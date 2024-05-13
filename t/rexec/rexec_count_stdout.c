@@ -57,14 +57,14 @@ void output_cb (flux_subprocess_t *p, const char *stream)
     /* Do not use flux_subprocess_getline(), testing is against
      * streams that are line buffered and not line buffered */
 
-    if (!(buf = flux_subprocess_read_line (p, stream, &len))) {
+    if ((len = flux_subprocess_read_line (p, stream, &buf)) < 0) {
         log_err ("flux_subprocess_read_line");
         return;
     }
 
     /* we're at the end of the stream, read any lingering data */
     if (!len && flux_subprocess_read_stream_closed (p, stream)) {
-        if (!(buf = flux_subprocess_read (p, stream, &len))) {
+        if ((len = flux_subprocess_read (p, stream, &buf)) < 0) {
             log_err ("flux_subprocess_read");
             return;
         }

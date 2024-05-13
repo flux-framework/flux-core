@@ -1320,8 +1320,8 @@ static void task_line_output_cb (struct shell_task *task,
     const char *data;
     int len;
 
-    data = flux_subprocess_getline (task->proc, stream, &len);
-    if (!data) {
+    len = flux_subprocess_getline (task->proc, stream, &data);
+    if (len < 0) {
         shell_log_errno ("read %s task %d", stream, task->rank);
     }
     else if (len > 0) {
@@ -1352,13 +1352,13 @@ static void task_none_output_cb (struct shell_task *task,
     const char *data;
     int len;
 
-    data = flux_subprocess_read_line (task->proc, stream, &len);
-    if (!data) {
+    len = flux_subprocess_read_line (task->proc, stream, &data);
+    if (len < 0) {
         shell_log_errno ("read line %s task %d", stream, task->rank);
     }
     else if (!len) {
         /* stderr is unbuffered */
-        if (!(data = flux_subprocess_read (task->proc, stream, &len))) {
+        if ((len = flux_subprocess_read (task->proc, stream, &data)) < 0) {
             shell_log_errno ("read %s task %d", stream, task->rank);
             return;
         }

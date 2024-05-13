@@ -217,7 +217,7 @@ static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state
 static void io_cb (flux_subprocess_t *p, const char *stream)
 {
     cron_task_t *t = flux_subprocess_aux_get (p, "task");
-    const char *buf = NULL;
+    const char *buf;
     int len;
     bool is_stderr = false;
 
@@ -226,14 +226,14 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
     if (streq (stream, "stderr"))
         is_stderr = true;
 
-    if (!(buf = flux_subprocess_read_trimmed_line (p, stream, &len))) {
+    if ((len = flux_subprocess_read_trimmed_line (p, stream, &buf)) < 0) {
         flux_log_error (t->h, "%s: flux_subprocess_read_trimmed_line",
                         __FUNCTION__);
         return;
     }
 
     if (!len) {
-        if (!(buf = flux_subprocess_read (p, stream, &len))) {
+        if ((len = flux_subprocess_read (p, stream, &buf)) < 0) {
             flux_log_error (t->h, "%s: flux_subprocess_read",
                             __FUNCTION__);
             return;

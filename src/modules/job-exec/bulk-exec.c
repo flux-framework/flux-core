@@ -224,7 +224,7 @@ static void exec_output_cb (flux_subprocess_t *p, const char *stream)
     const char *s;
     int len;
 
-    if (!(s = flux_subprocess_getline (p, stream, &len))) {
+    if ((len = flux_subprocess_getline (p, stream, &s)) < 0) {
         flux_log_error (exec->h, "flux_subprocess_getline");
         return;
     }

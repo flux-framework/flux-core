@@ -208,7 +208,7 @@ void output_cb (flux_subprocess_t *p, const char *stream)
     const char *buf;
     int len;
 
-    if (!(buf = flux_subprocess_getline (p, stream, &len)))
+    if ((len = flux_subprocess_getline (p, stream, &buf)) < 0)
         log_err_exit ("flux_subprocess_getline");
 
     if (len) {

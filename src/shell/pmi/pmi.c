@@ -366,8 +366,8 @@ static void pmi_fd_cb (flux_shell_task_t *task,
     const char *line;
     int rc;
 
-    line = flux_subprocess_read_line (task->proc, "PMI_FD", &len);
-    if (!line) {
+    len = flux_subprocess_read_line (task->proc, "PMI_FD", &line);
+    if (len < 0) {
         shell_trace ("%d: C: pmi read error: %s",
                      task->rank, flux_strerror (errno));
         return;

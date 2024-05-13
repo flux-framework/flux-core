@@ -277,7 +277,7 @@ static void io_cb (flux_subprocess_t *sp, const char *stream)
     const char *s;
     int len;
 
-    if (!(s = flux_subprocess_getline (sp, stream, &len))) {
+    if ((len = flux_subprocess_getline (sp, stream, &s)) < 0) {
         flux_log_error (h, "%s: %s: %s: flux_subprocess_getline",
                         idf58 (proc->id),
                         proc->prolog ? "prolog": "epilog",

@@ -246,7 +246,7 @@ static void proc_output_cb (flux_subprocess_t *p, const char *stream)
     const char *buf;
     int len;
 
-    if (!(buf = flux_subprocess_read (p, stream, &len))) {
+    if ((len = flux_subprocess_read (p, stream, &buf)) < 0) {
         llog_error (s,
                     "error reading from subprocess stream %s: %s",
                     stream,

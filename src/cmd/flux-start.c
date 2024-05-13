@@ -424,7 +424,7 @@ void channel_cb (flux_subprocess_t *p, const char *stream)
     assert (cli);
     assert (streq (stream, "PMI_FD"));
 
-    if (!(buf = flux_subprocess_read_line (p, stream, &len)))
+    if ((len = flux_subprocess_read_line (p, stream, &buf)) < 0)
         log_err_exit ("%s: flux_subprocess_read_line", __FUNCTION__);
 
     if (len) {

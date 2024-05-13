@@ -58,16 +58,16 @@ void completion_cb (flux_subprocess_t *p)
 
 void channel_fd_env_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
-    int len = 0;
+    const char *buf = NULL;
+    int len;
 
     ok (!strcasecmp (stream, "stdout"),
         "channel_fd_env_cb called with correct stream");
 
     if (!channel_fd_env_cb_count) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf
-            && len > 0,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read_line on %s success", stream);
 
         ok (strstarts (buf, "FOO="),
@@ -78,9 +78,8 @@ void channel_fd_env_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL
-            && len == 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
 
@@ -120,16 +119,16 @@ void test_channel_fd_env (flux_reactor_t *r)
 
 void channel_in_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
-    int len = 0;
+    const char *buf = NULL;
+    int len;
 
     ok (!strcasecmp (stream, "stdout"),
         "channel_in_cb called with correct stream");
 
     if (!channel_in_cb_count) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf != NULL
-            && len == 7,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len == 7
+            && buf != NULL,
             "flux_subprocess_read_line on %s success", stream);
 
         ok (!memcmp (buf, "foobar\n", 7),
@@ -142,9 +141,8 @@ void channel_in_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL
-            && len == 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
 
@@ -191,16 +189,16 @@ void test_channel_fd_in (flux_reactor_t *r)
 
 void channel_in_and_out_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
-    int len = 0;
+    const char *buf = NULL;
+    int len;
 
     ok (!strcasecmp (stream, "TEST_CHANNEL"),
         "channel_in_and_out_cb called with correct stream");
 
     if (!channel_in_and_out_cb_count) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf != NULL
-            && len == 7,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len == 7
+            && buf != NULL,
             "flux_subprocess_read_line on %s success", stream);
 
         ok (!memcmp (buf, "foobaz\n", 7),
@@ -213,9 +211,8 @@ void channel_in_and_out_cb (flux_subprocess_t *p, const char *stream)
         /* no check of flux_subprocess_read_stream_closed(), we aren't
          * closing channel in test below */
 
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL
-            && len == 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
 
@@ -263,34 +260,34 @@ void test_channel_fd_in_and_out (flux_reactor_t *r)
 
 void channel_multiple_lines_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
-    int len = 0;
+    const char *buf = NULL;
+    int len;
 
     ok (!strcasecmp (stream, "TEST_CHANNEL"),
         "channel_multiple_lines_cb called with correct stream");
 
     if (multiple_lines_channel_cb_count == 0) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf != NULL
-            && len > 0,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read_line on %s success", stream);
 
         ok (streq (buf, "bob\n"),
             "flux_subprocess_read_line returned correct data");
     }
     else if (multiple_lines_channel_cb_count == 1) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf != NULL
-            && len > 0,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read_line on %s success", stream);
 
         ok (streq (buf, "dan\n"),
             "flux_subprocess_read_line returned correct data");
     }
     else if (multiple_lines_channel_cb_count == 2) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf != NULL
-            && len > 0,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read_line on %s success", stream);
 
         ok (streq (buf, "jo\n"),
@@ -303,9 +300,8 @@ void channel_multiple_lines_cb (flux_subprocess_t *p, const char *stream)
         /* no check of flux_subprocess_read_stream_closed(), we aren't
          * closing channel in test below */
 
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL
-            && len == 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
 
@@ -359,13 +355,13 @@ void test_channel_multiple_lines (flux_reactor_t *r)
 
 void channel_nul_terminate_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
-    int len = 0;
+    const char *buf = NULL;
+    int len;
 
     if (!channel_nul_terminate_cb_count) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf != NULL
-            && len == 7,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len == 7
+            && buf != NULL,
             "flux_subprocess_read_line on %s success", stream);
 
         ok (!memcmp (buf, "foobaz\n\0", 8),
@@ -378,9 +374,8 @@ void channel_nul_terminate_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL
-            && len == 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
 

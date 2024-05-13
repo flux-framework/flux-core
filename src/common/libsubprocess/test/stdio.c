@@ -66,9 +66,9 @@ void completion_cb (flux_subprocess_t *p)
 
 void output_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
+    const char *buf = NULL;
     char cmpbuf[1024];
-    int len = 0;
+    int len;
     int *counter;
 
     if (!strcasecmp (stream, "stdout"))
@@ -81,9 +81,9 @@ void output_cb (flux_subprocess_t *p, const char *stream)
     }
 
     if ((*counter) == 0) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf != NULL
-            && len > 0,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read_line on %s success", stream);
 
         sprintf (cmpbuf, "%s:hi\n", stream);
@@ -98,9 +98,8 @@ void output_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL
-            && len == 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
 
@@ -139,9 +138,9 @@ void test_basic_stdout (flux_reactor_t *r)
 
 void output_no_readline_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
+    const char *buf = NULL;
     char cmpbuf[1024];
-    int len = 0;
+    int len;
     int *counter;
 
     if (!strcasecmp (stream, "stdout"))
@@ -153,8 +152,8 @@ void output_no_readline_cb (flux_subprocess_t *p, const char *stream)
         return;
     }
 
-    buf = flux_subprocess_read (p, stream, &len);
-    ok (buf != NULL,
+    len = flux_subprocess_read (p, stream, &buf);
+    ok (len >= 0,
         "flux_subprocess_read on %s success", stream);
 
     if (len > 0) {
@@ -301,14 +300,14 @@ void test_basic_default_output (flux_reactor_t *r)
 
 void output_default_stream_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
+    const char *buf = NULL;
     char cmpbuf[1024];
-    int len = 0;
+    int len;
 
     if (output_default_stream_cb_count == 0) {
-        buf = flux_subprocess_read_line (p, "stdout", &len);
-        ok (buf != NULL
-            && len > 0,
+        len = flux_subprocess_read_line (p, "stdout", &buf);
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read_line on %s success", "stdout");
 
         sprintf (cmpbuf, "%s:hi\n", stream);
@@ -323,9 +322,8 @@ void output_default_stream_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", "stdout");
 
-        buf = flux_subprocess_read (p, "stdout", &len);
-        ok (buf != NULL
-            && len == 0,
+        len = flux_subprocess_read (p, "stdout", &buf);
+        ok (len == 0,
             "flux_subprocess_read on %s read EOF", "stdout");
     }
 
@@ -368,9 +366,9 @@ void test_basic_stdin (flux_reactor_t *r)
 
 void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
+    const char *buf = NULL;
     char cmpbuf[1024];
-    int len = 0;
+    int len;
     int *counter;
 
     if (!strcasecmp (stream, "stdout"))
@@ -383,14 +381,13 @@ void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
     }
 
     if ((*counter) == 0) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf != NULL
-            && len == 0,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len == 0,
             "flux_subprocess_read_line on %s read 0 lines", stream);
 
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL
-            && len > 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read on %s read success", stream);
 
         sprintf (cmpbuf, "%s:hi", stream);
@@ -405,9 +402,8 @@ void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL
-            && len == 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
 
@@ -447,9 +443,9 @@ void test_basic_no_newline (flux_reactor_t *r)
 
 void output_trimmed_line_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
+    const char *buf = NULL;
     char cmpbuf[1024];
-    int len = 0;
+    int len;
     int *counter;
 
     if (!strcasecmp (stream, "stdout"))
@@ -462,9 +458,9 @@ void output_trimmed_line_cb (flux_subprocess_t *p, const char *stream)
     }
 
     if ((*counter) == 0) {
-        buf = flux_subprocess_read_trimmed_line (p, stream, &len);
-        ok (buf != NULL
-            && len > 0,
+        len = flux_subprocess_read_trimmed_line (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read_trimmed_line on %s success", stream);
 
         sprintf (cmpbuf, "%s:hi", stream);
@@ -476,9 +472,8 @@ void output_trimmed_line_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL
-            && len == 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
 
@@ -518,8 +513,8 @@ void test_basic_trimmed_line (flux_reactor_t *r)
 
 void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
-    int len = 0;
+    const char *buf = NULL;
+    int len;
     int *counter;
 
     if (!strcasecmp (stream, "stdout"))
@@ -532,9 +527,9 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
     }
 
     if ((*counter) == 0) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf != NULL
-            && len > 0,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read_line on %s success", stream);
 
         ok (streq (buf, "foo\n"),
@@ -543,9 +538,9 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_read_line returned correct data len");
     }
     else if ((*counter) == 1) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf != NULL
-            && len > 0,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read_line on %s success", stream);
 
         ok (streq (buf, "bar\n"),
@@ -554,9 +549,9 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_read_line returned correct data len");
     }
     else if ((*counter) == 2) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf != NULL
-            && len > 0,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read_line on %s success", stream);
 
         ok (streq (buf, "bo\n"),
@@ -568,9 +563,8 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL
-            && len == 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
 
@@ -622,8 +616,8 @@ void test_basic_multiple_lines (flux_reactor_t *r)
 
 void stdin_closed_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
-    int len = 0;
+    const char *buf = NULL;
+    int len;
     int *counter;
 
     if (!strcasecmp (stream, "stdout"))
@@ -638,9 +632,8 @@ void stdin_closed_cb (flux_subprocess_t *p, const char *stream)
     ok (flux_subprocess_read_stream_closed (p, stream),
         "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-    buf = flux_subprocess_read (p, stream, &len);
-    ok (buf != NULL
-        && len == 0,
+    len = flux_subprocess_read (p, stream, &buf);
+    ok (len == 0,
         "flux_subprocess_read on %s read EOF", stream);
 
     (*counter)++;
@@ -682,8 +675,8 @@ void test_basic_stdin_closed (flux_reactor_t *r)
 
 void output_read_line_until_eof_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
-    int len = 0;
+    const char *buf = NULL;
+    int len;
     int *counter;
 
     if (!strcasecmp (stream, "stdout"))
@@ -695,9 +688,9 @@ void output_read_line_until_eof_cb (flux_subprocess_t *p, const char *stream)
         return;
     }
 
-    buf = flux_subprocess_getline (p, stream, &len);
+    len = flux_subprocess_getline (p, stream, &buf);
     if ((*counter) == 0) {
-        ok (buf != NULL,
+        ok (len > 0,
             "flux_subprocess_getline on %s success", stream);
         ok (streq (buf, "foo\n"),
             "flux_subprocess_getline returned correct data");
@@ -705,7 +698,7 @@ void output_read_line_until_eof_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_getline returned correct data len");
     }
     else if ((*counter) == 1) {
-        ok (buf != NULL,
+        ok (len > 0,
             "flux_subprocess_getline on %s success", stream);
         ok (streq (buf, "bar"),
             "flux_subprocess_getline returned correct data");
@@ -713,8 +706,6 @@ void output_read_line_until_eof_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_getline returned correct data len");
     }
     else {
-        ok (buf != NULL,
-            "flux_subprocess_getline on %s success", stream);
         ok (len == 0,
             "flux_subprocess_getline returned EOF");
     }
@@ -764,8 +755,8 @@ void test_basic_read_line_until_eof (flux_reactor_t *r)
 
 void output_read_line_until_eof_error_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
-    int len = 0;
+    const char *buf = NULL;
+    int len;
     int *counter;
 
     if (!strcasecmp (stream, "stdout"))
@@ -776,21 +767,21 @@ void output_read_line_until_eof_error_cb (flux_subprocess_t *p, const char *stre
     }
 
     if ((*counter) == 0) {
-        buf = flux_subprocess_getline (p, stream, &len);
-        ok (!buf && errno == EPERM,
+        len = flux_subprocess_getline (p, stream, &buf);
+        ok (len < 0 && errno == EPERM,
             "flux_subprocess_getline returns EPERM "
             "on non line-buffered stream");
 
         /* drain whatever is in the buffer, we don't care about
          * contents for this test */
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL && len > 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read on %s success", stream);
     }
     else {
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL
-            && len == 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
     (*counter)++;
@@ -943,8 +934,8 @@ void test_flag_stdio_fallthrough (flux_reactor_t *r)
 
 void line_output_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
-    int len = 0;
+    const char *buf = NULL;
+    int len;
     int *counter;
 
     if (!strcasecmp (stream, "stdout"))
@@ -955,16 +946,17 @@ void line_output_cb (flux_subprocess_t *p, const char *stream)
     }
 
     if ((*counter) == 0) {
-        buf = flux_subprocess_read_line (p, stream, &len);
-        ok (buf != NULL && len == 4401,
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len == 4401
+            && buf != NULL,
             "flux_subprocess_read_line read line correctly");
     }
     else {
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        buf = flux_subprocess_read (p, stream, &len);
-        ok (buf != NULL && len == 0,
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
 
@@ -1145,8 +1137,8 @@ void test_stream_start_stop_basic (flux_reactor_t *r)
 
 void start_stdout_after_stderr_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
-    int len = 0;
+    const char *buf = NULL;
+    int len;
     int *counter;
     int *len_counter;
 
@@ -1163,11 +1155,11 @@ void start_stdout_after_stderr_cb (flux_subprocess_t *p, const char *stream)
         return;
     }
 
-    buf = flux_subprocess_read (p, stream, &len);
+    len = flux_subprocess_read (p, stream, &buf);
     (*counter)++;
     (*len_counter)+= len;
 
-    if (buf && len && (*len_counter) == 10001) {
+    if (len > 0 && buf != NULL && (*len_counter) == 10001) {
         if (streq (stream, "stderr")) {
             ok (stdout_output_cb_count == 0
                 && stdout_output_cb_len_count == 0,
@@ -1253,8 +1245,8 @@ void mid_stop_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 void mid_stop_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *buf;
-    int len = 0;
+    const char *buf = NULL;
+    int len;
     int *counter;
 
     if (!strcasecmp (stream, "stdout"))
@@ -1264,10 +1256,11 @@ void mid_stop_cb (flux_subprocess_t *p, const char *stream)
         return;
     }
 
-    buf = flux_subprocess_read (p, stream, &len);
+    len = flux_subprocess_read (p, stream, &buf);
     if (stdout_output_cb_count == 0) {
         flux_watcher_t *tw = NULL;
-        ok (buf && len > 0,
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read read data on stdout: %d", len);
         flux_subprocess_stream_stop (p, "stdout");
         diag ("flux_subprocess_stream_stop on stdout");
@@ -1276,7 +1269,8 @@ void mid_stop_cb (flux_subprocess_t *p, const char *stream)
         flux_watcher_start (tw);
     }
     else if (stdout_output_cb_count == 1) {
-        ok (buf && len > 0,
+        ok (len > 0
+            && buf != NULL,
             "flux_subprocess_read read data on stdout: %d", len);
         ok (timer_cb_count == 1,
             "next stdout callback called after time callback called");
