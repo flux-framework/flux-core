@@ -105,7 +105,7 @@ void test_corner_cases (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 
     ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
-        "flux_cmd_create with 0 args works");
+        "flux_cmd_create with /bin/true works");
     ok (flux_rexec (h, -10, 0, cmd, NULL) == NULL
         && errno == EINVAL,
         "flux_rexec fails with cmd with invalid rank");
