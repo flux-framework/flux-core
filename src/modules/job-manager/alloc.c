@@ -44,8 +44,6 @@ struct alloc {
     zlistx_t *queue;
     zlistx_t *pending_jobs;
     bool ready;
-    bool stopped;
-    char *stopped_reason;
     flux_watcher_t *prep;
     flux_watcher_t *check;
     flux_watcher_t *idle;
@@ -791,7 +789,6 @@ void alloc_ctx_destroy (struct alloc *alloc)
         flux_watcher_destroy (alloc->idle);
         zlistx_destroy (&alloc->queue);
         zlistx_destroy (&alloc->pending_jobs);
-        free (alloc->stopped_reason);
         free (alloc->sched_sender);
         free (alloc);
         errno = saved_errno;
