@@ -42,7 +42,7 @@ struct alloc {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
     zlistx_t *queue;
-    zlistx_t *pending_jobs;
+    zlistx_t *sent;
     bool ready;
     flux_watcher_t *prep;
     flux_watcher_t *check;
@@ -60,7 +60,7 @@ static void requeue_pending (struct alloc *alloc, struct job *job)
 
     assert (job->alloc_pending);
     if (alloc->alloc_limit) {
-        if (job_priority_queue_delete (alloc->pending_jobs, job) < 0)
+        if (job_priority_queue_delete (alloc->sent, job) < 0)
             flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
     }
     job->alloc_pending = 0;
@@ -191,7 +191,7 @@ static void alloc_response_cb (flux_t *h,
             break;
         }
         if (alloc->alloc_limit) {
-            if (job_priority_queue_delete (alloc->pending_jobs, job) < 0)
+            if (job_priority_queue_delete (alloc->sent, job) < 0)
                 flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
         }
         if (job->has_resources || job->R_redacted) {
@@ -239,7 +239,7 @@ static void alloc_response_cb (flux_t *h,
             break;
         job->alloc_pending = 0;
         if (alloc->alloc_limit) {
-            if (job_priority_queue_delete (alloc->pending_jobs, job) < 0)
+            if (job_priority_queue_delete (alloc->sent, job) < 0)
                 flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
         }
         annotations_clear_and_publish (ctx, job, NULL);
@@ -259,7 +259,7 @@ static void alloc_response_cb (flux_t *h,
             requeue_pending (alloc, job);
         else {
             if (alloc->alloc_limit) {
-                if (job_priority_queue_delete (alloc->pending_jobs, job) < 0)
+                if (job_priority_queue_delete (alloc->sent, job) < 0)
                     flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
             }
             annotations_clear_and_publish (ctx, job, NULL);
@@ -488,12 +488,12 @@ static void check_cb (flux_reactor_t *r,
     job->alloc_pending = 1;
     job->alloc_queued = 0;
     alloc->alloc_pending_count++;
-    /* Add job to alloc->pending_jobs if there is an alloc limit, so
+    /* Add job to alloc->sent if there is an alloc limit, so
      * that those requests can be canceled if the queue is reprioritized
      * and higher priority requests need to preempt lower priority ones.
      */
     if (alloc->alloc_limit) {
-        if (job_priority_queue_insert (alloc->pending_jobs, job) < 0)
+        if (job_priority_queue_insert (alloc->sent, job) < 0)
             flux_log (ctx->h, LOG_ERR, "failed to enqueue pending job");
     }
     /* Post event for debugging if job was submitted FLUX_JOB_DEBUG flag.
@@ -576,7 +576,7 @@ int alloc_cancel_alloc_request (struct alloc *alloc,
         if (finalize) {
             job->alloc_pending = 0;
             if (alloc->alloc_limit)
-                job_priority_queue_delete (alloc->pending_jobs, job);
+                job_priority_queue_delete (alloc->sent, job);
             annotations_clear_and_publish (alloc->ctx, job, NULL);
         }
     }
@@ -603,13 +603,13 @@ void alloc_queue_reorder (struct alloc *alloc, struct job *job)
 void alloc_pending_reorder (struct alloc *alloc, struct job *job)
 {
     if (alloc->alloc_limit)
-        job_priority_queue_reorder (alloc->pending_jobs, job);
+        job_priority_queue_reorder (alloc->sent, job);
 }
 
 int alloc_queue_reprioritize (struct alloc *alloc)
 {
     job_priority_queue_sort (alloc->queue);
-    job_priority_queue_sort (alloc->pending_jobs);
+    job_priority_queue_sort (alloc->sent);
 
     if (alloc->alloc_limit)
         return alloc_queue_recalc_pending (alloc);
@@ -620,7 +620,7 @@ int alloc_queue_reprioritize (struct alloc *alloc)
 int alloc_queue_recalc_pending (struct alloc *alloc)
 {
     struct job *head = zlistx_first (alloc->queue);
-    struct job *tail = zlistx_last (alloc->pending_jobs);
+    struct job *tail = zlistx_last (alloc->sent);
     while (alloc->alloc_limit
            && head
            && tail) {
@@ -635,7 +635,7 @@ int alloc_queue_recalc_pending (struct alloc *alloc)
         else
             break;
         head = zlistx_next (alloc->queue);
-        tail = zlistx_prev (alloc->pending_jobs);
+        tail = zlistx_prev (alloc->sent);
     }
     return 0;
 }
@@ -752,7 +752,7 @@ void alloc_ctx_destroy (struct alloc *alloc)
         flux_watcher_destroy (alloc->check);
         flux_watcher_destroy (alloc->idle);
         zlistx_destroy (&alloc->queue);
-        zlistx_destroy (&alloc->pending_jobs);
+        zlistx_destroy (&alloc->sent);
         free (alloc->sched_sender);
         free (alloc);
         errno = saved_errno;
@@ -797,7 +797,7 @@ struct alloc *alloc_ctx_create (struct job_manager *ctx)
         return NULL;
     alloc->ctx = ctx;
     if (!(alloc->queue = job_priority_queue_create ())
-        || !(alloc->pending_jobs = job_priority_queue_create ()))
+        || !(alloc->sent = job_priority_queue_create ()))
         goto error;
     if (flux_msg_handler_addvec (ctx->h, htab, ctx, &alloc->handlers) < 0)
         goto error;
