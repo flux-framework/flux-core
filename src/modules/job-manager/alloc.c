@@ -50,7 +50,7 @@ struct alloc {
     // e.g. for mode limited w/ limit=1, is 1, for mode unlimited set to 0
     unsigned int alloc_limit;
     // e.g. for mode limited w/ limit=1, max of 1
-    unsigned int alloc_pending_count;
+    unsigned int sent_count;
     char *sched_sender; // for disconnect
 };
 
@@ -94,7 +94,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
             job = zhashx_next (ctx->active_jobs);
         }
         alloc->scheduler_is_online = false;
-        alloc->alloc_pending_count = 0;
+        alloc->sent_count = 0;
         free (alloc->sched_sender);
         alloc->sched_sender = NULL;
         drain_check (alloc->ctx->drain);
@@ -184,7 +184,7 @@ static void alloc_response_cb (flux_t *h,
             goto teardown;
         }
         (void)json_object_del (R, "scheduling");
-        alloc->alloc_pending_count--;
+        alloc->sent_count--;
 
         if (!job) {
             (void)free_request (alloc, id, R);
@@ -234,7 +234,7 @@ static void alloc_response_cb (flux_t *h,
             flux_log_error (h, "annotations_update: id=%s", idf58 (id));
         break;
     case FLUX_SCHED_ALLOC_DENY: // error
-        alloc->alloc_pending_count--;
+        alloc->sent_count--;
         if (!job)
             break;
         job->alloc_pending = 0;
@@ -252,7 +252,7 @@ static void alloc_response_cb (flux_t *h,
             goto teardown;
         break;
     case FLUX_SCHED_ALLOC_CANCEL:
-        alloc->alloc_pending_count--;
+        alloc->sent_count--;
         if (!job)
             break;
         if (job->state == FLUX_JOB_STATE_SCHED)
@@ -433,7 +433,7 @@ static bool alloc_work_available (struct job_manager *ctx)
     if (!(job = zlistx_first (ctx->alloc->queue))) // queue is empty
         return false;
     if (ctx->alloc->alloc_limit > 0 // alloc limit reached
-        && ctx->alloc->alloc_pending_count >= ctx->alloc->alloc_limit)
+        && ctx->alloc->sent_count >= ctx->alloc->alloc_limit)
         return false;
     /* The alloc->queue is sorted from highest to lowest priority, so if the
      * first job has priority=MIN (held), all other jobs must have the same
@@ -487,7 +487,7 @@ static void check_cb (flux_reactor_t *r,
     job_priority_queue_delete (alloc->queue, job);
     job->alloc_pending = 1;
     job->alloc_queued = 0;
-    alloc->alloc_pending_count++;
+    alloc->sent_count++;
     /* Add job to alloc->sent if there is an alloc limit, so
      * that those requests can be canceled if the queue is reprioritized
      * and higher priority requests need to preempt lower priority ones.
@@ -647,7 +647,7 @@ int alloc_queue_count (struct alloc *alloc)
 
 int alloc_pending_count (struct alloc *alloc)
 {
-    return alloc->alloc_pending_count;
+    return alloc->sent_count;
 }
 
 bool alloc_sched_ready (struct alloc *alloc)
@@ -667,7 +667,7 @@ static void alloc_query_cb (flux_t *h,
                            msg,
                            "{s:i s:i s:i}",
                            "queue_length", zlistx_size (alloc->queue),
-                           "alloc_pending", alloc->alloc_pending_count,
+                           "alloc_pending", alloc->sent_count,
                            "running", alloc->ctx->running_jobs) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
