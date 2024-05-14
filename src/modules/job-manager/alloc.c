@@ -43,7 +43,7 @@ struct alloc {
     flux_msg_handler_t **handlers;
     zlistx_t *queue;
     zlistx_t *sent;
-    bool ready;
+    bool scheduler_is_online;
     flux_watcher_t *prep;
     flux_watcher_t *check;
     flux_watcher_t *idle;
@@ -73,11 +73,11 @@ static void requeue_pending (struct alloc *alloc, struct job *job)
 }
 
 /* Initiate teardown.  Clear any alloc/free requests, and clear
- * the alloc->ready flag to stop prep/check from allocating.
+ * the alloc->scheduler_is_online flag to stop prep/check from allocating.
  */
 static void interface_teardown (struct alloc *alloc, char *s, int errnum)
 {
-    if (alloc->ready) {
+    if (alloc->scheduler_is_online) {
         struct job *job;
         struct job_manager *ctx = alloc->ctx;
 
@@ -93,7 +93,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
                 requeue_pending (alloc, job);
             job = zhashx_next (ctx->active_jobs);
         }
-        alloc->ready = false;
+        alloc->scheduler_is_online = false;
         alloc->alloc_pending_count = 0;
         free (alloc->sched_sender);
         alloc->sched_sender = NULL;
@@ -398,7 +398,7 @@ static void ready_cb (flux_t *h,
         if (!(ctx->alloc->sched_sender = strdup (sender)))
             goto error;
     }
-    ctx->alloc->ready = true;
+    ctx->alloc->scheduler_is_online = true;
     flux_log (h, LOG_DEBUG, "scheduler: ready %s", mode);
     count = zlistx_size (ctx->alloc->queue);
     if (flux_respond_pack (h, msg, "{s:i}", "count", count) < 0)
@@ -428,7 +428,7 @@ static bool alloc_work_available (struct job_manager *ctx)
 {
     struct job *job;
 
-    if (!ctx->alloc->ready) // scheduler protocol is not ready for alloc
+    if (!ctx->alloc->scheduler_is_online) // scheduler is not ready for alloc
         return false;
     if (!(job = zlistx_first (ctx->alloc->queue))) // queue is empty
         return false;
@@ -510,7 +510,7 @@ static void check_cb (flux_reactor_t *r,
 int alloc_send_free_request (struct alloc *alloc, struct job *job)
 {
     assert (job->state == FLUX_JOB_STATE_CLEANUP);
-    if (alloc->ready) {
+    if (alloc->scheduler_is_online) {
         if (free_request (alloc, job->id, job->R_redacted) < 0)
             return -1;
         if ((job->flags & FLUX_JOB_DEBUG))
@@ -652,7 +652,7 @@ int alloc_pending_count (struct alloc *alloc)
 
 bool alloc_sched_ready (struct alloc *alloc)
 {
-    return alloc->ready;
+    return alloc->scheduler_is_online;
 }
 
 static void alloc_query_cb (flux_t *h,
