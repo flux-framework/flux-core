@@ -22,7 +22,6 @@
 #include <jansson.h>
 #include <flux/core.h>
 #include <flux/schedutil.h>
-#include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/idf58.h"
@@ -56,7 +55,8 @@ static void requeue_pending (struct alloc *alloc, struct job *job)
 {
     struct job_manager *ctx = alloc->ctx;
 
-    assert (job->alloc_pending);
+    if (!job->alloc_pending)
+        return;
     if (alloc->alloc_limit) {
         if (job_priority_queue_delete (alloc->sent, job) < 0)
             flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
@@ -507,7 +507,8 @@ static void check_cb (flux_reactor_t *r,
 /* called from event_job_action() FLUX_JOB_STATE_CLEANUP */
 int alloc_send_free_request (struct alloc *alloc, struct job *job)
 {
-    assert (job->state == FLUX_JOB_STATE_CLEANUP);
+    if (job->state != FLUX_JOB_STATE_CLEANUP)
+        return -1;
     if (alloc->scheduler_is_online) {
         if (free_request (alloc, job->id, job->R_redacted) < 0)
             return -1;
@@ -524,7 +525,8 @@ int alloc_send_free_request (struct alloc *alloc, struct job *job)
 /* called from event_job_action() FLUX_JOB_STATE_SCHED */
 int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
 {
-    assert (job->state == FLUX_JOB_STATE_SCHED);
+    if (job->state != FLUX_JOB_STATE_SCHED)
+        return -1;
     if (!job->alloc_bypass
         && !job->alloc_queued
         && !job->alloc_pending
