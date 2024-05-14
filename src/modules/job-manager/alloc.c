@@ -42,16 +42,14 @@ struct alloc {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
     zlistx_t *queue;
-    zlistx_t *sent;
+    zlistx_t *sent;             // track jobs w/ alloc reqs, mode=limited only
     bool scheduler_is_online;
     flux_watcher_t *prep;
     flux_watcher_t *check;
     flux_watcher_t *idle;
-    // e.g. for mode limited w/ limit=1, is 1, for mode unlimited set to 0
-    unsigned int alloc_limit;
-    // e.g. for mode limited w/ limit=1, max of 1
-    unsigned int sent_count;
-    char *sched_sender; // for disconnect
+    unsigned int alloc_limit;   // will have a value of 0 in mode=unlimited
+    unsigned int sent_count;    // track number of jobs w/ alloc reqs
+    char *sched_sender;         // scheduler uuid for disconnect processing
 };
 
 static void requeue_pending (struct alloc *alloc, struct job *job)
