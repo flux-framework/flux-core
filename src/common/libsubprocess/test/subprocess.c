@@ -365,27 +365,27 @@ void test_flag_fork_exec (flux_reactor_t *r)
 
 void env_passed_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *ptr;
-    int lenp = 0;
+    const char *buf;
+    int len = 0;
 
     ok (!strcasecmp (stream, "stdout"),
         "env_passed_cb called with correct stream");
 
     if (!env_passed_cb_count) {
-        ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr
-            && lenp > 0,
+        buf = flux_subprocess_read_line (p, stream, &len);
+        ok (buf
+            && len > 0,
             "flux_subprocess_read_line on %s success", stream);
 
-        ok (strstarts (ptr, "FOOBAR=foobaz"),
+        ok (strstarts (buf, "FOOBAR=foobaz"),
             "environment variable FOOBAR in subprocess");
-        ok (lenp == 14,
+        ok (len == 14,
             "flux_subprocess_read_line returned correct data len");
     }
     else {
-        ptr = flux_subprocess_read (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
+        buf = flux_subprocess_read (p, stream, &len);
+        ok (buf != NULL
+            && len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
 
@@ -468,21 +468,21 @@ void test_kill (flux_reactor_t *r)
 
 void output_processes_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *ptr;
-    int lenp;
+    const char *buf;
+    int len;
 
     if (output_processes_cb_count == 0
         || output_processes_cb_count == 1) {
-        ptr = flux_subprocess_read_trimmed_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp > 0,
+        buf = flux_subprocess_read_trimmed_line (p, stream, &len);
+        ok (buf != NULL
+            && len > 0,
             "flux_subprocess_read_trimmed_line read valid data");
 
-        if (ptr && lenp) {
+        if (buf && len) {
             if (output_processes_cb_count == 0)
-                parent_pid = atoi (ptr);
+                parent_pid = atoi (buf);
             else
-                child_pid = atoi (ptr);
+                child_pid = atoi (buf);
         }
 
         if (output_processes_cb_count == 1) {
@@ -497,9 +497,9 @@ void output_processes_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        ptr = flux_subprocess_read (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
+        buf = flux_subprocess_read (p, stream, &len);
+        ok (buf != NULL
+            && len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
 
@@ -563,8 +563,8 @@ void test_kill_setpgrp (flux_reactor_t *r)
 
 void eof_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *ptr;
-    int lenp = 0;
+    const char *buf;
+    int len = 0;
     int *counter;
 
     if (!strcasecmp (stream, "stdout"))
@@ -579,9 +579,9 @@ void eof_cb (flux_subprocess_t *p, const char *stream)
     ok (flux_subprocess_read_stream_closed (p, stream),
         "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-    ptr = flux_subprocess_read (p, stream, &lenp);
-    ok (ptr != NULL
-        && lenp == 0,
+    buf = flux_subprocess_read (p, stream, &len);
+    ok (buf != NULL
+        && len == 0,
         "flux_subprocess_read on %s read EOF", stream);
 
     (*counter)++;
@@ -970,8 +970,8 @@ void fail_completion_cb (flux_subprocess_t *p)
 
 void fail_output_cb (flux_subprocess_t *p, const char *stream)
 {
-    const char *ptr;
-    int lenp = 0;
+    const char *buf;
+    int len = 0;
     int *counter;
 
     if (!strcasecmp (stream, "stdout"))
@@ -987,9 +987,9 @@ void fail_output_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        ptr = flux_subprocess_read (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
+        buf = flux_subprocess_read (p, stream, &len);
+        ok (buf != NULL
+            && len == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
     else

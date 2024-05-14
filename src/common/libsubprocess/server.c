@@ -243,10 +243,10 @@ static void proc_output_cb (flux_subprocess_t *p, const char *stream)
 {
     subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
     const flux_msg_t *request = flux_subprocess_aux_get (p, msgkey);
-    const char *ptr;
-    int lenp;
+    const char *buf;
+    int len;
 
-    if (!(ptr = flux_subprocess_read (p, stream, &lenp))) {
+    if (!(buf = flux_subprocess_read (p, stream, &len))) {
         llog_error (s,
                     "error reading from subprocess stream %s: %s",
                     stream,
@@ -254,8 +254,8 @@ static void proc_output_cb (flux_subprocess_t *p, const char *stream)
         goto error;
     }
 
-    if (lenp) {
-        if (proc_output (p, stream, s, request, ptr, lenp, false) < 0)
+    if (len) {
+        if (proc_output (p, stream, s, request, buf, len, false) < 0)
             goto error;
     }
     else {

@@ -70,13 +70,13 @@ void stdin2stream (flux_subprocess_t *p, const char *stream)
 void output_cb (flux_subprocess_t *p, const char *stream)
 {
     FILE *fstream = streq (stream, "stderr") ? stderr : stdout;
-    const char *ptr;
-    int lenp;
+    const char *buf;
+    int len;
 
-    if (!(ptr = flux_subprocess_getline (p, stream, &lenp)))
+    if (!(buf = flux_subprocess_getline (p, stream, &len)))
         log_err_exit ("flux_subprocess_getline");
-    if (lenp)
-        fwrite (ptr, lenp, 1, fstream);
+    if (len)
+        fwrite (buf, len, 1, fstream);
     else
         fprintf (fstream, "EOF\n");
 }

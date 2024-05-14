@@ -217,27 +217,27 @@ void subprocess_standard_output (flux_subprocess_t *p, const char *stream)
 {
     /* everything except stderr goes to stdout */
     FILE *fstream = !strcasecmp (stream, "stderr") ? stderr : stdout;
-    const char *ptr;
-    int lenp;
+    const char *buf;
+    int len;
 
     /* Do not use flux_subprocess_getline(), this should work
      * regardless if stream is line buffered or not */
 
-    if (!(ptr = flux_subprocess_read_line (p, stream, &lenp))) {
+    if (!(buf = flux_subprocess_read_line (p, stream, &len))) {
         log_err ("subprocess_standard_output: read_line");
         return;
     }
 
     /* we're at the end of the stream, read any lingering data */
-    if (!lenp && flux_subprocess_read_stream_closed (p, stream)) {
-        if (!(ptr = flux_subprocess_read (p, stream, &lenp))) {
+    if (!len && flux_subprocess_read_stream_closed (p, stream)) {
+        if (!(buf = flux_subprocess_read (p, stream, &len))) {
             log_err ("subprocess_standard_output: read");
             return;
         }
     }
 
-    if (lenp)
-        fwrite (ptr, lenp, 1, fstream);
+    if (len)
+        fwrite (buf, len, 1, fstream);
 }
 
 /*
