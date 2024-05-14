@@ -697,6 +697,69 @@ int job_apply_resource_updates (struct job *job, json_t *updates)
     return jpath_set (job->R_redacted, "execution.expiration", val);
 }
 
+zlistx_t *job_priority_queue_create (void)
+{
+    zlistx_t *l;
+
+    if (!(l = zlistx_new())) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    zlistx_set_destructor (l, job_destructor);
+    zlistx_set_comparator (l, job_priority_comparator);
+    zlistx_set_duplicator (l, job_duplicator);
+    return l;
+}
+
+int job_priority_queue_insert (zlistx_t *l, struct job *job)
+{
+    bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
+    if (job->handle) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job->handle = zlistx_insert (l, job, fwd))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
+int job_priority_queue_delete (zlistx_t *l, struct job *job)
+{
+    if (!job->handle) {
+        errno = EINVAL;
+        return -1;
+    }
+    (void)zlistx_delete (l, job->handle);
+    job->handle = NULL;
+    return 0;
+}
+
+void job_priority_queue_reorder (zlistx_t *l, struct job *job)
+{
+    if (job->handle) {
+        bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
+        zlistx_reorder (l, job->handle, fwd);
+    }
+}
+
+/*  N.B.: zlistx_sort() invalidates all list handles since
+ *   the sort swaps contents of nodes, not the nodes themselves.
+ *   Therefore, job handles into the list must be re-acquired here.
+ */
+void job_priority_queue_sort (zlistx_t *l)
+{
+    struct job *job;
+
+    zlistx_sort (l);
+    job = zlistx_first (l);
+    while (job) {
+        job->handle = zlistx_cursor (l);
+        job = zlistx_next (l);
+    }
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
