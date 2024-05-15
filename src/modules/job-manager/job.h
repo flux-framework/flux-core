@@ -146,6 +146,14 @@ json_t *job_jobspec_with_updates (struct job *job, json_t *updates);
  */
 int job_apply_resource_updates (struct job *job, json_t *updates);
 
+/* job->handle tracks list position.
+ */
+zlistx_t *job_priority_queue_create (void);
+int job_priority_queue_insert (zlistx_t *l, struct job *job);
+int job_priority_queue_delete (zlistx_t *l, struct job *job);
+void job_priority_queue_reorder (zlistx_t *l, struct job *job);
+void job_priority_queue_sort (zlistx_t *l);
+
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 
 /*
