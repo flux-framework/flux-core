@@ -137,6 +137,7 @@ flux_subprocess_ops_t simple_ops = {
 
 
 void simple_run_check (flux_t *h,
+                       const char *prefix,
                        int ac,
                        char **av,
                        struct simple_scorecard *exp)
@@ -161,47 +162,47 @@ void simple_run_check (flux_t *h,
                        tap_logger,
                        NULL);
     ok (p != NULL,
-        "%s: flux_rexec_ex returned a subprocess object", av[0]);
+        "%s: flux_rexec_ex returned a subprocess object", prefix);
     if (!p)
         BAIL_OUT ("flux_rexec_ex failed");
     if (flux_subprocess_aux_set (p, "ctx", &ctx, NULL) < 0)
         BAIL_OUT ("flux_subprocess_aux_set failed");
     rc = flux_reactor_run (flux_get_reactor (h), 0);
     ok (rc >= 0,
-        "%s: client reactor ran successfully", av[0]);
+        "%s: client reactor ran successfully", prefix);
     ok (ctx.scorecard.init == exp->init,
         "%s: subprocess state=INIT was %sreported",
-        av[0], exp->init ? "" : "not ");
+        prefix, exp->init ? "" : "not ");
     ok (ctx.scorecard.running == exp->running,
         "%s: subprocess state=RUNNING was %sreported",
-        av[0], exp->running ? "" : "not ");
+        prefix, exp->running ? "" : "not ");
     ok (ctx.scorecard.exited == exp->exited,
         "%s: subprocess state=EXITED was %sreported",
-        av[0], exp->exited ? "" : "not ");
+        prefix, exp->exited ? "" : "not ");
     ok (ctx.scorecard.failed == exp->failed,
         "%s: subprocess state=FAILED was %sreported",
-        av[0], exp->failed ? "" : "not ");
+        prefix, exp->failed ? "" : "not ");
     ok (ctx.scorecard.stopped == exp->stopped,
         "%s: subprocess state=STOPPED was %sreported",
-        av[0], exp->stopped ? "" : "not ");
+        prefix, exp->stopped ? "" : "not ");
     ok (ctx.scorecard.completion == exp->completion,
         "%s: subprocess completion callback was %sinvoked",
-        av[0], exp->completion ? "" : "not ");
+        prefix, exp->completion ? "" : "not ");
     ok (ctx.scorecard.exit_nonzero == exp->exit_nonzero,
         "%s: subprocess did%s exit with nonzero exit code",
-        av[0], exp->exit_nonzero ? "" : " not");
+        prefix, exp->exit_nonzero ? "" : " not");
     ok (ctx.scorecard.signaled == exp->signaled,
         "%s: subprocess was%s signaled",
-        av[0], exp->signaled ? "" : " not");
+        prefix, exp->signaled ? "" : " not");
     ok (ctx.scorecard.stdout_lines == exp->stdout_lines,
         "%s: subprocess stdout got %d lines",
-        av[0], exp->stdout_lines);
+        prefix, exp->stdout_lines);
     ok (ctx.scorecard.stdout_eof == exp->stdout_eof,
         "%s: subprocess stdout %s EOF",
-        av[0], exp->stdout_eof ? "got" : "did not get");
+        prefix, exp->stdout_eof ? "got" : "did not get");
     ok (ctx.scorecard.stdout_error == exp->stdout_error,
         "%s: subprocess stdout %s error",
-        av[0], exp->stdout_error ? "got" : "did not get");
+        prefix, exp->stdout_error ? "got" : "did not get");
     flux_cmd_destroy (cmd);
     flux_subprocess_destroy (p);
 }
@@ -217,7 +218,11 @@ void simple_test (flux_t *h)
     exp.completion = 1;
     exp.stdout_eof = 1;
     exp.stderr_eof = 1;
-    simple_run_check (h, ARRAY_SIZE (true_av) - 1, true_av, &exp);
+    simple_run_check (h,
+                      "/bin/true",
+                      ARRAY_SIZE (true_av) - 1,
+                      true_av,
+                      &exp);
 
     char *false_av[] = { "/bin/false", NULL };
     memset (&exp, 0, sizeof (exp));
@@ -227,14 +232,23 @@ void simple_test (flux_t *h)
     exp.exit_nonzero = 1;
     exp.stdout_eof = 1;
     exp.stderr_eof = 1;
-    simple_run_check (h, ARRAY_SIZE (false_av) - 1, false_av, &exp);
+    simple_run_check (h,
+                      "/bin/false",
+                      ARRAY_SIZE (false_av) - 1,
+                      false_av,
+                      &exp);
 #if 0
     // This fails differently on el7 - need to investigate
     char *nocmd_av[] = { "/nocmd", NULL };
     memset (&exp, 0, sizeof (exp));
     exp.failed = 1;
-    simple_run_check (h, ARRAY_SIZE (nocmd_av) - 1, nocmd_av, &exp);
+    simple_run_check (h,
+                      "/nocmd",
+                      ARRAY_SIZE (nocmd_av) - 1,
+                      nocmd_av,
+                      &exp);
 #endif
+
     char *echo_av[] = { "/bin/sh", "-c", "echo hello", NULL };
     memset (&exp, 0, sizeof (exp));
     exp.running = 1;
@@ -243,7 +257,11 @@ void simple_test (flux_t *h)
     exp.stdout_lines = 1;
     exp.stdout_eof = 1;
     exp.stderr_eof = 1;
-    simple_run_check (h, ARRAY_SIZE (echo_av) - 1, echo_av, &exp);
+    simple_run_check (h,
+                      "echo stdout",
+                      ARRAY_SIZE (echo_av) - 1,
+                      echo_av,
+                      &exp);
 
     char *echo2_av[] = { "/bin/sh", "-c", "echo hello >&2", NULL };
     memset (&exp, 0, sizeof (exp));
@@ -253,7 +271,11 @@ void simple_test (flux_t *h)
     exp.stderr_lines = 1;
     exp.stdout_eof = 1;
     exp.stderr_eof = 1;
-    simple_run_check (h, ARRAY_SIZE (echo2_av) - 1, echo2_av, &exp);
+    simple_run_check (h,
+                      "echo stderr",
+                      ARRAY_SIZE (echo2_av) - 1,
+                      echo2_av,
+                      &exp);
 }
 
 /* In SIGSTOP test, a 'cat' subprocess is sent SIGSTOP upon starting.
