@@ -286,7 +286,7 @@ test_expect_success 'module: remove testmod if loaded' '
 '
 test_expect_success 'module: load without unload causes broker failure' '
 	test_must_fail flux start \
-	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Sbroker.shutdown_path= \
 	    flux module load content 2>nounload.err
 '
 test_expect_success 'module: module name is called out' '

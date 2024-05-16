@@ -117,6 +117,7 @@ test_expect_success 'run instance with statedir set (files)' '
 	flux start -o,--setattr=statedir=$(pwd) \
 		   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
 		   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+		   -o,--setattr=broker.shutdown_path= \
 		   flux kvs put --sequence testkey=43 > start_sequence_files.out
 '
 
@@ -129,6 +130,7 @@ test_expect_success 're-run instance with statedir set (files)' '
 	flux start -o,--setattr=statedir=$(pwd) \
 		   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
 		   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+		   -o,--setattr=broker.shutdown_path= \
 		   flux kvs get testkey >getfiles.out
 '
 
@@ -167,6 +169,7 @@ test_expect_success 're-run instance, verify checkpoint date saved (files)' '
 	flux start -o,--setattr=statedir=$(pwd) \
 		   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
 		   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+		   -o,--setattr=broker.shutdown_path= \
 		   flux dmesg >dmesgfiles.out
 '
 

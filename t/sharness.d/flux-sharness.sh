@@ -222,6 +222,7 @@ test_under_flux() {
     if test "$personality" = "minimal"; then
         RC1_PATH=""
         RC3_PATH=""
+        SHUTDOWN_PATH=""
     elif test "$personality" = "system"; then
         # Pre-create broker rundir so we know it in advance and
         # make_bootstrap_config() can use it for ipc:// socket paths.
@@ -234,11 +235,14 @@ test_under_flux() {
         unset root
     elif test "$personality" != "full"; then
         RC1_PATH=$FLUX_SOURCE_DIR/t/rc/rc1-$personality
+        SHUTDOWN_PATH=$FLUX_SOURCE_DIR/t/rc/shutdown-$personality
         RC3_PATH=$FLUX_SOURCE_DIR/t/rc/rc3-$personality
         test -x $RC1_PATH || error "cannot execute $RC1_PATH"
+        test -x $SHUTDOWN_PATH || error "cannot execute $SHUTDOWN_PATH"
         test -x $RC3_PATH || error "cannot execute $RC3_PATH"
     else
         unset RC1_PATH
+        unset SHUTDOWN_PATH
         unset RC3_PATH
     fi
 
@@ -267,6 +271,7 @@ test_under_flux() {
                       ${BROKER_RUNDIR+--test-rundir=${BROKER_RUNDIR}} \
                       ${BROKER_RUNDIR+--test-rundir-cleanup} \
                       ${RC1_PATH+-o -Sbroker.rc1_path=${RC1_PATH}} \
+                      ${SHUTDOWN_PATH+-o -Sbroker.shutdown_path=${SHUTDOWN_PATH}} \
                       ${RC3_PATH+-o -Sbroker.rc3_path=${RC3_PATH}} \
                       ${sysopts} \
                       ${logopts} \

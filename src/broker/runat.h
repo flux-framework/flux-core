@@ -54,6 +54,13 @@ int runat_push_command (struct runat *r,
                         size_t argz_len,
                         int flags);
 
+/* Same but with command specified by cmdline.
+ */
+int runat_push_command_line (struct runat *r,
+                             const char *name,
+                             const char *cmdline,
+                             int flags);
+
 /* Get exit code of completed command list.
  * If multiple commands fail, the exit code is that of the first failure.
  */

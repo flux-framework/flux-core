@@ -58,6 +58,7 @@ test_expect_success 'most recent period is still running' '
 test_expect_success 'doctor startlog to look like a crash' '
 	flux start -o,--setattr=statedir=$(pwd) \
 		-o,-Sbroker.rc1_path=$SHARNESS_TEST_SRCDIR/rc/rc1-kvs \
+		-o,-Sbroker.shutdown_path= \
 		-o,-Sbroker.rc3_path=$SHARNESS_TEST_SRCDIR/rc/rc3-kvs \
 		flux startlog --post-start-event
 '

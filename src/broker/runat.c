@@ -37,6 +37,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/str/str.h"
 
 #include "runat.h"
@@ -553,6 +554,29 @@ error:
     return -1;
 }
 
+int runat_push_command_line (struct runat *r,
+                             const char *name,
+                             const char *cmdline,
+                             int flags)
+{
+    int rc;
+    char *argz = NULL;
+    size_t argz_len = 0;
+
+    if (!cmdline) {
+        errno = EINVAL;
+        return -1;
+    }
+    rc = argz_create_sep (cmdline, ' ', &argz, &argz_len);
+    if (rc != 0) {
+        errno = rc;
+        return -1;
+    }
+    rc = runat_push_command (r, name, argz, argz_len, flags);
+    ERRNO_SAFE_WRAP (free, argz);
+    return rc;
+}
+
 int runat_get_exit_code (struct runat *r, const char *name, int *rc)
 {
     struct runat_entry *entry;
@@ -663,6 +687,12 @@ static void runat_push_cb (flux_t *h,
         errstr = "commands array is empty";
         goto error;
     }
+    /* Transition: treat "cleanup" as an alias for "shutdown"
+     * so framework projects that are still using flux admin cleanup-push
+     * can add commands to "shutdown".
+     */
+    if (streq (name, "cleanup"))
+        name = "shutdown";
     json_array_foreach (commands, index, el) {
         const char *cmdline = json_string_value (el);
         if (!cmdline || strlen (cmdline) == 0) {

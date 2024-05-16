@@ -118,6 +118,10 @@ broker.quorum-timeout [Updates: C]
 broker.rc1_path [Updates: C]
    The path to the broker's rc1 script.  Default: ``${prefix}/etc/flux/rc1``.
 
+broker.shutdown_path [Updates: C]
+   The path to the broker's shutdown script.  Default:
+   ``${prefix}/etc/flux/shutdown``.
+
 broker.rc3_path [Updates: C]
    The path to the broker's rc3 script.  Default: ``${prefix}/etc/flux/rc3``.
 

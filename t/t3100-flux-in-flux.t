@@ -10,7 +10,7 @@ SIZE=$(test_size_large)
 test_under_flux ${SIZE}
 echo "# $0: flux session size will be ${SIZE}"
 
-ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
+ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Sbroker.shutdown_path="
 test_expect_success "flux can run flux instance as a job" '
 	run_timeout 60 flux run -n1 -N1 \
 		flux start ${ARGS} flux getattr size >size.out &&

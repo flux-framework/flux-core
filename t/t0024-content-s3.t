@@ -349,12 +349,14 @@ EOF
 test_expect_success 'run instance with content-s3 module loaded' '
 	flux start -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-s3 \
                    -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-s3 \
+		   -o,--setattr=broker.shutdown_path= \
 	           flux kvs put testkey=43
 '
 
 test_expect_success 're-run instance with content-s3 module loaded' '
 	flux start -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-s3 \
                    -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-s3 \
+		   -o,--setattr=broker.shutdown_path= \
 	           flux kvs get testkey >gets3.out
 '
 
@@ -366,6 +368,7 @@ test_expect_success 'content from previous instance survived (s3)' '
 test_expect_success 're-run instance, verify checkpoint date saved (s3)' '
 	flux start -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-s3 \
                    -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-s3 \
+		   -o,--setattr=broker.shutdown_path= \
 	           flux dmesg >dmesgs3.out
 '
 

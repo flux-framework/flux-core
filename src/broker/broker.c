@@ -594,7 +594,11 @@ static void init_attrs_rc_paths (attr_t *attrs)
                   flux_conf_builtin_get ("rc1_path", FLUX_CONF_AUTO),
                   0) < 0)
         log_err_exit ("attr_add rc1_path");
-
+    if (attr_add (attrs,
+                  "broker.shutdown_path",
+                  flux_conf_builtin_get ("shutdown_path", FLUX_CONF_AUTO),
+                  0) < 0)
+        log_err_exit ("attr_add shutdown_path");
     if (attr_add (attrs,
                   "broker.rc3_path",
                   flux_conf_builtin_get ("rc3_path", FLUX_CONF_AUTO),
@@ -723,7 +727,7 @@ static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
 
 static int create_runat_phases (broker_ctx_t *ctx)
 {
-    const char *rc1, *rc3, *local_uri;
+    const char *rc1, *rc3, *shutdown, *local_uri;
     bool rc2_none = false;
 
     if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0) {
@@ -732,6 +736,10 @@ static int create_runat_phases (broker_ctx_t *ctx)
     }
     if (attr_get (ctx->attrs, "broker.rc1_path", &rc1, NULL) < 0) {
         log_err ("broker.rc1_path is not set");
+        return -1;
+    }
+    if (attr_get (ctx->attrs, "broker.shutdown_path", &shutdown, NULL) < 0) {
+        log_err ("broker.shutdown_path is not set");
         return -1;
     }
     if (attr_get (ctx->attrs, "broker.rc3_path", &rc3, NULL) < 0) {
@@ -749,11 +757,11 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc1 - initialization
      */
     if (rc1 && strlen (rc1) > 0) {
-        if (runat_push_shell_command (ctx->runat,
-                                      "rc1",
-                                      rc1,
-                                      RUNAT_FLAG_LOG_STDIO) < 0) {
-            log_err ("runat_push_shell_command rc1");
+        if (runat_push_command_line (ctx->runat,
+                                     "rc1",
+                                     rc1,
+                                     RUNAT_FLAG_LOG_STDIO) < 0) {
+            log_err ("runat_push_command_line rc1");
             return -1;
         }
     }
@@ -769,14 +777,26 @@ static int create_runat_phases (broker_ctx_t *ctx)
         }
     }
 
+    /* shutdown - clean up in preparation for instance shutdown
+     */
+    if (ctx->rank == 0 && shutdown && strlen (shutdown) > 0) {
+        if (runat_push_command_line (ctx->runat,
+                                     "shutdown",
+                                      shutdown,
+                                      RUNAT_FLAG_LOG_STDIO) < 0) {
+            log_err ("runat_push_command_line shutdown");
+            return -1;
+        }
+    }
+
     /* rc3 - finalization
      */
     if (rc3 && strlen (rc3) > 0) {
-        if (runat_push_shell_command (ctx->runat,
-                                      "rc3",
-                                      rc3,
-                                      RUNAT_FLAG_LOG_STDIO) < 0) {
-            log_err ("runat_push_shell_command rc3");
+        if (runat_push_command_line (ctx->runat,
+                                     "rc3",
+                                     rc3,
+                                     RUNAT_FLAG_LOG_STDIO) < 0) {
+            log_err ("runat_push_command_line rc3");
             return -1;
         }
     }

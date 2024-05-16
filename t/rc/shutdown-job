@@ -1,0 +1,5 @@
+#!/bin/sh
+
+flux queue stop --quiet --all --nocheckpoint
+flux cancel --user=all --quiet --states RUN
+flux queue idle --quiet
