@@ -85,6 +85,24 @@ test_expect_success 'alloc-bypass: a full system job can still be run' '
 	  flux run -n $(flux resource list -s up -no {ncores}) hostname
 '
 test_expect_success 'kill bypass job' '
-	flux pkill bypass
+	flux pkill bypass &&
+	flux queue drain
 '
+test_expect_success 'alloc-bypass: submit an alloc-bypass job' '
+	flux submit -vvv --wait-event=start --job-name=bypass2 \
+		--setattr=alloc-bypass.R="$(flux R encode -r 0)" \
+		-n 1 \
+		sleep 300
+'
+test_expect_success 'alloc-bypass: scheduler has no nodes allocated' '
+	test $(FLUX_RESOURCE_LIST_RPC=sched.resource-status flux resource list -s allocated -no {nnodes}) -eq 0
+'
+test_expect_success 'alloc-bypass: reload scheduler' '
+	flux module reload sched-simple
+'
+# issue #5797 - bypass jobs must not be included in scheduler hello message
+test_expect_success 'alloc-bypass: scheduler still has no nodes allocated' '
+	test $(FLUX_RESOURCE_LIST_RPC=sched.resource-status flux resource list -s allocated -no {nnodes}) -eq 0
+'
+
 test_done
