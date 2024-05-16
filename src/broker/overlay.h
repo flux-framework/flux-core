@@ -145,6 +145,13 @@ int overlay_set_monitor_cb (struct overlay *ov,
                             overlay_monitor_f cb,
                             void *arg);
 
+/* Make a range of ranks available/unavailable for flub bootstrap
+ */
+int overlay_flub_provision (struct overlay *ov,
+                            uint32_t lo_rank,
+                            uint32_t hi_rank,
+                            bool available);
+
 /* Register overlay-related broker attributes.
  */
 int overlay_register_attrs (struct overlay *overlay);
