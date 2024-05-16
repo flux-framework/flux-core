@@ -394,7 +394,7 @@ void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
 
         ok (streq (buf, cmpbuf),
             "flux_subprocess_read returned correct data");
-        /* 1 + 2 + 1 for ':', "hi" */
+        /* 1 + 2 for ':', "hi" */
         ok (len == (strlen (stream) + 1 + 2),
             "flux_subprocess_read_line returned correct data len");
     }
