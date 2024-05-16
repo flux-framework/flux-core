@@ -1099,6 +1099,9 @@ void attach_event_continuation (flux_future_t *f, void *arg)
             goto done;
         if (errno == ENOENT)
             log_msg_exit ("Failed to attach to %s: No such job", ctx->jobid);
+        if (errno == EPERM)
+            log_msg_exit ("Failed to attach to %s: that is not your job",
+                          ctx->jobid);
         log_msg_exit ("flux_job_event_watch_get: %s",
                       future_strerror (f, errno));
     }
