@@ -186,10 +186,10 @@ static void output_cb (flux_subprocess_t *p, const char *stream)
     const char *prog = basename (MPIR_executable_path);
     int rank = flux_subprocess_rank (p);
 
-    line = flux_subprocess_read_trimmed_line (p, stream, &len);
-    if (line && len == 0)
-        line = flux_subprocess_read (p, stream, &len);
-    if (len)
+    len = flux_subprocess_read_trimmed_line (p, stream, &line);
+    if (len == 0)
+        len = flux_subprocess_read (p, stream, &line);
+    if (len > 0)
         log_msg ("MPIR: rank %d: %s: %s: %s", rank, prog, stream, line);
 }
 

@@ -418,17 +418,17 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 void channel_cb (flux_subprocess_t *p, const char *stream)
 {
     struct client *cli = flux_subprocess_aux_get (p, "cli");
-    const char *ptr;
-    int rc, lenp;
+    const char *buf;
+    int rc, len;
 
     assert (cli);
     assert (streq (stream, "PMI_FD"));
 
-    if (!(ptr = flux_subprocess_read_line (p, stream, &lenp)))
+    if ((len = flux_subprocess_read_line (p, stream, &buf)) < 0)
         log_err_exit ("%s: flux_subprocess_read_line", __FUNCTION__);
 
-    if (lenp) {
-        rc = pmi_simple_server_request (ctx.pmi.srv, ptr, cli, cli->rank);
+    if (len) {
+        rc = pmi_simple_server_request (ctx.pmi.srv, buf, cli, cli->rank);
         if (rc < 0)
             log_err_exit ("%s: pmi_simple_server_request", __FUNCTION__);
         if (rc == 1)

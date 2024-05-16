@@ -244,7 +244,7 @@ static void stdio_cb (flux_subprocess_t *p, const char *stream)
     const char *line;
     int len;
 
-    if ((line = flux_subprocess_getline (p, stream, &len)) && len > 0) {
+    if ((len = flux_subprocess_getline (p, stream, &line)) > 0) {
         if (streq (stream, "stderr"))
             flux_log (r->h, LOG_ERR, "%s.%d: %s", entry->name, index, line);
         else

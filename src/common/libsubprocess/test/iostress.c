@@ -63,7 +63,7 @@ static void iostress_output_cb (flux_subprocess_t *p, const char *stream)
     const char *line;
     int len;
 
-    if (!(line = flux_subprocess_read_line (p, stream, &len)))
+    if ((len = flux_subprocess_read_line (p, stream, &line)) < 0)
         diag ("%s: %s", stream, strerror (errno));
     else if (len == 0)
         diag ("%s: EOF", stream);

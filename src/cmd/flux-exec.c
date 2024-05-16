@@ -205,16 +205,16 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 void output_cb (flux_subprocess_t *p, const char *stream)
 {
     FILE *fstream = streq (stream, "stderr") ? stderr : stdout;
-    const char *ptr;
-    int lenp;
+    const char *buf;
+    int len;
 
-    if (!(ptr = flux_subprocess_getline (p, stream, &lenp)))
+    if ((len = flux_subprocess_getline (p, stream, &buf)) < 0)
         log_err_exit ("flux_subprocess_getline");
 
-    if (lenp) {
+    if (len) {
         if (optparse_getopt (opts, "label-io", NULL) > 0)
             fprintf (fstream, "%d: ", flux_subprocess_rank (p));
-        fwrite (ptr, lenp, 1, fstream);
+        fwrite (buf, len, 1, fstream);
     }
 }
 

@@ -229,7 +229,7 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
     const char *s;
     int len;
 
-    if (!(s = flux_subprocess_read_trimmed_line (p, stream, &len))) {
+    if ((len = flux_subprocess_read_trimmed_line (p, stream, &s)) < 0) {
         flux_log_error (w->h, "%s: subprocess_read_trimmed_line", w->name);
         return;
     }

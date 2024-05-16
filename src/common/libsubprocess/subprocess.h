@@ -193,10 +193,9 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
  *  Read unread data from stream `stream`.  'stream' can be "stdout",
  *   "stderr", or the name of a stream specified with flux_cmd_add_channel().
  *
- *   Returns pointer to buffer on success and NULL on error with errno
- *   set.  Buffer is guaranteed to be NUL terminated.  User shall not
- *   free returned pointer.  Length of buffer returned can optionally
- *   returned in 'lenp'.
+ *   Returns length of data on success and -1 on error with errno set.
+ *   Buffer of data is returned in bufp.  Buffer is guaranteed to be
+ *   NUL terminated.  User shall not free returned pointer.
  *
  *   In most cases, a length of 0 indicates that the subprocess has
  *   closed this stream.  A length of 0 could be returned if read
@@ -205,36 +204,36 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
  *   once per output callback.  flux_subprocess_read_stream_closed()
  *   can always be used to verify if the stream is in fact closed.
  */
-const char *flux_subprocess_read (flux_subprocess_t *p,
-                                  const char *stream,
-                                  int *lenp);
+int flux_subprocess_read (flux_subprocess_t *p,
+                          const char *stream,
+                          const char **bufp);
 
 /*
  *  Read line of unread data from stream `stream`.  'stream' can be
  *   "stdout", "stderr", or the name of a stream specified with
  *   flux_cmd_add_channel().
  *
- *   Returns pointer to buffer on success and NULL on error with errno
- *   set.  Buffer will include newline character and is guaranteed to
- *   be NUL terminated.  If no line is available, returns pointer and
- *   length of zero.  User shall not free returned pointer.  Length of
- *   buffer returned can optionally returned in 'lenp'.
+ *   Returns length of data on success and -1 on error with errno set.
+ *   Buffer with line is returned in bufp.  Buffer will include
+ *   newline character and is guaranteed to be NUL terminated.  If no
+ *   line is available, returns length of zero.  User shall not free
+ *   returned pointer.
  *
  *   A length of zero may be returned if the stream is closed OR if
  *   the stream is line buffered and a line is not yet available. Use
  *   flux_subprocess_read_stream_closed() to distinguish between the
  *   two.
  */
-const char *flux_subprocess_read_line (flux_subprocess_t *p,
-                                       const char *stream,
-                                       int *lenp);
+int flux_subprocess_read_line (flux_subprocess_t *p,
+                               const char *stream,
+                               const char **bufp);
 
 /* Identical to flux_subprocess_read_line(), but does not return
  * trailing newline.
  */
-const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
-                                               const char *stream,
-                                               int *lenp);
+int flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
+                                       const char *stream,
+                                       const char **bufp);
 
 /* Determine if the read stream has is closed / received an EOF.  This
  * function can be useful if you are reading lines via
@@ -258,14 +257,13 @@ bool flux_subprocess_read_stream_closed (flux_subprocess_t *p,
  *   last data on the stream does not terminate in a newline
  *   character, this function will return that last data without the
  *   trailing newline.
- * - if the stream has been closed / reached EOF, lenp will be set to
- *   0.
+ * - if the stream has been closed / reached EOF, 0 will be returned.
  * - if the stream is not line buffered, NULL and errno = EPERM will
  *   be returned.
  */
-const char *flux_subprocess_getline (flux_subprocess_t *p,
-                                     const char *stream,
-                                     int *lenp);
+int flux_subprocess_getline (flux_subprocess_t *p,
+                             const char *stream,
+                             const char **bufp);
 
 /*
  *  Create RPC to send signal `signo` to subprocess `p`.

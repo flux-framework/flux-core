@@ -59,7 +59,7 @@ static void simple_output_cb (flux_subprocess_t *p, const char *stream)
     const char *line;
     int len;
 
-    if (!(line = flux_subprocess_read_line (p, stream, &len)))
+    if ((len = flux_subprocess_read_line (p, stream, &line)) < 0)
         diag ("%s: %s", stream, strerror (errno));
     else if (len == 0)
         diag ("%s: EOF", stream);
@@ -67,7 +67,7 @@ static void simple_output_cb (flux_subprocess_t *p, const char *stream)
         diag ("%s: %d bytes", stream, len);
 
     if (streq (stream, "stdout")) {
-        if (line == NULL)
+        if (len < 0)
             ctx->scorecard.stdout_error = 1;
         else if (len == 0)
             ctx->scorecard.stdout_eof = 1;
@@ -75,7 +75,7 @@ static void simple_output_cb (flux_subprocess_t *p, const char *stream)
             ctx->scorecard.stdout_lines++;
     }
     else if (streq (stream, "stderr")) {
-        if (line == NULL)
+        if (len < 0)
             ctx->scorecard.stderr_error = 1;
         else if (len == 0)
             ctx->scorecard.stderr_eof = 1;
@@ -293,7 +293,7 @@ static void stop_output_cb (flux_subprocess_t *p, const char *stream)
     const char *line;
     int len;
 
-    if (!(line = flux_subprocess_read_line (p, stream, &len)))
+    if ((len = flux_subprocess_read_line (p, stream, &line)) < 0)
         diag ("%s: %s", stream, strerror (errno));
     else if (len == 0)
         diag ("%s: EOF", stream);
