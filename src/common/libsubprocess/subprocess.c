@@ -246,7 +246,11 @@ void subprocess_standard_output (flux_subprocess_t *p, const char *stream)
 
 void subprocess_check_completed (flux_subprocess_t *p)
 {
-    assert (p->state == FLUX_SUBPROCESS_EXITED);
+    if (p->state != FLUX_SUBPROCESS_EXITED) {
+        log_err ("subprocess_check_completed: unexpected state %s",
+                 flux_subprocess_state_string (p->state));
+        return;
+    }
 
     /* we're also waiting for the "complete" to come from the remote end */
     if (!p->local && !p->remote_completed)
