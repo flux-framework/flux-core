@@ -255,4 +255,13 @@ test_expect_success 'attach: writing to stdin of closed tasks returns EPIPE' '
 	test_debug "cat pipe.out" &&
 	grep -i "Broken pipe" pipe.out
 '
+test_expect_success 'attach: EPERM generates sensible error' '
+	jobid=$(flux job last) &&
+	( export FLUX_HANDLE_USERID=42 &&
+	  export FLUX_HANDLE_ROLEMASK=0x2 &&
+	  test_must_fail flux job attach -vEX $jobid 2>eperm.err
+	) &&
+	test_debug "cat eperm.err" &&
+	grep -i "not your job" eperm.err
+'
 test_done
