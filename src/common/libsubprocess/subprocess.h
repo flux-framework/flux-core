@@ -51,13 +51,13 @@ typedef enum {
  * Subprocess flags
  */
 enum {
-    /* flux_exec(): let parent stdin, stdout, stderr, carry to child.
-     * Do not create "stdin", "stdout", or "stderr" channels.  Subsequently,
-     * flux_subprocess_write()/close()/read()/read_line() will fail on
-     * streams of "stdin", "stdout", or "stderr".
+    /* flux_local_exec(): let parent stdin, stdout, stderr, carry to
+     * child.  Do not create "stdin", "stdout", or "stderr" channels.
+     * Subsequently, flux_subprocess_write()/close()/read()/read_line()
+     * will fail on streams of "stdin", "stdout", or "stderr".
      */
     FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH = 1,
-    /* flux_exec(): call setpgrp() before exec(2) */
+    /* flux_local_exec(): call setpgrp() before exec(2) */
     FLUX_SUBPROCESS_FLAGS_SETPGRP = 2,
     /* use fork(2)/exec(2) even if posix_spawn(3) available */
     FLUX_SUBPROCESS_FLAGS_FORK_EXEC = 4,
