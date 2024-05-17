@@ -179,11 +179,11 @@ JOB STATUS
 ==========
 
 Jobs may be observed to pass through five job states in Flux: DEPEND,
-SCHED, RUN, CLEANUP, and INACTIVE (see Flux RFC 21). Under the
-*state_single* field name, these are abbreviated as D, S, R, C, and I
+PRIORITY, SCHED, RUN, CLEANUP, and INACTIVE (see Flux RFC 21). Under the
+*state_single* field name, these are abbreviated as D, S, P, R, C, and I
 respectively. For convenience and clarity, the following virtual job
-states also exist: "pending", an alias for DEPEND,SCHED; "running", an
-alias for RUN,CLEANUP; "active", an alias for "pending,running".
+states also exist: "pending", an alias for DEPEND,PRIORITY,SCHED; "running",
+an alias for RUN,CLEANUP; "active", an alias for "pending,running".
 
 After a job has finished and is in the INACTIVE state, it can be
 marked with one of the possible results: COMPLETED, FAILED,
@@ -191,9 +191,9 @@ CANCELED, TIMEOUT. Under the *result_abbrev* field name, these are
 abbreviated as CD, F, CA, and TO respectively.
 
 The job status is a user friendly mix of both, a job is always in one
-of the following statuses: DEPEND, SCHED, RUN, CLEANUP, COMPLETED,
+of the following statuses: DEPEND, PRIORITY, SCHED, RUN, CLEANUP, COMPLETED,
 FAILED, CANCELED, or TIMEOUT. Under the *status_abbrev* field name,
-these are abbreviated as D, S, R, C, CD, F, CA, and TO respectively.
+these are abbreviated as D, P, S, R, C, CD, F, CA, and TO respectively.
 
 
 .. _flux_jobs_output_format:
