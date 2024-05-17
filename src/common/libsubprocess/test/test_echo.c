@@ -10,6 +10,18 @@
 
 /* simple tool that outputs args to stdout/stderr or both depending on
  * options
+ *
+ * 'O' - output to stdout
+ * 'E' - output to stderr
+ * 'n' - no newline, do not output newline after output
+ * 'C' - output to channel, get fd via 'c' option
+ * 'c' - name environment variable that contains channel fd number
+ * 'P' - prefix output with stream name
+ * 'b' - max to output before breaking out
+ *
+ * if args on command line, output those args, else read from fd for
+ * input (default fd = STDIN_FILENO)
+ *
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -102,11 +114,8 @@ main (int argc, char *argv[])
 
     if (channel) {
         const char *fdstr;
-        char channelstr[1024];
 
-        sprintf (channelstr, "%s", channel_name);
-
-        if (!(fdstr = getenv (channelstr))) {
+        if (!(fdstr = getenv (channel_name))) {
             perror ("getenv");
             exit (1);
         }
