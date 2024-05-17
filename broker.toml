@@ -1,0 +1,30 @@
+[access]
+allow-guest-user = true
+allow-root-owner = true
+
+# Point to resource definition generated with flux-R(1).
+[resource]
+path = "/tmp/R"
+
+[bootstrap]
+curve_cert = "/tmp/curve.cert"
+default_port = 8050
+default_bind = "tcp://eth0:%p"
+default_connect = "tcp://%h.flux-service.default.svc.cluster.local:%p"
+
+# CHANGE THIS TO YOUR HOSTNAME (or container hostname)
+hosts = [
+{ host="3013fe118c9d"},
+]		
+
+
+[archive]
+dbpath = "/tmp/job-archive.sqlite"
+period = "1m"
+busytimeout = "50s"
+
+[ingest.frobnicator]
+plugins = [ "defaults", "constraints", "dependency" ]
+
+[sched-fluxion-qmanager]
+queue-policy = "fcfs"
