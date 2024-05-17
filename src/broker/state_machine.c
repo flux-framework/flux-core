@@ -896,7 +896,7 @@ static void broker_online_cb (flux_future_t *f, void *arg)
     }
 
     if (quorum_reached) {
-        if (s->state != STATE_RUN) {
+        if (s->state == STATE_QUORUM) {
             state_machine_post (s, "quorum-full");
             if (s->quorum.warned) {
                 flux_log (s->ctx->h, LOG_ERR, "quorum reached");
