@@ -331,7 +331,7 @@ static void hello_cb (flux_t *h,
     flux_log (h, LOG_DEBUG, "scheduler: hello");
     job = zhashx_first (ctx->active_jobs);
     while (job) {
-        if (job->has_resources) {
+        if (job->has_resources && !job->alloc_bypass) {
             if (flux_respond_pack (h,
                                    msg,
                                    "{s:I s:I s:I s:f}",

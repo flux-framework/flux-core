@@ -51,15 +51,6 @@ static void alloc_continuation (flux_future_t *f, void *arg)
                                      strerror (errno));
         goto done;
     }
-
-    /*  Set "needs-free" so that alloc-bypass knows that a "free"
-     *   event needs to be emitted for this node.
-     */
-    if (flux_jobtap_job_aux_set (p, *idptr, "alloc-bypass::free", p, NULL) < 0)
-        flux_log_error (flux_jobtap_get_flux (p),
-                        "id=%s: Failed to set alloc-bypass::free",
-                        idf58 (*idptr));
-
 done:
     flux_future_destroy (f);
 }
@@ -151,27 +142,6 @@ static int sched_cb (flux_plugin_t *p,
     return 0;
 }
 
-static int cleanup_cb (flux_plugin_t *p,
-                       const char *topic,
-                       flux_plugin_arg_t *args,
-                       void *arg)
-{
-    /*  If alloc-bypass::free is set on this job, then this plugin
-     *   sent an "alloc" event, so a "free" event needs to be sent now.
-     */
-    if (flux_jobtap_job_aux_get (p,
-                                 FLUX_JOBTAP_CURRENT_JOB,
-                                 "alloc-bypass::free")) {
-        if (flux_jobtap_event_post_pack (p,
-                                         FLUX_JOBTAP_CURRENT_JOB,
-                                         "free",
-                                         NULL) < 0)
-             flux_log_error (flux_jobtap_get_flux (p),
-                             "alloc-bypass: failed to post free event");
-    }
-    return 0;
-}
-
 static int validate_cb (flux_plugin_t *p,
                         const char *topic,
                         flux_plugin_arg_t *args,
@@ -247,7 +217,6 @@ static int validate_cb (flux_plugin_t *p,
 
 static const struct flux_plugin_handler tab[] = {
     { "job.state.sched",   sched_cb,    NULL },
-    { "job.state.cleanup", cleanup_cb,  NULL },
     { "job.validate",      validate_cb, NULL },
     { 0 }
 };
