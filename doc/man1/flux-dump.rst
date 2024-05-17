@@ -76,6 +76,13 @@ OPTIONS
    store.  This may be slightly faster, depending on how frequently the same
    content blobs are referenced by multiple keys.
 
+.. option:: --ignore-failed-read
+
+   If KVS metadata is encountered that references nonexistent blobrefs
+   (for example after a disk full event), print an error but skip over the
+   KVS key and treat it as a warning.  Without this option, content load
+   failures are treated as immediate fatal errors.
+
 
 OTHER NOTES
 ===========
