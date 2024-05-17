@@ -180,7 +180,7 @@ JOB STATUS
 
 Jobs may be observed to pass through five job states in Flux: DEPEND,
 SCHED, RUN, CLEANUP, and INACTIVE (see Flux RFC 21). Under the
-``state_single`` field name, these are abbreviated as D, S, R, C, and I
+*state_single* field name, these are abbreviated as D, S, R, C, and I
 respectively. For convenience and clarity, the following virtual job
 states also exist: "pending", an alias for DEPEND,SCHED; "running", an
 alias for RUN,CLEANUP; "active", an alias for "pending,running".
