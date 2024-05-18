@@ -265,6 +265,50 @@ test_expect_success 'rc1 skips blob that exceeds 100M limit' '
 	grep "exceeds" bigdump3.err
 '
 
+# Cover dump/restore KVS key pointing to nonexistent blobref
+
+test_expect_success 'load kvs' '
+	flux module load kvs
+'
+test_expect_success 'take a dump and count the keys' '
+	flux dump -v origdump.tar &&
+	tar tvf origdump.tar | wc -l >origdump.count
+'
+
+# Usage: mkbad dirref|valref
+blobref="sha1-996324fa537cd312e564be576bafc21a3f63910d"
+mkbad() {
+	echo '{"data":["'$blobref'"],"type":"'$1'","ver":1}'
+}
+
+test_expect_success 'create a KVS valref with a dangling blobref' '
+	mkbad valref | flux kvs put --treeobj bad.a=- &&
+	test_must_fail flux kvs get bad.a
+'
+test_expect_success 'flux dump fails on bad key' '
+	test_must_fail flux dump baddump.tar
+'
+test_expect_success 'flux dump works with --ignore-failed-read' '
+	flux dump -q --ignore-failed-read baddump.tar
+'
+test_expect_success 'archive contains expected number of keys' '
+	tar tvf baddump.tar | wc -l >baddump.count &&
+	test_cmp origdump.count baddump.count
+'
+test_expect_success 'create a KVS dirref with a dangling blobref' '
+	mkbad dirref | flux kvs put --treeobj bad.b=- &&
+	test_must_fail flux kvs get bad.b
+'
+test_expect_success 'flux dump works with --ignore-failed-read' '
+	flux dump -q --ignore-failed-read baddump2.tar
+'
+test_expect_success 'archive contains expected number of keys' '
+	tar tvf baddump2.tar | wc -l >baddump2.count &&
+	test_cmp origdump.count baddump2.count
+'
+test_expect_success 'remove kvs module' '
+	flux module remove kvs
+'
 test_expect_success 'remove content module' '
 	flux module remove content
 '

@@ -18,6 +18,7 @@
 #include <stdarg.h>
 #include <jansson.h>
 #include <time.h>
+#include <stdarg.h>
 #include <archive.h>
 #include <archive_entry.h>
 
@@ -39,11 +40,30 @@ static void dump_treeobj (struct archive *ar,
 static bool sd_notify_flag;
 static bool verbose;
 static bool quiet;
+static bool ignore_failed_read;
 static int content_flags;
 static time_t dump_time;
 static gid_t dump_gid;
 static uid_t dump_uid;
 static int keycount;
+
+static void read_verror (const char *fmt, va_list ap)
+{
+    char buf[128];
+    vsnprintf (buf, sizeof (buf), fmt, ap);
+    fprintf (stderr, "%s\n", buf);
+    if (!ignore_failed_read)
+        exit (1);
+}
+
+static __attribute__ ((format (printf, 1, 2)))
+void read_error (const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    read_verror (fmt, ap);
+    va_end (ap);
+}
 
 static void progress (int delta_keys)
 {
@@ -156,10 +176,13 @@ static void dump_valref (struct archive *ar,
                                           content_flags))
             || flux_future_get (f, (const void **)&msg) < 0
             || flux_response_decode_raw (msg, NULL, &data, &len) < 0) {
-            log_msg_exit ("%s: missing blobref %d: %s",
-                          path,
-                          i,
-                          future_strerror (f, errno));
+            read_error ("%s: missing blobref %d: %s",
+                        path,
+                        i,
+                        future_strerror (f, errno));
+            flux_future_destroy (f);
+            flux_msglist_destroy (l);
+            return;
         }
         if (flux_msglist_append (l, msg) < 0)
             log_err_exit ("could not stash load response message");
@@ -282,9 +305,11 @@ static void dump_dirref (struct archive *ar,
                                       treeobj_get_blobref (treeobj, 0),
                                       content_flags))
         || content_load_get (f, &buf, &buflen) < 0) {
-        log_msg_exit ("%s: missing blobref: %s",
-                      path,
-                      future_strerror (f, errno));
+        read_error ("%s: missing blobref: %s",
+                    path,
+                    future_strerror (f, errno));
+        flux_future_destroy (f);
+        return;
     }
     if (!(treeobj_deref = treeobj_decodeb (buf, buflen)))
         log_err_exit ("%s: could not decode directory", path);
@@ -338,9 +363,12 @@ static void dump_blobref (struct archive *ar,
     json_t *entry;
 
     if (!(f = content_load_byblobref (h, blobref, content_flags))
-        || content_load_get (f, &buf, &buflen) < 0)
-        log_msg_exit ("cannot load root tree object: %s",
-                      future_strerror (f, errno));
+        || content_load_get (f, &buf, &buflen) < 0) {
+        read_error ("cannot load root tree object: %s",
+                    future_strerror (f, errno));
+        flux_future_destroy (f);
+        return;
+    }
     if (!(treeobj = treeobj_decodeb (buf, buflen)))
         log_err_exit ("cannot decode root tree object");
     if (treeobj_validate (treeobj) < 0)
@@ -375,6 +403,8 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
         verbose = true;
     if (optparse_hasopt (p, "quiet"))
         quiet = true;
+    if (optparse_hasopt (p, "ignore-failed-read"))
+        ignore_failed_read = true;
     if (optparse_hasopt (p, "no-cache")) {
         content_flags |= CONTENT_FLAG_CACHE_BYPASS;
         kvs_checkpoint_flags |= KVS_CHECKPOINT_FLAG_CACHE_BYPASS;
@@ -441,6 +471,9 @@ static struct optparse_option dump_opts[] = {
     },
     { .name = "no-cache", .has_arg = 0,
       .usage = "Bypass the broker content cache",
+    },
+    { .name = "ignore-failed-read", .has_arg = 0,
+      .usage = "Treat content load errors as non-fatal",
     },
     OPTPARSE_TABLE_END
 };
