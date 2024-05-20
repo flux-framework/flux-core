@@ -373,14 +373,6 @@ static int shell_output_kvs (struct shell_output *out)
                 if (eventlogger_append_entry (out->ev, 0, "output", entry) < 0)
                     return shell_log_errno ("eventlogger_append");
             }
-            if (eof && truncate) {
-                size_t total = is_stdout ?
-                               out->stdout_bytes : out->stderr_bytes;
-                shell_warn ("%s: %zu of %zu bytes truncated",
-                            is_stdout ? "stdout" : "stderr",
-                            total - out->kvs_limit_bytes,
-                            total);
-            }
         }
     }
     return 0;
@@ -511,10 +503,34 @@ static int shell_output_file (struct shell_output *out)
     return 0;
 }
 
+static void output_truncation_warning (struct shell_output *out)
+{
+    bool warned = false;
+    if (out->stderr_type == FLUX_OUTPUT_TYPE_KVS
+        && out->stderr_bytes > out->kvs_limit_bytes) {
+        shell_warn ("stderr: %zu of %zu bytes truncated",
+                    out->stderr_bytes - out->kvs_limit_bytes,
+                    out->stderr_bytes);
+        warned = true;
+    }
+    if (out->stdout_type == FLUX_OUTPUT_TYPE_KVS &&
+        out->stdout_bytes > out->kvs_limit_bytes) {
+        shell_warn ("stdout: %zu of %zu bytes truncated",
+                    out->stdout_bytes - out->kvs_limit_bytes,
+                    out->stdout_bytes);
+        warned = true;
+    }
+    /* Ensure KVS output is flushed to eventlogger if a warning was issued:
+     */
+    if (warned)
+        shell_output_kvs (out);
+}
+
 static void shell_output_decref (struct shell_output *out,
                                  flux_msg_handler_t *mh)
 {
     if (--out->refcount == 0) {
+        output_truncation_warning (out);
         if (mh)
             flux_msg_handler_stop (mh);
         if (flux_shell_remove_completion_ref (out->shell, "output.write") < 0)
