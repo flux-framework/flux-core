@@ -918,15 +918,14 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
 
     if (p->state != FLUX_SUBPROCESS_RUNNING
         && p->state != FLUX_SUBPROCESS_INIT) {
-        /* XXX right errno? */
-        errno = EINVAL;
+        errno = ESRCH;
         return NULL;
     }
 
     if (p->local) {
         int ret;
         if (p->pid <= (pid_t) 0) {
-            errno = EINVAL;
+            errno = ESRCH;
             return NULL;
         }
         if (p->flags & FLUX_SUBPROCESS_FLAGS_SETPGRP)
