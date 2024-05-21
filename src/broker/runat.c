@@ -228,8 +228,10 @@ static void state_change_cb (flux_subprocess_t *p,
             break;
         case FLUX_SUBPROCESS_RUNNING:
             if (entry->aborted) {
-                if (!(f = flux_subprocess_kill (p, abort_signal)))
-                    flux_log_error (r->h, "%s: error aborting", entry->name);
+                if (!(f = flux_subprocess_kill (p, abort_signal))) {
+                    if (errno != ESRCH)
+                        flux_log_error (r->h, "kill %s", entry->name);
+                }
                 flux_future_destroy (f);
             }
             break;
@@ -630,8 +632,10 @@ int runat_abort (struct runat *r, const char *name)
     }
     if ((cmd = zlist_head (entry->commands)) && cmd->p != NULL) {
         flux_future_t *f;
-        if (!(f = flux_subprocess_kill (cmd->p, abort_signal)))
-            flux_log_error (r->h, "%s: error aborting", entry->name);
+        if (!(f = flux_subprocess_kill (cmd->p, abort_signal))) {
+            if (errno != ESRCH)
+                flux_log_error (r->h, "kill %s", entry->name);
+        }
         flux_future_destroy (f);
     }
     entry->aborted = true;
