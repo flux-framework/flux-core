@@ -348,10 +348,15 @@ test_expect_success 'job-shell: shell errors are captured in error file' '
 	test_expect_code 127  flux run --error=test.err nosuchcommand &&
 	grep "nosuchcommand: No such file or directory" test.err
 '
-test_expect_success 'job-shell: kvs output truncatation works' '
+test_expect_success 'job-shell: kvs output truncation works' '
 	flux run -o output.limit=5 echo 0123456789 2>trunc.err &&
 	test_debug "cat trunc.err" &&
 	grep "stdout.*truncated" trunc.err
+'
+test_expect_success 'job-shell: job shell only logs once about truncation' '
+	flux run -N4 -o output.limit=20 echo 0123456789 2>trunc4.err &&
+	test_debug "cat trunc4.err"  &&
+	test $(grep -c "bytes truncated" trunc4.err) -eq 1
 '
 test_expect_success 'job-shell: stderr truncation works' '
 	flux run -o output.limit=5 \
