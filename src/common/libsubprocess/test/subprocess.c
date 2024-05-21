@@ -432,6 +432,11 @@ void completion_sigterm_cb (flux_subprocess_t *p)
         "subprocess terminated by SIGTERM");
     flux_reactor_stop (flux_subprocess_get_reactor (p));
     completion_sigterm_cb_count++;
+
+    errno = 0;
+    ok (flux_subprocess_kill (p, SIGTERM) == NULL && errno == ESRCH,
+        "flux_subprocess_kill fails with ESRCH");
+
 }
 
 void test_kill (flux_reactor_t *r)
@@ -460,6 +465,7 @@ void test_kill (flux_reactor_t *r)
     ok (flux_future_get (f, NULL) == 0, "flux_future_get (f) returns 0");
     ok (flux_reactor_run (r, 0) == 0, "reactor_run exits normally");
     ok (completion_sigterm_cb_count == 1, "completion sigterm callback called 1 time");
+
     flux_subprocess_destroy (p);
     flux_future_destroy (f);
     flux_cmd_destroy (cmd);
