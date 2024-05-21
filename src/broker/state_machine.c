@@ -570,6 +570,8 @@ void state_machine_kill (struct state_machine *s, int signum)
                 state_machine_post (s, "shutdown");
             break;
         case STATE_CLEANUP:
+            if (!runat_is_defined (s->ctx->runat, "cleanup"))
+                break;
             if (runat_abort (s->ctx->runat, "cleanup") < 0)
                 flux_log_error (h, "runat_abort cleanup (signal %d)", signum);
             break;
