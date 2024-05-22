@@ -205,14 +205,21 @@ static struct shell_oom *oom_create (flux_shell_t *shell, char *path)
     if ((oom->inotify_fd = inotify_init1 (IN_NONBLOCK | IN_CLOEXEC)) < 0
         || (oom->watch_id = inotify_add_watch (oom->inotify_fd,
                                                path,
-                                               IN_MODIFY)) < 0)
+                                               IN_MODIFY)) < 0) {
+        if (errno == EMFILE)
+            shell_warn ("max number of user inotify instances has been reached");
+        else
+            shell_warn ("error setting up inotify: %s", strerror (errno));
         goto error;
+    }
     if (!(oom->w = flux_fd_watcher_create (shell->r,
                                            oom->inotify_fd,
                                            FLUX_POLLIN,
                                            watch_cb,
-                                           oom)))
+                                           oom))) {
+        shell_warn ("error setting up inotify watcher: %s", strerror (errno));
         goto error;
+    }
     flux_watcher_start (oom->w);
     oom->memory_events_path = path; // takes ownership
     return oom;
