@@ -169,6 +169,21 @@ static int input_kvs_start (flux_plugin_t *p,
 {
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct task_input_kvs *kp;
+    const char *type = "service";
+
+    /*  No need to watch kvs input eventlog if input mode is not "kvs"
+     *  or unset.
+     */
+    if (flux_shell_getopt_unpack (shell,
+                                  "input",
+                                  "{s?{s?s}}",
+                                  "stdin",
+                                   "type", &type) < 0)
+        return -1;
+
+    if (!streq (type, "service"))
+        return 0;
+
 
     if (!(kp = task_input_kvs_create (shell))
         || flux_plugin_aux_set (p,
