@@ -328,7 +328,7 @@ The field names that can be specified are:
 **status_abbrev**
    status but in a max 2 character abbreviation
 
-**status_abbrev**
+**status_emoji**
    status but an appropriate emoji instead of job state / result
 
 **name**
