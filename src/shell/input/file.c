@@ -74,7 +74,7 @@ static struct file_input *file_input_create (flux_shell_t *shell,
     fp->path = path;
 
     if ((fp->fd = open (fp->path, O_RDONLY)) < 0) {
-        shell_log_errno ("error opening input file '%s'", fp->path);
+        shell_die_errno (1, "error opening input file '%s'", fp->path);
         goto error;
     }
     if (!(fp->w = flux_fd_watcher_create (shell->r,
