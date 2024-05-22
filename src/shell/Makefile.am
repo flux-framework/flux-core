@@ -68,7 +68,11 @@ flux_shell_SOURCES = \
 	pmi/pmi.c \
 	pmi/pmi_exchange.c \
 	pmi/pmi_exchange.h \
-	input.c \
+	input/util.h \
+	input/util.c \
+	input/service.c \
+	input/file.c \
+	input/kvs.c \
 	output.c \
 	svc.c \
 	svc.h \
