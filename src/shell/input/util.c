@@ -36,7 +36,9 @@ static void input_put_kvs_completion (flux_future_t *f, void *arg)
         shell_log_errno ("flux_shell_remove_completion_ref");
 }
 
-int input_eventlog_put (flux_shell_t *shell, json_t *context)
+int input_eventlog_put_event (flux_shell_t *shell,
+                              const char *name,
+                              json_t *context)
 {
     flux_t *h;
     flux_kvs_txn_t *txn = NULL;
@@ -48,7 +50,7 @@ int input_eventlog_put (flux_shell_t *shell, json_t *context)
 
     if (!(h = flux_shell_get_flux (shell)))
         goto error;
-    if (!(entry = eventlog_entry_pack (0.0, "data", "O", context)))
+    if (!(entry = eventlog_entry_pack (0.0, name, "O", context)))
         goto error;
     if (!(entrystr = eventlog_entry_encode (entry)))
         goto error;

@@ -21,10 +21,12 @@
  */
 int input_eventlog_init (flux_shell_t *shell);
 
-/*  Put an input eventlog entry defined in `context` to the KVS input
+/*  Put an input eventlog entry `name` defined in `context` to the KVS input
  *  eventlog.
  */
-int input_eventlog_put (flux_shell_t *shell, json_t *context);
+int input_eventlog_put_event (flux_shell_t *shell,
+                              const char *name,
+                              json_t *context);
 
 #endif /* !SHELL_INPUT_INTERNAL_H */
 
