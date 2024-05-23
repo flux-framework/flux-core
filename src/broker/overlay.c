@@ -164,6 +164,7 @@ struct overlay {
     char uuid[UUID_STR_LEN];
     int version;
     int zmqdebug;
+    int zmq_io_threads;
     double torpid_min;
     double torpid_max;
     double tcp_user_timeout;
@@ -1266,6 +1267,32 @@ static void parent_monitor_cb (struct zmqutil_monitor *mon, void *arg)
     }
 }
 
+static int overlay_zmq_init (struct overlay *ov)
+{
+    if (!ov->zctx) {
+        if (!(ov->zctx = zmq_ctx_new ()))
+            return -1;
+        /* At this point, ensure that tbon.zmq_io_threads is only increased on
+         * the leader node, on the assumption that it will be less effective on
+         * other nodes yet increases the broker's footprint.
+         * This could be removed if we decide otherwise later on.
+         */
+        if (ov->rank > 0 && ov->zmq_io_threads != 1) {
+            const char *key = "tbon.zmq_io_threads";
+            if (attr_set_flags (ov->attrs, key, 0) < 0
+                || attr_delete (ov->attrs, key, true) < 0
+                || attr_add_int (ov->attrs, key, 1, ATTR_IMMUTABLE) < 0)
+                return -1;
+            ov->zmq_io_threads = 1;
+        }
+        if (zmq_ctx_set (ov->zctx,
+                         ZMQ_IO_THREADS,
+                         ov->zmq_io_threads) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 int overlay_connect (struct overlay *ov)
 {
     if (ov->rank > 0) {
@@ -1273,7 +1300,7 @@ int overlay_connect (struct overlay *ov)
             errno = EINVAL;
             return -1;
         }
-        if (!ov->zctx && !(ov->zctx = zmq_ctx_new ()))
+        if (overlay_zmq_init (ov) < 0)
             return -1;
         if (!(ov->parent.zsock = zmq_socket (ov->zctx, ZMQ_DEALER))
             || zsetsockopt_int (ov->parent.zsock, ZMQ_SNDHWM, 0) < 0
@@ -1337,7 +1364,7 @@ int overlay_bind (struct overlay *ov, const char *uri)
         log_err ("overlay_bind: invalid arguments");
         return -1;
     }
-    if (!ov->zctx && !(ov->zctx = zmq_ctx_new ())) {
+    if (overlay_zmq_init (ov) < 0) {
         log_err ("error creating zeromq context");
         return -1;
     }
@@ -2277,6 +2304,16 @@ struct overlay *overlay_create (flux_t *h,
         goto error;
     if (ov->child_rcvhwm < 0 || ov->child_rcvhwm == 1) {
         log_msg ("tbon.child_rcvhwm must be 0 (unlimited) or >= 2");
+        errno = EINVAL;
+        goto error;
+    }
+    if (overlay_configure_tbon_int (ov,
+                                    "zmq_io_threads",
+                                    &ov->zmq_io_threads,
+                                    1) < 0)
+        goto error;
+    if (ov->zmq_io_threads < 1) {
+        log_msg ("tbon.zmq_io_threads must be >= 1");
         errno = EINVAL;
         goto error;
     }
