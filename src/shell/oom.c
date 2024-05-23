@@ -222,9 +222,9 @@ error:
 }
 
 static int oom_init (flux_plugin_t *p,
-                      const char *topic,
-                      flux_plugin_arg_t *arg,
-                      void *data)
+                     const char *topic,
+                     flux_plugin_arg_t *arg,
+                     void *data)
 {
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct shell_oom *oom;
