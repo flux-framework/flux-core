@@ -539,6 +539,35 @@ test_expect_success 'tbon.zmq_io_threads broker attr overrides' '
 test_expect_success 'setting tbon.zmq_io_threads to -1 fails' '
 	test_expect_code 1 flux broker ${ARGS} -Stbon.zmq_io_threads=-1 true
 '
+test_expect_success 'tbon.child_rcvhwm is 0 by default' '
+	echo 0 >hwm0.exp &&
+	flux broker ${ARGS} \
+		flux getattr tbon.child_rcvhwm >hwm0.out &&
+	test_cmp hwm0.exp hwm0.out
+'
+test_expect_success 'tbon.child_rcvhwm can be configured' '
+	cat <<-EOT >hwm.toml &&
+	[tbon]
+	child_rcvhwm = 5
+	EOT
+	echo 5 >hwm5.exp &&
+	flux broker ${ARGS} --config-path=hwm.toml \
+		flux getattr tbon.child_rcvhwm >hwm5.out &&
+	test_cmp hwm5.exp hwm5.out
+'
+test_expect_success 'tbon.child_rcvhwm broker attr overrides' '
+	echo 2 >hwm2.exp &&
+	flux broker ${ARGS} --config-path=hwm.toml \
+		-Stbon.child_rcvhwm=2 \
+		flux getattr tbon.child_rcvhwm >hwm2.out &&
+	test_cmp hwm2.exp hwm2.out
+'
+test_expect_success 'tbon.child_rcvhwm=-1 fails' '
+	test_expect_code 1 flux broker ${args} -Stbon.child_rcvhwm=-1 true
+'
+test_expect_success 'tbon.child_rcvhwm=1 fails' '
+	test_expect_code 1 flux broker ${args} -Stbon.child_rcvhwm=1 true
+'
 test_expect_success 'tbon.torpid_max, tbon.torpid_min can be configured' '
 	mkdir conf21 &&
 	cat <<-EOT >conf21/tbon.toml &&
