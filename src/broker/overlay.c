@@ -168,6 +168,7 @@ struct overlay {
     double torpid_max;
     double tcp_user_timeout;
     double connect_timeout;
+    int child_rcvhwm;
 
     struct parent parent;
 
@@ -1349,7 +1350,7 @@ int overlay_bind (struct overlay *ov, const char *uri)
 
     if (!(ov->bind_zsock = zmq_socket (ov->zctx, ZMQ_ROUTER))
         || zsetsockopt_int (ov->bind_zsock, ZMQ_SNDHWM, 0) < 0
-        || zsetsockopt_int (ov->bind_zsock, ZMQ_RCVHWM, 0) < 0
+        || zsetsockopt_int (ov->bind_zsock, ZMQ_RCVHWM, ov->child_rcvhwm) < 0
         || zsetsockopt_int (ov->bind_zsock, ZMQ_LINGER, 5) < 0
         || zsetsockopt_int (ov->bind_zsock, ZMQ_ROUTER_MANDATORY, 1) < 0
         || zsetsockopt_int (ov->bind_zsock, ZMQ_IPV6, ov->enable_ipv6) < 0
@@ -2057,11 +2058,15 @@ static int overlay_configure_timeout (struct overlay *ov,
     return 0;
 }
 
-static int overlay_configure_zmqdebug (struct overlay *ov)
+static int overlay_configure_tbon_int (struct overlay *ov,
+                                       const char *name,
+                                       int *value,
+                                       int default_value)
 {
     const flux_conf_t *cf;
+    char attrname[128];
 
-    ov->zmqdebug = 0;
+    *value = default_value;
     if ((cf = flux_get_conf (ov->h))) {
         flux_error_t error;
 
@@ -2069,15 +2074,13 @@ static int overlay_configure_zmqdebug (struct overlay *ov)
                               &error,
                               "{s?{s?i}}",
                               "tbon",
-                                "zmqdebug", &ov->zmqdebug) < 0) {
+                                name, value) < 0) {
             log_msg ("Config file error [tbon]: %s", error.text);
             return -1;
         }
     }
-    if (overlay_configure_attr_int (ov->attrs,
-                                    "tbon.zmqdebug",
-                                    ov->zmqdebug,
-                                    &ov->zmqdebug) < 0)
+    (void)snprintf (attrname, sizeof (attrname), "tbon.%s", name);
+    if (overlay_configure_attr_int (ov->attrs, attrname, *value, value) < 0)
         return -1;
     return 0;
 }
@@ -2265,8 +2268,18 @@ struct overlay *overlay_create (flux_t *h,
                                    default_connect_timeout,
                                    &ov->connect_timeout) < 0)
         goto error;
-    if (overlay_configure_zmqdebug (ov) < 0)
+    if (overlay_configure_tbon_int (ov, "zmqdebug", &ov->zmqdebug, 0) < 0)
         goto error;
+    if (overlay_configure_tbon_int (ov,
+                                    "child_rcvhwm",
+                                    &ov->child_rcvhwm,
+                                    0) < 0)
+        goto error;
+    if (ov->child_rcvhwm < 0 || ov->child_rcvhwm == 1) {
+        log_msg ("tbon.child_rcvhwm must be 0 (unlimited) or >= 2");
+        errno = EINVAL;
+        goto error;
+    }
     if (overlay_configure_topo (ov) < 0)
         goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
