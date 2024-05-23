@@ -37,6 +37,7 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/strstrip.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 #include "builtins.h"
@@ -193,12 +194,20 @@ static void oom_destroy (struct shell_oom *oom)
     }
 }
 
-static struct shell_oom *oom_create (flux_shell_t *shell, char *path)
+static struct shell_oom *oom_create (flux_shell_t *shell,
+                                     char *path,
+                                     flux_error_t *errp)
 {
     struct shell_oom *oom;
 
-    if (!(oom = calloc (1, sizeof (*oom))))
+    if (!shell) {
+        errprintf (errp, "plugin not initialized with shell");
         return NULL;
+    }
+    if (!(oom = calloc (1, sizeof (*oom)))) {
+        errprintf (errp, "%s", strerror (errno));
+        return NULL;
+    }
     oom->inotify_fd = -1;
     oom->watch_id = -1;
     oom->shell = shell;
@@ -207,9 +216,10 @@ static struct shell_oom *oom_create (flux_shell_t *shell, char *path)
                                                path,
                                                IN_MODIFY)) < 0) {
         if (errno == EMFILE)
-            shell_warn ("max number of user inotify instances has been reached");
+            errprintf (errp,
+                       "max number of user inotify instances has been reached");
         else
-            shell_warn ("error setting up inotify: %s", strerror (errno));
+            errprintf (errp, "error setting up inotify: %s", strerror (errno));
         goto error;
     }
     if (!(oom->w = flux_fd_watcher_create (shell->r,
@@ -217,7 +227,9 @@ static struct shell_oom *oom_create (flux_shell_t *shell, char *path)
                                            FLUX_POLLIN,
                                            watch_cb,
                                            oom))) {
-        shell_warn ("error setting up inotify watcher: %s", strerror (errno));
+        errprintf (errp,
+                   "error setting up inotify watcher: %s",
+                   strerror (errno));
         goto error;
     }
     flux_watcher_start (oom->w);
@@ -235,14 +247,16 @@ static int oom_init (flux_plugin_t *p,
 {
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct shell_oom *oom;
+    flux_error_t error;
     char *path;
 
     // assume cgroup is not configured or not v2
     if (!(path = get_cgroup_path (getpid (), "memory.events", R_OK)))
         return 0;
-    if (!shell || !(oom = oom_create (shell, path))) {
+    if (!(oom = oom_create (shell, path, &error))) {
         ERRNO_SAFE_WRAP (free, path);
-        return -1;
+        shell_warn ("disabling oom detection: %s", error.text);
+        return 0;
     }
     if (flux_plugin_aux_set (p, "oom", oom, (flux_free_f)oom_destroy) < 0) {
         oom_destroy (oom);
