@@ -139,6 +139,11 @@ test_expect_success 'flux-shell: run 1-task input file as stdin job' '
         test_cmp input_stdin_file file0.out
 '
 
+test_expect_success 'flux-shell: input from file results in redirect event' '
+	flux job wait-event -Hp input -t 5 -m stream=stdin \
+		$(flux job last) redirect
+'
+
 test_expect_success 'flux-shell: run 2-task input file as stdin job' '
         flux run -n2 --input=input_stdin_file --label-io \
              ${TEST_SUBPROCESS_DIR}/test_echo -O -n > file1.out &&
