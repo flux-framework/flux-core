@@ -167,7 +167,7 @@ test_expect_success LONGTEST 'flux-shell: 10K line lptest input works' '
 '
 
 test_expect_success 'flux-shell: input file invalid' '
-        test_must_fail flux run -n1 --input=/foo/bar/baz \
+        test_must_fail_or_be_terminated flux run -n1 --input=/foo/bar/baz \
              ${TEST_SUBPROCESS_DIR}/test_echo -O -n
 '
 

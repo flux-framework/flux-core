@@ -35,7 +35,9 @@ extern struct shell_builtin builtin_files;
 extern struct shell_builtin builtin_stage_in;
 extern struct shell_builtin builtin_log_eventlog;
 extern struct shell_builtin builtin_pmi;
-extern struct shell_builtin builtin_input;
+extern struct shell_builtin builtin_input_service;
+extern struct shell_builtin builtin_file_input;
+extern struct shell_builtin builtin_kvs_input;
 extern struct shell_builtin builtin_output;
 extern struct shell_builtin builtin_kill;
 extern struct shell_builtin builtin_signals;
@@ -61,7 +63,9 @@ static struct shell_builtin * builtins [] = {
     &builtin_stage_in,
     &builtin_log_eventlog,
     &builtin_pmi,
-    &builtin_input,
+    &builtin_input_service,
+    &builtin_file_input,
+    &builtin_kvs_input,
     &builtin_output,
     &builtin_kill,
     &builtin_signals,
@@ -102,6 +106,7 @@ static int shell_load_builtin (flux_shell_t *shell,
                                     sb->post_init,
                                     NULL) < 0
         || flux_plugin_add_handler (p, "shell.exit", sb->exit, NULL) < 0
+        || flux_plugin_add_handler (p, "shell.start",sb->start, NULL) < 0
         || flux_plugin_add_handler (p, "task.init",  sb->task_init, NULL) < 0
         || flux_plugin_add_handler (p, "task.fork",  sb->task_fork, NULL) < 0
         || flux_plugin_add_handler (p, "task.exec",  sb->task_exec, NULL) < 0
