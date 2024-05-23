@@ -31,6 +31,7 @@
 #include "command_private.h"
 #include "local.h"
 #include "remote.h"
+#include "client.h"
 #include "util.h"
 
 /*
@@ -55,9 +56,6 @@ void channel_destroy (void *arg)
 
         fbuf_destroy (c->write_buffer);
         fbuf_destroy (c->read_buffer);
-        flux_watcher_destroy (c->in_prep_w);
-        flux_watcher_destroy (c->in_idle_w);
-        flux_watcher_destroy (c->in_check_w);
         flux_watcher_destroy (c->out_prep_w);
         flux_watcher_destroy (c->out_idle_w);
         flux_watcher_destroy (c->out_check_w);
@@ -709,13 +707,30 @@ int flux_subprocess_write (flux_subprocess_t *p,
             errno = EPIPE;
             return -1;
         }
-        if (fbuf_space (c->write_buffer) < len) {
-            errno = ENOSPC;
-            return -1;
+        if (p->state == FLUX_SUBPROCESS_INIT) {
+            if (fbuf_space (c->write_buffer) < len) {
+                errno = ENOSPC;
+                return -1;
+            }
+            if ((ret = fbuf_write (c->write_buffer, buf, len)) < 0) {
+                log_err ("fbuf_write");
+                return -1;
+            }
         }
-        if ((ret = fbuf_write (c->write_buffer, buf, len)) < 0) {
-            log_err ("fbuf_write");
-            return -1;
+        else { /* p->state == FLUX_SUBPROCESS_RUNNING */
+            if (subprocess_write (p->h,
+                                  p->service_name,
+                                  p->rank,
+                                  p->pid,
+                                  c->name,
+                                  buf,
+                                  len,
+                                  false) < 0) {
+                log_err ("error sending rexec.write request: %s",
+                         strerror (errno));
+                return -1;
+            }
+            ret = len;
         }
     }
 
@@ -754,11 +769,26 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
         c->closed = true;
     }
     else {
-        /* doesn't matter about state, b/c reactors will send closed.
-         * If those reactors are already turned off, it's b/c
-         * subprocess failed/exited.
+        /* if process isn't running, eof plus any previously written
+         * data will be sent after process converts to running.  See
+         * send_channel_data() in remote.c.  If subprocess has already
+         * exited, this does nothing.
          */
         c->closed = true;
+        if (p->state == FLUX_SUBPROCESS_RUNNING) {
+            if (subprocess_write (p->h,
+                                  p->service_name,
+                                  p->rank,
+                                  p->pid,
+                                  c->name,
+                                  NULL,
+                                  0,
+                                  true) < 0) {
+                log_err ("error sending rexec.write request: %s",
+                         strerror (errno));
+                return -1;
+            }
+        }
     }
 
     return 0;
