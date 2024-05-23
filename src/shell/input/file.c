@@ -96,6 +96,31 @@ static int file_input_task_exec (flux_plugin_t *p,
     return 0;
 }
 
+/*  Init eventlog and add redirect event(s)
+ */
+static void input_eventlog_put_redirect (struct file_input *fp)
+{
+    json_t *context = NULL;
+
+    if (input_eventlog_init (fp->shell) < 0) {
+        shell_log_errno ("failed to initialize input eventlog");
+        return;
+    }
+    if (!(context = json_pack ("{s:s s:s s:s}",
+                               "stream", "stdin",
+                               "rank", "all",
+                               "path", fp->path))) {
+        shell_log_error ("failed to pack redirect eventlog entry");
+        goto error;
+    }
+    if (input_eventlog_put_event (fp->shell, "redirect", context) < 0) {
+        shell_log_errno ("failed to add redirect event to input eventlog");
+        goto error;
+    }
+error:
+    json_decref (context);
+    return;
+}
 
 static int file_input_init (flux_plugin_t *p,
                             const char *topic,
@@ -139,6 +164,13 @@ static int file_input_init (flux_plugin_t *p,
                                  file_input_task_exec,
                                  fp) < 0)
         return -1;
+
+    /* On shell rank 0, post a redirect event for all tasks.
+     * Any errors will be emitted in input_eventlog_put_redirect(),
+     *  and they are not fatal since this is just informational.
+     */
+    if (shell->info->shell_rank == 0)
+        input_eventlog_put_redirect (fp);
 
     return 0;
 }
