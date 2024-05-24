@@ -19,7 +19,8 @@ parallel jobs.  For that, see :man1:`flux-run`.
 
 By default, *COMMAND* runs across all :man1:`flux-broker` processes.  If the
 :option:`--jobid` option is specified, the commands are run across a job's
-:man1:`flux-shell` processes.  Normally this means that one copy of *COMMAND*
+:man1:`flux-shell` processes.  Normally there is only one broker process per
+node, and one job shell per broker, meaning that one copy of *COMMAND* is
 is executed per node, but in unusual cases it could mean more (e.g. if the
 Flux instance was started with multiple brokers per node).
 
