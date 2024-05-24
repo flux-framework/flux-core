@@ -58,6 +58,19 @@ zmqdebug
    should be enabled: 0=disabled, 1=enabled.  Default: ``0``.  This configured
    value may be overridden by setting the ``tbon.zmqdebug`` broker attribute.
 
+zmq_io_threads
+   (optional) Integer value to set the number of I/O threads libzmq will start
+   on the leader node.  The default is 1.  This configured value may be
+   overridden by setting the ``tbon.zmq_io_threads`` broker attribute.
+
+child_rcvhwm
+   (optional) Integer value that limits the number of messages stored locally
+   on behalf of each downstream TBON peer.  When the limit is reached, messages
+   are queued on the peer instead.  Setting this reduces memory usage for
+   nodes with a large number of downstream peers, at the expense of message
+   latency.  The value should be 0 (unlimited) or >= 2.  The default is 0.
+   This configured value may be overridden by setting the ``tbon.child_rcvhwm``
+   broker attribute.
 
 EXAMPLE
 =======

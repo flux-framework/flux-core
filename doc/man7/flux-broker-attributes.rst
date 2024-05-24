@@ -174,6 +174,15 @@ tbon.zmqdebug [Updates: C]
    if available.  This is potentially useful for debugging overlay
    connectivity problems.  Default: ``0``.
 
+tbon.zmq_io_threads [Updates: C]
+   Set the number of I/O threads libzmq will start on the leader node.
+   Default: ``1``.
+
+tbon.child_rcvhwm [Updates: C]
+   Limit the number of messages stored locally on behalf of each downstream
+   TBON peer.  When the limit is reached, messages are queued on the peer
+   instead.  Default: ``0`` (unlimited).
+
 tbon.prefertcp [Updates: C]
    If set to an integer value other than zero, and the broker is bootstrapping
    with PMI, tcp:// endpoints will be used instead of ipc://, even if all

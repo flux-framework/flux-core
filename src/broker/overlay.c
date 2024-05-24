@@ -164,10 +164,12 @@ struct overlay {
     char uuid[UUID_STR_LEN];
     int version;
     int zmqdebug;
+    int zmq_io_threads;
     double torpid_min;
     double torpid_max;
     double tcp_user_timeout;
     double connect_timeout;
+    int child_rcvhwm;
 
     struct parent parent;
 
@@ -1265,6 +1267,32 @@ static void parent_monitor_cb (struct zmqutil_monitor *mon, void *arg)
     }
 }
 
+static int overlay_zmq_init (struct overlay *ov)
+{
+    if (!ov->zctx) {
+        if (!(ov->zctx = zmq_ctx_new ()))
+            return -1;
+        /* At this point, ensure that tbon.zmq_io_threads is only increased on
+         * the leader node, on the assumption that it will be less effective on
+         * other nodes yet increases the broker's footprint.
+         * This could be removed if we decide otherwise later on.
+         */
+        if (ov->rank > 0 && ov->zmq_io_threads != 1) {
+            const char *key = "tbon.zmq_io_threads";
+            if (attr_set_flags (ov->attrs, key, 0) < 0
+                || attr_delete (ov->attrs, key, true) < 0
+                || attr_add_int (ov->attrs, key, 1, ATTR_IMMUTABLE) < 0)
+                return -1;
+            ov->zmq_io_threads = 1;
+        }
+        if (zmq_ctx_set (ov->zctx,
+                         ZMQ_IO_THREADS,
+                         ov->zmq_io_threads) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 int overlay_connect (struct overlay *ov)
 {
     if (ov->rank > 0) {
@@ -1272,7 +1300,7 @@ int overlay_connect (struct overlay *ov)
             errno = EINVAL;
             return -1;
         }
-        if (!ov->zctx && !(ov->zctx = zmq_ctx_new ()))
+        if (overlay_zmq_init (ov) < 0)
             return -1;
         if (!(ov->parent.zsock = zmq_socket (ov->zctx, ZMQ_DEALER))
             || zsetsockopt_int (ov->parent.zsock, ZMQ_SNDHWM, 0) < 0
@@ -1336,7 +1364,7 @@ int overlay_bind (struct overlay *ov, const char *uri)
         log_err ("overlay_bind: invalid arguments");
         return -1;
     }
-    if (!ov->zctx && !(ov->zctx = zmq_ctx_new ())) {
+    if (overlay_zmq_init (ov) < 0) {
         log_err ("error creating zeromq context");
         return -1;
     }
@@ -1349,7 +1377,7 @@ int overlay_bind (struct overlay *ov, const char *uri)
 
     if (!(ov->bind_zsock = zmq_socket (ov->zctx, ZMQ_ROUTER))
         || zsetsockopt_int (ov->bind_zsock, ZMQ_SNDHWM, 0) < 0
-        || zsetsockopt_int (ov->bind_zsock, ZMQ_RCVHWM, 0) < 0
+        || zsetsockopt_int (ov->bind_zsock, ZMQ_RCVHWM, ov->child_rcvhwm) < 0
         || zsetsockopt_int (ov->bind_zsock, ZMQ_LINGER, 5) < 0
         || zsetsockopt_int (ov->bind_zsock, ZMQ_ROUTER_MANDATORY, 1) < 0
         || zsetsockopt_int (ov->bind_zsock, ZMQ_IPV6, ov->enable_ipv6) < 0
@@ -2057,11 +2085,15 @@ static int overlay_configure_timeout (struct overlay *ov,
     return 0;
 }
 
-static int overlay_configure_zmqdebug (struct overlay *ov)
+static int overlay_configure_tbon_int (struct overlay *ov,
+                                       const char *name,
+                                       int *value,
+                                       int default_value)
 {
     const flux_conf_t *cf;
+    char attrname[128];
 
-    ov->zmqdebug = 0;
+    *value = default_value;
     if ((cf = flux_get_conf (ov->h))) {
         flux_error_t error;
 
@@ -2069,15 +2101,13 @@ static int overlay_configure_zmqdebug (struct overlay *ov)
                               &error,
                               "{s?{s?i}}",
                               "tbon",
-                                "zmqdebug", &ov->zmqdebug) < 0) {
+                                name, value) < 0) {
             log_msg ("Config file error [tbon]: %s", error.text);
             return -1;
         }
     }
-    if (overlay_configure_attr_int (ov->attrs,
-                                    "tbon.zmqdebug",
-                                    ov->zmqdebug,
-                                    &ov->zmqdebug) < 0)
+    (void)snprintf (attrname, sizeof (attrname), "tbon.%s", name);
+    if (overlay_configure_attr_int (ov->attrs, attrname, *value, value) < 0)
         return -1;
     return 0;
 }
@@ -2265,8 +2295,28 @@ struct overlay *overlay_create (flux_t *h,
                                    default_connect_timeout,
                                    &ov->connect_timeout) < 0)
         goto error;
-    if (overlay_configure_zmqdebug (ov) < 0)
+    if (overlay_configure_tbon_int (ov, "zmqdebug", &ov->zmqdebug, 0) < 0)
         goto error;
+    if (overlay_configure_tbon_int (ov,
+                                    "child_rcvhwm",
+                                    &ov->child_rcvhwm,
+                                    0) < 0)
+        goto error;
+    if (ov->child_rcvhwm < 0 || ov->child_rcvhwm == 1) {
+        log_msg ("tbon.child_rcvhwm must be 0 (unlimited) or >= 2");
+        errno = EINVAL;
+        goto error;
+    }
+    if (overlay_configure_tbon_int (ov,
+                                    "zmq_io_threads",
+                                    &ov->zmq_io_threads,
+                                    1) < 0)
+        goto error;
+    if (ov->zmq_io_threads < 1) {
+        log_msg ("tbon.zmq_io_threads must be >= 1");
+        errno = EINVAL;
+        goto error;
+    }
     if (overlay_configure_topo (ov) < 0)
         goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)

@@ -912,3 +912,5 @@ keypair
 unterminated
 upmi
 testexec
+rcvhwm
+libzmq
