@@ -223,6 +223,11 @@ plugins include:
   initrc path. For details of the job shell initrc.lua file format,
   see the `SHELL INITRC`_ section below.
 
+.. option:: userrc=FILE
+
+  Load another initrc.lua file after the system one.  For details of the
+  job shell initrc.lua file format, see the `SHELL INITRC`_ section below.
+
 .. option:: pty
 
   Allocate a pty to all task ranks for non-interactive use. Output
@@ -479,7 +484,8 @@ At initialization, :program:`flux shell` reads a Lua initrc file which can be
 used to customize the shell operation. The initrc is loaded by default from
 ``$sysconfdir/flux/shell/initrc.lua`` (or ``/etc/flux/shell/initrc.lua``
 for a "standard" install), but a different path may be specified when
-launching a job via the ``initrc`` shell option.
+launching a job via the ``initrc`` shell option.  Alternatively, the ``userrc``
+shell option can specify an initrc file to load after the system one.
 
 A job shell initrc file may be used to adjust the shell plugin searchpath,
 load specific plugins, read and set shell options, and even extend the
