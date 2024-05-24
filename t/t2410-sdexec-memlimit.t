@@ -159,7 +159,7 @@ test_expect_success STRESS 'exceeding memory.max causes job failure' '
 #
 
 test_expect_success 'change values of memory containment' '
-	cat >config/config.toml <<EOT
+	cat >config/config.toml <<-EOT &&
 	[systemd]
 	enable = true
 	sdbus-debug = true
