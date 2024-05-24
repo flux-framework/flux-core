@@ -307,6 +307,160 @@ void simple_test (flux_t *h)
                       &exp);
 }
 
+void simple_pre_running_write_close_output_cb (flux_subprocess_t *p,
+                                               const char *stream)
+{
+    struct simple_ctx *ctx = flux_subprocess_aux_get (p, "ctx");
+    const char *line = NULL;
+    char cmpbuf[1024];
+    int len;
+
+    if (!streq (stream, "stdout"))
+        BAIL_OUT ("unexpected stream: %s", stream);
+
+    if (ctx->scorecard.stdout_lines == 0) {
+        len = flux_subprocess_read (p, stream, &line);
+        ok (len > 0
+            && line != NULL,
+            "flux_subprocess_read success");
+
+        /* 1 + 3 + 1 for ':', "foo", "\n" */
+        ok (len == (strlen (stream) + 1 + 3 + 1),
+            "flux_subprocess_read returned correct data len");
+
+        sprintf (cmpbuf, "%s:foo\n", stream);
+        ok (streq (line, cmpbuf),
+            "flux_subprocess_read returned correct data");
+
+        ctx->scorecard.stdout_lines++;
+    }
+    else {
+        ok (flux_subprocess_read_stream_closed (p, stream),
+            "flux_subprocess_read_stream_closed saw EOF on %s", stream);
+
+        len = flux_subprocess_read (p, stream, &line);
+        ok (len == 0,
+            "flux_subprocess_read on %s read EOF", stream);
+        ctx->scorecard.stdout_eof++;
+    }
+}
+
+void simple_pre_running_write_close (flux_t *h)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", NULL };
+    flux_subprocess_ops_t ops = {
+        .on_completion      = simple_completion_cb,
+        .on_stdout          = simple_pre_running_write_close_output_cb,
+    };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+    struct simple_ctx ctx;
+    int rc;
+
+    cmd = flux_cmd_create (3, av, environ);
+    if (!cmd)
+        BAIL_OUT ("flux_cmd_create failed");
+
+    memset (&ctx, 0, sizeof (ctx));
+    ctx.h = h;
+    p = flux_rexec_ex (h,
+                       SERVER_NAME,
+                       FLUX_NODEID_ANY,
+                       0,
+                       cmd,
+                       &ops,
+                       tap_logger,
+                       NULL);
+    ok (p != NULL,
+        "unbuf basic read: flux_rexec_ex returned a subprocess object");
+    if (!p)
+        BAIL_OUT ("flux_rexec_ex failed");
+    if (flux_subprocess_aux_set (p, "ctx", &ctx, NULL) < 0)
+        BAIL_OUT ("flux_subprocess_aux_set failed");
+
+    /* write & close BEFORE flux_reactor_run() */
+    ok (flux_subprocess_write (p, "stdin", "foo", 3) == 3,
+        "flux_subprocess_write success");
+
+    ok (flux_subprocess_close (p, "stdin") == 0,
+        "flux_subprocess_close success");
+
+    rc = flux_reactor_run (flux_get_reactor (h), 0);
+    ok (rc >= 0, "unbuf basic read: client reactor ran successfully");
+    ok (ctx.scorecard.completion == 1, "completion callback called 1 time");
+    ok (ctx.scorecard.stdout_lines == 1, "stdout lines valid");
+    ok (ctx.scorecard.stdout_eof == 1, "stdout eof count valid");
+
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void simple_pre_running_close_output_cb (flux_subprocess_t *p,
+                                         const char *stream)
+{
+    struct simple_ctx *ctx = flux_subprocess_aux_get (p, "ctx");
+    const char *line = NULL;
+    int len;
+
+    if (!streq (stream, "stdout"))
+        BAIL_OUT ("unexpected stream: %s", stream);
+
+    ok (flux_subprocess_read_stream_closed (p, stream),
+        "flux_subprocess_read_stream_closed saw EOF on %s", stream);
+
+    len = flux_subprocess_read (p, stream, &line);
+    ok (len == 0,
+        "flux_subprocess_read on %s read EOF", stream);
+    ctx->scorecard.stdout_eof++;
+}
+
+void simple_pre_running_close (flux_t *h)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", NULL };
+    flux_subprocess_ops_t ops = {
+        .on_completion      = simple_completion_cb,
+        .on_stdout          = simple_pre_running_close_output_cb,
+    };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+    struct simple_ctx ctx;
+    int rc;
+
+    cmd = flux_cmd_create (3, av, environ);
+    if (!cmd)
+        BAIL_OUT ("flux_cmd_create failed");
+
+    memset (&ctx, 0, sizeof (ctx));
+    ctx.h = h;
+    p = flux_rexec_ex (h,
+                       SERVER_NAME,
+                       FLUX_NODEID_ANY,
+                       0,
+                       cmd,
+                       &ops,
+                       tap_logger,
+                       NULL);
+    ok (p != NULL,
+        "unbuf basic read: flux_rexec_ex returned a subprocess object");
+    if (!p)
+        BAIL_OUT ("flux_rexec_ex failed");
+    if (flux_subprocess_aux_set (p, "ctx", &ctx, NULL) < 0)
+        BAIL_OUT ("flux_subprocess_aux_set failed");
+
+    /* close BEFORE flux_reactor_run() */
+    ok (flux_subprocess_close (p, "stdin") == 0,
+        "flux_subprocess_close success");
+
+    rc = flux_reactor_run (flux_get_reactor (h), 0);
+    ok (rc >= 0, "unbuf basic read: client reactor ran successfully");
+    ok (ctx.scorecard.completion == 1, "completion callback called 1 time");
+    ok (ctx.scorecard.stdout_lines == 0, "stdout lines valid");
+    ok (ctx.scorecard.stdout_eof == 1, "stdout eof count valid");
+
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
 void local_unbuf_output_cb (flux_subprocess_t *p, const char *stream)
 {
     struct simple_ctx *ctx = flux_subprocess_aux_get (p, "ctx");
@@ -600,6 +754,10 @@ int main (int argc, char *argv[])
     corner_case_test (h);
     diag ("simple_test");
     simple_test (h);
+    diag ("simple_pre_running_write_close");
+    simple_pre_running_write_close (h);
+    diag ("simple_pre_running_close");
+    simple_pre_running_close (h);
     diag ("local_unbuf_test");
     local_unbuf_test (h);
     diag ("local_unbuf_multiline_test");
