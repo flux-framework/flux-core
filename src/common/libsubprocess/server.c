@@ -107,6 +107,30 @@ static flux_subprocess_t *proc_find_bypid (subprocess_server_t *s, pid_t pid)
     return NULL;
 }
 
+/* Find a <service>.exec message with the same sender as msg and matchtag as
+ * specified in the request matchtag field.
+ * N.B. flux_cancel_match() happens to be helpful because RFC 42 subprocess
+ * write works like RFC 6 cancel.
+ */
+static flux_subprocess_t *proc_find_byclient (subprocess_server_t *s,
+                                              const flux_msg_t *request)
+{
+    flux_subprocess_t *p;
+
+    p = zlistx_first (s->subprocesses);
+    while (p) {
+        const flux_msg_t *msg;
+
+        if ((msg = flux_subprocess_aux_get (p, msgkey))
+            && flux_cancel_match (request, msg))
+            return p;
+        p = zlistx_next (s->subprocesses);
+    }
+    errno = ESRCH;
+    return NULL;
+}
+
+
 static void proc_completion_cb (flux_subprocess_t *p)
 {
     subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
@@ -390,14 +414,14 @@ static void server_write_cb (flux_t *h,
     char *data = NULL;
     int len = 0;
     bool eof = false;
-    pid_t pid;
+    int matchtag;
     json_t *io = NULL;
     flux_error_t error;
 
     if (flux_request_unpack (msg,
                              NULL,
                              "{ s:i s:o }",
-                             "pid", &pid,
+                             "matchtag", &matchtag,
                              "io", &io) < 0
         || iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
         llog_error (s,
@@ -415,7 +439,7 @@ static void server_write_cb (flux_t *h,
      * in flight, and is not necessarily an error, and can be common enough
      * that the log messages end up being a nuisance.
      */
-    if (!(p = proc_find_bypid (s, pid))
+    if (!(p = proc_find_byclient (s, msg))
         || p->state != FLUX_SUBPROCESS_RUNNING)
         goto out;
 
@@ -423,19 +447,15 @@ static void server_write_cb (flux_t *h,
         int rc = flux_subprocess_write (p, stream, data, len);
         if (rc < 0) {
             llog_error (s,
-                        "Error writing %d bytes to subprocess pid %d %s",
+                        "Error writing %d bytes to subprocess %s",
                         len,
-                        (int)pid,
                         stream);
             goto error;
         }
     }
     if (eof) {
         if (flux_subprocess_close (p, stream) < 0) {
-            llog_error (s,
-                        "Error writing EOF to subprocess pid %d %s",
-                        (int)pid,
-                        stream);
+            llog_error (s, "Error writing EOF to subprocess %s", stream);
             goto error;
         }
     }
