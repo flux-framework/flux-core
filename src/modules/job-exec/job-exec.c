@@ -385,6 +385,11 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
               sigutil_signame (kill_signal),
               idf58 (job->id));
     (*job->impl->kill) (job, kill_signal);
+
+    /* Since we've transitioned to killing the shell directly, stop the
+     * flux_job_kill(3) timer:
+     */
+    flux_watcher_stop (job->kill_timer);
 }
 
 static void kill_timer_cb (flux_reactor_t *r,
@@ -419,7 +424,7 @@ static void jobinfo_killtimer_start (struct jobinfo *job, double after)
     if (job->kill_timer == NULL) {
         job->kill_timer = flux_timer_watcher_create (r,
                                                      after,
-                                                     0.,
+                                                     after,
                                                      kill_timer_cb,
                                                      job);
         flux_watcher_start (job->kill_timer);
