@@ -379,6 +379,7 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
                                  void *arg)
 {
     struct jobinfo *job = arg;
+
     flux_log (job->h,
               LOG_DEBUG,
               "Sending %s to job shell for job %s",
@@ -390,6 +391,13 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
      * flux_job_kill(3) timer:
      */
     flux_watcher_stop (job->kill_timer);
+
+    /*  Reuse job->kill_timer to create an exponential backoff
+     */
+    if ((job->kill_timeout = job->kill_timeout * 2) > 300.)
+        job->kill_timeout = 300.;
+    flux_timer_watcher_reset (w, job->kill_timeout, 0.);
+    flux_watcher_start (w);
 }
 
 static void kill_timer_cb (flux_reactor_t *r,
