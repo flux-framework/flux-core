@@ -226,23 +226,10 @@ static int remote_channel_setup (flux_subprocess_t *p,
     struct subprocess_channel *c = NULL;
     char *e = NULL;
     int save_errno;
-    int buffer_size;
 
     if (!(c = channel_create (p, output_cb, name, channel_flags))) {
         llog_debug (p, "channel_create: %s", strerror (errno));
         goto error;
-    }
-
-    if ((buffer_size = cmd_option_bufsize (p, name)) < 0) {
-        llog_debug (p, "cmd_option_bufsize: %s", strerror (errno));
-        goto error;
-    }
-
-    if (channel_flags & CHANNEL_WRITE) {
-        if (!(c->write_buffer = fbuf_create (buffer_size))) {
-            llog_debug (p, "fbuf_create: %s", strerror (errno));
-            goto error;
-        }
     }
 
     if (channel_flags & CHANNEL_READ) {
@@ -257,6 +244,11 @@ static int remote_channel_setup (flux_subprocess_t *p,
             c->line_buffered = true;
 
         if (!(p->flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF)) {
+            int buffer_size;
+            if ((buffer_size = cmd_option_bufsize (p, name)) < 0) {
+                llog_debug (p, "cmd_option_bufsize: %s", strerror (errno));
+                goto error;
+            }
             if (!(c->read_buffer = fbuf_create (buffer_size))) {
                 llog_debug (p, "fbuf_create: %s", strerror (errno));
                 goto error;
@@ -509,6 +501,9 @@ static int send_channel_data (flux_subprocess_t *p)
                 set_failed (p, "internal close error");
                 return -1;
             }
+            /* Don't need this buffer anymore, reclaim the space */
+            fbuf_destroy (c->write_buffer);
+            c->write_buffer = NULL;
         }
         c = zhash_next (p->channels);
     }

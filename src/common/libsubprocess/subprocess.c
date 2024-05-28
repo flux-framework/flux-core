@@ -708,6 +708,17 @@ int flux_subprocess_write (flux_subprocess_t *p,
             return -1;
         }
         if (p->state == FLUX_SUBPROCESS_INIT) {
+            if (!c->write_buffer) {
+                int buffer_size;
+                if ((buffer_size = cmd_option_bufsize (p, stream)) < 0) {
+                    log_err ("cmd_option_bufsize: %s", strerror (errno));
+                    return -1;
+                }
+                if (!(c->write_buffer = fbuf_create (buffer_size))) {
+                    log_err ("fbuf_create");
+                    return -1;
+                }
+            }
             if (fbuf_space (c->write_buffer) < len) {
                 errno = ENOSPC;
                 return -1;
