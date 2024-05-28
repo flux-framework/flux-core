@@ -65,6 +65,7 @@ struct sdproc {
     flux_future_t *f_start;
     flux_future_t *f_stop;
     struct unit *unit;
+    struct flux_msglist *write_requests;
     struct channel *in;
     struct channel *out;
     struct channel *err;
@@ -365,6 +366,21 @@ static void start_continuation (flux_future_t *f, void *arg)
     sdexec_channel_close_fd (proc->in);
     sdexec_channel_close_fd (proc->out);
     sdexec_channel_close_fd (proc->err);
+    /* Now that stdin is ready, re-queue any messages write_cb() left in
+     * proc->write_requests.  Push these messages to the front of the flux_t
+     * queue so that they come before unprocessed writes, if any.
+     */
+    if (proc->write_requests) {
+        const flux_msg_t *request;
+        while ((request = flux_msglist_pop (proc->write_requests))) {
+            int rc = flux_requeue (ctx->h, request, FLUX_RQ_HEAD);
+            flux_msg_decref (request);
+            if (rc < 0) {
+                flux_log_error (ctx->h, "error requeuing early sdexec.write");
+                break;
+            }
+        }
+    }
     return;
 error:
     if (flux_respond_error (ctx->h, msg, errno, future_strerror (f, errno)))
@@ -445,6 +461,7 @@ static void sdproc_destroy (struct sdproc *proc)
         flux_future_destroy (proc->f_stop);
         sdexec_unit_destroy (proc->unit);
         json_decref (proc->cmd);
+        flux_msglist_destroy (proc->write_requests);
         free (proc);
         errno = saved_errno;
     }
@@ -758,6 +775,22 @@ static void write_cb (flux_t *h,
     if (!(exec_request = lookup_message_byclient (ctx->requests, msg))
         || !(proc = flux_msg_aux_get (exec_request, "sdproc"))) {
         flux_log (h, LOG_ERR, "sdexec.write: subprocess no longer exists");
+        return;
+    }
+    /* If the systemd unit has not started yet, enqueue the write request for
+     * later processing in start_continuation().  We can tell that it hasn't
+     * started if start_continuation() has not yet handed the stdin channel
+     * file descriptor over to systemd by calling the close function.
+     */
+    if (sdexec_channel_get_fd (proc->in) != -1) { // not yet claimed by systemd
+        if (!proc->write_requests) {
+            if (!(proc->write_requests = flux_msglist_create ())) {
+                flux_log_error (h, "sdexec.write: error creating write queue");
+                return;
+            }
+        }
+        if (flux_msglist_push (proc->write_requests, msg) < 0)
+            flux_log_error (h, "sdexec.write: error enqueueing write request");
         return;
     }
     if (iodecode (io, &stream, NULL, NULL, NULL, NULL) == 0
