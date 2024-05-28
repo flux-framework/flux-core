@@ -139,6 +139,25 @@ static const flux_msg_t *lookup_message_byaux (struct flux_msglist *msglist,
     return NULL;
 }
 
+/* Find an sdexec.exec message with the same sender as msg and matchtag as
+ * specified in the msg matchtag field.
+ * N.B. flux_cancel_match() happens to be helpful because RFC 42 subprocess
+ * write works like RFC 6 cancel.
+ */
+static const flux_msg_t *lookup_message_byclient (struct flux_msglist *msglist,
+                                                  const flux_msg_t *msg)
+{
+    const flux_msg_t *m;
+
+    m = flux_msglist_first (msglist);
+    while (m) {
+        if (flux_cancel_match (msg, m))
+            return m;
+        m = flux_msglist_next (msglist);
+    }
+    return NULL;
+}
+
 static void exec_respond_error (struct sdproc *proc,
                                 int errnum,
                                 const char *errstr)
@@ -713,7 +732,7 @@ static void write_cb (flux_t *h,
                       void *arg)
 {
     struct sdexec_ctx *ctx = arg;
-    pid_t pid;
+    int matchtag;
     json_t *io;
     const flux_msg_t *exec_request;
     flux_error_t error;
@@ -723,7 +742,7 @@ static void write_cb (flux_t *h,
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:i s:o}",
-                             "pid", &pid,
+                             "matchtag", &matchtag,
                              "io", &io) < 0) {
         flux_log_error (h, "error decoding write request");
         return;
@@ -736,22 +755,18 @@ static void write_cb (flux_t *h,
         flux_log_error (h, "%s", error.text);
         return;
     }
-    if (!(exec_request = lookup_message_bypid (ctx->requests, pid))
+    if (!(exec_request = lookup_message_byclient (ctx->requests, msg))
         || !(proc = flux_msg_aux_get (exec_request, "sdproc"))) {
-        flux_log (h, LOG_ERR, "write pid=%d: not found", pid);
+        flux_log (h, LOG_ERR, "sdexec.write: subprocess no longer exists");
         return;
     }
     if (iodecode (io, &stream, NULL, NULL, NULL, NULL) == 0
         && !streq (stream, "stdin")) {
-        flux_log (h,
-                  LOG_ERR,
-                  "write pid=%d stream=%s: invalid stream",
-                  pid,
-                  stream);
+        flux_log (h, LOG_ERR, "sdexec.write: %s is an invalid stream", stream);
         return;
     }
     if (sdexec_channel_write (proc->in, io) < 0) {
-        flux_log_error (h, "write pid=%d", pid);
+        flux_log_error (h, "sdexec.write %s", stream);
         return;
     }
 }
