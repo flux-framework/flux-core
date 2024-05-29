@@ -1357,25 +1357,28 @@ static int exec_hello (flux_t *h, const char *service)
 /*  Initialize job-exec module global config from defaults, config, cmdline,
  *   in that order.
  */
-static int job_exec_initialize (flux_t *h, int argc, char **argv)
+static int job_exec_set_config_globals (flux_t *h,
+                                        const flux_conf_t *conf,
+                                        int argc,
+                                        char **argv,
+                                        flux_error_t *errp)
 {
-    flux_error_t err;
     const char *kto = NULL;
     const char *tsignal = NULL;
     const char *ksignal = NULL;
+    flux_error_t error;
 
-    if (flux_conf_unpack (flux_get_conf (h),
-                          &err,
+    if (flux_conf_unpack (conf,
+                          &error,
                           "{s?{s?s s?s s?s}}",
                           "exec",
                             "kill-timeout", &kto,
                             "term-signal", &tsignal,
-                            "kill-signal", &ksignal) < 0) {
-        flux_log (h, LOG_ERR,
-                  "error reading [exec] config table: %s",
-                  err.text);
-        return -1;
-    }
+                            "kill-signal", &ksignal) < 0)
+        return errprintf (errp,
+                          "Error reading [exec] table: %s",
+                          error.text);
+
     /* Override via commandline */
     for (int i = 0; i < argc; i++) {
         if (strstarts (argv[i], "kill-timeout="))
@@ -1388,7 +1391,7 @@ static int job_exec_initialize (flux_t *h, int argc, char **argv)
 
     if (kto) {
         if (fsd_parse_duration (kto, &kill_timeout) < 0) {
-            flux_log_error (h, "invalid kill-timeout: %s", kto);
+            errprintf (errp, "invalid kill-timeout: %s", kto);
             errno = EINVAL;
             return -1;
         }
@@ -1396,14 +1399,14 @@ static int job_exec_initialize (flux_t *h, int argc, char **argv)
     }
     if (ksignal) {
         if ((kill_signal = sigutil_signum (ksignal)) < 0) {
-            flux_log (h, LOG_ERR, "invalid kill-signal: %s", ksignal);
+            errprintf (errp, "invalid kill-signal: %s", ksignal);
             errno = EINVAL;
             return -1;
         }
     }
     if (tsignal) {
         if ((term_signal = sigutil_signum (tsignal)) < 0) {
-            flux_log (h, LOG_ERR, "invalid term-signal: %s", tsignal);
+            errprintf (errp, "invalid term-signal: %s", tsignal);
             errno = EINVAL;
             return -1;
         }
@@ -1571,10 +1574,18 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     int saved_errno = 0;
     int rc = -1;
+    flux_error_t error;
     struct job_exec_ctx *ctx = job_exec_ctx_create (h, argc, argv);
 
-    if (job_exec_initialize (h, argc, argv) < 0
-        || configure_implementations (h, argc, argv) < 0) {
+    if (job_exec_set_config_globals (h,
+                                     flux_get_conf (h),
+                                     argc,
+                                     argv,
+                                     &error) < 0) {
+        flux_log_error (h, "job-exec: error parsing config: %s", error.text);
+        goto out;
+    }
+    if (configure_implementations (h, argc, argv) < 0) {
         flux_log_error (h, "job-exec: module initialization failed");
         goto out;
     }
