@@ -596,15 +596,6 @@ static int remote_output (flux_subprocess_t *p,
     return 0;
 }
 
-static void remote_completion (flux_subprocess_t *p)
-{
-    p->remote_completed = true;
-    /* TBON inorder delivery of messages should guarantee we received
-     * FLUX_SUBPROCESS_EXITED before this.
-     */
-    subprocess_check_completed (p);
-}
-
 static void rexec_continuation (flux_future_t *f, void *arg)
 {
     flux_subprocess_t *p = arg;
@@ -615,7 +606,21 @@ static void rexec_continuation (flux_future_t *f, void *arg)
 
     if (subprocess_rexec_get (f) < 0) {
         if (errno == ENODATA) {
-            remote_completion (p);
+            p->remote_completed = true;
+            /* Per RFC42, when remote processes are launched, the
+             * process should return finished (i.e. state EXITED)
+             * before returning ENODATA.  It is otherwise considered a
+             * protocol error.
+             *
+             * N.B. There is evidence that the sdexec module has
+             * violated the protocol before #5956.
+             */
+            if (p->state != FLUX_SUBPROCESS_EXITED) {
+                errno = EPROTO;
+                set_failed (p, "%s", strerror (errno));
+                goto error;
+            }
+            subprocess_check_completed (p);
             return;
         }
         set_failed (p, "%s", future_strerror (f, errno));
