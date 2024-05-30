@@ -514,6 +514,8 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
     if ((flags & SUBPROCESS_REXEC_STDOUT)) {
         if (!(proc->out = sdexec_channel_create_output (ctx->h,
                                                         "stdout",
+                                                        0,
+                                                        0,
                                                         channel_cb,
                                                         cherror_cb,
                                                         proc)))
@@ -522,6 +524,8 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
     if ((flags & SUBPROCESS_REXEC_STDERR)) {
         if (!(proc->err = sdexec_channel_create_output (ctx->h,
                                                         "stderr",
+                                                        0,
+                                                        0,
                                                         channel_cb,
                                                         cherror_cb,
                                                         proc)))

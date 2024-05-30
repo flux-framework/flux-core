@@ -151,7 +151,7 @@ void test_output (void)
         BAIL_OUT ("could not create loop flux_t handle for testing");
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
         BAIL_OUT ("could not set rank for testing");
-    ch = sdexec_channel_create_output (h, "out", output_cb, error_cb, NULL);
+    ch = sdexec_channel_create_output (h, "out", 0, 0, output_cb, error_cb, NULL);
     ok (ch != NULL,
         "sdexec_channel_crate_output works");
     sdexec_channel_start_output (ch);
@@ -205,11 +205,11 @@ void test_inval (void)
         BAIL_OUT ("could not create json io object");
 
     errno = 0;
-    ch = sdexec_channel_create_output (NULL, "foo", output_cb, error_cb, NULL);
+    ch = sdexec_channel_create_output (NULL, "foo", 0, 0, output_cb, error_cb, NULL);
     ok (ch == NULL && errno == EINVAL,
         "sdexec_channel_create_output h=NULL fails with EINVAL");
     errno = 0;
-    ch = sdexec_channel_create_output (h, NULL, output_cb, error_cb, NULL);
+    ch = sdexec_channel_create_output (h, NULL, 0, 0, output_cb, error_cb, NULL);
     ok (ch == NULL && errno == EINVAL,
         "sdexec_channel_create_output name=NULL fails with EINVAL");
 

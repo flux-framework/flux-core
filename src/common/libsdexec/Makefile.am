@@ -25,6 +25,8 @@ libsdexec_la_SOURCES = \
 	list.c \
 	property.h \
 	property.c \
+	outbuf.h \
+	outbuf.c \
 	channel.h \
 	channel.c \
 	unit.h \

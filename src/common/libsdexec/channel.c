@@ -24,7 +24,9 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/fdutils.h"
+#include "src/common/libsubprocess/subprocess_private.h" // for default bufsize
 
+#include "outbuf.h"
 #include "channel.h"
 
 struct channel {
@@ -32,13 +34,93 @@ struct channel {
     char rankstr[16];
     int fd[2];
     flux_watcher_t *w;
+    bool eof_received;
     bool eof_delivered;
+    struct outbuf *buf;
+    int flags;
     char *name;
     bool writable;
     channel_output_f output_cb;
     channel_error_f error_cb;
     void *arg;
 };
+
+static int call_output_callback (struct channel *ch,
+                                 const char *data,
+                                 size_t length,
+                                 bool eof)
+{
+    json_t *io;
+    int rc = -1;
+
+    if (length == 0)
+        data = NULL; // appease ioencode()
+    if (!(io = ioencode (ch->name, ch->rankstr, data, length, eof)))
+        goto done;
+    if (ch->output_cb)
+        ch->output_cb (ch, io, ch->arg);
+    if (eof)
+        ch->eof_delivered = true;
+    rc = 0;
+done:
+    json_decref (io);
+    return rc;
+}
+
+static size_t nextline (const char *data, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        if (data[i] == '\n')
+            return i + 1;
+    }
+    return 0;
+}
+
+/* Flush one line, or one partial buffer if it meets criteria noted below.
+ * This function returns -1 on error, 0 if done, or 1 if it should be called
+ * again.
+ */
+static int flush_output_line (struct channel *ch)
+{
+    size_t len;
+    bool eof = false;
+
+    len = nextline (outbuf_tail (ch->buf), outbuf_used (ch->buf));
+    /* There is no complete line, but the buffer is full.
+     * No more data can be added to terminate the line so we must flush.
+     */
+    if (len == 0 && outbuf_full (ch->buf))
+        len = outbuf_used (ch->buf);
+    /* There is no complete line nor full buffer, but EOF has been reached.
+     * No more data will ever be added to terminate the line so we must flush.
+     */
+    if (len == 0 && ch->eof_received) {
+        len = outbuf_used (ch->buf);
+        eof = true;
+    }
+    if (len > 0 || eof) {
+        int rc = call_output_callback (ch, outbuf_tail (ch->buf), len, eof);
+        outbuf_mark_free (ch->buf, len);
+        if (rc < 0)
+            return -1;
+    }
+    if (len == 0 || eof)
+        return 0;
+    return 1;
+}
+
+/* Flush all data in the buffer.
+ */
+static int flush_output_raw (struct channel *ch)
+{
+    int n;
+    n = call_output_callback (ch,
+                              outbuf_tail (ch->buf),
+                              outbuf_used (ch->buf),
+                              ch->eof_received);
+    outbuf_mark_free (ch->buf, outbuf_used (ch->buf));
+    return n;
+}
 
 /* fd watcher for read end of channel file descriptor
  */
@@ -48,11 +130,13 @@ static void channel_output_cb (flux_reactor_t *r,
                                void *arg)
 {
     struct channel *ch = arg;
-    char buf[1024];
     ssize_t n;
-    json_t *io;
 
-    if ((n = read (ch->fd[0], buf, sizeof (buf))) < 0) {
+    /* Read a chunk of data into the buffer, not necessarily all that is ready.
+     * Let the event loop iterate and read more as needed.
+     */
+    n = read (ch->fd[0], outbuf_head (ch->buf), outbuf_free (ch->buf));
+    if (n < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return; // spurious wakeup or revents without POLLIN?
         if (ch->error_cb) {
@@ -69,26 +153,28 @@ static void channel_output_cb (flux_reactor_t *r,
      * gets EOF, ensure that it always does, even if there was a read error.
      */
     if (n <= 0) {
-        io = ioencode (ch->name, ch->rankstr, NULL, 0, true);
+        ch->eof_received = true;
         flux_watcher_stop (w);
-        ch->eof_delivered = true;
     }
     else
-        io = ioencode (ch->name, ch->rankstr, buf, n, false);
-    if (!io) {
+        outbuf_mark_used (ch->buf, n);
+    if ((ch->flags & CHANNEL_LINEBUF)) {
+        while ((n = flush_output_line (ch)) > 0)
+            ;
+    }
+    else
+        n = flush_output_raw (ch);
+    if (n < 0) {
         if (ch->error_cb) {
             flux_error_t error;
             errprintf (&error,
-                       "error encoding data from %s: %s",
+                       "error flushing data from %s: %s",
                        ch->name,
                        strerror (errno));
             ch->error_cb (ch, &error, ch->arg);
         }
-        return;
     }
-    if (ch->output_cb)
-        ch->output_cb (ch, io, ch->arg);
-    json_decref (io);
+    outbuf_gc (ch->buf);
 }
 
 int sdexec_channel_get_fd (struct channel *ch)
@@ -124,6 +210,7 @@ void sdexec_channel_destroy (struct channel *ch)
         if (ch->fd[1] >= 0)
             close (ch->fd[1]);
         flux_watcher_destroy (ch->w);
+        outbuf_destroy (ch->buf);
         free (ch->name);
         free (ch);
         errno = saved_errno;
@@ -159,6 +246,8 @@ error:
 
 struct channel *sdexec_channel_create_output (flux_t *h,
                                               const char *name,
+                                              size_t bufsize,
+                                              int flags,
                                               channel_output_f output_cb,
                                               channel_error_f error_cb,
                                               void *arg)
@@ -170,6 +259,7 @@ struct channel *sdexec_channel_create_output (flux_t *h,
     ch->output_cb = output_cb;
     ch->error_cb = error_cb;
     ch->arg = arg;
+    ch->flags = flags;
     if (fd_set_nonblocking (ch->fd[0]) < 0)
         goto error;
     if (!(ch->w = flux_fd_watcher_create (flux_get_reactor (h),
@@ -177,6 +267,10 @@ struct channel *sdexec_channel_create_output (flux_t *h,
                                           FLUX_POLLIN,
                                           channel_output_cb,
                                           ch)))
+        goto error;
+    if (bufsize == 0)
+        bufsize = SUBPROCESS_DEFAULT_BUFSIZE;
+    if (!(ch->buf = outbuf_create (bufsize)))
         goto error;
     return ch;
 error:
