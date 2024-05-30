@@ -100,6 +100,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/sigutil.h"
 #include "ccan/str/str.h"
 
 #include "job-exec.h"
@@ -107,6 +108,8 @@
 #include "exec_config.h"
 
 static double kill_timeout=5.0;
+static int term_signal = SIGTERM;
+static int kill_signal = SIGKILL;
 
 #define DEBUG_FAIL_EXPIRATION 1
 
@@ -378,9 +381,10 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
     struct jobinfo *job = arg;
     flux_log (job->h,
               LOG_DEBUG,
-              "Sending SIGKILL to job shell for job %s",
+              "Sending %s to job shell for job %s",
+              sigutil_signame (kill_signal),
               idf58 (job->id));
-    (*job->impl->kill) (job, SIGKILL);
+    (*job->impl->kill) (job, kill_signal);
 }
 
 static void kill_timer_cb (flux_reactor_t *r,
@@ -392,12 +396,14 @@ static void kill_timer_cb (flux_reactor_t *r,
     flux_future_t *f;
     flux_log (job->h,
               LOG_DEBUG,
-              "Sending SIGKILL to job %s",
+              "Sending %s to job %s",
+              sigutil_signame (kill_signal),
               idf58 (job->id));
-    if (!(f = flux_job_kill (job->h, job->id, SIGKILL))) {
+    if (!(f = flux_job_kill (job->h, job->id, kill_signal))) {
         flux_log_error (job->h,
-                        "flux_job_kill (%s, SIGKILL)",
-                        idf58 (job->id));
+                        "flux_job_kill (%s, %s)",
+                        idf58 (job->id),
+                        sigutil_signame (kill_signal));
         return;
     }
     /* Open loop */
@@ -542,8 +548,8 @@ void jobinfo_reattached (struct jobinfo *job)
 }
 
 /*  Cancel any pending shells to execute with implementations cancel
- *   method, send SIGTERM to executing shells to notify them to terminate,
- *   schedule SIGKILL to be sent after kill_timeout seconds.
+ *   method, send term_signal to executing shells to notify them to terminate,
+ *   schedule kill_signal to be sent after kill_timeout seconds.
  */
 static void jobinfo_cancel (struct jobinfo *job)
 {
@@ -554,7 +560,7 @@ static void jobinfo_cancel (struct jobinfo *job)
     if (job->impl->cancel)
         (*job->impl->cancel) (job);
 
-    (*job->impl->kill) (job, SIGTERM);
+    (*job->impl->kill) (job, term_signal);
     jobinfo_killtimer_start (job, job->kill_timeout);
 }
 
@@ -1209,8 +1215,8 @@ static void exception_cb (flux_t *h,
         && (job = zhashx_lookup (ctx->jobs, &id))
         && (!job->finalizing)) {
         if (job->exception_in_progress) {
-            /*  Resend SIGTERM even if exception in progress */
-            (*job->impl->kill) (job, SIGTERM);
+            /*  Resend term_signal even if exception in progress */
+            (*job->impl->kill) (job, term_signal);
             return;
         }
         /*  !job->exception_in_progress:
@@ -1348,38 +1354,61 @@ static int exec_hello (flux_t *h, const char *service)
     return rc;
 }
 
-/*  Initialize job-exec module from defaults, config, cmdline,
- *   in that order. Currently only the kill-timeout is
- *   set here.
+/*  Initialize job-exec module global config from defaults, config, cmdline,
+ *   in that order.
  */
-static int job_exec_initialize (flux_t *h, int argc, char **argv)
+static int job_exec_set_config_globals (flux_t *h,
+                                        const flux_conf_t *conf,
+                                        int argc,
+                                        char **argv,
+                                        flux_error_t *errp)
 {
-    flux_error_t err;
     const char *kto = NULL;
+    const char *tsignal = NULL;
+    const char *ksignal = NULL;
+    flux_error_t error;
 
-    if (flux_conf_unpack (flux_get_conf (h),
-                          &err,
-                          "{s?{s?s}}",
+    if (flux_conf_unpack (conf,
+                          &error,
+                          "{s?{s?s s?s s?s}}",
                           "exec",
-                            "kill-timeout", &kto) < 0) {
-        flux_log (h, LOG_ERR,
-                  "error reading config value exec.kill-timeout: %s",
-                  err.text);
-        return -1;
-    }
+                            "kill-timeout", &kto,
+                            "term-signal", &tsignal,
+                            "kill-signal", &ksignal) < 0)
+        return errprintf (errp,
+                          "Error reading [exec] table: %s",
+                          error.text);
+
     /* Override via commandline */
     for (int i = 0; i < argc; i++) {
         if (strstarts (argv[i], "kill-timeout="))
             kto = argv[i] + 13;
+        else if (strstarts (argv[i], "kill-signal="))
+            ksignal = argv[i] + 12;
+        else if (strstarts (argv[i], "term-signal="))
+            tsignal = argv[i] + 12;
     }
 
     if (kto) {
         if (fsd_parse_duration (kto, &kill_timeout) < 0) {
-            flux_log_error (h, "invalid kill-timeout: %s", kto);
+            errprintf (errp, "invalid kill-timeout: %s", kto);
             errno = EINVAL;
             return -1;
         }
-        flux_log (h, LOG_INFO, "using kill-timeout of %.4gs", kill_timeout);
+    }
+    if (ksignal) {
+        if ((kill_signal = sigutil_signum (ksignal)) < 0) {
+            errprintf (errp, "invalid kill-signal: %s", ksignal);
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    if (tsignal) {
+        if ((term_signal = sigutil_signum (tsignal)) < 0) {
+            errprintf (errp, "invalid term-signal: %s", tsignal);
+            errno = EINVAL;
+            return -1;
+        }
     }
     return 0;
 }
@@ -1465,7 +1494,10 @@ static void stats_cb (flux_t *h,
     json_t *o = NULL;
     int i = 0;
 
-    if (!(o = json_object ())) {
+    if (!(o = json_pack ("{s:f s:s s:s}",
+                         "kill-timeout", kill_timeout,
+                         "term-signal", sigutil_signame (term_signal),
+                         "kill-signal", sigutil_signame (kill_signal)))) {
         errno = ENOMEM;
         goto error;
     }
@@ -1506,6 +1538,9 @@ static void config_reload_cb (flux_t *h,
         goto error;
     }
 
+    if (job_exec_set_config_globals (h, conf, 0, NULL, &err) < 0)
+        goto error;
+
     while ((impl = implementations[i]) && impl->name) {
         if (impl->config) {
             if ((*impl->config) (h, conf, ctx->argc, ctx->argv, &err) < 0)
@@ -1544,10 +1579,19 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     int saved_errno = 0;
     int rc = -1;
+    bool subscribed = false;
+    flux_error_t error;
     struct job_exec_ctx *ctx = job_exec_ctx_create (h, argc, argv);
 
-    if (job_exec_initialize (h, argc, argv) < 0
-        || configure_implementations (h, argc, argv) < 0) {
+    if (job_exec_set_config_globals (h,
+                                     flux_get_conf (h),
+                                     argc,
+                                     argv,
+                                     &error) < 0) {
+        flux_log_error (h, "job-exec: error parsing config: %s", error.text);
+        goto out;
+    }
+    if (configure_implementations (h, argc, argv) < 0) {
         flux_log_error (h, "job-exec: module initialization failed");
         goto out;
     }
@@ -1559,6 +1603,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_event_subscribe");
         goto out;
     }
+    subscribed = true;
     if (exec_hello (h, "job-exec") < 0)
         goto out;
 
@@ -1567,7 +1612,7 @@ out:
     unload_implementations (ctx);
 
     saved_errno = errno;
-    if (flux_event_unsubscribe (h, "job-exception") < 0)
+    if (subscribed && flux_event_unsubscribe (h, "job-exception") < 0)
         flux_log_error (h, "flux_event_unsubscribe ('job-exception')");
     job_exec_ctx_destroy (ctx);
     errno = saved_errno;

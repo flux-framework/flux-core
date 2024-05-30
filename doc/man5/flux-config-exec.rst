@@ -38,6 +38,18 @@ sdexec-properties
    (optional) A table of systemd properties to set for all jobs.  All values
    must be strings.  See SDEXEC PROPERTIES below.
 
+kill-timeout
+   (optional) The amount of time to wait after ``SIGTERM`` is sent to a job
+   before sending ``SIGKILL``.
+
+term-signal
+   (optional) Specify an alternate signal to ``SIGTERM`` when terminating
+   job tasks. Mainly used for testing.
+
+kill-signal
+   (optional) Specify an alternate signal to ``SIGKILL`` when killing tasks
+   and the job shell. Mainly used for testing.
+
 testexec
    (options) A table of keys (see :ref:`testexec`) for configuring the
    **job-exec** test execution implementation (used in mainly for testing).

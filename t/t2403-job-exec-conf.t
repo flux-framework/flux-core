@@ -11,7 +11,7 @@ test_under_flux 1 job
 test_expect_success 'job-exec: can specify kill-timeout on cmdline' '
 	flux dmesg -C &&
 	flux module reload job-exec kill-timeout=1m &&
-	flux dmesg | grep "using kill-timeout of 60s"
+	flux module stats job-exec | jq ".[\"kill-timeout\"] == 60"
 '
 test_expect_success 'job-exec: bad kill-timeout value causes module failure' '
 	flux dmesg -C &&
@@ -25,8 +25,15 @@ test_expect_success 'job-exec: kill-timeout can be set in exec conf' '
 	kill-timeout = ".5m"
 	EOF
 	flux start -o,--config-path=${name}.toml -s1 \
-		flux dmesg > ${name}.log 2>&1 &&
-	grep "using kill-timeout of 30s" ${name}.log
+		flux module stats job-exec > ${name}.json 2>&1 &&
+	test_debug "jq -S . < ${name}.json" &&
+	cat ${name}.json | jq ".[\"kill-timeout\"] == 30"
+'
+test_expect_success 'job-exec: kill-timeout can be set with a config reload' '
+	flux module load job-exec &&
+	flux dmesg -C &&
+	echo exec.kill-timeout=\".5m\" | flux config load &&
+	flux module stats job-exec | jq ".[\"kill-timeout\"] == 30"
 '
 test_expect_success 'job-exec: bad kill-timeout config causes module failure' '
 	name=bad-killconf &&
@@ -37,6 +44,52 @@ test_expect_success 'job-exec: bad kill-timeout config causes module failure' '
 	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
 		flux dmesg > ${name}.log 2>&1 &&
 	grep "invalid kill-timeout: foo" ${name}.log
+'
+test_expect_success 'job-exec: bad kill-timeout causes config reload failure' '
+	echo exec.kill-timeout=\"foo\" | test_must_fail flux config load
+'
+test_expect_success 'job-exec: reset config' '
+	echo | flux config load
+'
+test_expect_success 'job-exec: can specify term-signal on cmdline' '
+	flux dmesg -C &&
+	flux module reload job-exec term-signal=SIGUSR1 &&
+	flux module stats job-exec | jq ".[\"term-signal\"] == \"SIGUSR1\""
+'
+test_expect_success 'job-exec: can specify kill-signal on cmdline' '
+	flux dmesg -C &&
+	flux module reload job-exec kill-signal=SIGUSR2 &&
+	flux module stats job-exec | jq ".[\"kill-signal\"] == \"SIGUSR2\""
+'
+test_expect_success 'job-exec: bad term/kill-signal value causes failure' '
+	flux dmesg -C &&
+	test_expect_code 1 flux module reload job-exec kill-signal=SIGFOO &&
+	dmesg-grep.py -vt 10 "invalid kill-signal: SIGFOO" &&
+	flux dmesg -C &&
+	test_expect_code 1 flux module reload -f job-exec term-signal=-1 &&
+	dmesg-grep.py -vt 10 "invalid term-signal: -1"
+'
+test_expect_success 'job-exec: term/kill-signal can be set in exec conf' '
+	name=sigconf &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	kill-signal = "SIGINT"
+	term-signal = "SIGHUP"
+	EOF
+	flux start -o,--config-path=${name}.toml -s1 \
+		flux module stats job-exec > ${name}.json 2>&1 &&
+	cat ${name}.json | jq ".[\"kill-signal\"] == \"SIGINT\"" &&
+	cat ${name}.json | jq ".[\"term-signal\"] == \"SIGTERM\""
+'
+test_expect_success 'job-exec: bad term/kill-signal config causes module failure' '
+	name=bad-sigconf &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	kill-signal = "foo"
+	EOF
+	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
+	grep "invalid kill-signal: foo" ${name}.log
 '
 test_expect_success 'job-exec: can specify default-shell on cmdline' '
 	flux module reload -f job-exec job-shell=/path/to/shell &&
