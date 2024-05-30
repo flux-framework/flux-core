@@ -1577,6 +1577,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     int saved_errno = 0;
     int rc = -1;
+    bool subscribed = false;
     flux_error_t error;
     struct job_exec_ctx *ctx = job_exec_ctx_create (h, argc, argv);
 
@@ -1600,6 +1601,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_event_subscribe");
         goto out;
     }
+    subscribed = true;
     if (exec_hello (h, "job-exec") < 0)
         goto out;
 
@@ -1608,7 +1610,7 @@ out:
     unload_implementations (ctx);
 
     saved_errno = errno;
-    if (flux_event_unsubscribe (h, "job-exception") < 0)
+    if (subscribed && flux_event_unsubscribe (h, "job-exception") < 0)
         flux_log_error (h, "flux_event_unsubscribe ('job-exception')");
     job_exec_ctx_destroy (ctx);
     errno = saved_errno;
