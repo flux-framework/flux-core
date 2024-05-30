@@ -1495,7 +1495,10 @@ static void stats_cb (flux_t *h,
     json_t *o = NULL;
     int i = 0;
 
-    if (!(o = json_object ())) {
+    if (!(o = json_pack ("{s:f s:s s:s}",
+                         "kill-timeout", kill_timeout,
+                         "term-signal", sigutil_signame (term_signal),
+                         "kill-signal", sigutil_signame (kill_signal)))) {
         errno = ENOMEM;
         goto error;
     }
