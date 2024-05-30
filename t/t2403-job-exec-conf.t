@@ -11,7 +11,7 @@ test_under_flux 1 job
 test_expect_success 'job-exec: can specify kill-timeout on cmdline' '
 	flux dmesg -C &&
 	flux module reload job-exec kill-timeout=1m &&
-	flux dmesg | grep "using kill-timeout of 60s"
+	flux module stats job-exec | jq ".[\"kill-timeout\"] == 60"
 '
 test_expect_success 'job-exec: bad kill-timeout value causes module failure' '
 	flux dmesg -C &&
@@ -25,8 +25,8 @@ test_expect_success 'job-exec: kill-timeout can be set in exec conf' '
 	kill-timeout = ".5m"
 	EOF
 	flux start -o,--config-path=${name}.toml -s1 \
-		flux dmesg > ${name}.log 2>&1 &&
-	grep "using kill-timeout of 30s" ${name}.log
+		flux module stats job-exec > ${name}.json 2>&1 &&
+	cat ${name}.json | jq ".[\"kill-timeout\"] == 30"
 '
 test_expect_success 'job-exec: bad kill-timeout config causes module failure' '
 	name=bad-killconf &&
