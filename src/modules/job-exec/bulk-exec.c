@@ -224,8 +224,8 @@ static void exec_output_cb (flux_subprocess_t *p, const char *stream)
     const char *s;
     int len;
 
-    if ((len = flux_subprocess_getline (p, stream, &s)) < 0) {
-        flux_log_error (exec->h, "flux_subprocess_getline");
+    if ((len = flux_subprocess_read (p, stream, &s)) < 0) {
+        flux_log_error (exec->h, "flux_subprocess_read");
         return;
     }
     if (len) {
@@ -264,7 +264,8 @@ static struct exec_cmd *exec_cmd_create (const struct idset *ranks,
         fprintf (stderr, "exec_cmd_create: flux_cmd_copy failed");
         goto err;
     }
-    c->flags = flags;
+    /* bulk-exec always uses unbuffered reads for performance */
+    c->flags = flags | FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF;
     return (c);
 err:
     exec_cmd_destroy (c);

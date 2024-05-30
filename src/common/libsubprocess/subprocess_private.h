@@ -55,6 +55,9 @@ struct subprocess_channel {
     flux_watcher_t *out_prep_w;
     flux_watcher_t *out_idle_w;
     flux_watcher_t *out_check_w;
+    /* for FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF */
+    const char *unbuf_data;
+    int unbuf_len;
 
     /* misc */
     bool line_buffered;         /* for buffer_read_w / read_buffer */

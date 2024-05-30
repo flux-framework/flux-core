@@ -172,6 +172,16 @@ void test_corner_cases (flux_reactor_t *r)
         && errno == EINVAL,
         "flux_subprocess_aux_get fails with NULL pointer input");
 
+    ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
+        "flux_cmd_create with /bin/true works");
+    ok (flux_local_exec (r,
+                         FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF,
+                         cmd,
+                         NULL) == NULL
+        && errno == EINVAL,
+        "flux_local_exec fails with invalid flag");
+    flux_cmd_destroy (cmd);
+
     flux_close (h);
 }
 

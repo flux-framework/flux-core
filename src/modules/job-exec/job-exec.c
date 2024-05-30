@@ -107,9 +107,9 @@
 #include "checkpoint.h"
 #include "exec_config.h"
 
-static double kill_timeout=5.0;
-static int term_signal = SIGTERM;
-static int kill_signal = SIGKILL;
+static double kill_timeout;
+static int term_signal;
+static int kill_signal;
 
 #define DEBUG_FAIL_EXPIRATION 1
 
@@ -1367,6 +1367,18 @@ static int job_exec_set_config_globals (flux_t *h,
     const char *tsignal = NULL;
     const char *ksignal = NULL;
     flux_error_t error;
+
+    /* Per trws comment in 97421e88987535260b10d6a19551cea625f26ce4
+     *
+     * The musl libc loader doesn't actually unload objects on
+     * dlclose, so a subsequent dlopen doesn't re-clear globals and
+     * similar.
+     *
+     * So we must re-initialize globals everytime we reload the module.
+     */
+    kill_timeout = 5.0;
+    term_signal = SIGTERM;
+    kill_signal = SIGKILL;
 
     if (flux_conf_unpack (conf,
                           &error,

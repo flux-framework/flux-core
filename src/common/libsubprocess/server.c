@@ -246,7 +246,10 @@ static void proc_output_cb (flux_subprocess_t *p, const char *stream)
     const char *buf;
     int len;
 
-    if ((len = flux_subprocess_read (p, stream, &buf)) < 0) {
+    len = flux_subprocess_getline (p, stream, &buf);
+    if (len < 0 && errno == EPERM) // not line buffered
+        len = flux_subprocess_read (p, stream, &buf);
+    if (len < 0) {
         llog_error (s,
                     "error reading from subprocess stream %s: %s",
                     stream,

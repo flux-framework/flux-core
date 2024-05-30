@@ -534,6 +534,7 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
 {
     flux_subprocess_t *p = NULL;
     flux_reactor_t *r;
+    int valid_flags = FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF;
 
     if (!h
         || (rank < 0
@@ -545,8 +546,7 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
         return NULL;
     }
 
-    /* no flags supported yet */
-    if (flags) {
+    if (flags & ~valid_flags) {
         errno = EINVAL;
         return NULL;
     }
@@ -794,6 +794,12 @@ static int subprocess_read (flux_subprocess_t *p,
         return -1;
     }
 
+    if (p->flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF) {
+        if (bufp && c->unbuf_len)
+            (*bufp) = c->unbuf_data;
+        return c->unbuf_len;
+    }
+
     if (p->local) {
         if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w)))
             return -1;
@@ -837,6 +843,10 @@ int flux_subprocess_read_line (flux_subprocess_t *p,
                                const char *stream,
                                const char **bufp)
 {
+    if (p && (p->flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF)) {
+        errno = EPERM;
+        return -1;
+    }
     return subprocess_read (p, stream, bufp, true, false, false, NULL);
 }
 
@@ -844,6 +854,10 @@ int flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
                                        const char *stream,
                                        const char **bufp)
 {
+    if (p && (p->flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF)) {
+        errno = EPERM;
+        return -1;
+    }
     return subprocess_read (p, stream, bufp, true, true, false, NULL);
 }
 
@@ -860,6 +874,9 @@ bool flux_subprocess_read_stream_closed (flux_subprocess_t *p,
         || !(c->flags & CHANNEL_READ))
         return false;
 
+    if (p->flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF)
+        return c->read_eof_received;
+
     if (p->local)
         fb = fbuf_read_watcher_get_buffer (c->buffer_read_w);
     else
@@ -874,6 +891,11 @@ int flux_subprocess_getline (flux_subprocess_t *p,
 {
     int len;
     bool readonly;
+
+    if (p && (p->flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF)) {
+        errno = EPERM;
+        return -1;
+    }
 
     len = subprocess_read (p, stream, bufp, true, false, true, &readonly);
 
