@@ -14,7 +14,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-
+#include <math.h>
 #include <flux/core.h>
 #include <flux/jobtap.h>
 
@@ -78,13 +78,17 @@ static int validate_duration (flux_plugin_t *p,
 static void kvs_lookup_cb (flux_future_t *f, void *arg)
 {
     flux_t *h = flux_future_get_flux (f);
+    double val;
     if (flux_kvs_lookup_get_unpack (f,
                                     "{s:{s:F}}",
                                     "execution",
-                                      "expiration", &expiration) < 0) {
+                                      "expiration", &val) < 0) {
         flux_log_error (h, "flux_kvs_lookup_unpack");
     }
     flux_future_reset (f);
+    if (fabs (val - expiration) < 1.e-5)
+        return;
+    expiration = val;
     flux_log (h,
               LOG_DEBUG,
               "duration-validator: updated expiration to %.2f",

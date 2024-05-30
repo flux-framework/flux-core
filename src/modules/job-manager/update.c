@@ -652,9 +652,12 @@ static void resource_update_cb (flux_future_t *f, void *arg)
     flux_future_reset (f);
 
     /*  If this is the first successful update, or there are no
-     *  running jobs, then there is nothing left to do.
+     *  running jobs, or the expiration was not updated, then there is
+     *  nothing left to do.
      */
-    if (old_expiration == -1. || update->ctx->running_jobs == 0)
+    if (old_expiration == -1.
+        || fabs (update->instance_expiration - old_expiration) < 1.e-5
+        || update->ctx->running_jobs == 0)
         return;
 
     flux_log (h,
