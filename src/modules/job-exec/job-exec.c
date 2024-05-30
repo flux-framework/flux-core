@@ -1395,7 +1395,6 @@ static int job_exec_set_config_globals (flux_t *h,
             errno = EINVAL;
             return -1;
         }
-        flux_log (h, LOG_INFO, "using kill-timeout of %.4gs", kill_timeout);
     }
     if (ksignal) {
         if ((kill_signal = sigutil_signum (ksignal)) < 0) {
