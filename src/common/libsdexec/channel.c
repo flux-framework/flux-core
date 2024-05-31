@@ -32,6 +32,7 @@ struct channel {
     char rankstr[16];
     int fd[2];
     flux_watcher_t *w;
+    bool eof_delivered;
     char *name;
     bool writable;
     channel_output_f output_cb;
@@ -70,6 +71,7 @@ static void channel_output_cb (flux_reactor_t *r,
     if (n <= 0) {
         io = ioencode (ch->name, ch->rankstr, NULL, 0, true);
         flux_watcher_stop (w);
+        ch->eof_delivered = true;
     }
     else
         io = ioencode (ch->name, ch->rankstr, buf, n, false);
@@ -109,7 +111,7 @@ void sdexec_channel_close_fd (struct channel *ch)
 
 void sdexec_channel_start_output (struct channel *ch)
 {
-    if (ch)
+    if (ch && !ch->eof_delivered)
         flux_watcher_start (ch->w);
 }
 
