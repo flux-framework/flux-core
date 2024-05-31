@@ -808,6 +808,19 @@ void flux_stat_watcher_get_rstat (flux_watcher_t *w,
         *prev = sw->prev;
 }
 
+bool flux_watcher_is_active (flux_watcher_t *w)
+{
+    if (w) {
+        /*  Handle periodic watcher as a special case:
+         */
+        if (flux_watcher_get_ops (w) == &periodic_watcher) {
+            struct f_periodic *fp = w->data;
+            return ev_is_active (&fp->evp);
+        }
+        return ev_is_active (w->data);
+    }
+    return false;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
