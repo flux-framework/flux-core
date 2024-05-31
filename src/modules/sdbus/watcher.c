@@ -114,6 +114,12 @@ static void op_stop (flux_watcher_t *w)
     flux_watcher_stop (sdw->tmout);
 }
 
+static bool op_is_active (flux_watcher_t *w)
+{
+    struct sdbus_watcher *sdw = watcher_get_data (w);
+    return ev_is_active (sdw->prep);
+}
+
 static void op_destroy (flux_watcher_t *w)
 {
     struct sdbus_watcher *sdw = watcher_get_data (w);
@@ -127,6 +133,7 @@ static struct flux_watcher_ops sdbus_watcher_ops = {
     .start = op_start,
     .stop = op_stop,
     .destroy = op_destroy,
+    .is_active = op_is_active,
 };
 
 flux_watcher_t *sdbus_watcher_create (flux_reactor_t *r,

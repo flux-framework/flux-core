@@ -177,6 +177,11 @@ void ev_fbuf_read_stop (struct ev_loop *loop, struct ev_fbuf_read *ebr)
     }
 }
 
+bool ev_fbuf_read_is_active (struct ev_fbuf_read *ebr)
+{
+    return ev_is_active (&ebr->prepare_w);
+}
+
 void ev_fbuf_read_incref (struct ev_fbuf_read *ebr)
 {
     ebr->refcnt++;

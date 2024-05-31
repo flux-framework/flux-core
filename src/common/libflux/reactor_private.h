@@ -19,6 +19,7 @@ struct flux_watcher_ops {
     void (*start) (flux_watcher_t *w);
     void (*stop) (flux_watcher_t *w);
     void (*destroy) (flux_watcher_t *w);
+    bool (*is_active) (flux_watcher_t *w);
 };
 
 struct flux_reactor {

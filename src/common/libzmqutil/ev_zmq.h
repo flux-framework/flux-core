@@ -11,6 +11,7 @@
 #ifndef _EV_ZMQ_H
 #define _EV_ZMQ_H
 
+#include <stdbool.h>
 #include "src/common/libev/ev.h"
 
 typedef struct ev_zmq_struct ev_zmq;
@@ -31,6 +32,7 @@ struct ev_zmq_struct {
 int ev_zmq_init (ev_zmq *w, ev_zmq_cb cb, void *zsock, int events);
 void ev_zmq_start (struct ev_loop *loop, ev_zmq *w);
 void ev_zmq_stop (struct ev_loop *loop, ev_zmq *w);
+bool ev_zmq_is_active (ev_zmq *w);
 
 /* Convert zeromq poll bits to libev's, for construction of 'events'
  * when registering a watcher.

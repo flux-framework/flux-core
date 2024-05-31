@@ -141,6 +141,11 @@ void ev_fbuf_write_stop (struct ev_loop *loop, struct ev_fbuf_write *ebw)
     }
 }
 
+bool ev_fbuf_write_is_active (struct ev_fbuf_write *ebw)
+{
+    return ev_is_active (&ebw->io_w);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

@@ -200,7 +200,13 @@ static void watcher_stop_safe (flux_watcher_t *w)
     }
 }
 
-
+/* This is_active() callback works for "native" libev watchers, where
+ * w->data points to a struct ev_TYPE.
+ */
+static bool wrap_ev_active (flux_watcher_t *w)
+{
+    return ev_is_active (w->data);
+}
 
 /* flux_t handle
  */
@@ -215,6 +221,11 @@ static void handle_stop (flux_watcher_t *w)
     ev_flux_stop (w->r->loop, (struct ev_flux *)w->data);
 }
 
+static bool handle_is_active (flux_watcher_t *w)
+{
+    return ev_flux_is_active (w->data);
+}
+
 static void handle_cb (struct ev_loop *loop, struct ev_flux *fw, int revents)
 {
     struct flux_watcher *w = fw->data;
@@ -225,6 +236,7 @@ static void handle_cb (struct ev_loop *loop, struct ev_flux *fw, int revents)
 static struct flux_watcher_ops handle_watcher = {
     .start = handle_start,
     .stop = handle_stop,
+    .is_active = handle_is_active,
     .destroy = NULL,
 };
 
@@ -275,7 +287,8 @@ static void fd_cb (struct ev_loop *loop, ev_io *iow, int revents)
 static struct flux_watcher_ops fd_watcher = {
     .start = fd_start,
     .stop = fd_stop,
-    .destroy = NULL
+    .destroy = NULL,
+    .is_active = wrap_ev_active,
 };
 
 flux_watcher_t *flux_fd_watcher_create (flux_reactor_t *r,
@@ -327,6 +340,7 @@ static struct flux_watcher_ops timer_watcher = {
     .start = timer_start,
     .stop = timer_stop,
     .destroy = NULL,
+    .is_active = wrap_ev_active,
 };
 
 flux_watcher_t *flux_timer_watcher_create (flux_reactor_t *r,
@@ -385,6 +399,12 @@ static void periodic_stop (flux_watcher_t *w)
     ev_periodic_stop (w->r->loop, &fp->evp);
 }
 
+static bool periodic_is_active (flux_watcher_t *w)
+{
+    struct f_periodic *fp = w->data;
+    return ev_is_active (&fp->evp);
+}
+
 static void periodic_cb (struct ev_loop *loop, ev_periodic *pw, int revents)
 {
     struct f_periodic *fp = pw->data;
@@ -416,6 +436,7 @@ static struct flux_watcher_ops periodic_watcher = {
     .start = periodic_start,
     .stop = periodic_stop,
     .destroy = NULL,
+    .is_active = periodic_is_active,
 };
 
 flux_watcher_t *flux_periodic_watcher_create (flux_reactor_t *r,
@@ -502,6 +523,7 @@ static struct flux_watcher_ops prepare_watcher = {
     .start = prepare_start,
     .stop = prepare_stop,
     .destroy = NULL,
+    .is_active = wrap_ev_active,
 };
 
 flux_watcher_t *flux_prepare_watcher_create (flux_reactor_t *r,
@@ -550,6 +572,7 @@ static struct flux_watcher_ops check_watcher = {
     .start = check_start,
     .stop = check_stop,
     .destroy = NULL,
+    .is_active = wrap_ev_active,
 };
 
 flux_watcher_t *flux_check_watcher_create (flux_reactor_t *r,
@@ -592,6 +615,7 @@ static struct flux_watcher_ops idle_watcher = {
     .start = idle_start,
     .stop = idle_stop,
     .destroy = NULL,
+    .is_active = wrap_ev_active,
 };
 
 flux_watcher_t *flux_idle_watcher_create (flux_reactor_t *r,
@@ -634,6 +658,7 @@ static struct flux_watcher_ops child_watcher = {
     .start = child_start,
     .stop = child_stop,
     .destroy = NULL,
+    .is_active = wrap_ev_active,
 };
 
 
@@ -703,6 +728,7 @@ static struct flux_watcher_ops signal_watcher = {
     .start = signal_start,
     .stop = signal_stop,
     .destroy = NULL,
+    .is_active = wrap_ev_active,
 };
 
 flux_watcher_t *flux_signal_watcher_create (flux_reactor_t *r,
@@ -756,6 +782,7 @@ static struct flux_watcher_ops stat_watcher = {
     .start = stat_start,
     .stop = stat_stop,
     .destroy = NULL,
+    .is_active = wrap_ev_active,
 };
 
 flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
@@ -791,13 +818,8 @@ void flux_stat_watcher_get_rstat (flux_watcher_t *w,
 bool flux_watcher_is_active (flux_watcher_t *w)
 {
     if (w) {
-        /*  Handle periodic watcher as a special case:
-         */
-        if (watcher_get_ops (w) == &periodic_watcher) {
-            struct f_periodic *fp = w->data;
-            return ev_is_active (&fp->evp);
-        }
-        return ev_is_active (w->data);
+        if (w->ops->is_active)
+            return w->ops->is_active (w);
     }
     return false;
 }

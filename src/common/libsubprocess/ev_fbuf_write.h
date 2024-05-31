@@ -42,6 +42,7 @@ int ev_fbuf_write_init (struct ev_fbuf_write *ebw,
 void ev_fbuf_write_cleanup (struct ev_fbuf_write *ebw);
 void ev_fbuf_write_start (struct ev_loop *loop, struct ev_fbuf_write *ebw);
 void ev_fbuf_write_stop (struct ev_loop *loop, struct ev_fbuf_write *ebw);
+bool ev_fbuf_write_is_active (struct ev_fbuf_write *ebw);
 void ev_fbuf_write_wakeup (struct ev_fbuf_write *ebw);
 #endif /* !_EV_BUFFER_WRITE_H */
 

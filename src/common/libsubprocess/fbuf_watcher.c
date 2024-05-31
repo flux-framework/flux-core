@@ -38,6 +38,11 @@ static void buffer_read_stop (flux_watcher_t *w)
     ev_fbuf_read_stop (w->r->loop, ebr);
 }
 
+static bool buffer_read_is_active (flux_watcher_t *w)
+{
+    return ev_fbuf_read_is_active (w->data);
+}
+
 static void buffer_read_destroy (flux_watcher_t *w)
 {
     struct ev_fbuf_read *ebr = (struct ev_fbuf_read *)w->data;
@@ -57,6 +62,7 @@ static struct flux_watcher_ops buffer_read_watcher = {
     .start = buffer_read_start,
     .stop = buffer_read_stop,
     .destroy = buffer_read_destroy,
+    .is_active = buffer_read_is_active,
 };
 
 flux_watcher_t *fbuf_read_watcher_create (flux_reactor_t *r,
@@ -163,6 +169,11 @@ static void buffer_write_stop (flux_watcher_t *w)
     ev_fbuf_write_stop (w->r->loop, ebw);
 }
 
+static bool buffer_write_is_active (flux_watcher_t *w)
+{
+    return ev_fbuf_write_is_active (w->data);
+}
+
 static void buffer_write_destroy (flux_watcher_t *w)
 {
     struct ev_fbuf_write *ebw = (struct ev_fbuf_write *)w->data;
@@ -182,6 +193,7 @@ static struct flux_watcher_ops buffer_write_watcher = {
     .start = buffer_write_start,
     .stop = buffer_write_stop,
     .destroy = buffer_write_destroy,
+    .is_active = buffer_write_is_active,
 };
 
 flux_watcher_t *fbuf_write_watcher_create (flux_reactor_t *r,

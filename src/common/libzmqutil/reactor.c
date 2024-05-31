@@ -37,6 +37,11 @@ static void zmq_stop (flux_watcher_t *w)
     ev_zmq_stop (w->r->loop, (ev_zmq *)w->data);
 }
 
+static bool zmq_is_active (flux_watcher_t *w)
+{
+    return ev_zmq_is_active (w->data);
+}
+
 static void zmq_cb (struct ev_loop *loop, ev_zmq *pw, int revents)
 {
     struct flux_watcher *w = pw->data;
@@ -48,6 +53,7 @@ static struct flux_watcher_ops zmq_watcher  = {
     .start = zmq_start,
     .stop = zmq_stop,
     .destroy = NULL,
+    .is_active = zmq_is_active,
 };
 
 flux_watcher_t *zmqutil_watcher_create (flux_reactor_t *r,

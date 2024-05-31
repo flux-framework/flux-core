@@ -96,6 +96,11 @@ void ev_flux_stop (struct ev_loop *loop, struct ev_flux *w)
     ev_idle_stop (loop, &w->idle_w);
 }
 
+bool ev_flux_is_active (struct ev_flux *w)
+{
+    return ev_is_active (&w->prepare_w);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
