@@ -574,7 +574,7 @@ static int remote_output_local_unbuf (flux_subprocess_t *p,
     }
     /* N.B. any data not consumed by the user is lost, so if eof is
      * seen, we send it immediately */
-    if (eof) {
+    if (eof && !c->eof_sent_to_caller) {
         c->read_eof_received = true;
         c->unbuf_data = NULL;
         c->unbuf_len = 0;
