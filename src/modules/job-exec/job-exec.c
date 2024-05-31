@@ -1550,7 +1550,11 @@ static void config_reload_cb (flux_t *h,
         goto error;
     }
 
-    if (job_exec_set_config_globals (h, conf, 0, NULL, &err) < 0)
+    if (job_exec_set_config_globals (h,
+                                     conf,
+                                     ctx->argc,
+                                     ctx->argv,
+                                     &err) < 0)
         goto error;
 
     while ((impl = implementations[i]) && impl->name) {
