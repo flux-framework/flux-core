@@ -1528,12 +1528,11 @@ static void stats_cb (flux_t *h,
     }
     while ((impl = implementations[i]) && impl->name) {
         json_t *stats = NULL;
-        if (impl->stats) {
-            if ((*impl->stats) (&stats) == 0 && stats) {
-                if (json_object_set_new (o, impl->name, stats) < 0) {
-                    errno = ENOMEM;
-                    goto error;
-                }
+        if (impl->stats && (stats = (*impl->stats) ())) {
+            if (json_object_set_new (o, impl->name, stats) < 0) {
+                json_decref (stats);
+                errno = ENOMEM;
+                goto error;
             }
         }
         i++;

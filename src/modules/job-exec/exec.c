@@ -618,7 +618,7 @@ static int exec_config (flux_t *h,
     return config_setup (h, conf, argc, argv, errp);
 }
 
-static int exec_stats (json_t **stats)
+static json_t * exec_stats (void)
 {
     json_t *o = NULL;
     json_t *conf = NULL;
@@ -634,13 +634,11 @@ static int exec_stats (json_t **stats)
     if (json_object_set_new (o, "config", conf) < 0)
         goto error;
 
-    (*stats) = o;
-    return 0;
-
+    return o;
 error:
     ERRNO_SAFE_WRAP (json_decref, o);
     ERRNO_SAFE_WRAP (json_decref, conf);
-    return -1;
+    return NULL;
 }
 
 struct exec_implementation bulkexec = {
