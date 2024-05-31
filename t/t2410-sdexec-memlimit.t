@@ -37,7 +37,6 @@ mkdir -p config
 cat >config/config.toml <<EOT
 [systemd]
 enable = true
-sdbus-debug = true
 sdexec-debug = true
 [exec]
 service = "sdexec"
@@ -60,7 +59,7 @@ fi
 
 test_under_flux 1 full -o,--config-path=$(pwd)/config
 
-flux setattr log-stderr-level 1
+flux setattr log-stderr-level 7
 
 sdexec="flux exec --service sdexec"
 getcg=$(pwd)/getcg.sh
@@ -162,7 +161,6 @@ test_expect_success 'change values of memory containment' '
 	cat >config/config.toml <<-EOT &&
 	[systemd]
 	enable = true
-	sdbus-debug = true
 	sdexec-debug = true
 	[exec]
 	service = "sdexec"
@@ -180,5 +178,7 @@ test_expect_success 'memory.max configuration changed' '
 	flux run $getcg memory.max >maxupdate.out &&
 	test_cmp inf.exp maxupdate.out
 '
+
+flux setattr log-stderr-level 3
 
 test_done
