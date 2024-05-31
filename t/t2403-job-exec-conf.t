@@ -48,6 +48,17 @@ test_expect_success 'job-exec: bad kill-timeout config causes module failure' '
 test_expect_success 'job-exec: bad kill-timeout causes config reload failure' '
 	echo exec.kill-timeout=\"foo\" | test_must_fail flux config load
 '
+test_expect_success 'job-exec: cmdline kill-timeout takes priority' '
+	flux module reload -f job-exec kill-timeout=1m &&
+	flux module stats job-exec | jq ".[\"kill-timeout\"] == 60" &&
+	cat <<-EOF > ${FLUX_CONF_DIR}/exec.toml &&
+	[exec]
+	kill-timeout = ".5m"
+	EOF
+	flux config reload &&
+	flux module stats job-exec | jq ".[\"kill-timeout\"] == 60" &&
+	rm -f ${FLUX_CONF_DIR}/exec.toml
+'
 test_expect_success 'job-exec: reset config' '
 	echo | flux config load
 '
@@ -90,6 +101,20 @@ test_expect_success 'job-exec: bad term/kill-signal config causes module failure
 	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
 		flux dmesg > ${name}.log 2>&1 &&
 	grep "invalid kill-signal: foo" ${name}.log
+'
+test_expect_success 'job-exec: cmdline term/kill signal takes priority' '
+	flux module reload -f job-exec term-signal=SIGUSR1 kill-signal=SIGUSR2 &&
+	flux module stats job-exec | jq ".[\"term-signal\"] == \"SIGUSR1\"" &&
+	flux module stats job-exec | jq ".[\"kill-signal\"] == \"SIGUSR2\"" &&
+	cat <<-EOF > ${FLUX_CONF_DIR}/exec.toml &&
+	[exec]
+	kill-signal = "SIGINT"
+	term-signal = "SIGHUP"
+	EOF
+	flux config reload &&
+	flux module stats job-exec | jq ".[\"term-signal\"] == \"SIGUSR1\"" &&
+	flux module stats job-exec | jq ".[\"kill-signal\"] == \"SIGUSR2\"" &&
+	rm -f ${FLUX_CONF_DIR}/exec.toml
 '
 test_expect_success 'job-exec: can specify default-shell on cmdline' '
 	flux module reload -f job-exec job-shell=/path/to/shell &&
