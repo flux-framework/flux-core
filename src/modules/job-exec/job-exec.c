@@ -1512,19 +1512,88 @@ static int unload_implementations (struct job_exec_ctx *ctx)
     return 0;
 }
 
+static json_t *running_job_stats (struct job_exec_ctx *ctx)
+{
+    struct jobinfo *job = zhashx_first (ctx->jobs);
+    json_t *o = NULL;
+
+    if (!(o = json_object ())) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    while (job) {
+        json_t *entry;
+        char *critical_ranks;
+        json_t *impl_stats = NULL;
+
+        if (!(critical_ranks = idset_encode (job->critical_ranks,
+                                             IDSET_FLAG_RANGE)))
+            goto error;
+
+        entry = json_pack ("{s:s s:s s:s s:i s:i s:i s:i s:i s:i s:f s:i s:i}",
+                           "implementation",
+                           job->impl ? job->impl->name : "none",
+                           "ns", job->ns,
+                           "critical_ranks", critical_ranks,
+                           "multiuser", job->multiuser,
+                           "has_namespace", job->has_namespace,
+                           "exception_in_progress", job->exception_in_progress,
+                           "started", job->started,
+                           "running", job->running,
+                           "finalizing", job->finalizing,
+                           "kill_timeout", job->kill_timeout,
+                           "kill_count", job->kill_count,
+                           "kill_shell_count", job->kill_shell_count);
+
+        free (critical_ranks);
+        if (!entry) {
+            errno = ENOMEM;
+            goto error;
+        }
+        if (job->impl
+            && job->impl->stats
+            && (impl_stats = (*job->impl->stats) (job))
+            && json_object_update_missing (entry, impl_stats) < 0) {
+            json_decref (entry);
+            json_decref (impl_stats);
+            errno = ENOMEM;
+            goto error;
+        }
+        json_decref (impl_stats);
+        if (json_object_set_new (o, idf58 (job->id), entry) < 0) {
+            json_decref (entry);
+            errno = ENOMEM;
+            goto error;
+        }
+        job = zhashx_next (ctx->jobs);
+    }
+    return o;
+error:
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return NULL;
+}
+
 static void stats_cb (flux_t *h,
                       flux_msg_handler_t *mh,
                       const flux_msg_t *msg,
                       void *arg)
 {
+    struct job_exec_ctx *ctx = arg;
     struct exec_implementation *impl;
     json_t *o = NULL;
+    json_t *jobs;
     int i = 0;
 
     if (!(o = json_pack ("{s:f s:s s:s}",
                          "kill-timeout", kill_timeout,
                          "term-signal", sigutil_signame (term_signal),
                          "kill-signal", sigutil_signame (kill_signal)))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (!(jobs = running_job_stats (ctx))
+        || json_object_set_new (o, "jobs", jobs)) {
+        json_decref (jobs);
         errno = ENOMEM;
         goto error;
     }
