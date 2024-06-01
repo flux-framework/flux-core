@@ -208,13 +208,13 @@ void output_cb (flux_subprocess_t *p, const char *stream)
     const char *buf;
     int len;
 
-    if ((len = flux_subprocess_getline (p, stream, &buf)) < 0)
-        log_err_exit ("flux_subprocess_getline");
+    if ((len = flux_subprocess_read (p, stream, &buf)) < 0)
+        log_err_exit ("flux_subprocess_read");
 
     if (len) {
         if (optparse_getopt (opts, "label-io", NULL) > 0)
             fprintf (fstream, "%d: ", flux_subprocess_rank (p));
-        fwrite (buf, len, 1, fstream);
+        fprintf (fstream, "%.*s", len, buf);
     }
 }
 
@@ -284,7 +284,11 @@ static flux_subprocess_t *imp_kill (flux_subprocess_t *p, int signum)
     }
     /* Note: subprocess object destroyed in completion callback
      */
-    return flux_rexec (flux_handle, rank, 0, cmd, &ops);
+    return flux_rexec (flux_handle,
+                       rank,
+                       FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF,
+                       cmd,
+                       &ops);
 }
 
 static void killall (zlist_t *l, int signum)
@@ -715,7 +719,7 @@ int main (int argc, char *argv[])
         if (!(p = flux_rexec_ex (h,
                                  service_name,
                                  rank,
-                                 0,
+                                 FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF,
                                  cmd,
                                  &ops,
                                  NULL,
