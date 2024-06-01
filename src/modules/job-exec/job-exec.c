@@ -386,6 +386,7 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
               sigutil_signame (kill_signal),
               idf58 (job->id));
     (*job->impl->kill) (job, kill_signal);
+    job->kill_shell_count++;
 
     /* Since we've transitioned to killing the shell directly, stop the
      * flux_job_kill(3) timer:
@@ -419,6 +420,7 @@ static void kill_timer_cb (flux_reactor_t *r,
                         sigutil_signame (kill_signal));
         return;
     }
+    job->kill_count++;
     /* Open loop */
     flux_future_destroy (f);
 }
