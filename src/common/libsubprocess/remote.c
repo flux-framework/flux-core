@@ -48,27 +48,11 @@ static void set_failed (flux_subprocess_t *p, const char *fmt, ...)
     va_end (ap);
 }
 
-static void start_channel_watchers (flux_subprocess_t *p)
-{
-    struct subprocess_channel *c;
-    c = zhash_first (p->channels);
-    while (c) {
-        flux_watcher_start (c->in_prep_w);
-        flux_watcher_start (c->in_check_w);
-        c = zhash_next (p->channels);
-    }
-}
-
 static void stop_channel_watchers (flux_subprocess_t *p, bool in, bool out)
 {
     struct subprocess_channel *c;
     c = zhash_first (p->channels);
     while (c) {
-        if (in) {
-            flux_watcher_stop (c->in_prep_w);
-            flux_watcher_stop (c->in_idle_w);
-            flux_watcher_stop (c->in_check_w);
-        }
         if (out) {
             flux_watcher_stop (c->out_prep_w);
             flux_watcher_stop (c->out_idle_w);
@@ -157,10 +141,7 @@ static void process_new_state (flux_subprocess_t *p,
 
     p->state = state;
 
-    if (p->state == FLUX_SUBPROCESS_RUNNING) {
-        start_channel_watchers (p);
-    }
-    else if (state == FLUX_SUBPROCESS_EXITED) {
+    if (state == FLUX_SUBPROCESS_EXITED) {
         stop_in_watchers (p);
     }
     else if (state == FLUX_SUBPROCESS_FAILED) {
@@ -172,122 +153,6 @@ static void process_new_state (flux_subprocess_t *p,
 
     if (p->state != p->state_reported)
         state_change_start (p);
-}
-
-static void remote_in_prep_cb (flux_reactor_t *r,
-                               flux_watcher_t *w,
-                               int revents,
-                               void *arg)
-{
-    struct subprocess_channel *c = arg;
-
-    if (fbuf_bytes (c->write_buffer) > 0
-        || (c->closed && !c->write_eof_sent)
-        || (c->p->state == FLUX_SUBPROCESS_EXITED
-            || c->p->state == FLUX_SUBPROCESS_FAILED))
-        flux_watcher_start (c->in_idle_w);
-}
-
-static int remote_write (struct subprocess_channel *c)
-{
-    const void *ptr;
-    int lenp;
-    bool eof = false;
-    int rv = -1;
-
-    if (!(ptr = fbuf_read (c->write_buffer, -1, &lenp))) {
-        llog_debug (c->p, "fbuf_read: %s", strerror (errno));
-        set_failed (c->p, "internal buffer read error");
-        goto error;
-    }
-
-    assert (lenp);
-
-    /* if closed / EOF about to be sent, can attach to this RPC to
-     * avoid extra RPC */
-    if (!fbuf_bytes (c->write_buffer) && c->closed && !c->write_eof_sent)
-        eof = true;
-
-    if (subprocess_write (c->p->h,
-                          c->p->service_name,
-                          c->p->rank,
-                          c->p->pid,
-                          c->name,
-                          ptr,
-                          lenp,
-                          eof) < 0) {
-        llog_debug (c->p,
-                    "error sending rexec.write request: %s",
-                    strerror (errno));
-        set_failed (c->p, "internal write error");
-        goto error;
-    }
-
-    if (eof)
-        c->write_eof_sent = true;
-    rv = 0;
-error:
-    return rv;
-}
-
-static int remote_close (struct subprocess_channel *c)
-{
-    if (subprocess_write (c->p->h,
-                          c->p->service_name,
-                          c->p->rank,
-                          c->p->pid,
-                          c->name,
-                          NULL,
-                          0,
-                          true) < 0) {
-        llog_debug (c->p,
-                    "error sending rexec.write request: %s",
-                    strerror (errno));
-        set_failed (c->p, "internal close error");
-        return -1;
-    }
-    /* No need to do a "channel_flush", normal io reactor will handle
-     * flush of any data in read buffer */
-    return 0;
-}
-
-static void remote_in_check_cb (flux_reactor_t *r,
-                                flux_watcher_t *w,
-                                int revents,
-                                void *arg)
-{
-    struct subprocess_channel *c = arg;
-
-    flux_watcher_stop (c->in_idle_w);
-
-    if (fbuf_bytes (c->write_buffer) > 0) {
-        if (remote_write (c) < 0)
-            goto error;
-    }
-
-    if (!fbuf_bytes (c->write_buffer) && c->closed && !c->write_eof_sent) {
-        if (remote_close (c) < 0)
-            goto error;
-        c->write_eof_sent = true;
-    }
-
-    if (c->write_eof_sent
-        || c->p->state == FLUX_SUBPROCESS_EXITED
-        || c->p->state == FLUX_SUBPROCESS_FAILED) {
-        flux_watcher_stop (c->in_prep_w);
-        flux_watcher_stop (c->in_check_w);
-    }
-
-    return;
-
-error:
-    /* c->p->failed_errno and c->p->failed_error expected to be
-     * set before this point (typically via set_failed())
-     */
-    process_new_state (c->p, FLUX_SUBPROCESS_FAILED);
-    remote_kill_nowait (c->p, SIGKILL);
-    flux_future_destroy (c->p->f);
-    c->p->f = NULL;
 }
 
 static bool remote_out_data_available (struct subprocess_channel *c)
@@ -345,12 +210,8 @@ static void remote_out_check_cb (flux_reactor_t *r,
         flux_watcher_stop (c->out_check_w);
 
         /* close input side as well if eof sent to caller */
-        if (c->eof_sent_to_caller) {
-            flux_watcher_stop (c->in_prep_w);
-            flux_watcher_stop (c->in_idle_w);
-            flux_watcher_stop (c->in_check_w);
+        if (c->eof_sent_to_caller)
             c->closed = true;
-        }
     }
 
     if (c->p->state == FLUX_SUBPROCESS_EXITED && c->eof_sent_to_caller)
@@ -365,48 +226,10 @@ static int remote_channel_setup (flux_subprocess_t *p,
     struct subprocess_channel *c = NULL;
     char *e = NULL;
     int save_errno;
-    int buffer_size;
 
     if (!(c = channel_create (p, output_cb, name, channel_flags))) {
         llog_debug (p, "channel_create: %s", strerror (errno));
         goto error;
-    }
-
-    if ((buffer_size = cmd_option_bufsize (p, name)) < 0) {
-        llog_debug (p, "cmd_option_bufsize: %s", strerror (errno));
-        goto error;
-    }
-
-    if (channel_flags & CHANNEL_WRITE) {
-        if (!(c->write_buffer = fbuf_create (buffer_size))) {
-            llog_debug (p, "fbuf_create: %s", strerror (errno));
-            goto error;
-        }
-
-        if (!(c->in_prep_w = flux_prepare_watcher_create (p->reactor,
-                                                          remote_in_prep_cb,
-                                                          c))) {
-            llog_debug (p, "flux_prepare_watcher_create: %s", strerror (errno));
-            goto error;
-        }
-
-        if (!(c->in_idle_w = flux_idle_watcher_create (p->reactor,
-                                                       NULL,
-                                                       c))) {
-            llog_debug (p, "flux_idle_watcher_create: %s", strerror (errno));
-            goto error;
-        }
-
-        if (!(c->in_check_w = flux_check_watcher_create (p->reactor,
-                                                         remote_in_check_cb,
-                                                         c))) {
-            llog_debug (p, "flux_check_watcher_create: %s", strerror (errno));
-            goto error;
-        }
-
-        /* do not start these watchers till later, cannot send data to
-         * remote until it has reached running state
-         */
     }
 
     if (channel_flags & CHANNEL_READ) {
@@ -421,6 +244,11 @@ static int remote_channel_setup (flux_subprocess_t *p,
             c->line_buffered = true;
 
         if (!(p->flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF)) {
+            int buffer_size;
+            if ((buffer_size = cmd_option_bufsize (p, name)) < 0) {
+                llog_debug (p, "cmd_option_bufsize: %s", strerror (errno));
+                goto error;
+            }
             if (!(c->read_buffer = fbuf_create (buffer_size))) {
                 llog_debug (p, "fbuf_create: %s", strerror (errno));
                 goto error;
@@ -640,6 +468,48 @@ static int remote_output_buffered (flux_subprocess_t *p,
     return 0;
 }
 
+/* In the event channel had data / closed before process running */
+static int send_channel_data (flux_subprocess_t *p)
+{
+    struct subprocess_channel *c;
+    c = zhash_first (p->channels);
+    while (c) {
+        int bytes = fbuf_bytes (c->write_buffer);
+        if (c->closed || bytes > 0) {
+            const char *ptr = NULL;
+            int len = 0;
+            if (bytes > 0) {
+                if (!(ptr = fbuf_read (c->write_buffer, -1, &len))) {
+                    llog_debug (p,
+                                "error reading buffered data: %s",
+                                strerror (errno));
+                    set_failed (p, "internal fbuf_read error");
+                    return -1;
+                }
+            }
+            if (subprocess_write (p->h,
+                                  p->service_name,
+                                  p->rank,
+                                  p->pid,
+                                  c->name,
+                                  ptr,
+                                  len,
+                                  c->closed) < 0) {
+                llog_debug (p,
+                            "error sending rexec.write request: %s",
+                            strerror (errno));
+                set_failed (p, "internal close error");
+                return -1;
+            }
+            /* Don't need this buffer anymore, reclaim the space */
+            fbuf_destroy (c->write_buffer);
+            c->write_buffer = NULL;
+        }
+        c = zhash_next (p->channels);
+    }
+    return 0;
+}
+
 static void rexec_continuation (flux_future_t *f, void *arg)
 {
     flux_subprocess_t *p = arg;
@@ -673,6 +543,8 @@ static void rexec_continuation (flux_future_t *f, void *arg)
     if (subprocess_rexec_is_started (f, &p->pid)) {
         p->pid_set = true;
         process_new_state (p, FLUX_SUBPROCESS_RUNNING);
+        if (send_channel_data (p) < 0)
+            goto error;
     }
     else if (subprocess_rexec_is_stopped (f)) {
         process_new_state (p, FLUX_SUBPROCESS_STOPPED);

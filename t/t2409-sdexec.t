@@ -55,6 +55,9 @@ test_expect_success 'clear broker logs' '
 test_expect_success 'sdexec true succeeds' '
 	$sdexec -r 0 $true
 '
+test_expect_success 'sdexec -n cat succeeds' '
+	run_timeout 30 $sdexec -n -r 0 $cat
+'
 test_expect_success 'sdexec false fails with exit code 1' '
 	test_expect_code 1 $sdexec -r 0 $false
 '
