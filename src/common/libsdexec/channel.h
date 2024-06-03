@@ -16,24 +16,30 @@
 
 struct channel;
 
+enum {
+    CHANNEL_LINEBUF = 1,
+};
+
 typedef void (*channel_output_f)(struct channel *ch, json_t *io, void *arg);
 typedef void (*channel_error_f)(struct channel *ch,
                                 flux_error_t *error,
                                 void *arg);
 
 /* Open a channel for output from the systemd unit.  When the unit has written
- * some data, an internal fd watcher reads from it and invokes output_cb.
+ * some data, an internal fd watcher buffers it, then invokes output_cb.
  * If there is a read error, the error_cb is also called for logging, then
  * output_cb is called with EOF.
  *
  * Notes:
  * - internal watcher is not started until sdexec_channel_start_output()
  *   is called
- * - data is not line buffered
+ * - data is line buffered if 'flags' includes CHANNEL_LINEBUF
  * - a single callback may not represent all the data available at that moment
  */
 struct channel *sdexec_channel_create_output (flux_t *h,
                                               const char *name,
+                                              size_t bufsize,
+                                              int flags,
                                               channel_output_f output_cb,
                                               channel_error_f error_cb,
                                               void *arg);

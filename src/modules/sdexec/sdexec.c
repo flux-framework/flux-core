@@ -37,6 +37,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/jpath.h"
+#include "src/common/libutil/parse_size.h"
 #include "ccan/str/str.h"
 
 #include "src/common/libsdexec/stop.h"
@@ -463,6 +464,67 @@ static int get_dict (json_t *o,
     return 0;
 }
 
+static int get_stream_bufsize (json_t *cmd,
+                               const char *stream,
+                               size_t *vp)
+{
+    char key[64];
+    const char *val;
+    uint64_t result;
+
+    snprintf (key, sizeof (key), "%s_BUFSIZE", stream);
+    if (get_dict (cmd, "opts", key, &val) < 0) {
+        *vp = 0;
+        return 0;
+    }
+    if (parse_size (val, &result) < 0 || result > SIZE_MAX)
+        return -1;
+    *vp = result;
+    return 0;
+}
+
+static int get_stream_line_buffer (json_t *cmd,
+                                   const char *stream,
+                                   bool *vp,
+                                   bool default_value)
+{
+    char key[64];
+    const char *val;
+
+    snprintf (key, sizeof (key), "%s_LINE_BUFFER", stream);
+    if (get_dict (cmd, "opts", key, &val) < 0) {
+        *vp = default_value;
+        return 0;
+    }
+    if (!strcasecmp (val, "false"))
+        *vp = false;
+    else if (!strcasecmp (val, "true"))
+        *vp = true;
+    else
+        return -1;
+    return 0;
+}
+
+static struct channel *create_out_channel (flux_t *h,
+                                           json_t *cmd,
+                                           const char *stream,
+                                           void *arg)
+{
+    bool linebuf;
+    size_t bufsize;
+
+    if (get_stream_line_buffer (cmd, stream, &linebuf, true) < 0
+        || get_stream_bufsize (cmd, stream, &bufsize) < 0)
+        return NULL;
+    return sdexec_channel_create_output (h,
+                                         stream,
+                                         bufsize,
+                                         linebuf ? CHANNEL_LINEBUF : 0,
+                                         channel_cb,
+                                         cherror_cb,
+                                         arg);
+}
+
 static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
                                      json_t *cmd,
                                      int flags)
@@ -512,19 +574,17 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
     if (!(proc->in = sdexec_channel_create_input (ctx->h, "stdin")))
         goto error;
     if ((flags & SUBPROCESS_REXEC_STDOUT)) {
-        if (!(proc->out = sdexec_channel_create_output (ctx->h,
-                                                        "stdout",
-                                                        channel_cb,
-                                                        cherror_cb,
-                                                        proc)))
+        if (!(proc->out = create_out_channel (ctx->h,
+                                              proc->cmd,
+                                              "stdout",
+                                              proc)))
             goto error;
     }
     if ((flags & SUBPROCESS_REXEC_STDERR)) {
-        if (!(proc->err = sdexec_channel_create_output (ctx->h,
-                                                        "stderr",
-                                                        channel_cb,
-                                                        cherror_cb,
-                                                        proc)))
+        if (!(proc->err = create_out_channel (ctx->h,
+                                              proc->cmd,
+                                              "stderr",
+                                              proc)))
             goto error;
     }
     free (tmp);
