@@ -113,6 +113,14 @@ def reload(args):
     ).get()
 
 
+def acquire_mute(args):
+    """
+    Send an "acquire-mute" request to resource module, to avoid the stream of
+    DOWN acquire responses to the scheduler during shutdown.
+    """
+    RPC(flux.Flux(), "resource.acquire-mute", {}, nodeid=0).get()
+
+
 def drain(args):
     """
     Send a drain request to resource module for args.targets, if args.targets
@@ -705,6 +713,11 @@ def main():
         title="subcommands", description="", dest="subcommand"
     )
     subparsers.required = True
+
+    acquire_mute_parser = subparsers.add_parser(
+        "acquire-mute", formatter_class=flux.util.help_formatter()
+    )
+    acquire_mute_parser.set_defaults(func=acquire_mute)
 
     drain_parser = subparsers.add_parser(
         "drain", formatter_class=flux.util.help_formatter()
