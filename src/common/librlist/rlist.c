@@ -2583,6 +2583,13 @@ struct rlist *rlist_from_config (json_t *conf, flux_error_t *errp)
             errprintf (errp, "config[%zu]: %s", index, error.text);
             goto error;
         }
+        if (properties != NULL && !json_is_array (properties)) {
+            errprintf (errp,
+                       "config[%zu]: %s",
+                       index,
+                       "properties must be an array");
+            goto error;
+        }
         if (rlist_config_add_entry (rl,
                                     hl,
                                     errp,
