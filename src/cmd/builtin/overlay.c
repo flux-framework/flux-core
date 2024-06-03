@@ -321,35 +321,6 @@ static void status_print_noname (struct status *ctx,
             parent ? status_rpctime (ctx) : "");
 }
 
-/* Look up topology of 'child_rank' within the subtree topology rooted
- * at 'parent_rank'. Caller must json_decref() the result.
- * Returns NULL if --ghost option was not provided, or the lookup fails.
- */
-static json_t *topo_lookup (struct status *ctx,
-                            int parent_rank,
-                            int child_rank)
-{
-    flux_future_t *f;
-    json_t *topo;
-
-    if (optparse_hasopt (ctx->opt, "no-ghost"))
-        return NULL;
-    if (!(f = flux_rpc_pack (ctx->h,
-                             "overlay.topology",
-                             parent_rank,
-                             0,
-                             "{s:i}",
-                             "rank", child_rank))
-        || flux_future_wait_for (f, ctx->timeout) < 0
-        || flux_rpc_get_unpack (f, "o", &topo) < 0) {
-        flux_future_destroy (f);
-        return NULL;
-    }
-    json_incref (topo);
-    flux_future_destroy (f);
-    return topo;
-}
-
 /* Recursive function to walk 'topology', adding all subtree ranks to 'ids'.
  * Returns 0 on success, -1 on failure (errno is not set).
  *
@@ -605,7 +576,10 @@ static int status_healthwalk (struct status *ctx,
                         || streq (child.status, "lost")
                         || status_healthwalk (ctx, child.rank,
                                               level + 1, connector, fun) < 0) {
-                        topo = topo_lookup (ctx, node.rank, child.rank);
+                        if (optparse_hasopt (ctx->opt, "no-ghost"))
+                            topo = NULL;
+                        else if ((topo = get_topology (ctx->h)))
+                            topo = get_subtree_topology (topo, child.rank);
                         status_ghostwalk (ctx,
                                           topo,
                                           level + 1,
