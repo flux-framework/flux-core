@@ -618,7 +618,7 @@ static int exec_config (flux_t *h,
     return config_setup (h, conf, argc, argv, errp);
 }
 
-static int exec_stats (json_t **stats)
+static json_t *exec_config_stats (void)
 {
     json_t *o = NULL;
     json_t *conf = NULL;
@@ -634,13 +634,27 @@ static int exec_stats (json_t **stats)
     if (json_object_set_new (o, "config", conf) < 0)
         goto error;
 
-    (*stats) = o;
-    return 0;
-
+    return o;
 error:
     ERRNO_SAFE_WRAP (json_decref, o);
     ERRNO_SAFE_WRAP (json_decref, conf);
-    return -1;
+    return NULL;
+}
+
+static json_t *exec_job_stats (struct jobinfo *job)
+{
+    struct bulk_exec *exec = job->data;
+    return json_pack ("{s:i s:i}",
+                      "total_shells", bulk_exec_total (exec),
+                      "active_shells", bulk_exec_current (exec));
+}
+
+static json_t *exec_stats (struct jobinfo *job)
+{
+    if (job)
+        return exec_job_stats (job);
+    else
+        return exec_config_stats ();
 }
 
 struct exec_implementation bulkexec = {

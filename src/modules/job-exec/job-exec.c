@@ -379,12 +379,26 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
                                  void *arg)
 {
     struct jobinfo *job = arg;
+
     flux_log (job->h,
               LOG_DEBUG,
               "Sending %s to job shell for job %s",
               sigutil_signame (kill_signal),
               idf58 (job->id));
     (*job->impl->kill) (job, kill_signal);
+    job->kill_shell_count++;
+
+    /* Since we've transitioned to killing the shell directly, stop the
+     * flux_job_kill(3) timer:
+     */
+    flux_watcher_stop (job->kill_timer);
+
+    /*  Reuse job->kill_timer to create an exponential backoff
+     */
+    if ((job->kill_timeout = job->kill_timeout * 2) > 300.)
+        job->kill_timeout = 300.;
+    flux_timer_watcher_reset (w, job->kill_timeout, 0.);
+    flux_watcher_start (w);
 }
 
 static void kill_timer_cb (flux_reactor_t *r,
@@ -406,6 +420,7 @@ static void kill_timer_cb (flux_reactor_t *r,
                         sigutil_signame (kill_signal));
         return;
     }
+    job->kill_count++;
     /* Open loop */
     flux_future_destroy (f);
 }
@@ -419,7 +434,7 @@ static void jobinfo_killtimer_start (struct jobinfo *job, double after)
     if (job->kill_timer == NULL) {
         job->kill_timer = flux_timer_watcher_create (r,
                                                      after,
-                                                     0.,
+                                                     after,
                                                      kill_timer_cb,
                                                      job);
         flux_watcher_start (job->kill_timer);
@@ -1497,13 +1512,76 @@ static int unload_implementations (struct job_exec_ctx *ctx)
     return 0;
 }
 
+static json_t *running_job_stats (struct job_exec_ctx *ctx)
+{
+    struct jobinfo *job = zhashx_first (ctx->jobs);
+    json_t *o = NULL;
+
+    if (!(o = json_object ())) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    while (job) {
+        json_t *entry;
+        char *critical_ranks;
+        json_t *impl_stats = NULL;
+
+        if (!(critical_ranks = idset_encode (job->critical_ranks,
+                                             IDSET_FLAG_RANGE)))
+            goto error;
+
+        entry = json_pack ("{s:s s:s s:s s:i s:i s:i s:i s:i s:i s:f s:i s:i}",
+                           "implementation",
+                           job->impl ? job->impl->name : "none",
+                           "ns", job->ns,
+                           "critical_ranks", critical_ranks,
+                           "multiuser", job->multiuser,
+                           "has_namespace", job->has_namespace,
+                           "exception_in_progress", job->exception_in_progress,
+                           "started", job->started,
+                           "running", job->running,
+                           "finalizing", job->finalizing,
+                           "kill_timeout", job->kill_timeout,
+                           "kill_count", job->kill_count,
+                           "kill_shell_count", job->kill_shell_count);
+
+        free (critical_ranks);
+        if (!entry) {
+            errno = ENOMEM;
+            goto error;
+        }
+        if (job->impl
+            && job->impl->stats
+            && (impl_stats = (*job->impl->stats) (job))
+            && json_object_update_missing (entry, impl_stats) < 0) {
+            json_decref (entry);
+            json_decref (impl_stats);
+            errno = ENOMEM;
+            goto error;
+        }
+        json_decref (impl_stats);
+        if (json_object_set_new (o, idf58 (job->id), entry) < 0) {
+            json_decref (entry);
+            errno = ENOMEM;
+            goto error;
+        }
+        job = zhashx_next (ctx->jobs);
+    }
+    return o;
+error:
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return NULL;
+}
+
 static void stats_cb (flux_t *h,
                       flux_msg_handler_t *mh,
                       const flux_msg_t *msg,
                       void *arg)
 {
+    struct job_exec_ctx *ctx = arg;
     struct exec_implementation *impl;
     json_t *o = NULL;
+    json_t *jobs;
     int i = 0;
 
     if (!(o = json_pack ("{s:f s:s s:s}",
@@ -1513,14 +1591,19 @@ static void stats_cb (flux_t *h,
         errno = ENOMEM;
         goto error;
     }
+    if (!(jobs = running_job_stats (ctx))
+        || json_object_set_new (o, "jobs", jobs)) {
+        json_decref (jobs);
+        errno = ENOMEM;
+        goto error;
+    }
     while ((impl = implementations[i]) && impl->name) {
         json_t *stats = NULL;
-        if (impl->stats) {
-            if ((*impl->stats) (&stats) == 0 && stats) {
-                if (json_object_set_new (o, impl->name, stats) < 0) {
-                    errno = ENOMEM;
-                    goto error;
-                }
+        if (impl->stats && (stats = (*impl->stats) (NULL))) {
+            if (json_object_set_new (o, impl->name, stats) < 0) {
+                json_decref (stats);
+                errno = ENOMEM;
+                goto error;
             }
         }
         i++;
