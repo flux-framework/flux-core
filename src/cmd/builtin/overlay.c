@@ -617,13 +617,18 @@ static bool show_badtrees (struct status *ctx,
                            bool parent,
                            int level)
 {
+    int have_children = false;
+
     if (streq (node->status, "full"))
         return false;
+    if (idset_count (node->subtree_ranks) > 1)
+        have_children = true;
     if (parent
         || streq (node->status, "lost")
-        || streq (node->status, "offline"))
+        || streq (node->status, "offline")
+        || (!have_children && ctx->verbose < 2))
         status_print (ctx, node, parent, level);
-    return true;
+    return have_children || ctx->verbose >= 2;
 }
 
 /* map fun - follow all live brokers and print everything
@@ -633,11 +638,16 @@ static bool show_all (struct status *ctx,
                       bool parent,
                       int level)
 {
+    int have_children = false;
+
+    if (idset_count (node->subtree_ranks) > 1)
+        have_children = true;
     if (parent
         || streq (node->status, "lost")
-        || streq (node->status, "offline"))
+        || streq (node->status, "offline")
+        || (!have_children && ctx->verbose < 2))
         status_print (ctx, node, parent, level);
-    return true;
+    return have_children || ctx->verbose >= 2;
 }
 
 static bool validate_wait (const char *wait)
