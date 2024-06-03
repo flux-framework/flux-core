@@ -278,7 +278,7 @@ static const char *status_getname (struct status *ctx,
     return buf;
 }
 
-/* If --times, return string containing parenthesised elapsed
+/* If verbose >= 2, return string containing parenthesised elapsed
  * time since last RPC was started, with leading space.
  * Otherwise, return the empty string
  */
