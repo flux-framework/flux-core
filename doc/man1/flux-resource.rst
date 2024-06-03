@@ -21,6 +21,8 @@ SYNOPSIS
 
 | **flux** **resource** **reload** [-f] [--xml] *path*
 
+| **flux** **resource** **acquire-mute**
+
 DESCRIPTION
 ===========
 
@@ -316,6 +318,14 @@ This command is primarily used in test.
 
   Do not fail if resource contain invalid ranks.
 
+acquire-mute
+------------
+
+.. program:: flux resource acquire-mute
+
+Tell the resource module to stop sending RFC 28 ``resource.acquire`` responses
+to the scheduler.  This is used during Flux instance shutdown to avoid asking
+the scheduler to needlessly process OFFLINE updates.
 
 OUTPUT FORMAT
 =============

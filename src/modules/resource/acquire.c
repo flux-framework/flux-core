@@ -83,6 +83,7 @@ struct acquire {
     struct resource_ctx *ctx;
     flux_msg_handler_t **handlers;
     struct flux_msglist *requests;      // N.B. there can be only one currently
+    bool mute;                          // suspend responses during shutdown
 };
 
 
@@ -297,6 +298,25 @@ static void cancel_cb (flux_t *h,
         flux_log (h, LOG_DEBUG, "canceled %d resource.acquire", count);
 }
 
+/* Suspend resource.acquire responses during shutdown
+ */
+static void mute_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
+{
+    struct acquire *acquire = arg;
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    acquire->mute = true;
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to acquire-mute request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to acquire-mute request");
+}
+
 /* Handle resource.disconnect message.
  */
 void acquire_disconnect (struct acquire *acquire, const flux_msg_t *msg)
@@ -328,6 +348,9 @@ static void reslog_cb (struct reslog *reslog,
     const char *errmsg = NULL;
     json_t *resobj;
     const flux_msg_t *msg;
+
+    if (acquire->mute)
+        return;
 
     msg = flux_msglist_first (acquire->requests);
     while (msg) {
@@ -398,9 +421,9 @@ static void reslog_cb (struct reslog *reslog,
                                     "error responding to resource.acquire (%s)",
                                     name);
                     }
-                    idset_destroy (up);
-                    idset_destroy (dn);
                 }
+                idset_destroy (up);
+                idset_destroy (dn);
             }
         }
         msg = flux_msglist_next (acquire->requests);
@@ -421,6 +444,7 @@ int acquire_clients (struct acquire *acquire)
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "resource.acquire", acquire_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "resource.acquire-cancel", cancel_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "resource.acquire-mute", mute_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

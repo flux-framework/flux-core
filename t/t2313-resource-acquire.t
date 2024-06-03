@@ -89,4 +89,11 @@ test_expect_success 'flux resource reload fails with acquire client' '
 	test_must_fail flux resource reload R
 '
 
+test_expect_success 'flux resource acquire-mute works' '
+	flux resource acquire-mute &&
+	flux resource drain 2 mumble &&
+	flux resource drain -n -o "{ranks} {reason}" | grep mumble &&
+	flux run --requires=rank:2 flux getattr rank
+'
+
 test_done
