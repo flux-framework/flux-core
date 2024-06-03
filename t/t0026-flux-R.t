@@ -355,7 +355,19 @@ test_expect_success 'flux R parse-config detects invalid property' '
 	EOF
 	test_must_fail flux R parse-config conf
 '
-
+test_expect_success 'flux R parse-config detects when properties not an array' '
+	mkdir -p conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo[0-10]"
+	cores = "0-1"
+	[[resource.config]]
+	hosts = "foo11"
+	cores = "0-3"
+	properties = "foo"
+	EOF
+	test_must_fail flux R parse-config conf
+'
 test_expect_success 'flux R parse-config also works with resource.path' '
 	flux R encode -r 0-1 >R.path &&
 	cat <<-EOF >conf/resource.toml &&
