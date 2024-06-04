@@ -272,7 +272,7 @@ test_expect_success 'stop broker 12' '
 '
 
 test_expect_success 'flux overlay status prints connection timed out on 12' '
-	flux overlay status --no-pretty >status.out &&
+	flux overlay status -vv --no-pretty >status.out &&
 	grep "fake12: $(strerror_symbol ETIMEDOUT)" status.out
 '
 
