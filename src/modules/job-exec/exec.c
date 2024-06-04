@@ -160,7 +160,7 @@ static void lost_shell_continuation (flux_future_t *f, void *arg)
     struct jobinfo *job = arg;
     if (flux_future_get (f, NULL) < 0)
         jobinfo_fatal_error (job, errno,
-                             "failed to notify job of lost shell");
+                             "failed to notify job of node failure");
     flux_future_destroy (f);
 }
 
@@ -244,8 +244,7 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
             lost_shell (job,
                         critical,
                         shell_rank,
-                        "%s on %s (shell rank %d)",
-                        "lost contact with job shell",
+                        "node failure on %s (shell rank %d)",
                         hostname,
                         shell_rank);
 
@@ -255,8 +254,7 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
             if (critical)
                 jobinfo_fatal_error (job,
                                      0,
-                                     "%s on broker %s (rank %d)",
-                                     "lost contact with job shell",
+                                     "node failure on %s (rank %d)",
                                      hostname,
                                      rank);
         }

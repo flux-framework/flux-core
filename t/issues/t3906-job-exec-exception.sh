@@ -15,4 +15,4 @@ SHELL=/bin/sh flux start -s 4 -o,-Stbon.topo=kary:4 --test-exit-mode=leader '\
 
 cat t3906.output
 
-grep 'lost contact with job shell on broker.*rank 3' t3906.output
+grep 'node failure on .*rank 3' t3906.output

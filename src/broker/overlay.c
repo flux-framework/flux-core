@@ -759,6 +759,28 @@ static void overlay_child_status_update (struct overlay *ov,
     }
 }
 
+static void log_lost_connection (struct overlay *ov,
+                                 struct child *child,
+                                 const char *why)
+{
+    int children = topology_get_descendant_count_at (ov->topo, child->rank);
+    char add[128] = { 0 };
+
+    if (children > 0) {
+        snprintf (add,
+                  sizeof (add),
+                  " and severed contact with %d other nodes",
+                  children);
+    }
+    flux_log (ov->h,
+              LOG_ERR,
+              "%s (rank %d) %s%s",
+              flux_get_hostbyrank (ov->h, child->rank),
+              (int)child->rank,
+              why,
+              add);
+}
+
 static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
 {
     int rc = -1;
@@ -778,12 +800,7 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
 
         if ((uuid = flux_msg_route_last (msg))
             && (child = child_lookup_online (ov, uuid))) {
-            flux_log (ov->h,
-                      LOG_ERR,
-                      "%s (rank %d) has disconnected unexpectedly."
-                      " Marking it LOST.",
-                      flux_get_hostbyrank (ov->h, child->rank),
-                      (int)child->rank);
+            log_lost_connection (ov, child, "failed");
             overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
         }
         errno = saved_errno;
@@ -1801,12 +1818,7 @@ static void overlay_disconnect_subtree_cb (flux_t *h,
         errstr = "failed to send CONTROL_DISCONNECT message";
         goto error;
     }
-    flux_log (ov->h,
-              LOG_ERR,
-              "%s (rank %d) transitioning to LOST due to %s",
-              flux_get_hostbyrank (ov->h, child->rank),
-              (int)child->rank,
-              "administrative action");
+    log_lost_connection (ov, child, "disconnected by request");
     overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to overlay.disconnect-subtree");

@@ -55,6 +55,7 @@ ssize_t topology_get_child_ranks (struct topology *topo,
 int topology_get_level (struct topology *topo);
 int topology_get_maxlevel (struct topology *topo);
 int topology_get_descendant_count (struct topology *topo);
+int topology_get_descendant_count_at (struct topology *topo, int rank);
 int topology_get_child_route (struct topology *topo, int rank);
 json_t *topology_get_json_subtree_at (struct topology *topo, int rank);
 
