@@ -278,7 +278,7 @@ static const char *status_getname (struct status *ctx,
     return buf;
 }
 
-/* If --times, return string containing parenthesised elapsed
+/* If verbose >= 2, return string containing parenthesised elapsed
  * time since last RPC was started, with leading space.
  * Otherwise, return the empty string
  */
@@ -319,35 +319,6 @@ static void status_print_noname (struct status *ctx,
             status_colorize (ctx, node->status, node->ghost),
             status_duration (ctx, node->duration),
             parent ? status_rpctime (ctx) : "");
-}
-
-/* Look up topology of 'child_rank' within the subtree topology rooted
- * at 'parent_rank'. Caller must json_decref() the result.
- * Returns NULL if --ghost option was not provided, or the lookup fails.
- */
-static json_t *topo_lookup (struct status *ctx,
-                            int parent_rank,
-                            int child_rank)
-{
-    flux_future_t *f;
-    json_t *topo;
-
-    if (optparse_hasopt (ctx->opt, "no-ghost"))
-        return NULL;
-    if (!(f = flux_rpc_pack (ctx->h,
-                             "overlay.topology",
-                             parent_rank,
-                             0,
-                             "{s:i}",
-                             "rank", child_rank))
-        || flux_future_wait_for (f, ctx->timeout) < 0
-        || flux_rpc_get_unpack (f, "o", &topo) < 0) {
-        flux_future_destroy (f);
-        return NULL;
-    }
-    json_incref (topo);
-    flux_future_destroy (f);
-    return topo;
 }
 
 /* Recursive function to walk 'topology', adding all subtree ranks to 'ids'.
@@ -605,7 +576,10 @@ static int status_healthwalk (struct status *ctx,
                         || streq (child.status, "lost")
                         || status_healthwalk (ctx, child.rank,
                                               level + 1, connector, fun) < 0) {
-                        topo = topo_lookup (ctx, node.rank, child.rank);
+                        if (optparse_hasopt (ctx->opt, "no-ghost"))
+                            topo = NULL;
+                        else if ((topo = get_topology (ctx->h)))
+                            topo = get_subtree_topology (topo, child.rank);
                         status_ghostwalk (ctx,
                                           topo,
                                           level + 1,
@@ -643,13 +617,18 @@ static bool show_badtrees (struct status *ctx,
                            bool parent,
                            int level)
 {
+    int have_children = false;
+
     if (streq (node->status, "full"))
         return false;
+    if (idset_count (node->subtree_ranks) > 1)
+        have_children = true;
     if (parent
         || streq (node->status, "lost")
-        || streq (node->status, "offline"))
+        || streq (node->status, "offline")
+        || (!have_children && ctx->verbose < 2))
         status_print (ctx, node, parent, level);
-    return true;
+    return have_children || ctx->verbose >= 2;
 }
 
 /* map fun - follow all live brokers and print everything
@@ -659,11 +638,16 @@ static bool show_all (struct status *ctx,
                       bool parent,
                       int level)
 {
+    int have_children = false;
+
+    if (idset_count (node->subtree_ranks) > 1)
+        have_children = true;
     if (parent
         || streq (node->status, "lost")
-        || streq (node->status, "offline"))
+        || streq (node->status, "offline")
+        || (!have_children && ctx->verbose < 2))
         status_print (ctx, node, parent, level);
-    return true;
+    return have_children || ctx->verbose >= 2;
 }
 
 static bool validate_wait (const char *wait)
