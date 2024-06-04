@@ -872,6 +872,7 @@ static void broker_online_cb (flux_future_t *f, void *arg)
     struct state_machine *s = arg;
     const char *members;
     struct idset *ids;
+    struct idset *previous_online;
     static double last_update = 0;
     double now = flux_reactor_now (flux_get_reactor (s->ctx->h));
     bool quorum_reached = false;
@@ -883,7 +884,7 @@ static void broker_online_cb (flux_future_t *f, void *arg)
         return;
     }
 
-    idset_destroy (s->quorum.online);
+    previous_online = s->quorum.online;
     s->quorum.online = ids;
     if (idset_count (s->quorum.online) >= s->quorum.size)
         quorum_reached = true;
@@ -906,6 +907,25 @@ static void broker_online_cb (flux_future_t *f, void *arg)
             }
         }
     }
+    /* Log any nodes that leave broker.online during RUN and CLEANUP states.
+     */
+    if ((s->state == STATE_RUN || s->state == STATE_CLEANUP)) {
+        struct idset *loss = idset_difference (previous_online,
+                                               s->quorum.online);
+        if (idset_count (loss) > 0) {
+            char *ranks = idset_encode (loss, IDSET_FLAG_RANGE);
+            char *hosts = flux_hostmap_lookup (s->ctx->h, ranks, NULL);
+            flux_log (s->ctx->h,
+                      LOG_ERR,
+                      "dead to Flux: %s (rank %s)",
+                      hosts,
+                      ranks);
+            free (hosts);
+            free (ranks);
+        }
+    }
+
+    idset_destroy (previous_online);
     flux_future_reset (f);
 }
 
