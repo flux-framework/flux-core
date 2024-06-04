@@ -170,6 +170,19 @@ static void finalize_exec_request_if_done (struct sdproc *proc)
                        sdexec_unit_systemd_error (proc->unit));
             exec_respond_error (proc, ENOENT, error.text);
         }
+        else if (!proc->started_response_sent) {
+            exec_respond_error (proc,
+                                EINVAL,
+                                "Internal error: unfailed inactive.dead unit"
+                                " never received ExecMainPID property");
+        }
+        else if (!proc->finished_response_sent) {
+            exec_respond_error (proc,
+                                EINVAL,
+                                "Internal error: unfailed inactive.dead unit"
+                                " never received ExecMainCode and"
+                                " ExecMainStatus properties.");
+        }
         else
             exec_respond_error (proc, ENODATA, NULL);
     }
