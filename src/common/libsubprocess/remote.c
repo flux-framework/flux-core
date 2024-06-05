@@ -487,14 +487,7 @@ static int send_channel_data (flux_subprocess_t *p)
                     return -1;
                 }
             }
-            if (subprocess_write (p->h,
-                                  p->service_name,
-                                  p->rank,
-                                  p->pid,
-                                  c->name,
-                                  ptr,
-                                  len,
-                                  c->closed) < 0) {
+            if (subprocess_write (p->f, c->name, ptr, len, c->closed) < 0) {
                 llog_debug (p,
                             "error sending rexec.write request: %s",
                             strerror (errno));

@@ -120,7 +120,7 @@ static void iostress_state_cb (flux_subprocess_t *p,
     }
 }
 
-static int rexec_write (flux_t *h, pid_t pid, const char *buf, int len)
+static int rexec_write (flux_t *h, uint32_t matchtag, const char *buf, int len)
 {
     flux_future_t *f;
     json_t *io;
@@ -133,7 +133,7 @@ static int rexec_write (flux_t *h, pid_t pid, const char *buf, int len)
                              0,
                              FLUX_RPC_NORESPONSE,
                              "{s:i s:O}",
-                             "pid", pid,
+                             "matchtag", matchtag,
                              "io", io))) {
         json_decref (io);
         return -1;
@@ -150,15 +150,18 @@ static void iostress_source_cb (flux_reactor_t *r,
 {
     struct iostress_ctx *ctx = arg;
     char *buf;
+    uint32_t matchtag;
 
     if (!(buf = malloc (ctx->linesize)))
         BAIL_OUT ("out of memory");
     memset (buf, 'F', ctx->linesize - 1);
     buf[ctx->linesize - 1] = '\n';
 
+    matchtag = flux_rpc_get_matchtag (ctx->p->f);
+
     for (int i = 0; i < ctx->batchlines; i++) {
         if (ctx->direct) {
-            if (rexec_write (ctx->h, ctx->pid, buf, ctx->linesize) < 0)
+            if (rexec_write (ctx->h, matchtag, buf, ctx->linesize) < 0)
                 BAIL_OUT ("rexec_write failed");
         }
         else {

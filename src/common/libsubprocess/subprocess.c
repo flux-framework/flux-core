@@ -729,14 +729,7 @@ int flux_subprocess_write (flux_subprocess_t *p,
             }
         }
         else { /* p->state == FLUX_SUBPROCESS_RUNNING */
-            if (subprocess_write (p->h,
-                                  p->service_name,
-                                  p->rank,
-                                  p->pid,
-                                  c->name,
-                                  buf,
-                                  len,
-                                  false) < 0) {
+            if (subprocess_write (p->f, c->name, buf, len, false) < 0) {
                 log_err ("error sending rexec.write request: %s",
                          strerror (errno));
                 return -1;
@@ -787,14 +780,7 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
          */
         c->closed = true;
         if (p->state == FLUX_SUBPROCESS_RUNNING) {
-            if (subprocess_write (p->h,
-                                  p->service_name,
-                                  p->rank,
-                                  p->pid,
-                                  c->name,
-                                  NULL,
-                                  0,
-                                  true) < 0) {
+            if (subprocess_write (p->f, c->name, NULL, 0, true) < 0) {
                 log_err ("error sending rexec.write request: %s",
                          strerror (errno));
                 return -1;

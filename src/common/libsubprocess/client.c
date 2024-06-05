@@ -44,6 +44,9 @@ struct rexec_ctx {
     json_t *cmd;
     int flags;
     struct rexec_response response;
+    uint32_t matchtag;
+    uint32_t rank;
+    char *service_name;
 };
 
 static void rexec_response_clear (struct rexec_response *resp)
@@ -62,12 +65,16 @@ static void rexec_ctx_destroy (struct rexec_ctx *ctx)
         int saved_errno = errno;
         rexec_response_clear (&ctx->response);
         json_decref (ctx->cmd);
+        free (ctx->service_name);
         free (ctx);
         errno = saved_errno;
     }
 }
 
-static struct rexec_ctx *rexec_ctx_create (flux_cmd_t *cmd, int flags)
+static struct rexec_ctx *rexec_ctx_create (flux_cmd_t *cmd,
+                                           const char *service_name,
+                                           uint32_t rank,
+                                           int flags)
 {
     struct rexec_ctx *ctx;
     int valid_flags = SUBPROCESS_REXEC_STDOUT
@@ -80,10 +87,12 @@ static struct rexec_ctx *rexec_ctx_create (flux_cmd_t *cmd, int flags)
     }
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
-    if (!(ctx->cmd = cmd_tojson (cmd)))
+    if (!(ctx->cmd = cmd_tojson (cmd))
+        || !(ctx->service_name = strdup (service_name)))
         goto error;
     ctx->flags = flags;
     ctx->response.pid = -1;
+    ctx->rank = rank;
     return ctx;
 error:
     rexec_ctx_destroy (ctx);
@@ -106,7 +115,7 @@ flux_future_t *subprocess_rexec (flux_t *h,
     }
     if (asprintf (&topic, "%s.exec", service_name) < 0)
         return NULL;
-    if (!(ctx = rexec_ctx_create (cmd, flags)))
+    if (!(ctx = rexec_ctx_create (cmd, service_name, rank, flags)))
         goto error;
     if (!(f = flux_rpc_pack (h,
                              topic,
@@ -122,6 +131,7 @@ flux_future_t *subprocess_rexec (flux_t *h,
         rexec_ctx_destroy (ctx);
         goto error;
     }
+    ctx->matchtag = flux_rpc_get_matchtag (f);
     free (topic);
     return f;
 error:
@@ -223,33 +233,32 @@ bool subprocess_rexec_is_output (flux_future_t *f,
     return false;
 }
 
-int subprocess_write (flux_t *h,
-                      const char *service_name,
-                      uint32_t rank,
-                      pid_t pid,
+int subprocess_write (flux_future_t *f_exec,
                       const char *stream,
                       const char *data,
                       int len,
                       bool eof)
 {
+    struct rexec_ctx *ctx = flux_future_aux_get (f_exec, "flux::rexec");
+    flux_t *h = flux_future_get_flux (f_exec);
     flux_future_t *f = NULL;
     json_t *io;
     char *topic;
     int rc = -1;
 
-    if (!h || pid < 0 || !stream || !service_name) {
+    if (!stream || !ctx) {
         errno = EINVAL;
         return -1;
     }
-    if (asprintf (&topic, "%s.write", service_name) < 0)
+    if (asprintf (&topic, "%s.write", ctx->service_name) < 0)
         return -1;
     if (!(io = ioencode (stream, "0", data, len, eof))
         || !(f = flux_rpc_pack (h,
                                 topic,
-                                rank,
+                                ctx->rank,
                                 FLUX_RPC_NORESPONSE,
                                 "{s:i s:O}",
-                                "pid", pid,
+                                "matchtag", ctx->matchtag,
                                 "io", io)))
         goto out;
     rc = 0;

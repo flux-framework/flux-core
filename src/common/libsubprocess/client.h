@@ -40,10 +40,7 @@ bool subprocess_rexec_is_output (flux_future_t *f,
                                  int *len,
                                  bool *eof);
 
-int subprocess_write (flux_t *h,
-                      const char *service_name,
-                      uint32_t rank,
-                      pid_t pid,
+int subprocess_write (flux_future_t *f,
                       const char *stream,
                       const char *data,
                       int len,
