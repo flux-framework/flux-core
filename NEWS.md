@@ -1,6 +1,63 @@
-flux-core version 0.62.0 - 2024-05-07
+flux-core version 0.63.0 - 2024-06-04
 -------------------------------------
 
+## New Features
+ * broker: add timezone abbrev to log message timestamps (#6027)
+ * add output buffering to sdexec (#6023)
+ * libsubprocess: support `FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF` (#5975)
+ * job-exec: add `kill-signal` and `term-signal` module parameters (#6017)
+ * broker: add tunable parameters for extreme fanout configurations (#6006)
+ * bypass KVS for job stdin with `--input=FILE` (#6005)
+ * flux-dump: add --ignore-failed-read option (#5989)
+ * libsubprocess: improve read API (#5965)
+ * job-manager: journal jobspec with submit event (#5955)
+
+## Fixes
+ * improve broker messages when nodes die (#6032)
+ * sdexec: don't return ENODATA without start/finish (#6033)
+ * speed up `flux overlay status` on large systems (#6030)
+ * librlist: ensure properties is an array when parsing resource.config entries
+   (#6029)
+ * resource: stop scheduler updates during shutdown (#6028)
+ * libsubprocess: reduce remote input prep/check (#6002)
+ * job-exec: retry kill of job tasks and job shell during job termination
+   (#6014)
+ * libsubprocess: protect against double EOF (#6025)
+ * sdexec: avoid double EOF notification (#6022)
+ * job-exec: cmdline options for signals should override config settings
+   (#6020)
+ * job-manager: don't log expiration update when unnecessary (#6016)
+ * libsubprocess: handle remote protocol errors (#6003)
+ * shell: do not fail on oom init failure (#6004)
+ * shell: split up and improve efficiency of input plugin (#5998)
+ * suppress confusing log messages when broker is signaled during shutdown
+   (#5996)
+ * broker: don't post quorum-full in non-QUORUM state (#5994)
+ * shell: fix repeated output truncation warning messages (#5993)
+ * don't free alloc-bypass resources when scheduler reloads (#5980)
+ * flux-job: improve EPERM error message (#5971)
+ * libsubprocess: demote assert to warning (#5959)
+ * job-exec: do not allow guest access to the testexec implementation by
+   default (#5961)
+
+## Documentation
+ * doc: misc man page cleanup (#6008)
+ * doc: fix typo in flux-jobs(1) (#6001)
+ * doc: add PRIORITY state to flux-jobs(1) (#5988)
+
+## Cleanup
+ * libsubprocess: minor cleanup (#5974)
+ * job-manager: misc cleanup in scheduler interface (#5969)
+ * libsubprocess: remove unused len parameter from `flux_subprocess_read()`
+   (#5950)
+ * job-exec: remove layer of stats indirection (#5947)
+
+## CI/Testsuite
+ * testsuite: fix sdexec-memlimit config update test (#6007)
+
+
+flux-core version 0.62.0 - 2024-05-07
+-------------------------------------
 
 ## New Features
  * job-exec: support config reload (#5913)
