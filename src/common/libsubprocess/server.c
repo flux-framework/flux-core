@@ -440,7 +440,8 @@ static void server_write_cb (flux_t *h,
      * that the log messages end up being a nuisance.
      */
     if (!(p = proc_find_byclient (s, msg))
-        || p->state != FLUX_SUBPROCESS_RUNNING)
+        || p->state == FLUX_SUBPROCESS_FAILED
+        || p->state == FLUX_SUBPROCESS_EXITED)
         goto out;
 
     if (data && len) {
