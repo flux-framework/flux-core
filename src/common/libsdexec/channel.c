@@ -43,7 +43,11 @@ struct channel {
     channel_output_f output_cb;
     channel_error_f error_cb;
     void *arg;
+    int refcount;
 };
+
+static struct channel *sdexec_channel_incref (struct channel *ch);
+static void sdexec_channel_decref (struct channel *ch);
 
 static int call_output_callback (struct channel *ch,
                                  const char *data,
@@ -158,6 +162,11 @@ static void channel_output_cb (flux_reactor_t *r,
     }
     else
         outbuf_mark_used (ch->buf, n);
+    /* In case the channel output callback destroys the channel,
+     * hold a reference for the remainder of this function.
+     * See flux-framework/flux-core#6036.
+     */
+    sdexec_channel_incref (ch);
     if ((ch->flags & CHANNEL_LINEBUF)) {
         while ((n = flush_output_line (ch)) > 0)
             ;
@@ -175,6 +184,7 @@ static void channel_output_cb (flux_reactor_t *r,
         }
     }
     outbuf_gc (ch->buf);
+    sdexec_channel_decref (ch);
 }
 
 int sdexec_channel_get_fd (struct channel *ch)
@@ -201,9 +211,16 @@ void sdexec_channel_start_output (struct channel *ch)
         flux_watcher_start (ch->w);
 }
 
-void sdexec_channel_destroy (struct channel *ch)
+static struct channel *sdexec_channel_incref (struct channel *ch)
 {
-    if (ch) {
+    if (ch)
+        ch->refcount++;
+    return ch;
+}
+
+static void sdexec_channel_decref (struct channel *ch)
+{
+    if (ch && --ch->refcount == 0) {
         int saved_errno = errno;
         if (ch->fd[0] >= 0)
             close (ch->fd[0]);
@@ -217,6 +234,11 @@ void sdexec_channel_destroy (struct channel *ch)
     }
 }
 
+void sdexec_channel_destroy (struct channel *ch)
+{
+    sdexec_channel_decref (ch);
+}
+
 static struct channel *sdexec_channel_create (flux_t *h, const char *name)
 {
     struct channel *ch;
@@ -228,6 +250,7 @@ static struct channel *sdexec_channel_create (flux_t *h, const char *name)
     }
     if (!(ch = calloc (1, sizeof (*ch))))
         return NULL;
+    ch->refcount = 1;
     ch->h = h;
     ch->fd[0] = -1;
     ch->fd[1] = -1;
