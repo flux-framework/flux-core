@@ -193,6 +193,42 @@ void test_output (void)
     flux_close (h);
 }
 
+void destroy_output_cb (struct channel *ch, json_t *io, void *arg)
+{
+    sdexec_channel_destroy (ch);
+}
+
+void test_output_destroy_in_cb (void)
+{
+    flux_t *h;
+    struct channel *ch;
+    int fd;
+
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop flux_t handle for testing");
+    if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
+        BAIL_OUT ("could not set rank for testing");
+    ch = sdexec_channel_create_output (h,
+                                       "out",
+                                       0,
+                                       0, destroy_output_cb,
+                                       error_cb,
+                                       NULL);
+    ok (ch != NULL,
+        "sdexec_channel_crate_output works");
+    sdexec_channel_start_output (ch);
+    ok (true, "sdexec_channel_start_output called");
+
+    fd = sdexec_channel_get_fd (ch);
+    ok (fd >= 0,
+        "sdexec_channel_get_fd works");
+    sdexec_channel_close_fd (ch);
+    ok (true, "sdexec_channel_close_fd called");
+    ok (flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE) >= 0,
+        "flux_reactor_run ran ONCE");
+    flux_close (h);
+}
+
 void test_inval (void)
 {
     struct channel *ch;
@@ -249,6 +285,7 @@ int main (int ac, char *av[])
 
     test_input ();
     test_output ();
+    test_output_destroy_in_cb ();
     test_inval ();
 
     done_testing ();
