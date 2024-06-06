@@ -1581,6 +1581,13 @@ flux_future_t *overlay_goodbye_parent (struct overlay *ov)
 {
     flux_msg_t *msg;
 
+    /* Avoid 60s delay on shutdown of followers when upstream is down.
+     * flux-framework/flux-core#5991
+     */
+    if (!(ov->parent.hello_responded)) {
+        errno = EHOSTUNREACH;
+        return NULL;
+    }
     if (!(msg = flux_request_encode ("overlay.goodbye", NULL))
         || flux_msg_set_rolemask (msg, FLUX_ROLE_OWNER) < 0
         || overlay_sendmsg_parent (ov, msg) < 0) {
