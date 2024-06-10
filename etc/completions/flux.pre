@@ -246,6 +246,29 @@ _flux_hostlist()
     return 0
 }
 
+#  flux-shutdown(1) completions
+_flux_shutdown()
+{
+    local subcmd=$1
+    OPTS="\
+        --skip-gc \
+        --gc \
+        --dump= \
+        --background \
+        --quiet \
+        -v --verbose= \
+        -y --yes \
+        -n --no \
+    "
+    if [[ $cur != -* ]]; then
+        # Substitute recent alloc/batch jobid
+        jobs=$(_flux_active_instances $cur)
+        COMPREPLY=( $(compgen -W "$jobs" -- "$cur") )
+        return 0
+    fi
+    return 0
+}
+
 #  flux-{run,submit,batch,alloc,bulksubmit}(1) completions
 _flux_submit_commands()
 {
@@ -1585,6 +1608,9 @@ _flux_core()
         ;;
     hostlist)
         _flux_hostlist $subcmd
+        ;;
+    shutdown)
+        _flux_shutdown $subcmd
         ;;
     -*)
         COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )
