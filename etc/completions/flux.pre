@@ -140,6 +140,30 @@ _flux_id_fmt()
     echo "${fmt}"
 }
 
+_flux_active_instances()
+{
+    flux jobs -no "$(_flux_id_fmt $1) {uri}" | awk '!($2 == "None") {print $1}'
+}
+
+#  flux-proxy(1) completions
+_flux_proxy()
+{
+    local $cmd=$1
+    OPTS="\
+        -f --force \
+        -n --nohup \
+        --reconnect \
+    "
+    if [[ $cur != -* ]]; then
+        #  Attempt to substitute an active jobid
+        active_jobs=$(_flux_active_instances $cur)
+        COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
+        return 0
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    return 0
+}
+
 #  flux-cancel(1) completions
 _flux_cancel()
 {
@@ -1474,6 +1498,9 @@ _flux_core()
     case "${cmd}" in
     submit|run|alloc|batch|bulksubmit)
         _flux_submit_commands $cmd
+        ;;
+    proxy)
+        _flux_proxy $subcmd
         ;;
     cancel)
         _flux_cancel $subcmd
