@@ -45,7 +45,6 @@ struct subprocess_channel {
     bool buffer_read_w_started;
 
     /* remote */
-    struct fbuf *write_buffer;  /* buffer pre-running data */
     struct fbuf *read_buffer;
     bool read_eof_received;
     flux_watcher_t *out_prep_w;

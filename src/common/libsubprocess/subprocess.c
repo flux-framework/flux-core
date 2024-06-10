@@ -54,7 +54,6 @@ void channel_destroy (void *arg)
         flux_watcher_destroy (c->buffer_read_stopped_w);
         c->buffer_read_w_started = false;
 
-        fbuf_destroy (c->write_buffer);
         fbuf_destroy (c->read_buffer);
         flux_watcher_destroy (c->out_prep_w);
         flux_watcher_destroy (c->out_idle_w);
@@ -707,42 +706,12 @@ int flux_subprocess_write (flux_subprocess_t *p,
             errno = EPIPE;
             return -1;
         }
-        if (p->state == FLUX_SUBPROCESS_INIT) {
-            if (!c->write_buffer) {
-                int buffer_size;
-                if ((buffer_size = cmd_option_bufsize (p, stream)) < 0) {
-                    log_err ("cmd_option_bufsize: %s", strerror (errno));
-                    return -1;
-                }
-                if (!(c->write_buffer = fbuf_create (buffer_size))) {
-                    log_err ("fbuf_create");
-                    return -1;
-                }
-            }
-            if (fbuf_space (c->write_buffer) < len) {
-                errno = ENOSPC;
-                return -1;
-            }
-            if ((ret = fbuf_write (c->write_buffer, buf, len)) < 0) {
-                log_err ("fbuf_write");
-                return -1;
-            }
+        if (subprocess_write (p->f, c->name, buf, len, false) < 0) {
+            log_err ("error sending rexec.write request: %s",
+                     strerror (errno));
+            return -1;
         }
-        else { /* p->state == FLUX_SUBPROCESS_RUNNING */
-            if (subprocess_write (p->h,
-                                  p->service_name,
-                                  p->rank,
-                                  p->pid,
-                                  c->name,
-                                  buf,
-                                  len,
-                                  false) < 0) {
-                log_err ("error sending rexec.write request: %s",
-                         strerror (errno));
-                return -1;
-            }
-            ret = len;
-        }
+        ret = len;
     }
 
     return ret;
@@ -780,26 +749,12 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
         c->closed = true;
     }
     else {
-        /* if process isn't running, eof plus any previously written
-         * data will be sent after process converts to running.  See
-         * send_channel_data() in remote.c.  If subprocess has already
-         * exited, this does nothing.
-         */
-        c->closed = true;
-        if (p->state == FLUX_SUBPROCESS_RUNNING) {
-            if (subprocess_write (p->h,
-                                  p->service_name,
-                                  p->rank,
-                                  p->pid,
-                                  c->name,
-                                  NULL,
-                                  0,
-                                  true) < 0) {
-                log_err ("error sending rexec.write request: %s",
-                         strerror (errno));
-                return -1;
-            }
+        if (subprocess_write (p->f, c->name, NULL, 0, true) < 0) {
+            log_err ("error sending rexec.write request: %s",
+                     strerror (errno));
+            return -1;
         }
+        c->closed = true;
     }
 
     return 0;

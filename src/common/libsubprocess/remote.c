@@ -468,48 +468,6 @@ static int remote_output_buffered (flux_subprocess_t *p,
     return 0;
 }
 
-/* In the event channel had data / closed before process running */
-static int send_channel_data (flux_subprocess_t *p)
-{
-    struct subprocess_channel *c;
-    c = zhash_first (p->channels);
-    while (c) {
-        int bytes = fbuf_bytes (c->write_buffer);
-        if (c->closed || bytes > 0) {
-            const char *ptr = NULL;
-            int len = 0;
-            if (bytes > 0) {
-                if (!(ptr = fbuf_read (c->write_buffer, -1, &len))) {
-                    llog_debug (p,
-                                "error reading buffered data: %s",
-                                strerror (errno));
-                    set_failed (p, "internal fbuf_read error");
-                    return -1;
-                }
-            }
-            if (subprocess_write (p->h,
-                                  p->service_name,
-                                  p->rank,
-                                  p->pid,
-                                  c->name,
-                                  ptr,
-                                  len,
-                                  c->closed) < 0) {
-                llog_debug (p,
-                            "error sending rexec.write request: %s",
-                            strerror (errno));
-                set_failed (p, "internal close error");
-                return -1;
-            }
-            /* Don't need this buffer anymore, reclaim the space */
-            fbuf_destroy (c->write_buffer);
-            c->write_buffer = NULL;
-        }
-        c = zhash_next (p->channels);
-    }
-    return 0;
-}
-
 static void rexec_continuation (flux_future_t *f, void *arg)
 {
     flux_subprocess_t *p = arg;
@@ -543,8 +501,6 @@ static void rexec_continuation (flux_future_t *f, void *arg)
     if (subprocess_rexec_is_started (f, &p->pid)) {
         p->pid_set = true;
         process_new_state (p, FLUX_SUBPROCESS_RUNNING);
-        if (send_channel_data (p) < 0)
-            goto error;
     }
     else if (subprocess_rexec_is_stopped (f)) {
         process_new_state (p, FLUX_SUBPROCESS_STOPPED);
