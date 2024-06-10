@@ -27,26 +27,19 @@ struct match_ctx mctx = { .h = NULL,
                           .max_comparisons = 0 };
 
 static void list_constraint_create_corner_case (const char *str,
-                                                const char *fmt,
-                                                ...)
+                                                const char *msg)
 {
     struct list_constraint *c;
-    char buf[1024];
     flux_error_t error;
     json_error_t jerror;
     json_t *jc;
-    va_list ap;
 
     if (!(jc = json_loads (str, 0, &jerror)))
         BAIL_OUT ("json constraint invalid: %s", jerror.text);
 
-    va_start (ap, fmt);
-    vsnprintf(buf, sizeof (buf), fmt, ap);
-    va_end (ap);
-
     c = list_constraint_create (&mctx, jc, &error);
 
-    ok (c == NULL, "list_constraint_create fails on %s", buf);
+    ok (c == NULL, "list_constraint_create fails on %s", msg);
     diag ("error: %s", error.text);
     json_decref (jc);
 }
