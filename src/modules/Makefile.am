@@ -152,7 +152,6 @@ job_archive_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_exec_la_SOURCES =
 job_exec_la_LIBADD = \
 	$(builddir)/job-exec/libjob-exec.la \
-	$(builddir)/job-exec/libbulk-exec.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
 	$(top_builddir)/src/common/libflux-internal.la \

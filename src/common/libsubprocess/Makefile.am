@@ -41,7 +41,9 @@ libsubprocess_la_SOURCES = \
 	fbuf.h \
 	fbuf.c \
 	fbuf_watcher.h \
-	fbuf_watcher.c
+	fbuf_watcher.c \
+	bulk-exec.h \
+	bulk-exec.c
 
 fluxcoreinclude_HEADERS = \
 	command.h \
@@ -63,7 +65,8 @@ check_PROGRAMS = \
 	test_echo \
 	test_multi_echo \
 	test_fork_sleep \
-	test_fdcopy
+	test_fdcopy \
+	bulk-exec
 
 check_LTLIBRARIES = test/libutil.la
 
@@ -90,6 +93,14 @@ test_cppflags = \
 test_libutil_la_SOURCES = \
 	test/rcmdsrv.h \
 	test/rcmdsrv.c
+
+bulk_exec_SOURCES = test/bulk-exec.c
+bulk_exec_CPPFLAGS = $(test_cppflags)
+bulk_exec_LDADD = \
+	$(test_ldadd) \
+	$(top_builddir)/src/common/libflux-optparse.la
+
+bulk_exec_LDFLAGS = $(test_ldflags)
 
 test_command_t_SOURCES = test/command.c
 test_command_t_CPPFLAGS = $(test_cppflags)

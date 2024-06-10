@@ -14,6 +14,7 @@
 #define HAVE_JOB_EXEC_BULK_EXEC_H 1
 
 #include <flux/core.h>
+#include <flux/idset.h>
 
 struct bulk_exec;
 

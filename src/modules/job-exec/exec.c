@@ -39,10 +39,10 @@
 #include "ccan/str/str.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libsubprocess/bulk-exec.h"
 
 #include "job-exec.h"
 #include "exec_config.h"
-#include "bulk-exec.h"
 #include "rset.h"
 
 /*  Numeric severity used for a non-fatal, critical job exception:

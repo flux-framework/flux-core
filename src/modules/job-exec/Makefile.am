@@ -13,11 +13,7 @@ AM_CPPFLAGS = \
 	$(JANSSON_CFLAGS)
 
 noinst_LTLIBRARIES = \
-	libjob-exec.la \
-	libbulk-exec.la
-
-noinst_PROGRAMS = \
-	bulk-exec
+	libjob-exec.la
 
 libjob_exec_la_SOURCES = \
 	job-exec.h \
@@ -30,21 +26,6 @@ libjob_exec_la_SOURCES = \
 	rset.h \
 	testexec.c \
 	exec.c
-
-libbulk_exec_la_SOURCES = \
-	bulk-exec.h \
-	bulk-exec.c
-
-bulk_exec_SOURCES = \
-	test/bulk-exec.c
-
-bulk_exec_LDADD = \
-	libbulk-exec.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux-idset.la \
-	$(top_builddir)/src/common/libflux-optparse.la \
-	$(top_builddir)/src/common/libutil/libutil.la
 
 test_ldadd = \
 	$(builddir)/libjob-exec.la \
