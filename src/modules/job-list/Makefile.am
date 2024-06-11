@@ -39,13 +39,16 @@ libjob_list_la_SOURCES = \
 	state_match.c \
 	match_util.h \
 	match_util.c \
+	constraint_sql.h \
+	constraint_sql.c \
 	util.h \
 	util.c
 
 TESTS = \
 	test_job_data.t \
 	test_match.t \
-	test_state_match.t
+	test_state_match.t \
+	test_constraint_sql.t
 
 test_ldadd = \
 	$(builddir)/libjob-list.la \
@@ -91,6 +94,14 @@ test_state_match_t_CPPFLAGS = \
 test_state_match_t_LDADD = \
 	$(test_ldadd)
 test_state_match_t_LDFLAGS = \
+	$(test_ldflags)
+
+test_constraint_sql_t_SOURCES = test/constraint_sql.c
+test_constraint_sql_t_CPPFLAGS = \
+	$(test_cppflags)
+test_constraint_sql_t_LDADD = \
+	$(test_ldadd)
+test_constraint_sql_t_LDFLAGS = \
 	$(test_ldflags)
 
 EXTRA_DIST = \
