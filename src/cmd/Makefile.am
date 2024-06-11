@@ -124,7 +124,9 @@ dist_fluxcmd_SCRIPTS = \
 	flux-hostlist.py \
 	flux-post-job-event.py \
 	flux-run-housekeeping \
-	flux-housekeeping.py
+	flux-housekeeping.py \
+	flux-run-prolog \
+	flux-run-epilog
 
 fluxcmd_PROGRAMS = \
 	flux-terminus \
