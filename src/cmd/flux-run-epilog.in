@@ -1,0 +1,18 @@
+#!/bin/sh
+
+if test $FLUX_JOB_ID; then
+    FLUX_JOB_ID=$(FLUX_F58_FORCE_ASCII=t flux job id --to=f58 $FLUX_JOB_ID)
+fi
+unitname=flux-epilog@${FLUX_JOB_ID:-unknown}
+
+terminate() {
+    systemctl stop $unitname
+    exit 1
+}
+
+trap terminate INT TERM
+
+umask 022
+printenv >@X_RUNSTATEDIR@/${unitname}.env
+
+systemctl start $unitname --quiet
