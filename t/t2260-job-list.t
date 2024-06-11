@@ -26,6 +26,15 @@ wait_jobid_state() {
 	flux job list-ids --wait-state=$2 $1 > /dev/null
 }
 
+test_expect_success 'setup specific fake hostnames' '
+	flux R encode -r 0-3 -c 0-1 -H node[0-3] \
+	   | tr -d "\n" \
+	   | flux kvs put -r resource.R=- &&
+	flux module unload sched-simple &&
+	flux module reload resource noverify &&
+	flux module load sched-simple
+'
+
 test_expect_success 'create helper job submission script' '
 	cat >sleepinf.sh <<-EOT &&
 	#!/bin/sh
@@ -53,17 +62,11 @@ test_expect_success 'create helper job submission script' '
 # - alternate userid job listing
 
 test_expect_success 'submit jobs for job list testing' '
-	#  Create `hostname` and `sleep` jobspec
-	#  N.B. Used w/ `flux job submit` for serial job submission
-	#  for efficiency (vs serial `flux submit`.
-	#
-	flux submit --dry-run hostname >hostname.json &&
-	flux submit --dry-run --time-limit=5m sleep 600 > sleeplong.json &&
 	#
 	# submit jobs that will complete
 	#
 	for i in $(seq 0 3); do
-		flux job submit hostname.json >> inactiveids
+		flux submit --requires=host:node${i} hostname >> inactiveids
 		fj_wait_event `tail -n 1 inactiveids` clean
 	done &&
 	#
@@ -74,7 +77,7 @@ test_expect_success 'submit jobs for job list testing' '
 	#  Run a job that will fail, copy its JOBID to both inactive and
 	#	failed lists.
 	#
-	! jobid=`flux submit --wait nosuchcommand` &&
+	! jobid=`flux submit --requires=host:node0 --wait nosuchcommand` &&
 	echo $jobid >> inactiveids &&
 	flux job id $jobid > failedids &&
 	#
@@ -84,7 +87,7 @@ test_expect_success 'submit jobs for job list testing' '
 	# N.B. sleepinf.sh and wait-event on job data to workaround
 	# rare job startup race.  See #5210
 	#
-	jobid=`flux submit ./sleepinf.sh` &&
+	jobid=`flux submit --requires=host:node0 ./sleepinf.sh` &&
 	flux job wait-event -W -p guest.output $jobid data &&
 	flux job kill $jobid &&
 	fj_wait_event $jobid clean &&
@@ -98,7 +101,7 @@ test_expect_success 'submit jobs for job list testing' '
 	# N.B. sleepinf.sh and wait-event on job data to workaround
 	# rare job startup race.  See #5210
 	#
-	jobid=`flux submit ./sleepinf.sh` &&
+	jobid=`flux submit --requires=host:node0 ./sleepinf.sh` &&
 	flux job wait-event -W -p guest.output $jobid data &&
 	flux job raise --type=myexception --severity=0 -m "myexception" $jobid &&
 	fj_wait_event $jobid clean &&
@@ -109,28 +112,33 @@ test_expect_success 'submit jobs for job list testing' '
 	#  Run a job that will timeout, copy its JOBID to both inactive and
 	#	timeout lists.
 	#
-	jobid=`flux submit --time-limit=0.5s sleep 30` &&
+	jobid=`flux submit --requires=host:node0 --time-limit=0.5s sleep 30` &&
 	echo $jobid >> inactiveids &&
 	flux job id $jobid > timeout.ids &&
 	fj_wait_event ${jobid} clean &&
 	#
 	#  Submit 8 sleep jobs to fill up resources
 	#
+	#  N.B. no need to specify --requires:host, will be distributed
+	#  evenly
+	#
 	for i in $(seq 0 7); do
-		flux job submit sleeplong.json >> runningids
+		flux submit --time-limit=5m sleep 600 >> runningids
 	done &&
 	tac runningids | flux job id > running.ids &&
 	#
 	#  Submit a set of jobs with misc urgencies
 	#
-	id1=$(flux job submit -u20 hostname.json) &&
-	id2=$(flux job submit	   hostname.json) &&
-	id3=$(flux job submit -u31 hostname.json) &&
-	id4=$(flux job submit -u0  hostname.json) &&
-	id5=$(flux job submit -u20 hostname.json) &&
-	id6=$(flux job submit	   hostname.json) &&
-	id7=$(flux job submit -u31 hostname.json) &&
-	id8=$(flux job submit -u0  hostname.json) &&
+	#  N.B. no need to specify --requires:host, these jobs wont run
+	#
+	id1=$(flux submit --urgency=20 hostname) &&
+	id2=$(flux submit	       hostname) &&
+	id3=$(flux submit --urgency=31 hostname) &&
+	id4=$(flux submit --urgency=0  hostname) &&
+	id5=$(flux submit --urgency=20 hostname) &&
+	id6=$(flux submit	       hostname) &&
+	id7=$(flux submit --urgency=31 hostname) &&
+	id8=$(flux submit --urgency=0  hostname) &&
 	flux job id $id3 > pending.ids &&
 	flux job id $id7 >> pending.ids &&
 	flux job id $id1 >> pending.ids &&
@@ -606,6 +614,113 @@ test_expect_success 'flux job list all via t_depend (3)' '
 	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_constraint_all3.out &&
 	numlines=$(cat all.ids | wc -l) &&
 	test $(cat list_constraint_all3.out | wc -l) -eq ${numlines}
+'
+
+#
+# nodelist / hostlist constraint filtering
+#
+
+# N.B. all failed and timeout jobs we explicitly ran on node0, so
+# tests below don't test against node0 to make things easier.
+
+# N.B. failed.ids are jobs that failed after running, thus will have
+# had a node assigned.  timeout.ids obviously ran on a node, but timed
+# out.
+test_expect_success 'flux job list all jobs that ran on any node (1)' '
+	constraint="{ and: [ {hostlist:[\"node[0-3]\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist1.out &&
+	numlines=$(cat completed.ids running.ids failed.ids timeout.ids | wc -l) &&
+	test $(cat constraint_hostlist1.out | wc -l) -eq ${numlines}
+'
+
+test_expect_success 'flux job list all jobs that ran on any node (2)' '
+	constraint="{ and: [ {hostlist:[\"node[2-3]\", \"node1\", \"node0\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist2.out &&
+	numlines=$(cat completed.ids running.ids failed.ids timeout.ids | wc -l) &&
+	test $(cat constraint_hostlist2.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed non-bad jobs on nodes, so should be half of the jobs
+test_expect_success 'flux job list all jobs that ran on nodes[1-2] (1)' '
+	constraint="{ and: [ {hostlist:[\"node[1-2]\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist3.out &&
+	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist3.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed non-bad jobs on nodes, so should be half of the jobs
+test_expect_success 'flux job list all jobs that ran on nodes[1-2] (2)' '
+	constraint="{ and: [ {hostlist:[\"node1\", \"node2\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist4.out &&
+	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist4.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed non-bad jobs on nodes, so should be quarter of the jobs
+test_expect_success 'flux job list all jobs that ran on node3' '
+	constraint="{ and: [ {hostlist:[\"node3\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist5.out &&
+	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 4) &&
+	test $(cat constraint_hostlist5.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed completed jobs on nodes, so should be quarter of the jobs
+test_expect_success 'flux job list completed jobs that ran on node3' '
+	state=`${JOB_CONV} strtostate INACTIVE` &&
+	constraint="{ and: [ {hostlist:[\"node3\"]}, {states:[${state}]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist6.out &&
+	numlines=$(expr $(cat completed.ids | wc -l) / 4) &&
+	test $(cat constraint_hostlist6.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed running jobs on nodes, so should be quarter of the jobs
+test_expect_success 'flux job list running jobs that ran on node3' '
+	state=`${JOB_CONV} strtostate RUNNING` &&
+	constraint="{ and: [ {hostlist:[\"node3\"]}, {states:[${state}]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist7.out &&
+	numlines=$(expr $(cat running.ids | wc -l) / 4) &&
+	test $(cat constraint_hostlist7.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed running jobs on nodes, so should be half of the jobs
+# For this test, get start time of first running job
+test_expect_success 'flux job list of running jobs that ran on node[1-2] after certain time (1)' '
+	id=`tail -n1 running.ids` &&
+	t_submit=`flux job list-ids ${id} | $jq .t_submit` &&
+	constraint="{ and: [ {hostlist:[\"node[1-2]\"]}, {t_submit:[\">=${t_submit}\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist8.out &&
+	numlines=$(expr $(cat running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist8.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed running jobs on nodes, so should be half of the jobs
+# For this test, get last inactive time of completed jobs
+test_expect_success 'flux job list of running jobs that ran on node[1-2] after certain time (2)' '
+	id=`head -n1 completed.ids` &&
+	t_inactive=`flux job list-ids ${id} | $jq .t_inactive` &&
+	constraint="{ and: [ {hostlist:[\"node[1-2]\"]}, {t_submit:[\">${t_inactive}\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist9.out &&
+	numlines=$(expr $(cat running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist9.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed completed & running jobs on nodes, so should be half of the jobs
+test_expect_success 'flux job list of all jobs that ran on node[1-2] after certain time' '
+	id=`head -n1 completed.ids` &&
+	constraint="{ and: [ {hostlist:[\"node[1-2]\"]}, {t_submit:[\">5\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist9.out &&
+	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist9.out | wc -l) -eq ${numlines}
 '
 
 #
@@ -2798,6 +2913,7 @@ test_expect_success 'reload job-ingest without validator' '
 '
 
 test_expect_success 'create illegal jobspec with empty command array' '
+	flux submit --dry-run hostname > hostname.json &&
 	cat hostname.json | $jq ".tasks[0].command = []" > bad_jobspec.json
 '
 

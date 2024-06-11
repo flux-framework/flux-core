@@ -51,6 +51,8 @@ typedef enum {
     MATCH_LESS_THAN = 4,
 } match_comparison_t;
 
+#define MIN_MATCH_HOSTLIST 1024
+
 struct timestamp_value {
     double t_value;
     match_timestamp_type_t t_type;
@@ -428,6 +430,91 @@ static struct list_constraint *create_results_constraint (struct match_ctx *mctx
                                       errp);
 }
 
+static int match_hostlist (struct list_constraint *c,
+                           const struct job *job,
+                           unsigned int *comparisons,
+                           flux_error_t *errp)
+{
+    struct hostlist *hl = zlistx_first (c->values);
+    const char *host;
+
+    /* nodelist may not exist if job never ran */
+    if (!job->nodelist)
+        return 0;
+    if (!job->nodelist_hl) {
+        /* hack to remove const */
+        struct job *jobtmp = (struct job *)job;
+        if (!(jobtmp->nodelist_hl = hostlist_decode (job->nodelist)))
+            return 0;
+    }
+    host = hostlist_first (hl);
+    while (host) {
+        if (inc_check_comparison (c->mctx, comparisons, errp) < 0)
+            return -1;
+        if (hostlist_find (job->nodelist_hl, host) >= 0)
+            return 1;
+        host = hostlist_next (hl);
+    }
+    return 0;
+}
+
+/* zlistx_set_destructor */
+static void wrap_hostlist_destroy (void **item)
+{
+    if (item) {
+        struct hostlist *hl = *item;
+        hostlist_destroy (hl);
+        (*item) = NULL;
+    }
+}
+
+static struct list_constraint *create_hostlist_constraint (
+    struct match_ctx *mctx,
+    json_t *values,
+    flux_error_t *errp)
+{
+    struct list_constraint *c;
+    struct hostlist *hl = NULL;
+    json_t *entry;
+    size_t index;
+
+    if (!(c = list_constraint_new (mctx,
+                                   match_hostlist,
+                                   wrap_hostlist_destroy,
+                                   errp)))
+        return NULL;
+    /* Create a single hostlist if user specifies multiple nodes or
+     * RFC29 hostlist range */
+    if (!(hl = hostlist_create ())) {
+        errprintf (errp, "failed to create hostlist structure");
+        goto error;
+    }
+    json_array_foreach (values, index, entry) {
+        if (!json_is_string (entry)) {
+            errprintf (errp, "host value must be a string");
+            goto error;
+        }
+        if (hostlist_append (hl, json_string_value (entry)) <= 0) {
+            errprintf (errp, "host value not in valid Hostlist format");
+            goto error;
+        }
+    }
+    if (hostlist_count (hl) > mctx->max_hostlist) {
+        errprintf (errp, "too many hosts specified");
+        goto error;
+    }
+    if (!zlistx_add_end (c->values, hl)) {
+        errprintf (errp, "failed to append hostlist structure");
+        hostlist_destroy (hl);
+        goto error;
+    }
+    return c;
+ error:
+    hostlist_destroy (hl);
+    list_constraint_destroy (c);
+    return NULL;
+}
+
 static int match_timestamp (struct list_constraint *c,
                             const struct job *job,
                             unsigned int *comparisons,
@@ -665,6 +752,8 @@ struct list_constraint *list_constraint_create (struct match_ctx *mctx,
                 return create_states_constraint (mctx, values, errp);
             else if (streq (op, "results"))
                 return create_results_constraint (mctx, values, errp);
+            else if (streq (op, "hostlist"))
+                return create_hostlist_constraint (mctx, values, errp);
             else if (streq (op, "t_submit")
                      || streq (op, "t_depend")
                      || streq (op, "t_run")
@@ -742,6 +831,30 @@ struct match_ctx *match_ctx_create (flux_t *h)
         flux_log (mctx->h, LOG_ERR, "%s", error.text);
         goto error;
     }
+
+    if (flux_get_size (mctx->h, &mctx->max_hostlist) < 0) {
+        flux_log_error (h, "failed to get instance size");
+        goto error;
+    }
+
+    /* Notes:
+     *
+     * We do not want a hostlist constraint match to DoS this module.
+     * So we want to configure a "max" amount of hosts that can exist
+     * within a hostlist constraint.
+     *
+     * Under normal operating conditions, the number of brokers should
+     * represent the most likely maximum.  But there are some corner
+     * cases.  For example, the instance gets reconfigured to be
+     * smaller, which is not an uncommon thing to do towards a
+     * cluster's end of life and hardware is beginning to die.
+     *
+     * So we configure the following compromise.  If the number of
+     * brokers is below our defined minimum MIN_MATCH_HOSTLIST, we'll
+     * allow max_hostlist to be increased to this number.
+     */
+    if (mctx->max_hostlist < MIN_MATCH_HOSTLIST)
+        mctx->max_hostlist = MIN_MATCH_HOSTLIST;
 
     return mctx;
 
