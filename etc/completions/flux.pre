@@ -292,6 +292,80 @@ _flux_shutdown()
     return 0
 }
 
+#  flux-archive(1) completions
+_flux_archive()
+{
+    local cmd=$1
+    local subcmds="create remove extract list"
+    local split=false
+
+    local create_OPTS="\
+        -h --help \
+        -n --name= \
+        --no-force-primary \
+        -C --directory= \
+        -v --verbose= \
+        --overwrite \
+        --append \
+        --preserve \
+        --mmap \
+    "
+    local remove_OPTS="\
+        -h --help \
+        -n --name= \
+        --no-force-primary \
+        -f --force \
+    "
+    local extract_OPTS="\
+        -h --help \
+        -n --name= \
+        -v --verbose= \
+        -C --directory= \
+        --overwrite \
+        --waitcreate= \
+        --no-force-primary \
+        -t --list-only \
+    "
+    local list_OPTS="\
+        -h --help \
+        -n --name= \
+        --no-force-primary \
+        -l --long \
+        --raw \
+    "
+    if [[ $cmd != "archive" ]]; then
+
+        _flux_split_longopt && split=true
+        case $prev in
+            --directory | -!(-*)C)
+                compopt -o filenames
+                COMPREPLY=( $(compgen -d -- "$cur") )
+                return
+                ;;
+            -!(-*)[n])
+                return
+                ;;
+        esac
+        $split && return
+
+        if [[ $cmd == "create" && $cur != -* ]]; then
+            compopt -o default -o bashdefault -o filenames
+            COMPREPLY=( $(compgen -f -c -- "$cur") )
+            return
+        fi
+
+        var="${cmd//-/_}_OPTS"
+        COMPREPLY=( $(compgen -W "${!var}" -- "$cur") )
+        if [[ "${COMPREPLY[@]}" == *= ]]; then
+            # Add space if there is not a '=' in suggestions
+            compopt -o nospace
+        fi
+    else
+        COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
+    fi
+    return 0
+}
+
 #  flux-{run,submit,batch,alloc,bulksubmit}(1) completions
 _flux_submit_commands()
 {
@@ -1897,6 +1971,7 @@ _flux_start()
     return 0
 }
 
+
 _flux_core()
 {
     local cur prev cmd subcmd matched
@@ -2007,6 +2082,9 @@ _flux_core()
         ;;
     shutdown)
         _flux_shutdown $subcmd
+        ;;
+    archive)
+        _flux_archive $subcmd
         ;;
     -*)
         COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )
