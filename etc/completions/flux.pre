@@ -1971,6 +1971,43 @@ _flux_start()
     return 0
 }
 
+# flux-broker(1) completions
+_flux_broker()
+{
+    local cmd=$1
+    local split=false
+
+    OPTS="\
+        -h --help \
+        -v --verbose= \
+        -S --setattr= \
+        -c --config-path= \
+    "
+    _flux_split_longopt && split=true
+    case $prev in
+        --config-path | -!(-*)c)
+            compopt -o filenames
+            COMPREPLY=( $(compgen -f -- "$cur") $(compgen -d -- "$cur") )
+            return
+            ;;
+        -!(-*)[S])
+            return
+            ;;
+    esac
+    $split && return
+
+    if [[ $cur != -* ]]; then
+        compopt -o default -o bashdefault -o filenames
+        COMPREPLY=( $(compgen -f -c -- "$cur") )
+        return
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
 
 _flux_core()
 {
@@ -2085,6 +2122,9 @@ _flux_core()
         ;;
     archive)
         _flux_archive $subcmd
+        ;;
+    broker)
+        _flux_broker $subcmd
         ;;
     -*)
         COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )
