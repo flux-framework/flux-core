@@ -2133,6 +2133,9 @@ _flux_core()
         COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
         ;;
     *)
+        # return with no suggestions for unknown subcommands:
+        [[ "$prev" != "flux" ]] && return
+
         matched=f
         COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
         ;;
@@ -2144,6 +2147,7 @@ _flux_core()
     if test "$matched" = "t" -a -z "$COMPREPLY" -a "$cur" = "$cmd"; then
         COMPREPLY="$cur"
     fi
+
     return 0
 }
 
