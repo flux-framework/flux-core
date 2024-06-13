@@ -133,7 +133,7 @@ jobs:
 
   ci-checks:
     needs: [generate-matrix]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     env:
       TAP_DRIVER_QUIET: 1
       FLUX_TEST_TIMEOUT: 300
