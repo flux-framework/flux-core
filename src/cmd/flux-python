@@ -1,0 +1,8 @@
+#!/bin/sh
+
+# This minimal wrapper exists to help handle systems where env -S is
+# unavailable and scripts wish to use `flux python`. Using a shebang like this
+# for flux python scripts allows them to rely only on posix to start:
+# #!/usr/bin/env flux-python
+
+exec flux python "$@"
