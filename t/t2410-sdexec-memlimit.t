@@ -64,6 +64,11 @@ flux setattr log-stderr-level 7
 sdexec="flux exec --service sdexec"
 getcg=$(pwd)/getcg.sh
 
+if ! $sdexec $getcg memory.high; then
+	skip_all="$sdexec getcg doesn't work"
+	test_done
+fi
+
 #
 # memory.high: the throttling limit on memory usage
 #

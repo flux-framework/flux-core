@@ -59,6 +59,8 @@ fi
 
 TOP=$(git rev-parse --show-toplevel 2>&1) \
     || die "not inside $PROJECT git repository!"
+which podman >/dev/null \
+    || die "unable to find podman binary!"
 which docker >/dev/null \
     || die "unable to find docker binary!"
 
@@ -73,8 +75,28 @@ if test "$REBUILD_BASE_IMAGE" = "t"; then
         --install-only
 fi
 
+#  Note: podman cannot pull from local docker images in GitHub actions, so
+#  we have to use docker save -> podman load to make the image available
+#  to podman. This is done in steps to avoid a potential issue with
+#  podman reporting:
+#
+#  Error: payload does not match any of the supported image formats:
+#
+#  Saving to a file (avoiding a colon in the name) seems to work around
+#  these issues.
+#
+checks_group "Moving $IMAGE from docker to podman" \
+  docker save -o /tmp/systest-$$.tar $IMAGE \
+  && ls -lh /tmp/systest-$$.tar \
+  && (podman load -i /tmp/systest-$$.tar || die "podman load failed") \
+  && rm -f /tmp/systest-$$.tar
+
+#  Note: There's a bug in podman < 4 which saves an image loaded from
+#  docker save as the wrong name, so we use the image digest instead:
+IMAGE=$(docker images --format {{.ID}} $IMAGE)
+
 checks_group "Building system image for user $USER $(id -u) group=$(id -g)" \
-  docker build \
+  podman build \
     ${NOCACHE} \
     --build-arg IMAGE=$IMAGE \
     --build-arg USER=$USER \
@@ -87,7 +109,7 @@ checks_group "Building system image for user $USER $(id -u) group=$(id -g)" \
 
 NAME=flux-system-test-$$
 checks_group "Launching system instance container $NAME" \
-  docker run -d --rm \
+  podman run -d --rm \
     --hostname=fluxorama \
     --workdir=$WORKDIR \
     $MOUNT_HOME_ARGS \
@@ -97,10 +119,13 @@ checks_group "Launching system instance container $NAME" \
     --cap-add SYS_PTRACE \
     --name=flux-system-test-$$ \
     --network=host \
+    --systemd=always \
+    --userns=keep-id \
+    --security-opt unmask=/sys/fs/cgroup \
     fluxorama:systest \
     || die "docker run of fluxorama test container failed"
 
-until docker exec -u $USER:$GID \
+until podman exec -u $USER:$GID \
     flux-system-test-$$ flux run hostname 2>/dev/null; do
     echo "Waiting for flux-system-test-$$ to be ready"
     sleep 1
@@ -109,16 +134,16 @@ done
 #  Start user@uid.service service for unit tests:
 #
 checks_group "Starting user service user@$(id -u).service" \
-  docker exec flux-system-test-$$ \
+  podman exec flux-system-test-$$ \
     systemctl start user@$(id -u).service \
-    || die "docker start user@$(id -u).service failed"
+    || die "podman start user@$(id -u).service failed"
 
 if test -t 0; then
     INTERACTIVE="-ti"
 fi
 
 checks_group "Executing tests under system instance container" \
-  docker exec \
+  podman exec \
     "${INTERACTIVE}" \
     -u $USER:$GID \
     ${CC+-e CC=$CC} \
@@ -163,7 +188,7 @@ checks_group "Executing tests under system instance container" \
     flux-system-test-$$ "$@"
 RC=$?
 
-docker exec -ti flux-system-test-$$ shutdown -r now
+podman exec -ti flux-system-test-$$ shutdown -r now
 
 if test $RC -ne 0; then
     die "system tests failed with rc=$RC"
