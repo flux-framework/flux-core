@@ -81,6 +81,7 @@ flux_SOURCES = \
 	builtin/shutdown.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
+dist_bin_SCRIPTS = flux-python
 
 flux_LDADD = \
 	$(top_builddir)/src/common/libpmi/libupmi.la \
