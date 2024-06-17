@@ -9,6 +9,19 @@
 #
 shopt -s extglob
 
+# Lifted from bash_completions:
+# For a longopt --foo=bar, set $prev=--foo and $cur=bar.
+_flux_split_longopt() {
+    if [[ $cur == --?*=* ]]; then
+        # Cut also backslash before '=' in case it ended up there
+        # for some reason
+        prev="${cur%%?(\\)=*}"
+        cur="${cur#*=}"
+        return 0
+    fi
+    return 1
+}
+
 # return success if first argument is in remaining args
 _flux_contains_word() {
     local w word=$1; shift
@@ -61,48 +74,17 @@ _flux_get_subcmd() {
     echo $firstword
 }
 
-# Handle compgen for words that may contain an '=', so we need to remove
-# any `=` from COMP_WORDBREAKS
-_flux_compgen_with_equals() {
-    # Grab values to pass to compgen, removing possible trailing space
-    local values="${1%% }"
-    COMP_WORDBREAKS_saved="$COMP_WORDBREAKS"
-    COMP_WORDBREAKS="$(echo \"$COMP_WORDBREAKS\" | tr -d =)"
-    COMPREPLY=( $(compgen -W "${values}" -- "$cur") )
-    COMP_WORDBREAKS="$COMP_WORDBREAKS"
-}
-
-# Autocomplete queue name for `-q, --queue=NAME`
-# returns failure if cur or prev option is not -q,--queue
-#
+# Autocomplete current queues
 _flux_complete_queue() {
-    #  Autocomplete queue names
-    if [[ "$prev" == "--queue" \
-        || "$prev" == "-q" \
-        || "$cur" == "--que"* ]]; then
-        local queues=$(flux queue status | sed -n 's/^\(.*\): .*$/\1/p')
-        if [[ "$cur" == "--que"* ]]; then
-            queues=$(printf -- '--queue=%s ' $queues)
-        fi
-        _flux_compgen_with_equals "${queues}"
-        return 0
-    fi
-    return 1
+    local queues=$(flux queue status | sed -n 's/^\(.*\): .*$/\1/p')
+    COMPREPLY=( $(compgen -W "$queues" -- "$cur") )
 }
 
 # Autocomplete format names for commands that take -o, --format
+# usage _flux_complete_format_name COMMAND SUBCOMMAND [ARGS...]
 _flux_complete_format_name() {
-    if [[ "$prev" == "--format" \
-        || "$prev" == "-o" \
-        || "$cur" == "--form"* ]]; then
-        local formats=$($@ --format=help | grep -v ^Conf | awk 'NF {print $1}')
-        if [[ "$cur" == "--for"* ]]; then
-            formats=$(printf -- '--format=%s ' $formats)
-        fi
-        _flux_compgen_with_equals "${formats}"
-        return 0
-    fi
-    return 1
+    local formats=$($@ --format=help | grep -v ^Conf | awk 'NF {print $1}')
+    COMPREPLY=( $(compgen -W "$formats" -- "$cur") )
 }
 
 #  Get the list of subcommands from FLUX_EXEC_PATH and hard-coded builtins
@@ -140,10 +122,35 @@ _flux_id_fmt()
     echo "${fmt}"
 }
 
+_flux_active_instances()
+{
+    flux jobs -no "$(_flux_id_fmt $1) {uri}" | awk '!($2 == "None") {print $1}'
+}
+
+#  flux-proxy(1) completions
+_flux_proxy()
+{
+    local $cmd=$1
+    OPTS="\
+        -f --force \
+        -n --nohup \
+        --reconnect \
+    "
+    if [[ $cur != -* ]]; then
+        #  Attempt to substitute an active jobid
+        active_jobs=$(_flux_active_instances $cur)
+        COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
+        return 0
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    return 0
+}
+
 #  flux-cancel(1) completions
 _flux_cancel()
 {
     local cmd=$1
+    local split=false
     OPTS="\
         --all \
         -n --dry-run \
@@ -152,6 +159,24 @@ _flux_cancel()
         -S --states= \
         -m --message= \
     "
+    _flux_split_longopt && split=true
+    case $prev in
+        --user | -!(-*)u)
+            users=$(flux jobs -Ano {username} | uniq)
+            COMPREPLY=( $(compgen -W "$users" -- "$cur") )
+            return
+            ;;
+        --states | -!(-*)S)
+            states="active depend priority sched run pending running"
+            COMPREPLY=( $(compgen -W "$states" -- "$cur") )
+            return
+            ;;
+        --message | -!(-*)m)
+            return
+            ;;
+    esac
+    $split && return
+
     if [[ $cur != -* ]]; then
         #  Attempt to substitute an active jobid
         active_jobs=$(flux jobs -no $(_flux_id_fmt $cur))
@@ -191,12 +216,12 @@ _flux_update()
 #  flux-hostlist(1) completions
 _flux_hostlist()
 {
-    local cmd=$1
+    local cmd=$1 split=false
     OPTS="\
         -e --expand \
         -d --delimiter= \
         -c --count \
-        -n --nth \
+        -n --nth= \
         -L --limit= \
         -S --sort \
         -x --exclude= \
@@ -207,6 +232,14 @@ _flux_hostlist()
         -f --fallback \
         -q --quiet \
     "
+    _flux_split_longopt && split=true
+    case $prev in
+        --limit | --exclude | --nth | --delimiter | -!(-*)[lmxn])
+            return
+            ;;
+    esac
+    $split && return
+
     if [[ $cur != -* ]]; then
         # Substitute source name or recent jobid
         jobs="$(flux jobs -ano $(_flux_id_fmt $cur))"
@@ -222,11 +255,123 @@ _flux_hostlist()
     return 0
 }
 
+#  flux-shutdown(1) completions
+_flux_shutdown()
+{
+    local subcmd=$1 split=false
+    OPTS="\
+        --skip-gc \
+        --gc \
+        --dump= \
+        --background \
+        --quiet \
+        -v --verbose= \
+        -y --yes \
+        -n --no \
+    "
+    _flux_split_longopt && split=true
+    case $prev in
+        --dump)
+            COMPREPLY=( $(compgen -f -- "$cur") )
+            return
+            ;;
+    esac
+    $split && return
+
+    if [[ $cur != -* ]]; then
+        # Substitute recent alloc/batch jobid
+        jobs=$(_flux_active_instances $cur)
+        COMPREPLY=( $(compgen -W "$jobs" -- "$cur") )
+        return 0
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
+#  flux-archive(1) completions
+_flux_archive()
+{
+    local cmd=$1
+    local subcmds="create remove extract list"
+    local split=false
+
+    local create_OPTS="\
+        -h --help \
+        -n --name= \
+        --no-force-primary \
+        -C --directory= \
+        -v --verbose= \
+        --overwrite \
+        --append \
+        --preserve \
+        --mmap \
+    "
+    local remove_OPTS="\
+        -h --help \
+        -n --name= \
+        --no-force-primary \
+        -f --force \
+    "
+    local extract_OPTS="\
+        -h --help \
+        -n --name= \
+        -v --verbose= \
+        -C --directory= \
+        --overwrite \
+        --waitcreate= \
+        --no-force-primary \
+        -t --list-only \
+    "
+    local list_OPTS="\
+        -h --help \
+        -n --name= \
+        --no-force-primary \
+        -l --long \
+        --raw \
+    "
+    if [[ $cmd != "archive" ]]; then
+
+        _flux_split_longopt && split=true
+        case $prev in
+            --directory | -!(-*)C)
+                compopt -o filenames
+                COMPREPLY=( $(compgen -d -- "$cur") )
+                return
+                ;;
+            -!(-*)[n])
+                return
+                ;;
+        esac
+        $split && return
+
+        if [[ $cmd == "create" && $cur != -* ]]; then
+            compopt -o default -o bashdefault -o filenames
+            COMPREPLY=( $(compgen -f -c -- "$cur") )
+            return
+        fi
+
+        var="${cmd//-/_}_OPTS"
+        COMPREPLY=( $(compgen -W "${!var}" -- "$cur") )
+        if [[ "${COMPREPLY[@]}" == *= ]]; then
+            # Add space if there is not a '=' in suggestions
+            compopt -o nospace
+        fi
+    else
+        COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
+    fi
+    return 0
+}
+
 #  flux-{run,submit,batch,alloc,bulksubmit}(1) completions
 _flux_submit_commands()
 {
     local subcmds="run submit batch alloc bulksubmit"
     local cmd=$1
+    local split=false
 
     local COMMON_OPTIONS="\
         -q --queue= \
@@ -240,7 +385,7 @@ _flux_submit_commands()
         --begin-time= \
         --env= \
         --env-remove= \
-        --env-file= \
+        --env-file \
         --rlimit= \
         --input= \
         --output= \
@@ -328,12 +473,39 @@ _flux_submit_commands()
         $COMMON_OPTIONS \
         $ALLOC_OPTIONS \
     "
+    _flux_split_longopt && split=true
+    case $prev in
+        --queue | -!(-*)q)
+             _flux_complete_queue
+            return
+            ;;
+        --urgency)
+            COMPREPLY=( $(compgen -W "{0..32} hold default expedite" -- "$cur") )
+            return
+            ;;
+        --add-file | --env-file | --input | --output | --error | \
+            --log | --log-stderr)
+            compopt -o filenames
+            COMPREPLY=( $(compgen -f -- "$cur") $(compgen -d -- "$cur") )
+            return
+            ;;
+        --cwd)
+            compopt -o filenames
+            COMPREPLY=( $(compgen -d -- "$cur") )
+            return
+            ;;
+        --flags)
+            COMPREPLY=( $(compgen -W 'waitable debug novalidate' -- "$cur") )
+            return
+            ;;
+        -!(-*)[tNoncg])
+            return
+            ;;
+    esac
+    $split && return
 
     if [[ $cur != -* ]]; then
         compopt -o bashdefault -o default
-    fi
-    if _flux_complete_queue; then
-        return 0
     fi
 
     var="${cmd}_OPTS"
@@ -350,6 +522,8 @@ _flux_resource()
 {
     local subcmds="drain undrain status list R info reload"
     local cmd=$1
+    local split=false
+    local states
 
     local reload_OPTS="\
         -h --help \
@@ -390,11 +564,40 @@ _flux_resource()
         -q --queue= \
         -i --include= \
     "
+    _flux_split_longopt && split=true
+    case $prev in
+        --queue | -!(-*)q)
+            _flux_complete_queue
+            return
+            ;;
+        --format | -!(-*)o)
+            _flux_complete_format_name flux resource $cmd
+            return
+            ;;
+        --states | -!(-*)s)
+            case $cmd in
+                list | info | R)
+                    states="up down allocated free all"
+                    ;;
+                status | drain)
+                    states="avail exclude draining drained drain offline online"
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "$states" -- "$cur") )
+            return
+            ;;
+        -!(-*)i)
+            return
+            ;;
+    esac
+    $split && return
 
     if [[ $cmd != "resource" ]]; then
         if [[ $cur != -* ]]; then
             if [[ $cmd == "reload" ]]; then
                 compopt -o filenames
+                COMPREPLY=( $(compgen -f -- "$cur") $(compgen -d -- "$cur") )
+                return
             fi
         fi
         var="${cmd}_OPTS"
@@ -403,34 +606,18 @@ _flux_resource()
             # Add space if there is not a '=' in suggestions
             compopt -o nospace
         fi
-        if _flux_complete_queue flux resource ${cmd}; then
-            return 0
-        fi
-        if _flux_complete_format_name flux resource ${cmd}; then
-            return 0
-        fi
     else
         COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
     fi
     return 0
 }
 
-_flux_complete_taskmap_name() {
-    if [[ "$prev" == "--to" || "$cur" == "--to"* ]]; then
-        local formats="pmi raw multiline"
-        if [[ "$cur" == "--to"* ]]; then
-            formats=$(printf -- '--to=%s ' $formats)
-        fi
-        _flux_compgen_with_equals "${formats}"
-        return 0
-    fi
-    return 1
-}
-
 # flux-job(1) completions
 _flux_job()
 {
     local cmd=$1
+    local split=false
+
     local subcmds="\
         urgency \
         cancel \
@@ -458,7 +645,7 @@ _flux_job()
         submit \
         purge \
     "
-    local all_TOPS="\
+    local all_OPTS="\
         -h --help \
     "
     local urgency_OPTS="\
@@ -475,7 +662,7 @@ _flux_job()
     "
     local raise_OPTS="\
         -s --severity= \
-        -t, --type= \
+        -t --type= \
         -m --message= \
     "
     local raiseall_OPTS="\
@@ -507,7 +694,7 @@ _flux_job()
     local status_OPTS="\
         -v --verbose \
         -j --json \
-        -e --exception-exit-code \
+        -e --exception-exit-code= \
     "
     local submit_OPTS="\
         -u --urgency= \
@@ -569,6 +756,55 @@ _flux_job()
         -r --ranks= \
     "
     local last_OPTS=""
+
+    #  Handle options for all subcommands in one case statement
+    _flux_split_longopt && split=true
+    case $prev in
+        --path | -!(-*)p)
+            # wait-event, eventlog -p, --path=
+            COMPREPLY=( $(compgen -W "exec output input" -- "$cur") )
+            return
+            ;;
+        --format | -!(-*)f)
+            # wait-event, eventlog -f, --format=
+            COMPREPLY=( $(compgen -W "text json" -- "$cur") )
+            return
+            ;;
+        --time-format | -!(-*)T)
+            # wait-event, eventlog -T, --time-format=
+            COMPREPLY=( $(compgen -W "raw iso offset human" -- "$cur") )
+            return
+            ;;
+        --to | -!(-*)t)
+            case $cmd in
+                id)
+                    values="dec kvs hex dothex words f58 f58plain"
+                    ;;
+                taskmap)
+                    values="pmi raw multiline hosts"
+                    ;;
+                *)
+                    return
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "$values" -- "$cur") )
+            return
+            ;;
+        --user | -!(-*)u)
+            active_users=$(flux jobs -Ano {username} | uniq)
+            COMPREPLY=( $(compgen -W "${active_users}" -- "$cur") )
+            return
+            ;;
+        --flags | -!(-*)f)
+            COMPREPLY=( $(compgen -W "debug waitable novalidate" -- "$cur") )
+            return
+            ;;
+        -!(-*)[cmsSwiudr])
+            return
+            ;;
+    esac
+    $split && return
+
     if [[ $cmd != "job" ]]; then
         if [[ $cur != -* ]]; then
            if _flux_contains_word ${cmd} ${subcmds}; then
@@ -578,10 +814,10 @@ _flux_job()
                 return 0
             fi
         fi
-        if _flux_contains_word "taskmap" "${COMP_WORDS[@]}"; then
-            if _flux_complete_taskmap_name; then
-                return 0
-            fi
+        # Don't substitute longopts if already fully completed
+        if [[ $cur == --*= ]]; then
+            COMPREPLY=()
+            return 0
         fi
         var="${cmd//-/_}_OPTS"
         COMPREPLY=( $(compgen -W "${!var}" -- "$cur") )
@@ -598,7 +834,7 @@ _flux_job()
 # flux-queue(1) completions
 _flux_queue()
 {
-    local cmd=$1
+    local cmd=$1 split=false
     local subcmds="\
         enable \
         disable \
@@ -638,6 +874,27 @@ _flux_queue()
         -h --help \
         -t --timeout= \
     "
+    local list_OPTS="\
+        -o --format= \
+        -n --no-header \
+    "
+
+    _flux_split_longopt && split=true
+    case $prev in
+        --queue | -!(-*)q)
+            _flux_complete_queue
+            return
+            ;;
+        --format | -!(-*)o)
+            _flux_complete_format_name flux queue $cmd
+            return
+            ;;
+        --timeout | -!(-*)t)
+            return
+            ;;
+    esac
+    $split && return
+
     if [[ $cmd != "queue" ]]; then
         var="${cmd//-/_}_OPTS"
         COMPREPLY=( $(compgen -W "${!var}" -- "$cur") )
@@ -645,7 +902,9 @@ _flux_queue()
             # Add space if there is not a '=' in suggestions
             compopt -o nospace
         fi
-        if _flux_complete_queue; then
+        # Don't complete longopt if fully completed
+        if [[ $cur == --*= ]]; then
+            COMPREPLY=()
             return 0
         fi
     else
@@ -654,12 +913,20 @@ _flux_queue()
     return 0
 }
 
+_flux_complete_namespace() {
+    namespaces=$(flux kvs namespace list 2>/dev/null \
+                 | awk '!/^NAMESPACE/ {print $1}')
+    COMPREPLY=( $(compgen -W "$namespaces" -- "$cur") )
+    return
+}
 
 # flux-kvs(1) eventlog completions
 _flux_kvs_eventlog()
 {
     local cmd=$1
     local subcmds="append get wait-event"
+    local split=false
+
     local append_OPTS="\
         -N --namespace= \
         -t --timestamp= \
@@ -682,12 +949,27 @@ _flux_kvs_eventlog()
         -H --human \
         -L --color= \
     "
-     if [[ $cmd != "eventlog" ]]; then
+    _flux_split_longopt && split=true
+    case $prev in
+        --namespace | -!(-*)N)
+            _flux_complete_namespace
+            return
+            ;;
+        -!(-*)[tc])
+            return
+            ;;
+    esac
+    $split && return
+
+    if [[ $cmd != "eventlog" ]]; then
         var="${cmd//-/_}_OPTS"
         COMPREPLY=( $(compgen -W "${!var}" -- "$cur") )
         if [[ "${COMPREPLY[@]}" == *= ]]; then
             # Add space if there is not a '=' in suggestions
             compopt -o nospace
+        fi
+        if [[ "$cur" != -* ]]; then
+            compopt -o default
         fi
     else
         COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
@@ -699,6 +981,7 @@ _flux_kvs_eventlog()
 _flux_kvs()
 {
     local cmd=$1
+    local split=false
     local subcmds="\
         namespace
         get
@@ -804,6 +1087,7 @@ _flux_kvs()
         -o --owner \
         -b --blobref \
     "
+
     if [[ $cmd != "kvs" ]]; then
 
         if _flux_contains_word "eventlog" ${COMP_WORDS[*]}; then
@@ -811,11 +1095,28 @@ _flux_kvs()
             return 0
         fi
 
+        _flux_split_longopt && split=true
+        case $prev in
+            --src-namespace | --dst-namespace | --namespace | -!(-*)[SDN])
+                _flux_complete_namespace
+                return
+                ;;
+            -!(-*)[awc])
+                return
+                ;;
+        esac
+        $split && return
+
         var="${cmd//-/_}_OPTS"
         COMPREPLY=( $(compgen -W "${!var}" -- "$cur") )
         if [[ "${COMPREPLY[@]}" == *= ]]; then
             # Add space if there is not a '=' in suggestions
             compopt -o nospace
+        fi
+        # Don't complete longopt if fully completed
+        if [[ $cur == --*= ]]; then
+            COMPREPLY=()
+            return 0
         fi
     else
         COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
@@ -827,6 +1128,7 @@ _flux_overlay()
 {
     local cmd=$1
     local subcmds="status lookup parentof disconnect"
+    local split=false
 
     local status_OPTS="\
         -h --help \
@@ -851,12 +1153,25 @@ _flux_overlay()
         -h --help \
         -r --parent= \
     "
+    _flux_split_longopt && split=true
+    case $prev in
+        -!(-*)[rtwH])
+            return
+            ;;
+    esac
+    $split && return
+
     if [[ $cmd != "overlay" ]]; then
         var="${cmd//-/_}_OPTS"
         COMPREPLY=( $(compgen -W "${!var}" -- "$cur") )
         if [[ "${COMPREPLY[@]}" == *= ]]; then
             # Add space if there is not a '=' in suggestions
             compopt -o nospace
+        fi
+        # Don't complete longopt if fully completed
+        if [[ $cur == --*= ]]; then
+            COMPREPLY=()
+            return 0
         fi
     else
         COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
@@ -869,15 +1184,35 @@ _flux_config()
 {
     local cmd=$1
     local subcmds="reload get builtin"
+    local split=false
 
     local get_OPTS="\
         -t --type= \
         -q --quiet \
         -d --default= \
+        -c --config-path \
     "
 
     if [[ $cmd != "config" ]]; then
-        var="${cmd//-/_}_OPTS"
+
+        _flux_split_longopt && split=true
+        case $prev in
+            --config-path | -!(-*)c)
+                compopt -o filenames
+                COMPREPLY=( $(compgen -f -- "$cur") $(compgen -d -- "$cur") )
+                return
+                ;;
+            --type | -!(-*)t)
+                values="string integer real boolean object array fsd fsd-integer fsd-real"
+                COMPREPLY=( $(compgen -W "$values" -- "$cur") )
+                return
+                ;;
+            -!(-*)d)
+                return
+                ;;
+        esac
+        $split && return
+
         COMPREPLY=( $(compgen -W "${!var} -h --help" -- "$cur") )
         if [[ "${COMPREPLY[@]}" == *= ]]; then
             # Add space if there is not a '=' in suggestions
@@ -914,6 +1249,7 @@ _flux_module()
     local cmd=$1
     local subcmds_module_arg="remove reload stats debug"
     local subcmds="list load ${subcmds_module_arg}"
+    local split=false
 
     local load_OPTS="\
         --name= \
@@ -939,9 +1275,17 @@ _flux_module()
         -c --clearbit \
     "
     local list_OPTS="\
-        -l, --long \
+        -l --long \
     "
     if [[ $cmd != "module" ]]; then
+
+        _flux_split_longopt && split=true
+        case $prev in
+            -!(-*)[pst])
+                return
+                ;;
+        esac
+        $split && return
 
         if [[ $cur != -* ]]; then
             if _flux_contains_word ${cmd} ${subcmds_module_arg}; then
@@ -949,6 +1293,8 @@ _flux_module()
                 modules=$(flux module list | grep -v Module | awk '{print $1}')
                 COMPREPLY=( $(compgen -W "${modules}" -- "$cur") )
                 return 0
+            elif _flux_contains_word ${cmd} "load"; then
+                compopt -o default -o bashdefault
             fi
         fi
 
@@ -957,6 +1303,11 @@ _flux_module()
         if [[ "${COMPREPLY[@]}" == *= ]]; then
             # Add space if there is not a '=' in suggestions
             compopt -o nospace
+        fi
+        # Don't complete longopt if fully completed
+        if [[ $cur == --*= ]]; then
+            COMPREPLY=()
+            return 0
         fi
     else
         COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
@@ -985,6 +1336,8 @@ _flux_jobtap()
                 plugins=$(flux jobtap list 2>/dev/null)
                 COMPREPLY=( $(compgen -W "${plugins}" -- "$cur") )
                 return 0
+            elif _flux_contains_word ${cmd} "load"; then
+                compopt -o bashdefault -o default
             fi
         fi
 
@@ -993,6 +1346,11 @@ _flux_jobtap()
         if [[ "${COMPREPLY[@]}" == *= ]]; then
             # Add space if there is not a '=' in suggestions
             compopt -o nospace
+        fi
+        # Don't complete longopt if fully completed
+        if [[ $cur == --*= ]]; then
+            COMPREPLY=()
+            return 0
         fi
     else
         COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
@@ -1004,6 +1362,7 @@ _flux_jobtap()
 _flux_jobs()
 {
     local cmd=$1
+    local split=false
     local OPTS="\
         -a \
         -A \
@@ -1023,11 +1382,26 @@ _flux_jobs()
         --stats \
         --stats-only \
     "
-    if _flux_complete_queue; then
-        return 0
-    fi
-    if _flux_complete_format_name flux jobs; then
-        return 0
+
+    _flux_split_longopt && split=true
+    case $prev in
+        --queue)
+            _flux_complete_queue
+            return
+            ;;
+        --format | -!(-*)o)
+            _flux_complete_format_name flux jobs
+            return
+            ;;
+        -!(-*)[Lcf])
+            return
+            ;;
+    esac
+    $split && return
+
+    # Don't complete longopt if fully completed
+    if [[ $cur == --*= ]]; then
+        return
     fi
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
@@ -1041,6 +1415,7 @@ _flux_jobs()
 _flux_pgrep()
 {
     local cmd=$1
+    local split=false
     local OPTS="\
         -a \
         -A \
@@ -1052,13 +1427,28 @@ _flux_pgrep()
         --queue= \
         -o --format= \
     "
-    if _flux_complete_queue; then
-        return 0
-    fi
-    # flux-pgrep uses flux-jobs config
-    if _flux_complete_format_name flux jobs; then
-        return 0
-    fi
+    _flux_split_longopt && split=true
+    case $prev in
+        --queue)
+            _flux_complete_queue
+            return
+            ;;
+        --format | -!(-*)o)
+            # flux-prgrep uses flux-jobs named formats
+            _flux_complete_format_name flux jobs
+            return
+            ;;
+        --user | -!(-*)u)
+            active_users=$(flux jobs -Ano {username} | uniq)
+            COMPREPLY=( $(compgen -W "$active_users" -- "$cur") )
+            return
+            ;;
+        -!(-*)[cf])
+            return
+            ;;
+    esac
+    $split && return
+
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
@@ -1071,6 +1461,7 @@ _flux_pgrep()
 _flux_pkill()
 {
     local cmd=$1
+    local split=false
     local OPTS="\
         -A \
         -c --count= \
@@ -1079,9 +1470,23 @@ _flux_pkill()
         -u --user= \
         --queue= \
     "
-    if _flux_complete_queue; then
-        return 0
-    fi
+    _flux_split_longopt && split=true
+    case $prev in
+        --queue)
+            _flux_complete_queue
+            return
+            ;;
+        --user | -!(-*)u)
+            active_users=$(flux jobs -Ano {username} | uniq)
+            COMPREPLY=( $(compgen -W "$active_users" -- "$cur") )
+            return
+            ;;
+        -!(-*)[cf])
+            return
+            ;;
+    esac
+    $split && return
+
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
@@ -1094,6 +1499,8 @@ _flux_pkill()
 _flux_pstree()
 {
     local cmd=$1
+    local split=false
+
     local OPTS="\
         -a --all \
         -c --count= \
@@ -1110,8 +1517,21 @@ _flux_pstree()
         -d --details= \
         -C --compact \
         --ascii \
-        --skip-root=[yes|no] \
+        --skip-root \
     "
+
+    _flux_split_longopt && split=true
+    case $prev in
+        --details | -!(-*)d)
+            COMPREPLY=( $(compgen -W 'default resources progress stats' -- "$cur") )
+            return
+            ;;
+        -!(-*)[cfLo])
+            return
+            ;;
+    esac
+    $split && return
+
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
@@ -1124,6 +1544,7 @@ _flux_pstree()
 _flux_watch()
 {
     local cmd=$1
+    local split=false
     local OPTS="\
         -a --active \
         -A --all \
@@ -1141,6 +1562,15 @@ _flux_watch()
         COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
         return 0
     fi
+
+    _flux_split_longopt && split=true
+    case $prev in
+        -!(-*)[cf])
+            return
+            ;;
+    esac
+    $split && return
+
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
@@ -1158,7 +1588,10 @@ _flux_dump()
         -q --quiet \
         --checkpoint \
         --no-cache \
+        --ignore-failed-read \
     "
+    compopt -o default -o bashdefault
+
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
@@ -1178,6 +1611,7 @@ _flux_restore()
         --key= \
         --no-cache \
     "
+    compopt -o default -o bashdefault
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
@@ -1190,13 +1624,20 @@ _flux_restore()
 _flux_top()
 {
     local cmd=$1
+    local split=false
     local OPTS="\
         --color= \
         -q --queue= \
     "
-    if _flux_complete_queue; then
-        return 0
-    fi
+    _flux_split_longopt && split=true
+    case $prev in
+        --queue | -!(-*)q)
+            _flux_complete_queue
+            return
+            ;;
+    esac
+    $split && return
+
     #  flux-top(1) can target jobids that are also instances
     local jobs=$(flux jobs -no {uri}:$(_flux_id_fmt $cur) | grep -v ^None: \
                  | sed -n 's/.*://p')
@@ -1221,6 +1662,9 @@ _flux_dmesg()
         -d --delta \
         -L --color= \
     "
+    if [[ $cur == --*= ]]; then
+        return
+    fi
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
@@ -1233,6 +1677,7 @@ _flux_dmesg()
 _flux_cron()
 {
     local cmd=$1
+    local split=false
     local subcmds="\
         help \
         interval \
@@ -1278,7 +1723,7 @@ _flux_cron()
         -k --key= \
     "
     local delete_OPTS="\
-        -k, --kill \
+        -k --kill \
     "
     local sync_OPTS="\
         -d --disable \
@@ -1289,11 +1734,28 @@ _flux_cron()
         if [[ $cur != -* ]]; then
             if _flux_contains_word ${cmd} ${cron_entry_subcmds}; then
                 #  These commands take cron entries as args
-                entries=$(flux cron list | grep -v ID | awk '{print $1}')
+                entries=$(flux cron list 2>/dev/null \
+                          | grep -v ID | awk '{print $1}')
                 COMPREPLY=( $(compgen -W "${entries}" -- "$cur") )
                 return 0
             fi
         fi
+
+        _flux_split_longopt && split=true
+        case $prev in
+            --working-dir | -!(-*)d)
+                compopt -o filenames
+                COMPREPLY=( $(compgen -d -- "$cur") )
+                return
+                ;;
+            -!(-*)k)
+                [[ $cmd == "dump" ]] && return
+                ;;
+            -!(-*)[cNaonie])
+                return
+                ;;
+        esac
+        $split && return
 
         var="${cmd//-/_}_OPTS"
         COMPREPLY=( $(compgen -W "${!var} -h --help" -- "$cur") )
@@ -1310,6 +1772,8 @@ _flux_cron()
 _flux_R()
 {
     local cmd=$1
+    local split=false
+
     local subcmds="\
         encode \
         append \
@@ -1340,6 +1804,20 @@ _flux_R()
         -p --properties= \
     "
     if [[ $cmd != "R" ]]; then
+        # Don't complete longopt if fully completed
+        if [[ $cur == --*= ]]; then
+            COMPREPLY=()
+            return 0
+        fi
+
+        _flux_split_longopt && split=true
+        case $prev in
+            -!(-*)[ixcgH])
+                return
+                ;;
+        esac
+        $split && return
+
         var="${cmd//-/_}_OPTS"
         COMPREPLY=( $(compgen -W "${!var} -h --help" -- "$cur") )
         if [[ "${COMPREPLY[@]}" == *= ]]; then
@@ -1355,6 +1833,7 @@ _flux_R()
 _flux_ping()
 {
     local cmd=$1
+    local split=false
     OPTS="\
         -r --rank= \
         -p --pad= \
@@ -1363,6 +1842,14 @@ _flux_ping()
         -b --batch \
         -u --userid \
     "
+    _flux_split_longopt && split=true
+    case $prev in
+        -!(-*)[rpic])
+            return
+            ;;
+    esac
+    $split && return
+
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
@@ -1375,6 +1862,7 @@ _flux_ping()
 _flux_exec()
 {
     local cmd=$1
+    local split=false
     OPTS="\
         -r --rank= \
         -x --exclude= \
@@ -1384,6 +1872,20 @@ _flux_exec()
         -v --verbose \
         -q --quiet \
     "
+
+    _flux_split_longopt && split=true
+    case $prev in
+        --dir | -!(-*)d)
+            compopt -o filenames
+            COMPREPLY=( $(compgen -d -- "$cur") )
+            return
+            ;;
+        -!(-*)[rx])
+            return
+            ;;
+    esac
+    $split && return
+
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
@@ -1424,6 +1926,7 @@ _flux_content()
     "
     store_OPTS="\
         -b --bypass-cache \
+        --chunksize=
     "
     if [[ $cmd != "content" ]]; then
         var="${cmd//-/_}_OPTS"
@@ -1437,6 +1940,7 @@ _flux_content()
 _flux_start()
 {
     local cmd=$1
+    local split=false
 
     #  Most test-only options left off on purpose here
     OPTS="\
@@ -1446,7 +1950,58 @@ _flux_start()
         --wrap= \
         -s --test-size= \
     "
-     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    _flux_split_longopt && split=true
+    case $prev in
+        -!(-*)[os])
+            return
+            ;;
+    esac
+    $split && return
+
+    if [[ $cur != -* ]]; then
+        compopt -o default -o bashdefault -o filenames
+        COMPREPLY=( $(compgen -f -c -- "$cur") )
+        return
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
+# flux-broker(1) completions
+_flux_broker()
+{
+    local cmd=$1
+    local split=false
+
+    OPTS="\
+        -h --help \
+        -v --verbose= \
+        -S --setattr= \
+        -c --config-path= \
+    "
+    _flux_split_longopt && split=true
+    case $prev in
+        --config-path | -!(-*)c)
+            compopt -o filenames
+            COMPREPLY=( $(compgen -f -- "$cur") $(compgen -d -- "$cur") )
+            return
+            ;;
+        -!(-*)[S])
+            return
+            ;;
+    esac
+    $split && return
+
+    if [[ $cur != -* ]]; then
+        compopt -o default -o bashdefault -o filenames
+        COMPREPLY=( $(compgen -f -c -- "$cur") )
+        return
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
         compopt -o nospace
@@ -1474,6 +2029,9 @@ _flux_core()
     case "${cmd}" in
     submit|run|alloc|batch|bulksubmit)
         _flux_submit_commands $cmd
+        ;;
+    proxy)
+        _flux_proxy $subcmd
         ;;
     cancel)
         _flux_cancel $subcmd
@@ -1559,6 +2117,15 @@ _flux_core()
     hostlist)
         _flux_hostlist $subcmd
         ;;
+    shutdown)
+        _flux_shutdown $subcmd
+        ;;
+    archive)
+        _flux_archive $subcmd
+        ;;
+    broker)
+        _flux_broker $subcmd
+        ;;
     -*)
         COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )
         ;;
@@ -1566,6 +2133,9 @@ _flux_core()
         COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
         ;;
     *)
+        # return with no suggestions for unknown subcommands:
+        [[ "$prev" != "flux" ]] && return
+
         matched=f
         COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
         ;;
@@ -1577,6 +2147,7 @@ _flux_core()
     if test "$matched" = "t" -a -z "$COMPREPLY" -a "$cur" = "$cmd"; then
         COMPREPLY="$cur"
     fi
+
     return 0
 }
 
