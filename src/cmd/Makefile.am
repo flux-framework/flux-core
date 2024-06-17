@@ -122,7 +122,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-imp-exec-helper \
 	py-runner.py \
 	flux-hostlist.py \
-	flux-post-job-event.py
+	flux-post-job-event.py \
+	flux-run-housekeeping
 
 fluxcmd_PROGRAMS = \
 	flux-terminus \

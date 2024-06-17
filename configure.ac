@@ -599,6 +599,8 @@ AC_CONFIG_FILES( \
   etc/flux-hostlist.pc \
   etc/flux-taskmap.pc \
   etc/flux.service \
+  etc/flux-housekeeping@.service \
+  src/cmd/flux-run-housekeeping \
   doc/Makefile \
   doc/test/Makefile \
   t/Makefile \
