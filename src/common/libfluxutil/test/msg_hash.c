@@ -15,7 +15,7 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
-#include "src/common/librouter/msg_hash.h"
+#include "src/common/libfluxutil/msg_hash.h"
 #include "src/common/libtap/tap.h"
 
 #ifndef UUID_STR_LEN

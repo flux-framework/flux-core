@@ -14,9 +14,9 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libccan/ccan/str/str.h"
+#include "src/common/libfluxutil/msg_hash.h"
 
 #include "rpc_track.h"
-#include "msg_hash.h"
 
 struct rpc_track {
     zhashx_t *hash;
