@@ -723,6 +723,33 @@ test_expect_success 'flux job list of all jobs that ran on node[1-2] after certa
 	test $(cat constraint_hostlist9.out | wc -l) -eq ${numlines}
 '
 
+test_expect_success 'flux job list by rank (0-3)' '
+	constraint="{ and: [ {ranks:[\"0-3\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist1.out &&
+	numlines=$(cat completed.ids running.ids failed.ids timeout.ids | wc -l) &&
+	test $(cat constraint_hostlist1.out | wc -l) -eq ${numlines}
+'
+test_expect_success 'flux job list by rank (3)' '
+	constraint="{ and: [ {ranks:[\"3\"]} ] }" &&
+	$jq -j -c -n  \
+	  "{max_entries:1000, attrs:[\"ranks\"], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq -r .jobs[].ranks | uniq > jobs.ranks &&
+	test $(cat jobs.ranks) -eq 3
+'
+test_expect_success 'flux job list by rank (does not exist)' '
+	constraint="{ and: [ {ranks:[\"10\"]} ] }" &&
+	$jq -j -c -n  \
+	  "{max_entries:1000, attrs:[\"ranks\"], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq -e ".jobs|length == 0"
+'
+test_expect_success 'flux job list by rank (invalid)' '
+	constraint="{ and: [ {ranks:[3]} ] }" &&
+	$jq -j -c -n  \
+	  "{max_entries:1000, attrs:[\"ranks\"], constraint:${constraint}}" \
+	  | test_must_fail $RPC job-list.list 2>ranks.err &&
+	grep "value must be a string" ranks.err
+'
 #
 # legacy RPC tests
 #
