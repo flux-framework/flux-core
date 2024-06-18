@@ -452,6 +452,18 @@ bool idset_has_intersection (const struct idset *a, const struct idset *b)
     if (a && b) {
         unsigned int id;
 
+        /*  If there isn't a penalty for idset_count(3), then ensure
+         *  we're going to iterate the smaller of the provided idsets
+         *  for efficiency:
+         */
+        if (!(a->flags & IDSET_FLAG_COUNT_LAZY)
+            && !(b->flags & IDSET_FLAG_COUNT_LAZY)
+            && idset_count (a) < idset_count (b)) {
+            const struct idset *tmp = a;
+            a = b;
+            b = tmp;
+        }
+
         id = idset_first (b);
         while (id != IDSET_INVALID_ID) {
             if (idset_test (a, id))
@@ -542,6 +554,17 @@ struct idset *idset_intersect (const struct idset *a, const struct idset *b)
         errno = EINVAL;
         return NULL;
     }
+    /*  If there isn't a penalty for idset_count(3), then ensure
+     *  we start with the smaller of the two idsets for efficiency:
+     */
+    if (!(a->flags & IDSET_FLAG_COUNT_LAZY)
+        && !(b->flags & IDSET_FLAG_COUNT_LAZY)
+        && idset_count (b) < idset_count (a)) {
+        const struct idset *tmp = a;
+        a = b;
+        b = tmp;
+    }
+
     if (!(result = idset_copy (a)))
         return NULL;
     id = idset_first (a);
