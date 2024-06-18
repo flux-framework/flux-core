@@ -37,7 +37,7 @@ struct kvsroot {
     int flags;
     bool remove;
     bool setroot_pause;
-    zlist_t *setroot_queue;
+    struct flux_msglist *setroot_queue;
     struct list_node work_queue_node;
 };
 
