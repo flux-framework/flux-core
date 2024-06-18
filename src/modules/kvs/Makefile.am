@@ -9,6 +9,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
+	-I$(top_builddir)/src/common/librouter \
 	-I$(top_builddir)/src/common/libflux \
 	$(JANSSON_CFLAGS)
 
