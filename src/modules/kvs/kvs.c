@@ -36,6 +36,7 @@
 #include "src/common/libkvs/kvs_util_private.h"
 #include "src/common/libcontent/content.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libfluxutil/msg_hash.h"
 
 #include "waitqueue.h"
 #include "cache.h"
@@ -77,6 +78,7 @@ struct kvs_ctx {
     char *hash_name;
     unsigned int seq;           /* for commit transactions */
     kvs_checkpoint_t *kcp;
+    zhashx_t *requests;         /* track unfinished requests */
     struct list_head work_queue;
 };
 
@@ -111,9 +113,21 @@ static void kvs_ctx_destroy (struct kvs_ctx *ctx)
         flux_watcher_destroy (ctx->idle_w);
         kvs_checkpoint_destroy (ctx->kcp);
         free (ctx->hash_name);
+        zhashx_destroy (&ctx->requests);
         free (ctx);
         errno = saved_errno;
     }
+}
+
+static void request_tracking_add (struct kvs_ctx *ctx, const flux_msg_t *msg)
+{
+    /* ignore if item already tracked */
+    zhashx_insert (ctx->requests, msg, (flux_msg_t *)msg);
+}
+
+static void request_tracking_remove (struct kvs_ctx *ctx, const flux_msg_t *msg)
+{
+    zhashx_delete (ctx->requests, msg);
 }
 
 static void work_queue_check_append_wrapper (struct kvsroot *root,
@@ -164,6 +178,8 @@ static struct kvs_ctx *kvs_ctx_create (flux_t *h)
             goto error;
     }
     ctx->transaction_merge = 1;
+    if (!(ctx->requests = msg_hash_create (MSG_HASH_TYPE_UUID_MATCHTAG)))
+        goto error;
     list_head_init (&ctx->work_queue);
     return ctx;
 error:
@@ -1443,8 +1459,10 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (!(lh = lookup_common (h, mh, msg, ctx, lookup_request_cb,
                               &stall))) {
-        if (stall)
+        if (stall) {
+            request_tracking_add (ctx, msg);
             return;
+        }
         goto error;
     }
 
@@ -1456,10 +1474,12 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     lookup_destroy (lh);
     json_decref (val);
+    request_tracking_remove (ctx, msg);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    request_tracking_remove (ctx, msg);
     lookup_destroy (lh);
 }
 
@@ -1482,8 +1502,10 @@ static void lookup_plus_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (!(lh = lookup_common (h, mh, msg, ctx, lookup_plus_request_cb,
                               &stall))) {
-        if (stall)
+        if (stall) {
+            request_tracking_add (ctx, msg);
             return;
+        }
         goto error;
     }
 
@@ -1508,10 +1530,12 @@ static void lookup_plus_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     lookup_destroy (lh);
     json_decref (val);
+    request_tracking_remove (ctx, msg);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    request_tracking_remove (ctx, msg);
 }
 
 
@@ -1532,6 +1556,7 @@ static int finalize_transaction_req (treq_t *tr,
             flux_log_error (cbd->ctx->h, "%s: flux_respond_pack", __FUNCTION__);
     }
 
+    request_tracking_remove (cbd->ctx, req);
     return 0;
 }
 
@@ -1630,6 +1655,7 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
+    request_tracking_add (ctx, msg);
     work_queue_check_append (ctx, root);
     return;
 
@@ -1672,8 +1698,10 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
-        if (stall)
+        if (stall) {
+            request_tracking_add (ctx, msg);
             return;
+        }
         goto error;
     }
 
@@ -1730,11 +1758,13 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         }
         flux_future_destroy (f);
     }
+    request_tracking_add (ctx, msg);
     return;
 
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    request_tracking_remove (ctx, msg);
 }
 
 
@@ -1815,6 +1845,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         work_queue_check_append (ctx, root);
     }
 
+    request_tracking_add (ctx, msg);
     return;
 
 error:
@@ -1860,8 +1891,10 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
-        if (stall)
+        if (stall) {
+            request_tracking_add (ctx, msg);
             goto stall;
+        }
         goto error;
     }
 
@@ -1941,11 +1974,13 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         }
         flux_future_destroy (f);
     }
+    request_tracking_add (ctx, msg);
     return;
 
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    request_tracking_remove (ctx, msg);
 stall:
     return;
 }
@@ -1967,8 +2002,10 @@ static void wait_version_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
-        if (stall)
+        if (stall) {
+            request_tracking_add (ctx, msg);
             return;
+        }
         goto error;
     }
 
@@ -1983,6 +2020,7 @@ static void wait_version_request_cb (flux_t *h, flux_msg_handler_t *mh,
             flux_log_error (h, "%s: kvs_wait_version_add", __FUNCTION__);
             goto error;
         }
+        request_tracking_add (ctx, msg);
         return; /* stall */
     }
 
@@ -1991,11 +2029,13 @@ static void wait_version_request_cb (flux_t *h, flux_msg_handler_t *mh,
                            "rootref", root->ref) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
 
+    request_tracking_remove (ctx, msg);
     return;
 
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    request_tracking_remove (ctx, msg);
 }
 
 static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -2027,8 +2067,10 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
          */
         bool stall = false;
         if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
-            if (stall)
+            if (stall) {
+                request_tracking_add (ctx, msg);
                 return;
+            }
             goto error;
         }
     }
@@ -2041,10 +2083,12 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
                            "flags", root->flags,
                            "namespace", root->ns_name) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+    request_tracking_remove (ctx, msg);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    request_tracking_remove (ctx, msg);
 }
 
 static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -3046,6 +3090,15 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done;
+    }
+    if (zhashx_size (ctx->requests) > 0) {
+        /* anything that has not yet completed gets an ENOSYS */
+        const flux_msg_t *msg = zhashx_first (ctx->requests);
+        while (msg) {
+            if (flux_respond_error (ctx->h, msg, ENOSYS, NULL) < 0)
+                flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+            msg = zhashx_next (ctx->requests);
+        }
     }
     /* Checkpoint the KVS root to the content backing store.
      * If backing store is not loaded, silently proceed without checkpoint.

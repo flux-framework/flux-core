@@ -10,6 +10,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux \
+	-I$(top_builddir)/src/common/libfluxutil \
 	$(JANSSON_CFLAGS)
 
 noinst_LTLIBRARIES = libkvs.la
