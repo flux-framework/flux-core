@@ -27,7 +27,7 @@ typedef enum {
  *
  * The key duplicator and destructor are disabled, since the message contains
  * all of the key information.
-
+ *
  * The entry duplicator and destructor are set to flux_msg_incref() and
  * flux_msg_decref() respectively.
  */
