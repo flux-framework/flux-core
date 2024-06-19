@@ -505,7 +505,6 @@ static struct list_constraint *create_hostlist_constraint (
     }
     if (!zlistx_add_end (c->values, hl)) {
         errprintf (errp, "failed to append hostlist structure");
-        hostlist_destroy (hl);
         goto error;
     }
     return c;
