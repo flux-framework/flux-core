@@ -1273,11 +1273,10 @@ static void lookup_wait_error_cb (wait_t *w, int errnum, void *arg)
 }
 
 static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
-                                const flux_msg_t *msg, void *arg,
+                                const flux_msg_t *msg, struct kvs_ctx *ctx,
                                 flux_msg_handler_f replay_cb,
                                 bool *stall)
 {
-    struct kvs_ctx *ctx = arg;
     int flags;
     const char *ns = NULL;
     const char *key;
@@ -1431,11 +1430,12 @@ stall:
 static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
+    struct kvs_ctx *ctx = arg;
     lookup_t *lh;
     json_t *val;
     bool stall = false;
 
-    if (!(lh = lookup_common (h, mh, msg, arg, lookup_request_cb,
+    if (!(lh = lookup_common (h, mh, msg, ctx, lookup_request_cb,
                               &stall))) {
         if (stall)
             return;
@@ -1467,13 +1467,14 @@ error:
 static void lookup_plus_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                     const flux_msg_t *msg, void *arg)
 {
+    struct kvs_ctx *ctx = arg;
     lookup_t *lh;
     json_t *val = NULL;
     const char *root_ref;
     int root_seq;
     bool stall = false;
 
-    if (!(lh = lookup_common (h, mh, msg, arg, lookup_plus_request_cb,
+    if (!(lh = lookup_common (h, mh, msg, ctx, lookup_plus_request_cb,
                               &stall))) {
         if (stall)
             return;
