@@ -9,6 +9,8 @@ will generally cover non-obvious issues/features that a general user
 would be unaware of.
 '
 
+. `dirname $0`/kvs/kvs-helper.sh
+
 . `dirname $0`/sharness.sh
 
 # Size the session to one more than the number of cores, minimum of 4
@@ -509,6 +511,38 @@ test_expect_success 'kvs: test invalid fence arguments on rank 1' '
 test_expect_success 'kvs: test invalid lookup rpc' '
 	${FLUX_BUILD_DIR}/t/kvs/lookup_invalid a-key > lookup_invalid_output &&
 	grep "flux_future_get: Protocol error" lookup_invalid_output
+'
+
+#
+# test ENOSYS on unfinished requests when unloading the KVS module
+#
+# N.B. do this last as we are unloading the kvs module
+#
+
+wait_versionwaiters() {
+	num=$1
+	i=0
+	while [ "$(flux module stats --parse namespace.primary.#versionwaiters kvs 2> /dev/null)" != "${num}" ] \
+	      && [ $i -lt ${KVS_WAIT_ITERS} ]
+	do
+		sleep 0.1
+		i=$((i + 1))
+	done
+	return $(loophandlereturn $i)
+}
+
+# In order to test, wait for a version that will not happen
+test_expect_success NO_CHAIN_LINT 'kvs: ENOSYS returned on unfinished requests on module unload' '
+	WAITCOUNT=$(flux module stats --parse namespace.primary.#versionwaiters kvs) &&
+	WAITCOUNT=$(($WAITCOUNT+1))
+	VERS=$(flux kvs version) &&
+	VERSWAIT=$(($VERS+10)) &&
+	flux kvs wait ${VERSWAIT} 2> enosys.err &
+	pid=$! &&
+	wait_versionwaiters ${WAITCOUNT} &&
+	flux module remove kvs &&
+	! wait $pid &&
+	grep "Function not implemented" enosys.err
 '
 
 test_done
