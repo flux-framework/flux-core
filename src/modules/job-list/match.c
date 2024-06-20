@@ -505,7 +505,6 @@ static struct list_constraint *create_hostlist_constraint (
     }
     if (!zlistx_add_end (c->values, hl)) {
         errprintf (errp, "failed to append hostlist structure");
-        hostlist_destroy (hl);
         goto error;
     }
     return c;
@@ -514,6 +513,95 @@ static struct list_constraint *create_hostlist_constraint (
     list_constraint_destroy (c);
     return NULL;
 }
+
+static int match_ranks (struct list_constraint *c,
+                        const struct job *job,
+                        unsigned int *comparisons,
+                        flux_error_t *errp)
+{
+    struct idset *idset = zlistx_first (c->values);
+    size_t n, m;
+
+    /* ranks may not exist if job never ran */
+    if (!job->ranks)
+        return 0;
+    if (!job->ranks_idset) {
+        /* hack to remove const */
+        struct job *jobtmp = (struct job *)job;
+        if (!(jobtmp->ranks_idset = idset_decode (job->ranks)))
+            return 0;
+    }
+    /* Account for all ranks being compared before calling
+     * inc_check_comparison. This is the smallest of the job or
+     * comparison idset
+     */
+    m = idset_count (job->ranks_idset);
+    n = idset_count (idset);
+    *comparisons += (m < n ? m : n) - 1;
+    if (inc_check_comparison (c->mctx, comparisons, errp) < 0)
+        return -1;
+    return idset_has_intersection (job->ranks_idset, idset);
+}
+
+
+/* zlistx_set_destructor */
+static void wrap_idset_destroy (void **item)
+{
+    if (item) {
+        struct idset *idset = *item;
+        idset_destroy (idset);
+        (*item) = NULL;
+    }
+}
+
+static struct list_constraint *create_ranks_constraint (
+    struct match_ctx *mctx,
+    json_t *values,
+    flux_error_t *errp)
+{
+    struct list_constraint *c;
+    struct idset *idset = NULL;
+    json_t *entry;
+    size_t index;
+
+    if (!(c = list_constraint_new (mctx,
+                                   match_ranks,
+                                   wrap_idset_destroy,
+                                   errp)))
+        return NULL;
+
+    if (!(idset = idset_create (0, IDSET_FLAG_AUTOGROW))) {
+        errprintf (errp, "failed to create idset structure");
+        goto error;
+    }
+    json_array_foreach (values, index, entry) {
+        const char *ids;
+        idset_error_t error;
+        if (!json_is_string (entry)
+            || !(ids = json_string_value (entry))) {
+            errprintf (errp, "ranks value must be a string");
+            goto error;
+        }
+        if (idset_decode_add (idset, ids, -1, &error) < 0) {
+            errprintf (errp, "ranks value '%s': %s", ids, error.text);
+            goto error;
+        }
+    }
+    if (idset_count (idset) > mctx->max_hostlist) {
+        errprintf (errp, "too many ranks specified");
+        goto error;
+    }
+    if (!zlistx_add_end (c->values, idset)) {
+        errprintf (errp, "failed to append idset structure");
+        goto error;
+    }
+    return c;
+ error:
+    idset_destroy (idset);
+    list_constraint_destroy (c);
+    return NULL;
+}
+
 
 static int match_timestamp (struct list_constraint *c,
                             const struct job *job,
@@ -754,6 +842,8 @@ struct list_constraint *list_constraint_create (struct match_ctx *mctx,
                 return create_results_constraint (mctx, values, errp);
             else if (streq (op, "hostlist"))
                 return create_hostlist_constraint (mctx, values, errp);
+            else if (streq (op, "ranks"))
+                return create_ranks_constraint (mctx, values, errp);
             else if (streq (op, "t_submit")
                      || streq (op, "t_depend")
                      || streq (op, "t_run")

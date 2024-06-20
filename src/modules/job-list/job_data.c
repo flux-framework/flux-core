@@ -36,6 +36,7 @@ void job_destroy (void *data)
         free (job->ranks);
         free (job->nodelist);
         hostlist_destroy (job->nodelist_hl);
+        idset_destroy (job->ranks_idset);
         json_decref (job->annotations);
         grudgeset_destroy (job->dependencies);
         json_decref (job->jobspec);

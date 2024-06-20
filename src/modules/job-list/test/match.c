@@ -103,6 +103,7 @@ static struct job *setup_job (uint32_t userid,
                               const char *name,
                               const char *queue,
                               const char *nodelist,
+                              const char *ranks,
                               flux_job_state_t state,
                               flux_job_result_t result,
                               double t_submit,
@@ -124,6 +125,11 @@ static struct job *setup_job (uint32_t userid,
         /* N.B. internally is not const, so strdup it */
         if (!(job->nodelist = strdup (nodelist)))
             BAIL_OUT ("failed to strdup nodelist");
+    }
+   if (ranks) {
+        /* N.B. internally is not const, so strdup it */
+        if (!(job->ranks = strdup (ranks)))
+            BAIL_OUT ("failed to strdup ranks");
     }
     job->state = state;
     if (state) {
@@ -169,6 +175,7 @@ static struct list_constraint *create_list_constraint (const char *constraint)
 static void test_basic_special_cases (void)
 {
     struct job *job = setup_job (0,
+                                 NULL,
                                  NULL,
                                  NULL,
                                  NULL,
@@ -265,6 +272,7 @@ static void test_basic_userid (void)
                              NULL,
                              NULL,
                              NULL,
+                             NULL,
                              0,
                              0,
                              0.0,
@@ -351,6 +359,7 @@ static void test_basic_name (void)
             int rv;
             job = setup_job (0,
                              tests->name,
+                             NULL,
                              NULL,
                              NULL,
                              0,
@@ -441,6 +450,7 @@ static void test_basic_queue (void)
                              NULL,
                              tests->queue,
                              NULL,
+                             NULL,
                              0,
                              0,
                              0.0,
@@ -530,6 +540,7 @@ static void test_basic_states (void)
             flux_error_t error;
             int rv;
             job = setup_job (0,
+                             NULL,
                              NULL,
                              NULL,
                              NULL,
@@ -625,6 +636,7 @@ static void test_basic_results (void)
             flux_error_t error;
             int rv;
             job = setup_job (0,
+                             NULL,
                              NULL,
                              NULL,
                              NULL,
@@ -755,6 +767,7 @@ static void test_basic_hostlist (void)
                              NULL,
                              NULL,
                              tests->nodelist,
+                             NULL,
                              0,
                              0,
                              0.0,
@@ -766,6 +779,115 @@ static void test_basic_hostlist (void)
             ok (rv == tests->expected,
                 "basic host job match test #%d/#%d",
                 index, index2);
+            job_destroy (job);
+            index2++;
+            tests++;
+        }
+
+        index++;
+        list_constraint_destroy (c);
+        ctests++;
+    }
+}
+
+
+struct basic_ranks_test {
+    const char *ranks;
+    bool expected;
+    bool end;                   /* ranks can be NULL */
+};
+
+struct basic_ranks_constraint_test {
+    const char *constraint;
+    struct basic_ranks_test tests[9];
+} basic_ranks_tests[] = {
+    {
+        "{ \"ranks\": [ ] }",
+        {
+            /* N.B. ranks can potentially be NULL */
+            {  NULL, false, false, },
+            {  NULL, false,  true, },
+        },
+    },
+    {
+        "{ \"ranks\": [ \"1\" ] }",
+        {
+            /* N.B. ranks can potentially be NULL */
+            {  NULL, false, false, },
+            { "1",    true, false, },
+            { "2",   false, false, },
+            { "1-2",  true, false, },
+            { "2-3", false, false, },
+            {  NULL, false, true, },
+        },
+    },
+    {
+        "{ \"ranks\": [ \"1-2\" ] }",
+        {
+            /* N.B. ranks can potentially be NULL */
+            {  NULL, false, false, },
+            { "1",    true, false, },
+            { "2",    true, false, },
+            { "1-2",  true, false, },
+            { "2-3",  true, false, },
+            { "3-4", false, false, },
+            {  NULL, false,  true, },
+        },
+    },
+    {
+        "{ \"ranks\": [ \"1\", \"2\", \"3\" ] }",
+        {
+            /* N.B. ranks can potentially be NULL */
+            {  NULL, false, false, },
+            { "1",    true, false, },
+            { "2",    true, false, },
+            { "1-2",  true, false, },
+            { "2-3",  true, false, },
+            { "3-4",  true, false, },
+            { "4",   false, false, },
+            { "4-5", false, false, },
+            {  NULL, false,  true, },
+        },
+    },
+    {
+        NULL,
+        {
+            { NULL, false,  true, },
+        },
+    },
+};
+
+static void test_basic_ranks (void)
+{
+    struct basic_ranks_constraint_test *ctests = basic_ranks_tests;
+    int index = 0;
+
+    while (ctests->constraint) {
+        struct basic_ranks_test *tests = ctests->tests;
+        struct list_constraint *c;
+        int index2 = 0;
+
+        c = create_list_constraint (ctests->constraint);
+        while (!tests->end) {
+            struct job *job;
+            flux_error_t error;
+            int rv;
+            job = setup_job (0,
+                             NULL,
+                             NULL,
+                             NULL,
+                             tests->ranks,
+                             0,
+                             0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0);
+            rv = job_match (job, c, &error);
+            ok (rv == tests->expected,
+                "basic rank job match test #%d/#%d job->ranks = %s (expected %d got %d)",
+                index, index2, tests->ranks, tests->expected, rv);
             job_destroy (job);
             index2++;
             tests++;
@@ -1056,6 +1178,7 @@ static void test_basic_timestamp (void)
                              NULL,
                              NULL,
                              NULL,
+                             NULL,
                              tests->state,
                              0,
                              tests->t_submit,
@@ -1264,6 +1387,7 @@ static void test_basic_conditionals (void)
                              tests->name,
                              NULL,
                              NULL,
+                             NULL,
                              0,
                              0,
                              0.0,
@@ -1292,6 +1416,7 @@ struct realworld_test {
     const char *name;
     const char *queue;
     const char *nodelist;
+    const char *ranks;
     flux_job_state_t state;
     flux_job_result_t result;
     double t_run;
@@ -1317,6 +1442,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_DEPEND,
                 0,
                 0.0,
@@ -1327,6 +1453,7 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
@@ -1339,6 +1466,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 0.0,
@@ -1350,6 +1478,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 0.0,
@@ -1358,6 +1487,7 @@ struct realworld_constraint_test {
             },
             {
                 0,
+                NULL,
                 NULL,
                 NULL,
                 NULL,
@@ -1383,6 +1513,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_FAILED,
                 0.0,
@@ -1393,6 +1524,7 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_CANCELED,
@@ -1405,6 +1537,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_TIMEOUT,
                 0.0,
@@ -1415,6 +1548,7 @@ struct realworld_constraint_test {
                 43,
                 "foo",
                 "batch",
+                NULL,
                 NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_FAILED,
@@ -1427,6 +1561,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_DEPEND,
                 0,
                 0.0,
@@ -1438,6 +1573,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
                 0.0,
@@ -1446,6 +1582,7 @@ struct realworld_constraint_test {
             },
             {
                 0,
+                NULL,
                 NULL,
                 NULL,
                 NULL,
@@ -1472,16 +1609,6 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
-                FLUX_JOB_STATE_DEPEND,
-                0,
-                0.0,
-                0.0,
-                true,
-            },
-            {
-                42,
-                "foo",
-                "debug",
                 NULL,
                 FLUX_JOB_STATE_DEPEND,
                 0,
@@ -1493,6 +1620,19 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "debug",
+                NULL,
+                NULL,
+                FLUX_JOB_STATE_DEPEND,
+                0,
+                0.0,
+                0.0,
+                true,
+            },
+            {
+                42,
+                "foo",
+                "debug",
+                NULL,
                 NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
@@ -1505,6 +1645,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_DEPEND,
                 0,
                 0.0,
@@ -1515,6 +1656,7 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
@@ -1527,6 +1669,7 @@ struct realworld_constraint_test {
                 "foo",
                 "gpu",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_DEPEND,
                 0,
                 0.0,
@@ -1535,6 +1678,7 @@ struct realworld_constraint_test {
             },
             {
                 0,
+                NULL,
                 NULL,
                 NULL,
                 NULL,
@@ -1562,6 +1706,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
                 0.0,
@@ -1572,6 +1717,7 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 NULL,
                 FLUX_JOB_STATE_CLEANUP,
                 0,
@@ -1584,6 +1730,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
                 0.0,
@@ -1594,6 +1741,7 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "debug",
+                NULL,
                 NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
@@ -1606,6 +1754,7 @@ struct realworld_constraint_test {
                 "bar",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
                 0.0,
@@ -1617,6 +1766,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 0.0,
@@ -1625,6 +1775,7 @@ struct realworld_constraint_test {
             },
             {
                 0,
+                NULL,
                 NULL,
                 NULL,
                 NULL,
@@ -1650,6 +1801,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_SCHED,
                 0,
                 0.0,
@@ -1660,6 +1812,7 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
@@ -1672,6 +1825,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 0.0,
@@ -1683,6 +1837,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 NULL,
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 0.0,
@@ -1691,6 +1846,7 @@ struct realworld_constraint_test {
             },
             {
                 0,
+                NULL,
                 NULL,
                 NULL,
                 NULL,
@@ -1716,6 +1872,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 "node[1-3]",
+                "0-2",
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 0.0,
@@ -1727,6 +1884,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 "node[1-3]",
+                "0-2",
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 0.0,
@@ -1738,6 +1896,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 "node[2-4]",
+                "1-3",
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 0.0,
@@ -1749,6 +1908,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 "node[3-4]",
+                "2-3",
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 0.0,
@@ -1757,6 +1917,7 @@ struct realworld_constraint_test {
             },
             {
                 0,
+                NULL,
                 NULL,
                 NULL,
                 NULL,
@@ -1784,6 +1945,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 "node[1-3]",
+                "0-2",
                 FLUX_JOB_STATE_RUN,
                 0,
                 1000.0,
@@ -1795,6 +1957,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 "node[1-3]",
+                "0-2",
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 1000.0,
@@ -1806,6 +1969,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 "node[2-3]",
+                "1-2",
                 FLUX_JOB_STATE_RUN,
                 0,
                 1000.0,
@@ -1817,6 +1981,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 "node[2-3]",
+                "1-2",
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 1000.0,
@@ -1828,6 +1993,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 "node[2-3]",
+                "1-2",
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 1000.0,
@@ -1839,6 +2005,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 "node[3-4]",
+                "2-3",
                 FLUX_JOB_STATE_RUN,
                 0,
                 1000.0,
@@ -1850,6 +2017,7 @@ struct realworld_constraint_test {
                 "foo",
                 "batch",
                 "node[3-4]",
+                "2-3",
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
                 1000.0,
@@ -1858,6 +2026,7 @@ struct realworld_constraint_test {
             },
             {
                 0,
+                NULL,
                 NULL,
                 NULL,
                 NULL,
@@ -1874,6 +2043,7 @@ struct realworld_constraint_test {
         {
             {
                 0,
+                NULL,
                 NULL,
                 NULL,
                 NULL,
@@ -1906,6 +2076,7 @@ static void test_realworld (void)
                              tests->name,
                              tests->queue,
                              tests->nodelist,
+                             tests->ranks,
                              tests->state,
                              tests->result,
                              0.0,
@@ -1941,6 +2112,7 @@ int main (int argc, char *argv[])
     test_basic_results ();
     test_corner_case_hostlist ();
     test_basic_hostlist ();
+    test_basic_ranks ();
     test_basic_timestamp ();
     test_basic_conditionals ();
     test_realworld ();

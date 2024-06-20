@@ -15,6 +15,7 @@
 #include <jansson.h>
 
 #include "src/common/libhostlist/hostlist.h"
+#include "src/common/libidset/idset.h"
 #include "src/common/libutil/grudgeset.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
@@ -56,6 +57,7 @@ struct job {
     char *ranks;
     char *nodelist;
     struct hostlist *nodelist_hl; /* cache of nodelist in hl form */
+    struct idset *ranks_idset;    /* cache of ranks in idset form */
     double expiration;
     int wait_status;
     bool success;
