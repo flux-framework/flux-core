@@ -92,7 +92,7 @@ static void kvsroot_destroy (void *data)
         if (root->wait_version_list)
             zlist_destroy (&root->wait_version_list);
         if (root->setroot_queue)
-            zlist_destroy (&root->setroot_queue);
+            flux_msglist_destroy (root->setroot_queue);
         free (data);
     }
 }

@@ -52,6 +52,6 @@ int job_match (const struct job *job,
 
 int job_match_config_reload (struct match_ctx *mctx,
                              const flux_conf_t *conf,
-                             flux_error_t *errp);;
+                             flux_error_t *errp);
 
 #endif /* !HAVE_JOB_LIST_MATCH_H */
