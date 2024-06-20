@@ -575,9 +575,9 @@ static int exec_kill (struct jobinfo *job, int signum)
     flux_future_t *f;
 
     if (job->multiuser)
-        f = bulk_exec_imp_kill (exec, config_get_imp_path (), signum);
+        f = bulk_exec_imp_kill (exec, config_get_imp_path (), NULL, signum);
     else
-        f = bulk_exec_kill (exec, signum);
+        f = bulk_exec_kill (exec, NULL, signum);
     if (!f) {
         if (errno != ENOENT)
             flux_log_error (job->h, "%s: bulk_exec_kill", idf58 (job->id));
