@@ -436,6 +436,51 @@ const struct taskmap *flux_shell_get_taskmap (flux_shell_t *shell)
     return shell->info->taskmap;
 }
 
+static struct hostlist *hostlist_from_R (flux_shell_t *shell)
+{
+    size_t i;
+    json_t *nodelist;
+    json_t *val;
+    struct hostlist *hl = NULL;
+
+    if (flux_shell_info_unpack (shell,
+                                "{s:{s:{s:o}}}",
+                                "R",
+                                 "execution",
+                                  "nodelist", &nodelist) < 0) {
+        shell_log_errno ("unable to get job nodelist");
+        return NULL;
+    }
+    if (!(hl = hostlist_create ())) {
+        shell_log_errno ("hostlist_create");
+        return NULL;
+    }
+    json_array_foreach (nodelist, i, val) {
+        const char *host = json_string_value (val);
+        if (!host)
+            goto error;
+        if (hostlist_append (hl, host) < 0) {
+            shell_log_errno ("hostlist_append %s", host);
+            goto error;
+        }
+    }
+    return hl;
+error:
+    hostlist_destroy (hl);
+    return NULL;
+}
+
+const struct hostlist *flux_shell_get_hostlist (flux_shell_t *shell)
+{
+    if (!shell || !shell->info) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!shell->info->hostlist)
+        shell->info->hostlist = hostlist_from_R (shell);
+    return shell->info->hostlist;
+}
+
 static json_t *flux_shell_get_info_object (flux_shell_t *shell)
 {
     json_error_t err;

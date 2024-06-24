@@ -13,6 +13,7 @@
 
 #include <flux/core.h>
 #include <flux/taskmap.h>
+#include <flux/hostlist.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -101,6 +102,10 @@ int flux_shell_get_hwloc_xml (flux_shell_t *shell, const char **xmlp);
 /*  Return the current shell taskmap
  */
 const struct taskmap *flux_shell_get_taskmap (flux_shell_t *shell);
+
+/*  Return the list of hosts assigned to this job as a hostlist
+ */
+const struct hostlist *flux_shell_get_hostlist (flux_shell_t *shell);
 
 /*  Return shell info as a JSON string.
  *  {
