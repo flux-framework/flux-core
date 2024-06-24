@@ -101,40 +101,6 @@ error:
     return hl;
 }
 
-static struct hostlist *hostlist_from_R (flux_shell_t *shell)
-{
-    size_t i;
-    json_t *nodelist;
-    json_t *val;
-    struct hostlist *hl = NULL;
-
-    if (flux_shell_info_unpack (shell,
-                                "{s:{s:{s:o}}}",
-                                "R",
-                                 "execution",
-                                  "nodelist", &nodelist) < 0) {
-        shell_log_errno ("unable to get job nodelist");
-        return NULL;
-    }
-    if (!(hl = hostlist_create ())) {
-        shell_log_errno ("hostlist_create");
-        return NULL;
-    }
-    json_array_foreach (nodelist, i, val) {
-        const char *host = json_string_value (val);
-        if (!host)
-            goto error;
-        if (hostlist_append (hl, host) < 0) {
-            shell_log_errno ("hostlist_append %s", host);
-            goto error;
-        }
-    }
-    return hl;
-error:
-    hostlist_destroy (hl);
-    return NULL;
-}
-
 static int map_hostfile (flux_plugin_t *p,
                          const char *topic,
                          flux_plugin_arg_t *args,
@@ -160,8 +126,12 @@ static int map_hostfile (flux_plugin_t *p,
         return -1;
     }
 
+    /*  Note: the result of flux_shell_get_hostlist(3) is copied because
+     *  functions such as hostlist_find(3) modify the hostlist cursor, so
+     *  a `const struct hostlist` can't be used here.
+     */
     if (!(hl = hostlist_from_file (value))
-        || !(nodelist = hostlist_from_R (shell))) {
+        || !(nodelist = hostlist_copy (flux_shell_get_hostlist (shell)))) {
         shell_log_error ("failed to get hostlists from file and R");
         goto out;
     }
