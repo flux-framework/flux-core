@@ -554,6 +554,8 @@ class Jobspec(object):
         set job attribute
         """
         if not key.startswith("attributes."):
+            if not key.startswith(("user.", "system.")):
+                key = "system." + key
             key = "attributes." + key
         set_treedict(self.jobspec, key, val)
 

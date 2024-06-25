@@ -1046,18 +1046,20 @@ class MiniCmd:
             for keyval in args.setattr:
                 key, val = parse_jobspec_keyval("--setattr", keyval)
 
-                #  If key does not explicitly start with ".", "system."
+                #  If key does not explicitly start with ".", "attributes.", "system."
                 #   or "user.", then "system." is implied. This is a
                 #   meant to be a usability enhancement since almost all
                 #   uses of --setattr will target attributes.system.
                 #
-                if not key.startswith((".", "user.", "system.")):
+                #  Allow users to set keys at the top level by
+                #   specifying "." before the key name, e.g. the key
+                #   ".foo" sets "attributes.foo".
+                if not key.startswith((".", "attributes.", "user.", "system.")):
                     key = "system." + key
+                elif key.startswith("."):
+                    key = "attributes" + key
 
-                #  Allow key to begin with "." which simply forces the key
-                #   to start at the top level (since .system is not applied
-                #   due to above conditional)
-                jobspec.setattr(key.lstrip("."), val)
+                jobspec.setattr(key, val)
 
         if args.add_file is not None:
             for arg in args.add_file:

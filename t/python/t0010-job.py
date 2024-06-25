@@ -784,6 +784,29 @@ class TestJob(unittest.TestCase):
         except OSError:
             pass
 
+    def test_35_setattr_defaults(self):
+        """Test setattr setting defaults"""
+        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
+        jobspec.setattr("cow", 1)
+        jobspec.setattr("system.cat", 2)
+        jobspec.setattr("user.dog", 3)
+        jobspec.setattr("attributes.system.chicken", 4)
+        jobspec.setattr("attributes.user.duck", 5)
+        jobspec.setattr("attributes.goat", 6)
+        # N.B. setattr defaults "key" to "attributes.system.key"
+        # but getattr defaults "key" to "attributes.key"
+        self.assertEqual(jobspec.getattr("system.cow"), 1)
+        self.assertEqual(jobspec.getattr("attributes.system.cow"), 1)
+        self.assertEqual(jobspec.getattr("system.cat"), 2)
+        self.assertEqual(jobspec.getattr("attributes.system.cat"), 2)
+        self.assertEqual(jobspec.getattr("user.dog"), 3)
+        self.assertEqual(jobspec.getattr("attributes.user.dog"), 3)
+        self.assertEqual(jobspec.getattr("system.chicken"), 4)
+        self.assertEqual(jobspec.getattr("attributes.system.chicken"), 4)
+        self.assertEqual(jobspec.getattr("user.duck"), 5)
+        self.assertEqual(jobspec.getattr("attributes.user.duck"), 5)
+        self.assertEqual(jobspec.getattr("attributes.goat"), 6)
+
 
 if __name__ == "__main__":
     from subflux import rerun_under_flux
