@@ -252,6 +252,7 @@ man_pages = [
     ('man3/flux_shell_get_jobspec_info', 'flux_shell_jobspec_info_unpack', 'Manage shell jobspec summary information', [author], 3),
     ('man3/flux_shell_get_jobspec_info', 'flux_shell_get_jobspec_info', 'Manage shell jobspec summary information', [author], 3),
     ('man3/flux_shell_get_taskmap', 'flux_shell_get_taskmap', 'Get shell task mapping', [author], 3),
+    ('man3/flux_shell_get_hostlist', 'flux_shell_get_hostlist', 'Get the list of hosts in the current job', [author], 3),
     ('man3/flux_shell_getenv', 'flux_shell_get_environ', 'Get and set global environment variables', [author], 3),
     ('man3/flux_shell_getenv', 'flux_shell_setenvf', 'Get and set global environment variables', [author], 3),
     ('man3/flux_shell_getenv', 'flux_shell_unsetenv', 'Get and set global environment variables', [author], 3),

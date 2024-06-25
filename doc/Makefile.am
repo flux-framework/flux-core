@@ -79,6 +79,7 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_shell_get_info.3 \
 	man3/flux_shell_get_jobspec_info.3 \
 	man3/flux_shell_get_taskmap.3 \
+	man3/flux_shell_get_hostlist.3 \
 	man3/flux_shell_getenv.3 \
 	man3/flux_shell_getopt.3 \
 	man3/flux_shell_killall.3 \
