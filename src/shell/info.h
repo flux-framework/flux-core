@@ -14,6 +14,7 @@
 #include <flux/core.h>
 #include <flux/shell.h>
 #include <flux/taskmap.h>
+#include <flux/hostlist.h>
 
 #include <jansson.h>
 #include <stdbool.h>
@@ -33,6 +34,7 @@ struct shell_info {
     struct rcalc_rankinfo rankinfo;
     struct taskmap *taskmap;
     struct idset *taskids;
+    struct hostlist *hostlist;
     char *hwloc_xml;
     flux_future_t *R_watch_future;
 };

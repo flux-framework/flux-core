@@ -30,6 +30,9 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
+#include <flux/taskmap.h>
+#include <flux/hostlist.h>
+
 #include <jansson.h>
 #include <assert.h>
 
@@ -46,6 +49,8 @@ static const double default_timeout = 30.;
 
 struct shell_doom {
     flux_shell_t *shell;
+    const struct taskmap *map;
+    struct hostlist *hl;
     bool done; // event already posted (shell rank 0) or message sent (> 0)
     flux_watcher_t *timer;
     double timeout;
@@ -79,6 +84,18 @@ static int get_exit_rank (json_t *task_info)
     return rank;
 }
 
+static const char *doom_exit_host (struct shell_doom *doom)
+{
+    int nth;
+    if (!doom->map || !doom->hl)
+        return "unknown";
+    if (doom->lost_shell)
+        nth = doom->exit_rank;
+    else
+        nth = taskmap_nodeid (doom->map, doom->exit_rank);
+    return hostlist_nth (doom->hl, nth);
+}
+
 static void doom_check (struct shell_doom *doom,
                         int rank,
                         int exitcode,
@@ -87,11 +104,24 @@ static void doom_check (struct shell_doom *doom,
     doom->exit_rank = rank;
     doom->exit_rc = exitcode;
     doom->lost_shell = lost_shell;
+
+    /* Get copy of shell taskmap and hostlist to include hostnames in
+     * generated errors. Failures here are ignored and result in an
+     * "unknown" hostname generated in errors.
+     */
+    doom->map = flux_shell_get_taskmap (doom->shell);
+
+    /* Note: copy hostlist here because functions like hostlist_find(3)
+     * modify the hostlist cursor, therefore we need a non-const.
+     */
+    doom->hl = hostlist_copy (flux_shell_get_hostlist (doom->shell));
+
     if (doom->exit_on_error && doom->exit_rc != 0) {
         shell_die (doom->exit_rc,
-                   "%srank %d failed and exit-on-error is set",
+                   "%srank %d on host %s failed and exit-on-error is set",
                    doom->lost_shell ? "shell " : "",
-                   doom->exit_rank);
+                   doom->exit_rank,
+                   doom_exit_host (doom));
     }
     else if (doom->timeout != TIMEOUT_NONE)
         flux_watcher_start (doom->timer);
@@ -176,9 +206,10 @@ static void doom_timeout (flux_reactor_t *r,
 
     fsd_format_duration (fsd, sizeof (fsd), doom->timeout);
     shell_die (doom->exit_rc,
-               "%srank %d exited and exit-timeout=%s has expired",
+               "%srank %d on host %s exited and exit-timeout=%s has expired",
                doom->lost_shell ? "shell " : "",
                doom->exit_rank,
+               doom_exit_host (doom),
                fsd);
 }
 
@@ -230,6 +261,7 @@ static void doom_destroy (struct shell_doom *doom)
     if (doom) {
         int saved_errno = errno;
         flux_watcher_destroy (doom->timer);
+        hostlist_destroy (doom->hl);
         free (doom);
         errno = saved_errno;
     }
