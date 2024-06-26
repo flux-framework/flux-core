@@ -2014,6 +2014,46 @@ _flux_broker()
     return 0
 }
 
+# flux-housekeeping(1) completions
+_flux_housekeeping()
+{
+    local cmd=$1
+    local subcmds="list kill"
+    local split=false
+    list_OPTS="\
+        -o --format= \
+        -n --no-header \
+    "
+    kill_OPTS="\
+        -s --signal= \
+        -t --targets= \
+    "
+    _flux_split_longopt && split=true
+    case $prev in
+        --format | -!(-*)o)
+            _flux_complete_format_name flux housekeeping list
+            return
+            ;;
+    esac
+    if [[ $cmd != "housekeeping" ]]; then
+        if [[ $cur != -* ]]; then
+            if _flux_contains_word ${cmd} "kill"; then
+                hk_active=$(flux housekeeping list -no $(_flux_id_fmt $cur))
+                COMPREPLY=( $(compgen -W "${hk_active}" -- "$cur") )
+                return 0
+            fi
+        fi
+        var="${cmd//-/_}_OPTS"
+        COMPREPLY=( $(compgen -W "${!var}" -- "$cur") )
+        if [[ "${COMPREPLY[@]}" == *= ]]; then
+            # no space if suggestions ends with '='
+            compopt -o nospace
+        fi
+    else
+        COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
+    fi
+}
+
 _flux_core()
 {
     local cur prev cmd subcmd matched
@@ -2135,6 +2175,9 @@ _flux_core()
         # reset to defaults and let readline take over
         compopt -o default
         COMPREPLY=()
+        ;;
+    housekeeping)
+        _flux_housekeeping $subcmd
         ;;
     -*)
         COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )
