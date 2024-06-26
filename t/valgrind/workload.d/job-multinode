@@ -1,0 +1,6 @@
+#!/bin/bash -e
+
+NJOBS=${NJOBS:-2}
+
+flux submit --cc="1-$NJOBS" -N2 --wait hostname
+
