@@ -13,7 +13,7 @@
 
 #include <flux/core.h>
 
-#include "msg_hash.h"
+#include "src/common/libfluxutil/msg_hash.h"
 
 typedef void (*rpc_respond_f)(const flux_msg_t *msg, void *arg);
 
