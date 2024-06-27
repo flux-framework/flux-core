@@ -139,7 +139,8 @@ static void output_cb (struct bulk_exec *exec,
     const char *cmd = flux_cmd_arg (flux_subprocess_get_cmd (p), 0);
 
     if (streq (stream, "stdout")) {
-        if (streq (data, "enter\n")
+        if (len == 6
+            && strncmp (data, "enter\n", 6) == 0
             && exec_barrier_enter (exec) < 0) {
             jobinfo_fatal_error (job,
                                  errno,
