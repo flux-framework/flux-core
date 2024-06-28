@@ -146,3 +146,15 @@
    obj:/usr/lib64/libgcrypt.so.20.2.5
    ...
 }
+{
+   <issue_5705>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:calloc
+   ...
+   fun:hwloc_cuda_discover
+   fun:hwloc_discover_by_phase
+   fun:hwloc_discover
+   fun:hwloc_topology_load
+   ...
+}
