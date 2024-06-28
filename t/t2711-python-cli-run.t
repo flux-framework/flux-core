@@ -55,7 +55,9 @@ test_expect_success 'flux run -vvv produces exec events on stderr' '
 	flux run -vvv hostname 2>vvv.err &&
 	grep complete vvv.err
 '
-
+test_expect_success 'flux run waits for clean event by default' '
+	grep clean vvv.err
+'
 test_expect_success 'flux run --cwd works' '
 	mkdir cwd_test &&
 	flux run --cwd=$(realpath cwd_test) pwd > cwd.out &&
