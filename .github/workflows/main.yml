@@ -1,4 +1,9 @@
-on: [pull_request, push, merge_group]
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  merge_group:
 name: ci
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
