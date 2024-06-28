@@ -1279,13 +1279,13 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_get_reactor");
 
     /*  Check for the event name that attach should wait for in the
-     *   main job eventlog. The default is the "finish" event.
-     *   If the event never appears in the eventlog, flux-job attach
-     *   will still exit after the 'clean' event, since the job-info
-     *   module reponds with ENODATA after the final event, which by
-     *   definition is "clean".
+     *   main job eventlog. The default is the "clean" event.
+     *   If an event other than "clean" is specified, but never appears
+     *   in the eventlog, flux-job attach will still exit after the 'clean'
+     *   event, since the job-info module reponds with ENODATA after the
+     *   final event, which by definition is "clean".
      */
-    ctx.wait_event = optparse_get_str (p, "wait-event", "finish");
+    ctx.wait_event = optparse_get_str (p, "wait-event", "clean");
 
     if (optparse_hasopt (ctx.p, "debug")
         || optparse_hasopt (ctx.p, "debug-emulate")) {
