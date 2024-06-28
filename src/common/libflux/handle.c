@@ -25,6 +25,7 @@
 #include <sys/syscall.h>
 #endif
 
+#include "src/common/libflux/plugin_private.h"
 #include "src/common/librouter/rpc_track.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
@@ -273,7 +274,7 @@ static connector_init_f *find_connector_dso (const char *scheme,
         errno = ENOENT;
         goto error;
     }
-    if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL | FLUX_DEEPBIND))) {
+    if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL | plugin_deepbind ()))) {
         errprintf (errp, "dlopen: %s: %s", path, dlerror ());
         errno = EINVAL;
         goto error;

@@ -87,6 +87,7 @@ libflux_la_SOURCES = \
 	service.c \
 	version.c \
 	plugin.c \
+	plugin_private.h \
 	sync.c \
 	disconnect.c \
 	stats.c \
