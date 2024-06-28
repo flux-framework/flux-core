@@ -377,9 +377,9 @@ static void server_exec_cb (flux_t *h,
     }
 
     if (flux_subprocess_aux_set (p,
-                                msgkey,
-                                (void *)flux_msg_incref (msg),
-                                (flux_free_f)flux_msg_decref) < 0) {
+                                 msgkey,
+                                 (void *)flux_msg_incref (msg),
+                                 (flux_free_f)flux_msg_decref) < 0) {
         flux_msg_decref (msg);
         goto error;
     }
