@@ -854,14 +854,19 @@ _flux_queue()
         -h --help \
         -q --queue= \
         -a --all \
+        --quiet \
+        -v --verbose \
+        --nocheckpoint \
     "
     local start_OPTS="\
         -h --help \
+        -q --queue= \
         -v --verbose \
         --quiet \
     "
     local stop_OPTS="\
         -h --help \
+        -q --queue= \
         -v --verbose \
         --quiet \
     "
@@ -2125,6 +2130,11 @@ _flux_core()
         ;;
     broker)
         _flux_broker $subcmd
+        ;;
+    python)
+        # reset to defaults and let readline take over
+        compopt -o default
+        COMPREPLY=()
         ;;
     -*)
         COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )
