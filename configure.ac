@@ -599,6 +599,10 @@ AC_CONFIG_FILES( \
   etc/flux-hostlist.pc \
   etc/flux-taskmap.pc \
   etc/flux.service \
+  etc/flux-prolog@.service \
+  etc/flux-epilog@.service \
+  src/cmd/flux-run-prolog \
+  src/cmd/flux-run-epilog \
   doc/Makefile \
   doc/test/Makefile \
   t/Makefile \

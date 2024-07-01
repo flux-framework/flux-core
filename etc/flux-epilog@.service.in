@@ -1,0 +1,9 @@
+[Unit]
+Description=Epilog for Flux job %I
+CollectMode=inactive-or-failed
+
+[Service]
+Type=oneshot
+EnvironmentFile=-@X_RUNSTATEDIR@/flux-epilog@%I.env
+ExecStart=@X_SYSCONFDIR@/flux/system/epilog
+ExecStopPost=-rm -f @X_RUNSTATEDIR@/flux-epilog@%I.env

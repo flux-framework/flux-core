@@ -611,21 +611,30 @@ prolog and epilog.
 When using ``flux perilog-run`` to execute job prolog and epilog, the
 job-manager prolog/epilog feature is being used to execute a privileged
 prolog/epilog across the nodes/ranks assigned to a job, via the
-flux-security IMP "run" command support. Therefore, each of these
-components need to be configured, which is explained in the steps below.
+flux-security IMP "run" command support.  To ensure that the scripts
+are contained so they can be reliably stopped, systemd service
+units are provided for the site-provided prolog and epilog along with
+launch scripts.
 
- 1. Configure the IMP such that it will allow the system instance user
-    to execute a prolog and epilog script or command as root.
+Configuration consists of the following steps:
+
+ 0. Install site scripts to ``/etc/flux/system/prolog`` and
+    ``/etc/flux/system/epilog``.  These paths are referenced by the
+    systemd unit files and must match exactly.
+
+ 1. Configure the IMP to allow the system instance user to launch the
+    systemd units as root.  The IMP should run the provided helper scripts
+    that are installed in the system libexec directory:
 
     .. code-block:: toml
 
        [run.prolog]
        allowed-users = [ "flux" ]
-       path = "/etc/flux/system/prolog"
+       path = "/usr/libexec/flux/cmd/flux-run-prolog"
 
        [run.epilog]
        allowed-users = [ "flux" ]
-       path = "/etc/flux/system/epilog"
+       path = "/usr/libexec/flux/cmd/flux-run-epilog"
 
     By default, the IMP will set the environment variables
     ``FLUX_OWNER_USERID``, ``FLUX_JOB_USERID``, ``FLUX_JOB_ID``, ``HOME``
@@ -656,32 +665,37 @@ components need to be configured, which is explained in the steps below.
 
  3. Configure the Flux system instance ``[job-manager.prolog]`` and
     ``[job-manager.epilog]`` to execute ``flux perilog-run`` with appropriate
-    arguments to execute ``flux-imp run prolog`` and ``flux-imp run epilog``
-    across the ranks assigned to a job:
+    arguments to execute the prolog and epilog IMP run targets across the
+    ranks assigned to a job:
 
     .. code-block:: toml
 
        [job-manager.prolog]
        command = [
           "flux", "perilog-run", "prolog",
-          "-e", "/usr/libexec/flux/flux-imp,run,prolog"
+	  "--with-imp",
+          "-e", "prolog"
        ]
        [job-manager.epilog]
        command = [
           "flux", "perilog-run", "epilog",
-          "-e", "/usr/libexec/flux/flux-imp,run,epilog"
+	  "--with-imp",
+          "-e", "epilog"
        ]
 
- 4. (optional) If log messages from the prolog or epilog are filling
-    up the broker logs, a list of ignore patterns may be added via
-    the ``[job-manager.perilog]`` ``log-ignore`` array. Each entry
-    in the array should be a :linux:man7:`regex`. POSIX extended
-    regular expression syntax is supported, e.g.:
+When there is a problem with the prolog or epilog on a node, systemd tools
+can be used for diagnosis.  To get the status of any running epilog units:
 
-    .. code-block:: toml
+.. code-block:: console
 
-      [job-manager]
-      perilog.log-ignore = [ ".*Xauth.*", "^foo:.*debug" ]
+  $ systemctl status flux-epilog@*
+
+To get the epilog output:
+
+.. code-block:: console
+
+  $ journalctl -u flux-epilog@*
+
 
 Note that the ``flux perilog-run`` command will additionally execute any
 scripts in ``/etc/flux/system/{prolog,epilog}.d`` on rank 0 by default as
