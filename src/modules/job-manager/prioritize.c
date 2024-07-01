@@ -114,6 +114,14 @@ static int reprioritize_one (struct job_manager *ctx,
                              "priority", priority) < 0)
         return -1;
 
+    /*  Posting the priority event used to immediately set job->priority,
+     *   but after flux-framework/flux-core#4351, the event may be deferred.
+     *   Since the code below for sched.prioritize and queue reordering needs
+     *   the new job->priority value, set it here *also*.
+     *   See also: flux-framework/flux-core#6062
+     */
+    job->priority = priority;
+
     /*  Update alloc queues, cancel outstanding alloc requests for
      *   newly "held" jobs, and if in "oneshot" mode, notify scheduler
      *   of priority change
