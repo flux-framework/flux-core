@@ -937,6 +937,82 @@ error:
     json_decref (procs);
 }
 
+/* Make a string like "inactive.dead" in buf[size]
+ */
+static int get_statestr (char *buf, size_t size, struct unit *unit)
+{
+    const char *s = sdexec_statetostr (sdexec_unit_state (unit));
+    const char *ss = sdexec_substatetostr (sdexec_unit_substate (unit));
+    if (snprintf (buf, size, "%s.%s", s, ss) >= size) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    return 0;
+}
+
+static json_t *get_proc_stats (struct sdproc *proc)
+{
+    json_t *o;
+    char statebuf[64];
+    json_t *in_stats;
+    json_t *out_stats;
+    json_t *err_stats;
+
+    if (!proc->unit
+        || get_statestr (statebuf, sizeof (statebuf), proc->unit) < 0)
+        return NULL;
+    in_stats = sdexec_channel_get_stats (proc->in);
+    out_stats = sdexec_channel_get_stats (proc->out);
+    err_stats = sdexec_channel_get_stats (proc->err);
+    o = json_pack ("{s:s s:i s:O s:O s:O}",
+                   "state", statebuf,
+                   "pid", sdexec_unit_pid (proc->unit),
+                   "in", in_stats ? in_stats : json_null (),
+                   "out", out_stats ? out_stats : json_null (),
+                   "err", err_stats ? err_stats : json_null ());
+    json_decref (in_stats);
+    json_decref (out_stats);
+    json_decref (err_stats);
+    return o;
+}
+
+static void stats_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
+{
+    struct sdexec_ctx *ctx = arg;
+    json_t *procs;
+    const flux_msg_t *m;
+
+    if (!(procs = json_object ()))
+        goto nomem;
+    m = flux_msglist_first (ctx->requests);
+    while (m) {
+        struct sdproc *proc;
+        json_t *entry = NULL;
+
+        if (!(proc = flux_msg_aux_get (m, "sdproc"))
+            || !(entry = get_proc_stats (proc))
+            || json_object_set_new (procs,
+                                    sdexec_unit_name (proc->unit),
+                                    entry) < 0) {
+            json_decref (entry);
+            goto nomem;
+        }
+        m = flux_msglist_next (ctx->requests);
+    }
+    if (flux_respond_pack (h, msg, "{s:O}", "procs", procs) < 0)
+        flux_log_error (h, "error responding to stats-get request");
+    json_decref (procs);
+    return;
+nomem:
+    errno = ENOMEM;
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to stats-get request");
+    json_decref (procs);
+}
+
 /* When a client (like flux-exec or job-exec) disconnects, send any running
  * units that were started by that UUID a SIGKILL to begin cleanup.  Leave
  * the request in ctx->requests so the unit can be "reaped".  Let normal
@@ -1043,6 +1119,11 @@ static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,
       "list",
       list_cb,
+      0
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "stats-get",
+      stats_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
