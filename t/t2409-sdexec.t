@@ -279,6 +279,16 @@ test_expect_success NO_CHAIN_LINT 'sdexec.list works' '
 	kill -15 $testpid &&
 	test_expect_code 143 wait $testpid
 '
+test_expect_success NO_CHAIN_LINT 'sdexec.stats-get works' '
+	$sdexec -r 0 --setopt=SDEXEC_NAME=statstest.service \
+	    $sh -c "echo hello >sleep3.out && sleep 60" &
+	testpid=$! &&
+	$waitfile -q -t 30 sleep3.out &&
+	flux module stats sdexec >stats.out &&
+	grep statstest.service stats.out &&
+	kill -15 $testpid &&
+	test_expect_code 143 wait $testpid
+'
 test_expect_success 'sdexec sets FLUX_URI to local broker' '
 	echo $FLUX_URI >uri.exp &&
 	$sdexec -r 1 $printenv FLUX_URI >uri.out &&

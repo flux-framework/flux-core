@@ -76,6 +76,8 @@ void sdexec_channel_start_output (struct channel *ch);
 
 void sdexec_channel_destroy (struct channel *ch);
 
+json_t *sdexec_channel_get_stats (struct channel *ch);
+
 #endif /* !_LIBSDEXEC_CHANNEL_H */
 
 // vi:ts=4 sw=4 expandtab

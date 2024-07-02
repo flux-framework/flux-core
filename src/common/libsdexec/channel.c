@@ -349,4 +349,26 @@ int sdexec_channel_write (struct channel *ch, json_t *io)
     return 0;
 }
 
+json_t *sdexec_channel_get_stats (struct channel *ch)
+{
+    json_t *o = NULL;
+
+    if (ch) {
+        if (ch->writable) {
+            o = json_pack ("{s:i s:i}",
+                           "local_fd", ch->fd[0],
+                           "remote_fd", ch->fd[1]);
+        }
+        else {
+            o = json_pack ("{s:i s:i s:i s:i s:b}",
+                           "local_fd", ch->fd[0],
+                           "remote_fd", ch->fd[1],
+                           "buf_used", outbuf_used (ch->buf),
+                           "buf_free", outbuf_free (ch->buf),
+                           "eof", ch->eof_received);
+        }
+    }
+    return o;
+}
+
 // vi:ts=4 sw=4 expandtab
