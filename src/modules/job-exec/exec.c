@@ -39,10 +39,10 @@
 #include "ccan/str/str.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libsubprocess/bulk-exec.h"
 
 #include "job-exec.h"
 #include "exec_config.h"
-#include "bulk-exec.h"
 #include "rset.h"
 
 /*  Numeric severity used for a non-fatal, critical job exception:
@@ -575,9 +575,9 @@ static int exec_kill (struct jobinfo *job, int signum)
     flux_future_t *f;
 
     if (job->multiuser)
-        f = bulk_exec_imp_kill (exec, config_get_imp_path (), signum);
+        f = bulk_exec_imp_kill (exec, config_get_imp_path (), NULL, signum);
     else
-        f = bulk_exec_kill (exec, signum);
+        f = bulk_exec_kill (exec, NULL, signum);
     if (!f) {
         if (errno != ENOENT)
             flux_log_error (job->h, "%s: bulk_exec_kill", idf58 (job->id));

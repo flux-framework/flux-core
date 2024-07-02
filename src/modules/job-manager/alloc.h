@@ -11,6 +11,7 @@
 #ifndef _FLUX_JOB_MANAGER_ALLOC_H
 #define _FLUX_JOB_MANAGER_ALLOC_H
 
+#include <jansson.h>
 #include <flux/core.h>
 
 #include "job.h"
@@ -47,10 +48,9 @@ int alloc_queue_count (struct alloc *alloc);
  */
 int alloc_pending_count (struct alloc *alloc);
 
-/* Call from CLEANUP state to release resources.
- * This function is a no-op if job->free_pending is set.
+/* Release resources back to the scheduler.
  */
-int alloc_send_free_request (struct alloc *alloc, struct job *job);
+int alloc_send_free_request (struct alloc *alloc, json_t *R, flux_jobid_t id);
 
 /* List pending jobs
  */

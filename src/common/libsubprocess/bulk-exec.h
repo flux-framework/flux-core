@@ -14,6 +14,7 @@
 #define HAVE_JOB_EXEC_BULK_EXEC_H 1
 
 #include <flux/core.h>
+#include <flux/idset.h>
 
 struct bulk_exec;
 
@@ -68,7 +69,11 @@ int bulk_exec_push_cmd (struct bulk_exec *exec,
 
 int bulk_exec_start (flux_t *h, struct bulk_exec *exec);
 
-flux_future_t * bulk_exec_kill (struct bulk_exec *exec, int signal);
+/* Set ranks=NULL for all
+ */
+flux_future_t * bulk_exec_kill (struct bulk_exec *exec,
+		                const struct idset *ranks,
+		                int signal);
 
 /*  Log per-rank kill errors for a failed bulk_exec_kill() RPC.
  */
@@ -76,6 +81,7 @@ void bulk_exec_kill_log_error (flux_future_t *f, flux_jobid_t id);
 
 flux_future_t *bulk_exec_imp_kill (struct bulk_exec *exec,
                                    const char *imp_path,
+				   const struct idset *ranks,
                                    int signal);
 
 int bulk_exec_cancel (struct bulk_exec *exec);

@@ -564,7 +564,9 @@ void bulk_exec_kill_log_error (flux_future_t *f, flux_jobid_t id)
     }
 }
 
-flux_future_t *bulk_exec_kill (struct bulk_exec *exec, int signum)
+flux_future_t *bulk_exec_kill (struct bulk_exec *exec,
+                               const struct idset *ranks,
+                               int signum)
 {
     flux_subprocess_t *p = zlist_first (exec->processes);
     flux_future_t *cf = NULL;
@@ -574,8 +576,9 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec, int signum)
     flux_future_set_flux (cf, exec->h);
 
     while (p) {
-        if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING
-            || flux_subprocess_state (p) == FLUX_SUBPROCESS_INIT) {
+        if ((!ranks || idset_test (ranks, flux_subprocess_rank (p)))
+            && (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING
+            || flux_subprocess_state (p) == FLUX_SUBPROCESS_INIT)) {
             flux_future_t *f = NULL;
             char s[64];
             if (!(f = flux_subprocess_kill (p, signum))) {
@@ -672,6 +675,7 @@ static int bulk_exec_push_one (struct bulk_exec *exec,
  */
 flux_future_t *bulk_exec_imp_kill (struct bulk_exec *exec,
                                    const char *imp_path,
+                                   const struct idset *ranks,
                                    int signum)
 {
     struct bulk_exec *killcmd = NULL;
@@ -699,7 +703,8 @@ flux_future_t *bulk_exec_imp_kill (struct bulk_exec *exec,
 
     p = zlist_first (exec->processes);
     while (p) {
-        if ((flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING
+        if ((!ranks || idset_test (ranks, flux_subprocess_rank (p)))
+            && (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING
             || flux_subprocess_state (p) == FLUX_SUBPROCESS_INIT)) {
 
             pid_t pid = flux_subprocess_pid (p);

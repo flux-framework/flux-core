@@ -1,0 +1,21 @@
+[Unit]
+Description=Housekeeping for Flux job %I
+CollectMode=inactive-or-failed
+
+[Service]
+Type=oneshot
+EnvironmentFile=-@X_RUNSTATEDIR@/flux-housekeeping@%I.env
+ExecStart=@X_SYSCONFDIR@/flux/system/housekeeping
+ExecStopPost=-rm -f @X_RUNSTATEDIR@/flux-housekeeping@%I.env
+ExecStopPost=-sh -c '\
+    if test "$SERVICE_RESULT" != "success"; then \
+        if test "$EXIT_CODE" = "killed" -o "$EXIT_CODE" = "dumped"; then \
+            message="killed by SIG${EXIT_STATUS}"; \
+        elif test "$EXIT_CODE" = "exited"; then \
+            message="exited with exit code $EXIT_CODE"; \
+        else \
+            message="code=$EXIT_CODE status=$EXIT_STATUS"; \
+        fi; \
+        flux resource drain $(flux getattr rank) "housekeeping $message"; \
+    fi \
+'

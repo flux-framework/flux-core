@@ -55,7 +55,8 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-cancel.1 \
 	man1/flux-watch.1 \
 	man1/flux-update.1 \
-	man1/flux-hostlist.1
+	man1/flux-hostlist.1 \
+	man1/flux-housekeeping.1
 
 # These files are generated as clones of a primary page.
 # Sphinx handles this automatically if declared in the conf.py
@@ -383,6 +384,7 @@ if ENABLE_DOCS
 man_MANS = $(MAN1_FILES) $(MAN3_FILES) $(MAN5_FILES) $(MAN7_FILES)
 $(RST_FILES): \
 	man1/common/resources.rst \
+	man1/common/experimental.rst \
 	man1/common/job-param-additional.rst \
 	man1/common/job-param-batch.rst \
 	man1/common/job-param-common.rst \
@@ -400,10 +402,13 @@ $(RST_FILES): \
 	man1/common/job-other-run.rst \
 	man1/common/job-shell-options.rst \
 	man3/common/resources.rst \
+	man3/common/experimental.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst \
 	man5/common/resources.rst \
-	man7/common/resources.rst
+	man5/common/experimental.rst \
+	man7/common/resources.rst \
+	man7/common/experimental.rst
 endif
 
 SUFFIXES = .rst .1 .3 .5 .7
@@ -472,6 +477,7 @@ EXTRA_DIST = \
 	$(RST_FILES) \
 	man1/index.rst \
 	man1/common/resources.rst \
+	man1/common/experimental.rst \
 	man1/common/job-param-additional.rst \
 	man1/common/job-param-batch.rst \
 	man1/common/job-param-common.rst \
@@ -489,13 +495,16 @@ EXTRA_DIST = \
 	man1/common/job-other-run.rst \
 	man1/common/job-shell-options.rst \
 	man3/common/resources.rst \
+	man3/common/experimental.rst \
 	man3/index.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst \
 	man5/common/resources.rst \
+	man5/common/experimental.rst \
 	man5/index.rst \
 	man7/index.rst \
 	man7/common/resources.rst \
+	man7/common/experimental.rst \
 	man7/flux-undocumented.rst
 
 CLEANFILES = \

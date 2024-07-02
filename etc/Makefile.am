@@ -1,5 +1,7 @@
 #if HAVE_SYSTEMD
-systemdsystemunit_DATA = flux.service
+systemdsystemunit_DATA = \
+	flux.service \
+	flux-housekeeping@.service
 #endif
 
 tmpfilesdir = $(prefix)/lib/tmpfiles.d

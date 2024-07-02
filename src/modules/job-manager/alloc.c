@@ -36,6 +36,7 @@
 #include "annotate.h"
 #include "raise.h"
 #include "queue.h"
+#include "housekeeping.h"
 
 struct alloc {
     struct job_manager *ctx;
@@ -99,8 +100,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
     }
 }
 
-/* Send sched.free request for job.
- * Update flags.
+/* Send sched.free request.
  */
 int free_request (struct alloc *alloc, flux_jobid_t id, json_t *R)
 {
@@ -343,6 +343,8 @@ static void hello_cb (flux_t *h,
         }
         job = zhashx_next (ctx->active_jobs);
     }
+    if (housekeeping_hello_respond (ctx->housekeeping, msg) < 0)
+        goto error;
     if (flux_respond_error (h, msg, ENODATA, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     return;
@@ -504,20 +506,11 @@ static void check_cb (flux_reactor_t *r,
                                    NULL);
 }
 
-/* called from event_job_action() FLUX_JOB_STATE_CLEANUP */
-int alloc_send_free_request (struct alloc *alloc, struct job *job)
+int alloc_send_free_request (struct alloc *alloc, json_t *R, flux_jobid_t id)
 {
-    if (job->state != FLUX_JOB_STATE_CLEANUP)
-        return -1;
     if (alloc->scheduler_is_online) {
-        if (free_request (alloc, job->id, job->R_redacted) < 0)
+        if (free_request (alloc, id, R) < 0)
             return -1;
-        if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post_pack (alloc->ctx->event,
-                                       job,
-                                       "debug.free-request",
-                                       0,
-                                       NULL);
     }
     return 0;
 }
@@ -691,7 +684,8 @@ static void resource_status_cb (flux_t *h,
     }
     job = zhashx_first (alloc->ctx->active_jobs);
     while (job) {
-        if (job->has_resources && job->R_redacted && !job->alloc_bypass) {
+        if ((job->has_resources && !job->free_posted)
+            && job->R_redacted && !job->alloc_bypass) {
             struct rlist *rl2;
             json_error_t jerror;
 
@@ -711,6 +705,8 @@ static void resource_status_cb (flux_t *h,
         }
         job = zhashx_next (alloc->ctx->active_jobs);
     }
+    if (housekeeping_stat_append (ctx->housekeeping, rl, &error) < 0)
+        goto error;
     if (!(R = rlist_to_R (rl))) {
         errprintf (&error, "error converting rlist to JSON");
         goto error;

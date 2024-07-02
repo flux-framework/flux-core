@@ -57,7 +57,7 @@ void on_error (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
                 (uintmax_t) flux_subprocess_pid (p),
                 flux_subprocess_state_string (state));
     }
-    flux_future_t *f = bulk_exec_kill (exec, 9);
+    flux_future_t *f = bulk_exec_kill (exec, NULL, 9);
     if (flux_future_get (f, NULL) < 0)
         log_err_exit ("bulk_exec_kill");
 }
@@ -85,7 +85,7 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     int signum = flux_signal_watcher_get_signum (w);
 
     log_msg ("sending signal %d to all tasks\n", signum);
-    flux_future_t *f = bulk_exec_kill (exec, signum);
+    flux_future_t *f = bulk_exec_kill (exec, NULL, signum);
     if (!f || (flux_future_then (f, -1., kill_cb, exec) < 0))
         log_err ("SIGINT: failed to forward signal %d", signum);
     flux_watcher_stop (w);
