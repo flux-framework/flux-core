@@ -82,6 +82,32 @@ int bulk_exec_total (struct bulk_exec *exec)
     return exec->total;
 }
 
+int bulk_exec_complete (struct bulk_exec *exec)
+{
+    return exec->complete;
+}
+
+struct idset *bulk_exec_active_ranks (struct bulk_exec *exec)
+{
+    flux_subprocess_t *p;
+    struct idset *ranks;
+
+    if (!(ranks = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        return NULL;
+    p = zlist_first (exec->processes);
+    while (p) {
+        int rank = flux_subprocess_rank (p);
+        if (rank >= 0 && idset_set (ranks, rank) < 0) {
+            goto error;
+        }
+        p = zlist_next (exec->processes);
+    }
+    return ranks;
+error:
+    idset_destroy (ranks);
+    return NULL;
+}
+
 int bulk_exec_write (struct bulk_exec *exec, const char *stream,
                      const char *buf, size_t len)
 {

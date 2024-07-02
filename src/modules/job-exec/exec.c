@@ -643,9 +643,22 @@ error:
 static json_t *exec_job_stats (struct jobinfo *job)
 {
     struct bulk_exec *exec = job->data;
-    return json_pack ("{s:i s:i}",
-                      "total_shells", bulk_exec_total (exec),
-                      "active_shells", bulk_exec_current (exec));
+    struct idset *active_ranks;
+    char *s = NULL;
+    json_t *o;
+    int total = bulk_exec_total (exec);
+    int active = total - bulk_exec_complete (exec);
+
+    if ((active_ranks = bulk_exec_active_ranks (exec)))
+        s = idset_encode (active_ranks, IDSET_FLAG_RANGE);
+
+    o = json_pack ("{s:i s:i s:s}",
+                   "total_shells", total,
+                   "active_shells", active,
+                   "active_ranks", s ? s : "");
+    free (s);
+    idset_destroy (active_ranks);
+    return o;
 }
 
 static json_t *exec_stats (struct jobinfo *job)
