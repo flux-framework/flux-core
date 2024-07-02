@@ -1,3 +1,42 @@
+flux-core version 0.64.0 - 2024-07-02
+-------------------------------------
+
+## Experimental Features
+ * job-manager: add support for housekeeping scripts with partial release
+   of resources (#5818)
+
+## New Features
+ * sdexec: add stats-get RPC handler (#6071)
+ * job-exec: add `active_ranks` per-job stats (#6070)
+ * job-list: add support for `ranks` constraint (#6048)
+ * job-list: support "hostlist" constraint to allow jobs to be filtered by
+   nodes (#5656)
+ * add environment variable to avoid `RTLD_DEEPBIND` when loading modules
+   (#6063)
+
+## Fixes
+ * job-manager: improve sched.alloc request tracking (#6076)
+ * flux-job: fix prolog refcount in attach status message #6074 
+ * job-exec: fix `active_shells` count in per-job stats (#6070)
+ * job-manager/prioritize: update priority before sending (#6062)
+ * job-exec: do not streq() an unbuffered string (#6058)
+ * python: Update default Jobspec setattr() path (#6053)
+ * shell: enhance exit-timeout and exit-on-error exceptions with hostname
+   (#6056)
+ * libidset: improve efficiency of idset intersection (#6045)
+ * etc: update bash completions (#6039, #6060)
+ * flux-python: add posix-compatible shebang wrapper (#6041)
+ * libsubprocess: use matchtag instead of pid for flux_subprocess_write()
+   (#6013)
+ * sdexec: fix use after free during teardown (#6037)
+ * broker: avoid 60s delay on follower shutdown (#6034)
+
+## CI/Testsuite
+ * t: suppress hwloc 2.10 memleaks (#6061)
+ * ci: convert `system` test container to run under `podman` for better
+   `systemd` support (#6043)
+
+
 flux-core version 0.63.0 - 2024-06-04
 -------------------------------------
 
