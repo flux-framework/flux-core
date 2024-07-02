@@ -76,6 +76,7 @@ void flux_watcher_start (flux_watcher_t *w);
 void flux_watcher_stop (flux_watcher_t *w);
 void flux_watcher_destroy (flux_watcher_t *w);
 double flux_watcher_next_wakeup (flux_watcher_t *w);
+bool flux_watcher_is_active (flux_watcher_t *w);
 
 /* flux_t handle
  */
