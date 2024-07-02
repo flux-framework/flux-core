@@ -915,3 +915,7 @@ testexec
 rcvhwm
 libzmq
 userrc
+DEEPBIND
+PRELOAD
+RTLD
+dlopened

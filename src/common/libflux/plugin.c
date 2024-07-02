@@ -23,7 +23,9 @@
 #include <jansson.h>
 #include <assert.h>
 #include <flux/core.h>
+#include <pthread.h>
 
+#include "src/common/libflux/plugin_private.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
 #include "ccan/str/str.h"
@@ -34,6 +36,24 @@
 #define UUID_STR_LEN 37     // defined in later libuuid headers
 #endif
 
+static int use_deepbind = 1;
+static pthread_once_t deepbind_once = PTHREAD_ONCE_INIT;
+
+static void init_use_deepbind (void)
+{
+    const char *var = getenv ("FLUX_LOAD_WITH_DEEPBIND");
+    if (!var) {
+        // default is to allow the flag
+        return;
+    }
+    use_deepbind = strtol (var, NULL, 10);
+}
+
+int plugin_deepbind (void)
+{
+    pthread_once (&deepbind_once, init_use_deepbind);
+    return use_deepbind != 0 ? FLUX_DEEPBIND : 0;
+}
 
 struct flux_plugin {
     char *path;
@@ -270,7 +290,7 @@ static int open_flags (flux_plugin_t *p)
     else
         flags |= RTLD_LOCAL;
     if ((p->flags & FLUX_PLUGIN_RTLD_DEEPBIND))
-        flags |= FLUX_DEEPBIND;
+        flags |= plugin_deepbind ();
     return flags;
 }
 
