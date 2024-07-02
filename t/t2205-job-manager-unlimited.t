@@ -200,4 +200,78 @@ test_expect_success 'job-manager: no annotations in canceled jobs in flux jobs (
         fjobs_check_no_annotations $(cat job5.id)
 '
 
+test_expect_success 'job-manager: all jobs are inactive' '
+	flux queue idle --timeout 30s
+'
+test_expect_success 'job-manager: submit 5 jobs using one node each' '
+        flux submit --log=job{cc}.id --cc="1-5" -N1 true
+'
+test_expect_success 'job-manager: job state RSSSS' '
+        jmgr_check_state $(cat job1.id) R &&
+        jmgr_check_state $(cat job2.id) S &&
+        jmgr_check_state $(cat job3.id) S &&
+        jmgr_check_state $(cat job4.id) S &&
+        jmgr_check_state $(cat job5.id) S
+'
+test_expect_success 'job-manager: queue status shows 4 alloc requests pending' '
+	flux queue status -v |grep "0 alloc requests queued" &&
+	flux queue status -v |grep "4 alloc requests pending"
+'
+test_expect_success 'job-manager: cancel one pending job' '
+	flux cancel $(cat job2.id)
+'
+test_expect_success 'job-manager: job state RISSS' '
+        jmgr_check_state $(cat job1.id) R &&
+        jmgr_check_state $(cat job2.id) I &&
+        jmgr_check_state $(cat job3.id) S &&
+        jmgr_check_state $(cat job4.id) S &&
+        jmgr_check_state $(cat job5.id) S
+'
+test_expect_success 'job-manager: 3 alloc req pending, 0 queued' '
+	flux queue status -v |grep "0 alloc requests queued" &&
+	flux queue status -v |grep "3 alloc requests pending"
+'
+test_expect_success 'job-manager: cancel one running job' '
+	flux cancel $(cat job1.id)
+'
+test_expect_success 'job-manager: job state IIRSS' '
+        jmgr_check_state $(cat job1.id) I &&
+        jmgr_check_state $(cat job2.id) I &&
+        jmgr_check_state $(cat job3.id) R &&
+        jmgr_check_state $(cat job4.id) S &&
+        jmgr_check_state $(cat job5.id) S
+'
+test_expect_success 'job-manager: 2 alloc req pending, 0 queued' '
+	flux queue status -v |grep "0 alloc requests queued" &&
+	flux queue status -v |grep "2 alloc requests pending"
+'
+test_expect_success 'job-manager: reload the scheduler' '
+	flux module reload sched-simple mode=unlimited
+'
+test_expect_success 'job-manager: job state IIRSS' '
+        jmgr_check_state $(cat job1.id) I &&
+        jmgr_check_state $(cat job2.id) I &&
+        jmgr_check_state $(cat job3.id) R &&
+        jmgr_check_state $(cat job4.id) S &&
+        jmgr_check_state $(cat job5.id) S
+'
+test_expect_success 'job-manager: 2 alloc req pending, 0 queued' '
+	flux queue status -v |grep "0 alloc requests queued" &&
+	flux queue status -v |grep "2 alloc requests pending"
+'
+test_expect_success 'job-manager: cancel all jobs' '
+        flux cancel --all
+'
+test_expect_success 'job-manager: job state IIIII' '
+        jmgr_check_state $(cat job1.id) I &&
+        jmgr_check_state $(cat job2.id) I &&
+        jmgr_check_state $(cat job3.id) I &&
+        jmgr_check_state $(cat job4.id) I &&
+        jmgr_check_state $(cat job5.id) I
+'
+test_expect_success 'job-manager: 0 alloc req pending, 0 queued' '
+	flux queue status -v |grep "0 alloc requests queued" &&
+	flux queue status -v |grep "0 alloc requests pending"
+'
+
 test_done
