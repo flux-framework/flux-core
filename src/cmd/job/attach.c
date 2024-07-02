@@ -1003,9 +1003,14 @@ static void attach_notify (struct attach_ctx *ctx,
 
     if (!event_name)
         return;
-    if (ctx->statusline
-        && !ctx->fatal_exception
-        && (msg = job_event_notify_string (event_name))) {
+
+    /* job_event_notify_string must be called for all events even if
+     * the statusline is not active for prolog-start/finish refcounting.
+     */
+    msg = job_event_notify_string (event_name);
+    if (msg
+        && ctx->statusline
+        && !ctx->fatal_exception) {
         int dt = ts - ctx->timestamp_zero;
         int width = 80;
         struct winsize w;
