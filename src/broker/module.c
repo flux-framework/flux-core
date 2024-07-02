@@ -34,6 +34,7 @@
 #include <sys/syscall.h>
 #endif
 
+#include "src/common/libflux/plugin_private.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
@@ -307,7 +308,7 @@ module_t *module_create (flux_t *h,
     mod_main_f *mod_main;
 
     dlerror ();
-    if (!(dso = dlopen (path, RTLD_NOW | RTLD_GLOBAL | FLUX_DEEPBIND))) {
+    if (!(dso = dlopen (path, RTLD_NOW | RTLD_GLOBAL | plugin_deepbind ()))) {
         errprintf (error, "%s", dlerror ());
         errno = ENOENT;
         return NULL;

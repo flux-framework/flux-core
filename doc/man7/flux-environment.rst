@@ -351,6 +351,15 @@ components or writing tests.
    ``sched.resource-status`` RPC used in earlier releases still works for
    backwards compatibility.
 
+.. envvar:: FLUX_LOAD_WITH_DEEPBIND
+
+   By default flux loads all modules, plugins and dlopened libraries of any kind
+   with RTLD_DEEPBIND to avoid symbol conflicts.  If this environment variable
+   is set to 0 that flag will be cleared from the flags of all dlopen
+   invocations. This is mainly useful to override the allocator or otherwise
+   interpose a tool or library with LD_PRELOAD.  Be aware that this can cause
+   symbol conflicts with plugins, and is not recommended for production.
+
 MISCELLANEOUS
 =============
 
