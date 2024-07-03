@@ -111,6 +111,7 @@ static int child_create (struct proxy_command *ctx,
         .on_stderr = NULL,
     };
     flux_cmd_t *cmd = NULL;
+    int flags = 0;
     int i;
 
     if (!shell)
@@ -151,10 +152,12 @@ static int child_create (struct proxy_command *ctx,
         goto error;
 
     /* We want stdio fallthrough so subprocess can capture tty if
-     * necessary (i.e. an interactive shell)
+     * necessary (i.e. an interactive shell).
      */
+    flags |= FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH;
+    flags |= FLUX_SUBPROCESS_FLAGS_NO_SETPGRP;
     if (!(p = flux_local_exec (flux_get_reactor (ctx->h),
-                               FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH,
+                               flags,
                                cmd,
                                &ops)))
         goto error;

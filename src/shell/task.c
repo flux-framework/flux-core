@@ -222,7 +222,7 @@ int shell_task_start (struct flux_shell *shell,
                       shell_task_completion_f cb,
                       void *arg)
 {
-    int flags = FLUX_SUBPROCESS_FLAGS_SETPGRP;
+    int flags = 0;
     flux_reactor_t *r = shell->r;
     flux_subprocess_hooks_t hooks = {
         .pre_exec = subproc_preexec_hook,
@@ -230,7 +230,7 @@ int shell_task_start (struct flux_shell *shell,
     };
 
     if (shell->nosetpgrp)
-        flags &= ~FLUX_SUBPROCESS_FLAGS_SETPGRP;
+        flags |= FLUX_SUBPROCESS_FLAGS_NO_SETPGRP;
 
     task->proc = flux_local_exec_ex (r,
                                      flags,

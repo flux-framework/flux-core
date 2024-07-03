@@ -350,10 +350,10 @@ static struct runat_command *runat_command_create (char **env, int flags)
     if (flags & RUNAT_FLAG_FORK_EXEC)
         cmd->flags |= FLUX_SUBPROCESS_FLAGS_FORK_EXEC;
     /*
-     * Always run runat command in separate process group so that any
-     * processes spawned by command are signaled by flux_subprocess_signal()
+     * N.B. By default subprocesses call setpgrp() before exec(2).  So
+     * any processes spawned by command are also signaled by
+     * flux_subprocess_signal()
      */
-    cmd->flags |= FLUX_SUBPROCESS_FLAGS_SETPGRP;
     if (!(cmd->cmd = flux_cmd_create (0, NULL, env)))
         goto error;
     return cmd;
