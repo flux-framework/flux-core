@@ -166,7 +166,7 @@ static int local_child (flux_subprocess_t *p)
         p->in_hook = false;
     }
 
-    if (p->flags & FLUX_SUBPROCESS_FLAGS_SETPGRP
+    if (!(p->flags & FLUX_SUBPROCESS_FLAGS_NO_SETPGRP)
         && getpgrp () != getpid ()) {
         if (setpgrp () < 0) {
             fprintf (stderr, "setpgrp: %s\n", strerror (errno));

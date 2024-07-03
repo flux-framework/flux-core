@@ -57,8 +57,8 @@ enum {
      * will fail on streams of "stdin", "stdout", or "stderr".
      */
     FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH = 1,
-    /* flux_local_exec(): call setpgrp() before exec(2) */
-    FLUX_SUBPROCESS_FLAGS_SETPGRP = 2,
+    /* flux_local_exec(): do not call setpgrp() before exec(2) */
+    FLUX_SUBPROCESS_FLAGS_NO_SETPGRP = 2,
     /* flux_local_exec(): use fork(2)/exec(2) even if posix_spawn(3)
      * available */
     FLUX_SUBPROCESS_FLAGS_FORK_EXEC = 4,

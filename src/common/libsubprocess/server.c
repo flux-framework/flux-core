@@ -365,7 +365,7 @@ static void server_exec_cb (flux_t *h,
     flux_cmd_unsetenv (cmd, "FLUX_PROXY_REMOTE");
 
     if (!(p = flux_local_exec_ex (flux_get_reactor (s->h),
-                                  FLUX_SUBPROCESS_FLAGS_SETPGRP,
+                                  0,
                                   cmd,
                                   &ops,
                                   NULL,

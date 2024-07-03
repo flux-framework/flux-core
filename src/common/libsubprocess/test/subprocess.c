@@ -323,7 +323,7 @@ void test_basic_fail (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 }
 
-void test_flag_setpgrp (flux_reactor_t *r)
+void test_flag_no_setpgrp (flux_reactor_t *r)
 {
     char *av[] = { "/bin/true", NULL };
     flux_cmd_t *cmd;
@@ -335,7 +335,7 @@ void test_flag_setpgrp (flux_reactor_t *r)
         .on_completion = completion_cb
     };
     completion_cb_count = 0;
-    p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_SETPGRP, cmd, &ops);
+    p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_NO_SETPGRP, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -551,7 +551,7 @@ void test_kill_setpgrp (flux_reactor_t *r)
     output_processes_cb_count = 0;
     parent_pid = -1;
     child_pid = -1;
-    p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_SETPGRP, cmd, &ops);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1097,8 +1097,8 @@ int main (int argc, char *argv[])
     test_basic_fail (r);
     diag ("env_passed");
     test_env_passed (r);
-    diag ("flag_setpgrp");
-    test_flag_setpgrp (r);
+    diag ("flag_no_setpgrp");
+    test_flag_no_setpgrp (r);
     diag ("flag_fork_exec");
     test_flag_fork_exec (r);
     diag ("kill");

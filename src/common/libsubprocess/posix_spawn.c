@@ -136,7 +136,7 @@ int create_process_spawn (flux_subprocess_t *p)
     /*  If setpgrp(2) is desired for the child process, then add this
      *  flag to the spawnattr flags.
      */
-    if (p->flags & FLUX_SUBPROCESS_FLAGS_SETPGRP)
+    if (!(p->flags & FLUX_SUBPROCESS_FLAGS_NO_SETPGRP))
         flags |= POSIX_SPAWN_SETPGROUP;
     posix_spawnattr_setflags (&attr, flags);
 
