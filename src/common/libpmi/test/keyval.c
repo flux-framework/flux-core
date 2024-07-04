@@ -58,6 +58,7 @@ static char *pmi[] = {
     "cmd=lookup_result rc=0 info=ok port=merp42\n",
     "cmd=unpublish_name service=zz\n",
     "cmd=unpublish_result rc=0 info=ok\n",
+    "cmd=get_result rc=0 msg=success value=a = b found=TRUE\n",
     NULL,
 };
 
@@ -274,6 +275,14 @@ int main(int argc, char** argv)
         && keyval_parse_word (pmi[23], "info", val, sizeof (val)) == EKV_SUCCESS
         && streq (val, "ok"),
         "parsed pmi-1 unpublish response");
+    ok (keyval_parse_word (pmi[24], "cmd", val, sizeof (val)) == EKV_SUCCESS
+        && streq (val, "get_result")
+        && keyval_parse_int (pmi[24], "rc", &i) == EKV_SUCCESS && i == 0
+        && keyval_parse_word (pmi[24], "msg", val, sizeof (val)) == EKV_SUCCESS
+        && streq (val, "success")
+        && keyval_parse_string (pmi[24], "value", val, sizeof (val)) == EKV_SUCCESS
+        && streq (val, "a = b"),
+        "parsed pmi-1 lookup response with mpich v4.2.0 quirk");
 
     ok (keyval_parse_word (spawn[0], "mcmd", val, sizeof (val)) == EKV_SUCCESS
         && streq (val, "spawn"),

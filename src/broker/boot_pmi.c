@@ -207,6 +207,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
 {
     const char *topo_uri;
     flux_error_t error;
+    json_error_t jerror;
     char key[64];
     char *val;
     char hostname[MAXHOSTNAMELEN + 1];
@@ -351,12 +352,21 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
             log_msg ("%s: get %s: %s", upmi_describe (upmi), key, error.text);
             goto error;
         }
-        if (!(o = json_loads (val, 0, NULL))
-            || json_unpack (o,
-                            "{s:s s:s}",
-                            "pubkey", &peer_pubkey,
-                            "uri", &peer_uri) < 0
-            || strlen (peer_uri) == 0) {
+        if (!(o = json_loads (val, 0, &jerror))
+            || json_unpack_ex (o,
+                               &jerror,
+                               0,
+                               "{s:s s:s}",
+                               "pubkey", &peer_pubkey,
+                               "uri", &peer_uri) < 0) {
+            log_msg ("error decoding rank %d business card: %s",
+                     parent_rank,
+                     jerror.text);
+            json_decref (o);
+            free (val);
+            goto error;
+        }
+        if (strlen (peer_uri) == 0) {
             log_msg ("error decoding rank %d business card", parent_rank);
             json_decref (o);
             free (val);
@@ -392,9 +402,15 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
             log_msg ("%s: get %s: %s", upmi_describe (upmi), key, error.text);
             goto error;
         }
-        if (!(o = json_loads (val, 0, NULL))
-            || json_unpack (o, "{s:s}", "pubkey", &peer_pubkey) < 0) {
-            log_msg ("error decoding rank %d business card", child_rank);
+        if (!(o = json_loads (val, 0, &jerror))
+            || json_unpack_ex (o,
+                               &jerror,
+                               0,
+                               "{s:s}",
+                               "pubkey", &peer_pubkey) < 0) {
+            log_msg ("error decoding rank %d business card: %s",
+                     child_rank,
+                     jerror.text);
             json_decref (o);
             free (val);
             goto error;
@@ -423,9 +439,15 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
             log_msg ("%s: get %s: %s", upmi_describe (upmi), key, error.text);
             goto error;
         }
-        if (!(o = json_loads (val, 0, NULL))
-            || json_unpack (o, "{s:s}", "hostname", &peer_hostname) < 0) {
-            log_msg ("error decoding rank %d pmi business card", i);
+        if (!(o = json_loads (val, 0, &jerror))
+            || json_unpack_ex (o,
+                               &jerror,
+                               0,
+                               "{s:s}",
+                               "hostname", &peer_hostname) < 0) {
+            log_msg ("error decoding rank %d pmi business card: %s",
+                     i,
+                     error.text);
             json_decref (o);
             free (val);
             goto error;
