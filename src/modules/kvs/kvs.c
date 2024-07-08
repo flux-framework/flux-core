@@ -776,12 +776,6 @@ static int kvstxn_cache_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
     return 0;
 }
 
-static void flux_msg_destroy_wrapper (void *arg)
-{
-    flux_msg_t *msg = arg;
-    flux_msg_destroy (msg);
-}
-
 static int setroot_event_send (struct kvs_ctx *ctx, struct kvsroot *root,
                                json_t *names, json_t *keys)
 {
@@ -2128,24 +2122,11 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
 
     if (root->setroot_pause) {
-        flux_msg_t *msgcpy;
-
         assert (root->setroot_queue);
-
-        if (!(msgcpy = flux_msg_copy (msg, true))) {
-            flux_log_error (ctx->h, "%s: flux_msg_copy", __FUNCTION__);
+        if (flux_msglist_append (root->setroot_queue, msg) < 0) {
+            flux_log_error (ctx->h, "%s: flux_msglist_append", __FUNCTION__);
             return;
         }
-
-        if (zlist_append (root->setroot_queue, msgcpy) < 0) {
-            flux_log_error (ctx->h, "%s: zlist_append", __FUNCTION__);
-            return;
-        }
-
-        zlist_freefn (root->setroot_queue,
-                      msgcpy,
-                      flux_msg_destroy_wrapper,
-                      true);
         return;
     }
 
@@ -2663,10 +2644,8 @@ static void setroot_pause_request_cb (flux_t *h, flux_msg_handler_t *mh,
     root->setroot_pause = true;
 
     if (!root->setroot_queue) {
-        if (!(root->setroot_queue = zlist_new ())) {
-            errno = ENOMEM;
+        if (!(root->setroot_queue = flux_msglist_create ()))
             goto error;
-        }
     }
 
     if (flux_respond (h, msg, NULL) < 0)
@@ -2679,7 +2658,7 @@ error:
 
 static void setroot_unpause_process_msg (struct kvs_ctx *ctx,
                                          struct kvsroot *root,
-                                         flux_msg_t *msg)
+                                         const flux_msg_t *msg)
 {
     const char *ns;
     int rootseq;
@@ -2710,7 +2689,6 @@ static void setroot_unpause_request_cb (flux_t *h, flux_msg_handler_t *mh,
     struct kvs_ctx *ctx = arg;
     const char *ns = NULL;
     struct kvsroot *root;
-    flux_msg_t *m;
     bool stall = false;
 
     if (flux_request_unpack (msg, NULL, "{ s:s }",
@@ -2729,9 +2707,10 @@ static void setroot_unpause_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* user never called pause if !root->setroot_queue*/
     if (root->setroot_queue) {
-        while ((m = zlist_pop (root->setroot_queue))) {
+        const flux_msg_t *m;
+        while ((m = flux_msglist_pop (root->setroot_queue))) {
             setroot_unpause_process_msg (ctx, root, m);
-            flux_msg_destroy (m);
+            flux_msg_decref (m);
         }
     }
     if (flux_respond (h, msg, NULL) < 0)
