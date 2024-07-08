@@ -601,6 +601,10 @@ AC_CONFIG_FILES( \
   etc/flux.service \
   etc/flux-housekeeping@.service \
   src/cmd/flux-run-housekeeping \
+  etc/flux-prolog@.service \
+  etc/flux-epilog@.service \
+  src/cmd/flux-run-prolog \
+  src/cmd/flux-run-epilog \
   doc/Makefile \
   doc/test/Makefile \
   t/Makefile \
