@@ -231,6 +231,8 @@ struct wait_event_ctx {
     char *context_value;
     int count;
     int match_count;
+    bool verbose;
+    bool quiet;
 };
 
 static bool wait_event_test_context (struct wait_event_ctx *ctx,
@@ -329,13 +331,13 @@ static void wait_event_continuation (flux_future_t *f, void *arg)
 
     if (wait_event_test (ctx, o)) {
         ctx->got_event = true;
-        if (!optparse_hasopt (ctx->p, "quiet")) {
+        if (!ctx->quiet) {
             if (eventlog_entry_dumpf (ctx->evf, stdout, &error, o) < 0)
                 log_err ("failed to print eventlog entry: %s", error.text);
         }
         if (flux_job_event_watch_cancel (f) < 0)
             log_err_exit ("flux_job_event_watch_cancel");
-    } else if (optparse_hasopt (ctx->p, "verbose")) {
+    } else if (ctx->verbose) {
         if (!ctx->got_event) {
             if (eventlog_entry_dumpf (ctx->evf, stdout, &error, o) < 0)
                 log_err ("failed to print eventlog entry: %s", error.text);
@@ -347,46 +349,47 @@ static void wait_event_continuation (flux_future_t *f, void *arg)
     flux_future_reset (f);
 }
 
-int cmd_wait_event (optparse_t *p, int argc, char **argv)
+static int wait_event_run (optparse_t *p,
+                           const char *jobid,
+                           const char *wait_event,
+                           const char *path,
+                           const char *match_context,
+                           int count,
+                           double timeout,
+                           bool waitcreate,
+                           bool verbose,
+                           bool quiet)
 {
     flux_t *h;
-    int optindex = optparse_option_index (p);
     flux_future_t *f;
     struct wait_event_ctx ctx = {0};
-    const char *str;
-    double timeout;
     int flags = 0;
 
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
-
-    if ((argc - optindex) != 2) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-    ctx.jobid = argv[optindex++];
-    ctx.id = parse_jobid (ctx.jobid);
     ctx.p = p;
-    ctx.wait_event = argv[optindex++];
-    ctx.path = path_lookup (optparse_get_str (p, "path", "eventlog"));
-    timeout = optparse_get_duration (p, "timeout", -1.0);
-    if (optparse_hasopt (p, "waitcreate"))
+    ctx.jobid = jobid;
+    ctx.id = parse_jobid (ctx.jobid);
+    ctx.wait_event = wait_event;
+    ctx.path = path_lookup (path);
+    ctx.verbose = verbose;
+    ctx.quiet = quiet;
+    if ((ctx.count = count) <= 0)
+        log_msg_exit ("count must be > 0");
+    if (waitcreate)
         flags |= FLUX_JOB_EVENT_WATCH_WAITCREATE;
 
     if (!(ctx.evf = eventlog_formatter_create ()))
         log_err_exit ("eventlog_formatter_create");
     formatter_parse_options (p, ctx.evf);
-    if ((str = optparse_get_str (p, "match-context", NULL))) {
-        ctx.context_key = xstrdup (str);
+    if (match_context) {
+        ctx.context_key = xstrdup (match_context);
         ctx.context_value = strchr (ctx.context_key, '=');
         if (!ctx.context_value)
             log_msg_exit ("must specify a context test as key=value");
         *ctx.context_value++ = '\0';
     }
-    ctx.count = optparse_get_int (p, "count", 1);
-    if (ctx.count <= 0)
-        log_msg_exit ("count must be > 0");
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
     if (!(f = flux_job_event_watch (h, ctx.id, ctx.path, flags)))
         log_err_exit ("flux_job_event_watch");
     if (flux_future_then (f, timeout, wait_event_continuation, &ctx) < 0)
@@ -398,6 +401,31 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     flux_close (h);
     eventlog_formatter_destroy (ctx.evf);
     return (0);
+}
+
+int cmd_wait_event (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    const char *jobid;
+    const char *wait_event;
+
+    if ((argc - optindex) != 2) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    jobid = argv[optindex++];
+    wait_event = argv[optindex++];
+
+    return wait_event_run (p,
+                           jobid,
+                           wait_event,
+                           optparse_get_str (p, "path", "eventlog"),
+                           optparse_get_str (p, "match-context", NULL),
+                           optparse_get_int (p, "count", 1),
+                           optparse_get_duration (p, "timeout", -1.0),
+                           optparse_hasopt (p, "waitcreate"),
+                           optparse_hasopt (p, "verbose"),
+                           optparse_hasopt (p, "quiet"));
 }
 
 /* vi: ts=4 sw=4 expandtab
