@@ -776,7 +776,7 @@ class OutputFormat:
             print(formatter.header())
         for item in items:
             line = formatter.format(item)
-            if not line:
+            if not line or line.isspace():
                 continue
             if callable(pre):
                 pre(item)
