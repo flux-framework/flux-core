@@ -249,6 +249,75 @@ See also:
 `RFC 12 <https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_12.html>`_,
 `RFC 15 <https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_15.html>`_.
 
+Overlay Network
+===============
+
+As described above, a Flux instance consists of one or more Flux brokers
+communicating over a tree-based overlay network.  A Flux system instance
+on a cluster runs one broker per node.  The brokers connect to each other
+using TCP in a static tree topology, which is selected by configuration files.
+The broker at the tree root is the "leader".  The others are "followers".
+
+The leader is critical.  If it goes down, the entire Flux instance must
+restart.  Moreover, an unclean shutdown could result in lost job data.
+Therefore, it is desirable to arrange for the leader to run on a management
+node or other protected server that does not run user workloads.
+
+To a lesser degree, non-leaf follower (internal) nodes are also critical.
+If they are shut down or crash, the subtree rooted at that node must restart.
+However, the Flux instance continues and no data should be lost as long as
+the leader is unaffected.
+
+.. note::
+  At this time, when a node's broker restarts, any jobs running on the node
+  receive a fatal exception.  This will be addressed in a future release of
+  Flux that allows job shells to reconnect to the broker after it restarts.
+  For now, it means that restarting the leader affects all running jobs,
+  and restarting a non-leaf follower affects all jobs running on the subtree.
+
+The network used for the overlay network should be chosen for stability,
+as network partitions that persist long enough can cause downstream nodes
+to be declared lost.  This has the same effect as crashing.  Shorter
+partitions may cause nodes to be drained as "torpid".  On a cluster, the
+conservative choice is usually a commodity Ethernet rather than a high speed
+interconnect.  Note, however, that partition tolerance can be tuned when
+the network has known issues.  See :man5:`flux-config-tbon`.
+
+Topology for Small Clusters
+---------------------------
+
+The overlay topology can be configured in any tree shape.  Because of the
+criticality of internal nodes, the *flat* tree with no internal nodes has
+appeal for smaller clusters up to a few hundred nodes.  The downsides of
+a *flat* configuration, as the cluster size increases are:
+
+- The leader must directly manage all follower TCP connections.  For example,
+  it must iterate over all of them to publish (broadcast) a message.
+
+- The memory footprint of the leader node may grow large due to per-peer
+  message queues.
+
+- The advantages of hierarchical KVS caching are lost.  For example, when
+  starting a large job, the leader node must directly service each peer
+  lookup request for the same job data.
+
+- These extra overheads may affect the responsiveness of services that are
+  only present on the leader node, such as the job manager and the scheduler.
+
+The second example in :man5:`flux-config-bootstrap` is a *flat* topology.
+
+Topology for Large Clusters
+---------------------------
+
+To avoid the above downsides, larger clusters should use a custom topology
+with tree height of 2 and internal brokers assigned to stable, well connected,
+non-busy nodes.  The downside of this topology is, obviously:
+
+- More brokers are critical
+
+The third example in :man5:`flux-config-bootstrap` is a topology with a tree
+height of 2.
+
 ************
 Installation
 ************
