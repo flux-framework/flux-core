@@ -41,6 +41,9 @@ struct optparse_option eventlog_opts[] =  {
       .usage = "Colorize output when supported; WHEN can be 'always' "
                "(default if omitted), 'never', or 'auto' (default)."
     },
+    { .name = "follow", .key = 'F', .has_arg = 0,
+      .usage = "Follow events until job is inactive.",
+    },
     { .name = "path", .key = 'p', .has_arg = 1, .arginfo = "PATH",
       .usage = "Specify alternate eventlog name or path suffix "
                "(e.g. \"exec\", \"output\", or \"guest.exec.eventlog\")",
@@ -89,6 +92,16 @@ struct optparse_option wait_event_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static int wait_event_run (optparse_t *p,
+                           const char *jobid,
+                           const char *wait_event,
+                           const char *path,
+                           const char *match_context,
+                           int count,
+                           double timeout,
+                           bool waitcreate,
+                           bool verbose,
+                           bool quiet);
 
 struct eventlog_ctx {
     optparse_t *p;
@@ -195,6 +208,19 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     }
 
     ctx.jobid = argv[optindex++];
+
+    if (optparse_hasopt (p, "follow"))
+        return wait_event_run (p,
+                               ctx.jobid,
+                               "clean",
+                               optparse_get_str (p, "path", "eventlog"),
+                               NULL,
+                               1,
+                               -1.0,
+                               true,
+                               true,
+                               false);
+
     ctx.id = parse_jobid (ctx.jobid);
     ctx.path = path_lookup (optparse_get_str (p, "path", "eventlog"));
     ctx.p = p;
