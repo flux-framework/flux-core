@@ -218,7 +218,21 @@ test_expect_success 'flux job eventlog -p fails on invalid path' '
 	jobid=$(submit_job) &&
 	test_must_fail flux job eventlog -p "foobar" $jobid
 '
-
+# submit job in separate test to avoid using the form:
+#  jobid=$(flux submit ..) && flux job eventlog $jobid ... &
+# which will pick up the wrong $jobid since the pipeline is placed into
+# the background:
+test_expect_success 'submit held job for eventlog follow test' '
+	jobid=$(flux submit --urgency=hold -n1 hostname)
+'
+test_expect_success NO_CHAIN_LINT 'flux job eventlog -F, --follow works' '
+	flux job eventlog -HF $jobid >eventlog-follow.out &
+	pid=$! &&
+	flux job urgency $jobid default &&
+	wait $pid &&
+	test_debug "cat eventlog-follow.out" &&
+	grep clean eventlog-follow.out
+'
 #
 #  Color and human-readable output tests for flux job eventlog/wait-event
 #  
