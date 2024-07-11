@@ -134,6 +134,13 @@ test_expect_success 'flux-resource list supports -q, --queue' '
 	grep debug fluke-both.output &&
 	grep batch fluke-both.output
 '
+test_expect_success 'flux-resource list skips empty lines (issue#6093)' '
+	flux resource list -i fluke[3,103] -no "{queue} {nodelist}" \
+		--from-stdin --config-file=$FLUKE_CONFIG \
+                < $FLUKE_INPUT >fluke-empty-lines-test.out &&
+	test_debug "cat fluke-empty-lines-test.out" &&
+	test $(wc -l < fluke-empty-lines-test.out) -eq 2
+'
 test_expect_success 'flux-resource R supports -q, --queue' '
 	flux resource R --queue=debug \
 		--from-stdin --config-file=$FLUKE_CONFIG \
