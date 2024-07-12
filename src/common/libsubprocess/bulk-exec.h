@@ -72,8 +72,8 @@ int bulk_exec_start (flux_t *h, struct bulk_exec *exec);
 /* Set ranks=NULL for all
  */
 flux_future_t * bulk_exec_kill (struct bulk_exec *exec,
-		                const struct idset *ranks,
-		                int signal);
+                                const struct idset *ranks,
+                                int signal);
 
 /*  Log per-rank kill errors for a failed bulk_exec_kill() RPC.
  */
@@ -81,7 +81,7 @@ void bulk_exec_kill_log_error (flux_future_t *f, flux_jobid_t id);
 
 flux_future_t *bulk_exec_imp_kill (struct bulk_exec *exec,
                                    const char *imp_path,
-				   const struct idset *ranks,
+                                   const struct idset *ranks,
                                    int signal);
 
 int bulk_exec_cancel (struct bulk_exec *exec);
