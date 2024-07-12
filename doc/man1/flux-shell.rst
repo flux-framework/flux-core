@@ -497,7 +497,7 @@ supported. Job shell specific functions and tables are described below:
 **plugin.searchpath**
   The current plugin searchpath. This value can be queried, set,
   or appended. E.g. to add a new path to the plugin search path:
-  ``plugin.searchpath = plugin.searchpath + ':' + path``
+  ``plugin.searchpath = plugin.searchpath .. ':' .. path``
 
 **plugin.load({file=glob, [conf=table]})**
   Explicitly load one more shell plugins. This function takes a table
