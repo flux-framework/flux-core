@@ -44,7 +44,8 @@ int reslog_sync (struct reslog *reslog);
 
 /* Get a callback for each event.
  */
-void reslog_set_callback (struct reslog *reslog, reslog_cb_f cb, void *arg);
+int reslog_add_callback (struct reslog *reslog, reslog_cb_f cb, void *arg);
+void reslog_remove_callback (struct reslog *reslog, reslog_cb_f cb, void *arg);
 
 #define RESLOG_KEY "resource.eventlog"
 
