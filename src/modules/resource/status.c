@@ -22,16 +22,38 @@
 #include "monitor.h"
 #include "exclude.h"
 #include "status.h"
+#include "reslog.h"
 
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/librlist/rlist.h"
+#include "ccan/str/str.h"
+
+struct status_cache {
+    struct rlist *rl;   // exclusions removed
+    json_t *R_all;
+    json_t *R_down;
+};
 
 struct status {
     struct resource_ctx *ctx;
     flux_msg_handler_t **handlers;
     struct flux_msglist *requests;
+    struct status_cache cache;
+    json_t *R_empty;
 };
+
+static void invalidate_cache (struct status_cache *cache, bool all)
+{
+    if (all) {
+        rlist_destroy (cache->rl);
+        cache->rl = NULL;
+        json_decref (cache->R_all);
+        cache->R_all = NULL;
+    }
+    json_decref (cache->R_down);
+    cache->R_down = NULL;
+}
 
 static json_t *prepare_status_payload (struct status *status)
 {
@@ -114,37 +136,35 @@ static int mark_down (struct rlist *rl, const struct idset *ids)
 
 /* Get an Rv1 resource object that includes all resources.
  */
-static json_t *get_all (struct rlist *rl)
+static const json_t *get_all (struct status *status, const struct rlist *rl)
 {
-    json_t *o;
-    struct rlist *r;
 
-    if (!(r = rlist_copy_empty (rl))
-        || rlist_mark_up (r, "all") < 0
-        || !(o = rlist_to_R (r)))
-        goto error;
-    rlist_destroy (r);
-    return o;
-error:
-    rlist_destroy (r);
-    return NULL;
+    if (!status->cache.R_all)
+        status->cache.R_all = rlist_to_R (rl);
+    return status->cache.R_all;
 }
 
 /* Get an Rv1 resource object that includes only DOWN resources.
+ * This modifies 'rl' but only to mark nodes up/down for rlist_copy_down().
+ * The up/down state is not used by other users of cache->rl.
  */
-static json_t *get_down (struct rlist *rl)
+static json_t *get_down (struct status *status, struct rlist *rl)
 {
-    json_t *o;
-    struct rlist *r;
+    if (!status->cache.R_down) {
+        struct rlist *rdown = NULL;
+        struct idset *drain = NULL;
+        const struct idset *down = monitor_get_down (status->ctx->monitor);
 
-    if (!(r = rlist_copy_down (rl))
-        || !(o = rlist_to_R (r)))
-        goto error;
-    rlist_destroy (r);
-    return o;
-error:
-    rlist_destroy (r);
-    return NULL;
+        if ((drain = drain_get (status->ctx->drain))
+            && rlist_mark_up (rl, "all") >= 0
+            && mark_down (rl, down) == 0
+            && mark_down (rl, drain) == 0
+            && (rdown = rlist_copy_down (rl)))
+            status->cache.R_down = rlist_to_R (rdown);
+        idset_destroy (drain);
+        rlist_destroy (rdown);
+    }
+    return status->cache.R_down;
 }
 
 /* Create an empty but valid Rv1 object.
@@ -192,7 +212,7 @@ done:
 
 /* Fetch properties from a resource set in JSON form.
  */
-static json_t *get_properties (struct rlist *rl)
+static json_t *get_properties (const struct rlist *rl)
 {
     char *s;
     json_t *o = NULL;
@@ -206,7 +226,7 @@ static json_t *get_properties (struct rlist *rl)
 /* Given a resource set 'all' with properties, assign any to 'alloc'
  * that have matching ranks.
  */
-static int update_properties (struct rlist *alloc, struct rlist *all)
+static int update_properties (struct rlist *alloc, const struct rlist *all)
 {
     struct idset *alloc_ranks;
     json_t *props;
@@ -241,7 +261,7 @@ error:
     return -1;
 }
 
-static json_t *update_properties_json (json_t *R, struct rlist *all)
+static json_t *update_properties_json (json_t *R, const struct rlist *all)
 {
     struct rlist *alloc;
     json_t *R2 = NULL;
@@ -258,12 +278,9 @@ done:
 
 /* Create an rlist object from R.  Omit the scheduling key.  Then:
  * - exclude the ranks in 'exclude' (if non-NULL)
- * - mark down the ranks in 'down' and/or 'drain' (if non-NULL)
  */
 static struct rlist *create_rlist (const json_t *R,
-                                   const struct idset *exclude,
-                                   const struct idset *down,
-                                   struct idset *drain)
+                                   const struct idset *exclude)
 {
     json_t *cpy;
     struct rlist *rl;
@@ -281,8 +298,6 @@ static struct rlist *create_rlist (const json_t *R,
         if (rlist_remove_ranks (rl, (struct idset *)exclude) < 0)
             goto error;
     }
-    if (mark_down (rl, down) < 0 || mark_down (rl, drain) < 0)
-        goto error;
     json_decref (cpy);
     return rl;
 error:
@@ -290,6 +305,18 @@ error:
     rlist_destroy (rl);
     errno = EINVAL;
     return NULL;
+}
+
+static struct rlist *get_resource_list (struct status *status)
+{
+    if (!status->cache.rl) {
+        const json_t *R;
+        const struct idset *exclude = exclude_get (status->ctx->exclude);
+
+        if ((R = inventory_get (status->ctx->inventory)))
+            status->cache.rl = create_rlist (R, exclude);
+    }
+    return status->cache.rl;
 }
 
 /* See issue #5776 for an example of what the sched.resource-status
@@ -300,46 +327,33 @@ error:
 static json_t *prepare_sched_status_payload (struct status *status,
                                              json_t *allocated)
 {
-    struct resource_ctx *ctx = status->ctx;
-    const struct idset *exclude = exclude_get (ctx->exclude);
-    const struct idset *down = monitor_get_down (ctx->monitor);
-    struct idset *drain = drain_get (ctx->drain);
-    const json_t *R;
+    struct rlist *rl;
+    const json_t *all;
+    const json_t *down;
     json_t *o;
-    struct rlist *rl = NULL;
     json_t *result = NULL;
 
-    if (!(R = inventory_get (ctx->inventory))
-        || !(rl = create_rlist (R, exclude, down, drain))
-        || !(result = json_object ()))
+    if (!(rl = get_resource_list (status))
+        || !(all = get_all (status, rl))
+        || !(down = get_down (status, rl)))
         goto error;
-
-    if (!(o = get_all (rl))
-        || json_object_set_new (result, "all", o) < 0) {
-        json_decref (o);
-        goto error;
-    }
-    if (!(o = get_down (rl))
-        || json_object_set_new (result, "down", o) < 0) {
-        json_decref (o);
+    if (!(result = json_pack ("{s:O s:O}",
+                              "all", all,
+                              "down", down))) {
+        errno = ENOMEM;
         goto error;
     }
     if (allocated)
         o = update_properties_json (allocated, rl);
     else
-        o = get_empty_set ();
+        o = json_incref (status->R_empty);
     if (!o || json_object_set_new (result, "allocated", o) < 0) {
         json_decref (o);
         goto error;
     }
-
-    idset_destroy (drain);
-    rlist_destroy (rl);
     return result;
 error:
     ERRNO_SAFE_WRAP (json_decref, result);
-    idset_destroy (drain);
-    rlist_destroy (rl);
     return NULL;
 }
 
@@ -442,6 +456,30 @@ error:
         flux_log_error (h, "error responding to resource.sched-status");
 }
 
+/* Watch for resource eventlog events that might invalidate cached data.
+ * resource-define
+ *   could be called in test from 'flux resource reload'
+ * resource-update
+ *   expiration only at this time - ignore
+ * online, offline, drain, undrain
+ *   invalidate R_down only
+ */
+static void reslog_cb (struct reslog *reslog,
+                       const char *name,
+                       json_t *context,
+                       void *arg)
+{
+    struct status *status = arg;
+
+    if (streq (name, "resource-define"))
+        invalidate_cache (&status->cache, true);
+    else if (streq (name, "online")
+        || streq (name, "offline")
+        || streq (name, "drain")
+        || streq (name, "undrain"))
+        invalidate_cache (&status->cache, false);
+}
+
 /* Disconnect hook called from resource module's main disconnect
  * message handler.
  */
@@ -472,6 +510,9 @@ void status_destroy (struct status *status)
         int saved_errno = errno;
         flux_msg_handler_delvec (status->handlers);
         flux_msglist_destroy (status->requests);
+        reslog_remove_callback (status->ctx->reslog, reslog_cb, status);
+        invalidate_cache (&status->cache, true);
+        json_decref (status->R_empty);
         free (status);
         errno = saved_errno;
     }
@@ -488,6 +529,12 @@ struct status *status_create (struct resource_ctx *ctx)
         goto error;
     if (flux_msg_handler_addvec (ctx->h, htab, status, &status->handlers) < 0)
         goto error;
+    if (ctx->rank == 0) {
+        if (reslog_add_callback (ctx->reslog, reslog_cb, status) < 0)
+            goto error;
+        if (!(status->R_empty = get_empty_set ()))
+            goto error;
+    }
     return status;
 error:
     status_destroy (status);
