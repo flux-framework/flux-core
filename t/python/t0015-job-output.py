@@ -62,6 +62,7 @@ class TestJobOutput(unittest.TestCase):
         )
         urgency = FLUX_JOB_URGENCY_DEFAULT
         jobspec.setattr_shell_option("cpu-affinity", "off")
+        jobspec.environment = dict(os.environ)
         if hold:
             urgency = FLUX_JOB_URGENCY_HOLD
         if verbose:
