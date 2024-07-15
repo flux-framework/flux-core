@@ -380,6 +380,12 @@ dist_check_SCRIPTS = \
 	scripts/pipe.py \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
+	valgrind/workload.d/job-info \
+	valgrind/workload.d/job-multinode \
+	valgrind/workload.d/job-wait \
+	valgrind/workload.d/job-cancel \
+	valgrind/workload.d/job-list \
+	valgrind/workload.d/job-sdexec \
 	content/content-helper.sh \
 	kvs/kvs-helper.sh \
 	kvs/change-checkpoint.py \
