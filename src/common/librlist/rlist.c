@@ -1580,7 +1580,7 @@ int rlist_json_nodelist (struct rlist *rl, json_t **result)
     return 0;
 }
 
-static zhashx_t *rlist_properties (struct rlist *rl)
+static zhashx_t *rlist_properties (const struct rlist *rl)
 {
     int saved_errno;
     struct rnode *n;
@@ -1631,7 +1631,7 @@ error:
     return NULL;
 }
 
-static int rlist_json_properties (struct rlist *rl, json_t **result)
+static int rlist_json_properties (const struct rlist *rl, json_t **result)
 {
     int saved_errno;
     int rc = -1;
@@ -1687,7 +1687,7 @@ out:
     return rc;
 }
 
-char *rlist_properties_encode (struct rlist *rl)
+char *rlist_properties_encode (const struct rlist *rl)
 {
     char *result = NULL;
     json_t *o = NULL;
