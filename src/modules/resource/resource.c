@@ -405,10 +405,15 @@ static int reload_eventlog (flux_t *h, json_t **eventlog)
         o = NULL;
     }
     else {
-        if (!(o = eventlog_decode (s))) {
-            flux_log (h, LOG_ERR, "%s: decode error", RESLOG_KEY);
-            goto error;
+        if (s) {
+            if (!(o = eventlog_decode (s))) {
+                flux_log (h, LOG_ERR, "%s: decode error", RESLOG_KEY);
+                goto error;
+            }
         }
+        else
+            /* s == NULL, RESLOG_KEY has been set to empty string */
+            o = NULL;
     }
     *eventlog = o;
     flux_future_destroy (f);
