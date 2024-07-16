@@ -513,10 +513,8 @@ int pmi_kvs_get (void *arg, void *client, const char *kvsname,
 int execvp_argz (char *argz, size_t argz_len)
 {
     char **av = malloc (sizeof (char *) * (argz_count (argz, argz_len) + 1));
-    if (!av) {
-        errno = ENOMEM;
+    if (!av)
         return -1;
-    }
     argz_extract (argz, argz_len, av);
     execvp (av[0], av);
     free (av);
@@ -600,7 +598,7 @@ int exec_broker (const char *cmd_argz,
     if (ctx.verbose >= 1) {
         char *cpy = malloc (argz_len);
         if (!cpy)
-            goto nomem;
+            goto error;
         memcpy (cpy, argz, argz_len);
         argz_stringify (cpy, argz_len, ' ');
         log_msg ("%s", cpy);
