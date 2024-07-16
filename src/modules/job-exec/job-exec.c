@@ -108,6 +108,7 @@
 #include "exec_config.h"
 
 static double kill_timeout;
+static int max_kill_count;
 static int term_signal;
 static int kill_signal;
 
@@ -373,12 +374,49 @@ static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
     }
 }
 
+static int drain_active_ranks (struct jobinfo *job, struct idset *active_ranks)
+{
+    char *ranks = NULL;
+    flux_future_t *f = NULL;
+    char reason[64];
+    int rc = -1;
+
+    /* message below guaranteed to fit in < 64 characters */
+    (void) snprintf (reason,
+                     sizeof (reason),
+                     "unkillable processes for job %s",
+                     idf58 (job->id));
+
+    if (!(ranks = idset_encode (active_ranks, IDSET_FLAG_RANGE))
+        || !(f = flux_rpc_pack (job->h,
+                                "resource.drain",
+                                0,
+                                0,
+                                "{s:s s:s s:s}",
+                                "targets", ranks,
+                                "reason", reason,
+                                "mode", "update"))) {
+        flux_log (job->h,
+                  LOG_ERR,
+                  "Failed to drain broker ranks %s for job %s",
+                  ranks,
+                  idf58 (job->id));
+        goto error;
+    }
+    rc = 0;
+error:
+    flux_future_destroy (f);
+    free (ranks);
+    return rc;
+}
+
 static void kill_shell_timer_cb (flux_reactor_t  *r,
                                  flux_watcher_t *w,
                                  int revents,
                                  void *arg)
 {
     struct jobinfo *job = arg;
+    struct idset *active_ranks;
 
     flux_log (job->h,
               LOG_DEBUG,
@@ -399,6 +437,31 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
         job->kill_timeout = 300.;
     flux_timer_watcher_reset (w, job->kill_timeout, 0.);
     flux_watcher_start (w);
+
+    /* Check if we've exceeded the maximum number of kill attempts.
+     * Drain ranks that are still active if so. If the drain succeeds,
+     * then force remaining tasks to be complete, which will then cause
+     * this job object to be destroyed (which terminates any active kill
+     * timers).
+     *
+     * If the drain fails (unlikely), then the job stays active and we'll
+     * try to kill it again (and drain ranks) the next time the kill timer
+     * fires.
+     */
+    if (job->kill_shell_count >= max_kill_count
+        && job->impl->active_ranks
+        && (active_ranks = (*job->impl->active_ranks) (job))) {
+        flux_log (job->h,
+                  LOG_DEBUG,
+                  "job %s exceeded max kill count. Draining active ranks",
+                  idf58 (job->id));
+        if (drain_active_ranks (job, active_ranks) == 0) {
+            /* Force remaining tasks to be complete
+             */
+            jobinfo_tasks_complete (job, active_ranks, 1);
+        }
+        idset_destroy (active_ranks);
+    }
 }
 
 static void kill_timer_cb (flux_reactor_t *r,
@@ -1392,16 +1455,18 @@ static int job_exec_set_config_globals (flux_t *h,
      * So we must re-initialize globals everytime we reload the module.
      */
     kill_timeout = 5.0;
+    max_kill_count = 8;
     term_signal = SIGTERM;
     kill_signal = SIGKILL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s s?s}}",
+                          "{s?{s?s s?s s?s s?i}}",
                           "exec",
                             "kill-timeout", &kto,
                             "term-signal", &tsignal,
-                            "kill-signal", &ksignal) < 0)
+                            "kill-signal", &ksignal,
+                            "max-kill-count", &max_kill_count) < 0)
         return errprintf (errp,
                           "Error reading [exec] table: %s",
                           error.text);
@@ -1414,6 +1479,8 @@ static int job_exec_set_config_globals (flux_t *h,
             ksignal = argv[i] + 12;
         else if (strstarts (argv[i], "term-signal="))
             tsignal = argv[i] + 12;
+        else if (strstarts (argv[i], "max-kill-count="))
+            max_kill_count = atoi(argv[i] + 15);
     }
 
     if (kto) {
@@ -1584,10 +1651,11 @@ static void stats_cb (flux_t *h,
     json_t *jobs;
     int i = 0;
 
-    if (!(o = json_pack ("{s:f s:s s:s}",
+    if (!(o = json_pack ("{s:f s:s s:s s:i}",
                          "kill-timeout", kill_timeout,
                          "term-signal", sigutil_signame (term_signal),
-                         "kill-signal", sigutil_signame (kill_signal)))) {
+                         "kill-signal", sigutil_signame (kill_signal),
+                         "max-kill-count", max_kill_count))) {
         errno = ENOMEM;
         goto error;
     }

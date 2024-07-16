@@ -669,6 +669,13 @@ static json_t *exec_stats (struct jobinfo *job)
         return exec_config_stats ();
 }
 
+static struct idset *active_ranks (struct jobinfo *job)
+{
+    if (job)
+        return bulk_exec_active_ranks ((struct bulk_exec *) job->data);
+    return NULL;
+}
+
 struct exec_implementation bulkexec = {
     .name =     "bulk-exec",
     .config =   exec_config,
@@ -678,6 +685,7 @@ struct exec_implementation bulkexec = {
     .kill =     exec_kill,
     .cancel =   exec_cancel,
     .stats =    exec_stats,
+    .active_ranks = active_ranks,
 };
 
 /* vi: ts=4 sw=4 expandtab

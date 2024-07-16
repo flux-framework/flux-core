@@ -7,7 +7,8 @@ test_description='Test flux job exec job cleanup via SIGKILL'
 test_under_flux 1 job
 
 test_expect_success 'job-exec: reload module with short kill-timeout' '
-	flux module reload job-exec kill-timeout=0.1s
+	flux module reload job-exec kill-timeout=0.1s &&
+	flux module stats job-exec
 '
 test_expect_success 'job-exec: run test program that blocks SIGTERM' '
 	id=$(flux submit --wait-event=start  -n 1 -o trap.out \
@@ -27,13 +28,17 @@ test_expect_success 'job-exec: ensure cancellation kills job' '
 '
 test_expect_success 'job-exec: reload module with kill/term-signal=SIGURG' '
 	flux module reload job-exec \
-		kill-timeout=0.1s kill-signal=SIGURG term-signal=SIGURG
+		kill-timeout=0.1s kill-signal=SIGURG term-signal=SIGURG \
+		max-kill-count=3
 '
 test_expect_success 'job-exec: submit a job' '
 	jobid=$(flux submit --wait-event=start -n1 sleep inf)
 '
 test_expect_success 'job-exec: job is listed in flux-module stats' '
 	flux module stats job-exec | jq .jobs.$jobid
+'
+test_expect_success 'job-exec: get sleep PID for later cleanup' '
+	sleep_pid=$(flux job hostpids $jobid | sed s/.*://)
 '
 test_expect_success 'job-exec: cancel test job to start kill timer' '
 	flux cancel $jobid
@@ -51,7 +56,7 @@ check_kill_count() {
 			echo "${stat} >= ${value} timed out after ${timeout}s"
 			return 1
 		fi
-		sleep 0.5
+		sleep 0.2
 		flux module stats job-exec | jq .jobs.${id}.${stat}
 	done
 }
@@ -65,8 +70,12 @@ test_expect_success 'job-exec: kill-timeout > original value (0.1)' '
 	flux module stats job-exec | jq .jobs.${jobid}.kill_timeout &&
 	flux module stats job-exec | jq -e ".jobs.${jobid}.kill_timeout > 0.1"
 '
-test_expect_success 'job-exec: kill test job with SIGKILL' '
-	flux job kill -s 9 $jobid &&
-	flux job wait-event -vt 15 $jobid clean
+test_expect_success 'job-exec: wait for job to be terminated by max-kill-count' '
+	flux job wait-event -vt 15 $jobid clean &&
+	flux dmesg -H | grep "exceeded max kill count" &&
+	flux resource drain -no {reason} | grep "unkillable processes"
+'
+test_expect_success 'job-exec: kill orphan sleep PID' '
+	kill $sleep_pid
 '
 test_done

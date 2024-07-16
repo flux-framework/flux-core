@@ -47,6 +47,8 @@ struct jobinfo;
  *
  *   - stats:   (optional) get json object of exec implementation stats
  *
+ *   - active_ranks:
+ *              (optional) get the set of ranks with active job shells.
  */
 struct exec_implementation {
     const char *name;
@@ -62,6 +64,7 @@ struct exec_implementation {
     int  (*kill)    (struct jobinfo *job, int signum);
     int  (*cancel)  (struct jobinfo *job);
     json_t * (*stats) (struct jobinfo *job);
+    struct idset * (*active_ranks) (struct jobinfo *job);
 };
 
 /*  Exec job information */
