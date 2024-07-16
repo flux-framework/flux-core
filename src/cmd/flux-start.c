@@ -534,6 +534,48 @@ bool system_instance_is_running (void)
     return running;
 }
 
+void process_recovery_option (char **argz,
+                              size_t *argz_len,
+                              bool *system_recovery)
+{
+    char path[1024];
+    const char *optarg;
+    struct stat sb;
+
+    add_argzf (argz, argz_len, "-Sbroker.recovery-mode=1");
+    add_argzf (argz, argz_len, "-Sbroker.quorum=1");
+    add_argzf (argz, argz_len, "-Slog-stderr-level=5");
+
+    // if --recovery has no optional argument, assume this is the system
+    // instance and make sure it is not running.
+    if (!(optarg = optparse_get_str (ctx.opts, "recovery", NULL))) {
+        optarg = default_statedir;
+        if (system_instance_is_running ())
+            log_msg_exit ("system instance is already running");
+        *system_recovery = true;
+    }
+
+    // if argument is a dir, assume statedir; if file, assume dump archive
+    if (stat (optarg, &sb) < 0)
+        log_err_exit ("%s", optarg);
+    if (S_ISDIR (sb.st_mode)) {
+        if (sb.st_uid != getuid ())
+            log_msg_exit ("%s: not owned by you", optarg);
+        if ((sb.st_mode & S_IRWXU) != S_IRWXU)
+            log_msg_exit ("%s: no access", optarg);
+        snprintf (path, sizeof (path), "%s/content.sqlite", optarg);
+        if (access (path, F_OK) < 0)
+            log_err_exit ("%s", path);
+        if (access (path, R_OK) < 0)
+            log_msg_exit ("%s: no read permission", path);
+        if (access (path, W_OK) < 0)
+            log_msg_exit ("%s: no write permission", path);
+        add_argzf (argz, argz_len, "-Sstatedir=%s", optarg);
+    }
+    else
+        add_argzf (argz, argz_len, "-Scontent.restore=%s", optarg);
+}
+
 /* Directly exec() a single flux broker.  It is assumed that we
  * are running in an environment with an external PMI service, and the
  * broker will figure out how to bootstrap without any further aid from
@@ -551,44 +593,10 @@ int exec_broker (const char *cmd_argz,
     if (argz_add (&argz, &argz_len, broker_path) != 0)
         goto nomem;
     add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
-    if (optparse_hasopt (ctx.opts, "recovery")) {
-        char path[1024];
-        const char *optarg;
-        struct stat sb;
 
-        add_argzf (&argz, &argz_len, "-Sbroker.recovery-mode=1");
-        add_argzf (&argz, &argz_len, "-Sbroker.quorum=1");
-        add_argzf (&argz, &argz_len, "-Slog-stderr-level=5");
+    if (optparse_hasopt (ctx.opts, "recovery"))
+        process_recovery_option (&argz, &argz_len, &system_recovery);
 
-        // if --recovery has no optional argument, assume this is the system
-        // instance and make sure it is not running.
-        if (!(optarg = optparse_get_str (ctx.opts, "recovery", NULL))) {
-            optarg = default_statedir;
-            if (system_instance_is_running ())
-                log_msg_exit ("system instance is already running");
-            system_recovery = true;
-        }
-
-        // if argument is a dir, assume statedir; if file, assume dump archive
-        if (stat (optarg, &sb) < 0)
-            log_err_exit ("%s", optarg);
-        if (S_ISDIR (sb.st_mode)) {
-            if (sb.st_uid != getuid ())
-                log_msg_exit ("%s: not owned by you", optarg);
-            if ((sb.st_mode & S_IRWXU) != S_IRWXU)
-                log_msg_exit ("%s: no access", optarg);
-            snprintf (path, sizeof (path), "%s/content.sqlite", optarg);
-            if (access (path, F_OK) < 0)
-                log_err_exit ("%s", path);
-            if (access (path, R_OK) < 0)
-                log_msg_exit ("%s: no read permission", path);
-            if (access (path, W_OK) < 0)
-                log_msg_exit ("%s: no write permission", path);
-            add_argzf (&argz, &argz_len, "-Sstatedir=%s", optarg);
-        }
-        else
-            add_argzf (&argz, &argz_len, "-Scontent.restore=%s", optarg);
-    }
     if (system_recovery || optparse_hasopt (ctx.opts, "sysconfig"))
         add_argzf (&argz, &argz_len, "-c%s", default_config_path);
     if (cmd_argz) {
