@@ -1345,7 +1345,7 @@ fail:
     return NULL;
 }
 
-static json_t * rlist_compressed (struct rlist *rl)
+static json_t * rlist_compressed (const struct rlist *rl)
 {
     struct multi_rnode *mrn = NULL;
     json_t *o = json_array ();
@@ -1570,7 +1570,7 @@ fail:
     return NULL;
 }
 
-int rlist_json_nodelist (struct rlist *rl, json_t **result)
+int rlist_json_nodelist (const struct rlist *rl, json_t **result)
 {
     struct hostlist *hl = rlist_nodelist (rl);
     if (!hl)
@@ -1701,7 +1701,7 @@ char *rlist_properties_encode (const struct rlist *rl)
     return result;
 }
 
-json_t *rlist_to_R (struct rlist *rl)
+json_t *rlist_to_R (const struct rlist *rl)
 {
     json_t *R = NULL;
     json_t *R_lite = NULL;
@@ -1748,7 +1748,7 @@ fail:
     return NULL;
 }
 
-char *rlist_encode (struct rlist *rl)
+char *rlist_encode (const struct rlist *rl)
 {
     json_t *o;
     char *R;
