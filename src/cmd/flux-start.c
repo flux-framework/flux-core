@@ -81,9 +81,11 @@ void exit_timeout (flux_reactor_t *r,
                    flux_watcher_t *w,
                    int revents,
                    void *arg);
-int start_session (const char *cmd_argz, size_t cmd_argz_len,
+int start_session (const char *cmd_argz,
+                   size_t cmd_argz_len,
                    const char *broker_path);
-int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
+int exec_broker (const char *cmd_argz,
+                 size_t cmd_argz_len,
                  const char *broker_path);
 char *create_rundir (void);
 void client_destroy (struct client *cli);
@@ -194,10 +196,12 @@ int main (int argc, char *argv[])
     if ((optindex = optparse_parse_args (ctx.opts, argc, argv)) < 0)
         exit (1);
 
-    ctx.exit_timeout = optparse_get_duration (ctx.opts, "test-exit-timeout",
+    ctx.exit_timeout = optparse_get_duration (ctx.opts,
+                                              "test-exit-timeout",
                                               DEFAULT_EXIT_TIMEOUT);
     if (!optparse_hasopt (ctx.opts, "test-exit-timeout"))
-        ctx.exit_timeout = optparse_get_duration (ctx.opts, "killer-timeout",
+        ctx.exit_timeout = optparse_get_duration (ctx.opts,
+                                                  "killer-timeout",
                                                   ctx.exit_timeout);
 
     ctx.exit_mode = optparse_get_str (ctx.opts, "test-exit-mode", "any");
@@ -270,7 +274,9 @@ static void setup_profiling_env (void)
      */
     if (optparse_getopt (ctx.opts, "caliper-profile", &profile) == 1) {
         const char *pl = getenv ("LD_PRELOAD");
-        int rc = setenvf ("LD_PRELOAD", 1, "%s%s%s",
+        int rc = setenvf ("LD_PRELOAD",
+                          1,
+                          "%s%s%s",
                           pl ? pl : "",
                           pl ? " ": "",
                           "libcaliper.so");
@@ -391,7 +397,8 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
             break;
         case FLUX_SUBPROCESS_FAILED: { // completion will not be called
             log_errn_exit (flux_subprocess_fail_errno (p),
-                           "%d subprocess failed", cli->rank);
+                           "%d subprocess failed",
+                           cli->rank);
             break;
         }
         case FLUX_SUBPROCESS_EXITED: {
@@ -401,11 +408,15 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
             assert (status >= 0);
             if (WIFSIGNALED (status)) {
                 log_msg ("%d (pid %d) %s",
-                         cli->rank, pid, strsignal (WTERMSIG (status)));
+                         cli->rank,
+                         pid,
+                         strsignal (WTERMSIG (status)));
             }
             else if (WIFEXITED (status) && WEXITSTATUS (status) != 0) {
                 log_msg ("%d (pid %d) exited with rc=%d",
-                         cli->rank, pid, WEXITSTATUS (status));
+                         cli->rank,
+                         pid,
+                         WEXITSTATUS (status));
             }
             break;
         }
@@ -436,7 +447,10 @@ void channel_cb (flux_subprocess_t *p, const char *stream)
     }
 }
 
-void add_args_list (char **argz, size_t *argz_len, optparse_t *opt, const char *name)
+void add_args_list (char **argz,
+                    size_t *argz_len,
+                    optparse_t *opt,
+                    const char *name)
 {
     const char *arg;
     optparse_getopt_iterator_reset (opt, name);
@@ -499,10 +513,8 @@ int pmi_kvs_get (void *arg, void *client, const char *kvsname,
 int execvp_argz (char *argz, size_t argz_len)
 {
     char **av = malloc (sizeof (char *) * (argz_count (argz, argz_len) + 1));
-    if (!av) {
-        errno = ENOMEM;
+    if (!av)
         return -1;
-    }
     argz_extract (argz, argz_len, av);
     execvp (av[0], av);
     free (av);
@@ -522,12 +534,55 @@ bool system_instance_is_running (void)
     return running;
 }
 
+void process_recovery_option (char **argz,
+                              size_t *argz_len,
+                              bool *system_recovery)
+{
+    char path[1024];
+    const char *optarg;
+    struct stat sb;
+
+    add_argzf (argz, argz_len, "-Sbroker.recovery-mode=1");
+    add_argzf (argz, argz_len, "-Sbroker.quorum=1");
+    add_argzf (argz, argz_len, "-Slog-stderr-level=5");
+
+    // if --recovery has no optional argument, assume this is the system
+    // instance and make sure it is not running.
+    if (!(optarg = optparse_get_str (ctx.opts, "recovery", NULL))) {
+        optarg = default_statedir;
+        if (system_instance_is_running ())
+            log_msg_exit ("system instance is already running");
+        *system_recovery = true;
+    }
+
+    // if argument is a dir, assume statedir; if file, assume dump archive
+    if (stat (optarg, &sb) < 0)
+        log_err_exit ("%s", optarg);
+    if (S_ISDIR (sb.st_mode)) {
+        if (sb.st_uid != getuid ())
+            log_msg_exit ("%s: not owned by you", optarg);
+        if ((sb.st_mode & S_IRWXU) != S_IRWXU)
+            log_msg_exit ("%s: no access", optarg);
+        snprintf (path, sizeof (path), "%s/content.sqlite", optarg);
+        if (access (path, F_OK) < 0)
+            log_err_exit ("%s", path);
+        if (access (path, R_OK) < 0)
+            log_msg_exit ("%s: no read permission", path);
+        if (access (path, W_OK) < 0)
+            log_msg_exit ("%s: no write permission", path);
+        add_argzf (argz, argz_len, "-Sstatedir=%s", optarg);
+    }
+    else
+        add_argzf (argz, argz_len, "-Scontent.restore=%s", optarg);
+}
+
 /* Directly exec() a single flux broker.  It is assumed that we
  * are running in an environment with an external PMI service, and the
  * broker will figure out how to bootstrap without any further aid from
  * flux-start.
  */
-int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
+int exec_broker (const char *cmd_argz,
+                 size_t cmd_argz_len,
                  const char *broker_path)
 {
     char *argz = NULL;
@@ -538,44 +593,10 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
     if (argz_add (&argz, &argz_len, broker_path) != 0)
         goto nomem;
     add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
-    if (optparse_hasopt (ctx.opts, "recovery")) {
-        char path[1024];
-        const char *optarg;
-        struct stat sb;
 
-        add_argzf (&argz, &argz_len, "-Sbroker.recovery-mode=1");
-        add_argzf (&argz, &argz_len, "-Sbroker.quorum=1");
-        add_argzf (&argz, &argz_len, "-Slog-stderr-level=5");
+    if (optparse_hasopt (ctx.opts, "recovery"))
+        process_recovery_option (&argz, &argz_len, &system_recovery);
 
-        // if --recovery has no optional argument, assume this is the system
-        // instance and make sure it is not running.
-        if (!(optarg = optparse_get_str (ctx.opts, "recovery", NULL))) {
-            optarg = default_statedir;
-            if (system_instance_is_running ())
-                log_msg_exit ("system instance is already running");
-            system_recovery = true;
-        }
-
-        // if argument is a dir, assume statedir; if file, assume dump archive
-        if (stat (optarg, &sb) < 0)
-            log_err_exit ("%s", optarg);
-        if (S_ISDIR (sb.st_mode)) {
-            if (sb.st_uid != getuid ())
-                log_msg_exit ("%s: not owned by you", optarg);
-            if ((sb.st_mode & S_IRWXU) != S_IRWXU)
-                log_msg_exit ("%s: no access", optarg);
-            snprintf (path, sizeof (path), "%s/content.sqlite", optarg);
-            if (access (path, F_OK) < 0)
-                log_err_exit ("%s", path);
-            if (access (path, R_OK) < 0)
-                log_msg_exit ("%s: no read permission", path);
-            if (access (path, W_OK) < 0)
-                log_msg_exit ("%s: no write permission", path);
-            add_argzf (&argz, &argz_len, "-Sstatedir=%s", optarg);
-        }
-        else
-            add_argzf (&argz, &argz_len, "-Scontent.restore=%s", optarg);
-    }
     if (system_recovery || optparse_hasopt (ctx.opts, "sysconfig"))
         add_argzf (&argz, &argz_len, "-c%s", default_config_path);
     if (cmd_argz) {
@@ -585,7 +606,7 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
     if (ctx.verbose >= 1) {
         char *cpy = malloc (argz_len);
         if (!cpy)
-            goto nomem;
+            goto error;
         memcpy (cpy, argz, argz_len);
         argz_stringify (cpy, argz_len, ' ');
         log_msg ("%s", cpy);
@@ -615,6 +636,7 @@ struct client *client_create (const char *broker_path,
     char *arg;
     char * argz = NULL;
     size_t argz_len = 0;
+    bool system_recovery = false;
 
     cli->rank = rank;
     add_args_list (&argz, &argz_len, ctx.opts, "wrap");
@@ -622,6 +644,10 @@ struct client *client_create (const char *broker_path,
     char *dir_arg = xasprintf ("--setattr=rundir=%s", rundir);
     argz_add (&argz, &argz_len, dir_arg);
     free (dir_arg);
+    if (optparse_hasopt (ctx.opts, "recovery") && rank == 0)
+        process_recovery_option (&argz, &argz_len, &system_recovery);
+    if (system_recovery || optparse_hasopt (ctx.opts, "sysconfig"))
+        add_argzf (&argz, &argz_len, "-c%s", default_config_path);
     add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
     if (rank == 0 && cmd_argz)
         argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len); /* must be last arg */
@@ -640,10 +666,16 @@ struct client *client_create (const char *broker_path,
         log_err_exit ("flux_cmd_add_channel");
     if (flux_cmd_setenvf (cli->cmd, 1, "PMI_RANK", "%d", rank) < 0
         || flux_cmd_setenvf (cli->cmd, 1, "PMI_SIZE", "%d", ctx.test_size) < 0
-        || flux_cmd_setenvf (cli->cmd, 1, "FLUX_START_URI",
-                             "local://%s/start", rundir) < 0
-        || (hostname && flux_cmd_setenvf (cli->cmd, 1, "FLUX_FAKE_HOSTNAME",
-                                          "%s", hostname) < 0))
+        || flux_cmd_setenvf (cli->cmd,
+                             1,
+                             "FLUX_START_URI",
+                             "local://%s/start",
+                             rundir) < 0
+        || (hostname && flux_cmd_setenvf (cli->cmd,
+                                          1,
+                                          "FLUX_FAKE_HOSTNAME",
+                                          "%s",
+                                          hostname) < 0))
             log_err_exit ("error setting up environment for rank %d", rank);
     return cli;
 fail:
@@ -713,8 +745,13 @@ void pmi_server_initialize (int flags)
             log_msg_exit ("error encoding PMI_process_mapping");
         zhash_update (ctx.pmi.kvs, "PMI_process_mapping", s);
     }
-    ctx.pmi.srv = pmi_simple_server_create (ops, appnum, ctx.test_size,
-                                            ctx.test_size, "-", flags, NULL);
+    ctx.pmi.srv = pmi_simple_server_create (ops,
+                                            appnum,
+                                            ctx.test_size,
+                                            ctx.test_size,
+                                            "-",
+                                            flags,
+                                            NULL);
     if (!ctx.pmi.srv)
         log_err_exit ("pmi_simple_server_create");
     taskmap_destroy (map);
@@ -1001,7 +1038,8 @@ void start_server_finalize (void)
  * descriptors it implies that the brokers in this instance must all
  * be contained on one node.  This is mostly useful for testing purposes.
  */
-int start_session (const char *cmd_argz, size_t cmd_argz_len,
+int start_session (const char *cmd_argz,
+                   size_t cmd_argz_len,
                    const char *broker_path)
 {
     struct client *cli;
@@ -1021,8 +1059,8 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
     if (!(ctx.timer = flux_timer_watcher_create (ctx.reactor,
-                                                  ctx.exit_timeout, 0.,
-                                                  exit_timeout, NULL)))
+                                                 ctx.exit_timeout, 0.,
+                                                 exit_timeout, NULL)))
         log_err_exit ("flux_timer_watcher_create");
     if (!(ctx.clients = zlist_new ()))
         log_err_exit ("zlist_new");
