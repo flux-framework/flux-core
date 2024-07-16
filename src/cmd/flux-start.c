@@ -636,6 +636,7 @@ struct client *client_create (const char *broker_path,
     char *arg;
     char * argz = NULL;
     size_t argz_len = 0;
+    bool system_recovery = false;
 
     cli->rank = rank;
     add_args_list (&argz, &argz_len, ctx.opts, "wrap");
@@ -643,6 +644,10 @@ struct client *client_create (const char *broker_path,
     char *dir_arg = xasprintf ("--setattr=rundir=%s", rundir);
     argz_add (&argz, &argz_len, dir_arg);
     free (dir_arg);
+    if (optparse_hasopt (ctx.opts, "recovery") && rank == 0)
+        process_recovery_option (&argz, &argz_len, &system_recovery);
+    if (system_recovery || optparse_hasopt (ctx.opts, "sysconfig"))
+        add_argzf (&argz, &argz_len, "-c%s", default_config_path);
     add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
     if (rank == 0 && cmd_argz)
         argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len); /* must be last arg */
