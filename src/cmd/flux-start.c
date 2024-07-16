@@ -81,9 +81,11 @@ void exit_timeout (flux_reactor_t *r,
                    flux_watcher_t *w,
                    int revents,
                    void *arg);
-int start_session (const char *cmd_argz, size_t cmd_argz_len,
+int start_session (const char *cmd_argz,
+                   size_t cmd_argz_len,
                    const char *broker_path);
-int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
+int exec_broker (const char *cmd_argz,
+                 size_t cmd_argz_len,
                  const char *broker_path);
 char *create_rundir (void);
 void client_destroy (struct client *cli);
@@ -194,10 +196,12 @@ int main (int argc, char *argv[])
     if ((optindex = optparse_parse_args (ctx.opts, argc, argv)) < 0)
         exit (1);
 
-    ctx.exit_timeout = optparse_get_duration (ctx.opts, "test-exit-timeout",
+    ctx.exit_timeout = optparse_get_duration (ctx.opts,
+                                              "test-exit-timeout",
                                               DEFAULT_EXIT_TIMEOUT);
     if (!optparse_hasopt (ctx.opts, "test-exit-timeout"))
-        ctx.exit_timeout = optparse_get_duration (ctx.opts, "killer-timeout",
+        ctx.exit_timeout = optparse_get_duration (ctx.opts,
+                                                  "killer-timeout",
                                                   ctx.exit_timeout);
 
     ctx.exit_mode = optparse_get_str (ctx.opts, "test-exit-mode", "any");
@@ -270,7 +274,9 @@ static void setup_profiling_env (void)
      */
     if (optparse_getopt (ctx.opts, "caliper-profile", &profile) == 1) {
         const char *pl = getenv ("LD_PRELOAD");
-        int rc = setenvf ("LD_PRELOAD", 1, "%s%s%s",
+        int rc = setenvf ("LD_PRELOAD",
+                          1,
+                          "%s%s%s",
                           pl ? pl : "",
                           pl ? " ": "",
                           "libcaliper.so");
@@ -391,7 +397,8 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
             break;
         case FLUX_SUBPROCESS_FAILED: { // completion will not be called
             log_errn_exit (flux_subprocess_fail_errno (p),
-                           "%d subprocess failed", cli->rank);
+                           "%d subprocess failed",
+                           cli->rank);
             break;
         }
         case FLUX_SUBPROCESS_EXITED: {
@@ -401,11 +408,15 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
             assert (status >= 0);
             if (WIFSIGNALED (status)) {
                 log_msg ("%d (pid %d) %s",
-                         cli->rank, pid, strsignal (WTERMSIG (status)));
+                         cli->rank,
+                         pid,
+                         strsignal (WTERMSIG (status)));
             }
             else if (WIFEXITED (status) && WEXITSTATUS (status) != 0) {
                 log_msg ("%d (pid %d) exited with rc=%d",
-                         cli->rank, pid, WEXITSTATUS (status));
+                         cli->rank,
+                         pid,
+                         WEXITSTATUS (status));
             }
             break;
         }
@@ -436,7 +447,10 @@ void channel_cb (flux_subprocess_t *p, const char *stream)
     }
 }
 
-void add_args_list (char **argz, size_t *argz_len, optparse_t *opt, const char *name)
+void add_args_list (char **argz,
+                    size_t *argz_len,
+                    optparse_t *opt,
+                    const char *name)
 {
     const char *arg;
     optparse_getopt_iterator_reset (opt, name);
@@ -527,7 +541,8 @@ bool system_instance_is_running (void)
  * broker will figure out how to bootstrap without any further aid from
  * flux-start.
  */
-int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
+int exec_broker (const char *cmd_argz,
+                 size_t cmd_argz_len,
                  const char *broker_path)
 {
     char *argz = NULL;
@@ -640,10 +655,16 @@ struct client *client_create (const char *broker_path,
         log_err_exit ("flux_cmd_add_channel");
     if (flux_cmd_setenvf (cli->cmd, 1, "PMI_RANK", "%d", rank) < 0
         || flux_cmd_setenvf (cli->cmd, 1, "PMI_SIZE", "%d", ctx.test_size) < 0
-        || flux_cmd_setenvf (cli->cmd, 1, "FLUX_START_URI",
-                             "local://%s/start", rundir) < 0
-        || (hostname && flux_cmd_setenvf (cli->cmd, 1, "FLUX_FAKE_HOSTNAME",
-                                          "%s", hostname) < 0))
+        || flux_cmd_setenvf (cli->cmd,
+                             1,
+                             "FLUX_START_URI",
+                             "local://%s/start",
+                             rundir) < 0
+        || (hostname && flux_cmd_setenvf (cli->cmd,
+                                          1,
+                                          "FLUX_FAKE_HOSTNAME",
+                                          "%s",
+                                          hostname) < 0))
             log_err_exit ("error setting up environment for rank %d", rank);
     return cli;
 fail:
@@ -713,8 +734,13 @@ void pmi_server_initialize (int flags)
             log_msg_exit ("error encoding PMI_process_mapping");
         zhash_update (ctx.pmi.kvs, "PMI_process_mapping", s);
     }
-    ctx.pmi.srv = pmi_simple_server_create (ops, appnum, ctx.test_size,
-                                            ctx.test_size, "-", flags, NULL);
+    ctx.pmi.srv = pmi_simple_server_create (ops,
+                                            appnum,
+                                            ctx.test_size,
+                                            ctx.test_size,
+                                            "-",
+                                            flags,
+                                            NULL);
     if (!ctx.pmi.srv)
         log_err_exit ("pmi_simple_server_create");
     taskmap_destroy (map);
@@ -1001,7 +1027,8 @@ void start_server_finalize (void)
  * descriptors it implies that the brokers in this instance must all
  * be contained on one node.  This is mostly useful for testing purposes.
  */
-int start_session (const char *cmd_argz, size_t cmd_argz_len,
+int start_session (const char *cmd_argz,
+                   size_t cmd_argz_len,
                    const char *broker_path)
 {
     struct client *cli;
@@ -1021,8 +1048,8 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
     if (!(ctx.timer = flux_timer_watcher_create (ctx.reactor,
-                                                  ctx.exit_timeout, 0.,
-                                                  exit_timeout, NULL)))
+                                                 ctx.exit_timeout, 0.,
+                                                 exit_timeout, NULL)))
         log_err_exit ("flux_timer_watcher_create");
     if (!(ctx.clients = zlist_new ()))
         log_err_exit ("zlist_new");
