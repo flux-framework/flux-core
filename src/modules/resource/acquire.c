@@ -454,7 +454,7 @@ void acquire_destroy (struct acquire *acquire)
         int saved_errno = errno;
 
         flux_msg_handler_delvec (acquire->handlers);
-        reslog_set_callback (acquire->ctx->reslog, NULL, NULL);
+        reslog_remove_callback (acquire->ctx->reslog, reslog_cb, acquire);
 
         if (acquire->requests) {
             const flux_msg_t *msg;
@@ -491,7 +491,8 @@ struct acquire *acquire_create (struct resource_ctx *ctx)
                                  acquire,
                                  &acquire->handlers) < 0)
         goto error;
-    reslog_set_callback (ctx->reslog, reslog_cb, acquire);
+    if (reslog_add_callback (ctx->reslog, reslog_cb, acquire) < 0)
+        goto error;
     return acquire;
 error:
     acquire_destroy (acquire);

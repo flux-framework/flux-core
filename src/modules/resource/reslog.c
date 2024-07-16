@@ -19,6 +19,11 @@
 
 #include "reslog.h"
 
+struct reslog_watcher {
+    reslog_cb_f cb;
+    void *arg;
+};
+
 struct event_info {
     json_t *event;          // JSON form of event
     const flux_msg_t *msg;  // optional request to be answered on commit
@@ -27,28 +32,41 @@ struct event_info {
 struct reslog {
     flux_t *h;
     zlist_t *pending;       // list of pending futures
-    reslog_cb_f cb;
-    void *cb_arg;
+    zlist_t *watchers;
 };
 
 static const char *auxkey = "flux::event_info";
 
-/* Call registered callback, if any, with the event name that just completed.
+/* zlist_compare_fn() footprint */
+static int watcher_compare (void *item1, void *item2)
+{
+    struct reslog_watcher *w1 = item1;
+    struct reslog_watcher *w2 = item2;
+    if (w1 && w2 && w1->cb == w2->cb)
+        return 0;
+    return -1;
+}
+
+/* Call registered callbacks, if any, with the event name that just completed.
  */
-static void notify_callback (struct reslog *reslog, json_t *event)
+static void notify_callbacks (struct reslog *reslog, json_t *event)
 {
     const char *name;
     json_t *context;
+    struct reslog_watcher *w;
 
-    if (reslog->cb) {
-        if (json_unpack (event,
-                         "{s:s s:o}",
-                         "name", &name,
-                         "context", &context) < 0) {
-            flux_log (reslog->h, LOG_ERR, "error unpacking event for callback");
-            return;
-        }
-        reslog->cb (reslog, name, context, reslog->cb_arg);
+    if (json_unpack (event,
+                     "{s:s s:o}",
+                     "name", &name,
+                     "context", &context) < 0) {
+        flux_log (reslog->h, LOG_ERR, "error unpacking event for callback");
+        return;
+    }
+    w = zlist_first (reslog->watchers);
+    while (w) {
+        if (w->cb)
+            w->cb (reslog, name, context, w->arg);
+        w = zlist_next (reslog->watchers);
     }
 }
 
@@ -92,7 +110,7 @@ int post_handler (struct reslog *reslog, flux_future_t *f)
                 flux_log_error (reslog->h, "responding to request after post");
         }
     }
-    notify_callback (reslog, info->event);
+    notify_callbacks (reslog, info->event);
 done:
     zlist_remove (reslog->pending, f);
     flux_future_destroy (f);
@@ -187,10 +205,33 @@ error:
     return -1;
 }
 
-void reslog_set_callback (struct reslog *reslog, reslog_cb_f cb, void *arg)
+void reslog_remove_callback (struct reslog *reslog, reslog_cb_f cb, void *arg)
 {
-    reslog->cb = cb;
-    reslog->cb_arg = arg;
+    if (reslog) {
+        struct reslog_watcher w = { .cb = cb, .arg = arg };
+        zlist_remove (reslog->watchers, &w);
+    }
+}
+
+int reslog_add_callback (struct reslog *reslog, reslog_cb_f cb, void *arg)
+{
+    struct reslog_watcher *w;
+
+    if (!reslog) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(w = calloc (1, sizeof (*w))))
+        return -1;
+    w->cb = cb;
+    w->arg = arg;
+    if (zlist_append (reslog->watchers, w) < 0) {
+        free (w);
+        errno = ENOMEM;
+        return -1;
+    }
+    zlist_freefn (reslog->watchers, w, free, true);
+    return 0;
 }
 
 void reslog_destroy (struct reslog *reslog)
@@ -203,6 +244,7 @@ void reslog_destroy (struct reslog *reslog)
                 (void)post_handler (reslog, f);
             zlist_destroy (&reslog->pending);
         }
+        zlist_destroy (&reslog->watchers);
         free (reslog);
         errno = saved_errno;
     }
@@ -215,10 +257,12 @@ struct reslog *reslog_create (flux_t *h)
     if (!(reslog = calloc (1, sizeof (*reslog))))
         return NULL;
     reslog->h = h;
-    if (!(reslog->pending = zlist_new ())) {
+    if (!(reslog->pending = zlist_new ())
+        || !(reslog->watchers = zlist_new ())) {
         errno = ENOMEM;
         goto error;
     }
+    zlist_comparefn (reslog->watchers, watcher_compare);
     return reslog;
 error:
     reslog_destroy (reslog);

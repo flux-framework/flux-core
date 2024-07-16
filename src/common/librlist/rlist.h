@@ -200,14 +200,14 @@ struct idset * rlist_hosts_to_ranks (const struct rlist *rl,
  *  Serialize a resource list into v1 "R" format. This encodes only the
  *   "available" ids in each resource node into execution.R_lite
  */
-json_t * rlist_to_R (struct rlist *rl);
+json_t * rlist_to_R (const struct rlist *rl);
 
 
 /*
  *  Encode resource list into v1 "R" string format.
  *  Identical to `R = rlist_to_R (rl); return json_dumps (R, 0);`.
  */
-char *rlist_encode (struct rlist *rl);
+char *rlist_encode (const struct rlist *rl);
 
 /*
  *  Dump short form description of rlist `rl` as a single line string.
@@ -285,7 +285,7 @@ int rlist_assign_properties (struct rlist *rl,
 /*  Encode properties to a JSON string which conforms to RFC 20 properties
  *   specification. Caller must free.
  */
-char *rlist_properties_encode (struct rlist *rl);
+char *rlist_properties_encode (const struct rlist *rl);
 
 struct rlist *rlist_from_config (json_t *conf, flux_error_t *errp);
 
