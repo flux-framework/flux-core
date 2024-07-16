@@ -2313,9 +2313,10 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (flux_respond_pack (h, msg,
-                           "{ s:O s:O }",
+                           "{ s:O s:O s:i }",
                            "cache", cstats,
-                           "namespace", nsstats) < 0)
+                           "namespace", nsstats,
+                           "pending_requests", zhashx_size (ctx->requests)) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     json_decref (tstats);
     json_decref (cstats);
