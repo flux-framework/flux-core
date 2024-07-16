@@ -10,6 +10,7 @@ RUN apk add \
     bash \
     sudo \
     gcc \
+    g++ \
     autoconf \
     automake \
     libtool \
@@ -54,3 +55,8 @@ RUN groupadd -r munge \
  && useradd -d /etc/munge -g munge -s /sbin/nologin -r munge
 
 ENV LANG=C.UTF-8
+
+# Install catch by hand for now:
+COPY scripts/fetch-and-build-catch.sh /fetch-and-build-catch.sh
+RUN /fetch-and-build-catch.sh
+

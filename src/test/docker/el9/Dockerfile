@@ -1,16 +1,14 @@
-FROM rockylinux:8
+FROM rockylinux:9
 
 LABEL maintainer="Mark Grondona <mgrondona@llnl.gov>"
 
 #  Enable PowerTools for development packages
-RUN yum -y update \
- && dnf -y install 'dnf-command(config-manager)' \
- && yum config-manager --set-enabled powertools \
- && yum -y update \
+RUN dnf -y install 'dnf-command(config-manager)' \
+ && dnf config-manager --enable crb \
 #  Enable EPEL
- && yum -y install epel-release \
+ && dnf -y install epel-release \
 #  Utilities
- && yum -y install \
+ && dnf -y install \
 	wget \
 	man-db \
 	less \
@@ -41,13 +39,13 @@ RUN yum -y update \
 	bison \
 	flex \
 #  Python
-	python36 \
 	python3-devel \
 	python3-cffi \
 	python3-six \
 	python3-yaml \
 	python3-jsonschema \
 	python3-sphinx \
+	python3-coverage \
 #  Development dependencies
 	libsodium-devel \
 	zeromq-devel \
@@ -64,6 +62,7 @@ RUN yum -y update \
 	systemd-devel \
 	libarchive-devel \
 	pam-devel \
+	mpich-devel \
 #  Other deps
 	perl-Time-HiRes \
 	lua-posix \
@@ -74,10 +73,11 @@ RUN yum -y update \
 	aspell-en \
 	glibc-langpack-en \
 	hwloc \
- && yum clean all
+	lcov \
+ && dnf clean all
 
 #  Set default /usr/bin/python to python3
-RUN alternatives --set python /usr/bin/python3
+RUN ln -s /usr/bin/python3 /usr/bin/python
 
 # Install caliper by hand for now:
 COPY scripts/fetch-and-build-caliper.sh /fetch-and-build-caliper.sh
@@ -87,23 +87,16 @@ RUN /fetch-and-build-caliper.sh
 COPY scripts/fetch-and-build-catch.sh /fetch-and-build-catch.sh
 RUN /fetch-and-build-catch.sh
 
-# Install mvapich2
-RUN mkdir mvapich2 \
- && cd mvapich2 \
- && wget -O - http://mvapich.cse.ohio-state.edu/download/mvapich/mv2/mvapich2-2.3.6.tar.gz | tar xvz --strip-components 1 \
- && ./configure --with-device=ch3:sock --disable-fortran --prefix=/usr \
- && make -j4 \
- && make install \
- && cd .. \
- && rm -rf mvapich2
-
-# Install lcov
-RUN rpm --nodeps -i http://downloads.sourceforge.net/ltp/lcov-1.14-1.noarch.rpm
-
-# Install Python 3 coverage
-RUN pip3 install coverage
 
 ENV LANG=C.UTF-8
 RUN printf "LANG=C.UTF-8" > /etc/locale.conf
 
 COPY src/test/docker/el9/config.site /usr/share/config.site
+
+# the psm3 connector added to libfabrics in ~1.12 causes errors when allowed to
+# use non-local connectors on a system with virtual NICs, since we're in a
+# docker container, prevent this
+ENV PSM3_HAL=loopback
+# hwloc tries to look for opengl devices  by connecting to a port that might
+# sometimes be an x11 port, but more often for us is munge, turn it off
+ENV HWLOC_COMPONENTS=-gl

@@ -97,6 +97,7 @@ compile_flags.txt
 # local editor config dirs
 .idea
 .clangd
+.cache
 
 # Rules to ignore auto-generated test harness scripts
 test_*.t

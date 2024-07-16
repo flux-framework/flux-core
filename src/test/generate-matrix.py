@@ -214,14 +214,6 @@ matrix.add_build(
     docker_tag=True,
 )
 
-# Ubuntu 20.04: py3.8
-matrix.add_build(
-    name="focal - py3.8",
-    image="focal",
-    env=dict(PYTHON_VERSION="3.8"),
-    docker_tag=True,
-)
-
 # RHEL8 clone
 matrix.add_build(
     name="el8",

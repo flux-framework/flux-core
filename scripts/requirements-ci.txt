@@ -1,0 +1,9 @@
+markupsafe==2.0.0
+coverage
+cffi
+ply
+six
+pyyaml
+jsonschema>=2.6,<4.0
+sphinxcontrib-spelling
+-r requirements-doc.txt
