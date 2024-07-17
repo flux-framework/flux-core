@@ -1168,11 +1168,6 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
 
     if (!version_check (version, ov->version, &error)) {
         child->error = error; // capture this error message for health report
-        flux_log (ov->h, LOG_ERR,
-                  "rejecting connection from %s (rank %lu): %s",
-                  flux_get_hostbyrank (ov->h, rank),
-                  (unsigned long)rank,
-                  error.text);
         errmsg = error.text;
         errno = EINVAL;
         goto error;
