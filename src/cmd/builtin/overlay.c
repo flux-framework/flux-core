@@ -21,6 +21,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/librlist/rlist.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 #include "builtin.h"
@@ -111,6 +112,7 @@ struct status_node {
     double duration;
     bool ghost;
     enum connector connector;
+    flux_error_t error;
 };
 
 static json_t *overlay_topology;
@@ -299,12 +301,14 @@ static void status_print (struct status *ctx,
     enum connector connector = optparse_hasopt (ctx->opt, "no-pretty") ?
                                0 :
                                node->connector;
-    printf ("%s%s%s: %s%s%s\n",
+    printf ("%s%s%s: %s%s%s%s%s\n",
             status_indent (ctx, level),
             connector_string (connector),
             status_getname (ctx, node),
             status_colorize (ctx, node->status, node->ghost),
             status_duration (ctx, node->duration),
+            strlen (node->error.text) > 0 ? " " : "",
+            node->error.text,
             parent ? status_rpctime (ctx) : "");
 }
 
@@ -554,12 +558,15 @@ static int status_healthwalk (struct status *ctx,
 
             total = json_array_size (children);
             json_array_foreach (children, index, entry) {
+                const char *error = NULL;
                 if (json_unpack (entry,
-                                 "{s:i s:s s:f}",
+                                 "{s:i s:s s:f s?s}",
                                  "rank", &child.rank,
                                  "status", &child.status,
-                                 "duration", &child.duration) < 0)
+                                 "duration", &child.duration,
+                                 "error", &error) < 0)
                     log_msg_exit ("error parsing child array entry");
+                errprintf (&child.error, "%s", error ? error : "");
                 if (!(child.subtree_ranks = subtree_ranks (ctx->h, child.rank)))
                       log_err_exit ("Unable to get subtree idset for rank %d",
                                     child.rank);
