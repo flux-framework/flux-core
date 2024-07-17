@@ -256,10 +256,6 @@ static void allocation_release (struct allocation *a)
 static void allocation_remove (struct allocation *a)
 {
     void *cursor;
-    flux_log (a->hk->ctx->h,
-              LOG_DEBUG,
-              "housekeeping: all resources of %s have been released",
-              idf58 (a->id));
     if (!(cursor = zlistx_find (a->hk->allocations, a))) {
         flux_log (a->hk->ctx->h,
                   LOG_ERR,
@@ -309,14 +305,6 @@ static bool housekeeping_finish_one (struct allocation *a, int rank)
         a->timer_armed = true;
     }
     return true;
-}
-
-static void bulk_start (struct bulk_exec *bulk_exec, void *arg)
-{
-    struct allocation *a = arg;
-    flux_t *h = a->hk->ctx->h;
-
-    flux_log (h, LOG_DEBUG, "housekeeping: %s started", idf58 (a->id));
 }
 
 static void set_failed_reason (const char **s, const char *reason)
@@ -386,9 +374,7 @@ static void bulk_exit (struct bulk_exec *bulk_exec,
 static void bulk_complete (struct bulk_exec *bulk_exec, void *arg)
 {
     struct allocation *a = arg;
-    flux_t *h = a->hk->ctx->h;
 
-    flux_log (h, LOG_DEBUG, "housekeeping: %s complete", idf58 (a->id));
     allocation_remove (a);
 }
 
@@ -850,7 +836,7 @@ error:
 }
 
 static struct bulk_exec_ops bulk_ops = {
-    .on_start = bulk_start,
+    .on_start = NULL,
     .on_exit = bulk_exit,
     .on_complete = bulk_complete,
     .on_output = bulk_output,
