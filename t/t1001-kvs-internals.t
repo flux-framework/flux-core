@@ -27,6 +27,15 @@ test_kvs_key() {
 }
 
 #
+# pending request stats are 0 at start of tests
+#
+
+test_expect_success 'kvs: no pending requests at start of tests' '
+	pendingcount=$(flux module stats -p pending_requests kvs) &&
+	test $pendingcount -eq 0
+'
+
+#
 # large value test
 #
 test_expect_success 'kvs: kvs get/put large raw values works' '
@@ -533,6 +542,8 @@ wait_versionwaiters() {
 
 # In order to test, wait for a version that will not happen
 test_expect_success NO_CHAIN_LINT 'kvs: ENOSYS returned on unfinished requests on module unload' '
+	pendingcount=$(flux module stats -p pending_requests kvs) &&
+	pendingcountexp=$(($pendingcount+1)) &&
 	WAITCOUNT=$(flux module stats --parse namespace.primary.#versionwaiters kvs) &&
 	WAITCOUNT=$(($WAITCOUNT+1))
 	VERS=$(flux kvs version) &&
@@ -540,6 +551,8 @@ test_expect_success NO_CHAIN_LINT 'kvs: ENOSYS returned on unfinished requests o
 	flux kvs wait ${VERSWAIT} 2> enosys.err &
 	pid=$! &&
 	wait_versionwaiters ${WAITCOUNT} &&
+	newcount=$(flux module stats -p pending_requests kvs) &&
+	test $pendingcountexp -eq $newcount &&
 	flux module remove kvs &&
 	! wait $pid &&
 	grep "Function not implemented" enosys.err
