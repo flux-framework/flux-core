@@ -156,6 +156,11 @@ test_expect_success 'kvs: checkpoint of kvs-primary should change in time (4)' '
 	test_cmp checkpoint5.out blob5.out
 '
 
+test_expect_success 'kvs: no pending requests at end of tests before module removal' '
+	pendingcount=$(flux module stats -p pending_requests kvs) &&
+	test $pendingcount -eq 0
+'
+
 test_expect_success 'kvs: remove modules' '
 	flux module remove kvs &&
 	flux module remove content-sqlite &&

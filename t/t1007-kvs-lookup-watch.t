@@ -670,4 +670,14 @@ test_expect_success 'kvs-watch.lookup request non-streaming fails with EPROTO(71
 	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":4}" \
 		${RPC} kvs-watch.lookup 71
 '
+
+#
+# ensure no lingering pending requests
+#
+
+test_expect_success 'kvs: no pending requests at end of tests' '
+	pendingcount=$(flux module stats -p pending_requests kvs) &&
+	test $pendingcount -eq 0
+'
+
 test_done

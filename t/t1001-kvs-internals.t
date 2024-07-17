@@ -523,6 +523,18 @@ test_expect_success 'kvs: test invalid lookup rpc' '
 '
 
 #
+# ensure pending requests are the expected number
+#
+
+# fence invalid tests above linger a pending request on both rank 0 and rank 1
+test_expect_success 'kvs: 1 pending requests at end of tests before module removal' '
+	pendingcount=$(flux module stats -p pending_requests kvs) &&
+	test $pendingcount -eq 1 &&
+	pendingcount1=$(flux exec -n -r 1 sh -c "flux module stats -p pending_requests kvs") &&
+	test $pendingcount1 -eq 1
+'
+
+#
 # test ENOSYS on unfinished requests when unloading the KVS module
 #
 # N.B. do this last as we are unloading the kvs module

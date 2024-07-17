@@ -1274,6 +1274,15 @@ test_expect_success 'setroot-unpause request with empty payload fails with EPROT
 '
 
 #
+# ensure no lingering pending requests
+#
+
+test_expect_success 'kvs: no pending requests at end of tests before module removal' '
+	pendingcount=$(flux module stats -p pending_requests kvs) &&
+	test $pendingcount -eq 0
+'
+
+#
 # module corner cases
 #
 

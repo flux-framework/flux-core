@@ -77,6 +77,11 @@ test_expect_success 'kvs: sync without backing store fails' '
         test_must_fail flux kvs put --sync d=4
 '
 
+test_expect_success 'kvs: no pending requests at end of tests before module removal' '
+	pendingcount=$(flux module stats -p pending_requests kvs) &&
+	test $pendingcount -eq 0
+'
+
 test_expect_success 'kvs: unload kvs' '
 	flux module remove kvs
 '
