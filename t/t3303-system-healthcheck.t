@@ -128,7 +128,7 @@ test_expect_success 'flux overlay status -vv works' '
 '
 
 test_expect_success 'flux overlay status shows rank 3 offline' '
-	echo "3 fake3: offline" >health.exp &&
+	echo "3 fake3: offline administrative shutdown" >health.exp &&
 	flux overlay status --timeout=0 --no-pretty \
 		| grep fake3 >health.out &&
 	test_cmp health.exp health.out
