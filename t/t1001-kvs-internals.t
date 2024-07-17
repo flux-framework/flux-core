@@ -134,7 +134,7 @@ test_expect_success 'kvs: append a zero length value to zero length value works'
 #
 test_expect_success 'kvs: link: error on link depth' '
 	flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.a=1 &&
+	flux kvs put $DIR.a=1 &&
 	flux kvs link $DIR.a $DIR.b &&
 	flux kvs link $DIR.b $DIR.c &&
 	flux kvs link $DIR.c $DIR.d &&
@@ -146,13 +146,13 @@ test_expect_success 'kvs: link: error on link depth' '
 	flux kvs link $DIR.i $DIR.j &&
 	flux kvs link $DIR.j $DIR.k &&
 	flux kvs link $DIR.k $DIR.l &&
-        test_must_fail flux kvs get $DIR.l
+	test_must_fail flux kvs get $DIR.l
 '
 test_expect_success 'kvs: link: error on link depth, loop' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs link $DIR.link1 $DIR.link2 &&
 	flux kvs link $DIR.link2 $DIR.link1 &&
-        test_must_fail flux kvs get $DIR.link1
+	test_must_fail flux kvs get $DIR.link1
 '
 
 #
@@ -164,32 +164,32 @@ largevalhash="sha1-d8cc4fd0a57d0e0e96cdb3e74164f734c593ed65"
 
 test_expect_success 'kvs: large put stores raw data into content store' '
 	flux kvs unlink -Rf $DIR &&
- 	flux kvs put $DIR.largeval=$largeval &&
+	flux kvs put $DIR.largeval=$largeval &&
 	flux kvs get --treeobj $DIR.largeval | grep -q \"valref\" &&
 	flux kvs get --treeobj $DIR.largeval | grep -q ${largevalhash} &&
 	flux content load ${largevalhash} | grep $largeval
 '
 
 test_expect_success 'kvs: valref that points to content store data can be read' '
-        flux kvs unlink -Rf $DIR &&
+	flux kvs unlink -Rf $DIR &&
 	echo "$largeval" | flux content store &&
 	flux kvs put --treeobj $DIR.largeval2="{\"data\":[\"${largevalhash}\"],\"type\":\"valref\",\"ver\":1}" &&
-        flux kvs get $DIR.largeval2 | grep $largeval
+	flux kvs get $DIR.largeval2 | grep $largeval
 '
 
 test_expect_success 'kvs: valref that points to zero size content store data can be read' '
 	flux kvs unlink -Rf $DIR &&
-        hashval=`flux content store </dev/null` &&
+	hashval=`flux content store </dev/null` &&
 	flux kvs put --treeobj $DIR.empty="{\"data\":[\"${hashval}\"],\"type\":\"valref\",\"ver\":1}" &&
 	test $(flux kvs get --raw $DIR.empty|wc -c) -eq 0
 '
 
 test_expect_success 'kvs: valref can point to other treeobjs' '
 	flux kvs unlink -Rf $DIR &&
-        flux kvs mkdir $DIR.a.b.c &&
-        dirhash=`flux kvs get --treeobj $DIR.a.b.c | grep -E "sha1-[A-Za-z0-9]+" -o` &&
+	flux kvs mkdir $DIR.a.b.c &&
+	dirhash=`flux kvs get --treeobj $DIR.a.b.c | grep -E "sha1-[A-Za-z0-9]+" -o` &&
 	flux kvs put --treeobj $DIR.value="{\"data\":[\"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
-        flux kvs get --raw $DIR.value | grep dir
+	flux kvs get --raw $DIR.value | grep dir
 '
 
 #
@@ -197,49 +197,49 @@ test_expect_success 'kvs: valref can point to other treeobjs' '
 #
 
 test_expect_success 'kvs: multi blob-ref valref can be read' '
-        flux kvs unlink -Rf $DIR &&
+	flux kvs unlink -Rf $DIR &&
 	hashval1=`echo -n "abcd" | flux content store` &&
 	hashval2=`echo -n "efgh" | flux content store` &&
 	flux kvs put --treeobj $DIR.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
-        flux kvs get --raw $DIR.multival | grep "abcdefgh" &&
-        test $(flux kvs get --raw $DIR.multival|wc -c) -eq 8
+	flux kvs get --raw $DIR.multival | grep "abcdefgh" &&
+	test $(flux kvs get --raw $DIR.multival|wc -c) -eq 8
 '
 
 test_expect_success 'kvs: multi blob-ref valref with an empty blobref on left, can be read' '
-        flux kvs unlink -Rf $DIR &&
+	flux kvs unlink -Rf $DIR &&
 	hashval1=`flux content store < /dev/null` &&
 	hashval2=`echo -n "abcd" | flux content store` &&
 	flux kvs put --treeobj $DIR.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
-        flux kvs get --raw $DIR.multival | grep "abcd" &&
-        test $(flux kvs get --raw $DIR.multival|wc -c) -eq 4
+	flux kvs get --raw $DIR.multival | grep "abcd" &&
+	test $(flux kvs get --raw $DIR.multival|wc -c) -eq 4
 '
 
 test_expect_success 'kvs: multi blob-ref valref with an empty blobref on right, can be read' '
-        flux kvs unlink -Rf $DIR &&
+	flux kvs unlink -Rf $DIR &&
 	hashval1=`echo -n "abcd" | flux content store` &&
 	hashval2=`flux content store < /dev/null` &&
 	flux kvs put --treeobj $DIR.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
-        flux kvs get --raw $DIR.multival | grep "abcd" &&
-        test $(flux kvs get --raw $DIR.multival|wc -c) -eq 4
+	flux kvs get --raw $DIR.multival | grep "abcd" &&
+	test $(flux kvs get --raw $DIR.multival|wc -c) -eq 4
 '
 
 test_expect_success 'kvs: multi blob-ref valref with an empty blobref in middle, can be read' '
-        flux kvs unlink -Rf $DIR &&
+	flux kvs unlink -Rf $DIR &&
 	hashval1=`echo -n "abcd" | flux content store` &&
 	hashval2=`flux content store < /dev/null` &&
 	hashval3=`echo -n "efgh" | flux content store` &&
 	flux kvs put --treeobj $DIR.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\", \"${hashval3}\"],\"type\":\"valref\",\"ver\":1}" &&
-        flux kvs get --raw $DIR.multival | grep "abcdefgh" &&
-        test $(flux kvs get --raw $DIR.multival|wc -c) -eq 8
+	flux kvs get --raw $DIR.multival | grep "abcdefgh" &&
+	test $(flux kvs get --raw $DIR.multival|wc -c) -eq 8
 '
 
 test_expect_success 'kvs: multi blob-ref valref with a blobref pointing to a treeobj' '
-        flux kvs unlink -Rf $DIR &&
+	flux kvs unlink -Rf $DIR &&
 	hashval1=`echo -n "abcd" | flux content store` &&
-        flux kvs mkdir $DIR.a.b.c &&
-        dirhash=`flux kvs get --treeobj $DIR.a.b.c | grep -E "sha1-[A-Za-z0-9]+" -o` &&
+	flux kvs mkdir $DIR.a.b.c &&
+	dirhash=`flux kvs get --treeobj $DIR.a.b.c | grep -E "sha1-[A-Za-z0-9]+" -o` &&
 	flux kvs put --treeobj $DIR.multival="{\"data\":[\"${hashval1}\", \"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
-        flux kvs get --raw $DIR.multival | grep dir
+	flux kvs get --raw $DIR.multival | grep dir
 '
 
 #
@@ -252,42 +252,42 @@ test_expect_success 'kvs: multi blob-ref valref with a blobref pointing to a tre
 badhash="sha1-0123456789012345678901234567890123456789"
 
 test_expect_success 'kvs: invalid valref lookup wont hang' '
-        flux kvs put --treeobj $DIR.bad_valref="{\"data\":[\"${badhash}\"],\"type\":\"valref\",\"ver\":1}" &&
-        ! flux kvs get $DIR.bad_valref &&
-        ! flux kvs get $DIR.bad_valref
+	flux kvs put --treeobj $DIR.bad_valref="{\"data\":[\"${badhash}\"],\"type\":\"valref\",\"ver\":1}" &&
+	! flux kvs get $DIR.bad_valref &&
+	! flux kvs get $DIR.bad_valref
 '
 
 test_expect_success 'kvs: invalid valref get --watch wont hang' '
-        ! flux kvs get --watch $DIR.bad_valref &&
-        ! flux kvs get --watch $DIR.bad_valref
+	! flux kvs get --watch $DIR.bad_valref &&
+	! flux kvs get --watch $DIR.bad_valref
 '
 
 test_expect_success 'kvs: invalid multi-blobref valref lookup wont hang' '
-        flux kvs put --treeobj $DIR.bad_multi_valref="{\"data\":[\"${badhash}\", \"${badhash}\"],\"type\":\"valref\",\"ver\":1}" &&
-        ! flux kvs get $DIR.bad_multi_valref &&
-        ! flux kvs get $DIR.bad_multi_valref
+	flux kvs put --treeobj $DIR.bad_multi_valref="{\"data\":[\"${badhash}\", \"${badhash}\"],\"type\":\"valref\",\"ver\":1}" &&
+	! flux kvs get $DIR.bad_multi_valref &&
+	! flux kvs get $DIR.bad_multi_valref
 '
 
 test_expect_success 'kvs: invalid multi-blobref valref get --watch wont hang' '
-        ! flux kvs get --watch $DIR.bad_multi_valref &&
-        ! flux kvs get --watch $DIR.bad_multi_valref
+	! flux kvs get --watch $DIR.bad_multi_valref &&
+	! flux kvs get --watch $DIR.bad_multi_valref
 '
 
 test_expect_success 'kvs: invalid dirref lookup wont hang' '
-        flux kvs put --treeobj $DIR.bad_dirref="{\"data\":[\"${badhash}\"],\"type\":\"dirref\",\"ver\":1}" &&
-        ! flux kvs get $DIR.bad_dirref.a &&
-        ! flux kvs get $DIR.bad_dirref.a
+	flux kvs put --treeobj $DIR.bad_dirref="{\"data\":[\"${badhash}\"],\"type\":\"dirref\",\"ver\":1}" &&
+	! flux kvs get $DIR.bad_dirref.a &&
+	! flux kvs get $DIR.bad_dirref.a
 '
 
 test_expect_success 'kvs: invalid dirref get --watch wont hang' '
-        ! flux kvs get --watch $DIR.bad_dirref.a &&
-        ! flux kvs get --watch $DIR.bad_dirref.a
+	! flux kvs get --watch $DIR.bad_dirref.a &&
+	! flux kvs get --watch $DIR.bad_dirref.a
 '
 
 test_expect_success 'kvs: invalid dirref write wont hang' '
-        flux kvs put --treeobj $DIR.bad_dirref="{\"data\":[\"${badhash}\"],\"type\":\"dirref\",\"ver\":1}" &&
-        ! flux kvs put $DIR.bad_dirref.a=1 &&
-        ! flux kvs put $DIR.bad_dirref.b=1
+	flux kvs put --treeobj $DIR.bad_dirref="{\"data\":[\"${badhash}\"],\"type\":\"dirref\",\"ver\":1}" &&
+	! flux kvs put $DIR.bad_dirref.a=1 &&
+	! flux kvs put $DIR.bad_dirref.b=1
 '
 
 # N.B. kvs test personality loads content module with blob-size-limit=1048576
@@ -320,14 +320,14 @@ test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
 #
 
 test_expect_success 'kvs: pause / unpause works' '
-        ${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause &&
-        ${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause
+	${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause &&
+	${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause
 '
 
 # cover invalid namespace cases
 test_expect_success 'kvs: cover pause / unpause namespace invalid' '
-        ! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=illegalnamespace &&
-        ! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=illegalnamespace
+	! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=illegalnamespace &&
+	! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=illegalnamespace
 '
 
 #
@@ -339,60 +339,60 @@ test_expect_success 'kvs: cover pause / unpause namespace invalid' '
 # setroot events b/c it shouldn't be necessary.
 
 test_expect_success 'kvs: causal consistency (put)' '
-        flux kvs unlink -Rf $DIR &&
-        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
-        ATREF=$(flux kvs put -O $DIR.testA=1) &&
-        VAL=$(flux exec -n -r 1 flux kvs get --at $ATREF $DIR.testA) &&
-        test "$VAL" = "1" &&
-        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
-        VERS=$(flux kvs put -s $DIR.testB=2) &&
-        flux exec -n -r 2 flux kvs wait $VERS &&
-        VAL=$(flux exec -n -r 2 flux kvs get $DIR.testB) &&
-        test "$VAL" = "2" &&
-        flux exec -n -r [1-2] sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause"
+	flux kvs unlink -Rf $DIR &&
+	flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
+	ATREF=$(flux kvs put -O $DIR.testA=1) &&
+	VAL=$(flux exec -n -r 1 flux kvs get --at $ATREF $DIR.testA) &&
+	test "$VAL" = "1" &&
+	flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
+	VERS=$(flux kvs put -s $DIR.testB=2) &&
+	flux exec -n -r 2 flux kvs wait $VERS &&
+	VAL=$(flux exec -n -r 2 flux kvs get $DIR.testB) &&
+	test "$VAL" = "2" &&
+	flux exec -n -r [1-2] sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause"
 '
 
 test_expect_success 'kvs: causal consistency (mkdir)' '
-        flux kvs unlink -Rf $DIR &&
-        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
-        ATREF=$(flux kvs mkdir -O $DIR.dirA) &&
-        ! flux exec -n -r 1 flux kvs get --at $ATREF $DIR.dirA > output 2>&1 &&
-        grep "Is a directory" output &&
-        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
-        VERS=$(flux kvs mkdir -s $DIR.dirB) &&
-        flux exec -n -r 2 flux kvs wait $VERS &&
-        ! flux exec -n -r 2 flux kvs get $DIR.dirB > output 2>&1 &&
-        grep "Is a directory" output
+	flux kvs unlink -Rf $DIR &&
+	flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
+	ATREF=$(flux kvs mkdir -O $DIR.dirA) &&
+	! flux exec -n -r 1 flux kvs get --at $ATREF $DIR.dirA > output 2>&1 &&
+	grep "Is a directory" output &&
+	flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
+	VERS=$(flux kvs mkdir -s $DIR.dirB) &&
+	flux exec -n -r 2 flux kvs wait $VERS &&
+	! flux exec -n -r 2 flux kvs get $DIR.dirB > output 2>&1 &&
+	grep "Is a directory" output
 '
 
 test_expect_success 'kvs: causal consistency (link)' '
-        flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.fooA=3 &&
-        flux kvs put $DIR.fooB=4 &&
-        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
-        ATREF=$(flux kvs link -O $DIR.fooA $DIR.linkA) &&
-        VAL=$(flux exec -n -r 1 flux kvs get --at $ATREF $DIR.linkA) &&
-        test "$VAL" = "3" &&
-        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
-        VERS=$(flux kvs link -s $DIR.fooB $DIR.linkB) &&
-        flux exec -n -r 2 flux kvs wait $VERS &&
-        VAL=$(flux exec -n -r 2 flux kvs get $DIR.linkB) &&
-        test "$VAL" = "4"
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.fooA=3 &&
+	flux kvs put $DIR.fooB=4 &&
+	flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
+	ATREF=$(flux kvs link -O $DIR.fooA $DIR.linkA) &&
+	VAL=$(flux exec -n -r 1 flux kvs get --at $ATREF $DIR.linkA) &&
+	test "$VAL" = "3" &&
+	flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
+	VERS=$(flux kvs link -s $DIR.fooB $DIR.linkB) &&
+	flux exec -n -r 2 flux kvs wait $VERS &&
+	VAL=$(flux exec -n -r 2 flux kvs get $DIR.linkB) &&
+	test "$VAL" = "4"
 '
 
 test_expect_success 'kvs: causal consistency (unlink)' '
-        flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.unlinkA=5 &&
-        flux kvs put $DIR.unlinkB=6 &&
-        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
-        ATREF=$(flux kvs unlink -O $DIR.unlinkA) &&
-        ! flux exec -n -r 1 flux kvs get --at $ATREF $DIR.unlinkA > output 2>&1 &&
-        grep "No such file or directory" output &&
-        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
-        VERS=$(flux kvs unlink -s $DIR.unlinkB) &&
-        flux exec -n -r 2 flux kvs wait $VERS &&
-        ! flux exec -n -r 2 flux kvs get $DIR.unlinkB > output 2>&1 &&
-        grep "No such file or directory" output
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.unlinkA=5 &&
+	flux kvs put $DIR.unlinkB=6 &&
+	flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
+	ATREF=$(flux kvs unlink -O $DIR.unlinkA) &&
+	! flux exec -n -r 1 flux kvs get --at $ATREF $DIR.unlinkA > output 2>&1 &&
+	grep "No such file or directory" output &&
+	flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
+	VERS=$(flux kvs unlink -s $DIR.unlinkB) &&
+	flux exec -n -r 2 flux kvs wait $VERS &&
+	! flux exec -n -r 2 flux kvs get $DIR.unlinkB > output 2>&1 &&
+	grep "No such file or directory" output
 '
 
 #
@@ -408,46 +408,46 @@ test_expect_success 'kvs: causal consistency (unlink)' '
 # - change should be visible on X & Y
 
 test_expect_success 'kvs: read-your-writes consistency on primary namespace' '
-        flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.test=1 &&
-        VERS=$(flux kvs version) &&
-        flux exec -n sh -c "flux kvs wait ${VERS}" &&
-        flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
-        flux exec -n -r 1 sh -c "flux kvs put $DIR.test=2" &&
-        flux exec -n -r 1 sh -c "flux kvs get $DIR.test" > rank1-a.out &&
-        flux exec -n -r 2 sh -c "flux kvs get $DIR.test" > rank2-a.out &&
-        echo "1" > old.out &&
-        echo "2" > new.out &&
-        test_cmp rank1-a.out new.out &&
-        test_cmp rank2-a.out old.out &&
-        flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
-        flux exec -n sh -c "flux kvs wait ${VERS}" &&
-        flux exec -n -r 1 sh -c "flux kvs get $DIR.test" > rank1-b.out &&
-        flux exec -n -r 2 sh -c "flux kvs get $DIR.test" > rank2-b.out &&
-        test_cmp rank1-b.out new.out &&
-        test_cmp rank2-b.out new.out
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.test=1 &&
+	VERS=$(flux kvs version) &&
+	flux exec -n sh -c "flux kvs wait ${VERS}" &&
+	flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
+	flux exec -n -r 1 sh -c "flux kvs put $DIR.test=2" &&
+	flux exec -n -r 1 sh -c "flux kvs get $DIR.test" > rank1-a.out &&
+	flux exec -n -r 2 sh -c "flux kvs get $DIR.test" > rank2-a.out &&
+	echo "1" > old.out &&
+	echo "2" > new.out &&
+	test_cmp rank1-a.out new.out &&
+	test_cmp rank2-a.out old.out &&
+	flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
+	flux exec -n sh -c "flux kvs wait ${VERS}" &&
+	flux exec -n -r 1 sh -c "flux kvs get $DIR.test" > rank1-b.out &&
+	flux exec -n -r 2 sh -c "flux kvs get $DIR.test" > rank2-b.out &&
+	test_cmp rank1-b.out new.out &&
+	test_cmp rank2-b.out new.out
 '
 
 test_expect_success 'kvs: read-your-writes consistency on alt namespace' '
-        flux kvs namespace create rywtestns &&
-        flux kvs put --namespace=rywtestns $DIR.test=1 &&
-        VERS=$(flux kvs version --namespace=rywtestns) &&
-        flux exec -n sh -c "flux kvs wait --namespace=rywtestns ${VERS}" &&
-        flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=rywtestns" &&
-        flux exec -n -r 1 sh -c "flux kvs put --namespace=rywtestns $DIR.test=2" &&
-        flux exec -n -r 1 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank1-a.out &&
-        flux exec -n -r 2 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank2-a.out &&
-        echo "1" > old.out &&
-        echo "2" > new.out &&
-        test_cmp rank1-a.out new.out &&
-        test_cmp rank2-a.out old.out &&
-        flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=rywtestns" &&
-        flux exec -n sh -c "flux kvs wait --namespace=rywtestns ${VERS}" &&
-        flux exec -n -r 1 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank1-b.out &&
-        flux exec -n -r 2 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank2-b.out &&
-        test_cmp rank1-b.out new.out &&
-        test_cmp rank2-b.out new.out &&
-        flux kvs namespace remove rywtestns
+	flux kvs namespace create rywtestns &&
+	flux kvs put --namespace=rywtestns $DIR.test=1 &&
+	VERS=$(flux kvs version --namespace=rywtestns) &&
+	flux exec -n sh -c "flux kvs wait --namespace=rywtestns ${VERS}" &&
+	flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=rywtestns" &&
+	flux exec -n -r 1 sh -c "flux kvs put --namespace=rywtestns $DIR.test=2" &&
+	flux exec -n -r 1 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank1-a.out &&
+	flux exec -n -r 2 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank2-a.out &&
+	echo "1" > old.out &&
+	echo "2" > new.out &&
+	test_cmp rank1-a.out new.out &&
+	test_cmp rank2-a.out old.out &&
+	flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=rywtestns" &&
+	flux exec -n sh -c "flux kvs wait --namespace=rywtestns ${VERS}" &&
+	flux exec -n -r 1 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank1-b.out &&
+	flux exec -n -r 2 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank2-b.out &&
+	test_cmp rank1-b.out new.out &&
+	test_cmp rank2-b.out new.out &&
+	flux kvs namespace remove rywtestns
 '
 
 #
@@ -458,26 +458,26 @@ test_expect_success 'kvs: read-your-writes consistency on alt namespace' '
 # know that the identical large value will be cached as raw data
 
 test_expect_success 'kvs: clear stats locally' '
-        flux kvs unlink -Rf $DIR &&
-        flux module stats -c kvs &&
-        flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
-        flux kvs put $DIR.largeval1=$largeval &&
-        flux kvs put $DIR.largeval2=$largeval &&
-        ! flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
-        flux module stats -c kvs &&
-        flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0
+	flux kvs unlink -Rf $DIR &&
+	flux module stats -c kvs &&
+	flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
+	flux kvs put $DIR.largeval1=$largeval &&
+	flux kvs put $DIR.largeval2=$largeval &&
+	! flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
+	flux module stats -c kvs &&
+	flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0
 '
 
 test_expect_success NO_ASAN 'kvs: clear stats globally' '
-        flux kvs unlink -Rf $DIR &&
-        flux module stats -C kvs &&
-        flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
-        for i in `seq 0 $((${SIZE} - 1))`; do
-            flux exec -n -r $i sh -c "flux kvs put $DIR.$i.largeval1=$largeval $DIR.$i.largeval2=$largeval"
-        done &&
-        ! flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
-        flux module stats -C kvs &&
-        flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0"
+	flux kvs unlink -Rf $DIR &&
+	flux module stats -C kvs &&
+	flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
+	for i in `seq 0 $((${SIZE} - 1))`; do
+	    flux exec -n -r $i sh -c "flux kvs put $DIR.$i.largeval1=$largeval $DIR.$i.largeval2=$largeval"
+	done &&
+	! flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
+	flux module stats -C kvs &&
+	flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0"
 '
 
 #
@@ -485,7 +485,7 @@ test_expect_success NO_ASAN 'kvs: clear stats globally' '
 #
 
 test_expect_success 'kvs: test fence returns identical root info on all responses' '
-        ${FLUX_BUILD_DIR}/t/kvs/fence_api 8 apitest
+	${FLUX_BUILD_DIR}/t/kvs/fence_api 8 apitest
 '
 
 #
@@ -493,13 +493,13 @@ test_expect_success 'kvs: test fence returns identical root info on all response
 #
 
 test_expect_success 'kvs: test invalid fence arguments on rank 0' '
-        ${FLUX_BUILD_DIR}/t/kvs/fence_invalid invalidtest1 > invalid_output &&
-        grep "flux_future_get: Invalid argument" invalid_output
+	${FLUX_BUILD_DIR}/t/kvs/fence_invalid invalidtest1 > invalid_output &&
+	grep "flux_future_get: Invalid argument" invalid_output
 '
 
 test_expect_success 'kvs: test invalid fence arguments on rank 1' '
-        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_invalid invalidtest2" > invalid_output &&
-        grep "flux_future_get: Invalid argument" invalid_output
+	flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_invalid invalidtest2" > invalid_output &&
+	grep "flux_future_get: Invalid argument" invalid_output
 '
 
 #
@@ -507,8 +507,8 @@ test_expect_success 'kvs: test invalid fence arguments on rank 1' '
 #
 
 test_expect_success 'kvs: test invalid lookup rpc' '
-        ${FLUX_BUILD_DIR}/t/kvs/lookup_invalid a-key > lookup_invalid_output &&
-        grep "flux_future_get: Protocol error" lookup_invalid_output
+	${FLUX_BUILD_DIR}/t/kvs/lookup_invalid a-key > lookup_invalid_output &&
+	grep "flux_future_get: Protocol error" lookup_invalid_output
 '
 
 test_done
