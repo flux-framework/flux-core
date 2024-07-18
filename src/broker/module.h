@@ -96,6 +96,9 @@ int module_subscribe (module_t *p, const char *topic);
 int module_unsubscribe (module_t *p, const char *topic);
 int module_event_cast (module_t *p, const flux_msg_t *msg);
 
+ssize_t module_get_send_queue_count (module_t *p);
+ssize_t module_get_recv_queue_count (module_t *p);
+
 #endif /* !_BROKER_MODULE_H */
 
 /*
