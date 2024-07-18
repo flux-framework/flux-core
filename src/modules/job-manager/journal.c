@@ -62,6 +62,7 @@ struct journal {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
     struct flux_msglist *listeners;
+    int event_count;
 };
 
 struct journal_filter { // stored as aux item in request message
@@ -123,6 +124,7 @@ int journal_process_event (struct journal *journal,
             || json_object_set (o, "R", job->R_redacted) < 0)
             goto error;
     }
+    journal->event_count++;
     msg = flux_msglist_first (journal->listeners);
     while (msg) {
         if (allow_deny_check (msg, name)
@@ -307,6 +309,17 @@ error:
         flux_log_error (h, "error responding to %s", topic);
 }
 
+json_t *journal_get_stats (struct journal *journal)
+{
+    json_t *o;
+
+    o = json_pack ("{s:i s:i}",
+                   "listeners", flux_msglist_count (journal->listeners),
+                   "events", journal->event_count);
+
+    return o;
+}
+
 static void journal_cancel_request (flux_t *h, flux_msg_handler_t *mh,
                                     const flux_msg_t *msg, void *arg)
 {
@@ -382,13 +395,6 @@ struct journal *journal_ctx_create (struct job_manager *ctx)
 error:
     journal_ctx_destroy (journal);
     return NULL;
-}
-
-int journal_listeners_count (struct journal *journal)
-{
-    if (journal)
-        return flux_msglist_count (journal->listeners);
-    return -1;
 }
 
 /*
