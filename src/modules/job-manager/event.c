@@ -814,9 +814,11 @@ int event_job_process_entry (struct event *event,
         }
     }
 
-    if (json_array_append (job->eventlog, entry) < 0) {
-        errno = ENOMEM;
-        return -1;
+    if (!(flags & EVENT_NO_COMMIT)) {
+        if (json_array_append (job->eventlog, entry) < 0) {
+            errno = ENOMEM;
+            return -1;
+        }
     }
 
     if (journal_process_event (event->ctx->journal,

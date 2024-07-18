@@ -894,16 +894,18 @@ wait_inactive() {
 	return 0
 }
 
-test_expect_success 'reload the job-list module' '
-	flux job list -a > before_reload.out &&
+# Note: annotations are not part of the following comparison
+# because they are omitted from the in-memory journal history
+test_expect_success 'reload the job-list module' "
+	flux job list -a | jq 'del(.annotations)' > before_reload.out &&
 	flux module reload job-list &&
 	wait_inactive
-'
+"
 
-test_expect_success 'job-list: list successfully reconstructed' '
-	flux job list -a > after_reload.out &&
+test_expect_success 'job-list: list successfully reconstructed' "
+	flux job list -a | jq 'del(.annotations)' > after_reload.out &&
 	test_cmp before_reload.out after_reload.out
-'
+"
 
 # the canceled checks may look confusing.  We canceled all active jobs
 # right above here, so all those active jobs became canceled as a result
