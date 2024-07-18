@@ -70,6 +70,8 @@ enum {
 #define FLUX_OPT_TESTING_USERID     "flux::testing_userid"
 #define FLUX_OPT_TESTING_ROLEMASK   "flux::testing_rolemask"
 #define FLUX_OPT_ROUTER_NAME        "flux::router_name"
+#define FLUX_OPT_SEND_QUEUE_COUNT   "flux::send_queue_count"
+#define FLUX_OPT_RECV_QUEUE_COUNT   "flux::recv_queue_count"
 
 /* Create/destroy a broker handle.
  * The 'uri' scheme name selects a connector to dynamically load.
