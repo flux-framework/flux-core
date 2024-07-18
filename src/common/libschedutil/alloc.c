@@ -38,8 +38,9 @@ static int schedutil_alloc_respond_pack (flux_t *h,
     if (fmt) {
         json_t *o;
         va_start (ap, fmt);
-        if (!(o = json_vpack_ex (NULL, 0, fmt, ap))
-            || json_object_update (payload, o) < 0) {
+        o = json_vpack_ex (NULL, 0, fmt, ap);
+        va_end (ap);
+        if (!o || json_object_update (payload, o) < 0) {
             json_decref (o);
             goto nomem;
         }
