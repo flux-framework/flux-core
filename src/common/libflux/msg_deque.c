@@ -218,6 +218,19 @@ bool msg_deque_empty (struct msg_deque *q)
     return res;
 }
 
+size_t msg_deque_count (struct msg_deque *q)
+{
+    if (!q)
+        return 0;
+    msg_deque_lock (q);
+    size_t count = 0;
+    flux_msg_t *msg = NULL;
+    list_for_each (&q->messages, msg, list)
+        count++;
+    msg_deque_unlock (q);
+    return count;
+}
+
 int msg_deque_pollfd (struct msg_deque *q)
 {
     if (!q) {

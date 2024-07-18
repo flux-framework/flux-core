@@ -11,6 +11,8 @@
 #ifndef _FLUX_CORE_MSG_DEQUE_H
 #define _FLUX_CORE_MSG_DEQUE_H
 
+#include <sys/types.h>
+
 /* If flags contains MSG_DEQUE_SINGLE_THREAD, pthread locking is eliminated
  * and messages are permitted to be pushed with a reference count > 1.
  */
@@ -34,6 +36,7 @@ int msg_deque_pollfd (struct msg_deque *q);
 int msg_deque_pollevents (struct msg_deque *q);
 
 bool msg_deque_empty (struct msg_deque *q);
+size_t msg_deque_count (struct msg_deque *q);
 
 #endif // !_FLUX_CORE_MSG_DEQUE_H
 
