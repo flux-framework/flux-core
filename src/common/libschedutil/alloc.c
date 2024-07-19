@@ -170,11 +170,11 @@ static void alloc_continuation (flux_future_t *f, void *arg)
     struct alloc *ctx = flux_future_aux_get (f, "flux::alloc_ctx");
     json_t *payload = NULL;
 
+    schedutil_remove_outstanding_future (util, f);
     if (flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "commit R");
         goto error;
     }
-    schedutil_remove_outstanding_future (util, f);
     if (!(payload = json_object ())
         || (ctx->annotations && json_object_set (payload,
                                                  "annotations",
@@ -197,7 +197,6 @@ static void alloc_continuation (flux_future_t *f, void *arg)
     return;
 error:
     flux_reactor_stop_error (flux_get_reactor (h)); // XXX
-    alloc_destroy (ctx);
     ERRNO_SAFE_WRAP (json_decref, payload);
     flux_future_destroy (f);
 }
