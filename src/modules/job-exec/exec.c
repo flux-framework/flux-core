@@ -76,11 +76,13 @@ static struct exec_ctx *exec_ctx_create (struct jobinfo *job)
     if (ctx == NULL)
         return NULL;
     ctx->job = job;
-    (void) json_unpack (job->jobspec, "{s:{s:{s:{s:{s:s}}}}}",
-                                 "attributes", "system", "exec",
-                                     "bulkexec",
-                                         "mock_exception",
-                                         &ctx->mock_exception);
+    (void) json_unpack (job->jobspec,
+                        "{s:{s:{s:{s:{s:s}}}}}",
+                        "attributes",
+                          "system",
+                            "exec",
+                              "bulkexec",
+                                "mock_exception", &ctx->mock_exception);
     return ctx;
 }
 
