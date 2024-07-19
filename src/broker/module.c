@@ -685,6 +685,28 @@ int module_event_cast (module_t *p, const flux_msg_t *msg)
     return 0;
 }
 
+ssize_t module_get_send_queue_count (module_t *p)
+{
+    size_t count;
+    if (flux_opt_get (p->h_broker,
+                      FLUX_OPT_SEND_QUEUE_COUNT,
+                      &count,
+                      sizeof (count)) < 0)
+        return -1;
+    return count;
+}
+
+ssize_t module_get_recv_queue_count (module_t *p)
+{
+    size_t count;
+    if (flux_opt_get (p->h_broker,
+                      FLUX_OPT_RECV_QUEUE_COUNT,
+                      &count,
+                      sizeof (count)) < 0)
+        return -1;
+    return count;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

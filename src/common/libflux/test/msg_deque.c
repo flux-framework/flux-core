@@ -37,17 +37,25 @@ void check_queue (void)
         "msg_deque_create works");
     ok (msg_deque_empty (q) == true,
         "msg_deque_empty is true");
+    ok (msg_deque_count (q) == 0,
+        "msg_deque_count = 0");
     ok (msg_deque_push_back (q, msg1) == 0,
         "msg_deque_push_back msg1 works");
     ok (msg_deque_empty (q) == false,
         "msg_deque_empty is false");
+    ok (msg_deque_count (q) == 1,
+        "msg_deque_count = 1");
     ok (msg_deque_push_back (q, msg2) == 0,
         "msg_deque_push_back msg2 works");
     ok (msg_deque_empty (q) == false,
         "msg_deque_empty is false");
+    ok (msg_deque_count (q) == 2,
+        "msg_deque_count = 2");
     ok ((msg = msg_deque_pop_front (q)) == msg1,
         "msg_deque_pop_front popped msg1");
     flux_msg_destroy (msg);
+    ok (msg_deque_count (q) == 1,
+        "msg_deque_count = 1");
     ok (msg_deque_empty (q) == false,
         "msg_deque_empty is false");
     ok ((msg = msg_deque_pop_front (q)) == msg2,
@@ -55,6 +63,8 @@ void check_queue (void)
     flux_msg_destroy (msg);
     ok (msg_deque_empty (q) == true,
         "msg_deque_empty is true");
+    ok (msg_deque_count (q) == 0,
+        "msg_deque_count = 0");
     ok (msg_deque_pop_front (q) == NULL,
         "msg_deque_pop_front returned NULL");
 
@@ -203,6 +213,9 @@ void check_inval (void)
         "msg_deque_destroy q=NULL doesn't crash");
     ok (errno == 42,
         "msg_deque_destroy doesn't clobber errno");
+
+    ok (msg_deque_count (NULL) == 0,
+        "msg_deque_count q=NULL is 0");
 
     // msg_deque_push_back
     errno = 0;

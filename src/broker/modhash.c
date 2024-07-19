@@ -108,12 +108,14 @@ static json_t *modhash_entry_tojson (module_t *p,
 
     if (!(svcs  = service_list_byuuid (sw, module_get_uuid (p))))
         return NULL;
-    entry = json_pack ("{s:s s:s s:i s:i s:O}",
+    entry = json_pack ("{s:s s:s s:i s:i s:O s:i s:i}",
                        "name", module_get_name (p),
                        "path", module_get_path (p),
                        "idle", (int)(now - module_get_lastseen (p)),
                        "status", module_get_status (p),
-                       "services", svcs);
+                       "services", svcs,
+                       "sendqueue", module_get_send_queue_count (p),
+                       "recvqueue", module_get_recv_queue_count (p));
     json_decref (svcs);
     return entry;
 }

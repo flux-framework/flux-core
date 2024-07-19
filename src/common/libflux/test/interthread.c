@@ -19,6 +19,21 @@
 #include "ccan/str/str.h"
 #include "ccan/array_size/array_size.h"
 
+void recv_count_is (flux_t *h, size_t expected, const char *msg)
+{
+    size_t n;
+    ok (flux_opt_get (h, FLUX_OPT_RECV_QUEUE_COUNT, &n, sizeof (n)) == 0
+        && n == expected,
+        "%s", msg);
+}
+void send_count_is (flux_t *h, size_t expected, const char *msg)
+{
+    size_t n;
+    ok (flux_opt_get (h, FLUX_OPT_SEND_QUEUE_COUNT, &n, sizeof (n)) == 0
+        && n == expected,
+        "%s", msg);
+}
+
 void test_basic (void)
 {
     const char *uri = "interthread://test1";
@@ -42,6 +57,11 @@ void test_basic (void)
     h2 = flux_open (uri, 0);
     ok (h2 != NULL,
         "basic: flux_open %s (2) works", uri);
+
+    send_count_is (h, 0, "SEND_QUEUE_COUNT h = 0");
+    recv_count_is (h, 0, "RECV_QUEUE_COUNT h = 0");
+    send_count_is (h2, 0, "SEND_QUEUE_COUNT h2 = 0");
+    recv_count_is (h2, 0, "RECV_QUEUE_COUNT h2 = 0");
 
     /* cover connecting to a paired channel */
     errno = 0;
@@ -70,9 +90,13 @@ void test_basic (void)
         BAIL_OUT ("basic: could not create request");
     ok (flux_send (h, req, 0) == 0,
        "basic: flux_send on first handle works");
+    send_count_is (h, 1, "SEND_QUEUE_COUNT h = 1");
+    recv_count_is (h2, 1, "RECV_QUEUE_COUNT h2 = 1");
     msg = flux_recv (h2, FLUX_MATCH_ANY, 0);
     ok (msg != NULL,
         "basic: flux_recv on second handle works");
+    send_count_is (h, 0, "SEND_QUEUE_COUNT h = 0");
+    recv_count_is (h2, 0, "RECV_QUEUE_COUNT h = 0");
     ok (flux_msg_route_count (msg) == 0,
         "basic: request has no route stack");
     ok (flux_request_decode (msg, &topic, &payload) == 0
@@ -90,9 +114,13 @@ void test_basic (void)
     /* send response h2 -> h */
     ok (flux_send (h2, rep, 0) == 0,
        "basic: flux_send on second handle works");
+    recv_count_is (h, 1, "RECV_QUEUE_COUNT h = 1");
+    send_count_is (h2, 1, "SEND_QUEUE_COUNT h2 = 1");
     msg = flux_recv (h, FLUX_MATCH_ANY, 0);
     ok (msg != NULL,
         "basic: flux_recv on first handle works");
+    recv_count_is (h, 0, "RECV_QUEUE_COUNT h = 0");
+    send_count_is (h2, 0, "SEND_QUEUE_COUNT h2 = 0");
     ok (flux_msg_route_count (msg) == 0,
         "basic: response has no route stack");
     ok (flux_response_decode (msg, &topic, &payload) == 0

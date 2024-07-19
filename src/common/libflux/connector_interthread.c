@@ -260,6 +260,30 @@ static flux_msg_t *op_recv (void *impl, int flags)
     return msg;
 }
 
+static int op_getopt (void *impl, const char *option, void *val, size_t size)
+{
+    struct interthread_ctx *ctx = impl;
+
+    if (streq (option, FLUX_OPT_RECV_QUEUE_COUNT)) {
+        size_t count = msg_deque_count (ctx->recv);
+        if (size != sizeof (count) || !val)
+            goto error;
+        memcpy (val, &count, size);
+    }
+    else if (streq (option, FLUX_OPT_SEND_QUEUE_COUNT)) {
+        size_t count = msg_deque_count (ctx->send);
+        if (size != sizeof (count) || !val)
+            goto error;
+        memcpy (val, &count, size);
+    }
+    else
+        goto error;
+    return 0;
+error:
+    errno = EINVAL;
+    return -1;
+}
+
 static int op_setopt (void *impl,
                       const char *option,
                       const void *val,
@@ -337,6 +361,7 @@ static const struct flux_handle_ops handle_ops = {
     .send_new = op_send_new,
     .recv = op_recv,
     .setopt = op_setopt,
+    .getopt = op_getopt,
     .impl_destroy = op_fini,
 };
 

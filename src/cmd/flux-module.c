@@ -435,13 +435,13 @@ void lsmod_print_header (FILE *f, bool longopt)
 {
     if (longopt) {
         fprintf (f,
-                 "%-24.24s %4s  %c %-8s %s\n",
-                 "Module", "Idle", 'S', "Service", "Path");
+                 "%-24.24s %4s  %c %s %s %-8s %s\n",
+                 "Module", "Idle", 'S', "Sendq", "Recvq", "Service", "Path");
     }
     else {
         fprintf (f,
-                 "%-24s %4s  %c %s\n",
-                 "Module", "Idle", 'S', "Service");
+                 "%-24s %4s  %c %s %s %s\n",
+                 "Module", "Idle", 'S', "Sendq", "Recvq", "Service");
     }
 }
 
@@ -451,6 +451,8 @@ void lsmod_print_entry (FILE *f,
                        int idle,
                        int status,
                        json_t *services,
+                       int sendqueue,
+                       int recvqueue,
                        bool longopt)
 {
     char idle_s[16];
@@ -460,20 +462,24 @@ void lsmod_print_entry (FILE *f,
 
     if (longopt) {
         char *s = lsmod_services_string (services, name, 8);
-        fprintf (f, "%-24.24s %4s  %c %-8s %s\n",
+        fprintf (f, "%-24.24s %4s  %c %5d %5d %-8s %s\n",
                  name,
                  idle_s,
                  state,
+                 sendqueue,
+                 recvqueue,
                  s ? s : "",
                  path);
         free (s);
     }
     else {
         char *s = lsmod_services_string (services, name, 0);
-        fprintf (f, "%-24.24s %4s  %c %s\n",
+        fprintf (f, "%-24.24s %4s  %c %5d %5d %s\n",
                  name,
                  idle_s,
                  state,
+                 sendqueue,
+                 recvqueue,
                  s ? s : "");
         free (s);
     }
@@ -488,18 +494,32 @@ void lsmod_print_list (FILE *f, json_t *o, bool longopt)
     int idle;
     int status;
     json_t *services;
+    int recvqueue;
+    int sendqueue;
 
     json_array_foreach (o, index, value) {
-        if (json_unpack (value, "{s:s s:s s:i s:i s:o}",
+        recvqueue = 0;
+        sendqueue = 0;
+        if (json_unpack (value, "{s:s s:s s:i s:i s:o s?i s?i}",
                          "name", &name,
                          "path", &path,
                          "idle", &idle,
                          "status", &status,
-                         "services", &services) < 0)
+                         "services", &services,
+                         "recvqueue", &recvqueue,
+                         "sendqueue", &sendqueue) < 0)
             log_msg_exit ("Error parsing lsmod response");
         if (!json_is_array (services))
             log_msg_exit ("Error parsing lsmod services array");
-        lsmod_print_entry (f, name, path, idle, status, services, longopt);
+        lsmod_print_entry (f,
+                           name,
+                           path,
+                           idle,
+                           status,
+                           services,
+                           sendqueue,
+                           recvqueue,
+                           longopt);
     }
 }
 
