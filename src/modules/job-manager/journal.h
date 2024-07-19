@@ -34,7 +34,7 @@ void journal_listeners_disconnect_rpc (flux_t *h,
                                        const flux_msg_t *msg,
                                        void *arg);
 
-int journal_listeners_count (struct journal *journal);
+json_t *journal_get_stats (struct journal *journal);
 
 #endif /* _FLUX_JOB_MANAGER_JOURNAL_H */
 

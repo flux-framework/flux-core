@@ -79,15 +79,14 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct job_manager *ctx = arg;
-    int journal_listeners = journal_listeners_count (ctx->journal);
+    json_t *journal = journal_get_stats (ctx->journal);
     json_t *housekeeping = housekeeping_get_stats (ctx->housekeeping);
-    if (!housekeeping)
+    if (!housekeeping || !journal)
         goto error;
     if (flux_respond_pack (h,
                            msg,
-                           "{s:{s:i} s:i s:i s:I s:O}",
-                           "journal",
-                             "listeners", journal_listeners,
+                           "{s:O s:i s:i s:I s:O}",
+                           "journal", journal,
                            "active_jobs", zhashx_size (ctx->active_jobs),
                            "inactive_jobs", zhashx_size (ctx->inactive_jobs),
                            "max_jobid", ctx->max_jobid,
@@ -96,11 +95,13 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     json_decref (housekeeping);
+    json_decref (journal);
     return;
  error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (housekeeping);
+    json_decref (journal);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
