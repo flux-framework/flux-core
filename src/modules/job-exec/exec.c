@@ -53,6 +53,8 @@
 extern char **environ;
 
 struct exec_ctx {
+    struct jobinfo *job;
+
     const char * mock_exception;   /* fake exception */
     int barrier_enter_count;
     int barrier_completion_count;
@@ -68,12 +70,13 @@ static void exec_ctx_destroy (struct exec_ctx *tc)
     }
 }
 
-static struct exec_ctx *exec_ctx_create (json_t *jobspec)
+static struct exec_ctx *exec_ctx_create (struct jobinfo *job)
 {
     struct exec_ctx *ctx = calloc (1, sizeof (*ctx));
     if (ctx == NULL)
         return NULL;
-    (void) json_unpack (jobspec, "{s:{s:{s:{s:{s:s}}}}}",
+    ctx->job = job;
+    (void) json_unpack (job->jobspec, "{s:{s:{s:{s:{s:s}}}}}",
                                  "attributes", "system", "exec",
                                      "bulkexec",
                                          "mock_exception",
@@ -443,7 +446,7 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: bulk_exec_create");
         goto err;
     }
-    if (!(ctx = exec_ctx_create (job->jobspec))) {
+    if (!(ctx = exec_ctx_create (job))) {
         flux_log_error (job->h, "exec_init: exec_ctx_create");
         goto err;
     }
