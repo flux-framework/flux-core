@@ -71,6 +71,7 @@ RUN dnf -y install \
 	aspell-en \
 	time \
 	glibc-langpack-en \
+	lcov \
  && dnf clean all
 
 #  Add /usr/bin/mpicc link so MPI tests are built
