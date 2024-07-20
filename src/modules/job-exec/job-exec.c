@@ -374,28 +374,31 @@ static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
     }
 }
 
-static int drain_active_ranks (struct jobinfo *job, struct idset *active_ranks)
+int jobinfo_drain_ranks (struct jobinfo *job,
+                         const char *ranks,
+                         const char *fmt,
+                         ...)
 {
-    char *ranks = NULL;
+    va_list ap;
     flux_future_t *f = NULL;
-    char reason[64];
+    char reason[256];
     int rc = -1;
 
-    /* message below guaranteed to fit in < 64 characters */
-    (void) snprintf (reason,
-                     sizeof (reason),
-                     "unkillable processes for job %s",
-                     idf58 (job->id));
+    /* vsnprintf(3) May truncate (unlikely), but that's ok 255 chars should
+     * get the gist across...
+     */
+    va_start (ap, fmt);
+    (void) vsnprintf (reason, sizeof (reason), fmt, ap);
+    va_end (ap);
 
-    if (!(ranks = idset_encode (active_ranks, IDSET_FLAG_RANGE))
-        || !(f = flux_rpc_pack (job->h,
-                                "resource.drain",
-                                0,
-                                0,
-                                "{s:s s:s s:s}",
-                                "targets", ranks,
-                                "reason", reason,
-                                "mode", "update"))) {
+    if (!(f = flux_rpc_pack (job->h,
+                             "resource.drain",
+                             0,
+                             0,
+                             "{s:s s:s s:s}",
+                             "targets", ranks,
+                             "reason", reason,
+                             "mode", "update"))) {
         flux_log (job->h,
                   LOG_ERR,
                   "Failed to drain broker ranks %s for job %s",
@@ -406,7 +409,25 @@ static int drain_active_ranks (struct jobinfo *job, struct idset *active_ranks)
     rc = 0;
 error:
     flux_future_destroy (f);
-    free (ranks);
+    return rc;
+}
+
+static int drain_active_ranks (struct jobinfo *job, struct idset *active_ranks)
+{
+    char *ranks = NULL;
+    int rc;
+
+    if (!(ranks = idset_encode (active_ranks, IDSET_FLAG_RANGE))) {
+        flux_log_error (job->h,
+                        "drain_active_ranks: Failed get rank string for job %s",
+                        idf58 (job->id));
+        return -1;
+    }
+    rc = jobinfo_drain_ranks (job,
+                              ranks,
+                              "unkillable processes for job %s",
+                              idf58 (job->id));
+    ERRNO_SAFE_WRAP (free, ranks);
     return rc;
 }
 
