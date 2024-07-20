@@ -24,6 +24,8 @@
  *                               "init", or "starting"
  *    "service":s              - Specify service to use for launching remote
  *                               subprocesses: "rexec" or "sdexec".
+ *    "barrier-timeout":F      - Specify timeout for start barrier in floating
+ *                               point seconds.
  * }
  *
  */
@@ -56,34 +58,99 @@ struct exec_ctx {
     struct jobinfo *job;
 
     const char * mock_exception;   /* fake exception */
+    struct idset *barrier_pending_ranks;
     int barrier_enter_count;
     int barrier_completion_count;
     int exit_count;
+
+    flux_watcher_t *shell_barrier_timer;
 };
+
+static void barrier_timer_cb (flux_reactor_t *r,
+                              flux_watcher_t *w,
+                              int revents,
+                              void *arg)
+{
+    struct exec_ctx *ctx = arg;
+    struct jobinfo *job = ctx->job;
+    struct bulk_exec *exec = ctx->job->data;
+    char *ranks;
+
+    if (!(ranks = idset_encode (ctx->barrier_pending_ranks,
+                                IDSET_FLAG_RANGE))) {
+        flux_log_error (job->h,
+                        "failed to encode barrier pending ranks for job %s",
+                        idf58 (job->id));
+        return;
+    }
+
+    (void) jobinfo_drain_ranks (job,
+                                ranks,
+                                "job %s start timeout: %s",
+                                idf58 (job->id),
+                                "possible node hang");
+
+    jobinfo_fatal_error (job,
+                         0,
+                         "%s waiting for %zu/%d nodes (rank%s %s)",
+                         "start barrier timeout",
+                         idset_count (ctx->barrier_pending_ranks),
+                         bulk_exec_total (exec),
+                         idset_count (ctx->barrier_pending_ranks) > 1 ?"s":"",
+                         ranks);
+    free (ranks);
+}
+
 
 static void exec_ctx_destroy (struct exec_ctx *tc)
 {
     if (tc) {
         int saved_errno = errno;
+        idset_destroy (tc->barrier_pending_ranks);
+        flux_watcher_destroy (tc->shell_barrier_timer);
         free (tc);
         errno = saved_errno;
     }
 }
 
-static struct exec_ctx *exec_ctx_create (struct jobinfo *job)
+static struct exec_ctx *exec_ctx_create (struct jobinfo *job,
+                                         const struct idset *ranks)
 {
     struct exec_ctx *ctx = calloc (1, sizeof (*ctx));
-    if (ctx == NULL)
-        return NULL;
+    flux_reactor_t *r = flux_get_reactor (job->h);
+    double barrier_timeout = 1800.;
+
+    if (!r || !ctx || !(ctx->barrier_pending_ranks = idset_copy (ranks)))
+        goto error;
+
     ctx->job = job;
     (void) json_unpack (job->jobspec,
-                        "{s:{s:{s:{s:{s:s}}}}}",
+                        "{s:{s:{s:{s:{s?s s?F}}}}}",
                         "attributes",
                           "system",
                             "exec",
                               "bulkexec",
-                                "mock_exception", &ctx->mock_exception);
+                                "mock_exception", &ctx->mock_exception,
+                                "barrier-timeout", &barrier_timeout);
+
+    if (barrier_timeout > 0.) {
+        ctx->shell_barrier_timer = flux_timer_watcher_create (r,
+                                                              barrier_timeout,
+                                                              0.,
+                                                              barrier_timer_cb,
+                                                              ctx);
+        if (!ctx->shell_barrier_timer) {
+            flux_log_error (job->h,
+                            "%s: failed to create barrier timer",
+                            idf58 (ctx->job->id));
+            goto error;
+        }
+    }
+
     return ctx;
+error:
+    exec_ctx_destroy (ctx);
+    return NULL;
 }
 
 static const char * exec_mock_exception (struct bulk_exec *exec)
@@ -108,17 +175,36 @@ static void complete_cb (struct bulk_exec *exec, void *arg)
                             bulk_exec_rc (exec));
 }
 
-static int exec_barrier_enter (struct bulk_exec *exec)
+static void barrier_timer_stop (struct exec_ctx *ctx)
+{
+    flux_watcher_stop (ctx->shell_barrier_timer);
+}
+
+static void barrier_timer_start (struct exec_ctx *ctx)
+{
+    /* Only ever create one barrier timer (for the first shell barrier)
+     */
+    if (ctx->barrier_completion_count == 0) {
+        fprintf (stderr, "starting barrier timer\n");
+        flux_watcher_start (ctx->shell_barrier_timer);
+    }
+}
+
+
+static int exec_barrier_enter (struct bulk_exec *exec, int rank)
 {
     struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
 
     if (!ctx)
         return -1;
+
+    (void) idset_clear (ctx->barrier_pending_ranks, rank);
     if (++ctx->barrier_enter_count == bulk_exec_total (exec)) {
         if (bulk_exec_write (exec, "stdin", "exit=0\n", 7) < 0)
             return -1;
         ctx->barrier_enter_count = 0;
         ctx->barrier_completion_count++;
+        barrier_timer_stop (ctx);
     }
     else if (ctx->barrier_enter_count == 1 && ctx->exit_count > 0) {
         /*
@@ -130,6 +216,14 @@ static int exec_barrier_enter (struct bulk_exec *exec)
         if (bulk_exec_write (exec, "stdin", "exit=1\n", 7) < 0)
             return -1;
     }
+
+    /*  When the first shell enters the barrier, start a timer after
+     *   which the job will be terminated if all shells have not reached
+     *   the barrier.
+     */
+    if (ctx->barrier_enter_count == 1)
+        barrier_timer_start (ctx);
+
     return 0;
 }
 
@@ -142,11 +236,12 @@ static void output_cb (struct bulk_exec *exec,
 {
     struct jobinfo *job = arg;
     const char *cmd = flux_cmd_arg (flux_subprocess_get_cmd (p), 0);
+    int rank = flux_subprocess_rank (p);
 
     if (streq (stream, "stdout")) {
         if (len == 6
             && strncmp (data, "enter\n", 6) == 0
-            && exec_barrier_enter (exec) < 0) {
+            && exec_barrier_enter (exec, rank) < 0) {
             jobinfo_fatal_error (job,
                                  errno,
                                  "Failed to handle barrier");
@@ -448,7 +543,7 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: bulk_exec_create");
         goto err;
     }
-    if (!(ctx = exec_ctx_create (job))) {
+    if (!(ctx = exec_ctx_create (job, ranks))) {
         flux_log_error (job->h, "exec_init: exec_ctx_create");
         goto err;
     }
@@ -536,6 +631,12 @@ static void exec_check_cb (flux_reactor_t *r,
 static int exec_start (struct jobinfo *job)
 {
     struct bulk_exec *exec = job->data;
+    struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
+
+    if (!exec || !(ctx = bulk_exec_aux_get (exec, "ctx"))) {
+        jobinfo_fatal_error (job, errno, "failed to get bulk-exec ctx");
+        return -1;
+    }
 
     if (streq (exec_mock_exception (exec), "init")) {
         /* If creating an "init" mock exception, generate it and
