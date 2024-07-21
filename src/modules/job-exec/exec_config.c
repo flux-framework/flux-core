@@ -116,13 +116,15 @@ int config_get_stats (json_t **config_stats)
 {
     json_t *o = NULL;
 
-    if (!(o = json_pack ("{s:s? s:s? s:s? s:s? s:i}",
+    if (!(o = json_pack ("{s:s? s:s? s:s? s:s? s:i s:f}",
                          "default_cwd", default_cwd,
                          "default_job_shell", exec_conf.default_job_shell,
                          "flux_imp_path", exec_conf.flux_imp_path,
                          "exec_service", exec_conf.exec_service,
                          "exec_service_override",
-                         exec_conf.exec_service_override))) {
+                         exec_conf.exec_service_override,
+                         "default_barrier_timeout",
+                         exec_conf.default_barrier_timeout))) {
         errno = ENOMEM;
         return -1;
     }
