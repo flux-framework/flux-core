@@ -26,6 +26,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/jpath.h"
 
 static const char *default_cwd = "/tmp";
 
@@ -111,71 +112,20 @@ double config_get_default_barrier_timeout (void)
     return exec_conf.default_barrier_timeout;
 }
 
-static int config_add_stats_string (json_t *o,
-                                    const char *key,
-                                    const char *value)
-{
-    json_t *s;
-
-    if (!value)
-        return 0;
-
-    if (!(s = json_string (value))) {
-        errno = ENOMEM;
-        return -1;
-    }
-    if (json_object_set_new (o, key, s) < 0) {
-        json_decref (s);
-        errno = ENOMEM;
-        return -1;
-    }
-    return 0;
-}
-
-static int config_add_stats_int (json_t *o,
-                                 const char *key,
-                                 int value)
-{
-    json_t *s = json_integer (value);
-    if (!s) {
-        errno = ENOMEM;
-        return -1;
-    }
-    if (json_object_set_new (o, key, s) < 0) {
-        json_decref (s);
-        errno = ENOMEM;
-        return -1;
-    }
-    return 0;
-}
-
 int config_get_stats (json_t **config_stats)
 {
     json_t *o = NULL;
 
-    if (!(o = json_object ())) {
+    if (!(o = json_pack ("{s:s? s:s? s:s? s:s? s:i}",
+                         "default_cwd", default_cwd,
+                         "default_job_shell", exec_conf.default_job_shell,
+                         "flux_imp_path", exec_conf.flux_imp_path,
+                         "exec_service", exec_conf.exec_service,
+                         "exec_service_override",
+                         exec_conf.exec_service_override))) {
         errno = ENOMEM;
-        goto error;
+        return -1;
     }
-
-    if (config_add_stats_string (o,
-                                 "default_cwd",
-                                 default_cwd) < 0
-        || config_add_stats_string (o,
-                                    "default_job_shell",
-                                    exec_conf.default_job_shell) < 0
-        || config_add_stats_string (o,
-                                    "flux_imp_path",
-                                    exec_conf.flux_imp_path) < 0
-        || config_add_stats_string (o,
-                                    "exec_service",
-                                    exec_conf.exec_service) < 0)
-        goto error;
-
-    if (config_add_stats_int (o,
-                              "exec_service_override",
-                              exec_conf.exec_service_override) < 0)
-        goto error;
 
     if (exec_conf.sdexec_properties) {
         if (json_object_set (o,
@@ -183,6 +133,8 @@ int config_get_stats (json_t **config_stats)
                              exec_conf.sdexec_properties) < 0)
             goto error;
     }
+
+    (void) jpath_clear_null (o);
 
     (*config_stats) = o;
     return 0;
