@@ -25,6 +25,7 @@
 #include "ccan/str/str.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/fsd.h"
 
 static const char *default_cwd = "/tmp";
 
@@ -34,6 +35,7 @@ struct exec_config {
     const char *exec_service;
     int exec_service_override;
     json_t *sdexec_properties;
+    double default_barrier_timeout;
 };
 
 /* Global configs initialized in config_init() */
@@ -102,6 +104,11 @@ bool config_get_exec_service_override (void)
 json_t *config_get_sdexec_properties (void)
 {
     return exec_conf.sdexec_properties;
+}
+
+double config_get_default_barrier_timeout (void)
+{
+    return exec_conf.default_barrier_timeout;
 }
 
 static int config_add_stats_string (json_t *o,
@@ -192,6 +199,7 @@ static void exec_config_init (struct exec_config *ec)
     ec->exec_service = "rexec";
     ec->exec_service_override = 0;
     ec->sdexec_properties = NULL;
+    ec->default_barrier_timeout = 1800.;
 }
 
 /*  Initialize configurations for use by job-exec bulk-exec
@@ -204,6 +212,7 @@ int config_setup (flux_t *h,
                   flux_error_t *errp)
 {
     struct exec_config tmpconf;
+    const char *barrier_timeout = NULL;
     flux_error_t err;
 
     /* Per trws comment in 97421e88987535260b10d6a19551cea625f26ce4
@@ -285,6 +294,27 @@ int config_setup (flux_t *h,
             }
         }
     }
+
+    /*  Check configuration for exec.barrier-timeout */
+    if (flux_conf_unpack (conf,
+                          &err,
+                          "{s?{s?s}}",
+                          "exec",
+                            "barrier-timeout", &barrier_timeout) < 0) {
+        errprintf (errp,
+                   "error reading config value exec.barrier-timeout: %s",
+                   err.text);
+        return -1;
+    }
+    if (barrier_timeout
+        && fsd_parse_duration (barrier_timeout,
+                               &tmpconf.default_barrier_timeout) < 0) {
+        errprintf (errp,
+                   "invalid duration '%s' specified for exec.barrier-timeout",
+                   barrier_timeout);
+        return -1;
+    }
+
 
     if (argv && argc) {
         /* Finally, override values on cmdline */

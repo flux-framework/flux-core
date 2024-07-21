@@ -34,6 +34,8 @@ json_t *config_get_sdexec_properties (void);
 
 bool config_get_exec_service_override (void);
 
+double config_get_default_barrier_timeout (void);
+
 int config_get_stats (json_t **config_stats);
 
 int config_setup (flux_t *h,

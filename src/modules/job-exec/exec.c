@@ -118,7 +118,7 @@ static struct exec_ctx *exec_ctx_create (struct jobinfo *job,
 {
     struct exec_ctx *ctx = calloc (1, sizeof (*ctx));
     flux_reactor_t *r = flux_get_reactor (job->h);
-    double barrier_timeout = 1800.;
+    double barrier_timeout = config_get_default_barrier_timeout ();
 
     if (!r || !ctx || !(ctx->barrier_pending_ranks = idset_copy (ranks)))
         goto error;
