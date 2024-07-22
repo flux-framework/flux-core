@@ -264,30 +264,38 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
     monitor->size = ctx->size;
     if (monitor->size < inventory_size)
         monitor->size = inventory_size;
+
     if (flux_msg_handler_addvec (ctx->h, htab, monitor, &monitor->handlers) < 0)
         goto error;
+
+    /* Monitor currently doesn't do anything on follower ranks,
+     * except respond to RPCs with a human readable error.
+     */
+    if (ctx->rank > 0)
+        goto done;
+
     if (!(monitor->waitup_requests = flux_msglist_create ()))
         goto error;
-    if (ctx->rank == 0) {
-        /* Initialize up to the empty set unless 'monitor_force_up' is true.
-         * N.B. Initial up value will appear in 'restart' event posted
-         * to resource.eventlog.
-         */
-        if (!(monitor->up = idset_create (monitor->size, 0)))
+
+    /* Initialize up to the empty set unless 'monitor_force_up' is true.
+     * N.B. Initial up value will appear in 'restart' event posted
+     * to resource.eventlog.
+     */
+    if (!(monitor->up = idset_create (monitor->size, 0)))
+        goto error;
+    if (monitor_force_up) {
+        if (idset_range_set (monitor->up, 0, monitor->size - 1) < 0)
             goto error;
-        if (monitor_force_up) {
-            if (idset_range_set (monitor->up, 0, monitor->size - 1) < 0)
-                goto error;
-        }
-        else if (!flux_attr_get (ctx->h, "broker.recovery-mode")) {
-            if (!(monitor->f_online = group_monitor (ctx->h, "broker.online"))
-                || flux_future_then (monitor->f_online,
-                                     -1,
-                                     broker_online_cb,
-                                     monitor) < 0)
-                goto error;
-        }
     }
+    else if (!flux_attr_get (ctx->h, "broker.recovery-mode")) {
+        if (!(monitor->f_online = group_monitor (ctx->h, "broker.online"))
+            || flux_future_then (monitor->f_online,
+                                 -1,
+                                 broker_online_cb,
+                                 monitor) < 0)
+            goto error;
+    }
+done:
     return monitor;
 error:
     monitor_destroy (monitor);
