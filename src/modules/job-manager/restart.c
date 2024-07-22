@@ -111,6 +111,10 @@ static struct job *lookup_job (flux_t *h,
      * after resources have been allocated.
      */
     R = lookup_job_data_get (f3, NULL);
+
+    /* Treat these errors as non-fatal to avoid a nuisance on restart.
+     * See also: flux-framework/flux-core#6123
+     */
     if (!(job = job_create_from_eventlog (id,
                                           eventlog,
                                           jobspec,
@@ -120,7 +124,7 @@ static struct job *lookup_job (flux_t *h,
                    "replay %s: %s",
                    flux_kvs_lookup_get_key (f1),
                    e.text);
-        *fatal = true;
+        *fatal = false;
     }
 done:
     flux_future_destroy (f1);
