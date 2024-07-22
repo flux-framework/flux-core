@@ -51,6 +51,8 @@
 struct monitor {
     struct resource_ctx *ctx;
     flux_future_t *f_online;
+    flux_future_t *f_torpid;
+    struct idset *torpid;
     struct idset *up;
     struct idset *down; // cached result of monitor_get_down()
     flux_msg_handler_t **handlers;
@@ -63,6 +65,11 @@ static void notify_waitup (struct monitor *monitor);
 const struct idset *monitor_get_up (struct monitor *monitor)
 {
     return monitor->up;
+}
+
+const struct idset *monitor_get_torpid (struct monitor *monitor)
+{
+    return monitor->torpid;
 }
 
 const struct idset *monitor_get_down (struct monitor *monitor)
@@ -188,6 +195,36 @@ static void broker_online_cb (flux_future_t *f, void *arg)
     flux_future_reset (f);
 }
 
+static void broker_torpid_cb (flux_future_t *f, void *arg)
+{
+    struct monitor *monitor = arg;
+    flux_t *h = monitor->ctx->h;
+    struct idset *torpid = NULL;
+
+    if (!(torpid = group_get (f))) {
+        flux_log (h,
+                  LOG_ERR,
+                  "monitor: broker.torpid: %s",
+                  future_strerror (f, errno));
+        return;
+    }
+    if (post_join_leave (monitor,
+                         monitor->torpid,
+                         torpid,
+                         "torpid",
+                         "lively") < 0) {
+        flux_log_error (h, "monitor: error posting torpid/lively event");
+        idset_destroy (torpid);
+        flux_future_reset (f);
+        return;
+    }
+
+    idset_destroy (monitor->torpid);
+    monitor->torpid = torpid;
+
+    flux_future_reset (f);
+}
+
 static void notify_waitup (struct monitor *monitor)
 {
     const flux_msg_t *msg;
@@ -258,7 +295,9 @@ void monitor_destroy (struct monitor *monitor)
         flux_msg_handler_delvec (monitor->handlers);
         idset_destroy (monitor->up);
         idset_destroy (monitor->down);
+        idset_destroy (monitor->torpid);
         flux_future_destroy (monitor->f_online);
+        flux_future_destroy (monitor->f_torpid);
         flux_msglist_destroy (monitor->waitup_requests);
         free (monitor);
         errno = saved_errno;
@@ -301,7 +340,8 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
      * N.B. Initial up value will appear in 'restart' event posted
      * to resource.eventlog.
      */
-    if (!(monitor->up = idset_create (monitor->size, 0)))
+    if (!(monitor->up = idset_create (monitor->size, 0))
+        || !(monitor->torpid = idset_create (monitor->size, 0)))
         goto error;
     if (monitor_force_up) {
         if (idset_range_set (monitor->up, 0, monitor->size - 1) < 0)
@@ -312,6 +352,12 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
             || flux_future_then (monitor->f_online,
                                  -1,
                                  broker_online_cb,
+                                 monitor) < 0)
+            goto error;
+        if (!(monitor->f_torpid = group_monitor (ctx->h, "broker.torpid"))
+            || flux_future_then (monitor->f_torpid,
+                                 -1,
+                                 broker_torpid_cb,
                                  monitor) < 0)
             goto error;
     }
