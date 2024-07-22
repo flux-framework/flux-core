@@ -82,6 +82,29 @@ const struct idset *monitor_get_down (struct monitor *monitor)
     return monitor->down;
 }
 
+/* Send a streaming groups.get RPC for broker group 'name'.
+ */
+static flux_future_t *group_monitor (flux_t *h, const char *name)
+{
+    return flux_rpc_pack (h,
+                          "groups.get",
+                          FLUX_NODEID_ANY,
+                          FLUX_RPC_STREAMING,
+                          "{s:s}",
+                          "name", name);
+}
+
+/* Handle a response to the group monitor request, parsing the
+ * encoded idset in the payload.
+ */
+static struct idset *group_get (flux_future_t *f)
+{
+    const char *members;
+    if (flux_rpc_get_unpack (f, "{s:s}", "members", &members) < 0)
+        return NULL;
+    return idset_decode (members);
+}
+
 /* Leader: set of online brokers has changed.
  * Update monitor->up and post online/offline events to resource.eventlog.
  * Avoid posting events if nothing changed.
@@ -90,19 +113,20 @@ static void broker_online_cb (flux_future_t *f, void *arg)
 {
     struct monitor *monitor = arg;
     flux_t *h = monitor->ctx->h;
-    const char *members;
     struct idset *new_up = NULL;
     struct idset *join = NULL;
     struct idset *leave = NULL;
     char *online = NULL;
     char *offline = NULL;
 
-    if (flux_rpc_get_unpack (f, "{s:s}", "members", &members) < 0) {
-        flux_log_error (h, "monitor: group.get failed");
+    if (!(new_up = group_get (f))) {
+        flux_log (h,
+                  LOG_ERR,
+                  "monitor: group.get: %s",
+                  future_strerror (f, errno));
         return;
     }
-    if (!(new_up = idset_decode (members))
-        || !(join = idset_difference (new_up, monitor->up))
+    if (!(join = idset_difference (new_up, monitor->up))
         || !(leave = idset_difference (monitor->up, new_up)))
         goto done;
     if (idset_count (join) > 0) {
@@ -258,12 +282,7 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
                 goto error;
         }
         else if (!flux_attr_get (ctx->h, "broker.recovery-mode")) {
-            if (!(monitor->f_online = flux_rpc_pack (ctx->h,
-                                                     "groups.get",
-                                                     FLUX_NODEID_ANY,
-                                                     FLUX_RPC_STREAMING,
-                                                     "{s:s}",
-                                                     "name", "broker.online"))
+            if (!(monitor->f_online = group_monitor (ctx->h, "broker.online"))
                 || flux_future_then (monitor->f_online,
                                      -1,
                                      broker_online_cb,
