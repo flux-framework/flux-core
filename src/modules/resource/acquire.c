@@ -137,6 +137,8 @@ static int acquire_request_init (struct acquire_request *ar,
         goto error;
     if (idset_subtract (ar->up, monitor_get_down (ctx->monitor)) < 0)
         goto error;
+    if (idset_subtract (ar->up, monitor_get_torpid (ctx->monitor)) < 0)
+        goto error;
     rlist_destroy (rl);
     idset_destroy (drain);
     return 0;
@@ -170,6 +172,8 @@ static int acquire_request_update (struct acquire_request *ar,
     if (idset_subtract (new_up, drain) < 0)
         goto error;
     if (idset_subtract (new_up, monitor_get_down (ctx->monitor)) < 0)
+        goto error;
+    if (idset_subtract (new_up, monitor_get_torpid (ctx->monitor)) < 0)
         goto error;
     if (idset_subtract (new_up, exclude_get (ctx->exclude)) < 0)
         goto error;
@@ -401,7 +405,9 @@ static void reslog_cb (struct reslog *reslog,
         else if (streq (name, "online")
                  || streq (name, "offline")
                  || streq (name, "drain")
-                 || streq (name, "undrain")) {
+                 || streq (name, "undrain")
+                 || streq (name, "torpid")
+                 || streq (name, "lively")) {
             if (ar->response_count > 0) {
                 struct idset *up, *dn;
                 if (acquire_request_update (ar,
