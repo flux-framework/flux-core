@@ -50,7 +50,7 @@
 
 struct monitor {
     struct resource_ctx *ctx;
-    flux_future_t *f;
+    flux_future_t *f_online;
     struct idset *up;
     struct idset *down; // cached result of monitor_get_down()
     flux_msg_handler_t **handlers;
@@ -216,7 +216,7 @@ void monitor_destroy (struct monitor *monitor)
         flux_msg_handler_delvec (monitor->handlers);
         idset_destroy (monitor->up);
         idset_destroy (monitor->down);
-        flux_future_destroy (monitor->f);
+        flux_future_destroy (monitor->f_online);
         flux_msglist_destroy (monitor->waitup_requests);
         free (monitor);
         errno = saved_errno;
@@ -258,13 +258,13 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
                 goto error;
         }
         else if (!flux_attr_get (ctx->h, "broker.recovery-mode")) {
-            if (!(monitor->f = flux_rpc_pack (ctx->h,
-                                              "groups.get",
-                                               FLUX_NODEID_ANY,
-                                               FLUX_RPC_STREAMING,
-                                               "{s:s}",
-                                               "name", "broker.online"))
-                || flux_future_then (monitor->f,
+            if (!(monitor->f_online = flux_rpc_pack (ctx->h,
+                                                     "groups.get",
+                                                     FLUX_NODEID_ANY,
+                                                     FLUX_RPC_STREAMING,
+                                                     "{s:s}",
+                                                     "name", "broker.online"))
+                || flux_future_then (monitor->f_online,
                                      -1,
                                      broker_online_cb,
                                      monitor) < 0)
