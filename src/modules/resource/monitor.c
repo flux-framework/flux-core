@@ -137,8 +137,7 @@ static void broker_online_cb (flux_future_t *f, void *arg)
                                  "online",
                                  EVENT_NO_COMMIT,
                                  "{s:s}",
-                                 "idset",
-                                 online) < 0) {
+                                 "idset", online) < 0) {
             flux_log_error (h, "monitor: error posting online event");
             goto done;
         }
@@ -151,8 +150,7 @@ static void broker_online_cb (flux_future_t *f, void *arg)
                                  "offline",
                                  EVENT_NO_COMMIT,
                                  "{s:s}",
-                                 "idset",
-                                 offline) < 0) {
+                                 "idset", offline) < 0) {
             flux_log_error (h, "monitor: error posting offline event");
             goto done;
         }
