@@ -105,6 +105,57 @@ static struct idset *group_get (flux_future_t *f)
     return idset_decode (members);
 }
 
+/* Post event 'name' with a context containing idset:s, where 's' is
+ * the string encoding of 'ids'.  The event is not propagated to the KVS.
+ */
+static int post_event (struct monitor *monitor,
+                       const char *name,
+                       struct idset *ids)
+{
+    char *s = NULL;
+
+    if (idset_count (ids) == 0)
+        return 0;
+    if (!(s = idset_encode (ids, IDSET_FLAG_RANGE))
+        || reslog_post_pack (monitor->ctx->reslog,
+                             NULL,
+                             0.,
+                             name,
+                             EVENT_NO_COMMIT,
+                             "{s:s}",
+                             "idset", s) < 0) {
+        ERRNO_SAFE_WRAP (free, s);
+        return -1;
+    }
+    free (s);
+    return 0;
+}
+
+/* Post 'join_event' and/or 'leave_event' to record ids added or removed
+ * in 'newset' relative to 'oldset'.
+ */
+static int post_join_leave (struct monitor *monitor,
+                            const struct idset *oldset,
+                            const struct idset *newset,
+                            const char *join_event,
+                            const char *leave_event)
+{
+    struct idset *join;
+    struct idset *leave = NULL;
+    int rc = -1;
+
+    if (!(join = idset_difference (newset, oldset))
+        || !(leave = idset_difference (oldset, newset))
+        || post_event (monitor, join_event, join) < 0
+        || post_event (monitor, leave_event, leave) < 0)
+        goto error;
+    rc = 0;
+error:
+    idset_destroy (join);
+    idset_destroy (leave);
+    return rc;
+}
+
 /* Leader: set of online brokers has changed.
  * Update monitor->up and post online/offline events to resource.eventlog.
  * Avoid posting events if nothing changed.
@@ -113,58 +164,27 @@ static void broker_online_cb (flux_future_t *f, void *arg)
 {
     struct monitor *monitor = arg;
     flux_t *h = monitor->ctx->h;
-    struct idset *new_up = NULL;
-    struct idset *join = NULL;
-    struct idset *leave = NULL;
-    char *online = NULL;
-    char *offline = NULL;
+    struct idset *up = NULL;
 
-    if (!(new_up = group_get (f))) {
+    if (!(up = group_get (f))) {
         flux_log (h,
                   LOG_ERR,
                   "monitor: group.get: %s",
                   future_strerror (f, errno));
         return;
     }
-    if (!(join = idset_difference (new_up, monitor->up))
-        || !(leave = idset_difference (monitor->up, new_up)))
-        goto done;
-    if (idset_count (join) > 0) {
-        if (!(online = idset_encode (join, IDSET_FLAG_RANGE))
-            || reslog_post_pack (monitor->ctx->reslog,
-                                 NULL,
-                                 0.,
-                                 "online",
-                                 EVENT_NO_COMMIT,
-                                 "{s:s}",
-                                 "idset", online) < 0) {
-            flux_log_error (h, "monitor: error posting online event");
-            goto done;
-        }
+    if (post_join_leave (monitor, monitor->up, up, "online", "offline") < 0) {
+        flux_log_error (h, "monitor: error posting online/offline event");
+        idset_destroy (up);
+        flux_future_reset (f);
+        return;
     }
-    if (idset_count (leave) > 0) {
-        if (!(offline = idset_encode (leave, IDSET_FLAG_RANGE))
-            || reslog_post_pack (monitor->ctx->reslog,
-                                 NULL,
-                                 0.,
-                                 "offline",
-                                 EVENT_NO_COMMIT,
-                                 "{s:s}",
-                                 "idset", offline) < 0) {
-            flux_log_error (h, "monitor: error posting offline event");
-            goto done;
-        }
-    }
+
     idset_destroy (monitor->up);
-    monitor->up = new_up;
-    new_up = NULL;
+    monitor->up = up;
+
     notify_waitup (monitor);
-done:
-    free (online);
-    free (offline);
-    idset_destroy (join);
-    idset_destroy (leave);
-    idset_destroy (new_up);
+
     flux_future_reset (f);
 }
 
