@@ -1221,22 +1221,21 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
     if (flux_job_kvs_namespace (job->ns, sizeof (job->ns), job->id) < 0) {
         jobinfo_fatal_error (job, errno, "failed to create ns name for job");
         flux_log_error (ctx->h, "job_ns_create");
-        return -1;
+        goto error;
     }
     job->ev = eventlogger_create (job->h, 0.01, &ev_ops, job);
     if (!job->ev || eventlogger_setns (job->ev, job->ns) < 0) {
         flux_log_error (job->h,
                         "eventlogger_create/setns for job %s failed",
                         idf58 (job->id));
-        jobinfo_decref (job);
-        return -1;
+        goto error;
     }
 
     if (zhashx_insert (ctx->jobs, &job->id, job) < 0) {
         errno = EEXIST;
         flux_log_error (ctx->h, "zhashx_insert");
         jobinfo_fatal_error (job, errno, "failed to hash job");
-        return -1;
+        goto error;
     }
     if (!(f = jobinfo_start_init (job))) {
         flux_log_error (ctx->h, "start: jobinfo_kvs_lookup");
@@ -1249,6 +1248,7 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
     return 0;
 error:
     jobinfo_fatal_error (job, errno, "job start failure");
+    jobinfo_decref (job);
     return -1;
 }
 

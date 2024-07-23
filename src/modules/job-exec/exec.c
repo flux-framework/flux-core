@@ -156,15 +156,6 @@ static void output_cb (struct bulk_exec *exec,
                         len);
 }
 
-static void lost_shell_continuation (flux_future_t *f, void *arg)
-{
-    struct jobinfo *job = arg;
-    if (flux_future_get (f, NULL) < 0)
-        jobinfo_fatal_error (job, errno,
-                             "failed to notify job of node failure");
-    flux_future_destroy (f);
-}
-
 static int lost_shell (struct jobinfo *job,
                        bool critical,
                        int shell_rank,
@@ -212,10 +203,13 @@ static int lost_shell (struct jobinfo *job,
                                       "shell_rank", shell_rank,
                                       "message", msg)))
             return -1;
-    if (flux_future_then (f, -1., lost_shell_continuation, job) < 0) {
-        flux_future_destroy (f);
-        return -1;
-    }
+    /*  Do not wait for response. If a shell is lost because the job
+     *  is terminating, then the rank 0 shell may also have exited by the
+     *  time this message is sent, so a response may never come. This
+     *  could leak the future (and the job reference taken by
+     *  jobinfo_shell_rpc_pack())
+     */
+    flux_future_destroy (f);
     return 0;
 }
 
