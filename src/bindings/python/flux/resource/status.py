@@ -41,6 +41,7 @@ class ResourceStatus:
         offline (IDset): idset of ranks currently offline
         online (IDset): idset of ranks currently online
         exclude (IDset): idset of ranks excluded by configuration
+        torpid (IDset): idset of torpid ranks
         allocated (IDset): idset of ranks with one or more jobs
         drained (IDset): idset of ranks drained and not allocated
         draining (IDset): idset of ranks drained and allocated
@@ -50,7 +51,9 @@ class ResourceStatus:
     def __init__(self, rstatus=None, allocated_ranks=None):
         # Allow "empty" ResourceStatus object to be created:
         if rstatus is None:
-            rstatus = dict(R=None, offline="", online="", exclude="", drain={})
+            rstatus = dict(
+                R=None, offline="", online="", exclude="", torpid="", drain={}
+            )
         if allocated_ranks is None:
             allocated_ranks = IDset()
 
@@ -91,13 +94,16 @@ class ResourceStatus:
         # excluded: excluded by configuration
         self.exclude = IDset(self.rstatus["exclude"])
 
+        # torpid: unresponsive nodes
+        self.torpid = IDset(self.rstatus["torpid"])
+
         # allocated: online and allocated by scheduler
         self.allocated = self.allocated_ranks
 
         # If include_ranks was provided, filter all idsets to only those
         # that intersect the provided idset
         if include_ranks is not None:
-            for name in ("all", "offline", "online", "exclude", "allocated"):
+            for name in ("all", "offline", "online", "exclude", "allocated", "torpid"):
                 result = getattr(self, name).intersect(include_ranks)
                 setattr(self, name, result)
 
