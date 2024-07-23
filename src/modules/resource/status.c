@@ -156,10 +156,12 @@ static json_t *get_down (struct status *status, struct rlist *rl)
         struct rlist *rdown = NULL;
         struct idset *drain = NULL;
         const struct idset *down = monitor_get_down (status->ctx->monitor);
+        const struct idset *torpid = monitor_get_torpid (status->ctx->monitor);
 
         if ((drain = drain_get (status->ctx->drain))
             && rlist_mark_up (rl, "all") >= 0
             && mark_down (rl, down) == 0
+            && mark_down (rl, torpid) == 0
             && mark_down (rl, drain) == 0
             && (rdown = rlist_copy_down (rl)))
             status->cache.R_down = rlist_to_R (rdown);
@@ -478,7 +480,9 @@ static void reslog_cb (struct reslog *reslog,
     else if (streq (name, "online")
         || streq (name, "offline")
         || streq (name, "drain")
-        || streq (name, "undrain"))
+        || streq (name, "undrain")
+        || streq (name, "torpid")
+        || streq (name, "lively"))
         invalidate_cache (&status->cache, false);
 }
 
