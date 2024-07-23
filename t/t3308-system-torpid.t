@@ -108,10 +108,6 @@ test_expect_success 'rank 1 is removed from broker.torpid group' '
 	$groups waitfor --count=0 broker.torpid
 '
 
-test_expect_success 'rank 1 is removed from broker.torpid group' '
-	$groups waitfor --count=0 broker.torpid
-'
-
 test_expect_success 'rank 1 was drained' '
 	test $(flux resource status -s drain -no {nnodes}) -eq 1
 '
