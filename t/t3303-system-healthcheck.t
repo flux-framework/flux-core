@@ -65,6 +65,11 @@ test_expect_success 'overlay status is full' '
 	test "$(flux overlay status --timeout=0 --summary)" = "full"
 '
 
+test_expect_success 'flux overlay errors prints nothing' '
+	flux overlay errors --timeout=0 >errors.out &&
+	test $(wc -l <errors.out) -eq 0
+'
+
 test_expect_success 'wait timeout of zero is not an immediate timeout' '
 	flux overlay status --wait=full --summary --timeout=0
 '
@@ -128,10 +133,15 @@ test_expect_success 'flux overlay status -vv works' '
 '
 
 test_expect_success 'flux overlay status shows rank 3 offline' '
-	echo "3 fake3: offline" >health.exp &&
+	echo "3 fake3: offline administrative shutdown" >health.exp &&
 	flux overlay status --timeout=0 --no-pretty \
 		| grep fake3 >health.out &&
 	test_cmp health.exp health.out
+'
+
+test_expect_success 'flux overlay errors prints nothing' '
+	flux overlay errors --timeout=0 >errors2.out &&
+	test $(wc -l <errors2.out) -eq 0
 '
 
 test_expect_success 'flux overlay status --summary' '
@@ -189,6 +199,12 @@ test_expect_success 'ping to rank 14 fails with EHOSTUNREACH' '
 	echo "flux-ping: 14!broker.ping: $(strerror_symbol EHOSTUNREACH)" >ping.exp &&
 	test_must_fail flux ping 14 2>ping.err &&
 	test_cmp ping.exp ping.err
+'
+
+test_expect_success 'flux overlay errors shows the lost connection' '
+	echo "fake14: lost connection" >errors3.exp &&
+	flux overlay errors --timeout=0 >errors3.out &&
+	test_cmp errors3.exp errors3.out
 '
 
 test_expect_success 'wait for rank 0 subtree to be degraded' '
@@ -274,6 +290,10 @@ test_expect_success 'stop broker 12' '
 test_expect_success 'flux overlay status prints connection timed out on 12' '
 	flux overlay status -vv --no-pretty >status.out &&
 	grep "fake12: $(strerror_symbol ETIMEDOUT)" status.out
+'
+test_expect_success 'flux overlay errors prints connection timed out on 12' '
+	flux overlay errors >errors4.out &&
+	grep "fake12: $(strerror_symbol ETIMEDOUT)" errors4.out
 '
 
 test_expect_success 'continue broker 12' '

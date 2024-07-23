@@ -10,6 +10,7 @@ SYNOPSIS
 ========
 
 | **flux** **overlay** **status** [*-v*] [*--timeout=FSD*] [*--rank=N*]
+| **flux** **overlay** **errors** [*--timeout=FSD*]
 | **flux** **overlay** **lookup** *target*
 | **flux** **overlay** **parentof** *rank*
 | **flux** **overlay** **disconnect** [*--parent=RANK*] *target*
@@ -78,6 +79,18 @@ below.
 
    Wait until sub-tree enters *STATE* before reporting (full, partial, offline,
    degraded, lost).
+
+errors
+------
+
+.. program:: flux overlay errors
+
+:program:`flux overlay errors` summarizes any errors recorded for lost nodes.
+The output consists of one line per unique error with a hostlist prefix.
+
+.. option:: -t, --timeout=FSD
+
+   Set RPC timeout, 0=disable (default 0.5s)
 
 lookup
 ------
@@ -151,6 +164,18 @@ Round trip RPC times are shown with ``-vv``, e.g.
   ├─ 5 test5: offline for 12.754h
   ├─ 6 test6: full for 18.3052h (2.131 ms)
   └─ 7 test7: offline for 12.754h
+
+
+
+::
+
+At times an error summary for *lost* nodes may be useful, e.g.
+
+::
+
+  $ flux overlay errors
+  test[2,5]: lost connection
+  test[6-7]: lost parent
 
 A broker that is not responding but is not shown as *lost* or *offline* may
 be forcibly disconnected from the overlay network with

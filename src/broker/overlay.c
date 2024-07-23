@@ -111,6 +111,7 @@ struct child {
     struct timespec status_timestamp;
     bool torpid;
     struct rpc_track *tracker;
+    flux_error_t error;
 };
 
 struct parent {
@@ -737,7 +738,8 @@ static void fail_child_rpcs (const flux_msg_t *msg, void *arg)
 
 static void overlay_child_status_update (struct overlay *ov,
                                          struct child *child,
-                                         int status)
+                                         int status,
+                                         const char *reason)
 {
     if (child->status != status) {
         if (subtree_is_online (child->status)
@@ -757,6 +759,7 @@ static void overlay_child_status_update (struct overlay *ov,
         overlay_monitor_notify (ov, child->rank);
         overlay_health_respond_all (ov);
     }
+    errprintf (&child->error, "%s", reason ? reason : "");
 }
 
 static void log_lost_connection (struct overlay *ov,
@@ -801,7 +804,10 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
         if ((uuid = flux_msg_route_last (msg))
             && (child = child_lookup_online (ov, uuid))) {
             log_lost_connection (ov, child, "failed");
-            overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
+            overlay_child_status_update (ov,
+                                         child,
+                                         SUBTREE_STATUS_LOST,
+                                         "lost connection");
         }
         errno = saved_errno;
     }
@@ -951,7 +957,7 @@ static void child_cb (flux_reactor_t *r,
             int type, status;
             if (flux_control_decode (msg, &type, &status) == 0
                 && type == CONTROL_STATUS)
-                overlay_child_status_update (ov, child, status);
+                overlay_child_status_update (ov, child, status, NULL);
             goto done;
         }
         case FLUX_MSGTYPE_REQUEST:
@@ -1156,23 +1162,19 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
         "%s (rank %lu) reconnected after crash, dropping old connection state",
                   flux_get_hostbyrank (ov->h, child->rank),
                   (unsigned long)child->rank);
-        overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
+        overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST, NULL);
         hello_log_level = LOG_ERR; // want hello log to stand out in this case
     }
 
     if (!version_check (version, ov->version, &error)) {
-        flux_log (ov->h, LOG_ERR,
-                  "rejecting connection from %s (rank %lu): %s",
-                  flux_get_hostbyrank (ov->h, rank),
-                  (unsigned long)rank,
-                  error.text);
+        child->error = error; // capture this error message for health report
         errmsg = error.text;
         errno = EINVAL;
         goto error;
     }
 
     snprintf (child->uuid, sizeof (child->uuid), "%s", uuid);
-    overlay_child_status_update (ov, child, status);
+    overlay_child_status_update (ov, child, status, NULL);
 
     flux_log (ov->h,
               hello_log_level,
@@ -1548,7 +1550,10 @@ static void overlay_goodbye_cb (flux_t *h,
         flux_msg_decref (response);
         goto error;
     }
-    overlay_child_status_update (ov, child, SUBTREE_STATUS_OFFLINE);
+    overlay_child_status_update (ov,
+                                 child,
+                                 SUBTREE_STATUS_OFFLINE,
+                                 "administrative shutdown");
     flux_msg_decref (response);
     return;
 error:
@@ -1649,6 +1654,14 @@ static int overlay_health_respond (struct overlay *ov, const flux_msg_t *msg)
                                  "status", subtree_status_str (child->status),
                                  "duration", duration)))
             goto nomem;
+        if (!subtree_is_online (child->status) && child->error.text[0]) {
+            json_t *o;
+            if (!(o = json_string (child->error.text))
+                || json_object_set_new (entry, "error", o) < 0) {
+                json_decref (o);
+                // if this fails (unlikely), soldier on
+            }
+        }
         if (json_array_append_new (array, entry) < 0) {
             json_decref (entry);
             goto nomem;
@@ -1826,7 +1839,10 @@ static void overlay_disconnect_subtree_cb (flux_t *h,
         goto error;
     }
     log_lost_connection (ov, child, "disconnected by request");
-    overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
+    overlay_child_status_update (ov,
+                                 child,
+                                 SUBTREE_STATUS_LOST,
+                                 "administrative disconnect");
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to overlay.disconnect-subtree");
     return;

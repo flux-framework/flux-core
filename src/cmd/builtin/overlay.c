@@ -21,6 +21,8 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/librlist/rlist.h"
+#include "src/common/libutil/errprintf.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
 #include "builtin.h"
@@ -35,6 +37,13 @@ static const char *ansi_reset = "\033[0m";
 
 //static const char *ansi_green = "\033[32m";
 static const char *ansi_dark_gray = "\033[90m";
+
+static struct optparse_option errors_opts[] = {
+    { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "FSD",
+      .usage = "Set RPC timeout, 0=disable (default 0.5s)",
+    },
+    OPTPARSE_TABLE_END
+};
 
 static struct optparse_option status_opts[] = {
     { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "NODEID",
@@ -111,6 +120,7 @@ struct status_node {
     double duration;
     bool ghost;
     enum connector connector;
+    flux_error_t error;
 };
 
 static json_t *overlay_topology;
@@ -299,12 +309,14 @@ static void status_print (struct status *ctx,
     enum connector connector = optparse_hasopt (ctx->opt, "no-pretty") ?
                                0 :
                                node->connector;
-    printf ("%s%s%s: %s%s%s\n",
+    printf ("%s%s%s: %s%s%s%s%s\n",
             status_indent (ctx, level),
             connector_string (connector),
             status_getname (ctx, node),
             status_colorize (ctx, node->status, node->ghost),
             status_duration (ctx, node->duration),
+            strlen (node->error.text) > 0 ? " " : "",
+            node->error.text,
             parent ? status_rpctime (ctx) : "");
 }
 
@@ -456,25 +468,25 @@ static void status_ghostwalk (struct status *ctx,
     }
 }
 
-static double time_now (struct status *ctx)
+static double time_now (flux_t *h)
 {
-    return flux_reactor_now (flux_get_reactor (ctx->h));
+    return flux_reactor_now (flux_get_reactor (h));
 }
 
-static flux_future_t *health_rpc (struct status *ctx,
+static flux_future_t *health_rpc (flux_t *h,
                                   int rank,
                                   const char *wait,
                                   double timeout)
 {
     flux_future_t *f;
-    double start = time_now (ctx);
+    double start = time_now (h);
     const char *status;
     int rpc_flags = 0;
 
     if (wait)
         rpc_flags |= FLUX_RPC_STREAMING;
 
-    if (!(f = flux_rpc (ctx->h,
+    if (!(f = flux_rpc (h,
                         "overlay.health",
                         NULL,
                         rank,
@@ -482,7 +494,7 @@ static flux_future_t *health_rpc (struct status *ctx,
         return NULL;
 
     do {
-        if (flux_future_wait_for (f, timeout - (time_now (ctx) - start)) < 0
+        if (flux_future_wait_for (f, timeout - (time_now (h) - start)) < 0
             || flux_rpc_get_unpack (f, "{s:s}", "status", &status) < 0) {
             flux_future_destroy (f);
             return NULL;
@@ -518,7 +530,7 @@ static int status_healthwalk (struct status *ctx,
     monotime (&ctx->start);
     node.subtree_ranks = NULL;
 
-    if (!(f = health_rpc (ctx, rank, ctx->wait, ctx->timeout))
+    if (!(f = health_rpc (ctx->h, rank, ctx->wait, ctx->timeout))
         || flux_rpc_get_unpack (f,
                                 "{s:i s:s s:f s:o}",
                                 "rank", &node.rank,
@@ -554,12 +566,15 @@ static int status_healthwalk (struct status *ctx,
 
             total = json_array_size (children);
             json_array_foreach (children, index, entry) {
+                const char *error = NULL;
                 if (json_unpack (entry,
-                                 "{s:i s:s s:f}",
+                                 "{s:i s:s s:f s?s}",
                                  "rank", &child.rank,
                                  "status", &child.status,
-                                 "duration", &child.duration) < 0)
+                                 "duration", &child.duration,
+                                 "error", &error) < 0)
                     log_msg_exit ("error parsing child array entry");
+                errprintf (&child.error, "%s", error ? error : "");
                 if (!(child.subtree_ranks = subtree_ranks (ctx->h, child.rank)))
                       log_err_exit ("Unable to get subtree idset for rank %d",
                                     child.rank);
@@ -771,6 +786,160 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
     return 0;
 }
 
+// zhashx_destructor_fn footprint
+static void idset_destructor (void **item)
+{
+    if (*item) {
+        idset_destroy (*item);
+        *item = NULL;
+    }
+}
+
+static struct idset *errhash_add_entry (zhashx_t *errhash,
+                                        const char *error)
+{
+    struct idset *entry;
+    if (!(entry = zhashx_lookup (errhash, error))) {
+        if (!(entry = idset_create (0, IDSET_FLAG_AUTOGROW)))
+            return NULL;
+        if (zhashx_insert (errhash, error, entry) < 0) {
+            idset_destroy (entry);
+            errno = ENOMEM;
+            return NULL;
+        }
+    }
+    return entry;
+}
+
+static int errhash_add_one (zhashx_t *errhash,
+                            int rank,
+                            const char *error)
+{
+    struct idset *entry;
+    if (!(entry = errhash_add_entry (errhash, error)))
+        return -1;
+    if (idset_set (entry, rank) < 0)
+        return -1;
+    return 0;
+}
+
+static int errhash_add_set (zhashx_t *errhash,
+                            const struct idset *ranks,
+                            const char *error)
+{
+    if (ranks && idset_count (ranks) > 0) {
+        struct idset *entry;
+        if (!(entry = errhash_add_entry (errhash, error))
+            || idset_add (entry, ranks) < 0)
+            return -1;
+    }
+    return 0;
+}
+
+int errhash_add_children (zhashx_t *errhash, int rank, flux_t *h)
+{
+    struct idset *ranks = subtree_ranks (h, rank);
+    int rc;
+
+    idset_clear (ranks, rank);
+    rc = errhash_add_set (errhash, ranks, "lost parent");
+    idset_destroy (ranks);
+    return rc;
+}
+
+void gather_errors (flux_t *h,
+                    int rank,
+                    zhashx_t *errhash,
+                    double timeout)
+{
+    flux_future_t *f;
+    json_t *children;
+    size_t index;
+    json_t *value;
+
+    if (!(f = health_rpc (h, rank, NULL, timeout))
+        || flux_rpc_get_unpack (f,
+                                "{s:o}",
+                                "children", &children) < 0) {
+        const char *error = future_strerror (f, errno);
+        if (errhash_add_one (errhash, rank, error) < 0
+            || errhash_add_children (errhash, rank, h) < 0)
+            log_msg_exit ("error adding to error hash");
+        goto done;
+    }
+    json_array_foreach (children, index, value) {
+        int child_rank;
+        const char *status;
+        const char *error = NULL;
+        if (json_unpack (value,
+                         "{s:i s:s s?s}",
+                         "rank", &child_rank,
+                         "status", &status,
+                         "error", &error) < 0)
+            log_msg_exit ("error parsing topology");
+        if (streq (status, "lost")) {
+            if (!error)
+                error = "unknown error";
+            // record error for child_rank and its children
+            if (errhash_add_one (errhash, child_rank, error) < 0
+                || errhash_add_children (errhash, child_rank, h) < 0)
+                log_msg_exit ("error adding to error hash");
+        }
+        else if (streq (status, "offline")) {
+            /* Don't report offline nodes.
+             */
+        }
+        else { // recurse
+            gather_errors (h, child_rank, errhash, timeout);
+        }
+    }
+done:
+    flux_future_destroy (f);
+}
+
+void print_errors (flux_t *h, zhashx_t *errhash)
+{
+    struct idset *r;
+
+    r = zhashx_first (errhash);
+    while (r) {
+        char *ranks;
+        char *hostlist;
+
+        if (!(ranks = idset_encode (r, IDSET_FLAG_RANGE))
+            || !(hostlist = flux_hostmap_lookup (h, ranks, NULL)))
+            log_err_exit ("converting ranks to hostnames");
+        printf ("%s: %s\n",
+                hostlist,
+                (const char *)zhashx_cursor (errhash));
+        free (hostlist);
+        free (ranks);
+
+        r = zhashx_next (errhash);
+    }
+}
+
+static int subcmd_errors (optparse_t *p, int ac, char *av[])
+{
+    flux_t *h = builtin_get_flux_handle (p);
+    zhashx_t *errhash; // error string => ranks idset
+    double timeout;
+
+    timeout = optparse_get_duration (p, "timeout", default_timeout);
+    if (timeout == 0)
+        timeout = -1.0; // disabled
+
+    if (!(errhash = zhashx_new ()))
+        log_msg_exit ("could not create error hash");
+    zhashx_set_destructor (errhash, idset_destructor);
+
+    gather_errors (h, 0, errhash, timeout);
+    print_errors (h, errhash);
+
+    zhashx_destroy (&errhash);
+    return 0;
+}
+
 static int subcmd_lookup (optparse_t *p, int ac, char *av[])
 {
     int optindex = optparse_option_index (p);
@@ -917,6 +1086,13 @@ int cmd_overlay (optparse_t *p, int argc, char *argv[])
 }
 
 static struct optparse_subcommand overlay_subcmds[] = {
+    { "errors",
+      "[OPTIONS]",
+      "Summarize overlay errors",
+      subcmd_errors,
+      0,
+      errors_opts,
+    },
     { "status",
       "[OPTIONS]",
       "Display overlay subtree health status",
