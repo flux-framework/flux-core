@@ -95,6 +95,7 @@ if test "$PROJECT" = "flux-core"; then
     && echo '#error Non-build-tree flux/core.h!' > /usr/include/flux/core.h"
 fi
 
+POSTCHECKCMDS=":"
 # Enable coverage for $CC-coverage build
 # We can't use distcheck here, it doesn't play well with coverage testing:
 if test "$COVERAGE" = "t"; then
@@ -138,11 +139,13 @@ if test "$COVERAGE" = "t"; then
 	SYSTEM_TESTS=$(cd t && grep -l ci=system *.t)
 
 	ARGS="$ARGS --enable-code-coverage"
+
 	CHECKCMDS="\
 	export ENABLE_USER_SITE=1 && \
 	export COVERAGE_PROCESS_START=$(pwd)/coverage.rc && \
 	${MAKE} -j $JOBS check-prep && \
-	(cd t && ${MAKE} -j $JOBS check ${SYSTEM:+TESTS=\"$SYSTEM_TESTS\"}) && \
+	(cd t && ${MAKE} -j $JOBS check ${SYSTEM:+TESTS=\"$SYSTEM_TESTS\"})"
+	POSTCHECKCMDS="\
 	${MAKE} code-coverage-capture &&
 	lcov -l flux*-coverage.info && \
 	rm -f coverage.xml && \
@@ -228,7 +231,8 @@ if test "$DISTCHECK" != "t"; then
   checks_group "${MAKECMDS}" "${MAKECMDS}" \
 	|| checks_die "${MAKECMDS} failed"
 fi
-checks_group "${CHECKCMDS}" "${CHECKCMDS}"
+checks_group "${CHECKCMDS}" "${CHECKCMDS}" && \
+	checks_group "${POSTCHECKCMDS}" "${POSTCHECKCMDS}"
 RC=$?
 
 if test "$RECHECK" = "t" -a $RC -ne 0; then
@@ -239,7 +243,8 @@ if test "$RECHECK" = "t" -a $RC -ne 0; then
   if test -s t/t0000-sharness.trs; then
     cd t
     printf "::warning::make check failed, trying recheck in ./t\n"
-    checks_group "make recheck" ${MAKE} -j ${JOBS} recheck
+    checks_group "make recheck" ${MAKE} -j ${JOBS} recheck && \
+			checks_group "${POSTCHECKCMDS}" "${POSTCHECKCMDS}"
     RC=$?
     cd
    else
