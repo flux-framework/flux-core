@@ -4,8 +4,17 @@ test_description='Test flux job exec job cleanup via SIGKILL'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1 job
+test_under_flux 4 job
 
+test_expect_success 'job-exec: active_ranks stat works' '
+	flux submit -N4 sh -c "test \$FLUX_TASK_RANK -eq 2 && exit; sleep 30" &&
+	jobid=$(flux job last) &&
+	flux job wait-event -p exec -Hvt 20 $jobid shell.task-exit &&
+	flux module stats job-exec \
+		| jq ".jobs.${jobid}.active_ranks == \"0-1,3\"" &&
+	flux cancel --all &&
+	flux queue idle
+'
 test_expect_success 'job-exec: reload module with short kill-timeout' '
 	flux module reload job-exec kill-timeout=0.1s &&
 	flux module stats job-exec
