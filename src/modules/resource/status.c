@@ -59,6 +59,7 @@ static json_t *prepare_status_payload (struct status *status)
 {
     struct resource_ctx *ctx = status->ctx;
     const struct idset *down = monitor_get_down (ctx->monitor);
+    const struct idset *torpid = monitor_get_torpid (ctx->monitor);
     const struct idset *exclude = exclude_get (ctx->exclude);
     const json_t *R;
     json_t *o = NULL;
@@ -73,7 +74,8 @@ static json_t *prepare_status_payload (struct status *status)
     }
     if (rutil_set_json_idset (o, "online", monitor_get_up (ctx->monitor)) < 0
         || rutil_set_json_idset (o, "offline", down) < 0
-        || rutil_set_json_idset (o, "exclude", exclude) < 0)
+        || rutil_set_json_idset (o, "exclude", exclude) < 0
+        || rutil_set_json_idset (o, "torpid", torpid) < 0)
         goto error;
     json_decref (drain_info);
     return o;
