@@ -197,8 +197,9 @@ tbon.torpid_max [Updates: C, R]
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
    will wait for an idle TBON child connection to send messages before
    declaring it torpid (unresponsive).  A value of 0 disables torpid node
-   checking.  Torpid nodes are automatically drained and require manual
-   undraining with :man1:`flux-resource`.  Default: ``30s``.
+   checking.  New work is not scheduled on a node while torpid, but a job
+   running on a node when it becomes torpid is allowed to complete.
+   Default: ``30s``.
 
 tbon.tcp_user_timeout
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
