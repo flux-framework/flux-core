@@ -133,6 +133,27 @@ done:
     return job;
 }
 
+/* A job could not be reloaded due to some problem like a truncated eventlog.
+ * Move job data to lost+found for manual cleanup.
+ */
+static void move_to_lost_found (flux_t *h, const char *key, flux_jobid_t id)
+{
+    char nkey[128];
+    flux_future_t *f;
+
+    snprintf (nkey, sizeof (nkey), "lost+found.job.%s", idf58 (id));
+    if (!(f = flux_kvs_move (h, NULL, key, NULL, nkey, 0))
+        || flux_future_get (f, NULL) < 0) {
+        flux_log (h,
+                  LOG_ERR,
+                  "mv %s %s: %s",
+                  key,
+                  nkey,
+                  future_strerror (f, errno));
+    }
+    flux_future_destroy (f);
+}
+
 /* Create a 'struct job' from the KVS, using synchronous KVS RPCs.
  * Return 1 on success, 0 on non-fatal error, or -1 on a fatal error,
  * where a fatal error will prevent flux from starting.
@@ -165,6 +186,7 @@ static int depthfirst_map_one (flux_t *h,
             errprintf (error, "%s", lookup_error.text);
             return -1;
         }
+        move_to_lost_found (h, key, id);
         flux_log (h,
                   LOG_ERR,
                   "job %s not replayed: %s",
