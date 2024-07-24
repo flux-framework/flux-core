@@ -114,24 +114,42 @@ static void exec_ctx_destroy (struct exec_ctx *tc)
 }
 
 static struct exec_ctx *exec_ctx_create (struct jobinfo *job,
-                                         const struct idset *ranks)
+                                         const struct idset *ranks,
+                                         flux_error_t *errp)
 {
+    json_error_t error;
+    const char *service;
     struct exec_ctx *ctx = calloc (1, sizeof (*ctx));
     flux_reactor_t *r = flux_get_reactor (job->h);
     double barrier_timeout = config_get_default_barrier_timeout ();
 
-    if (!r || !ctx || !(ctx->barrier_pending_ranks = idset_copy (ranks)))
+    if (!r || !ctx || !(ctx->barrier_pending_ranks = idset_copy (ranks))) {
+        errprintf (errp, "Out of memory");
         goto error;
+    }
 
     ctx->job = job;
-    (void) json_unpack (job->jobspec,
-                        "{s:{s:{s:{s:{s?s s?F}}}}}",
+
+    /* Note: service unpacked below but unused to allow use of strict (!)
+     * unpacking.
+     */
+    if (json_unpack_ex (job->jobspec,
+                        &error,
+                        0,
+                        "{s?{s?{s?{s?{s?s s?s s?F !}}}}}",
                         "attributes",
                           "system",
                             "exec",
                               "bulkexec",
+                                "service", &service,
                                 "mock_exception", &ctx->mock_exception,
-                                "barrier-timeout", &barrier_timeout);
+                                "barrier-timeout", &barrier_timeout) < 0) {
+        errprintf (errp,
+                   "failed to unpack system.exec.bulkexec for %s: %s",
+                    idf58 (job->id),
+                    error.text);
+        goto error;
+    }
 
     if (barrier_timeout > 0.) {
         ctx->shell_barrier_timer = flux_timer_watcher_create (r,
@@ -140,9 +158,9 @@ static struct exec_ctx *exec_ctx_create (struct jobinfo *job,
                                                               barrier_timer_cb,
                                                               ctx);
         if (!ctx->shell_barrier_timer) {
-            flux_log_error (job->h,
-                            "%s: failed to create barrier timer",
-                            idf58 (ctx->job->id));
+            errprintf (errp,
+                       "%s: failed to create barrier timer",
+                       idf58 (ctx->job->id));
             goto error;
         }
     }
@@ -543,8 +561,8 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: bulk_exec_create");
         goto err;
     }
-    if (!(ctx = exec_ctx_create (job, ranks))) {
-        flux_log_error (job->h, "exec_init: exec_ctx_create");
+    if (!(ctx = exec_ctx_create (job, ranks, &error))) {
+        flux_log (job->h, LOG_ERR, "exec_ctx_create: %s", error.text);
         goto err;
     }
     if (bulk_exec_aux_set (exec, "ctx", ctx,
