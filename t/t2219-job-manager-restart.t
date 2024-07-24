@@ -198,6 +198,12 @@ test_expect_success 'new queue configured on restart uses defaults' '
 	grep "^newqueue: Scheduling is stopped" dump_queue_ignored.out
 '
 
+test_expect_success 'bad job directory is moved to lost+found' '
+	flux start \
+	    -o,-Scontent.restore=${DUMPS}/warn/dump-shorteventlog.tar.bz2 \
+	    flux kvs dir -R lost+found
+'
+
 for dump in ${DUMPS}/valid/*.tar.bz2; do
     testname=$(basename $dump)
     test_expect_success 'successfully started from '$testname "restart_flux $dump"
