@@ -176,7 +176,7 @@ static void broker_online_cb (flux_future_t *f, void *arg)
     if (!(up = group_get (f))) {
         flux_log (h,
                   LOG_ERR,
-                  "monitor: group.get: %s",
+                  "monitor: broker.online: %s",
                   future_strerror (f, errno));
         return;
     }
