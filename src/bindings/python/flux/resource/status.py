@@ -130,8 +130,11 @@ class ResourceStatus:
         self.draining = self.drained & self.allocated
         self.drained -= self.draining
 
-        # available: all ranks not excluded or drained/draining
-        self.avail = self.all - self.get_idset("exclude", "drained", "draining")
+        # available: all ranks not excluded, drained/draining, or currently
+        # marked as torpid
+        self.avail = self.all - self.get_idset(
+            "exclude", "drained", "draining", "torpid"
+        )
 
     def __getitem__(self, state):
         """
