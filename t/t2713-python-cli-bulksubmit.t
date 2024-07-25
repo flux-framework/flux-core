@@ -113,7 +113,7 @@ test_expect_success 'flux submit --wait/progress with job exceptions' '
         test_expect_code 1 $runpty flux bulksubmit \
 	    -n1 --progress --wait \
 	    --setattr=system.exec.bulkexec.mock_exception={} hostname \
-	    ::: 0 init init 0 0 \
+	    ::: none init init none none \
 	    >bs9.out &&
 	grep "PD:1 *R:0 *CD:0 *F:0" bs9.out &&
 	grep "PD:0 *R:0 *CD:3 *F:2" bs9.out &&

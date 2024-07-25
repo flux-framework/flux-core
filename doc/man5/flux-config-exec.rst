@@ -50,6 +50,16 @@ kill-signal
    (optional) Specify an alternate signal to ``SIGKILL`` when killing tasks
    and the job shell. Mainly used for testing.
 
+barrier-timeout
+   (optional) Specify the default job shell start barrier timeout in FSD.
+   All multi-node jobs enter a barrier at startup once the Flux job shell
+   completes initialization tasks such as changing the working directory
+   and processing the initrc file. Once the first node enters this barrier,
+   the job execution system starts a timer, and if the timer expires
+   before the barrier is complete, raises a job exception and drains the
+   nodes on which the barrier is waiting.  To disable the barrier timeout,
+   set this value to ``"0"``. (Default: ``30m``).
+
 testexec
    (options) A table of keys (see :ref:`testexec`) for configuring the
    **job-exec** test execution implementation (used in mainly for testing).

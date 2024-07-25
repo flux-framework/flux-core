@@ -144,6 +144,11 @@ void jobinfo_raise (struct jobinfo *job,
                     int severity,
                     const char *fmt, ...);
 
+int jobinfo_drain_ranks (struct jobinfo *job,
+                         const char *ranks,
+                         const char *fmt,
+                         ...);
+
 /* Append a log output message to exec.eventlog for job
  */
 void jobinfo_log_output (struct jobinfo *job,

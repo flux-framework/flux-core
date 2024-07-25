@@ -87,4 +87,54 @@ test_expect_success 'job-exec: wait for job to be terminated by max-kill-count' 
 test_expect_success 'job-exec: kill orphan sleep PID' '
 	kill $sleep_pid
 '
+test_expect_success 'job-exec: undrain all ranks' '
+	flux resource undrain $(flux resource drain -no {ranks})
+'
+test_expect_success 'job-exec: reload module with default kill/term-signal' '
+	flux module reload job-exec
+'
+test_expect_success 'job-exec: barrier timeout raises job exception' '
+	cat <<-EOF >initrc.lua &&
+	if shell.info.rank == 3 then
+		os.execute("sleep 30")
+	end
+	EOF
+	jobid=$(flux submit -N4 --setattr=exec.bulkexec.barrier-timeout=0.5 \
+		-o userrc=initrc.lua sleep 60) &&
+	flux job wait-event -vHt 60 $jobid exception
+'
+test_expect_success 'job-exec: affected rank is drained' '
+	test_debug "flux resource drain" &&
+	test $(flux resource drain -no {ranks}) -eq 3 &&
+	flux resource drain -no {reason} | grep "start timeout"
+'
+test_expect_success 'job-exec: undrain all ranks' '
+	flux resource list &&
+	flux resource undrain $(flux resource drain -no {ranks})
+'
+test_expect_success 'job-exec: default barrier timeout can be configured' '
+	flux config load <<-EOF &&
+	[exec]
+	barrier-timeout = "0.1s"
+	EOF
+	flux module stats job-exec |
+		jq -e ".\"bulk-exec\".config.default_barrier_timeout < 1." &&
+	jobid=$(flux submit -N4 -o userrc=initrc.lua sleep 60) &&
+	flux job wait-event -vHt 60 $jobid exception
+'
+test_expect_success 'job-exec: undrain all ranks' '
+	flux resource undrain $(flux resource drain -no {ranks})
+'
+test_expect_success 'job-exec: setting an invalid barrier-timeout fails' '
+	test_expect_code 1 flux config load <<-EOF
+	[exec]
+	barrier-timeout = 100
+	EOF
+'
+test_expect_success 'job-exec: invalid FSD for barrier-timeout fails' '
+	test_expect_code 1 flux config load <<-EOF
+	[exec]
+	barrier-timeout = "55p"
+	EOF
+'
 test_done

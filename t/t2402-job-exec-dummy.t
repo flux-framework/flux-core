@@ -94,6 +94,11 @@ test_expect_success 'job-exec: invalid job shell generates exception' '
 		| flux job submit) &&
 	flux job wait-event -vt 5 $id clean
 '
+test_expect_success 'job-exec: invalid bulkexec key in jobspec raises error' '
+	flux dmesg -C &&
+	test_must_fail flux run --setattr=exec.bulkexec.foo=bar hostname &&
+	flux dmesg -H | grep "failed to unpack system.exec.bulkexec"
+'
 test_expect_success 'job-exec: exception during init terminates job' '
 	id=$(flux run --dry-run -n2 -N2 sleep 30 \
 		| $jq ".attributes.system.exec.bulkexec.mock_exception = \"init\"" \
