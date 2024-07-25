@@ -1377,7 +1377,7 @@ _flux_jobs()
         -n --no-header \
         -u --user= \
         --name= \
-        --queue= \
+        -q --queue= \
         -o --format= \
         --color= \
         -R --recursive \
@@ -1390,7 +1390,7 @@ _flux_jobs()
 
     _flux_split_longopt && split=true
     case $prev in
-        --queue)
+        --queue | -!(-*)q)
             _flux_complete_queue
             return
             ;;
@@ -1429,12 +1429,12 @@ _flux_pgrep()
         -f --filter= \
         -n --no-header \
         -u --user= \
-        --queue= \
+        -q --queue= \
         -o --format= \
     "
     _flux_split_longopt && split=true
     case $prev in
-        --queue)
+        --queue | -!(-*)q)
             _flux_complete_queue
             return
             ;;
@@ -1473,11 +1473,11 @@ _flux_pkill()
         --max-entries= \
         -f --filter= \
         -u --user= \
-        --queue= \
+        -q --queue= \
     "
     _flux_split_longopt && split=true
     case $prev in
-        --queue)
+        --queue | -!(-*)q)
             _flux_complete_queue
             return
             ;;

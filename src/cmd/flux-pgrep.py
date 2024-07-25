@@ -168,6 +168,7 @@ def parse_args():
         help="List jobs with specific job state or result",
     )
     parser.add_argument(
+        "-q",
         "--queue",
         type=str,
         metavar="QUEUE",
