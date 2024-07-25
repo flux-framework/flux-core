@@ -1,0 +1,4 @@
+     STATE NNODES RANKS           NODELIST
+     avail      1 2               foo3
+    torpid      1 3               foo4
+   drained      2 0-1             foo[1-2]

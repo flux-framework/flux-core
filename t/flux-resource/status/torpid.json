@@ -1,0 +1,34 @@
+{
+  "R": {
+    "execution": {
+      "R_lite": [
+        {
+          "children": {
+            "core": "0-3"
+          },
+          "rank": "0-3"
+        }
+      ],
+      "expiration": 0,
+      "nodelist": [
+        "foo[1-4]"
+      ],
+      "starttime": 0
+    },
+    "version": 1
+  },
+  "drain": {
+    "0": {
+      "reason": "bad node",
+      "timestamp": 1607544031.1368911
+    },
+    "1": {
+      "reason": "testing drain",
+      "timestamp": 1607544037.2190773
+    }
+  },
+  "exclude": "",
+  "torpid": "1,3",
+  "offline": "",
+  "online": "0-3"
+}

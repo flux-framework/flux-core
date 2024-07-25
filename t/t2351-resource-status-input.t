@@ -261,4 +261,14 @@ test_expect_success 'flux-resource status: --include works with invalid host' '
 		-no "{nodelist}" <$INPUT >drain-empty.out 2>&1 &&
 	test_must_be_empty drain-fail.out
 '
+test_expect_success 'flux-resource status: all torpid ranks shown without drain states' '
+	INPUT=${INPUTDIR}/torpid.json &&
+	flux resource status -s torpid --from-stdin < $INPUT &&
+	flux resource status -s torpid --from-stdin \
+		-no "{state} {nodelist}" < $INPUT >torpid-only.out 2>&1 &&
+	cat <<-EOF >torpid-only.expected &&
+	torpid foo[2,4]
+	EOF
+	test_cmp torpid-only.expected torpid-only.out
+'
 test_done
