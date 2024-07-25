@@ -468,25 +468,18 @@ dynamic discovery
 Once the inventory has been determined, it is stored the KVS ``resource.R``
 key, in RFC 20 (R version 1) format.
 
-Events that affect the availability of resources are posted to the KVS
-*resource.eventlog*.  Such events include:
+Events that affect the availability of resources and should persist across
+a Flux restart are posted to the KVS *resource.eventlog*.  Such events include:
 
 resource-define
-   The resource inventory is defined with an initial set of drained, online,
-   and excluded nodes.
+   The instance resource set is known (posted each time the resource module
+   is loaded).
 
 drain
    One or more nodes are administratively removed from scheduling.
 
 undrain
    One or more nodes are no longer drained.
-
-offline
-   One or more nodes are removed from scheduling due to unavailability,
-   e.g. node was shutdown or crashed.
-
-online
-   One or more nodes are no longer offline.
 
 
 RESOURCES
