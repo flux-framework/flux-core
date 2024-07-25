@@ -263,6 +263,7 @@ def parse_args():
         help="Limit output to specific job name",
     )
     parser.add_argument(
+        "-q",
         "--queue",
         action=FilterAction,
         type=str,

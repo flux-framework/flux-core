@@ -46,7 +46,7 @@ OPTIONS
 
    List jobs with a specific job name.
 
-.. option:: --queue=[QUEUE]
+.. option:: -q, --queue=[QUEUE]
 
    List jobs in a specific queue.
 
