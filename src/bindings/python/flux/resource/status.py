@@ -95,7 +95,11 @@ class ResourceStatus:
         self.exclude = IDset(self.rstatus["exclude"])
 
         # torpid: unresponsive nodes
-        self.torpid = IDset(self.rstatus["torpid"])
+        try:
+            self.torpid = IDset(self.rstatus["torpid"])
+        except KeyError:
+            # May be an older Flux version response missing "torpid" idset
+            self.torpid = IDset()
 
         # allocated: online and allocated by scheduler
         self.allocated = self.allocated_ranks
