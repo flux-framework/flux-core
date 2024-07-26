@@ -202,10 +202,8 @@ static void barrier_timer_start (struct exec_ctx *ctx)
 {
     /* Only ever create one barrier timer (for the first shell barrier)
      */
-    if (ctx->barrier_completion_count == 0) {
-        fprintf (stderr, "starting barrier timer\n");
+    if (ctx->barrier_completion_count == 0)
         flux_watcher_start (ctx->shell_barrier_timer);
-    }
 }
 
 
