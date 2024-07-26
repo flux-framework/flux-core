@@ -265,10 +265,10 @@ def parse_args():
     parser.add_argument(
         "-q",
         "--queue",
-        action=FilterAction,
-        type=str,
-        metavar="QUEUE",
-        help="Limit output to specific queue",
+        action=FilterActionSetUpdate,
+        default=set(),
+        metavar="QUEUE,...",
+        help="Limit output to specific queue or queues",
     )
     parser.add_argument(
         "-o",
