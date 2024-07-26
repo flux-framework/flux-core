@@ -253,6 +253,10 @@ test_under_flux() {
         valgrind="$valgrind,--trace-children=no,--child-silent-after-fork=yes"
         valgrind="$valgrind,--leak-resolution=med,--error-exitcode=1"
         valgrind="$valgrind,--suppressions=${VALGRIND_SUPPRESSIONS}"
+    elif test -n "$FLUX_TEST_HEAPTRACK" ; then
+        valgrind="--wrap=heaptrack,--record-only"
+    elif test -n "$FLUX_TEST_WRAP" ; then
+        valgrind="$FLUX_TEST_WRAP"
     fi
     # Extend timeouts when running under AddressSanitizer
     if test_have_prereq ASAN; then
