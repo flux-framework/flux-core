@@ -231,6 +231,7 @@ else
         -e TAP_DRIVER_QUIET \
         -e FLUX_TEST_TIMEOUT \
         -e FLUX_TEST_SIZE_MAX \
+        -e PYTHON \
         -e PYTHON_VERSION \
         -e PRELOAD \
         -e POISON \
