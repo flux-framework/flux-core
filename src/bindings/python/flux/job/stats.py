@@ -8,6 +8,8 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import itertools
+
 from flux.rpc import RPC
 
 
@@ -33,44 +35,80 @@ class JobStats:
 
     """
 
+    states = (
+        "depend",
+        "priority",
+        "sched",
+        "run",
+        "cleanup",
+        "inactive",
+        "total",
+    )
+    stats = (
+        "successful",
+        "failed",
+        "timeout",
+        "canceled",
+        "inactive_purged",
+    )
+    derived_stats = (
+        "pending",
+        "running",
+        "active",
+    )
+
+    class QueueStats:
+        """Container for a set of per-queue stats"""
+
+        def __init__(self, stats=None):
+            if stats is None:
+                self.queue_name = ""
+                for stat in itertools.chain(JobStats.states, JobStats.stats):
+                    setattr(self, stat, 0)
+                return
+
+            self.queue_name = stats["name"] if "name" in stats else "all"
+            #  Move all stats to top-level attributes of this object
+            for state in JobStats.states:
+                setattr(self, state, stats["job_states"][state])
+            for stat in JobStats.stats:
+                setattr(self, stat, stats[stat])
+
+        def __iadd__(self, other):
+            self.queue_name += "," + other.queue_name
+            for stat in itertools.chain(JobStats.states, JobStats.stats):
+                setattr(self, stat, getattr(self, stat) + getattr(other, stat))
+            return self
+
     def __init__(self, handle, queue=None):
         """Initialize a JobStats object with Flux handle ``handle``"""
         self.handle = handle
-        self.queue = queue
+        self.queues = []
+        # Accept queue as str or iterable
+        if queue is not None:
+            self.queues.extend([queue] if isinstance(queue, str) else queue)
         self.callback = None
         self.cb_kwargs = {}
-        for attr in [
-            "depend",
-            "priority",
-            "sched",
-            "run",
-            "cleanup",
-            "inactive",
-            "successful",
-            "failed",
-            "timeout",
-            "canceled",
-            "inactive_purged",
-            "pending",
-            "running",
-            "active",
-        ]:
+        for attr in itertools.chain(
+            JobStats.states, JobStats.stats, JobStats.derived_stats
+        ):
             setattr(self, attr, -1)
 
     def _update_cb(self, rpc):
         resp = rpc.get()
-        if self.queue:
-            tmpstat = None
-            if resp["queues"]:
-                tmpstat = [x for x in resp["queues"] if x["name"] == self.queue]
-            if not tmpstat:
-                raise ValueError(f"no stats available for queue {self.queue}")
-            resp = tmpstat[0]
+        queues = {x["name"]: self.QueueStats(x) for x in resp["queues"]}
+        if self.queues:
+            qstat = self.QueueStats()
+            for queue in self.queues:
+                try:
+                    qstat += queues[queue]
+                except KeyError:
+                    raise ValueError(f"no stats available for queue {queue}")
+        else:
+            qstat = self.QueueStats(resp)
 
-        for state, count in resp["job_states"].items():
-            setattr(self, state, count)
-        for state in ["successful", "failed", "timeout", "canceled", "inactive_purged"]:
-            setattr(self, state, resp[state])
+        for attr in itertools.chain(JobStats.states, JobStats.stats):
+            setattr(self, attr, getattr(qstat, attr))
 
         #  Compute some stats for convenience:
         #  pylint: disable=attribute-defined-outside-init
