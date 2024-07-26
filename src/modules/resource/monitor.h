@@ -19,6 +19,8 @@ void monitor_destroy (struct monitor *monitor);
 const struct idset *monitor_get_down (struct monitor *monitor);
 const struct idset *monitor_get_up (struct monitor *monitor);
 
+const struct idset *monitor_get_torpid (struct monitor *monitor);
+
 #endif /* !_FLUX_RESOURCE_MONITOR_H */
 
 /*

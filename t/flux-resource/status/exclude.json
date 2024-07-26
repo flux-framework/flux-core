@@ -19,6 +19,7 @@
   },
   "drain": {},
   "exclude": "0",
+  "torpid": "",
   "offline": "1",
   "online": "0,2-3"
 }

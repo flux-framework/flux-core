@@ -304,7 +304,7 @@ def statuslines(rstatus, states, formatter, include_online=True, include_offline
         combine=lambda line, arg: line.update(arg.ranks, arg.hostlist),
     )
     states = set(states)
-    for state in ["avail", "exclude"]:
+    for state in ["avail", "exclude", "torpid"]:
         if not states & {state, "all"}:
             continue
         for online in (True, False):
@@ -316,7 +316,7 @@ def statuslines(rstatus, states, formatter, include_online=True, include_offline
                 ResourceStatusLine(state, online, ranks, rstatus.nodelist[ranks])
             )
     for state in ["draining", "drained"]:
-        if not states & {state, "all", "drain"}:
+        if not states & {state, "all"}:
             continue
         ranks = rstatus[state]
         if not ranks:
@@ -367,6 +367,11 @@ def status_get_state_list(args, valid_states, default_states):
     copy = list(filter(lambda x: x not in ("offline", "online"), states))
     if not copy:
         states.extend(default_states.split(","))
+
+    #  Expand special "drain" state to "draining", "drained"
+    if "drain" in states:
+        states.remove("drain")
+        states.extend(("draining", "drained"))
     return states
 
 
@@ -380,8 +385,9 @@ def status(args):
         "drain",
         "draining",
         "drained",
+        "torpid",
     ]
-    default_states = "avail,exclude,draining,drained"
+    default_states = "avail,exclude,draining,drained,torpid"
 
     headings = {
         "state": "STATE",
@@ -453,6 +459,12 @@ def status(args):
     #  becomes exclusive (unless both are present).
     include_online = "online" in states or "offline" not in states
     include_offline = "offline" in states or "online" not in states
+
+    #  Remove drained/draining ranks from torpid set if these
+    #  are in the list of displayed states
+    for drain_state in ("draining", "drained"):
+        if "all" in states or drain_state in states:
+            rstatus.torpid -= rstatus.get_idset(drain_state)
 
     lines = []
     for line in statuslines(

@@ -50,7 +50,9 @@
 
 struct monitor {
     struct resource_ctx *ctx;
-    flux_future_t *f;
+    flux_future_t *f_online;
+    flux_future_t *f_torpid;
+    struct idset *torpid;
     struct idset *up;
     struct idset *down; // cached result of monitor_get_down()
     flux_msg_handler_t **handlers;
@@ -63,6 +65,11 @@ static void notify_waitup (struct monitor *monitor);
 const struct idset *monitor_get_up (struct monitor *monitor)
 {
     return monitor->up;
+}
+
+const struct idset *monitor_get_torpid (struct monitor *monitor)
+{
+    return monitor->torpid;
 }
 
 const struct idset *monitor_get_down (struct monitor *monitor)
@@ -82,6 +89,80 @@ const struct idset *monitor_get_down (struct monitor *monitor)
     return monitor->down;
 }
 
+/* Send a streaming groups.get RPC for broker group 'name'.
+ */
+static flux_future_t *group_monitor (flux_t *h, const char *name)
+{
+    return flux_rpc_pack (h,
+                          "groups.get",
+                          FLUX_NODEID_ANY,
+                          FLUX_RPC_STREAMING,
+                          "{s:s}",
+                          "name", name);
+}
+
+/* Handle a response to the group monitor request, parsing the
+ * encoded idset in the payload.
+ */
+static struct idset *group_get (flux_future_t *f)
+{
+    const char *members;
+    if (flux_rpc_get_unpack (f, "{s:s}", "members", &members) < 0)
+        return NULL;
+    return idset_decode (members);
+}
+
+/* Post event 'name' with a context containing idset:s, where 's' is
+ * the string encoding of 'ids'.  The event is not propagated to the KVS.
+ */
+static int post_event (struct monitor *monitor,
+                       const char *name,
+                       struct idset *ids)
+{
+    char *s = NULL;
+
+    if (idset_count (ids) == 0)
+        return 0;
+    if (!(s = idset_encode (ids, IDSET_FLAG_RANGE))
+        || reslog_post_pack (monitor->ctx->reslog,
+                             NULL,
+                             0.,
+                             name,
+                             EVENT_NO_COMMIT,
+                             "{s:s}",
+                             "idset", s) < 0) {
+        ERRNO_SAFE_WRAP (free, s);
+        return -1;
+    }
+    free (s);
+    return 0;
+}
+
+/* Post 'join_event' and/or 'leave_event' to record ids added or removed
+ * in 'newset' relative to 'oldset'.
+ */
+static int post_join_leave (struct monitor *monitor,
+                            const struct idset *oldset,
+                            const struct idset *newset,
+                            const char *join_event,
+                            const char *leave_event)
+{
+    struct idset *join;
+    struct idset *leave = NULL;
+    int rc = -1;
+
+    if (!(join = idset_difference (newset, oldset))
+        || !(leave = idset_difference (oldset, newset))
+        || post_event (monitor, join_event, join) < 0
+        || post_event (monitor, leave_event, leave) < 0)
+        goto error;
+    rc = 0;
+error:
+    idset_destroy (join);
+    idset_destroy (leave);
+    return rc;
+}
+
 /* Leader: set of online brokers has changed.
  * Update monitor->up and post online/offline events to resource.eventlog.
  * Avoid posting events if nothing changed.
@@ -90,59 +171,57 @@ static void broker_online_cb (flux_future_t *f, void *arg)
 {
     struct monitor *monitor = arg;
     flux_t *h = monitor->ctx->h;
-    const char *members;
-    struct idset *new_up = NULL;
-    struct idset *join = NULL;
-    struct idset *leave = NULL;
-    char *online = NULL;
-    char *offline = NULL;
+    struct idset *up = NULL;
 
-    if (flux_rpc_get_unpack (f, "{s:s}", "members", &members) < 0) {
-        flux_log_error (h, "monitor: group.get failed");
+    if (!(up = group_get (f))) {
+        flux_log (h,
+                  LOG_ERR,
+                  "monitor: broker.online: %s",
+                  future_strerror (f, errno));
         return;
     }
-    if (!(new_up = idset_decode (members))
-        || !(join = idset_difference (new_up, monitor->up))
-        || !(leave = idset_difference (monitor->up, new_up)))
-        goto done;
-    if (idset_count (join) > 0) {
-        if (!(online = idset_encode (join, IDSET_FLAG_RANGE))
-            || reslog_post_pack (monitor->ctx->reslog,
-                                 NULL,
-                                 0.,
-                                 "online",
-                                 EVENT_NO_COMMIT,
-                                 "{s:s}",
-                                 "idset",
-                                 online) < 0) {
-            flux_log_error (h, "monitor: error posting online event");
-            goto done;
-        }
+    if (post_join_leave (monitor, monitor->up, up, "online", "offline") < 0) {
+        flux_log_error (h, "monitor: error posting online/offline event");
+        idset_destroy (up);
+        flux_future_reset (f);
+        return;
     }
-    if (idset_count (leave) > 0) {
-        if (!(offline = idset_encode (leave, IDSET_FLAG_RANGE))
-            || reslog_post_pack (monitor->ctx->reslog,
-                                 NULL,
-                                 0.,
-                                 "offline",
-                                 EVENT_NO_COMMIT,
-                                 "{s:s}",
-                                 "idset",
-                                 offline) < 0) {
-            flux_log_error (h, "monitor: error posting offline event");
-            goto done;
-        }
-    }
+
     idset_destroy (monitor->up);
-    monitor->up = new_up;
-    new_up = NULL;
+    monitor->up = up;
+
     notify_waitup (monitor);
-done:
-    free (online);
-    free (offline);
-    idset_destroy (join);
-    idset_destroy (leave);
-    idset_destroy (new_up);
+
+    flux_future_reset (f);
+}
+
+static void broker_torpid_cb (flux_future_t *f, void *arg)
+{
+    struct monitor *monitor = arg;
+    flux_t *h = monitor->ctx->h;
+    struct idset *torpid = NULL;
+
+    if (!(torpid = group_get (f))) {
+        flux_log (h,
+                  LOG_ERR,
+                  "monitor: broker.torpid: %s",
+                  future_strerror (f, errno));
+        return;
+    }
+    if (post_join_leave (monitor,
+                         monitor->torpid,
+                         torpid,
+                         "torpid",
+                         "lively") < 0) {
+        flux_log_error (h, "monitor: error posting torpid/lively event");
+        idset_destroy (torpid);
+        flux_future_reset (f);
+        return;
+    }
+
+    idset_destroy (monitor->torpid);
+    monitor->torpid = torpid;
+
     flux_future_reset (f);
 }
 
@@ -216,7 +295,9 @@ void monitor_destroy (struct monitor *monitor)
         flux_msg_handler_delvec (monitor->handlers);
         idset_destroy (monitor->up);
         idset_destroy (monitor->down);
-        flux_future_destroy (monitor->f);
+        idset_destroy (monitor->torpid);
+        flux_future_destroy (monitor->f_online);
+        flux_future_destroy (monitor->f_torpid);
         flux_msglist_destroy (monitor->waitup_requests);
         free (monitor);
         errno = saved_errno;
@@ -242,35 +323,45 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
     monitor->size = ctx->size;
     if (monitor->size < inventory_size)
         monitor->size = inventory_size;
+
     if (flux_msg_handler_addvec (ctx->h, htab, monitor, &monitor->handlers) < 0)
         goto error;
+
+    /* Monitor currently doesn't do anything on follower ranks,
+     * except respond to RPCs with a human readable error.
+     */
+    if (ctx->rank > 0)
+        goto done;
+
     if (!(monitor->waitup_requests = flux_msglist_create ()))
         goto error;
-    if (ctx->rank == 0) {
-        /* Initialize up to the empty set unless 'monitor_force_up' is true.
-         * N.B. Initial up value will appear in 'restart' event posted
-         * to resource.eventlog.
-         */
-        if (!(monitor->up = idset_create (monitor->size, 0)))
+
+    /* Initialize up to the empty set unless 'monitor_force_up' is true.
+     * N.B. Initial up value will appear in 'restart' event posted
+     * to resource.eventlog.
+     */
+    if (!(monitor->up = idset_create (monitor->size, 0))
+        || !(monitor->torpid = idset_create (monitor->size, 0)))
+        goto error;
+    if (monitor_force_up) {
+        if (idset_range_set (monitor->up, 0, monitor->size - 1) < 0)
             goto error;
-        if (monitor_force_up) {
-            if (idset_range_set (monitor->up, 0, monitor->size - 1) < 0)
-                goto error;
-        }
-        else if (!flux_attr_get (ctx->h, "broker.recovery-mode")) {
-            if (!(monitor->f = flux_rpc_pack (ctx->h,
-                                              "groups.get",
-                                               FLUX_NODEID_ANY,
-                                               FLUX_RPC_STREAMING,
-                                               "{s:s}",
-                                               "name", "broker.online"))
-                || flux_future_then (monitor->f,
-                                     -1,
-                                     broker_online_cb,
-                                     monitor) < 0)
-                goto error;
-        }
     }
+    else if (!flux_attr_get (ctx->h, "broker.recovery-mode")) {
+        if (!(monitor->f_online = group_monitor (ctx->h, "broker.online"))
+            || flux_future_then (monitor->f_online,
+                                 -1,
+                                 broker_online_cb,
+                                 monitor) < 0)
+            goto error;
+        if (!(monitor->f_torpid = group_monitor (ctx->h, "broker.torpid"))
+            || flux_future_then (monitor->f_torpid,
+                                 -1,
+                                 broker_torpid_cb,
+                                 monitor) < 0)
+            goto error;
+    }
+done:
     return monitor;
 error:
     monitor_destroy (monitor);

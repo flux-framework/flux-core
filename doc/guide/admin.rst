@@ -278,10 +278,10 @@ the leader is unaffected.
 The network used for the overlay network should be chosen for stability,
 as network partitions that persist long enough can cause downstream nodes
 to be declared lost.  This has the same effect as crashing.  Shorter
-partitions may cause nodes to be drained as "torpid".  On a cluster, the
-conservative choice is usually a commodity Ethernet rather than a high speed
-interconnect.  Note, however, that partition tolerance can be tuned when
-the network has known issues.  See :man5:`flux-config-tbon`.
+partitions may cause nodes to be marked "torpid" and taken offline temporarily.
+On a cluster, the conservative choice is usually a commodity Ethernet rather
+than a high speed interconnect.  Note, however, that partition tolerance can
+be tuned when the network has known issues.  See :man5:`flux-config-tbon`.
 
 Topology for Small Clusters
 ---------------------------
@@ -1077,9 +1077,9 @@ Will the network stay up?
 Although TCP is a reliable transport, the network used by the Flux overlay
 should be stable, otherwise:
 
-- Nodes can be automatically drained with reason set to "broker was
-  unresponsive".  The Flux broker remains connected but cannot get messages
-  through promptly.  This may be tuned with ``tbon.torpid_max``.
+- Nodes can be temporarily marked offline for scheduling if the Flux broker
+  remains connected but cannot get messages through promptly.  This may be
+  tuned with ``tbon.torpid_max``.
 
 - Nodes can be disconnected (and running jobs lost) when TCP acknowledgements
   cannot get through in time.  For example, this may happen during a network

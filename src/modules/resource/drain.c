@@ -28,9 +28,6 @@
  * Post events for each drain/undrain action.  Drain state is sticky
  * across module reload / instance restart.  The state is reacquired
  * by replaying the eventlog.
- *
- * In addition, monitor the 'broker.torpid' group and drain any nodes that
- * are added to the group (if they are not already drained).
  */
 
 #if HAVE_CONFIG_H
@@ -66,7 +63,6 @@ struct drain {
     struct resource_ctx *ctx;
     struct draininfo *info; // rank-indexed array [0:size-1]
     flux_msg_handler_t **handlers;
-    flux_future_t *f;
 };
 
 struct drain_init_args {
@@ -205,77 +201,6 @@ static int check_draininfo_idset (struct drain *drain,
     }
     idset_destroy (errids);
     return rc;
-}
-
-
-static bool is_drained (struct drain *drain, unsigned int rank)
-{
-    if (rank < drain->ctx->size && drain->info[rank].drained)
-        return true;
-    return false;
-}
-
-static void broker_torpid_cb (flux_future_t *f, void *arg)
-{
-    struct drain *drain = arg;
-    flux_t *h = drain->ctx->h;
-    const char *members;
-    struct idset *ids;
-    unsigned int rank;
-    double timestamp;
-    const char *reason = "broker was unresponsive";
-    char *idstr = NULL;
-    char *nodelist = NULL;
-
-    if (flux_rpc_get_unpack (f, "{s:s}", "members", &members) < 0) {
-        flux_log_error (h, "drain: group.get failed");
-        return;
-    }
-    if (!(ids = idset_decode (members))) {
-        flux_log_error (h, "drain: unable to decode group.get response");
-        goto done;
-    }
-    rank = idset_first (ids);
-    while (rank != IDSET_INVALID_ID) {
-        if (is_drained (drain, rank)) {
-            if (idset_clear (ids, rank) < 0) {
-                flux_log_error (h, "error building torpid idset");
-                goto done;
-            }
-        }
-        rank = idset_next (ids, rank);
-    }
-    if (idset_count (ids) > 0) {
-        if (get_timestamp_now (&timestamp) < 0
-            || update_draininfo_idset (drain,
-                                       ids,
-                                       true,
-                                       timestamp,
-                                       reason,
-                                       0) < 0) {
-            flux_log_error (h, "error draining torpid nodes");
-            goto done;
-        }
-        if (!(idstr = idset_encode (ids, IDSET_FLAG_RANGE))
-            || !(nodelist = flux_hostmap_lookup (h, idstr, NULL))
-            || reslog_post_pack (drain->ctx->reslog,
-                                 NULL,
-                                 timestamp,
-                                 "drain",
-                                 0,
-                                 "{s:s s:s s:s}",
-                                 "idset", idstr,
-                                 "nodelist", nodelist,
-                                 "reason", reason) < 0) {
-            flux_log_error (h, "error posting drain event for torpid nodes");
-            goto done;
-        }
-    }
-done:
-    idset_destroy (ids);
-    free (nodelist);
-    free (idstr);
-    flux_future_reset (f);
 }
 
 json_t *drain_get_info (struct drain *drain)
@@ -795,7 +720,6 @@ void drain_destroy (struct drain *drain)
                 free (drain->info[rank].reason);
             free (drain->info);
         }
-        flux_future_destroy (drain->f);
         free (drain);
         errno = saved_errno;
     }
@@ -811,16 +735,6 @@ struct drain *drain_create (struct resource_ctx *ctx, const json_t *eventlog)
     drain->ctx = ctx;
     if (!(drain->info = calloc (ctx->size, sizeof (drain->info[0]))))
         goto error;
-    if (ctx->rank == 0) {
-        if (!(drain->f = flux_rpc_pack (ctx->h,
-                                        "groups.get",
-                                        FLUX_NODEID_ANY,
-                                        FLUX_RPC_STREAMING,
-                                        "{s:s}",
-                                        "name", "broker.torpid"))
-            || flux_future_then (drain->f, -1, broker_torpid_cb, drain) < 0)
-            goto error;
-    }
     if (replay_eventlog (drain, eventlog, &error) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: %s", RESLOG_KEY, error.text);
         goto error;

@@ -100,6 +100,13 @@ test_expect_success 'rank 1 is added to broker.torpid group' '
 	$groups waitfor --count=1 broker.torpid
 '
 
+test_expect_success 'flux resource list shows one node down' '
+	test $(flux resource list -s down -no {nnodes}) -eq 1
+'
+test_expect_success 'scheduler shows one node down' '
+	test $(FLUX_RESOURCE_LIST_RPC=sched.resource-status flux resource list -s down -no {nnodes}) -eq 1
+'
+
 test_expect_success 'set tbon.torpid_max to zero to disable' '
 	flux setattr tbon.torpid_max 0
 '
@@ -108,12 +115,16 @@ test_expect_success 'rank 1 is removed from broker.torpid group' '
 	$groups waitfor --count=0 broker.torpid
 '
 
-test_expect_success 'rank 1 is removed from broker.torpid group' '
-	$groups waitfor --count=0 broker.torpid
+test_expect_success 'flux resource list shows no nodes down' '
+	test $(flux resource list -s down -no {nnodes}) -eq 0
 '
 
-test_expect_success 'rank 1 was drained' '
-	test $(flux resource status -s drain -no {nnodes}) -eq 1
+test_expect_success 'scheduler shows no nodes down' '
+	test $(FLUX_RESOURCE_LIST_RPC=sched.resource-status flux resource list -s down -no {nnodes}) -eq 0
+'
+
+test_expect_success 'no nodes are drained' '
+	test $(flux resource status -s drain -no {nnodes}) -eq 0
 '
 
 test_done

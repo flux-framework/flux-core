@@ -28,6 +28,7 @@
     }
   },
   "exclude": "",
+  "torpid": "",
   "offline": "",
   "online": "0-3"
 }

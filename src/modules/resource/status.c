@@ -59,6 +59,7 @@ static json_t *prepare_status_payload (struct status *status)
 {
     struct resource_ctx *ctx = status->ctx;
     const struct idset *down = monitor_get_down (ctx->monitor);
+    const struct idset *torpid = monitor_get_torpid (ctx->monitor);
     const struct idset *exclude = exclude_get (ctx->exclude);
     const json_t *R;
     json_t *o = NULL;
@@ -73,7 +74,8 @@ static json_t *prepare_status_payload (struct status *status)
     }
     if (rutil_set_json_idset (o, "online", monitor_get_up (ctx->monitor)) < 0
         || rutil_set_json_idset (o, "offline", down) < 0
-        || rutil_set_json_idset (o, "exclude", exclude) < 0)
+        || rutil_set_json_idset (o, "exclude", exclude) < 0
+        || rutil_set_json_idset (o, "torpid", torpid) < 0)
         goto error;
     json_decref (drain_info);
     return o;
@@ -154,10 +156,12 @@ static json_t *get_down (struct status *status, struct rlist *rl)
         struct rlist *rdown = NULL;
         struct idset *drain = NULL;
         const struct idset *down = monitor_get_down (status->ctx->monitor);
+        const struct idset *torpid = monitor_get_torpid (status->ctx->monitor);
 
         if ((drain = drain_get (status->ctx->drain))
             && rlist_mark_up (rl, "all") >= 0
             && mark_down (rl, down) == 0
+            && mark_down (rl, torpid) == 0
             && mark_down (rl, drain) == 0
             && (rdown = rlist_copy_down (rl)))
             status->cache.R_down = rlist_to_R (rdown);
@@ -476,7 +480,9 @@ static void reslog_cb (struct reslog *reslog,
     else if (streq (name, "online")
         || streq (name, "offline")
         || streq (name, "drain")
-        || streq (name, "undrain"))
+        || streq (name, "undrain")
+        || streq (name, "torpid")
+        || streq (name, "lively"))
         invalidate_cache (&status->cache, false);
 }
 

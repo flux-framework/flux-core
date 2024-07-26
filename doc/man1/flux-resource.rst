@@ -70,7 +70,7 @@ Show the scheduler view of resources.
 
 In the scheduler view, excluded resources are always omitted, and
 unavailable resources are shown in the "down" state regardless of the
-reason (drained, offline, etc).  Valid states in the scheduler view are:
+reason (drained, offline, torpid, etc).  Valid states in the scheduler view are:
 
 up
   Available for use.
@@ -188,6 +188,10 @@ drained
 drain
   shorthand for :option:`drained,draining`
 
+torpid
+  node has been unresponsive for a period of time and is temporarily
+  unavailable for scheduling
+
 offline
   node has not joined the Flux instance (e.g. turned off or has not
   started the flux broker).
@@ -201,13 +205,13 @@ resources that share a state and online/offline state.
 .. note::
   :program:`flux resource status` queries both the administrative and
   scheduler view of resources to identify resources that are available,
-  excluded by configuration, or administratively drained or draining.
+  excluded by configuration, torpid, or administratively drained or draining.
 
 .. option:: -s, --states=STATE,...
 
   Restrict the set of resource states a comma-separated list.
 
-  If unspecified, :option:`avail,exclude,draining,drained` is used.
+  If unspecified, :option:`avail,exclude,draining,drained,torpid` is used.
 
 
 .. option:: -q, --queue=QUEUE,...
@@ -358,9 +362,9 @@ The following field names can be specified for the **status** and **drain**
 subcommands:
 
 **state**
-   State of node(s): "avail", "exclude", "drain", "draining", "drained". If
-   the set of resources is offline, an asterisk suffix is appended to the
-   state, e.g. "avail*".
+   State of node(s): "avail", "exclude", "drain", "draining", "drained",
+   "torpid". If the set of resources is offline, an asterisk suffix is
+   appended to the state, e.g. "avail*".
 
 **statex**
    Like **state**, but exclude the asterisk for offline resources.
@@ -464,25 +468,18 @@ dynamic discovery
 Once the inventory has been determined, it is stored the KVS ``resource.R``
 key, in RFC 20 (R version 1) format.
 
-Events that affect the availability of resources are posted to the KVS
-*resource.eventlog*.  Such events include:
+Events that affect the availability of resources and should persist across
+a Flux restart are posted to the KVS *resource.eventlog*.  Such events include:
 
 resource-define
-   The resource inventory is defined with an initial set of drained, online,
-   and excluded nodes.
+   The instance resource set is known (posted each time the resource module
+   is loaded).
 
 drain
    One or more nodes are administratively removed from scheduling.
 
 undrain
    One or more nodes are no longer drained.
-
-offline
-   One or more nodes are removed from scheduling due to unavailability,
-   e.g. node was shutdown or crashed.
-
-online
-   One or more nodes are no longer offline.
 
 
 RESOURCES
