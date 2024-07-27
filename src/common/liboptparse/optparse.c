@@ -988,7 +988,7 @@ double optparse_get_duration (optparse_t *p,
     if (fsd_parse_duration (s, &d) < 0) {
         optparse_fatalmsg (p,
                            1,
-                           "%s: Invalid argument for option '%s': '%s'",
+                           "%s: Invalid argument for option '%s': '%s'\n",
                            p->program_name,
                            name,
                            s);
