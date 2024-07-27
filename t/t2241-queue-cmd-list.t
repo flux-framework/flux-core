@@ -9,8 +9,8 @@ test_under_flux 1 full
 
 test_expect_success 'flux-queue: default lists expected fields' '
 	flux queue list > default.out &&
-	grep DEFAULTTIME default.out &&
-	grep TIMELIMIT default.out &&
+	grep TDEFAULT default.out &&
+	grep TLIMIT default.out &&
 	grep NNODES default.out &&
 	grep NCORES default.out &&
 	grep NGPUS default.out
@@ -25,8 +25,8 @@ test_expect_success 'flux-queue: FLUX_QUEUE_LIST_FORMAT_DEFAULT works' '
 
 test_expect_success 'flux-queue: --no-header works' '
 	flux queue list --no-header > default_no_header.out &&
-	test_must_fail grep DEFAULTTIME default_no_header.out &&
-	test_must_fail grep TIMELIMIT default_no_header.out &&
+	test_must_fail grep TDEFAULT default_no_header.out &&
+	test_must_fail grep TLIMIT default_no_header.out &&
 	test_must_fail grep NNODES default_no_header.out &&
 	test_must_fail grep NCORES default_no_header.out &&
 	test_must_fail grep NGPUS default_no_header.out
@@ -41,8 +41,8 @@ ALL_LIMITS_FMT="\
 
 test_expect_success 'flux-queue: expected headers with non-default fields output' '
 	flux queue list -o "${ALL_LIMITS_FMT}" > non_default.out &&
-	grep DEFAULTTIME non_default.out &&
-	grep TIMELIMIT non_default.out &&
+	grep TDEFAULT non_default.out &&
+	grep TLIMIT non_default.out &&
 	grep NNODES non_default.out &&
 	grep NCORES non_default.out &&
 	grep NGPUS non_default.out &&

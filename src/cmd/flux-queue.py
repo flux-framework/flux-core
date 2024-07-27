@@ -110,8 +110,12 @@ class FluxQueueConfig(UtilConfig):
         "default": {
             "description": "Default flux-queue list format string",
             "format": (
-                "?:{queuem:<8.8} {defaults.timelimit!F:>11} {limits.timelimit!F:>10} {limits.range.nnodes:>10} "
-                "{limits.range.ncores:>10} {limits.range.ngpus:>10}"
+                "?:{queuem:<8.8} "
+                "{defaults.timelimit!F:>8} "
+                "{limits.timelimit!F:>8} "
+                "{limits.range.nnodes:>10} "
+                "{limits.range.ncores:>10} "
+                "{limits.range.ngpus:>10}"
             ),
         },
     }
@@ -264,8 +268,8 @@ def list(args):
     headings = {
         "queue": "QUEUE",
         "queuem": "QUEUE",
-        "defaults.timelimit": "DEFAULTTIME",
-        "limits.timelimit": "TIMELIMIT",
+        "defaults.timelimit": "TDEFAULT",
+        "limits.timelimit": "TLIMIT",
         "limits.range.nnodes": "NNODES",
         "limits.range.ncores": "NCORES",
         "limits.range.ngpus": "NGPUS",
