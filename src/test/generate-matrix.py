@@ -67,7 +67,7 @@ class BuildMatrix:
     def add_build(
         self,
         name=None,
-        image="bookworm",
+        image="fedora40",
         args=default_args,
         jobs=4,
         env=None,
@@ -83,6 +83,14 @@ class BuildMatrix:
 
         # Extra environment to add to this command:
         env = env or {}
+
+        # hwloc tries to look for opengl devices  by connecting to a port that might
+        # sometimes be an x11 port, but more often for us is munge, turn it off
+        env["HWLOC_COMPONENTS"] = "-gl"
+        # the psm3 connector added to libfabrics in ~1.12 causes errors when allowed to
+        # use non-local connectors on a system with virtual NICs, since we're in a
+        # docker container, prevent this
+        env["PSM3_HAL"] = "loopback"
 
         needs_buildx = False
         if platform:
@@ -138,8 +146,8 @@ class BuildMatrix:
 
 matrix = BuildMatrix()
 
-# Debian: no args
-matrix.add_build(name="bookworm")
+# Fedora40: no args
+matrix.add_build(name="fedora40")
 
 # Debian: 32b
 matrix.add_build(
@@ -149,19 +157,21 @@ matrix.add_build(
     docker_tag=True,
 )
 
-# Debian: arm64, expensive, only on master and tags, only install
+# debian/Fedora40: arm64, expensive, only on master and tags, only install
 if matrix.branch == "master" or matrix.tag:
-    matrix.add_build(
-        name="bookworm - arm64",
-        image="bookworm",
-        platform="linux/arm64",
-        docker_tag=True,
-        command_args="--install-only ",
-    )
+    for d in ("bookworm", "noble", "fedora40", "el9"):
+        matrix.add_build(
+            name=f"{d} - arm64",
+            image="{d}",
+            platform="linux/arm64",
+            docker_tag=True,
+            command_args="--install-only ",
+        )
 
 # Debian: gcc-12, content-s3, distcheck
 matrix.add_build(
     name="bookworm - gcc-12,content-s3,distcheck",
+    image="bookworm",
     env=dict(
         CC="gcc-12",
         CXX="g++12",
@@ -171,14 +181,13 @@ matrix.add_build(
     test_s3=True,
 )
 
-# Ubuntu: py3.11,clang-15
+# fedora40: clang-18
 matrix.add_build(
-    name="bookworm - py3.11,clang-15",
+    name="fedora40 - clang-18",
     env=dict(
-        CC="clang-15",
-        CXX="clang++-15",
+        CC="clang-18",
+        CXX="clang++-18",
         CFLAGS="-O2 -gdwarf-4",
-        PYTHON_VERSION="3.11",
         chain_lint="t",
     ),
     args="--with-flux-security",
@@ -188,6 +197,7 @@ matrix.add_build(
 # coverage
 matrix.add_build(
     name="coverage",
+    image="bookworm",
     coverage_flags="ci-basic",
     coverage=True,
     jobs=4,
@@ -196,17 +206,18 @@ matrix.add_build(
 
 # Ubuntu: TEST_INSTALL
 matrix.add_build(
-    name="jammy - test-install",
-    image="jammy",
+    name="noble - test-install",
+    image="noble",
     env=dict(
         TEST_INSTALL="t",
     ),
     docker_tag=True,
 )
 
-# Debian: TEST_INSTALL
+# el9: TEST_INSTALL
 matrix.add_build(
-    name="bookworm - test-install",
+    name="el9 - test-install",
+    image="el9",
     env=dict(
         TEST_INSTALL="t",
     ),
@@ -248,41 +259,18 @@ matrix.add_build(
     args="--with-flux-security --enable-caliper",
 )
 
-# Fedora 34
+# Fedora 40
 matrix.add_build(
-    name="fedora34 - gcc-11.2,py3.9",
-    image="fedora34",
-    docker_tag=True,
-)
-
-# Fedora 38
-# Note: caliper does not compile on Fedora 38
-matrix.add_build(
-    name="fedora38 - gcc-13.1,py3.11",
-    image="fedora38",
+    name="fedora40 - gcc-14.1,py3.12",
+    image="fedora40",
     args=(
         "--prefix=/usr"
         " --sysconfdir=/etc"
         " --with-systemdsystemunitdir=/etc/systemd/system"
         " --localstatedir=/var"
         " --with-flux-security"
+        " --enable-caliper"
     ),
-    docker_tag=True,
-)
-
-# Fedora 39
-# Note: caliper does not compile on Fedora 38
-matrix.add_build(
-    name="fedora39 - gcc-13.2,py3.12",
-    image="fedora39",
-    args=(
-        "--prefix=/usr"
-        " --sysconfdir=/etc"
-        " --with-systemdsystemunitdir=/etc/systemd/system"
-        " --localstatedir=/var"
-        " --with-flux-security"
-    ),
-    env=dict(PSM3_HAL="loopback"),
     docker_tag=True,
 )
 
@@ -302,7 +290,6 @@ matrix.add_build(
 # inception
 matrix.add_build(
     name="inception",
-    image="bookworm",
     command_args="--inception",
 )
 

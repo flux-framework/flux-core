@@ -119,16 +119,13 @@ RUN locale-gen en_US.UTF-8
 RUN luarocks install luaposix
 
 # Install caliper by hand for now:
-RUN mkdir caliper \
- && cd caliper \
- && wget -O - https://github.com/LLNL/Caliper/archive/v1.7.0.tar.gz | tar xvz --strip-components 1 \
- && mkdir build \
- && cd build \
- && CC=gcc CXX=g++ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DWITH_GOTCHA=Off \
- && make -j 4 \
- && make install \
- && cd ../.. \
- && rm -rf caliper
+COPY scripts/fetch-and-build-caliper.sh /fetch-and-build-caliper.sh
+RUN /fetch-and-build-caliper.sh
+
+# Install catch by hand for now:
+COPY scripts/fetch-and-build-catch.sh /fetch-and-build-catch.sh
+RUN /fetch-and-build-catch.sh
+
 
 # Install openpmix, prrte
 RUN mkdir prrte \

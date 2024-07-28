@@ -7,10 +7,7 @@ RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
         apt-utils \
         wget \
- && rm -rf /var/lib/apt/lists/*
-
 # Utilities
-RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
         locales \
         ca-certificates \
@@ -29,11 +26,7 @@ RUN apt-get update \
         mpich \
         valgrind \
         jq \
- && rm -rf /var/lib/apt/lists/*
-
 # Compilers, autotools
-RUN apt-get update \
- && apt-get -qq install -y --no-install-recommends \
         build-essential \
         pkg-config \
         autotools-dev \
@@ -46,38 +39,13 @@ RUN apt-get update \
         clang-tools-15 \
         gcc-12 \
         g++-12 \
- && rm -rf /var/lib/apt/lists/*
-
 # Python
-# NOTE: sudo pip install is necessary to get differentiated installations of
-# python binary components for multiple python3 variants, --ignore-installed
-# makes it ignore local versions of the packages if your home directory is
-# mapped into the container and contains the same libraries
-RUN apt-get update \
- && apt-get -qq install -y --no-install-recommends \
-	libffi-dev \
+        libffi-dev \
         python3.11-dev \
         python3-pip \
         python3-setuptools \
         python3-wheel \
- && rm -rf /var/lib/apt/lists/*
-
-RUN for PY in python3.11 ; do \
-        sudo $PY -m pip install --upgrade --ignore-installed \
-        --break-system-packages \
-	    "markupsafe==2.0.0" \
-            coverage cffi ply six pyyaml "jsonschema>=2.6,<4.0" \
-            sphinx sphinx-rtd-theme sphinxcontrib-spelling; \
-	sudo mkdir -p /usr/lib/${PY}/dist-packages; \
-	echo ../site-packages >/tmp/site-packages.pth; \
-	sudo mv /tmp/site-packages.pth /usr/lib/${PY}/dist-packages; \
-    done ; \
-    apt-get -qq purge -y python3-pip \
- && apt-get -qq autoremove -y
-
 # Other deps
-RUN apt-get update \
- && apt-get -qq install -y --no-install-recommends \
         libsodium-dev \
         libzmq3-dev \
         libjansson-dev \
@@ -93,11 +61,7 @@ RUN apt-get update \
         libevent-dev \
         libarchive-dev \
         libpam-dev \
- && rm -rf /var/lib/apt/lists/*
-
 # Testing utils and libs
-RUN apt-get update \
- && apt-get -qq install -y --no-install-recommends \
         faketime \
         libfaketime \
         pylint \
@@ -106,7 +70,23 @@ RUN apt-get update \
         aspell \
         aspell-en \
         time \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+# NOTE: sudo pip install is necessary to get differentiated installations of
+# python binary components for multiple python3 variants, --ignore-installed
+# makes it ignore local versions of the packages if your home directory is
+# mapped into the container and contains the same libraries
+ ;  for PY in python3.11 ; do \
+        sudo $PY -m pip install --upgrade --ignore-installed \
+        --break-system-packages \
+	    "markupsafe==2.0.0" \
+            coverage cffi ply six pyyaml "jsonschema>=2.6,<4.0" \
+            sphinx sphinx-rtd-theme sphinxcontrib-spelling; \
+	sudo mkdir -p /usr/lib/${PY}/dist-packages; \
+	echo ../site-packages >/tmp/site-packages.pth; \
+	sudo mv /tmp/site-packages.pth /usr/lib/${PY}/dist-packages; \
+    done ; \
+    apt-get -qq purge -y python3-pip \
+ && apt-get -qq autoremove -y
 
 RUN locale-gen en_US.UTF-8
 
@@ -114,16 +94,12 @@ RUN locale-gen en_US.UTF-8
 RUN luarocks install luaposix
 
 # Install caliper by hand for now:
-RUN mkdir caliper \
- && cd caliper \
- && wget -O - https://github.com/LLNL/Caliper/archive/v1.7.0.tar.gz | tar xvz --strip-components 1 \
- && mkdir build \
- && cd build \
- && CC=gcc CXX=g++ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DWITH_GOTCHA=Off \
- && make -j 4 \
- && make install \
- && cd ../.. \
- && rm -rf caliper
+COPY scripts/fetch-and-build-caliper.sh /fetch-and-build-caliper.sh
+RUN /fetch-and-build-caliper.sh
+
+# Install catch by hand for now:
+COPY scripts/fetch-and-build-catch.sh /fetch-and-build-catch.sh
+RUN /fetch-and-build-catch.sh
 
 # Install openpmix, prrte
 RUN mkdir prrte \

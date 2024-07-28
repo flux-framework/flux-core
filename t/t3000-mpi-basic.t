@@ -16,6 +16,8 @@ if ! test -x ${HELLO}; then
     test_done
 fi
 
+# work around https://github.com/open-mpi/ompi/issues/7701 and similar in mpich
+export HWLOC_COMPONENTS=-gl
 export TEST_UNDER_FLUX_CORES_PER_RANK=4
 SIZE=2
 MAX_MPI_SIZE=$(($SIZE*$TEST_UNDER_FLUX_CORES_PER_RANK))
