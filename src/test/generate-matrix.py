@@ -159,7 +159,7 @@ if matrix.branch == "master" or matrix.tag:
     for d in ("bookworm", "noble", "fedora40", "el9"):
         matrix.add_build(
             name=f"{d} - arm64",
-            image="{d}",
+            image=f"{d}",
             platform="linux/arm64",
             docker_tag=True,
             command_args="--install-only ",
