@@ -1317,24 +1317,16 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
         struct flux_msg_cred cred;
         int root_seq = -1;
 
-        if (flux_request_unpack (msg, NULL, "{ s:s s:i }",
+        /* namespace, rootdir, and rootseq optional */
+        if (flux_request_unpack (msg, NULL, "{ s:s s:i s?s s?o s?i}",
                                  "key", &key,
-                                 "flags", &flags) < 0) {
+                                 "flags", &flags,
+                                 "namespace", &ns,
+                                 "rootdir", &root_dirent,
+                                 "rootseq", &root_seq) < 0) {
             flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
             goto done;
         }
-
-        /* namespace is optional */
-        (void)flux_request_unpack (msg, NULL, "{ s:s }",
-                                   "namespace", &ns);
-
-        /* rootdir is optional */
-        (void)flux_request_unpack (msg, NULL, "{ s:o }",
-                                   "rootdir", &root_dirent);
-
-        /* rootseq is optional */
-        (void)flux_request_unpack (msg, NULL, "{ s:i }",
-                                   "rootseq", &root_seq);
 
         /* either namespace or rootdir must be specified */
         if (!ns && !root_dirent) {
