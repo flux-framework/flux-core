@@ -163,7 +163,16 @@ if matrix.branch == "master" or matrix.tag:
             platform="linux/arm64",
             docker_tag=True,
             command_args="--install-only ",
+            args=(
+                "--prefix=/usr"
+                " --sysconfdir=/etc"
+                " --with-systemdsystemunitdir=/etc/systemd/system"
+                " --localstatedir=/var"
+                " --with-flux-security"
+            ),
         )
+
+# builds to match arm64 images must have linux/amd64 platform explicitly
 
 # Debian: gcc-12, content-s3, distcheck
 matrix.add_build(
@@ -200,6 +209,7 @@ matrix.add_build(
     jobs=4,
     args="--with-flux-security --enable-caliper",
 )
+
 
 # Ubuntu: TEST_INSTALL
 matrix.add_build(
@@ -244,6 +254,7 @@ matrix.add_build(
         TEST_INSTALL="t",
     ),
     platform="linux/amd64",
+    args="--with-flux-security --enable-caliper",
     docker_tag=True,
 )
 
@@ -257,16 +268,9 @@ matrix.add_build(
 
 # RHEL8 clone
 matrix.add_build(
-    name="el8",
-    image="el8",
-    env=dict(PYTHON_VERSION="3.6", LDFLAGS="-Wl,-z,relro  -Wl,-z,now"),
-    docker_tag=True,
-)
-
-# RHEL8 clone
-matrix.add_build(
     name="el8 - ascii",
     image="el8",
+    env=dict(PYTHON_VERSION="3.6", LDFLAGS="-Wl,-z,relro  -Wl,-z,now"),
     args="--enable-broken-locale-mode",
 )
 
@@ -293,6 +297,7 @@ matrix.add_build(
         " --with-flux-security"
         " --enable-caliper"
     ),
+    platform="linux/amd64",
     docker_tag=True,
 )
 
