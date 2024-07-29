@@ -146,9 +146,6 @@ class BuildMatrix:
 
 matrix = BuildMatrix()
 
-# Fedora40: no args
-matrix.add_build(name="fedora40")
-
 # Debian: 32b
 matrix.add_build(
     name="bookworm - 32 bit",
@@ -211,6 +208,31 @@ matrix.add_build(
     env=dict(
         TEST_INSTALL="t",
     ),
+    platform="linux/amd64",
+    args="--with-flux-security --enable-caliper",
+    docker_tag=True,
+)
+
+# Ubuntu: TEST_INSTALL
+matrix.add_build(
+    name="jammy - test-install",
+    image="jammy",
+    env=dict(
+        TEST_INSTALL="t",
+    ),
+    args="--with-flux-security --enable-caliper",
+    docker_tag=True,
+)
+
+# Debian: TEST_INSTALL
+matrix.add_build(
+    name="bookworm - test-install",
+    image="bookworm",
+    env=dict(
+        TEST_INSTALL="t",
+    ),
+    platform="linux/amd64",
+    args="--with-flux-security --enable-caliper",
     docker_tag=True,
 )
 
@@ -261,7 +283,7 @@ matrix.add_build(
 
 # Fedora 40
 matrix.add_build(
-    name="fedora40 - gcc-14.1,py3.12",
+    name="fedora40 - gcc-14",
     image="fedora40",
     args=(
         "--prefix=/usr"
