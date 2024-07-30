@@ -56,9 +56,11 @@ OPTIONS
    results can be listed separated by comma. See the JOB STATUS section
    of the :man1:`flux-jobs` manual for more detail.
 
-.. option:: -q, --queue=QUEUE
+.. option:: -q, --queue=QUEUE[,...]
 
-   Only include jobs in the named queue *QUEUE*.
+   Only include jobs in the named queue *QUEUE*. Multiple queues may be
+   specified as a comma-separated list, or by using the :option:`--queue`
+   option multiple times.
 
 .. option:: -c, --count=N
 

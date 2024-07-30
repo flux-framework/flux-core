@@ -46,9 +46,10 @@ OPTIONS
 
    List jobs with a specific job name.
 
-.. option:: -q, --queue=[QUEUE]
+.. option:: -q, --queue=QUEUE[,...]
 
-   List jobs in a specific queue.
+   List jobs in a specific queue or queues. Multiple queues may be separated
+   by a comma or by using the :option:`-q, --queue` option multiple times.
 
 .. option:: -c, --count=N
 

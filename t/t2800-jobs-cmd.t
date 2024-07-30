@@ -274,6 +274,10 @@ test_expect_success 'flux-jobs --queue works' '
 	test_debug "flux jobs -an --queue=foobar" &&
 	test $(flux jobs -an --queue=foobar | wc -l) -eq 0
 '
+test_expect_success 'flux-jobs --queue accepts multiple queues' '
+	test $(flux jobs -anq queue1,queue2 | wc -l) \
+		-eq $(job_list_state_count completed sched run)
+'
 
 # Recall pending = depend | priority | sched, running = run | cleanup,
 #  active = pending | running

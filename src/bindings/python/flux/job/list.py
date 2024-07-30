@@ -10,6 +10,7 @@
 import errno
 import os
 import pwd
+from collections.abc import Iterable
 
 import flux.constants
 from flux.future import WaitAllFuture
@@ -58,7 +59,11 @@ def job_list(
     if name:
         constraint["and"].append({"name": [name]})
     if queue:
-        constraint["and"].append({"queue": [queue]})
+        if isinstance(queue, str):
+            queue = [queue]
+        if not isinstance(queue, Iterable):
+            raise ValueError("queue parameter must be a string or iterable")
+        constraint["and"].append({"queue": list(queue)})
     if states and results:
         tmp = {"or": []}
         tmp["or"].append({"states": [states]})
@@ -201,7 +206,7 @@ class JobList:
     :max_entries: Maximum number of jobs to return
     :since: Limit jobs to those that have been active since a given timestamp.
     :name: Limit jobs to those with a specific name.
-    :queue: Limit jobs to those submitted to a specific queue.
+    :queue: Limit jobs to those submitted to a specific queue or queues
     """
 
     # pylint: disable=too-many-instance-attributes

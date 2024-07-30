@@ -170,9 +170,9 @@ def parse_args():
     parser.add_argument(
         "-q",
         "--queue",
-        type=str,
-        metavar="QUEUE",
-        help="Limit output to specific queue",
+        type=FilterActionSetUpdate,
+        metavar="QUEUE,...",
+        help="Limit output to specific queue or queues",
     )
     parser.add_argument(
         "-c",
