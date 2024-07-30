@@ -16,7 +16,7 @@ import math
 import sys
 
 import flux
-from flux.util import UtilConfig, parse_fsd
+from flux.util import AltField, UtilConfig, parse_fsd
 
 
 def print_enable_status(name, status):
@@ -111,6 +111,8 @@ class FluxQueueConfig(UtilConfig):
             "description": "Default flux-queue list format string",
             "format": (
                 "?:{queuem:<8.8} "
+                "{color_enabled}{enabled:>2}{color_off} "
+                "{color_started}{started:>2}{color_off} "
                 "{defaults.timelimit!F:>8} "
                 "{limits.timelimit!F:>8} "
                 "{limits.range.nnodes:>10} "
@@ -238,11 +240,15 @@ class QueueDefaultsInfo:
 
 
 class QueueInfo:
-    def __init__(self, name, config):
+    def __init__(self, name, config, enabled, started):
         self.name = name
         self.config = config
         self.limits = QueueLimitsInfo(name, config)
         self.defaults = QueueDefaultsInfo(name, config)
+        self.scheduling = "started" if started else "stopped"
+        self.submission = "enabled" if enabled else "disabled"
+        self._enabled = enabled
+        self._started = started
 
     def __getattr__(self, attr):
         try:
@@ -263,11 +269,51 @@ class QueueInfo:
         q = self.queue + ("*" if defaultq and self.queue == defaultq else "")
         return q
 
+    @property
+    def color_enabled(self):
+        return "\033[01;32m" if self._enabled else "\033[01;31m"
+
+    @property
+    def color_off(self):
+        return "\033[0;0m"
+
+    @property
+    def enabled(self):
+        return AltField("✔", "y") if self._enabled else AltField("✗", "n")
+
+    @property
+    def color_started(self):
+        return "\033[01;32m" if self._started else "\033[01;31m"
+
+    @property
+    def started(self):
+        return AltField("✔", "y") if self._started else AltField("✗", "n")
+
+
+def fetch_all_queue_status(handle, queues=None):
+    if handle is None:
+        # Return fake payload if handle is not open (e.g. during testing)
+        return {"enable": True, "start": True}
+    topic = "job-manager.queue-status"
+    if queues is None:
+        return handle.rpc(topic, {}).get()
+    rpcs = {x: handle.rpc(topic, {"name": x}) for x in queues}
+    return {x: rpcs[x].get() for x in rpcs}
+
 
 def list(args):
     headings = {
         "queue": "QUEUE",
         "queuem": "QUEUE",
+        "submission": "SUBMIT",
+        "scheduling": "SCHED",
+        "enabled": "EN",
+        "started": "ST",
+        "enabled.ascii": "EN",
+        "started.ascii": "ST",
+        "color_enabled": "",
+        "color_started": "",
+        "color_off": "",
         "defaults.timelimit": "TDEFAULT",
         "limits.timelimit": "TLIMIT",
         "limits.range.nnodes": "NNODES",
@@ -281,6 +327,7 @@ def list(args):
         "limits.max.ngpus": "MAXGPUS",
     }
     config = None
+    handle = None
 
     if args.from_stdin:
         config = json.loads(sys.stdin.read())
@@ -297,11 +344,15 @@ def list(args):
 
     queues = []
     if config and "queues" in config:
+        status = fetch_all_queue_status(handle, config["queues"].keys())
         for key, value in config["queues"].items():
-            queues.append(QueueInfo(key, config))
+            queues.append(
+                QueueInfo(key, config, status[key]["enable"], status[key]["start"])
+            )
     else:
         # single anonymous queue
-        queues.append(QueueInfo(None, config))
+        status = fetch_all_queue_status(handle)
+        queues.append(QueueInfo(None, config, status["enable"], status["start"]))
 
     formatter.print_items(queues, no_header=args.no_header)
 
