@@ -54,4 +54,20 @@ test_expect_success 'flux still operates with content-files running out of space
         grep "helloworld" files.out
 '
 
+test_expect_success 'clear & setup test statedir' '
+	rm -rf /test/tmpfs-1m/* &&
+	mkdir /test/tmpfs-1m/statedir
+'
+
+# rc3 currently hangs under ENOSPC, so disable it, flux start will fail for time being
+test_expect_success 'content flush returns error on ENOSPC' '
+	test_must_fail flux start \
+	    -o,-Scontent.backing-module=content-sqlite \
+	    -o,-Sstatedir=/test/tmpfs-1m/statedir \
+	    -o,-Sbroker.rc3_path= \
+	    "./fillstatedir.sh; flux dmesg; flux content flush" > flush.out 2> flush.err &&
+        grep -q "No space left on device" flush.out &&
+        grep "content.flush: No space left on device" flush.err
+'
+
 test_done
