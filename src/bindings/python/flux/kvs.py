@@ -321,10 +321,6 @@ def namespace_create(flux_handle, namespace, owner=os.getuid(), flags: int = 0):
 
     Args:
         flux_handle: A Flux handle obtained from flux.Flux()
-        flags: defaults to 0, possible flag options:
-          flux.constants.FLUX_KVS_NO_MERGE - disallow merging of different commits
-          flux.constants.FLUX_KVS_TXN_COMPACT - if possible compact changes
-          flux.constants.FLUX_KVS_SYNC - flush & checkpoint commit (only against primary KVS)
         namespace: namespace to create
         owner: uid of namespace owner, defaults to caller uid
         flags: currently unused, defaults to 0
