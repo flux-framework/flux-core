@@ -383,7 +383,7 @@ The TBON has a fixed topology determined by configuration, and brokers do not
 adapt to route around down nodes.  In addition, Flux must be completely stopped
 to alter the topology configuration - it cannot be changed on the fly.
 
-See the `Flux Administrator's Guide <https://flux-framework.readthedocs.io/en/latest/guides/admin-guide.html>`_
+See the `Flux Administrator's Guide <https://flux-framework.readthedocs.io/projects/flux-core/en/latest/guide/admin.html>`_
 for a discussion on draining nodes and excluding nodes from scheduling via
 configuration.  Scheduling is somewhat orthogonal to this topic.
 
