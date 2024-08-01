@@ -74,7 +74,7 @@ RESOURCES
 
 .. include:: common/resources.rst
 
-Flux Administrator's Guide: https://flux-framework.readthedocs.io/en/latest/adminguide.html
+Flux Administrator's Guide: https://flux-framework.readthedocs.io/projects/flux-core/en/latest/guide/admin.html
 
 TOML: Tom's Obvious Minimal Language: https://toml.io/en/
 

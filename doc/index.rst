@@ -43,7 +43,7 @@ context may benefit from the following material:
      - `Docs <https://flux-framework.readthedocs.io/en/latest/index.html>`_
 
    * - Flux as the primary resource manager on an HPC cluster
-     - `Flux Administrator's Guide <https://flux-framework.readthedocs.io/en/latest/guides/admin-guide.html>`_
+     - `Flux Administrator's Guide <https://flux-framework.readthedocs.io/projects/flux-core/en/latest/guide/admin.html>`_
 
    * - Flux Request for Comments Specifications
      - `RFC <https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/index.html>`_
