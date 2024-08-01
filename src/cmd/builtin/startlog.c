@@ -31,7 +31,7 @@ static const char *startlog_key;
 static int startlog_version;
 
 enum post_flags {
-    POST_FLAG_FLUSH,
+    POST_FLAG_FLUSH = 1,
 };
 
 static void post_startlog_event (flux_t *h,
