@@ -100,7 +100,8 @@ libutil_la_SOURCES = \
 	sigutil.h \
 	sigutil.c \
 	parse_size.h \
-	parse_size.c
+	parse_size.c \
+	ansi_color.h
 
 TESTS = test_sha1.t \
 	test_sha256.t \
