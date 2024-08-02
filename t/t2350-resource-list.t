@@ -541,6 +541,32 @@ test_expect_success 'flux resource list --queue works for a queue with no constr
 	test $(grep "allocated 1" queue-every.out | grep -c debug) -eq 1 &&
 	test $(grep "allocated 1" queue-every.out | grep -c every) -eq 2
 '
+test_expect_success 'flux resource list includes queue names for empty sets' '
+	# There are no nodes in 'down' state in this test, so use that:
+	flux resource list -s down -no "{queue} {state} {nnodes}" \
+		>queue-empty1.out &&
+	cat <<-EOF >queue-empty1.expected &&
+	every down 0
+	batch down 0
+	debug down 0
+	EOF
+	test_cmp queue-empty1.expected queue-empty1.out
+'
+test_expect_success 'flux resource list includes queue names for empty sets (single)' '
+	flux resource list -q batch -s down -no "{queue} {state} {nnodes}" \
+		>queue-batch-down.out &&
+	cat <<-EOF >queue-batch-down.expected &&
+	batch down 0
+	EOF
+	test_cmp queue-batch-down.expected queue-batch-down.out
+'
+test_expect_success 'flux resource list includes queue names for empty sets (multiple)' '
+	flux resource list -q batch,debug \
+		-s down -no "{queue} {state} {nnodes}" \
+		>queue-batch,debug-down.out &&
+	grep "debug down 0" queue-batch,debug-down.out &&
+	grep "batch down 0" queue-batch,debug-down.out
+'
 test_expect_success 'cleanup jobs' '
 	flux cancel $(cat job2A.id) $(cat job2B.id)
 '
