@@ -22,21 +22,13 @@
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/librlist/rlist.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/ansi_color.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
 #include "builtin.h"
 
 static double default_timeout = 0.5;
-
-static const char *ansi_default = "\033[39m";
-static const char *ansi_red = "\033[31m";
-static const char *ansi_yellow = "\033[33m";
-static const char *ansi_blue = "\033[01;34m";
-static const char *ansi_reset = "\033[0m";
-
-//static const char *ansi_green = "\033[32m";
-static const char *ansi_dark_gray = "\033[90m";
 
 static struct optparse_option errors_opts[] = {
     { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "FSD",
@@ -199,17 +191,17 @@ static const char *status_colorize (struct status *ctx,
     if (ctx->color) {
         if (streq (status, "lost") && !ghost) {
             snprintf (buf, sizeof (buf), "%s%s%s",
-                      ansi_red, status, ansi_default);
+                      ANSI_COLOR_RED, status, ANSI_COLOR_DEFAULT);
             status = buf;
         }
         else if (streq (status, "offline") && !ghost) {
             snprintf (buf, sizeof (buf), "%s%s%s",
-                      ansi_yellow, status, ansi_default);
+                      ANSI_COLOR_YELLOW, status, ANSI_COLOR_DEFAULT);
             status = buf;
         }
         else if (ghost) {
             snprintf (buf, sizeof (buf), "%s%s%s",
-                      ansi_dark_gray, status, ansi_default);
+                      ANSI_COLOR_DARK_GRAY, status, ANSI_COLOR_DEFAULT);
             status = buf;
         }
     }
@@ -274,8 +266,8 @@ static const char *status_getname (struct status *ctx,
      */
     if (node->subtree_ranks
         && idset_has_intersection (ctx->highlight, node->subtree_ranks)) {
-        highlight_start = ctx->color ? ansi_blue : "<<";
-        highlight_end = ctx->color ? ansi_reset : ">>";
+        highlight_start = ctx->color ? ANSI_COLOR_BOLD_BLUE : "<<";
+        highlight_end = ctx->color ? ANSI_COLOR_RESET : ">>";
     }
 
     snprintf (buf,
