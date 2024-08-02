@@ -566,7 +566,7 @@ def split_by_property_combinations(rset):
     return [rset.copy_constraint(x) for x in constraint_combinations(rset)]
 
 
-def resources_uniq_lines(resources, states, formatter, config):
+def resources_uniq_lines(resources, states, formatter, config, queues=None):
     """
     Generate a set of resource sets that would produce unique lines given
     the ResourceSet formatter argument. Include only the provided states
@@ -591,6 +591,15 @@ def resources_uniq_lines(resources, states, formatter, config):
 
     fmt = flux.util.OutputFormat(uniq_fmt, headings=formatter.headings)
 
+    #  Get a list of configured queues if a specific list of queues
+    #  was not supplied by the caller. If no queues are configured then
+    #  one "anonymous" queue is simulated with [None]
+    if not queues:
+        if config and "queues" in config:
+            queues = config["queues"].keys()
+        else:
+            queues = [None]
+
     #  Create a mapping of resources sets that generate uniq "lines":
     lines = {}
     for state in states:
@@ -600,13 +609,14 @@ def resources_uniq_lines(resources, states, formatter, config):
             #   resource set for output purposes. O/w the output for this
             #   state would be suppressed.
             #
-            rset = ResourceSetExtra(flux_config=config)
-            rset.state = state
-            key = fmt.format(rset)
-            if key not in lines:
-                lines[key] = rset
-            else:
-                lines[key].add(rset)
+            for queue in queues:
+                rset = ResourceSetExtra(flux_config=config, queue=queue)
+                rset.state = state
+                key = fmt.format(rset)
+                if key not in lines:
+                    lines[key] = rset
+                else:
+                    lines[key].add(rset)
             continue
 
         for rset in split_by_property_combinations(resources[state]):
@@ -692,7 +702,9 @@ def list_handler(args):
     fmt = FluxResourceConfig("list").load().get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
-    lines = resources_uniq_lines(resources, args.states, formatter, config)
+    lines = resources_uniq_lines(
+        resources, args.states, formatter, config, queues=args.queue
+    )
     items = sort_output(args, lines.values())
     formatter.print_items(items, no_header=args.no_header)
 
