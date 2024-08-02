@@ -21,6 +21,20 @@ default_args = (
 DOCKER_REPO = "fluxrm/flux-core"
 
 
+def on_master_or_tag(matrix):
+    return matrix.branch == "master" or matrix.tag
+
+
+DEFAULT_MULTIARCH_PLATFORMS = {
+    "linux/arm64": {
+        "when": on_master_or_tag,
+        "suffix": " - arm64",
+        "command_args": "--install-only ",
+    },
+    "linux/amd64": {"when": lambda _: True},
+}
+
+
 class BuildMatrix:
     def __init__(self):
         self.matrix = []
@@ -137,6 +151,27 @@ class BuildMatrix:
             }
         )
 
+    def add_multiarch_build(
+        self,
+        name: str,
+        platforms=DEFAULT_MULTIARCH_PLATFORMS,
+        default_suffix="",
+        image=None,
+        docker_tag=True,
+        **kwargs,
+    ):
+        for p, args in platforms.items():
+            if args["when"](self):
+                suffix = args.get("suffix", default_suffix)
+                self.add_build(
+                    name + suffix,
+                    platform=p,
+                    docker_tag=docker_tag,
+                    image=image if image is not None else name,
+                    command_args=args.get("command_args", ""),
+                    **kwargs,
+                )
+
     def __str__(self):
         """Return compact JSON representation of matrix"""
         return json.dumps(
@@ -146,27 +181,85 @@ class BuildMatrix:
 
 matrix = BuildMatrix()
 
-# Fedora40: no args
-matrix.add_build(name="fedora40")
+# Multi-arch builds, arm only builds on
+bookworm_platforms = dict(DEFAULT_MULTIARCH_PLATFORMS)
+bookworm_platforms["linux/386"] = {"when": lambda _: True, "suffix": " - 32 bit"}
+common_args = (
+    "--prefix=/usr"
+    " --sysconfdir=/etc"
+    " --with-systemdsystemunitdir=/etc/systemd/system"
+    " --localstatedir=/var"
+    " --with-flux-security"
+    " --enable-caliper"
+)
+matrix.add_multiarch_build(
+    name="bookworm",
+    default_suffix=" - test-install",
+    platforms=bookworm_platforms,
+    args=common_args,
+    env=dict(
+        TEST_INSTALL="t",
+    ),
+)
+matrix.add_multiarch_build(
+    name="noble",
+    default_suffix=" - test-install",
+    args=common_args,
+    env=dict(
+        TEST_INSTALL="t",
+    ),
+)
+matrix.add_multiarch_build(
+    name="el9",
+    default_suffix=" - test-install",
+    args=common_args,
+    env=dict(
+        TEST_INSTALL="t",
+    ),
+)
+matrix.add_multiarch_build(
+    name="fedora40",
+    default_suffix=" - test-install",
+    args=common_args,
+    env=dict(
+        TEST_INSTALL="t",
+    ),
+)
+matrix.add_multiarch_build(
+    name="alpine",
+    default_suffix=" - test-install",
+    args=(
+        "--prefix=/usr"
+        " --sysconfdir=/etc"
+        " --with-systemdsystemunitdir=/etc/systemd/system"
+        " --localstatedir=/var"
+        " --with-flux-security"
+    ),
+    env=dict(
+        TEST_INSTALL="t",
+    ),
+)
 
-# Debian: 32b
+# single arch builds that still produce a container
+# Ubuntu: TEST_INSTALL
 matrix.add_build(
-    name="bookworm - 32 bit",
-    image="bookworm",
-    platform="linux/386",
+    name="jammy - test-install",
+    image="jammy",
+    env=dict(
+        TEST_INSTALL="t",
+    ),
+    args="--with-flux-security --enable-caliper",
     docker_tag=True,
 )
 
-# debian/Fedora40: arm64, expensive, only on master and tags, only install
-if matrix.branch == "master" or matrix.tag:
-    for d in ("bookworm", "noble", "fedora40", "el9"):
-        matrix.add_build(
-            name=f"{d} - arm64",
-            image="{d}",
-            platform="linux/arm64",
-            docker_tag=True,
-            command_args="--install-only ",
-        )
+# Ubuntu 20.04: py3.8, deprecated
+matrix.add_build(
+    name="focal - py3.8",
+    image="focal",
+    env=dict(PYTHON_VERSION="3.8"),
+    docker_tag=True,
+)
+
 
 # Debian: gcc-12, content-s3, distcheck
 matrix.add_build(
@@ -204,47 +297,11 @@ matrix.add_build(
     args="--with-flux-security --enable-caliper",
 )
 
-# Ubuntu: TEST_INSTALL
-matrix.add_build(
-    name="noble - test-install",
-    image="noble",
-    env=dict(
-        TEST_INSTALL="t",
-    ),
-    docker_tag=True,
-)
-
-# el9: TEST_INSTALL
-matrix.add_build(
-    name="el9 - test-install",
-    image="el9",
-    env=dict(
-        TEST_INSTALL="t",
-    ),
-    platform="linux/amd64",
-    docker_tag=True,
-)
-
-# Ubuntu 20.04: py3.8
-matrix.add_build(
-    name="focal - py3.8",
-    image="focal",
-    env=dict(PYTHON_VERSION="3.8"),
-    docker_tag=True,
-)
-
-# RHEL8 clone
-matrix.add_build(
-    name="el8",
-    image="el8",
-    env=dict(PYTHON_VERSION="3.6", LDFLAGS="-Wl,-z,relro  -Wl,-z,now"),
-    docker_tag=True,
-)
-
 # RHEL8 clone
 matrix.add_build(
     name="el8 - ascii",
     image="el8",
+    env=dict(PYTHON_VERSION="3.6", LDFLAGS="-Wl,-z,relro  -Wl,-z,now"),
     args="--enable-broken-locale-mode",
 )
 
@@ -257,34 +314,6 @@ matrix.add_build(
     jobs=4,
     command_args="--system",
     args="--with-flux-security --enable-caliper",
-)
-
-# Fedora 40
-matrix.add_build(
-    name="fedora40 - gcc-14.1,py3.12",
-    image="fedora40",
-    args=(
-        "--prefix=/usr"
-        " --sysconfdir=/etc"
-        " --with-systemdsystemunitdir=/etc/systemd/system"
-        " --localstatedir=/var"
-        " --with-flux-security"
-        " --enable-caliper"
-    ),
-    docker_tag=True,
-)
-
-matrix.add_build(
-    name="alpine",
-    image="alpine",
-    args=(
-        "--prefix=/usr"
-        " --sysconfdir=/etc"
-        " --with-systemdsystemunitdir=/etc/systemd/system"
-        " --localstatedir=/var"
-        " --with-flux-security"
-    ),
-    docker_tag=True,
 )
 
 # inception
