@@ -27,7 +27,7 @@ from flux.resource import (
     resource_status,
 )
 from flux.rpc import RPC
-from flux.util import Deduplicator, UtilConfig
+from flux.util import Deduplicator, FilterActionSetUpdate, UtilConfig
 
 
 class FluxResourceConfig(UtilConfig):
@@ -198,7 +198,7 @@ def ranks_by_queue(resource_set, config, queues):
     """
     queue_resources = QueueResources(resource_set, config)
     ranks = IDset()
-    for queue in queues.split(","):
+    for queue in queues:
         ranks.add(queue_resources.queue(queue).ranks)
     return ranks
 
@@ -759,6 +759,8 @@ def main():
     drain_parser.add_argument(
         "-q",
         "--queue",
+        action=FilterActionSetUpdate,
+        default=set(),
         metavar="QUEUE,...",
         help="Include only specified queues in output",
     )
@@ -824,6 +826,8 @@ def main():
     status_parser.add_argument(
         "-q",
         "--queue",
+        action=FilterActionSetUpdate,
+        default=set(),
         metavar="QUEUE,...",
         help="Include only specified queues in output",
     )
@@ -879,6 +883,8 @@ def main():
     list_parser.add_argument(
         "-q",
         "--queue",
+        action=FilterActionSetUpdate,
+        default=set(),
         metavar="QUEUE,...",
         help="Include only specified queues in output",
     )
@@ -911,6 +917,8 @@ def main():
     info_parser.add_argument(
         "-q",
         "--queue",
+        action=FilterActionSetUpdate,
+        default=set(),
         metavar="QUEUE,...",
         help="Include only specified queues in output",
     )
@@ -959,6 +967,8 @@ def main():
     R_parser.add_argument(
         "-q",
         "--queue",
+        action=FilterActionSetUpdate,
+        default=set(),
         metavar="QUEUE,...",
         help="Include only specified queues in output",
     )
