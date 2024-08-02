@@ -27,12 +27,11 @@ test_expect_success 'clear & setup test statedir' '
 	mkdir /test/tmpfs-1m/statedir
 '
 
-# rc3 currently hangs under ENOSPC, so disable it. flux start will fail for time being
+# flux start will fail b/c rc3 will fail due to ENOSPC
 test_expect_success 'flux still operates with content-sqlite running out of space' '
 	test_must_fail flux start \
 	    -o,-Scontent.backing-module=content-sqlite \
 	    -o,-Sstatedir=/test/tmpfs-1m/statedir \
-	    -o,-Sbroker.rc3_path= \
 	    "./fillstatedir.sh; flux dmesg; flux run echo helloworld" > sql.out 2> sql.err &&
         grep -q "No space left on device" sql.out &&
         grep "helloworld" sql.out
@@ -43,12 +42,11 @@ test_expect_success 'clear & setup test statedir' '
 	mkdir /test/tmpfs-1m/statedir
 '
 
-# rc3 currently hangs under ENOSPC, so disable it. flux start will fail for time being
+# flux start will fail b/c rc3 will fail due to ENOSPC
 test_expect_success 'flux still operates with content-files running out of space' '
 	test_must_fail flux start \
 	    -o,-Scontent.backing-module=content-files \
 	    -o,-Sstatedir=/test/tmpfs-1m/statedir \
-	    -o,-Sbroker.rc3_path= \
 	    "./fillstatedir.sh; flux dmesg; flux run echo helloworld" > files.out 2> files.err &&
         grep -q "No space left on device" files.out &&
         grep "helloworld" files.out
