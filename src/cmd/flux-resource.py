@@ -492,8 +492,9 @@ def drain_list(args):
 
 
 class ResourceSetExtra(ResourceSet):
-    def __init__(self, arg=None, version=1, flux_config=None):
+    def __init__(self, arg=None, version=1, flux_config=None, queue=None):
         self.flux_config = flux_config
+        self._queue = queue
         if isinstance(arg, ResourceSet):
             self._rset = arg
             if arg.state:
@@ -517,6 +518,13 @@ class ResourceSetExtra(ResourceSet):
 
     @property
     def queue(self):
+        #  Note: queue may be set manually in self._queue for an empty
+        #  ResourceSet, which cannot otherwise have an associated queue.
+        if self._queue is not None:
+            return self._queue
+
+        #  If self._queue is not set, then build list of queues from
+        #  set properties and queue configuration:
         queues = ""
         if self.flux_config and "queues" in self.flux_config:
             if not self.ranks:
