@@ -36,6 +36,10 @@ CODE_COVERAGE_IGNORE_PATTERN = \
 	"*/common/libccan/*" \
 	"*/common/libmissing/*"
 
+# ignore lcov errors to avoid merge mismatch issue since lcov < 2 doesn't offer
+# an option to just ignore this error, we use this env var to ignore all, see:
+# https://github.com/flux-framework/flux-core/issues/6078
+export GCOV_ERROR_FILE=/dev/null
 CODE_COVERAGE_LCOV_OPTIONS =
 @CODE_COVERAGE_RULES@
 
