@@ -83,7 +83,7 @@ class BuildMatrix:
         name=None,
         image="fedora40",
         args=default_args,
-        jobs=4,
+        jobs=6,
         env=None,
         docker_tag=False,
         test_s3=False,
@@ -293,7 +293,6 @@ matrix.add_build(
     image="bookworm",
     coverage_flags="ci-basic",
     coverage=True,
-    jobs=4,
     args="--with-flux-security --enable-caliper",
 )
 
@@ -311,7 +310,6 @@ matrix.add_build(
     coverage_flags="ci-system",
     image="el8",
     coverage=True,
-    jobs=4,
     command_args="--system",
     args="--with-flux-security --enable-caliper",
 )
