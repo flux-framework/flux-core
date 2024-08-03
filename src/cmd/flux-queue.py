@@ -16,7 +16,7 @@ import math
 import sys
 
 import flux
-from flux.util import AltField, UtilConfig, parse_fsd
+from flux.util import AltField, FilterActionSetUpdate, UtilConfig, parse_fsd
 
 
 def print_enable_status(name, status):
@@ -342,10 +342,22 @@ def list(args):
     fmt = FluxQueueConfig("list").load().get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
+    #  Build queue_config from args.queue, or config["queue"] if --queue
+    #  was unused:
+    queue_config = {}
+    if args.queue:
+        for queue in args.queue:
+            try:
+                queue_config[queue] = config["queues"][queue]
+            except KeyError:
+                raise ValueError(f"No such queue: {queue}")
+    elif config and "queues" in config:
+        queue_config = config["queues"]
+
     queues = []
     if config and "queues" in config:
-        status = fetch_all_queue_status(handle, config["queues"].keys())
-        for key, value in config["queues"].items():
+        status = fetch_all_queue_status(handle, queue_config.keys())
+        for key, value in queue_config.items():
             queues.append(
                 QueueInfo(key, config, status[key]["enable"], status[key]["start"])
             )
@@ -510,6 +522,14 @@ def main():
 
     list_parser = subparsers.add_parser(
         "list", formatter_class=flux.util.help_formatter()
+    )
+    list_parser.add_argument(
+        "-q",
+        "--queue",
+        action=FilterActionSetUpdate,
+        default=set(),
+        metavar="QUEUE,...",
+        help="Include only specified queues in output",
     )
     list_parser.add_argument(
         "-o",
