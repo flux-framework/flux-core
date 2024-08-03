@@ -141,7 +141,7 @@ jobs:
       DOCKER_USERNAME: travisflux
       DOCKER_PASSWORD: ${{ secrets.DOCKER_HUB_TRAVISFLUX_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       matrix: ${{fromJson(needs.generate-matrix.outputs.matrix)}}
       fail-fast: false
