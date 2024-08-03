@@ -517,9 +517,7 @@ test_expect_success 'flux resource lists expected queues (every)' '
 	flux resource list -o "{state} {nnodes} {queue}" > listqueue_every.out &&
 	test $(grep "free 2" listqueue_every.out | grep -c batch) -eq 1 &&
 	test $(grep "free 2" listqueue_every.out | grep -c debug) -eq 1 &&
-	test $(grep "free 2" listqueue_every.out | grep -c every) -eq 2 &&
-	test $(grep "allocated 0" listqueue_every.out | grep -c every) -eq 0 &&
-	test $(grep "down 0" listqueue_every.out | grep -c every) -eq 0
+	test $(grep "free 2" listqueue_every.out | grep -c every) -eq 2
 '
 test_expect_success 'run a few jobs (every)' '
 	flux submit -q batch sleep 30 > job2A.id &&
@@ -532,8 +530,7 @@ test_expect_success 'flux resource lists expected queues in states (every)' '
 	test $(grep "free 1" listqueue_every2.out | grep -c every) -eq 2 &&
 	test $(grep "allocated 1" listqueue_every2.out | grep -c batch) -eq 1 &&
 	test $(grep "allocated 1" listqueue_every2.out | grep -c debug) -eq 1 &&
-	test $(grep "allocated 1" listqueue_every2.out | grep -c every) -eq 2 &&
-	test $(grep "down 0" listqueue_every2.out | grep -c every) -eq 0
+	test $(grep "allocated 1" listqueue_every2.out | grep -c every) -eq 2
 '
 test_expect_success 'flux resource list --queue works for a queue with no constraints' '
 	flux resource list --queue=every -o "{state} {nnodes} {queue}" >queue-every.out &&
@@ -542,8 +539,33 @@ test_expect_success 'flux resource list --queue works for a queue with no constr
 	test $(grep "free 1" queue-every.out | grep -c every) -eq 2 &&
 	test $(grep "allocated 1" queue-every.out | grep -c batch) -eq 1 &&
 	test $(grep "allocated 1" queue-every.out | grep -c debug) -eq 1 &&
-	test $(grep "allocated 1" queue-every.out | grep -c every) -eq 2 &&
-	test $(grep "down 0" queue-every.out | grep -c every) -eq 0
+	test $(grep "allocated 1" queue-every.out | grep -c every) -eq 2
+'
+test_expect_success 'flux resource list includes queue names for empty sets' '
+	# There are no nodes in 'down' state in this test, so use that:
+	flux resource list -s down -no "{queue} {state} {nnodes}" \
+		>queue-empty1.out &&
+	cat <<-EOF >queue-empty1.expected &&
+	every down 0
+	batch down 0
+	debug down 0
+	EOF
+	test_cmp queue-empty1.expected queue-empty1.out
+'
+test_expect_success 'flux resource list includes queue names for empty sets (single)' '
+	flux resource list -q batch -s down -no "{queue} {state} {nnodes}" \
+		>queue-batch-down.out &&
+	cat <<-EOF >queue-batch-down.expected &&
+	batch down 0
+	EOF
+	test_cmp queue-batch-down.expected queue-batch-down.out
+'
+test_expect_success 'flux resource list includes queue names for empty sets (multiple)' '
+	flux resource list -q batch,debug \
+		-s down -no "{queue} {state} {nnodes}" \
+		>queue-batch,debug-down.out &&
+	grep "debug down 0" queue-batch,debug-down.out &&
+	grep "batch down 0" queue-batch,debug-down.out
 '
 test_expect_success 'cleanup jobs' '
 	flux cancel $(cat job2A.id) $(cat job2B.id)

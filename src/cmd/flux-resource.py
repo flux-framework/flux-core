@@ -27,7 +27,7 @@ from flux.resource import (
     resource_status,
 )
 from flux.rpc import RPC
-from flux.util import Deduplicator, UtilConfig
+from flux.util import Deduplicator, FilterActionSetUpdate, UtilConfig
 
 
 class FluxResourceConfig(UtilConfig):
@@ -198,7 +198,7 @@ def ranks_by_queue(resource_set, config, queues):
     """
     queue_resources = QueueResources(resource_set, config)
     ranks = IDset()
-    for queue in queues.split(","):
+    for queue in queues:
         ranks.add(queue_resources.queue(queue).ranks)
     return ranks
 
@@ -492,8 +492,9 @@ def drain_list(args):
 
 
 class ResourceSetExtra(ResourceSet):
-    def __init__(self, arg=None, version=1, flux_config=None):
+    def __init__(self, arg=None, version=1, flux_config=None, queue=None):
         self.flux_config = flux_config
+        self._queue = queue
         if isinstance(arg, ResourceSet):
             self._rset = arg
             if arg.state:
@@ -517,6 +518,13 @@ class ResourceSetExtra(ResourceSet):
 
     @property
     def queue(self):
+        #  Note: queue may be set manually in self._queue for an empty
+        #  ResourceSet, which cannot otherwise have an associated queue.
+        if self._queue is not None:
+            return self._queue
+
+        #  If self._queue is not set, then build list of queues from
+        #  set properties and queue configuration:
         queues = ""
         if self.flux_config and "queues" in self.flux_config:
             if not self.ranks:
@@ -558,7 +566,7 @@ def split_by_property_combinations(rset):
     return [rset.copy_constraint(x) for x in constraint_combinations(rset)]
 
 
-def resources_uniq_lines(resources, states, formatter, config):
+def resources_uniq_lines(resources, states, formatter, config, queues=None):
     """
     Generate a set of resource sets that would produce unique lines given
     the ResourceSet formatter argument. Include only the provided states
@@ -583,6 +591,15 @@ def resources_uniq_lines(resources, states, formatter, config):
 
     fmt = flux.util.OutputFormat(uniq_fmt, headings=formatter.headings)
 
+    #  Get a list of configured queues if a specific list of queues
+    #  was not supplied by the caller. If no queues are configured then
+    #  one "anonymous" queue is simulated with [None]
+    if not queues:
+        if config and "queues" in config:
+            queues = config["queues"].keys()
+        else:
+            queues = [None]
+
     #  Create a mapping of resources sets that generate uniq "lines":
     lines = {}
     for state in states:
@@ -592,13 +609,14 @@ def resources_uniq_lines(resources, states, formatter, config):
             #   resource set for output purposes. O/w the output for this
             #   state would be suppressed.
             #
-            rset = ResourceSetExtra(flux_config=config)
-            rset.state = state
-            key = fmt.format(rset)
-            if key not in lines:
-                lines[key] = rset
-            else:
-                lines[key].add(rset)
+            for queue in queues:
+                rset = ResourceSetExtra(flux_config=config, queue=queue)
+                rset.state = state
+                key = fmt.format(rset)
+                if key not in lines:
+                    lines[key] = rset
+                else:
+                    lines[key].add(rset)
             continue
 
         for rset in split_by_property_combinations(resources[state]):
@@ -684,7 +702,9 @@ def list_handler(args):
     fmt = FluxResourceConfig("list").load().get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
-    lines = resources_uniq_lines(resources, args.states, formatter, config)
+    lines = resources_uniq_lines(
+        resources, args.states, formatter, config, queues=args.queue
+    )
     items = sort_output(args, lines.values())
     formatter.print_items(items, no_header=args.no_header)
 
@@ -759,6 +779,8 @@ def main():
     drain_parser.add_argument(
         "-q",
         "--queue",
+        action=FilterActionSetUpdate,
+        default=set(),
         metavar="QUEUE,...",
         help="Include only specified queues in output",
     )
@@ -824,6 +846,8 @@ def main():
     status_parser.add_argument(
         "-q",
         "--queue",
+        action=FilterActionSetUpdate,
+        default=set(),
         metavar="QUEUE,...",
         help="Include only specified queues in output",
     )
@@ -879,6 +903,8 @@ def main():
     list_parser.add_argument(
         "-q",
         "--queue",
+        action=FilterActionSetUpdate,
+        default=set(),
         metavar="QUEUE,...",
         help="Include only specified queues in output",
     )
@@ -911,6 +937,8 @@ def main():
     info_parser.add_argument(
         "-q",
         "--queue",
+        action=FilterActionSetUpdate,
+        default=set(),
         metavar="QUEUE,...",
         help="Include only specified queues in output",
     )
@@ -959,6 +987,8 @@ def main():
     R_parser.add_argument(
         "-q",
         "--queue",
+        action=FilterActionSetUpdate,
+        default=set(),
         metavar="QUEUE,...",
         help="Include only specified queues in output",
     )
