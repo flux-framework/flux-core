@@ -27,7 +27,7 @@ from flux.resource import (
     resource_status,
 )
 from flux.rpc import RPC
-from flux.util import Deduplicator, FilterActionSetUpdate, UtilConfig
+from flux.util import AltField, Deduplicator, FilterActionSetUpdate, UtilConfig
 
 
 class FluxResourceConfig(UtilConfig):
@@ -201,24 +201,6 @@ def ranks_by_queue(resource_set, config, queues):
     for queue in queues:
         ranks.add(queue_resources.queue(queue).ranks)
     return ranks
-
-
-class AltField:
-    """
-    Convenient wrapper for fields that have an ascii and non-ascii
-    representation. Allows the ascii representation to be selected with
-    {field.ascii}.
-    """
-
-    def __init__(self, default, ascii):
-        self.default = default
-        self.ascii = ascii
-
-    def __str__(self):
-        return self.default
-
-    def __format__(self, fmt):
-        return str(self).__format__(fmt)
 
 
 class ResourceStatusLine:
