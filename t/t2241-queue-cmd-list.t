@@ -13,6 +13,8 @@ test_expect_success 'flux-queue: default lists expected fields' '
 	grep TLIMIT default.out &&
 	grep NNODES default.out &&
 	grep NCORES default.out &&
+	grep ST default.out &&
+	grep EN default.out &&
 	grep NGPUS default.out
 '
 
@@ -29,6 +31,8 @@ test_expect_success 'flux-queue: --no-header works' '
 	test_must_fail grep TLIMIT default_no_header.out &&
 	test_must_fail grep NNODES default_no_header.out &&
 	test_must_fail grep NCORES default_no_header.out &&
+	test_must_fail grep ST default_no_header.out &&
+	test_must_fail grep EN default_no_header.out &&
 	test_must_fail grep NGPUS default_no_header.out
 '
 
@@ -66,6 +70,41 @@ test_expect_success 'flux-queue: empty config limits are 0/infinity' '
 	echo "inf,inf,0-inf,0-inf,0-inf,0,0,0,inf,inf,inf" > empty_config_all.exp &&
 	test_cmp empty_config_all.exp empty_config_all.out
 '
+test_expect_success 'flux-queue: empty config: queue is enabled/started' '
+	test_debug "flux queue list" &&
+	test "$(flux queue list -no {submission})" = "enabled" &&
+	test "$(flux queue list -no {scheduling})" = "started" &&
+	test "$(flux queue list -no {enabled})" = "✔" &&
+	test "$(flux queue list -no {started})" = "✔"
+'
+test_expect_success 'flux-queue: stop anonymous queue' '
+	flux queue stop
+'
+test_expect_success 'flux-queue: queue is enabled/stopped' '
+	test_debug "flux queue list" &&
+	test "$(flux queue list -no {submission})" = "enabled" &&
+	test "$(flux queue list -no {scheduling})" = "stopped" &&
+	test "$(flux queue list -no {enabled})" = "✔" &&
+	test "$(flux queue list -no {started})" = "✗"
+'
+test_expect_success 'flux-queue: disable anonymous queue' '
+	flux queue disable testing
+'
+test_expect_success 'flux-queue: queue is disabled/stopped' '
+	test_debug "flux queue list" &&
+	test "$(flux queue list -no {submission})" = "disabled" &&
+	test "$(flux queue list -no {scheduling})" = "stopped" &&
+	test "$(flux queue list -no {enabled})" = "✗" &&
+	test "$(flux queue list -no {started})" = "✗"
+'
+test_expect_success 'flux-queue: enable and start anonymous queue' '
+	flux queue enable &&
+	flux queue start
+'
+test_expect_success 'flux-queue: --queue option fails with anonymouns queue' '
+	test_expect_code 1 flux queue list --queue=batch
+'
+
 test_expect_success 'flux-queue: fsd of infinity is infinity' '
 	flux queue list -n \
 		-o "{defaults.timelimit!F},{limits.timelimit!F}" \
@@ -134,6 +173,15 @@ test_expect_success 'flux-queue: queue config, no default marked' '
 	flux queue list -no "{queue},{queuem}" > queues_no_default.out &&
 	test $(grep "^batch,batch$" queues_no_default.out | wc -l) -eq 1 &&
 	test $(grep ^"debug,debug$" queues_no_default.out | wc -l) -eq 1
+'
+test_expect_success 'flux-queue: --queue option works' '
+	test "$(flux queue list -q batch -no "{queue}")" = "batch" &&
+	test "$(flux queue list -q debug -no "{queue}")" = "debug" &&
+	test_debug "flux queue list -q batch,debug -n" &&
+	test $(flux queue list -q batch,debug -n  | wc -l) -eq 2
+'
+test_expect_success 'flux-queue: invalid queue is detected with --queue' '
+	test_expect_code 1 flux queue list --queue=foo
 '
 
 # N.B. job-size.max.ngpus left out of [policy.limits] to test default
