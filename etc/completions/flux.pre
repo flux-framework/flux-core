@@ -880,6 +880,7 @@ _flux_queue()
         -t --timeout= \
     "
     local list_OPTS="\
+        -q --queue= \
         -o --format= \
         -n --no-header \
     "
