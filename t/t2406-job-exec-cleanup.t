@@ -35,19 +35,18 @@ test_expect_success 'job-exec: ensure cancellation kills job' '
 	test_expect_code 137 flux job status $id &&
 	test_must_fail ps -q $pid
 '
+# Note: increase max-kill-count here to ensure job doesn't disappear from
+# job-exec while we're testing kill-timeout:
 test_expect_success 'job-exec: reload module with kill/term-signal=SIGURG' '
 	flux module reload job-exec \
 		kill-timeout=0.1s kill-signal=SIGURG term-signal=SIGURG \
-		max-kill-count=3
+		max-kill-count=20
 '
 test_expect_success 'job-exec: submit a job' '
 	jobid=$(flux submit --wait-event=start -n1 sleep inf)
 '
 test_expect_success 'job-exec: job is listed in flux-module stats' '
 	flux module stats job-exec | jq .jobs.$jobid
-'
-test_expect_success 'job-exec: get sleep PID for later cleanup' '
-	sleep_pid=$(flux job hostpids $jobid | sed s/.*://)
 '
 test_expect_success 'job-exec: cancel test job to start kill timer' '
 	flux cancel $jobid
@@ -78,6 +77,27 @@ test_expect_success 'job-exec: ensure kill_shell_count > 1' '
 test_expect_success 'job-exec: kill-timeout > original value (0.1)' '
 	flux module stats job-exec | jq .jobs.${jobid}.kill_timeout &&
 	flux module stats job-exec | jq -e ".jobs.${jobid}.kill_timeout > 0.1"
+'
+test_expect_success 'job-exec: kill test job with SIGKILL' '
+       flux job kill -s 9 $jobid &&
+       flux job wait-event -vt 15 $jobid clean
+'
+test_expect_success 'job-exec: reload module with small max-kill-count' '
+	flux module reload job-exec \
+		kill-timeout=0.1s kill-signal=SIGURG term-signal=SIGURG \
+		max-kill-count=3
+'
+test_expect_success 'job-exec: submit a job' '
+	jobid=$(flux submit --wait-event=start -n1 sleep inf)
+'
+test_expect_success 'job-exec: job is listed in flux-module stats' '
+	flux module stats job-exec | jq .jobs.$jobid
+'
+test_expect_success 'job-exec: get sleep PID for later cleanup' '
+	sleep_pid=$(flux job hostpids $jobid | sed s/.*://)
+'
+test_expect_success 'job-exec: cancel test job to start kill timer' '
+	flux cancel $jobid
 '
 test_expect_success 'job-exec: wait for job to be terminated by max-kill-count' '
 	flux job wait-event -vt 15 $jobid clean &&
