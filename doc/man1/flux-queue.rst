@@ -42,7 +42,11 @@ list
 
 .. program:: flux queue list
 
-List queue defaults and limits.
+List queue status, defaults, and limits.
+
+.. option:: -q, --queue=QUEUE,...
+
+   Limit output to specified queues
 
 .. option:: -n, --no-header
 
@@ -218,6 +222,24 @@ The following field names can be specified:
 
 **queuem**
    queue name, but default queue is marked up with an asterisk
+
+**submission**
+   Description of queue submission status: ``enabled`` or ``disabled``
+
+**scheduling**
+   Description of queue scheduling status: ``started`` or ``stopped``
+
+**enabled**
+   Single character submission status: ``✔`` if enabled, ``✗`` if disabled.
+
+**started**
+   Single character scheduling status: ``✔`` if started, ``✗`` if stopped.
+
+**enabled.ascii**
+   Single character submission status: ``y`` if enabled, ``n`` if disabled.
+
+**started.ascii**
+   Single character scheduling status: ``y`` if started, ``n`` if stopped.
 
 **defaults.timelimit**
    default timelimit for jobs submitted to the queue

@@ -535,6 +535,24 @@ class UtilFormatter(Formatter):
         return retval
 
 
+class AltField:
+    """
+    Convenient wrapper for fields that have an ascii and non-ascii
+    representation. Allows the ascii representation to be selected with
+    {field.ascii}.
+    """
+
+    def __init__(self, default, ascii):
+        self.default = default
+        self.ascii = ascii
+
+    def __str__(self):
+        return self.default
+
+    def __format__(self, fmt):
+        return str(self).__format__(fmt)
+
+
 class OutputFormat:
     """
     Store a parsed version of the program's output format,
