@@ -24,6 +24,18 @@ path_printenv=$(which printenv)
 test_expect_success 'TEST_NAME is set' '
 	test -n "$TEST_NAME"
 '
+test_expect_success_hd 'heredoc tests work: success' <<-'EOT'
+	test -n "$TEST_NAME" &&
+	# embedded heredoc
+	cat >tmp.sh <<-EOF &&
+	true
+	EOF
+	chmod +x tmp.sh &&
+	./tmp.sh
+EOT
+test_expect_failure_hd 'heredoc tests work: failure' <<'EOT'
+	test -n ""
+EOT
 test_expect_success 'run_timeout works' '
 	test_expect_code 142 run_timeout -s ALRM 0.001 sleep 2
 '
