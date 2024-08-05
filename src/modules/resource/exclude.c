@@ -64,10 +64,11 @@ struct exclude *exclude_create (struct resource_ctx *ctx,
         if (!(exclude->idset = inventory_targets_to_ranks (ctx->inventory,
                                                            exclude_idset,
                                                            &error))) {
-            flux_log_error (ctx->h,
-                            "error decoding exclude set %s: %s",
-                            exclude_idset,
-                            error.text);
+            flux_log (ctx->h,
+                      LOG_ERR,
+                      "error decoding exclude set %s: %s",
+                      exclude_idset,
+                      error.text);
             goto error;
         }
         if (idset_count (exclude->idset) > 0
