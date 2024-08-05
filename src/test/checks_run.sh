@@ -241,12 +241,10 @@ if test "$RECHECK" = "t" -a $RC -ne 0; then
   #   under ./t were run (and presumably failed)
   #
   if test -s t/t0000-sharness.trs; then
-    cd t
     printf "::warning::make check failed, trying recheck in ./t\n"
-    checks_group "make recheck" ${MAKE} -j ${JOBS} recheck && \
+		(cd t ; checks_group "make recheck" ${MAKE} -j ${JOBS} recheck) && \
 			checks_group "${POSTCHECKCMDS}" "${POSTCHECKCMDS}"
     RC=$?
-    cd
    else
       printf "::warning::recheck requested but no tests in ./t were run\n"
    fi
