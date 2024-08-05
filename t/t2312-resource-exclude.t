@@ -97,5 +97,19 @@ test_expect_success 'instance with configured R can exclude hostnames' '
 	test $(flux start -s1 -o,--config-path=exclude3.toml \
 	    flux resource status -s exclude -no {nnodes}) -eq 1
 '
+test_expect_success 'incorrect excluded hostnames raises correct error' '
+	cat >exclude4.toml <<-EOT &&
+	[resource]
+	exclude = "badhost"
+	noverify = true
+	[[resource.config]]
+	hosts = "$(hostname -s)"
+	cores = "0"
+	EOT
+	test_must_fail flux start -o,--config-path=exclude4.toml true \
+		2>exclude4.err &&
+	test_debug "cat exclude4.err" &&
+	grep "invalid hosts: badhost" exclude4.err
+'
 
 test_done

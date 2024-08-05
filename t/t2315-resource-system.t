@@ -107,7 +107,7 @@ test_expect_success 'invalid exclude hosts cause instance failure' '
 	test_must_fail flux start -s 2 \
 		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
 		flux resource list -s up -no {nnodes} > ${name}/nnodes &&
-    grep "nosuchhost: Invalid argument" ${name}/logfile
+    grep "invalid hosts: nosuchhost" ${name}/logfile
 '
 
 test_expect_success 'gpu resources in configured R are not verified' '
