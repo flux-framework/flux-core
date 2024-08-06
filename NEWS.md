@@ -1,3 +1,73 @@
+flux-core version 0.65.0 - 2024-08-06
+-------------------------------------
+
+## New Features
+ * job-manager: add final flag to sched.free (#6197)
+ * add `-B, --bank=` option to submission commands (#6195)
+ * add flux overlay trace (#6174)
+ * enhance `flux queue list` with `-q, --queue=` option and abillity to
+   report queue enabled/started status (#6185)
+ * support multiple queues in `flux jobs`, `pgrep`, and `pkill` `-q,
+   --queue` option (#6149)
+ * accept `-q` for `--queue` in `flux-jobs`, `pgrep`, and `pkill`
+   (#6142)
+ * resource: mark torpid nodes down for scheduling instead of draining them
+   (#6131)
+ * job-exec: add timeout for job start barrier (#6140)
+ * job-exec: fix per-job `active_ranks` module stats (#6138)
+ * job-exec: fix job refcount leaks (#6134)
+ * drain nodes with unkillable tasks after configurable retries (#6101)
+ * move bad KVS job entries to a lost+found directory (#6139)
+ * add error text to down nodes in flux overlay status (#6111)
+ * job-manager: ignore bad KVS eventlogs (#6129)
+ * add message queue counts to flux module list (#6120)
+ * flux-job: add `-F, --follow` option to `flux job eventlog` (#6102)
+ * wait for job `clean` event by default in `flux run`  and `flux job attach`
+   (#6065)
+ * systemd: add prolog/epilog service units (#6040)
+ * broker: work around problem with launch by some versions of mpiexec.hydra
+   (#6081)
+ * reject jobs submitted as user root in a multi-user instance (#6194)
+
+## Fixes
+ * improve housekeeping logging and list management (#6191)
+ * add configure time check for zeromq crypto and improve broker error
+   handling at cert creation (#6189)
+ * resource: error message cleanup, add test for invalid exclude (#6186)
+ * flux-resource: fix missing queue in `flux resource list` output for
+   states with no nodes (#6180)
+ * flux-resource: suppress empty lines in output (#6096)
+ * kvs: return ENOSYS on unfinished requests (#6049)
+ * cmd/startlog: initialize enum to non zero (#6170)
+ * address RSS growth when there are excessive annotation events (#6115)
+ * resource: cache resource status information to reduce broker load (#6105)
+ * flux-start: accept --recovery with --test-size (#6108)
+ * doc: update flux admin guide URL (#6163)
+ * doc: update flux-shell(1) manpage (#6094)
+ * doc: add overlay network to overview section (#6092)
+
+## Cleanup
+ * kvs: minor cleanup (#6172)
+ * job-manager: silence housekeeping debug logs (#6113)
+ * kvs: replace list of message with msglist (#6047)
+
+## CI/Testsuite
+ * matrix/actions: add per-target timeout-minutes (#6192)
+ * t: add initial ENOSPC tests (#6127)
+ * matrix: avoid overwriting env elements (#6190)
+ * docker: Demote fedora40 to `x86_64` only (#6188)
+ * ci: ignore merge errors and increase parallelism (#6183)
+ * testsuite: fix racy test in t2406-job-exec-cleanup.t (#6187)
+ * add support for new wrap options in tests and heredoc support for sharness
+   (#6150)
+ * actions: increase ci timeout from 90 to 120 minutes (#6181)
+ * matrix: fix matrix generation for arm64 and remove redundant fedora
+   (#6156)
+ * Update containers: el9, fedora40, noble, add arm64 for fedora40, el9,
+   noble (#6128)
+ * t: add job environment to tests (#6106)
+
+
 flux-core version 0.64.0 - 2024-07-02
 -------------------------------------
 
