@@ -253,6 +253,7 @@ TESTSCRIPTS = \
 	t3307-system-leafcrash.t \
 	t3308-system-torpid.t \
 	t3309-system-reconnect.t \
+	t3400-overlay-trace.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \

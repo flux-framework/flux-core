@@ -12,6 +12,8 @@
 # include <config.h>
 #endif
 #include <unistd.h>
+#include <time.h>
+#include <math.h>
 #include <jansson.h>
 #include <flux/core.h>
 
@@ -22,21 +24,15 @@
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/librlist/rlist.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/ansi_color.h"
+#include "src/common/libutil/parse_size.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
+#include "ccan/array_size/array_size.h"
 
 #include "builtin.h"
 
 static double default_timeout = 0.5;
-
-static const char *ansi_default = "\033[39m";
-static const char *ansi_red = "\033[31m";
-static const char *ansi_yellow = "\033[33m";
-static const char *ansi_blue = "\033[01;34m";
-static const char *ansi_reset = "\033[0m";
-
-//static const char *ansi_green = "\033[32m";
-static const char *ansi_dark_gray = "\033[90m";
 
 static struct optparse_option errors_opts[] = {
     { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "FSD",
@@ -93,6 +89,27 @@ static struct optparse_option disconnect_opts[] = {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option trace_opts[] = {
+    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "NODEID",
+      .usage = "Filter output by peer rank",
+    },
+    { .name = "type", .key = 't', .has_arg = 1,
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
+      .arginfo = "TYPE,...",
+      .usage = "Filter output by message type "
+               "(request, response, event, control)",
+    },
+    { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
+      .usage = "Colorize output when supported; WHEN can be 'always' "
+               "(default if omitted), 'never', or 'auto' (default)." },
+    { .name = "human",  .key = 'H',  .has_arg = 0,
+      .usage = "Human readable output", },
+    { .name = "delta",  .key = 'd',  .has_arg = 0,
+      .usage = "With --human, show timestamp delta between messages", },
+    OPTPARSE_TABLE_END,
+};
+
 struct status {
     flux_t *h;
     int verbose;
@@ -121,6 +138,15 @@ struct status_node {
     bool ghost;
     enum connector connector;
     flux_error_t error;
+};
+
+struct trace_ctx {
+    int color;
+    int nodeid;
+    struct flux_match match;
+    int delta;
+    double last_sec;
+    double last_timestamp;
 };
 
 static json_t *overlay_topology;
@@ -199,17 +225,17 @@ static const char *status_colorize (struct status *ctx,
     if (ctx->color) {
         if (streq (status, "lost") && !ghost) {
             snprintf (buf, sizeof (buf), "%s%s%s",
-                      ansi_red, status, ansi_default);
+                      ANSI_COLOR_RED, status, ANSI_COLOR_DEFAULT);
             status = buf;
         }
         else if (streq (status, "offline") && !ghost) {
             snprintf (buf, sizeof (buf), "%s%s%s",
-                      ansi_yellow, status, ansi_default);
+                      ANSI_COLOR_YELLOW, status, ANSI_COLOR_DEFAULT);
             status = buf;
         }
         else if (ghost) {
             snprintf (buf, sizeof (buf), "%s%s%s",
-                      ansi_dark_gray, status, ansi_default);
+                      ANSI_COLOR_DARK_GRAY, status, ANSI_COLOR_DEFAULT);
             status = buf;
         }
     }
@@ -274,8 +300,8 @@ static const char *status_getname (struct status *ctx,
      */
     if (node->subtree_ranks
         && idset_has_intersection (ctx->highlight, node->subtree_ranks)) {
-        highlight_start = ctx->color ? ansi_blue : "<<";
-        highlight_end = ctx->color ? ansi_reset : ">>";
+        highlight_start = ctx->color ? ANSI_COLOR_BOLD_BLUE : "<<";
+        highlight_end = ctx->color ? ANSI_COLOR_RESET : ">>";
     }
 
     snprintf (buf,
@@ -677,6 +703,7 @@ static bool validate_wait (const char *wait)
     return true;
 }
 
+// N.B. used by both status and trace subcommands
 static int status_use_color (optparse_t *p)
 {
     const char *when;
@@ -1073,6 +1100,254 @@ static int subcmd_disconnect (optparse_t *p, int ac, char *av[])
 
     return 0;
 }
+
+struct typemap {
+    const char *s;
+    int type;
+};
+
+static struct typemap typemap[] = {
+    { ">", FLUX_MSGTYPE_REQUEST },
+    { "<", FLUX_MSGTYPE_RESPONSE},
+    { "e", FLUX_MSGTYPE_EVENT},
+    { "c", FLUX_MSGTYPE_CONTROL},
+};
+
+static const char *type2str (int type)
+{
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE (typemap); i++)
+        if ((type & typemap[i].type))
+            return typemap[i].s;
+    return "?";
+}
+
+enum {
+    TRACE_COLOR_EVENT = FLUX_MSGTYPE_EVENT,
+    TRACE_COLOR_REQUEST = FLUX_MSGTYPE_REQUEST,
+    TRACE_COLOR_RESPONSE = FLUX_MSGTYPE_RESPONSE,
+    TRACE_COLOR_CONTROL = FLUX_MSGTYPE_CONTROL,
+    TRACE_COLOR_TIME = 0x10,
+    TRACE_COLOR_TIMEBREAK = 0x11,
+};
+
+static const char *trace_colors[] = {
+    [TRACE_COLOR_EVENT]         = ANSI_COLOR_YELLOW,
+    [TRACE_COLOR_REQUEST]       = ANSI_COLOR_BOLD_BLUE,
+    [TRACE_COLOR_RESPONSE]      = ANSI_COLOR_CYAN,
+    [TRACE_COLOR_CONTROL]       = ANSI_COLOR_BOLD,
+    [TRACE_COLOR_TIME]          = ANSI_COLOR_GREEN,
+    [TRACE_COLOR_TIMEBREAK]     = ANSI_COLOR_BOLD ANSI_COLOR_GREEN
+};
+
+static const char *months[] = {
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+    NULL
+};
+
+static const char *trace_color (struct trace_ctx *ctx, int type)
+{
+    if (ctx->color)
+        return trace_colors[type];
+    return "";
+}
+
+static const char *trace_color_reset (struct trace_ctx *ctx)
+{
+    if (ctx->color)
+        return ANSI_COLOR_RESET;
+    return "";
+}
+
+
+static void trace_print_human_timestamp (struct trace_ctx *ctx,
+                                         double timestamp)
+{
+
+    if ((time_t)(timestamp/60) == (time_t)(ctx->last_timestamp/60)) {
+        /* Within same minute, print offset in sec */
+        printf ("%s[%+11.6f]%s ",
+                trace_color (ctx, TRACE_COLOR_TIME),
+                timestamp - ctx->last_timestamp
+                    + fmod (ctx->last_timestamp, 60.),
+                trace_color_reset (ctx));
+    }
+    else {
+        struct tm tm;
+        time_t t = timestamp;
+
+        localtime_r (&t, &tm);
+
+        /* New minute, print datetime */
+        printf ("%s[%s%02d %02d:%02d]%s ",
+                trace_color (ctx, TRACE_COLOR_TIMEBREAK),
+                months [tm.tm_mon],
+                tm.tm_mday,
+                tm.tm_hour,
+                tm.tm_min,
+                trace_color_reset (ctx));
+        ctx->last_timestamp  = timestamp;
+    }
+}
+
+static void trace_print_human (struct trace_ctx *ctx,
+                               double timestamp,
+                               int message_type,
+                               const char *s)
+{
+    trace_print_human_timestamp (ctx, timestamp);
+    printf (" %s%s%s\n",
+            trace_color (ctx, message_type),
+            s,
+            trace_color_reset (ctx));
+}
+
+static void trace_print_timestamp (struct trace_ctx *ctx, double timestamp)
+{
+    time_t t = timestamp;
+    struct tm tm;
+    char buf[64] = "";
+
+    localtime_r (&t, &tm);
+
+    strftime (buf, sizeof (buf), "%Y-%m-%dT%T", &tm);
+    printf ("%s%s.%.3d%s",
+            trace_color (ctx, TRACE_COLOR_TIME),
+            buf,
+            (int)(1e3 * (timestamp - t)),
+            trace_color_reset (ctx));
+}
+
+static void trace_print (struct trace_ctx *ctx,
+                         double timestamp,
+                         int message_type,
+                         const char *s)
+{
+    trace_print_timestamp (ctx, timestamp);
+    printf (" %s%s%s\n",
+            trace_color (ctx, message_type),
+            s,
+            trace_color_reset (ctx));
+}
+
+static void trace_ctx_init (struct trace_ctx *ctx,
+                            optparse_t *p,
+                            int ac,
+                            char *av[])
+{
+    int n = optparse_option_index (p);
+
+    memset (ctx, 0, sizeof (*ctx));
+
+    if (n < ac - 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (optparse_hasopt (p, "delta")) {
+        if (!optparse_hasopt (p, "human"))
+            log_msg_exit ("--delta can only be used with --human");
+        ctx->delta = 1;
+    }
+    ctx->nodeid = optparse_get_int (p, "rank", FLUX_NODEID_ANY);
+    ctx->match = FLUX_MATCH_ANY;
+    if (n < ac)
+        ctx->match.topic_glob = av[n++];
+    else
+        ctx->match.topic_glob = "*";
+    ctx->color = status_use_color (p); // borrowed from status subcommand
+    if (optparse_hasopt (p, "type")) {
+        const char *arg;
+
+        optparse_getopt_iterator_reset (p, "type");
+        ctx->match.typemask = 0;
+        while ((arg = optparse_getopt_next (p, "type"))) {
+            if (streq (arg, "request"))
+                ctx->match.typemask |= FLUX_MSGTYPE_REQUEST;
+            else if (streq (arg, "response"))
+                ctx->match.typemask |= FLUX_MSGTYPE_RESPONSE;
+            else if (streq (arg, "event"))
+                ctx->match.typemask |= FLUX_MSGTYPE_EVENT;
+            else if (streq (arg, "control"))
+                ctx->match.typemask |= FLUX_MSGTYPE_CONTROL;
+            else
+                log_msg_exit ("valid types: request, response, event, control");
+        }
+    }
+}
+
+static int subcmd_trace (optparse_t *p, int ac, char *av[])
+{
+    flux_t *h = builtin_get_flux_handle (p);
+    flux_future_t *f;
+    struct trace_ctx ctx;
+
+    trace_ctx_init (&ctx, p, ac, av);
+
+    if (!(f = flux_rpc_pack (h,
+                             "overlay.trace",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_STREAMING,
+                             "{s:i s:s s:i}",
+                             "typemask", ctx.match.typemask,
+                             "topic_glob", ctx.match.topic_glob,
+                             "nodeid", ctx.nodeid)))
+        log_err_exit ("error sending overlay.trace request");
+    do {
+        double timestamp;
+        const char *prefix;
+        int rank;
+        int type;
+        const char *topic;
+        int payload_size;
+        char buf[160];
+
+        if (flux_rpc_get_unpack (f,
+                                 "{s:F s:s s:i s:i s:s s:i}",
+                                 "timestamp", &timestamp,
+                                 "prefix", &prefix,
+                                 "rank", &rank,
+                                 "type", &type,
+                                 "topic", &topic,
+                                 "payload_size", &payload_size) < 0)
+            log_err_exit ("%s", future_strerror (f, errno));
+
+        char rankstr[16];
+        if (rank < 0)
+            snprintf (rankstr, sizeof (rankstr), "*");
+        else
+            snprintf (rankstr, sizeof (rankstr), "%d", rank);
+
+        snprintf (buf,
+                  sizeof (buf),
+                  "%s %s %s %s [%s]",
+                  prefix,
+                  rankstr,
+                  type2str (type),
+                  topic,
+                  encode_size (payload_size));
+
+        if (optparse_hasopt (p, "human"))
+            trace_print_human (&ctx, timestamp, type, buf);
+        else
+            trace_print (&ctx, timestamp, type, buf);
+        fflush (stdout);
+
+        flux_future_reset (f);
+    } while (1);
+}
+
 int cmd_overlay (optparse_t *p, int argc, char *argv[])
 {
     log_init ("flux-overlay");
@@ -1086,6 +1361,13 @@ int cmd_overlay (optparse_t *p, int argc, char *argv[])
 }
 
 static struct optparse_subcommand overlay_subcmds[] = {
+    { "trace",
+      "[OPTIONS] [topic-glob]",
+      "Trace messages received on overlay network",
+      subcmd_trace,
+      0,
+      trace_opts,
+    },
     { "errors",
       "[OPTIONS]",
       "Summarize overlay errors",

@@ -14,6 +14,7 @@ SYNOPSIS
 | **flux** **overlay** **lookup** *target*
 | **flux** **overlay** **parentof** *rank*
 | **flux** **overlay** **disconnect** [*--parent=RANK*] *target*
+| **flux** **overlay** **trace** [*-r rank*] [*-t TYPE,...*] [*topic-glob*]
 
 
 DESCRIPTION
@@ -118,6 +119,41 @@ Disconnect a subtree rooted at *target* (hostname or rank).
 
   Set parent rank to *NODEID*.  By default, the parent is determined from
   the topology.
+
+trace
+-----
+
+.. program:: flux overlay trace
+
+Display message summaries for messages transmitted and received on the
+overlay network.  A topic string glob pattern may be supplied as a positional
+argument.
+
+.. option:: -r, --rank=NODEID
+
+   Filter output by overlay network peer rank.  Note that this rank is not
+   necessarily the same as the message source or destination.
+
+.. option:: -t, --type=TYPE,...
+
+   Filter output by message type, a comma-separated list.  Valid types are
+   ``request``, ``response``, ``event``, or ``control``.
+
+.. option:: -L, --color=WHEN
+
+   Colorize output when supported; WHEN can be ``always`` (default if omitted),
+   ``never``, or ``auto`` (default).
+
+.. option:: -H, --human
+
+   Display human-readable output. See also :option:`--color` and
+   :option:`--delta`.
+
+.. option:: -d, --delta
+
+   With :option:`--human`, display the time delta between messages instead
+   of a relative offset since the last absolute timestamp.
+
 
 
 EXAMPLES
