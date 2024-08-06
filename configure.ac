@@ -333,8 +333,7 @@ AM_CONDITIONAL([ENABLE_PYLINT], [test "x$PYLINT" = "xpylint"])
 AX_PROG_LUA([5.1],[5.5])
 AX_LUA_HEADERS
 AX_LUA_LIBS
-# N.B oldest in CI are focal=libzmq-4.3.2-2, centos7=zeromq-4.1.4
-PKG_CHECK_MODULES([ZMQ], [libzmq >= 4.0.4])
+X_AC_ZEROMQ
 X_AC_JANSSON
 PKG_CHECK_MODULES([LIBSYSTEMD], [libsystemd >= 0.23],
                                 [have_libsystemd=yes], [have_libsystemd=no])
