@@ -758,6 +758,13 @@ class MiniCmd:
             formatter_class=flux.util.help_formatter(),
         )
         parser.add_argument(
+            "-B",
+            "--bank",
+            type=str,
+            metavar="BANK",
+            help="Submit a job to a specific named bank",
+        )
+        parser.add_argument(
             "-q",
             "--queue",
             type=str,
@@ -1041,6 +1048,9 @@ class MiniCmd:
 
         if args.queue is not None:
             jobspec.setattr("system.queue", args.queue)
+
+        if args.bank is not None:
+            jobspec.setattr("system.bank", args.bank)
 
         if args.setattr is not None:
             for keyval in args.setattr:
@@ -1425,7 +1435,6 @@ class SubmitBulkCmd(SubmitBaseCmd):
             args.progress = None
 
     def watcher_start(self, args):
-
         if not self.watcher:
             #  Need to open self.flux_handle if it isn't already in order
             #  to start the watcher
