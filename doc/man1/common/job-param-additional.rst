@@ -6,6 +6,15 @@
    option is ignored, though :man1:`flux-jobs` may display the queue
    name in its rendering of the ``{queue}`` attribute.
 
+.. option:: -B, --bank=NAME
+
+   Set the bank name for this job to ``NAME``. This option is equivalent
+   to `--setattr=bank=NAME`, and results in the ``bank`` attribute being
+   set to ``NAME`` in the submitted jobspec. However, besides the bank
+   name appearing in job listing output, this option may have no effect
+   if no plugin or package that supports it (such as flux-accounting)
+   is installed and configured.
+
 .. option:: -t, --time-limit=MINUTES|FSD
 
    Set a time limit for the job in either minutes or Flux standard duration
