@@ -254,7 +254,7 @@ jobs:
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker manifest create fluxrm/flux-core:bookworm fluxrm/flux-core:bookworm-amd64 fluxrm/flux-core:bookworm-386 fluxrm/flux-core:bookworm-arm64
         docker manifest push fluxrm/flux-core:bookworm
-        for d in el9 noble fedora40 alpine ; do
+        for d in el9 noble alpine ; do
           docker manifest create fluxrm/flux-core:$d fluxrm/flux-core:$d-amd64 fluxrm/flux-core:$d-arm64
           docker manifest push fluxrm/flux-core:$d
         done
