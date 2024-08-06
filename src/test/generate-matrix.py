@@ -96,7 +96,9 @@ class BuildMatrix:
         """Add a build to the matrix.include array"""
 
         # Extra environment to add to this command:
-        env = env or {}
+        # NOTE: ensure we copy the dict rather than modify, re-used dicts can cause
+        #       overwriting
+        env = dict(env) if env is not None else {}
 
         # hwloc tries to look for opengl devices  by connecting to a port that might
         # sometimes be an x11 port, but more often for us is munge, turn it off
