@@ -95,6 +95,17 @@ test_expect_success HAVE_FLUX_SECURITY 'flux-job: submit ignores security-config
 		signed.json >submit-signed.out 2>&1 &&
 	grep "Ignoring security config" submit-signed.out
 '
+test_expect_success HAVE_FLUX_SECURITY 'flux-job: submit as root fails' '
+	flux run --dry-run -n1 hostname | \
+	    flux python \
+	    ${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py 0 >signed0.json &&
+	    ( export FLUX_HANDLE_USERID=0 &&
+	      test_must_fail \
+	          flux job submit --flags=signed signed0.json 2>signed0.err \
+	    ) &&
+	test_debug "cat signed0.err" &&
+        grep "submission of jobs as user root not supported" signed0.err
+'
 test_expect_success 'flux-job: can submit jobspec on stdin with -' '
 	flux job submit - <basic.json
 '
