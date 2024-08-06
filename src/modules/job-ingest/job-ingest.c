@@ -13,6 +13,7 @@
 #endif
 #include <time.h>
 #include <unistd.h>
+#include <sys/types.h>
 #include <jansson.h>
 #include <flux/core.h>
 #if HAVE_FLUX_SECURITY
@@ -84,6 +85,7 @@ static int max_fluid_generator_id = 16384 - 16 - 1;
 struct job_ingest_ctx {
     flux_t *h;
     struct pipeline *pipeline;
+    uid_t owner;
 #if HAVE_FLUX_SECURITY
     flux_security_t *sec;
 #else
@@ -574,6 +576,13 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errmsg = error.text;
         goto error;
     }
+    /* Do not allow root user to submit jobs in a multi-user instance.
+     * The jobs will fail at runtime anyway.
+     */
+    if (ctx->owner != 0 && job->cred.userid == 0) {
+        errmsg = "submission of jobs as user root not supported";
+        goto error;
+    }
     if (pipeline_process_job (ctx->pipeline, job, &f, &error) < 0) {
         errmsg = error.text;
         goto error;
@@ -796,6 +805,8 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
     memset (ctx, 0, sizeof (*ctx));
     ctx->h = h;
     flux_error_t error;
+
+    ctx->owner = getuid ();
 
     /*  Default worker input buffer size is 10MB */
     ctx->buffer_size = "10M";
