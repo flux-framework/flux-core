@@ -98,16 +98,20 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
 
 /* Send sched.free request.
  */
-int free_request (struct alloc *alloc, flux_jobid_t id, json_t *R)
+int free_request (struct alloc *alloc,
+                  flux_jobid_t id,
+                  json_t *R,
+                  bool final)
 {
     flux_msg_t *msg;
 
     if (!(msg = flux_request_encode ("sched.free", NULL)))
         return -1;
     if (flux_msg_pack (msg,
-                       "{s:I s:O}",
+                       "{s:I s:O s:b}",
                        "id", id,
-                       "R", R) < 0)
+                       "R", R,
+                       "final", final) < 0)
         goto error;
     if (flux_send (alloc->ctx->h, msg, 0) < 0)
         goto error;
@@ -180,7 +184,7 @@ static void alloc_response_cb (flux_t *h,
         (void)json_object_del (R, "scheduling");
 
         if (!job) {
-            (void)free_request (alloc, id, R);
+            (void)free_request (alloc, id, R, true);
             break;
         }
         if (job_priority_queue_delete (alloc->sent, job) < 0)
@@ -486,10 +490,13 @@ static void check_cb (flux_reactor_t *r,
                                    NULL);
 }
 
-int alloc_send_free_request (struct alloc *alloc, json_t *R, flux_jobid_t id)
+int alloc_send_free_request (struct alloc *alloc,
+                             json_t *R,
+                             flux_jobid_t id,
+                             bool final)
 {
     if (alloc->scheduler_is_online) {
-        if (free_request (alloc, id, R) < 0)
+        if (free_request (alloc, id, R, final) < 0)
             return -1;
     }
     return 0;

@@ -227,16 +227,19 @@ static void allocation_release (struct allocation *a)
     struct idset *ranks = NULL;
     struct rlist *rl = NULL;
     json_t *R = NULL;
+    bool final = false;
 
     if ((ranks = get_housekept_ranks (a)) && idset_count (ranks) == 0) {
         idset_destroy (ranks);
         return; // nothing to do
     }
+    if (idset_empty (a->pending))
+        final = true;
 
     if (!ranks
         || !(rl = rlist_copy_ranks (a->rl, ranks))
         || !(R = rlist_to_R (rl))
-        || alloc_send_free_request (ctx->alloc, R, a->id) < 0
+        || alloc_send_free_request (ctx->alloc, R, a->id, final) < 0
         || rlist_remove_ranks (a->rl, ranks) < 0) {
         char *s = idset_encode (ranks, IDSET_FLAG_RANGE);
         flux_log (ctx->h,
@@ -457,7 +460,7 @@ int housekeeping_start (struct housekeeping *hk,
     }
     return 0;
 skip:
-    return alloc_send_free_request (hk->ctx->alloc, R, id);
+    return alloc_send_free_request (hk->ctx->alloc, R, id, true);
 }
 
 static int housekeeping_hello_respond_one (struct housekeeping *hk,
