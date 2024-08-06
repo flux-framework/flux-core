@@ -113,7 +113,8 @@ jobreq_create (const flux_msg_t *msg)
     if (job == NULL)
         return NULL;
 
-    if (flux_msg_unpack (msg, "{s:I s:i s:i s:f s:o}",
+    if (flux_msg_unpack (msg,
+                         "{s:I s:i s:i s:f s:o}",
                          "id", &job->id,
                          "priority", &job->priority,
                          "userid", &job->uid,
@@ -133,8 +134,8 @@ jobreq_create (const flux_msg_t *msg)
     if (json_unpack (jobspec,
                      "{s:{s?{s?O}}}",
                      "attributes",
-                     "system",
-                     "constraints", &job->constraints) < 0) {
+                       "system",
+                         "constraints", &job->constraints) < 0) {
         job->errnum = errno;
         goto err;
     }
@@ -253,15 +254,14 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
                 flux_log_error (h, "try_alloc: rlist_free");
             rlist_destroy (alloc);
             alloc = NULL;
-        } else if (errno == ENOSPC)
+        }
+        else if (errno == ENOSPC)
             return rc;
         else if (errno == EOVERFLOW)
             note = "unsatisfiable request";
         else if (fail_alloc)
             note = "DEBUG_FAIL_ALLOC";
-        if (schedutil_alloc_respond_deny (ss->util_ctx,
-                                          job->msg,
-                                          note) < 0)
+        if (schedutil_alloc_respond_deny (ss->util_ctx, job->msg, note) < 0)
             flux_log_error (h, "schedutil_alloc_respond_deny");
         goto out;
     }
@@ -272,9 +272,9 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
                                               R,
                                               "{ s:{s:s s:n s:n} }",
                                               "sched",
-                                              "resource_summary", s,
-                                              "reason_pending",
-                                              "jobs_ahead") < 0)
+                                                "resource_summary", s,
+                                                "reason_pending",
+                                                "jobs_ahead") < 0)
         flux_log_error (h, "schedutil_alloc_respond_success_pack");
 
     flux_log (h, LOG_DEBUG, "alloc: %s: %s", idf58 (job->id), s);
@@ -310,8 +310,10 @@ static void annotate_reason_pending (struct simple_sched *ss)
     }
 }
 
-static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
-                     int revents, void *arg)
+static void prep_cb (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
 {
     struct simple_sched *ss = arg;
     /* if there is at least one job to schedule, start check and idle */
@@ -322,8 +324,10 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void check_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     struct simple_sched *ss = arg;
     flux_watcher_stop (ss->idle);
@@ -393,7 +397,8 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg, void *arg)
 
     if (ss->alloc_limit
         && zlistx_size (ss->queue) >= ss->alloc_limit) {
-        flux_log (h, LOG_ERR,
+        flux_log (h,
+                  LOG_ERR,
                   "alloc received above max concurrency: %d",
                   ss->alloc_limit);
         errno = EINVAL;
@@ -411,14 +416,18 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg, void *arg)
         jobreq_destroy (job);
         return;
     }
-    flux_log (h, LOG_DEBUG, "req: %s: spec={%d,%d,%d} duration=%.1f",
-                            idf58 (job->id), job->jj.nnodes,
-                            job->jj.nslots, job->jj.slot_size,
-                            job->jj.duration);
+
+    flux_log (h,
+              LOG_DEBUG,
+              "req: %s: spec={%d,%d,%d} duration=%.1f",
+              idf58 (job->id),
+              job->jj.nnodes,
+              job->jj.nslots,
+              job->jj.slot_size,
+              job->jj.duration);
+
     search_dir = job->priority > FLUX_JOB_URGENCY_DEFAULT;
-    job->handle = zlistx_insert (ss->queue,
-                                 job,
-                                 search_dir);
+    job->handle = zlistx_insert (ss->queue, job, search_dir);
     flux_watcher_start (ss->prep);
     return;
 err:
@@ -430,9 +439,7 @@ err:
  * If a matching job found in queue, respond to the alloc request
  * and "dequeue" it.
  */
-static void cancel_cb (flux_t *h,
-                       const flux_msg_t *msg,
-                       void *arg)
+static void cancel_cb (flux_t *h, const flux_msg_t *msg, void *arg)
 {
     struct simple_sched *ss = arg;
     flux_jobid_t id;
@@ -457,9 +464,7 @@ static void cancel_cb (flux_t *h,
  * matching job found in queue, update the priority and reorder queue
  * as necessary.
  */
-static void prioritize_cb (flux_t *h,
-                           const flux_msg_t *msg,
-                           void *arg)
+static void prioritize_cb (flux_t *h, const flux_msg_t *msg, void *arg)
 {
     static int min_sort_size = 4;
     struct simple_sched *ss = arg;
@@ -520,7 +525,8 @@ static int hello_cb (flux_t *h,
     uint32_t userid;
     double t_submit;
 
-    if (flux_msg_unpack (msg, "{s:I s:i s:i s:f}",
+    if (flux_msg_unpack (msg,
+                         "{s:I s:i s:i s:f}",
                          "id", &id,
                          "priority", &priority,
                          "userid", &userid,
@@ -529,7 +535,8 @@ static int hello_cb (flux_t *h,
         return -1;
     }
 
-    flux_log (h, LOG_DEBUG,
+    flux_log (h,
+              LOG_DEBUG,
               "hello: id=%s priority=%u userid=%u t_submit=%0.1f",
               idf58 (id),
               priority,
@@ -594,7 +601,9 @@ static void status_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     rlist_destroy (rl);
 
-    if (flux_respond_pack (h, msg, "{s:o s:o s:o}",
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:o s:o s:o}",
                            "all", all,
                            "allocated", alloc,
                            "down", down) < 0)
@@ -622,14 +631,16 @@ static void feasibility_cb (flux_t *h,
     const char *errmsg = NULL;
     flux_error_t error;
 
-    if (flux_request_unpack (msg, NULL, "{s:o}",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:o}",
                             "jobspec", &jobspec) < 0)
         goto err;
     if (json_unpack (jobspec,
                      "{s:{s?{s?o}}}",
                      "attributes",
-                     "system",
-                     "constraints", &constraints) < 0)
+                       "system",
+                         "constraints", &constraints) < 0)
         goto err;
 
     if (jj_get_counts_json (jobspec, &jj) < 0) {
@@ -701,9 +712,7 @@ static void expiration_cb (flux_t *h,
         errno = EINVAL;
         goto err;
     }
-    if (flux_module_debug_test (ss->h,
-                                DEBUG_EXPIRATION_UPDATE_DENY,
-                                false)) {
+    if (flux_module_debug_test (ss->h, DEBUG_EXPIRATION_UPDATE_DENY, false)) {
         errmsg = "Rejecting expiration update for testing";
         goto err;
     }
@@ -722,7 +731,8 @@ static int ss_resource_update (struct simple_sched *ss, flux_future_t *f)
     double expiration = -1.;
     const char *s;
 
-    int rc = flux_rpc_get_unpack (f, "{s?s s?s s?F}",
+    int rc = flux_rpc_get_unpack (f,
+                                  "{s?s s?s s?F}",
                                   "up", &up,
                                   "down", &down,
                                   "expiration", &expiration);
@@ -760,7 +770,8 @@ static void acquire_continuation (flux_future_t *f, void *arg)
 {
     struct simple_sched *ss = arg;
     if (flux_future_get (f, NULL) < 0) {
-        flux_log (ss->h, LOG_ERR,
+        flux_log (ss->h,
+                  LOG_ERR,
                   "exiting due to resource update failure: %s",
                   future_strerror (f, errno));
         flux_reactor_stop (flux_get_reactor (ss->h));
@@ -780,7 +791,8 @@ static int ss_acquire_resources (flux_t *h, struct simple_sched *ss)
     json_t *R;
     json_error_t e;
 
-    if (!(f = flux_rpc (h, "resource.acquire",
+    if (!(f = flux_rpc (h,
+                        "resource.acquire",
                         NULL,
                         FLUX_NODEID_ANY,
                         FLUX_RPC_STREAMING))) {
@@ -789,7 +801,9 @@ static int ss_acquire_resources (flux_t *h, struct simple_sched *ss)
     }
     ss->acquire_f = f;
     if (flux_rpc_get_unpack (f, "{s:o}", "resources", &R) < 0) {
-        flux_log (h, LOG_ERR, "resource.acquire failed: %s",
+        flux_log (h,
+                  LOG_ERR,
+                  "resource.acquire failed: %s",
                   future_strerror (f, errno));
         goto out;
     }
@@ -846,8 +860,12 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
         goto out;
     }
     s = rlist_dumps (ss->rlist);
-    flux_log (h, LOG_DEBUG, "ready: %d of %d cores: %s",
-                            ss->rlist->avail, ss->rlist->total, s);
+    flux_log (h,
+              LOG_DEBUG,
+              "ready: %d of %d cores: %s",
+              ss->rlist->avail,
+              ss->rlist->total,
+              s);
     free (s);
     rc = 0;
 out:
