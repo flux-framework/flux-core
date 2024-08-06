@@ -343,7 +343,11 @@ static void check_cb (flux_reactor_t *r,
     }
 }
 
-static int try_free (flux_t *h, struct simple_sched *ss, json_t *R)
+static int try_free (flux_t *h,
+                     struct simple_sched *ss,
+                     flux_jobid_t id,
+                     json_t *R,
+                     bool final)
 {
     int rc = -1;
     char *r = NULL;
@@ -358,8 +362,14 @@ static int try_free (flux_t *h, struct simple_sched *ss, json_t *R)
     r = rlist_dumps (alloc);
     if ((rc = rlist_free (ss->rlist, alloc)) < 0)
         flux_log_error (h, "free: %s", r);
-    else
-        flux_log (h, LOG_DEBUG, "free: %s", r);
+    else {
+        flux_log (h,
+                  LOG_DEBUG,
+                  "free: %s %s%s",
+                  r,
+                  idf58 (id),
+                  final ? " (final)" : "");
+    }
     free (r);
     rlist_destroy (alloc);
     return rc;
@@ -369,13 +379,20 @@ void free_cb (flux_t *h, const flux_msg_t *msg, const char *R_str, void *arg)
 {
     struct simple_sched *ss = arg;
     json_t *R;
+    flux_jobid_t id;
+    int final = 0;
 
-    if (flux_request_unpack (msg, NULL, "{s:o}", "R", &R) < 0) {
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:o s?b}",
+                             "id", &id,
+                             "R", &R,
+                             "final", &final) < 0) {
         flux_log (h, LOG_ERR, "free: error unpacking sched.free request");
         return;
     }
 
-    if (try_free (h, ss, R) < 0) {
+    if (try_free (h, ss, id, R, final) < 0) {
         flux_log_error (h, "free: could not free R");
         return;
     }
