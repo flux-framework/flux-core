@@ -2493,8 +2493,10 @@ struct overlay *overlay_create (flux_t *h,
         goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;
-    if (!(ov->cert = cert_create ()))
-        goto nomem;
+    if (!(ov->cert = cert_create ())) {
+        log_err ("could not create curve certificate");
+        goto error;
+    }
     if (!(ov->health_requests = flux_msglist_create ())
         || !(ov->trace_requests = flux_msglist_create ()))
         goto error;
