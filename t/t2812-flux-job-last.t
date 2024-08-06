@@ -66,6 +66,9 @@ submit_as_root()
 
 # issue #5475
 # Execution may fail but submission should work - enough for this test
+test_expect_success FLUX_SECURITY 'reload job-ingest with allow-root-jobs' '
+	flux module reload job-ingest allow-root-jobs
+'
 test_expect_success FLUX_SECURITY 'run a job as fake root' '
 	submit_as_root true &&
 	FLUX_HANDLE_USERID=0 flux job last

@@ -13,6 +13,7 @@
 #endif
 #include <time.h>
 #include <unistd.h>
+#include <sys/types.h>
 #include <jansson.h>
 #include <flux/core.h>
 #if HAVE_FLUX_SECURITY
@@ -81,9 +82,16 @@ static const double batch_timeout = 0.01;
  */
 static int max_fluid_generator_id = 16384 - 16 - 1;
 
+/* By default, root (userid=0) jobs are rejected at submission
+ * unless the instance owner is also root. However, for testing
+ * purposes it may be useful to allow root jobs:
+ */
+static bool allow_root_jobs = false;
+
 struct job_ingest_ctx {
     flux_t *h;
     struct pipeline *pipeline;
+    uid_t owner;
 #if HAVE_FLUX_SECURITY
     flux_security_t *sec;
 #else
@@ -574,6 +582,13 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errmsg = error.text;
         goto error;
     }
+    /* Do not allow root user to submit jobs in a multi-user instance.
+     * The jobs will fail at runtime anyway.
+     */
+    if (ctx->owner != 0 && !allow_root_jobs && job->cred.userid == 0) {
+        errmsg = "submission of jobs as user root not supported";
+        goto error;
+    }
     if (pipeline_process_job (ctx->pipeline, job, &f, &error) < 0) {
         errmsg = error.text;
         goto error;
@@ -694,6 +709,9 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
         else if (strstarts (argv[i], "max-fluid-generator-id=")) {
             max_fluid_id = argv[i] + 23;
         }
+        else if (streq (argv[i], "allow-root-jobs")) {
+            allow_root_jobs = true;
+        }
         else {
             errprintf (error, "Invalid option: %s", argv[i]);
             errno = EINVAL;
@@ -796,6 +814,8 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
     memset (ctx, 0, sizeof (*ctx));
     ctx->h = h;
     flux_error_t error;
+
+    ctx->owner = getuid ();
 
     /*  Default worker input buffer size is 10MB */
     ctx->buffer_size = "10M";
