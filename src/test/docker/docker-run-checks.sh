@@ -205,6 +205,7 @@ else
     docker run --rm \
         --workdir=$WORKDIR \
         --volume=$TOP:$WORKDIR \
+        --mount type=tmpfs,destination=/test/tmpfs-1m,tmpfs-size=1048576 \
         ${PLATFORM} \
         $MOUNT_HOME_ARGS \
         -e PLATFORM \
