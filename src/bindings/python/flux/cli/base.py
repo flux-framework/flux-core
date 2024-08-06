@@ -505,6 +505,7 @@ class Xcmd:
     #  the string representation of an Xcmd object.
     mutable_args = {
         "queue": "-q",
+        "bank": "-B",
         "ntasks": "-n",
         "nodes": "-N",
         "cores_per_task": "-c",
