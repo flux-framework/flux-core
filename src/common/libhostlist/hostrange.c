@@ -57,6 +57,7 @@ static struct hostrange * hostrange_new (const char *prefix)
         hostrange_destroy (new);
         return NULL;
     }
+    new->len_prefix = strlen (prefix);
     return new;
 }
 
@@ -74,7 +75,7 @@ struct hostrange * hostrange_create_single (const char *prefix)
 
 /* Create a hostrange object with a prefix, hi, lo, and format width
  */
-struct hostrange * hostrange_create (char *prefix,
+struct hostrange * hostrange_create (const char *prefix,
                                      unsigned long lo,
                                      unsigned long hi,
                                      int width)
@@ -189,9 +190,18 @@ int hostrange_prefix_cmp (struct hostrange * h1, struct hostrange * h2)
     if (h2 == NULL)
         return 1;
 
-    retval = strcmp (h1->prefix, h2->prefix);
+    int min_len = h1->len_prefix < h2->len_prefix ? h1->len_prefix : h2->len_prefix;
+    retval = memcmp (h1->prefix, h2->prefix, min_len);
 
-    return retval == 0 ? h2->singlehost - h1->singlehost : retval;
+    if (retval == 0) {
+        if (h1->len_prefix < h2->len_prefix)
+            return -1;
+        if (h1->len_prefix > h2->len_prefix)
+            return 1;
+        retval = h2->singlehost - h1->singlehost;
+    }
+
+    return retval;
 }
 
 
@@ -335,12 +345,8 @@ struct hostrange * hostrange_intersect (struct hostrange * h1,
 /* return offset of hn if it is in the hostlist or
  *        -1 if not.
  */
-int hostrange_hn_within (struct hostrange * hr, struct hostname * hn)
+int hostrange_hn_within (struct hostrange * hr, struct stack_hostname * hn)
 {
-    int len_hr;
-    int len_hn;
-    int width;
-
     if (hr->singlehost) {
         /*
          *  If the current hostrange [hr] is a `singlehost' (no valid
@@ -351,7 +357,9 @@ int hostrange_hn_within (struct hostrange * hr, struct hostname * hn)
          *   which case we return true. Otherwise, there is no
          *   possibility that [hn] matches [hr].
          */
-        if (strcmp (hn->hostname, hr->prefix) == 0)
+        if (hr->len_prefix != hn->len)
+            return -1;
+        if (memcmp (hn->hostname, hr->prefix, hr->len_prefix) == 0)
             return 0;
         else
             return -1;
@@ -362,10 +370,8 @@ int hostrange_hn_within (struct hostrange * hr, struct hostname * hn)
      *   better have a valid numeric suffix, or there is no
      *   way we can match
      */
-    if (!hostname_suffix_is_valid (hn))
+    if (!hn || !hn->suffix)
         return -1;
-
-    len_hn = strlen (hn->prefix);
 
     /*
      *  If hostrange and hostname prefixes don't match to at least
@@ -373,7 +379,9 @@ int hostrange_hn_within (struct hostrange * hr, struct hostname * hn)
      *   possible prefix length), then there is no way the hostname
      *   falls within the range [hr].
      */
-    if (strncmp (hr->prefix, hn->prefix, len_hn) != 0)
+    if (hr->len_prefix < hn->len_prefix)
+        return -1;
+    if (memcmp (hr->prefix, hn->hostname, hn->len_prefix) != 0)
         return -1;
 
     /*
@@ -387,24 +395,20 @@ int hostrange_hn_within (struct hostrange * hr, struct hostname * hn)
      *   hostname with the longer prefix and calling this function
      *   again with the new hostname. (Yes, this is ugly, sorry)
      */
-    len_hr = strlen (hr->prefix);
-    width = hostname_suffix_width (hn);
-
-    if ((len_hn < len_hr)
-         && (width > 1)
-         && (isdigit (hr->prefix [len_hr - 1]))
-         && (hr->prefix [len_hn] == hn->suffix[0]) ) {
+    if ((hn->len_prefix < hr->len_prefix)
+         && (hn->width > 1)
+         && (isdigit (hr->prefix [hr->len_prefix - 1]))
+         && (hr->prefix [hn->len_prefix] == hn->suffix[0]) ) {
         int rc;
         /*
          *  Create new hostname object with its prefix offset by one
          */
-        struct hostname * h = hostname_create_with_suffix (hn->hostname,
-                                                           len_hn);
+        struct stack_hostname shn;
+        struct stack_hostname * h = hostname_stack_copy_one_less_digit (&shn, hn);
         /*
          *  Recursive call :-o
          */
         rc = hostrange_hn_within (hr, h);
-        hostname_destroy (h);
         return rc;
     }
 
@@ -414,11 +418,10 @@ int hostrange_hn_within (struct hostrange * hr, struct hostname * hn)
      *   falls within the range of [hr] if [hn] and [hr] prefix are
      *   identical.
      */
-    if ((len_hr == len_hn)
-        && (strcmp (hn->prefix, hr->prefix) == 0)
+    if ((hr->len_prefix == hn->len_prefix)
         && (hn->num <= hr->hi)
         && (hn->num >= hr->lo)) {
-        int width = hostname_suffix_width (hn);
+        int width = hn->width;
         if (!width_equiv (hr->lo, &hr->width, hn->num, &width))
             return -1;
         return (hn->num - hr->lo);

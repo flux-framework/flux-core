@@ -17,6 +17,7 @@
  */
 struct hostrange {
     char *prefix;        /* alphanumeric prefix: */
+    unsigned long len_prefix; /* length of the prefix */
 
     /* beginning (lo) and end (hi) of suffix range */
     unsigned long lo, hi;
@@ -31,7 +32,7 @@ struct hostrange {
 
 struct hostrange * hostrange_create_single (const char *);
 
-struct hostrange * hostrange_create (char *s,
+struct hostrange * hostrange_create (const char *s,
                                      unsigned long lo,
                                      unsigned long hi,
                                      int width);
@@ -56,7 +57,7 @@ int hostrange_join (struct hostrange *, struct hostrange *);
 struct hostrange * hostrange_intersect (struct hostrange *,
                                         struct hostrange *);
 
-int hostrange_hn_within (struct hostrange *, struct hostname *);
+int hostrange_hn_within (struct hostrange *, struct stack_hostname *);
 
 size_t hostrange_numstr(struct hostrange *, size_t, char *);
 

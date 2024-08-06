@@ -48,7 +48,7 @@ int main (int argc, char *argv[])
 
     t = hostname_tests;
     while (t && t->input != NULL) {
-        struct hostname *hn = hostname_create (t->input);
+        struct hostlist_hostname *hn = hostname_create (t->input);
         if (t->prefix == NULL) {
             /* Check expected failure */
             ok (hn == NULL && errno == EINVAL,

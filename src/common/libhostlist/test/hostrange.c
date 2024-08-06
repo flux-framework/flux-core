@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#include "src/common/libhostlist/hostname.h"
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -160,32 +161,32 @@ struct cmp_test {
 };
 
 struct cmp_test cmp_tests[] = {
-    { { "foo", 0, 15, 0, 0 },
-      { "foo", 1, 15, 0, 0 },
+    { { "foo", 3, 0, 15, 0, 0 },
+      { "foo", 3, 1, 15, 0, 0 },
       -1, },
-    { { "foo", 0, 15, 0, 0 },
-      { "foo", 0, 15, 0, 0 },
+    { { "foo", 3, 0, 15, 0, 0 },
+      { "foo", 3, 0, 15, 0, 0 },
       0, },
-    { { "foo", 0, 15, 0, 0 },
-      { "foo", 0,  0, 0, 1 },
+    { { "foo", 3, 0, 15, 0, 0 },
+      { "foo", 3, 0,  0, 0, 1 },
       1, },
-    { { "bar", 0,  0, 0, 1 },
-      { "foo", 0,  0, 0, 1 },
+    { { "bar", 3, 0,  0, 0, 1 },
+      { "foo", 3, 0,  0, 0, 1 },
       -1, },
-    { { "",    0,  5, 0, 0 },
-      { "",    5,  5, 0, 0 },
+    { { "", 0,   0,  5, 0, 0 },
+      { "",  0,  5,  5, 0, 0 },
       -1,
     },
-    { { "",    0,  5, 0, 0 },
-      { "",    0,  5, 2, 0 },
+    { { "", 0,   0,  5, 0, 0 },
+      { "", 0,   0,  5, 2, 0 },
       -1,
     },
-    { { "",    12,  12, 0, 0 },
-      { "",    15,  15, 0, 0 },
+    { { "", 0,   12,  12, 0, 0 },
+      { "", 0,   15,  15, 0, 0 },
       -1,
     },
-    { { "",    15,  15, 0, 0 },
-      { "",    12,  12, 0, 0 },
+    { { "", 0,   15,  15, 0, 0 },
+      { "", 0,   12,  12, 0, 0 },
       1,
     },
     { { 0 }, { 0 }, 0 },
@@ -405,7 +406,8 @@ void test_within ()
     while (t && t->hostname) {
         int result;
         struct hostrange *hr;
-        struct hostname *hn = hostname_create (t->hostname);
+        struct stack_hostname hn_storage = {};
+        struct stack_hostname *hn = hostname_stack_create (&hn_storage, t->hostname);
 
         if (hn == NULL)
             BAIL_OUT ("hostname_create failed!");
@@ -420,7 +422,6 @@ void test_within ()
             "hostrange_hn_within (%s[%lu-%lu], %s) returned %d",
             t->prefix, t->lo, t->hi, t->hostname, result);
 
-        hostname_destroy (hn);
         hostrange_destroy (hr);
         t++;
     }

@@ -68,6 +68,35 @@ const char * hostlist_nth (struct hostlist * hl, int n);
 int hostlist_find (struct hostlist * hl, const char *hostname);
 
 /*
+ *  Create an opaque hostname object which can be used with the
+ *   more efficient hostlist_find_hostname() below. This interface
+ *   should be used when matching the same hostname to many hostlists
+ *   since it caches processing of the hostname instead of duplicating
+ *   the work on each call to hostlist_find().
+ *
+ *  Caller must call hostlist_hostname_destroy() to free memory associated
+ *   with the returns hostlist_hostname object.
+ *
+ *  Returns NULL on error.
+ */
+struct hostlist_hostname *hostlist_hostname_create (const char *hostname);
+
+/*
+ *  Free resources associated with hostname hn.
+ */
+void hostlist_hostname_destroy (struct hostlist_hostname *hn);
+
+/*
+ *  Search hostlist hl for the first host matching hostlist_hostname `hn`
+ *   and return position in list if found.
+ *
+ *  Leaves cursor pointing to the matching host.
+ *
+ *  Returns -1 if host is not found.
+ */
+int hostlist_find_hostname (struct hostlist *hl, struct hostlist_hostname *hn);
+
+/*
  *  Delete all hosts in the list represented by `hosts'
  *
  *  Returns the number of hosts successfully deleted, -1 on failure.
