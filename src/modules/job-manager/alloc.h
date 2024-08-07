@@ -50,7 +50,10 @@ int alloc_pending_count (struct alloc *alloc);
 
 /* Release resources back to the scheduler.
  */
-int alloc_send_free_request (struct alloc *alloc, json_t *R, flux_jobid_t id);
+int alloc_send_free_request (struct alloc *alloc,
+                             json_t *R,
+                             flux_jobid_t id,
+                             bool final);
 
 /* List pending jobs
  */
