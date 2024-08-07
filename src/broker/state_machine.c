@@ -446,7 +446,7 @@ static void rmmod_continuation (flux_future_t *f, void *arg)
     struct state_machine *s = arg;
 
     if (flux_rpc_get (f, NULL) < 0)
-        flux_log_error (s->ctx->h, "broker.rmmod connector-local");
+        flux_log_error (s->ctx->h, "module.remove connector-local");
     flux_reactor_stop (flux_get_reactor (s->ctx->h));
     flux_future_destroy (f);
 }
@@ -471,14 +471,14 @@ static void subproc_continuation (flux_future_t *f, void *arg)
     /* Next task is to remove the connector-local module.
      */
     if (!(f = flux_rpc_pack (h,
-                             "broker.rmmod",
+                             "module.remove",
                              FLUX_NODEID_ANY,
                              0,
                              "{s:s}",
                              "name",
                              "connector-local"))
         || flux_future_then (f, -1, rmmod_continuation, s) < 0) {
-        flux_log_error (h, "error sending broker.rmmod connector-local");
+        flux_log_error (h, "error sending module.remove connector-local");
         flux_reactor_stop (flux_get_reactor (h));
         flux_future_destroy (f);
     }

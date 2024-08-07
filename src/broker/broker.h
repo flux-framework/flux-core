@@ -61,6 +61,10 @@ struct broker {
 
 typedef struct broker broker_ctx_t;
 
+int broker_event_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
+int broker_response_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
+void broker_request_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
+
 #endif /* !_BROKER_H */
 
 /*

@@ -39,7 +39,7 @@ int flux_module_set_running (flux_t *h)
     flux_future_t *f;
 
     if (!(f = flux_rpc_pack (h,
-                             "broker.module-status",
+                             "module.status",
                              FLUX_NODEID_ANY,
                              FLUX_RPC_NORESPONSE,
                              "{s:i}",

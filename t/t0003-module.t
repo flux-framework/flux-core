@@ -18,11 +18,11 @@ testmod=${FLUX_BUILD_DIR}/t/module/.libs/testmod.so
 legacy=${FLUX_BUILD_DIR}/t/module/.libs/legacy.so
 
 module_status_bad_proto() {
-	flux python -c "import flux; print(flux.Flux().rpc(\"broker.module-status\").get())"
+	flux python -c "import flux; print(flux.Flux().rpc(\"module.status\").get())"
 }
 
 module_status () {
-	flux python -c "import flux; print(flux.Flux().rpc(\"broker.module-status\",{\"status\":0}).get())"
+	flux python -c "import flux; print(flux.Flux().rpc(\"module.status\",{\"status\":0}).get())"
 }
 
 module_getinfo () {
@@ -31,7 +31,7 @@ module_getinfo () {
 
 # Usage: module_debug_defer modname True|False
 module_debug_defer () {
-        flux python -c "import flux; flux.Flux().rpc(\"broker.module-debug\",{\"name\":\"$1\",\"defer\":$2}).get()"
+        flux python -c "import flux; flux.Flux().rpc(\"module.debug\",{\"name\":\"$1\",\"defer\":$2}).get()"
 }
 
 
@@ -242,13 +242,13 @@ test_expect_success 'flux_module_set_running - signal module to enter reactor' '
 test_expect_success 'flux_module_set_running - remove test module' '
 	flux module remove running
 '
-test_expect_success 'broker.module-status rejects malformed request' '
+test_expect_success 'module.status rejects malformed request' '
 	test_must_fail module_status_bad_proto 2>proto.err &&
-	grep "error decoding/finding broker.module-status" proto.err
+	grep "error decoding/finding module.status" proto.err
 '
-test_expect_success 'broker.module-status rejects request from unknown sender' '
+test_expect_success 'module.status rejects request from unknown sender' '
 	test_must_fail module_status 2>sender.err &&
-	grep "error decoding/finding broker.module-status" sender.err
+	grep "error decoding/finding module.status" sender.err
 '
 # issue #5255
 test_expect_success 'module with version ext can be loaded by name' '

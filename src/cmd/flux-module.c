@@ -276,9 +276,9 @@ static void module_load (flux_t *h,
                                "path", fullpath ? fullpath : path,
                                "args", args))
         || (name && set_string (payload, "name", name) < 0))
-        log_msg_exit ("failed to create broker.insmod payload");
+        log_msg_exit ("failed to create module.load payload");
     if (!(f = flux_rpc_pack (h,
-                             "broker.insmod",
+                             "module.load",
                              FLUX_NODEID_ANY,
                              0,
                              "O",
@@ -321,7 +321,7 @@ static void module_remove (flux_t *h, optparse_t *p, const char *path)
         log_err_exit ("could not canonicalize module path '%s'", path);
 
     if (!(f = flux_rpc_pack (h,
-                             "broker.rmmod",
+                             "module.remove",
                              FLUX_NODEID_ANY,
                              0,
                              "{s:s}",
@@ -538,7 +538,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!(f = flux_rpc (h, "broker.lsmod", NULL, FLUX_NODEID_ANY, 0))
+    if (!(f = flux_rpc (h, "module.list", NULL, FLUX_NODEID_ANY, 0))
         || flux_rpc_get_unpack (f, "{s:o}", "mods", &o) < 0)
         log_err_exit ("list");
     lsmod_print_header (stdout, longopt);

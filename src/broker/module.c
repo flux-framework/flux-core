@@ -151,14 +151,13 @@ static int module_finalizing (module_t *p)
     flux_future_t *f;
 
     if (!(f = flux_rpc_pack (p->h_module_end,
-                             "broker.module-status",
+                             "module.status",
                              FLUX_NODEID_ANY,
                              0,
                              "{s:i}",
                              "status", FLUX_MODSTATE_FINALIZING))
         || flux_rpc_get (f, NULL)) {
-        flux_log_error (p->h_module_end,
-                        "broker.module-status FINALIZING error");
+        flux_log_error (p->h_module_end, "module.status FINALIZING error");
         flux_future_destroy (f);
         return -1;
     }
@@ -255,13 +254,13 @@ static void *module_thread (void *arg)
         flux_msg_destroy (msg);
     }
     if (!(f = flux_rpc_pack (p->h_module_end,
-                             "broker.module-status",
+                             "module.status",
                              FLUX_NODEID_ANY,
                              FLUX_RPC_NORESPONSE,
                              "{s:i s:i}",
                              "status", FLUX_MODSTATE_EXITED,
                              "errnum", mod_main_errno))) {
-        flux_log_error (p->h_module_end, "broker.module-status EXITED error");
+        flux_log_error (p->h_module_end, "module.status EXITED error");
         goto done;
     }
     flux_future_destroy (f);
@@ -453,11 +452,11 @@ int module_sendmsg_new (module_t *p, flux_msg_t **msg)
     if (flux_msg_get_type (*msg, &type) < 0
         || flux_msg_get_topic (*msg, &topic) < 0)
         return -1;
-    /* Muted modules only accept response to broker.module-status
+    /* Muted modules only accept response to module.status
      */
     if (p->muted) {
         if (type != FLUX_MSGTYPE_RESPONSE
-            || !streq (topic, "broker.module-status")) {
+            || !streq (topic, "module.status")) {
             errno = ENOSYS;
             return -1;
         }
