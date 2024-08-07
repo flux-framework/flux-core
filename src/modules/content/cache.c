@@ -97,6 +97,7 @@ struct content_cache {
     uint32_t blob_size_limit;
     uint32_t flush_batch_limit;
     uint32_t flush_batch_count;
+    int flush_errno;
 
     uint32_t purge_target_size;
     uint32_t purge_old_entry;
@@ -560,6 +561,8 @@ static void cache_store_continuation (flux_future_t *f, void *arg)
         goto error;
     }
     cache_entry_dirty_clear (cache, e);
+    /* clear flush errno if backing store functional/recovered */
+    cache->flush_errno = 0;
     flux_future_destroy (f);
     cache_resume_flush (cache);
     return;
@@ -569,6 +572,13 @@ error:
                                 errno,
                                 NULL,
                                 "store");
+    /* all flush requests are assumed to fail with same errno */
+    request_list_respond_error (&cache->flush_requests,
+                                cache->h,
+                                errno,
+                                NULL,
+                                "flush");
+    cache->flush_errno = errno;
     flux_future_destroy (f);
     cache_resume_flush (cache);
 }
@@ -909,6 +919,15 @@ static void content_flush_request (flux_t *h,
     if (cache->acct_dirty > 0) {
         if (cache_flush (cache) < 0)
             goto error;
+        /* if flush_batch_count == 0, no stores are in progress.  If
+         * there is a problem with the backing store, we must return
+         * error here.  We assume that the last store error is the
+         * primary storage error (i.e. ENOSPC, ENOSYS, etc.).
+         */
+        if (!cache->flush_batch_count && cache->flush_errno) {
+            errno = cache->flush_errno;
+            goto error;
+        }
         if (msgstack_push (&cache->flush_requests, msg) < 0)
             goto error;
         return;
