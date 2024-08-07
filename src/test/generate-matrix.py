@@ -83,7 +83,7 @@ class BuildMatrix:
     def add_build(
         self,
         name=None,
-        image="fedora40",
+        image=None,
         args=default_args,
         jobs=6,
         env=None,
@@ -208,18 +208,6 @@ matrix.add_multiarch_build(
         TEST_INSTALL="t",
     ),
 )
-fedora40_platforms = deepcopy(DEFAULT_MULTIARCH_PLATFORMS)
-fedora40_platforms["linux/arm64"]["timeout_minutes"] = 240
-matrix.add_multiarch_build(
-    name="fedora40",
-    default_suffix=" - test-install",
-    args=common_args,
-    platforms=fedora40_platforms,
-    env=dict(
-        TEST_INSTALL="t",
-    ),
-    docker_tag=True,
-)
 
 matrix.add_multiarch_build(
     name="noble",
@@ -246,6 +234,16 @@ matrix.add_multiarch_build(
     ),
 )
 # single arch builds that still produce a container
+matrix.add_build(
+    name="fedora40 - test-install",
+    image="fedora40",
+    args=common_args,
+    env=dict(
+        TEST_INSTALL="t",
+    ),
+    docker_tag=True,
+)
+
 # Ubuntu: TEST_INSTALL
 matrix.add_build(
     name="jammy - test-install",
@@ -282,6 +280,7 @@ matrix.add_build(
 # fedora40: clang-18
 matrix.add_build(
     name="fedora40 - clang-18",
+    image="fedora40",
     env=dict(
         CC="clang-18",
         CXX="clang++-18",
@@ -322,6 +321,7 @@ matrix.add_build(
 # inception
 matrix.add_build(
     name="inception",
+    image="fedora40",
     command_args="--inception",
 )
 
