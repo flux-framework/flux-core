@@ -94,7 +94,14 @@ test_expect_success 'flux submit --queue works' '
 test_expect_success 'flux submit --queue works' '
 	flux submit --env=-* --dry-run -q debug hostname >queue2.out && grep -i "debug" queue2.out
 '
-
+test_expect_success 'flux submit --bank works' '
+	flux submit --env=-* --dry-run --bank=mybank hostname >bank.out &&
+	grep -i "mybank" bank.out
+'
+test_expect_success 'flux submit -B works' '
+	flux submit --env=-* --dry-run -B mybank2 hostname >bank2.out &&
+	grep -i "mybank2" bank2.out
+'
 test_expect_success 'flux submit --setattr works' '
 	flux submit --env=-* --dry-run \
 		--setattr user.meep=false \

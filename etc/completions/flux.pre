@@ -375,6 +375,7 @@ _flux_submit_commands()
 
     local COMMON_OPTIONS="\
         -q --queue= \
+        -B --bank= \
         -t --time-limit= \
         -o --setopt= \
         --setattr= \
