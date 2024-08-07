@@ -74,10 +74,20 @@ struct content_sqlite {
     size_t lzo_bufsize;
     void *lzo_buf;
     struct content_stats stats;
-    const char *journal_mode;
-    const char *synchronous;
+    char *journal_mode;
+    char *synchronous;
     bool truncate;
 };
+
+static int set_config (char **conf, const char *val)
+{
+    char *tmp;
+    if (!(tmp = strdup (val)))
+        return -1;
+    free (*conf);
+    *conf = tmp;
+    return 0;
+}
 
 static void log_sqlite_error (struct content_sqlite *ctx, const char *fmt, ...)
 {
@@ -729,6 +739,8 @@ static void content_sqlite_destroy (struct content_sqlite *ctx)
         free (ctx->dbfile);
         free (ctx->lzo_buf);
         free (ctx->hashfun);
+        free (ctx->journal_mode);
+        free (ctx->synchronous);
         free (ctx);
         errno = saved_errno;
     }
@@ -758,8 +770,10 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
         goto error;
     ctx->lzo_bufsize = lzo_buf_chunksize;
     ctx->h = h;
-    ctx->journal_mode = "WAL";
-    ctx->synchronous = "NORMAL";
+    if (set_config (&ctx->journal_mode, "WAL") < 0)
+        goto error;
+    if (set_config (&ctx->synchronous, "NORMAL") < 0)
+        goto error;
 
     /* Some tunables:
      * - the hash function, e.g. sha1, sha256
@@ -780,8 +794,10 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
      */
     if (!(dbdir = flux_attr_get (h, "statedir"))) {
         dbdir = flux_attr_get (h, "rundir");
-        ctx->journal_mode = "OFF";
-        ctx->synchronous = "OFF";
+        if (set_config (&ctx->journal_mode, "OFF") < 0)
+            goto error;
+        if (set_config (&ctx->synchronous, "OFF") < 0)
+            goto error;
     }
     if (!dbdir) {
         flux_log_error (h, "neither statedir nor rundir are set");
@@ -816,10 +832,12 @@ static int process_args (struct content_sqlite *ctx,
     int i;
     for (i = 0; i < argc; i++) {
         if (strstarts (argv[i], "journal_mode=")) {
-            ctx->journal_mode = argv[i] + 13;
+            if (set_config (&ctx->journal_mode, argv[i] + 13) < 0)
+                return -1;
         }
         else if (strstarts (argv[i], "synchronous=")) {
-            ctx->synchronous = argv[i] + 12;
+            if (set_config (&ctx->synchronous, argv[i] + 12) < 0)
+                return -1;
         }
         else if (streq ("truncate", argv[i])) {
             *truncate = true;
