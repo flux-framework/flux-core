@@ -923,6 +923,7 @@ static void broker_online_cb (flux_future_t *f, void *arg)
             free (hosts);
             free (ranks);
         }
+        idset_destroy (loss);
     }
 
     idset_destroy (previous_online);
