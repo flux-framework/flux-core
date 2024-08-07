@@ -342,6 +342,18 @@ test_expect_success 'run flux with statedir and verify modes' '
 	    -o,-Sstatedir=$(pwd) flux dmesg >logs4  &&
 	grep "journal_mode=WAL synchronous=NORMAL" logs4
 '
+test_expect_success 'run flux without statedir and verify config' '
+	flux start -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	    flux module stats content-sqlite >stats1 &&
+	$jq -e ".config.journal_mode == \"OFF\"" < stats1 &&
+	$jq -e ".config.synchronous == \"OFF\"" < stats1
+'
+test_expect_success 'run flux with statedir and verify config' '
+	flux start -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	    -o,-Sstatedir=$(pwd) flux module stats content-sqlite >stats2  &&
+	$jq -e ".config.journal_mode == \"WAL\"" < stats2 &&
+	$jq -e ".config.synchronous == \"NORMAL\"" < stats2
+'
 
 # Will create in WAL mode since statedir is set
 recreate_database()
