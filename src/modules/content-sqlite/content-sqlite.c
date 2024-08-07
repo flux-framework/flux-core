@@ -54,6 +54,11 @@ const char *sql_checkpt_get = "SELECT value FROM checkpt"
                               "  WHERE key = ?1";
 const char *sql_checkpt_put = "REPLACE INTO checkpt (key,value) "
                               "  values (?1, ?2)";
+const char *sql_create_table_preallocate = "CREATE TABLE if not exists preallocate("
+                                       "  data BLOB"
+                                       ");";
+const char *sql_preallocate_fill = "INSERT INTO preallocate (data) values (?1)";
+const char *sql_drop_table_preallocate = "DROP TABLE preallocate";
 
 struct content_stats {
     tstat_t load;
@@ -68,6 +73,7 @@ struct content_sqlite {
     sqlite3_stmt *store_stmt;
     sqlite3_stmt *checkpt_get_stmt;
     sqlite3_stmt *checkpt_put_stmt;
+    sqlite3_stmt *preallocate_fill_stmt;
     flux_t *h;
     char *hashfun;
     int hash_size;
@@ -76,8 +82,15 @@ struct content_sqlite {
     struct content_stats stats;
     char *journal_mode;
     char *synchronous;
+    uint64_t preallocate_size;
     bool truncate;
 };
+
+/* By default, sqlite is compiled with a max blob of 1 billion
+ * bytes.  So we'll go with 500m blocks as the default largest
+ * blob we'll write out at a time.
+ */
+#define PREALLOCATE_BLOBSIZE (1024*1024*512)
 
 static int set_config (char **conf, const char *val)
 {
@@ -510,6 +523,11 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
                 log_sqlite_error (ctx, "sqlite_finalize checkpt_put_stmt");
             ctx->checkpt_put_stmt = NULL;
         }
+        if (ctx->preallocate_fill_stmt) {
+            if (sqlite3_finalize (ctx->preallocate_fill_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize preallocate_fill_stmt");
+            ctx->preallocate_fill_stmt = NULL;
+        }
         if (ctx->db) {
             if (sqlite3_close (ctx->db) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite3_close");
@@ -742,6 +760,92 @@ error:
     return -1;
 }
 
+static int content_sqlite_preallocate (struct content_sqlite *ctx)
+{
+    struct stat statbuf;
+    uint64_t preallocate_count;
+    int blobsize = PREALLOCATE_BLOBSIZE;
+    int save_errno;
+
+    if (!ctx->preallocate_size)
+        return 0;
+
+    /* We must pre-allocate via non-journaling modes, as journals may
+     * not allow us to pre-allocate sizes > 50% of the available
+     * space.  i.e. say you have a 10m mount, you can't write 6m to
+     * the journal and then expect sqlite to copy the 6m over to the
+     * db later.
+     */
+    if (content_sqlite_opendb (ctx, "OFF", "FULL") < 0)
+        return -1;
+
+    if (stat (ctx->dbfile, &statbuf) < 0) {
+        flux_log_error (ctx->h, "error getting db stats");
+        goto error;
+    }
+
+    if (statbuf.st_size >= ctx->preallocate_size)
+        goto out;
+
+    preallocate_count = ctx->preallocate_size - statbuf.st_size;
+
+    if (sqlite3_exec (ctx->db,
+                      sql_create_table_preallocate,
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "creating preallocate table");
+        goto error;
+    }
+
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_preallocate_fill,
+                            -1,
+                            &ctx->preallocate_fill_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing preallocate_fill stmt");
+        goto error;
+    }
+
+    while (preallocate_count > 0) {
+        if (preallocate_count < PREALLOCATE_BLOBSIZE)
+            blobsize = preallocate_count;
+        if (sqlite3_bind_zeroblob (ctx->preallocate_fill_stmt,
+                                   1,
+                                   blobsize) != SQLITE_OK) {
+            log_sqlite_error (ctx, "preallocate: binding zeroblob");
+            goto error;
+        }
+        if (sqlite3_step (ctx->preallocate_fill_stmt) != SQLITE_DONE
+            && sqlite3_errcode (ctx->db) != SQLITE_CONSTRAINT) {
+            log_sqlite_error (ctx, "preallocate: executing stmt");
+            goto error;
+        }
+        sqlite3_reset (ctx->preallocate_fill_stmt);
+        preallocate_count -= blobsize;
+    }
+
+    if (sqlite3_exec (ctx->db,
+                      sql_drop_table_preallocate,
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "dropping preallocate table");
+        goto error;
+    }
+
+out:
+    content_sqlite_closedb (ctx);
+    return 0;
+
+error:
+    set_errno_from_sqlite_error (ctx);
+    save_errno = errno;
+    content_sqlite_closedb (ctx);
+    errno = save_errno;
+    return -1;
+}
+
 static void content_sqlite_destroy (struct content_sqlite *ctx)
 {
     if (ctx) {
@@ -865,13 +969,15 @@ static int process_config (struct content_sqlite *ctx,
     flux_error_t error;
     const char *journal_mode = NULL;
     const char *synchronous = NULL;
+    int64_t preallocate_size = 0;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s}}",
+                          "{s?{s?s s?s s?I}}",
                           "content-sqlite",
                             "journal_mode", &journal_mode,
-                            "synchronous", &synchronous) < 0) {
+                            "synchronous", &synchronous,
+                            "preallocate", &preallocate_size) < 0) {
         flux_log_error (ctx->h, "%s", error.text);
         return -1;
     }
@@ -892,6 +998,13 @@ static int process_config (struct content_sqlite *ctx,
         }
         if (set_config (&ctx->synchronous, synchronous) < 0)
             return -1;
+    }
+    if (preallocate_size) {
+        if (preallocate_size < 0) {
+            errno = EINVAL;
+            return -1;
+        }
+        ctx->preallocate_size = preallocate_size;
     }
     return 0;
 }
@@ -924,6 +1037,17 @@ static int process_args (struct content_sqlite *ctx,
         else if (streq ("truncate", argv[i])) {
             *truncate = true;
         }
+        else if (strstarts (argv[i], "preallocate=")) {
+            unsigned long tmp;
+            char *endptr;
+            errno = 0;
+            tmp = strtoul (argv[i]+12, &endptr, 10);
+            if (errno != 0 || *endptr != '\0' || !tmp) {
+                errno = EINVAL;
+                return -1;
+            }
+            ctx->preallocate_size = tmp;
+        }
         else {
             flux_log (ctx->h, LOG_ERR, "Unknown module option: '%s'", argv[i]);
             errno = EINVAL;
@@ -948,6 +1072,8 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (process_args (ctx, argc, argv, &truncate) < 0)
         goto done;
     if (content_sqlite_setup (ctx, truncate) < 0)
+        goto done;
+    if (content_sqlite_preallocate (ctx) < 0)
         goto done;
     if (content_sqlite_opendb (ctx, ctx->journal_mode, ctx->synchronous) < 0)
         goto done;
