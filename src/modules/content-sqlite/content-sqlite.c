@@ -16,7 +16,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <unistd.h>
 #include <sys/statvfs.h>
 #include <sqlite3.h>
 #include <lz4.h>
