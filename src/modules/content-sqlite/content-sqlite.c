@@ -613,16 +613,20 @@ error:
     json_decref (store_time);
 }
 
+static int content_sqlite_setup (struct content_sqlite *ctx, bool truncate)
+{
+    if (truncate)
+        (void)unlink (ctx->dbfile);
+    return 0;
+}
+
 /* Open the database file ctx->dbfile and set up the database.
  */
-static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
+static int content_sqlite_opendb (struct content_sqlite *ctx)
 {
     int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
     char s[128];
     int count;
-
-    if (truncate)
-        (void)unlink (ctx->dbfile);
 
     if (sqlite3_open_v2 (ctx->dbfile, &ctx->db, flags, NULL) != SQLITE_OK) {
         log_sqlite_error (ctx, "opening %s", ctx->dbfile);
@@ -936,7 +940,9 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     if (process_args (ctx, argc, argv, &truncate) < 0)
         goto done;
-    if (content_sqlite_opendb (ctx, truncate) < 0)
+    if (content_sqlite_setup (ctx, truncate) < 0)
+        goto done;
+    if (content_sqlite_opendb (ctx) < 0)
         goto done;
     if (content_register_service (h, "content-backing") < 0)
         goto done;
