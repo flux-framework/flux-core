@@ -454,6 +454,62 @@ error:
         flux_log_error (h, "error responding to module.debug request");
 }
 
+static void trace_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    struct flux_match match = FLUX_MATCH_ANY;
+    json_t *names = NULL;
+    size_t index;
+    json_t *entry;
+    const char *errmsg = NULL;
+    flux_error_t error;
+    zlist_t *l = NULL;
+    module_t *p;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:o s:i s:s}",
+                             "names", &names,
+                             "typemask", &match.typemask,
+                             "topic_glob", &match.topic_glob) < 0)
+        goto error;
+    if (!flux_msg_is_streaming (msg) || !json_is_array (names)) {
+        errno = EPROTO;
+        goto error;
+    }
+    /* Put modules in a list as the names are checked,
+     */
+    if (!(l = zlist_new ()))
+        goto nomem;
+    json_array_foreach (names, index, entry) {
+        const char *name = json_string_value (entry);
+        if (!(p = modhash_lookup_byname (ctx->modhash, (name)))) {
+            errprintf (&error, "%s module is not loaded", name);
+            errmsg = error.text;
+            errno = ENOENT;
+            goto error;
+        }
+        if (zlist_append (l, p) < 0)
+            goto nomem;
+    }
+    p = zlist_first (l);
+    while (p) {
+        (void)module_trace (p, msg);
+        p = zlist_next (l);
+    }
+    zlist_destroy (&l);
+    return;
+nomem:
+    errno = ENOMEM;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to module.trace");
+    zlist_destroy (&l);
+}
+
 static void status_cb (flux_t *h,
                        flux_msg_handler_t *mh,
                        const flux_msg_t *msg,
@@ -509,6 +565,14 @@ static void disconnect_cb (flux_t *h,
                            const flux_msg_t *msg,
                            void *arg)
 {
+    broker_ctx_t *ctx = arg;
+    module_t *p;
+
+    p = zhash_first (ctx->modhash->zh_byuuid);
+    while (p) {
+        module_trace_disconnect (p, msg);
+        p = zhash_next (ctx->modhash->zh_byuuid);
+    }
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -540,6 +604,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "module.debug",
         debug_cb,
+        0,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "module.trace",
+        trace_cb,
         0,
     },
     {
@@ -662,6 +732,8 @@ module_t *modhash_lookup_byname (modhash_t *mh, const char *name)
     char *uuid;
     module_t *result = NULL;
 
+    if (!name)
+        return NULL;
     if (!(uuids = zhash_keys (mh->zh_byuuid))) {
         errno = ENOMEM;
         return NULL;

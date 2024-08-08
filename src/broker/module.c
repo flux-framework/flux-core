@@ -45,6 +45,8 @@
 #include "modservice.h"
 
 struct broker_module {
+    flux_t *h;              /* ref to broker's internal flux_t handle */
+
     flux_watcher_t *broker_w;
 
     double lastseen;
@@ -78,6 +80,7 @@ struct broker_module {
 
     struct flux_msglist *rmmod_requests;
     struct flux_msglist *insmod_requests;
+    struct flux_msglist *trace_requests;
     struct flux_msglist *deferred_messages;
 
     flux_t *h_module_end;   /* module end of interthread_channel */
@@ -332,6 +335,7 @@ module_t *module_create (flux_t *h,
     p->main = mod_main;
     p->dso = dso;
     p->rank = rank;
+    p->h = h;
     if (!(p->conf = flux_conf_copy (flux_get_conf (h))))
         goto cleanup;
     if (!(p->parent_uuid_str = strdup (parent_uuid)))
@@ -349,7 +353,8 @@ module_t *module_create (flux_t *h,
     }
     if (!(p->path = strdup (path))
         || !(p->rmmod_requests = flux_msglist_create ())
-        || !(p->insmod_requests = flux_msglist_create ()))
+        || !(p->insmod_requests = flux_msglist_create ())
+        || !(p->trace_requests = flux_msglist_create ()))
         goto nomem;
     if (name) {
         if (!(p->name = strdup (name)))
@@ -437,9 +442,70 @@ int module_get_status (module_t *p)
     return p ? p->status : 0;
 }
 
+static void message_trace (module_t *p,
+                           const char *prefix,
+                           const flux_msg_t *msg)
+{
+    const flux_msg_t *req;
+    double now = flux_reactor_now (flux_get_reactor (p->h));
+    int type = 0;
+    char buf[64];
+    const char *topic = NULL;
+    int payload_size = 0;
+
+    (void)flux_msg_get_type (msg, &type);
+    if (type == FLUX_MSGTYPE_CONTROL) {
+        int ctype;
+        int cstatus;
+        if (flux_control_decode (msg, &ctype, &cstatus) == 0)
+            snprintf (buf,
+                      sizeof (buf),
+                      "%s %d",
+                      ctype == FLUX_MODSTATE_INIT ? "init" :
+                      ctype == FLUX_MODSTATE_RUNNING ? "running" :
+                      ctype == FLUX_MODSTATE_FINALIZING ? "finalizing" :
+                      ctype == FLUX_MODSTATE_EXITED ? "exited" : "unknown",
+                      cstatus);
+    }
+    else {
+        (void)flux_msg_get_topic (msg, &topic);
+        (void)flux_msg_get_payload (msg, NULL, &payload_size);
+        if (topic && streq (topic, "module.trace"))
+            return;
+    }
+
+    req = flux_msglist_first (p->trace_requests);
+    while (req) {
+        struct flux_match match = FLUX_MATCH_ANY;
+        if (flux_request_unpack (req,
+                                 NULL,
+                                 "{s:i s:s}",
+                                 "typemask", &match.typemask,
+                                 "topic_glob", &match.topic_glob) < 0
+            || !flux_msg_cmp (msg, match))
+            goto next;
+        if (flux_respond_pack (p->h,
+                               req,
+                               "{s:f s:s s:i s:s s:s s:i}",
+                               "timestamp", now,
+                               "prefix", prefix,
+                               "type", type,
+                               "name", p->name,
+                               "topic", topic ? topic : "NO-TOPIC",
+                               "payload_size", payload_size) < 0)
+            flux_log_error (p->h, "error responding to module.trace");
+next:
+        req = flux_msglist_next (p->trace_requests);
+    }
+}
+
 flux_msg_t *module_recvmsg (module_t *p)
 {
-    return flux_recv (p->h_broker_end, FLUX_MATCH_ANY, FLUX_O_NONBLOCK);
+    flux_msg_t *msg;
+    msg = flux_recv (p->h_broker_end, FLUX_MATCH_ANY, FLUX_O_NONBLOCK);
+    if (msg && flux_msglist_count (p->trace_requests) > 0)
+        message_trace (p, "tx", msg);
+    return msg;
 }
 
 int module_sendmsg_new (module_t *p, flux_msg_t **msg)
@@ -468,6 +534,8 @@ int module_sendmsg_new (module_t *p, flux_msg_t **msg)
         *msg = NULL;
         return 0;
     }
+    if (flux_msglist_count (p->trace_requests) > 0)
+        message_trace (p, "rx", *msg);
     return flux_send_new (p->h_broker_end, msg, 0);
 }
 
@@ -528,6 +596,7 @@ void module_destroy (module_t *p)
     flux_msglist_destroy (p->rmmod_requests);
     flux_msglist_destroy (p->insmod_requests);
     flux_msglist_destroy (p->deferred_messages);
+    flux_msglist_destroy (p->trace_requests);
     subhash_destroy (p->sub);
     free (p);
     errno = saved_errno;
@@ -713,6 +782,18 @@ ssize_t module_get_recv_queue_count (module_t *p)
                       sizeof (count)) < 0)
         return -1;
     return count;
+}
+
+int module_trace (module_t *p, const flux_msg_t *msg)
+{
+    if (flux_msglist_append (p->trace_requests, msg) < 0)
+        return -1;
+    return 0;
+}
+
+void module_trace_disconnect (module_t *p, const flux_msg_t *msg)
+{
+    (void)flux_msglist_disconnect (p->trace_requests, msg);
 }
 
 /*
