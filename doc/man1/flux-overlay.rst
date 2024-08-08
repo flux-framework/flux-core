@@ -86,8 +86,9 @@ errors
 
 .. program:: flux overlay errors
 
-:program:`flux overlay errors` summarizes any errors recorded for lost nodes.
-The output consists of one line per unique error with a hostlist prefix.
+:program:`flux overlay errors` summarizes any errors recorded for lost or
+offline nodes.  The output consists of one line per unique error with a
+hostlist prefix.
 
 .. option:: -t, --timeout=FSD
 

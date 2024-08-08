@@ -139,9 +139,9 @@ test_expect_success 'flux overlay status shows rank 3 offline' '
 	test_cmp health.exp health.out
 '
 
-test_expect_success 'flux overlay errors prints nothing' '
+test_expect_success 'flux overlay errors shows rank 3' '
 	flux overlay errors --timeout=0 >errors2.out &&
-	test $(wc -l <errors2.out) -eq 0
+	grep "fake3: administrative shutdown" errors2.out
 '
 
 test_expect_success 'flux overlay status --summary' '
@@ -202,9 +202,8 @@ test_expect_success 'ping to rank 14 fails with EHOSTUNREACH' '
 '
 
 test_expect_success 'flux overlay errors shows the lost connection' '
-	echo "fake14: lost connection" >errors3.exp &&
 	flux overlay errors --timeout=0 >errors3.out &&
-	test_cmp errors3.exp errors3.out
+	grep "fake14: lost connection" errors3.out
 '
 
 test_expect_success 'wait for rank 0 subtree to be degraded' '

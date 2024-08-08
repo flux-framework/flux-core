@@ -913,8 +913,11 @@ void gather_errors (flux_t *h,
                 log_msg_exit ("error adding to error hash");
         }
         else if (streq (status, "offline")) {
-            /* Don't report offline nodes.
-             */
+            // report offline only if there is error text
+            if (error && strlen (error) > 0) {
+                if (errhash_add_one (errhash, child_rank, error) < 0)
+                    log_msg_exit ("error adding to error hash");
+            }
         }
         else { // recurse
             gather_errors (h, child_rank, errhash, timeout);
