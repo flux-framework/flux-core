@@ -28,9 +28,6 @@ typedef struct modhash modhash_t;
 modhash_t *modhash_create (struct broker *ctx);
 int modhash_destroy (modhash_t *mh);
 
-void modhash_add (modhash_t *mh, module_t *p);
-void modhash_remove (modhash_t *mh, module_t *p);
-
 /* Send an event message to all modules that have matching subscription.
  */
 int modhash_event_mcast (modhash_t *mh, const flux_msg_t *msg);

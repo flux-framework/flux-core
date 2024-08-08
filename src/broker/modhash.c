@@ -57,7 +57,7 @@ int modhash_response_sendmsg_new (modhash_t *mh, flux_msg_t **msg)
     return module_sendmsg_new (p, msg);
 }
 
-void modhash_add (modhash_t *mh, module_t *p)
+static void modhash_add (modhash_t *mh, module_t *p)
 {
     int rc;
 
@@ -68,7 +68,7 @@ void modhash_add (modhash_t *mh, module_t *p)
                   (zhash_free_fn *)module_destroy);
 }
 
-void modhash_remove (modhash_t *mh, module_t *p)
+static void modhash_remove (modhash_t *mh, module_t *p)
 {
     zhash_delete (mh->zh_byuuid, module_get_uuid (p));
 }
