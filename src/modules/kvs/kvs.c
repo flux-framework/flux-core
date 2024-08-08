@@ -2852,8 +2852,15 @@ static int process_args (struct kvs_ctx *ctx, int ac, char **av)
     int i;
 
     for (i = 0; i < ac; i++) {
-        if (strstarts (av[i], "transaction-merge="))
-            ctx->transaction_merge = strtoul (av[i]+13, NULL, 10);
+        if (strstarts (av[i], "transaction-merge=")) {
+            char *endptr;
+            errno = 0;
+            ctx->transaction_merge = strtoul (av[i]+18, &endptr, 10);
+            if (errno != 0 || *endptr != '\0') {
+                errno = EINVAL;
+                return -1;
+            }
+        }
         else {
             flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
             errno = EINVAL;

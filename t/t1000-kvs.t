@@ -1291,4 +1291,8 @@ test_expect_success 'module fails to load with unknown option' '
 	test_must_fail flux module load kvs badopt
 '
 
+test_expect_success 'module fails to load with bad input to transaction-merge' '
+        test_must_fail flux module reload kvs transaction-merge=foobar
+'
+
 test_done
