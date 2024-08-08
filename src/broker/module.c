@@ -45,11 +45,13 @@
 #include "modservice.h"
 
 struct broker_module {
+    flux_t *h;              /* ref to broker's internal flux_t handle */
+
     flux_watcher_t *broker_w;
 
     double lastseen;
 
-    flux_t *h_broker;       /* broker end of interthread channel */
+    flux_t *h_broker_end;   /* broker end of interthread channel */
     char uri[128];
 
     uuid_t uuid;            /* uuid for unique request sender identity */
@@ -78,9 +80,10 @@ struct broker_module {
 
     struct flux_msglist *rmmod_requests;
     struct flux_msglist *insmod_requests;
+    struct flux_msglist *trace_requests;
     struct flux_msglist *deferred_messages;
 
-    flux_t *h;               /* module's handle */
+    flux_t *h_module_end;   /* module end of interthread_channel */
     struct subhash *sub;
 };
 
@@ -150,14 +153,14 @@ static int module_finalizing (module_t *p)
 {
     flux_future_t *f;
 
-    if (!(f = flux_rpc_pack (p->h,
-                             "broker.module-status",
+    if (!(f = flux_rpc_pack (p->h_module_end,
+                             "module.status",
                              FLUX_NODEID_ANY,
                              0,
                              "{s:i}",
                              "status", FLUX_MODSTATE_FINALIZING))
         || flux_rpc_get (f, NULL)) {
-        flux_log_error (p->h, "broker.module-status FINALIZING error");
+        flux_log_error (p->h_module_end, "module.status FINALIZING error");
         flux_future_destroy (f);
         return -1;
     }
@@ -181,21 +184,21 @@ static void *module_thread (void *arg)
 
     /* Connect to broker socket, enable logging, register built-in services
      */
-    if (!(p->h = flux_open (p->uri, 0))) {
+    if (!(p->h_module_end = flux_open (p->uri, 0))) {
         log_err ("flux_open %s", uri);
         goto done;
     }
-    if (attr_cache_from_json (p->h, p->attr_cache) < 0) {
+    if (attr_cache_from_json (p->h_module_end, p->attr_cache) < 0) {
         log_err ("%s: error priming broker attribute cache", p->name);
         goto done;
     }
-    flux_log_set_appname (p->h, p->name);
-    if (flux_set_conf (p->h, p->conf) < 0) {
+    flux_log_set_appname (p->h_module_end, p->name);
+    if (flux_set_conf (p->h_module_end, p->conf) < 0) {
         log_err ("%s: error setting config object", p->name);
         goto done;
     }
-    p->conf = NULL; // flux_set_conf() transfers ownership to p->h
-    if (modservice_register (p->h, p) < 0) {
+    p->conf = NULL; // flux_set_conf() transfers ownership to p->h_module_end
+    if (modservice_register (p->h_module_end, p) < 0) {
         log_err ("%s: modservice_register", p->name);
         goto done;
     }
@@ -219,11 +222,11 @@ static void *module_thread (void *arg)
         goto done;
     }
     argz_extract (p->argz, p->argz_len, av);
-    if (p->main (p->h, ac, av) < 0) {
+    if (p->main (p->h_module_end, ac, av) < 0) {
         mod_main_errno = errno;
         if (mod_main_errno == 0)
             mod_main_errno = ECONNRESET;
-        flux_log (p->h, LOG_CRIT, "module exiting abnormally");
+        flux_log (p->h_module_end, LOG_CRIT, "module exiting abnormally");
     }
 
     /* Before processing unhandled requests, ensure that this module
@@ -232,34 +235,42 @@ static void *module_thread (void *arg)
      * which could cause the broker to block.
      */
     if (module_finalizing (p) < 0)
-        flux_log_error (p->h, "failed to set module state to finalizing");
+        flux_log_error (p->h_module_end,
+                        "failed to set module state to finalizing");
 
     /* If any unhandled requests were received during shutdown,
      * respond to them now with ENOSYS.
      */
-    while ((msg = flux_recv (p->h, FLUX_MATCH_REQUEST, FLUX_O_NONBLOCK))) {
+    while ((msg = flux_recv (p->h_module_end,
+                             FLUX_MATCH_REQUEST,
+                             FLUX_O_NONBLOCK))) {
         const char *topic = "unknown";
         (void)flux_msg_get_topic (msg, &topic);
-        flux_log (p->h, LOG_DEBUG, "responding to post-shutdown %s", topic);
-        if (flux_respond_error (p->h, msg, ENOSYS, NULL) < 0)
-            flux_log_error (p->h, "responding to post-shutdown %s", topic);
+        flux_log (p->h_module_end,
+                  LOG_DEBUG,
+                  "responding to post-shutdown %s",
+                  topic);
+        if (flux_respond_error (p->h_module_end, msg, ENOSYS, NULL) < 0)
+            flux_log_error (p->h_module_end,
+                            "responding to post-shutdown %s",
+                            topic);
         flux_msg_destroy (msg);
     }
-    if (!(f = flux_rpc_pack (p->h,
-                             "broker.module-status",
+    if (!(f = flux_rpc_pack (p->h_module_end,
+                             "module.status",
                              FLUX_NODEID_ANY,
                              FLUX_RPC_NORESPONSE,
                              "{s:i s:i}",
                              "status", FLUX_MODSTATE_EXITED,
                              "errnum", mod_main_errno))) {
-        flux_log_error (p->h, "broker.module-status EXITED error");
+        flux_log_error (p->h_module_end, "module.status EXITED error");
         goto done;
     }
     flux_future_destroy (f);
 done:
     free (av);
-    flux_close (p->h);
-    p->h = NULL;
+    flux_close (p->h_module_end);
+    p->h_module_end = NULL;
     return NULL;
 }
 
@@ -324,6 +335,7 @@ module_t *module_create (flux_t *h,
     p->main = mod_main;
     p->dso = dso;
     p->rank = rank;
+    p->h = h;
     if (!(p->conf = flux_conf_copy (flux_get_conf (h))))
         goto cleanup;
     if (!(p->parent_uuid_str = strdup (parent_uuid)))
@@ -341,7 +353,8 @@ module_t *module_create (flux_t *h,
     }
     if (!(p->path = strdup (path))
         || !(p->rmmod_requests = flux_msglist_create ())
-        || !(p->insmod_requests = flux_msglist_create ()))
+        || !(p->insmod_requests = flux_msglist_create ())
+        || !(p->trace_requests = flux_msglist_create ()))
         goto nomem;
     if (name) {
         if (!(p->name = strdup (name)))
@@ -372,17 +385,17 @@ module_t *module_create (flux_t *h,
      */
     // copying 13 + 37 + 1 = 51 bytes into 128 byte buffer cannot fail
     (void)snprintf (p->uri, sizeof (p->uri), "interthread://%s", p->uuid_str);
-    if (!(p->h_broker = flux_open (p->uri, FLUX_O_NOREQUEUE))
-        || flux_opt_set (p->h_broker,
+    if (!(p->h_broker_end = flux_open (p->uri, FLUX_O_NOREQUEUE))
+        || flux_opt_set (p->h_broker_end,
                          FLUX_OPT_ROUTER_NAME,
                          parent_uuid,
                          strlen (parent_uuid) + 1) < 0
-        || flux_set_reactor (p->h_broker, r) < 0) {
+        || flux_set_reactor (p->h_broker_end, r) < 0) {
         errprintf (error, "could not create %s interthread handle", p->name);
         goto cleanup;
     }
     if (!(p->broker_w = flux_handle_watcher_create (r,
-                                                    p->h_broker,
+                                                    p->h_broker_end,
                                                     FLUX_POLLIN,
                                                     module_cb,
                                                     p))) {
@@ -429,9 +442,70 @@ int module_get_status (module_t *p)
     return p ? p->status : 0;
 }
 
+static void message_trace (module_t *p,
+                           const char *prefix,
+                           const flux_msg_t *msg)
+{
+    const flux_msg_t *req;
+    double now = flux_reactor_now (flux_get_reactor (p->h));
+    int type = 0;
+    char buf[64];
+    const char *topic = NULL;
+    int payload_size = 0;
+
+    (void)flux_msg_get_type (msg, &type);
+    if (type == FLUX_MSGTYPE_CONTROL) {
+        int ctype;
+        int cstatus;
+        if (flux_control_decode (msg, &ctype, &cstatus) == 0)
+            snprintf (buf,
+                      sizeof (buf),
+                      "%s %d",
+                      ctype == FLUX_MODSTATE_INIT ? "init" :
+                      ctype == FLUX_MODSTATE_RUNNING ? "running" :
+                      ctype == FLUX_MODSTATE_FINALIZING ? "finalizing" :
+                      ctype == FLUX_MODSTATE_EXITED ? "exited" : "unknown",
+                      cstatus);
+    }
+    else {
+        (void)flux_msg_get_topic (msg, &topic);
+        (void)flux_msg_get_payload (msg, NULL, &payload_size);
+        if (topic && streq (topic, "module.trace"))
+            return;
+    }
+
+    req = flux_msglist_first (p->trace_requests);
+    while (req) {
+        struct flux_match match = FLUX_MATCH_ANY;
+        if (flux_request_unpack (req,
+                                 NULL,
+                                 "{s:i s:s}",
+                                 "typemask", &match.typemask,
+                                 "topic_glob", &match.topic_glob) < 0
+            || !flux_msg_cmp (msg, match))
+            goto next;
+        if (flux_respond_pack (p->h,
+                               req,
+                               "{s:f s:s s:i s:s s:s s:i}",
+                               "timestamp", now,
+                               "prefix", prefix,
+                               "type", type,
+                               "name", p->name,
+                               "topic", topic ? topic : "NO-TOPIC",
+                               "payload_size", payload_size) < 0)
+            flux_log_error (p->h, "error responding to module.trace");
+next:
+        req = flux_msglist_next (p->trace_requests);
+    }
+}
+
 flux_msg_t *module_recvmsg (module_t *p)
 {
-    return flux_recv (p->h_broker, FLUX_MATCH_ANY, FLUX_O_NONBLOCK);
+    flux_msg_t *msg;
+    msg = flux_recv (p->h_broker_end, FLUX_MATCH_ANY, FLUX_O_NONBLOCK);
+    if (msg && flux_msglist_count (p->trace_requests) > 0)
+        message_trace (p, "tx", msg);
+    return msg;
 }
 
 int module_sendmsg_new (module_t *p, flux_msg_t **msg)
@@ -444,11 +518,11 @@ int module_sendmsg_new (module_t *p, flux_msg_t **msg)
     if (flux_msg_get_type (*msg, &type) < 0
         || flux_msg_get_topic (*msg, &topic) < 0)
         return -1;
-    /* Muted modules only accept response to broker.module-status
+    /* Muted modules only accept response to module.status
      */
     if (p->muted) {
         if (type != FLUX_MSGTYPE_RESPONSE
-            || !streq (topic, "broker.module-status")) {
+            || !streq (topic, "module.status")) {
             errno = ENOSYS;
             return -1;
         }
@@ -460,7 +534,9 @@ int module_sendmsg_new (module_t *p, flux_msg_t **msg)
         *msg = NULL;
         return 0;
     }
-    return flux_send_new (p->h_broker, msg, 0);
+    if (flux_msglist_count (p->trace_requests) > 0)
+        message_trace (p, "rx", *msg);
+    return flux_send_new (p->h_broker_end, msg, 0);
 }
 
 int module_disconnect_arm (module_t *p,
@@ -506,7 +582,7 @@ void module_destroy (module_t *p)
 
     flux_watcher_stop (p->broker_w);
     flux_watcher_destroy (p->broker_w);
-    flux_close (p->h_broker);
+    flux_close (p->h_broker_end);
 
 #ifndef __SANITIZE_ADDRESS__
     dlclose (p->dso);
@@ -520,6 +596,7 @@ void module_destroy (module_t *p)
     flux_msglist_destroy (p->rmmod_requests);
     flux_msglist_destroy (p->insmod_requests);
     flux_msglist_destroy (p->deferred_messages);
+    flux_msglist_destroy (p->trace_requests);
     subhash_destroy (p->sub);
     free (p);
     errno = saved_errno;
@@ -562,7 +639,7 @@ int module_set_defer (module_t *p, bool flag)
     if (!flag && p->deferred_messages) {
         const flux_msg_t *msg;
         while ((msg = flux_msglist_pop (p->deferred_messages))) {
-            if (flux_send_new (p->h_broker, (flux_msg_t **)&msg, 0) < 0) {
+            if (flux_send_new (p->h_broker_end, (flux_msg_t **)&msg, 0) < 0) {
                 flux_msg_decref (msg);
                 return -1;
             }
@@ -688,7 +765,7 @@ int module_event_cast (module_t *p, const flux_msg_t *msg)
 ssize_t module_get_send_queue_count (module_t *p)
 {
     size_t count;
-    if (flux_opt_get (p->h_broker,
+    if (flux_opt_get (p->h_broker_end,
                       FLUX_OPT_SEND_QUEUE_COUNT,
                       &count,
                       sizeof (count)) < 0)
@@ -699,12 +776,24 @@ ssize_t module_get_send_queue_count (module_t *p)
 ssize_t module_get_recv_queue_count (module_t *p)
 {
     size_t count;
-    if (flux_opt_get (p->h_broker,
+    if (flux_opt_get (p->h_broker_end,
                       FLUX_OPT_RECV_QUEUE_COUNT,
                       &count,
                       sizeof (count)) < 0)
         return -1;
     return count;
+}
+
+int module_trace (module_t *p, const flux_msg_t *msg)
+{
+    if (flux_msglist_append (p->trace_requests, msg) < 0)
+        return -1;
+    return 0;
+}
+
+void module_trace_disconnect (module_t *p, const flux_msg_t *msg)
+{
+    (void)flux_msglist_disconnect (p->trace_requests, msg);
 }
 
 /*

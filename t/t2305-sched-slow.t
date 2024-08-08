@@ -11,7 +11,7 @@ test_under_flux 1
 
 # Usage: module_debug_defer modname True|False
 module_debug_defer () {
-	flux python -c "import flux; flux.Flux().rpc(\"broker.module-debug\",{\"name\":\"$1\",\"defer\":$2}).get()"
+	flux python -c "import flux; flux.Flux().rpc(\"module.debug\",{\"name\":\"$1\",\"defer\":$2}).get()"
 }
 
 test_expect_success 'pause sched message handling' '

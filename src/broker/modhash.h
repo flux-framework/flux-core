@@ -18,17 +18,15 @@
 #include "attr.h"
 #include "service.h"
 #include "module.h"
+#include "broker.h"
 
 typedef struct modhash modhash_t;
 
 /* Hash-o-modules, keyed by uuid
  * Destructor returns the number of modules that had to be canceled.
  */
-modhash_t *modhash_create (void);
+modhash_t *modhash_create (struct broker *ctx);
 int modhash_destroy (modhash_t *mh);
-
-void modhash_add (modhash_t *mh, module_t *p);
-void modhash_remove (modhash_t *mh, module_t *p);
 
 /* Send an event message to all modules that have matching subscription.
  */
@@ -49,16 +47,17 @@ module_t *modhash_lookup (modhash_t *mh, const char *uuid);
  */
 module_t *modhash_lookup_byname (modhash_t *mh, const char *name);
 
-/* Prepare RFC 5 'mods' array for lsmod response.
- */
-json_t *modhash_get_modlist (modhash_t *mh,
-                             double now,
-                             struct service_switch *sw);
-
 /* Iterator
  */
 module_t *modhash_first (modhash_t *mh);
 module_t *modhash_next (modhash_t *mh);
+
+int modhash_load (modhash_t *mh,
+                  const char *name,
+                  const char *path,
+                  json_t *args,
+                  const flux_msg_t *request,
+                  flux_error_t *error);
 
 #endif /* !_BROKER_MODHASH_H */
 

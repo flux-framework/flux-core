@@ -12,6 +12,7 @@ SYNOPSIS
 | **flux** **module** **list** [*-l*]
 | **flux** **module** **stats** [*-R*] [*--clear*] *name*
 | **flux** **module** **debug** [*--setbit=VAL*] [*--clearbit=VAL*] [*--set=MASK*] [*--clear=MASK*] *name*
+| **flux** **module** **trace** [*-t TYPE,...*] [-T *topic-glob*] *name...*
 
 
 
@@ -141,6 +142,39 @@ flag bits is private to the module and its test drivers.
 .. option:: -c, --clearbit=VAL
 
   Set one debug flag *VAL* to 0.
+
+trace
+-----
+
+.. program:: flux module trace
+
+Display message summaries for messages transmitted and received by the
+named modules.
+
+.. option:: -T, --topic=GLOB
+
+   Filter output by topic string.
+
+.. option:: -t, --type=TYPE,...
+
+   Filter output by message type, a comma-separated list.  Valid types are
+   ``request``, ``response``, ``event``, or ``control``.
+
+.. option:: -L, --color=WHEN
+
+   Colorize output when supported; WHEN can be ``always`` (default if omitted),
+   ``never``, or ``auto`` (default).
+
+.. option:: -H, --human
+
+   Display human-readable output. See also :option:`--color` and
+   :option:`--delta`.
+
+.. option:: -d, --delta
+
+   With :option:`--human`, display the time delta between messages instead
+   of a relative offset since the last absolute timestamp.
+
 
 DEBUG OPTIONS
 =============
