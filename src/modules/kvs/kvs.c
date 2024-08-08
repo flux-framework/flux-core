@@ -2855,7 +2855,7 @@ static int process_args (struct kvs_ctx *ctx, int ac, char **av)
         if (strstarts (av[i], "transaction-merge=")) {
             char *endptr;
             errno = 0;
-            ctx->transaction_merge = strtoul (av[i]+13, &endptr, 10);
+            ctx->transaction_merge = strtoul (av[i]+18, &endptr, 10);
             if (errno != 0 || *endptr != '\0') {
                 errno = EINVAL;
                 return -1;
