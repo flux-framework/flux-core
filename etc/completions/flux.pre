@@ -1134,7 +1134,7 @@ _flux_kvs()
 _flux_overlay()
 {
     local cmd=$1
-    local subcmds="status lookup parentof disconnect"
+    local subcmds="status lookup parentof disconnect trace"
     local split=false
 
     local status_OPTS="\
@@ -1159,6 +1159,14 @@ _flux_overlay()
     local disconnect_OPTS="\
         -h --help \
         -r --parent= \
+    "
+    local trace_OPTS="\
+        -h --help \
+        -r --rank= \
+        -t --type= \
+        -L --color= \
+        -H --human \
+        -d --delta \
     "
     _flux_split_longopt && split=true
     case $prev in
@@ -1254,7 +1262,7 @@ _flux_admin()
 _flux_module()
 {
     local cmd=$1
-    local subcmds_module_arg="remove reload stats debug"
+    local subcmds_module_arg="remove reload stats debug trace"
     local subcmds="list load ${subcmds_module_arg}"
     local split=false
 
@@ -1283,6 +1291,14 @@ _flux_module()
     "
     local list_OPTS="\
         -l --long \
+    "
+    local trace_OPTS="\
+        -h --help \
+        -T --topic= \
+        -t --type= \
+        -L --color= \
+        -H --human \
+        -d --delta \
     "
     if [[ $cmd != "module" ]]; then
 
