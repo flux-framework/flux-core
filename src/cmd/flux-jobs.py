@@ -17,6 +17,8 @@ import os
 import sys
 
 import flux.constants
+from flux.hostlist import Hostlist
+from flux.idset import IDset
 from flux.job import JobID, JobInfo, JobInfoFormat, JobList, job_fields_to_attrs
 from flux.job.stats import JobStats
 from flux.util import (
@@ -156,6 +158,16 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
     if not args.filter:
         args.filter = {"pending", "running"}
 
+    constraint = None
+    if args.include:
+        try:
+            constraint = {"ranks": [IDset(args.include).encode()]}
+        except ValueError:
+            try:
+                constraint = {"hostlist": [Hostlist(args.include).encode()]}
+            except ValueError:
+                raise ValueError(f"-i/--include: invalid targets: {args.include}")
+
     jobs_rpc = JobList(
         flux_handle,
         ids=args.jobids,
@@ -166,6 +178,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         since=since,
         name=args.name,
         queue=args.queue,
+        constraint=constraint,
     )
 
     jobs = jobs_rpc.jobs()
@@ -269,6 +282,14 @@ def parse_args():
         default=set(),
         metavar="QUEUE,...",
         help="Limit output to specific queue or queues",
+    )
+    parser.add_argument(
+        "-i",
+        "--include",
+        type=str,
+        metavar="HOSTS|RANKS",
+        help="Limit output to jobs that were allocated to the specified "
+        + "HOSTS or RANKS provided as a hostlist or idset.",
     )
     parser.add_argument(
         "-o",
