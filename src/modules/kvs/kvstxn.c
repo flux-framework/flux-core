@@ -495,6 +495,10 @@ static int kvstxn_append (kvstxn_t *kt, json_t *dirent,
         /* entry not found, treat like normal insertion */
         if (treeobj_insert_entry (dir, final_name, dirent) < 0)
             return -1;
+        /* N.B. although this is an "insert", we still treat this as
+         * an "append".  If we don't, the "append" could be issued
+         * twice, leading to duplicated data.  See issue #6207. */
+        (*append) = true;
     }
     else if (treeobj_is_valref (entry)) {
         char ref[BLOBREF_MAX_STRING_SIZE];
