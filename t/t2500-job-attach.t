@@ -129,7 +129,7 @@ test_expect_success 'attach: reports Terminated when tasks are terminated' '
 	grep Terminated terminated.err
 '
 test_expect_success 'attach: reports job shell Killed if job shell is killed' '
-	id=$(flux submit --wait-event=exec.shell.start sh -c "kill -9 \$PPID") &&
+	id=$(flux submit sh -c "kill -9 \$PPID") &&
 	test_must_fail_or_be_terminated flux job attach $id 2>shell-killed.out &&
 	grep "job shell Killed" shell-killed.out
 '
