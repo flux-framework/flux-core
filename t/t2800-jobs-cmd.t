@@ -413,6 +413,28 @@ test_expect_success 'flux-jobs --count works' '
 '
 
 #
+# -i, --include tests
+#
+test_expect_success 'flux-jobs -i, --include works with ranks' '
+	for rank in $(flux jobs -ai 0 -no {ranks}); do
+		test $rank -eq 0
+	done
+'
+test_expect_success 'flux-jobs -i, --include works with ranks' '
+	for rank in $(flux jobs -ai 0,3 -no {ranks}); do
+		test $rank -eq 0 -o $rank -eq 3
+	done
+'
+test_expect_success 'flux jobs -i, --include works with hosts' '
+	for host in $(flux jobs -ai $(hostname) -no {nodelist}); do
+		test $host = $(hostname)
+	done
+'
+test_expect_success 'flux jobs -i, --include fails with bad idset/hostlist' '
+	test_must_fail flux jobs -ai "foo["
+'
+
+#
 # test specific IDs
 #
 

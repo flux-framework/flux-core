@@ -51,9 +51,15 @@ def job_list(
     since=0.0,
     name=None,
     queue=None,
+    constraint=None,
 ):
-    # N.B. an "and" operation with no values returns everything
-    constraint = {"and": []}
+    if constraint is None:
+        # N.B. an "and" operation with no values returns everything
+        constraint = {"and": []}
+    else:
+        # O/w, a provided constraint will be anded with other parameters below:
+        constraint = {"and": [constraint]}
+
     if userid != flux.constants.FLUX_USERID_UNKNOWN:
         constraint["and"].append({"userid": [userid]})
     if name:
@@ -83,7 +89,13 @@ def job_list(
 
 
 def job_list_inactive(
-    flux_handle, since=0.0, max_entries=1000, attrs=["all"], name=None, queue=None
+    flux_handle,
+    since=0.0,
+    max_entries=1000,
+    attrs=["all"],
+    name=None,
+    queue=None,
+    constraint=None,
 ):
     """Same as ``flux.job.list.job_list``, but lists only inactive jobs."""
     return job_list(
@@ -95,6 +107,7 @@ def job_list_inactive(
         since=since,
         name=name,
         queue=queue,
+        constraint=constraint,
     )
 
 
@@ -207,6 +220,10 @@ class JobList:
     :since: Limit jobs to those that have been active since a given timestamp.
     :name: Limit jobs to those with a specific name.
     :queue: Limit jobs to those submitted to a specific queue or queues
+    :constraint: An RFC 31 Constraint object describing a job-list constraint
+        as documented in RFC 43 Constraint Operators section. This constraint
+        may then be joined with other constraints provided by above parameters
+        via the ``and`` operator.
     """
 
     # pylint: disable=too-many-instance-attributes
@@ -240,6 +257,7 @@ class JobList:
         since=0.0,
         name=None,
         queue=None,
+        constraint=None,
     ):
         self.handle = flux_handle
         self.attrs = list(attrs)
@@ -255,6 +273,7 @@ class JobList:
             for x in fname.split(","):
                 self.add_filter(x)
         self.set_user(user)
+        self.constraint = constraint
 
     def set_user(self, user):
         """Only return jobs for user (may be a username or userid)"""
@@ -306,6 +325,7 @@ class JobList:
             since=self.since,
             name=self.name,
             queue=self.queue,
+            constraint=self.constraint,
         )
 
     def jobs(self):

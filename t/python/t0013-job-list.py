@@ -320,6 +320,18 @@ class TestJob(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             rpc_handle.get_jobinfo()
 
+    def test_19_list_inactive_constraints(self):
+        for job in flux.job.job_list_inactive(
+            self.fh, constraint={"name": ["sleep"]}
+        ).get_jobinfos():
+            self.assertEqual(job.name, "sleep")
+
+    def test_20_list_constraints(self):
+        for job in flux.job.job_list(
+            self.fh, constraint={"name": ["sleep"]}
+        ).get_jobinfos():
+            self.assertEqual(job.name, "sleep")
+
 
 if __name__ == "__main__":
     from subflux import rerun_under_flux

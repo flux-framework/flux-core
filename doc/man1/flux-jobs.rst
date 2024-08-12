@@ -51,6 +51,13 @@ OPTIONS
    List jobs in a specific queue or queues. Multiple queues may be separated
    by a comma or by using the :option:`-q, --queue` option multiple times.
 
+.. option:: -i, --include=HOSTS|RANKS
+
+   List only jobs where the assigned resources intersect with the supplied
+   argument, which may be specified either as an RFC 22 idset of broker ranks
+   or an RFC 29 hostlist of host names. It is not an error to specify ranks or
+   hosts which do not exist.
+
 .. option:: -c, --count=N
 
    Limit output to N jobs (default 1000)
@@ -617,6 +624,12 @@ RESOURCES
 =========
 
 .. include:: common/resources.rst
+
+FLUX RFC
+========
+
+| :doc:`rfc:spec_22`
+| :doc:`rfc:spec_29`
 
 SEE ALSO
 ========
