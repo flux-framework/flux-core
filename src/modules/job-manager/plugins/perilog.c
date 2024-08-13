@@ -52,6 +52,7 @@
 #include <jansson.h>
 #include <flux/core.h>
 #include <flux/jobtap.h>
+#include <flux/idset.h>
 
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libjob/idf58.h"
@@ -59,6 +60,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 #include "src/broker/state_machine.h" // for STATE_CLEANUP
+#include "src/common/libsubprocess/bulk-exec.h"
 
 extern char **environ;
 
@@ -81,15 +83,17 @@ struct perilog_proc {
     flux_plugin_t *p;
     flux_jobid_t id;
     bool prolog;
-    flux_subprocess_t *sp;
     flux_future_t *kill_f;
     flux_watcher_t *kill_timer;
+    struct bulk_exec *bulk_exec;
+    struct idset *ranks;
 };
 
 static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
                                                   flux_jobid_t id,
                                                   bool prolog,
-                                                  flux_subprocess_t *sp)
+                                                  struct bulk_exec *bulk_exec,
+                                                  struct idset *ranks)
 {
     struct perilog_proc *proc = calloc (1, sizeof (*proc));
     if (proc == NULL)
@@ -97,7 +101,8 @@ static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
     proc->p = p;
     proc->id = id;
     proc->prolog = prolog;
-    proc->sp = sp;
+    proc->bulk_exec = bulk_exec;
+    proc->ranks = ranks;
     if (zhashx_insert (perilog_config.processes, &proc->id, proc) < 0) {
         free (proc);
         errno = EEXIST;
@@ -109,10 +114,13 @@ static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
 static void perilog_proc_destroy (struct perilog_proc *proc)
 {
     if (proc) {
-        flux_subprocess_destroy (proc->sp);
+        int saved_errno = errno;
+        idset_destroy (proc->ranks);
+        bulk_exec_destroy (proc->bulk_exec);
         flux_future_destroy (proc->kill_f);
         flux_watcher_destroy (proc->kill_timer);
         free (proc);
+        errno = saved_errno;
     }
 }
 
@@ -151,23 +159,28 @@ static void perilog_proc_delete (struct perilog_proc *proc)
 }
 
 static void emit_finish_event (struct perilog_proc *proc,
-                               flux_subprocess_t *sp)
+                               struct bulk_exec *bulk_exec)
 {
-    int status = flux_subprocess_status (sp);
+    int status = bulk_exec_rc (bulk_exec);
     if (proc->prolog) {
+        int rc;
+
         /*
          *  If prolog failed, raise job exception before prolog-finish
          *   event is emitted to ensure job isn't halfway started before
          *   the exception is raised:
          */
         if (status != 0) {
-            int code = flux_subprocess_exit_code (sp);
-            int rc;
+            int code = WIFEXITED (status) ? WEXITSTATUS (status) : -1;
             int sig;
             char *errmsg;
 
-            if ((sig = flux_subprocess_signaled (sp)) > 0
-                || (sig = (code - 128)) > 0) {
+            /*  Report that prolog was signaled if WIFSIGNALED() is true, or
+             *  exit code > 128 (where standard exit code is 127+signo from
+             *  most shells)
+             */
+            if (WIFSIGNALED (status) || code > 128) {
+                sig = WIFSIGNALED (status) ? WTERMSIG (status) : code - 128;
                 rc = asprintf (&errmsg,
                                "prolog killed by signal %d%s",
                                sig,
@@ -178,7 +191,7 @@ static void emit_finish_event (struct perilog_proc *proc,
             else
                 rc = asprintf (&errmsg,
                                "prolog exited with exit code=%d",
-                               flux_subprocess_exit_code (sp));
+                               code);
             if (rc < 0)
                 errmsg = NULL;
             if (flux_jobtap_raise_exception (proc->p,
@@ -221,26 +234,26 @@ static void emit_finish_event (struct perilog_proc *proc,
     }
 }
 
-static void completion_cb (flux_subprocess_t *sp)
+static void completion_cb (struct bulk_exec *bulk_exec, void *arg)
 {
-    struct perilog_proc *proc = flux_subprocess_aux_get (sp, "perilog_proc");
+    struct perilog_proc *proc = bulk_exec_aux_get (bulk_exec, "perilog_proc");
     if (proc) {
-        emit_finish_event (proc, sp);
+        emit_finish_event (proc, bulk_exec);
         perilog_proc_delete (proc);
     }
 }
 
-static void state_cb (flux_subprocess_t *sp, flux_subprocess_state_t state)
+static void error_cb (struct bulk_exec *bulk_exec,
+                      flux_subprocess_t *p,
+                      void *arg)
 {
-    struct perilog_proc *proc;
+    struct perilog_proc *proc = bulk_exec_aux_get (bulk_exec, "perilog_proc");
 
-    if ((state == FLUX_SUBPROCESS_FAILED)
-        && (proc = flux_subprocess_aux_get (sp, "perilog_proc"))) {
-
+    if (flux_subprocess_state (p) == FLUX_SUBPROCESS_FAILED) {
         /*  If subprocess failed or execution failed, then we still
          *   must be sure to emit a finish event.
          */
-        int errnum = flux_subprocess_fail_errno (sp);
+        int errnum = flux_subprocess_fail_errno (p);
         int code = EXIT_CODE(1);
 
         if (errnum == EPERM || errnum == EACCES)
@@ -254,11 +267,8 @@ static void state_cb (flux_subprocess_t *sp, flux_subprocess_state_t state)
                   LOG_ERR,
                   "%s %s: code=%d",
                   perilog_proc_name (proc),
-                  flux_subprocess_state_string (flux_subprocess_state (sp)),
+                  flux_subprocess_state_string (flux_subprocess_state (p)),
                   code);
-
-        emit_finish_event (proc, sp);
-        perilog_proc_delete (proc);
     }
 }
 
@@ -275,21 +285,27 @@ static bool perilog_log_ignore (struct perilog_conf *conf, const char *s)
     return false;
 }
 
-static void io_cb (flux_subprocess_t *sp, const char *stream)
+static void io_cb (struct bulk_exec *bulk_exec,
+                   flux_subprocess_t *sp,
+                   const char *stream,
+                   const char *data,
+                   int len,
+                   void *arg)
 {
-    struct perilog_proc *proc = flux_subprocess_aux_get (sp, "perilog_proc");
-    flux_t *h = flux_jobtap_get_flux (proc->p);
-    const char *s;
-    int len;
+    flux_t *h;
+    struct perilog_proc *proc;
+    char buf[len+1]; /* bulk_exec output is not NUL terminated */
 
-    if ((len = flux_subprocess_getline (sp, stream, &s)) < 0) {
-        flux_log_error (h, "%s: %s: %s: flux_subprocess_getline",
-                        idf58 (proc->id),
-                        perilog_proc_name (proc),
-                        stream);
+    if (len <= 0
+        || !(proc = bulk_exec_aux_get (bulk_exec, "perilog_proc"))
+        || !(h = flux_jobtap_get_flux (proc->p)))
         return;
-    }
-    if (len && !perilog_log_ignore (&perilog_config, s)) {
+
+    /* Copy data to NUL terminated buffer */
+    memcpy (buf, data, len);
+    buf [len] = '\0';
+
+    if (!perilog_log_ignore (&perilog_config, buf)) {
         int level = LOG_INFO;
         if (streq (stream, "stderr"))
             level = LOG_ERR;
@@ -299,9 +315,17 @@ static void io_cb (flux_subprocess_t *sp, const char *stream)
                   idf58 (proc->id),
                   perilog_proc_name (proc),
                   stream,
-                  s);
+                  buf);
     }
 }
+
+static struct bulk_exec_ops ops = {
+        .on_start = NULL,
+        .on_exit = NULL,
+        .on_complete = completion_cb,
+        .on_error = error_cb,
+        .on_output = io_cb,
+};
 
 static int run_command (flux_plugin_t *p,
                         flux_plugin_arg_t *args,
@@ -309,16 +333,11 @@ static int run_command (flux_plugin_t *p,
                         flux_cmd_t *cmd)
 {
     flux_t *h = flux_jobtap_get_flux (p);
-    struct perilog_proc *proc;
+    struct perilog_proc *proc = NULL;
     flux_jobid_t id;
     uint32_t userid;
-    flux_subprocess_t *sp = NULL;
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_state_change = state_cb,
-        .on_stdout = io_cb,
-        .on_stderr = io_cb
-    };
+    struct idset *ranks = NULL;
+    struct bulk_exec *bulk_exec = NULL;
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
@@ -335,21 +354,45 @@ static int run_command (flux_plugin_t *p,
         return -1;
     }
 
-    if (!(sp = flux_rexec_ex (h, "rexec", 0, 0, cmd, &ops, flux_llog, h))) {
-        flux_log_error (h, "%s: flux_rexec", prolog ? "prolog" : "epilog");
+    /* By default, perilog runs on only on rank 0
+     */
+    if (!(ranks = idset_decode ("0"))) {
+        flux_log_error (h, "%s: idset_decode", prolog ? "prolog" : "epilog");
         return -1;
     }
 
-    if (!(proc = perilog_proc_create (p, id, prolog, sp))) {
+    if (!(bulk_exec = bulk_exec_create (&ops,
+                                        "rexec",
+                                        id,
+                                        prolog ? "prolog" : "epilog",
+                                        NULL))
+        || bulk_exec_push_cmd (bulk_exec, ranks, cmd, 0) < 0) {
+        flux_log_error (h,
+                        "failed to create %s bulk exec cmd for %s",
+                        prolog ? "prolog" : "epilog",
+                        idf58 (id));
+        goto error;
+    }
+    if (bulk_exec_start (h, bulk_exec) < 0) {
+        flux_log_error (h, "%s: bulk_exec_start", prolog ? "prolog" : "epilog");
+        goto error;
+    }
+
+    if (!(proc = perilog_proc_create (p, id, prolog, bulk_exec, ranks))) {
         flux_log_error (h, "%s: proc_create", prolog ? "prolog" : "epilog");
-        flux_subprocess_destroy (sp);
-        return -1;
+        goto error;
     }
 
-    if (flux_subprocess_aux_set (sp, "perilog_proc", proc, NULL) < 0) {
-        flux_log_error (h, "%s: flux_subprocess_aux_set",
+    /* proc now has ownership of bulk_exec and ranks
+     */
+    ranks = NULL;
+    bulk_exec = NULL;
+
+    if (bulk_exec_aux_set (bulk_exec, "perilog_proc", proc, NULL) < 0) {
+        flux_log_error (h,
+                        "%s: bulk_exec_aux_set",
                         prolog ? "prolog" : "epilog");
-        return -1;
+        goto error;
     }
 
     if (flux_jobtap_job_aux_set (p,
@@ -357,12 +400,17 @@ static int run_command (flux_plugin_t *p,
                                  "perilog_proc",
                                  proc,
                                  NULL) < 0) {
-        flux_log_error (h, "%s: flux_jobtap_job_aux_set",
+        flux_log_error (h,
+                        "%s: flux_jobtap_job_aux_set",
                         prolog ? "prolog" : "epilog");
-        return -1;
+        goto error;
     }
-
     return 0;
+error:
+    idset_destroy (ranks);
+    bulk_exec_destroy (bulk_exec);
+    perilog_proc_destroy (proc);
+    return -1;
 }
 
 static int run_cb (flux_plugin_t *p,
@@ -451,7 +499,7 @@ static int prolog_kill (struct perilog_proc *proc)
     if (proc->kill_timer)
         return 0;
 
-    if (!(proc->kill_f = flux_subprocess_kill (proc->sp, SIGTERM)))
+    if (!(proc->kill_f = bulk_exec_kill (proc->bulk_exec, NULL, SIGTERM)))
         return -1;
 
     if (flux_future_then (proc->kill_f, -1., prolog_kill_cb, proc) < 0) {
@@ -476,7 +524,7 @@ static void prolog_kill_timer_cb (flux_reactor_t *r,
     if (!proc || !(h = flux_jobtap_get_flux (proc->p)))
         return;
 
-    if (!(f = flux_subprocess_kill (proc->sp, SIGKILL))) {
+    if (!(f = bulk_exec_kill (proc->bulk_exec, NULL, SIGKILL))) {
         flux_log_error (h,
                         "%s: failed to send SIGKILL to prolog",
                         idf58 (proc->id));
@@ -530,9 +578,8 @@ static int exception_cb (flux_plugin_t *p,
                                            FLUX_JOBTAP_CURRENT_JOB,
                                            "perilog_proc"))
         && proc->prolog
-        && flux_subprocess_state (proc->sp) == FLUX_SUBPROCESS_RUNNING) {
-
-       if (prolog_kill (proc) < 0
+        && bulk_exec_active_count (proc->bulk_exec) > 0) {
+        if (prolog_kill (proc) < 0
             || prolog_kill_timer_start (proc,
                                         perilog_config.prolog_kill_timeout) < 0)
             return -1;
