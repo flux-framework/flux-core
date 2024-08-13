@@ -69,21 +69,31 @@ extern char **environ;
 
 int bulk_exec_rc (struct bulk_exec *exec)
 {
-    return (exec->exit_status);
+    if (!exec) {
+        errno = EINVAL;
+        return -1;
+    }
+    return exec->exit_status;
 }
 
 int bulk_exec_current (struct bulk_exec *exec)
 {
+    if (!exec || !exec->processes)
+        return 0;
     return zlist_size (exec->processes);
 }
 
 int bulk_exec_total (struct bulk_exec *exec)
 {
+    if (!exec || !exec->processes)
+        return 0;
     return exec->total;
 }
 
 int bulk_exec_complete (struct bulk_exec *exec)
 {
+    if (!exec || !exec->processes)
+        return 0;
     return exec->complete;
 }
 
@@ -92,8 +102,14 @@ struct idset *bulk_exec_active_ranks (struct bulk_exec *exec)
     flux_subprocess_t *p;
     struct idset *ranks;
 
+    if (!exec || !exec->processes) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     if (!(ranks = idset_create (0, IDSET_FLAG_AUTOGROW)))
         return NULL;
+
     p = zlist_first (exec->processes);
     while (p) {
         if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
@@ -113,7 +129,14 @@ error:
 int bulk_exec_write (struct bulk_exec *exec, const char *stream,
                      const char *buf, size_t len)
 {
-    flux_subprocess_t *p = zlist_first (exec->processes);
+    flux_subprocess_t *p;
+
+    if (!exec || !stream || !buf || len <= 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    p = zlist_first (exec->processes);
     while (p) {
         if (flux_subprocess_write (p, stream, buf, len) < len)
             return -1;
@@ -124,7 +147,14 @@ int bulk_exec_write (struct bulk_exec *exec, const char *stream,
 
 int bulk_exec_close (struct bulk_exec *exec, const char *stream)
 {
-    flux_subprocess_t *p = zlist_first (exec->processes);
+    flux_subprocess_t *p;
+
+    if (!exec || !stream) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    p = zlist_first (exec->processes);
     while (p) {
         if (flux_subprocess_close (p, stream) < 0)
             return -1;
@@ -492,7 +522,7 @@ error:
 
 int bulk_exec_set_max_per_loop (struct bulk_exec *exec, int max)
 {
-    if (max == 0) {
+    if (!exec || max == 0) {
         errno = EINVAL;
         return -1;
     }
@@ -505,8 +535,14 @@ int bulk_exec_push_cmd (struct bulk_exec *exec,
                        flux_cmd_t *cmd,
                        int flags)
 {
-    struct exec_cmd *c = exec_cmd_create (ranks, cmd, flags);
-    if (!c)
+    struct exec_cmd *c;
+
+    if (!exec || !ranks || !cmd) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!(c = exec_cmd_create (ranks, cmd, flags)))
         return -1;
 
     if (zlist_append (exec->commands, c) < 0) {
@@ -527,7 +563,14 @@ int bulk_exec_push_cmd (struct bulk_exec *exec,
 
 int bulk_exec_start (flux_t *h, struct bulk_exec *exec)
 {
-    flux_reactor_t *r = flux_get_reactor (h);
+    flux_reactor_t *r;
+
+    if (!h || !exec) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    r = flux_get_reactor (h);
     exec->h = h;
     exec->prep = flux_prepare_watcher_create (r, prep_cb, exec);
     exec->check = flux_check_watcher_create (r, check_cb, exec);
@@ -543,8 +586,14 @@ int bulk_exec_start (flux_t *h, struct bulk_exec *exec)
  */
 int bulk_exec_cancel (struct bulk_exec *exec)
 {
-    struct exec_cmd *cmd = zlist_first (exec->commands);
-    if (!cmd)
+    struct exec_cmd *cmd;
+
+    if (!exec) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!(cmd = zlist_first (exec->commands)))
         return 0;
 
     while (cmd) {
@@ -571,8 +620,14 @@ int bulk_exec_cancel (struct bulk_exec *exec)
  */
 void bulk_exec_kill_log_error (flux_future_t *f, flux_jobid_t id)
 {
-    flux_t *h = flux_future_get_flux (f);
-    const char *name = flux_future_first_child (f);
+    flux_t *h;
+    const char *name;
+
+    if (!f)
+        return;
+
+    h = flux_future_get_flux (f);
+    name = flux_future_first_child (f);
     while (name) {
         flux_future_t *cf = flux_future_get_child (f, name);
         uint32_t rank = flux_rpc_get_nodeid (cf);
@@ -596,13 +651,19 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec,
                                const struct idset *ranks,
                                int signum)
 {
-    flux_subprocess_t *p = zlist_first (exec->processes);
-    flux_future_t *cf = NULL;
+    flux_subprocess_t *p;
+    flux_future_t *cf;
+
+    if (!exec) {
+        errno = EINVAL;
+        return NULL;
+    }
 
     if (!(cf = flux_future_wait_all_create ()))
         return NULL;
     flux_future_set_flux (cf, exec->h);
 
+    p = zlist_first (exec->processes);
     while (p) {
         if ((!ranks || idset_test (ranks, flux_subprocess_rank (p)))
             && (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING
@@ -711,6 +772,11 @@ flux_future_t *bulk_exec_imp_kill (struct bulk_exec *exec,
     flux_future_t *f = NULL;
     int count = 0;
 
+    if (!exec || !imp_path) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     /* Empty future for return value
      */
     if (!(f = flux_future_create (NULL, NULL))) {
@@ -781,22 +847,39 @@ err:
 int bulk_exec_aux_set (struct bulk_exec *exec, const char *key,
                        void *val, flux_free_f free_fn)
 {
+    if (!exec) {
+        errno = EINVAL;
+        return -1;
+    }
     return (aux_set (&exec->aux, key, val, free_fn));
 }
 
 void * bulk_exec_aux_get (struct bulk_exec *exec, const char *key)
 {
+    if (!exec) {
+        errno = EINVAL;
+        return NULL;
+    }
     return (aux_get (exec->aux, key));
 }
 
 const char *bulk_exec_service_name (struct bulk_exec *exec)
 {
+    if (!exec)
+        return NULL;
     return exec->service;
 }
 
 flux_subprocess_t *bulk_exec_get_subprocess (struct bulk_exec *exec, int rank)
 {
-    flux_subprocess_t *p = zlist_first (exec->processes);
+    flux_subprocess_t *p;
+
+    if (!exec || rank < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    p = zlist_first (exec->processes);
     while (p) {
         if (flux_subprocess_rank (p) == rank)
             return p;
