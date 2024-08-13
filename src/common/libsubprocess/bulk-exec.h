@@ -98,8 +98,10 @@ int bulk_exec_complete (struct bulk_exec *exec);
 /* Return idset of ranks on which processes are still active */
 struct idset *bulk_exec_active_ranks (struct bulk_exec *exec);
 
-int bulk_exec_write (struct bulk_exec *exec, const char *stream,
-                     const char *buf, size_t len);
+int bulk_exec_write (struct bulk_exec *exec,
+                     const char *stream,
+                     const char *buf,
+                     size_t len);
 
 int bulk_exec_close (struct bulk_exec *exec, const char *stream);
 

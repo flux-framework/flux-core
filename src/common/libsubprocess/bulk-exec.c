@@ -126,8 +126,10 @@ error:
     return NULL;
 }
 
-int bulk_exec_write (struct bulk_exec *exec, const char *stream,
-                     const char *buf, size_t len)
+int bulk_exec_write (struct bulk_exec *exec,
+                     const char *stream,
+                     const char *buf,
+                     size_t len)
 {
     flux_subprocess_t *p;
 
@@ -441,8 +443,10 @@ static int exec_start_cmds (struct bulk_exec *exec, int max)
 }
 
 
-static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
-                     int revents, void *arg)
+static void prep_cb (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
 {
     struct bulk_exec *exec = arg;
 
@@ -455,8 +459,10 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
         bulk_exec_stop (exec);
 }
 
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                     int revents, void *arg)
+static void check_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     struct bulk_exec *exec = arg;
     flux_watcher_stop (exec->idle);
@@ -678,8 +684,10 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec,
                 else
                     flux_future_fulfill_error (cf, err, "Internal error");
             }
-            (void) snprintf (s, sizeof (s)-1, "%u",
-                            flux_subprocess_rank (p));
+            (void) snprintf (s,
+                             sizeof (s)-1,
+                             "%u",
+                             flux_subprocess_rank (p));
             if (flux_future_push (cf, s, f) < 0) {
                 fprintf (stderr, "flux_future_push: %s\n", strerror (errno));
                 flux_future_destroy (f);
@@ -708,7 +716,8 @@ static void imp_kill_output (struct bulk_exec *kill,
                              void *arg)
 {
     int rank = flux_subprocess_rank (p);
-    flux_log (kill->h, LOG_INFO,
+    flux_log (kill->h,
+              LOG_INFO,
               "%s (rank %d): imp kill: %s",
               flux_get_hostbyrank (kill->h, rank),
               rank,
@@ -844,8 +853,10 @@ err:
     return NULL;
 }
 
-int bulk_exec_aux_set (struct bulk_exec *exec, const char *key,
-                       void *val, flux_free_f free_fn)
+int bulk_exec_aux_set (struct bulk_exec *exec,
+                       const char *key,
+                       void *val,
+                       flux_free_f free_fn)
 {
     if (!exec) {
         errno = EINVAL;
