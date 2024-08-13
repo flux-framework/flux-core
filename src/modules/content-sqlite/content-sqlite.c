@@ -493,22 +493,27 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
         if (ctx->store_stmt) {
             if (sqlite3_finalize (ctx->store_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize store_stmt");
+            ctx->store_stmt = NULL;
         }
         if (ctx->load_stmt) {
             if (sqlite3_finalize (ctx->load_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize load_stmt");
+            ctx->load_stmt = NULL;
         }
         if (ctx->checkpt_get_stmt) {
             if (sqlite3_finalize (ctx->checkpt_get_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize checkpt_get_stmt");
+            ctx->checkpt_get_stmt = NULL;
         }
         if (ctx->checkpt_put_stmt) {
             if (sqlite3_finalize (ctx->checkpt_put_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize checkpt_put_stmt");
+            ctx->checkpt_put_stmt = NULL;
         }
         if (ctx->db) {
             if (sqlite3_close (ctx->db) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite3_close");
+            ctx->db = NULL;
         }
         errno = saved_errno;
     }
