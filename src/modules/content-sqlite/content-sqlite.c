@@ -840,7 +840,6 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "content_sqlite_create failed");
         return -1;
     }
-    // override pragmas set above
     if (process_args (ctx, argc, argv, &truncate) < 0)
         goto done;
     if (content_sqlite_opendb (ctx, truncate) < 0)
