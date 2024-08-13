@@ -17,6 +17,12 @@ MAXBLOB=1048576
 test_expect_success 'load content module' '
 	flux exec flux module load content blob-size-limit=$MAXBLOB
 '
+
+test_expect_success 'content flush fails with ENOSYS with no backing store' '
+	test_must_fail flux content flush 2> flush.err &&
+	grep "Function not implemented" flush.err
+'
+
 HASHFUN=`flux getattr content.hash`
 
 register_backing() {
