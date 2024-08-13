@@ -83,6 +83,7 @@ struct content_sqlite {
     char *journal_mode;
     char *synchronous;
     uint64_t preallocate_size;
+    bool preallocated_used;
     bool truncate;
 };
 
@@ -91,6 +92,11 @@ struct content_sqlite {
  * blob we'll write out at a time.
  */
 #define PREALLOCATE_BLOBSIZE (1024*1024*512)
+
+static void content_sqlite_closedb (struct content_sqlite *ctx);
+static int content_sqlite_opendb (struct content_sqlite *ctx,
+                                  const char *journal_mode,
+                                  const char *synchronous);
 
 static int set_config (char **conf, const char *val)
 {
@@ -239,11 +245,11 @@ error:
  * hash over 'data' is stored to 'hash'.
  * Returns hash size on success, -1 on error with errno set.
  */
-static int content_sqlite_store (struct content_sqlite *ctx,
-                                 const void *data,
-                                 int size,
-                                 void *hash,
-                                 int hash_len)
+static int sqlite_store (struct content_sqlite *ctx,
+                         const void *data,
+                         int size,
+                         void *hash,
+                         int hash_len)
 {
     int uncompressed_size = -1;
     int hash_size;
@@ -309,6 +315,52 @@ static int content_sqlite_store (struct content_sqlite *ctx,
 error:
     ERRNO_SAFE_WRAP (sqlite3_reset, ctx->store_stmt);
     return -1;
+}
+
+static int content_sqlite_store (struct content_sqlite *ctx,
+                                 const void *data,
+                                 int size,
+                                 void *hash,
+                                 int hash_len)
+{
+    int ret;
+    if ((ret = sqlite_store (ctx, data, size, hash, hash_len)) < 0) {
+        /* If we hit ENOSPC, have not tried to use pre_allocated
+         * already, pre-allocated space was reserved, and we are
+         * journaling in some fashion, turn off the journaling and try
+         * to use pre-allocated space instead
+         */
+        if (errno == ENOSPC
+            && !ctx->preallocated_used
+            && ctx->preallocate_size > 0
+            && (!streq (ctx->journal_mode, "OFF")
+                && !streq (ctx->journal_mode, "MEMORY"))) {
+            content_sqlite_closedb (ctx);
+            set_config (&ctx->journal_mode, "OFF");
+            /* to reduce corruption odds, require atleast FULL for
+             * synchronous */
+            if (!streq (ctx->synchronous, "EXTRA")
+                && !streq (ctx->synchronous, "FULL"))
+                set_config (&ctx->synchronous, "FULL");
+            if (content_sqlite_opendb (ctx,
+                                       ctx->journal_mode,
+                                       ctx->synchronous) < 0) {
+                /* return original errno */
+                errno = ENOSPC;
+                return -1;
+            }
+            flux_log (ctx->h,
+                      LOG_INFO,
+                      "sqlite preallocate reconfig journal_mode=%s synchronous=%s",
+                      ctx->journal_mode,
+                      ctx->synchronous);
+            ctx->preallocated_used = true;
+            /* try the store again */
+            return sqlite_store (ctx, data, size, hash, hash_len);
+        }
+        return -1;
+    }
+    return ret;
 }
 
 static void load_cb (flux_t *h,
