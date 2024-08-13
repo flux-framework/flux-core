@@ -459,4 +459,79 @@ test_expect_success 'remove content module' '
 	flux exec flux module remove content
 '
 
+# test preallocate
+
+# note that there can be small differences in preallocation size as
+# sqlite may write some of their own metadata.  So just make sure the
+# file size is larger than what we want and within a reasonable range.
+
+test_expect_success 'content-sqlite test preallocate (cmdline)' '
+	mkdir $(pwd)/dbsize1 &&
+	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		-o,-Sstatedir=$(pwd)/dbsize1 \
+		"flux module load content; \
+		flux module load content-sqlite preallocate=4194304; \
+		flux module remove content-sqlite; \
+		flux module remove content" &&
+	size=$(du -b $(pwd)/dbsize1/content.sqlite | cut -f 1) &&
+	test $size -ge 4194304 &&
+	test $size -le 4500000
+'
+
+test_expect_success 'content-sqlite test preallocate (config)' '
+	mkdir $(pwd)/dbsize2 &&
+	cat >dbsize2/content-sqlite.toml <<-EOT &&
+	[content-sqlite]
+	preallocate = 5242880
+	EOT
+	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		-o,-Sstatedir=$(pwd)/dbsize2 \
+		-o,--config-path=$(pwd)/dbsize2 \
+		"flux module load content; \
+		flux module load content-sqlite; \
+		flux module remove content-sqlite; \
+		flux module remove content" &&
+	size=$(du -b $(pwd)/dbsize2/content.sqlite | cut -f 1) &&
+	test $size -ge 5242880 &&
+	test $size -le 5600000
+'
+
+test_expect_success 'content-sqlite preallocate invalid input fail (cmdline)' '
+	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		"flux module load content; \
+		flux module load content-sqlite preallocate=foobar; \
+		flux module remove content" 2> preallocateinvalid1.err &&
+	grep "Invalid argument" preallocateinvalid1.err
+'
+
+test_expect_success 'content-sqlite preallocate invalid input (config1)' '
+	mkdir $(pwd)/dbsize3 &&
+	cat >dbsize3/content-sqlite.toml <<-EOT &&
+	[content-sqlite]
+	preallocate = "not_a_number"
+	EOT
+	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		-o,-Sstatedir=$(pwd)/dbsize3 \
+		-o,--config-path=$(pwd)/dbsize3 \
+		"flux module load content; \
+		flux module load content-sqlite; \
+		flux module remove content" 2> preallocateinvalid2.err &&
+	grep "Invalid argument" preallocateinvalid2.err
+'
+
+test_expect_success 'content-sqlite preallocate invalid input (config2)' '
+	mkdir $(pwd)/dbsize4 &&
+	cat >dbsize4/content-sqlite.toml <<-EOT &&
+	[content-sqlite]
+	preallocate = -100
+	EOT
+	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		-o,-Sstatedir=$(pwd)/dbsize4 \
+		-o,--config-path=$(pwd)/dbsize4 \
+		"flux module load content; \
+		flux module load content-sqlite; \
+		flux module remove content" 2> preallocateinvalid3.err &&
+	grep "Invalid argument" preallocateinvalid3.err
+'
+
 test_done
