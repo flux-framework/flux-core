@@ -444,10 +444,7 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg)
         goto out_err;
     }
 
-    if (!cwd)
-        cwd = ctx->cwd;
-
-    if ((e->cwd = strdup (cwd)) == NULL) {
+    if (cwd && (e->cwd = strdup (cwd)) == NULL) {
         flux_log_error (h, "cron.create: strdup (cwd)");
         errno = ENOMEM;
         goto out_err;

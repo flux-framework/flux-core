@@ -273,7 +273,6 @@ static flux_cmd_t *exec_cmd_create (struct cron_task *t,
                                     json_t *env)
 {
     flux_cmd_t *cmd = NULL;
-    char *tmp_cwd = NULL;
 
     if (!(cmd = flux_cmd_create (0, NULL, NULL))) {
         flux_log_error (t->h, "exec_cmd_create: flux_cmd_create");
@@ -285,7 +284,7 @@ static flux_cmd_t *exec_cmd_create (struct cron_task *t,
         flux_log_error (t->h, "exec_cmd_create: flux_cmd_argv_append");
         goto error;
     }
-    if (flux_cmd_setcwd (cmd, cwd) < 0) {
+    if (cwd && flux_cmd_setcwd (cmd, cwd) < 0) {
         flux_log_error (t->h, "exec_cmd_create: flux_cmd_setcwd");
         goto error;
     }
@@ -308,10 +307,8 @@ static flux_cmd_t *exec_cmd_create (struct cron_task *t,
         }
     }
 
-    free (tmp_cwd);
     return (cmd);
  error:
-    free (tmp_cwd);
     flux_cmd_destroy (cmd);
     return (NULL);
 }
