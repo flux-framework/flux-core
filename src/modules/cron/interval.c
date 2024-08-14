@@ -26,8 +26,10 @@ struct cron_interval {
 };
 
 
-static void interval_handler (flux_reactor_t *r, flux_watcher_t *w,
-                              int revents, void *arg)
+static void interval_handler (flux_reactor_t *r,
+                              flux_watcher_t *w,
+                              int revents,
+                              void *arg)
 {
     cron_entry_schedule_task ((cron_entry_t *)arg);
 }
@@ -40,9 +42,10 @@ static void *cron_interval_create (flux_t *h, cron_entry_t *e, json_t *arg)
     /*  Unpack 'interval' and 'after' arguments. If after was not specified,
      *   (and thus is still < 0.0), then it is set to interval by default.
      */
-    if (json_unpack (arg, "{ s:F, s?F }",
-                          "interval", &i,
-                          "after", &after) < 0) {
+    if (json_unpack (arg,
+                     "{s:F s?F}",
+                     "interval", &i,
+                     "after", &after) < 0) {
         return NULL;
     }
     if (after < 0.0)
@@ -55,7 +58,9 @@ static void *cron_interval_create (flux_t *h, cron_entry_t *e, json_t *arg)
     iv->seconds = i;
     iv->after = after;
     iv->w = flux_timer_watcher_create (flux_get_reactor (h),
-                                       after, i, interval_handler,
+                                       after,
+                                       i,
+                                       interval_handler,
                                        (void *) e);
     if (!iv->w) {
         flux_log_error (h, "cron_interval: flux_timer_watcher_create");
@@ -86,9 +91,9 @@ static void cron_interval_stop (void *arg)
 static json_t *cron_interval_to_json (void *arg)
 {
     struct cron_interval *iv = arg;
-    return json_pack ("{ s:f, s:f, s:f }",
-                      "interval",    iv->seconds,
-                      "after",       iv->after,
+    return json_pack ("{s:f s:f s:f}",
+                      "interval", iv->seconds,
+                      "after", iv->after,
                       "next_wakeup", flux_watcher_next_wakeup (iv->w));
 }
 

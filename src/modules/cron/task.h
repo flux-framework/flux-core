@@ -20,8 +20,12 @@ typedef struct cron_task cron_task_t;
 
 /*  io callback fn for cron task
  */
-typedef void (*cron_task_io_f) (flux_t *h, cron_task_t *t, void *arg,
-                                bool is_stderr, const char *data, int datalen);
+typedef void (*cron_task_io_f) (flux_t *h,
+                                cron_task_t *t,
+                                void *arg,
+                                bool is_stderr,
+                                const char *data,
+                                int datalen);
 
 /*  task state change handler for cron task, check state with
  *   cron_task_state().
