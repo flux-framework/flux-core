@@ -627,7 +627,9 @@ static int content_sqlite_setup (struct content_sqlite *ctx, bool truncate)
 
 /* Open the database file ctx->dbfile and set up the database.
  */
-static int content_sqlite_opendb (struct content_sqlite *ctx)
+static int content_sqlite_opendb (struct content_sqlite *ctx,
+                                  const char *journal_mode,
+                                  const char *synchronous)
 {
     int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
     char s[128];
@@ -637,7 +639,7 @@ static int content_sqlite_opendb (struct content_sqlite *ctx)
         log_sqlite_error (ctx, "opening %s", ctx->dbfile);
         goto error;
     }
-    snprintf (s, sizeof (s), "PRAGMA journal_mode=%s", ctx->journal_mode);
+    snprintf (s, sizeof (s), "PRAGMA journal_mode=%s", journal_mode);
     if (sqlite3_exec (ctx->db,
                       s,
                       NULL,
@@ -646,7 +648,7 @@ static int content_sqlite_opendb (struct content_sqlite *ctx)
         log_sqlite_error (ctx, "setting sqlite 'journal_mode' pragma");
         goto error;
     }
-    snprintf (s, sizeof (s), "PRAGMA synchronous=%s", ctx->synchronous);
+    snprintf (s, sizeof (s), "PRAGMA synchronous=%s", synchronous);
     if (sqlite3_exec (ctx->db,
                       s,
                       NULL,
@@ -947,7 +949,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     if (content_sqlite_setup (ctx, truncate) < 0)
         goto done;
-    if (content_sqlite_opendb (ctx) < 0)
+    if (content_sqlite_opendb (ctx, ctx->journal_mode, ctx->synchronous) < 0)
         goto done;
     if (content_register_service (h, "content-backing") < 0)
         goto done;
