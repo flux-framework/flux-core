@@ -61,6 +61,7 @@
 #include "ccan/str/str.h"
 #include "src/broker/state_machine.h" // for STATE_CLEANUP
 #include "src/common/libsubprocess/bulk-exec.h"
+#include "src/common/librlist/rlist.h"
 
 extern char **environ;
 
@@ -69,7 +70,9 @@ extern char **environ;
 static struct perilog_conf {
     double prolog_kill_timeout;/*  Time between SIGTERM/SIGKILL for prolog  */
     flux_cmd_t *prolog_cmd;    /*  Configured prolog command                */
+    bool prolog_per_rank;      /*  Execute prolog on each job rank          */
     flux_cmd_t *epilog_cmd;    /*  Configured epilog command                */
+    bool epilog_per_rank;      /*  Execute epilog on each job rank          */
     zhashx_t *processes;       /*  List of outstanding perilog_proc objects */
     zlistx_t *log_ignore;      /*  List of regex patterns to ignore in logs */
     flux_future_t *watch_f;    /*  Watch for broker entering CLEANUP state */
@@ -327,6 +330,17 @@ static struct bulk_exec_ops ops = {
         .on_output = io_cb,
 };
 
+static struct idset *ranks_from_R (json_t *R)
+{
+    struct idset *ranks;
+    struct rlist *rl = rlist_from_json (R, NULL);
+    if (!rl)
+        return NULL;
+    ranks = rlist_ranks (rl);
+    rlist_destroy (rl);
+    return ranks;
+}
+
 static int run_command (flux_plugin_t *p,
                         flux_plugin_arg_t *args,
                         int prolog,
@@ -338,12 +352,14 @@ static int run_command (flux_plugin_t *p,
     uint32_t userid;
     struct idset *ranks = NULL;
     struct bulk_exec *bulk_exec = NULL;
+    json_t *R;
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
-                                "{s:I s:i}",
+                                "{s:I s:i s:o}",
                                 "id", &id,
-                                "userid", &userid) < 0) {
+                                "userid", &userid,
+                                "R", &R) < 0) {
         flux_log_error (h, "flux_plugin_arg_unpack");
         return -1;
     }
@@ -356,7 +372,18 @@ static int run_command (flux_plugin_t *p,
 
     /* By default, perilog runs on only on rank 0
      */
-    if (!(ranks = idset_decode ("0"))) {
+    if ((prolog && perilog_config.prolog_per_rank)
+        || (!prolog && perilog_config.epilog_per_rank)) {
+        if (!(ranks = ranks_from_R (R))) {
+            flux_log (h,
+                      LOG_ERR,
+                      "%s: %s: failed to decode ranks from R",
+                      idf58 (id),
+                      prolog ? "prolog" : "epilog");
+            return -1;
+        }
+    }
+    else if (!(ranks = idset_decode ("0"))) {
         flux_log_error (h, "%s: idset_decode", prolog ? "prolog" : "epilog");
         return -1;
     }
@@ -721,6 +748,8 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
     json_t *prolog = NULL;
     json_t *epilog = NULL;
     json_t *log_ignore = NULL;
+    int prolog_per_rank = 0;
+    int epilog_per_rank = 0;
 
     memset (conf, 0, sizeof (*conf));
     conf->prolog_kill_timeout = 5.;
@@ -744,13 +773,15 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
     }
     if (flux_conf_unpack (flux_get_conf (h),
                           &error,
-                          "{s?{s?{s?o s?F !} s?{s?o !} s?{s?o}}}",
+                          "{s?{s?{s?o s?b s?F !} s?{s?o s?b !} s?{s?o}}}",
                           "job-manager",
                             "prolog",
                               "command", &prolog,
+                              "per-rank", &prolog_per_rank,
                               "kill-timeout", &conf->prolog_kill_timeout,
                             "epilog",
                               "command", &epilog,
+                              "per-rank", &epilog_per_rank,
                             "perilog",
                               "log-ignore", &log_ignore) < 0) {
         flux_log (h, LOG_ERR,
@@ -758,6 +789,8 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
                   error.text);
         return -1;
     }
+    conf->prolog_per_rank = prolog_per_rank;
+    conf->epilog_per_rank = epilog_per_rank;
     if (prolog &&
         !(conf->prolog_cmd = cmd_from_json (prolog))) {
         flux_log (h, LOG_ERR, "[job-manager.prolog] command malformed!");
