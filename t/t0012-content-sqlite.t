@@ -368,6 +368,42 @@ test_expect_success 'flux fails with invalid synchronous config' '
 	    flux module remove content" > invalid2.out 2> invalid2.err &&
 	grep "content-sqlite: Invalid argument" invalid2.err
 '
+test_expect_success 'test config via config file works' '
+	cat >content-sqlite.toml <<-EOT &&
+	[content-sqlite]
+	journal_mode = "PERSIST"
+	synchronous = "EXTRA"
+	EOT
+	flux start -o,--config-path=$(pwd) \
+	   -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	   flux module stats content-sqlite > configstats.out &&
+	$jq -e ".config.journal_mode == \"PERSIST\"" < configstats.out &&
+	$jq -e ".config.synchronous == \"EXTRA\"" < configstats.out &&
+	rm content-sqlite.toml
+'
+test_expect_success 'invalid config fails (journal_mode)' '
+	cat >content-sqlite.toml <<-EOT &&
+	[content-sqlite]
+	journal_mode = "FOO"
+	synchronous = "EXTRA"
+	EOT
+	test_must_fail flux start -o,--config-path=$(pwd) \
+	   -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	   flux module stats content-sqlite &&
+	rm content-sqlite.toml
+'
+test_expect_success 'invalid config fails (synchronous)' '
+	cat >content-sqlite.toml <<-EOT &&
+	[content-sqlite]
+	journal_mode = "PERSIST"
+	synchronous = "BAR"
+	EOT
+	test_must_fail flux start -o,--config-path=$(pwd) \
+	   -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	   flux module stats content-sqlite &&
+	rm content-sqlite.toml
+'
+
 
 # Will create in WAL mode since statedir is set
 recreate_database()
