@@ -174,7 +174,7 @@ static void emit_finish_event (struct perilog_proc *proc,
          *   event is emitted to ensure job isn't halfway started before
          *   the exception is raised:
          */
-        if (status != 0) {
+        if (status != 0 && !proc->canceled) {
             int code = WIFEXITED (status) ? WEXITSTATUS (status) : -1;
             int sig;
             char *errmsg;
