@@ -848,6 +848,43 @@ static bool synchronous_valid (const char *s)
     return true;
 }
 
+static int process_config (struct content_sqlite *ctx,
+                           const flux_conf_t *conf)
+{
+    flux_error_t error;
+    const char *journal_mode = NULL;
+    const char *synchronous = NULL;
+
+    if (flux_conf_unpack (conf,
+                          &error,
+                          "{s?{s?s s?s}}",
+                          "content-sqlite",
+                            "journal_mode", &journal_mode,
+                            "synchronous", &synchronous) < 0) {
+        flux_log_error (ctx->h, "%s", error.text);
+        return -1;
+    }
+    if (journal_mode) {
+        if (!journal_mode_valid (journal_mode)) {
+            flux_log (ctx->h, LOG_ERR, "invalid journal_mode config");
+            errno = EINVAL;
+            return -1;
+        }
+        if (set_config (&ctx->journal_mode, journal_mode) < 0)
+            return -1;
+    }
+    if (synchronous) {
+        if (!synchronous_valid (synchronous)) {
+            flux_log (ctx->h, LOG_ERR, "invalid synchronous config");
+            errno = EINVAL;
+            return -1;
+        }
+        if (set_config (&ctx->synchronous, synchronous) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 static int process_args (struct content_sqlite *ctx,
                          int argc,
                          char **argv,
@@ -895,6 +932,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "content_sqlite_create failed");
         return -1;
     }
+    if (process_config (ctx, flux_get_conf (h)) < 0)
+        goto done;
     if (process_args (ctx, argc, argv, &truncate) < 0)
         goto done;
     if (content_sqlite_opendb (ctx, truncate) < 0)
