@@ -86,10 +86,13 @@ struct perilog_proc {
     flux_plugin_t *p;
     flux_jobid_t id;
     bool prolog;
+    bool canceled;
     flux_future_t *kill_f;
+    flux_future_t *drain_f;
     flux_watcher_t *kill_timer;
     struct bulk_exec *bulk_exec;
     struct idset *ranks;
+    char *failed_ranks;
 };
 
 static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
@@ -115,8 +118,10 @@ static void perilog_proc_destroy (struct perilog_proc *proc)
     if (proc) {
         int saved_errno = errno;
         idset_destroy (proc->ranks);
+        free (proc->failed_ranks);
         bulk_exec_destroy (proc->bulk_exec);
         flux_future_destroy (proc->kill_f);
+        flux_future_destroy (proc->drain_f);
         flux_watcher_destroy (proc->kill_timer);
         free (proc);
         errno = saved_errno;
@@ -233,10 +238,123 @@ static void emit_finish_event (struct perilog_proc *proc,
     }
 }
 
+static flux_future_t *drain_failed_ranks (struct perilog_proc *proc)
+{
+    struct idset *failed = NULL;
+    flux_future_t *f = NULL;
+    unsigned long rank;
+    char reason[256];
+    flux_t *h = flux_jobtap_get_flux (proc->p);
+
+    if (!(failed = idset_create (0, IDSET_FLAG_AUTOGROW))) {
+        flux_log_error (h, "drain_failed_ranks: idset_create");
+        goto out;
+    }
+
+    rank = idset_first (proc->ranks);
+    while (rank != IDSET_INVALID_ID) {
+        flux_subprocess_t *p;
+        if ((p = bulk_exec_get_subprocess (proc->bulk_exec, rank))) {
+            if (flux_subprocess_state (p) == FLUX_SUBPROCESS_FAILED
+                || flux_subprocess_status (p) != 0) {
+                if (idset_set (failed, rank) < 0){
+                    flux_log_error (h,
+                                    "failed to add rank=%lu to drain set",
+                                    rank);
+                }
+            }
+        }
+        rank = idset_next (proc->ranks, rank);
+    }
+    if (!(proc->failed_ranks = idset_encode (failed, IDSET_FLAG_RANGE))) {
+        flux_log_error (h,
+                        "%s: error encoding %s failed ranks",
+                        idf58 (proc->id),
+                        perilog_proc_name (proc));
+        goto out;
+    }
+    (void) snprintf (reason,
+                     sizeof (reason),
+                     "%s failed for job %s",
+                     perilog_proc_name (proc),
+                     idf58 (proc->id));
+
+    if (!(f = flux_rpc_pack (h,
+                             "resource.drain",
+                             0,
+                             0,
+                             "{s:s s:s s:s}",
+                             "targets", proc->failed_ranks,
+                             "reason", reason,
+                             "mode", "update"))) {
+        flux_log (h,
+                  LOG_ERR,
+                  "%s: %s: failed to send drain RPC for ranks %s",
+                  idf58 (proc->id),
+                  perilog_proc_name (proc),
+                  proc->failed_ranks);
+        goto out;
+    }
+out:
+    idset_destroy (failed);
+    return f;
+}
+
+
+static void drain_failed_cb (flux_future_t *f, void *arg)
+{
+    struct perilog_proc *proc = arg;
+    flux_t *h = flux_jobtap_get_flux (proc->p);
+
+    if (flux_future_get (f, NULL) < 0) {
+        flux_log (h,
+                  LOG_ERR,
+                  "Failed to drain ranks with failed %s for %s: %s",
+                  perilog_proc_name (proc),
+                  idf58 (proc->id),
+                  future_strerror (f, errno));
+    }
+    /* future destroyed by perilog_proc_delete()
+     */
+    emit_finish_event (proc, proc->bulk_exec);
+    perilog_proc_delete (proc);
+}
+
+static bool perilog_per_rank (struct perilog_proc *proc)
+{
+    if (proc->prolog)
+        return perilog_config.prolog_per_rank;
+    return perilog_config.epilog_per_rank;
+}
+
 static void completion_cb (struct bulk_exec *bulk_exec, void *arg)
 {
     struct perilog_proc *proc = bulk_exec_aux_get (bulk_exec, "perilog_proc");
     if (proc) {
+        if (perilog_per_rank (proc)
+            && !proc->canceled
+            && bulk_exec_rc (bulk_exec) != 0) {
+
+            /* Drain the set of ranks that failed the prolog/epilog. If the
+             * drain RPC is successful, then wait for the response before
+             * emitting the "prolog/epilog-finish" event. O/w, resources could
+             * be freed and handed out to new jobs before they are drained.
+             */
+            if ((proc->drain_f = drain_failed_ranks (proc))
+                 && flux_future_then (proc->drain_f,
+                                      -1.,
+                                      drain_failed_cb,
+                                      proc) == 0)
+                return;
+
+            /* O/w, drain RPC failed, report error and fall through so finish
+             * event is still emitted.
+             */
+            flux_log_error (flux_jobtap_get_flux (proc->p),
+                            "%s: failed to drain %s failed ranks",
+                            idf58 (proc->id),
+                            perilog_proc_name (proc));
+        }
         emit_finish_event (proc, bulk_exec);
         perilog_proc_delete (proc);
     }
@@ -597,12 +715,18 @@ static int exception_cb (flux_plugin_t *p,
                                 "context",
                                 "severity", &severity) < 0)
         return -1;
+
     if (severity == 0
         && (proc = flux_jobtap_job_aux_get (p,
                                            FLUX_JOBTAP_CURRENT_JOB,
                                            "perilog_proc"))
         && proc->prolog
+        && !proc->canceled
         && bulk_exec_active_count (proc->bulk_exec) > 0) {
+
+        /* Set canceled flag to disable draining of failed prolog nodes
+         */
+        proc->canceled = true;
         if (prolog_kill (proc) < 0
             || prolog_kill_timer_start (proc,
                                         perilog_config.prolog_kill_timeout) < 0)
