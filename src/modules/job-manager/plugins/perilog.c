@@ -94,9 +94,7 @@ struct perilog_proc {
 
 static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
                                                   flux_jobid_t id,
-                                                  bool prolog,
-                                                  struct bulk_exec *bulk_exec,
-                                                  struct idset *ranks)
+                                                  bool prolog)
 {
     struct perilog_proc *proc = calloc (1, sizeof (*proc));
     if (proc == NULL)
@@ -104,8 +102,6 @@ static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
     proc->p = p;
     proc->id = id;
     proc->prolog = prolog;
-    proc->bulk_exec = bulk_exec;
-    proc->ranks = ranks;
     if (zhashx_insert (perilog_config.processes, &proc->id, proc) < 0) {
         free (proc);
         errno = EEXIST;
@@ -364,9 +360,14 @@ static int run_command (flux_plugin_t *p,
         return -1;
     }
 
+    if (!(proc = perilog_proc_create (p, id, prolog))) {
+        flux_log_error (h, "%s: proc_create", prolog ? "prolog" : "epilog");
+        goto error;
+    }
+
     if (flux_cmd_setenvf (cmd, 1, "FLUX_JOB_ID", "%s", idf58 (id)) < 0
         || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_USERID", "%u", userid) < 0) {
-        flux_log_error (h, "%s: flux_cmd_create", prolog ? "prolog" : "epilog");
+        flux_log_error (h, "%s: flux_cmd_create", perilog_proc_name (proc));
         return -1;
     }
 
@@ -379,46 +380,36 @@ static int run_command (flux_plugin_t *p,
                       LOG_ERR,
                       "%s: %s: failed to decode ranks from R",
                       idf58 (id),
-                      prolog ? "prolog" : "epilog");
+                      perilog_proc_name (proc));
             return -1;
         }
     }
     else if (!(ranks = idset_decode ("0"))) {
-        flux_log_error (h, "%s: idset_decode", prolog ? "prolog" : "epilog");
+        flux_log_error (h, "%s: idset_decode", perilog_proc_name (proc));
         return -1;
     }
 
     if (!(bulk_exec = bulk_exec_create (&ops,
                                         "rexec",
                                         id,
-                                        prolog ? "prolog" : "epilog",
+                                        perilog_proc_name (proc),
                                         NULL))
         || bulk_exec_push_cmd (bulk_exec, ranks, cmd, 0) < 0) {
         flux_log_error (h,
                         "failed to create %s bulk exec cmd for %s",
-                        prolog ? "prolog" : "epilog",
+                        perilog_proc_name (proc),
                         idf58 (id));
         goto error;
     }
     if (bulk_exec_start (h, bulk_exec) < 0) {
-        flux_log_error (h, "%s: bulk_exec_start", prolog ? "prolog" : "epilog");
+        flux_log_error (h, "%s: bulk_exec_start", perilog_proc_name (proc));
         goto error;
     }
-
-    if (!(proc = perilog_proc_create (p, id, prolog, bulk_exec, ranks))) {
-        flux_log_error (h, "%s: proc_create", prolog ? "prolog" : "epilog");
-        goto error;
-    }
-
-    /* proc now has ownership of bulk_exec and ranks
-     */
-    ranks = NULL;
-    bulk_exec = NULL;
 
     if (bulk_exec_aux_set (bulk_exec, "perilog_proc", proc, NULL) < 0) {
         flux_log_error (h,
                         "%s: bulk_exec_aux_set",
-                        prolog ? "prolog" : "epilog");
+                        perilog_proc_name (proc));
         goto error;
     }
 
@@ -429,9 +420,15 @@ static int run_command (flux_plugin_t *p,
                                  NULL) < 0) {
         flux_log_error (h,
                         "%s: flux_jobtap_job_aux_set",
-                        prolog ? "prolog" : "epilog");
+                        perilog_proc_name (proc));
         goto error;
     }
+
+    proc->bulk_exec = bulk_exec;
+    proc->ranks = ranks;
+
+    /* proc now has ownership of bulk_exec and ranks
+     */
     return 0;
 error:
     idset_destroy (ranks);
