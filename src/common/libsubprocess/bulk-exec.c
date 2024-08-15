@@ -97,6 +97,13 @@ int bulk_exec_complete (struct bulk_exec *exec)
     return exec->complete;
 }
 
+int bulk_exec_active_count (struct bulk_exec *exec)
+{
+    if (!exec || !exec->processes)
+        return 0;
+    return exec->total - exec->complete;
+}
+
 struct idset *bulk_exec_active_ranks (struct bulk_exec *exec)
 {
     flux_subprocess_t *p;

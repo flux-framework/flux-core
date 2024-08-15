@@ -95,6 +95,9 @@ int bulk_exec_started_count (struct bulk_exec *exec);
 /* Return number of processes that are complete */
 int bulk_exec_complete (struct bulk_exec *exec);
 
+/* Return number of processes that are still active */
+int bulk_exec_active_count (struct bulk_exec *exec);
+
 /* Return idset of ranks on which processes are still active */
 struct idset *bulk_exec_active_ranks (struct bulk_exec *exec);
 
