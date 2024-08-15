@@ -22,13 +22,10 @@ test_expect_success 'create script to fill statedir' '
 	chmod +x fillstatedir.sh
 '
 
-test_expect_success 'clear & setup test statedir' '
-	rm -rf /test/tmpfs-1m/* &&
-	mkdir /test/tmpfs-1m/statedir
-'
-
 # flux start will fail b/c rc3 will fail due to ENOSPC
 test_expect_success 'flux still operates with content-sqlite running out of space' '
+	rm -rf /test/tmpfs-1m/* &&
+	mkdir /test/tmpfs-1m/statedir &&
 	test_must_fail flux start \
 	    -o,-Scontent.backing-module=content-sqlite \
 	    -o,-Sstatedir=/test/tmpfs-1m/statedir \
@@ -37,13 +34,10 @@ test_expect_success 'flux still operates with content-sqlite running out of spac
         grep "helloworld" sql.out
 '
 
-test_expect_success 'clear & setup test statedir' '
-	rm -rf /test/tmpfs-1m/* &&
-	mkdir /test/tmpfs-1m/statedir
-'
-
 # flux start will fail b/c rc3 will fail due to ENOSPC
 test_expect_success 'flux still operates with content-files running out of space' '
+	rm -rf /test/tmpfs-1m/* &&
+	mkdir /test/tmpfs-1m/statedir &&
 	test_must_fail flux start \
 	    -o,-Scontent.backing-module=content-files \
 	    -o,-Sstatedir=/test/tmpfs-1m/statedir \
@@ -52,13 +46,10 @@ test_expect_success 'flux still operates with content-files running out of space
         grep "helloworld" files.out
 '
 
-test_expect_success 'clear & setup test statedir' '
-	rm -rf /test/tmpfs-1m/* &&
-	mkdir /test/tmpfs-1m/statedir
-'
-
 # flux start will fail b/c rc3 will fail due to ENOSPC
 test_expect_success 'content flush returns error on ENOSPC' '
+	rm -rf /test/tmpfs-1m/* &&
+	mkdir /test/tmpfs-1m/statedir &&
 	test_must_fail flux start \
 	    -o,-Scontent.backing-module=content-sqlite \
 	    -o,-Sstatedir=/test/tmpfs-1m/statedir \
