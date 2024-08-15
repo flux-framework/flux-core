@@ -138,4 +138,25 @@ test_expect_success 'preallocate will still hit ENOSPC at some point' '
 	rm content-sqlite.toml
 '
 
+test_expect_success 'test preallocate works w/ journaling' '
+	cat >content-sqlite.toml <<-EOT &&
+	[content-sqlite]
+	preallocate = 3145728
+	EOT
+	rm -rf /test/tmpfs-5m/* &&
+	mkdir /test/tmpfs-5m/statedir &&
+	flux start \
+	    -o,-Scontent.backing-module=content-sqlite \
+	    -o,-Sstatedir=/test/tmpfs-5m/statedir \
+	    -o,--config-path=$(pwd) \
+	    "./filljunk.sh /test/tmpfs-5m/statedir; flux run echo helloworld; flux dmesg" \
+	    > prealloc3.out 2> prealloc3.err &&
+        ls /test/tmpfs-5m/statedir | grep -q junk &&
+        test_must_fail grep "No space left on device" prealloc3.err &&
+        grep "preallocate reconfig" prealloc3.out | grep "journal_mode=OFF" &&
+        grep "preallocate reconfig" prealloc3.out | grep "synchronous=FULL" &&
+        grep "helloworld" prealloc3.out &&
+	rm content-sqlite.toml
+'
+
 test_done
