@@ -824,6 +824,30 @@ error:
     return NULL;
 }
 
+static bool journal_mode_valid (const char *s)
+{
+    /* N.B. sqlite is case sensitive by default, we assume it here */
+    if (!streq (s, "DELETE")
+        && !streq (s, "TRUNCATE")
+        && !streq (s, "PERSIST")
+        && !streq (s, "MEMORY")
+        && !streq (s, "WAL")
+        && !streq (s, "OFF"))
+        return false;
+    return true;
+}
+
+static bool synchronous_valid (const char *s)
+{
+    /* N.B. sqlite is case sensitive by default, we assume it here */
+    if (!streq (s, "EXTRA")
+        && !streq (s, "FULL")
+        && !streq (s, "NORMAL")
+        && !streq (s, "OFF"))
+        return false;
+    return true;
+}
+
 static int process_args (struct content_sqlite *ctx,
                          int argc,
                          char **argv,
@@ -832,10 +856,20 @@ static int process_args (struct content_sqlite *ctx,
     int i;
     for (i = 0; i < argc; i++) {
         if (strstarts (argv[i], "journal_mode=")) {
+            if (!journal_mode_valid (argv[i] + 13)) {
+                flux_log (ctx->h, LOG_ERR, "invalid journal_mode specified");
+                errno = EINVAL;
+                return -1;
+            }
             if (set_config (&ctx->journal_mode, argv[i] + 13) < 0)
                 return -1;
         }
         else if (strstarts (argv[i], "synchronous=")) {
+            if (!synchronous_valid (argv[i] + 12)) {
+                flux_log (ctx->h, LOG_ERR, "invalid synchronous specified");
+                errno = EINVAL;
+                return -1;
+            }
             if (set_config (&ctx->synchronous, argv[i] + 12) < 0)
                 return -1;
         }
