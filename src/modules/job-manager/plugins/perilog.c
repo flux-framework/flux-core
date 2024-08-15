@@ -116,6 +116,11 @@ static void perilog_proc_destroy (struct perilog_proc *proc)
     }
 }
 
+static const char *perilog_proc_name (struct perilog_proc *proc)
+{
+    return proc->prolog ? "prolog" : "epilog";
+}
+
 /*  zhashx_destructor_fn prototype
  */
 static void perilog_proc_destructor (void **item)
@@ -248,7 +253,7 @@ static void state_cb (flux_subprocess_t *sp, flux_subprocess_state_t state)
         flux_log (flux_jobtap_get_flux (proc->p),
                   LOG_ERR,
                   "%s %s: code=%d",
-                  proc->prolog ? "prolog": "epilog",
+                  perilog_proc_name (proc),
                   flux_subprocess_state_string (flux_subprocess_state (sp)),
                   code);
 
@@ -280,7 +285,7 @@ static void io_cb (flux_subprocess_t *sp, const char *stream)
     if ((len = flux_subprocess_getline (sp, stream, &s)) < 0) {
         flux_log_error (h, "%s: %s: %s: flux_subprocess_getline",
                         idf58 (proc->id),
-                        proc->prolog ? "prolog": "epilog",
+                        perilog_proc_name (proc),
                         stream);
         return;
     }
@@ -292,7 +297,7 @@ static void io_cb (flux_subprocess_t *sp, const char *stream)
                   level,
                   "%s: %s: %s: %s",
                   idf58 (proc->id),
-                  proc->prolog ? "prolog" : "epilog",
+                  perilog_proc_name (proc),
                   stream,
                   s);
     }
