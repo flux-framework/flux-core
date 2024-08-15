@@ -919,3 +919,10 @@ DEEPBIND
 PRELOAD
 RTLD
 dlopened
+WAL
+backend
+backends
+journaling
+pragmas
+preallocate
+preallocated
