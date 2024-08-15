@@ -39,8 +39,8 @@ int main (int argc, char *argv[])
         "bulk_exec_cancel (NULL) returns EINVAL");
     ok (bulk_exec_rc (NULL) < 0 && errno == EINVAL,
         "bulk_exec_rc (NULL) returns EINVAL");
-    ok (bulk_exec_current (NULL) == 0,
-        "bulk_exec_current (NULL) == 0");
+    ok (bulk_exec_started_count (NULL) == 0,
+        "bulk_exec_started_count (NULL) == 0");
     ok (bulk_exec_complete (NULL) == 0,
         "bulk_exec_complete (NULL) == 0");
     ok (bulk_exec_total (NULL) == 0,

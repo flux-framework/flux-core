@@ -633,13 +633,13 @@ static void exec_check_cb (flux_reactor_t *r,
 {
     struct jobinfo *job = arg;
     struct bulk_exec *exec = job->data;
-    if (bulk_exec_current (exec) >= 1) {
+    if (bulk_exec_started_count (exec) >= 1) {
         jobinfo_fatal_error (job, 0, "mock starting exception generated");
         flux_log (job->h,
                   LOG_DEBUG,
                   "mock exception for starting job total=%d, current=%d",
                   bulk_exec_total (exec),
-                  bulk_exec_current (exec));
+                  bulk_exec_started_count (exec));
         flux_watcher_destroy (w);
     }
 }

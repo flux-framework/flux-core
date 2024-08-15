@@ -76,7 +76,7 @@ int bulk_exec_rc (struct bulk_exec *exec)
     return exec->exit_status;
 }
 
-int bulk_exec_current (struct bulk_exec *exec)
+int bulk_exec_started_count (struct bulk_exec *exec)
 {
     if (!exec || !exec->processes)
         return 0;

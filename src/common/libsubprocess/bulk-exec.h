@@ -89,8 +89,8 @@ int bulk_exec_cancel (struct bulk_exec *exec);
 /* Returns max wait status returned from all exited processes */
 int bulk_exec_rc (struct bulk_exec *exec);
 
-/* Returns current number of processes starting/running */
-int bulk_exec_current (struct bulk_exec *exec);
+/* Returns current number of processes that have been started */
+int bulk_exec_started_count (struct bulk_exec *exec);
 
 /* Return number of processes that are complete */
 int bulk_exec_complete (struct bulk_exec *exec);
