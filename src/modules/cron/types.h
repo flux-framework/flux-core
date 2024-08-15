@@ -16,6 +16,6 @@
  *  Lookup cron entry operations for cron entry type named "name"
  */
 int cron_type_operations_lookup (const char *name,
-    struct cron_entry_ops *ops);
+                                 struct cron_entry_ops *ops);
 
 #endif /* !HAVE_CRON_TYPES_H */

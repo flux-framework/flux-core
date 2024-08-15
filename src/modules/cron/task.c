@@ -181,7 +181,8 @@ static void completion_cb (flux_subprocess_t *p)
     cron_task_handle_finished (p, t);
 }
 
-static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
+static void state_change_cb (flux_subprocess_t *p,
+                             flux_subprocess_state_t state)
 {
     cron_task_t *t = flux_subprocess_aux_get (p, "task");
 
@@ -227,14 +228,16 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
         is_stderr = true;
 
     if ((len = flux_subprocess_read_trimmed_line (p, stream, &buf)) < 0) {
-        flux_log_error (t->h, "%s: flux_subprocess_read_trimmed_line",
+        flux_log_error (t->h,
+                        "%s: flux_subprocess_read_trimmed_line",
                         __FUNCTION__);
         return;
     }
 
     if (!len) {
         if ((len = flux_subprocess_read (p, stream, &buf)) < 0) {
-            flux_log_error (t->h, "%s: flux_subprocess_read",
+            flux_log_error (t->h,
+                            "%s: flux_subprocess_read",
                             __FUNCTION__);
             return;
         }
@@ -265,12 +268,11 @@ int cron_task_kill (cron_task_t *t, int sig)
 
 
 static flux_cmd_t *exec_cmd_create (struct cron_task *t,
-    const char *command,
-    const char *cwd,
-    json_t *env)
+                                    const char *command,
+                                    const char *cwd,
+                                    json_t *env)
 {
     flux_cmd_t *cmd = NULL;
-    char *tmp_cwd = NULL;
 
     if (!(cmd = flux_cmd_create (0, NULL, NULL))) {
         flux_log_error (t->h, "exec_cmd_create: flux_cmd_create");
@@ -282,7 +284,7 @@ static flux_cmd_t *exec_cmd_create (struct cron_task *t,
         flux_log_error (t->h, "exec_cmd_create: flux_cmd_argv_append");
         goto error;
     }
-    if (flux_cmd_setcwd (cmd, cwd) < 0) {
+    if (cwd && flux_cmd_setcwd (cmd, cwd) < 0) {
         flux_log_error (t->h, "exec_cmd_create: flux_cmd_setcwd");
         goto error;
     }
@@ -305,17 +307,17 @@ static flux_cmd_t *exec_cmd_create (struct cron_task *t,
         }
     }
 
-    free (tmp_cwd);
     return (cmd);
  error:
-    free (tmp_cwd);
     flux_cmd_destroy (cmd);
     return (NULL);
 }
 
 int cron_task_run (cron_task_t *t,
-    int rank, const char *command, const char *cwd,
-    json_t *env)
+                   int rank,
+                   const char *command,
+                   const char *cwd,
+                   json_t *env)
 {
     flux_t *h = t->h;
     flux_subprocess_t *p = NULL;
