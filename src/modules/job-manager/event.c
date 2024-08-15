@@ -328,10 +328,15 @@ int event_job_action (struct event *event, struct job *job)
                 && !job->perilog_active
                 && !job->start_pending
                 && !job->free_posted) {
-                if (housekeeping_start (ctx->housekeeping,
-                                        job->R_redacted,
-                                        job->id,
-                                        job->userid) < 0)
+
+                /* Release resources to housekeeping, but only if they were
+                 * allocated by the scheduler.
+                 */
+                if (!job->alloc_bypass
+                    && housekeeping_start (ctx->housekeeping,
+                                           job->R_redacted,
+                                           job->id,
+                                           job->userid) < 0)
                     return -1;
                 if (event_job_post_pack (ctx->event, job, "free", 0, NULL) < 0)
                     return -1;
