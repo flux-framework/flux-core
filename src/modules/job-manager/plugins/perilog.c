@@ -91,6 +91,7 @@ struct perilog_proc {
     flux_jobid_t id;
     bool prolog;
     bool canceled;
+    bool timedout;
     flux_future_t *kill_f;
     flux_future_t *drain_f;
     flux_watcher_t *timer;
@@ -193,27 +194,41 @@ static void emit_finish_event (struct perilog_proc *proc,
          *   the exception is raised:
          */
         if (status != 0 && !proc->canceled) {
+            flux_t *h = flux_jobtap_get_flux (proc->p);
             int code = WIFEXITED (status) ? WEXITSTATUS (status) : -1;
             int sig;
             char *errmsg;
+            char *hosts = NULL;
 
+            if (!(hosts = flux_hostmap_lookup (h, proc->failed_ranks, NULL)))
+                hosts = strdup ("unknown");
+
+            if (proc->timedout) {
+                rc = asprintf (&errmsg,
+                               "prolog timed out on %s (rank %s)",
+                               hosts,
+                               proc->failed_ranks);
+            }
             /*  Report that prolog was signaled if WIFSIGNALED() is true, or
              *  exit code > 128 (where standard exit code is 127+signo from
              *  most shells)
              */
-            if (WIFSIGNALED (status) || code > 128) {
+            else if (WIFSIGNALED (status) || code > 128) {
                 sig = WIFSIGNALED (status) ? WTERMSIG (status) : code - 128;
                 rc = asprintf (&errmsg,
-                               "prolog killed by signal %d%s",
+                               "prolog killed by signal %d on %s (rank %s)",
                                sig,
-                               sig == SIGTERM ?
-                               " (timeout or job canceled)" :
-                               "");
+                               hosts ? hosts : "unknown",
+                               proc->failed_ranks);
             }
             else
                 rc = asprintf (&errmsg,
-                               "prolog exited with exit code=%d",
-                               code);
+                               "prolog exited with code=%d on %s (rank %s)",
+                               code,
+                               hosts ? hosts : "unknown",
+                               proc->failed_ranks);
+
+            free (hosts);
             if (rc < 0)
                 errmsg = NULL;
             if (flux_jobtap_raise_exception (proc->p,
@@ -293,8 +308,9 @@ static flux_future_t *drain_failed_ranks (struct perilog_proc *proc)
     }
     (void) snprintf (reason,
                      sizeof (reason),
-                     "%s failed for job %s",
+                     "%s %s for job %s",
                      perilog_proc_name (proc),
+                     proc->timedout ? "timed out" : "failed",
                      idf58 (proc->id));
 
     if (!(f = flux_rpc_pack (h,
@@ -738,6 +754,7 @@ static void timeout_cb (flux_reactor_t *r,
                         void *arg)
 {
     struct perilog_proc *proc = arg;
+    proc->timedout = true;
     if (prolog_kill (proc) < 0)
         flux_log_error (flux_jobtap_get_flux (proc->p),
                         "failed to kill %s for %s",
@@ -926,8 +943,10 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
 
     memset (conf, 0, sizeof (*conf));
     conf->prolog_kill_timeout = 5.;
-    if (!(conf->processes = job_hash_create ()))
+    if (!(conf->processes = job_hash_create ())) {
+        flux_log (h, LOG_ERR, "perilog: failed to create job hash");
         return -1;
+    }
     zhashx_set_destructor (conf->processes,
                            perilog_proc_destructor);
 
