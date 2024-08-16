@@ -393,7 +393,10 @@ void free_cb (flux_t *h, const flux_msg_t *msg, const char *R_str, void *arg)
     }
 
     if (try_free (h, ss, id, R, final) < 0) {
-        flux_log_error (h, "free: could not free R");
+        flux_log_error (h, "free: could not free R. Stopping scheduler.");
+        /* Make this error fatal to the scheduler so that tests will fail.
+         */
+        flux_reactor_stop_error (flux_get_reactor (h));
         return;
     }
     /* This is a no-op now that sched.free requires no response

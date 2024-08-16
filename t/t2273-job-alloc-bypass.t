@@ -36,6 +36,9 @@ test_expect_success 'alloc-bypass: works' '
 	        --setattr=system.alloc-bypass.R="$(flux kvs get resource.R)" \
 	        -o per-resource.type=node hostname
 '
+test_expect_success 'alloc-bypass: scheduler still running' '
+	flux ping -c 1 sched-simple
+'
 test_expect_success 'alloc-bypass: works with per-resource.type=core' '
 	flux run \
 	    --setattr=system.alloc-bypass.R="$(flux kvs get resource.R)" \
