@@ -31,6 +31,7 @@
  *
  *     [job-manager.prolog]
  *     command = [ "command", "arg1", "arg2" ]
+ *     timeout = "30m"
  *
  *  - The queue should be idle before unloading/reloading this
  *     plugin. Otherwise jobs may become stuck because a prolog
@@ -58,6 +59,7 @@
 #include "src/common/libjob/idf58.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/fsd.h"
 #include "ccan/str/str.h"
 #include "src/broker/state_machine.h" // for STATE_CLEANUP
 #include "src/common/libsubprocess/bulk-exec.h"
@@ -71,8 +73,10 @@ static struct perilog_conf {
     double prolog_kill_timeout;/*  Time between SIGTERM/SIGKILL for prolog  */
     flux_cmd_t *prolog_cmd;    /*  Configured prolog command                */
     bool prolog_per_rank;      /*  Execute prolog on each job rank          */
+    double prolog_timeout;     /*  Prolog timeout                           */
     flux_cmd_t *epilog_cmd;    /*  Configured epilog command                */
     bool epilog_per_rank;      /*  Execute epilog on each job rank          */
+    double epilog_timeout;     /*  Epilog timeout                           */
     zhashx_t *processes;       /*  List of outstanding perilog_proc objects */
     zlistx_t *log_ignore;      /*  List of regex patterns to ignore in logs */
     flux_future_t *watch_f;    /*  Watch for broker entering CLEANUP state */
@@ -89,11 +93,17 @@ struct perilog_proc {
     bool canceled;
     flux_future_t *kill_f;
     flux_future_t *drain_f;
+    flux_watcher_t *timer;
     flux_watcher_t *kill_timer;
     struct bulk_exec *bulk_exec;
     struct idset *ranks;
     char *failed_ranks;
 };
+
+static void timeout_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg);
 
 static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
                                                   flux_jobid_t id,
@@ -122,6 +132,7 @@ static void perilog_proc_destroy (struct perilog_proc *proc)
         bulk_exec_destroy (proc->bulk_exec);
         flux_future_destroy (proc->kill_f);
         flux_future_destroy (proc->drain_f);
+        flux_watcher_destroy (proc->timer);
         flux_watcher_destroy (proc->kill_timer);
         free (proc);
         errno = saved_errno;
@@ -131,6 +142,13 @@ static void perilog_proc_destroy (struct perilog_proc *proc)
 static const char *perilog_proc_name (struct perilog_proc *proc)
 {
     return proc->prolog ? "prolog" : "epilog";
+}
+
+static double perilog_proc_timeout (struct perilog_proc *proc)
+{
+    if (proc->prolog)
+        return perilog_config.prolog_timeout;
+    return perilog_config.epilog_timeout;
 }
 
 /*  zhashx_destructor_fn prototype
@@ -466,6 +484,7 @@ static int run_command (flux_plugin_t *p,
     uint32_t userid;
     struct idset *ranks = NULL;
     struct bulk_exec *bulk_exec = NULL;
+    double timeout;
     json_t *R;
 
     if (flux_plugin_arg_unpack (args,
@@ -540,6 +559,22 @@ static int run_command (flux_plugin_t *p,
                         "%s: flux_jobtap_job_aux_set",
                         perilog_proc_name (proc));
         goto error;
+    }
+
+    if ((timeout = perilog_proc_timeout (proc)) > 0.) {
+        flux_watcher_t *w;
+        if (!(w = flux_timer_watcher_create (flux_get_reactor (h),
+                                             timeout,
+                                             0.,
+                                             timeout_cb,
+                                             proc))) {
+            flux_log_error (h,
+                            "%s: failed to create timeout timer",
+                            perilog_proc_name (proc));
+            goto error;
+        }
+        flux_watcher_start (w);
+        proc->timer = w;
     }
 
     proc->bulk_exec = bulk_exec;
@@ -695,6 +730,21 @@ static int prolog_kill_timer_start (struct perilog_proc *proc, double timeout)
         flux_watcher_start (proc->kill_timer);
     }
     return 0;
+}
+
+static void timeout_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
+{
+    struct perilog_proc *proc = arg;
+    if (prolog_kill (proc) < 0)
+        flux_log_error (flux_jobtap_get_flux (proc->p),
+                        "failed to kill %s for %s",
+                        perilog_proc_name (proc),
+                        idf58 (proc->id));
+    (void) prolog_kill_timer_start (proc,
+                                    perilog_config.prolog_kill_timeout);
 }
 
 static int exception_cb (flux_plugin_t *p,
@@ -871,6 +921,8 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
     json_t *log_ignore = NULL;
     int prolog_per_rank = 0;
     int epilog_per_rank = 0;
+    const char *prolog_timeout = "30m";
+    const char *epilog_timeout = "0";
 
     memset (conf, 0, sizeof (*conf));
     conf->prolog_kill_timeout = 5.;
@@ -894,15 +946,17 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
     }
     if (flux_conf_unpack (flux_get_conf (h),
                           &error,
-                          "{s?{s?{s?o s?b s?F !} s?{s?o s?b !} s?{s?o}}}",
+                          "{s?{s?{s?o s?b s?F s?s!} s?{s?o s?b s?s!} s?{s?o}}}",
                           "job-manager",
                             "prolog",
                               "command", &prolog,
                               "per-rank", &prolog_per_rank,
                               "kill-timeout", &conf->prolog_kill_timeout,
+                              "timeout", &prolog_timeout,
                             "epilog",
                               "command", &epilog,
                               "per-rank", &epilog_per_rank,
+                              "timeout", &epilog_timeout,
                             "perilog",
                               "log-ignore", &log_ignore) < 0) {
         flux_log (h, LOG_ERR,
@@ -912,6 +966,21 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
     }
     conf->prolog_per_rank = prolog_per_rank;
     conf->epilog_per_rank = epilog_per_rank;
+
+    if (fsd_parse_duration (prolog_timeout, &conf->prolog_timeout) < 0) {
+        flux_log (h,
+                  LOG_ERR,
+                  "[job-manager.prolog] invalid timeout %s specified",
+                  prolog_timeout);
+        return -1;
+    }
+    if (fsd_parse_duration (epilog_timeout, &conf->epilog_timeout) < 0) {
+        flux_log (h,
+                  LOG_ERR,
+                  "[job-manager.epilog] invalid timeout %s specified",
+                  epilog_timeout);
+        return -1;
+    }
     if (prolog &&
         !(conf->prolog_cmd = cmd_from_json (prolog))) {
         flux_log (h, LOG_ERR, "[job-manager.prolog] command malformed!");
