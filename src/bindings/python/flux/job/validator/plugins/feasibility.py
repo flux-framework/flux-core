@@ -8,9 +8,9 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-"""Use sched.feasibility RPC to validate job
+"""Use feasibility service to validate job
 
-This plugin validates jobs via a sched.feasibility RPC.
+This plugin validates jobs via a feasibility.check RPC.
 
 This allows jobs which are making infeasible or otherwise invalid
 requests to be rejected by the scheduler before ingest, instead of
@@ -19,8 +19,8 @@ when the scheduler attempts to allocate resources for them.
 The RPC endpoint for feasibility checks can be set with an optional
 --feasibility-service=NAME option.
 
-ENOSYS errors from the RPC are ignored, in case the loaded scheduler
-does not support the sched.feasibility RPC
+ENOSYS errors from the RPC are ignored, in case there is no feasibility
+service currently loaded.
 """
 
 import errno
@@ -30,7 +30,7 @@ from flux.job.validator import ValidatorPlugin
 
 class Validator(ValidatorPlugin):
     def __init__(self, parser):
-        self.service_name = "sched.feasibility"
+        self.service_name = "feasibility.check"
         parser.add_argument(
             "--feasibility-service",
             metavar="NAME",
