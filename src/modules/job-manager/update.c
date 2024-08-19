@@ -40,10 +40,10 @@
  * `job.update.*` callback. The `job.validate` step will only be skipped
  * all keys in an update have the validated flag set.
  *
- * Plugins may also request a job feasibility check (sched.feasibility RPC)
- * by setting a 'feasibility' flag to 1 in the FLUX_PLUGIN_OUT_ARGS. If any
- * plugin requests a feasibility check, then feasibility is run for the
- * proposed jobspec as a whole.
+ * Plugins may also request a job feasibility check by setting a
+ * 'feasibility' flag to 1 in the FLUX_PLUGIN_OUT_ARGS. If any plugin
+ * requests a feasibility check, then feasibility is run for the proposed
+ * jobspec as a whole.
  *
  * A plugin may request additional updates by setting an 'updates' key in
  * in the plugin out arguments. The updates key follows the same format as
@@ -362,7 +362,7 @@ static int update_feasibility_check (struct update *update,
                                            updates,
                                            validate))
         || !(f = flux_rpc_pack (update->ctx->h,
-                                "sched.feasibility",
+                                "feasibility.check",
                                 0,
                                 0,
                                 "{s:O}",
