@@ -860,6 +860,15 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
 {
     int rc = -1;
     char *s = NULL;
+    flux_future_t *f = NULL;
+
+    /*  Per RFC 27 register 'feasibility' service for feasibility.check RPC
+     */
+    if (!(f = flux_service_register (h, "feasibility"))
+        || flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "Failed to register feasibility service");
+        goto out;
+    }
 
     /*  Acquire resources from resource module and set initial
      *   resource state.
@@ -889,6 +898,7 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
     free (s);
     rc = 0;
 out:
+    flux_future_destroy (f);
     return rc;
 }
 
@@ -963,6 +973,11 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "*.resource-status", status_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "*.feasibility", feasibility_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "*.expiration", expiration_cb, FLUX_ROLE_OWNER },
+    { FLUX_MSGTYPE_REQUEST,
+      "feasibility.check",
+      feasibility_cb,
+      FLUX_ROLE_USER
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
