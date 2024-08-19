@@ -971,7 +971,6 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "*.resource-status", status_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "*.feasibility", feasibility_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "*.expiration", expiration_cb, FLUX_ROLE_OWNER },
     { FLUX_MSGTYPE_REQUEST,
       "feasibility.check",
