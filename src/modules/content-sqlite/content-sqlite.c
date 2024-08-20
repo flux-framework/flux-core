@@ -74,10 +74,20 @@ struct content_sqlite {
     size_t lzo_bufsize;
     void *lzo_buf;
     struct content_stats stats;
-    const char *journal_mode;
-    const char *synchronous;
+    char *journal_mode;
+    char *synchronous;
     bool truncate;
 };
+
+static int set_config (char **conf, const char *val)
+{
+    char *tmp;
+    if (!(tmp = strdup (val)))
+        return -1;
+    free (*conf);
+    *conf = tmp;
+    return 0;
+}
 
 static void log_sqlite_error (struct content_sqlite *ctx, const char *fmt, ...)
 {
@@ -729,6 +739,8 @@ static void content_sqlite_destroy (struct content_sqlite *ctx)
         free (ctx->dbfile);
         free (ctx->lzo_buf);
         free (ctx->hashfun);
+        free (ctx->journal_mode);
+        free (ctx->synchronous);
         free (ctx);
         errno = saved_errno;
     }
@@ -758,8 +770,10 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
         goto error;
     ctx->lzo_bufsize = lzo_buf_chunksize;
     ctx->h = h;
-    ctx->journal_mode = "WAL";
-    ctx->synchronous = "NORMAL";
+    if (set_config (&ctx->journal_mode, "WAL") < 0)
+        goto error;
+    if (set_config (&ctx->synchronous, "NORMAL") < 0)
+        goto error;
 
     /* Some tunables:
      * - the hash function, e.g. sha1, sha256
@@ -780,8 +794,10 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
      */
     if (!(dbdir = flux_attr_get (h, "statedir"))) {
         dbdir = flux_attr_get (h, "rundir");
-        ctx->journal_mode = "OFF";
-        ctx->synchronous = "OFF";
+        if (set_config (&ctx->journal_mode, "OFF") < 0)
+            goto error;
+        if (set_config (&ctx->synchronous, "OFF") < 0)
+            goto error;
     }
     if (!dbdir) {
         flux_log_error (h, "neither statedir nor rundir are set");
@@ -808,6 +824,67 @@ error:
     return NULL;
 }
 
+static bool journal_mode_valid (const char *s)
+{
+    /* N.B. sqlite is case sensitive by default, we assume it here */
+    if (!streq (s, "DELETE")
+        && !streq (s, "TRUNCATE")
+        && !streq (s, "PERSIST")
+        && !streq (s, "MEMORY")
+        && !streq (s, "WAL")
+        && !streq (s, "OFF"))
+        return false;
+    return true;
+}
+
+static bool synchronous_valid (const char *s)
+{
+    /* N.B. sqlite is case sensitive by default, we assume it here */
+    if (!streq (s, "EXTRA")
+        && !streq (s, "FULL")
+        && !streq (s, "NORMAL")
+        && !streq (s, "OFF"))
+        return false;
+    return true;
+}
+
+static int process_config (struct content_sqlite *ctx,
+                           const flux_conf_t *conf)
+{
+    flux_error_t error;
+    const char *journal_mode = NULL;
+    const char *synchronous = NULL;
+
+    if (flux_conf_unpack (conf,
+                          &error,
+                          "{s?{s?s s?s}}",
+                          "content-sqlite",
+                            "journal_mode", &journal_mode,
+                            "synchronous", &synchronous) < 0) {
+        flux_log_error (ctx->h, "%s", error.text);
+        return -1;
+    }
+    if (journal_mode) {
+        if (!journal_mode_valid (journal_mode)) {
+            flux_log (ctx->h, LOG_ERR, "invalid journal_mode config");
+            errno = EINVAL;
+            return -1;
+        }
+        if (set_config (&ctx->journal_mode, journal_mode) < 0)
+            return -1;
+    }
+    if (synchronous) {
+        if (!synchronous_valid (synchronous)) {
+            flux_log (ctx->h, LOG_ERR, "invalid synchronous config");
+            errno = EINVAL;
+            return -1;
+        }
+        if (set_config (&ctx->synchronous, synchronous) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 static int process_args (struct content_sqlite *ctx,
                          int argc,
                          char **argv,
@@ -816,10 +893,22 @@ static int process_args (struct content_sqlite *ctx,
     int i;
     for (i = 0; i < argc; i++) {
         if (strstarts (argv[i], "journal_mode=")) {
-            ctx->journal_mode = argv[i] + 13;
+            if (!journal_mode_valid (argv[i] + 13)) {
+                flux_log (ctx->h, LOG_ERR, "invalid journal_mode specified");
+                errno = EINVAL;
+                return -1;
+            }
+            if (set_config (&ctx->journal_mode, argv[i] + 13) < 0)
+                return -1;
         }
         else if (strstarts (argv[i], "synchronous=")) {
-            ctx->synchronous = argv[i] + 12;
+            if (!synchronous_valid (argv[i] + 12)) {
+                flux_log (ctx->h, LOG_ERR, "invalid synchronous specified");
+                errno = EINVAL;
+                return -1;
+            }
+            if (set_config (&ctx->synchronous, argv[i] + 12) < 0)
+                return -1;
         }
         else if (streq ("truncate", argv[i])) {
             *truncate = true;
@@ -843,6 +932,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "content_sqlite_create failed");
         return -1;
     }
+    if (process_config (ctx, flux_get_conf (h)) < 0)
+        goto done;
     if (process_args (ctx, argc, argv, &truncate) < 0)
         goto done;
     if (content_sqlite_opendb (ctx, truncate) < 0)
