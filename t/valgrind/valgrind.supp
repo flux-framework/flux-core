@@ -61,14 +61,6 @@
    fun:_dl_lookup_symbol_x
 }
 {
-   <issue_1897>
-   Memcheck:Addr1
-   ...
-   fun:ev_run
-   fun:flux_reactor_run
-   ...
-}
-{
    <issue_2223>
    Memcheck:Leak
    match-leak-kinds: definite
