@@ -102,7 +102,7 @@ done
 
 # Print module that has registered 'sched' service, if any
 lookup_sched_module() {
-    flux module list | awk '$NF == "sched" { print $1 }'
+    flux module list | awk '$NF ~ /^\s*(\w+,)?sched(,\w+)?\s*$/ { print $1 }'
 }
 
 if test $RANK -eq 0 -a "${FLUX_SCHED_MODULE}" != "none" \
