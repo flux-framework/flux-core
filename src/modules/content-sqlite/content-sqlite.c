@@ -88,10 +88,10 @@ struct content_sqlite {
 };
 
 /* By default, sqlite is compiled with a max blob of 1 billion
- * bytes.  So we'll go with 500m blocks as the default largest
+ * bytes.  So we'll go with 896m blocks as the default largest
  * blob we'll write out at a time.
  */
-#define PREALLOCATE_BLOBSIZE (1024*1024*512)
+#define PREALLOCATE_BLOBSIZE (1024*1024*896)
 
 static void content_sqlite_closedb (struct content_sqlite *ctx);
 static int content_sqlite_opendb (struct content_sqlite *ctx,
