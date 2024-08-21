@@ -38,6 +38,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/librouter/rpc_track.h"
 #include "ccan/str/str.h"
+#include "ccan/array_size/array_size.h"
 
 #include "overlay.h"
 #include "attr.h"
@@ -192,6 +193,7 @@ struct overlay {
 
     struct flux_msglist *health_requests;
     struct flux_msglist *trace_requests;
+    struct idset *flub_rankpool;
 };
 
 static void overlay_mcast_child (struct overlay *ov, flux_msg_t *msg);
@@ -297,6 +299,16 @@ int overlay_set_topology (struct overlay *ov, struct topology *topo)
 
     ov->size = topology_get_size (topo);
     ov->rank = topology_get_rank (topo);
+    if (ov->rank == 0) {
+        if (!(ov->flub_rankpool = idset_create (ov->size, 0)))
+            goto error;
+    }
+    if (!cert_meta_get (ov->cert, "name")) {
+        char val[16];
+        snprintf (val, sizeof (val), "%lu", (unsigned long)ov->rank);
+        if (cert_meta_set (ov->cert, "name", val) < 0)
+            goto error;
+    }
     ov->child_count = child_count;
     if (ov->child_count > 0) {
         int i;
@@ -1584,6 +1596,7 @@ int overlay_register_attrs (struct overlay *overlay)
                          overlay->rank,
                          ATTR_IMMUTABLE) < 0)
         return -1;
+    (void)attr_delete (overlay->attrs, "size", true);
     if (attr_add_uint32 (overlay->attrs,
                          "size", overlay->size,
                          ATTR_IMMUTABLE) < 0)
@@ -2319,10 +2332,141 @@ static int overlay_configure_topo (struct overlay *ov)
     return 0;
 }
 
+static int overlay_flub_alloc (struct overlay *ov, int *rank)
+{
+    unsigned int id;
+
+    if (!ov->flub_rankpool) { // created by overlay_set_topology()
+        errno = EINVAL;
+        return -1;
+    }
+    if ((id = idset_first (ov->flub_rankpool)) != IDSET_INVALID_ID) {
+        if (idset_clear (ov->flub_rankpool, id) < 0)
+            return -1;
+        *rank = (int)id;
+        return 0;
+    }
+    errno = ENOENT;
+    return -1;
+}
+
+int overlay_flub_provision (struct overlay *ov,
+                            uint32_t lo_rank,
+                            uint32_t hi_rank,
+                            bool available)
+{
+    if (!ov->flub_rankpool) { // created by overlay_set_topology()
+        errno = EINVAL;
+        return -1;
+    }
+    if (available)
+        return idset_range_set (ov->flub_rankpool, lo_rank, hi_rank);
+    return idset_range_clear (ov->flub_rankpool, lo_rank, hi_rank);
+}
+
+static json_t *flub_dict_create (attr_t *attrs)
+{
+    const char *names[] = { "hostlist", "instance-level" };
+    json_t *dict;
+
+    if (!(dict = json_object ()))
+        goto nomem;
+    for (int i = 0; i < ARRAY_SIZE (names); i++) {
+        const char *val;
+        json_t *o;
+        if (attr_get (attrs, names[i], &val, NULL) < 0)
+            goto error;
+        if (!(o = json_string (val))
+            || json_object_set_new (dict, names[i], o) < 0) {
+            json_decref (o);
+            goto nomem;
+        }
+    }
+    return dict;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, dict);
+    return NULL;
+}
+
+static void overlay_flub_getinfo_cb (flux_t *h,
+                                     flux_msg_handler_t *mh,
+                                     const flux_msg_t *msg,
+                                     void *arg)
+{
+    struct overlay *ov = arg;
+    const char *errmsg = NULL;
+    json_t *attrs = NULL;
+    int rank;
+
+    if (flux_request_unpack (msg, NULL, "{}") < 0)
+        goto error;
+    if (overlay_flub_alloc (ov, &rank) < 0) {
+        errmsg = "there are no available ranks";
+        goto error;
+    }
+    if (!(attrs = flub_dict_create (ov->attrs)))
+        goto error;
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:i s:O}",
+                           "rank", rank,
+                           "size", ov->size,
+                           "attrs", attrs) < 0)
+        flux_log_error (h, "error responding to overlay.flub-getinfo request");
+    json_decref (attrs);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to overlay.flub-getinfo request");
+    json_decref (attrs);
+}
+
+static void overlay_flub_kex_cb (flux_t *h,
+                                 flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg,
+                                 void *arg)
+{
+    struct overlay *ov = arg;
+    const char *errmsg = NULL;
+    const char *name;
+    const char *pubkey;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:s}",
+                             "name", &name,
+                             "pubkey", &pubkey) < 0)
+        goto error;
+    if (ov->child_count == 0) {
+        errmsg = "this broker cannot have children";
+        errno = EINVAL;
+        goto error;
+    }
+    if (overlay_authorize (ov, name, pubkey) < 0) {
+        errmsg = "failed to authorize public key";
+        goto error;
+    }
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:s s:s s:s}",
+                           "pubkey", overlay_cert_pubkey (ov),
+                           "name", overlay_cert_name (ov),
+                           "uri", overlay_get_bind_uri (ov)) < 0)
+        flux_log_error (h, "error responding to overlay.flub-kex request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to overlay.flub-kex request");
+}
+
 void overlay_destroy (struct overlay *ov)
 {
     if (ov) {
         int saved_errno = errno;
+
+        idset_destroy (ov->flub_rankpool);
 
         flux_msglist_destroy (ov->health_requests);
 
@@ -2375,6 +2519,18 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "overlay.trace",
         overlay_trace_cb,
+        0,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.flub-kex",
+        overlay_flub_kex_cb,
+        0,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.flub-getinfo",
+        overlay_flub_getinfo_cb,
         0,
     },
     {

@@ -95,6 +95,8 @@ TESTSCRIPTS = \
 	t0022-jj-reader.t \
 	t0023-jobspec1-validate.t \
 	t0026-flux-R.t \
+	t0033-size-override.t \
+	t0034-flub.t \
 	t0090-content-enospc.t \
 	t1000-kvs.t \
 	t1001-kvs-internals.t \

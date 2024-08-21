@@ -75,17 +75,22 @@ static char *pmi_mapping_to_taskmap (const char *s)
 }
 
 /* Set broker.mapping attribute from enclosing instance taskmap.
+ * Skip setting the taskmap if extra_ranks is nonzero since the
+ * mapping of those ranks is unknown.  N.B. when broker.mapping is missing,
+ * use_ipc() below will return false, a good thing since it is unknown
+ * whether ipc:// would work for the TBON wire-up of extra nodes.
  */
 static int set_broker_mapping_attr (struct upmi *upmi,
                                     int size,
-                                    attr_t *attrs)
+                                    attr_t *attrs,
+                                    int extra_ranks)
 {
     char *val = NULL;
     int rc;
 
     if (size == 1)
         val = strdup ("[[0,1,1,1]]");
-    else {
+    else if (extra_ranks == 0) {
         /* First attempt to get flux.taskmap, falling back to
          * PMI_process_mapping if this key is not available.
          */
@@ -163,7 +168,7 @@ overflow:
     return -1;
 }
 
-static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
+static int set_hostlist_attr (attr_t *attrs,struct hostlist *hl)
 {
     const char *value;
     char *s;
@@ -220,9 +225,10 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     int child_count;
     int *child_ranks = NULL;
     const char *uri;
-    int i;
     int upmi_flags = UPMI_LIBPMI_NOFLUX;
     const char *upmi_method;
+    const char *s;
+    int size;
 
     // N.B. overlay_create() sets the tbon.topo attribute
     if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
@@ -249,17 +255,35 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
         log_err ("set_instance_level_attr");
         goto error;
     }
-    if (set_broker_mapping_attr (upmi, info.size, attrs) < 0) {
+    /* Allow the PMI size to be overridden with a larger one so that
+     * additional ranks can be grafted on later.
+     */
+    size = info.size;
+    if (attr_get (attrs, "size", &s, NULL) == 0) {
+        errno = 0;
+        size = strtoul (s, NULL, 10);
+        if (errno != 0 || size <= info.size) {
+            log_msg ("instance size may only be increased");
+            goto error;
+        }
+    }
+    if (set_broker_mapping_attr (upmi, size, attrs, size - info.size) < 0) {
         log_err ("error setting broker.mapping attribute");
         goto error;
     }
-    if (!(topo = topology_create (topo_uri, info.size, &error))) {
+    if (!(topo = topology_create (topo_uri, size, &error))) {
         log_msg ("error creating '%s' topology: %s", topo_uri, error.text);
         goto error;
     }
     if (topology_set_rank (topo, info.rank) < 0
         || overlay_set_topology (overlay, topo) < 0)
         goto error;
+    if (info.rank == 0 && size > info.size) {
+        if (overlay_flub_provision (overlay, info.size, size - 1, true) < 0) {
+            log_msg ("error provisioning flub allocator");
+            goto error;
+        }
+    }
     if (gethostname (hostname, sizeof (hostname)) < 0) {
         log_err ("gethostname");
         goto error;
@@ -267,16 +291,6 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     if (!(hl = hostlist_create ())) {
         log_err ("hostlist_create");
         goto error;
-    }
-
-    /* A size=1 instance has no peers, so skip the PMI exchange.
-     */
-    if (info.size == 1) {
-        if (hostlist_append (hl, hostname) < 0) {
-            log_err ("hostlist_append");
-            goto error;
-        }
-        goto done;
     }
 
     /* Enable ipv6 for maximum flexibility in address selection.
@@ -308,6 +322,16 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     if (attr_add (attrs, "tbon.endpoint", uri, ATTR_IMMUTABLE) < 0) {
         log_err ("setattr tbon.endpoint");
         goto error;
+    }
+
+    /* If the PMI size is 1, then skip the PMI exchange entirely.
+     */
+    if (info.size == 1) {
+        if (hostlist_append (hl, hostname) < 0) {
+            log_err ("hostlist_append");
+            goto error;
+        }
+        goto done;
     }
 
     /* Each broker writes a "business card" consisting of hostname,
@@ -390,9 +414,12 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
 
     /* Fetch the business card of children and inform overlay of public keys.
      */
-    for (i = 0; i < child_count; i++) {
+    for (int i = 0; i < child_count; i++) {
         const char *peer_pubkey;
         int child_rank = child_ranks[i];
+
+        if (child_rank >= info.size)
+            break;
 
         if (snprintf (key, sizeof (key), "%d", child_rank) >= sizeof (key)) {
             log_msg ("pmi key string overflow");
@@ -428,7 +455,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     /* Fetch the business card of all ranks and build hostlist.
      * The hostlist is built independently (and in parallel) on all ranks.
      */
-    for (i = 0; i < info.size; i++) {
+    for (int i = 0; i < info.size; i++) {
         const char *peer_hostname;
 
         if (snprintf (key, sizeof (key), "%d", i) >= sizeof (key)) {
@@ -471,6 +498,17 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     }
 
 done:
+    /* If the instance size is greater than the PMI size, add placeholder
+     * names to the hostlist for the ranks that haven't joined yet.
+     */
+    for (int i = info.size; i < size; i++) {
+        char buf[64];
+        snprintf (buf, sizeof (buf), "extra%d", i - info.size);
+        if (hostlist_append (hl, buf) < 0) {
+            log_err ("hostlist_append");
+            goto error;
+        }
+    }
     if (set_hostlist_attr (attrs, hl) < 0) {
         log_err ("setattr hostlist");
         goto error;
