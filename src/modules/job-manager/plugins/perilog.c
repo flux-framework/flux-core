@@ -81,6 +81,8 @@ struct perilog_procdesc {
 /*  Global prolog/epilog configuration
  */
 static struct perilog_conf {
+    bool initialized;
+
     struct perilog_procdesc *prolog;
     struct perilog_procdesc *epilog;
 
@@ -165,7 +167,7 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
                         "{s:o s?s s?F s?b !}",
                         "command", &command,
                         "timeout", &timeout,
-                        "kill_timeout", &kill_timeout,
+                        "kill-timeout", &kill_timeout,
                         "per-rank", &per_rank) < 0) {
         errprintf (errp, "%s", error.text);
         return NULL;
@@ -942,12 +944,23 @@ static void regexp_free (void **item)
     }
 }
 
+static int regexp_list_append (zlistx_t *l,
+                               const char *pattern,
+                               flux_error_t *errp);
+
 static zlistx_t *regexp_list_create ()
 {
     zlistx_t *l = NULL;
     if (!(l = zlistx_new ()))
         return NULL;
     zlistx_set_destructor (l, regexp_free);
+
+    /*  Always ignore empty lines
+     */
+    if (regexp_list_append (l, "^\\s*$", NULL) < 0) {
+        zlistx_destroy (&l);
+        return NULL;
+    }
     return l;
 }
 
@@ -1021,17 +1034,14 @@ static void free_config (struct perilog_conf *conf)
     zlistx_destroy (&conf->log_ignore);
 }
 
-/*  Parse [job-manager.prolog] and [job-manager.epilog] config
+/*   Initialize a perilog_config object
  */
 static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
 {
     flux_t *h = flux_jobtap_get_flux (p);
-    flux_error_t error;
-    json_t *prolog = NULL;
-    json_t *epilog = NULL;
-    json_t *log_ignore = NULL;
 
     memset (conf, 0, sizeof (*conf));
+    conf->initialized = true;
 
     if (!(conf->processes = job_hash_create ())) {
         flux_log (h, LOG_ERR, "perilog: failed to create job hash");
@@ -1040,57 +1050,6 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
     zhashx_set_destructor (conf->processes,
                            perilog_proc_destructor);
 
-    /*  Set up log ignore pattern list
-     */
-    if (!(conf->log_ignore = regexp_list_create ()))
-        return -1;
-    /*  Always ignore empty lines
-     */
-    if (regexp_list_append (conf->log_ignore, "^\\s*$", &error) < 0) {
-        flux_log (h,
-                  LOG_ERR,
-                  "perilog: failed to pass empty pattern to log-ignore: %s",
-                  error.text);
-        return -1;
-    }
-    if (flux_conf_unpack (flux_get_conf (h),
-                          &error,
-                          "{s?{s?o s?o s?{s?o}}}",
-                          "job-manager",
-                            "prolog", &prolog,
-                            "epilog", &epilog,
-                            "perilog",
-                              "log-ignore", &log_ignore) < 0) {
-        flux_log (h, LOG_ERR,
-                  "prolog/epilog configuration error: %s",
-                  error.text);
-        return -1;
-    }
-    if (prolog
-        && !(conf->prolog = perilog_procdesc_create (prolog, true, &error))) {
-        flux_log (h,
-                  LOG_ERR,
-                  "[job-manager.prolog]: %s",
-                  error.text);
-        return -1;
-    }
-    if (epilog
-        && !(conf->epilog = perilog_procdesc_create (epilog, false, &error))) {
-        flux_log (h,
-                  LOG_ERR,
-                  "[job-manager.epilog]: %s",
-                  error.text);
-        goto error;
-    }
-    if (log_ignore
-        && regexp_list_append_array (conf->log_ignore,
-                                     log_ignore,
-                                     &error) < 0) {
-        flux_log (h,
-                  LOG_ERR,
-                  "perilog: error parsing conf.log_ignore: %s", error.text);
-        goto error;
-    }
     /* Watch for broker transition to CLEANUP.
      */
     if (!(conf->watch_f = flux_rpc_pack (h,
@@ -1107,29 +1066,136 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
         goto error;
     }
 
+    /* Free config at plugin destruction:
+     */
+    if (flux_plugin_aux_set (p, NULL, conf, (flux_free_f) free_config) < 0)
+        goto error;
+
     return 0;
 error:
     free_config (conf);
     return -1;
 }
 
+
+static int conf_update_cb (flux_plugin_t *p,
+                           const char *topic,
+                           flux_plugin_arg_t *args,
+                           void *arg)
+{
+    json_t *conf;
+    flux_error_t error;
+    json_error_t jerror;
+    json_t *prolog_config = NULL;
+    json_t *epilog_config = NULL;
+    struct perilog_procdesc *prolog = NULL;
+    struct perilog_procdesc *epilog = NULL;
+    json_t *log_ignore_config = NULL;
+    zlistx_t *log_ignore = NULL;
+
+    /* Perform one-time initialization of config if necessary
+     */
+    if (!perilog_config.initialized
+        && conf_init (p, &perilog_config) < 0) {
+        errprintf (&error, "failed to initialize perilog config");
+        goto error;
+    }
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:o}",
+                                "conf", &conf) < 0) {
+        errprintf (&error,
+                   "perilog: error unpackage conf.update arguments: %s",
+                   flux_plugin_arg_strerror (args));
+        goto error;
+    }
+
+    if (json_unpack_ex (conf,
+                        &jerror,
+                        0,
+                        "{s?{s?o s?o s?{s?o}}}",
+                        "job-manager",
+                          "prolog", &prolog_config,
+                          "epilog", &epilog_config,
+                          "perilog",
+                            "log-ignore", &log_ignore_config) < 0) {
+        errprintf (&error,
+                   "perilog: error unpacking config: %s",
+                   jerror.text);
+        goto error;
+    }
+    if (prolog_config) {
+        flux_error_t perr;
+        if (!(prolog = perilog_procdesc_create (prolog_config,
+                                                true,
+                                                &perr))) {
+            errprintf (&error,
+                       "[job-manager.prolog]: %s",
+                       perr.text);
+            goto error;
+        }
+    }
+    if (epilog_config) {
+        flux_error_t perr;
+        if (!(epilog = perilog_procdesc_create (epilog_config,
+                                                false,
+                                                &perr))) {
+            errprintf (&error,
+                       "[job-manager.epilog]: %s",
+                       perr.text);
+            goto error;
+        }
+    }
+
+    /* Always start with default log_ignore list (ignores empty lines)
+     */
+    if (!(log_ignore = regexp_list_create ())) {
+        errprintf (&error, "Out of memory creating log_ignore list");
+        goto error;
+    }
+    if (log_ignore_config) {
+        flux_error_t perr;
+        if (regexp_list_append_array (log_ignore,
+                                      log_ignore_config,
+                                      &perr) < 0) {
+            errprintf (&error,
+                       "[job-manager.perilog]: error parsing log-ignore: %s",
+                       perr.text);
+            goto error;
+        }
+    }
+
+    /*  Swap config:
+     */
+    perilog_procdesc_destroy (perilog_config.prolog);
+    perilog_config.prolog = prolog;
+
+    perilog_procdesc_destroy (perilog_config.epilog);
+    perilog_config.epilog = epilog;
+
+    zlistx_destroy (&perilog_config.log_ignore);
+    perilog_config.log_ignore = log_ignore;
+
+    return 0;
+error:
+    perilog_procdesc_destroy (epilog);
+    perilog_procdesc_destroy (prolog);
+    zlistx_destroy (&log_ignore);
+    return flux_jobtap_error (p, args, "%s", error.text);
+}
+
 static const struct flux_plugin_handler tab[] = {
     { "job.state.run",       run_cb,       NULL },
     { "job.event.finish",    job_finish_cb,NULL },
     { "job.event.exception", exception_cb, NULL },
+    { "conf.update",  conf_update_cb, NULL },
     { 0 }
 };
 
 int flux_plugin_init (flux_plugin_t *p)
 {
-    if (conf_init (p, &perilog_config) < 0
-        || flux_plugin_aux_set (p,
-                                NULL,
-                                &perilog_config,
-                                (flux_free_f) free_config) < 0) {
-        free_config (&perilog_config);
-        return -1;
-    }
+    perilog_config.initialized = false;
     return flux_plugin_register (p, "perilog", tab);
 }
 
