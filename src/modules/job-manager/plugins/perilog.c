@@ -67,16 +67,23 @@
 
 extern char **environ;
 
+/*
+ *  Configuration for a single perilog process
+ */
+struct perilog_procdesc {
+    flux_cmd_t *cmd;
+    bool prolog;
+    bool per_rank;
+    double timeout;
+    double kill_timeout;
+};
+
 /*  Global prolog/epilog configuration
  */
 static struct perilog_conf {
-    double prolog_kill_timeout;/*  Time between SIGTERM/SIGKILL for prolog  */
-    flux_cmd_t *prolog_cmd;    /*  Configured prolog command                */
-    bool prolog_per_rank;      /*  Execute prolog on each job rank          */
-    double prolog_timeout;     /*  Prolog timeout                           */
-    flux_cmd_t *epilog_cmd;    /*  Configured epilog command                */
-    bool epilog_per_rank;      /*  Execute epilog on each job rank          */
-    double epilog_timeout;     /*  Epilog timeout                           */
+    struct perilog_procdesc *prolog;
+    struct perilog_procdesc *epilog;
+
     zhashx_t *processes;       /*  List of outstanding perilog_proc objects */
     zlistx_t *log_ignore;      /*  List of regex patterns to ignore in logs */
     flux_future_t *watch_f;    /*  Watch for broker entering CLEANUP state */
@@ -105,6 +112,95 @@ static void timeout_cb (flux_reactor_t *r,
                         flux_watcher_t *w,
                         int revents,
                         void *arg);
+
+static void perilog_procdesc_destroy (struct perilog_procdesc *pd)
+{
+    if (pd) {
+        int saved_errno = errno;
+        flux_cmd_destroy (pd->cmd);
+        free (pd);
+        errno = saved_errno;
+    }
+}
+
+static flux_cmd_t *cmd_from_json (json_t *o)
+{
+    size_t index;
+    json_t *value;
+    flux_cmd_t *cmd;
+
+    if (!json_is_array (o))
+        return NULL;
+
+    if (!(cmd = flux_cmd_create (0, NULL, environ)))
+        return NULL;
+
+    json_array_foreach (o, index, value) {
+        const char *arg = json_string_value (value);
+        if (!value
+            || flux_cmd_argv_append (cmd, arg) < 0)
+            goto fail;
+    }
+    return cmd;
+fail:
+    flux_cmd_destroy (cmd);
+    return NULL;
+}
+
+
+static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
+                                                         bool prolog,
+                                                         flux_error_t *errp)
+{
+    struct perilog_procdesc *pd = NULL;
+    int per_rank = 0;
+    const char *timeout = NULL;
+    double kill_timeout = -1.;
+    json_t *command;
+    json_error_t error;
+
+    if (json_unpack_ex (o,
+                        &error,
+                        0,
+                        "{s:o s?s s?F s?b !}",
+                        "command", &command,
+                        "timeout", &timeout,
+                        "kill_timeout", &kill_timeout,
+                        "per-rank", &per_rank) < 0) {
+        errprintf (errp, "%s", error.text);
+        return NULL;
+    }
+    if (!json_is_array (command)) {
+        errprintf (errp, "command must be an array");
+        return NULL;
+    }
+    if (kill_timeout > 0.) {
+        if (!prolog) {
+            errprintf (errp, "kill-timeout not allowed for epilog");
+            return NULL;
+        }
+    }
+    if (!(pd = calloc (1, sizeof (*pd)))) {
+        errprintf (errp, "Out of memory");
+        return NULL;
+    }
+    if (!(pd->cmd = cmd_from_json (command))) {
+        errprintf (errp, "malformed %s command", prolog ? "prolog" : "epilog");
+        goto error;
+    }
+    if (timeout && fsd_parse_duration (timeout, &pd->timeout) < 0) {
+        errprintf (errp, "invalid %s timeout", prolog ? "prolog" : "epilog");
+        goto error;
+    }
+
+    pd->kill_timeout = kill_timeout > 0. ? kill_timeout : 5.;
+    pd->per_rank = per_rank;
+    pd->prolog = prolog;
+    return pd;
+error:
+    perilog_procdesc_destroy (pd);
+    return NULL;
+}
 
 static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
                                                   flux_jobid_t id,
@@ -148,8 +244,8 @@ static const char *perilog_proc_name (struct perilog_proc *proc)
 static double perilog_proc_timeout (struct perilog_proc *proc)
 {
     if (proc->prolog)
-        return perilog_config.prolog_timeout;
-    return perilog_config.epilog_timeout;
+        return perilog_config.prolog->timeout;
+    return perilog_config.epilog->timeout;
 }
 
 /*  zhashx_destructor_fn prototype
@@ -357,8 +453,8 @@ static void drain_failed_cb (flux_future_t *f, void *arg)
 static bool perilog_per_rank (struct perilog_proc *proc)
 {
     if (proc->prolog)
-        return perilog_config.prolog_per_rank;
-    return perilog_config.epilog_per_rank;
+        return perilog_config.prolog->per_rank;
+    return perilog_config.epilog->per_rank;
 }
 
 static void completion_cb (struct bulk_exec *bulk_exec, void *arg)
@@ -489,57 +585,44 @@ static struct idset *ranks_from_R (json_t *R)
     return ranks;
 }
 
-static int run_command (flux_plugin_t *p,
-                        flux_plugin_arg_t *args,
-                        int prolog,
-                        flux_cmd_t *cmd)
+static struct perilog_proc *procdesc_run (flux_t *h,
+                                          flux_plugin_t *p,
+                                          struct perilog_procdesc *pd,
+                                          flux_jobid_t id,
+                                          uint32_t userid,
+                                          json_t *R)
 {
-    flux_t *h = flux_jobtap_get_flux (p);
     struct perilog_proc *proc = NULL;
-    flux_jobid_t id;
-    uint32_t userid;
     struct idset *ranks = NULL;
     struct bulk_exec *bulk_exec = NULL;
     double timeout;
-    json_t *R;
 
-    if (flux_plugin_arg_unpack (args,
-                                FLUX_PLUGIN_ARG_IN,
-                                "{s:I s:i s:o}",
-                                "id", &id,
-                                "userid", &userid,
-                                "R", &R) < 0) {
-        flux_log_error (h, "flux_plugin_arg_unpack");
-        return -1;
-    }
-
-    if (!(proc = perilog_proc_create (p, id, prolog))) {
-        flux_log_error (h, "%s: proc_create", prolog ? "prolog" : "epilog");
+    if (!(proc = perilog_proc_create (p, id, pd->prolog))) {
+        flux_log_error (h,
+                        "%s: proc_create",
+                        pd->prolog ? "prolog" : "epilog");
         goto error;
     }
-
-    if (flux_cmd_setenvf (cmd, 1, "FLUX_JOB_ID", "%s", idf58 (id)) < 0
-        || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_USERID", "%u", userid) < 0) {
-        flux_log_error (h, "%s: flux_cmd_create", perilog_proc_name (proc));
-        return -1;
+    if (flux_cmd_setenvf (pd->cmd, 1, "FLUX_JOB_ID", "%s", idf58 (id)) < 0
+        || flux_cmd_setenvf (pd->cmd, 1, "FLUX_JOB_USERID", "%u", userid) < 0) {
+        flux_log_error (h,
+                        "%s: flux_cmd_create",
+                        perilog_proc_name (proc));
+        goto error;
     }
-
-    /* By default, perilog runs on only on rank 0
-     */
-    if ((prolog && perilog_config.prolog_per_rank)
-        || (!prolog && perilog_config.epilog_per_rank)) {
+    if (pd->per_rank) {
         if (!(ranks = ranks_from_R (R))) {
             flux_log (h,
                       LOG_ERR,
                       "%s: %s: failed to decode ranks from R",
                       idf58 (id),
                       perilog_proc_name (proc));
-            return -1;
+            goto error;
         }
     }
     else if (!(ranks = idset_decode ("0"))) {
         flux_log_error (h, "%s: idset_decode", perilog_proc_name (proc));
-        return -1;
+        goto error;
     }
 
     if (!(bulk_exec = bulk_exec_create (&ops,
@@ -547,7 +630,7 @@ static int run_command (flux_plugin_t *p,
                                         id,
                                         perilog_proc_name (proc),
                                         NULL))
-        || bulk_exec_push_cmd (bulk_exec, ranks, cmd, 0) < 0) {
+        || bulk_exec_push_cmd (bulk_exec, ranks, pd->cmd, 0) < 0) {
         flux_log_error (h,
                         "failed to create %s bulk exec cmd for %s",
                         perilog_proc_name (proc),
@@ -558,26 +641,14 @@ static int run_command (flux_plugin_t *p,
         flux_log_error (h, "%s: bulk_exec_start", perilog_proc_name (proc));
         goto error;
     }
-
     if (bulk_exec_aux_set (bulk_exec, "perilog_proc", proc, NULL) < 0) {
         flux_log_error (h,
                         "%s: bulk_exec_aux_set",
                         perilog_proc_name (proc));
         goto error;
     }
-
-    if (flux_jobtap_job_aux_set (p,
-                                 FLUX_JOBTAP_CURRENT_JOB,
-                                 "perilog_proc",
-                                 proc,
-                                 NULL) < 0) {
-        flux_log_error (h,
-                        "%s: flux_jobtap_job_aux_set",
-                        perilog_proc_name (proc));
-        goto error;
-    }
-
-    if ((timeout = perilog_proc_timeout (proc)) > 0.) {
+    timeout = perilog_proc_timeout (proc);
+    if (timeout > 0.0) {
         flux_watcher_t *w;
         if (!(w = flux_timer_watcher_create (flux_get_reactor (h),
                                              timeout,
@@ -592,18 +663,56 @@ static int run_command (flux_plugin_t *p,
         flux_watcher_start (w);
         proc->timer = w;
     }
-
     proc->bulk_exec = bulk_exec;
     proc->ranks = ranks;
 
-    /* proc now has ownership of bulk_exec and ranks
+    /* proc now has ownership of bulk_exec, ranks
      */
-    return 0;
+    return proc;
 error:
     idset_destroy (ranks);
     bulk_exec_destroy (bulk_exec);
     perilog_proc_destroy (proc);
-    return -1;
+    return NULL;
+}
+
+static int run_command (flux_plugin_t *p,
+                        flux_plugin_arg_t *args,
+                        struct perilog_procdesc *pd)
+{
+    flux_t *h = flux_jobtap_get_flux (p);
+    struct perilog_proc *proc = NULL;
+    flux_jobid_t id;
+    uint32_t userid;
+    json_t *R;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:I s:i s:o}",
+                                "id", &id,
+                                "userid", &userid,
+                                "R", &R) < 0) {
+        flux_log_error (h, "flux_plugin_arg_unpack");
+        return -1;
+    }
+
+    if (!(proc = procdesc_run (h, p, pd, id, userid, R)))
+        return -1;
+
+    if (flux_jobtap_job_aux_set (p,
+                                 FLUX_JOBTAP_CURRENT_JOB,
+                                 "perilog_proc",
+                                 proc,
+                                 NULL) < 0) {
+        flux_log_error (h,
+                        "%s: flux_jobtap_job_aux_set",
+                        perilog_proc_name (proc));
+        goto error;
+    }
+    return 0;
+error:
+    perilog_proc_destroy (proc);
+    return 01;
 }
 
 static int run_cb (flux_plugin_t *p,
@@ -618,7 +727,7 @@ static int run_cb (flux_plugin_t *p,
      *   to the finish event for the epilog, and any exception events
      *   for the prolog (so it can be canceled).
      */
-    if (perilog_config.epilog_cmd || perilog_config.prolog_cmd) {
+    if (perilog_config.epilog || perilog_config.prolog) {
         if (flux_jobtap_job_subscribe (p, FLUX_JOBTAP_CURRENT_JOB) < 0) {
             flux_jobtap_raise_exception (p,
                                          FLUX_JOBTAP_CURRENT_JOB,
@@ -629,10 +738,10 @@ static int run_cb (flux_plugin_t *p,
         }
     }
 
-    if (perilog_config.prolog_cmd == NULL)
+    if (perilog_config.prolog == NULL)
         return 0;
 
-    if (run_command (p, args, 1, perilog_config.prolog_cmd) < 0) {
+    if (run_command (p, args, perilog_config.prolog) < 0) {
         flux_jobtap_raise_exception (p,
                                      FLUX_JOBTAP_CURRENT_JOB,
                                      "prolog",
@@ -648,7 +757,7 @@ static int job_finish_cb (flux_plugin_t *p,
                           flux_plugin_arg_t *args,
                           void *arg)
 {
-    if (perilog_config.epilog_cmd == NULL)
+    if (perilog_config.epilog == NULL)
         return 0;
 
     /*  Don't start new epilog processes if the broker is shutting down.
@@ -662,7 +771,7 @@ static int job_finish_cb (flux_plugin_t *p,
     if (perilog_config.shutting_down)
         return 0;
 
-    if (run_command (p, args, 0, perilog_config.epilog_cmd) < 0) {
+    if (run_command (p, args, perilog_config.epilog) < 0) {
         flux_jobtap_raise_exception (p,
                                      FLUX_JOBTAP_CURRENT_JOB,
                                      "epilog",
@@ -761,7 +870,7 @@ static void timeout_cb (flux_reactor_t *r,
                         perilog_proc_name (proc),
                         idf58 (proc->id));
     (void) prolog_kill_timer_start (proc,
-                                    perilog_config.prolog_kill_timeout);
+                                    perilog_config.prolog->kill_timeout);
 }
 
 static int exception_cb (flux_plugin_t *p,
@@ -790,40 +899,16 @@ static int exception_cb (flux_plugin_t *p,
         && proc->prolog
         && !proc->canceled
         && bulk_exec_active_count (proc->bulk_exec) > 0) {
+        double kill_timeout = perilog_config.prolog->kill_timeout;
 
         /* Set canceled flag to disable draining of failed prolog nodes
          */
         proc->canceled = true;
         if (prolog_kill (proc) < 0
-            || prolog_kill_timer_start (proc,
-                                        perilog_config.prolog_kill_timeout) < 0)
+            || prolog_kill_timer_start (proc, kill_timeout) < 0)
             return -1;
     }
     return 0;
-}
-
-static flux_cmd_t *cmd_from_json (json_t *o)
-{
-    size_t index;
-    json_t *value;
-    flux_cmd_t *cmd;
-
-    if (!json_is_array (o))
-        return NULL;
-
-    if (!(cmd = flux_cmd_create (0, NULL, environ)))
-        return NULL;
-
-    json_array_foreach (o, index, value) {
-        const char *arg = json_string_value (value);
-        if (!value
-            || flux_cmd_argv_append (cmd, arg) < 0)
-            goto fail;
-    }
-    return cmd;
-fail:
-    flux_cmd_destroy (cmd);
-    return NULL;
 }
 
 static regex_t *regexp_create (const char *pattern)
@@ -927,6 +1012,15 @@ static void monitor_continuation (flux_future_t *f, void *arg)
     flux_future_reset (f);
 }
 
+static void free_config (struct perilog_conf *conf)
+{
+    flux_future_destroy (conf->watch_f);
+    perilog_procdesc_destroy (conf->prolog);
+    perilog_procdesc_destroy (conf->epilog);
+    zhashx_destroy (&conf->processes);
+    zlistx_destroy (&conf->log_ignore);
+}
+
 /*  Parse [job-manager.prolog] and [job-manager.epilog] config
  */
 static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
@@ -936,13 +1030,9 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
     json_t *prolog = NULL;
     json_t *epilog = NULL;
     json_t *log_ignore = NULL;
-    int prolog_per_rank = 0;
-    int epilog_per_rank = 0;
-    const char *prolog_timeout = "30m";
-    const char *epilog_timeout = "0";
 
     memset (conf, 0, sizeof (*conf));
-    conf->prolog_kill_timeout = 5.;
+
     if (!(conf->processes = job_hash_create ())) {
         flux_log (h, LOG_ERR, "perilog: failed to create job hash");
         return -1;
@@ -965,17 +1055,10 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
     }
     if (flux_conf_unpack (flux_get_conf (h),
                           &error,
-                          "{s?{s?{s?o s?b s?F s?s!} s?{s?o s?b s?s!} s?{s?o}}}",
+                          "{s?{s?o s?o s?{s?o}}}",
                           "job-manager",
-                            "prolog",
-                              "command", &prolog,
-                              "per-rank", &prolog_per_rank,
-                              "kill-timeout", &conf->prolog_kill_timeout,
-                              "timeout", &prolog_timeout,
-                            "epilog",
-                              "command", &epilog,
-                              "per-rank", &epilog_per_rank,
-                              "timeout", &epilog_timeout,
+                            "prolog", &prolog,
+                            "epilog", &epilog,
                             "perilog",
                               "log-ignore", &log_ignore) < 0) {
         flux_log (h, LOG_ERR,
@@ -983,32 +1066,21 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
                   error.text);
         return -1;
     }
-    conf->prolog_per_rank = prolog_per_rank;
-    conf->epilog_per_rank = epilog_per_rank;
-
-    if (fsd_parse_duration (prolog_timeout, &conf->prolog_timeout) < 0) {
+    if (prolog
+        && !(conf->prolog = perilog_procdesc_create (prolog, true, &error))) {
         flux_log (h,
                   LOG_ERR,
-                  "[job-manager.prolog] invalid timeout %s specified",
-                  prolog_timeout);
+                  "[job-manager.prolog]: %s",
+                  error.text);
         return -1;
     }
-    if (fsd_parse_duration (epilog_timeout, &conf->epilog_timeout) < 0) {
+    if (epilog
+        && !(conf->epilog = perilog_procdesc_create (epilog, false, &error))) {
         flux_log (h,
                   LOG_ERR,
-                  "[job-manager.epilog] invalid timeout %s specified",
-                  epilog_timeout);
-        return -1;
-    }
-    if (prolog &&
-        !(conf->prolog_cmd = cmd_from_json (prolog))) {
-        flux_log (h, LOG_ERR, "[job-manager.prolog] command malformed!");
-        return -1;
-    }
-    if (epilog &&
-        !(conf->epilog_cmd = cmd_from_json (epilog))) {
-        flux_log (h, LOG_ERR, "[job-manager.epilog] command malformed!");
-        return -1;
+                  "[job-manager.epilog]: %s",
+                  error.text);
+        goto error;
     }
     if (log_ignore
         && regexp_list_append_array (conf->log_ignore,
@@ -1017,7 +1089,7 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
         flux_log (h,
                   LOG_ERR,
                   "perilog: error parsing conf.log_ignore: %s", error.text);
-        return -1;
+        goto error;
     }
     /* Watch for broker transition to CLEANUP.
      */
@@ -1032,19 +1104,13 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
                              monitor_continuation,
                              conf) < 0) {
         flux_log_error (h, "perilog: error watching broker state");
-        return -1;
+        goto error;
     }
 
     return 0;
-}
-
-static void free_config (struct perilog_conf *conf)
-{
-    flux_future_destroy (conf->watch_f);
-    flux_cmd_destroy (conf->prolog_cmd);
-    flux_cmd_destroy (conf->epilog_cmd);
-    zhashx_destroy (&conf->processes);
-    zlistx_destroy (&conf->log_ignore);
+error:
+    free_config (conf);
+    return -1;
 }
 
 static const struct flux_plugin_handler tab[] = {
