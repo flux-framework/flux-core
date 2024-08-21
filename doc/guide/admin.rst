@@ -780,7 +780,7 @@ distributed with Flux is shown below:
 
   $ flux job-validator --list-plugins
   Available plugins:
-  feasibility           Use sched.feasibility RPC to validate job
+  feasibility           Use feasibility service to validate job
   jobspec               Python bindings based jobspec validator
   require-instance      Require that all jobs are new instances of Flux
   schema                Validate jobspec using jsonschema
