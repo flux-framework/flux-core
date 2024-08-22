@@ -1077,6 +1077,153 @@ error:
     return -1;
 }
 
+static json_t *proc_to_json (struct perilog_proc *proc)
+{
+    const char *state;
+    struct idset *active_ranks;
+    char *ranks = NULL;
+    json_t *o;
+    int total = bulk_exec_total (proc->bulk_exec);
+    int active = total - bulk_exec_complete (proc->bulk_exec);
+
+    if (proc->canceled)
+        state = "canceled";
+    else if (proc->timedout)
+        state = "timeout";
+    else
+        state = "running";
+
+    if ((active_ranks = bulk_exec_active_ranks (proc->bulk_exec)))
+        ranks = idset_encode (active_ranks, IDSET_FLAG_RANGE);
+
+    o = json_pack ("{s:s s:s s:i s:i s:s}",
+                   "name", perilog_proc_name (proc),
+                   "state", state,
+                   "total", total,
+                   "active", active,
+                   "active_ranks", ranks ? ranks : "");
+    free (ranks);
+    idset_destroy (active_ranks);
+    return o;
+}
+
+static json_t *cmdline_tojson (flux_cmd_t *cmd)
+{
+    int argc;
+    json_t *o = json_array ();
+
+    if (!o)
+        return NULL;
+
+    argc = flux_cmd_argc (cmd);
+    for (int i = 0; i < argc; i++) {
+        json_t *arg;
+        if ((!(arg = json_string (flux_cmd_arg (cmd, i))))
+            || json_array_append_new (o, arg) < 0) {
+            json_decref (arg);
+            goto error;
+        }
+    }
+    return o;
+error:
+    json_decref (o);
+    return NULL;
+}
+
+static json_t *procdesc_to_json (struct perilog_procdesc *pd)
+{
+    json_t *cmd = NULL;
+    json_t *o;
+
+    if (!pd || !pd->cmd)
+        return json_object ();
+
+    if (!(cmd = cmdline_tojson (pd->cmd)))
+        return NULL;
+
+    o = json_pack ("{s:O s:b s:f s:f}",
+                   "command", cmd,
+                   "per_rank", pd->per_rank,
+                   "timeout", pd->timeout,
+                   "kill-timeout", pd->kill_timeout);
+
+    json_decref (cmd);
+    return o;
+}
+
+static json_t *conf_to_json (struct perilog_conf *conf)
+{
+    json_t *o = NULL;
+    json_t *prolog = procdesc_to_json (perilog_config.prolog);
+    json_t *epilog = procdesc_to_json (perilog_config.epilog);
+
+
+    if (!prolog || !epilog)
+        goto out;
+    o = json_pack ("{s:O s:O}",
+                   "prolog", prolog,
+                   "epilog", epilog);
+out:
+    json_decref (prolog);
+    json_decref (epilog);
+    return o;
+}
+
+static json_t *procs_to_json (zhashx_t *processes)
+{
+    struct perilog_proc *proc;
+    json_t *o = NULL;
+
+    if (!(o = json_object ()))
+        return NULL;
+
+    proc = zhashx_first (processes);
+    while (proc) {
+        json_t *entry;
+        if (!(entry = proc_to_json (proc))
+            || json_object_set_new (o, idf58 (proc->id), entry) < 0) {
+            json_decref (entry);
+            goto error;
+        }
+        proc = zhashx_next (processes);
+    }
+    return o;
+error:
+    json_decref (o);
+    return NULL;
+}
+
+static int query_cb (flux_plugin_t *p,
+                     const char *topic,
+                     flux_plugin_arg_t *args,
+                     void *arg)
+{
+    flux_t *h = flux_jobtap_get_flux (p);
+    json_t *conf = NULL;
+    json_t *procs = NULL;
+    int rc = -1;
+
+    if (!(conf = conf_to_json (&perilog_config))
+        || !(procs = procs_to_json (perilog_config.processes))) {
+        flux_log (h,
+                  LOG_ERR,
+                  "perilog: failed to create query_cb json results");
+        goto out;
+    }
+
+    if ((rc = flux_plugin_arg_pack (args,
+                                    FLUX_PLUGIN_ARG_OUT,
+                                    "{s:O s:O}",
+                                    "conf", conf,
+                                    "procs", procs)) < 0)
+        flux_log_error (h,
+                        "perilog: query_cb: flux_plugin_arg_pack: %s",
+                        flux_plugin_arg_strerror (args));
+out:
+    json_decref (conf);
+    json_decref (procs);
+    return rc;
+}
 
 static int conf_update_cb (flux_plugin_t *p,
                            const char *topic,
@@ -1190,6 +1337,7 @@ static const struct flux_plugin_handler tab[] = {
     { "job.event.finish",    job_finish_cb,NULL },
     { "job.event.exception", exception_cb, NULL },
     { "conf.update",  conf_update_cb, NULL },
+    { "plugin.query", query_cb, NULL },
     { 0 }
 };
 
