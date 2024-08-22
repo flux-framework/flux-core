@@ -52,5 +52,20 @@ begin-time:TIMESTAMP
 In any of the above ``after*`` cases, if it is determined that the
 dependency cannot be satisfied (e.g. a job fails due to an exception
 with afterok), then a fatal exception of type=dependency is raised
-on the current job.
+on the current job. An example of submitting a job, getting the Flux
+job identifier, and then submitting a job that depends on it (meaning
+it will wait for completion before starting) is provided below:
 
+.. code-block:: console
+  
+    # Do some long work
+    jobid=$(flux submit -N2 sleep 200)
+
+    # Submit the dependent job
+    flux submit --dependency=afterany:$jobid /bin/bash my-script.sh
+
+    # Look at your queue
+    flux jobs -a 
+
+    # Block and watch output
+    flux job attach $(flux job last)
