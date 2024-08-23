@@ -37,6 +37,7 @@ struct bulk_exec {
     char *service;
     flux_jobid_t id;
     char *name;
+    char *imp_path;          /* Path to IMP. If set, use IMP for kill */
 
     struct aux_item *aux;
 
@@ -57,6 +58,7 @@ struct bulk_exec {
     flux_watcher_t *exit_batch_timer; /* Timer for batched exit notify */
 
     flux_subprocess_ops_t ops;
+
 
     zlist_t *commands;
     zlist_t *processes;
@@ -495,6 +497,7 @@ void bulk_exec_destroy (struct bulk_exec *exec)
         aux_destroy (&exec->aux);
         free (exec->name);
         free (exec->service);
+        free (exec->imp_path);
         free (exec);
         errno = saved_errno;
     }
@@ -540,6 +543,19 @@ int bulk_exec_set_max_per_loop (struct bulk_exec *exec, int max)
         return -1;
     }
     exec->max_start_per_loop = max;
+    return 0;
+}
+
+int bulk_exec_set_imp_path (struct bulk_exec *exec,
+                            const char *imp_path)
+{
+    if (!exec || !imp_path) {
+        errno = EINVAL;
+        return -1;
+    }
+    free (exec->imp_path);
+    if (!(exec->imp_path = strdup (imp_path)))
+        return -1;
     return 0;
 }
 
@@ -660,9 +676,9 @@ void bulk_exec_kill_log_error (flux_future_t *f, flux_jobid_t id)
     }
 }
 
-flux_future_t *bulk_exec_kill (struct bulk_exec *exec,
-                               const struct idset *ranks,
-                               int signum)
+static flux_future_t *bulk_exec_simple_kill (struct bulk_exec *exec,
+                                             const struct idset *ranks,
+                                             int signum)
 {
     flux_subprocess_t *p;
     flux_future_t *cf;
@@ -858,6 +874,19 @@ flux_future_t *bulk_exec_imp_kill (struct bulk_exec *exec,
 err:
     flux_future_destroy (f);
     return NULL;
+}
+
+flux_future_t *bulk_exec_kill (struct bulk_exec *exec,
+                               const struct idset *ranks,
+                               int signum)
+{
+    if (!exec || signum < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (exec->imp_path)
+        return bulk_exec_imp_kill (exec, exec->imp_path, ranks, signum);
+    return bulk_exec_simple_kill (exec, ranks, signum);
 }
 
 int bulk_exec_aux_set (struct bulk_exec *exec,

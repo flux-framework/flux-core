@@ -60,6 +60,11 @@ int bulk_exec_aux_set (struct bulk_exec *exec,
  */
 int bulk_exec_set_max_per_loop (struct bulk_exec *exec, int max);
 
+/*  Set path to an IMP to use for bulk_exec_kill().
+ */
+int bulk_exec_set_imp_path (struct bulk_exec *exec,
+                            const char *imp_path);
+
 void bulk_exec_destroy (struct bulk_exec *exec);
 
 int bulk_exec_push_cmd (struct bulk_exec *exec,
@@ -69,7 +74,8 @@ int bulk_exec_push_cmd (struct bulk_exec *exec,
 
 int bulk_exec_start (flux_t *h, struct bulk_exec *exec);
 
-/* Set ranks=NULL for all
+/* Send signal to ranks. Set ranks=NULL for all.
+ * If an IMP path has been set then bulk_exec_imp_kill() will be used.
  */
 flux_future_t * bulk_exec_kill (struct bulk_exec *exec,
                                 const struct idset *ranks,
