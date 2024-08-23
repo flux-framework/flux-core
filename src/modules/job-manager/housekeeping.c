@@ -191,6 +191,8 @@ static struct allocation *allocation_create (struct housekeeping *hk,
                                               id,
                                               "housekeeping",
                                                a))
+        || (hk->imp_path
+            && bulk_exec_set_imp_path (a->bulk_exec, hk->imp_path) < 0)
         || update_cmd_env (hk->cmd, id, userid) < 0
         || bulk_exec_push_cmd (a->bulk_exec, a->pending, hk->cmd, 0) < 0) {
         allocation_destroy (a);
@@ -537,14 +539,7 @@ int housekeeping_hello_respond (struct housekeeping *hk, const flux_msg_t *msg)
             free (hosts);
             free (ranks);
 
-            if (hk->imp_path) {
-                f = bulk_exec_imp_kill (a->bulk_exec,
-                                        hk->imp_path,
-                                        NULL,
-                                        SIGTERM);
-            }
-            else
-                f = bulk_exec_kill (a->bulk_exec, NULL, SIGTERM);
+            f = bulk_exec_kill (a->bulk_exec, NULL, SIGTERM);
             if (flux_future_then (f, -1, kill_continuation, hk) < 0)
                 flux_future_destroy (f);
 
@@ -662,14 +657,7 @@ static void housekeeping_kill_cb (flux_t *h,
     while (a) {
         if (a->id == jobid || jobid == FLUX_JOBID_ANY) {
             if (a->bulk_exec) {
-                if (hk->imp_path) {
-                    f = bulk_exec_imp_kill (a->bulk_exec,
-                                            hk->imp_path,
-                                            ids,
-                                            signum);
-                }
-                else
-                    f = bulk_exec_kill (a->bulk_exec, ids, signum);
+                f = bulk_exec_kill (a->bulk_exec, ids, signum);
                 if (flux_future_then (f, -1, kill_continuation, hk) < 0)
                     flux_future_destroy (f);
             }
