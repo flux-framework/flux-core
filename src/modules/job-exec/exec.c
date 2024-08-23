@@ -763,7 +763,7 @@ static json_t *exec_job_stats (struct jobinfo *job)
     char *s = NULL;
     json_t *o;
     int total = bulk_exec_total (exec);
-    int active = total - bulk_exec_complete (exec);
+    int active = bulk_exec_active_count (exec);
 
     if ((active_ranks = bulk_exec_active_ranks (exec)))
         s = idset_encode (active_ranks, IDSET_FLAG_RANGE);
