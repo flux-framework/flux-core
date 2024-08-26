@@ -29,6 +29,10 @@ test_expect_success 'flux alloc can set initial-program' '
 	flux alloc -n1 --dry-run myapp --foo | \
 	    jq -e ".tasks[0].command == [ \"flux\", \"broker\", \"myapp\", \"--foo\" ]"
 '
+test_expect_success 'flux alloc ignores ambiguous option after --' '
+	flux alloc -n1 --dry-run -- myapp --n=2 | \
+	    jq -e ".tasks[0].command == [ \"flux\", \"broker\", \"--\", \"myapp\", \"--n=2\" ]"
+'
 test_expect_success 'flux alloc -N2 requests 2 nodes exclusively' '
 	flux alloc -N2 --dry-run hostname | jq -S ".resources[0]" | jq -e ".type == \"node\" and .exclusive"
 '

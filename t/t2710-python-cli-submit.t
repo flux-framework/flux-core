@@ -6,6 +6,9 @@ test_description='Test flux submit command'
 
 test_under_flux 4
 
+NCORES=$(flux resource list -no {ncores})
+test ${NCORES} -gt 4 && test_set_prereq MULTICORE
+
 # Set CLIMain log level to logging.DEBUG (10), to enable stack traces
 export FLUX_PYCLI_LOGLEVEL=10
 
@@ -19,11 +22,15 @@ test_expect_success 'flux submit fails with error message' '
 	test_must_fail flux submit 2>usage.err &&
 	grep "job command and arguments are missing" usage.err
 '
+test_expect_success 'flux submit ignores ambiguous args after --' '
+	flux submit -n2 --dry-run -- hostname --n=2 \
+		| jq -e ".tasks[0].command[0] == \"hostname\""
+'
 test_expect_success 'flux submit + flux job attach works' '
 	jobid=$(flux submit hostname) &&
 	flux job attach $jobid
 '
-test_expect_success HAVE_MULTICORE 'flux submit --ntasks=2 --cores-per-task=2 works' '
+test_expect_success MULTICORE 'flux submit --ntasks=2 --cores-per-task=2 works' '
 	jobid=$(flux submit --ntasks=2 --cores-per-task=2 hostname) &&
 	flux job attach $jobid
 '

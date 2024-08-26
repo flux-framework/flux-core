@@ -17,6 +17,10 @@ test_expect_success 'flux run fails with error message' '
 	test_must_fail flux run 2>usage.err &&
 	grep "job command and arguments are missing" usage.err
 '
+test_expect_success 'flux run ignores ambiguous args after --' '
+	flux run -n2 --dry-run -- hostname --n=2 \
+		| jq -e ".tasks[0].command[0] == \"hostname\""
+'
 test_expect_success 'flux run works' '
 	flux run hostname >run.out &&
 	hostname >run.exp &&
