@@ -83,6 +83,7 @@ struct perilog_procdesc {
 static struct perilog_conf {
     bool initialized;
 
+    char *imp_path;
     struct perilog_procdesc *prolog;
     struct perilog_procdesc *epilog;
 
@@ -158,13 +159,16 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     int per_rank = 0;
     const char *timeout = NULL;
     double kill_timeout = -1.;
-    json_t *command;
+    flux_cmd_t *cmd = NULL;
+    json_t *command = NULL;
     json_error_t error;
+
+    const char *name = prolog ? "prolog" : "epilog";
 
     if (json_unpack_ex (o,
                         &error,
                         0,
-                        "{s:o s?s s?F s?b !}",
+                        "{s?o s?s s?F s?b !}",
                         "command", &command,
                         "timeout", &timeout,
                         "kill-timeout", &kill_timeout,
@@ -172,7 +176,7 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
         errprintf (errp, "%s", error.text);
         return NULL;
     }
-    if (!json_is_array (command)) {
+    if (command && !json_is_array (command)) {
         errprintf (errp, "command must be an array");
         return NULL;
     }
@@ -182,11 +186,27 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
             return NULL;
         }
     }
+    /*  If no command is set but exec.imp is non-NULL then set command to
+     *  [ "$imp_path", "run", "$name" ]
+     */
+    if (!command && perilog_config.imp_path) {
+        json_t *imp_cmd;
+        if ((imp_cmd = json_pack ("[sss]",
+                                  perilog_config.imp_path,
+                                  "run",
+                                  name)))
+            cmd = cmd_from_json (imp_cmd);
+        json_decref (imp_cmd);
+        if (!cmd) {
+            errprintf (errp, "error creating %s command", name);
+            return NULL;
+        }
+    }
     if (!(pd = calloc (1, sizeof (*pd)))) {
         errprintf (errp, "Out of memory");
         return NULL;
     }
-    if (!(pd->cmd = cmd_from_json (command))) {
+    if (command && !(cmd = cmd_from_json (command))) {
         errprintf (errp, "malformed %s command", prolog ? "prolog" : "epilog");
         goto error;
     }
@@ -194,12 +214,18 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
         errprintf (errp, "invalid %s timeout", prolog ? "prolog" : "epilog");
         goto error;
     }
+    if (!cmd) {
+        errprintf (errp, "no command specified and exec.imp not defined");
+        goto error;
+    }
 
+    pd->cmd = cmd;
     pd->kill_timeout = kill_timeout > 0. ? kill_timeout : 5.;
     pd->per_rank = per_rank;
     pd->prolog = prolog;
     return pd;
 error:
+    flux_cmd_destroy (cmd);
     perilog_procdesc_destroy (pd);
     return NULL;
 }
@@ -1233,6 +1259,7 @@ static int conf_update_cb (flux_plugin_t *p,
     json_t *conf;
     flux_error_t error;
     json_error_t jerror;
+    const char *imp_path = NULL;
     json_t *prolog_config = NULL;
     json_t *epilog_config = NULL;
     struct perilog_procdesc *prolog = NULL;
@@ -1261,7 +1288,9 @@ static int conf_update_cb (flux_plugin_t *p,
     if (json_unpack_ex (conf,
                         &jerror,
                         0,
-                        "{s?{s?o s?o s?{s?o}}}",
+                        "{s?{s?s} s?{s?o s?o s?{s?o}}}",
+                        "exec",
+                          "imp", &imp_path,
                         "job-manager",
                           "prolog", &prolog_config,
                           "epilog", &epilog_config,
@@ -1272,6 +1301,18 @@ static int conf_update_cb (flux_plugin_t *p,
                    jerror.text);
         goto error;
     }
+
+    /*  Capture IMP path before first call to perilog_procdesc_create()
+     */
+    free (perilog_config.imp_path);
+    perilog_config.imp_path = NULL;
+    if (imp_path) {
+        if (!(perilog_config.imp_path = strdup (imp_path))) {
+            errprintf (&error, "failed to duplicate imp_path");
+            goto error;
+        }
+    }
+
     if (prolog_config) {
         flux_error_t perr;
         if (!(prolog = perilog_procdesc_create (prolog_config,
