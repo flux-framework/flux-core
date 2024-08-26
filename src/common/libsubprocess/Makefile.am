@@ -58,7 +58,8 @@ TESTS = \
 	test_iostress.t \
 	test_iochan.t \
 	test_fbuf.t \
-	test_fbuf_watcher.t
+	test_fbuf_watcher.t \
+	test_bulk-exec-einval.t
 
 check_PROGRAMS = \
 	$(TESTS) \
@@ -156,6 +157,11 @@ test_fbuf_watcher_t_SOURCES = test/fbuf_watcher.c
 test_fbuf_watcher_t_CPPFLAGS = $(test_cppflags)
 test_fbuf_watcher_t_LDADD = $(test_ldadd)
 test_fbuf_watcher_t_LDFLAGS = $(test_ldflags)
+
+test_bulk_exec_einval_t_SOURCES = test/bulk-exec-einval.c
+test_bulk_exec_einval_t_CPPFLAGS = $(test_cppflags)
+test_bulk_exec_einval_t_LDADD = $(test_ldadd)
+test_bulk_exec_einval_t_LDFLAGS = $(test_ldflags)
 
 test_echo_SOURCES = test/test_echo.c
 

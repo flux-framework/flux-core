@@ -95,7 +95,7 @@ static void check_cancel_cb (flux_reactor_t *r, flux_watcher_t *w,
                              int revents, void *arg)
 {
     struct bulk_exec *exec = arg;
-    if (cancel_after && bulk_exec_current (exec) >= cancel_after) {
+    if (cancel_after && bulk_exec_started_count (exec) >= cancel_after) {
         log_msg ("cancelling remaining commands");
         bulk_exec_cancel (exec);
         flux_watcher_stop (w);

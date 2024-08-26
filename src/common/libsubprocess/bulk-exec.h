@@ -60,6 +60,11 @@ int bulk_exec_aux_set (struct bulk_exec *exec,
  */
 int bulk_exec_set_max_per_loop (struct bulk_exec *exec, int max);
 
+/*  Set path to an IMP to use for bulk_exec_kill().
+ */
+int bulk_exec_set_imp_path (struct bulk_exec *exec,
+                            const char *imp_path);
+
 void bulk_exec_destroy (struct bulk_exec *exec);
 
 int bulk_exec_push_cmd (struct bulk_exec *exec,
@@ -69,7 +74,8 @@ int bulk_exec_push_cmd (struct bulk_exec *exec,
 
 int bulk_exec_start (flux_t *h, struct bulk_exec *exec);
 
-/* Set ranks=NULL for all
+/* Send signal to ranks. Set ranks=NULL for all.
+ * If an IMP path has been set then bulk_exec_imp_kill() will be used.
  */
 flux_future_t * bulk_exec_kill (struct bulk_exec *exec,
                                 const struct idset *ranks,
@@ -89,17 +95,22 @@ int bulk_exec_cancel (struct bulk_exec *exec);
 /* Returns max wait status returned from all exited processes */
 int bulk_exec_rc (struct bulk_exec *exec);
 
-/* Returns current number of processes starting/running */
-int bulk_exec_current (struct bulk_exec *exec);
+/* Returns current number of processes that have been started */
+int bulk_exec_started_count (struct bulk_exec *exec);
 
 /* Return number of processes that are complete */
 int bulk_exec_complete (struct bulk_exec *exec);
 
+/* Return number of processes that are still active */
+int bulk_exec_active_count (struct bulk_exec *exec);
+
 /* Return idset of ranks on which processes are still active */
 struct idset *bulk_exec_active_ranks (struct bulk_exec *exec);
 
-int bulk_exec_write (struct bulk_exec *exec, const char *stream,
-                     const char *buf, size_t len);
+int bulk_exec_write (struct bulk_exec *exec,
+                     const char *stream,
+                     const char *buf,
+                     size_t len);
 
 int bulk_exec_close (struct bulk_exec *exec, const char *stream);
 

@@ -533,10 +533,11 @@ static int exec_init (struct jobinfo *job)
     struct exec_ctx *ctx = NULL;
     struct bulk_exec *exec = NULL;
     const struct idset *ranks = NULL;
+    const char *imp_path = NULL;
     const char *service;
     flux_error_t error;
 
-    if (job->multiuser && !config_get_imp_path ()) {
+    if (job->multiuser && !(imp_path = config_get_imp_path ())) {
         flux_log (job->h,
                   LOG_ERR,
                   "unable run multiuser job with no IMP configured!");
@@ -557,6 +558,10 @@ static int exec_init (struct jobinfo *job)
                                    job->multiuser ? "imp-shell" : "shell",
                                    job))) {
         flux_log_error (job->h, "exec_init: bulk_exec_create");
+        goto err;
+    }
+    if (job->multiuser && bulk_exec_set_imp_path (exec, imp_path)) {
+        flux_log_error (job->h, "exec_ctx_create: bulk_exec_set_imp_path");
         goto err;
     }
     if (!(ctx = exec_ctx_create (job, ranks, &error))) {
@@ -633,13 +638,13 @@ static void exec_check_cb (flux_reactor_t *r,
 {
     struct jobinfo *job = arg;
     struct bulk_exec *exec = job->data;
-    if (bulk_exec_current (exec) >= 1) {
+    if (bulk_exec_started_count (exec) >= 1) {
         jobinfo_fatal_error (job, 0, "mock starting exception generated");
         flux_log (job->h,
                   LOG_DEBUG,
                   "mock exception for starting job total=%d, current=%d",
                   bulk_exec_total (exec),
-                  bulk_exec_current (exec));
+                  bulk_exec_started_count (exec));
         flux_watcher_destroy (w);
     }
 }
@@ -690,11 +695,7 @@ static int exec_kill (struct jobinfo *job, int signum)
     struct  bulk_exec *exec = job->data;
     flux_future_t *f;
 
-    if (job->multiuser)
-        f = bulk_exec_imp_kill (exec, config_get_imp_path (), NULL, signum);
-    else
-        f = bulk_exec_kill (exec, NULL, signum);
-    if (!f) {
+    if (!(f = bulk_exec_kill (exec, NULL, signum))) {
         if (errno != ENOENT)
             flux_log_error (job->h, "%s: bulk_exec_kill", idf58 (job->id));
         return 0;
@@ -763,7 +764,7 @@ static json_t *exec_job_stats (struct jobinfo *job)
     char *s = NULL;
     json_t *o;
     int total = bulk_exec_total (exec);
-    int active = total - bulk_exec_complete (exec);
+    int active = bulk_exec_active_count (exec);
 
     if ((active_ranks = bulk_exec_active_ranks (exec)))
         s = idset_encode (active_ranks, IDSET_FLAG_RANGE);
