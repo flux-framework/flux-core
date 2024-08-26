@@ -22,6 +22,10 @@ test_expect_success 'flux submit fails with error message' '
 	test_must_fail flux submit 2>usage.err &&
 	grep "job command and arguments are missing" usage.err
 '
+test_expect_success 'flux submit ignores ambiguous args after --' '
+	flux submit -n2 --dry-run -- hostname --n=2 \
+		| jq -e ".tasks[0].command[0] == \"hostname\""
+'
 test_expect_success 'flux submit + flux job attach works' '
 	jobid=$(flux submit hostname) &&
 	flux job attach $jobid

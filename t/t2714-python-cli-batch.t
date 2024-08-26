@@ -42,6 +42,15 @@ test_expect_success 'flux batch --wrap option works' '
 	EOF
 	test_cmp script-wrap.expected script-wrap.out
 '
+test_expect_success 'flux batch --wrap option works with --' '
+	flux batch -n1 --dry-run --wrap -- foo --n=2 | \
+		jq -j .attributes.system.files.script.data >script-wrap.out &&
+	cat <<-EOF >script-wrap.expected &&
+	#!/bin/sh
+	foo --n=2
+	EOF
+	test_cmp script-wrap.expected script-wrap.out
+'
 test_expect_success 'flux batch --wrap option works on stdin' '
 	printf "foo\nbar\nbaz\n" | \
 	    flux batch -n1 --dry-run --wrap | \
