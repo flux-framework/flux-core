@@ -60,6 +60,11 @@ class BatchCmd(base.MiniCmd):
         Returns the ingested script and new argparse args Namespace.
         """
         if args.SCRIPT:
+            # Remove leading "--" in case it was used to separate flux-batch(1)
+            # options from user script and options:
+            if args.SCRIPT[0] == "--":
+                args.SCRIPT.pop(0)
+
             if args.wrap:
                 #  Return script which will be wrapped by caller
                 return " ".join(args.SCRIPT) + "\n", args

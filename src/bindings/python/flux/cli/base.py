@@ -1232,6 +1232,11 @@ class SubmitBaseCmd(MiniCmd):
         if not args.command:
             raise ValueError("job command and arguments are missing")
 
+        #  Remove first -- from command in case user used it to separate
+        #  Flux cli options from command and options
+        if args.command[0] == "--":
+            args.command.pop(0)
+
         #  Ensure integer args are converted to int() here.
         #  This is done because we do not use type=int in argparse in order
         #   to allow these options to be mutable for bulksubmit:
