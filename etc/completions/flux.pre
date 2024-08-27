@@ -378,7 +378,7 @@ _flux_submit_commands()
         -B --bank= \
         -t --time-limit= \
         -o --setopt= \
-        --setattr= \
+        -S --setattr= \
         --urgency= \
         --job-name= \
         --dependency= \
