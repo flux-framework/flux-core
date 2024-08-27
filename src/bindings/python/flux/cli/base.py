@@ -801,6 +801,7 @@ class MiniCmd:
             metavar="OPT",
         )
         parser.add_argument(
+            "-S",
             "--setattr",
             action="append",
             help="Set job attribute ATTR. An optional value is supported "
