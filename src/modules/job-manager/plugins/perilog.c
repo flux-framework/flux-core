@@ -523,28 +523,22 @@ static void error_cb (struct bulk_exec *bulk_exec,
                       void *arg)
 {
     struct perilog_proc *proc = bulk_exec_aux_get (bulk_exec, "perilog_proc");
+    flux_t *h = flux_jobtap_get_flux (proc->p);
+    int rank = flux_subprocess_rank (p);
+    const char *hostname = flux_get_hostbyrank (h, rank);
+    const char *error = flux_subprocess_fail_error (p);
 
-    if (flux_subprocess_state (p) == FLUX_SUBPROCESS_FAILED) {
-        /*  If subprocess failed or execution failed, then we still
-         *   must be sure to emit a finish event.
-         */
-        int errnum = flux_subprocess_fail_errno (p);
-        int code = EXIT_CODE(1);
+    if (!proc)
+        return;
 
-        if (errnum == EPERM || errnum == EACCES)
-            code = EXIT_CODE(126);
-        else if (errnum == ENOENT)
-            code = EXIT_CODE(127);
-        else if (errnum == EHOSTUNREACH)
-            code = EXIT_CODE(68);
-
-        flux_log (flux_jobtap_get_flux (proc->p),
-                  LOG_ERR,
-                  "%s %s: code=%d",
-                  perilog_proc_name (proc),
-                  flux_subprocess_state_string (flux_subprocess_state (p)),
-                  code);
-    }
+    flux_log (h,
+              LOG_ERR,
+              "%s: %s: %s (rank %d): %s",
+              idf58 (proc->id),
+              perilog_proc_name (proc),
+              hostname,
+              rank,
+              error);
 }
 
 static bool perilog_log_ignore (struct perilog_conf *conf, const char *s)
