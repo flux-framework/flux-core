@@ -109,7 +109,7 @@ test_expect_success 'flux submit -B works' '
 	flux submit --env=-* --dry-run -B mybank2 hostname >bank2.out &&
 	grep -i "mybank2" bank2.out
 '
-test_expect_success 'flux submit --setattr works' '
+test_expect_success 'flux submit -S, --setattr works' '
 	flux submit --env=-* --dry-run \
 		--setattr user.meep=false \
 		--setattr user.foo=\"xxx\" \
@@ -117,14 +117,19 @@ test_expect_success 'flux submit --setattr works' '
 		--setattr foo \
 		--setattr .test=a \
 		--setattr test2=b \
-		--setattr system.bar=42 hostname >attr.out &&
+		--setattr system.bar=42 \
+		-S baz \
+		-Sbiz=4 hostname >attr.out &&
+	test_debug "jq .attributes attr.out" &&
 	jq -e ".attributes.user.meep == false" attr.out &&
 	jq -e ".attributes.user.foo == \"xxx\"" attr.out &&
 	jq -e ".attributes.user.foo2 == \"yyy\"" attr.out &&
 	jq -e ".attributes.system.foo == 1" attr.out &&
 	jq -e ".attributes.test == \"a\"" attr.out &&
 	jq -e ".attributes.system.test2 == \"b\"" attr.out &&
-	jq -e ".attributes.system.bar == 42" attr.out
+	jq -e ".attributes.system.bar == 42" attr.out &&
+	jq -e ".attributes.system.baz == 1" attr.out &&
+	jq -e ".attributes.system.biz == 4" attr.out
 '
 
 test_expect_success 'flux submit --setattr=^ATTR=VAL works' '
