@@ -58,4 +58,16 @@ test_expect_success 'content flush returns error on ENOSPC' '
 	grep "content.flush: No space left on device" flush.err
 '
 
+# flux start will fail b/c rc3 will fail due to ENOSPC
+test_expect_success 'kvs sync fails due to ENOSPC' '
+	rm -rf /test/tmpfs-1m/* &&
+	mkdir /test/tmpfs-1m/statedir &&
+	test_must_fail flux start \
+	    -o,-Scontent.backing-module=content-sqlite \
+	    -o,-Sstatedir=/test/tmpfs-1m/statedir \
+	    "./fillstatedir.sh; flux dmesg; flux kvs put --sync foo=1" > sync.out 2> sync.err &&
+	grep -q "No space left on device" sync.out &&
+	grep "flux_kvs_commit: No space left on device" sync.err
+'
+
 test_done
