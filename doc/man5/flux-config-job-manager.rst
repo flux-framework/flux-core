@@ -70,13 +70,9 @@ HOUSEKEEPING
 ============
 
 command
-  (optional) An array of strings specifying the housekeeping command. Either
-  ``command`` or ``use-systemd-unit`` must be specified.
-
-use-systemd-unit
-  (optional) A boolean value indicating whether to run the flux-housekeeping
-  systemd unit to handle housekeeping, rather than a specific command.
-  Either ``use-systemd-unit`` or ``command`` must be specified.
+  (optional) An array of strings specifying the housekeeping command.
+  If unspecified but the housekeeping table exists, then assume the command is
+  ``imp run housekeeping``.
 
 release-after
   (optional) A string specified in Flux Standard Duration (FSD). If unset,
@@ -110,7 +106,6 @@ EXAMPLE
    ]
 
    [job-manager.housekeeping]
-   use-systemd-unit = true
    release-after = "1m"
 
 
