@@ -48,7 +48,7 @@
    otherwise VAL is interpreted as a string. If VAL is not set, then the
    default value is 1. See `SHELL OPTIONS`_ below.
 
-.. option:: --setattr=KEY[=VAL]
+.. option:: -S, --setattr=KEY[=VAL]
 
    Set jobspec attribute. Keys may include periods to denote hierarchy.
    If KEY does not begin with ``system.``, ``user.``, or ``.``, then
