@@ -18,13 +18,17 @@ checkpoint_get() {
         jq -j -c -n  "{key:\"$1\"}" | $RPC content.checkpoint-get
 }
 
-test_expect_success 'load content module' '
-	flux module load content
+test_expect_success 'load content module and kvs' '
+        flux module load content &&
+        flux module load kvs
+'
+
+test_expect_success 'sync does not work without a backing store' '
+        test_must_fail flux kvs put --sync testsync=1
 '
 
 test_expect_success 'load content-sqlite and kvs and add some data' '
         flux module load content-sqlite &&
-        flux module load kvs &&
         flux kvs put a=1 &&
         flux kvs put b=2
 '
