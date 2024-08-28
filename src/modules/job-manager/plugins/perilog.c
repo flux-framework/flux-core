@@ -74,6 +74,7 @@ struct perilog_procdesc {
     flux_cmd_t *cmd;
     bool prolog;
     bool per_rank;
+    bool cancel_on_exception;
     double timeout;
     double kill_timeout;
 };
@@ -100,8 +101,10 @@ struct perilog_proc {
     flux_plugin_t *p;
     flux_jobid_t id;
     bool prolog;
+    bool cancel_on_exception;
     bool canceled;
     bool timedout;
+    double kill_timeout;
     flux_future_t *kill_f;
     flux_future_t *drain_f;
     flux_watcher_t *timer;
@@ -157,6 +160,7 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
 {
     struct perilog_procdesc *pd = NULL;
     int per_rank = 0;
+    int cancel_on_exception = -1;
     const char *timeout = NULL;
     double kill_timeout = -1.;
     flux_cmd_t *cmd = NULL;
@@ -168,11 +172,12 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     if (json_unpack_ex (o,
                         &error,
                         0,
-                        "{s?o s?s s?F s?b !}",
+                        "{s?o s?s s?F s?b s?b !}",
                         "command", &command,
                         "timeout", &timeout,
                         "kill-timeout", &kill_timeout,
-                        "per-rank", &per_rank) < 0) {
+                        "per-rank", &per_rank,
+                        "cancel-on-exception", &cancel_on_exception) < 0) {
         errprintf (errp, "%s", error.text);
         return NULL;
     }
@@ -223,6 +228,15 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     pd->kill_timeout = kill_timeout > 0. ? kill_timeout : 5.;
     pd->per_rank = per_rank;
     pd->prolog = prolog;
+
+    /* If cancel_on_exception unset, default to prolog=true, epilog=false
+     * Otherwise, use set value:
+     */
+    if (cancel_on_exception < 0)
+        pd->cancel_on_exception = prolog;
+    else
+        pd->cancel_on_exception = cancel_on_exception;
+
     return pd;
 error:
     flux_cmd_destroy (cmd);
@@ -692,6 +706,8 @@ static struct perilog_proc *procdesc_run (flux_t *h,
     }
     proc->bulk_exec = bulk_exec;
     proc->ranks = ranks;
+    proc->cancel_on_exception = pd->cancel_on_exception;
+    proc->kill_timeout = pd->kill_timeout;
 
     /* proc now has ownership of bulk_exec, ranks
      */
@@ -809,19 +825,20 @@ static int job_finish_cb (flux_plugin_t *p,
     return flux_jobtap_epilog_start (p, "job-manager.epilog");
 }
 
-static void prolog_kill_cb (flux_future_t *f, void *arg)
+static void proc_kill_cb (flux_future_t *f, void *arg)
 {
     struct perilog_proc *proc = arg;
     flux_t *h = flux_future_get_flux (f);
 
     if (flux_future_get (f, NULL) < 0) {
         flux_log_error (h,
-                        "%s: Failed to signal job prolog",
-                        idf58 (proc->id));
+                        "%s: Failed to signal job %s",
+                        idf58 (proc->id),
+                        perilog_proc_name (proc));
     }
 }
 
-static int prolog_kill (struct perilog_proc *proc)
+static int proc_kill (struct perilog_proc *proc)
 {
     flux_t *h = flux_jobtap_get_flux (proc->p);
 
@@ -831,8 +848,8 @@ static int prolog_kill (struct perilog_proc *proc)
     if (!(proc->kill_f = bulk_exec_kill (proc->bulk_exec, NULL, SIGTERM)))
         return -1;
 
-    if (flux_future_then (proc->kill_f, -1., prolog_kill_cb, proc) < 0) {
-        flux_log_error (h, "prolog_kill: flux_future_then");
+    if (flux_future_then (proc->kill_f, -1., proc_kill_cb, proc) < 0) {
+        flux_log_error (h, "proc_kill: flux_future_then");
         flux_future_destroy (proc->kill_f);
         proc->kill_f = NULL;
         return -1;
@@ -841,10 +858,10 @@ static int prolog_kill (struct perilog_proc *proc)
     return 0;
 }
 
-static void prolog_kill_timer_cb (flux_reactor_t *r,
-                                  flux_watcher_t *w,
-                                  int revents,
-                                  void *arg)
+static void proc_kill_timer_cb (flux_reactor_t *r,
+                                flux_watcher_t *w,
+                                int revents,
+                                void *arg)
 {
     flux_t *h;
     flux_future_t *f;
@@ -855,15 +872,16 @@ static void prolog_kill_timer_cb (flux_reactor_t *r,
 
     if (!(f = bulk_exec_kill (proc->bulk_exec, NULL, SIGKILL))) {
         flux_log_error (h,
-                        "%s: failed to send SIGKILL to prolog",
-                        idf58 (proc->id));
+                        "%s: failed to send SIGKILL to %s",
+                        idf58 (proc->id),
+                        perilog_proc_name (proc));
         return;
     }
     /* Do not wait for any response */
     flux_future_destroy (f);
 }
 
-static int prolog_kill_timer_start (struct perilog_proc *proc, double timeout)
+static int proc_kill_timer_start (struct perilog_proc *proc, double timeout)
 {
     if (proc->kill_timer == NULL) {
         flux_t *h = flux_jobtap_get_flux (proc->p);
@@ -871,12 +889,13 @@ static int prolog_kill_timer_start (struct perilog_proc *proc, double timeout)
         proc->kill_timer = flux_timer_watcher_create (r,
                                                       timeout,
                                                       0.,
-                                                      prolog_kill_timer_cb,
+                                                      proc_kill_timer_cb,
                                                       proc);
         if (!proc->kill_timer) {
             flux_log_error (h,
-                            "%s: failed to start prolog kill timer",
-                            idf58 (proc->id));
+                            "%s: failed to start %s kill timer",
+                            idf58 (proc->id),
+                            perilog_proc_name (proc));
             return -1;
         }
         flux_watcher_start (proc->kill_timer);
@@ -891,13 +910,12 @@ static void timeout_cb (flux_reactor_t *r,
 {
     struct perilog_proc *proc = arg;
     proc->timedout = true;
-    if (prolog_kill (proc) < 0)
+    if (proc_kill (proc) < 0)
         flux_log_error (flux_jobtap_get_flux (proc->p),
                         "failed to kill %s for %s",
                         perilog_proc_name (proc),
                         idf58 (proc->id));
-    (void) prolog_kill_timer_start (proc,
-                                    perilog_config.prolog->kill_timeout);
+    (void) proc_kill_timer_start (proc, proc->kill_timeout);
 }
 
 static int exception_cb (flux_plugin_t *p,
@@ -923,16 +941,15 @@ static int exception_cb (flux_plugin_t *p,
         && (proc = flux_jobtap_job_aux_get (p,
                                            FLUX_JOBTAP_CURRENT_JOB,
                                            "perilog_proc"))
-        && proc->prolog
+        && proc->cancel_on_exception
         && !proc->canceled
         && bulk_exec_active_count (proc->bulk_exec) > 0) {
-        double kill_timeout = perilog_config.prolog->kill_timeout;
 
         /* Set canceled flag to disable draining of failed prolog nodes
          */
         proc->canceled = true;
-        if (prolog_kill (proc) < 0
-            || prolog_kill_timer_start (proc, kill_timeout) < 0)
+        if (proc_kill (proc) < 0
+            || proc_kill_timer_start (proc, proc->kill_timeout) < 0)
             return -1;
     }
     return 0;
@@ -1166,9 +1183,10 @@ static json_t *procdesc_to_json (struct perilog_procdesc *pd)
     if (!(cmd = cmdline_tojson (pd->cmd)))
         return NULL;
 
-    o = json_pack ("{s:O s:b s:f s:f}",
+    o = json_pack ("{s:O s:b s:b s:f s:f}",
                    "command", cmd,
                    "per_rank", pd->per_rank,
+                   "cancel_on_exception", pd->cancel_on_exception,
                    "timeout", pd->timeout,
                    "kill-timeout", pd->kill_timeout);
 
