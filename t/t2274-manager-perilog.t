@@ -213,7 +213,7 @@ test_expect_success 'perilog: prolog/epilog output is logged' '
 	test_when_finished "rm -f prolog.d/log.sh" &&
 	jobid=$(flux submit --job-name=output-test hostname) &&
 	flux job wait-event -t 15 $jobid prolog-finish &&
-	flux dmesg | grep "prolog: stdout: this is the prolog" &&
+	flux dmesg -H | grep "prolog:.*this is the prolog" &&
 	flux job wait-event -vt 15 $jobid clean
 '
 test_expect_success 'perilog: fails if configuration is not valid' '

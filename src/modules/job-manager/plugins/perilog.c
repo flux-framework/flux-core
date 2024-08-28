@@ -576,13 +576,18 @@ static void io_cb (struct bulk_exec *bulk_exec,
 
     if (!perilog_log_ignore (&perilog_config, buf)) {
         int level = LOG_INFO;
+        int rank = flux_subprocess_rank (sp);
+        const char *hostname = flux_get_hostbyrank (h, rank);
+
         if (streq (stream, "stderr"))
             level = LOG_ERR;
         flux_log (h,
                   level,
-                  "%s: %s: %s: %s",
+                  "%s: %s: %s (rank %d): %s: %s",
                   idf58 (proc->id),
                   perilog_proc_name (proc),
+                  hostname,
+                  rank,
                   stream,
                   buf);
     }
