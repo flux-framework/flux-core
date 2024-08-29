@@ -31,7 +31,8 @@ avail[able]  instance hostlist minus those nodes down or drained
 stdin, '-'   read a list of hosts on stdin
 hosts        literal list of hosts
 
-The default when no SOURCES are supplied is 'local'.
+The default when no SOURCES are supplied is 'stdin', unless the -l, --local
+option is used, in which case the default is 'local'.
 """
 
 
@@ -123,6 +124,12 @@ def parse_args():
         action="store_true",
         help="Fallback to treating jobids that are not found as hostnames"
         + " (for hostnames that are also valid jobids e.g. f1, fuzz100, etc)",
+    )
+    parser.add_argument(
+        "-l",
+        "--local",
+        action="store_true",
+        help="Set the default source to 'local' instead of 'stdin'",
     )
     parser.add_argument(
         "-q",
@@ -312,7 +319,10 @@ def main():
     args = parse_args()
 
     if not args.sources:
-        args.sources = ["local"]
+        if args.local:
+            args.sources = ["local"]
+        else:
+            args.sources = ["stdin"]
 
     hostlists = HostlistResolver(args.sources, fallback=args.fallback).results()
 
