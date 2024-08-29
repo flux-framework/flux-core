@@ -16,6 +16,20 @@ test_expect_success 'flux-hostlist returns hostlist attr in initial program' '
 	flux getattr hostlist >hl-instance.expected &&
 	test_cmp hl-instance.expected hl-instance.out
 '
+test_expect_success 'flux-hostlist reads from stdin by default' '
+	echo foo[0-3] | flux hostlist
+'
+# Need to simulate open stdin with a fifo since sharness closes stdin
+test_expect_success NO_CHAIN_LINT 'flux-hostlist includes a timeout on reading stdin' '
+	rm -f input.fifo;
+	mkfifo input.fifo;
+	FLUX_HOSTLIST_STDIN_TIMEOUT=0.1 flux hostlist <input.fifo &
+	pid=$! &&
+	test_when_finished rm -f input.fifo &&
+	exec 9>input.fifo &&
+	test_must_fail wait $pid &&
+	exec 9>&-
+'
 test_expect_success 'flux-hostlist returns job hostlist in job' '
 	flux run flux hostlist -l >hl-job.out &&
 	flux jobs -no {nodelist} $(flux job last) > hl-job.expected &&
