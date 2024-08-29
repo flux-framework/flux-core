@@ -20,7 +20,6 @@
  * Configuration:
  *   [job-manager.housekeeping]
  *   #command = ["command", "arg1", "arg2", ...]
- *   use-systemd-unit = true
  *   release-after = "FSD"
  *
  * Partial release:
@@ -706,25 +705,41 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
                                       void *arg)
 {
     struct housekeeping *hk = arg;
+    json_t *housekeeping = NULL;
     flux_error_t e;
+    json_error_t jerror;
     json_t *cmdline = NULL;
     const char *release_after = NULL;
     flux_cmd_t *cmd = NULL;
-    int use_systemd_unit = false;
     const char *imp_path = NULL;
     char *imp_path_cpy = NULL;
+    int use_systemd_unit = 0;
 
     if (flux_conf_unpack (conf,
                           &e,
-                          "{s?{s?{s?o s?s s?b !}}}",
+                          "{s?{s?o}}",
                           "job-manager",
-                            "housekeeping",
-                              "command", &cmdline,
-                              "release-after", &release_after,
-                              "use-systemd-unit", &use_systemd_unit) < 0) {
-        return errprintf (error,
-                          "job-manager.housekeeping.command: %s",
-                          e.text);
+                            "housekeeping", &housekeeping) < 0)
+        return errprintf (error, "job-manager.housekeeping: %s", e.text);
+
+    // if the housekeeping table is not present, housekeeping is not configured
+    if (!housekeeping)
+        goto done;
+
+    if (json_unpack_ex (housekeeping,
+                        &jerror,
+                        0,
+                        "{s?o s?s s?b !}",
+                        "command", &cmdline,
+                        "release-after", &release_after,
+                        "use-systemd-unit", &use_systemd_unit) < 0)
+        return errprintf (error, "job-manager.housekeeping: %s", jerror.text);
+
+    if (use_systemd_unit) {
+        flux_log (hk->ctx->h,
+                  LOG_ERR,
+                  "job-manager.housekeeping.use-systemd-unit is deprecated"
+                  " - ignoring");
     }
 
     // let job-exec handle exec errors
@@ -736,16 +751,18 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
                               "job-manager.housekeeping.release-after"
                               " FSD parse error");
     }
-    if (use_systemd_unit) {
+
+    if (cmdline) {
+        if (!(cmd = create_cmd (cmdline)))
+            return errprintf (error, "error creating housekeeping command");
+    }
+
+    // if no command line was defined, assume "imp exec housekeeping"
+    else {
         if (!imp_path) {
             return errprintf (error,
-                              "job-manager.housekeeeping.use-systemd-unit "
-                              " requires that exec.imp also be defined");
-        }
-        if (cmdline) {
-            return errprintf (error,
-                              "job-manager.housekeeeping.use-systemd-unit "
-                              " means housekeeping.command must not be defined");
+                              "job-manager.housekeeping implies IMP"
+                              " but exec.imp is undefined");
         }
         json_t *o;
         if ((o = json_pack ("[sss]", imp_path, "run", "housekeeping")))
@@ -758,10 +775,7 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
             return errprintf (error, "error duplicating IMP path");
         }
     }
-    else if (cmdline) {
-        if (!(cmd = create_cmd (cmdline)))
-            return errprintf (error, "error creating housekeeping command");
-    }
+done:
     flux_cmd_destroy (hk->cmd);
     hk->cmd = cmd;
     free (hk->imp_path);
