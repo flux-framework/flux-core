@@ -11,6 +11,7 @@
 import argparse
 import logging
 import os
+import select
 import sys
 
 import flux
@@ -236,6 +237,15 @@ class StdinHostlistResult:
 
     def __init__(self, *args, **kwargs):
         hl = Hostlist()
+
+        # Note: Previous versions of this command defaulted to reading
+        # the current enclosing instance or job hostlist, not from stdin.
+        # To avoid potential hangs, only wait for stdin for 15s. This should
+        # be removed in a future version
+        timeout = float(os.environ.get("FLUX_HOSTLIST_STDIN_TIMEOUT", 15.0))
+        if not select.select([sys.stdin], [], [], timeout)[0]:
+            raise RuntimeError(f"timeout after {timeout}s waiting for stdin")
+
         for line in sys.stdin.readlines():
             hl.append(line.rstrip())
         self.result = hl
