@@ -47,6 +47,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <regex.h>
+#include <math.h>
 #include "src/common/libmissing/macros.h"
 #define EXIT_CODE(x) __W_EXITCODE(x,0)
 
@@ -219,6 +220,10 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
         errprintf (errp, "invalid %s timeout", prolog ? "prolog" : "epilog");
         goto error;
     }
+    /* Special case: INFINITY disables timeout so set timeout = 0.0:
+     */
+    if (pd->timeout == INFINITY)
+        pd->timeout = 0.;
     if (!cmd) {
         errprintf (errp, "no command specified and exec.imp not defined");
         goto error;
