@@ -44,7 +44,7 @@ stdin or ``-``
 hosts
   a literal RFC 29 Hostlist
 
-The default source is *local*.
+The default source is *stdin*.
 
 OPTIONS
 =======
@@ -112,6 +112,11 @@ OPTIONS
  
     $ flux hostlist --fallback foo1 foo2
     foo[1-2]
+
+.. option:: -l, --local
+
+  Change the default input source to "local". This is a shorter way to
+  specify ``flux hostlist local``.
   
 .. option:: -q, --quiet
 
@@ -125,7 +130,7 @@ program:
 
 ::
 
-  $ flux hostlist -ed'\n' >hostfile
+  $ flux hostlist -led'\n' >hostfile
 
 Launch an MPI program using :program:`mpiexec.hydra` from within a batch
 script:
@@ -133,7 +138,7 @@ script:
 ::
 
   #!/bin/sh
-  mpiexec.hydra -launcher ssh -hosts "$(flux hostlist -e)" mpi_hello
+  mpiexec.hydra -launcher ssh -hosts "$(flux hostlist -le)" mpi_hello
 
 List the hosts for one job: (Note: this is the same as
 :command:`flux jobs -no {nodelist} JOBID`)

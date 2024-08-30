@@ -360,6 +360,13 @@ components or writing tests.
    interpose a tool or library with LD_PRELOAD.  Be aware that this can cause
    symbol conflicts with plugins, and is not recommended for production.
 
+.. envvar:: FLUX_HOSTLIST_STDIN_TIMEOUT
+
+   The :command:`flux-hostlist` command reads from stdin by default. If no
+   data is available within 15s, the command times out to prevent a permanent
+   hang. This environment variable can be used to modify or disable (set to 0)
+   the timeout.
+
 MISCELLANEOUS
 =============
 

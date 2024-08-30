@@ -11,6 +11,7 @@
 import argparse
 import logging
 import os
+import select
 import sys
 
 import flux
@@ -31,7 +32,8 @@ avail[able]  instance hostlist minus those nodes down or drained
 stdin, '-'   read a list of hosts on stdin
 hosts        literal list of hosts
 
-The default when no SOURCES are supplied is 'local'.
+The default when no SOURCES are supplied is 'stdin', unless the -l, --local
+option is used, in which case the default is 'local'.
 """
 
 
@@ -123,6 +125,12 @@ def parse_args():
         action="store_true",
         help="Fallback to treating jobids that are not found as hostnames"
         + " (for hostnames that are also valid jobids e.g. f1, fuzz100, etc)",
+    )
+    parser.add_argument(
+        "-l",
+        "--local",
+        action="store_true",
+        help="Set the default source to 'local' instead of 'stdin'",
     )
     parser.add_argument(
         "-q",
@@ -229,6 +237,15 @@ class StdinHostlistResult:
 
     def __init__(self, *args, **kwargs):
         hl = Hostlist()
+
+        # Note: Previous versions of this command defaulted to reading
+        # the current enclosing instance or job hostlist, not from stdin.
+        # To avoid potential hangs, only wait for stdin for 15s. This should
+        # be removed in a future version
+        timeout = float(os.environ.get("FLUX_HOSTLIST_STDIN_TIMEOUT", 15.0))
+        if not select.select([sys.stdin], [], [], timeout)[0]:
+            raise RuntimeError(f"timeout after {timeout}s waiting for stdin")
+
         for line in sys.stdin.readlines():
             hl.append(line.rstrip())
         self.result = hl
@@ -312,7 +329,10 @@ def main():
     args = parse_args()
 
     if not args.sources:
-        args.sources = ["local"]
+        if args.local:
+            args.sources = ["local"]
+        else:
+            args.sources = ["stdin"]
 
     hostlists = HostlistResolver(args.sources, fallback=args.fallback).results()
 

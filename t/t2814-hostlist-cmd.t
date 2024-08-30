@@ -12,12 +12,26 @@ test_expect_success 'flux-hostlist --help works' '
 	grep "SOURCES may include" help.out
 '
 test_expect_success 'flux-hostlist returns hostlist attr in initial program' '
-	flux hostlist >hl-instance.out &&
+	flux hostlist -l >hl-instance.out &&
 	flux getattr hostlist >hl-instance.expected &&
 	test_cmp hl-instance.expected hl-instance.out
 '
+test_expect_success 'flux-hostlist reads from stdin by default' '
+	echo foo[0-3] | flux hostlist
+'
+# Need to simulate open stdin with a fifo since sharness closes stdin
+test_expect_success NO_CHAIN_LINT 'flux-hostlist includes a timeout on reading stdin' '
+	rm -f input.fifo;
+	mkfifo input.fifo;
+	FLUX_HOSTLIST_STDIN_TIMEOUT=0.1 flux hostlist <input.fifo &
+	pid=$! &&
+	test_when_finished rm -f input.fifo &&
+	exec 9>input.fifo &&
+	test_must_fail wait $pid &&
+	exec 9>&-
+'
 test_expect_success 'flux-hostlist returns job hostlist in job' '
-	flux run flux hostlist >hl-job.out &&
+	flux run flux hostlist -l >hl-job.out &&
 	flux jobs -no {nodelist} $(flux job last) > hl-job.expected &&
 	test_cmp hl-job.expected hl-job.out
 '
@@ -33,8 +47,8 @@ test_expect_success 'flux-hostlist --fallback treats invalid jobid as host' '
 	test "$(cat fallback.out)" = "foo1"
 '
 test_expect_success 'flux-hostlist -c works' '
-	flux hostlist --count  &&
-	test $(flux hostlist --count) -eq 2 &&
+	flux hostlist --count local  &&
+	test $(flux hostlist --count local) -eq 2 &&
 	test $(flux hostlist -c "foo[1-10]") -eq 10
 '
 test_expect_success 'flux-hostlist works with "avail"' '
@@ -43,8 +57,8 @@ test_expect_success 'flux-hostlist works with "avail"' '
 	flux resource undrain 0
 '
 test_expect_success 'flux-hostlist works with stdin' '
-	printf "foo1 foo2 foo3"   | flux hostlist - >hl-stdin1.out &&
-	printf "foo1\nfoo2\nfoo3" | flux hostlist - >hl-stdin2.out &&
+	printf "foo1 foo2 foo3"   | flux hostlist >hl-stdin1.out &&
+	printf "foo1\nfoo2\nfoo3" | flux hostlist >hl-stdin2.out &&
 	test_debug "grep . hl-stdin*.out" &&
 	printf "foo[1-3]\n" >hl-stdin.expected &&
 	test_cmp hl-stdin.expected hl-stdin1.out &&
