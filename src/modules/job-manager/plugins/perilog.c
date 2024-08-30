@@ -477,6 +477,11 @@ out:
     return f;
 }
 
+static void perilog_proc_finish (struct perilog_proc *proc)
+{
+    emit_finish_event (proc, proc->bulk_exec);
+    perilog_proc_delete (proc);
+}
 
 static void drain_failed_cb (flux_future_t *f, void *arg)
 {
@@ -493,8 +498,7 @@ static void drain_failed_cb (flux_future_t *f, void *arg)
     }
     /* future destroyed by perilog_proc_delete()
      */
-    emit_finish_event (proc, proc->bulk_exec);
-    perilog_proc_delete (proc);
+    perilog_proc_finish (proc);
 }
 
 static bool perilog_per_rank (struct perilog_proc *proc)
@@ -532,8 +536,7 @@ static void completion_cb (struct bulk_exec *bulk_exec, void *arg)
                             idf58 (proc->id),
                             perilog_proc_name (proc));
         }
-        emit_finish_event (proc, bulk_exec);
-        perilog_proc_delete (proc);
+        perilog_proc_finish (proc);
     }
 }
 
