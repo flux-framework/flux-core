@@ -101,6 +101,8 @@ static struct perilog_conf {
 struct perilog_proc {
     flux_plugin_t *p;
     flux_jobid_t id;
+    uint32_t userid;
+    json_t *R;
     bool prolog;
     bool cancel_on_exception;
     bool canceled;
@@ -251,6 +253,7 @@ error:
 
 static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
                                                   flux_jobid_t id,
+                                                  uint32_t userid,
                                                   bool prolog)
 {
     struct perilog_proc *proc = calloc (1, sizeof (*proc));
@@ -258,6 +261,7 @@ static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
         return NULL;
     proc->p = p;
     proc->id = id;
+    proc->userid = id;
     proc->prolog = prolog;
     if (zhashx_insert (perilog_config.processes, &proc->id, proc) < 0) {
         free (proc);
@@ -273,6 +277,7 @@ static void perilog_proc_destroy (struct perilog_proc *proc)
         int saved_errno = errno;
         idset_destroy (proc->ranks);
         free (proc->failed_ranks);
+        json_decref (proc->R);
         bulk_exec_destroy (proc->bulk_exec);
         flux_future_destroy (proc->kill_f);
         flux_future_destroy (proc->drain_f);
@@ -646,7 +651,7 @@ static struct perilog_proc *procdesc_run (flux_t *h,
     struct bulk_exec *bulk_exec = NULL;
     double timeout;
 
-    if (!(proc = perilog_proc_create (p, id, pd->prolog))) {
+    if (!(proc = perilog_proc_create (p, id, userid, pd->prolog))) {
         flux_log_error (h,
                         "%s: proc_create",
                         pd->prolog ? "prolog" : "epilog");
@@ -712,6 +717,7 @@ static struct perilog_proc *procdesc_run (flux_t *h,
         flux_watcher_start (w);
         proc->timer = w;
     }
+    proc->R = json_incref (R);
     proc->bulk_exec = bulk_exec;
     proc->ranks = ranks;
     proc->cancel_on_exception = pd->cancel_on_exception;
