@@ -1016,20 +1016,6 @@ static void kvstxn_apply (kvstxn_t *kt)
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    else if (ret == KVSTXN_PROCESS_SYNC_CONTENT_FLUSH) {
-        /* N.B. future is managed by kvstxn, should not call
-         * flux_future_destroy() on it */
-        flux_future_t *f = kvstxn_sync_content_flush (kt);
-        if (!f) {
-            errnum = errno;
-            goto done;
-        }
-        if (flux_future_then (f, -1., kvstxn_apply_cb, kt) < 0) {
-            errnum = errno;
-            goto done;
-        }
-        goto stall;
-    }
     else if (ret == KVSTXN_PROCESS_SYNC_CHECKPOINT) {
         /* N.B. future is managed by kvstxn, should not call
          * flux_future_destroy() on it */
@@ -2714,22 +2700,15 @@ error:
  */
 static int checkpoint_put (flux_t *h, const char *rootref, int rootseq)
 {
-    flux_future_t *f1 = NULL;
-    flux_future_t *f2 = NULL;
+    flux_future_t *f = NULL;
     int rv = -1;
 
-    /* first must ensure all content is flushed */
-    if (!(f1 = flux_rpc (h, "content.flush", NULL, 0, 0))
-        || flux_rpc_get (f1, NULL) < 0)
-        goto error;
-
-    if (!(f2 = kvs_checkpoint_commit (h, rootref, rootseq, 0, 0))
-        || flux_rpc_get (f2, NULL) < 0)
+    if (!(f = kvs_checkpoint_commit (h, rootref, rootseq, 0, 0))
+        || flux_rpc_get (f, NULL) < 0)
         goto error;
     rv = 0;
 error:
-    flux_future_destroy (f1);
-    flux_future_destroy (f2);
+    flux_future_destroy (f);
     return rv;
 }
 

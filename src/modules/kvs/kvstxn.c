@@ -62,7 +62,6 @@ struct kvstxn {
     char newroot[BLOBREF_MAX_STRING_SIZE];
     zlist_t *missing_refs_list;
     zlist_t *dirty_cache_entries_list;
-    flux_future_t *f_sync_content_flush;
     flux_future_t *f_sync_checkpoint;
     bool processing;            /* kvstxn is being processed */
     bool merged;                /* kvstxn is a merger of transactions */
@@ -78,7 +77,6 @@ struct kvstxn {
      * STORE - generate dirty entries for caller to store
      * GENERATE_KEYS - stall until stores complete
      *               - generate keys modified in txn
-     * SYNC_CONTENT_FLUSH - call content.flush (for FLUX_KVS_SYNC)
      * SYNC_CHECKPOINT - call kvs_checkpoint_commit (for FLUX_KVS_SYNC)
      * FINISHED - end state
      *
@@ -88,8 +86,7 @@ struct kvstxn {
      * APPLY_OPS -> STORE
      * STORE -> GENERATE_KEYS
      * GENERATE_KEYS -> FINISHED
-     * GENERATE_KEYS -> SYNC_CONTENT_FLUSH
-     * SYNC_CONTENT_FLUSH -> SYNC_CHECKPOINT
+     * GENERATE_KEYS -> SYNC_CHECKPOINT
      * SYNC_CHECKPOINT -> FINISHED
      */
     enum {
@@ -98,9 +95,8 @@ struct kvstxn {
         KVSTXN_STATE_APPLY_OPS = 3,
         KVSTXN_STATE_STORE = 4,
         KVSTXN_STATE_GENERATE_KEYS = 5,
-        KVSTXN_STATE_SYNC_CONTENT_FLUSH = 6,
-        KVSTXN_STATE_SYNC_CHECKPOINT = 7,
-        KVSTXN_STATE_FINISHED = 8,
+        KVSTXN_STATE_SYNC_CHECKPOINT = 6,
+        KVSTXN_STATE_FINISHED = 7,
     } state;
 };
 
@@ -117,7 +113,6 @@ static void kvstxn_destroy (kvstxn_t *kt)
             zlist_destroy (&kt->missing_refs_list);
         if (kt->dirty_cache_entries_list)
             zlist_destroy (&kt->dirty_cache_entries_list);
-        flux_future_destroy (kt->f_sync_content_flush);
         flux_future_destroy (kt->f_sync_checkpoint);
         free (kt);
     }
@@ -1061,37 +1056,9 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
             }
 
             if (kt->flags & FLUX_KVS_SYNC)
-                kt->state = KVSTXN_STATE_SYNC_CONTENT_FLUSH;
+                kt->state = KVSTXN_STATE_SYNC_CHECKPOINT;
             else
                 kt->state = KVSTXN_STATE_FINISHED;
-        }
-        else if (kt->state == KVSTXN_STATE_SYNC_CONTENT_FLUSH) {
-            if (!(kt->f_sync_content_flush)) {
-                kt->f_sync_content_flush = flux_rpc (kt->ktm->h,
-                                                     "content.flush",
-                                                     NULL,
-                                                     0,
-                                                     0);
-                if (!kt->f_sync_content_flush) {
-                    kt->errnum = errno;
-                    return KVSTXN_PROCESS_ERROR;
-                }
-                kt->blocked = 1;
-                return KVSTXN_PROCESS_SYNC_CONTENT_FLUSH;
-            }
-
-            /* user did not wait for future to complex */
-            if (!flux_future_is_ready (kt->f_sync_content_flush)) {
-                kt->blocked = 1;
-                return KVSTXN_PROCESS_SYNC_CONTENT_FLUSH;
-            }
-
-            if (flux_rpc_get (kt->f_sync_content_flush, NULL) < 0) {
-                kt->errnum = errno;
-                return KVSTXN_PROCESS_ERROR;
-            }
-
-            kt->state = KVSTXN_STATE_SYNC_CHECKPOINT;
         }
         else if (kt->state == KVSTXN_STATE_SYNC_CHECKPOINT) {
 
@@ -1196,16 +1163,6 @@ int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
         }
     }
     return 0;
-}
-
-flux_future_t *kvstxn_sync_content_flush (kvstxn_t *kt)
-{
-    if (kt->state != KVSTXN_STATE_SYNC_CONTENT_FLUSH) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    return kt->f_sync_content_flush;
 }
 
 flux_future_t *kvstxn_sync_checkpoint (kvstxn_t *kt)
