@@ -666,22 +666,20 @@ enabled.
 Adding Job Prolog/Epilog Scripts
 ================================
 
-Flux does not currently support a traditional job prolog/epilog
-which runs as root on the nodes assigned to a job before/after job
-execution. Flux does, however, support a job-manager prolog/epilog,
-which is run at the same point on rank 0 as the instance
-owner (typically user ``flux``), instead of user root.
+The current best practice for enabling per-job prolog/epilog scripts
+is to use the job-manager prolog/epilog configuration supported by the
+``perilog.so`` jobtap plugin. The perilog plugin optionally initiates a
+prolog action when a job enters the RUN state before any job shells are
+launched, and an epilog action that can be started after all job shells
+complete but before resources are returned to the scheduler.
 
-As a temporary solution, a convenience command ``flux perilog-run``
-is provided which can simulate a job prolog and epilog by executing a
-command across the broker ranks assigned to a job from the job-manager
-prolog and epilog.
+.. note::
+   The perilog plugin now supports directly executing the configured
+   prolog/epilog across all ranks of a job, which makes the previous solution
+   using ``flux perilog-run`` obsolete.
 
-When using ``flux perilog-run`` to execute job prolog and epilog, the
-job-manager prolog/epilog feature is being used to execute a privileged
-prolog/epilog across the nodes/ranks assigned to a job, via the
-flux-security IMP "run" command support. Therefore, each of these
-components need to be configured, which is explained in the steps below.
+The configuration of a prolog and epilog that runs as root requires the
+following steps:
 
  1. Configure the IMP such that it will allow the system instance user
     to execute a prolog and epilog script or command as root.
@@ -723,23 +721,29 @@ components need to be configured, which is explained in the steps below.
          { load = "perilog.so" }
        ]
 
- 3. Configure the Flux system instance ``[job-manager.prolog]`` and
-    ``[job-manager.epilog]`` to execute ``flux perilog-run`` with appropriate
-    arguments to execute ``flux-imp run prolog`` and ``flux-imp run epilog``
-    across the ranks assigned to a job:
+ 3. Configure the Flux system instance to run a prolog and epilog across
+    the ranks of each job using the job-manager prolog/epilog as supported
+    by the ``perilog.so`` plugin. See :man5:`flux-config-job-manager` for
+    a detailed description of supported ``perilog.so`` configuration.
+
+    .. note::
+        A command need not be specified in ``[job-manager.prolog]`` or
+        ``[job-manager.epilog]`` when ``exec.imp`` (the path to the IMP)
+        is configured. In this case, the default is to run the prolog/epilog
+        defined in IMP configuration via ``flux-imp run [prolog|epilog]``.
+
+    For example:
 
     .. code-block:: toml
 
        [job-manager.prolog]
-       command = [
-          "flux", "perilog-run", "prolog",
-          "-e", "/usr/libexec/flux/flux-imp,run,prolog"
-       ]
+       per-rank = true
+       # timeout = "30m"
+
        [job-manager.epilog]
-       command = [
-          "flux", "perilog-run", "epilog",
-          "-e", "/usr/libexec/flux/flux-imp,run,epilog"
-       ]
+       per-rank = true
+       # timeout = "0"
+
 
  4. (optional) If log messages from the prolog or epilog are filling
     up the broker logs, a list of ignore patterns may be added via
@@ -751,15 +755,6 @@ components need to be configured, which is explained in the steps below.
 
       [job-manager]
       perilog.log-ignore = [ ".*Xauth.*", "^foo:.*debug" ]
-
-Note that the ``flux perilog-run`` command will additionally execute any
-scripts in ``/etc/flux/system/{prolog,epilog}.d`` on rank 0 by default as
-part of the job-manager prolog/epilog. Only place scripts here if there is
-a need to execute scripts as the instance owner (user `flux`) on a single
-rank for each job. If only traditional prolog/epilog support is required,
-these directories can be ignored and should be empty or nonexistent.
-To run scripts from a different directory, use the ``-d, --exec-directory``
-option in the configured ``command``.
 
 See also: :man5:`flux-config-job-manager`,
 :security:man5:`flux-config-security-imp`.

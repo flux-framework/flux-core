@@ -213,7 +213,7 @@ test_expect_success 'perilog: prolog/epilog output is logged' '
 	test_when_finished "rm -f prolog.d/log.sh" &&
 	jobid=$(flux submit --job-name=output-test hostname) &&
 	flux job wait-event -t 15 $jobid prolog-finish &&
-	flux dmesg | grep "prolog: stdout: this is the prolog" &&
+	flux dmesg -H | grep "prolog:.*this is the prolog" &&
 	flux job wait-event -vt 15 $jobid clean
 '
 test_expect_success 'perilog: fails if configuration is not valid' '
@@ -321,18 +321,18 @@ test_expect_success 'perilog: bad log-ignore entry is caught' '
 	[job-manager.perilog]
 	log-ignore = "foo"
 	EOF
-	flux config reload &&
-	test_must_fail flux jobtap load --remove=*.so perilog.so &&
-	flux dmesg -Hc | grep "not an array"
+	test_must_fail flux config reload 2>bad-log-ignore.err &&
+	test_debug "cat bad-log-ignore.err" &&
+	grep "not an array" bad-log-ignore.err
 '
 test_expect_success 'perilog: bad log-ignore regexp is caught' '
 	cat <<-EOF >config/perilog.toml &&
 	[job-manager.perilog]
 	log-ignore = [ "[" ]
 	EOF
-	flux config reload &&
-	test_must_fail flux jobtap load perilog.so &&
-	flux dmesg -Hc | grep "[fF]ailed to compile"
+	test_must_fail flux config reload 2>bad-log-ignore-regexp.err &&
+	test_debug "cat bad-log-ignore-regexp.err" &&
+	grep "[fF]ailed to compile" bad-log-ignore-regexp.err
 '
 
 #  Note: run this job before taking rank 3 offline below
@@ -356,7 +356,7 @@ test_expect_success 'perilog: create config to run flux-perilog-run' '
 '
 test_expect_success 'perilog: load offline.so before perilog.so' '
 	flux jobtap load $OFFLINE_PLUGIN &&
-	flux jobtap load perilog.so
+	flux jobtap load --remove=perilog.so perilog.so
 '
 test_expect_success 'perilog: prolog with offline ranks raises sev 1 exception' '
 	id=$(flux submit -N4 -n4 true) &&

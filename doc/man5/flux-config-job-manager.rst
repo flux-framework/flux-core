@@ -9,6 +9,10 @@ DESCRIPTION
 The Flux **job-manager** service may be configured via the ``job-manager``
 table, which may contain the following keys:
 
+Note that this set of keys may be extended by loaded jobtap plugins.
+For details pertaining to some plugins distributed with flux see
+:ref:`plugin_specific_keys` below.
+
 
 KEYS
 ====
@@ -82,6 +86,86 @@ release-after
   first execution target for a given job completes, and all resources that
   have completed housekeeping when the timer fires are released. Following
   that, resources are released as each execution target completes.
+
+.. _plugin_specific_keys:
+
+PLUGIN SPECIFIC KEYS
+====================
+
+The following configuration keys are supported by included jobtap plugins.
+The documented config will have no effect if the associated plugin is not
+loaded into the job-manager.
+
+perilog.so
+----------
+
+The ``perilog.so`` plugin supports configuration and execution of job-manager
+prolog and/or epilog. The following keys are supported when the ``perilog.so``
+plugin is loaded:
+
+prolog
+   (optional) Table of configuration for a job-manager prolog. If enabled,
+   the prolog is initiated when the job enters the RUN state before any
+   job shells (i.e. user processes) are started. The following keys are
+   supported for the ``[job-manager.prolog]`` table:
+
+   command
+      (optional) An array of strings specifying the command to run. If
+      ``exec.imp`` is set, the the default command is ``["flux-imp",
+      "run", "prolog"]``, otherwise it is an error if command is not set.
+   per-rank
+      (optional) By default the job-manager prolog only runs ``command``
+      on rank 0. With ``per-rank=true``, the command will be run on each
+      rank assigned to the job.
+   timeout
+      (optional) A string value in Flux Standard Duration specifying a
+      timeout for the prolog, after which it is terminated (and a job
+      exception raised). The default prolog timeout is 30m. To disable
+      the timeout use ``0`` or ``infinity``.
+   kill-timeout
+      (optional) Floating-point number of seconds to wait after sending
+      SIGTERM to send SIGKILL to the prolog when the prolog has been
+      canceled due to timeout or exception. The default is 5.0. (This
+      key is mainly used for testing purposes).
+   cancel-on-exception
+      (optional) A boolean indicating whether a fatal job exception raised
+      while the prolog is active terminates the prolog. The default is true.
+
+epilog
+   (optional) Table of configuration for a job-manager epilog. If configured,
+   the epilog is started at the job ``finish`` event, i.e. after all user
+   processes and job shells have terminated. The ``[job-manager.epilog]``
+   table supports the following keys:
+
+   command
+      (optional) An array of strings specifying the command to run. If
+      ``exec.imp`` is set, the the default command is ``["flux-imp",
+      "run", "prolog"]``, otherwise it is an error if command is not set.
+   per-rank
+      (optional) By default the job-manager epilog only runs ``command``
+      on rank 0. With ``per-rank=true``, the command will be run on each
+      rank assigned to the job.
+   timeout
+      (optional) A string value in Flux Standard Duration specifying a
+      timeout for the epilog, after which it is terminated (and a job
+      exception raised). By default, the epilog timeout is disabled.
+   kill-timeout
+      (optional) Floating-point number of seconds to wait after sending
+      SIGTERM to send SIGKILL to the epilog when it has been canceled due
+      to timeout or exception. The default is 5.0. (This key is mainly
+      used for testing purposes)
+   cancel-on-exception
+      (optional) A boolean indicating whether a fatal job exception raised
+      while the epilog is active terminates the epilog. The default is true.
+      (cancel-on-exception is only used with the epilog for testing purposes)
+
+perilog
+  (optional) Common prolog/epilog configuration keys:
+
+   log-ignore
+      (optional) An array of regular expression strings to ignore in the
+      stdout and stderr of prolog and epilog processes.
+
 
 EXAMPLE
 =======
