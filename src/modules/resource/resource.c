@@ -104,19 +104,8 @@ static int parse_config (struct resource_ctx *ctx,
         rlist_destroy (rl);
     }
     else if (path) {
-        FILE *f;
         json_error_t e;
-
-        if (!(f = fopen (path, "r"))) {
-            errprintf (errp,
-                       "%s: %s",
-                       path,
-                       strerror (errno));
-            return -1;
-        }
-        o = json_loadf (f, 0, &e);
-        fclose (f);
-        if (!o) {
+        if (!(o = json_load_file (path, 0, &e))) {
             errprintf (errp,
                        "%s: %s on line %d",
                        e.source,
