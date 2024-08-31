@@ -117,6 +117,13 @@ struct perilog_proc {
     char *failed_ranks;
 };
 
+static struct perilog_proc *procdesc_run (flux_t *h,
+                                          flux_plugin_t *p,
+                                          struct perilog_procdesc *pd,
+                                          flux_jobid_t id,
+                                          uint32_t userid,
+                                          json_t *R);
+
 static void timeout_cb (flux_reactor_t *r,
                         flux_watcher_t *w,
                         int revents,
@@ -482,10 +489,87 @@ out:
     return f;
 }
 
+static bool perilog_proc_failed (struct perilog_proc *proc)
+{
+    if (proc->canceled
+        || proc->timedout
+        || bulk_exec_rc (proc->bulk_exec) > 0)
+        return true;
+    return false;
+}
+
 static void perilog_proc_finish (struct perilog_proc *proc)
 {
+    flux_t *h = flux_jobtap_get_flux (proc->p);
+    flux_plugin_t *p;
+    uint32_t userid;
+    flux_jobid_t id;
+    json_t *R;
+    struct perilog_procdesc *pd;
+    bool run_epilog = false;
+
+
+    /*  If a prolog was completing, and it failed in some way, then there
+     *  will be no finish event to trigger the epilog. However, an epilog
+     *  should still be run in case it is required to clean up or revert
+     *  something done by the prolog. So do that here.
+     */
+    if (proc->prolog
+        && perilog_proc_failed (proc)
+        && (pd = perilog_config.epilog)) {
+        /* epilog process can't be started until prolog perilog_proc is
+         * deleted, so capture necessary info here and set a boolean to
+         * create the epilog before leaving this function.
+         */
+        run_epilog = true;
+        p = proc->p;
+        id = proc->id;
+        userid = proc->userid;
+        R = proc->R;
+
+        /* The epilog-start event must be posted before the prolog-finish
+         * event to avoid the job potentially going straight to INACTIVE
+         * after the prolog-finish event is posted below
+         */
+        if (flux_jobtap_event_post_pack (p,
+                                         id,
+                                         "epilog-start",
+                                         "{s:s}",
+                                         "description",
+                                         "job-manager.epilog") < 0) {
+            flux_log_error (h,
+                            "%s: failed to post epilog-start on prolog-finish",
+                            idf58 (proc->id));
+            run_epilog = false;
+        }
+    }
     emit_finish_event (proc, proc->bulk_exec);
     perilog_proc_delete (proc);
+
+    if (run_epilog) {
+        struct perilog_proc *epilog;
+
+        if (!(epilog = procdesc_run (h, p, pd, id,userid, R))
+            || flux_jobtap_job_aux_set (p,
+                                        id,
+                                        "perilog_proc",
+                                        epilog,
+                                        NULL) < 0) {
+            flux_log_error (h,
+                            "%s: failed to start epilog on prolog-finish",
+                            idf58 (proc->id));
+
+            /* Since epilog-start event was emitted above, we must emit an
+             * epilog-finish event to avoid hanging the job
+             */
+            if (flux_jobtap_epilog_finish (p, id,"job-manager.epilog", 1) < 0) {
+                flux_log_error (h,
+                                "%s: failed to post epilog-finish event",
+                                idf58 (proc->id));
+            }
+            perilog_proc_delete (epilog);
+        }
+    }
 }
 
 static void drain_failed_cb (flux_future_t *f, void *arg)
