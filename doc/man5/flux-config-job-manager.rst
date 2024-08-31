@@ -132,10 +132,11 @@ prolog
       while the prolog is active terminates the prolog. The default is true.
 
 epilog
-   (optional) Table of configuration for a job-manager epilog. If configured,
-   the epilog is started at the job ``finish`` event, i.e. after all user
-   processes and job shells have terminated. The ``[job-manager.epilog]``
-   table supports the following keys:
+   (optional) Table of configuration for a job-manager epilog. If
+   configured, the epilog is started at the job ``finish`` event,
+   i.e. after all user processes and job shells have terminated, or after
+   prolog failure (in which case there will not be a job ``finish`` event.)
+   The ``[job-manager.epilog]`` table supports the following keys:
 
    command
       (optional) An array of strings specifying the command to run. If
