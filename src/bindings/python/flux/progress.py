@@ -303,6 +303,8 @@ class ProgressBar(Bottombar):
         part = int(length * len(style) * fraction) - fill * len(style)
         if part:
             fill += 1
+            if part >= len(style):
+                part = -1
             filled += style[part]
 
         #  Build the bar string as 'filled':
