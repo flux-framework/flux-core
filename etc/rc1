@@ -54,7 +54,9 @@ if test $RANK -eq 0; then
             rm -f ${dumplink}
         fi
     elif test "${backingmod}" != "none"; then
-        flux module load ${backingmod}
+        date > /tmp/timing
+        flux module load ${backingmod} preallocate=50000000000
+        date >> /tmp/timing
     fi
 fi
 

@@ -206,6 +206,7 @@ else
         --workdir=$WORKDIR \
         --volume=$TOP:$WORKDIR \
         --mount type=tmpfs,destination=/test/tmpfs-1m,tmpfs-size=1048576 \
+        --mount=type=tmpfs,destination=/test/tmpfs-5m,tmpfs-size=5242880 \
         ${PLATFORM} \
         $MOUNT_HOME_ARGS \
         -e PLATFORM \

@@ -54,6 +54,11 @@ const char *sql_checkpt_get = "SELECT value FROM checkpt"
                               "  WHERE key = ?1";
 const char *sql_checkpt_put = "REPLACE INTO checkpt (key,value) "
                               "  values (?1, ?2)";
+const char *sql_create_table_preallocate = "CREATE TABLE if not exists preallocate("
+                                       "  data BLOB"
+                                       ");";
+const char *sql_preallocate_fill = "INSERT INTO preallocate (data) values (?1)";
+const char *sql_drop_table_preallocate = "DROP TABLE preallocate";
 
 struct content_stats {
     tstat_t load;
@@ -68,6 +73,7 @@ struct content_sqlite {
     sqlite3_stmt *store_stmt;
     sqlite3_stmt *checkpt_get_stmt;
     sqlite3_stmt *checkpt_put_stmt;
+    sqlite3_stmt *preallocate_fill_stmt;
     flux_t *h;
     char *hashfun;
     int hash_size;
@@ -76,8 +82,21 @@ struct content_sqlite {
     struct content_stats stats;
     char *journal_mode;
     char *synchronous;
+    uint64_t preallocate_size;
+    bool preallocated_used;
     bool truncate;
 };
+
+/* By default, sqlite is compiled with a max blob of 1 billion
+ * bytes.  So we'll go with 896m blocks as the default largest
+ * blob we'll write out at a time.
+ */
+#define PREALLOCATE_BLOBSIZE (1024*1024*896)
+
+static void content_sqlite_closedb (struct content_sqlite *ctx);
+static int content_sqlite_opendb (struct content_sqlite *ctx,
+                                  const char *journal_mode,
+                                  const char *synchronous);
 
 static int set_config (char **conf, const char *val)
 {
@@ -226,11 +245,11 @@ error:
  * hash over 'data' is stored to 'hash'.
  * Returns hash size on success, -1 on error with errno set.
  */
-static int content_sqlite_store (struct content_sqlite *ctx,
-                                 const void *data,
-                                 int size,
-                                 void *hash,
-                                 int hash_len)
+static int sqlite_store (struct content_sqlite *ctx,
+                         const void *data,
+                         int size,
+                         void *hash,
+                         int hash_len)
 {
     int uncompressed_size = -1;
     int hash_size;
@@ -296,6 +315,52 @@ static int content_sqlite_store (struct content_sqlite *ctx,
 error:
     ERRNO_SAFE_WRAP (sqlite3_reset, ctx->store_stmt);
     return -1;
+}
+
+static int content_sqlite_store (struct content_sqlite *ctx,
+                                 const void *data,
+                                 int size,
+                                 void *hash,
+                                 int hash_len)
+{
+    int ret;
+    if ((ret = sqlite_store (ctx, data, size, hash, hash_len)) < 0) {
+        /* If we hit ENOSPC, have not tried to use pre_allocated
+         * already, pre-allocated space was reserved, and we are
+         * journaling in some fashion, turn off the journaling and try
+         * to use pre-allocated space instead
+         */
+        if (errno == ENOSPC
+            && !ctx->preallocated_used
+            && ctx->preallocate_size > 0
+            && (!streq (ctx->journal_mode, "OFF")
+                && !streq (ctx->journal_mode, "MEMORY"))) {
+            content_sqlite_closedb (ctx);
+            set_config (&ctx->journal_mode, "OFF");
+            /* to reduce corruption odds, require atleast FULL for
+             * synchronous */
+            if (!streq (ctx->synchronous, "EXTRA")
+                && !streq (ctx->synchronous, "FULL"))
+                set_config (&ctx->synchronous, "FULL");
+            if (content_sqlite_opendb (ctx,
+                                       ctx->journal_mode,
+                                       ctx->synchronous) < 0) {
+                /* return original errno */
+                errno = ENOSPC;
+                return -1;
+            }
+            flux_log (ctx->h,
+                      LOG_INFO,
+                      "sqlite preallocate reconfig journal_mode=%s synchronous=%s",
+                      ctx->journal_mode,
+                      ctx->synchronous);
+            ctx->preallocated_used = true;
+            /* try the store again */
+            return sqlite_store (ctx, data, size, hash, hash_len);
+        }
+        return -1;
+    }
+    return ret;
 }
 
 static void load_cb (flux_t *h,
@@ -493,22 +558,32 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
         if (ctx->store_stmt) {
             if (sqlite3_finalize (ctx->store_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize store_stmt");
+            ctx->store_stmt = NULL;
         }
         if (ctx->load_stmt) {
             if (sqlite3_finalize (ctx->load_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize load_stmt");
+            ctx->load_stmt = NULL;
         }
         if (ctx->checkpt_get_stmt) {
             if (sqlite3_finalize (ctx->checkpt_get_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize checkpt_get_stmt");
+            ctx->checkpt_get_stmt = NULL;
         }
         if (ctx->checkpt_put_stmt) {
             if (sqlite3_finalize (ctx->checkpt_put_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize checkpt_put_stmt");
+            ctx->checkpt_put_stmt = NULL;
+        }
+        if (ctx->preallocate_fill_stmt) {
+            if (sqlite3_finalize (ctx->preallocate_fill_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize preallocate_fill_stmt");
+            ctx->preallocate_fill_stmt = NULL;
         }
         if (ctx->db) {
             if (sqlite3_close (ctx->db) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite3_close");
+            ctx->db = NULL;
         }
         errno = saved_errno;
     }
@@ -613,22 +688,28 @@ error:
     json_decref (store_time);
 }
 
+static int content_sqlite_setup (struct content_sqlite *ctx, bool truncate)
+{
+    if (truncate)
+        (void)unlink (ctx->dbfile);
+    return 0;
+}
+
 /* Open the database file ctx->dbfile and set up the database.
  */
-static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
+static int content_sqlite_opendb (struct content_sqlite *ctx,
+                                  const char *journal_mode,
+                                  const char *synchronous)
 {
     int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
     char s[128];
     int count;
 
-    if (truncate)
-        (void)unlink (ctx->dbfile);
-
     if (sqlite3_open_v2 (ctx->dbfile, &ctx->db, flags, NULL) != SQLITE_OK) {
         log_sqlite_error (ctx, "opening %s", ctx->dbfile);
         goto error;
     }
-    snprintf (s, sizeof (s), "PRAGMA journal_mode=%s", ctx->journal_mode);
+    snprintf (s, sizeof (s), "PRAGMA journal_mode=%s", journal_mode);
     if (sqlite3_exec (ctx->db,
                       s,
                       NULL,
@@ -637,7 +718,7 @@ static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
         log_sqlite_error (ctx, "setting sqlite 'journal_mode' pragma");
         goto error;
     }
-    snprintf (s, sizeof (s), "PRAGMA synchronous=%s", ctx->synchronous);
+    snprintf (s, sizeof (s), "PRAGMA synchronous=%s", synchronous);
     if (sqlite3_exec (ctx->db,
                       s,
                       NULL,
@@ -728,6 +809,92 @@ static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
     return 0;
 error:
     set_errno_from_sqlite_error (ctx);
+    return -1;
+}
+
+static int content_sqlite_preallocate (struct content_sqlite *ctx)
+{
+    struct stat statbuf;
+    uint64_t preallocate_count;
+    int blobsize = PREALLOCATE_BLOBSIZE;
+    int save_errno;
+
+    if (!ctx->preallocate_size)
+        return 0;
+
+    /* We must pre-allocate via non-journaling modes, as journals may
+     * not allow us to pre-allocate sizes > 50% of the available
+     * space.  i.e. say you have a 10m mount, you can't write 6m to
+     * the journal and then expect sqlite to copy the 6m over to the
+     * db later.
+     */
+    if (content_sqlite_opendb (ctx, "OFF", "FULL") < 0)
+        return -1;
+
+    if (stat (ctx->dbfile, &statbuf) < 0) {
+        flux_log_error (ctx->h, "error getting db stats");
+        goto error;
+    }
+
+    if (statbuf.st_size >= ctx->preallocate_size)
+        goto out;
+
+    preallocate_count = ctx->preallocate_size - statbuf.st_size;
+
+    if (sqlite3_exec (ctx->db,
+                      sql_create_table_preallocate,
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "creating preallocate table");
+        goto error;
+    }
+
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_preallocate_fill,
+                            -1,
+                            &ctx->preallocate_fill_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing preallocate_fill stmt");
+        goto error;
+    }
+
+    while (preallocate_count > 0) {
+        if (preallocate_count < PREALLOCATE_BLOBSIZE)
+            blobsize = preallocate_count;
+        if (sqlite3_bind_zeroblob (ctx->preallocate_fill_stmt,
+                                   1,
+                                   blobsize) != SQLITE_OK) {
+            log_sqlite_error (ctx, "preallocate: binding zeroblob");
+            goto error;
+        }
+        if (sqlite3_step (ctx->preallocate_fill_stmt) != SQLITE_DONE
+            && sqlite3_errcode (ctx->db) != SQLITE_CONSTRAINT) {
+            log_sqlite_error (ctx, "preallocate: executing stmt");
+            goto error;
+        }
+        sqlite3_reset (ctx->preallocate_fill_stmt);
+        preallocate_count -= blobsize;
+    }
+
+    if (sqlite3_exec (ctx->db,
+                      sql_drop_table_preallocate,
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "dropping preallocate table");
+        goto error;
+    }
+
+out:
+    content_sqlite_closedb (ctx);
+    return 0;
+
+error:
+    set_errno_from_sqlite_error (ctx);
+    save_errno = errno;
+    content_sqlite_closedb (ctx);
+    errno = save_errno;
     return -1;
 }
 
@@ -854,13 +1021,15 @@ static int process_config (struct content_sqlite *ctx,
     flux_error_t error;
     const char *journal_mode = NULL;
     const char *synchronous = NULL;
+    int64_t preallocate_size = 0;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s}}",
+                          "{s?{s?s s?s s?I}}",
                           "content-sqlite",
                             "journal_mode", &journal_mode,
-                            "synchronous", &synchronous) < 0) {
+                            "synchronous", &synchronous,
+                            "preallocate", &preallocate_size) < 0) {
         flux_log_error (ctx->h, "%s", error.text);
         return -1;
     }
@@ -881,6 +1050,13 @@ static int process_config (struct content_sqlite *ctx,
         }
         if (set_config (&ctx->synchronous, synchronous) < 0)
             return -1;
+    }
+    if (preallocate_size) {
+        if (preallocate_size < 0) {
+            errno = EINVAL;
+            return -1;
+        }
+        ctx->preallocate_size = preallocate_size;
     }
     return 0;
 }
@@ -913,6 +1089,17 @@ static int process_args (struct content_sqlite *ctx,
         else if (streq ("truncate", argv[i])) {
             *truncate = true;
         }
+        else if (strstarts (argv[i], "preallocate=")) {
+            unsigned long tmp;
+            char *endptr;
+            errno = 0;
+            tmp = strtoul (argv[i]+12, &endptr, 10);
+            if (errno != 0 || *endptr != '\0' || !tmp) {
+                errno = EINVAL;
+                return -1;
+            }
+            ctx->preallocate_size = tmp;
+        }
         else {
             flux_log (ctx->h, LOG_ERR, "Unknown module option: '%s'", argv[i]);
             errno = EINVAL;
@@ -936,7 +1123,11 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     if (process_args (ctx, argc, argv, &truncate) < 0)
         goto done;
-    if (content_sqlite_opendb (ctx, truncate) < 0)
+    if (content_sqlite_setup (ctx, truncate) < 0)
+        goto done;
+    if (content_sqlite_preallocate (ctx) < 0)
+        goto done;
+    if (content_sqlite_opendb (ctx, ctx->journal_mode, ctx->synchronous) < 0)
         goto done;
     if (content_register_service (h, "content-backing") < 0)
         goto done;

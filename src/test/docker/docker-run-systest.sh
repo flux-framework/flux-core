@@ -117,6 +117,7 @@ checks_group "Launching system instance container $NAME" \
     --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
     --tmpfs=/run \
     --mount=type=tmpfs,destination=/test/tmpfs-1m,tmpfs-size=1048576 \
+    --mount=type=tmpfs,destination=/test/tmpfs-5m,tmpfs-size=5242880 \
     --cap-add SYS_PTRACE \
     --name=flux-system-test-$$ \
     --network=host \
