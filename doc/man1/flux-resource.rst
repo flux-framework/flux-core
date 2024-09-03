@@ -174,7 +174,8 @@ status
 Show system view of resources.  Valid states in the system view are:
 
 avail
-  available for scheduling when up
+  available for scheduling when up. This includes all nodes that are
+  not excluded, drained, or torpid.
 
 exclude
   excluded by configuration
@@ -187,6 +188,9 @@ drained
 
 drain
   shorthand for :option:`drained,draining`
+
+allocated
+  node is currently allocated to a job or housekeeping
 
 torpid
   node has been unresponsive for a period of time and is temporarily
@@ -363,8 +367,8 @@ subcommands:
 
 **state**
    State of node(s): "avail", "exclude", "drain", "draining", "drained",
-   "torpid". If the set of resources is offline, an asterisk suffix is
-   appended to the state, e.g. "avail*".
+   "torpid", "allocated". If the set of resources is offline, an asterisk
+   suffix is appended to the state, e.g. "avail*".
 
 **statex**
    Like **state**, but exclude the asterisk for offline resources.

@@ -286,7 +286,7 @@ def statuslines(rstatus, states, formatter, include_online=True, include_offline
         combine=lambda line, arg: line.update(arg.ranks, arg.hostlist),
     )
     states = set(states)
-    for state in ["avail", "exclude", "torpid"]:
+    for state in ["avail", "exclude", "allocated", "torpid"]:
         if not states & {state, "all"}:
             continue
         for online in (True, False):
@@ -368,6 +368,7 @@ def status(args):
         "draining",
         "drained",
         "torpid",
+        "allocated",
     ]
     default_states = "avail,exclude,draining,drained,torpid"
 
