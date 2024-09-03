@@ -152,6 +152,10 @@ test_expect_success 'perilog: load a basic per-rank prolog config' '
 	[job-manager.prolog]
 	per-rank = true
 	command = [ "sleep", "5" ]
+	[job-manager.epilog]
+	per-rank = true
+	command = [ "sleep", "30" ]
+	cancel-on-exception = true
 	EOF
 	flux jobtap query perilog.so | jq .conf.prolog
 '
@@ -167,10 +171,26 @@ test_expect_success 'perilog: prolog runs on all 4 ranks of a 4 node job' '
 		| jq -e ".procs.$jobid.active == 4" &&
 	flux cancel $jobid &&
 	flux jobtap query perilog.so &&
-	flux job wait-event $jobid clean
+	flux job wait-event $jobid prolog-finish
 '
 test_expect_success 'perilog: canceled prolog does not drain ranks' '
 	no_drained_ranks
+'
+test_expect_success 'perilog: epilog runs even if prolog is canceled' '
+	flux dmesg -H &&
+	flux job wait-event -vHt 30 $jobid epilog-start &&
+	flux jobtap query perilog.so | jq .procs &&
+	flux jobtap query perilog.so \
+		| jq -e ".procs.$jobid.name == \"epilog\"" &&
+	flux jobtap query perilog.so \
+		| jq -e ".procs.$jobid.active_ranks == \"0-3\"" &&
+	flux jobtap query perilog.so \
+		| jq -e ".procs.$jobid.total == 4" &&
+	flux jobtap query perilog.so \
+		| jq -e ".procs.$jobid.active == 4" &&
+	flux cancel $jobid &&
+	flux jobtap query perilog.so | jq &&
+	flux job wait-event -Hvt 30 $jobid clean
 '
 test_expect_success 'perilog: signaled prolog is reported' '
 	flux config load <<-EOF &&
