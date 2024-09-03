@@ -37,7 +37,7 @@ class ResourceStatus:
     Attributes:
         nodelist (Hostlist): rank ordered set of hostnames
         all (IDset): idset of all known ranks
-        avail (IDset): idset of ranks not excluded or drained
+        avail (IDset): idset of ranks not excluded, drained, or torpid
         offline (IDset): idset of ranks currently offline
         online (IDset): idset of ranks currently online
         exclude (IDset): idset of ranks excluded by configuration
