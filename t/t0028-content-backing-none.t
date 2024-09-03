@@ -88,7 +88,7 @@ test_expect_success 'content.backing-module input of none works' '
         flux start -Scontent.backing-module=none true
 '
 
-test_expect_success 'removedcontent module' '
+test_expect_success 'remove content module' '
 	flux exec flux module remove content
 '
 
