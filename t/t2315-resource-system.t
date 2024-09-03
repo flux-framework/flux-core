@@ -51,6 +51,57 @@ test_expect_success 'invalid R causes instance to fail with error' '
 		flux kvs get resource.R >bad/R.out &&
 	grep "error parsing R: invalid version=42" bad/logfile
 '
+test_expect_success 'missing scheduling key causes instance to fail with error' '
+	mkdir sched.enoent &&
+	flux R encode -r 0-1 -c 0-1 > sched.enoent/R &&
+	cat <<-EOF >sched.enoent/sched-missing.toml &&
+	[resource]
+	path = "$(pwd)/sched.enoent/R"
+	scheduling = "missing"
+	EOF
+	test_must_fail flux start -s2 \
+	       -o,--config-path=$(pwd)/sched.enoent \
+	       -o,,-Slog-filename=sched.enoent/logfile \
+	       flux kvs get resource.R >sched.enoent/R.out &&
+	grep -i "resource.scheduling:.*no such" sched.enoent/logfile
+'
+
+test_expect_success 'resource.scheduling key amends resource.path' '
+	mkdir sched.good &&
+	flux R encode -r 0-1 -c 0-1 > sched.good/R &&
+	cat >sched.good/sched.json <<-EOF &&
+	{"test": 1}
+	EOF
+	cat >sched.good/resource.toml <<-EOF &&
+	[resource]
+	path = "$(pwd)/sched.good/R"
+	scheduling = "$(pwd)/sched.good/sched.json"
+	EOF
+	flux start -s2 \
+	       -o,--config-path=$(pwd)/sched.good \
+	       -o,,-Slog-filename=sched.good/logfile \
+	       flux kvs get resource.R >sched.good/R.out &&
+	jq -S < sched.good/R.out &&
+	jq -e < sched.good/R.out ".scheduling == {\"test\": 1}"
+'
+
+test_expect_success 'invalid scheduling key causes instance to fail with error' '
+	mkdir sched.bad &&
+	flux R encode -r 0-1 -c 0-1 > sched.bad/R &&
+	cat >sched.bad/sched.json <<-EOF &&
+	foo
+	EOF
+	cat >sched.bad/resource.toml <<-EOF &&
+	[resource]
+	path = "$(pwd)/sched.bad/R"
+	scheduling = "$(pwd)/sched.bad/sched.json"
+	EOF
+	test_must_fail flux start -s2 \
+	       -o,--config-path=$(pwd)/sched.bad \
+	       -o,,-Slog-filename=sched.bad/logfile \
+	       flux kvs get resource.R >sched.bad/R.out &&
+	grep "error loading resource.scheduling" sched.bad/logfile
+'
 
 test_expect_success 'missing ranks in R are drained' '
 	mkdir missing &&
@@ -188,6 +239,27 @@ test_expect_success 'bad resource.config causes instance failure' '
 		flux resource list -s up > ${name}/output 2>&1 &&
 	test_debug "cat ${name}/output" &&
 	grep "no hosts configured" ${name}/output
+'
+
+test_expect_success 'resource.scheduling key amends [resource.config]' '
+	name=sched+config &&
+	mkdir -p $name &&
+	cat >${name}/sched.json <<-EOF &&
+	{ "foo": true }
+	EOF
+	cat >${name}/resource.toml <<-EOF &&
+	[resource]
+	noverify = true
+	scheduling = "$(pwd)/${name}/sched.json"
+	[[resource.config]]
+	hosts = "foo[0-10]"
+	cores = "0-3"
+	EOF
+	flux start -s 1 \
+		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		flux kvs get resource.R > ${name}/R.json &&
+	jq -S < ${name}/R.json &&
+	jq -e < ${name}/R.json ".scheduling.foo == true"
 '
 
 test_done

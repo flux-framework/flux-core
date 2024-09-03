@@ -848,6 +848,7 @@ int cmd_parse_config (optparse_t *p, int argc, char **argv)
     flux_error_t error;
     json_t *o = NULL;
     const char *path = NULL;
+    const char *scheduling = NULL;
     struct rlist *rl = NULL;
     flux_conf_t *conf;
 
@@ -855,10 +856,11 @@ int cmd_parse_config (optparse_t *p, int argc, char **argv)
         log_msg_exit ("flux_conf_parse: %s", error.text);
 
     if (flux_conf_unpack (conf, &error,
-                          "{s:{s?o s?s}}",
+                          "{s:{s?o s?s s?s}}",
                           "resource",
                             "config", &o,
-                            "path", &path) < 0)
+                            "path", &path,
+                            "scheduling", &scheduling) < 0)
         log_msg_exit ("Config file error: %s", error.text);
 
     if (!o) {
@@ -879,6 +881,19 @@ int cmd_parse_config (optparse_t *p, int argc, char **argv)
     else {
         if (!(rl = rlist_from_config (o, &error)))
             log_msg_exit ("Config file error: %s", error.text);
+    }
+    if (scheduling) {
+        json_error_t e;
+        json_t *sched;
+
+        if (!(sched = json_load_file (scheduling, 0, &e))) {
+            log_msg_exit ("resource.scheduling: %s: %s on line %d",
+                          scheduling,
+                          e.text,
+                          e.line);
+        }
+        json_decref (rl->scheduling);
+        rl->scheduling = sched;
     }
 
     rlist_puts (rl);

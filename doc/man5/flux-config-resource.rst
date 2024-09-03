@@ -54,6 +54,10 @@ config
      hosts = "test[90-100]"
      properties = ["debug"]
 
+scheduling
+   (optional) Set the path to a file stored as JSON which will be used
+   to amend the configured R with a RFC 20 ``scheduling`` key.
+
 exclude
    (optional) A string value that defines one or more nodes to withhold
    from scheduling, either in RFC 22 idset form, or in RFC 29 hostlist form.

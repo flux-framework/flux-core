@@ -383,5 +383,33 @@ test_expect_success 'flux R parse-config fails when resource.path = missing R' '
 	rm -f R.path &&
 	test_must_fail flux R parse-config conf
 '
-
+test_expect_success 'flux R parse-config works (+scheduling)' '
+	mkdir -p conf3 &&
+	jq -n ".sched = true" > conf3/sched.json &&
+	cat <<-EOF >conf3/resource.toml &&
+	resource.scheduling = "$(pwd)/conf3/sched.json"
+	[[resource.config]]
+	hosts = "foo[0-2]"
+	cores = "0-1"
+	[[resource.config]]
+	hosts = "foo2"
+	gpus = "0"
+	EOF
+	flux R parse-config conf3 > conf+sched.json &&
+	jq -e <conf+sched.json ".scheduling.sched == true"
+'
+test_expect_success 'flux R parse-config detects bad scheduling key' '
+	mkdir -p conf4 &&
+	echo foo > conf4/sched.json &&
+	cat <<-EOF >conf4/resource.toml &&
+	resource.scheduling = "$(pwd)/conf4/sched.json"
+	[[resource.config]]
+	hosts = "foo[0-2]"
+	cores = "0-1"
+	[[resource.config]]
+	hosts = "foo2"
+	gpus = "0"
+	EOF
+	test_must_fail flux R parse-config conf4
+'
 test_done

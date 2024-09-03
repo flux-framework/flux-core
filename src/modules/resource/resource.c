@@ -70,6 +70,7 @@ static int parse_config (struct resource_ctx *ctx,
     flux_error_t error;
     const char *exclude  = NULL;
     const char *path = NULL;
+    const char *scheduling_path = NULL;
     int noverify = 0;
     int norestrict = 0;
     int no_update_watch = 0;
@@ -78,9 +79,10 @@ static int parse_config (struct resource_ctx *ctx,
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?o s?s s?b s?b s?b !}}",
+                          "{s?{s?s s?s s?o s?s s?b s?b s?b !}}",
                           "resource",
                             "path", &path,
+                            "scheduling", &scheduling_path,
                             "config", &config,
                             "exclude", &exclude,
                             "norestrict", &norestrict,
@@ -104,24 +106,37 @@ static int parse_config (struct resource_ctx *ctx,
         rlist_destroy (rl);
     }
     else if (path) {
-        FILE *f;
         json_error_t e;
-
-        if (!(f = fopen (path, "r"))) {
-            errprintf (errp,
-                       "%s: %s",
-                       path,
-                       strerror (errno));
-            return -1;
-        }
-        o = json_loadf (f, 0, &e);
-        fclose (f);
-        if (!o) {
+        if (!(o = json_load_file (path, 0, &e))) {
             errprintf (errp,
                        "%s: %s on line %d",
                        e.source,
                        e.text,
                        e.line);
+            return -1;
+        }
+    }
+    if (scheduling_path) {
+        json_t *scheduling;
+        json_error_t e;
+        if (!o) {
+            errprintf (errp,
+                       "resource.scheduling requires "
+                       "resource.path or [resource.config]");
+            return -1;
+        }
+        if (!(scheduling = json_load_file (scheduling_path, 0, &e))) {
+            errprintf (errp,
+                       "error loading resource.scheduling: %s on line %d",
+                       e.text,
+                       e.line);
+            json_decref (o);
+            return -1;
+        }
+        if (json_object_set_new (o, "scheduling", scheduling) < 0) {
+            errprintf (errp, "failed to set scheduling key in R");
+            json_decref (o);
+            json_decref (scheduling);
             return -1;
         }
     }
