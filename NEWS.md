@@ -1,3 +1,47 @@
+flux-core version 0.66.0 - 2024-09-03
+-------------------------------------
+
+## New Features
+ * support display of `allocated` nodes in `flux resource status` (#6253)
+ * support `resource.scheduling` in config TOML to amend configured R with
+   a scheduling key (#6252)
+ * perilog: support direct execution of prolog/epilog on job ranks for
+   better performance (#6235)
+ * flux-hostlist: change default source from `local` to `stdin` (#6246)
+ * support short option `-S` for `--setattr=` in job submission commands
+   (#6238)
+ * content-sqlite: set sqlite pragmas with flux-config (#6222)
+ * content-sqlite: add sqlite config to module stats (#6221)
+ * content: allow content.flush to return errors (#6175)
+ * flux-jobs: add `-i, --include=HOSTS|RANKS` option (#6209)
+ * add flux module trace (#6203, #6206)
+ * include offline nodes in flux overlay errors output (#6201)
+
+## Fixes
+ * run epilog even if job prolog is failed or is canceled (#6249)
+ * progress: ensure we don't access outside style (#6250)
+ * housekeeping: deprecate use-systemd-config option (#6241)
+ * Fix handling of `--` used to separate options from command in `flux
+   submit`, `run`, and `batch` (#6234)
+ * libsubprocess: minor improvements to bulk-exec (#6233)
+ * update feasibility RPCs to conform to RFC 27 (#6223)
+ * libev: fix memory fence on i386 under valgrind (#6224)
+ * job-manager: skip housekeeping for alloc-bypass jobs (#6219)
+ * cron: use `posix_spawn()` for cron tasks when possible (#6214)
+ * kvs: correct code logic about what is an append (#6210)
+ * avoid idset leak when nodes leave the broker.online group (#6198)
+ * kvs: correct transaction-merge option parsing (#6204)
+
+## Cleanup
+ * content-sqlite: misc cleanup (#6220)
+
+## CI/Testsuite/Documentation
+ * doc: add dependency example (#6226)
+ * mergify: use updated keys before deprecation bites (#6225)
+ * testsuite: fix racy flux job attach test (#6212)
+ * matrix: remove fedora40 arm again (#6200)
+
+
 flux-core version 0.65.0 - 2024-08-06
 -------------------------------------
 
