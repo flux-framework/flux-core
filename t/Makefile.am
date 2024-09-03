@@ -184,6 +184,7 @@ TESTSCRIPTS = \
 	t2351-resource-status-input.t \
 	t2352-resource-cmd-config.t \
 	t2353-resource-eventlog.t \
+	t2354-resource-status.t \
 	t2400-job-exec-test.t \
 	t2401-job-exec-hello.t \
 	t2402-job-exec-dummy.t \
