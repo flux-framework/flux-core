@@ -16,7 +16,7 @@ test_expect_success 'loaded content module' '
 '
 
 test_expect_success 'checkpoint-get fails, no checkpoints yet' '
-        checkpoint_put foo bar
+        test_must_fail checkpoint_get foo
 '
 
 test_expect_success 'checkpoint-put foo w/ rootref bar' '
