@@ -31,6 +31,18 @@ test_expect_success 'content.backing-module input of none works' '
         flux start -Scontent.backing-module=none true
 '
 
+test_expect_success 'checkpoint-get fails, backing store is none' '
+        test_must_fail checkpoint_get foo
+'
+
+test_expect_success 'checkpoint-put fails, backing store is none' '
+        test_must_fail checkpoint_put foo bar
+'
+
+test_expect_success 'flux-dump --checkpoint with backing store is none' '
+        test_must_fail flux dump --checkpoint foo.tar
+'
+
 test_expect_success 'remove content module' '
 	flux exec flux module remove content
 '
