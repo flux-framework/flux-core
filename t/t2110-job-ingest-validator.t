@@ -167,4 +167,22 @@ test_expect_success 'job-ingest: require-instance validator plugin works' '
 	test_must_fail flux submit hostname &&
 	test_must_fail flux submit flux getattr rank
 '
+test_expect_success 'job-ingest: require-instance min size can be configured' '
+	ARGS="--require-instance-minnodes=2,--require-instance-mincores=4" &&
+	ingest_module reload validator-plugins=require-instance \
+		validator-args="$ARGS" &&
+	flux submit -N1 hostname &&
+	flux submit -n2 hostname &&
+	test_must_fail flux submit -N4 hostname &&
+	test_must_fail flux submit -n4 hostname
+'
+test_expect_success 'job-ingest: require-instance min size can be for nodes only' '
+	ARGS="--require-instance-minnodes=2" &&
+	ingest_module reload validator-plugins=require-instance \
+		validator-args="$ARGS" &&
+	flux submit -N1 hostname &&
+	flux submit -n2 hostname &&
+	test_must_fail flux submit -N4 hostname &&
+	test_must_fail flux submit -n32 hostname
+'
 test_done
