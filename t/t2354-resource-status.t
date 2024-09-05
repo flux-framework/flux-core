@@ -39,4 +39,30 @@ test_expect_success 'flux-resource status: allocated set is not displayed by def
 test_expect_success 'flux-resource status: allocated nodes can be displayed' '
 	flux resource status -s allocated | grep allocated
 '
+test_expect_success 'cancel running jobs' '
+	flux cancel --all &&
+	flux queue idle
+'
+test_expect_success 'flux-resource status shows housekeeping by default' '
+	flux config load <<-EOF &&
+	[job-manager.housekeeping]
+	release-after = "0"
+	command = [ "sleep", "inf" ]
+	EOF
+	flux run -N4 hostname &&
+	test_debug "flux housekeeping list" &&
+	test_debug "flux resource status" &&
+	flux resource status | grep housekeeping &&
+	test $(flux resource status -s housekeeping -no {nnodes}) -eq 4
+'
+test_expect_success 'flux-resource status works after partial release' '
+	flux housekeeping kill --targets=0-1 &&
+	test_debug "flux housekeeping list" &&
+	test_debug "flux resource status" &&
+	flux resource status | grep housekeeping &&
+	test $(flux resource status -s housekeeping -no {ranks}) = "2-3"
+'
+test_expect_success 'stop housekeeping tasks' '
+	flux housekeeping kill --all
+'
 test_done
