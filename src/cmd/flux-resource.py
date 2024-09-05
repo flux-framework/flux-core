@@ -37,12 +37,12 @@ class FluxResourceConfig(UtilConfig):
     builtin_formats["status"] = {
         "default": {
             "description": "Default flux-resource status format string",
-            "format": "{state:>10} {color_up}{up:>2}{color_off} {nnodes:>6} {nodelist}",
+            "format": "{state:>12} {color_up}{up:>2}{color_off} {nnodes:>6} {nodelist}",
         },
         "long": {
             "description": "Long flux-resource status format string",
             "format": (
-                "{state:>10} {color_up}{up:>2}{color_off} "
+                "{state:>12} {color_up}{up:>2}{color_off} "
                 "{nnodes:>6} {reason:<30.30+} {nodelist}"
             ),
         },
@@ -286,7 +286,7 @@ def statuslines(rstatus, states, formatter, include_online=True, include_offline
         combine=lambda line, arg: line.update(arg.ranks, arg.hostlist),
     )
     states = set(states)
-    for state in ["avail", "exclude", "allocated", "torpid"]:
+    for state in ["avail", "exclude", "allocated", "torpid", "housekeeping"]:
         if not states & {state, "all"}:
             continue
         for online in (True, False):
@@ -369,8 +369,9 @@ def status(args):
         "drained",
         "torpid",
         "allocated",
+        "housekeeping",
     ]
-    default_states = "avail,exclude,draining,drained,torpid"
+    default_states = "avail,exclude,draining,drained,torpid,housekeeping"
 
     headings = {
         "state": "STATE",
