@@ -42,25 +42,35 @@ class ResourceStatus:
         online (IDset): idset of ranks currently online
         exclude (IDset): idset of ranks excluded by configuration
         torpid (IDset): idset of torpid ranks
+        housekeeping (IDset): idset of ranks in housekeeping
         allocated (IDset): idset of ranks with one or more jobs
         drained (IDset): idset of ranks drained and not allocated
         draining (IDset): idset of ranks drained and allocated
         drain_info (list): list of DrainInfo object for drain ranks
     """
 
-    def __init__(self, rstatus=None, allocated_ranks=None):
+    def __init__(self, rstatus=None, allocated_ranks=None, housekeeping_ranks=None):
         # Allow "empty" ResourceStatus object to be created:
         if rstatus is None:
             rstatus = dict(
-                R=None, offline="", online="", exclude="", torpid="", drain={}
+                R=None,
+                offline="",
+                online="",
+                exclude="",
+                torpid="",
+                housekeeping="",
+                drain={},
             )
         if allocated_ranks is None:
             allocated_ranks = IDset()
+        if housekeeping_ranks is None:
+            housekeeping_ranks = IDset()
 
         self.rstatus = rstatus
         self.rset = ResourceSet(rstatus["R"])
         self.nodelist = self.rset.nodelist
         self.allocated_ranks = allocated_ranks
+        self.housekeeping_ranks = housekeeping_ranks
 
         self._recalculate()
 
@@ -103,6 +113,9 @@ class ResourceStatus:
 
         # allocated: online and allocated by scheduler
         self.allocated = self.allocated_ranks
+
+        # housekeeping: ranks in housekeeping. May overlap with avail/allocated
+        self.housekeeping = self.housekeeping_ranks
 
         # If include_ranks was provided, filter all idsets to only those
         # that intersect the provided idset
@@ -175,10 +188,12 @@ class ResourceStatusRPC:
         self.rpcs = [
             RPC(handle, "resource.status", nodeid=0, flags=0),
             resource_list(handle),
+            RPC(handle, "job-manager.stats-get", nodeid=0, flags=0),
         ]
         self.rlist = None
         self.rstatus = None
         self.allocated_ranks = None
+        self.housekeeping_ranks = None
 
     def get_status(self):
         if self.rstatus is None:
@@ -194,12 +209,26 @@ class ResourceStatusRPC:
                 self.allocated_ranks = IDset()
         return self.allocated_ranks
 
+    def get_housekeeping_ranks(self):
+        if self.housekeeping_ranks is None:
+            self.housekeeping_ranks = IDset()
+            try:
+                stats = self.rpcs[2].get()
+                for jobid, info in stats["housekeeping"]["running"].items():
+                    self.housekeeping_ranks.add(info["allocated"])
+            except EnvironmentError:
+                # use empty housekeeping_ranks from above
+                pass
+        return self.housekeeping_ranks
+
     def get(self):
         """
         Return a ResourceStatus object corresponding to the request
         Blocks until all RPCs are fulfilled
         """
-        return ResourceStatus(self.get_status(), self.get_allocated_ranks())
+        return ResourceStatus(
+            self.get_status(), self.get_allocated_ranks(), self.get_housekeeping_ranks()
+        )
 
 
 def resource_status(flux_handle):
