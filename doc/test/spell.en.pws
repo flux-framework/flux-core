@@ -920,3 +920,8 @@ DEEPBIND
 PRELOAD
 RTLD
 dlopened
+ne
+oneshot
+peridir
+periname
+templated
