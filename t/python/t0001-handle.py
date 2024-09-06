@@ -88,6 +88,30 @@ class TestHandle(unittest.TestCase):
         rank = self.f.get_rank()
         self.assertEqual(attr_rank, rank)
 
+    def test_conf_get(self):
+        # Works with empty config
+        self.assertEqual(self.f.conf_get(), {})
+
+        # load test config
+        testconf = {"a": {"b": {"c": 42}, "foo": "bar"}}
+        self.f.rpc("config.load", testconf).get()
+
+        # conf_get() still returns old config
+        self.assertEqual(self.f.conf_get(), {})
+
+        # conf_get() with update=True returns new config
+        self.assertEqual(self.f.conf_get(update=True), testconf)
+
+        # conf_get() with key works
+        self.assertEqual(self.f.conf_get("a"), testconf["a"])
+        self.assertEqual(self.f.conf_get("a.b"), testconf["a"]["b"])
+        self.assertEqual(self.f.conf_get("a.b.c"), testconf["a"]["b"]["c"])
+        self.assertEqual(self.f.conf_get("a.foo"), testconf["a"]["foo"])
+
+        # conf_get() works with default
+        self.assertIsNone(self.f.conf_get("a.baz"))
+        self.assertEqual(self.f.conf_get("a.baz", default=42), 42)
+
 
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
