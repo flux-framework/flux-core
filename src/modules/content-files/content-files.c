@@ -227,8 +227,7 @@ void checkpoint_get_cb (flux_t *h,
     if (flux_respond_pack (h,
                            msg,
                            "{s:O}",
-                           "value",
-                           o) < 0)
+                           "value", o) < 0)
         flux_log_error (h, "error responding to checkpoint-get request");
     free (data);
     json_decref (o);
@@ -257,10 +256,8 @@ void checkpoint_put_cb (flux_t *h,
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:s s:o}",
-                             "key",
-                             &key,
-                             "value",
-                             &o) < 0)
+                             "key", &key,
+                             "value", &o) < 0)
         goto error;
     if (!(value = json_dumps (o, JSON_COMPACT))) {
         errstr = "failed to encode checkpoint value";
