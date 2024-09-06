@@ -1218,7 +1218,7 @@ static int get_output_limit (struct shell_output *out)
         }
     }
     if (parse_size (out->kvs_limit_string, &size) < 0) {
-        shell_log_errno ("Invalid KVS output.limit=%s", out->kvs_limit_string);
+        shell_log ("Invalid KVS output.limit=%s", out->kvs_limit_string);
         return -1;
     }
     out->kvs_limit_bytes = (size_t) size;
