@@ -19,7 +19,7 @@ from flux.core.watchers import FDWatcher, SignalWatcher, TimerWatcher
 from flux.future import Future
 from flux.message import Message, MessageWatcher
 from flux.rpc import RPC
-from flux.util import encode_payload, encode_topic
+from flux.util import encode_payload, encode_topic, get_treedict
 from flux.wrapper import Wrapper
 
 
@@ -70,6 +70,7 @@ class Flux(Wrapper):
 
         self.aux_txn = None
         self._active_watchers = set()
+        self._cached_config = None
 
     @classmethod
     def reactor_running(cls):
@@ -276,6 +277,31 @@ class Flux(Wrapper):
 
     def attr_get(self, attr_name):
         return self.flux_attr_get(attr_name).decode("utf-8")
+
+    def conf_get(self, key=None, default=None, update=False):
+        """
+        Access Flux configuration via this handle. On first use, the
+        configuration is fetched synchronously from the broker, then
+        cached in this :obj:`Flux` object. To force the configuration
+        to be updated, pass ``update=True``.
+
+        Example:
+        >>> print(handle.conf_get("tbon.topo", default="kary:32"))
+
+        Args:
+            key (str): key to get from configuration in dotted-string
+                form, e.g. ``tbon.topo``. If None, then the entire
+                config will be returned. Default is None.
+            default (obj): value to return if ``key`` is not set.
+                (default=None)
+            update (bool): Force an update of the internal conf dict.
+                (default=False)
+        """
+        if update or self._cached_config is None:
+            self._cached_config = self.rpc("config.get").get()
+        if key is not None:
+            return get_treedict(self._cached_config, key, default)
+        return self._cached_config
 
     def reactor_run(self, reactor=None, flags=0):
         """
