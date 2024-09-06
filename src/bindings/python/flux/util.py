@@ -175,6 +175,23 @@ def help_formatter(argwidth=40, raw_description=False):
     return lambda prog: FluxHelpFormatter(prog, max_help_position=argwidth)
 
 
+def get_treedict(in_dict, key, default=None):
+    """
+    get_treedict(d, "a.b.c" [,default=None]) is like:
+    >>> try:
+    >>>     return d[a][b][c]
+    >>> except KeyError:
+    >>>     return default
+    """
+    if "." in key:
+        next_key, rest = key.split(".", 1)
+        try:
+            return get_treedict(in_dict[next_key], rest, default)
+        except KeyError:
+            return default
+    return in_dict.get(key, default)
+
+
 def set_treedict(in_dict, key, val):
     """
     set_treedict(d, "a.b.c", 42) is like d[a][b][c] = 42
