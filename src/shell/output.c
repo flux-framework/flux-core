@@ -62,7 +62,9 @@
 #include "builtins.h"
 #include "log.h"
 
-#define MULTIUSER_OUTPUT_LIMIT "10M"
+#define SINGLEUSER_OUTPUT_LIMIT "1G"
+#define MULTIUSER_OUTPUT_LIMIT  "10M"
+#define OUTPUT_LIMIT_MAX        1073741824
 
 enum {
     FLUX_OUTPUT_TYPE_TERM = 1,
@@ -330,9 +332,6 @@ static bool check_kvs_output_limit (struct shell_output *out,
     const char *stream;
     size_t *bytesp;
     size_t prev;
-
-    if (out->kvs_limit_bytes == 0)
-        return false;
 
     if (is_stdout) {
         stream = "stdout";
@@ -1183,11 +1182,11 @@ static int get_output_limit (struct shell_output *out)
     json_t *val = NULL;
     uint64_t size;
 
-    /*  Set default to unlimited (0) for single-user instances,
+    /*  For single-user instances, cap at reasonable size limit.
      *  O/w use the default multiuser output limit:
      */
     if (out->shell->broker_owner == getuid())
-        out->kvs_limit_string = "0";
+        out->kvs_limit_string = SINGLEUSER_OUTPUT_LIMIT;
     else
         out->kvs_limit_string = MULTIUSER_OUTPUT_LIMIT;
 
@@ -1200,16 +1199,19 @@ static int get_output_limit (struct shell_output *out)
     }
     if (val != NULL) {
         if (json_is_integer (val)) {
-            out->kvs_limit_bytes = (size_t) json_integer_value (val);
-            if (out->kvs_limit_bytes > 0) {
-                /*  Need a string representation of limit for errors
-                */
-                char *s = strdup (encode_size (out->kvs_limit_bytes));
-                if (s && flux_shell_aux_set (out->shell, NULL, s, free) < 0)
-                    free (s);
-                else
-                    out->kvs_limit_string = s;
+            json_int_t limit = json_integer_value (val);
+            if (limit <= 0 || limit > OUTPUT_LIMIT_MAX) {
+                shell_log ("Invalid KVS output.limit=%ld", (long) limit);
+                return -1;
             }
+            out->kvs_limit_bytes = (size_t) limit;
+            /*  Need a string representation of limit for errors
+             */
+            char *s = strdup (encode_size (out->kvs_limit_bytes));
+            if (s && flux_shell_aux_set (out->shell, NULL, s, free) < 0)
+                free (s);
+            else
+                out->kvs_limit_string = s;
             return 0;
         }
         if (!(out->kvs_limit_string = json_string_value (val))) {
@@ -1217,7 +1219,9 @@ static int get_output_limit (struct shell_output *out)
             return -1;
         }
     }
-    if (parse_size (out->kvs_limit_string, &size) < 0) {
+    if (parse_size (out->kvs_limit_string, &size) < 0
+        || size == 0
+        || size > OUTPUT_LIMIT_MAX) {
         shell_log ("Invalid KVS output.limit=%s", out->kvs_limit_string);
         return -1;
     }
