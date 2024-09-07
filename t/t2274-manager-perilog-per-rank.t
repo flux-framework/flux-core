@@ -34,6 +34,21 @@ test_expect_success 'perilog: query shows no prolog/epilog config' '
 	flux jobtap query perilog.so \
 		| jq -e ".conf.prolog == {} and .conf.epilog == {}"
 '
+test_expect_success 'perilog: default timeouts are expected values' '
+	flux config load <<-EOF &&
+	[job-manager.prolog]
+	command = ["prolog"]
+	per-rank = true
+	[job-manager.epilog]
+	command = ["epilog"]
+	per-rank = true
+	EOF
+	flux jobtap query perilog.so | jq .conf &&
+	flux jobtap query perilog.so \
+		| jq -e ".conf.prolog.timeout == 1800.0" &&
+	flux jobtap query perilog.so \
+		| jq -e ".conf.epilog.timeout == 0.0"
+'
 test_expect_success 'perilog: timeout can be set to 0' '
 	flux config load <<-EOF &&
 	[job-manager.prolog]
