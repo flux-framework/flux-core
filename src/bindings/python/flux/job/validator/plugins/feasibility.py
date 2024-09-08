@@ -31,7 +31,7 @@ class Validator(ValidatorPlugin):
 
     def validate(self, args):
         try:
-            args.flux.rpc(self.service_name, args.jobinfo).get()
+            self.flux.rpc(self.service_name, args.jobinfo).get()
         except OSError as err:
             if err.errno == errno.ENOSYS:
                 #  Treat ENOSYS as success
