@@ -88,10 +88,21 @@ class ValidatorJobInfo:
 
 
 class ValidatorPlugin(ABC):  # pragma: no cover
-    """Base class for Validator Plugins"""
+    """Base class for Validator Plugins
+
+    Attributes:
+        flux (:obj:`flux.Flux`): on-demand per-plugin (per-thread) Flux
+            handle.
+    """
 
     def __init__(self, parser):
         """Initialize a ValidatorPlugin"""
+
+    @property
+    def flux(self):
+        if not hasattr(self, "_flux"):
+            self._flux = flux.Flux()
+        return self._flux
 
     def configure(self, args):
         """Configure a ValidatorPlugin. Run after argparse.parse_args()
