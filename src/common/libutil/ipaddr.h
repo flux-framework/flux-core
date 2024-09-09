@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _UTIL_GETIP_H
-#define _UTIL_GETIP_H
+#ifndef _UTIL_IPADDR_H
+#define _UTIL_IPADDR_H
 
 #include <sys/socket.h> // for AF_INET, AF_INET6
 #include "src/common/libflux/types.h" // for flux_error_t
@@ -49,7 +49,7 @@ int ipaddr_getprimary (char *buf,
                        const char *interface,
                        flux_error_t *error);
 
-#endif /* !_UTIL_GETIP_H */
+#endif /* !_UTIL_IPADDR_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
