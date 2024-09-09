@@ -19,6 +19,8 @@ noinst_LTLIBRARIES = libutil.la
 libutil_la_SOURCES = \
 	ipaddr.c \
 	ipaddr.h \
+	cidr.c \
+	cidr.h \
 	log.c \
 	log.h \
 	xzmalloc.c \
