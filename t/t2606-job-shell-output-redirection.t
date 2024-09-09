@@ -368,8 +368,17 @@ test_expect_success LONGTEST 'job-shell: no truncation at 10MB for single-user j
 	flux run cat 10M+ >10M+.output &&
 	test_cmp 10M+ 10M+.output
 '
-test_expect_success 'job-shell: invalid output.limit string is rejected' '
+test_expect_success 'job-shell: invalid output.limit string is rejected (text)' '
 	test_must_fail flux run -o output.limit=foo hostname
+'
+test_expect_success 'job-shell: invalid output.limit string is rejected (zero)' '
+	test_must_fail flux run -o output.limit=0 hostname
+'
+test_expect_success 'job-shell: invalid output.limit string is rejected (big num)' '
+	test_must_fail flux run -o output.limit=4000000000 hostname
+'
+test_expect_success 'job-shell: invalid output.limit string is rejected (big num suffix)' '
+	test_must_fail flux run -o output.limit=4G hostname
 '
 test_expect_success 'job-shell: output.mode=append works' '
 	flux bulksubmit --watch --output=append.out \
