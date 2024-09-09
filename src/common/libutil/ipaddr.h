@@ -12,6 +12,7 @@
 #define _UTIL_GETIP_H
 
 #include <sys/socket.h> // for AF_INET, AF_INET6
+#include "src/common/libflux/types.h" // for flux_error_t
 
 /* Guess at a usable network address for the local node using one
  * of these methods:
@@ -34,10 +35,10 @@
  *   if set, only method 3 is tried above
  *
  * Return address as a string in buf (up to len bytes, always null terminated)
- * Return 0 on success, -1 on error with error message written to errstr
+ * Return 0 on success, -1 on error with error message written to 'error'
  * if non-NULL.
  */
-int ipaddr_getprimary (char *buf, int len, char *errstr, int errstrsz);
+int ipaddr_getprimary (char *buf, int len, flux_error_t *error);
 
 #endif /* !_UTIL_GETIP_H */
 

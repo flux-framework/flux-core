@@ -147,11 +147,10 @@ static int format_bind_uri (char *buf, int bufsz, attr_t *attrs, int rank)
     }
     else {
         char ipaddr[HOST_NAME_MAX + 1];
-        char error[200];
+        flux_error_t error;
 
-        if (ipaddr_getprimary (ipaddr, sizeof (ipaddr),
-                               error, sizeof (error)) < 0) {
-            log_msg ("%s", error);
+        if (ipaddr_getprimary (ipaddr, sizeof (ipaddr), &error) < 0) {
+            log_msg ("%s", error.text);
             return -1;
         }
         if (snprintf (buf, bufsz, "tcp://%s:*", ipaddr) >= bufsz)
