@@ -18,18 +18,6 @@
 #include "src/common/libutil/ipaddr.h"
 
 
-static void setopt (const char *name, int val)
-{
-    if (val) {
-        if (setenv (name, "1", 1) < 0)
-            BAIL_OUT ("setenv %s", name);
-    }
-    else {
-        if (unsetenv (name) < 0)
-            BAIL_OUT ("unsetenv %s", name);
-    }
-}
-
 int main(int argc, char** argv)
 {
     char host[MAXHOSTNAMELEN + 1];
@@ -38,30 +26,26 @@ int main(int argc, char** argv)
 
     plan (NO_PLAN);
 
-    setopt ("FLUX_IPADDR_HOSTNAME", 0);
-    setopt ("FLUX_IPADDR_V6", 0);
-    n = ipaddr_getprimary (host, sizeof (host), &error);
+    n = ipaddr_getprimary (host, sizeof (host), 0, NULL, &error);
     ok (n == 0,
         "ipaddr_getprimary (hostname=0 v6=0) works");
     diag ("%s", n == 0 ? host : error.text);
 
-    setopt ("FLUX_IPADDR_HOSTNAME", 0);
-    setopt ("FLUX_IPADDR_V6", 1);
-    n = ipaddr_getprimary (host, sizeof (host), &error);
+    n = ipaddr_getprimary (host, sizeof (host), IPADDR_V6, NULL, &error);
     ok (n == 0,
         "ipaddr_getprimary (hostname=0 v6=1) works");
     diag ("%s", n == 0 ? host : error.text);
 
-    setopt ("FLUX_IPADDR_HOSTNAME", 1);
-    setopt ("FLUX_IPADDR_V6", 0);
-    n = ipaddr_getprimary (host, sizeof (host), &error);
+    n = ipaddr_getprimary (host, sizeof (host), IPADDR_HOSTNAME, NULL, &error);
     ok (n == 0,
         "ipaddr_getprimary (hostname=1 v6=0) works");
     diag ("%s", n == 0 ? host : error.text);
 
-    setopt ("FLUX_IPADDR_HOSTNAME", 1);
-    setopt ("FLUX_IPADDR_V6", 1);
-    n = ipaddr_getprimary (host, sizeof (host), &error);
+    n = ipaddr_getprimary (host,
+                           sizeof (host),
+                           IPADDR_HOSTNAME | IPADDR_V6,
+                           NULL,
+                           &error);
     ok (n == 0,
         "ipaddr_getprimary (hostname=1 v6=1)");
     diag ("%s", n == 0 ? host : error.text);

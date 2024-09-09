@@ -148,8 +148,18 @@ static int format_bind_uri (char *buf, int bufsz, attr_t *attrs, int rank)
     else {
         char ipaddr[HOST_NAME_MAX + 1];
         flux_error_t error;
+        int flags = 0;
+        const char *interface = getenv ("FLUX_IPADDR_INTERFACE");
 
-        if (ipaddr_getprimary (ipaddr, sizeof (ipaddr), &error) < 0) {
+        if (getenv ("FLUX_IPADDR_HOSTNAME"))
+            flags |= IPADDR_HOSTNAME;
+        if (getenv ("FLUX_IPADDR_V6"))
+            flags |= IPADDR_V6;
+        if (ipaddr_getprimary (ipaddr,
+                               sizeof (ipaddr),
+                               flags,
+                               interface,
+                               &error) < 0) {
             log_msg ("%s", error.text);
             return -1;
         }

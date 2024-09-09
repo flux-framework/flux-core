@@ -199,17 +199,20 @@ static int getprimary_hostaddr (char *buf, int len, int prefer_family,
     return 0;
 }
 
-int ipaddr_getprimary (char *buf, int len, flux_error_t *error)
+int ipaddr_getprimary (char *buf,
+                       int len,
+                       int flags,
+                       const char *interface,
+                       flux_error_t *error)
 {
-    int prefer_family = getenv ("FLUX_IPADDR_V6") ? AF_INET6 : AF_INET;
-    const char *iface_name;
+    int prefer_family = (flags & IPADDR_V6) ? AF_INET6 : AF_INET;
     int rc = -1;
 
-    if ((iface_name = getenv ("FLUX_IPADDR_INTERFACE"))) {
-        rc = getnamed_ifaddr (buf, len, iface_name, prefer_family, error);
+    if (interface) {
+        rc = getnamed_ifaddr (buf, len, interface, prefer_family, error);
     }
     else {
-        if (getenv ("FLUX_IPADDR_HOSTNAME") == NULL)
+        if (!(flags & IPADDR_HOSTNAME))
             rc = getprimary_ifaddr (buf, len, prefer_family, error);
         if (rc < 0) {
             rc = getprimary_hostaddr (buf, len, prefer_family, error);
