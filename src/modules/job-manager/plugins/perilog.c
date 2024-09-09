@@ -171,13 +171,17 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     struct perilog_procdesc *pd = NULL;
     int per_rank = 0;
     int cancel_on_exception = -1;
-    const char *timeout = NULL;
+    const char *timeout;
     double kill_timeout = -1.;
     flux_cmd_t *cmd = NULL;
     json_t *command = NULL;
     json_error_t error;
 
     const char *name = prolog ? "prolog" : "epilog";
+
+    /*  Set default timeout for prolog to 30m, unlimited for epilog
+     */
+    timeout = prolog ? "30m" : "0";
 
     if (json_unpack_ex (o,
                         &error,
