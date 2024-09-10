@@ -65,6 +65,8 @@
 #define SINGLEUSER_OUTPUT_LIMIT "1G"
 #define MULTIUSER_OUTPUT_LIMIT  "10M"
 #define OUTPUT_LIMIT_MAX        1073741824
+/* 104857600 = 100M */
+#define OUTPUT_LIMIT_WARNING    104857600
 
 enum {
     FLUX_OUTPUT_TYPE_TERM = 1,
@@ -517,6 +519,24 @@ static void output_truncation_warning (struct shell_output *out)
         shell_warn ("stdout: %zu of %zu bytes truncated",
                     out->stdout_bytes - out->kvs_limit_bytes,
                     out->stdout_bytes);
+        warned = true;
+    }
+    if (out->stderr_type == FLUX_OUTPUT_TYPE_KVS
+        && (out->stderr_bytes > OUTPUT_LIMIT_WARNING
+            && out->stderr_bytes <= OUTPUT_LIMIT_MAX)) {
+        shell_warn ("high stderr volume (%s), "
+                    "consider redirecting to a file next time "
+                    "(e.g. use --output=FILE)",
+                    encode_size (out->stderr_bytes));
+        warned = true;
+    }
+    if (out->stdout_type == FLUX_OUTPUT_TYPE_KVS
+        && (out->stdout_bytes > OUTPUT_LIMIT_WARNING
+            && out->stdout_bytes <= OUTPUT_LIMIT_MAX)) {
+        shell_warn ("high stdout volume (%s), "
+                    "consider redirecting to a file next time "
+                    "(e.g. use --output=FILE)",
+                    encode_size (out->stdout_bytes));
         warned = true;
     }
     /* Ensure KVS output is flushed to eventlogger if a warning was issued:
