@@ -27,6 +27,7 @@
 #include "errprintf.h"
 
 #include "log.h"
+#include "cidr.h"
 #include "ipaddr.h"
 
 /* Identify an IPv6 link-local address so it can be skipped.
@@ -76,6 +77,7 @@ static struct ifaddrs *find_ifaddr (struct ifaddrs *ifaddr,
                                     int family)
 {
     struct ifaddrs *ifa;
+    struct cidr4 cidr;
 
     for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
         if (streq (ifa->ifa_name, name)
@@ -85,6 +87,24 @@ static struct ifaddrs *find_ifaddr (struct ifaddrs *ifaddr,
                 || !is_linklocal6 ((struct sockaddr_in6 *)ifa->ifa_addr)))
             break;
     }
+    if (ifa)
+        return ifa;
+
+    /* We didn't find an exact interface match for 'name' above, so
+     * try parsing 'name' as a CIDR and match the interface address.
+     * Only ipv4 is supported at this point.
+     */
+    if (family == AF_INET6 || cidr_parse4 (&cidr, name) < 0)
+        return NULL;
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET)
+            continue;
+        struct sockaddr_in *sin = (struct sockaddr_in *)ifa->ifa_addr;
+        if (cidr_match4 (&cidr, &sin->sin_addr))
+            break;
+    }
+
     return ifa;
 }
 
