@@ -343,6 +343,35 @@ void test_find ()
     }
 }
 
+void test_find_hostname ()
+{
+    struct find_test *t = find_tests;
+
+    ok (hostlist_find_hostname (NULL, NULL) == -1 && errno == EINVAL,
+        "hostlist_find_hostname (NULL, NULL) returns EINVAL");
+
+    while (t && t->input) {
+        int rc;
+        struct hostlist_hostname *hn;
+        struct hostlist *hl = hostlist_decode (t->input);
+        if (!hl)
+            BAIL_OUT ("hostlist_decode (%s) failed!", t->input);
+        if (!(hn = hostlist_hostname_create (t->arg)))
+            BAIL_OUT ("hostlist_hostname_create (%s) failed!", t->arg);
+        rc = hostlist_find_hostname (hl, hn);
+        ok (rc == t->rc,
+            "hostlist_find_hostname ('%s', '%s') returned %d",
+            t->input, t->arg, rc);
+        if (t->rc >= 0)
+            is (hostlist_current (hl), t->arg,
+                "hostlist_find leaves cursor pointing to found host");
+        hostlist_hostname_destroy (hn);
+        hostlist_destroy (hl);
+        t++;
+    }
+}
+
+
 struct delete_test {
     char *input;
     char *delete;
@@ -616,6 +645,7 @@ int main (int argc, char *argv[])
     test_append ();
     test_nth ();
     test_find ();
+    test_find_hostname ();
     test_delete ();
     test_sortuniq ();
     test_iteration ();
