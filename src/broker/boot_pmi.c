@@ -149,10 +149,19 @@ static int format_bind_uri (char *buf, int bufsz, attr_t *attrs, int rank)
         char ipaddr[HOST_NAME_MAX + 1];
         flux_error_t error;
         int flags = 0;
-        const char *interface = getenv ("FLUX_IPADDR_INTERFACE");
+        const char *interface = NULL;
+        const char *hint;
 
-        if (getenv ("FLUX_IPADDR_HOSTNAME"))
+        if (attr_get (attrs, "tbon.interface-hint", &hint, NULL) < 0) {
+            log_err ("tbon.interface-hint attribute is not set");
+            return -1;
+        }
+        if (streq (hint, "hostname"))
             flags |= IPADDR_HOSTNAME;
+        else if (streq (hint, "default-route"))
+            ; // default behavior
+        else
+            interface = hint;
         if (getenv ("FLUX_IPADDR_V6"))
             flags |= IPADDR_V6;
         if (ipaddr_getprimary (ipaddr,
