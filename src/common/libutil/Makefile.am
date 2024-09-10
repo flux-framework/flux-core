@@ -120,6 +120,7 @@ TESTS = test_sha1.t \
 	test_read_all.t \
 	test_tomltk.t \
 	test_ipaddr.t \
+	test_cidr.t \
 	test_fluid.t \
 	test_aux.t \
 	test_fdutils.t \
@@ -228,6 +229,10 @@ test_ipaddr_t_LDADD = $(test_ldadd)
 test_getaddr_SOURCES = test/getaddr.c
 test_getaddr_CPPFLAGS = $(test_cppflags)
 test_getaddr_LDADD = $(test_ldadd)
+
+test_cidr_t_SOURCES = test/cidr.c
+test_cidr_t_CPPFLAGS = $(test_cppflags)
+test_cidr_t_LDADD = $(test_ldadd)
 
 test_fluid_t_SOURCES = test/fluid.c
 test_fluid_t_CPPFLAGS = $(test_cppflags)
