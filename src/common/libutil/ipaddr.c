@@ -127,7 +127,7 @@ static int getnamed_ifaddr (char *buf,
         ifa = find_ifaddr (ifaddr, name, prefer_family);
     }
     if (!ifa) {
-        errprintf (error, "could not find address of %s", name);
+        errprintf (error, "could not find address associated with %s", name);
         freeifaddrs (ifaddr);
         return -1;
     }
