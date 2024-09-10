@@ -188,6 +188,21 @@ tbon.prefertcp [Updates: C]
    with PMI, tcp:// endpoints will be used instead of ipc://, even if all
    brokers are on a single node.  Default: ``0``.
 
+tbon.interface-hint
+   When bootstrapping with PMI, tcp:// endpoints are chosen heuristically
+   using one of the following methods:
+
+   default-route
+      The address associated with the default route (the default hint).
+   hostname
+      The address associated with the system hostname.
+   *interface*
+     The address associated with the named network interface, e.g. ``enp4s0``
+   *network*
+     The address associated with the first interface that matches the
+     network address in CIDR form, e.g. ``10.0.2.0/24``.  NOTE: IPv6
+     network addresses are not supported at this time.
+
 tbon.torpid_min [Updates: C, R]
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
    will allow the connection to its TBON parent to remain idle before sending a
