@@ -79,10 +79,10 @@ static struct ifaddrs *find_ifaddr (struct ifaddrs *ifaddr,
 
     for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
         if (streq (ifa->ifa_name, name)
-                && ifa->ifa_addr != NULL
-                && ifa->ifa_addr->sa_family == family
-                && (ifa->ifa_addr->sa_family != AF_INET6
-                    || !is_linklocal6 ((struct sockaddr_in6 *)ifa->ifa_addr)))
+            && ifa->ifa_addr != NULL
+            && ifa->ifa_addr->sa_family == family
+            && (ifa->ifa_addr->sa_family != AF_INET6
+                || !is_linklocal6 ((struct sockaddr_in6 *)ifa->ifa_addr)))
             break;
     }
     return ifa;
@@ -153,7 +153,9 @@ static struct addrinfo *find_addrinfo (struct addrinfo *addrinfo, int family)
     return ai;
 }
 
-static int getprimary_hostaddr (char *buf, int len, int prefer_family,
+static int getprimary_hostaddr (char *buf,
+                                int len,
+                                int prefer_family,
                                 flux_error_t *error)
 {
     char hostname[HOST_NAME_MAX + 1];
