@@ -26,6 +26,7 @@
 
 #include "hostlist.h"
 #include "hostrange.h"
+#include "hostname.h"
 #include "util.h"
 
 /* number of elements to allocate when extending the hostlist array */
@@ -384,7 +385,7 @@ static int hostlist_append_host (struct hostlist *hl, const char *str)
 {
     int rc = -1;
     struct hostrange * hr;
-    struct hostname * hn;
+    struct hostlist_hostname * hn;
 
     assert (hl != NULL);
 
@@ -687,16 +688,10 @@ int hostlist_count (struct hostlist *hl)
 }
 
 static int hostlist_find_host (struct hostlist *hl,
-                               const char *hostname,
+                               struct stack_hostname *hn,
                                struct current *cur)
 {
     int i, count, ret = -1;
-    struct hostname * hn;
-
-    hn = hostname_create (hostname);
-    if (!hn)
-        return -1;
-
     for (i = 0, count = 0; i < hl->nranges; i++) {
         int offset = hostrange_hn_within (hl->hr[i], hn);
         if (offset >= 0) {
@@ -708,7 +703,6 @@ static int hostlist_find_host (struct hostlist *hl,
             count += hostrange_count (hl->hr[i]);
     }
 
-    hostname_destroy (hn);
     if (ret < 0)
         errno = ENOENT;
     return ret;
@@ -721,7 +715,38 @@ int hostlist_find (struct hostlist *hl, const char *hostname)
         errno = EINVAL;
         return -1;
     }
-    return hostlist_find_host (hl, hostname, &hl->current);
+    struct stack_hostname hn_storage;
+
+    struct stack_hostname *hn = hostname_stack_create (&hn_storage, hostname);
+    if (!hn)
+        return -1;
+    return hostlist_find_host (hl, hn, &hl->current);
+}
+
+int hostlist_find_hostname (struct hostlist *hl, struct hostlist_hostname *hn)
+{
+    struct stack_hostname hn_storage;
+    struct stack_hostname *shn;
+
+    if (!hl || !hn) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    shn = hostname_stack_create_from_hostname (&hn_storage, hn);
+    if (!hn)
+        return -1;
+    return hostlist_find_host (hl, shn, &hl->current);
+}
+
+struct hostlist_hostname *hostlist_hostname_create (const char *hn)
+{
+    return hostname_create (hn);
+}
+
+void hostlist_hostname_destroy (struct hostlist_hostname *hn)
+{
+    hostname_destroy (hn);
 }
 
 /*  Remove host at cursor 'cur'. If the current real cursor hl->current
@@ -786,7 +811,12 @@ static int hostlist_remove_at (struct hostlist *hl, struct current *cur)
 static int hostlist_delete_host (struct hostlist *hl, const char *hostname)
 {
     struct current cur = { 0 };
-    int n = hostlist_find_host (hl, hostname, &cur);
+    struct stack_hostname hn_storage;
+
+    struct stack_hostname *hn = hostname_stack_create (&hn_storage, hostname);
+    if (!hn)
+        return -1;
+    int n = hostlist_find_host (hl, hn, &cur);
     if (n < 0)
         return errno == ENOENT ? 0 : -1;
     return hostlist_remove_at (hl, &cur);
