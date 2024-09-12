@@ -102,7 +102,8 @@ static void shell_pmi_abort (void *arg,
      *   This allows the shell to continue to process events and stdio
      *   until the exec system terminates the job due to the exception.
      */
-    flux_shell_raise ("exec", 0,
+    flux_shell_raise ("exec",
+                      0,
                       "MPI_Abort%s%s",
                       msg ? ": " : "",
                       msg ? msg : "");
@@ -285,17 +286,17 @@ done:
 
 /* pmi_simple_ops->kvs_get() signature */
 static int exchange_kvs_get (void *arg,
-                              void *cli,
-                              const char *kvsname,
-                              const char *key)
+                             void *cli,
+                             const char *kvsname,
+                             const char *key)
 {
     struct shell_pmi *pmi = arg;
     json_t *o;
     const char *val = NULL;
 
     if ((o = json_object_get (pmi->locals, key))
-            || (o = json_object_get (pmi->pending, key))
-            || (o = json_object_get (pmi->global, key))) {
+        || (o = json_object_get (pmi->pending, key))
+        || (o = json_object_get (pmi->global, key))) {
         val = json_string_value (o);
         pmi_simple_server_kvs_get_complete (pmi->server, cli, val);
         return 0;
@@ -324,9 +325,9 @@ static int exchange_barrier_enter (void *arg)
 
 /* pmi_simple_ops->kvs_put() signature */
 static int exchange_kvs_put (void *arg,
-                              const char *kvsname,
-                              const char *key,
-                              const char *val)
+                             const char *kvsname,
+                             const char *key,
+                             const char *val)
 {
     struct shell_pmi *pmi = arg;
 
@@ -369,7 +370,8 @@ static void pmi_fd_cb (flux_shell_task_t *task,
     len = flux_subprocess_read_line (task->proc, "PMI_FD", &line);
     if (len < 0) {
         shell_trace ("%d: C: pmi read error: %s",
-                     task->rank, flux_strerror (errno));
+                     task->rank,
+                     flux_strerror (errno));
         return;
     }
     if (len == 0) {
