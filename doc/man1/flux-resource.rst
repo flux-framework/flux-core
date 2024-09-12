@@ -196,6 +196,9 @@ torpid
   node has been unresponsive for a period of time and is temporarily
   unavailable for scheduling
 
+housekeeping
+  node is currently running housekeeping
+
 offline
   node has not joined the Flux instance (e.g. turned off or has not
   started the flux broker).
@@ -209,13 +212,15 @@ resources that share a state and online/offline state.
 .. note::
   :program:`flux resource status` queries both the administrative and
   scheduler view of resources to identify resources that are available,
-  excluded by configuration, torpid, or administratively drained or draining.
+  excluded by configuration, torpid, administratively drained or draining,
+  or currently executing housekeeping.
 
 .. option:: -s, --states=STATE,...
 
   Restrict the set of resource states a comma-separated list.
 
-  If unspecified, :option:`avail,exclude,draining,drained,torpid` is used.
+  If unspecified, :option:`avail,exclude,draining,drained,torpid,housekeeping`
+  is used.
 
 
 .. option:: -q, --queue=QUEUE,...
