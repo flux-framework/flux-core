@@ -104,7 +104,7 @@ static void shell_pmi_abort (void *arg,
      */
     flux_shell_raise ("exec",
                       0,
-                      "MPI_Abort%s%s",
+                      "PMI_Abort%s%s",
                       msg ? ": " : "",
                       msg ? msg : "");
 }
