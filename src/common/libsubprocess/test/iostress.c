@@ -292,12 +292,13 @@ int main (int argc, char *argv[])
     ok (iostress_run_check (h, "balanced", false, 0, 0, 8, 8, 80),
         "balanced worked");
 
-    // (remote?) stdout buffer is overrun
-    // Needs further investigation as no errors are thrown and completion is
-    // not called called after subprocess exit.  The doomsday timer stops
-    // the test.
-    ok (!iostress_run_check (h, "tinystdout", false, 0, 128, 1, 1, 256),
-        "tinystdout failed as expected");
+    // stdout buffer is overrun
+
+    // When the line size is greater than the buffer size, all the
+    // data is transferred. flux_subprocess_read_line() will receive a
+    // "line" that is not terminated with \n
+    ok (iostress_run_check (h, "tinystdout", false, 0, 128, 1, 1, 256),
+        "tinystdout works");
 
     // local stdin buffer is overrun (immediately)
     // remote stdin buffer is also overwritten
