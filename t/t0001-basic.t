@@ -476,7 +476,7 @@ test_expect_success 'TOML tcp.interface-hint=wrong type fails' '
 '
 test_expect_success 'tcp.interface-hint=badiface fails' '
 	test_expect_code 137 flux start -o,-Stbon.interface-hint=badiface \
-		${ARGS} --test-exit-timeout=1s -s2 -o,-Stbon.prefertcp=1 true
+		${ARGS} -s2 -o,-Stbon.prefertcp=1 true
 '
 test_expect_success 'tcp.interface-hint=default-route works' '
 	flux start -o,-Stbon.interface-hint=default-route,-Stbon.prefertcp=1 \
@@ -487,7 +487,7 @@ test_expect_success 'tcp.interface-hint=hostname works' '
 		${ARGS} -s2 true
 '
 test_expect_success 'tbon.endpoint cannot be set' '
-	test_must_fail flux start ${ARGS} -s2 \
+	test_expect_code 137 flux start ${ARGS} -s2 \
 		-o,--setattr=tbon.endpoint=ipc:///tmp/customflux /bin/true
 '
 test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '

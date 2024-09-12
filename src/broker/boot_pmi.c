@@ -261,7 +261,8 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     }
     if (upmi_initialize (upmi, &info, &error) < 0) {
         log_msg ("%s: initialize: %s", upmi_describe (upmi), error.text);
-        goto error;
+        upmi_destroy (upmi);
+        return -1;
     }
     if (set_instance_level_attr (upmi, info.name, attrs) < 0) {
         log_err ("set_instance_level_attr");
@@ -506,6 +507,13 @@ done:
     topology_decref (topo);
     return 0;
 error:
+    /* We've logged error to stderr before getting here so the fatal
+     * error message passed to the PMI server does not necessarily need
+     * to be highly detailed.  Some implementations of abort may not
+     * return.
+     */
+    if (upmi_abort (upmi, "fatal bootstrap error", &error) < 0)
+        log_msg ("upmi_abort: %s", error.text);
     free (bizcard);
     upmi_destroy (upmi);
     hostlist_destroy (hl);

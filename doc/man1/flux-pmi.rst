@@ -88,6 +88,11 @@ barrier
 
   Execute N barrier (step 2) operations (default 1).
 
+.. option:: --abort=RANK
+
+  Instead of entering the barrier, arrange for RANK to call the PMI
+  abort function.
+
 exchange
 --------
 

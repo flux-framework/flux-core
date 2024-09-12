@@ -103,6 +103,24 @@ static int op_barrier (flux_plugin_t *p,
     return 0;
 }
 
+static int op_abort (flux_plugin_t *p,
+                     const char *topic,
+                     flux_plugin_arg_t *args,
+                     void *data)
+{
+    const char *msg;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s}",
+                                "msg", &msg) < 0)
+        return upmi_seterror (p, args, "error unpacking abort arguments");
+    fprintf (stderr, "%s\n", msg);
+    exit (1);
+    //NOTREACHED
+    return 0;
+}
+
 static int op_initialize (flux_plugin_t *p,
                           const char *topic,
                           flux_plugin_arg_t *args,
@@ -148,6 +166,7 @@ static const struct flux_plugin_handler optab[] = {
     { "upmi.put",           op_put,         NULL },
     { "upmi.get",           op_get,         NULL },
     { "upmi.barrier",       op_barrier,     NULL },
+    { "upmi.abort",         op_abort,       NULL },
     { "upmi.initialize",    op_initialize,  NULL },
     { "upmi.finalize",      op_finalize,    NULL },
     { "upmi.preinit",       op_preinit,     NULL },

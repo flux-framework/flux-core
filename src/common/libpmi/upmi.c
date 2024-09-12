@@ -470,6 +470,28 @@ int upmi_finalize (struct upmi *upmi, flux_error_t *errp)
     return 0;
 }
 
+int upmi_abort (struct upmi *upmi, const char *msg, flux_error_t *errp)
+{
+    flux_error_t error;
+
+    if (!upmi || !msg) {
+        errprintf (errp, "invalid argument\n");
+        return -1;
+    }
+    if (upmi_call (upmi,
+                   "upmi.abort",
+                   &error,
+                   "{s:s}",
+                   "msg", msg) < 0) {
+        errprintf (errp, "%s", error.text);
+        upmi_trace (upmi, "abort: %s", error.text);
+        return -1;
+    }
+    // possibly not reached
+    upmi_trace (upmi, "abort: success");
+    return 0;
+}
+
 int upmi_put (struct upmi *upmi,
               const char *key,
               const char *value,

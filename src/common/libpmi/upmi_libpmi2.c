@@ -34,6 +34,7 @@ struct plugin_ctx {
     void *dso;
     int (*init) (int *spawned, int *size, int *rank, int *appnum);
     int (*finalize) (void);
+    int (*abort) (int flag, const char *msg);
     int (*job_getid) (char *jobid, int jobid_size);
     int (*kvs_put) (const char *key, const char *value);
     int (*kvs_fence) (void);
@@ -129,6 +130,7 @@ static struct plugin_ctx *plugin_ctx_create (const char *path,
         goto error;
     if (!(ctx->init = dlsym (ctx->dso, "PMI2_Init"))
         || !(ctx->finalize = dlsym (ctx->dso, "PMI2_Finalize"))
+        || !(ctx->abort = dlsym (ctx->dso, "PMI2_Abort"))
         || !(ctx->job_getid = dlsym (ctx->dso, "PMI2_Job_GetId"))
         || !(ctx->kvs_put = dlsym (ctx->dso, "PMI2_KVS_Put"))
         || !(ctx->kvs_fence = dlsym (ctx->dso, "PMI2_KVS_Fence"))
@@ -319,6 +321,28 @@ static int op_barrier (flux_plugin_t *p,
     return 0;
 }
 
+static int op_abort (flux_plugin_t *p,
+                     const char *topic,
+                     flux_plugin_arg_t *args,
+                     void *data)
+
+{
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    int flag = 1; // abort all processes in the job
+    const char *msg;
+    int result;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s}",
+                                "msg", &msg) < 0)
+        return upmi_seterror (p, args, "error unpacking abort arguments");
+    result = ctx->abort (flag, msg);
+    if (result != PMI2_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+    return 0;
+}
+
 static int op_initialize (flux_plugin_t *p,
                           const char *topic,
                           flux_plugin_arg_t *args,
@@ -422,6 +446,7 @@ static const struct flux_plugin_handler optab[] = {
     { "upmi.put",           op_put,         NULL },
     { "upmi.get",           op_get,         NULL },
     { "upmi.barrier",       op_barrier,     NULL },
+    { "upmi.abort",         op_abort,       NULL },
     { "upmi.initialize",    op_initialize,  NULL },
     { "upmi.finalize",      op_finalize,    NULL },
     { "upmi.preinit",       op_preinit,     NULL },

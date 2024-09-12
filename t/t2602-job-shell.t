@@ -137,7 +137,7 @@ test_expect_success 'job-exec: decrease kill timeout for tests' '
 test_expect_success 'job-shell: PMI_Abort works' '
 	! flux run -N4 -n4 ${PMI_INFO} --abort=1 >abort.log 2>&1 &&
 	test_debug "cat abort.log" &&
-	grep "job.exception.*MPI_Abort: Test abort error." abort.log
+	grep "job.exception.*PMI_Abort: Test abort error." abort.log
 '
 test_expect_success 'job-shell: create expected I/O output' '
 	${LPTEST} | sed -e "s/^/0: /" >lptest.exp &&

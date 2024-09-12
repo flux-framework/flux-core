@@ -493,21 +493,47 @@ static void pmi_debug_trace (void *client, const char *buf)
     fprintf (stderr, "%d: %s", cli->rank, buf);
 }
 
-int pmi_kvs_put (void *arg, const char *kvsname,
-                 const char *key, const char *val)
+int pmi_kvs_put (void *arg,
+                 const char *kvsname,
+                 const char *key,
+                 const char *val)
 {
     zhash_update (ctx.pmi.kvs, key, xstrdup (val));
     zhash_freefn (ctx.pmi.kvs, key, (zhash_free_fn *)free);
     return 0;
 }
 
-int pmi_kvs_get (void *arg, void *client, const char *kvsname,
+int pmi_kvs_get (void *arg,
+                 void *client,
+                 const char *kvsname,
                  const char *key)
 {
     char *v = zhash_lookup (ctx.pmi.kvs, key);
     if (pmi_simple_server_kvs_get_complete (ctx.pmi.srv, client, v) < 0)
         log_err_exit ("pmi_simple_server_kvs_get_complete");
     return 0;
+}
+
+void pmi_abort (void *arg,
+                void *client,
+                int exit_code,
+                const char *error_message)
+{
+    struct client *cli = client;
+
+    log_msg ("%d: PMI_Abort()%s%s",
+             cli->rank,
+             error_message ? ": " : "",
+             error_message ? error_message : "");
+
+    cli = zlist_first (ctx.clients);
+    while (cli) {
+        if (cli->p) {
+            flux_future_t *f = flux_subprocess_kill (cli->p, SIGKILL);
+            flux_future_destroy (f);
+        }
+        cli = zlist_next (ctx.clients);
+    }
 }
 
 int execvp_argz (char *argz, size_t argz_len)
@@ -715,6 +741,7 @@ void pmi_server_initialize (int flags)
     struct taskmap *map;
     const char *mode = optparse_get_str (ctx.opts, "test-pmi-clique", "single");
     struct pmi_simple_ops ops = {
+        .abort = pmi_abort,
         .kvs_put = pmi_kvs_put,
         .kvs_get = pmi_kvs_get,
         .barrier_enter = NULL,

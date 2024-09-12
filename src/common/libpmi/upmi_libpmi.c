@@ -29,6 +29,7 @@ struct plugin_ctx {
     void *dso;
     int (*init) (int *spawned);
     int (*finalize) (void);
+    int (*abort) (int exit_code, const char *error_msg);
     int (*get_size) (int *size);
     int (*get_rank) (int *rank);
     int (*barrier) (void);
@@ -122,7 +123,8 @@ static struct plugin_ctx *plugin_ctx_create (const char *path,
         || !(ctx->kvs_get_my_name = dlsym (ctx->dso, "PMI_KVS_Get_my_name"))
         || !(ctx->kvs_put = dlsym (ctx->dso, "PMI_KVS_Put"))
         || !(ctx->kvs_commit = dlsym (ctx->dso, "PMI_KVS_Commit"))
-        || !(ctx->kvs_get = dlsym (ctx->dso, "PMI_KVS_Get"))) {
+        || !(ctx->kvs_get = dlsym (ctx->dso, "PMI_KVS_Get"))
+        || !(ctx->abort = dlsym (ctx->dso, "PMI_Abort"))) {
         errprintf (error, "%s:  missing required PMI_* symbols", path);
         goto error;
     }
@@ -212,6 +214,26 @@ static int op_barrier (flux_plugin_t *p,
     if (result != PMI_SUCCESS)
         return upmi_seterror (p, args, "%s", pmi_strerror (result));
 
+    return 0;
+}
+
+static int op_abort (flux_plugin_t *p,
+                     const char *topic,
+                     flux_plugin_arg_t *args,
+                     void *data)
+{
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    int result;
+    const char *msg;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s}",
+                                "msg", &msg) < 0)
+        return upmi_seterror (p, args, "error unpacking abort arguments");
+    result = ctx->abort (1, msg);
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
     return 0;
 }
 
@@ -313,6 +335,7 @@ static const struct flux_plugin_handler optab[] = {
     { "upmi.put",           op_put,         NULL },
     { "upmi.get",           op_get,         NULL },
     { "upmi.barrier",       op_barrier,     NULL },
+    { "upmi.abort",         op_abort,       NULL },
     { "upmi.initialize",    op_initialize,  NULL },
     { "upmi.finalize",      op_finalize,    NULL },
     { "upmi.preinit",       op_preinit,     NULL },
