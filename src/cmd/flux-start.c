@@ -514,6 +514,28 @@ int pmi_kvs_get (void *arg,
     return 0;
 }
 
+void pmi_abort (void *arg,
+                void *client,
+                int exit_code,
+                const char *error_message)
+{
+    struct client *cli = client;
+
+    log_msg ("%d: PMI_Abort()%s%s",
+             cli->rank,
+             error_message ? ": " : "",
+             error_message ? error_message : "");
+
+    cli = zlist_first (ctx.clients);
+    while (cli) {
+        if (cli->p) {
+            flux_future_t *f = flux_subprocess_kill (cli->p, SIGKILL);
+            flux_future_destroy (f);
+        }
+        cli = zlist_next (ctx.clients);
+    }
+}
+
 int execvp_argz (char *argz, size_t argz_len)
 {
     char **av = malloc (sizeof (char *) * (argz_count (argz, argz_len) + 1));
@@ -719,6 +741,7 @@ void pmi_server_initialize (int flags)
     struct taskmap *map;
     const char *mode = optparse_get_str (ctx.opts, "test-pmi-clique", "single");
     struct pmi_simple_ops ops = {
+        .abort = pmi_abort,
         .kvs_put = pmi_kvs_put,
         .kvs_get = pmi_kvs_get,
         .barrier_enter = NULL,
