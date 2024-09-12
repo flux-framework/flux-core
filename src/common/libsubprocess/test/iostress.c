@@ -38,6 +38,7 @@ struct iostress_ctx {
     int batchcount;
     int batchlines;
     int batchcursor;
+    int outputcount;
     bool direct;
     const char *name;
 };
@@ -68,9 +69,11 @@ static void iostress_output_cb (flux_subprocess_t *p, const char *stream)
     else if (len == 0)
         diag ("%s: EOF", stream);
     else {
-        //diag ("%s: %d bytes", stream, len);
-        ctx->linerecv++;
+        // diag ("%s: %d bytes", stream, len);
+        if (strstr (line, "\n"))
+            ctx->linerecv++;
     }
+    ctx->outputcount++;
 }
 
 static void iostress_completion_cb (flux_subprocess_t *p)
@@ -264,8 +267,8 @@ bool iostress_run_check (flux_t *h,
         ret = false;
     }
 
-    diag ("%s: processed %d of %d lines", name,
-          ctx.linerecv, ctx.batchcount * ctx.batchlines);
+    diag ("%s: processed %d of %d lines, %d calls to output cb", name,
+          ctx.linerecv, ctx.batchcount * ctx.batchlines, ctx.outputcount);
     if (ctx.linerecv < ctx.batchcount * ctx.batchlines)
         ret = false;
 
