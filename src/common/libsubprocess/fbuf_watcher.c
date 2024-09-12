@@ -126,6 +126,9 @@ const char *fbuf_read_watcher_get_data (flux_watcher_t *w, int *lenp)
                 return NULL;
             if (*lenp > 0)
                 return data;
+            /* if no space, have to flush data out */
+            if (!(*lenp) && !fbuf_space (eb->fb))
+                return fbuf_read (eb->fb, -1, lenp);
         }
         /* Not line-buffered, or reading last bit of data which does
          * not contain a newline. Read any data:
