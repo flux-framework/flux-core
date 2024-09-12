@@ -20,6 +20,7 @@
 #include "src/common/libpmi/upmi.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 static struct upmi *upmi;
@@ -59,6 +60,7 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
 {
     int n = optparse_option_index (p);
     int count = optparse_get_int (p, "count", 1);
+    int abort = optparse_get_int (p, "abort", -1);
     struct timespec t;
     const char *label;
     flux_error_t error;
@@ -77,6 +79,17 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
     // don't let task launch stragglers skew timing
     if (upmi_barrier (upmi, &error) < 0)
         log_msg_exit ("barrier: %s", error.text);
+
+    // abort one rank if --abort was specified
+    if (abort != -1) {
+        if (info.rank == abort) {
+            flux_error_t e;
+            errprintf (&e, "flux-pmi: rank %d is aborting", info.rank);
+            if (upmi_abort (upmi, e.text, &error) < 0) {
+                log_msg_exit ("abort: %s", error.text);
+            }
+        }
+    }
 
     while (count-- > 0) {
         monotime (&t);
@@ -216,6 +229,8 @@ static int cmd_pmi (optparse_t *p, int argc, char *argv[])
 static struct optparse_option barrier_opts[] = {
     { .name = "count",      .has_arg = 1, .arginfo = "N",
        .usage = "Execute N barrier operations (default 1)", },
+    { .name = "abort",      .has_arg = 1, .arginfo = "RANK",
+       .usage = "RANK calls abort instead of barrier", },
     OPTPARSE_TABLE_END,
 };
 static struct optparse_option get_opts[] = {
