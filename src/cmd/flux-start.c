@@ -493,15 +493,19 @@ static void pmi_debug_trace (void *client, const char *buf)
     fprintf (stderr, "%d: %s", cli->rank, buf);
 }
 
-int pmi_kvs_put (void *arg, const char *kvsname,
-                 const char *key, const char *val)
+int pmi_kvs_put (void *arg,
+                 const char *kvsname,
+                 const char *key,
+                 const char *val)
 {
     zhash_update (ctx.pmi.kvs, key, xstrdup (val));
     zhash_freefn (ctx.pmi.kvs, key, (zhash_free_fn *)free);
     return 0;
 }
 
-int pmi_kvs_get (void *arg, void *client, const char *kvsname,
+int pmi_kvs_get (void *arg,
+                 void *client,
+                 const char *kvsname,
                  const char *key)
 {
     char *v = zhash_lookup (ctx.pmi.kvs, key);
