@@ -55,6 +55,7 @@ int upmi_get (struct upmi *upmi,
               flux_error_t *error);
 int upmi_barrier (struct upmi *upmi,
                   flux_error_t *error);
+int upmi_abort (struct upmi *upmi, const char *msg, flux_error_t *error);
 
 #endif /* !_LIBPMI_UPMI_H */
 
