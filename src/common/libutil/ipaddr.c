@@ -24,21 +24,11 @@
 #include <stdio.h>
 
 #include "ccan/str/str.h"
+#include "errprintf.h"
 
 #include "log.h"
+#include "cidr.h"
 #include "ipaddr.h"
-
-static __attribute__ ((format (printf, 3, 4)))
-void esprintf (char *buf, int len, const char *fmt, ...)
-{
-    if (buf) {
-        va_list ap;
-
-        va_start (ap, fmt);
-        vsnprintf (buf, len, fmt, ap);
-        va_end (ap);
-    }
-}
 
 /* Identify an IPv6 link-local address so it can be skipped.
  * The leftmost 10 bits of the 128 bit address will be 0xfe80.
@@ -54,8 +44,7 @@ static bool is_linklocal6 (struct sockaddr_in6 *sin)
     return false;
 }
 
-static int getprimary_iface4 (char *buf, size_t size,
-                              char *errstr, int errstrsz)
+static int getprimary_iface4 (char *buf, size_t size, flux_error_t *error)
 {
     const char *path = "/proc/net/route";
     FILE *f;
@@ -63,7 +52,7 @@ static int getprimary_iface4 (char *buf, size_t size,
     char line[256];
 
     if (!(f = fopen (path, "r"))) {
-        esprintf (errstr, errstrsz, "%s: %s", path, strerror (errno));
+        errprintf (error, "%s: %s", path, strerror (errno));
         return -1;
     }
     while (fgets (line, sizeof (line), f)) {
@@ -79,7 +68,7 @@ static int getprimary_iface4 (char *buf, size_t size,
         }
     }
     fclose (f);
-    esprintf (errstr, errstrsz, "%s: no default route", path);
+    errprintf (error, "%s: no default route", path);
     return -1;
 }
 
@@ -88,15 +77,34 @@ static struct ifaddrs *find_ifaddr (struct ifaddrs *ifaddr,
                                     int family)
 {
     struct ifaddrs *ifa;
+    struct cidr4 cidr;
 
     for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
         if (streq (ifa->ifa_name, name)
-                && ifa->ifa_addr != NULL
-                && ifa->ifa_addr->sa_family == family
-                && (ifa->ifa_addr->sa_family != AF_INET6
-                    || !is_linklocal6 ((struct sockaddr_in6 *)ifa->ifa_addr)))
+            && ifa->ifa_addr != NULL
+            && ifa->ifa_addr->sa_family == family
+            && (ifa->ifa_addr->sa_family != AF_INET6
+                || !is_linklocal6 ((struct sockaddr_in6 *)ifa->ifa_addr)))
             break;
     }
+    if (ifa)
+        return ifa;
+
+    /* We didn't find an exact interface match for 'name' above, so
+     * try parsing 'name' as a CIDR and match the interface address.
+     * Only ipv4 is supported at this point.
+     */
+    if (family == AF_INET6 || cidr_parse4 (&cidr, name) < 0)
+        return NULL;
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET)
+            continue;
+        struct sockaddr_in *sin = (struct sockaddr_in *)ifa->ifa_addr;
+        if (cidr_match4 (&cidr, &sin->sin_addr))
+            break;
+    }
+
     return ifa;
 }
 
@@ -104,15 +112,14 @@ static int getnamed_ifaddr (char *buf,
                             int len,
                             const char *name,
                             int prefer_family,
-                            char *errstr,
-                            int errstrsz)
+                            flux_error_t *error)
 {
     struct ifaddrs *ifaddr;
     struct ifaddrs *ifa;
-    int error;
+    int e;
 
     if (getifaddrs (&ifaddr) < 0) {
-        esprintf (errstr, errstrsz, "getifaddrs: %s", strerror (errno));
+        errprintf (error, "getifaddrs: %s", strerror (errno));
         return -1;
     }
     if (!(ifa = find_ifaddr (ifaddr, name, prefer_family))) {
@@ -120,21 +127,21 @@ static int getnamed_ifaddr (char *buf,
         ifa = find_ifaddr (ifaddr, name, prefer_family);
     }
     if (!ifa) {
-        esprintf (errstr, errstrsz, "could not find address of %s", name);
+        errprintf (error, "could not find address associated with %s", name);
         freeifaddrs (ifaddr);
         return -1;
     }
-    error = getnameinfo (ifa->ifa_addr,
-                         ifa->ifa_addr->sa_family == AF_INET
-                             ? sizeof (struct sockaddr_in)
-                             : sizeof (struct sockaddr_in6),
-                         buf, // <== result copied here
-                         len,
-                         NULL,
-                         0,
-                         NI_NUMERICHOST);
-    if (error) {
-        esprintf (errstr, errstrsz, "getnameinfo: %s", gai_strerror (error));
+    e = getnameinfo (ifa->ifa_addr,
+                     ifa->ifa_addr->sa_family == AF_INET
+                         ? sizeof (struct sockaddr_in)
+                         : sizeof (struct sockaddr_in6),
+                     buf, // <== result copied here
+                     len,
+                     NULL,
+                     0,
+                     NI_NUMERICHOST);
+    if (e) {
+        errprintf (error, "getnameinfo: %s", gai_strerror (e));
         freeifaddrs (ifaddr);
         return -1;
     }
@@ -145,13 +152,12 @@ static int getnamed_ifaddr (char *buf,
 static int getprimary_ifaddr (char *buf,
                               int len,
                               int prefer_family,
-                              char *errstr,
-                              int errstrsz)
+                              flux_error_t *error)
 {
     char name[64];
-    if (getprimary_iface4 (name, sizeof (name), errstr, errstrsz) < 0)
+    if (getprimary_iface4 (name, sizeof (name), error) < 0)
         return -1;
-    return getnamed_ifaddr (buf, len, name, prefer_family, errstr, errstrsz);
+    return getnamed_ifaddr (buf, len, name, prefer_family, error);
 }
 
 static struct addrinfo *find_addrinfo (struct addrinfo *addrinfo, int family)
@@ -167,26 +173,27 @@ static struct addrinfo *find_addrinfo (struct addrinfo *addrinfo, int family)
     return ai;
 }
 
-static int getprimary_hostaddr (char *buf, int len, int prefer_family,
-                                char *errstr, int errstrsz)
+static int getprimary_hostaddr (char *buf,
+                                int len,
+                                int prefer_family,
+                                flux_error_t *error)
 {
     char hostname[HOST_NAME_MAX + 1];
     struct addrinfo hints, *res = NULL;
     struct addrinfo *rp;
-    int error;
+    int e;
 
     if (gethostname (hostname, sizeof (hostname)) < 0) {
-        esprintf (errstr, errstrsz, "gethostname: %s", strerror (errno));
+        errprintf (error, "gethostname: %s", strerror (errno));
         return -1;
     }
     memset (&hints, 0, sizeof (hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    error = getaddrinfo (hostname, NULL, &hints, &res);
-    if (error) {
-        esprintf (errstr, errstrsz, "getaddrinfo %s: %s",
-                  hostname, gai_strerror (error));
+    e = getaddrinfo (hostname, NULL, &hints, &res);
+    if (e) {
+        errprintf (error, "getaddrinfo %s: %s", hostname, gai_strerror (e));
         return -1;
     }
     if (!(rp = find_addrinfo (res, prefer_family))) {
@@ -194,19 +201,19 @@ static int getprimary_hostaddr (char *buf, int len, int prefer_family,
         rp = find_addrinfo (res, prefer_family);
     }
     if (!rp) {
-        esprintf (errstr, errstrsz, "could not find address of %s", hostname);
+        errprintf (error, "could not find address of %s", hostname);
         freeaddrinfo (res);
         return -1;
     }
-    error = getnameinfo (rp->ai_addr,
-                         rp->ai_addrlen,
-                         buf, // <== result copied here
-                         len,
-                         NULL,
-                         0,
-                         NI_NUMERICHOST);
-    if (error) {
-        esprintf (errstr, errstrsz, "getnameinfo: %s", gai_strerror (error));
+    e = getnameinfo (rp->ai_addr,
+                     rp->ai_addrlen,
+                     buf, // <== result copied here
+                     len,
+                     NULL,
+                     0,
+                     NI_NUMERICHOST);
+    if (e) {
+        errprintf (error, "getnameinfo: %s", gai_strerror (e));
         freeaddrinfo (res);
         return -1;
     }
@@ -214,30 +221,23 @@ static int getprimary_hostaddr (char *buf, int len, int prefer_family,
     return 0;
 }
 
-int ipaddr_getprimary (char *buf, int len,
-                       char *errstr, int errstrsz)
+int ipaddr_getprimary (char *buf,
+                       int len,
+                       int flags,
+                       const char *interface,
+                       flux_error_t *error)
 {
-    int prefer_family = getenv ("FLUX_IPADDR_V6") ? AF_INET6 : AF_INET;
-    const char *iface_name;
+    int prefer_family = (flags & IPADDR_V6) ? AF_INET6 : AF_INET;
     int rc = -1;
 
-    if ((iface_name = getenv ("FLUX_IPADDR_INTERFACE"))) {
-        rc = getnamed_ifaddr (buf,
-                              len,
-                              iface_name,
-                              prefer_family,
-                              errstr,
-                              errstrsz);
+    if (interface) {
+        rc = getnamed_ifaddr (buf, len, interface, prefer_family, error);
     }
     else {
-        if (getenv ("FLUX_IPADDR_HOSTNAME") == NULL)
-            rc = getprimary_ifaddr (buf, len, prefer_family, errstr, errstrsz);
+        if (!(flags & IPADDR_HOSTNAME))
+            rc = getprimary_ifaddr (buf, len, prefer_family, error);
         if (rc < 0) {
-            rc = getprimary_hostaddr (buf,
-                                      len,
-                                      prefer_family,
-                                      errstr,
-                                      errstrsz);
+            rc = getprimary_hostaddr (buf, len, prefer_family, error);
         }
     }
     return rc;

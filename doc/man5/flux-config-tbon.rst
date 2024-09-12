@@ -73,6 +73,23 @@ child_rcvhwm
    This configured value may be overridden by setting the ``tbon.child_rcvhwm``
    broker attribute.
 
+interface-hint
+   When the broker's bind address is not explicitly configured via
+   :man5:`flux-config-bootstrap`, it is chosen dynamically, influenced by
+   one of the following hints:
+
+   default-route
+     The address associated with the default route (the default hint).
+   hostname
+     The address associated with the system hostname.
+   *interface*
+     The address associated with the named network interface, e.g. ``enp4s0``
+   *network*
+     The address associated with the first interface that matches the
+     network address in CIDR form, e.g. ``10.0.2.0/24``.  NOTE: IPv6
+     network addresses are not supported at this time.
+
+
 EXAMPLE
 =======
 

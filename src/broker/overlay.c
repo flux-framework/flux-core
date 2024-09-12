@@ -141,6 +141,8 @@ static const double sync_max = 5.0;
 static const double default_torpid_min = 5.0;
 static const double default_torpid_max = 30.0;
 
+static const char *default_interface_hint = "default-route";
+
 struct overlay_monitor {
     overlay_monitor_f cb;
     void *arg;
@@ -2132,6 +2134,55 @@ error:
     return -1;
 }
 
+static int overlay_configure_interface_hint (struct overlay *ov,
+                                             const char *table,
+                                             const char *name,
+                                             const char *default_value)
+{
+    char long_name[128];
+    const char *val;
+    const char *s;
+    const flux_conf_t *cf;
+
+    (void)snprintf (long_name, sizeof (long_name), "%s.%s", table, name);
+
+    /* Take initial value from compiled-in default or legacy
+     * environment variable settings.
+     */
+    if ((s = getenv ("FLUX_IPADDR_INTERFACE")))
+        val = s;
+    else if (getenv ("FLUX_IPADDR_HOSTNAME"))
+        val = "hostname";
+    else
+        val = default_value;
+
+    /* Override with config file settings, if any.
+     */
+    if ((cf = flux_get_conf (ov->h))) {
+        flux_error_t error;
+
+        s = NULL;
+        if (flux_conf_unpack (flux_get_conf (ov->h),
+                              &error,
+                              "{s?{s?s}}",
+                              table,
+                                name, &s) < 0) {
+            log_msg ("Config file error [%s]: %s", table, error.text);
+            return -1;
+        }
+        if (s)
+            val = s;
+    }
+    /* Override with broker attribute, if any.
+     * Then set broker attribute to reflect current value.
+     */
+    if (overlay_configure_attr (ov->attrs, long_name, val, NULL) < 0) {
+        log_err ("Error setting %s attribute", long_name);
+        return -1;
+    }
+    return 0;
+}
+
 static int overlay_configure_torpid (struct overlay *ov)
 {
     const flux_conf_t *cf;
@@ -2450,6 +2501,11 @@ struct overlay *overlay_create (flux_t *h,
     if (!(ov->monitor_callbacks = zlist_new ()))
         goto nomem;
     if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
+        goto error;
+    if (overlay_configure_interface_hint (ov,
+                                          "tbon",
+                                          "interface-hint",
+                                          default_interface_hint) < 0)
         goto error;
     if (overlay_configure_torpid (ov) < 0)
         goto error;

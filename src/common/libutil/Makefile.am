@@ -19,6 +19,8 @@ noinst_LTLIBRARIES = libutil.la
 libutil_la_SOURCES = \
 	ipaddr.c \
 	ipaddr.h \
+	cidr.c \
+	cidr.h \
 	log.c \
 	log.h \
 	xzmalloc.c \
@@ -118,6 +120,7 @@ TESTS = test_sha1.t \
 	test_read_all.t \
 	test_tomltk.t \
 	test_ipaddr.t \
+	test_cidr.t \
 	test_fluid.t \
 	test_aux.t \
 	test_fdutils.t \
@@ -152,7 +155,9 @@ test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
 	$(AM_CPPFLAGS) $(JANSSON_CFLAGS)
 
-check_PROGRAMS = $(TESTS)
+check_PROGRAMS = \
+	$(TESTS) \
+	test_getaddr
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
@@ -220,6 +225,14 @@ test_tomltk_t_LDADD = $(test_ldadd)
 test_ipaddr_t_SOURCES = test/ipaddr.c
 test_ipaddr_t_CPPFLAGS = $(test_cppflags)
 test_ipaddr_t_LDADD = $(test_ldadd)
+
+test_getaddr_SOURCES = test/getaddr.c
+test_getaddr_CPPFLAGS = $(test_cppflags)
+test_getaddr_LDADD = $(test_ldadd)
+
+test_cidr_t_SOURCES = test/cidr.c
+test_cidr_t_CPPFLAGS = $(test_cppflags)
+test_cidr_t_LDADD = $(test_ldadd)
 
 test_fluid_t_SOURCES = test/fluid.c
 test_fluid_t_CPPFLAGS = $(test_cppflags)

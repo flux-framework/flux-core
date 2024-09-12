@@ -232,7 +232,9 @@ affect the broker's PMI client.
 .. envvar:: FLUX_IPADDR_INTERFACE
 
    Force PMI bootstrap to assign the broker an address associated with a
-   particular network interface, like ``eth0``.
+   particular network interface, like ``eth0``.  Alternatively, the interface
+   may be specified by its IPv4 network address in CIDR form, e.g.
+   "192.168.1.1/24".
 
 
 CUSTOM OUTPUT FORMATS
