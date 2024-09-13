@@ -79,6 +79,21 @@ test_expect_success 'tbon.interface-hint=hostname works' '
 	flux start -o,-Stbon.interface-hint=hostname,-Stbon.prefertcp=1 \
 		${ARGS} -s2 true
 '
+test_expect_success 'tbon.interface-hint defaults to default-router' '
+	flux start ${ARGS} flux getattr tbon.interface-hint >defhint.out &&
+	grep default-route defhint.out
+'
+test_expect_success 'tbon.interface-hint default comes from parent' '
+	flux start -o,-Stbon.interface-hint=hostname \
+	    flux alloc -N1 flux getattr tbon.interface-hint >childhint.out &&
+	grep hostname childhint.out
+'
+test_expect_success 'tbon.interface-hint from parent can be overridden' '
+	flux start -o,-Stbon.interface-hint=hostname \
+	    flux alloc -N1 --broker-opts=-Stbon.interface-hint=default-router \
+	    flux getattr tbon.interface-hint >childhint2.out &&
+	grep default-router childhint2.out
+'
 test_expect_success 'tbon.endpoint cannot be set' '
 	test_expect_code 137 flux start ${ARGS} -s2 \
 		-o,--setattr=tbon.endpoint=ipc:///tmp/customflux /bin/true
