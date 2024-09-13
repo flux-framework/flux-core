@@ -447,19 +447,19 @@ test_expect_success 'FLUX_IPADDR_INTERFACE=lo works' '
 		flux getattr tbon.endpoint >endpoint3.out &&
 	grep "127.0.0.1" endpoint3.out
 '
-test_expect_success 'tcp.interface-hint=lo works' '
+test_expect_success 'tbon.interface-hint=lo works' '
 	flux start -o,-Stbon.interface-hint=lo \
 		${ARGS} -s2 -o,-Stbon.prefertcp=1 \
 		flux getattr tbon.endpoint >endpoint3a.out &&
 	grep "127.0.0.1" endpoint3a.out
 '
-test_expect_success 'tcp.interface-hint=127.0.0.0/8 works' '
+test_expect_success 'tbon.interface-hint=127.0.0.0/8 works' '
 	flux start -o,-Stbon.interface-hint=127.0.0.0/8 \
 		${ARGS} -s2 -o,-Stbon.prefertcp=1 \
 		flux getattr tbon.endpoint >endpoint3b.out &&
 	grep "127.0.0.1" endpoint3b.out
 '
-test_expect_success 'TOML tcp.interface-hint=127.0.0.0/8 works' '
+test_expect_success 'TOML tbon.interface-hint=127.0.0.0/8 works' '
 	cat >hint.toml <<-EOT &&
 	tbon.interface-hint = "127.0.0.0/8"
 	EOT
@@ -468,21 +468,21 @@ test_expect_success 'TOML tcp.interface-hint=127.0.0.0/8 works' '
 		flux getattr tbon.endpoint >endpoint3c.out &&
 	grep "127.0.0.1" endpoint3c.out
 '
-test_expect_success 'TOML tcp.interface-hint=wrong type fails' '
+test_expect_success 'TOML tbon.interface-hint=wrong type fails' '
 	cat >badhint.toml <<-EOT &&
 	tbon.interface-hint = 42
 	EOT
 	test_must_fail flux start -o,--config-path=badhint.toml ${ARGS} true
 '
-test_expect_success 'tcp.interface-hint=badiface fails' '
+test_expect_success 'tbon.interface-hint=badiface fails' '
 	test_expect_code 137 flux start -o,-Stbon.interface-hint=badiface \
 		${ARGS} -s2 -o,-Stbon.prefertcp=1 true
 '
-test_expect_success 'tcp.interface-hint=default-route works' '
+test_expect_success 'tbon.interface-hint=default-route works' '
 	flux start -o,-Stbon.interface-hint=default-route,-Stbon.prefertcp=1 \
 		${ARGS} -s2 true
 '
-test_expect_success 'tcp.interface-hint=hostname works' '
+test_expect_success 'tbon.interface-hint=hostname works' '
 	flux start -o,-Stbon.interface-hint=hostname,-Stbon.prefertcp=1 \
 		${ARGS} -s2 true
 '
