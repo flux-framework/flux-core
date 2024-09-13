@@ -799,7 +799,7 @@ class OutputFormat:
             raise KeyError(f"Invalid format field {exc} for {typestr}")
         return retval
 
-    def filter_empty(self, items):
+    def filter(self, items):
         """
         Check for format fields that are prefixed with `?:` (e.g. "?:{name}")
         and filter them out of the current format string if they result in an
@@ -935,8 +935,8 @@ class OutputFormat:
             pre (callable): Function to call before printing each item
             post (callable): Function to call after printing each item
         """
-        #  Preprocess original format by processing with filter_empty():
-        newfmt = self.filter_empty(items)
+        #  Preprocess original format by processing with filter():
+        newfmt = self.filter(items)
         #  Get the current class for creating a new formatter instance:
         cls = self.__class__
         #  Create new instance of the current class from filtered format:

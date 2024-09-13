@@ -274,7 +274,7 @@ def main():
     if PROGRAM == "flux-pkill":
         pkill(fh, args, jobs)
 
-    sformatter = JobInfoFormat(formatter.filter_empty(jobs))
+    sformatter = JobInfoFormat(formatter.filter(jobs))
 
     # "default" can be overridden by environment variable, so check if
     # it's different than the builtin default
