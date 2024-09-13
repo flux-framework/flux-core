@@ -196,7 +196,29 @@ test_expect_success 'flux-jobs: collapsible fields work' '
 	grep EXCEPTION-TYPE nocollapse.out &&
 	test_must_fail grep EXCEPTION-TYPE collapsed.out
 '
-
+# Note longest name from above should be 'nosuchcommand'
+# To ensure field was expanded to this width, ensure NAME header is right
+# justified:
+test_expect_success 'flux-jobs: expandable fields work' '
+	flux jobs -ao "+:{name:>1}" >expanded.out &&
+	grep "^ *NAME" expanded.out &&
+	grep "^ *sleep" expanded.out &&
+	grep "nosuchcommand" expanded.out
+'
+test_expect_success 'flux-jobs: specified width overrides expandable field' '
+	flux jobs -ao "+:{name:>16}" >expanded2.out &&
+	test_debug "cat expanded2.out" &&
+	grep "^   nosuchcommand" expanded2.out
+'
+test_expect_success 'flux-jobs: collapsible+expandable fields work' '
+	flux jobs -ao "{id.f58:<12} ?+:{exception.type:>1}" >both.out &&
+	flux jobs -f running,completed \
+		 -o "{id.f58:<12} ?+:{exception.type:>1}" >both-collapsed.out &&
+	test_debug "head -n1 both.out" &&
+	test_debug "head -n1 both-collapsed.out" &&
+	grep EXCEPTION-TYPE both.out &&
+	test_must_fail grep EXCEPTION-TYPE both-collapsed.out
+'
 test_expect_success 'flux-jobs: request indication of truncation works' '
 	flux jobs -n -c1 -ano "{id.f58:<5.5+}" | grep + &&
 	flux jobs -n -c1 -ano "{id.f58:<5.5h+}" | grep + &&
