@@ -54,6 +54,30 @@ error:
     return rc;
 }
 
+/* If the tbon.interface-hint broker attr is not already set, set it.
+ * If running under Flux, use the value, if any, placed in PMI KVS by
+ * the enclsoing instance.  Otherwise, set a default value.
+ */
+static int set_tbon_interface_hint_attr (struct upmi *upmi,
+                                         attr_t *attrs,
+                                         struct overlay *ov,
+                                         bool under_flux)
+{
+    char *val = NULL;
+    int rc = -1;
+
+    if (attr_get (attrs, "tbon.interface-hint", NULL, NULL) == 0)
+        return 0;
+    if (under_flux)
+        (void)upmi_get (upmi, "flux.tbon-interface-hint", -1, &val, NULL);
+    if (overlay_set_tbon_interface_hint (ov, val) < 0)
+        goto error;
+    rc = 0;
+error:
+    ERRNO_SAFE_WRAP (free, val);
+    return rc;
+}
+
 static char *pmi_mapping_to_taskmap (const char *s)
 {
     char *result;
@@ -269,6 +293,10 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
             log_err ("error setting jobid attribute");
             goto error;
         }
+    }
+    if (set_tbon_interface_hint_attr (upmi, attrs, overlay, under_flux) < 0) {
+        log_err ("error setting tbon.interface-hint attribute");
+        goto error;
     }
     if (set_broker_mapping_attr (upmi, info.size, attrs) < 0) {
         log_err ("error setting broker.mapping attribute");

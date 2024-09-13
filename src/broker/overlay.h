@@ -95,6 +95,7 @@ const char *overlay_get_uuid (struct overlay *ov);
 bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid);
 bool overlay_uuid_is_child (struct overlay *ov, const char *uuid);
 void overlay_set_ipv6 (struct overlay *ov, int enable);
+int overlay_set_tbon_interface_hint (struct overlay *ov, const char *val);
 
 /* Return an idset of critical ranks, i.e. non-leaf brokers
  */

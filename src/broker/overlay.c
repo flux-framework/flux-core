@@ -2134,51 +2134,64 @@ error:
     return -1;
 }
 
+/* This is called from boot_*.c with a default value to set if the attribute
+ * is not set already.
+ */
+int overlay_set_tbon_interface_hint (struct overlay *ov, const char *val)
+{
+    if (attr_get (ov->attrs, "tbon.interface-hint", NULL, NULL) == 0)
+        return 0;
+    if (!val)
+        val = default_interface_hint;
+    return attr_add (ov->attrs, "tbon.interface-hint", val, 0);
+}
+
+/* Set attribute with the following precedence:
+ * 1. broker attribute
+ * 2. TOML config
+ * 3. legacy environment variables
+ * Leave it unset if none of those are available.
+ * The bootstrap methods set it later, but only if not already set.
+ */
 static int overlay_configure_interface_hint (struct overlay *ov,
                                              const char *table,
-                                             const char *name,
-                                             const char *default_value)
+                                             const char *name)
 {
     char long_name[128];
-    const char *val;
-    const char *s;
+    const char *val = NULL;
+    const char *config_val = NULL;
+    const char *attr_val = NULL;
+    int flags;
     const flux_conf_t *cf;
+    flux_error_t error;
 
-    (void)snprintf (long_name, sizeof (long_name), "%s.%s", table, name);
-
-    /* Take initial value from compiled-in default or legacy
-     * environment variable settings.
-     */
-    if ((s = getenv ("FLUX_IPADDR_INTERFACE")))
-        val = s;
-    else if (getenv ("FLUX_IPADDR_HOSTNAME"))
-        val = "hostname";
-    else
-        val = default_value;
-
-    /* Override with config file settings, if any.
-     */
     if ((cf = flux_get_conf (ov->h))) {
-        flux_error_t error;
-
-        s = NULL;
-        if (flux_conf_unpack (flux_get_conf (ov->h),
+        if (flux_conf_unpack (cf,
                               &error,
                               "{s?{s?s}}",
                               table,
-                                name, &s) < 0) {
+                                name, &config_val) < 0) {
             log_msg ("Config file error [%s]: %s", table, error.text);
             return -1;
         }
-        if (s)
-            val = s;
     }
-    /* Override with broker attribute, if any.
-     * Then set broker attribute to reflect current value.
-     */
-    if (overlay_configure_attr (ov->attrs, long_name, val, NULL) < 0) {
-        log_err ("Error setting %s attribute", long_name);
-        return -1;
+    (void)snprintf (long_name, sizeof (long_name), "%s.%s", table, name);
+    (void)attr_get (ov->attrs, long_name, &attr_val, &flags);
+
+    if (attr_val)
+        val = attr_val;
+    else if (config_val)
+        val = config_val;
+    else if ((val = getenv ("FLUX_IPADDR_INTERFACE")))
+        ;
+    else if (getenv ("FLUX_IPADDR_HOSTNAME"))
+        val = "hostname";
+
+    if (val && !attr_val) {
+         if (attr_add (ov->attrs, long_name, val, 0) < 0) {
+            log_err ("Error setting %s attribute value", long_name);
+            return -1;
+         }
     }
     return 0;
 }
@@ -2502,10 +2515,7 @@ struct overlay *overlay_create (flux_t *h,
         goto nomem;
     if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
         goto error;
-    if (overlay_configure_interface_hint (ov,
-                                          "tbon",
-                                          "interface-hint",
-                                          default_interface_hint) < 0)
+    if (overlay_configure_interface_hint (ov, "tbon", "interface-hint") < 0)
         goto error;
     if (overlay_configure_torpid (ov) < 0)
         goto error;
@@ -2566,7 +2576,6 @@ error:
     overlay_destroy (ov);
     return NULL;
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
