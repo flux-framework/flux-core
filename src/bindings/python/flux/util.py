@@ -631,6 +631,78 @@ class OutputFormat:
         if self.prepend:
             self.fmt = self.get_format_prepended(self.prepend)
 
+    class FormatSpec:
+        """Split Python format spec into components"""
+
+        # Note: 'hyphen' and 'truncate' are Flux extensions
+        components = (
+            "fill",
+            "align",
+            "sign",
+            "pos_zero",
+            "alt",
+            "zero_pad",
+            "width_str",
+            "grouping",
+            "decimal",
+            "precision_str",
+            "type",
+            "hyphen",
+            "truncate",
+        )
+
+        def __init__(self, spec):
+
+            # Regex taken from https://stackoverflow.com/a/78351366
+            # 'hyphen' and 'truncate' are Flux extensions
+            spec_re = re.compile(
+                r"(?:(?P<fill>[\s\S])?(?P<align>[<>=^]))?"
+                r"(?P<sign>[- +])?"
+                r"(?P<pos_zero>z)?"
+                r"(?P<alt>#)?"
+                r"(?P<zero_pad>0)?"
+                r"(?P<width_str>\d+)?"
+                r"(?P<grouping>[_,])?"
+                r"(?:(?P<decimal>\.)(?P<precision_str>\d+))?"
+                r"(?P<type>[bcdeEfFgGnosxX%])?"
+                r"(?P<hyphen>h)?"
+                r"(?P<truncate>\+)?"
+            )
+            try:
+                self._spec_dict = spec_re.fullmatch(spec).groupdict()
+            except AttributeError:
+                self._spec_dict = {}
+            for item in self.components:
+                setattr(self, item, self._spec_dict.get(item, ""))
+
+        @property
+        def width(self):
+            return int(self.width_str) if self.width_str else 0
+
+        @width.setter
+        def width(self, val):
+            self.width_str = str(val)
+
+            # Also adjust precision if necessary
+            if self.precision and self.precision < self.width:
+                self.precision = self.width
+
+        @property
+        def precision(self):
+            return int(self.precision_str) if self.precision_str else 0
+
+        @precision.setter
+        def precision(self, val):
+            self.precision_str = str(val)
+
+        def __str__(self):
+            result = ""
+            for item in self.components:
+                value = getattr(self, item)
+                if value is not None:
+                    result += str(value)
+            return result
+
     @property
     def fields(self):
         return self._fields
@@ -734,53 +806,115 @@ class OutputFormat:
         empty value (as defined by the `empty` tuple defined below) for every
         entry in `items`.
         """
-        #  Build a list of all format strings that have the collapsible
-        #  sentinel '?:' to determine which are subject to the test for
-        #  emptiness.
+
+        #  Build a list of all format strings that have one of the width
+        #  adjustment sentinels to determine which are subject to the test for
+        #  emptiness/maxwidth.
+        #
+        sentinels = {"?:": "filter", "+:": "maxwidth", "?+:": "both"}
+
+        def sentinel_keys():
+            #  helper function to iterate supported sentinels by longest
+            #  first to avoid matching `+:` instead of `?+:`, etc.
+            #
+            return sorted(sentinels.keys(), key=lambda x: -len(x))
+
+        lst = []
+        index = 0
+
+        #  Loop over each format entry to find entries using any one
+        #  of the sentinels above:
         #
         #  Note: we remove the leading `text` and the format `spec` because
         #  these may make even empty formatted fields non-empty. E.g. a spec
         #  of `:>8` will always make the format result 8 characters wide.
         #
-        lst = []
-        index = 0
-        for text, field, _, conv in self.format_list:
-            if text.endswith("?:"):
+        for text, field, spec, conv in self.format_list:
+            # Determine if field has any supported sentinel above:
+            end = next((x for x in sentinel_keys() if text.endswith(x)), False)
+
+            if end:
+                #  This entry matches one of the filtering sentinels, parse
+                #  the spec to get current width (and allow possible
+                #  reconstruction later).
+                spec = self.FormatSpec(spec)
+
+                #  Save a format without any spec to allow determination of
+                #  maximum width after formatting all items:
                 fmt = self._fmt_tuple("", "0." + field, None, conv)
-                lst.append(dict(fmt=fmt, index=index))
+
+                #  Save the modified format, index, type, maximum width,
+                #  observed width, and broken-down spec in lst:
+                lst.append(
+                    dict(
+                        fmt=fmt,
+                        index=index,
+                        type=sentinels[end],
+                        maxwidth=spec.width or 0,
+                        width=0,
+                        spec=spec,
+                    )
+                )
             index = index + 1
 
-        # Return immediately if no format fields are collapsible
+        # Return immediately if no format fields need filtering:
         if not lst:
             return self.get_format(orig=True)
 
         formatter = self.formatter()
 
-        #  Iterate over all items, rebuilding lst each time to contain
-        #  only those fields that resulted in non-"empty" strings:
+        #  Get a list of outputs that would qualify as "empty"
         empty = empty_outputs()
-        for item in items:
-            lst = [x for x in lst if formatter.format(x["fmt"], item) in empty]
 
-            #  If lst is now empty, that means all fields already returned
-            #  nonzero strings, so we can break early
-            if not lst:
-                break
+        #  Loop over all items that will be printed and capture the max
+        #  width. This will later be used to either filter out the format
+        #  field entirely, or update the width to the maximum value:
+        for item in items:
+            for entry in lst:
+                result = formatter.format(entry["fmt"], item)
+                width = 0 if result in empty else len(result)
+                if width > entry["maxwidth"]:
+                    entry["maxwidth"] = width
+                if width > entry["width"]:
+                    entry["width"] = width
+
+        #  Create two new lists from lst:
+        #
+        #  remove: These entries have 0 width and were requested to be removed
+        #
+        #  new_lst: lst without those entries in `remove`. These entries
+        #      have nonzero width and/or are requesting max width be
+        #      substituted into the format spec.
+        #
+        remove = []
+        new_lst = []
+        for entry in lst:
+            if entry["width"] == 0 and entry["type"] in ("filter", "both"):
+                remove.append(entry["index"])
+            else:
+                new_lst.append(entry)
+        lst = new_lst
+
+        #  For any remaining entries in lst, update the format spec width
+        #  to the found maxwidth:
+        #
+        format_list = self.format_list.copy()
+        for entry in lst:
+            entry["spec"].width = entry["maxwidth"]
+            format_list[entry["index"]][2] = str(entry["spec"])
 
         #  Remove any entries that were empty from self.format_list
-        #  (use index field of lst to remove by position in self.format_list)
-        format_list = [
-            x
-            for i, x in enumerate(self.format_list)
-            if i not in [x["index"] for x in lst]
-        ]
+        #  After this line saved indices in entry["index"] will no longer
+        #  be valid, so they should not be used after this point.
+        #
+        format_list = [x for i, x in enumerate(self.format_list) if i not in remove]
 
-        #  Remove "?:" from remaining entries so they disappear in output.
+        #  Remove sentinels from remaining entries so they disappear in output.
         for entry in format_list:
-            if entry[0].endswith("?:"):
-                entry[0] = entry[0][:-2]
+            for s in sentinel_keys():
+                entry[0] = entry[0].replace(s, "")
 
-        #  Return new format string created from pruned format_list
+        #  Return new format string:
         return "".join(self._fmt_tuple(*x) for x in format_list)
 
     def print_items(self, items, no_header=False, pre=None, post=None):
