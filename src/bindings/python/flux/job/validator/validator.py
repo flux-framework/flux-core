@@ -11,7 +11,6 @@
 import argparse
 import concurrent.futures
 import json
-import threading
 from abc import ABC, abstractmethod
 
 import flux
@@ -63,35 +62,32 @@ class ValidatorJobInfo:
         userid (int): Submitting user id
         flags (int): Job flags supplied during submission
         urgency (int): Job urgency
-        flux (:obj:`Flux`): On-demand, per-thread Flux handle
-
     """
-
-    #  Thread-local storage, used to provide an on-demand, per-thread
-    #    Flux handle for validators that require one.
-    tls = threading.local()
 
     def __init__(self, jobinfo):
         self.jobinfo = jobinfo
 
     def __getattr__(self, attr):
-        if attr == "flux":
-            #  Allow one flux handle per thread, created on demand:
-            try:
-                return self.tls.flux
-            except AttributeError:
-                self.tls.flux = flux.Flux()
-                return self.tls.flux
-        else:
-            #  Return components of the validate request as attrs
-            return self.jobinfo[attr]
+        #  Return components of the validate request as attrs
+        return self.jobinfo[attr]
 
 
 class ValidatorPlugin(ABC):  # pragma: no cover
-    """Base class for Validator Plugins"""
+    """Base class for Validator Plugins
+
+    Attributes:
+        flux (:obj:`flux.Flux`): on-demand per-plugin (per-thread) Flux
+            handle.
+    """
 
     def __init__(self, parser):
         """Initialize a ValidatorPlugin"""
+
+    @property
+    def flux(self):
+        if not hasattr(self, "_flux"):
+            self._flux = flux.Flux()
+        return self._flux
 
     def configure(self, args):
         """Configure a ValidatorPlugin. Run after argparse.parse_args()
