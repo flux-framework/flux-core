@@ -238,6 +238,19 @@ would eliminate the EXCEPTION-TYPE column if no jobs in the list received
 an exception. (Thus the job queue is only displayed if at least one job
 has a queue assigned in the default format shown above).
 
+If a format field is preceded by the special string ``+:`` this will
+cause the field width to be set to the maximum width such that no entry
+will be truncated. If the field already has a width, then this will be
+the minimum width of that field. For example::
+
+  {id.f58:>12} +:{queue:>5}
+
+would set the width of the ``QUEUE`` field to the maximum of 5 and the
+actual width of the largest presented queue.
+
+If a format field is preceded by the string ``?+:``, then the field is
+eliminated if empty, or set the maximum item width.
+
 As a reminder to the reader, some shells will interpret braces
 (``{`` and ``}``) in the format string.  They may need to be quoted.
 
