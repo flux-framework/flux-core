@@ -75,6 +75,15 @@ OPTIONS
    "last Monday", etc. It is assumed to be an error if a timestamp in
    the future is supplied.
 
+   .. note::
+      Due to a quirk in the Python argument parsing implementation,
+      it is suggested to always use ``=`` between the :option:`--since`
+      option and its argument, e.g. ``--since=-1d`` rather than ``--since
+      -1d``. In the second case Python mistakenly considers the option
+      argument an unknown option and will raise an error about a missing
+      argument to :option:`--since`.
+
+
 .. option:: -f, --filter=STATE|RESULT
 
    List jobs with specific job state or result. Multiple states or
