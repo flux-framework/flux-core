@@ -66,15 +66,15 @@ class FluxResourceConfig(UtilConfig):
         "default": {
             "description": "Default flux-resource list format string",
             "format": (
-                "{state:>10} ?:{queue:<10.10} ?:{propertiesx:<10.10+} {nnodes:>6} "
-                "{ncores:>8} ?:{ngpus:>8} {nodelist}"
+                "{state:>10} ?+:{queue:<5} ?:{propertiesx:<10.10+} {nnodes:>6} "
+                "+:{ncores:>6} ?+:{ngpus:>5} {nodelist}"
             ),
         },
         "rlist": {
             "description": "Format including resource list details",
             "format": (
-                "{state:>10} ?:{queue:<8.8} ?:{propertiesx:<10.10+} {nnodes:>6} "
-                "{ncores:>8} {ngpus:>8} {rlist}"
+                "{state:>10} ?+:{queue:<5} ?:{propertiesx:<10.10+} {nnodes:>6} "
+                "+:{ncores:>6} ?:+{ngpus:>5} {rlist}"
             ),
         },
     }
