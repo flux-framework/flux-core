@@ -379,45 +379,6 @@ static int match_results (struct list_constraint *c,
     return ((*results) & job->result) ? 1 : 0;
 }
 
-static int array_to_results_bitmask (json_t *values, flux_error_t *errp)
-{
-    int results = 0;
-    json_t *entry;
-    size_t index;
-    int valid_results = (FLUX_JOB_RESULT_COMPLETED
-                         | FLUX_JOB_RESULT_FAILED
-                         | FLUX_JOB_RESULT_CANCELED
-                         | FLUX_JOB_RESULT_TIMEOUT);
-
-    json_array_foreach (values, index, entry) {
-        flux_job_result_t result;
-        if (json_is_string (entry)) {
-            const char *resultstr = json_string_value (entry);
-            if (flux_job_strtoresult (resultstr, &result) < 0) {
-                errprintf (errp,
-                           "invalid results value '%s' specified",
-                           resultstr);
-                return -1;
-            }
-        }
-        else if (json_is_integer (entry)) {
-            result = json_integer_value (entry);
-            if (result & ~valid_results) {
-                errprintf (errp,
-                           "invalid results value '%Xh' specified",
-                           result);
-                return -1;
-            }
-        }
-        else {
-            errprintf (errp, "results value invalid type");
-            return -1;
-        }
-        results |= result;
-    }
-    return results;
-}
-
 static struct list_constraint *create_results_constraint (struct match_ctx *mctx,
                                                           json_t *values,
                                                           flux_error_t *errp)
