@@ -30,8 +30,9 @@
 #include "server.h"
 #include "client.h"
 
-/* Keys used to store subprocess server, rexec.exec request, and
- * 'subprocesses' zlistx handle in the subprocess object.
+/* Keys used to store subprocess server, exec request
+ * (i.e. rexec.exec), and 'subprocesses' zlistx handle in the
+ * subprocess object.
  */
 static const char *srvkey = "flux::server";
 static const char *msgkey = "flux::request";
@@ -39,6 +40,7 @@ static const char *lstkey = "flux::handle";
 
 struct subprocess_server {
     flux_t *h;
+    char *service_name;
     char *local_uri;
     uint32_t rank;
     subprocess_log_f llog;
@@ -140,7 +142,8 @@ static void proc_completion_cb (flux_subprocess_t *p)
         /* no fallback if this fails */
         if (flux_respond_error (s->h, request, ENODATA, NULL) < 0) {
             llog_error (s,
-                        "error responding to rexec.exec request: %s",
+                        "error responding to %s.exec request: %s",
+                        s->service_name,
                         strerror (errno));
         }
     }
@@ -218,7 +221,8 @@ static void proc_state_change_cb (flux_subprocess_t *p,
     }
     if (rc < 0) {
         llog_error (s,
-                    "error responding to rexec.exec request: %s",
+                    "error responding to %s.exec request: %s",
+                    s->service_name,
                     strerror (errno));
     }
     return;
@@ -252,7 +256,8 @@ static int proc_output (flux_subprocess_t *p,
                            "pid", flux_subprocess_pid (p),
                            "io", io) < 0) {
         llog_error (s,
-                    "error responding to rexec.exec request: %s",
+                    "error responding to %s.exec request: %s",
+                    s->service_name,
                     strerror (errno));
         goto error;
     }
@@ -395,7 +400,8 @@ static void server_exec_cb (flux_t *h,
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0) {
         llog_error (s,
-                    "error responding to rexec.exec request: %s",
+                    "error responding to %s.exec request: %s",
+                    s->service_name,
                     strerror (errno));
     }
     flux_cmd_destroy (cmd);
@@ -425,12 +431,13 @@ static void server_write_cb (flux_t *h,
                              "io", &io) < 0
         || iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
         llog_error (s,
-                    "Error decoding rexec.write request: %s",
+                    "Error decoding %s.write request: %s",
+                    s->service_name,
                     strerror (errno));
         goto out;
     }
     if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
-        llog_error (s, "rexec.write: %s", error.text);
+        llog_error (s, "%s.write: %s", s->service_name, error.text);
         goto out;
     }
 
@@ -497,14 +504,16 @@ static void server_kill_cb (flux_t *h,
         goto error;
     if (flux_respond (h, msg, NULL) < 0) {
         llog_error (s,
-                    "error responding to rexec.kill request: %s",
+                    "error responding to %s.kill request: %s",
+                    s->service_name,
                     strerror (errno));
     }
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0) {
         llog_error (s,
-                    "error responding to rexec.kill request: %s",
+                    "error responding to %s.kill request: %s",
+                    s->service_name,
                     strerror (errno));
     }
 }
@@ -566,7 +575,8 @@ static void server_list_cb (flux_t *h,
     if (flux_respond_pack (h, msg, "{s:i s:o}", "rank", s->rank,
                            "procs", procs) < 0) {
         llog_error (s,
-                    "error responding to rexec.list request: %s",
+                    "error responding to %s.list request: %s",
+                    s->service_name,
                     strerror (errno));
     }
     return;
@@ -575,7 +585,8 @@ nomem:
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0) {
         llog_error (s,
-                    "error responding to rexec.list request: %s",
+                    "error responding to %s.list request: %s",
+                    s->service_name,
                     strerror (errno));
     }
     json_decref (procs);
@@ -666,6 +677,7 @@ void subprocess_server_destroy (subprocess_server_t *s)
         server_killall (s, SIGKILL);
         zlistx_destroy (&s->subprocesses);
         flux_future_destroy (s->shutdown);
+        free (s->service_name);
         free (s->local_uri);
         free (s);
         errno = saved_errno;
@@ -695,6 +707,8 @@ subprocess_server_t *subprocess_server_create (flux_t *h,
     if (!(s->subprocesses = zlistx_new ()))
         goto error;
     zlistx_set_destructor (s->subprocesses, proc_destructor);
+    if (!(s->service_name = strdup (service_name)))
+        goto error;
     if (!(s->local_uri = strdup (local_uri)))
         goto error;
     if (flux_get_rank (h, &s->rank) < 0)
