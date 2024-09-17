@@ -20,9 +20,11 @@ import flux.constants
 from flux.hostlist import Hostlist
 from flux.idset import IDset
 from flux.job import JobID, JobInfo, JobInfoFormat, JobList, job_fields_to_attrs
+from flux.job.list import JobListConstraintParser
 from flux.job.stats import JobStats
 from flux.util import (
     FilterAction,
+    FilterActionConcatenate,
     FilterActionSetUpdate,
     FilterTrueAction,
     UtilConfig,
@@ -153,18 +155,17 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         if args.filter:
             LOGGER.warning("Both -a and --filter specified, ignoring -a")
         else:
-            args.filter.update(["pending", "running", "inactive"])
+            args.filter = "pending,running,inactive"
 
     if not args.filter:
-        args.filter = {"pending", "running"}
+        args.filter = "pending,running"
 
-    constraint = None
     if args.include:
         try:
-            constraint = {"ranks": [IDset(args.include).encode()]}
+            args.filter += " ranks:" + IDset(args.include).encode()
         except ValueError:
             try:
-                constraint = {"hostlist": [Hostlist(args.include).encode()]}
+                args.filter += " host:" + Hostlist(args.include).encode()
             except ValueError:
                 raise ValueError(f"-i/--include: invalid targets: {args.include}")
 
@@ -172,13 +173,12 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         flux_handle,
         ids=args.jobids,
         attrs=attrs,
-        filters=args.filter,
         user=args.user,
         max_entries=args.count,
         since=since,
         name=args.name,
         queue=args.queue,
-        constraint=constraint,
+        constraint=JobListConstraintParser().parse(args.filter),
     )
 
     jobs = jobs_rpc.jobs()
@@ -231,10 +231,9 @@ def parse_args():
     parser.add_argument(
         "-f",
         "--filter",
-        action=FilterActionSetUpdate,
-        metavar="STATE|RESULT",
-        default=set(),
-        help="List jobs with specific job state or result",
+        action=FilterActionConcatenate,
+        metavar="QUERY",
+        help="Restrict jobs using a constraint query string",
     )
     parser.add_argument(
         "--since",
