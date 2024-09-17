@@ -23,4 +23,3 @@ AlignAfterOpenBracket: true
 BinPackArguments : false
 AlignOperands : true
 BreakBeforeTernaryOperators : true
-AllowAllParametersOfDeclarationOnNextLine : false
