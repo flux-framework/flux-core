@@ -38,6 +38,7 @@
 #include "src/common/libutil/strstrip.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/parse_size.h"
 #include "ccan/str/str.h"
 
 #include "builtins.h"
@@ -102,6 +103,35 @@ eproto:
 error:
     ERRNO_SAFE_WRAP (free, cg);
     return NULL;
+}
+
+static int get_cgroup_value (const char *name, char *buf, size_t len)
+{
+    char *path;
+    char *s = NULL;
+    int rc = -1;
+
+    if (!(path = get_cgroup_path (getpid (), name, R_OK))
+        || !(s = read_file (path)))
+        goto out;
+    if (snprintf (buf, len, "%s", strstrip (s)) >= len)
+        goto out;
+    rc = 0;
+out:
+    free (s);
+    free (path);
+    return rc;
+}
+
+static const char *get_cgroup_size (const char *name)
+{
+    uint64_t size;
+    char rawbuf[32];
+
+    if (get_cgroup_value (name, rawbuf, sizeof (rawbuf)) < 0
+        || parse_size (rawbuf, &size) < 0)
+        return "unknown";
+    return encode_size (size);
 }
 
 /* Parse 'name' from memory.events file.  Example content:
@@ -170,9 +200,14 @@ static void watch_cb (flux_reactor_t *r,
     /* If any new oom events have been recorded, log them.
      */
     if (oom->oom_kill < count) {
-        shell_log_error ("Memory cgroup out of memory: killed %lu task%s.",
+        shell_log_error ("Memory cgroup out of memory: "
+                         "killed %lu task%s on %s.",
                          count - oom->oom_kill,
-                         count - oom->oom_kill > 1 ? "s" : "");
+                         count - oom->oom_kill > 1 ? "s" : "",
+                         oom->shell->hostname);
+
+        shell_log_error ("memory.peak = %s", get_cgroup_size ("memory.peak"));
+
         oom->oom_kill = count;
     }
 out:
