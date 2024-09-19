@@ -22,7 +22,7 @@ void fbuf_destroy (void *fb);
 /* Returns the buffer size, set when fbuf_create () was called */
 int fbuf_size (struct fbuf *fb);
 
-/* Returns the number of bytes current stored in fbuf */
+/* Returns the number of bytes currently stored in fbuf */
 int fbuf_bytes (struct fbuf *fb);
 
 /* Returns the number of bytes of space available in fbuf */
