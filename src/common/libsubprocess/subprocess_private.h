@@ -41,6 +41,8 @@ struct subprocess_channel {
      */
     flux_watcher_t *buffer_read_stopped_w;
     bool buffer_read_w_started;
+    /* watcher to only send initial credits */
+    flux_watcher_t *initial_credits_w;
 
     /* remote */
     struct fbuf *read_buffer;

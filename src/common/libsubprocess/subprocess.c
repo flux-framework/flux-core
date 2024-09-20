@@ -52,6 +52,7 @@ void channel_destroy (void *arg)
         flux_watcher_destroy (c->buffer_write_w);
         flux_watcher_destroy (c->buffer_read_w);
         flux_watcher_destroy (c->buffer_read_stopped_w);
+        flux_watcher_destroy (c->initial_credits_w);
         c->buffer_read_w_started = false;
 
         fbuf_destroy (c->read_buffer);

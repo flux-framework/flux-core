@@ -33,11 +33,17 @@ struct rexec_io {
     bool eof;
 };
 
+struct rexec_credit {
+    const char *stream;
+    int bytes;
+};
+
 struct rexec_response {
     const char *type;
     pid_t pid;
     int status;
     struct rexec_io io;
+    struct rexec_credit credit;
 };
 
 struct rexec_ctx {
@@ -79,7 +85,8 @@ static struct rexec_ctx *rexec_ctx_create (flux_cmd_t *cmd,
     struct rexec_ctx *ctx;
     int valid_flags = SUBPROCESS_REXEC_STDOUT
         | SUBPROCESS_REXEC_STDERR
-        | SUBPROCESS_REXEC_CHANNEL;
+        | SUBPROCESS_REXEC_CHANNEL
+        | SUBPROCESS_REXEC_CREDIT;
 
     if ((flags & ~valid_flags)) {
         errno = EINVAL;
@@ -150,11 +157,14 @@ int subprocess_rexec_get (flux_future_t *f)
     }
     rexec_response_clear (&ctx->response);
     if (flux_rpc_get_unpack (f,
-                             "{s:s s?i s?i s?O}",
+                             "{s:s s?i s?i s?O s?{s:s s:i}}",
                              "type", &ctx->response.type,
                              "pid", &ctx->response.pid,
                              "status", &ctx->response.status,
-                             "io", &ctx->response.io.obj) < 0)
+                             "io", &ctx->response.io.obj,
+                             "channel",
+                               "stream", &ctx->response.credit.stream,
+                               "bytes", &ctx->response.credit.bytes) < 0)
         return -1;
     if (streq (ctx->response.type, "output")) {
         if (iodecode (ctx->response.io.obj,
@@ -167,7 +177,8 @@ int subprocess_rexec_get (flux_future_t *f)
     }
     else if (!streq (ctx->response.type, "started")
         && !streq (ctx->response.type, "stopped")
-        && !streq (ctx->response.type, "finished")) {
+        && !streq (ctx->response.type, "finished")
+        && !streq (ctx->response.type, "add-credit")) {
         errno = EPROTO;
         return -1;
     }
@@ -228,6 +239,23 @@ bool subprocess_rexec_is_output (flux_future_t *f,
             *len = ctx->response.io.len;
         if (eof)
             *eof = ctx->response.io.eof;
+        return true;
+    }
+    return false;
+}
+
+bool subprocess_rexec_is_add_credit (flux_future_t *f,
+                                     const char **stream,
+                                     int *bytes)
+{
+    struct rexec_ctx *ctx;
+    if ((ctx = flux_future_aux_get (f, "flux::rexec"))
+        && ctx->response.type != NULL
+        && streq (ctx->response.type, "add-credit")) {
+        if (stream)
+            *stream = ctx->response.credit.stream;
+        if (bytes)
+            *bytes = ctx->response.credit.bytes;
         return true;
     }
     return false;
