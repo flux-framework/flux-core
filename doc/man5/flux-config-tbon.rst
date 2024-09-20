@@ -89,6 +89,11 @@ interface-hint
      network address in CIDR form, e.g. ``10.0.2.0/24``.  NOTE: IPv6
      network addresses are not supported at this time.
 
+   This configured value may be overridden by setting the
+   ``tbon.interface-hint`` broker attribute on the command line.
+   It is inherited by sub-instances spawned for batch jobs and allocations.
+   Refer to :man7:`flux-broker-attributes` for more information.
+
 
 EXAMPLE
 =======
