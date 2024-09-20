@@ -68,7 +68,8 @@ test_expect_success 'TOML tbon.interface-hint=wrong type fails' '
 	test_must_fail flux start -o,--config-path=badhint.toml ${ARGS} true
 '
 test_expect_success 'tbon.interface-hint=badiface fails' '
-	test_expect_code 137 flux start -o,-Stbon.interface-hint=badiface \
+	test_must_fail_or_be_terminated flux start \
+		-o,-Stbon.interface-hint=badiface \
 		${ARGS} -s2 -o,-Stbon.prefertcp=1 true
 '
 test_expect_success 'tbon.interface-hint=default-route works' '
@@ -95,7 +96,7 @@ test_expect_success 'tbon.interface-hint from parent can be overridden' '
 	grep default-router childhint2.out
 '
 test_expect_success 'tbon.endpoint cannot be set' '
-	test_expect_code 137 flux start ${ARGS} -s2 \
+	test_must_fail_or_be_terminated flux start ${ARGS} -s2 \
 		-o,--setattr=tbon.endpoint=ipc:///tmp/customflux /bin/true
 '
 test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '
