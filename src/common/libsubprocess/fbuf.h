@@ -88,7 +88,7 @@ typedef void (*fbuf_notify_f) (struct fbuf *fb, void *arg);
  * The callback is invoked when the buffer transitions from empty
  * or from full.
  */
-void fbuf_set_notify (struct fbuf *fb, fbuf_notify_f cb, void *arg);
+void fbuf_set_notify (struct fbuf *fb, fbuf_notify_f notify_cb, void *arg);
 
 #endif /* !_LIBSUBPROCESS_FBUF_H */
 

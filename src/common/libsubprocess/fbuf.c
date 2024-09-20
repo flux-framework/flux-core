@@ -30,8 +30,8 @@ struct fbuf {
     cbuf_t cbuf;
     char *buf;                  /* internal buffer for user reads */
     int buflen;
-    fbuf_notify_f cb;
-    void *cb_arg;
+    fbuf_notify_f notify_cb;
+    void *notify_cb_arg;
 };
 
 struct fbuf *fbuf_create (int size)
@@ -74,11 +74,11 @@ cleanup:
     return NULL;
 }
 
-void fbuf_set_notify (struct fbuf *fb, fbuf_notify_f cb, void *arg)
+void fbuf_set_notify (struct fbuf *fb, fbuf_notify_f notify_cb, void *arg)
 {
     if (fb) {
-        fb->cb = cb;
-        fb->cb_arg = arg;
+        fb->notify_cb = notify_cb;
+        fb->notify_cb_arg = arg;
     }
 }
 
@@ -148,16 +148,16 @@ bool fbuf_is_readonly (struct fbuf *fb)
 static void nonempty_transition_check (struct fbuf *fb, bool was_empty)
 {
     if (was_empty && cbuf_used (fb->cbuf) > 0) {
-        if (fb->cb)
-            fb->cb (fb, fb->cb_arg);
+        if (fb->notify_cb)
+            fb->notify_cb (fb, fb->notify_cb_arg);
     }
 }
 
 static void nonfull_transition_check (struct fbuf *fb, bool was_full)
 {
     if (was_full && cbuf_free (fb->cbuf) > 0) {
-        if (fb->cb)
-            fb->cb (fb, fb->cb_arg);
+        if (fb->notify_cb)
+            fb->notify_cb (fb, fb->notify_cb_arg);
     }
 }
 
