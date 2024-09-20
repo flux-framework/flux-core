@@ -32,6 +32,8 @@ struct fbuf {
     int buflen;
     fbuf_notify_f notify_cb;
     void *notify_cb_arg;
+    fbuf_credit_f credit_cb;
+    void *credit_cb_arg;
 };
 
 struct fbuf *fbuf_create (int size)
@@ -79,6 +81,14 @@ void fbuf_set_notify (struct fbuf *fb, fbuf_notify_f notify_cb, void *arg)
     if (fb) {
         fb->notify_cb = notify_cb;
         fb->notify_cb_arg = arg;
+    }
+}
+
+void fbuf_set_credit (struct fbuf *fb, fbuf_credit_f credit_cb, void *arg)
+{
+    if (fb) {
+        fb->credit_cb = credit_cb;
+        fb->credit_cb_arg = arg;
     }
 }
 
@@ -161,6 +171,12 @@ static void nonfull_transition_check (struct fbuf *fb, bool was_full)
     }
 }
 
+static void credit_check (struct fbuf *fb, int bytes)
+{
+    if (fb->credit_cb && bytes)
+        fb->credit_cb (fb, bytes, fb->credit_cb_arg);
+}
+
 /* check if internal buffer can hold data from user */
 static int return_buffer_check (struct fbuf *fb)
 {
@@ -219,6 +235,7 @@ const void *fbuf_read (struct fbuf *fb, int len, int *lenp)
         (*lenp) = ret;
 
     nonfull_transition_check (fb, full);
+    credit_check (fb, ret);
 
     return fb->buf;
 }
@@ -278,6 +295,7 @@ const void *fbuf_read_line (struct fbuf *fb, int *lenp)
         (*lenp) = ret;
 
     nonfull_transition_check (fb, full);
+    credit_check (fb, ret);
 
     return fb->buf;
 }
@@ -316,6 +334,7 @@ int fbuf_read_to_fd (struct fbuf *fb, int fd, int len)
         return -1;
 
     nonfull_transition_check (fb, full);
+    credit_check (fb, ret);
 
     return ret;
 }
