@@ -188,12 +188,12 @@ tbon.prefertcp [Updates: C]
    with PMI, tcp:// endpoints will be used instead of ipc://, even if all
    brokers are on a single node.  Default: ``0``.
 
-tbon.interface-hint
-   When bootstrapping with PMI, tcp:// endpoints are chosen heuristically
+tbon.interface-hint [Updates: C, R]
+   When bootstrapping with PMI, tcp endpoints are chosen heuristically
    using one of the following methods:
 
    default-route
-      The address associated with the default route (the default hint).
+      The address associated with the default route (default, but see below).
    hostname
       The address associated with the system hostname.
    *interface*
@@ -202,6 +202,15 @@ tbon.interface-hint
      The address associated with the first interface that matches the
      network address in CIDR form, e.g. ``10.0.2.0/24``.  NOTE: IPv6
      network addresses are not supported at this time.
+
+   If the attribute is not explicitly set, its value is assigned from
+   (in descending precedence):
+
+   1. the TOML configuration key of the same name
+   2. the :envvar:`FLUX_IPADDR_INTERFACE` or :envvar:`FLUX_IPADDR_HOSTNAME`
+      environment variables (these should be considered deprecated)
+   3. the enclosing Flux instance's value (via the PMI KVS)
+   4. the compiled-in default of default-route
 
 tbon.torpid_min [Updates: C, R]
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
