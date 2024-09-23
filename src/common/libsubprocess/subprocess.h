@@ -235,6 +235,9 @@ int flux_subprocess_read (flux_subprocess_t *p,
  *   the stream is line buffered and a line is not yet available. Use
  *   flux_subprocess_read_stream_closed() to distinguish between the
  *   two.
+ *
+ *   This function may return an incomplete line when the stream has
+ *   closed and the last output is not a line.
  */
 int flux_subprocess_read_line (flux_subprocess_t *p,
                                const char *stream,
