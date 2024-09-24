@@ -77,7 +77,7 @@ class Validator(ValidatorPlugin):
             + "default: 0",
             metavar="N",
             type=int,
-            default=0,
+            default=-1,
         )
         parser.add_argument(
             "--require-instance-mincores",
@@ -85,12 +85,20 @@ class Validator(ValidatorPlugin):
             help="minimum core count that requires flux-batch/alloc be used."
             + "default: 0",
             type=int,
-            default=0,
+            default=-1,
         )
+        super().__init__(parser)
 
     def configure(self, args):
-        nnodes = args.require_instance_minnodes
-        ncores = args.require_instance_mincores
+        base = "ingest.validator.require-instance"
+        nnodes = self.flux.conf_get(f"{base}.minnodes", 0)
+        ncores = self.flux.conf_get(f"{base}.mincores", 0)
+
+        # Allow command line to override config:
+        if args.require_instance_minnodes >= 0:
+            nnodes = args.require_instance_minnodes
+        if args.require_instance_mincores >= 0:
+            ncores = args.require_instance_mincores
         if nnodes > 0 and ncores == 0:
             # Default ncores to a multiple of nnodes to avoid leaving an
             # accidental hole that allows a cores-only job to be admitted
