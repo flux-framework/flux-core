@@ -663,6 +663,12 @@ error:
  *  plugins = [ "jobspec" ]
  *  args = []
  *
+ *  [ingest.validator.plugin-name]
+ *  # plugin-specific configuration
+ *
+ *  [ingest.frobnicator.plugin-name]
+ #  # plugin-specific configuration
+ *
  */
 static int job_ingest_configure (struct job_ingest_ctx *ctx,
                                  const flux_conf_t *conf,
