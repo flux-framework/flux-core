@@ -53,8 +53,9 @@ static void exception_handler (flux_t *h,
         if (!args
             || flux_plugin_arg_pack (args,
                                      FLUX_PLUGIN_ARG_IN,
-                                     "{s:i}",
-                                     "shell_rank", shell_rank) < 0) {
+                                     "{s:i s:i}",
+                                     "shell_rank", shell_rank,
+                                     "severity", severity) < 0) {
             flux_plugin_arg_destroy (args);
             goto error;
         }
