@@ -36,27 +36,46 @@
  *  the booting instance at what "level" it will be running, i.e. the
  *  number of parents. If the PMI key is missing, this is not an error,
  *  instead the level of this instance is considered to be zero.
- *  Additionally, if level > 0, the shell will have put the instance's
- *  jobid in the PMI kvsname for us as well, so populate the 'jobid' attr.
  */
 static int set_instance_level_attr (struct upmi *upmi,
-                                    const char *name,
-                                    attr_t *attrs)
+                                    attr_t *attrs,
+                                    bool *under_flux)
 {
-    int rc;
     char *val = NULL;
-    const char *level = "0";
-    const char *jobid = NULL;
+    int rc = -1;
 
-    if (upmi_get (upmi, "flux.instance-level", -1, &val, NULL) == 0) {
-        level = val;
-        jobid = name;
-    }
-    rc = attr_add (attrs, "instance-level", level, ATTR_IMMUTABLE);
-    free (val);
-    if (rc < 0 || attr_add (attrs, "jobid", jobid, ATTR_IMMUTABLE) < 0)
-        return -1;
-    return 0;
+    (void)upmi_get (upmi, "flux.instance-level", -1, &val, NULL);
+    if (attr_add (attrs, "instance-level", val ? val : "0", ATTR_IMMUTABLE) < 0)
+        goto error;
+    *under_flux = val ? true : false;
+    rc = 0;
+error:
+    ERRNO_SAFE_WRAP (free, val);
+    return rc;
+}
+
+/* If the tbon.interface-hint broker attr is not already set, set it.
+ * If running under Flux, use the value, if any, placed in PMI KVS by
+ * the enclsoing instance.  Otherwise, set a default value.
+ */
+static int set_tbon_interface_hint_attr (struct upmi *upmi,
+                                         attr_t *attrs,
+                                         struct overlay *ov,
+                                         bool under_flux)
+{
+    char *val = NULL;
+    int rc = -1;
+
+    if (attr_get (attrs, "tbon.interface-hint", NULL, NULL) == 0)
+        return 0;
+    if (under_flux)
+        (void)upmi_get (upmi, "flux.tbon-interface-hint", -1, &val, NULL);
+    if (overlay_set_tbon_interface_hint (ov, val) < 0)
+        goto error;
+    rc = 0;
+error:
+    ERRNO_SAFE_WRAP (free, val);
+    return rc;
 }
 
 static char *pmi_mapping_to_taskmap (const char *s)
@@ -241,6 +260,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     int i;
     int upmi_flags = UPMI_LIBPMI_NOFLUX;
     const char *upmi_method;
+    bool under_flux;
 
     // N.B. overlay_create() sets the tbon.topo attribute
     if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
@@ -264,8 +284,18 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
         upmi_destroy (upmi);
         return -1;
     }
-    if (set_instance_level_attr (upmi, info.name, attrs) < 0) {
+    if (set_instance_level_attr (upmi, attrs, &under_flux) < 0) {
         log_err ("set_instance_level_attr");
+        goto error;
+    }
+    if (under_flux) {
+        if (attr_add (attrs, "jobid", info.name, ATTR_IMMUTABLE) < 0) {
+            log_err ("error setting jobid attribute");
+            goto error;
+        }
+    }
+    if (set_tbon_interface_hint_attr (upmi, attrs, overlay, under_flux) < 0) {
+        log_err ("error setting tbon.interface-hint attribute");
         goto error;
     }
     if (set_broker_mapping_attr (upmi, info.size, attrs) < 0) {

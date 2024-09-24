@@ -599,6 +599,13 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
      */
     overlay_set_ipv6 (overlay, conf.enable_ipv6);
 
+    /* Ensure that tbon.interface-hint is set.
+     */
+    if (overlay_set_tbon_interface_hint (overlay, NULL) < 0) {
+        log_err ("error setting tbon.interface-hint attribute");
+        goto error;
+    }
+
     /* If broker has "downstream" peers, determine the URI to bind to
      * from the config and tell overlay.  Also, set the tbon.endpoint
      * attribute to the URI peers will connect to.  If broker has no

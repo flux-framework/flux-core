@@ -423,6 +423,16 @@ out:
     return 0;
 }
 
+static int set_flux_tbon_interface_hint (struct shell_pmi *pmi)
+{
+    const char *hint;
+
+    if (!(hint = flux_attr_get (pmi->shell->h, "tbon.interface-hint")))
+        return 0;
+    put_dict (pmi->locals, "flux.tbon-interface-hint", hint);
+    return 0;
+}
+
 static int set_flux_instance_level (struct shell_pmi *pmi)
 {
     char *p;
@@ -575,6 +585,7 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell, json_t *config)
     if (!nomap && init_clique (pmi) < 0)
         goto error;
     if (set_flux_instance_level (pmi) < 0
+        || set_flux_tbon_interface_hint (pmi) < 0
         || (!nomap && set_flux_taskmap (pmi) < 0))
         goto error;
     return pmi;

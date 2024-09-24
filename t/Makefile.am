@@ -90,6 +90,7 @@ TESTSCRIPTS = \
 	t0016-cron-faketime.t \
 	t0017-security.t \
 	t0018-content-files.t \
+	t0019-tbon-config.t \
 	t0020-terminus.t \
 	t0021-archive-cmd.t \
 	t0022-jj-reader.t \
