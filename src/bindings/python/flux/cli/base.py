@@ -517,6 +517,7 @@ class Xcmd:
         "time_limit": "-t",
         "env": "--env=",
         "env_file": "--env-file=",
+        "env_remove": "--env-remove=",
         "urgency": "--urgency=",
         "setopt": "-o ",
         "setattr": "--setattr=",
@@ -532,6 +533,11 @@ class Xcmd:
         "taskmap": "--taskmap=",
         "requires": "--requires=",
         "wait": "--wait-event=",
+        "cwd": "--cwd=",
+        "flags": "--flags=",
+        "begin_time": "--begin-time=",
+        "signal": "--signal=",
+        "taskmap": "--taskmap=",
     }
 
     class Xinput:
