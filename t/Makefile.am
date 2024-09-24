@@ -451,7 +451,6 @@ check_PROGRAMS = \
 	ingest/submitbench \
 	sched-simple/jj-reader \
 	shell/rcalc \
-	shell/lptest \
 	shell/mpir \
 	debug/stall \
 	hwloc/hwloc-convert \
@@ -733,11 +732,6 @@ shell_rcalc_CPPFLAGS = $(test_cppflags)
 shell_rcalc_LDADD = $(top_builddir)/src/shell/libshell.la \
 	$(test_ldadd)
 shell_rcalc_LDFLAGS = $(test_ldflags)
-
-shell_lptest_SOURCES = shell/lptest.c
-shell_lptest_CPPFLAGS = $(test_cppflags)
-shell_lptest_LDADD = $(test_ldadd)
-shell_lptest_LDFLAGS = $(test_ldflags)
 
 shell_mpir_SOURCES = shell/mpir.c
 shell_mpir_CPPFLAGS = $(test_cppflags)

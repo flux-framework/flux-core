@@ -4,7 +4,7 @@ test_description='Test flux-shell stage-in plugin support'
 
 . `dirname $0`/sharness.sh
 
-lptest=${FLUX_BUILD_DIR}/t/shell/lptest
+lptest="flux lptest"
 
 test_under_flux 4 job
 

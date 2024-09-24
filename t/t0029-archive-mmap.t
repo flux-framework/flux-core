@@ -6,7 +6,7 @@ test_description='Test flux-archive'
 
 . `dirname $0`/sharness.sh
 
-LPTEST=${FLUX_BUILD_DIR}/t/shell/lptest
+LPTEST="flux lptest"
 
 # SEEK_DATA support was added to the linux NFS client in kernel 3.18.
 # In el7 based distros, it is defined but doesn't work on NFS.  So

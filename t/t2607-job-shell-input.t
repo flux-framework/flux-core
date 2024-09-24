@@ -9,7 +9,7 @@ test_under_flux 4 job
 flux setattr log-stderr-level 1
 
 TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
-LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
+LPTEST="flux lptest"
 
 test_expect_success 'flux-shell: generate input for stdin input tests' '
        echo "foo" > input_stdin_file &&
