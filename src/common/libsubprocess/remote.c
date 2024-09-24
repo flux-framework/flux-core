@@ -157,8 +157,8 @@ static void process_new_state (flux_subprocess_t *p,
 
 static bool remote_out_data_available (struct subprocess_channel *c)
 {
-    /* no need to handle failure states, on fatal error, these
-     * reactors are closed */
+    /* no need to handle failure states, on fatal error, the
+     * io watchers are closed */
     if ((c->line_buffered && fbuf_has_line (c->read_buffer))
         || (!c->line_buffered && fbuf_bytes (c->read_buffer) > 0)
         || (c->read_eof_received && !c->eof_sent_to_caller))
@@ -202,8 +202,8 @@ static void remote_out_check_cb (flux_reactor_t *r,
         c->p->channels_eof_sent++;
     }
 
-    /* no need to handle failure states, on fatal error, these
-     * reactors are closed */
+    /* no need to handle failure states, on fatal error, the
+     * io watchers are closed */
     if (!remote_out_data_available (c) || c->eof_sent_to_caller) {
         /* if no data in buffer, shut down prep/check */
         flux_watcher_stop (c->out_prep_w);
