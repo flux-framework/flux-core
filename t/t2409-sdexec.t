@@ -23,7 +23,7 @@ test_under_flux 2 minimal
 flux setattr log-stderr-level 1
 
 sdexec="flux exec --service sdexec"
-lptest=${FLUX_BUILD_DIR}/t/shell/lptest
+lptest="flux lptest"
 rkill="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py kill -s sdexec"
 rps="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py ps -s sdexec"
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"

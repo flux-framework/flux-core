@@ -3,4 +3,4 @@
 NJOBS=${NJOBS:-10}
 
 flux submit --cc="1-$NJOBS" --wait \
-	${SHARNESS_TEST_DIRECTORY}/shell/lptest 78 2
+	flux lptest 78 2

@@ -6,7 +6,7 @@ test_description='Test flux-filemap'
 
 . `dirname $0`/sharness.sh
 
-LPTEST=${FLUX_BUILD_DIR}/t/shell/lptest
+LPTEST="flux lptest"
 
 test_under_flux 2 kvs
 

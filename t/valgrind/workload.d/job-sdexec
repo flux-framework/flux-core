@@ -20,7 +20,7 @@ for i in `seq 1 ${NJOBS}`
 do
     flux submit --wait \
         --setattr system.exec.bulkexec.service=sdexec \
-        ${SHARNESS_TEST_DIRECTORY}/shell/lptest 78 2
+        flux lptest 78 2
 done
 
 flux module remove sdexec

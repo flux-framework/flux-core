@@ -10,7 +10,7 @@ flux setattr log-stderr-level 1
 
 PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
-LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
+LPTEST="flux lptest"
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 
 test_expect_success 'job-shell: errors on unknown argument' '
