@@ -23,10 +23,15 @@ static bool data_to_read (struct ev_fbuf_read *ebr, bool *is_eof)
     if (ebr->line) {
         if (fbuf_has_line (ebr->fb))
             return true;
-        /* if eof read, no lines, but left over data non-line data,
-         * this data should be flushed to the user */
-        else if (ebr->eof_read && fbuf_bytes (ebr->fb))
-            return true;
+        else {
+            /* if no line, but the buffer is full, we have to flush */
+            if (!fbuf_space (ebr->fb))
+                return true;
+            /* if eof read, no lines, but left over data non-line data,
+             * this data should be flushed to the user */
+            if (ebr->eof_read && fbuf_bytes (ebr->fb))
+                return true;
+        }
     }
     else {
         if (fbuf_bytes (ebr->fb) > 0)

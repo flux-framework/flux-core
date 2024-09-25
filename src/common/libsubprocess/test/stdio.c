@@ -1336,6 +1336,84 @@ void test_stream_start_stop_mid_stop (flux_reactor_t *r)
     flux_watcher_destroy (tw);
 }
 
+void overflow_output_cb (flux_subprocess_t *p, const char *stream)
+{
+    const char *buf = NULL;
+    int len;
+
+    if (strcasecmp (stream, "stdout") != 0) {
+        ok (false, "unexpected stream %s", stream);
+        return;
+    }
+
+    /* first callback should return "0123" for 4 byte buffer.
+     * second callback should return "456\n" in 4 byte buffer
+     */
+    if (stdout_output_cb_count == 0) {
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
+            "flux_subprocess_read_line on %s success", stream);
+
+        ok (streq (buf, "0123"),
+            "flux_subprocess_read_line returned correct data");
+        ok (len == 4,
+            "flux_subprocess_read_line returned correct data len");
+    }
+    else if (stdout_output_cb_count == 1) {
+        len = flux_subprocess_read_line (p, stream, &buf);
+        ok (len > 0
+            && buf != NULL,
+            "flux_subprocess_read_line on %s success", stream);
+
+        ok (streq (buf, "456\n"),
+            "flux_subprocess_read_line returned correct data");
+        ok (len == 4,
+            "flux_subprocess_read_line returned correct data len");
+    }
+    else {
+        ok (flux_subprocess_read_stream_closed (p, stream),
+            "flux_subprocess_read_stream_closed saw EOF on %s", stream);
+
+        len = flux_subprocess_read (p, stream, &buf);
+        ok (len == 0,
+            "flux_subprocess_read on %s read EOF", stream);
+    }
+    stdout_output_cb_count++;
+}
+
+/* Set buffer size to 4 and have 7 bytes of output (8 including newline) */
+void test_long_line (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O", "0123456", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (3, av, environ)) != NULL, "flux_cmd_create");
+
+    ok (flux_cmd_setopt (cmd, "stdout_BUFSIZE", "4") == 0,
+        "flux_cmd_setopt set stdout_BUFSIZE success");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = overflow_output_cb
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    ok (stdout_output_cb_count == 3, "stdout output callback called 3 times");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *r;
@@ -1395,6 +1473,8 @@ int main (int argc, char *argv[])
     test_stream_start_stop_initial_stop (r);
     diag ("stream_start_stop_mid_stop");
     test_stream_start_stop_mid_stop (r);
+    diag ("long_line");
+    test_long_line (r);
 
     end_fdcount = fdcount ();
 

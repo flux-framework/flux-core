@@ -816,6 +816,13 @@ static int subprocess_read (flux_subprocess_t *p,
             if (!(ptr = fbuf_read_line (fb, &len)))
                 return -1;
         }
+        /* Special case if buffer full, we gotta flush it out even if
+         * there is no line
+         */
+        if (!len && !fbuf_space (fb)) {
+            if (!(ptr = fbuf_read (fb, -1, &len)))
+                return -1;
+        }
     }
     else {
         if (!(ptr = fbuf_read (fb, -1, &len)))

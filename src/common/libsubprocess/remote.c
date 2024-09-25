@@ -157,9 +157,12 @@ static void process_new_state (flux_subprocess_t *p,
 
 static bool remote_out_data_available (struct subprocess_channel *c)
 {
-    /* no need to handle failure states, on fatal error, these
-     * reactors are closed */
-    if ((c->line_buffered && fbuf_has_line (c->read_buffer))
+    /* no need to handle failure states, on fatal error, the
+     * io watchers are closed */
+    /* N.B. if line buffered and buffer full, gotta flush it
+     * regardless if there's a line or not */
+    if ((c->line_buffered
+         && (fbuf_has_line (c->read_buffer) || !fbuf_space (c->read_buffer)))
         || (!c->line_buffered && fbuf_bytes (c->read_buffer) > 0)
         || (c->read_eof_received && !c->eof_sent_to_caller))
         return true;
@@ -188,6 +191,7 @@ static void remote_out_check_cb (flux_reactor_t *r,
 
     if ((c->line_buffered
          && (fbuf_has_line (c->read_buffer)
+             || !fbuf_space (c->read_buffer)
              || (c->read_eof_received
                  && fbuf_bytes (c->read_buffer) > 0)))
         || (!c->line_buffered && fbuf_bytes (c->read_buffer) > 0)) {
@@ -202,8 +206,8 @@ static void remote_out_check_cb (flux_reactor_t *r,
         c->p->channels_eof_sent++;
     }
 
-    /* no need to handle failure states, on fatal error, these
-     * reactors are closed */
+    /* no need to handle failure states, on fatal error, the
+     * io watchers are closed */
     if (!remote_out_data_available (c) || c->eof_sent_to_caller) {
         /* if no data in buffer, shut down prep/check */
         flux_watcher_stop (c->out_prep_w);
@@ -437,6 +441,13 @@ static int remote_output_buffered (flux_subprocess_t *p,
 
     if (data && len) {
         int tmp;
+
+        /* In the event the buffer is full, the `fbuf_write()` will
+         * fail.  Call user callback to give them a chance to empty
+         * buffer.  If they don't, we'll hit error below.
+         */
+        if (!fbuf_space (c->read_buffer))
+            c->output_cb (c->p, c->name);
 
         tmp = fbuf_write (c->read_buffer, data, len);
         if (tmp >= 0 && tmp < len) {

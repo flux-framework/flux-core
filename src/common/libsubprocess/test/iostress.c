@@ -38,6 +38,7 @@ struct iostress_ctx {
     int batchcount;
     int batchlines;
     int batchcursor;
+    int outputcount;
     bool direct;
     const char *name;
 };
@@ -68,9 +69,11 @@ static void iostress_output_cb (flux_subprocess_t *p, const char *stream)
     else if (len == 0)
         diag ("%s: EOF", stream);
     else {
-        //diag ("%s: %d bytes", stream, len);
-        ctx->linerecv++;
+        // diag ("%s: %d bytes", stream, len);
+        if (strstr (line, "\n"))
+            ctx->linerecv++;
     }
+    ctx->outputcount++;
 }
 
 static void iostress_completion_cb (flux_subprocess_t *p)
@@ -264,8 +267,8 @@ bool iostress_run_check (flux_t *h,
         ret = false;
     }
 
-    diag ("%s: processed %d of %d lines", name,
-          ctx.linerecv, ctx.batchcount * ctx.batchlines);
+    diag ("%s: processed %d of %d lines, %d calls to output cb", name,
+          ctx.linerecv, ctx.batchcount * ctx.batchlines, ctx.outputcount);
     if (ctx.linerecv < ctx.batchcount * ctx.batchlines)
         ret = false;
 
@@ -289,12 +292,13 @@ int main (int argc, char *argv[])
     ok (iostress_run_check (h, "balanced", false, 0, 0, 8, 8, 80),
         "balanced worked");
 
-    // (remote?) stdout buffer is overrun
-    // Needs further investigation as no errors are thrown and completion is
-    // not called called after subprocess exit.  The doomsday timer stops
-    // the test.
-    ok (!iostress_run_check (h, "tinystdout", false, 0, 128, 1, 1, 256),
-        "tinystdout failed as expected");
+    // stdout buffer is overrun
+
+    // When the line size is greater than the buffer size, all the
+    // data is transferred. flux_subprocess_read_line() will receive a
+    // "line" that is not terminated with \n
+    ok (iostress_run_check (h, "tinystdout", false, 0, 128, 1, 1, 256),
+        "tinystdout works");
 
     // local stdin buffer is overrun (immediately)
     // remote stdin buffer is also overwritten
