@@ -24,6 +24,7 @@ RUN apk add \
     py3-yaml \
     py3-jsonschema \
     py3-ply \
+    py3-setuptools \
     py3-sphinx \
     lua5.1-dev \
     lua5.1-posix \

@@ -107,7 +107,7 @@ AC_DEFUN([AX_PYTHON_DEVEL],[
 	   # Check for a version of Python >= 2.1.0
 	   #
 	   AC_MSG_CHECKING([for a version of Python >= '2.1.0'])
-	   ac_supports_python_ver=`$PYTHON -c "import sys; \
+	   ac_supports_python_ver=`$PYTHON -c "import sys;import setuptools; \
 		ver = sys.version.split ()[[0]]; \
 		print (ver >= '2.1.0')"`
 	   if test "$ac_supports_python_ver" != "True"; then
@@ -150,6 +150,7 @@ class VPy:
         return tuple(map(int, s.strip().replace("rc", ".").split(".")))
     def __init__(self):
         import sys
+        import setuptools
         self.vpy = tuple(sys.version_info)[[:3]]
     def __eq__(self, s):
         return self.vpy == self.vtup(s)

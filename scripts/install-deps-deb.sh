@@ -20,6 +20,7 @@ apt install \
   python3-dev \
   python3-cffi \
   python3-ply \
+  python3-setuptools \
   python3-yaml \
   python3-sphinx \
   aspell \

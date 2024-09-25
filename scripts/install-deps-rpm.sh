@@ -22,6 +22,7 @@ yum install \
   python36-ply \
   python36-yaml \
   python3-sphinx \
+  python3-setuptools \
   aspell \
   aspell-en \
   time \
