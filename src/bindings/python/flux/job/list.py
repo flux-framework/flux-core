@@ -276,7 +276,7 @@ class JobList:
         self.constraint = constraint
 
     def set_user(self, user):
-        """Only return jobs for user (may be a username or userid)"""
+        """Only return jobs for user (may be a username, userid, or "all")"""
         if user is None:
             self.userid = os.getuid()
         elif user == "all":
