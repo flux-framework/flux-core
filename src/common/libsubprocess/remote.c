@@ -278,7 +278,13 @@ static int remote_channel_setup (flux_subprocess_t *p,
                 llog_debug (p, "flux_check_watcher_create: %s", strerror (errno));
                 goto error;
             }
-
+            /* the output check should be called before other check
+             * callbacks, to ensure that the output buffer is emptied
+             * before any check callbacks that may move data into the
+             * buffer.  So we up the priority of the output check
+             * watcher.
+             */
+            flux_watcher_set_priority (c->out_check_w, 1);
             /* don't start these watchers until we've reached the running
              * state */
         }
@@ -441,13 +447,6 @@ static int remote_output_buffered (flux_subprocess_t *p,
 
     if (data && len) {
         int tmp;
-
-        /* In the event the buffer is full, the `fbuf_write()` will
-         * fail.  Call user callback to give them a chance to empty
-         * buffer.  If they don't, we'll hit error below.
-         */
-        if (!fbuf_space (c->read_buffer))
-            c->output_cb (c->p, c->name);
 
         tmp = fbuf_write (c->read_buffer, data, len);
         if (tmp >= 0 && tmp < len) {
