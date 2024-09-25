@@ -18,8 +18,15 @@ enum {
     FBUF_WATCHER_LINE_BUFFER = 1, /* line buffer data before invoking callback */
 };
 
-/* on eof, callback will be called with an empty buffer */
-/* if line buffered, second to last callback may not contain a full line */
+/* read watcher
+ *
+ * - data from fd copied into buffer
+ * - when data is available, triggers callback
+ * - on eof, callback will be called with an empty buffer
+ * - if line buffered, second to last callback may not contain a full line
+ * - users should read from the buffer or stop the watcher, to avoid
+ *   excessive event loop iterations without progress
+ */
 flux_watcher_t *fbuf_read_watcher_create (flux_reactor_t *r,
                                           int fd,
                                           int size,
@@ -40,7 +47,11 @@ const char *fbuf_read_watcher_get_data (flux_watcher_t *w, int *lenp);
 void fbuf_read_watcher_incref (flux_watcher_t *w);
 void fbuf_read_watcher_decref (flux_watcher_t *w);
 
-/* 'cb' only called after fd closed (FLUX_POLLOUT) or error (FLUX_POLLERR) */
+/* write watcher
+ *
+ * - data from buffer written to fd
+ * - callback triggered after fd closed (FLUX_POLLOUT) or error (FLUX_POLLERR)
+ */
 flux_watcher_t *fbuf_write_watcher_create (flux_reactor_t *r,
                                            int fd,
                                            int size,
