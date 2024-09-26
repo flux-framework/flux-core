@@ -553,7 +553,7 @@ static void perilog_proc_finish (struct perilog_proc *proc)
     if (run_epilog) {
         struct perilog_proc *epilog;
 
-        if (!(epilog = procdesc_run (h, p, pd, id,userid, R))
+        if (!(epilog = procdesc_run (h, p, pd, id, userid, R))
             || flux_jobtap_job_aux_set (p,
                                         id,
                                         "perilog_proc",
