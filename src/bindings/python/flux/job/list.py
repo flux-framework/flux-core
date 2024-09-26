@@ -215,7 +215,7 @@ class JobList:
               [ "pending", "running" ].
     :ids: List of jobids to return. Other filters are ignored if ``ids`` is
           not empty.
-    :user: Username or userid for which to fetch jobs. Default is all users.
+    :user: Username or userid for which to fetch jobs. Default is current user.
     :max_entries: Maximum number of jobs to return
     :since: Limit jobs to those that have been active since a given timestamp.
     :name: Limit jobs to those with a specific name.
@@ -276,7 +276,7 @@ class JobList:
         self.constraint = constraint
 
     def set_user(self, user):
-        """Only return jobs for user (may be a username or userid)"""
+        """Only return jobs for user (may be a username, userid, or "all")"""
         if user is None:
             self.userid = os.getuid()
         elif user == "all":
