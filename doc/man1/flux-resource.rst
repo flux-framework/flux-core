@@ -17,7 +17,7 @@ SYNOPSIS
 
 | **flux** **resource** **drain** [*-n*] [*-o* *FORMAT*] [*-i* *TARGETS*]
 | **flux** **resource** **drain** [*-f*] [*-u*] [*targets*] [*reason*]
-| **flux** **resource** **undrain** *targets*
+| **flux** **resource** **undrain** [*-f*] *targets*
 
 | **flux** **resource** **reload** [-f] [--xml] *path*
 
@@ -312,6 +312,10 @@ undrain
 Undrain the nodes specified by the *targets* argument (IDSET or HOSTLIST).
 
 This command is restricted to the Flux instance owner.
+
+.. option:: -f, --force
+
+  Do not fail if any of the *targets* are not drained.
 
 reload
 ------
