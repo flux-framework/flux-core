@@ -207,6 +207,21 @@ test_expect_success 'perilog: epilog runs even if prolog is canceled' '
 	flux jobtap query perilog.so | jq &&
 	flux job wait-event -Hvt 30 $jobid clean
 '
+test_expect_success 'perilog: epilog triggered by prolog has correct userid' '
+	flux config load <<-EOF &&
+	[job-manager.prolog]
+	per-rank = true
+	command = [ "sleep", "5" ]
+	[job-manager.epilog]
+	per-rank = true
+	command = [ "sh", "-c", "echo FLUX_JOB_USERID=\$FLUX_JOB_USERID" ]
+	EOF
+	jobid=$(flux submit -N4 hostname) &&
+	flux job wait-event -vHt 30 $jobid prolog-start &&
+	flux cancel $jobid &&
+	flux job wait-event -vHt 30 $jobid clean &&
+	flux dmesg -H  | grep FLUX_JOB_USERID=$(id -u)
+'
 test_expect_success 'perilog: signaled prolog is reported' '
 	flux config load <<-EOF &&
 	[job-manager.prolog]
