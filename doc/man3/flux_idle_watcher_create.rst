@@ -78,4 +78,4 @@ libev: http://software.schmorp.de/pkg/libev.html
 SEE ALSO
 ========
 
-:man3:`flux_watcher_start`, :man3:`flux_reactor_run`
+:man3:`flux_watcher_start`, :man3:`flux_reactor_run`, :man3:`flux_check_watcher_create`
