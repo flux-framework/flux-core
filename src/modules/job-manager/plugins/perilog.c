@@ -21,9 +21,10 @@
  *    running, the prolog is terminated with SIGTERM, followed
  *    by SIGKILL
  *
- *  - The epilog is started as a result of a "finish" event,
- *    and therefore the job manager epilog is only run if
- *    job shells are actually started.
+ *  - The epilog is started as a result of a "finish" event or
+ *    when the prolog completes if a fatal job exception has been
+ *    raised. Therefore the job manager epilog is always run if
+ *    a prolog has run.
  *
  *  - Requires that a prolog and/or epilog command be configured
  *    in the [job-manager.prolog] and [job-manager.epilog]
