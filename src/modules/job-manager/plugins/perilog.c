@@ -272,7 +272,7 @@ static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
         return NULL;
     proc->p = p;
     proc->id = id;
-    proc->userid = id;
+    proc->userid = userid;
     proc->prolog = prolog;
     if (zhashx_insert (perilog_config.processes, &proc->id, proc) < 0) {
         free (proc);
