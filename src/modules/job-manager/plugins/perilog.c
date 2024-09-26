@@ -74,6 +74,7 @@ extern char **environ;
  */
 struct perilog_procdesc {
     flux_cmd_t *cmd;
+    bool uses_imp;
     bool prolog;
     bool per_rank;
     bool cancel_on_exception;
@@ -176,6 +177,7 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     double kill_timeout = -1.;
     flux_cmd_t *cmd = NULL;
     json_t *command = NULL;
+    bool uses_imp = false;
     json_error_t error;
 
     const char *name = prolog ? "prolog" : "epilog";
@@ -221,6 +223,7 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
             errprintf (errp, "error creating %s command", name);
             return NULL;
         }
+        uses_imp = true;
     }
     if (!(pd = calloc (1, sizeof (*pd)))) {
         errprintf (errp, "Out of memory");
@@ -247,6 +250,7 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     pd->kill_timeout = kill_timeout > 0. ? kill_timeout : 5.;
     pd->per_rank = per_rank;
     pd->prolog = prolog;
+    pd->uses_imp = uses_imp;
 
     /* If cancel_on_exception unset, default to prolog=true, epilog=false
      * Otherwise, use set value:
@@ -778,6 +782,15 @@ static struct perilog_proc *procdesc_run (flux_t *h,
                         "failed to create %s bulk exec cmd for %s",
                         perilog_proc_name (proc),
                         idf58 (id));
+        goto error;
+    }
+    /*  If using IMP, push path to IMP into bulk_exec for IMP kill support:
+     */
+    if (pd->uses_imp
+        && bulk_exec_set_imp_path (bulk_exec, perilog_config.imp_path) < 0) {
+        flux_log_error (h,
+                        "%s: failed to set IMP path",
+                        perilog_proc_name (proc));
         goto error;
     }
     if (bulk_exec_start (h, bulk_exec) < 0) {
