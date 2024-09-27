@@ -315,6 +315,11 @@ flux_subprocess_state_t flux_subprocess_state (flux_subprocess_t *p);
  */
 const char *flux_subprocess_state_string (flux_subprocess_state_t state);
 
+/*  Return true if subprocess p is still active, i.e. it is waiting to
+ *  start, still running, or waiting for eof on all streams.
+ */
+bool flux_subprocess_active (flux_subprocess_t *p);
+
 int flux_subprocess_rank (flux_subprocess_t *p);
 
 /* Returns the errno causing the FLUX_SUBPROCESS_FAILED state to be reached.

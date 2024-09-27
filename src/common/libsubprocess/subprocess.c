@@ -1011,6 +1011,13 @@ flux_subprocess_state_t flux_subprocess_state (flux_subprocess_t *p)
     return p->state;
 }
 
+bool flux_subprocess_active (flux_subprocess_t *p)
+{
+    /*  A subprocess is still active if it has not failed or completed.
+     */
+    return (p && p->state != FLUX_SUBPROCESS_FAILED && !p->completed);
+}
+
 const char *flux_subprocess_state_string (flux_subprocess_state_t state)
 {
     switch (state)
