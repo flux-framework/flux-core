@@ -121,7 +121,7 @@ struct idset *bulk_exec_active_ranks (struct bulk_exec *exec)
 
     p = zlist_first (exec->processes);
     while (p) {
-        if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
+        if (flux_subprocess_active (p)) {
             int rank = flux_subprocess_rank (p);
             if (rank >= 0 && idset_set (ranks, rank) < 0) {
                 goto error;
