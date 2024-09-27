@@ -1268,11 +1268,18 @@ error:
     return -1;
 }
 
+static int watcher_remaining_time (flux_watcher_t *w)
+{
+    double next_wakeup = flux_watcher_next_wakeup (w);
+    return (int) round (next_wakeup - flux_reactor_time ());
+}
+
 static json_t *proc_to_json (struct perilog_proc *proc)
 {
     const char *state;
     struct idset *active_ranks;
     char *ranks = NULL;
+    int remaining_time = -1.;
     json_t *o;
     int total = bulk_exec_total (proc->bulk_exec);
     int active = total - bulk_exec_complete (proc->bulk_exec);
@@ -1287,12 +1294,18 @@ static json_t *proc_to_json (struct perilog_proc *proc)
     if ((active_ranks = bulk_exec_active_ranks (proc->bulk_exec)))
         ranks = idset_encode (active_ranks, IDSET_FLAG_RANGE);
 
-    o = json_pack ("{s:s s:s s:i s:i s:s}",
+    if (proc->kill_timer)
+        remaining_time = watcher_remaining_time (proc->kill_timer);
+    else if (proc->timer)
+        remaining_time = watcher_remaining_time (proc->timer);
+
+    o = json_pack ("{s:s s:s s:i s:i s:s s:i}",
                    "name", perilog_proc_name (proc),
                    "state", state,
                    "total", total,
                    "active", active,
-                   "active_ranks", ranks ? ranks : "");
+                   "active_ranks", ranks ? ranks : "",
+                   "remaining_time", remaining_time);
     free (ranks);
     idset_destroy (active_ranks);
     return o;
