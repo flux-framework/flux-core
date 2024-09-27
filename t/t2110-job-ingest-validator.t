@@ -11,6 +11,7 @@ JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 Y2J="flux python ${JOBSPEC}/y2j.py"
 SUBMITBENCH="${FLUX_BUILD_DIR}/t/ingest/submitbench"
 BAD_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/bad-validate.py
+export FLUX_URI_RESOLVE_LOCAL=t
 
 test_valid ()
 {
@@ -184,5 +185,19 @@ test_expect_success 'job-ingest: require-instance min size can be for nodes only
 	flux submit -n2 hostname &&
 	test_must_fail flux submit -N4 hostname &&
 	test_must_fail flux submit -n32 hostname
+'
+test_expect_success 'job-ingest: kill all jobs and start the queue' '
+	flux cancel --all &&
+	flux queue idle &&
+	flux queue start
+'
+test_expect_success 'job-ingest: require-instance min size can use config' '
+	jobid=$(flux alloc --bg -N4 \
+		--conf=ingest.validator.plugins="[\"require-instance\"]" \
+		--conf=ingest.validator.require-instance.minnodes=4 \
+		--conf=ingest.validator.require-instance.mincores=16) &&
+	flux proxy $jobid flux run hostname &&
+	test_must_fail flux proxy $jobid flux run -N4 hostname 2>config.err &&
+	grep "Direct job submission disabled for jobs >= 4" config.err
 '
 test_done

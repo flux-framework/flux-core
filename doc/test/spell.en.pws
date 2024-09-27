@@ -927,3 +927,5 @@ periname
 templated
 CIDR
 enp
+mincores
+minnodes

@@ -56,6 +56,18 @@ args
    command line. Valid arguments can be found by running
    ``flux job-frobnicator --plugins=LIST --help``
 
+FROBNICATOR PLUGIN CONFIGURATION
+--------------------------------
+
+Job frobnicator plugins optionally support plugin-specific configuration
+via keys based on the plugin name in the ``[ingest.frobnicator]``
+table. Frobnicator plugin keys match the plugin name, and define a table
+of keys specific to each plugin.
+
+No frobnicator plugins distributed with Flux support configuration at
+this time.
+
+
 VALIDATOR KEYS
 ==============
 
@@ -74,6 +86,32 @@ args
    (optional) An array of extra arguments to pass on the validator
    command line. Valid arguments can be found by running
    ``flux job-validator --plugins=LIST --help``
+
+VALIDATOR PLUGIN CONFIGURATION
+------------------------------
+
+Job validator plugins optionally support plugin-specific configuration via
+keys based on the plugin name in the ``[ingest.validator]`` table. Validator
+plugin keys match the plugin name, and define a table of keys specific to
+each plugin.
+
+Plugins distributed with Flux and support configuration are described below.
+
+require-instance
+----------------
+
+The ``[ingest.validator.require-instance]`` table supports the following
+keys:
+
+minnodes
+   (optional) The minimum number of nodes at which to reject jobs that
+   are not instances of Flux. Default is 0. This is an alternative to passing
+   the ``--require-instance-minnodes=`` option on the validator command line.
+
+mincores
+   (optional) The minimum number of cores at which to reject jobs that
+   are not instances of Flux. Default is 0. This is an alternative to passing
+   the ``--require-instance-mincores=`` option on the validator command line.
 
 EXAMPLE
 =======
