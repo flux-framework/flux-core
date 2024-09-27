@@ -88,6 +88,11 @@ typedef void (*flux_subprocess_hook_f) (flux_subprocess_t *p, void *arg);
 /*
  *  Functions for event-driven subprocess handling:
  *
+ *  When output callbacks are called, flux_subprocess_read(),
+ *  flux_subprocess_read_line() and similar functions should be used
+ *  to read buffered data.  If this is not done, it can lead to
+ *  excessive callbacks and code "spinning".
+ *
  */
 typedef struct {
     flux_subprocess_f on_completion;    /* Process exited and all I/O

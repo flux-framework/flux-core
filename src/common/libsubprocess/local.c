@@ -154,14 +154,14 @@ static void local_out_cb (flux_reactor_t *r,
 }
 
 static void local_stdout_cb (flux_reactor_t *r, flux_watcher_t *w,
-                               int revents, void *arg)
+                             int revents, void *arg)
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     local_output (c, w, revents, c->p->ops.on_stdout);
 }
 
 static void local_stderr_cb (flux_reactor_t *r, flux_watcher_t *w,
-                               int revents, void *arg)
+                             int revents, void *arg)
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     local_output (c, w, revents, c->p->ops.on_stderr);
