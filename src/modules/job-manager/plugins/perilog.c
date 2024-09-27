@@ -21,9 +21,10 @@
  *    running, the prolog is terminated with SIGTERM, followed
  *    by SIGKILL
  *
- *  - The epilog is started as a result of a "finish" event,
- *    and therefore the job manager epilog is only run if
- *    job shells are actually started.
+ *  - The epilog is started as a result of a "finish" event or
+ *    when the prolog completes if a fatal job exception has been
+ *    raised. Therefore the job manager epilog is always run if
+ *    a prolog has run.
  *
  *  - Requires that a prolog and/or epilog command be configured
  *    in the [job-manager.prolog] and [job-manager.epilog]
@@ -272,7 +273,7 @@ static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
         return NULL;
     proc->p = p;
     proc->id = id;
-    proc->userid = id;
+    proc->userid = userid;
     proc->prolog = prolog;
     if (zhashx_insert (perilog_config.processes, &proc->id, proc) < 0) {
         free (proc);
@@ -553,7 +554,7 @@ static void perilog_proc_finish (struct perilog_proc *proc)
     if (run_epilog) {
         struct perilog_proc *epilog;
 
-        if (!(epilog = procdesc_run (h, p, pd, id,userid, R))
+        if (!(epilog = procdesc_run (h, p, pd, id, userid, R))
             || flux_jobtap_job_aux_set (p,
                                         id,
                                         "perilog_proc",
