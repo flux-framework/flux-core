@@ -161,7 +161,10 @@ def undrain(args):
     """
     Send an "undrain" request to resource module for args.targets
     """
-    RPC(flux.Flux(), "resource.undrain", {"targets": args.targets}, nodeid=0).get()
+    payload = {"targets": args.targets}
+    if args.force:
+        payload["mode"] = "force"
+    RPC(flux.Flux(), "resource.undrain", payload, nodeid=0).get()
 
 
 class QueueResources:
@@ -798,6 +801,12 @@ def main():
 
     undrain_parser = subparsers.add_parser(
         "undrain", formatter_class=flux.util.help_formatter()
+    )
+    undrain_parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Do not fail if any targets are not drained",
     )
     undrain_parser.add_argument(
         "targets", help="List of targets to resume (IDSET or HOSTLIST)"

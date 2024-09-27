@@ -453,32 +453,64 @@ static void undrain_cb (flux_t *h,
 {
     struct drain *drain = arg;
     const char *s;
+    const char *mode = NULL;
     struct idset *idset = NULL;
     unsigned int id;
     const char *errstr = NULL;
     flux_error_t error;
+    bool force = false;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s}",
-                             "targets",
-                             &s) < 0)
+                             "{s:s s?s}",
+                             "targets", &s,
+                             "mode", &mode) < 0)
         goto error;
     if (!(idset = drain_idset_decode (drain, s, &error))) {
         errstr = error.text;
         goto error;
     }
-    id = idset_first (idset);
-    while (id != IDSET_INVALID_ID) {
-        if (!drain->info[id].drained) {
-            errprintf (&error, "rank %u not drained", id);
+    if (mode) {
+        if (streq (mode, "force"))
+            force = true;
+        else {
+            errprintf (&error, "invalid undrain mode '%s' specified", mode);
             errno = EINVAL;
             errstr = error.text;
             goto error;
         }
+    }
+    id = idset_first (idset);
+    while (id != IDSET_INVALID_ID) {
+        if (!drain->info[id].drained) {
+            /* This rank is already undrained, remove it from targets
+             * if mode=force. Otherwise, abort the operation and return
+             * an error.
+             */
+            if (force) {
+                if (idset_clear (idset, id) < 0) {
+                    errprintf (&error, "failed to update undrain target idset");
+                    errstr = error.text;
+                    goto error;
+                }
+            }
+            else {
+                errprintf (&error, "rank %u not drained", id);
+                errno = EINVAL;
+                errstr = error.text;
+                goto error;
+            }
+        }
         id = idset_next (idset, id);
     }
-    if (undrain_rank_idset (drain, msg, idset) < 0)
+    if (idset_count (idset) == 0) {
+        /* If idset is now empty then no targets are drained and
+         * mode=force was used. Therefore, immediately return success:
+         */
+        if (flux_respond (h, msg, NULL) < 0)
+            flux_log_error (h, "error responding to undrain request");
+    }
+    else if (undrain_rank_idset (drain, msg, idset) < 0)
         goto error;
     idset_destroy (idset);
     return;

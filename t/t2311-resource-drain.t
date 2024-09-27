@@ -255,6 +255,32 @@ test_expect_success 'undrain fails if rank not drained' '
 	grep "rank 1 not drained" undrain_not.err
 '
 
+test_expect_success 'undrain fails if any rank not drained' '
+	flux resource drain 0 &&
+	test_must_fail flux resource undrain 0-1 2>undrain_0-1_not.err &&
+	test_debug "cat undrain_0-1_not.err" &&
+	grep "rank 1 not drained" undrain_0-1_not.err
+'
+
+test_expect_success 'undrain --force works even if a target is not drained' '
+	flux resource undrain --force 0-1
+'
+
+test_expect_success 'undrain --force returns success when no targets drained' '
+	flux resource undrain --force 0-1
+'
+
+undrain_bad_mode() {
+	flux python -c 'import flux; \
+	  flux.Flux().rpc("resource.undrain", \
+			  {"targets": "0", "mode": "foo"}).get()'
+}
+
+test_expect_success 'undrain RPC rejects invalid mode' '
+	test_must_fail undrain_bad_mode 2>undrain_bad_mode.err &&
+	grep "invalid undrain mode" undrain_bad_mode.err
+'
+
 test_expect_success 'drain fails if idset is empty' '
 	test_must_fail flux resource drain "" 2>drain_empty.err &&
 	grep "idset is empty" drain_empty.err
