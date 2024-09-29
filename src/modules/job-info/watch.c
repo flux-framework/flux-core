@@ -397,10 +397,8 @@ void watch_cb (flux_t *h,
                              "{s:I s:s s:i}",
                              "id", &id,
                              "path", &path,
-                             "flags", &flags) < 0) {
-        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+                             "flags", &flags) < 0)
         goto error;
-    }
     if ((flags & ~valid_flags)) {
         errno = EPROTO;
         errmsg = "eventlog-watch request rejected with invalid flag";

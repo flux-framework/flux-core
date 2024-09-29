@@ -481,10 +481,8 @@ void update_watch_cb (flux_t *h,
                              "{s:I s:s s:i}",
                              "id", &id,
                              "key", &key,
-                             "flags", &flags) < 0) {
-        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+                             "flags", &flags) < 0)
         goto error;
-    }
     if ((flags & ~valid_flags)) {
         errno = EPROTO;
         errmsg = "update-watch request rejected with invalid flag";
