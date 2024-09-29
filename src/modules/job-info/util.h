@@ -23,7 +23,8 @@ flux_msg_t *cred_msg_pack (const char *topic,
                            ...);
 
 /* helper to parse next eventlog entry when whole eventlog is read */
-bool get_next_eventlog_entry (const char **pp, const char **tok,
+bool get_next_eventlog_entry (const char **pp,
+                              const char **tok,
                               size_t *toklen);
 
 /* parse chunk from eventlog_parse_next, 'entry' is required and

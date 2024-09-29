@@ -20,8 +20,10 @@
  * event which records the job owner.  Will cache recently looked
  * up job owners in an LRU cache.
  */
-int eventlog_allow (struct info_ctx *ctx, const flux_msg_t *msg,
-                    flux_jobid_t id, const char *s);
+int eventlog_allow (struct info_ctx *ctx,
+                    const flux_msg_t *msg,
+                    flux_jobid_t id,
+                    const char *s);
 
 /* Determine if user who sent request 'msg' is allowed to access job
  * eventlog via LRU cache.  Returns 1 if access allowed, 0 if

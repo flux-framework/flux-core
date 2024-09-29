@@ -118,10 +118,14 @@ void apply_updates_R (flux_t *h,
         if (streq (ckey, "expiration"))
             if (jpath_set (R,
                            "execution.expiration",
-                           value) < 0)
-                flux_log (h, LOG_INFO,
+                           value) < 0) {
+                flux_log (h,
+                          LOG_INFO,
                           "%s: failed to update job %s %s",
-                          __FUNCTION__, idf58 (id), key);
+                          __FUNCTION__,
+                          idf58 (id),
+                          key);
+                }
     }
 }
 
@@ -137,10 +141,14 @@ void apply_updates_jobspec (flux_t *h,
     json_object_foreach (context, ckey, value) {
         if (jpath_set (jobspec,
                        ckey,
-                       value) < 0)
-            flux_log (h, LOG_INFO,
+                       value) < 0) {
+            flux_log (h,
+                      LOG_INFO,
                       "%s: failed to update job %s %s",
-                      __FUNCTION__, idf58 (id), key);
+                      __FUNCTION__,
+                      idf58 (id),
+                      key);
+        }
     }
 }
 

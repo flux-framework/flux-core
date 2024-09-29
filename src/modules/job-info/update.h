@@ -14,11 +14,15 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-void update_watch_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg);
+void update_watch_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg);
 
-void update_watch_cancel_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg);
+void update_watch_cancel_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg);
 
 /* returns 1 on found, 0 if not, -1 on error */
 int update_watch_get_cached (struct info_ctx *ctx,

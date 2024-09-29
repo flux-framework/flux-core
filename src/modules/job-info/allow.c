@@ -25,7 +25,8 @@
 /* Parse the submit userid from the event log.
  * Assume "submit" is the first event.
  */
-static int eventlog_get_userid (struct info_ctx *ctx, const char *s,
+static int eventlog_get_userid (struct info_ctx *ctx,
+                                const char *s,
                                 uint32_t *useridp)
 {
     json_t *a = NULL;
@@ -90,8 +91,10 @@ static void store_lru (struct info_ctx *ctx, flux_jobid_t id, uint32_t userid)
 /* Optimization:
  * Avoid calling eventlog_get_userid() if message cred has OWNER role.
  */
-int eventlog_allow (struct info_ctx *ctx, const flux_msg_t *msg,
-                    flux_jobid_t id, const char *s)
+int eventlog_allow (struct info_ctx *ctx,
+                    const flux_msg_t *msg,
+                    flux_jobid_t id,
+                    const char *s)
 {
     struct flux_msg_cred cred;
 

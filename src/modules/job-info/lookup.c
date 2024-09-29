@@ -182,15 +182,18 @@ static int lookup_current (struct lookup_ctx *l,
     }
 
     if (!(f_eventlog = flux_future_get_child (fall, "eventlog"))) {
-        flux_log_error (l->ctx->h, "%s: flux_future_get_child",
+        flux_log_error (l->ctx->h,
+                        "%s: flux_future_get_child",
                         __FUNCTION__);
         goto error;
     }
 
     if (flux_kvs_lookup_get (f_eventlog, &s_eventlog) < 0) {
-        if (errno != ENOENT)
-            flux_log_error (l->ctx->h, "%s: flux_kvs_lookup_get",
+        if (errno != ENOENT) {
+            flux_log_error (l->ctx->h,
+                            "%s: flux_kvs_lookup_get",
                             __FUNCTION__);
+        }
         goto error;
     }
 
@@ -462,7 +465,9 @@ static int lookup_cached (struct lookup_ctx *l)
 
     if (ret) {
         if (l->flags & FLUX_JOB_LOOKUP_JSON_DECODE) {
-            if (flux_respond_pack (l->ctx->h, l->msg, "{s:I s:O}",
+            if (flux_respond_pack (l->ctx->h,
+                                   l->msg,
+                                   "{s:I s:O}",
                                    "id", l->id,
                                    key_str, current_object) < 0) {
                 flux_log_error (l->ctx->h, "%s: flux_respond", __FUNCTION__);
@@ -477,7 +482,9 @@ static int lookup_cached (struct lookup_ctx *l)
                 errno = ENOMEM;
                 goto cleanup;
             }
-            if (flux_respond_pack (l->ctx->h, l->msg, "{s:I s:O}",
+            if (flux_respond_pack (l->ctx->h,
+                                   l->msg,
+                                   "{s:I s:O}",
                                    "id", l->id,
                                    key_str, o) < 0) {
                 json_decref (o);
@@ -538,8 +545,10 @@ error:
     return -1;
 }
 
-void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
-                const flux_msg_t *msg, void *arg)
+void lookup_cb (flux_t *h,
+                flux_msg_handler_t *mh,
+                const flux_msg_t *msg,
+                void *arg)
 {
     struct info_ctx *ctx = arg;
     size_t index;
@@ -550,7 +559,9 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     int valid_flags = FLUX_JOB_LOOKUP_JSON_DECODE | FLUX_JOB_LOOKUP_CURRENT;
     const char *errmsg = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:o s:i}",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:o s:i}",
                              "id", &id,
                              "keys", &keys,
                              "flags", &flags) < 0) {
@@ -588,8 +599,10 @@ error:
 }
 
 /* legacy rpc target */
-void update_lookup_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+void update_lookup_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     struct info_ctx *ctx = arg;
     flux_jobid_t id;
@@ -599,7 +612,9 @@ void update_lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     int valid_flags = 0;
     const char *errmsg = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:s s:i}",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:s s:i}",
                              "id", &id,
                              "key", &key,
                              "flags", &flags) < 0) {

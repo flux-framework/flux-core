@@ -13,11 +13,15 @@
 
 #include <flux/core.h>
 
-void watch_cb (flux_t *h, flux_msg_handler_t *mh,
-               const flux_msg_t *msg, void *arg);
+void watch_cb (flux_t *h,
+               flux_msg_handler_t *mh,
+               const flux_msg_t *msg,
+               void *arg);
 
-void watch_cancel_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg);
+void watch_cancel_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg);
 
 /* Cancel all lookups that match msg.
  * match credentials & matchtag if cancel true
