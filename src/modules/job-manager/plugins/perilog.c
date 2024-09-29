@@ -435,7 +435,18 @@ static void emit_finish_event (struct perilog_proc *proc,
     }
 }
 
-static flux_future_t *drain_failed_ranks (struct perilog_proc *proc)
+static bool subprocess_failed (flux_subprocess_t *p)
+{
+    if (flux_subprocess_state (p) == FLUX_SUBPROCESS_FAILED
+        || flux_subprocess_status (p) != 0)
+        return true;
+    return false;
+}
+
+/* Drain ranks that failed, are still active or both. */
+static flux_future_t *proc_drain_ranks (struct perilog_proc *proc,
+                                        bool drain_failed,
+                                        bool drain_active)
 {
     struct idset *failed = NULL;
     flux_future_t *f = NULL;
@@ -452,8 +463,8 @@ static flux_future_t *drain_failed_ranks (struct perilog_proc *proc)
     while (rank != IDSET_INVALID_ID) {
         flux_subprocess_t *p;
         if ((p = bulk_exec_get_subprocess (proc->bulk_exec, rank))) {
-            if (flux_subprocess_state (p) == FLUX_SUBPROCESS_FAILED
-                || flux_subprocess_status (p) != 0) {
+            if ((drain_failed && subprocess_failed (p))
+                || (drain_active && flux_subprocess_active (p))) {
                 if (idset_set (failed, rank) < 0){
                     flux_log_error (h,
                                     "failed to add rank=%lu to drain set",
@@ -619,7 +630,7 @@ static void completion_cb (struct bulk_exec *bulk_exec, void *arg)
              * emitting the "prolog/epilog-finish" event. O/w, resources could
              * be freed and handed out to new jobs before they are drained.
              */
-            if ((proc->drain_f = drain_failed_ranks (proc))
+            if ((proc->drain_f = proc_drain_ranks (proc, true, false))
                  && flux_future_then (proc->drain_f,
                                       -1.,
                                       drain_failed_cb,
