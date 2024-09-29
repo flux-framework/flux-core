@@ -43,12 +43,15 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg);
 
 static void lookup_ctx_destroy (void *data)
 {
-    if (data) {
-        struct lookup_ctx *ctx = data;
+    struct lookup_ctx *ctx = data;
+
+    if (ctx) {
+        int saved_errno = errno;
         flux_msg_decref (ctx->msg);
         json_decref (ctx->keys);
         flux_future_destroy (ctx->f);
         free (ctx);
+        errno = saved_errno;
     }
 }
 
@@ -59,7 +62,6 @@ static struct lookup_ctx *lookup_ctx_create (struct info_ctx *ctx,
                                              int flags)
 {
     struct lookup_ctx *l = calloc (1, sizeof (*l));
-    int saved_errno;
 
     if (!l)
         return NULL;
@@ -78,9 +80,7 @@ static struct lookup_ctx *lookup_ctx_create (struct info_ctx *ctx,
     return l;
 
 error:
-    saved_errno = errno;
     lookup_ctx_destroy (l);
-    errno = saved_errno;
     return NULL;
 }
 
