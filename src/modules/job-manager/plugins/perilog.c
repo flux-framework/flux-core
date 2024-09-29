@@ -617,35 +617,45 @@ static bool perilog_per_rank (struct perilog_proc *proc)
     return perilog_config.epilog->per_rank;
 }
 
+static void proc_drain_and_finish (struct perilog_proc *proc,
+                                   bool drain_failed,
+                                   bool drain_active)
+{
+
+    if (drain_failed || drain_active) {
+        /* Drain the set of ranks that failed the prolog/epilog. If the
+         * drain RPC is successful, then wait for the response before
+         * emitting the "prolog/epilog-finish" event. O/w, resources could
+         * be freed and handed out to new jobs before they are drained.
+         */
+        if ((proc->drain_f = proc_drain_ranks (proc,
+                                               drain_failed,
+                                               drain_active))
+            && flux_future_then (proc->drain_f,
+                                 -1.,
+                                 drain_failed_cb,
+                                 proc) == 0)
+            return;
+
+        /* O/w, drain RPC failed, fall through so finish event is still
+         * emitted.
+         */
+    }
+    perilog_proc_finish (proc);
+}
+
 static void completion_cb (struct bulk_exec *bulk_exec, void *arg)
 {
     struct perilog_proc *proc = bulk_exec_aux_get (bulk_exec, "perilog_proc");
     if (proc) {
+        bool drain_failed = false;
+
         if (perilog_per_rank (proc)
             && !proc->canceled
-            && bulk_exec_rc (bulk_exec) != 0) {
+            && bulk_exec_rc (bulk_exec) != 0)
+            drain_failed = true;
 
-            /* Drain the set of ranks that failed the prolog/epilog. If the
-             * drain RPC is successful, then wait for the response before
-             * emitting the "prolog/epilog-finish" event. O/w, resources could
-             * be freed and handed out to new jobs before they are drained.
-             */
-            if ((proc->drain_f = proc_drain_ranks (proc, true, false))
-                 && flux_future_then (proc->drain_f,
-                                      -1.,
-                                      drain_failed_cb,
-                                      proc) == 0)
-                return;
-
-            /* O/w, drain RPC failed, report error and fall through so finish
-             * event is still emitted.
-             */
-            flux_log_error (flux_jobtap_get_flux (proc->p),
-                            "%s: failed to drain %s failed ranks",
-                            idf58 (proc->id),
-                            perilog_proc_name (proc));
-        }
-        perilog_proc_finish (proc);
+        proc_drain_and_finish (proc, drain_failed, false);
     }
 }
 
