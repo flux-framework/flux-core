@@ -123,10 +123,12 @@ prolog
       exception raised). The default prolog timeout is 30m. To disable
       the timeout use ``0`` or ``infinity``.
    kill-timeout
-      (optional) Floating-point number of seconds to wait after sending
-      SIGTERM to send SIGKILL to the prolog when the prolog has been
-      canceled due to timeout or exception. The default is 5.0. (This
-      key is mainly used for testing purposes).
+      (optional) If a job exception is raised during the job prolog and
+      ``cancel-on-exception`` is true,  the prolog will be canceled by
+      sending it a SIGTERM signal. ``kill-timeout`` is the number of
+      seconds to wait until any nodes with prolog tasks that are still
+      active will be drained. The drain reason will include the string
+      "canceled then timed out". The default is 10.
    cancel-on-exception
       (optional) A boolean indicating whether a fatal job exception raised
       while the prolog is active terminates the prolog. The default is true.
@@ -151,10 +153,13 @@ epilog
       timeout for the epilog, after which it is terminated (and a job
       exception raised). By default, the epilog timeout is disabled.
    kill-timeout
-      (optional) Floating-point number of seconds to wait after sending
-      SIGTERM to send SIGKILL to the epilog when it has been canceled due
-      to timeout or exception. The default is 5.0. (This key is mainly
-      used for testing purposes)
+      (optional) If a job exception is raised during the job epilog and
+      ``cancel-on-exception`` is ``true``, then the epilog will be canceled
+      by sending it a SIGTERM signal. ``kill-timeout`` is the number of
+      seconds to wait until any nodes with prolog tasks that are still
+      active will be drained. The drain reason will include the string
+      "canceled then timed out". The default is 10. (``kill-timeout`` with
+      the job epilog should only be used for testing purposes)
    cancel-on-exception
       (optional) A boolean indicating whether a fatal job exception raised
       while the epilog is active terminates the epilog. The default is true.
