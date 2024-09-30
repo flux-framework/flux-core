@@ -227,7 +227,6 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
     json_t *key;
     json_t *o = NULL;
     json_t *tmp = NULL;
-    char *data = NULL;
     flux_error_t error;
 
     if (!l->allow) {
@@ -331,11 +330,7 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
      * taken error path */
     assert (l->allow);
 
-    if (!(data = json_dumps (o, JSON_COMPACT))) {
-        errprintf (&error, "error preparing response");
-        goto enomem;
-    }
-    if (flux_respond (ctx->h, l->msg, data) < 0)
+    if (flux_respond_pack (ctx->h, l->msg, "O", o) < 0)
         flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
 
     goto done;
@@ -350,7 +345,6 @@ done:
     /* flux future destroyed in lookup_ctx_destroy, which is called
      * via zlist_remove() */
     json_decref (o);
-    free (data);
     free (current_value);
     zlist_remove (ctx->lookups, l);
 }
