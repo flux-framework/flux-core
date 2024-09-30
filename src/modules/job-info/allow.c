@@ -37,7 +37,6 @@ static int eventlog_get_userid (struct info_ctx *ctx,
     int rv = -1;
 
     if (!(a = eventlog_decode (s))) {
-        flux_log_error (ctx->h, "%s: eventlog_decode", __FUNCTION__);
         /* if eventlog improperly formatted, we'll consider this a
          * protocol error */
         if (errno == EINVAL)
@@ -48,12 +47,9 @@ static int eventlog_get_userid (struct info_ctx *ctx,
         errno = EPROTO;
         goto error;
     }
-    if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
-        flux_log_error (ctx->h, "%s: eventlog_decode", __FUNCTION__);
+    if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
         goto error;
-    }
     if (!streq (name, "submit") || !context) {
-        flux_log (ctx->h, LOG_ERR, "%s: invalid event: %s", __FUNCTION__, name);
         errno = EPROTO;
         goto error;
     }

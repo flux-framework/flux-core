@@ -261,7 +261,7 @@ test_expect_success 'flux job info dummy works (owner)' '
 
 test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "Protocol error" &&
+        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog" &&
 	unset_userid
 '
 
@@ -272,7 +272,7 @@ test_expect_success 'create eventlog with invalid data / not JSON' '
 
 test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "Protocol error" &&
+        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog" &&
 	unset_userid
 '
 
@@ -284,7 +284,7 @@ test_expect_success 'create eventlog without submit context' '
 
 test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "Protocol error" &&
+        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog" &&
 	unset_userid
 '
 
@@ -296,7 +296,7 @@ test_expect_success 'create eventlog without submit userid' '
 
 test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "Protocol error" &&
+        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog" &&
 	unset_userid
 '
 
@@ -308,7 +308,7 @@ test_expect_success 'create eventlog that is binary garbage' '
 
 test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "Protocol error" &&
+        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog" &&
 	unset_userid
 '
 

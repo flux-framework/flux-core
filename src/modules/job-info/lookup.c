@@ -20,6 +20,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libjob/idf58.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 #include "job-info.h"
@@ -95,26 +96,13 @@ static int lookup_key (struct lookup_ctx *l,
     if (flux_future_get_child (fall, key) != NULL)
         return 0;
 
-    if (flux_job_kvs_key (path, sizeof (path), l->id, key) < 0) {
-        flux_log_error (l->ctx->h, "%s: flux_job_kvs_key", __FUNCTION__);
-        goto error;
+    if (flux_job_kvs_key (path, sizeof (path), l->id, key) < 0
+        || !(f = flux_kvs_lookup (l->ctx->h, NULL, 0, path))
+        || flux_future_push (fall, key, f) < 0) {
+        flux_future_destroy (f);
+        return -1;
     }
-
-    if (!(f = flux_kvs_lookup (l->ctx->h, NULL, 0, path))) {
-        flux_log_error (l->ctx->h, "%s: flux_kvs_lookup", __FUNCTION__);
-        goto error;
-    }
-
-    if (flux_future_push (fall, key, f) < 0) {
-        flux_log_error (l->ctx->h, "%s: flux_future_push", __FUNCTION__);
-        goto error;
-    }
-
     return 0;
-
-error:
-    flux_future_destroy (f);
-    return -1;
 }
 
 static int lookup_keys (struct lookup_ctx *l)
@@ -123,10 +111,8 @@ static int lookup_keys (struct lookup_ctx *l)
     size_t index;
     json_t *key;
 
-    if (!(fall = flux_future_wait_all_create ())) {
-        flux_log_error (l->ctx->h, "%s: flux_wait_all_create", __FUNCTION__);
-        goto error;
-    }
+    if (!(fall = flux_future_wait_all_create ()))
+        return -1;
     flux_future_set_flux (fall, l->ctx->h);
 
     if (l->lookup_eventlog) {
@@ -139,13 +125,8 @@ static int lookup_keys (struct lookup_ctx *l)
             goto error;
     }
 
-    if (flux_future_then (fall,
-                          -1,
-                          info_lookup_continuation,
-                          l) < 0) {
-        flux_log_error (l->ctx->h, "%s: flux_future_then", __FUNCTION__);
+    if (flux_future_then (fall, -1, info_lookup_continuation, l) < 0)
         goto error;
-    }
 
     l->f = fall;
     return 0;
@@ -247,31 +228,41 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
     json_t *o = NULL;
     json_t *tmp = NULL;
     char *data = NULL;
+    flux_error_t error;
 
     if (!l->allow) {
         flux_future_t *f;
 
         if (!(f = flux_future_get_child (fall, "eventlog"))) {
-            flux_log_error (ctx->h, "%s: flux_future_get_child", __FUNCTION__);
+            errprintf (&error,
+                       "internal error: flux_future_get_child eventlog: %s",
+                       strerror (errno));
             goto error;
         }
 
         if (flux_kvs_lookup_get (f, &s) < 0) {
-            if (errno != ENOENT)
-                flux_log_error (l->ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+            errprintf (&error,
+                       "%s",
+                       errno == ENOENT ? "invalid job id" : strerror (errno));
             goto error;
         }
 
-        if (eventlog_allow (ctx, l->msg, l->id, s) < 0)
+        if (eventlog_allow (ctx, l->msg, l->id, s) < 0) {
+            char *errmsg;
+            if (errno == EPERM)
+                errmsg = "access is restricted to job/instance owner";
+            else
+                errmsg = "error parsing eventlog";
+            errprintf (&error, "%s", errmsg);
             goto error;
+        }
         l->allow = true;
     }
 
-    if (!(o = json_object ()))
-        goto enomem;
-
-    tmp = json_integer (l->id);
-    if (json_object_set_new (o, "id", tmp) < 0) {
+    if (!(o = json_object ())
+        || !(tmp = json_integer (l->id))
+        || json_object_set_new (o, "id", tmp) < 0) {
+        errprintf (&error, "error creating response object");
         json_decref (tmp);
         goto enomem;
     }
@@ -282,47 +273,53 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
         json_t *val = NULL;
 
         if (!(f = flux_future_get_child (fall, keystr))) {
-            flux_log_error (ctx->h, "%s: flux_future_get_child", __FUNCTION__);
+            errprintf (&error,
+                       "internal error: flux_future_get_child %s: %s",
+                       keystr,
+                       strerror (errno));
             goto error;
         }
 
         if (flux_kvs_lookup_get (f, &s) < 0) {
-            if (errno != ENOENT)
-                flux_log_error (l->ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+            errprintf (&error,
+                       "%s: %s",
+                       keystr,
+                       errno == ENOENT ? "key not found" : strerror (errno));
             goto error;
         }
 
         /* treat empty value as invalid */
         if (!s) {
+            errprintf (&error, "%s: value is unexpectedly empty", keystr);
             errno = EPROTO;
             goto error;
         }
 
         if ((l->flags & FLUX_JOB_LOOKUP_CURRENT)
-            && (streq (keystr, "R")
-                || streq (keystr, "jobspec"))) {
-            if (lookup_current (l, fall, keystr, s, &current_value) < 0)
+            && (streq (keystr, "R") || streq (keystr, "jobspec"))) {
+            if (lookup_current (l, fall, keystr, s, &current_value) < 0) {
+                errprintf (&error,
+                           "%s: error applying eventlog to original value: %s",
+                           keystr,
+                           strerror (errno));
                 goto error;
+            }
             s = current_value;
         }
 
         /* check for JSON_DECODE flag last, as changes above could affect
          * desired value */
         if ((l->flags & FLUX_JOB_LOOKUP_JSON_DECODE)
-            && (streq (keystr, "jobspec")
-                || streq (keystr, "R"))) {
+            && (streq (keystr, "jobspec") || streq (keystr, "R"))) {
             /* We assume if it was stored in the KVS it's valid JSON,
              * so failure is ENOMEM */
-            if (!(val = json_loads (s, 0, NULL)))
-                goto enomem;
+            val = json_loads (s, 0, NULL);
         }
-        else {
-            if (!(val = json_string (s)))
-                goto enomem;
-        }
-
-        if (json_object_set_new (o, keystr, val) < 0) {
+        else
+            val = json_string (s);
+        if (!val || json_object_set_new (o, keystr, val) < 0) {
             json_decref (val);
+            errprintf (&error, "%s: error adding value to response", keystr);
             goto enomem;
         }
 
@@ -334,20 +331,19 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
      * taken error path */
     assert (l->allow);
 
-    if (!(data = json_dumps (o, JSON_COMPACT)))
+    if (!(data = json_dumps (o, JSON_COMPACT))) {
+        errprintf (&error, "error preparing response");
         goto enomem;
-
-    if (flux_respond (ctx->h, l->msg, data) < 0) {
-        flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
-        goto error;
     }
+    if (flux_respond (ctx->h, l->msg, data) < 0)
+        flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
 
     goto done;
 
 enomem:
     errno = ENOMEM;
 error:
-    if (flux_respond_error (ctx->h, l->msg, errno, NULL) < 0)
+    if (flux_respond_error (ctx->h, l->msg, errno, error.text) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
 
 done:
@@ -388,19 +384,17 @@ static int check_allow (struct lookup_ctx *l)
 /* If we need the eventlog for an allow check or for update-lookup
  * we need to add it to the key lookup list.
  */
-static int check_to_lookup_eventlog (struct lookup_ctx *l)
+static void check_to_lookup_eventlog (struct lookup_ctx *l)
 {
     if (!l->allow || (l->flags & FLUX_JOB_LOOKUP_CURRENT)) {
         size_t index;
         json_t *key;
         json_array_foreach (l->keys, index, key) {
             if (streq (json_string_value (key), "eventlog"))
-                return 0;
+                return;
         }
         l->lookup_eventlog = true;
     }
-
-    return 0;
 }
 
 static json_t *get_json_string (json_t *o)
@@ -508,33 +502,49 @@ static int lookup (flux_t *h,
                    struct info_ctx *ctx,
                    flux_jobid_t id,
                    json_t *keys,
-                   int flags)
+                   int flags,
+                   flux_error_t *error)
 {
     struct lookup_ctx *l = NULL;
     int ret;
 
-    if (!(l = lookup_ctx_create (ctx, msg, id, keys, flags)))
+    if (!(l = lookup_ctx_create (ctx, msg, id, keys, flags))) {
+        errprintf (error,
+                   "could not create lookup context: %s",
+                   strerror (errno));
         goto error;
+    }
 
-    if (check_allow (l) < 0)
+    if (check_allow (l) < 0) {
+        errprintf (error, "access is restricted to job/instance owner");
         goto error;
+    }
 
-    if ((ret = lookup_cached (l)) < 0)
+    if ((ret = lookup_cached (l)) < 0) {
+        errprintf (error,
+                   "internal error attempting to use update-watch cache: %s",
+                   strerror (errno));
         goto error;
+    }
 
     if (ret) {
         lookup_ctx_destroy (l);
         return 0;
     }
 
-    if (check_to_lookup_eventlog (l) < 0)
-        goto error;
+    check_to_lookup_eventlog (l);
 
-    if (lookup_keys (l) < 0)
+    if (lookup_keys (l) < 0) {
+        errprintf (error,
+                   "error sending KVS lookup request(s): %s",
+                   strerror (errno));
         goto error;
+    }
 
     if (zlist_append (ctx->lookups, l) < 0) {
-        flux_log_error (h, "%s: zlist_append", __FUNCTION__);
+        errprintf (error,
+                   "internal error saving lookup context: out of memory");
+        errno = ENOMEM;
         goto error;
     }
     zlist_freefn (ctx->lookups, l, lookup_ctx_destroy, true);
@@ -557,6 +567,7 @@ void lookup_cb (flux_t *h,
     flux_jobid_t id;
     int flags;
     int valid_flags = FLUX_JOB_LOOKUP_JSON_DECODE | FLUX_JOB_LOOKUP_CURRENT;
+    flux_error_t error;
     const char *errmsg = NULL;
 
     if (flux_request_unpack (msg,
@@ -586,8 +597,10 @@ void lookup_cb (flux_t *h,
         }
     }
 
-    if (lookup (h, msg, ctx, id, keys, flags) < 0)
+    if (lookup (h, msg, ctx, id, keys, flags, &error) < 0) {
+        errmsg = error.text;
         goto error;
+    }
 
     return;
 
@@ -608,6 +621,7 @@ void update_lookup_cb (flux_t *h,
     json_t *keys = NULL;
     int flags;
     int valid_flags = 0;
+    flux_error_t error;
     const char *errmsg = NULL;
 
     if (flux_request_unpack (msg,
@@ -638,9 +652,11 @@ void update_lookup_cb (flux_t *h,
                 ctx,
                 id,
                 keys,
-                FLUX_JOB_LOOKUP_JSON_DECODE | FLUX_JOB_LOOKUP_CURRENT) < 0)
+                FLUX_JOB_LOOKUP_JSON_DECODE | FLUX_JOB_LOOKUP_CURRENT,
+                &error) < 0) {
+        errmsg = error.text;
         goto error;
-
+    }
     return;
 
 error:

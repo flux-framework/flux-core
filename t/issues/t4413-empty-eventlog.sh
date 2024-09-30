@@ -7,6 +7,6 @@ jobpath=`flux job id --to=kvs 123456789`
 flux kvs put "${jobpath}.eventlog"=""
 
 # Issue 4413, previously would return Cannot allocate memory
-flux job info 123456789 eventlog 2>&1 | grep "Protocol error"
+flux job info 123456789 eventlog 2>&1 | grep "unexpectedly empty"
 
 
