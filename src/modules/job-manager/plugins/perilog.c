@@ -248,7 +248,7 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     }
 
     pd->cmd = cmd;
-    pd->kill_timeout = kill_timeout > 0. ? kill_timeout : 5.;
+    pd->kill_timeout = kill_timeout > 0. ? kill_timeout : 10.;
     pd->per_rank = per_rank;
     pd->prolog = prolog;
     pd->uses_imp = uses_imp;
