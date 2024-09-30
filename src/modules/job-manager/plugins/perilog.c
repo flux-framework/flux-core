@@ -18,8 +18,9 @@
  *  - The job manager prolog is started at the RUN state.
  *
  *  - If a job gets a fatal exception while the prolog is
- *    running, the prolog is terminated with SIGTERM, followed
- *    by SIGKILL
+ *    running, the prolog is canceled and a SIGTERM signal
+ *    is sent. After a configurable timeout, ranks on which
+ *    the prolog is still active are drained.
  *
  *  - The epilog is started as a result of a "finish" event or
  *    when the prolog completes if a fatal job exception has been
@@ -995,27 +996,20 @@ static int proc_kill (struct perilog_proc *proc)
     return 0;
 }
 
-static void proc_kill_timer_cb (flux_reactor_t *r,
-                                flux_watcher_t *w,
-                                int revents,
-                                void *arg)
+static void proc_kill_timeout_cb (flux_reactor_t *r,
+                                  flux_watcher_t *w,
+                                  int revents,
+                                  void *arg)
 {
-    flux_t *h;
-    flux_future_t *f;
     struct perilog_proc *proc = arg;
-
-    if (!proc || !(h = flux_jobtap_get_flux (proc->p)))
-        return;
-
-    if (!(f = bulk_exec_kill (proc->bulk_exec, NULL, SIGKILL))) {
-        flux_log_error (h,
-                        "%s: failed to send SIGKILL to %s",
-                        idf58 (proc->id),
-                        perilog_proc_name (proc));
-        return;
-    }
-    /* Do not wait for any response */
-    flux_future_destroy (f);
+    flux_t *h = flux_jobtap_get_flux (proc->p);
+    flux_log_error (h,
+                    "%s: timed out waiting for SIGTERM to terminate %s",
+                    idf58 (proc->id),
+                    perilog_proc_name (proc));
+    /*  Drain active ranks and post finish event
+     */
+    proc_drain_and_finish (proc, false, true);
 }
 
 static int proc_kill_timer_start (struct perilog_proc *proc, double timeout)
@@ -1026,13 +1020,16 @@ static int proc_kill_timer_start (struct perilog_proc *proc, double timeout)
         proc->kill_timer = flux_timer_watcher_create (r,
                                                       timeout,
                                                       0.,
-                                                      proc_kill_timer_cb,
+                                                      proc_kill_timeout_cb,
                                                       proc);
         if (!proc->kill_timer) {
             flux_log_error (h,
                             "%s: failed to start %s kill timer",
                             idf58 (proc->id),
                             perilog_proc_name (proc));
+            /* Since timer cb won't be run, drain and send finish event now
+             */
+            proc_drain_and_finish (proc, false, true);
             return -1;
         }
         flux_watcher_start (proc->kill_timer);
