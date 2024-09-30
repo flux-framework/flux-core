@@ -349,32 +349,6 @@ done:
     zlist_remove (ctx->lookups, l);
 }
 
-/* Check if lookup allowed, either b/c message is from instance owner
- * or previous lookup verified it's ok.
- */
-static int check_allow (struct lookup_ctx *l)
-{
-    int ret;
-
-    /* if rpc from owner, no need to do guest access check */
-    if (flux_msg_authorize (l->msg, FLUX_USERID_UNKNOWN) == 0) {
-        l->allow = true;
-        return 0;
-    }
-
-    if ((ret = eventlog_allow_lru (l->ctx,
-                                   l->msg,
-                                   l->id)) < 0)
-        return -1;
-
-    if (ret) {
-        l->allow = true;
-        return 0;
-    }
-
-    return 0;
-}
-
 /* If we need the eventlog for an allow check or for update-lookup
  * we need to add it to the key lookup list.
  */
@@ -509,9 +483,22 @@ static int lookup (flux_t *h,
         goto error;
     }
 
-    if (check_allow (l) < 0) {
-        errprintf (error, "access is restricted to job/instance owner");
-        goto error;
+    /* If authorization is indeterminate at this stage (l->allow == false),
+     * look up the eventlog and authorize in the continuation.  N.B. we could
+     * summarily allow the instance owner without looking up the eventlog,
+     * but then we could not differentiate an invalid job ID and a missing key.
+     * Since keys are looked up in parallel, this should not be too costly.
+     * See also: flux-framework/flux-core#6325
+     */
+    switch (eventlog_allow_lru (l->ctx, l->msg, l->id)) {
+        case -1:    // entry found - DENY
+            errprintf (error, "access is restricted to job/instance owner");
+            goto error;
+        case 1:     // entry found - ALLOW
+            l->allow = true;
+            break;
+        case 0:     // indeterminate
+            break;
     }
 
     if ((ret = lookup_cached (l)) < 0) {
