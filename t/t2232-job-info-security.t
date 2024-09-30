@@ -79,25 +79,25 @@ test_expect_success 'flux job eventlog works (owner)' '
 test_expect_success 'flux job eventlog works (user)' '
 	jobid=$(submit_job 9000) &&
 	set_userid 9000 &&
-	flux job eventlog $jobid &&
-	unset_userid
+	flux job eventlog $jobid
 '
 
 test_expect_success 'flux job eventlog fails (wrong user)' '
+	unset_userid &&
 	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	! flux job eventlog $jobid &&
-	unset_userid
+	! flux job eventlog $jobid
 '
 
 test_expect_success 'flux job eventlog fails on bad first event (user)' '
+	unset_userid &&
 	jobid=$(bad_first_event 9000) &&
 	set_userid 9999 &&
-	! flux job eventlog $jobid &&
-	unset_userid
+	! flux job eventlog $jobid
 '
 
 test_expect_success 'flux job guest.exec.eventlog works via -p (owner)' '
+	unset_userid &&
 	jobid=$(submit_job) &&
 	flux job eventlog -p exec $jobid
 '
@@ -105,15 +105,14 @@ test_expect_success 'flux job guest.exec.eventlog works via -p (owner)' '
 test_expect_success 'flux job guest.exec.eventlog works via -p (user)' '
 	jobid=$(submit_job 9000) &&
 	set_userid 9000 &&
-	flux job eventlog -p exec $jobid &&
-	unset_userid
+	flux job eventlog -p exec $jobid
 '
 
 test_expect_success 'flux job guest.exec.eventlog fails via -p (wrong user)' '
+	unset_userid &&
 	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	! flux job eventlog -p exec $jobid &&
-	unset_userid
+	! flux job eventlog -p exec $jobid
 '
 
 #
@@ -121,6 +120,7 @@ test_expect_success 'flux job guest.exec.eventlog fails via -p (wrong user)' '
 #
 
 test_expect_success 'flux job info eventlog works (owner)' '
+	unset_userid &&
 	jobid=$(submit_job) &&
 	flux job info $jobid eventlog
 '
@@ -128,37 +128,38 @@ test_expect_success 'flux job info eventlog works (owner)' '
 test_expect_success 'flux job info eventlog works (user)' '
 	jobid=$(submit_job 9000) &&
 	set_userid 9000 &&
-	flux job info $jobid eventlog &&
-	unset_userid
+	flux job info $jobid eventlog
 '
 
 test_expect_success 'flux job info eventlog fails (wrong user)' '
+	unset_userid &&
 	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	! flux job info $jobid eventlog &&
-	unset_userid
+	! flux job info $jobid eventlog
 '
 
 test_expect_success 'flux job info jobspec works (owner)' '
+	unset_userid &&
 	jobid=$(submit_job) &&
 	flux job info $jobid jobspec
 '
 
 test_expect_success 'flux job info jobspec works (user)' '
+	unset_userid &&
 	jobid=$(submit_job 9000) &&
 	set_userid 9000 &&
-	flux job info $jobid jobspec &&
-	unset_userid
+	flux job info $jobid jobspec
 '
 
 test_expect_success 'flux job info jobspec fails (wrong user)' '
+	unset_userid &&
 	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	! flux job info $jobid jobspec &&
-	unset_userid
+	! flux job info $jobid jobspec
 '
 
 test_expect_success 'flux job info foobar fails (owner)' '
+	unset_userid &&
 	jobid=$(submit_job) &&
 	! flux job info $jobid foobar
 '
@@ -166,15 +167,14 @@ test_expect_success 'flux job info foobar fails (owner)' '
 test_expect_success 'flux job info foobar fails (user)' '
 	jobid=$(submit_job 9000) &&
 	set_userid 9000 &&
-	! flux job info $jobid foobar &&
-	unset_userid
+	! flux job info $jobid foobar
 '
 
 test_expect_success 'flux job info foobar fails (wrong user)' '
+	unset_userid &&
 	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	! flux job info $jobid foobar &&
-	unset_userid
+	! flux job info $jobid foobar
 '
 
 #
@@ -182,6 +182,7 @@ test_expect_success 'flux job info foobar fails (wrong user)' '
 #
 
 test_expect_success 'flux job wait-event works (owner)' '
+	unset_userid &&
 	jobid=$(submit_job) &&
 	flux job wait-event $jobid submit
 '
@@ -189,18 +190,18 @@ test_expect_success 'flux job wait-event works (owner)' '
 test_expect_success 'flux job wait-event works (user)' '
 	jobid=$(submit_job 9000) &&
 	set_userid 9000 &&
-	flux job wait-event $jobid submit &&
-	unset_userid
+	flux job wait-event $jobid submit
 '
 
 test_expect_success 'flux job wait-event fails (wrong user)' '
+	unset_userid &&
 	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	! flux job wait-event $jobid submit &&
-	unset_userid
+	! flux job wait-event $jobid submit
 '
 
 test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (owner)' '
+	unset_userid &&
 	jobid=$(submit_job) &&
 	flux job wait-event -p exec $jobid done
 '
@@ -208,18 +209,18 @@ test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (owner
 test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (user)' '
 	jobid=$(submit_job 9000) &&
 	set_userid 9000 &&
-	flux job wait-event -p exec $jobid done &&
-	unset_userid
+	flux job wait-event -p exec $jobid done
 '
 
 test_expect_success 'flux job wait-event guest.exec.eventlog fails via -p (wrong user)' '
+	unset_userid &&
 	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	! flux job wait-event -p exec $jobid done &&
-	unset_userid
+	! flux job wait-event -p exec $jobid done
 '
 
 test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (live job, owner)' '
+	unset_userid &&
 	jobid=$(submit_job_live) &&
 	flux job wait-event -p exec $jobid init &&
 	flux cancel $jobid
@@ -228,7 +229,10 @@ test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (live 
 test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (live job, user)' '
 	jobid=$(submit_job_live 9000) &&
 	set_userid 9000 &&
-	flux job wait-event -p exec $jobid init &&
+	flux job wait-event -p exec $jobid init
+'
+
+test_expect_success 'cancel job' '
 	unset_userid &&
 	flux cancel $jobid
 '
@@ -236,7 +240,10 @@ test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (live 
 test_expect_success 'flux job wait-event guest.exec.eventlog fails via -p (live job, wrong user)' '
 	jobid=$(submit_job_live 9000) &&
 	set_userid 9999 &&
-	! flux job wait-event -p exec $jobid init &&
+	! flux job wait-event -p exec $jobid init
+'
+
+test_expect_success 'cancel job' '
 	unset_userid &&
 	flux cancel $jobid
 '
@@ -261,22 +268,22 @@ test_expect_success 'flux job info dummy works (owner)' '
 
 test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog" &&
-	unset_userid
+        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog"
 '
 
 test_expect_success 'create eventlog with invalid data / not JSON' '
+	unset_userid &&
 	jobpath=`flux job id --to=kvs 123456789`&&
 	flux kvs put "${jobpath}.eventlog"="foobar"
 '
 
 test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog" &&
-	unset_userid
+        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog"
 '
 
 test_expect_success 'create eventlog without submit context' '
+	unset_userid &&
         submitstr="{\"timestamp\":123.4,\"name\":\"submit\"}" &&
 	jobpath=`flux job id --to=kvs 123456789` &&
 	echo $submitstr | flux kvs put --raw "${jobpath}.eventlog"=-
@@ -284,11 +291,11 @@ test_expect_success 'create eventlog without submit context' '
 
 test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog" &&
-	unset_userid
+        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog"
 '
 
 test_expect_success 'create eventlog without submit userid' '
+	unset_userid
         submitstr="{\"timestamp\":123.4,\"name\":\"submit\",\"context\":{}}" &&
 	jobpath=`flux job id --to=kvs 123456789` &&
 	echo $submitstr | flux kvs put --raw "${jobpath}.eventlog"=-
@@ -296,11 +303,11 @@ test_expect_success 'create eventlog without submit userid' '
 
 test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog" &&
-	unset_userid
+        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog"
 '
 
 test_expect_success 'create eventlog that is binary garbage' '
+	unset_userid &&
 	jobpath=`flux job id --to=kvs 123456789` &&
         dd if=/dev/urandom bs=64 count=1 > binary.out &&
 	flux kvs put --raw "${jobpath}.eventlog"=- < binary.out
@@ -308,7 +315,10 @@ test_expect_success 'create eventlog that is binary garbage' '
 
 test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog" &&
+        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog"
+'
+
+test_expect_success 'clean up' '
 	unset_userid
 '
 
