@@ -74,31 +74,17 @@ static void store_lru (struct info_ctx *ctx, flux_jobid_t id, uint32_t userid)
     return;
 }
 
-/* Optimization:
- * Avoid calling eventlog_get_userid() if message cred has OWNER role.
- */
 int eventlog_allow (struct info_ctx *ctx,
                     const flux_msg_t *msg,
                     flux_jobid_t id,
                     const char *s)
 {
-    struct flux_msg_cred cred;
-
-    if (flux_msg_get_cred (msg, &cred) < 0)
+    uint32_t userid;
+    if (eventlog_get_userid (ctx, s, &userid) < 0)
         return -1;
-    if (!(cred.rolemask & FLUX_ROLE_OWNER)) {
-        uint32_t userid;
-        /* RFC18: empty eventlog not allowed */
-        if (!s) {
-            errno = EPROTO;
-            return -1;
-        }
-        if (eventlog_get_userid (ctx, s, &userid) < 0)
-            return -1;
-        store_lru (ctx, id, userid);
-        if (flux_msg_cred_authorize (cred, userid) < 0)
-            return -1;
-    }
+    store_lru (ctx, id, userid);
+    if (flux_msg_authorize (msg, userid) < 0)
+        return -1;
     return 0;
 }
 
