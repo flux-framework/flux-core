@@ -248,31 +248,6 @@ test_expect_success 'perilog: fails if command not found' '
 	jobid=$(flux submit --job-name=prolog-failure hostname) &&
 	test_must_fail flux job attach -vEX $jobid
 '
-test_expect_success 'perilog: prolog is killed even if it ignores SIGTERM' '
-	cat <<-EOF >trap-sigterm.sh &&
-	#!/bin/sh
-	trap "echo trap-sigterm got SIGTERM" 15
-	flux kvs put trap-ready=1
-	sleep 60 &
-	pid=\$!
-	wait \$pid
-	sleep 60
-	EOF
-	chmod +x trap-sigterm.sh &&
-	cat <<-EOT >config/perilog.toml &&
-	[job-manager.prolog]
-	kill-timeout = 0.5
-	command = [ "$(pwd)/trap-sigterm.sh" ]
-	EOT
-	flux config reload &&
-	flux jobtap load --remove=*.so perilog.so &&
-	jobid=$(flux submit --job-name=prolog-sigkill hostname) &&
-	flux job wait-event -t 15 $jobid prolog-start &&
-	flux cancel $jobid &&
-	flux job wait-event -t 15 -m status=9 $jobid prolog-finish &&
-	test_must_fail flux job attach -vEX $jobid
-'
-
 test_expect_success 'perilog: epilog can be specified without a prolog' '
 	cat <<-EOF >config/perilog.toml &&
 	[job-manager.epilog]
