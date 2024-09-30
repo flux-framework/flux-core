@@ -4,7 +4,7 @@ test_description='Test flux job info service security'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 job
+test_under_flux 1 job
 
 # We have to fake a job submission by a guest into the KVS.
 # This method of editing the eventlog preserves newline separators.
