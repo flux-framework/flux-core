@@ -20,47 +20,37 @@
 #include "allow.h"
 
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/str/str.h"
 
 /* Parse the submit userid from the event log.
- * Assume "submit" is the first event.
+ * RFC 18 defines the structure of eventlogs.
+ * RFC 21 requires that the first entry is "submit" and defines its context.
  */
 static int eventlog_get_userid (struct info_ctx *ctx,
                                 const char *s,
                                 uint32_t *useridp)
 {
-    json_t *a = NULL;
-    json_t *entry = NULL;
-    const char *name = NULL;
-    json_t *context = NULL;
+    json_t *o = NULL;
+    const char *name;
     int userid;
     int rv = -1;
 
-    if (!(a = eventlog_decode (s))) {
-        /* if eventlog improperly formatted, we'll consider this a
-         * protocol error */
-        if (errno == EINVAL)
-            errno = EPROTO;
-        goto error;
-    }
-    if (!(entry = json_array_get (a, 0))) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
-        goto error;
-    if (!streq (name, "submit") || !context) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (json_unpack (context, "{ s:i }", "userid", &userid) < 0) {
+    if (!s
+        || !(o = json_loads (s, JSON_DISABLE_EOF_CHECK, NULL))
+        || json_unpack (o,
+                        "{s:s s:{s:i}}",
+                        "name", &name,
+                        "context",
+                          "userid", &userid) < 0
+        || !streq (name, "submit")) {
         errno = EPROTO;
         goto error;
     }
     (*useridp) = userid;
     rv = 0;
 error:
-    json_decref (a);
+    ERRNO_SAFE_WRAP (json_decref, o);
     return rv;
 }
 
