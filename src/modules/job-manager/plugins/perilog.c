@@ -452,6 +452,7 @@ static flux_future_t *proc_drain_ranks (struct perilog_proc *proc,
     struct idset *failed = NULL;
     flux_future_t *f = NULL;
     unsigned long rank;
+    const char *msg;
     char reason[256];
     flux_t *h = flux_jobtap_get_flux (proc->p);
 
@@ -482,11 +483,19 @@ static flux_future_t *proc_drain_ranks (struct perilog_proc *proc,
                         perilog_proc_name (proc));
         goto out;
     }
+
+    if (proc->canceled)
+        msg = "canceled then timed out";
+    else if (proc->timedout)
+        msg = "timed out";
+    else
+        msg = "failed";
+
     (void) snprintf (reason,
                      sizeof (reason),
                      "%s %s for job %s",
                      perilog_proc_name (proc),
-                     proc->timedout ? "timed out" : "failed",
+                     msg,
                      idf58 (proc->id));
 
     if (!(f = flux_rpc_pack (h,
