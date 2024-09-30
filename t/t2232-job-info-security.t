@@ -6,51 +6,17 @@ test_description='Test flux job info service security'
 
 test_under_flux 1 job
 
-# We have to fake a job submission by a guest into the KVS.
-# This method of editing the eventlog preserves newline separators.
+flux version | grep -q libflux-security && test_set_prereq FLUX_SECURITY
 
-update_job_userid() {
-	local userid=$1
-	if test -n "$userid"; then
-		local kvsdir=$(flux job id --to=kvs $jobid)
-		flux kvs get --raw ${kvsdir}.eventlog \
-			| sed -e 's/\("userid":\)-*[0-9]*/\1'${userid}/ \
-			| flux kvs put --raw ${kvsdir}.eventlog=-
-	fi
-}
-
-# Usage: submit_job [userid]
-# To ensure robustness of tests despite future job manager changes,
-# cancel the job, and wait for clean event.  Optionally, edit the
-# userid
-submit_job() {
-	local jobid=$(flux job submit sleeplong.json) &&
-	flux job wait-event $jobid start >/dev/null &&
-	flux cancel $jobid &&
-	flux job wait-event $jobid clean >/dev/null &&
-	update_job_userid $1 &&
-	echo $jobid
-}
-
-# Unlike above, do not cancel the job, the test will cancel the job
-submit_job_live() {
-	local jobid=$(flux job submit sleeplong.json) &&
-	flux job wait-event $jobid start >/dev/null &&
-	update_job_userid $1 &&
-	echo $jobid
-}
-
-# Usage: bad_first_event
-# Wait for job eventlog to include 'depend' event, then mangle submit event name
-bad_first_event() {
-	local jobid=$(flux job submit sleeplong.json) &&
-	flux job wait-event $jobid depend >/dev/null &&
-	local kvsdir=$(flux job id --to=kvs $jobid) &&
-	flux kvs get --raw ${kvsdir}.eventlog \
-		| sed -e s/submit/foobar/ \
-		| flux kvs put --raw ${kvsdir}.eventlog=- &&
-	flux cancel $jobid &&
-	echo $jobid
+# Usage: submit_as_alternate_user cmd...
+submit_as_alternate_user()
+{
+	FAKE_USERID=42
+        flux run --dry-run "$@" | \
+          flux python ${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py $FAKE_USERID \
+            >job.signed
+        FLUX_HANDLE_USERID=$FAKE_USERID \
+          flux job submit --flags=signed job.signed
 }
 
 set_userid() {
@@ -63,189 +29,188 @@ unset_userid() {
 	unset FLUX_HANDLE_ROLEMASK
 }
 
-test_expect_success 'job-info: generate jobspec for simple test job' '
-	flux run --dry-run -n1 -N1 sleep 300 > sleeplong.json
+test_expect_success 'configure to allow guests to use test execution' '
+	flux config load <<-EOT
+	exec.testexec.allow-guests = true
+	EOT
+'
+
+test_expect_success 'submit a job as instance owner and wait for clean' '
+	jobid=$(flux submit -n1 true) &&
+	flux job wait-event $jobid clean &&
+	echo $jobid >jobid.owner
+'
+
+test_expect_success FLUX_SECURITY 'submit a job as guest and wait for clean' '
+	jobid=$(submit_as_alternate_user -n1 true) &&
+	flux job wait-event $jobid clean &&
+	echo $jobid >jobid.guest
 '
 
 #
 # job lookup (via eventlog)
 #
 
-test_expect_success 'flux job eventlog works (owner)' '
-	jobid=$(submit_job) &&
-	flux job eventlog $jobid
+test_expect_success 'flux job eventlog works as instance owner' '
+	flux job eventlog $(cat jobid.owner)
 '
 
-test_expect_success 'flux job eventlog works (user)' '
-	jobid=$(submit_job 9000) &&
-	set_userid 9000 &&
-	flux job eventlog $jobid
+test_expect_success FLUX_SECURITY 'flux job eventlog works as guest' '
+	set_userid 42 &&
+	flux job eventlog $(cat jobid.guest)
 '
 
-test_expect_success 'flux job eventlog fails (wrong user)' '
+test_expect_success FLUX_SECURITY 'flux job eventlog fails as wrong guest' '
 	unset_userid &&
-	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	test_must_fail flux job eventlog $jobid
+	test_must_fail flux job eventlog $(cat jobid.guest)
 '
 
-test_expect_success 'flux job eventlog fails on bad first event (user)' '
+test_expect_success FLUX_SECURITY 'flux job eventlog as owner works on guest job' '
 	unset_userid &&
-	jobid=$(bad_first_event 9000) &&
+	flux job eventlog $(cat jobid.guest)
+'
+
+test_expect_success 'flux job eventlog -p exec works as instance owner' '
+	unset_userid &&
+	flux job eventlog -p exec $(cat jobid.owner)
+'
+
+test_expect_success FLUX_SECURITY 'flux job eventlog -p exec works as guest' '
+	set_userid 42 &&
+	flux job eventlog -p exec $(cat jobid.guest)
+'
+
+test_expect_success FLUX_SECURITY 'flux job eventlog -p exec fails as wrong guest' '
+	unset_userid &&
 	set_userid 9999 &&
-	test_must_fail flux job eventlog $jobid
-'
-
-test_expect_success 'flux job guest.exec.eventlog works via -p (owner)' '
-	unset_userid &&
-	jobid=$(submit_job) &&
-	flux job eventlog -p exec $jobid
-'
-
-test_expect_success 'flux job guest.exec.eventlog works via -p (user)' '
-	jobid=$(submit_job 9000) &&
-	set_userid 9000 &&
-	flux job eventlog -p exec $jobid
-'
-
-test_expect_success 'flux job guest.exec.eventlog fails via -p (wrong user)' '
-	unset_userid &&
-	jobid=$(submit_job 9000) &&
-	set_userid 9999 &&
-	test_must_fail flux job eventlog -p exec $jobid
+	test_must_fail flux job eventlog -p exec $(cat jobid.guest)
 '
 
 #
 # job info lookup (via 'info')
 #
 
-test_expect_success 'flux job info eventlog works (owner)' '
+test_expect_success 'flux job info eventlog works as instance owner' '
 	unset_userid &&
-	jobid=$(submit_job) &&
-	flux job info $jobid eventlog
+	flux job info $(cat jobid.owner) eventlog
 '
 
-test_expect_success 'flux job info eventlog works (user)' '
-	jobid=$(submit_job 9000) &&
-	set_userid 9000 &&
-	flux job info $jobid eventlog
+test_expect_success FLUX_SECURITY 'flux job info eventlog works as guest ' '
+	set_userid 42 &&
+	flux job info $(cat jobid.guest) eventlog
 '
 
-test_expect_success 'flux job info eventlog fails (wrong user)' '
+test_expect_success FLUX_SECURITY 'flux job info eventlog as owner works on guest job' '
 	unset_userid &&
-	jobid=$(submit_job 9000) &&
+	flux job info $(cat jobid.guest) eventlog
+'
+
+test_expect_success FLUX_SECURITY 'flux job info eventlog fails as wrong guest' '
+	unset_userid &&
 	set_userid 9999 &&
-	test_must_fail flux job info $jobid eventlog
+	test_must_fail flux job info $(cat jobid.guest) eventlog
 '
 
-test_expect_success 'flux job info jobspec works (owner)' '
+test_expect_success 'flux job info jobspec works as instance owner' '
 	unset_userid &&
-	jobid=$(submit_job) &&
-	flux job info $jobid jobspec
+	flux job info $(cat jobid.owner) jobspec
 '
 
-test_expect_success 'flux job info jobspec works (user)' '
+test_expect_success FLUX_SECURITY 'flux job info jobspec works as guest' '
 	unset_userid &&
-	jobid=$(submit_job 9000) &&
-	set_userid 9000 &&
-	flux job info $jobid jobspec
+	set_userid 42 &&
+	flux job info $(cat jobid.guest) jobspec
 '
 
-test_expect_success 'flux job info jobspec fails (wrong user)' '
+test_expect_success FLUX_SECURITY 'flux job info jobspec fails as wrong guest' '
 	unset_userid &&
-	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	test_must_fail flux job info $jobid jobspec
+	test_must_fail flux job info $(cat jobid.guest) jobspec
 '
 
-test_expect_success 'flux job info foobar fails (owner)' '
+test_expect_success 'flux job info foobar fails as instance owner' '
 	unset_userid &&
-	jobid=$(submit_job) &&
-	test_must_fail flux job info $jobid foobar
+	test_must_fail flux job info $(cat jobid.owner) foobar
 '
 
-test_expect_success 'flux job info foobar fails (user)' '
-	jobid=$(submit_job 9000) &&
-	set_userid 9000 &&
-	test_must_fail flux job info $jobid foobar
+test_expect_success 'flux job info foobar fails as guest' '
+	set_userid 42 &&
+	test_must_fail flux job info $(cat jobid.guest) foobar
 '
 
-test_expect_success 'flux job info foobar fails (wrong user)' '
+test_expect_success 'flux job info foobar fails as wrong guest' '
 	unset_userid &&
-	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	test_must_fail flux job info $jobid foobar
+	test_must_fail flux job info $(cat jobid.guest) foobar
 '
 
 #
 # job eventlog watch (via wait-event)
 #
 
-test_expect_success 'flux job wait-event works (owner)' '
+test_expect_success 'flux job wait-event works as instance owner' '
 	unset_userid &&
-	jobid=$(submit_job) &&
-	flux job wait-event $jobid submit
+	flux job wait-event $(cat jobid.owner) submit
 '
 
-test_expect_success 'flux job wait-event works (user)' '
-	jobid=$(submit_job 9000) &&
-	set_userid 9000 &&
-	flux job wait-event $jobid submit
+test_expect_success FLUX_SECURITY 'flux job wait-event works guest' '
+	set_userid 42 &&
+	flux job wait-event $(cat jobid.guest) submit
 '
 
-test_expect_success 'flux job wait-event fails (wrong user)' '
+test_expect_success FLUX_SECURITY 'flux job wait-event fails as wrong guest' '
 	unset_userid &&
-	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	test_must_fail flux job wait-event $jobid submit
+	test_must_fail flux job wait-event $(cat jobid.guest) submit
 '
 
-test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (owner)' '
+test_expect_success 'flux job wait-event -p exec works as instance owner' '
 	unset_userid &&
-	jobid=$(submit_job) &&
-	flux job wait-event -p exec $jobid done
+	flux job wait-event -p exec $(cat jobid.owner) done
 '
 
-test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (user)' '
-	jobid=$(submit_job 9000) &&
-	set_userid 9000 &&
-	flux job wait-event -p exec $jobid done
+test_expect_success FLUX_SECURITY 'flux job wait-event -p exec as guest' '
+	set_userid 42 &&
+	flux job wait-event -p exec $(cat jobid.guest) done
 '
 
-test_expect_success 'flux job wait-event guest.exec.eventlog fails via -p (wrong user)' '
+test_expect_success FLUX_SECURITY 'flux job wait-event -p exec fails as wrong guest' '
 	unset_userid &&
-	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	test_must_fail flux job wait-event -p exec $jobid done
+	test_must_fail flux job wait-event -p exec $(cat jobid.guest) done
 '
 
-test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (live job, owner)' '
+test_expect_success 'flux job wait-event -p exec on running job works as instance owner' '
 	unset_userid &&
-	jobid=$(submit_job_live) &&
+	jobid=$(flux submit -n1 sleep 300) &&
 	flux job wait-event -p exec $jobid init &&
-	flux cancel $jobid
-'
-
-test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (live job, user)' '
-	jobid=$(submit_job_live 9000) &&
-	set_userid 9000 &&
-	flux job wait-event -p exec $jobid init
+	echo $jobid >jobid.running
 '
 
 test_expect_success 'cancel job' '
 	unset_userid &&
-	flux cancel $jobid
+	flux cancel $(cat jobid.running)
 '
 
-test_expect_success 'flux job wait-event guest.exec.eventlog fails via -p (live job, wrong user)' '
-	jobid=$(submit_job_live 9000) &&
+test_expect_success FLUX_SECURITY 'flux job wait-event -p exec on running job works as guest' '
+	unset_userid &&
+	jobid=$(submit_as_alternate_user -n1 \
+	    --setattr=system.exec.test.run_duration=5m true) &&
+	set_userid 42 &&
+	flux job wait-event -p exec $jobid init &&
+	echo $jobid >jobid-guest.running
+'
+
+test_expect_success FLUX_SECURITY 'flux job wait-event -p exec on running job fails as wrong guest' '
+	unset_userid &&
 	set_userid 9999 &&
-	test_must_fail flux job wait-event -p exec $jobid init
+	test_must_fail flux job wait-event -p exec $(cat jobid-guest.running) init
 '
 
-test_expect_success 'cancel job' '
+test_expect_success FLUX_SECURITY 'cancel job' '
 	unset_userid &&
-	flux cancel $jobid
+	flux cancel $(cat jobid-guest.running)
 '
 
 #
@@ -262,64 +227,47 @@ test_expect_success 'create empty eventlog for job' '
 	flux kvs put "${jobpath}.dummy"="foobar"
 '
 
-test_expect_success 'flux job info dummy works (owner)' '
-	flux job info $jobpath dummy
+test_expect_success 'flux job info dummy fails as owner' '
+	test_must_fail flux job info $jobpath dummy 2>malevent.err &&
+	grep "error parsing eventlog" malevent.err
 '
 
-test_expect_success 'flux job info dummy fails (user)' '
-	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog"
+test_expect_success 'flux job info dummy fails as guest' '
+	set_userid 42 &&
+        test_must_fail flux job info 123456789 dummy 2>malevent2.err &&
+	grep "error parsing eventlog" malevent2.err
 '
 
-test_expect_success 'create eventlog with invalid data / not JSON' '
+test_expect_success 'flux job info fails on malformed eventlog (not json)' '
 	unset_userid &&
-	jobpath=`flux job id --to=kvs 123456789`&&
-	flux kvs put "${jobpath}.eventlog"="foobar"
+	jobpath=`flux job id --to=kvs 123456789` &&
+	flux kvs put "${jobpath}.eventlog"="foobar" &&
+        test_must_fail flux job info 123456789 dummy 2>malevent3.err &&
+	grep "error parsing eventlog" malevent3.err
 '
 
-test_expect_success 'flux job info dummy fails (user)' '
-	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog"
-'
-
-test_expect_success 'create eventlog without submit context' '
-	unset_userid &&
+test_expect_success 'flux job info fails on malformed eventlog (no submit event)' '
         submitstr="{\"timestamp\":123.4,\"name\":\"submit\"}" &&
 	jobpath=`flux job id --to=kvs 123456789` &&
-	echo $submitstr | flux kvs put --raw "${jobpath}.eventlog"=-
+	echo $submitstr | flux kvs put --raw "${jobpath}.eventlog"=- &&
+        test_must_fail flux job info 123456789 dummy 2>malevent4.err &&
+	grep "error parsing eventlog" malevent4.err
 '
 
-test_expect_success 'flux job info dummy fails (user)' '
-	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog"
-'
-
-test_expect_success 'create eventlog without submit userid' '
-	unset_userid
+test_expect_success 'flux job info fails on malformed eventlog (no submit userid)' '
         submitstr="{\"timestamp\":123.4,\"name\":\"submit\",\"context\":{}}" &&
 	jobpath=`flux job id --to=kvs 123456789` &&
-	echo $submitstr | flux kvs put --raw "${jobpath}.eventlog"=-
+	echo $submitstr | flux kvs put --raw "${jobpath}.eventlog"=- &&
+        test_must_fail flux job info 123456789 dummy 2>malevent5.err &&
+	grep "error parsing eventlog" malevent5.err
 '
 
-test_expect_success 'flux job info dummy fails (user)' '
-	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog"
-'
-
-test_expect_success 'create eventlog that is binary garbage' '
-	unset_userid &&
+test_expect_success 'flux job info fails on malformed eventlog (random garbage)' '
 	jobpath=`flux job id --to=kvs 123456789` &&
         dd if=/dev/urandom bs=64 count=1 > binary.out &&
-	flux kvs put --raw "${jobpath}.eventlog"=- < binary.out
-'
-
-test_expect_success 'flux job info dummy fails (user)' '
-	set_userid 9000 &&
-        flux job info 123456789 dummy 2>&1 | grep "error parsing eventlog"
-'
-
-test_expect_success 'clean up' '
-	unset_userid
+	flux kvs put --raw "${jobpath}.eventlog"=- < binary.out &&
+        test_must_fail flux job info 123456789 dummy 2>malevent6.err &&
+	grep "error parsing eventlog" malevent6.err
 '
 
 test_done
