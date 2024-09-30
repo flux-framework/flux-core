@@ -106,6 +106,7 @@ struct perilog_proc {
     flux_jobid_t id;
     uint32_t userid;
     json_t *R;
+    bool per_rank;
     bool prolog;
     bool cancel_on_exception;
     bool canceled;
@@ -620,13 +621,6 @@ static void drain_failed_cb (flux_future_t *f, void *arg)
     perilog_proc_finish (proc);
 }
 
-static bool perilog_per_rank (struct perilog_proc *proc)
-{
-    if (proc->prolog)
-        return perilog_config.prolog->per_rank;
-    return perilog_config.epilog->per_rank;
-}
-
 static void proc_drain_and_finish (struct perilog_proc *proc,
                                    bool drain_failed,
                                    bool drain_active)
@@ -660,7 +654,7 @@ static void completion_cb (struct bulk_exec *bulk_exec, void *arg)
     if (proc) {
         bool drain_failed = false;
 
-        if (perilog_per_rank (proc)
+        if (proc->per_rank
             && !proc->canceled
             && bulk_exec_rc (bulk_exec) != 0)
             drain_failed = true;
@@ -864,6 +858,7 @@ static struct perilog_proc *procdesc_run (flux_t *h,
     proc->R = json_incref (R);
     proc->bulk_exec = bulk_exec;
     proc->ranks = ranks;
+    proc->per_rank = pd->per_rank;
     proc->cancel_on_exception = pd->cancel_on_exception;
     proc->kill_timeout = pd->kill_timeout;
 
