@@ -222,6 +222,24 @@ test_expect_success 'perilog: epilog triggered by prolog has correct userid' '
 	flux job wait-event -vHt 30 $jobid clean &&
 	flux dmesg -H  | grep FLUX_JOB_USERID=$(id -u)
 '
+test_expect_success 'perilog: canceled prolog drains active ranks after kill_timeout' '
+	flux config load <<-EOF &&
+	[job-manager.prolog]
+	per-rank = true
+	command = [ "sh", "-c", "trap \"\" 15; if test \$(flux getattr rank) -eq 3; then sleep 10; fi" ]
+	kill-timeout = 0.5
+	EOF
+	flux jobtap query perilog.so | jq .conf.prolog &&
+	jobid=$(flux submit -N4 hostname) &&
+	flux job wait-event $jobid prolog-start &&
+	flux cancel $jobid &&
+	flux job wait-event $jobid prolog-finish &&
+	test_debug "echo drained_ranks=$(drained_ranks)" &&
+	test "$(drained_ranks)" = "3" &&
+	flux resource drain -no {reason} | grep "canceled then timed out" &&
+	flux job wait-event -vt 15 $jobid clean &&
+	flux resource undrain 3
+'
 test_expect_success 'perilog: signaled prolog is reported' '
 	flux config load <<-EOF &&
 	[job-manager.prolog]
