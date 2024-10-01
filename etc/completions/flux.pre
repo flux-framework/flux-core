@@ -555,6 +555,7 @@ _flux_resource()
     "
     local undrain_OPTS="\
         -h --help \
+        -f --force \
     "
     local drain_OPTS="\
         -h --help \
@@ -1396,6 +1397,7 @@ _flux_jobs()
         -A \
         -c --count=N \
         -f --filter= \
+        -i --include= \
         --since=WHEN \
         -n --no-header \
         -u --user= \
