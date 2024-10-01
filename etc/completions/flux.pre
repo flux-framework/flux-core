@@ -555,6 +555,7 @@ _flux_resource()
     "
     local undrain_OPTS="\
         -h --help \
+        -f --force \
     "
     local drain_OPTS="\
         -h --help \
@@ -1198,7 +1199,7 @@ _flux_overlay()
 _flux_config()
 {
     local cmd=$1
-    local subcmds="reload get builtin"
+    local subcmds="reload get builtin load"
     local split=false
 
     local get_OPTS="\
@@ -1209,6 +1210,11 @@ _flux_config()
     "
 
     if [[ $cmd != "config" ]]; then
+
+        if _flux_contains_word "load" ${COMP_WORDS[*]}; then
+            COMPREPLY=( $(compgen -f -- "$cur") $(compgen -d -- "$cur") )
+            return 0
+        fi
 
         _flux_split_longopt && split=true
         case $prev in
@@ -1391,6 +1397,7 @@ _flux_jobs()
         -A \
         -c --count=N \
         -f --filter= \
+        -i --include= \
         --since=WHEN \
         -n --no-header \
         -u --user= \
