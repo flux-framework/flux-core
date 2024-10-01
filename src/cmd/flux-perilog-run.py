@@ -84,7 +84,11 @@ async def kill_process_tree(parent_pid, sig):
     # Iterate the list in reverse so that parent_pid comes last and
     # (for the most part) children are signaled before their parent:
     for pid in reversed(await get_children(parent_pid)):
-        os.kill(pid, sig)
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            # No error if process no longer exists
+            pass
 
 
 async def run_with_timeout(cmd, label, timeout=1800.0):
