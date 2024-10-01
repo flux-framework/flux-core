@@ -1,3 +1,9 @@
+.. note::
+   Paths specified in the options :option:`--output`, :option:`--error`,
+   and :option:`--input` will be opened relative to the working directory
+   on the first node of the job allocation, not on the node from which
+   the job is submitted.
+
 .. option:: --input=FILENAME|RANKS
 
    Redirect stdin to the specified filename, bypassing the KVS.
