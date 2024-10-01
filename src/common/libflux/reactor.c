@@ -199,6 +199,14 @@ struct flux_watcher_ops * flux_watcher_get_ops (flux_watcher_t *w)
     return NULL;
 }
 
+void flux_watcher_set_priority (flux_watcher_t *w, int priority)
+{
+    if (w) {
+        if (w->ops->set_priority)
+            w->ops->set_priority (w, priority);
+    }
+}
+
 void flux_watcher_start (flux_watcher_t *w)
 {
     if (w) {
@@ -558,6 +566,11 @@ flux_watcher_t *flux_prepare_watcher_create (flux_reactor_t *r,
 /* Check
  */
 
+static void check_set_priority (flux_watcher_t *w, int priority)
+{
+    ev_set_priority ((ev_check *)w->data, priority);
+}
+
 static void check_start (flux_watcher_t *w)
 {
     ev_check_start (w->r->loop, (ev_check *)w->data);
@@ -576,6 +589,7 @@ static void check_cb (struct ev_loop *loop, ev_check *cw, int revents)
 }
 
 static struct flux_watcher_ops check_watcher = {
+    .set_priority = check_set_priority,
     .start = check_start,
     .stop = check_stop,
     .destroy = NULL,

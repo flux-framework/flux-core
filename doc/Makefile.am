@@ -114,6 +114,7 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_timer_watcher_create.3 \
 	man3/flux_periodic_watcher_create.3 \
 	man3/flux_idle_watcher_create.3 \
+	man3/flux_watcher_set_priority.3 \
 	man3/flux_msg_handler_create.3 \
 	man3/flux_msg_cmp.3 \
 	man3/flux_msg_create.3 \

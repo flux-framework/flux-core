@@ -286,6 +286,7 @@ man_pages = [
     ('man3/flux_watcher_start', 'flux_watcher_destroy', 'start/stop/destroy/query reactor watcher', [author], 3),
     ('man3/flux_watcher_start', 'flux_watcher_next_wakeup', 'start/stop/destroy/query reactor watcher', [author], 3),
     ('man3/flux_watcher_start', 'flux_watcher_start', 'start/stop/destroy/query reactor watcher', [author], 3),
+    ('man3/flux_watcher_set_priority', 'flux_watcher_set_priority', 'set watcher priority', [author], 3),
     ('man3/hostlist_create', 'hostlist_create', 'Manipulate lists of hostnames', [author], 3),
     ('man3/hostlist_create', 'hostlist_destroy', 'Manipulate lists of hostnames', [author], 3),
     ('man3/hostlist_create', 'hostlist_decode', 'Manipulate lists of hostnames', [author], 3),

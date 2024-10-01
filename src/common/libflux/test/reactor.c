@@ -634,6 +634,79 @@ static void test_reactor_flags (flux_reactor_t *r)
         "flux_reactor_create flags=0xffff fails with EINVAL");
 }
 
+static char cblist[6] = {0};
+static int cblist_index = 0;
+static flux_watcher_t *priority_prep = NULL;
+static flux_watcher_t *priority_idle = NULL;
+
+static void priority_prep_cb (flux_reactor_t *r,
+                              flux_watcher_t *w,
+                              int revents,
+                              void *arg)
+{
+    flux_watcher_start (priority_idle);
+}
+
+static void priority_check_cb (flux_reactor_t *r,
+                               flux_watcher_t *w,
+                               int revents,
+                               void *arg)
+{
+    char *s = arg;
+    /* stick the char name of this watcher into the array, we'll
+     * compare later
+     */
+    cblist[cblist_index++] = s[0];
+    if (cblist_index >= 5) {
+        flux_watcher_stop (priority_prep);
+        flux_watcher_stop (priority_idle);
+    }
+    flux_watcher_stop (w);
+}
+
+static void test_priority (flux_reactor_t *r)
+{
+    flux_watcher_t *a, *b, *c, *d, *e;
+    priority_prep = flux_prepare_watcher_create (r, priority_prep_cb, NULL);
+    ok (priority_prep != NULL,
+        "prep watcher create worked");
+    priority_idle = flux_idle_watcher_create (r, NULL, NULL);
+    ok (priority_idle != NULL,
+        "idle watcher create worked");
+    a = flux_check_watcher_create (r, priority_check_cb, "A");
+    b = flux_check_watcher_create (r, priority_check_cb, "B");
+    c = flux_check_watcher_create (r, priority_check_cb, "C");
+    d = flux_check_watcher_create (r, priority_check_cb, "D");
+    e = flux_check_watcher_create (r, priority_check_cb, "E");
+    ok (a != NULL && b != NULL && c != NULL && d != NULL && e != NULL,
+        "check watcher create worked");
+    // Don't set priority of 'a', it'll be default
+    flux_watcher_set_priority (b, -2);
+    flux_watcher_set_priority (c, 1);
+    flux_watcher_set_priority (d, 2);
+    flux_watcher_set_priority (e, -1);
+    flux_watcher_start (a);
+    flux_watcher_start (b);
+    flux_watcher_start (c);
+    flux_watcher_start (d);
+    flux_watcher_start (e);
+    flux_watcher_start (priority_prep);
+    ok (flux_reactor_run (r, 0) == 0,
+        "reactor ran to completion");
+    /* given priorities, callbacks should be called in the following order
+     * DCAEB
+     */
+    ok (memcmp (cblist, "DCAEB", 5) == 0,
+        "callbacks called in the correct order");
+    flux_watcher_destroy (a);
+    flux_watcher_destroy (b);
+    flux_watcher_destroy (c);
+    flux_watcher_destroy (d);
+    flux_watcher_destroy (e);
+    flux_watcher_destroy (priority_prep);
+    flux_watcher_destroy (priority_idle);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *reactor;
@@ -658,6 +731,7 @@ int main (int argc, char *argv[])
     test_stat (reactor);
     test_active_ref (reactor);
     test_reactor_flags (reactor);
+    test_priority (reactor);
 
     flux_reactor_destroy (reactor);
 

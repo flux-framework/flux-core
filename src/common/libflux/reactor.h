@@ -72,6 +72,15 @@ typedef struct flux_watcher flux_watcher_t;
 typedef void (*flux_watcher_f)(flux_reactor_t *r, flux_watcher_t *w,
                                int revents, void *arg);
 
+/* Set the watcher priority.  The range is [-2:2] (default 0).
+ * Higher priority watchers run first.
+ * This is a no-op if the underlying watcher doesn't support it.
+ * If the priority is out of range, the max or min value is set.
+ * The priority should only be set when the watcher is stopped.
+ * Currently only the check watcher supports it.
+ */
+void flux_watcher_set_priority (flux_watcher_t *w, int priority);
+
 void flux_watcher_start (flux_watcher_t *w);
 void flux_watcher_stop (flux_watcher_t *w);
 void flux_watcher_destroy (flux_watcher_t *w);
@@ -160,6 +169,7 @@ void flux_stat_watcher_get_rstat (flux_watcher_t *w,
  */
 
 struct flux_watcher_ops {
+    void (*set_priority) (flux_watcher_t *w, int priority);
     void (*start) (flux_watcher_t *w);
     void (*stop) (flux_watcher_t *w);
     void (*destroy) (flux_watcher_t *w);
