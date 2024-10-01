@@ -9,13 +9,10 @@ ExecStart=@X_SYSCONFDIR@/flux/system/housekeeping
 ExecStopPost=-rm -f @X_RUNSTATEDIR@/flux-housekeeping@%I.env
 ExecStopPost=-sh -c '\
     if test "$SERVICE_RESULT" != "success"; then \
-        if test "$EXIT_CODE" = "killed" -o "$EXIT_CODE" = "dumped"; then \
-            message="killed by SIG${EXIT_STATUS}"; \
-        elif test "$EXIT_CODE" = "exited"; then \
-            message="exited with exit code $EXIT_CODE"; \
-        else \
-            message="code=$EXIT_CODE status=$EXIT_STATUS"; \
+        message="housekeeping@%I ${SERVICE_RESULT:-failure}"; \
+        if test "${EXIT_CODE}${EXIT_STATUS}"; then \
+            message="$message: $EXIT_CODE $EXIT_STATUS"; \
         fi; \
-        flux resource drain $(flux getattr rank) "housekeeping $message"; \
+        flux resource drain $(flux getattr rank) $message; \
     fi \
 '
