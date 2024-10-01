@@ -166,7 +166,7 @@ test_expect_success 'perilog: load a basic per-rank prolog config' '
 	flux config load <<-EOF &&
 	[job-manager.prolog]
 	per-rank = true
-	command = [ "sleep", "5" ]
+	command = [ "sleep", "30" ]
 	[job-manager.epilog]
 	per-rank = true
 	command = [ "sleep", "30" ]
@@ -175,6 +175,7 @@ test_expect_success 'perilog: load a basic per-rank prolog config' '
 	flux jobtap query perilog.so | jq .conf.prolog
 '
 test_expect_success 'perilog: prolog runs on all 4 ranks of a 4 node job' '
+	flux dmesg -c &&
 	jobid=$(flux submit -N4 hostname) &&
 	flux job wait-event -vt 30 $jobid prolog-start &&
 	flux jobtap query perilog.so | jq .procs &&
