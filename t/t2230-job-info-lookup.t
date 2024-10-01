@@ -381,4 +381,16 @@ test_expect_success 'lookup request with invalid flags fails with EPROTO(71)' '
 	  | ${RPC} job-info.lookup 71
 '
 
+#
+# issue 6325
+#
+test_expect_success 'flux job info on bad job id gives good error message' '
+	test_must_fail flux job info fuzzybunny R 2>fuzzy.err &&
+	grep "invalid job id" fuzzy.err
+'
+test_expect_success 'flux job info on bad key gives good error message' '
+	test_must_fail flux job info $(flux job last) badkey 2>badkey.err &&
+	grep "key not found" badkey.err
+'
+
 test_done

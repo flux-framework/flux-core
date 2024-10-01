@@ -191,7 +191,9 @@ static void eventlog_continuation (flux_future_t *f, void *arg)
 
             msg = flux_msglist_first (uc->msglist);
             while (msg) {
-                if (flux_respond_pack (uc->ctx->h, msg, "{s:O}",
+                if (flux_respond_pack (uc->ctx->h,
+                                       msg,
+                                       "{s:O}",
                                        uc->key, uc->update_object) < 0) {
                     flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
                     goto error_cancel;
@@ -275,7 +277,8 @@ static void lookup_continuation (flux_future_t *f, void *arg)
     bool submit_parsed = false;
     const flux_msg_t *msg;
 
-    if (flux_rpc_get_unpack (f, "{s:s s:s}",
+    if (flux_rpc_get_unpack (f,
+                             "{s:s s:s}",
                              uc->key, &key_str,
                              "eventlog", &eventlog_str) < 0) {
         if (errno != ENOENT && errno != EPERM)
@@ -459,8 +462,10 @@ error:
     return -1;
 }
 
-void update_watch_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+void update_watch_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct info_ctx *ctx = arg;
     struct update_ctx *uc = NULL;
@@ -471,13 +476,13 @@ void update_watch_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *errmsg = NULL;
     char *index_key = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:s s:i}",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:s s:i}",
                              "id", &id,
                              "key", &key,
-                             "flags", &flags) < 0) {
-        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+                             "flags", &flags) < 0)
         goto error;
-    }
     if ((flags & ~valid_flags)) {
         errno = EPROTO;
         errmsg = "update-watch request rejected with invalid flag";
@@ -510,7 +515,9 @@ void update_watch_cb (flux_t *h, flux_msg_handler_t *mh,
         if (uc->update_object) {
             if (flux_msg_authorize (msg, uc->userid) < 0)
                 goto error;
-            if (flux_respond_pack (uc->ctx->h, msg, "{s:O}",
+            if (flux_respond_pack (uc->ctx->h,
+                                   msg,
+                                   "{s:O}",
                                    uc->key, uc->update_object) < 0) {
                 flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
                 goto error;
@@ -593,8 +600,10 @@ void update_watchers_cancel (struct info_ctx *ctx,
     }
 }
 
-void update_watch_cancel_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+void update_watch_cancel_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     struct info_ctx *ctx = arg;
     update_watchers_cancel (ctx, msg, true);
@@ -609,9 +618,11 @@ void update_watch_cleanup (struct info_ctx *ctx)
         eventlog_watch_cancel (uc);
         msg = flux_msglist_first (uc->msglist);
         while (msg) {
-            if (flux_respond_error (ctx->h, msg, ENOSYS, NULL) < 0)
-                flux_log_error (ctx->h, "%s: flux_respond_error",
+            if (flux_respond_error (ctx->h, msg, ENOSYS, NULL) < 0) {
+                flux_log_error (ctx->h,
+                                "%s: flux_respond_error",
                                 __FUNCTION__);
+            }
             msg = flux_msglist_next (uc->msglist);
         }
         update_ctx_destroy (uc);

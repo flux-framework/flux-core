@@ -55,6 +55,7 @@ static void info_usage (void)
 int cmd_info (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
+    flux_error_t error;
     int optindex = optparse_option_index (p);
     flux_jobid_t id;
     const char *id_str;
@@ -72,8 +73,8 @@ int cmd_info (optparse_t *p, int argc, char **argv)
     id = parse_jobid (id_str);
     key = argv[optindex++];
 
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
+    if (!(h = flux_open_ex (NULL, 0, &error)))
+        log_msg_exit ("flux_open: %s", error.text);
 
     /* The --original (pre-frobnication) jobspec is obtained by fetching J.
      * J is the original jobspec, signed, so we must unwrap it to get to the

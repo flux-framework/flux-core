@@ -132,7 +132,10 @@ static int watch_key (struct watch_ctx *w)
         pathptr = w->path;
     }
     else {
-        if (flux_job_kvs_key (fullpath, sizeof (fullpath), w->id, w->path) < 0) {
+        if (flux_job_kvs_key (fullpath,
+                              sizeof (fullpath),
+                              w->id,
+                              w->path) < 0) {
             flux_log_error (w->ctx->h, "%s: flux_job_kvs_key", __FUNCTION__);
             return -1;
         }
@@ -256,10 +259,12 @@ static void watch_continuation (flux_future_t *f, void *arg)
 
     input = s;
     while (get_next_eventlog_entry (&input, &tok, &toklen)) {
-        if (flux_respond_pack (ctx->h, w->msg,
+        if (flux_respond_pack (ctx->h,
+                               w->msg,
                                "{s:s#}",
                                "event", tok, toklen) < 0) {
-            flux_log_error (ctx->h, "%s: flux_respond_pack",
+            flux_log_error (ctx->h,
+                            "%s: flux_respond_pack",
                             __FUNCTION__);
             goto error_cancel;
         }
@@ -273,7 +278,8 @@ static void watch_continuation (flux_future_t *f, void *arg)
         if (!w->guest && streq (w->path, "eventlog")) {
             if (check_eventlog_end (w, tok, toklen) > 0) {
                 if (flux_kvs_lookup_cancel (w->watch_f) < 0) {
-                    flux_log_error (ctx->h, "%s: flux_kvs_lookup_cancel",
+                    flux_log_error (ctx->h,
+                                    "%s: flux_kvs_lookup_cancel",
                                     __FUNCTION__);
                     goto error;
                 }
@@ -294,7 +300,8 @@ error_cancel:
     if (!w->kvs_watch_canceled) {
         int save_errno = errno;
         if (flux_kvs_lookup_cancel (w->watch_f) < 0)
-            flux_log_error (ctx->h, "%s: flux_kvs_lookup_cancel",
+            flux_log_error (ctx->h,
+                            "%s: flux_kvs_lookup_cancel",
                             __FUNCTION__);
         errno = save_errno;
     }
@@ -371,8 +378,10 @@ error:
     return -1;
 }
 
-void watch_cb (flux_t *h, flux_msg_handler_t *mh,
-               const flux_msg_t *msg, void *arg)
+void watch_cb (flux_t *h,
+               flux_msg_handler_t *mh,
+               const flux_msg_t *msg,
+               void *arg)
 {
     struct info_ctx *ctx = arg;
     struct watch_ctx *w = NULL;
@@ -383,13 +392,13 @@ void watch_cb (flux_t *h, flux_msg_handler_t *mh,
     int valid_flags = FLUX_JOB_EVENT_WATCH_WAITCREATE;
     const char *errmsg = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:s s:i}",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:s s:i}",
                              "id", &id,
                              "path", &path,
-                             "flags", &flags) < 0) {
-        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+                             "flags", &flags) < 0)
         goto error;
-    }
     if ((flags & ~valid_flags)) {
         errno = EPROTO;
         errmsg = "eventlog-watch request rejected with invalid flag";
@@ -440,9 +449,11 @@ static void send_kvs_watch_cancel (struct info_ctx *ctx,
 
         /* if the watching hasn't started yet, no need to cancel */
         if (w->watch_f) {
-            if (flux_kvs_lookup_cancel (w->watch_f) < 0)
-                flux_log_error (ctx->h, "%s: flux_kvs_lookup_cancel",
+            if (flux_kvs_lookup_cancel (w->watch_f) < 0) {
+                flux_log_error (ctx->h,
+                                "%s: flux_kvs_lookup_cancel",
                                 __FUNCTION__);
+            }
         }
     }
 }
@@ -472,13 +483,14 @@ void watch_cleanup (struct info_ctx *ctx)
 
     while ((w = zlist_pop (ctx->watchers))) {
         if (w->watch_f) {
-            if (flux_kvs_lookup_cancel (w->watch_f) < 0)
-                flux_log_error (ctx->h, "%s: flux_kvs_lookup_cancel",
+            if (flux_kvs_lookup_cancel (w->watch_f) < 0) {
+                flux_log_error (ctx->h,
+                                "%s: flux_kvs_lookup_cancel",
                                 __FUNCTION__);
+            }
         }
         if (flux_respond_error (ctx->h, w->msg, ENOSYS, NULL) < 0)
-            flux_log_error (ctx->h, "%s: flux_respond_error",
-                            __FUNCTION__);
+            flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
         watch_ctx_destroy (w);
     }
 }

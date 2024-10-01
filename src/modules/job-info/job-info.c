@@ -22,8 +22,10 @@
 #include "guest_watch.h"
 #include "update.h"
 
-static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
+static void disconnect_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     struct info_ctx *ctx = arg;
     watchers_cancel (ctx, msg, false);
@@ -31,8 +33,10 @@ static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
     update_watchers_cancel (ctx, msg, false);
 }
 
-static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void stats_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct info_ctx *ctx = arg;
     int lookups = zlist_size (ctx->lookups);
@@ -40,7 +44,9 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
     int guest_watchers = zlist_size (ctx->guest_watchers);
     int update_lookups = 0;     /* no longer supported */
     int update_watchers = update_watch_count (ctx);
-    if (flux_respond_pack (h, msg, "{s:i s:i s:i s:i s:i}",
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:i s:i s:i s:i}",
                            "lookups", lookups,
                            "watchers", watchers,
                            "guest_watchers", guest_watchers,
