@@ -1,3 +1,61 @@
+flux-core version 0.67.0 - 2024-10-01
+-------------------------------------
+
+## New Features
+ * include hostnames in flux resource undrain error message (#6335)
+ * libsubprocess: increase output watcher priority (#6317)
+ * libflux: support modifying watcher priority via
+   `flux_watcher_set_priority()` (#6316)
+ * add `--force` option to `flux resource undrain` (#6312)
+ * autoconf: support python 3.12 (#6303)
+ * flux-bulksubmit: support `{}`  in more options like `--cwd=`, `--signal=`,
+   `--taskmap=`, etc. (#6299)
+ * add flux-lptest (#6301)
+ * broker: use enclosing instance tbon.interface-hint unless overridden
+   (#6283)
+ * shell/oom: log more detail when tasks are killed (#6289)
+ * support expandable width output formats and use them in `flux resource
+   list` to avoid truncation of queue field (#6284)
+ * python: update Flux handle location in validator plugin API (#6282)
+ * broker: call `PMI_Abort()` if something goes wrong during PMI bootstrap
+   (#6279)
+ * add tbon.interface-hint broker attribute / configuration key with CIDR
+   network support (#6277)
+ * support configuration of require-instance and other job
+   validator/frobnicator plugins in broker config TOML (#6305)
+ * validator: allow configurable minimum job size in the require-instance
+   validator plugin (#6258)
+ * display nodes in housekeeping in `flux resource status` (#6263)
+ * shell: output stdio output size warning (#6274)
+ * python: add `conf_get()` convenience method to `flux.Flux` handle (#6267)
+ * limit output to 1G in single user instances (#6268)
+
+## Fixes
+ * systemd: improve housekeeping drain message (#6334)
+ * perilog: never send SIGKILL to prolog/epilog, drain active nodes after
+   kill-timeout instead (#6330)
+ * perilog: fix kill of prolog/epilog when using IMP (#6324)
+ * perilog: fix `FLUX_JOB_USERID` in epilog after canceled prolog (#6320)
+ * flux job info: improve error messages (#6331)
+ * libsubprocess: fix bulk-exec reporting of active ranks (#6326)
+ * libsubprocess: do not spin on large lines (#6281)
+ * configure: add check for valid version (#6276)
+ * etc: minor improvements for bash completions (#6332)
+ * perilog: ensure default prolog timeout matches documentation (#6270)
+ * hostlist: remove allocations in `hostrange_find` (#6259)
+
+## CI/Testsuite/Documentation
+ * libsubprocess: add extra documentation (#6307)
+ * format: fix clang-format file (#6280)
+ * doc: python: fix JobList default documentation (#6309)
+ * doc: add dash to flux-job(1) manpage (#6313)
+ * doc: add warning about Python argparse in flux-jobs(1) (#6285)
+ * doc: fix typo in `FLUX_IPADDR_INTERFACE` entry in `flux-environment(7)`
+   (#6271)
+ * doc: update admin guide for systemd perilog (#6261)
+ * doc: add warning about stdio paths in submission cli man pages (#6333)
+
+
 flux-core version 0.66.0 - 2024-09-03
 -------------------------------------
 
