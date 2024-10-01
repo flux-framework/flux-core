@@ -73,7 +73,7 @@ test_expect_success 'perilog: perilog-run timeout works with local scripts' '
 	printf "#!/bin/sh\nsleep 60" >prolog.d/timeout.sh &&
 	chmod +x prolog.d/timeout.sh &&
 	( export FLUX_JOB_ID=f1 &&
-	  test_expect_code 143 \
+	  test_must_fail_or_be_terminated \
 	    flux perilog-run prolog --timeout=0.5s -vv -d prolog.d
 	) &&
 	rm -f prolog.d/timeout.sh
@@ -128,12 +128,12 @@ test_expect_success 'perilog: can be run with timeout' '
 	EOF
 	chmod +x fail-timeout.sh &&
 	(export FLUX_JOB_ID=${jobid} &&
-	 test_expect_code 143 flux perilog-run prolog --timeout=1s \
+	 test_expect_code 143 flux perilog-run prolog --timeout=2s \
 		-ve./fail-timeout.sh,1 \
 		>fail-timeout.out 2>&1
 	) &&
 	test_debug "cat fail-timeout.out" &&
-	flux resource drain &&
+	flux resource drain -o "{ranks:>12} {reason}"&&
 	test "$(drained_ranks)" = "1" &&
 	grep "timeout" fail-timeout.out &&
 	undrain_all
@@ -248,31 +248,6 @@ test_expect_success 'perilog: fails if command not found' '
 	jobid=$(flux submit --job-name=prolog-failure hostname) &&
 	test_must_fail flux job attach -vEX $jobid
 '
-test_expect_success 'perilog: prolog is killed even if it ignores SIGTERM' '
-	cat <<-EOF >trap-sigterm.sh &&
-	#!/bin/sh
-	trap "echo trap-sigterm got SIGTERM" 15
-	flux kvs put trap-ready=1
-	sleep 60 &
-	pid=\$!
-	wait \$pid
-	sleep 60
-	EOF
-	chmod +x trap-sigterm.sh &&
-	cat <<-EOT >config/perilog.toml &&
-	[job-manager.prolog]
-	kill-timeout = 0.5
-	command = [ "$(pwd)/trap-sigterm.sh" ]
-	EOT
-	flux config reload &&
-	flux jobtap load --remove=*.so perilog.so &&
-	jobid=$(flux submit --job-name=prolog-sigkill hostname) &&
-	flux job wait-event -t 15 $jobid prolog-start &&
-	flux cancel $jobid &&
-	flux job wait-event -t 15 -m status=9 $jobid prolog-finish &&
-	test_must_fail flux job attach -vEX $jobid
-'
-
 test_expect_success 'perilog: epilog can be specified without a prolog' '
 	cat <<-EOF >config/perilog.toml &&
 	[job-manager.epilog]
@@ -284,20 +259,6 @@ test_expect_success 'perilog: epilog can be specified without a prolog' '
 	test_must_fail flux job wait-event -t 15 $jobid prolog-start &&
 	flux job wait-event -t 15 $jobid epilog-start &&
 	flux job wait-event -t 15 $jobid epilog-finish
-'
-test_expect_success 'perilog: canceled prolog does not drain ranks' '
-	cat <<-EOF >config/perilog.toml &&
-	[job-manager.prolog]
-	command = [ "flux", "perilog-run", "prolog", "-vesleep,30" ]
-	EOF
-	flux config reload &&
-	flux jobtap load --remove=*.so perilog.so &&
-	jobid=$(flux submit hostname) &&
-	flux job wait-event -t 15 $jobid prolog-start &&
-	flux cancel $jobid &&
-	flux job wait-event -vt 15 $jobid prolog-finish &&
-	flux resource drain &&
-	test "$(drained_ranks)" = ""
 '
 test_expect_success 'perilog: log-ignore works' '
 	cat <<-EOF >config/perilog.toml &&
@@ -336,7 +297,10 @@ test_expect_success 'perilog: bad log-ignore regexp is caught' '
 '
 
 #  Note: run this job before taking rank 3 offline below
+#  Undrain all ranks since one or more could be left drained due to timeouts
+#  on slow systems from tests above.
 test_expect_success 'perilog: run job across all 4 ranks' '
+	undrain_all &&
 	jobid=$(flux submit --wait-event=clean -N4 -n4 true)
 '
 #  Note: rank 3 is taken offline after this point for testing handling
