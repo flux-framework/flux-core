@@ -16,8 +16,6 @@
 #include "subprocess.h"
 #include "fbuf_watcher.h"
 
-#define SUBPROCESS_DEFAULT_BUFSIZE 4194304
-
 #define CHANNEL_READ  0x01
 #define CHANNEL_WRITE 0x02
 #define CHANNEL_FD    0x04

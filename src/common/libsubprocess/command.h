@@ -25,6 +25,8 @@ extern "C" {
  */
 typedef struct flux_command flux_cmd_t;
 
+#define SUBPROCESS_DEFAULT_BUFSIZE 4194304
+
 /*
  *  Create a cmd object, from which subprocesses can be created
  */
