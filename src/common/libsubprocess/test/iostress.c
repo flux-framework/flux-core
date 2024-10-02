@@ -30,6 +30,7 @@
 enum {
     WRITE_API,
     WRITE_DIRECT,
+    WRITE_CREDIT,
 };
 
 struct iostress_ctx {
@@ -40,12 +41,15 @@ struct iostress_ctx {
     pid_t pid;
     size_t linesize;
     char *buf;
+    int buf_index;
     int linerecv;
     int batchcount;
     int batchlines;
     int batchcursor;
+    int batchlinescursor;
     int outputcount;
     int write_type;
+    int stdin_credits;
     const char *name;
 };
 
@@ -105,7 +109,12 @@ static void iostress_state_cb (flux_subprocess_t *p,
         case FLUX_SUBPROCESS_INIT:
         case FLUX_SUBPROCESS_RUNNING:
             ctx->pid = flux_subprocess_pid (p);
-            flux_watcher_start (ctx->source); // start sourcing data
+            /* if credit based write, writing will be taken care of in
+             * iostress_credit_cb()
+             */
+            if (ctx->write_type == WRITE_API
+                || ctx->write_type == WRITE_DIRECT)
+                flux_watcher_start (ctx->source); // start sourcing data
             break;
         case FLUX_SUBPROCESS_STOPPED:
             break;
@@ -197,10 +206,67 @@ error:
     iostress_start_doomsday (ctx, 2.);
 }
 
+static void iostress_credit_cb (flux_subprocess_t *p,
+                                const char *stream,
+                                int bytes)
+{
+    struct iostress_ctx *ctx = flux_subprocess_aux_get (p, "ctx");
+
+    if (ctx->write_type != WRITE_CREDIT)
+        return;
+
+    // diag ("%s credit cb stream=%s bytes=%d", ctx->name, stream, bytes);
+
+    ctx->stdin_credits += bytes;
+
+    while (ctx->batchcursor < ctx->batchcount) {
+        while (ctx->batchlinescursor < ctx->batchlines) {
+            int wlen, len;
+
+            if ((ctx->linesize - ctx->buf_index) < ctx->stdin_credits)
+                wlen = ctx->linesize - ctx->buf_index;
+            else
+                wlen = ctx->stdin_credits;
+            len = flux_subprocess_write (ctx->p,
+                                         "stdin",
+                                         &ctx->buf[ctx->buf_index],
+                                         wlen);
+            if (len < 0) {
+                diag ("%s: source: %s", ctx->name, strerror (errno));
+                goto error;
+            }
+            ctx->stdin_credits -= len;
+            ctx->buf_index += len;
+            if (ctx->buf_index == ctx->linesize) {
+                ctx->buf_index = 0;
+                ctx->batchlinescursor++;
+            }
+            if (ctx->stdin_credits == 0)
+                break;
+        }
+        if (ctx->batchlinescursor == ctx->batchlines) {
+            ctx->batchlinescursor = 0;
+            if (++ctx->batchcursor == ctx->batchcount) {
+                if (flux_subprocess_close (ctx->p, "stdin") < 0) {
+                    diag ("%s: source: %s", ctx->name, strerror (errno));
+                    goto error;
+                }
+                break;
+            }
+        }
+        if (ctx->stdin_credits == 0)
+            break;
+    }
+    return;
+error:
+    iostress_start_doomsday (ctx, 2.);
+}
+
 flux_subprocess_ops_t iostress_ops = {
     .on_completion      = iostress_completion_cb,
     .on_state_change    = iostress_state_cb,
     .on_stdout          = iostress_output_cb,
+    .on_credit          = iostress_credit_cb,
 };
 
 bool iostress_run_check (flux_t *h,
@@ -226,6 +292,7 @@ bool iostress_run_check (flux_t *h,
     ctx.linesize = linesize;
     ctx.name = name;
     ctx.write_type = write_type;
+    ctx.stdin_credits = 0;
 
     if (!(ctx.buf = malloc (ctx.linesize)))
         BAIL_OUT ("out of memory");
@@ -343,6 +410,28 @@ int main (int argc, char *argv[])
                              1,
                              4096),
         "tinystdin-direct failed as expected");
+
+    // remote stdin buffer managed via credits should work
+    ok (iostress_run_check (h,
+                            "tinystdin-credit",
+                            WRITE_CREDIT,
+                            128,
+                            0,
+                            1,
+                            1,
+                            4096),
+        "tinystdin-credit works as expected");
+
+    // credits w/ more data
+    ok (iostress_run_check (h,
+                            "tinystdin-credit-more",
+                            WRITE_CREDIT,
+                            128,
+                            0,
+                            8,
+                            8,
+                            4096),
+        "tinystdin-credit-more works as expected");
 
     test_server_stop (h);
     flux_close (h);
