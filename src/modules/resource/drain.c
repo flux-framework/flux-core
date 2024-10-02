@@ -455,6 +455,7 @@ static void undrain_cb (flux_t *h,
     const char *s;
     const char *mode = NULL;
     struct idset *idset = NULL;
+    struct idset *undrained = NULL;
     unsigned int id;
     const char *errstr = NULL;
     flux_error_t error;
@@ -480,28 +481,44 @@ static void undrain_cb (flux_t *h,
             goto error;
         }
     }
+    if (!force && !(undrained = idset_create (0, IDSET_FLAG_AUTOGROW))) {
+        errprintf (&error,
+                   "failed to create idset for undrained ranks: %s",
+                   strerror (errno));
+        errstr = error.text;
+        goto error;
+    }
     id = idset_first (idset);
     while (id != IDSET_INVALID_ID) {
         if (!drain->info[id].drained) {
+            int rc;
             /* This rank is already undrained, remove it from targets
-             * if mode=force. Otherwise, abort the operation and return
-             * an error.
+             * if mode=force. Otherwise, add rank to undrained idset.
              */
-            if (force) {
-                if (idset_clear (idset, id) < 0) {
-                    errprintf (&error, "failed to update undrain target idset");
-                    errstr = error.text;
-                    goto error;
-                }
-            }
-            else {
-                errprintf (&error, "rank %u not drained", id);
-                errno = EINVAL;
+            rc = force ? idset_clear (idset, id) : idset_set (undrained, id);
+            if (rc < 0) {
+                errprintf (&error, "failed to update undrain target idset");
                 errstr = error.text;
                 goto error;
             }
         }
         id = idset_next (idset, id);
+    }
+    if (!force && idset_count (undrained) > 0) {
+        char *nodelist = NULL;
+        char *ranks = idset_encode (undrained, IDSET_FLAG_RANGE);
+        if (ranks)
+            nodelist = flux_hostmap_lookup (h, ranks, NULL);
+        errprintf (&error,
+                   "%s (rank%s %s) not drained",
+                   nodelist ? nodelist : "unknown",
+                   idset_count (undrained) > 1 ? "s" : "",
+                   ranks ? ranks : "unknown");
+        free (ranks);
+        free (nodelist);
+        errstr = error.text;
+        errno = EINVAL;
+        goto error;
     }
     if (idset_count (idset) == 0) {
         /* If idset is now empty then no targets are drained and
@@ -513,11 +530,13 @@ static void undrain_cb (flux_t *h,
     else if (undrain_rank_idset (drain, msg, idset) < 0)
         goto error;
     idset_destroy (idset);
+    idset_destroy (undrained);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to undrain request");
     idset_destroy (idset);
+    idset_destroy (undrained);
 }
 
 /* Add rank to ids, adjusting rank if the rank:host mapping has changed.

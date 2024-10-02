@@ -252,14 +252,20 @@ test_expect_success 'no nodes remain drained or excluded' '
 
 test_expect_success 'undrain fails if rank not drained' '
 	test_must_fail flux resource undrain 1 2>undrain_not.err &&
-	grep "rank 1 not drained" undrain_not.err
+	grep ".*rank 1.* not drained" undrain_not.err
 '
 
 test_expect_success 'undrain fails if any rank not drained' '
 	flux resource drain 0 &&
 	test_must_fail flux resource undrain 0-1 2>undrain_0-1_not.err &&
 	test_debug "cat undrain_0-1_not.err" &&
-	grep "rank 1 not drained" undrain_0-1_not.err
+	grep ".*rank 1.* not drained" undrain_0-1_not.err
+'
+
+test_expect_success 'undrain reports multiple ranks not drained' '
+	test_must_fail flux resource undrain 0-2 2>undrain_0-2_not.err &&
+	test_debug "cat undrain_0-2_not.err" &&
+	grep ".*ranks 1-2.* not drained" undrain_0-2_not.err
 '
 
 test_expect_success 'undrain --force works even if a target is not drained' '
