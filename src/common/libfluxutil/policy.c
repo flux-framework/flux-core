@@ -39,7 +39,8 @@ static int validate_policy_jobspec (json_t *o,
                           "system",
                             "duration", &duration,
                             "queue", &queue) < 0) {
-        errprintf (error, "%s: %s", key, jerror.text);
+        errprintf (error,
+                   "error parsing [%s] config table: %s", key, jerror.text);
         goto inval;
     }
     if (duration) {
@@ -48,14 +49,18 @@ static int validate_policy_jobspec (json_t *o,
         if (!json_is_string (duration)
             || fsd_parse_duration (json_string_value (duration), &d) < 0) {
             errprintf (error,
-                       "%s.defaults.system.duration is not a valid FSD",
+                       "error parsing [%s] config table:"
+                       " 'defaults.system.duration' is not a valid FSD",
                        key);
             goto inval;
         }
     }
     if (queue) {
         if (!json_is_string (queue)) {
-            errprintf (error, "%s.defaults.system.queue is not a string", key);
+            errprintf (error,
+                       "error parsing [%s] config table:"
+                       " 'defaults.system.queue' is not a string",
+                       key);
             goto inval;
         }
     }
@@ -84,11 +89,19 @@ static int validate_policy_limits_job_size (json_t *o,
                         "nnodes", &nnodes,
                         "ncores", &ncores,
                         "ngpus", &ngpus) < 0) {
-        errprintf (error, "%s.%s: %s", key, key2, jerror.text);
+        errprintf (error,
+                   "error parsing [%s.%s] config table: %s",
+                   key,
+                   key2,
+                   jerror.text);
         goto inval;
     }
     if (nnodes < -1 || ncores < -1 || ngpus < -1) {
-        errprintf (error, "%s.%s: values must be >= -1", key, key2);
+        errprintf (error,
+                   "error parsing [%s.%s] config table:"
+                   " values must be >= -1",
+                   key,
+                   key2);
         goto inval;
     }
     return 0;
@@ -111,7 +124,10 @@ static int validate_policy_limits (json_t *o,
                         "{s?o s?o !}",
                         "job-size", &job_size,
                         "duration", &duration) < 0) {
-        errprintf (error, "%s: %s", key, jerror.text);
+        errprintf (error,
+                   "error parsing [%s] config table: %s",
+                   key,
+                   jerror.text);
         goto inval;
     }
     if (duration) {
@@ -119,7 +135,10 @@ static int validate_policy_limits (json_t *o,
 
         if (!json_is_string (duration)
             || fsd_parse_duration (json_string_value (duration), &d) < 0) {
-            errprintf (error, "%s.duration is not a valid FSD", key);
+            errprintf (error,
+                       "error parsing [%s] config table:"
+                       " 'duration' is not a valid FSD",
+                       key);
             goto inval;
         }
     }
@@ -133,7 +152,10 @@ static int validate_policy_limits (json_t *o,
                             "{s?o s?o !}",
                             "min", &min,
                             "max", &max) < 0) {
-            errprintf (error, "%s.job-size: %s", key, jerror.text);
+            errprintf (error,
+                       "error parsing [%s.job-size] config table: %s",
+                       key,
+                       jerror.text);
             goto inval;
         }
         if (min) {
@@ -185,18 +207,27 @@ static int validate_policy_access (json_t *o,
                         "{s?o s?o !}",
                         "allow-user", &allow_user,
                         "allow-group", &allow_group) < 0) {
-        errprintf (error, "%s: %s", key, jerror.text);
+        errprintf (error,
+                   "error parsing [%s] config table: %s",
+                   key,
+                   jerror.text);
         goto inval;
     }
     if (allow_user) {
         if (!is_string_array (allow_user, NULL)) {
-            errprintf (error, "%s.allow-user must be a string array", key);
+            errprintf (error,
+                       "error parsing [%s] config table:"
+                       " 'allow-user' must be a string array",
+                       key);
             goto inval;
         }
     }
     if (allow_group) {
         if (!is_string_array (allow_group, NULL)) {
-            errprintf (error, "%s.allow-group must be a string array", key);
+            errprintf (error,
+                       "error parsing [%s] config table:"
+                       " 'allow-group' must be a string array",
+                       key);
             goto inval;
         }
     }
@@ -230,7 +261,10 @@ static int validate_policy_json (json_t *policy,
                         "limits", &limits,
                         "access", &access,
                         "scheduler", &scheduler) < 0) {
-        errprintf (error, "%s: %s", key, jerror.text);
+        errprintf (error,
+                   "error parsing [%s] config table: %s",
+                   key,
+                   jerror.text);
         errno = EINVAL;
         return -1;
     }
@@ -260,12 +294,15 @@ static int validate_policy_config (const flux_conf_t *conf,
 {
     json_t *policy = NULL;
     const char *defqueue = NULL;
+    flux_error_t e;
 
     if (flux_conf_unpack (conf,
-                          error,
+                          &e,
                           "{s?o}",
-                          "policy", &policy) < 0)
+                          "policy", &policy) < 0) {
+        errprintf (error, "error parsing [policy] config table: %s", e.text);
         return -1;
+    }
     if (policy) {
         if (validate_policy_json (policy, "policy", &defqueue, error) < 0)
             return -1;
@@ -280,18 +317,23 @@ static int validate_queues_config (const flux_conf_t *conf,
                                    flux_error_t *error)
 {
     json_t *queues = NULL;
+    flux_error_t e;
 
     if (flux_conf_unpack (conf,
-                          error,
+                          &e,
                           "{s?o}",
-                          "queues", &queues) < 0)
+                          "queues", &queues) < 0) {
+        errprintf (error, "error parsing [queues] config table: %s", e.text);
         return -1;
+    }
     if (queues) {
         const char *name;
         json_t *entry;
 
         if (!json_is_object (queues)) {
-            errprintf (error, "queues must be a table");
+            errprintf (error,
+                       "error parsing [queues] config table:"
+                       " not a table");
             goto inval;
         }
         json_object_foreach (queues, name, entry) {
@@ -305,7 +347,10 @@ static int validate_queues_config (const flux_conf_t *conf,
                                 "{s?o s?o !}",
                                 "policy", &policy,
                                 "requires", &requires) < 0) {
-                errprintf (error, "queues.%s: %s", name, jerror.text);
+                errprintf (error,
+                           "error parsing [queues.%s] config table: %s",
+                           name,
+                           jerror.text);
                 goto inval;
             }
             if (policy) {
@@ -316,8 +361,9 @@ static int validate_queues_config (const flux_conf_t *conf,
                     return -1;
                 if (defqueue) {
                     errprintf (error,
-                               "%s: queue policy includes default queue!",
-                               key);
+                               "error parsing [queues.%s] config table:"
+                               " 'policy' must not define a default queue!",
+                               name);
                     goto inval;
                 }
             }
@@ -325,9 +371,10 @@ static int validate_queues_config (const flux_conf_t *conf,
                 const char *banned_property_chars = " \t!&'\"`'|()";
                 if (!is_string_array (requires, banned_property_chars)) {
                     errprintf (error,
-                               "queues.%s.requires must be an array of %s",
-                               name,
-                               "property strings (RFC 20)");
+                               "error parsing [queues.%s] config table:"
+                               " 'requires' must be an array of property"
+                               " strings (RFC 20)",
+                               name);
                     goto inval;
                 }
             }
@@ -336,7 +383,8 @@ static int validate_queues_config (const flux_conf_t *conf,
     if (default_queue) {
         if (!queues || !json_object_get (queues, default_queue)) {
             errprintf (error,
-                       "default queue '%s' is not in queues table",
+                       "the [policy] config table defines a default queue %s"
+                       " that is not in [queues] table",
                        default_queue);
             goto inval;
         }
