@@ -166,7 +166,7 @@ void output_no_readline_cb (flux_subprocess_t *p, const char *stream)
 
         sprintf (cmpbuf, "%s:hi\n", stream);
         ok (streq (outputbuf, cmpbuf),
-            "flux_subprocess_read_line returned correct data");
+            "flux_subprocess_read returned correct data");
         /* 1 + 2 + 1 for ':', "hi", '\n' */
         ok (outputbuf_len == (strlen (stream) + 1 + 2 + 1),
             "flux_subprocess_read returned correct amount of data");
