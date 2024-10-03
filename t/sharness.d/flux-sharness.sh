@@ -49,7 +49,7 @@ test_must_fail_or_be_terminated() {
     elif test $exit_code = 0; then
         echo >&2 "test_must_fail: command succeeded: $*"
         return 1
-    elif test $exit_code -gt 129 -a $exit_code -le 192; then
+    elif test $exit_code -ge 129 -a $exit_code -le 192; then
         echo >&2 "test_must_fail: died by signal $(($exit_code-128)): $*"
         return 1
     elif test $exit_code = 127; then
