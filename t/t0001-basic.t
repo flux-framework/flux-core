@@ -17,7 +17,6 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 # the duration of this test to avoid these failure
 export MAN_DISABLE_SECCOMP=1
 
-RPC=${FLUX_BUILD_DIR}/t/request/rpc
 startctl=${SHARNESS_TEST_SRCDIR}/scripts/startctl.py
 path_printenv=$(which printenv)
 

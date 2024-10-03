@@ -27,11 +27,11 @@ LARGE_SIZES="8388608 10000000 16777216 33554432 67108864"
 
 # Usage: backing_load <hash
 backing_load() {
-        $RPC -r content-backing.load
+        $RPC -r -R content-backing.load
 }
 # Usage: backing_store <blob >hash
 backing_store() {
-        $RPC -r content-backing.store
+        $RPC -r -R content-backing.store
 }
 # Usage: make_blob size >blob
 make_blob() {

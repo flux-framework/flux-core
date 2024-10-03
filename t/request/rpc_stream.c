@@ -40,13 +40,18 @@ int main (int argc, char *argv[])
     if (argc == 3)
         end_key = argv[2];
 
+    /* N.B. As a safety measure, read_all() adds a NUL char to the buffer
+     * that is not accounted for in the returned length.
+     */
     if ((inlen = read_all (STDIN_FILENO, &inbuf)) < 0)
         log_err_exit ("read from stdin");
-    if (inlen > 0)  // flux stringified JSON payloads are sent with \0-term
-        inlen++;    //  and read_all() ensures inbuf has one, not acct in inlen
+    if (!(f = flux_rpc (h,
+                        topic,
+                        inlen > 0 ? inbuf : NULL,
+                        FLUX_NODEID_ANY,
+                        FLUX_RPC_STREAMING)))
+        log_err_exit ("flux_rpc %s", topic);
 
-    if (!(f = flux_rpc_raw (h, topic, inbuf, inlen, FLUX_NODEID_ANY, FLUX_RPC_STREAMING)))
-        log_err_exit ("flux_rpc_raw %s", topic);
     bool done = false;
     do {
         if (flux_rpc_get (f, &out) < 0)
