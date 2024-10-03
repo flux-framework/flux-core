@@ -8,8 +8,6 @@ test_description='Test flux job list services w/ changing job data'
 
 test_under_flux 4 job
 
-RPC=${FLUX_BUILD_DIR}/t/request/rpc
-
 fj_wait_event() {
   flux job wait-event --timeout=20 "$@"
 }

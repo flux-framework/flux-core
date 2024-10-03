@@ -8,7 +8,6 @@ test_description='Test flux jobs command'
 
 test_under_flux 4 job
 
-RPC=${FLUX_BUILD_DIR}/t/request/rpc
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer -f asciicast"
 PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
 
