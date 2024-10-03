@@ -45,6 +45,18 @@ test_expect_success 'test run_timeout with success' '
 test_expect_success 'run_timeout fails if exec fails' '
 	test_must_fail run_timeout 1 /nonexistent/executable
 '
+test_expect_success 'test_must_fail_or_be_terminated fails on success' '
+	test_must_fail test_must_fail_or_be_terminated true
+'
+test_expect_success 'test_must_fail_or_be_terminated succeeds on nonzero exit' '
+	test_must_fail_or_be_terminated false
+'
+test_expect_success 'test_must_fail_or_be_terminated succeeds on SIGTERM' '
+	test_must_fail_or_be_terminated sh -c "kill \$\$"
+'
+test_expect_success 'test_must_fail_or_be_terminated fails on SIGHUP' '
+	test_must_fail test_must_fail_or_be_terminated sh -c "kill -HUP \$\$"
+'
 test_expect_success 'we can find a flux binary' '
 	flux --help >/dev/null
 '

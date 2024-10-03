@@ -47,13 +47,13 @@ test_must_fail_or_be_terminated() {
     if test $exit_code = 143 -o $exit_code = 137; then
         return 0
     elif test $exit_code = 0; then
-        echo >&2 "test_must_fail: command succeeded: $*"
+        echo >&2 "test_must_fail_or_be_terminated: command succeeded: $*"
         return 1
-    elif test $exit_code -gt 129 -a $exit_code -le 192; then
-        echo >&2 "test_must_fail: died by non-SIGTERM signal: $*"
+    elif test $exit_code -ge 129 -a $exit_code -le 192; then
+        echo >&2 "test_must_fail_or_be_terminated: died by signal $(($exit_code-128)): $*"
         return 1
     elif test $exit_code = 127; then
-        echo >&2 "test_must_fail: command not found: $*"
+        echo >&2 "test_must_fail_or_be_terminated: command not found: $*"
         return 1
     fi
     return 0
