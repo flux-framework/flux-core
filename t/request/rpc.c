@@ -20,15 +20,16 @@
 #include "src/common/libutil/log.h"
 
 
-#define OPTIONS "r"
+#define OPTIONS "rR"
 static const struct option longopts[] = {
-    {"raw", no_argument,  0, 'r'},
+    {"raw-request", no_argument,  0, 'r'},
+    {"raw-response", no_argument,  0, 'R'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
-    fprintf (stderr, "Usage: rpc [-r] topic [errnum] <payload >payload\n");
+    fprintf (stderr, "Usage: rpc [-r] [-R] topic [errnum] <payload >payload\n");
     exit (1);
 }
 
@@ -39,16 +40,21 @@ int main (int argc, char *argv[])
     const char *topic;
     ssize_t inlen;
     void *inbuf;
-    const void *outbuf;
+    const char *outbuf;
     int outlen;
     int expected_errno = -1;
     int ch;
-    bool raw = false;
+    bool raw_request = false;
+    bool raw_response = false;
+    int rc;
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
             case 'r':
-                raw = true;
+                raw_request = true;
+                break;
+            case 'R':
+                raw_response = true;
                 break;
             default:
                 usage ();
@@ -60,22 +66,28 @@ int main (int argc, char *argv[])
     if (argc - optind > 0)
         expected_errno = strtoul (argv[optind++], NULL, 10);
 
-    /* N.B. As a safety measure, read_all() adds a NULL char to the buffer
-     * that is not accounted for in the returned length.  RFC 3 requires that
-     * JSON payloads include a NULL terminator.  Assume a JSON payload
-     * if size is nonzero AND the raw option was not specified, and add one
-     * to the required length to satisfy RFC 3.
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    /* N.B. As a safety measure, read_all() adds a NUL char to the buffer
+     * that is not accounted for in the returned length.
      */
     if ((inlen = read_all (STDIN_FILENO, &inbuf)) < 0)
         log_err_exit ("read from stdin");
-    if (!raw && inlen > 0)
-        inlen++;
+    if (raw_request)
+        f = flux_rpc_raw (h, topic, inbuf, inlen, FLUX_NODEID_ANY, 0);
+    else
+        f = flux_rpc (h, topic, inlen > 0 ? inbuf : NULL, FLUX_NODEID_ANY, 0);
+    if (!f)
+        log_err_exit ("error sending RPC");
 
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
-    if (!(f = flux_rpc_raw (h, topic, inbuf, inlen, FLUX_NODEID_ANY, 0)))
-        log_err_exit ("flux_rpc_raw %s", topic);
-    if (flux_rpc_get_raw (f, &outbuf, &outlen) < 0) {
+    if (raw_response)
+        rc = flux_rpc_get_raw (f, (const void **)&outbuf, &outlen);
+    else {
+        if ((rc = flux_rpc_get (f, &outbuf)) == 0)
+            outlen = outbuf ? strlen (outbuf) : 0;
+    }
+    if (rc < 0) {
         if (expected_errno > 0) {
             if (errno != expected_errno)
                 log_msg_exit ("%s: failed with errno=%d != expected %d",
