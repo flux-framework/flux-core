@@ -18,4 +18,4 @@ printenv >@X_RUNSTATEDIR@/${unitname}.env
 # Run systemctl start in background and `wait` for it so that the trap
 # will run immediately when signal is received:
 systemctl start $unitname --quiet &
-wait
+wait $!
