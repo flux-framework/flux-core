@@ -55,6 +55,10 @@ int cmd_option_bufsize (flux_subprocess_t *p, const char *name)
         uint64_t size;
         if (parse_size (val, &size) < 0)
             goto cleanup;
+        if (size == 0) {
+            errno = EINVAL;
+            goto cleanup;
+        }
         if (size > INT_MAX) {
             errno = EOVERFLOW;
             goto cleanup;
