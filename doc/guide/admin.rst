@@ -691,7 +691,7 @@ following steps:
 
        exit_rc=0
        periname=prolog
-       peridir=/usr/flux/system/${periname}.d
+       peridir=/etc/flux/system/${periname}.d
 
        # This script may be run in test with 'sudo flux run-prolog'
        test $FLUX_JOB_USERID && userid=$(id -n -u $FLUX_JOB_USERID 2>/dev/null)
