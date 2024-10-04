@@ -24,8 +24,15 @@ test_expect_success NO_CHAIN_LINT 'start background trace' '
 	flux overlay trace >trace.out &
 	echo $! >trace.pid
 '
+test_expect_success NO_CHAIN_LINT 'start second background trace with --full' '
+	flux overlay trace --full >trace2.out &
+	echo $! >trace2.pid
+'
 test_expect_success NO_CHAIN_LINT 'heartbeat.pulse event was captured' '
 	$waitfile -t 60 -p heartbeat.pulse trace.out
+'
+test_expect_success NO_CHAIN_LINT 'heartbeat.pulse event was captured with --full' '
+	$waitfile -t 60 -p heartbeat.pulse trace2.out
 '
 test_expect_success NO_CHAIN_LINT 'send one kvs.ping to rank 1' '
 	flux ping -r 1 -c 1 kvs
@@ -33,7 +40,17 @@ test_expect_success NO_CHAIN_LINT 'send one kvs.ping to rank 1' '
 test_expect_success NO_CHAIN_LINT 'kvs.ping request/response was captured' '
 	$waitfile -t 60 -c 2 -p kvs.ping trace.out
 '
+test_expect_success NO_CHAIN_LINT 'kvs.ping request/response was captured with --full' '
+	$waitfile -t 60 -c 2 -p kvs.ping trace2.out
+'
 test_expect_success NO_CHAIN_LINT 'stop background trace' '
-	kill -15 $(cat trace.pid); wait || true
+	pid=$(cat trace.pid) &&
+	kill -15 $pid &&
+	wait $pid || true
+'
+test_expect_success NO_CHAIN_LINT 'stop second background trace' '
+	pid=$(cat trace2.pid) &&
+	kill -15 $pid &&
+	wait $pid || true
 '
 test_done
