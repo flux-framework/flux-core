@@ -39,6 +39,7 @@ struct iostress_ctx {
     flux_watcher_t *timer;
     pid_t pid;
     size_t linesize;
+    char *buf;
     int linerecv;
     int batchcount;
     int batchlines;
@@ -157,24 +158,21 @@ static void iostress_source_cb (flux_reactor_t *r,
                                 void *arg)
 {
     struct iostress_ctx *ctx = arg;
-    char *buf;
     uint32_t matchtag;
-
-    if (!(buf = malloc (ctx->linesize)))
-        BAIL_OUT ("out of memory");
-    memset (buf, 'F', ctx->linesize - 1);
-    buf[ctx->linesize - 1] = '\n';
 
     matchtag = flux_rpc_get_matchtag (ctx->p->f);
 
     for (int i = 0; i < ctx->batchlines; i++) {
         if (ctx->write_type == WRITE_DIRECT) {
-            if (rexec_write (ctx->h, matchtag, buf, ctx->linesize) < 0)
+            if (rexec_write (ctx->h, matchtag, ctx->buf, ctx->linesize) < 0)
                 BAIL_OUT ("rexec_write failed");
         }
         else if (ctx->write_type == WRITE_API) {
             int len;
-            len = flux_subprocess_write (ctx->p, "stdin", buf, ctx->linesize);
+            len = flux_subprocess_write (ctx->p,
+                                         "stdin",
+                                         ctx->buf,
+                                         ctx->linesize);
             if (len < 0) {
                 diag ("%s: source: %s", ctx->name, strerror (errno));
                 goto error;
@@ -186,7 +184,6 @@ static void iostress_source_cb (flux_reactor_t *r,
             }
         }
     }
-    free (buf);
     if (++ctx->batchcursor == ctx->batchcount) {
         if (flux_subprocess_close (ctx->p, "stdin") < 0) {
             diag ("%s: source: %s", ctx->name, strerror (errno));
@@ -196,7 +193,6 @@ static void iostress_source_cb (flux_reactor_t *r,
     }
     return;
 error:
-    free (buf);
     //flux_reactor_stop_error (r);
     iostress_start_doomsday (ctx, 2.);
 }
@@ -230,6 +226,11 @@ bool iostress_run_check (flux_t *h,
     ctx.linesize = linesize;
     ctx.name = name;
     ctx.write_type = write_type;
+
+    if (!(ctx.buf = malloc (ctx.linesize)))
+        BAIL_OUT ("out of memory");
+    memset (ctx.buf, 'F', ctx.linesize - 1);
+    ctx.buf[ctx.linesize - 1] = '\n';
 
     if (!(cmd = flux_cmd_create (ARRAY_SIZE (cat_av) - 1, cat_av, environ)))
         BAIL_OUT ("flux_cmd_create failed");
@@ -281,6 +282,7 @@ bool iostress_run_check (flux_t *h,
     flux_watcher_destroy (ctx.timer);
     diag ("%s: destroying subprocess", name);
     flux_subprocess_destroy (ctx.p);
+    free (ctx.buf);
     flux_cmd_destroy (cmd);
 
     return ret;
