@@ -1168,6 +1168,7 @@ _flux_overlay()
         -L --color= \
         -H --human \
         -d --delta \
+        -f --full \
     "
     _flux_split_longopt && split=true
     case $prev in
@@ -1305,6 +1306,7 @@ _flux_module()
         -L --color= \
         -H --human \
         -d --delta \
+        -f --full \
     "
     if [[ $cmd != "module" ]]; then
 
