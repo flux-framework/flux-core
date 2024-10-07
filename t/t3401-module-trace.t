@@ -24,8 +24,15 @@ test_expect_success NO_CHAIN_LINT 'start background trace' '
 	flux module trace kvs >trace.out &
 	echo $! >trace.pid
 '
+test_expect_success NO_CHAIN_LINT 'start second background trace with --full' '
+	flux module trace --full kvs >trace1a.out &
+	echo $! >trace1a.pid
+'
 test_expect_success NO_CHAIN_LINT 'heartbeat.pulse event was captured' '
 	$waitfile -t 60 -p heartbeat.pulse trace.out
+'
+test_expect_success NO_CHAIN_LINT 'heartbeat.pulse event was captured with --full' '
+	$waitfile -t 60 -p heartbeat.pulse trace1a.out
 '
 test_expect_success NO_CHAIN_LINT 'send one kvs.ping' '
 	flux ping -c 1 kvs
@@ -33,8 +40,18 @@ test_expect_success NO_CHAIN_LINT 'send one kvs.ping' '
 test_expect_success NO_CHAIN_LINT 'kvs.ping request/response was captured' '
 	$waitfile -t 60 -c 2 -p kvs.ping trace.out
 '
+test_expect_success NO_CHAIN_LINT 'kvs.ping request/response was captured with --full' '
+	$waitfile -t 60 -c 2 -p kvs.ping trace1a.out
+'
 test_expect_success NO_CHAIN_LINT 'stop background trace' '
-	kill -15 $(cat trace.pid); wait || true
+	pid=$(cat trace.pid) &&
+	kill -15 $pid &&
+	wait $pid || true
+'
+test_expect_success NO_CHAIN_LINT 'stop second background trace' '
+	pid=$(cat trace1a.pid) &&
+	kill -15 $pid &&
+	wait $pid || true
 '
 
 test_expect_success NO_CHAIN_LINT 'start background trace on multiple modules' '

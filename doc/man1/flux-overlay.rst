@@ -14,7 +14,7 @@ SYNOPSIS
 | **flux** **overlay** **lookup** *target*
 | **flux** **overlay** **parentof** *rank*
 | **flux** **overlay** **disconnect** [*--parent=RANK*] *target*
-| **flux** **overlay** **trace** [*-r rank*] [*-t TYPE,...*] [*topic-glob*]
+| **flux** **overlay** **trace** [-f] [*-r rank*] [*-t TYPE,...*] [*topic-glob*]
 
 
 DESCRIPTION
@@ -129,6 +129,11 @@ trace
 Display message summaries for messages transmitted and received on the
 overlay network.  A topic string glob pattern may be supplied as a positional
 argument.
+
+.. option:: -f, --full
+
+   Include JSON payload in output, if any.  Payloads that are not JSON are
+   not displayed.
 
 .. option:: -r, --rank=NODEID
 

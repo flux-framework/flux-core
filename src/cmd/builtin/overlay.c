@@ -93,6 +93,9 @@ static struct optparse_option trace_opts[] = {
     { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "NODEID",
       .usage = "Filter output by peer rank",
     },
+    { .name = "full", .key = 'f', .has_arg = 0,
+      .usage = "Show JSON message payload, if any",
+    },
     { .name = "type", .key = 't', .has_arg = 1,
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .arginfo = "TYPE,...",
@@ -1208,12 +1211,15 @@ static void trace_print_human_timestamp (struct trace_ctx *ctx,
 static void trace_print_human (struct trace_ctx *ctx,
                                double timestamp,
                                int message_type,
-                               const char *s)
+                               const char *s,
+                               const char *payload_str)
 {
     trace_print_human_timestamp (ctx, timestamp);
-    printf (" %s%s%s\n",
+    printf (" %s%s%s%s%s\n",
             trace_color (ctx, message_type),
             s,
+            payload_str ? "\n" : "",
+            payload_str ? payload_str : "",
             trace_color_reset (ctx));
 }
 
@@ -1236,12 +1242,15 @@ static void trace_print_timestamp (struct trace_ctx *ctx, double timestamp)
 static void trace_print (struct trace_ctx *ctx,
                          double timestamp,
                          int message_type,
-                         const char *s)
+                         const char *s,
+                         const char *payload_str)
 {
     trace_print_timestamp (ctx, timestamp);
-    printf (" %s%s%s\n",
+    printf (" %s%s%s%s%s\n",
             trace_color (ctx, message_type),
             s,
+            payload_str ? "\n" : "",
+            payload_str ? payload_str : "",
             trace_color_reset (ctx));
 }
 
@@ -1302,10 +1311,11 @@ static int subcmd_trace (optparse_t *p, int ac, char *av[])
                              "overlay.trace",
                              FLUX_NODEID_ANY,
                              FLUX_RPC_STREAMING,
-                             "{s:i s:s s:i}",
+                             "{s:i s:s s:i s:b}",
                              "typemask", ctx.match.typemask,
                              "topic_glob", ctx.match.topic_glob,
-                             "nodeid", ctx.nodeid)))
+                             "nodeid", ctx.nodeid,
+                             "full", optparse_hasopt (p, "full") ? 1 : 0)))
         log_err_exit ("error sending overlay.trace request");
     do {
         double timestamp;
@@ -1314,17 +1324,23 @@ static int subcmd_trace (optparse_t *p, int ac, char *av[])
         int type;
         const char *topic;
         int payload_size;
+        json_t *payload_json = json_null ();
+        char *payload_str = NULL;
         char buf[160];
 
         if (flux_rpc_get_unpack (f,
-                                 "{s:F s:s s:i s:i s:s s:i}",
+                                 "{s:F s:s s:i s:i s:s s:i s?o}",
                                  "timestamp", &timestamp,
                                  "prefix", &prefix,
                                  "rank", &rank,
                                  "type", &type,
                                  "topic", &topic,
-                                 "payload_size", &payload_size) < 0)
+                                 "payload_size", &payload_size,
+                                 "payload", &payload_json) < 0)
             log_err_exit ("%s", future_strerror (f, errno));
+
+        if (!json_is_null (payload_json))
+            payload_str = json_dumps (payload_json, JSON_INDENT(2));
 
         char rankstr[16];
         if (rank < 0)
@@ -1342,10 +1358,12 @@ static int subcmd_trace (optparse_t *p, int ac, char *av[])
                   encode_size (payload_size));
 
         if (optparse_hasopt (p, "human"))
-            trace_print_human (&ctx, timestamp, type, buf);
+            trace_print_human (&ctx, timestamp, type, buf, payload_str);
         else
-            trace_print (&ctx, timestamp, type, buf);
+            trace_print (&ctx, timestamp, type, buf, payload_str);
         fflush (stdout);
+
+        free (payload_str);
 
         flux_future_reset (f);
     } while (1);

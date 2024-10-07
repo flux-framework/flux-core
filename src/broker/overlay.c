@@ -933,6 +933,7 @@ static void message_trace (struct overlay *ov,
     char buf[64];
     const char *topic = NULL;
     int payload_size = 0;
+    json_t *payload_json = NULL;
 
     (void)flux_msg_get_type (msg, &type);
     if (type == FLUX_MSGTYPE_CONTROL) {
@@ -958,25 +959,31 @@ static void message_trace (struct overlay *ov,
     while (req) {
         struct flux_match match = FLUX_MATCH_ANY;
         int nodeid;
+        int full = 0;
         if (flux_request_unpack (req,
                                  NULL,
-                                 "{s:i s:s s:i}",
+                                 "{s:i s:s s:i s?b}",
                                  "typemask", &match.typemask,
                                  "topic_glob", &match.topic_glob,
-                                 "nodeid", &nodeid) < 0
+                                 "nodeid", &nodeid,
+                                 "full", &full) < 0
             || (nodeid != FLUX_NODEID_ANY && nodeid != rank)
             || !flux_msg_cmp (msg, match))
             goto next;
 
+        if (full && !payload_json && payload_size > 0)
+            (void)flux_msg_unpack (msg, "o", &payload_json);
+
         if (flux_respond_pack (ov->h,
                                req,
-                               "{s:f s:s s:i s:i s:s s:i}",
+                               "{s:f s:s s:i s:i s:s s:i s:O?}",
                                "timestamp", now,
                                "prefix", prefix,
                                "rank", rank,
                                "type", type,
                                "topic", topic ? topic : "NO-TOPIC",
-                               "payload_size", payload_size) < 0)
+                               "payload_size", payload_size,
+                               "payload", payload_json) < 0)
             flux_log_error (ov->h, "error responding to overlay.trace");
 next:
         req = flux_msglist_next (ov->trace_requests);
