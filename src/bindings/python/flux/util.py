@@ -26,6 +26,7 @@ import threading
 import traceback
 from collections import namedtuple
 from datetime import datetime, timedelta
+from operator import attrgetter
 from pathlib import Path, PurePosixPath
 from string import Formatter
 from typing import Mapping
@@ -608,14 +609,33 @@ class OutputFormat:
             self.headings = headings
         if prepend is not None:
             self.prepend = prepend
-        self.fmt = fmt
-        self.fmt_orig = fmt
         #  Parse format into list of (string, field, spec, conv) tuples,
         #   replacing any None values with empty string "" (this makes
         #   substitution back into a format string in self.header() and
         #   self.get_format() much simpler below)
         format_list = Formatter().parse(fmt)
         self.format_list = [[s or "" for s in t] for t in format_list]
+
+        #  If the first entry's text portion starts with `sort:`, then
+        #  what follows is a list of sort keys (used only in print_items())
+        #
+        #  self.sort_keys is a list of (key(str), reverse(bool)) tuples.
+        self.sort_keys = []
+        if self.format_list and self.format_list[0][0].startswith("sort:"):
+            #  Remove sort:keys, prefix from format_list, replace with
+            #   empty string:
+            sort_spec = self.format_list[0][0]
+            self.format_list[0][0] = ""
+
+            #  Store sort keys for later use
+            self.set_sort_keys(sort_spec[5:])
+
+            #  Strip sort_spec from beginning of fmt
+            fmt = fmt.lstrip(sort_spec)
+
+        #  Save format after removal of sort keys:
+        self.fmt = fmt
+        self.fmt_orig = fmt
 
         #  Store list of requested fields in self.fields
         #  (ignore any empty fields, which may be present due to text
@@ -631,7 +651,9 @@ class OutputFormat:
 
         #  Prepend arbitrary string to format fields if requested
         if self.prepend:
-            self.fmt = self.get_format_prepended(self.prepend)
+            self.fmt = self.get_format_prepended(
+                self.prepend, include_sort_prefix=False
+            )
 
     class FormatSpec:
         """Split Python format spec into components"""
@@ -719,7 +741,12 @@ class OutputFormat:
 
     @property
     def fields(self):
-        return self._fields
+        # Add any sort keys to returned fields for users like flux-jobs(1),
+        # which need to translate requested fields to job-list attributes:
+        fields = set(self._fields.copy())
+        if self.sort_keys:
+            fields.update([x for x, y in self.sort_keys])
+        return list(fields)
 
     # This should be a method, not a function since it is overridden by
     # inheriting classes
@@ -758,7 +785,9 @@ class OutputFormat:
         formatter = self.HeaderFormatter()
         return formatter.format(self.header_format(), **self.headings)
 
-    def get_format_prepended(self, prepend, except_fields=None):
+    def get_format_prepended(
+        self, prepend, except_fields=None, include_sort_prefix=True
+    ):
         """
         Return the format string, ensuring that the string in "prepend"
         is prepended to each format field
@@ -776,15 +805,26 @@ class OutputFormat:
             if field and not field.startswith(prepend):
                 field = prepend + field
             lst.append(self._fmt_tuple(text, field, spec, conv))
-        return "".join(lst)
+        if include_sort_prefix:
+            prefix = self._sort_prefix()
+        else:
+            prefix = ""
+        return prefix + "".join(lst)
 
-    def get_format(self, orig=False):
+    def _sort_prefix(self):
+        if self.sort_keys:
+            keys = [f"-{x}" if rev else x for x, rev in self.sort_keys]
+            return "sort:" + ",".join(keys) + " "
+        return ""
+
+    def get_format(self, orig=False, include_sort_prefix=True):
         """
         Return the format string
         """
-        if orig:
-            return self.fmt_orig
-        return self.fmt
+        fmt = self.fmt_orig if orig else self.fmt
+        if include_sort_prefix:
+            return self._sort_prefix() + fmt
+        return fmt
 
     def copy(self, except_fields=None):
         """
@@ -803,7 +843,9 @@ class OutputFormat:
         format object with internal format
         """
         try:
-            retval = self.formatter().format(self.get_format(), obj)
+            retval = self.formatter().format(
+                self.get_format(include_sort_prefix=False), obj
+            )
         except KeyError as exc:
             typestr = type(obj)
             raise KeyError(f"Invalid format field {exc} for {typestr}")
@@ -926,7 +968,41 @@ class OutputFormat:
                 entry[0] = entry[0].replace(s, "")
 
         #  Return new format string:
-        return "".join(self._fmt_tuple(*x) for x in format_list)
+        return self._sort_prefix() + "".join(self._fmt_tuple(*x) for x in format_list)
+
+    def set_sort_keys(self, sort_keys):
+        """
+        Override current sort keys used in print_items() which may have
+        been set by a `sort:` prefix.
+
+        Args:
+            sort_keys (str): Comma separated list of sort keys. Prefix a
+                key with `-` to reverse sort on that key.
+        """
+        #  Reset self.sort_keys:
+        self.sort_keys = []
+        for key in sort_keys.split(","):
+            key = key.strip()
+            reverse = False
+            if key.startswith("-"):
+                reverse = True
+                key = key[1:]
+            if key not in self.headings:
+                raise ValueError("Invalid sort key: " + key)
+            self.sort_keys.append((key, reverse))
+
+    def sort_items(self, items):
+        """
+        Sort items using sort_keys attribute.
+
+        Args:
+            items (list): list of items to sort. Note that the list is
+                sorted in place and then returned.
+        """
+        # Apply any requested sort:
+        for key, reverse in reversed(self.sort_keys):
+            items.sort(key=attrgetter(key), reverse=reverse)
+        return items
 
     def print_items(self, items, no_header=False, pre=None, post=None):
         """
@@ -935,6 +1011,9 @@ class OutputFormat:
         First pre-process format using ``items`` to remove any empty
         fields, if requested. (The pre-processing step could be extended
         in the future.)
+
+        Next, sort items via any sort keys as set by set_sort_keys() or
+        via a ``sort:`` prefix in the supplied format.
 
         Then, generate a header unless no_header is True.
 
@@ -952,6 +1031,9 @@ class OutputFormat:
         cls = self.__class__
         #  Create new instance of the current class from filtered format:
         formatter = cls(newfmt, headings=self.headings, prepend=self.prepend)
+
+        items = self.sort_items(items)
+
         if not no_header:
             print(formatter.header())
         for item in items:
