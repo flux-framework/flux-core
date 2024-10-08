@@ -255,7 +255,7 @@ void kvstxn_cleanup_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry)
         char ref[BLOBREF_MAX_STRING_SIZE];
         const void *data;
         int len;
-        int ret;
+        __attribute__((unused)) int ret;
 
         /* special case, must clear */
         if (kt->newroot_entry == entry)
@@ -360,14 +360,14 @@ static int store_cache (kvstxn_t *kt, json_t *o,
     }
     else {
         if (cache_entry_set_raw (entry, data, datalen) < 0) {
-            int ret;
+            __attribute__((unused)) int ret;
             ret = cache_remove_entry (kt->ktm->cache, ref);
             assert (ret == 1);
             goto error;
         }
         if (cache_entry_set_dirty (entry, true) < 0) {
             flux_log_error (kt->ktm->h, "%s: cache_entry_set_dirty",__FUNCTION__);
-            int ret;
+            __attribute__((unused)) int ret;
             ret = cache_remove_entry (kt->ktm->cache, ref);
             assert (ret == 1);
             goto error;

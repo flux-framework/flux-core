@@ -833,7 +833,7 @@ static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount,
     }
 
     for (i = 0; i < refcount; i++) {
-        int ret;
+        __attribute__((unused)) int ret;
 
         /* this function should only be called if all cache entries
          * known to be valid & raw, thus assert checks below */

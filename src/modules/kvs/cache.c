@@ -365,7 +365,7 @@ struct cache_entry *cache_lookup (struct cache *cache, const char *ref)
 
 int cache_insert (struct cache *cache, struct cache_entry *entry)
 {
-    int rc;
+    __attribute__((unused)) int rc;
 
     if (cache && entry) {
         rc = zhashx_insert (cache->zhx, entry->blobref, entry);
