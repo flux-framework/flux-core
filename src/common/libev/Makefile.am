@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -w
+AM_CPPFLAGS = -w $(CODE_COVERAGE_CPPFLAGS)
 
 noinst_LTLIBRARIES = libev.la
 

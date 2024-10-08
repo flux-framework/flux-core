@@ -702,7 +702,8 @@ error:
      * must call cache_entry_force_clear_dirty().  flushed.
      */
     if (cache_entry_set_errnum_on_notdirty (entry, errno) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: cache_entry_set_errnum_on_notdirty",
+        flux_log (ctx->h,
+                  LOG_ERR, "%s: cache_entry_set_errnum_on_notdirty",
                   __FUNCTION__);
         ret = cache_entry_force_clear_dirty (entry);
         assert (ret == 0);

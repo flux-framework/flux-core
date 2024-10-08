@@ -6,6 +6,9 @@ AM_CFLAGS = \
 AM_LDFLAGS = \
     $(CODE_COVERAGE_LIBS)
 
+AM_CPPFLAGS = \
+    $(CODE_COVERAGE_CPPFLAGS)
+
 noinst_LTLIBRARIES = \
     libhostlist.la
 

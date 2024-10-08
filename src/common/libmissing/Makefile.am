@@ -33,7 +33,8 @@ AM_CFLAGS = \
         $(WARNING_CFLAGS) \
         $(CODE_COVERAGE_CFLAGS)
 
-AM_CPPFLAGS =
+AM_CPPFLAGS = \
+	$(CODE_COVERAGE_CPPFLAGS)
 
 noinst_LTLIBRARIES = libmissing.la
 

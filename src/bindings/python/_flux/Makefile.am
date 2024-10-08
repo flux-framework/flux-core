@@ -5,6 +5,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_builddir)/src/common/libflux \
 	$(PYTHON_CPPFLAGS) \
+	$(CODE_COVERAGE_CPPFLAGS) \
 	$(CODE_COVERAGE_CFLAGS)
 
 AM_LDFLAGS = \
