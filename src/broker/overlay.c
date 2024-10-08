@@ -17,7 +17,6 @@
 #include <fcntl.h>
 #include <zmq.h>
 #include <unistd.h>
-#include <assert.h>
 #include <flux/core.h>
 #include <inttypes.h>
 #include <jansson.h>
@@ -1049,7 +1048,9 @@ static void child_cb (flux_reactor_t *r,
         }
         goto done;
     }
-    assert (subtree_is_online (child->status));
+    /* N.B. We just looked up the child subtree in the online list, so
+     * it is guaranteed to be online at this point.
+     */
 
     child->lastseen = flux_reactor_now (ov->reactor);
     switch (type) {
@@ -1494,7 +1495,10 @@ int overlay_bind (struct overlay *ov, const char *uri)
         log_err ("error creating zeromq context");
         return -1;
     }
-    assert (ov->zap == NULL);
+    if (ov->zap != NULL) {
+        log_err ("ZAP is already initialized!");
+        return -1;
+    }
     if (!(ov->zap = zmqutil_zap_create (ov->zctx, ov->reactor))) {
         log_err ("error creating ZAP server");
         return -1;

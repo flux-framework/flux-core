@@ -22,7 +22,6 @@
 #include <termios.h>
 #include <unistd.h>
 #include <signal.h>
-#include <assert.h>
 #ifdef HAVE_ARGZ_ADD
 #include <argz.h>
 #else

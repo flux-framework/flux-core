@@ -18,7 +18,6 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <stdbool.h>
-#include <assert.h>
 #include <jansson.h>
 #include <sys/param.h>
 #include <flux/core.h>
@@ -616,8 +615,8 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
         char bind_uri[MAX_URI + 1];
         char my_uri[MAX_URI + 1];
 
-        assert (hosts != NULL);
-
+        if (!hosts)
+            log_err_exit ("internal error: hosts object is NULL");
         if (boot_config_getbindbyrank (hosts,
                                        &conf,
                                        rank,

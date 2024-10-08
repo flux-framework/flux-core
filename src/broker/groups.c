@@ -49,7 +49,6 @@
 #endif
 #include <stdlib.h>
 #include <jansson.h>
-#include <assert.h>
 #include <flux/core.h>
 
 #include "src/common/libidset/idset.h"

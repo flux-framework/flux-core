@@ -13,7 +13,6 @@
 #endif
 #include <flux/core.h>
 #include <jansson.h>
-#include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
@@ -59,10 +58,8 @@ int modhash_response_sendmsg_new (modhash_t *mh, flux_msg_t **msg)
 
 static void modhash_add (modhash_t *mh, module_t *p)
 {
-    int rc;
-
-    rc = zhash_insert (mh->zh_byuuid, module_get_uuid (p), p);
-    assert (rc == 0); /* uuids are by definition unique */
+    /* always succeeds - uuids are by definition unique */
+    (void)zhash_insert (mh->zh_byuuid, module_get_uuid (p), p);
     zhash_freefn (mh->zh_byuuid,
                   module_get_uuid (p),
                   (zhash_free_fn *)module_destroy);

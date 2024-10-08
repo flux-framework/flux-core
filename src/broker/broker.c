@@ -11,7 +11,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <assert.h>
 #include <libgen.h>
 #include <signal.h>
 #include <locale.h>
@@ -380,7 +379,8 @@ int main (int argc, char *argv[])
     ctx.rank = overlay_get_rank (ctx.overlay);
     ctx.size = overlay_get_size (ctx.overlay);
 
-    assert (ctx.size > 0);
+    if (ctx.size == 0)
+        log_err_exit ("internal error: instance size is zero!");
 
     /* Must be called after overlay setup */
     if (overlay_register_attrs (ctx.overlay) < 0) {
@@ -412,13 +412,6 @@ int main (int argc, char *argv[])
         log_err ("error priming broker attribute cache");
         goto cleanup;
     }
-    int flags;
-    assert (attr_get (ctx.attrs, "rank", NULL, &flags) == 0
-            && (flags & ATTR_IMMUTABLE));
-    assert (attr_get (ctx.attrs, "size", NULL, &flags) == 0
-            && (flags & ATTR_IMMUTABLE));
-    assert (attr_get (ctx.attrs, "hostlist", NULL, &flags) == 0
-            && (flags & ATTR_IMMUTABLE));
 
     if (!(ctx.groups = groups_create (&ctx))) {
         log_err ("groups_create");

@@ -22,7 +22,6 @@
 #include <sys/syscall.h>
 #include <signal.h>
 #include <pthread.h>
-#include <assert.h>
 #include <uuid.h>
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers
@@ -699,8 +698,8 @@ void module_set_status_cb (module_t *p, module_status_cb_f cb, void *arg)
 
 void module_set_status (module_t *p, int new_status)
 {
-    assert (new_status != FLUX_MODSTATE_INIT);  /* illegal state transition */
-    assert (p->status != FLUX_MODSTATE_EXITED); /* illegal state transition */
+    if (new_status == FLUX_MODSTATE_INIT || p->status == FLUX_MODSTATE_EXITED)
+        return; // illegal state transitions
     int prev_status = p->status;
     p->status = new_status;
     if (p->status_cb)
