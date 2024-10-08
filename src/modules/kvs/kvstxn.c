@@ -414,8 +414,12 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
         if (treeobj_is_dir (dir_entry)) {
             if (kvstxn_unroll (kt, dir_entry) < 0) /* depth first */
                 return -1;
-            if ((ret = store_cache (kt, dir_entry,
-                                    false, ref, sizeof (ref), &entry)) < 0)
+            if ((ret = store_cache (kt,
+                                    dir_entry,
+                                    false,
+                                    ref,
+                                    sizeof (ref),
+                                    &entry)) < 0)
                 return -1;
             if (ret) {
                 if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
@@ -435,8 +439,12 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
             if (!(val_data = treeobj_get_data (dir_entry)))
                 return -1;
             if (json_string_length (val_data) > BLOBREF_MAX_STRING_SIZE) {
-                if ((ret = store_cache (kt, val_data,
-                                        true, ref, sizeof (ref), &entry)) < 0)
+                if ((ret = store_cache (kt,
+                                        val_data,
+                                        true,
+                                        ref,
+                                        sizeof (ref),
+                                        &entry)) < 0)
                     return -1;
                 if (ret) {
                     if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
@@ -458,7 +466,9 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
 }
 
 static int kvstxn_val_data_to_cache (kvstxn_t *kt,
-                                     json_t *val, char *ref, int ref_len)
+                                     json_t *val,
+                                     char *ref,
+                                     int ref_len)
 {
     struct cache_entry *entry;
     json_t *val_data;
@@ -467,8 +477,12 @@ static int kvstxn_val_data_to_cache (kvstxn_t *kt,
     if (!(val_data = treeobj_get_data (val)))
         return -1;
 
-    if ((ret = store_cache (kt, val_data,
-                            true, ref, ref_len, &entry)) < 0)
+    if ((ret = store_cache (kt,
+                            val_data,
+                            true,
+                            ref,
+                            ref_len,
+                            &entry)) < 0)
         return -1;
 
     if (ret) {
@@ -479,8 +493,11 @@ static int kvstxn_val_data_to_cache (kvstxn_t *kt,
     return 0;
 }
 
-static int kvstxn_append (kvstxn_t *kt, json_t *dirent,
-                          json_t *dir, const char *final_name, bool *append)
+static int kvstxn_append (kvstxn_t *kt,
+                          json_t *dirent,
+                          json_t *dir,
+                          const char *final_name,
+                          bool *append)
 {
     json_t *entry;
 
@@ -515,8 +532,7 @@ static int kvstxn_append (kvstxn_t *kt, json_t *dirent,
          * sitting in the KVS cache.
          */
 
-        if (kvstxn_val_data_to_cache (kt, dirent, ref,
-                                      sizeof (ref)) < 0)
+        if (kvstxn_val_data_to_cache (kt, dirent, ref, sizeof (ref)) < 0)
             return -1;
 
         if (!(cpy = treeobj_deep_copy (entry)))
@@ -602,8 +618,10 @@ static int kvstxn_append (kvstxn_t *kt, json_t *dirent,
 /* link (key, dirent) into directory 'dir'.
  */
 static int kvstxn_link_dirent (kvstxn_t *kt,
-                               json_t *rootdir, const char *key,
-                               json_t *dirent, int flags,
+                               json_t *rootdir,
+                               const char *key,
+                               json_t *dirent,
+                               int flags,
                                const char **missing_ref,
                                bool *append)
 {
@@ -640,8 +658,8 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
         }
 
         if (!(dir_entry = treeobj_get_entry (dir, name))) {
-            if (json_is_null (dirent)) /* key deletion - it doesn't exist so return */
-                goto success;
+            if (json_is_null (dirent))
+                goto success; /* key deletion - it doesn't exist so return */
             if (!(subdir = treeobj_create_dir ())) {
                 saved_errno = errno;
                 goto done;
@@ -653,9 +671,11 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
                 goto done;
             }
             json_decref (subdir);
-        } else if (treeobj_is_dir (dir_entry)) {
+        }
+        else if (treeobj_is_dir (dir_entry)) {
             subdir = dir_entry;
-        } else if (treeobj_is_dirref (dir_entry)) {
+        }
+        else if (treeobj_is_dirref (dir_entry)) {
             struct cache_entry *entry;
             const char *ref;
             const json_t *subdirktmp;
@@ -667,7 +687,9 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
             }
 
             if (refcount != 1) {
-                flux_log (kt->ktm->h, LOG_ERR, "invalid dirref count: %d",
+                flux_log (kt->ktm->h,
+                          LOG_ERR,
+                          "invalid dirref count: %d",
                           refcount);
                 saved_errno = ENOTRECOVERABLE;
                 goto done;
@@ -702,7 +724,8 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
                 goto done;
             }
             json_decref (subdir);
-        } else if (treeobj_is_symlink (dir_entry)) {
+        }
+        else if (treeobj_is_symlink (dir_entry)) {
             const char *ns = NULL;
             const char *target = NULL;
             char *nkey = NULL;
@@ -736,9 +759,10 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
             }
             free (nkey);
             goto success;
-        } else {
-            if (json_is_null (dirent)) /* key deletion - it doesn't exist so return */
-                goto success;
+        }
+        else {
+            if (json_is_null (dirent))
+                goto success; /* key deletion - it doesn't exist so return */
             if (!(subdir = treeobj_create_dir ())) {
                 saved_errno = errno;
                 goto done;
@@ -1315,7 +1339,8 @@ kvstxn_t *kvstxn_mgr_get_ready_transaction (kvstxn_mgr_t *ktm)
     return NULL;
 }
 
-void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt,
+void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm,
+                                    kvstxn_t *kt,
                                     bool fallback)
 {
     if (kt->processing) {

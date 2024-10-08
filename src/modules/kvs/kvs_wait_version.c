@@ -54,9 +54,13 @@ static void kvs_wait_version_destroy (void *data)
     }
 }
 
-int kvs_wait_version_add (struct kvsroot *root, flux_msg_handler_f cb,
-                          flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg, int seq)
+int kvs_wait_version_add (struct kvsroot *root,
+                          flux_msg_handler_f cb,
+                          flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg,
+                          int seq)
 {
     struct kvs_wait_version *kwv = NULL;
 
@@ -79,7 +83,10 @@ int kvs_wait_version_add (struct kvsroot *root, flux_msg_handler_f cb,
         errno = ENOMEM;
         goto error;
     }
-    zlist_freefn (root->wait_version_list, kwv, kvs_wait_version_destroy, false);
+    zlist_freefn (root->wait_version_list,
+                  kwv,
+                  kvs_wait_version_destroy,
+                  false);
 
     zlist_sort (root->wait_version_list, kvs_wait_version_cmp);
 

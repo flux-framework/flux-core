@@ -425,8 +425,7 @@ int cache_expire_entries (struct cache *cache, double thresh)
         if (!cache_entry_get_dirty (entry)
             && cache_entry_get_valid (entry)
             && !entry->refcount
-            && (thresh == 0.
-                    || cache_entry_age (entry, cache) > thresh)) {
+            && (thresh == 0. || cache_entry_age (entry, cache) > thresh)) {
                 list_del (&entry->entries_node);
                 zhashx_delete (cache->zhx, entry->blobref);
                 count++;
@@ -435,8 +434,11 @@ int cache_expire_entries (struct cache *cache, double thresh)
     return count;
 }
 
-int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
-                     int *incompletep, int *dirtyp)
+int cache_get_stats (struct cache *cache,
+                     tstat_t *ts,
+                     int *sizep,
+                     int *incompletep,
+                     int *dirtyp)
 {
     struct cache_entry *entry;
     const char *key;

@@ -54,7 +54,10 @@ int treq_mgr_transactions_count (treq_mgr_t *trm);
 treq_t *treq_create (const char *name, int nprocs, int flags);
 
 /* treq_create_rank - internally will create name based on rank & seq */
-treq_t *treq_create_rank (uint32_t rank, unsigned int seq, int nprocs, int flags);
+treq_t *treq_create_rank (uint32_t rank,
+                          unsigned int seq,
+                          int nprocs,
+                          int flags);
 
 void treq_destroy (treq_t *tr);
 

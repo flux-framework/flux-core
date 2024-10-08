@@ -237,7 +237,10 @@ error:
     return NULL;
 }
 
-treq_t *treq_create_rank (uint32_t rank, unsigned int seq, int nprocs, int flags)
+treq_t *treq_create_rank (uint32_t rank,
+                          unsigned int seq,
+                          int nprocs,
+                          int flags)
 {
     treq_t *tr = NULL;
     int saved_errno;

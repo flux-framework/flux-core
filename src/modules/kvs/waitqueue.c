@@ -63,8 +63,10 @@ wait_t *wait_create (wait_cb_f cb, void *arg)
     return w;
 }
 
-wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *mh,
-                                 const flux_msg_t *msg, void *arg,
+wait_t *wait_create_msg_handler (flux_t *h,
+                                 flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg,
+                                 void *arg,
                                  flux_msg_handler_f cb)
 {
     wait_t *w = wait_create (NULL, NULL);
@@ -89,7 +91,9 @@ void wait_destroy (wait_t *w)
     }
 }
 
-int wait_msg_aux_set (wait_t *w, const char *name, void *aux,
+int wait_msg_aux_set (wait_t *w,
+                      const char *name,
+                      void *aux,
                       flux_free_f destroy)
 {
     if (w && w->hand.msg)
