@@ -562,7 +562,8 @@ error:
 static int load (struct kvs_ctx *ctx, const char *ref, wait_t *wait, bool *stall)
 {
     struct cache_entry *entry = cache_lookup (ctx->cache, ref);
-    int saved_errno, ret;
+    int saved_errno;
+    __attribute__((unused)) int ret;
 
     assert (wait != NULL);
 
@@ -630,7 +631,7 @@ static void content_store_completion (flux_future_t *f, void *arg)
     struct kvs_ctx *ctx = arg;
     struct cache_entry *entry;
     const char *cache_blobref, *blobref;
-    int ret;
+    __attribute__((unused)) int ret;
 
     cache_blobref = flux_future_aux_get (f, "cache_blobref");
     assert (cache_blobref);
@@ -701,7 +702,8 @@ error:
      * must call cache_entry_force_clear_dirty().  flushed.
      */
     if (cache_entry_set_errnum_on_notdirty (entry, errno) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: cache_entry_set_errnum_on_notdirty",
+        flux_log (ctx->h,
+                  LOG_ERR, "%s: cache_entry_set_errnum_on_notdirty",
                   __FUNCTION__);
         ret = cache_entry_force_clear_dirty (entry);
         assert (ret == 0);
@@ -1380,7 +1382,7 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
     }
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE) {
         bool stall = false;
-        struct kvsroot *root;
+        __attribute__((unused)) struct kvsroot *root;
 
         ns = lookup_missing_namespace (lh);
         assert (ns);
@@ -2936,7 +2938,8 @@ error:
 static int store_initial_rootdir (struct kvs_ctx *ctx, char *ref, int ref_len)
 {
     struct cache_entry *entry;
-    int saved_errno, ret;
+    int saved_errno;
+    __attribute__((unused)) int ret;
     void *data = NULL;
     int len;
     flux_future_t *f = NULL;

@@ -14,7 +14,6 @@
 #include <sys/param.h>
 #include <unistd.h>
 #include <jansson.h>
-#include <assert.h>
 #include <flux/hostlist.h>
 #include <flux/taskmap.h>
 

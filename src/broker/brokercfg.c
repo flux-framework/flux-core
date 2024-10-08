@@ -16,7 +16,6 @@
 #endif
 #include <flux/core.h>
 #include <jansson.h>
-#include <assert.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errprintf.h"

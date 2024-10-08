@@ -1241,12 +1241,10 @@ static void flags2str (int flags, char *buf, int buflen)
 
 static void userid2str (uint32_t userid, char *buf, int buflen)
 {
-    int n;
     if (userid == FLUX_USERID_UNKNOWN)
-        n = snprintf (buf, buflen, "unknown");
+        (void)snprintf (buf, buflen, "unknown");
     else
-        n = snprintf (buf, buflen, "%u", userid);
-    assert (n < buflen);
+        (void)snprintf (buf, buflen, "%u", userid);
 }
 
 static int roletostr (uint32_t role, const char *sep, char *buf, int buflen)
@@ -1286,14 +1284,12 @@ static void rolemask2str (uint32_t rolemask, char *buf, int buflen)
 
 static void nodeid2str (uint32_t nodeid, char *buf, int buflen)
 {
-    int n;
     if (nodeid == FLUX_NODEID_ANY)
-        n = snprintf (buf, buflen, "any");
+        (void)snprintf (buf, buflen, "any");
     else if (nodeid == FLUX_NODEID_UPSTREAM)
-        n = snprintf (buf, buflen, "upstream");
+        (void)snprintf (buf, buflen, "upstream");
     else
-        n = snprintf (buf, buflen, "%u", nodeid);
-    assert (n < buflen);
+        (void)snprintf (buf, buflen, "%u", nodeid);
 }
 
 void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp)

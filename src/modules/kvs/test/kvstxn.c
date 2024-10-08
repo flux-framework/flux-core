@@ -104,7 +104,7 @@ static struct cache_entry *create_cache_entry_raw (const char *ref,
                                                    int len)
 {
     struct cache_entry *entry;
-    int ret;
+    __attribute__((unused)) int ret;
 
     assert (data);
     assert (len);
@@ -121,7 +121,7 @@ static struct cache_entry *create_cache_entry_treeobj (const char *ref,
                                                        json_t *o)
 {
     struct cache_entry *entry;
-    int ret;
+    __attribute__((unused)) int ret;
 
     assert (o);
 

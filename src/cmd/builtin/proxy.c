@@ -19,7 +19,6 @@
 #include <sys/un.h>
 #include <stdio.h>
 #include <signal.h>
-#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -85,8 +84,6 @@ static void restore_terminal_state (void)
 static void completion_cb (flux_subprocess_t *p)
 {
     struct proxy_command *ctx = flux_subprocess_aux_get (p, "ctx");
-
-    assert (ctx);
 
     if ((ctx->exit_code = flux_subprocess_exit_code (p)) < 0) {
        /* bash standard, signals + 128 */
@@ -353,7 +350,6 @@ static int comms_error (flux_t *h, void *arg)
 
 static int cmd_proxy (optparse_t *p, int ac, char *av[])
 {
-    int n;
     struct proxy_command ctx;
     const char *tmpdir = getenv ("TMPDIR");
     char workpath[PATH_MAX + 1];
@@ -406,15 +402,20 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 
     /* Create socket directory.
      */
-    n = snprintf (workpath, sizeof (workpath), "%s/flux-proxy-XXXXXX",
-                             tmpdir ? tmpdir : "/tmp");
-    assert (n < sizeof (workpath));
+    if (snprintf (workpath,
+                  sizeof (workpath),
+                  "%s/flux-proxy-XXXXXX",
+                  tmpdir ? tmpdir : "/tmp") >= sizeof (workpath))
+        log_msg_exit ("TMPDIR is too long for internal buffer");
     if (!mkdtemp (workpath))
         log_err_exit ("error creating proxy socket directory");
     cleanup_push_string(cleanup_directory, workpath);
 
-    n = snprintf (sockpath, sizeof (sockpath), "%s/local", workpath);
-    assert (n < sizeof (sockpath));
+    if (snprintf (sockpath,
+                  sizeof (sockpath),
+                  "%s/local",
+                  workpath) >= sizeof (sockpath))
+        log_msg_exit ("TMPDIR is too long for internal buffer");
 
     /* Create listen socket and watcher to handle new connections
      */

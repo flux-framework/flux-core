@@ -13,7 +13,6 @@
 #endif
 #include <limits.h>
 #include <jansson.h>
-#include <assert.h>
 #include <inttypes.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -215,9 +214,11 @@ static int get_int (const char *name, const char **val, void *arg)
 {
     int *i = arg;
     static char s[32];
-    int n = snprintf (s, sizeof (s), "%d", *i);
 
-    assert (n <= sizeof (s));
+    if (snprintf (s, sizeof (s), "%d", *i) >= sizeof (s)) {
+        errno = EOVERFLOW;
+        return -1;
+    }
     *val = s;
     return 0;
 }
@@ -248,13 +249,13 @@ static int set_int (const char *name, const char *val, void *arg)
 
 int attr_add_int (attr_t *attrs, const char *name, int val, int flags)
 {
-    char val_string[32];
-    int n;
+    char s[32];
 
-    n = snprintf (val_string, sizeof (val_string), "%d", val);
-    assert (n <= sizeof(val_string));
-
-    return attr_add (attrs, name, val_string, flags);
+    if (snprintf (s, sizeof (s), "%d", val) >= sizeof (s)) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    return attr_add (attrs, name, s, flags);
 }
 
 int attr_add_active_int (attr_t *attrs, const char *name, int *val, int flags)
@@ -266,9 +267,11 @@ static int get_uint32 (const char *name, const char **val, void *arg)
 {
     uint32_t *i = arg;
     static char s[32];
-    int n = snprintf (s, sizeof (s), "%" PRIu32, *i);
 
-    assert (n <= sizeof (s));
+    if (snprintf (s, sizeof (s), "%" PRIu32, *i) >= sizeof (s)) {
+        errno = EOVERFLOW;
+        return -1;
+    }
     *val = s;
     return 0;
 }
