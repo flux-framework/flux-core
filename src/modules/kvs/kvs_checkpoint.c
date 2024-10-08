@@ -47,17 +47,13 @@ static int checkpoint_period_parse (const flux_conf_t *conf,
                           "{s?{s?s}}",
                           "kvs",
                           "checkpoint-period", &str) < 0) {
-        errprintf (errp,
-                   "error reading config for kvs: %s",
-                   error.text);
+        errprintf (errp, "error reading config for kvs: %s", error.text);
         return -1;
     }
 
     if (str) {
         if (fsd_parse_duration (str, checkpoint_period) < 0) {
-            errprintf (errp,
-                       "invalid checkpoint-period config: %s",
-                       str);
+            errprintf (errp, "invalid checkpoint-period config: %s", str);
             return -1;
         }
     }
@@ -143,8 +139,7 @@ static void checkpoint_cb (flux_reactor_t *r,
                                     ops,
                                     FLUX_KVS_SYNC,
                                     KVSTXN_INTERNAL_FLAG_NO_PUBLISH) < 0) {
-        flux_log_error (kcp->h, "%s: kvstxn_mgr_add_transaction",
-                        __FUNCTION__);
+        flux_log_error (kcp->h, "%s: kvstxn_mgr_add_transaction", __FUNCTION__);
         goto done;
     }
 

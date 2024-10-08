@@ -19,9 +19,13 @@
 typedef bool (*kvs_wait_version_test_msg_f)(const flux_msg_t *msg, void *arg);
 
 /* add a kvs_wait_version structure to the kvsroot synclist */
-int kvs_wait_version_add (struct kvsroot *root, flux_msg_handler_f cb,
-                          flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg, int seq);
+int kvs_wait_version_add (struct kvsroot *root,
+                          flux_msg_handler_f cb,
+                          flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg,
+                          int seq);
 
 /* if a root sequence number has gone past a sequence number, call the
  * callback.  If 'all' is true, run callback on all wait_version_list

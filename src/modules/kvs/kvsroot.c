@@ -253,8 +253,10 @@ error:
 /* Convenience functions on struct kvsroot
  */
 
-void kvsroot_setroot (kvsroot_mgr_t *krm, struct kvsroot *root,
-                      const char *root_ref, int root_seq)
+void kvsroot_setroot (kvsroot_mgr_t *krm,
+                      struct kvsroot *root,
+                      const char *root_ref,
+                      int root_seq)
 {
     if (!root || !root_ref)
         return;
@@ -265,7 +267,8 @@ void kvsroot_setroot (kvsroot_mgr_t *krm, struct kvsroot *root,
     root->seq = root_seq;
 }
 
-int kvsroot_check_user (kvsroot_mgr_t *krm, struct kvsroot *root,
+int kvsroot_check_user (kvsroot_mgr_t *krm,
+                        struct kvsroot *root,
                         struct flux_msg_cred cred)
 {
     if (!root) {

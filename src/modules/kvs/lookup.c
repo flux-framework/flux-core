@@ -431,11 +431,16 @@ static lookup_process_t walk (lookup_t *lh)
             }
             else {
                 char *s = json_dumps (wl->dirent, JSON_ENCODE_ANY);
-                flux_log (lh->h, LOG_ERR,
+                flux_log (lh->h,
+                          LOG_ERR,
                           "%s: unknown/unexpected dirent type: "
                           "lh->path=%s pathcomp=%s wl->dirent(ptr)=%p "
                           "wl->dirent(str)=%s",
-                          __FUNCTION__, lh->path, pathcomp, wl->dirent, s);
+                          __FUNCTION__,
+                          lh->path,
+                          pathcomp,
+                          wl->dirent,
+                          s);
                 free (s);
                 lh->errnum = ENOTRECOVERABLE;
                 goto error;
@@ -776,8 +781,10 @@ static int get_single_blobref_valref_value (lookup_t *lh, bool *stall)
     return 0;
 }
 
-static int get_multi_blobref_valref_length (lookup_t *lh, int refcount,
-                                            int *total_len, bool *stall)
+static int get_multi_blobref_valref_length (lookup_t *lh,
+                                            int refcount,
+                                            int *total_len,
+                                            bool *stall)
 {
     struct cache_entry *entry;
     const char *reftmp;
@@ -816,7 +823,8 @@ static int get_multi_blobref_valref_length (lookup_t *lh, int refcount,
     return 0;
 }
 
-static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount,
+static char *get_multi_blobref_valref_data (lookup_t *lh,
+                                            int refcount,
                                             int total_len)
 {
     struct cache_entry *entry;
@@ -858,7 +866,8 @@ static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount,
 
 /* return 0 on success, -1 on failure.  On success, stall should be
  * check */
-static int get_multi_blobref_valref_value (lookup_t *lh, int refcount,
+static int get_multi_blobref_valref_value (lookup_t *lh,
+                                           int refcount,
                                            bool *stall)
 {
     char *valbuf = NULL;
@@ -1083,7 +1092,8 @@ lookup_process_t lookup (lookup_t *lh)
                     lh->errnum = errno;
                     goto error;
                 }
-            } else if (treeobj_is_valref (lh->wdirent)) {
+            }
+            else if (treeobj_is_valref (lh->wdirent)) {
                 bool stall;
 
                 if ((lh->flags & FLUX_KVS_READLINK)) {
@@ -1099,7 +1109,9 @@ lookup_process_t lookup (lookup_t *lh)
                     goto error;
                 }
                 if (!refcount) {
-                    flux_log (lh->h, LOG_ERR, "invalid valref count: %d",
+                    flux_log (lh->h,
+                              LOG_ERR,
+                              "invalid valref count: %d",
                               refcount);
                     lh->errnum = ENOTRECOVERABLE;
                     goto error;
@@ -1118,7 +1130,8 @@ lookup_process_t lookup (lookup_t *lh)
                     if (stall)
                         return LOOKUP_PROCESS_LOAD_MISSING_REFS;
                 }
-            } else if (treeobj_is_dir (lh->wdirent)) {
+            }
+            else if (treeobj_is_dir (lh->wdirent)) {
                 if ((lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EINVAL;
                     goto error;
@@ -1131,7 +1144,8 @@ lookup_process_t lookup (lookup_t *lh)
                     lh->errnum = errno;
                     goto error;
                 }
-            } else if (treeobj_is_val (lh->wdirent)) {
+            }
+            else if (treeobj_is_val (lh->wdirent)) {
                 if ((lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EINVAL;
                     goto error;
@@ -1144,7 +1158,8 @@ lookup_process_t lookup (lookup_t *lh)
                     lh->errnum = errno;
                     goto error;
                 }
-            } else if (treeobj_is_symlink (lh->wdirent)) {
+            }
+            else if (treeobj_is_symlink (lh->wdirent)) {
                 /* this should be "impossible" */
                 if (!(lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EPROTO;
@@ -1158,10 +1173,15 @@ lookup_process_t lookup (lookup_t *lh)
                     lh->errnum = errno;
                     goto error;
                 }
-            } else {
+            }
+            else {
                 char *s = json_dumps (lh->wdirent, JSON_ENCODE_ANY);
-                flux_log (lh->h, LOG_ERR, "%s: corrupt dirent: %p, %s",
-                          __FUNCTION__, lh->wdirent, s);
+                flux_log (lh->h,
+                          LOG_ERR,
+                          "%s: corrupt dirent: %p, %s",
+                          __FUNCTION__,
+                          lh->wdirent,
+                          s);
                 free (s);
                 lh->errnum = ENOTRECOVERABLE;
                 goto error;
@@ -1171,8 +1191,11 @@ lookup_process_t lookup (lookup_t *lh)
         case LOOKUP_STATE_FINISHED:
             break;
         default:
-            flux_log (lh->h, LOG_ERR, "%s: invalid state %d",
-                      __FUNCTION__, lh->state);
+            flux_log (lh->h,
+                      LOG_ERR,
+                      "%s: invalid state %d",
+                      __FUNCTION__,
+                      lh->state);
             lh->errnum = ENOTRECOVERABLE;
             goto error;
     }

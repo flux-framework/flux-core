@@ -197,7 +197,8 @@ kvstxn_t *kvstxn_mgr_get_ready_transaction (kvstxn_mgr_t *ktm);
  * an error (i.e. you don't use kvstxn_get_newroot_ref to get a new
  * root).
  */
-void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt,
+void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm,
+                                    kvstxn_t *kt,
                                     bool fallback);
 
 int kvstxn_mgr_get_noop_stores (kvstxn_mgr_t *ktm);
