@@ -23,6 +23,14 @@ typedef enum {
     OVERLAY_DOWNSTREAM,
 } overlay_where_t;
 
+/* Overlay control messages
+ */
+enum control_type {
+    CONTROL_HEARTBEAT = 0, // child sends when connection is idle
+    CONTROL_STATUS = 1,    // child tells parent of subtree status change
+    CONTROL_DISCONNECT = 2,// parent tells child to immediately disconnect
+};
+
 struct overlay;
 
 typedef void (*overlay_monitor_f)(struct overlay *ov, uint32_t rank, void *arg);

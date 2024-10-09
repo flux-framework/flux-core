@@ -67,14 +67,6 @@ static bool have_connect_timeout = false;
 
 #define FLUX_ZAP_DOMAIN "flux"
 
-/* Overlay control messages
- */
-enum control_type {
-    CONTROL_HEARTBEAT = 0, // child sends when connection is idle
-    CONTROL_STATUS = 1,    // child tells parent of subtree status change
-    CONTROL_DISCONNECT = 2,// parent tells child to immediately disconnect
-};
-
 /* Numerical values for "subtree health" so we can send them in control
  * messages.  Textual values below will be used for communication with front
  * end diagnostic tool.
