@@ -231,6 +231,7 @@ AC_REPLACE_FUNCS( \
   strlcat \
   argz_add \
   envz_add \
+  strerrorname_np \
 )
 X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
