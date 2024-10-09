@@ -95,7 +95,7 @@ static void trace_msg (flux_t *h,
                                "type", type,
                                "topic", topic ? topic : "",
                                "payload_size", payload_size,
-                               "payload", payload_json) < 0)
+                               "payload", full ? payload_json : NULL) < 0)
             flux_log_error (h, "error responding to overlay.trace");
 next:
         req = flux_msglist_next (trace_requests);
