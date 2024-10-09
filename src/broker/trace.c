@@ -16,6 +16,25 @@
 #include "overlay.h"
 #include "trace.h"
 
+static const char *fake_control_topic (char *buf,
+                                       size_t size,
+                                       const flux_msg_t *msg)
+{
+    int ctype;
+    int cstatus;
+
+    if (flux_control_decode (msg, &ctype, &cstatus) < 0)
+        return NULL;
+    snprintf (buf,
+              size,
+              "%s %d",
+              ctype == CONTROL_HEARTBEAT ? "heartbeat" :
+              ctype == CONTROL_STATUS ? "status" :
+              ctype == CONTROL_DISCONNECT ? "disconnect" : "unknown",
+              cstatus);
+    return buf;
+}
+
 static bool match_nodeid (uint32_t overlay_peer, int nodeid)
 {
     if (nodeid == -1 || overlay_peer == FLUX_NODEID_ANY)
@@ -37,6 +56,8 @@ static void trace_msg (flux_t *h,
     const char *topic = NULL;
     int payload_size = 0;
     json_t *payload_json = NULL;
+    int errnum = 0;
+    const char *errstr = NULL;
 
     if (!h
         || !prefix
@@ -47,23 +68,22 @@ static void trace_msg (flux_t *h,
 
     now = flux_reactor_now (flux_get_reactor (h));
     (void)flux_msg_get_type (msg, &type);
-    if (type == FLUX_MSGTYPE_CONTROL) {
-        int ctype;
-        int cstatus;
-        if (flux_control_decode (msg, &ctype, &cstatus) == 0) {
-            snprintf (buf,
-                      sizeof (buf),
-                      "%s %d",
-                      ctype == CONTROL_HEARTBEAT ? "heartbeat" :
-                      ctype == CONTROL_STATUS ? "status" :
-                      ctype == CONTROL_DISCONNECT ? "disconnect" : "unknown",
-                      cstatus);
-            topic = buf;
-        }
-    }
-    else {
-        (void)flux_msg_get_topic (msg, &topic);
-        (void)flux_msg_get_payload (msg, NULL, &payload_size);
+    switch (type) {
+        case FLUX_MSGTYPE_CONTROL:
+            topic = fake_control_topic (buf, sizeof (buf), msg);
+            break;
+        case FLUX_MSGTYPE_REQUEST:
+        case FLUX_MSGTYPE_EVENT:
+            (void)flux_msg_get_topic (msg, &topic);
+            (void)flux_msg_get_payload (msg, NULL, &payload_size);
+            break;
+        case FLUX_MSGTYPE_RESPONSE:
+            (void)flux_msg_get_topic (msg, &topic);
+            if (flux_msg_get_errnum (msg, &errnum) == 0 && errnum > 0)
+                (void)flux_msg_get_string (msg, &errstr);
+            else
+                flux_msg_get_payload (msg, NULL, &payload_size);
+            break;
     }
 
     req = flux_msglist_first (trace_requests);
@@ -82,12 +102,12 @@ static void trace_msg (flux_t *h,
             || !flux_msg_cmp (msg, match))
             goto next;
 
-        if (full && !payload_json && payload_size > 0)
+        if (full && errnum == 0 && !payload_json && payload_size > 0)
             (void)flux_msg_unpack (msg, "o", &payload_json);
 
         if (flux_respond_pack (h,
                                req,
-                               "{s:f s:s s:i s:s? s:i s:s s:i s:O?}",
+                               "{s:f s:s s:i s:s? s:i s:s s:i s:O? s:i s:s}",
                                "timestamp", now,
                                "prefix", prefix,
                                "rank", overlay_peer,
@@ -95,7 +115,9 @@ static void trace_msg (flux_t *h,
                                "type", type,
                                "topic", topic ? topic : "",
                                "payload_size", payload_size,
-                               "payload", full ? payload_json : NULL) < 0)
+                               "payload", full ? payload_json : NULL,
+                               "errnum", errnum,
+                               "errstr", full && errstr ? errstr : "") < 0)
             flux_log_error (h, "error responding to overlay.trace");
 next:
         req = flux_msglist_next (trace_requests);
