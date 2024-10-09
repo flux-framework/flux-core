@@ -16,6 +16,11 @@
 #include <math.h>
 #include <jansson.h>
 #include <flux/core.h>
+#ifdef HAVE_STRERRORNAME_NP
+#include <string.h>
+#else
+#include "src/common/libmissing/strerrorname_np.h"
+#endif
 
 #include "src/common/libccan/ccan/str/str.h"
 #include "src/common/libccan/ccan/ptrint/ptrint.h"
@@ -1136,6 +1141,7 @@ enum {
     TRACE_COLOR_CONTROL = FLUX_MSGTYPE_CONTROL,
     TRACE_COLOR_TIME = 0x10,
     TRACE_COLOR_TIMEBREAK = 0x11,
+    TRACE_COLOR_RESPONSE_FAIL = 0x12,
 };
 
 static const char *trace_colors[] = {
@@ -1144,7 +1150,8 @@ static const char *trace_colors[] = {
     [TRACE_COLOR_RESPONSE]      = ANSI_COLOR_CYAN,
     [TRACE_COLOR_CONTROL]       = ANSI_COLOR_BOLD,
     [TRACE_COLOR_TIME]          = ANSI_COLOR_GREEN,
-    [TRACE_COLOR_TIMEBREAK]     = ANSI_COLOR_BOLD ANSI_COLOR_GREEN
+    [TRACE_COLOR_TIMEBREAK]     = ANSI_COLOR_BOLD ANSI_COLOR_GREEN,
+    [TRACE_COLOR_RESPONSE_FAIL] = ANSI_COLOR_BOLD ANSI_COLOR_RED
 };
 
 static const char *months[] = {
@@ -1211,9 +1218,12 @@ static void trace_print_human_timestamp (struct trace_ctx *ctx,
 static void trace_print_human (struct trace_ctx *ctx,
                                double timestamp,
                                int message_type,
+                               int errnum,
                                const char *s,
                                const char *payload_str)
 {
+    if (message_type == FLUX_MSGTYPE_RESPONSE && errnum > 0)
+        message_type = TRACE_COLOR_RESPONSE_FAIL;
     trace_print_human_timestamp (ctx, timestamp);
     printf (" %s%s%s%s%s\n",
             trace_color (ctx, message_type),
@@ -1242,9 +1252,12 @@ static void trace_print_timestamp (struct trace_ctx *ctx, double timestamp)
 static void trace_print (struct trace_ctx *ctx,
                          double timestamp,
                          int message_type,
+                         int errnum,
                          const char *s,
                          const char *payload_str)
 {
+    if (message_type == FLUX_MSGTYPE_RESPONSE && errnum > 0)
+        message_type = TRACE_COLOR_RESPONSE_FAIL;
     trace_print_timestamp (ctx, timestamp);
     printf (" %s%s%s%s%s\n",
             trace_color (ctx, message_type),
@@ -1325,22 +1338,33 @@ static int subcmd_trace (optparse_t *p, int ac, char *av[])
         const char *topic;
         int payload_size;
         json_t *payload_json = json_null ();
-        char *payload_str = NULL;
+        const char *payload_str = NULL;
+        char *payload_tmp_str = NULL;
+        int errnum = 0;
+        const char *errstr = NULL;
         char buf[160];
 
         if (flux_rpc_get_unpack (f,
-                                 "{s:F s:s s:i s:i s:s s:i s?o}",
+                                 "{s:F s:s s:i s:i s:s s:i s?o s?i s?s}",
                                  "timestamp", &timestamp,
                                  "prefix", &prefix,
                                  "rank", &rank,
                                  "type", &type,
                                  "topic", &topic,
                                  "payload_size", &payload_size,
-                                 "payload", &payload_json) < 0)
+                                 "payload", &payload_json,
+                                 "errnum", &errnum,
+                                 "errstr", &errstr) < 0)
             log_err_exit ("%s", future_strerror (f, errno));
 
-        if (!json_is_null (payload_json))
-            payload_str = json_dumps (payload_json, JSON_INDENT(2));
+        if (errnum > 0) {
+            if (errstr && strlen (errstr) > 0)
+                payload_str = errstr;
+        }
+        else if (!json_is_null (payload_json)) {
+            payload_tmp_str = json_dumps (payload_json, JSON_INDENT(2));
+            payload_str = payload_tmp_str;
+        }
 
         char rankstr[16];
         if (rank < 0)
@@ -1357,13 +1381,25 @@ static int subcmd_trace (optparse_t *p, int ac, char *av[])
                   topic,
                   encode_size (payload_size));
 
+        if (type == FLUX_MSGTYPE_RESPONSE) {
+            const char *desc = strerrorname_np (errnum);
+            size_t len = strlen (buf);
+
+            if (errnum == 0)
+                snprintf (buf + len, sizeof (buf) - len, " success");
+            else if (desc && !isdigit (desc[0]))
+                snprintf (buf + len, sizeof (buf) - len, " %s", desc);
+            else
+                snprintf (buf + len, sizeof (buf) - len, " errno %d", errnum);
+        }
+
         if (optparse_hasopt (p, "human"))
-            trace_print_human (&ctx, timestamp, type, buf, payload_str);
+            trace_print_human (&ctx, timestamp, type, errnum, buf, payload_str);
         else
-            trace_print (&ctx, timestamp, type, buf, payload_str);
+            trace_print (&ctx, timestamp, type, errnum, buf, payload_str);
         fflush (stdout);
 
-        free (payload_str);
+        free (payload_tmp_str);
 
         flux_future_reset (f);
     } while (1);
