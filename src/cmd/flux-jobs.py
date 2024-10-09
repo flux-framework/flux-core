@@ -301,6 +301,13 @@ def parse_args():
         + " or a defined format by name (use 'help' to get a list of names)",
     )
     parser.add_argument(
+        "--sort",
+        type=str,
+        default="",
+        metavar="KEY,...",
+        help="Specify sort order",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Output jobs in JSON instead of formatted output",
@@ -519,6 +526,9 @@ def main():
         )
         if args.stats_only:
             sys.exit(0 if stats.active else 1)
+
+    if args.sort:
+        formatter.set_sort_keys(args.sort)
 
     jobs = fetch_jobs(args, formatter.fields)
     sformatter = JobInfoFormat(formatter.filter(jobs))
