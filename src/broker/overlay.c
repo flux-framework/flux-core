@@ -40,6 +40,7 @@
 
 #include "overlay.h"
 #include "attr.h"
+#include "trace.h"
 
 /* How long to wait (seconds) for a peer broker's TCP ACK before disconnecting.
  * This can be configured via TOML and on the broker command line.
@@ -197,10 +198,6 @@ static int overlay_control_parent (struct overlay *ov,
                                    int status);
 static void overlay_health_respond_all (struct overlay *ov);
 static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank);
-static void message_trace (struct overlay *ov,
-                           const char *prefix,
-                           int rank,
-                           const flux_msg_t *msg);
 
 /* Convenience iterator for ov->children
  */
@@ -517,8 +514,11 @@ static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg)
     rc = zmqutil_msg_send (ov->parent.zsock, msg);
     if (rc == 0) {
         ov->parent.lastsent = flux_reactor_now (ov->reactor);
-        if (flux_msglist_count (ov->trace_requests) > 0)
-            message_trace (ov, "tx", ov->parent.rank, msg);
+        trace_overlay_msg (ov->h,
+                           "tx",
+                           ov->parent.rank,
+                           ov->trace_requests,
+                           msg);
     }
 done:
     return rc;
@@ -825,7 +825,7 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
             if ((uuid = flux_msg_route_last (msg))
                 && (child = child_lookup_online (ov, uuid)))
                 rank = child->rank;
-            message_trace (ov, "tx", rank, msg);
+            trace_overlay_msg (ov->h, "tx", rank, ov->trace_requests, msg);
         }
     }
 done:
@@ -865,8 +865,13 @@ static void overlay_mcast_child (struct overlay *ov, flux_msg_t *msg)
                 count++;
         }
     }
-    if (count > 0 && flux_msglist_count (ov->trace_requests) > 0)
-        message_trace (ov, "tx", -1, msg);
+    if (count > 0) {
+        trace_overlay_msg (ov->h,
+                           "tx",
+                           FLUX_NODEID_ANY,
+                           ov->trace_requests,
+                           msg);
+    }
 }
 
 static void logdrop (struct overlay *ov,
@@ -913,74 +918,6 @@ static int clear_msg_role (flux_msg_t *msg, uint32_t role)
     return 0;
 }
 
-static void message_trace (struct overlay *ov,
-                           const char *prefix,
-                           int rank,
-                           const flux_msg_t *msg)
-{
-    const flux_msg_t *req;
-    double now = flux_reactor_now (ov->reactor);
-    int type = 0;
-    char buf[64];
-    const char *topic = NULL;
-    int payload_size = 0;
-    json_t *payload_json = NULL;
-
-    (void)flux_msg_get_type (msg, &type);
-    if (type == FLUX_MSGTYPE_CONTROL) {
-        int ctype;
-        int cstatus;
-        if (flux_control_decode (msg, &ctype, &cstatus) == 0) {
-            snprintf (buf,
-                      sizeof (buf),
-                      "%s %d",
-                      ctype == CONTROL_HEARTBEAT ? "heartbeat" :
-                      ctype == CONTROL_STATUS ? "status" :
-                      ctype == CONTROL_DISCONNECT ? "disconnect" : "unknown",
-                      cstatus);
-            topic = buf;
-        }
-    }
-    else {
-        (void)flux_msg_get_topic (msg, &topic);
-        (void)flux_msg_get_payload (msg, NULL, &payload_size);
-    }
-
-    req = flux_msglist_first (ov->trace_requests);
-    while (req) {
-        struct flux_match match = FLUX_MATCH_ANY;
-        int nodeid;
-        int full = 0;
-        if (flux_request_unpack (req,
-                                 NULL,
-                                 "{s:i s:s s:i s?b}",
-                                 "typemask", &match.typemask,
-                                 "topic_glob", &match.topic_glob,
-                                 "nodeid", &nodeid,
-                                 "full", &full) < 0
-            || (nodeid != FLUX_NODEID_ANY && nodeid != rank)
-            || !flux_msg_cmp (msg, match))
-            goto next;
-
-        if (full && !payload_json && payload_size > 0)
-            (void)flux_msg_unpack (msg, "o", &payload_json);
-
-        if (flux_respond_pack (ov->h,
-                               req,
-                               "{s:f s:s s:i s:i s:s s:i s:O?}",
-                               "timestamp", now,
-                               "prefix", prefix,
-                               "rank", rank,
-                               "type", type,
-                               "topic", topic ? topic : "NO-TOPIC",
-                               "payload_size", payload_size,
-                               "payload", payload_json) < 0)
-            flux_log_error (ov->h, "error responding to overlay.trace");
-next:
-        req = flux_msglist_next (ov->trace_requests);
-    }
-}
-
 /* Handle a message received from TBON child (downstream).
  */
 static void child_cb (flux_reactor_t *r,
@@ -1019,7 +956,11 @@ static void child_cb (flux_reactor_t *r,
             && flux_msg_get_topic (msg, &topic) == 0
             && streq (topic, "overlay.hello")
             && !ov->shutdown_in_progress) {
-            message_trace (ov, "rx", -1, msg);
+            trace_overlay_msg (ov->h,
+                               "rx",
+                               FLUX_NODEID_ANY,
+                               ov->trace_requests,
+                               msg);
             hello_request_handler (ov, msg);
         }
         /* Or one of the following cases occurred that requires (or at least
@@ -1050,7 +991,11 @@ static void child_cb (flux_reactor_t *r,
             int type, status;
             if (flux_control_decode (msg, &type, &status) == 0
                 && type == CONTROL_STATUS) {
-                message_trace (ov, "rx", child->rank, msg);
+                trace_overlay_msg (ov->h,
+                                   "rx",
+                                   child->rank,
+                                   ov->trace_requests,
+                                   msg);
                 overlay_child_status_update (ov, child, status, NULL);
             }
             goto done;
@@ -1070,8 +1015,7 @@ static void child_cb (flux_reactor_t *r,
         case FLUX_MSGTYPE_EVENT:
             break;
     }
-    if (flux_msglist_count (ov->trace_requests) > 0)
-        message_trace (ov, "rx", child->rank, msg);
+    trace_overlay_msg (ov->h, "rx", child->rank, ov->trace_requests, msg);
     if (ov->recv_cb (&msg, OVERLAY_DOWNSTREAM, ov->recv_arg) < 0)
         goto done;
     return;
@@ -1161,9 +1105,7 @@ static void parent_cb (flux_reactor_t *r,
         default:
             break;
     }
-    if (flux_msglist_count (ov->trace_requests) > 0) {
-        message_trace (ov, "rx", ov->parent.rank, msg);
-    }
+    trace_overlay_msg (ov->h, "rx", ov->parent.rank, ov->trace_requests, msg);
     if (ov->recv_cb (&msg, OVERLAY_UPSTREAM, ov->recv_arg) < 0)
         goto done;
     return;
