@@ -799,6 +799,7 @@ int client_run (struct client *cli)
         .on_stdout = NULL,
         .on_stderr = NULL,
     };
+    int flags = 0;
     if (cli->p) {
         errno = EEXIST;
         return -1;
@@ -806,8 +807,10 @@ int client_run (struct client *cli)
     /* We want stdio fallthrough so subprocess can capture tty if
      * necessary (i.e. an interactive shell)
      */
+    flags |= FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH;
+    flags |= FLUX_SUBPROCESS_FLAGS_NO_SETPGRP;
     if (!(cli->p = flux_local_exec (ctx.reactor,
-                                    FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH,
+                                    flags,
                                     cli->cmd,
                                     &ops)))
         log_err_exit ("flux_exec");

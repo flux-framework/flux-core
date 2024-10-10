@@ -463,7 +463,7 @@ flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
 {
     flux_subprocess_t *p = NULL;
     int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
-                       | FLUX_SUBPROCESS_FLAGS_SETPGRP
+                       | FLUX_SUBPROCESS_FLAGS_NO_SETPGRP
                        | FLUX_SUBPROCESS_FLAGS_FORK_EXEC);
 
     if (!r || !cmd) {
@@ -953,7 +953,7 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
             errno = ESRCH;
             return NULL;
         }
-        if (p->flags & FLUX_SUBPROCESS_FLAGS_SETPGRP)
+        if (!(p->flags & FLUX_SUBPROCESS_FLAGS_NO_SETPGRP))
             ret = killpg (p->pid, signum);
         else
             ret = kill (p->pid, signum);
