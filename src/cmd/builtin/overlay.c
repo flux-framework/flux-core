@@ -1355,7 +1355,7 @@ static int subcmd_trace (optparse_t *p, int ac, char *av[])
                                  "payload", &payload_json,
                                  "errnum", &errnum,
                                  "errstr", &errstr) < 0)
-            log_err_exit ("%s", future_strerror (f, errno));
+            log_msg_exit ("%s", future_strerror (f, errno));
 
         if (errnum > 0) {
             if (errstr && strlen (errstr) > 0)
