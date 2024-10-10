@@ -1,0 +1,112 @@
+name: Run Libabigail
+on: [pull_request]
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Build Previous Release
+      uses: actions/checkout@v3
+    - name: Retrieve from Container
+      run: |
+       mkdir -p /tmp/libs
+       docker run --rm \
+          --workdir=$(pwd) \
+          --volume=/tmp/libs:/tmp/libs \
+          fluxrm/flux-sched:focal \
+          sh -c "sudo cp /usr/lib/*.so /tmp/libs"
+       sudo chown -R $USER /tmp/libs
+       echo "Found fluxrm/flux-sched:focal release libs 🧐️"
+       ls /tmp/libs
+
+    - name: Upload results
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-libs
+        path: /tmp/libs
+
+  build-pull-request:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Build Pull Request
+      uses: actions/checkout@v3
+    - name: Build in Container
+      env:
+        ACTOR: ${{ github.actor }}
+      run: |
+       mkdir -p /tmp/libs
+       docker run --rm \
+          --workdir=/usr/src \
+          --volume=$PWD/:/usr/src \
+          --volume=/tmp/libs:/tmp/libs \
+          --user root \
+          fluxrm/flux-sched:focal \
+          sh -c "git config --global --add safe.directory /usr/src && 
+                 git config --global user.email ${ACTOR} &&
+                 git config --global user.name HarryPotter &&
+                 git tag -a 0.9999.0 HEAD -m weezard &&
+                 ./autogen.sh &&
+                 ./configure --prefix=/usr --sysconfdir=/etc \
+                --with-systemdsystemunitdir=/etc/systemd/system \
+                --localstatedir=/var \
+                --with-flux-security \
+                --enable-caliper &&
+               make clean &&
+               make -j${JOBS} &&
+               make install &&
+               cp /usr/lib/*.so /tmp/libs"
+       sudo chown -R $USER /tmp/libs
+       echo "Found pull request built libs 🧐️"
+       ls /tmp/libs
+      
+    - name: Upload results
+      uses: actions/upload-artifact@v3
+      with:
+        name: pull-request-libs
+        path: /tmp/libs
+
+  abi:
+    runs-on: ubuntu-latest
+    needs: [build-release, build-pull-request]
+    strategy:
+      fail-fast: false
+      matrix:
+
+        # Testing every paired library for release vs pr and main vs. pr
+        libs: ["libflux-core.so",
+               "libflux-hostlist.so",
+               "libflux-idset.so",
+               "libflux-optparse.so",
+               "libflux-schedutil.so",
+               "libflux-security.so",
+               "libflux-taskmap.so",
+               "libs3.so"]
+
+        # Artifact pairs (named) for comparison)
+        artifacts: [["release-libs", "pull-request-libs"]]
+
+    steps:
+    - name: Download Previous Version
+      uses: actions/download-artifact@v2
+      with:
+        name: ${{ matrix.artifacts[1] }}
+        path: previous/
+
+    - name: Download Pull Request Version
+      uses: actions/download-artifact@v2
+      with:
+        name: ${{ matrix.artifacts[0] }}
+        path: current/
+
+    - name: Show Files
+      run: |
+        ls current/
+        ls previous/
+        
+    - name: Run Libabigail
+      uses: buildsi/libabigail-action@main
+      env:
+        lib: ${{ matrix.libs }}
+      with: 
+        abidiff: previous/${{ env.lib }} current/${{ env.lib }}
+
