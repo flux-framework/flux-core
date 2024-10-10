@@ -39,6 +39,11 @@ int multiple_lines_stderr_output_cb_count;
 int stdin_closed_stdout_cb_count;
 int stdin_closed_stderr_cb_count;
 int timer_cb_count;
+int credit_cb_count;
+int stdin_credit;
+char inputbuf[1024];
+int inputbuf_index;
+int inputbuf_len;
 char outputbuf[1024];
 int outputbuf_len;
 
@@ -166,7 +171,7 @@ void output_no_readline_cb (flux_subprocess_t *p, const char *stream)
 
         sprintf (cmpbuf, "%s:hi\n", stream);
         ok (streq (outputbuf, cmpbuf),
-            "flux_subprocess_read_line returned correct data");
+            "flux_subprocess_read returned correct data");
         /* 1 + 2 + 1 for ':', "hi", '\n' */
         ok (outputbuf_len == (strlen (stream) + 1 + 2 + 1),
             "flux_subprocess_read returned correct amount of data");
@@ -1414,6 +1419,119 @@ void test_long_line (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 }
 
+void credit_output_cb (flux_subprocess_t *p, const char *stream)
+{
+    const char *buf = NULL;
+    int len;
+
+    if (strcasecmp (stream, "stdout")) {
+        ok (false, "unexpected stream %s", stream);
+        return;
+    }
+
+    len = flux_subprocess_read (p, stream, &buf);
+    ok (len >= 0,
+        "flux_subprocess_read on %s success", stream);
+
+    if (len > 0) {
+        memcpy (outputbuf + outputbuf_len, buf, len);
+        outputbuf_len += len;
+    }
+    else {
+        char cmpbuf[1024];
+
+        ok (flux_subprocess_read_stream_closed (p, stream),
+            "flux_subprocess_read_stream_closed saw EOF on %s", stream);
+
+        sprintf (cmpbuf, "abcdefghijklmnopqrstuvwxyz0123456789\n");
+        ok (streq (outputbuf, cmpbuf),
+            "flux_subprocess_read returned correct data");
+        /* 26 (ABCs) + 10 (1-10) + 1 for `\n' */
+        ok (outputbuf_len == (26 + 10 + 1),
+            "flux_subprocess_read returned correct amount of data");
+    }
+    stdout_output_cb_count++;
+}
+
+void credit_cb (flux_subprocess_t *p, const char *stream, int bytes)
+{
+    int *credits = flux_subprocess_aux_get (p, "credits");
+    int len;
+    int ret;
+
+    assert (credits);
+
+    diag ("on_credit: credit of %d bytes", bytes);
+
+    (*credits) += bytes;
+
+    if ((inputbuf_len - inputbuf_index) > 0) {
+        if ((inputbuf_len - inputbuf_index) > (*credits))
+            len = (*credits);
+        else
+            len = (inputbuf_len - inputbuf_index);
+
+        ret = flux_subprocess_write (p, "stdin", &inputbuf[inputbuf_index], len);
+        ok (ret == len,
+            "flux_subprocess_write success");
+
+        (*credits) -= ret;
+        inputbuf_index += ret;
+    }
+    else {
+        ok (flux_subprocess_close (p, "stdin") == 0,
+            "flux_subprocess_close success");
+    }
+    credit_cb_count++;
+}
+
+void test_on_credit (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O",  NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+    int credits = 0;
+    int ret;
+
+    ok ((cmd = flux_cmd_create (2, av, environ)) != NULL, "flux_cmd_create");
+    ok (flux_cmd_setopt (cmd, "stdin_BUFSIZE", "8") == 0,
+        "set stdin buffer size to 1024 bytes");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = credit_output_cb,
+        .on_credit = credit_cb
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    credit_cb_count = 0;
+    sprintf (inputbuf, "abcdefghijklmnopqrstuvwxyz0123456789");
+    inputbuf_index = 0;
+    inputbuf_len = (26 + 10);
+    memset (outputbuf, '\0', sizeof (outputbuf));
+    outputbuf_len = 0;
+    p = flux_local_exec (r, 0, cmd, &ops);
+    ok (p != NULL, "flux_local_exec");
+    ret = flux_subprocess_aux_set (p, "credits", &credits, NULL);
+    ok (ret == 0, "flux_subprocess_aux_set works");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    errno = 0;
+    ret = flux_subprocess_write (p, "stdin", &inputbuf[inputbuf_index], 10);
+    ok (ret < 0 && errno == ENOSPC,
+        "flux_subprocess_write fails with too much data");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    ok (stdout_output_cb_count >= 2, "stdout output callback called >= 2 times");
+    ok (credit_cb_count == 6, "credit callback called 6 times");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *r;
@@ -1475,6 +1593,8 @@ int main (int argc, char *argv[])
     test_stream_start_stop_mid_stop (r);
     diag ("long_line");
     test_long_line (r);
+    diag ("on_credit");
+    test_on_credit (r);
 
     end_fdcount = fdcount ();
 

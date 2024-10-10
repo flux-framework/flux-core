@@ -16,8 +16,6 @@
 #include "subprocess.h"
 #include "fbuf_watcher.h"
 
-#define SUBPROCESS_DEFAULT_BUFSIZE 4194304
-
 #define CHANNEL_READ  0x01
 #define CHANNEL_WRITE 0x02
 #define CHANNEL_FD    0x04
@@ -43,6 +41,8 @@ struct subprocess_channel {
      */
     flux_watcher_t *buffer_read_stopped_w;
     bool buffer_read_w_started;
+    /* watcher to only send initial credits */
+    flux_watcher_t *initial_credits_w;
 
     /* remote */
     struct fbuf *read_buffer;

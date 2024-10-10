@@ -88,7 +88,15 @@ typedef void (*fbuf_notify_f) (struct fbuf *fb, void *arg);
  * The callback is invoked when the buffer transitions from empty
  * or from full.
  */
-void fbuf_set_notify (struct fbuf *fb, fbuf_notify_f cb, void *arg);
+void fbuf_set_notify (struct fbuf *fb, fbuf_notify_f notify_cb, void *arg);
+
+typedef void (*fbuf_credit_f) (struct fbuf *fb, int len, void *arg);
+
+/* Set credit callback for internal use by fbuf watchers.  The callback
+ * is invoked when buffer reads happen, giving "credit" to the buffer and
+ * allowing more writes to happen.
+ */
+void fbuf_set_credit (struct fbuf *fb, fbuf_credit_f credit_cb, void *arg);
 
 #endif /* !_LIBSUBPROCESS_FBUF_H */
 

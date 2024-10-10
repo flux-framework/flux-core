@@ -219,6 +219,51 @@ void notify_callback (void)
     fbuf_destroy (fb);
 }
 
+struct credit_count {
+    int count;
+    int last_bytes;
+};
+
+void credit_cb (struct fbuf *fb, int bytes, void *arg)
+{
+    struct credit_count *cp = arg;
+    cp->count++;
+    cp->last_bytes = bytes;
+}
+
+void credit_callback (void)
+{
+    struct fbuf *fb;
+    struct credit_count credit = {0};
+    int len;
+
+    ok ((fb = fbuf_create (16)) != NULL,
+        "fbuf_create 16 byte buffer works");
+    fbuf_set_credit (fb, credit_cb, &credit);
+
+    ok (fbuf_write (fb, "foobar", 6) == 6,
+        "fbuf_write 6 bytes");
+
+    ok (credit.count == 0,
+        "read callback not called");
+
+    ok (fbuf_read (fb, 1, &len) != NULL && len == 1,
+        "fbuf_read read one byte");
+
+    ok (credit.count == 1
+        && credit.last_bytes == 1,
+        "credit callback with 1 byte");
+
+    ok (fbuf_read (fb, -1, &len) != NULL && len == 5,
+        "fbuf_read cleared all data");
+
+    ok (credit.count == 2
+        && credit.last_bytes == 5,
+        "credit callback with 5 bytes");
+
+    fbuf_destroy (fb);
+}
+
 void corner_case (void)
 {
     struct fbuf *fb;
@@ -431,6 +476,7 @@ int main (int argc, char *argv[])
 
     basic ();
     notify_callback ();
+    credit_callback ();
     corner_case ();
     full_buffer ();
     readonly_buffer ();

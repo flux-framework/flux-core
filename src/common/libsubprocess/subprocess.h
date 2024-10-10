@@ -84,6 +84,9 @@ typedef void (*flux_subprocess_output_f) (flux_subprocess_t *p,
                                           const char *stream);
 typedef void (*flux_subprocess_state_f) (flux_subprocess_t *p,
                                          flux_subprocess_state_t state);
+typedef void (*flux_subprocess_credit_f) (flux_subprocess_t *p,
+                                          const char *stream,
+                                          int bytes);
 typedef void (*flux_subprocess_hook_f) (flux_subprocess_t *p, void *arg);
 
 /*
@@ -104,6 +107,8 @@ typedef struct {
     flux_subprocess_output_f on_channel_out; /* Read from channel when ready */
     flux_subprocess_output_f on_stdout; /* Read of stdout is ready           */
     flux_subprocess_output_f on_stderr; /* Read of stderr is ready           */
+    flux_subprocess_credit_f on_credit; /* bytes of write buffer space
+                                         * reclaimed */
 } flux_subprocess_ops_t;
 
 /*

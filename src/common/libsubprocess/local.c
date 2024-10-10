@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <flux/core.h>
 
@@ -28,6 +29,7 @@
 #include "subprocess.h"
 #include "subprocess_private.h"
 #include "command_private.h"
+#include "fbuf.h"
 #include "local.h"
 #include "fork.h"
 #include "posix_spawn.h"
@@ -94,6 +96,13 @@ static void local_in_cb (flux_reactor_t *r,
                     revents,
                     strerror (errno));
     }
+}
+
+static void local_in_credit_cb (struct fbuf *fb, int bytes, void *arg)
+{
+    struct subprocess_channel *c = arg;
+    if (c->p->ops.on_credit)
+        c->p->ops.on_credit (c->p, c->name, bytes);
 }
 
 static void local_output (struct subprocess_channel *c,
@@ -167,9 +176,26 @@ static void local_stderr_cb (flux_reactor_t *r, flux_watcher_t *w,
     local_output (c, w, revents, c->p->ops.on_stderr);
 }
 
+static void initial_credits_cb (flux_reactor_t *r,
+                                flux_watcher_t *w,
+                                int revents,
+                                void *arg)
+{
+    struct subprocess_channel *c = (struct subprocess_channel *)arg;
+    if (c->p->ops.on_credit) {
+        int bufsize = cmd_option_bufsize (c->p, c->name);
+        /* should have been checked at setup */
+        assert (bufsize > 0);
+        c->p->ops.on_credit (c->p, c->name, bufsize);
+        /* initial credits sent, we don't know need this watcher anymore */
+        flux_watcher_stop (c->initial_credits_w);
+    }
+}
+
 static int channel_local_setup (flux_subprocess_t *p,
                                 flux_subprocess_output_f output_cb,
                                 flux_watcher_f in_cb,
+                                fbuf_credit_f in_credit_cb,
                                 flux_watcher_f out_cb,
                                 const char *name,
                                 int channel_flags)
@@ -220,6 +246,24 @@ static int channel_local_setup (flux_subprocess_t *p,
         if (!c->buffer_write_w) {
             llog_debug (p, "fbuf_write_watcher_create: %s", strerror (errno));
             goto error;
+        }
+
+        if (c->p->ops.on_credit) {
+            struct fbuf *fb = fbuf_write_watcher_get_buffer (c->buffer_write_w);
+            assert (fb);
+            fbuf_set_credit (fb, in_credit_cb, c);
+
+            /* to send initial credits the size of the buffer */
+            c->initial_credits_w =
+                flux_prepare_watcher_create (c->p->reactor,
+                                             initial_credits_cb,
+                                             c);
+            if (!c->initial_credits_w) {
+                llog_debug (p,
+                            "flux_prepare_watcher_create: %s",
+                            strerror (errno));
+                goto error;
+            }
         }
     }
 
@@ -304,6 +348,7 @@ static int local_setup_stdio (flux_subprocess_t *p)
     if (channel_local_setup (p,
                              NULL,
                              local_in_cb,
+                             local_in_credit_cb,
                              NULL,
                              "stdin",
                              CHANNEL_WRITE) < 0)
@@ -312,6 +357,7 @@ static int local_setup_stdio (flux_subprocess_t *p)
     if (p->ops.on_stdout) {
         if (channel_local_setup (p,
                                  p->ops.on_stdout,
+                                 NULL,
                                  NULL,
                                  local_stdout_cb,
                                  "stdout",
@@ -322,6 +368,7 @@ static int local_setup_stdio (flux_subprocess_t *p)
     if (p->ops.on_stderr) {
         if (channel_local_setup (p,
                                  p->ops.on_stderr,
+                                 NULL,
                                  NULL,
                                  local_stderr_cb,
                                  "stderr",
@@ -349,6 +396,7 @@ static int local_setup_channels (flux_subprocess_t *p)
         if (channel_local_setup (p,
                                  p->ops.on_channel_out,
                                  local_in_cb,
+                                 NULL,
                                  p->ops.on_channel_out ? local_out_cb : NULL,
                                  name,
                                  channel_flags) < 0)
@@ -440,6 +488,7 @@ static int start_local_watchers (flux_subprocess_t *p)
     while (c) {
         flux_watcher_start (c->buffer_write_w);
         flux_watcher_start (c->buffer_read_w);
+        flux_watcher_start (c->initial_credits_w);
         c->buffer_read_w_started = true;
         c = zhash_next (p->channels);
     }
