@@ -43,6 +43,16 @@ test_expect_success NO_CHAIN_LINT 'kvs.ping request/response was captured' '
 test_expect_success NO_CHAIN_LINT 'kvs.ping request/response was captured with --full' '
 	$waitfile -t 60 -c 2 -p kvs.ping trace2.out
 '
+# This RPC happens to return a human readable error on failure
+test_expect_success NO_CHAIN_LINT 'send one job-manager.kill (failing)' '
+	test_must_fail flux exec -r 1 flux job kill fuzzybunny
+'
+test_expect_success NO_CHAIN_LINT 'job-manager.kill request/response was captured' '
+	$waitfile -t 60 -c 2 -p "job%-manager.kill" trace.out
+'
+test_expect_success NO_CHAIN_LINT 'job-manager.kill request/response was captured with --full' '
+	$waitfile -t 60 -c 2 -p "job%-manager.kill" trace2.out
+'
 test_expect_success NO_CHAIN_LINT 'stop background trace' '
 	pid=$(cat trace.pid) &&
 	kill -15 $pid &&
