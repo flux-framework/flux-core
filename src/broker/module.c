@@ -42,6 +42,7 @@
 
 #include "module.h"
 #include "modservice.h"
+#include "trace.h"
 
 struct broker_module {
     flux_t *h;              /* ref to broker's internal flux_t handle */
@@ -441,77 +442,11 @@ int module_get_status (module_t *p)
     return p ? p->status : 0;
 }
 
-static void message_trace (module_t *p,
-                           const char *prefix,
-                           const flux_msg_t *msg)
-{
-    const flux_msg_t *req;
-    double now = flux_reactor_now (flux_get_reactor (p->h));
-    int type = 0;
-    char buf[64];
-    const char *topic = NULL;
-    int payload_size = 0;
-    json_t *payload_json = NULL;
-
-    (void)flux_msg_get_type (msg, &type);
-    if (type == FLUX_MSGTYPE_CONTROL) {
-        int ctype;
-        int cstatus;
-        if (flux_control_decode (msg, &ctype, &cstatus) == 0)
-            snprintf (buf,
-                      sizeof (buf),
-                      "%s %d",
-                      ctype == FLUX_MODSTATE_INIT ? "init" :
-                      ctype == FLUX_MODSTATE_RUNNING ? "running" :
-                      ctype == FLUX_MODSTATE_FINALIZING ? "finalizing" :
-                      ctype == FLUX_MODSTATE_EXITED ? "exited" : "unknown",
-                      cstatus);
-    }
-    else {
-        (void)flux_msg_get_topic (msg, &topic);
-        (void)flux_msg_get_payload (msg, NULL, &payload_size);
-        if (topic && streq (topic, "module.trace"))
-            return;
-    }
-
-    req = flux_msglist_first (p->trace_requests);
-    while (req) {
-        struct flux_match match = FLUX_MATCH_ANY;
-        int full = 0;
-        if (flux_request_unpack (req,
-                                 NULL,
-                                 "{s:i s:s s?b}",
-                                 "typemask", &match.typemask,
-                                 "topic_glob", &match.topic_glob,
-                                 "full", &full) < 0
-            || !flux_msg_cmp (msg, match))
-            goto next;
-
-        if (full && !payload_json && payload_size > 0)
-            (void)flux_msg_unpack (msg, "o", &payload_json);
-
-        if (flux_respond_pack (p->h,
-                               req,
-                               "{s:f s:s s:i s:s s:s s:i s:O?}",
-                               "timestamp", now,
-                               "prefix", prefix,
-                               "type", type,
-                               "name", p->name,
-                               "topic", topic ? topic : "NO-TOPIC",
-                               "payload_size", payload_size,
-                               "payload", payload_json) < 0)
-            flux_log_error (p->h, "error responding to module.trace");
-next:
-        req = flux_msglist_next (p->trace_requests);
-    }
-}
-
 flux_msg_t *module_recvmsg (module_t *p)
 {
     flux_msg_t *msg;
     msg = flux_recv (p->h_broker_end, FLUX_MATCH_ANY, FLUX_O_NONBLOCK);
-    if (msg && flux_msglist_count (p->trace_requests) > 0)
-        message_trace (p, "tx", msg);
+    trace_module_msg (p->h, "tx", p->name, p->trace_requests, msg);
     return msg;
 }
 
@@ -541,8 +476,7 @@ int module_sendmsg_new (module_t *p, flux_msg_t **msg)
         *msg = NULL;
         return 0;
     }
-    if (flux_msglist_count (p->trace_requests) > 0)
-        message_trace (p, "rx", *msg);
+    trace_module_msg (p->h, "rx", p->name, p->trace_requests, *msg);
     return flux_send_new (p->h_broker_end, msg, 0);
 }
 
