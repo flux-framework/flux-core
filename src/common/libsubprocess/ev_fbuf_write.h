@@ -30,6 +30,7 @@ struct ev_fbuf_write {
     bool              eof;      /* flag, eof written             */
     bool              closed;   /* flag, fd has been closed      */
     int               close_errno;  /* errno from close          */
+    bool              initial_space; /* flag, initial space notified */
     void              *data;
 };
 

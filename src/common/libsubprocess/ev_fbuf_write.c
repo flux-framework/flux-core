@@ -25,11 +25,25 @@ static void buffer_write_cb (struct ev_loop *loop, ev_io *iow, int revents)
     struct ev_fbuf_write *ebw = iow->data;
 
     if (revents & EV_WRITE) {
+        int ret;
 
-        if (fbuf_read_to_fd (ebw->fb, ebw->fd, -1) < 0) {
+        /* Send one time notification so user knows initial buffer
+         * size */
+        if (!ebw->initial_space) {
+            ebw->initial_space = true;
+            if (ebw->cb)
+                ebw->cb (loop, ebw, revents);
+        }
+
+        if ((ret = fbuf_read_to_fd (ebw->fb, ebw->fd, -1)) < 0) {
             if (ebw->cb)
                 ebw->cb (loop, ebw, EV_ERROR);
             return;
+        }
+
+        if (ret) {
+            if (ebw->cb)
+                ebw->cb (loop, ebw, revents);
         }
 
         if (!fbuf_bytes (ebw->fb) && ebw->eof) {
@@ -109,8 +123,12 @@ void ev_fbuf_write_start (struct ev_loop *loop, struct ev_fbuf_write *ebw)
 {
     if (!ebw->start) {
         ebw->start = true;
-        /* do not start watcher unless there is data or EOF to be written out */
-        if (fbuf_bytes (ebw->fb) || ebw->eof)
+        /* do not start watcher unless
+         * - we have not sent initial space
+         * - there is data to be written out
+         * - notify EOF
+         */
+        if (!ebw->initial_space || fbuf_bytes (ebw->fb) || ebw->eof)
             ev_io_start (ebw->loop, &(ebw->io_w));
     }
 }

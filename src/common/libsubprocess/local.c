@@ -28,6 +28,7 @@
 #include "subprocess.h"
 #include "subprocess_private.h"
 #include "command_private.h"
+#include "fbuf.h"
 #include "local.h"
 #include "fork.h"
 #include "posix_spawn.h"
@@ -81,16 +82,65 @@ static void local_in_cb (flux_reactor_t *r,
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     int err = 0;
 
-    if (fbuf_write_watcher_is_closed (w, &err) == 1) {
-        if (err) {
-            llog_error (c->p,
-                        "fbuf_write_watcher close error: %s",
-                        strerror (err));
+    /* always a chance caller may destroy subprocess in callback */
+    subprocess_incref (c->p);
+
+    if (revents & FLUX_POLLOUT) {
+        if (fbuf_write_watcher_is_closed (w, &err) == 1) {
+            if (err) {
+                llog_error (c->p,
+                            "fbuf_write_watcher close error: %s",
+                            strerror (err));
+            }
+            else
+                c->parent_fd = -1;  /* closed by reactor */
+            flux_watcher_stop (w);  /* c->buffer_write_w */
+            local_channel_flush (c);
         }
-        else
-            c->parent_fd = -1;  /* closed by reactor */
-        flux_watcher_stop (w);  /* c->buffer_write_w */
-        local_channel_flush (c);
+        else {
+            /* If watcher is not closed, we were alerted to a change
+             * in buffer space
+             *
+             * - c->buffer_space is set to the buffer size on creation
+             * - c->buffer_space is reduced by flux_subprocess_write()
+             * - it is legal to call flux_subprocess_write() before
+             *   the first on_credit() callback
+             * - the fbuf write watcher specially raises POLLOUT
+             *   initially for initial credits
+             * - if data has already been written and moved out of the
+             *   buffer at that time, POLLOUT is raised again
+             *   (separately) after the initial callback returns
+             */
+            struct fbuf *fb;
+
+            if (!(fb = fbuf_write_watcher_get_buffer (c->buffer_write_w))) {
+                llog_error (c->p,
+                            "fbuf_write_watcher_get_buffer: %s",
+                            strerror (errno));
+                goto out;
+            }
+
+            if (!c->initial_credits_sent) {
+                c->initial_credits_sent = true;
+                if (c->p->ops.on_credit)
+                    c->p->ops.on_credit (c->p, c->name, fbuf_size (fb));
+            }
+            else {
+                int new_buffer_space = fbuf_space (fb);
+                /* Only report credits when space is reclaimed, not when
+                 * space is used up */
+                if (new_buffer_space > c->buffer_space) {
+                    int credits = new_buffer_space - c->buffer_space;
+                    /* N.B. Update buffer_space BEFORE the
+                     * on_credit callback, as there is a good chance
+                     * on_credit callback may call
+                     * flux_subprocess_write() */
+                    c->buffer_space = new_buffer_space;
+                    if (c->p->ops.on_credit)
+                        c->p->ops.on_credit (c->p, c->name, credits);
+                }
+            }
+        }
     }
     else {
         llog_error (c->p,
@@ -99,6 +149,8 @@ static void local_in_cb (flux_reactor_t *r,
                     revents,
                     strerror (errno));
     }
+out:
+    subprocess_decref (c->p);
 }
 
 static void local_output (struct subprocess_channel *c,
@@ -222,6 +274,8 @@ static int channel_local_setup (flux_subprocess_t *p,
     }
 
     if ((channel_flags & CHANNEL_WRITE) && in_cb) {
+        struct fbuf *fb;
+
         c->buffer_write_w = fbuf_write_watcher_create (p->reactor,
                                                        c->parent_fd,
                                                        buffer_size,
@@ -230,6 +284,18 @@ static int channel_local_setup (flux_subprocess_t *p,
                                                        c);
         if (!c->buffer_write_w) {
             llog_debug (p, "fbuf_write_watcher_create: %s", strerror (errno));
+            goto error;
+        }
+
+        if (!(fb = fbuf_write_watcher_get_buffer (c->buffer_write_w))) {
+            llog_debug (p,
+                        "fbuf_write_watcher_get_buffer: %s",
+                        strerror (errno));
+            goto error;
+        }
+
+        if ((c->buffer_space = fbuf_size (fb)) < 0) {
+            llog_debug (p, "fbuf_size: %s", strerror (errno));
             goto error;
         }
     }
@@ -454,6 +520,7 @@ static int start_local_watchers (flux_subprocess_t *p)
         c->buffer_read_w_started = true;
         c = zhash_next (p->channels);
     }
+
     return 0;
 }
 

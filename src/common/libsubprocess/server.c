@@ -29,6 +29,7 @@
 #include "command_private.h"
 #include "server.h"
 #include "client.h"
+#include "util.h"
 
 /* Keys used to store subprocess server, exec request
  * (i.e. rexec.exec), and 'subprocesses' zlistx handle in the
@@ -301,6 +302,30 @@ error:
     proc_internal_fatal (p);
 }
 
+static void proc_credit_cb (flux_subprocess_t *p, const char *stream, int bytes)
+{
+    subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
+    const flux_msg_t *request = flux_subprocess_aux_get (p, msgkey);
+
+    if (flux_respond_pack (s->h,
+                           request,
+                           "{s:s s:{s:i}}",
+                           "type", "add-credit",
+                           "channels",
+                             stream, bytes) < 0) {
+        llog_error (s,
+                    "error responding to %s.exec request: %s",
+                    s->service_name,
+                    strerror (errno));
+        goto error;
+    }
+
+    return;
+
+error:
+    proc_internal_fatal (p);
+}
+
 static void server_exec_cb (flux_t *h,
                             flux_msg_handler_t *mh,
                             const flux_msg_t *msg,
@@ -316,6 +341,7 @@ static void server_exec_cb (flux_t *h,
         .on_channel_out = proc_output_cb,
         .on_stdout = proc_output_cb,
         .on_stderr = proc_output_cb,
+        .on_credit = proc_credit_cb,
     };
     char **env = NULL;
     const char *errmsg = NULL;
@@ -344,6 +370,8 @@ static void server_exec_cb (flux_t *h,
         ops.on_stdout = NULL;
     if (!(flags & SUBPROCESS_REXEC_STDERR))
         ops.on_stderr = NULL;
+    if (!(flags & SUBPROCESS_REXEC_WRITE_CREDIT))
+        ops.on_credit = NULL;
 
     if (!(cmd = cmd_fromjson (cmd_obj, NULL))) {
         errmsg = "error parsing command string";

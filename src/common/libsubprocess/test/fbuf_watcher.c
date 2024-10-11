@@ -178,12 +178,29 @@ static void buffer_write (flux_reactor_t *r, flux_watcher_t *w,
             "buffer: write callback called with FLUX_POLLERR");
     }
     else {
-        ok (fbuf_write_watcher_is_closed (w, NULL),
-            "buffer: write callback called after close");
+        /* First callback is so user knows initial buffer size */
+        if ((*count) == 0) {
+            struct fbuf *fb = fbuf_write_watcher_get_buffer (w);
+            int space = fbuf_size (fb);
+            ok (space == 1024,
+                "buffer: write callback gets correct buffer size");
+        }
+        /* Second callback is when space is reclaimed */
+        else if ((*count) == 1) {
+            struct fbuf *fb = fbuf_write_watcher_get_buffer (w);
+            int space = fbuf_space (fb);
+            ok (space == 1024,
+                "buffer: write callback gets correct amount of space");
+        }
+        else {
+            ok (fbuf_write_watcher_is_closed (w, NULL),
+                "buffer: write callback called after close");
+        }
     }
 
     (*count)++;
-    flux_watcher_stop (w);
+    if ((*count) == 1)
+        flux_watcher_stop (w);
     return;
 }
 
@@ -418,8 +435,8 @@ static void test_buffer (flux_reactor_t *reactor)
     ok (flux_reactor_run (reactor, 0) == 0,
         "buffer: reactor ran to completion");
 
-    ok (count == 0,
-        "buffer: write callback never called");
+    ok (count == 2,
+        "buffer: write callback called 2 times");
 
     ok (read (fd[1], buf, 1024) == 6,
         "buffer: read from socketpair success");
@@ -456,8 +473,8 @@ static void test_buffer (flux_reactor_t *reactor)
     ok (flux_reactor_run (reactor, 0) == 0,
         "buffer: reactor ran to completion");
 
-    ok (count == 0,
-        "buffer: write callback never called");
+    ok (count == 2,
+        "buffer: write callback called 2 times");
 
     ok (read (fd[1], buf, 1024) == 6,
         "buffer: read from socketpair success");
@@ -586,8 +603,8 @@ static void test_buffer (flux_reactor_t *reactor)
     ok (flux_reactor_run (reactor, 0) == 0,
         "buffer: reactor ran to completion");
 
-    ok (count == 1,
-        "buffer: write callback called once");
+    ok (count == 3,
+        "buffer: write callback called 3 times");
     ok (fbuf_write_watcher_is_closed (w, &errnum) == 1 && errnum == 0,
         "buffer: fbuf_write_watcher_is_closed returns true");
     ok (fbuf_write_watcher_close (w) == -1 && errno == EINVAL,

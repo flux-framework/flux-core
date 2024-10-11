@@ -699,6 +699,7 @@ int flux_subprocess_write (flux_subprocess_t *p,
             log_err ("fbuf_write");
             return -1;
         }
+        c->buffer_space -= ret;
     }
     else {
         if (p->state != FLUX_SUBPROCESS_INIT
