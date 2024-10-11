@@ -60,7 +60,7 @@ OPTIONS
 
 .. option:: -c, --count=N
 
-   Limit output to N jobs (default 1000)
+   Limit output to N jobs. N=0 means unlimited. (default 1000)
 
 .. option:: --since=WHEN
 
