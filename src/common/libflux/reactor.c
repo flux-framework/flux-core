@@ -525,6 +525,12 @@ double flux_watcher_next_wakeup (flux_watcher_t *w)
 
 /* Prepare
  */
+
+static void prepare_set_priority (flux_watcher_t *w, int priority)
+{
+    ev_set_priority ((ev_prepare *)w->data, priority);
+}
+
 static void prepare_start (flux_watcher_t *w)
 {
     ev_prepare_start (w->r->loop, (ev_prepare *)w->data);
@@ -543,6 +549,7 @@ static void prepare_cb (struct ev_loop *loop, ev_prepare *pw, int revents)
 }
 
 static struct flux_watcher_ops prepare_watcher = {
+    .set_priority = prepare_set_priority,
     .start = prepare_start,
     .stop = prepare_stop,
     .destroy = NULL,
