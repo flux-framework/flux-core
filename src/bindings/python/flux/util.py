@@ -618,7 +618,9 @@ class OutputFormat:
         self.format_list = [[s or "" for s in t] for t in format_list]
 
         #  Store list of requested fields in self.fields
-        self._fields = [field for (_, field, _, _) in self.format_list]
+        #  (ignore any empty fields, which may be present due to text
+        #   at the end of a format string):
+        self._fields = [field for (_, field, _, _) in self.format_list if field]
 
         #  Throw an exception if any requested fields are invalid:
         for field in self._fields:
