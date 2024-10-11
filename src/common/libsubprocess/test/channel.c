@@ -430,6 +430,12 @@ void test_bufsize_error (flux_reactor_t *r)
     char *av[] = { "/bin/true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_channel_out = subprocess_standard_output,
+        .on_stdout = subprocess_standard_output,
+        .on_stderr = subprocess_standard_output
+    };
 
     ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
 
@@ -439,16 +445,25 @@ void test_bufsize_error (flux_reactor_t *r)
     ok (flux_cmd_setopt (cmd, "TEST_CHANNEL_BUFSIZE", "ABCD") == 0,
         "flux_cmd_setopt set TEST_CHANNEL_BUFSIZE success");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_channel_out = subprocess_standard_output,
-        .on_stdout = subprocess_standard_output,
-        .on_stderr = subprocess_standard_output
-    };
     p = flux_local_exec (r, 0, cmd, &ops);
     ok (p == NULL
         && errno == EINVAL,
         "flux_local_exec fails with EINVAL due to bad bufsize input");
+
+    flux_cmd_destroy (cmd);
+
+    ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
+
+    ok (flux_cmd_add_channel (cmd, "TEST_CHANNEL") == 0,
+        "flux_cmd_add_channel success adding channel TEST_CHANNEL");
+
+    ok (flux_cmd_setopt (cmd, "TEST_CHANNEL_BUFSIZE", "0") == 0,
+        "flux_cmd_setopt set TEST_CHANNEL_BUFSIZE success");
+
+    p = flux_local_exec (r, 0, cmd, &ops);
+    ok (p == NULL
+        && errno == EINVAL,
+        "flux_local_exec fails with EINVAL due to bufsize zero");
 
     flux_cmd_destroy (cmd);
 }
