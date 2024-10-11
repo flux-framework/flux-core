@@ -34,6 +34,7 @@ struct subprocess_channel {
     int parent_fd;
     int child_fd;
     flux_watcher_t *buffer_write_w;
+    int buffer_write_credits;
     flux_watcher_t *buffer_read_w;
     /* buffer_read_stopped_w is a "sub-in" watcher if buffer_read_w is
      * stopped.  We need to put something into the reactor so we know
@@ -92,6 +93,9 @@ struct flux_subprocess {
     flux_watcher_t *completed_prep_w;
     flux_watcher_t *completed_idle_w;
     flux_watcher_t *completed_check_w;
+
+    /* watcher to only send initial credits */
+    flux_watcher_t *initial_credits_w;
 
     /* local */
 
