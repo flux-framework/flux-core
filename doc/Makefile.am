@@ -473,6 +473,7 @@ EXTRA_DIST = \
 	guide/admin.rst \
 	guide/glossary.rst \
 	guide/internals.rst \
+	guide/debug.rst \
 	guide/kvs.rst \
 	guide/broker.rst \
 	$(RST_FILES) \
