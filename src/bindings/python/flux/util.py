@@ -572,10 +572,32 @@ class AltField:
 
 
 class OutputFormat:
-    """
-    Store a parsed version of the program's output format,
-    allowing the fields to iterated without modifiers, building
-    a new format suitable for headers display, etc...
+    """Extended output format container class for Flux utilities.
+
+    The OutputFormat class stores a parsed version of a program's output
+    format, allowing fields to be iterated without their corresponding
+    modifiers, automatic creation of a format string suitable for header
+    display, as well as some other features specific to Flux utility
+    output including:
+
+     - Support for format prefix "sentinels" ``?:``, ``+:`` and ``?+:``
+       which suppress fields that would be empty, expand fields automatically
+       to their maximum obsevered width, or both.
+     - Support for embedding a set of sort keys in a format via a
+       ``sort:KEY,...`` prefix.
+     - A ``print_items()`` method to handle the common code for sorting,
+       filtering and printing a set of items using the current format.
+
+    Attributes:
+        formatter (Formatter): a custom string formatter that will be used to
+            render output using its ``format()`` method. The default
+            formatter is :py:class:`flux.util.UtilFormatter`
+        headings (dict): A mapping of field name to header string. This also
+            provides detection of invalid fields, so all valid fields should
+            have an entry in headings. The headings dict can be set as an
+            argument to :py:func:`OutputFormat.__init__`, or a subclass of
+            the :py:class`flux.util.OutputFormat` class may set default
+            headings for a given tool.
     """
 
     formatter = UtilFormatter
@@ -598,12 +620,14 @@ class OutputFormat:
 
     def __init__(self, fmt, headings=None, prepend="0."):
         """
-        Parse the input format fmt with string.Formatter.
+        Parse the input format ``fmt`` with string.Formatter.
         Save off the fields and list of format tokens for later use,
         (converting None to "" in the process)
 
-        Throws an exception if any format fields do not match the allowed
-        list of headings.
+        Args:
+            headings (dict): Set a mapping of field name to header string.
+            prepend (str): Prepend each field with a string. (Default is
+                "0.", so ``{f1} {f2}`` becomes ``{0.f1} {0.f2}``.
         """
         if headings is not None:
             self.headings = headings
@@ -764,8 +788,10 @@ class OutputFormat:
 
     def header_format(self):
         """
-        Return the header row formatted by the user-provided format spec,
-        which will be made "safe" for use with string headings.
+        Return the current format sanitized for use in formatting a header
+        row. All format specs are adjusted to keep only the align and width,
+        and any numeric formatting types are dropped since the header row
+        is made up of only strings.
         """
         format_list = []
         for text, field, spec, _ in self.format_list:
@@ -782,6 +808,7 @@ class OutputFormat:
         return fmt
 
     def header(self):
+        """Return a header row using the current format"""
         formatter = self.HeaderFormatter()
         return formatter.format(self.header_format(), **self.headings)
 
@@ -791,6 +818,13 @@ class OutputFormat:
         """
         Return the format string, ensuring that the string in "prepend"
         is prepended to each format field
+
+        Args:
+            prepend (str): String to prepend to each field name, e.g. "0."
+            except_fields (list): List of fields to skip  when constructing
+                the format.
+            include_sort_prefix (bool): If format specifies a list of sort
+                keys, include them in a ``sort:`` prefix. Default: True
         """
         if except_fields is None:
             except_fields = []
@@ -820,6 +854,10 @@ class OutputFormat:
     def get_format(self, orig=False, include_sort_prefix=True):
         """
         Return the format string
+        Args:
+            orig (bool): Return the format as originally specified.
+            include_sort_prefix (bool): If the format includes a list of
+                sort keys, include a ``sort:`` prefix in the result.
         """
         fmt = self.fmt_orig if orig else self.fmt
         if include_sort_prefix:
@@ -830,6 +868,9 @@ class OutputFormat:
         """
         Return a copy of the current formatter, optionally with some
         fields removed
+
+        Args:
+            except_fields (list): List of fields to remove from result.
         """
         cls = self.__class__
         return cls(
@@ -839,9 +880,7 @@ class OutputFormat:
         )
 
     def format(self, obj):
-        """
-        format object with internal format
-        """
+        """Format object with internal format"""
         try:
             retval = self.formatter().format(
                 self.get_format(include_sort_prefix=False), obj
@@ -853,10 +892,16 @@ class OutputFormat:
 
     def filter(self, items):
         """
-        Check for format fields that are prefixed with `?:` (e.g. "?:{name}")
+        Check for format fields that are prefixed with `?:` (e.g. "?:{name}"),
         and filter them out of the current format string if they result in an
         empty value (as defined by the `empty` tuple defined below) for every
         entry in `items`.
+
+        Also, check for fields prefixed with `+:` (e.g. "+:{name}") and expand
+        those fields to the maximum observed width.
+
+        (`?+:` requests both actions: filter out field if it is empty for all
+        items, if not expand to maximum width)
         """
 
         #  Build a list of all format strings that have one of the width
