@@ -301,8 +301,15 @@ static void exec_output_cb (flux_subprocess_t *p, const char *stream)
         int rank = flux_subprocess_rank (p);
         if (exec->handlers->on_output)
             (*exec->handlers->on_output) (exec, p, stream, s, len, exec->arg);
-        else
-            flux_log (exec->h, LOG_INFO, "rank %d: %s: %s", rank, stream, s);
+        else {
+            flux_log (exec->h,
+                      LOG_INFO,
+                      "rank %d: %s: %.*s",
+                      rank,
+                      stream,
+                      len,
+                      s);
+        }
     }
 }
 
@@ -741,9 +748,10 @@ static void imp_kill_output (struct bulk_exec *kill,
     int rank = flux_subprocess_rank (p);
     flux_log (kill->h,
               LOG_INFO,
-              "%s (rank %d): imp kill: %s",
+              "%s (rank %d): imp kill: %.*s",
               flux_get_hostbyrank (kill->h, rank),
               rank,
+              len,
               data);
 }
 
