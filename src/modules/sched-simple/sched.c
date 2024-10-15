@@ -127,7 +127,7 @@ jobreq_create (const flux_msg_t *msg)
     else if (job->jj.slot_gpus > 0) {
         snprintf (job->jj.error,
                   sizeof (job->jj.error),
-                  "Unsupported resource type 'gpu'");
+                  "sched-simple does not support resource type 'gpu'");
         errno = EINVAL;
         job->errnum = errno;
     }
