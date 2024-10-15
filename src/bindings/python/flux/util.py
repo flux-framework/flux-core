@@ -687,8 +687,12 @@ class OutputFormat:
         def width(self, val):
             self.width_str = str(val)
 
-            # Also adjust precision if necessary
-            if self.precision and self.precision < self.width:
+            # Also adjust precision if necessary (only for string type)
+            if (
+                self.type in (None, "s")
+                and self.precision
+                and self.precision < self.width
+            ):
                 self.precision = self.width
 
         @property
