@@ -63,7 +63,8 @@ test_expect_success 'sched-simple: unsatisfiable request is canceled' '
 test_expect_success 'sched-simple: gpu request is canceled' '
 	jobid=$(flux run -n1 -g1 --dry-run hostname | flux job submit) &&
 	flux job wait-event --timeout=5.0 $jobid exception &&
-	flux job eventlog $jobid | grep  "Unsupported resource type .gpu."
+	flux job eventlog $jobid \
+		| grep  "sched-simple does not support resource type .gpu."
 '
 Y2J="flux python ${SHARNESS_TEST_SRCDIR}/jobspec/y2j.py"
 SPEC=${SHARNESS_TEST_SRCDIR}/jobspec/valid/basic.yaml
