@@ -85,8 +85,7 @@ int fbuf_write_from_fd (struct fbuf *fb, int fd, int len);
 typedef void (*fbuf_notify_f) (struct fbuf *fb, void *arg);
 
 /* Set notify callback for internal use by fbuf watchers.
- * The callback is invoked when the buffer transitions from empty
- * or from full.
+ * The callback is invoked when the amount of data in the buffer has changed.
  */
 void fbuf_set_notify (struct fbuf *fb, fbuf_notify_f cb, void *arg);
 
