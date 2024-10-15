@@ -81,7 +81,7 @@ currently:
    * - flux-accounting - Bank accounting and fair share priority
      - `Github <https://github.com/flux-framework/flux-accounting>`_
 
-       `Flux Accounting Guide <https://flux-framework.readthedocs.io/en/latest/guides/accounting-guide.html>`_
+       `Flux Accounting Guide <https://flux-framework.readthedocs.io/projects/flux-accounting/en/latest/guide/accounting-guide.html>`_
 
    * - flux-pmix - OpenMPI support
      - `Github <https://github.com/flux-framework/flux-pmix>`_
