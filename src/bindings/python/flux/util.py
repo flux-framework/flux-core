@@ -674,8 +674,10 @@ class OutputFormat:
                 self._spec_dict = spec_re.fullmatch(spec).groupdict()
             except AttributeError:
                 self._spec_dict = {}
+
             for item in self.components:
-                setattr(self, item, self._spec_dict.get(item, ""))
+                value = self._spec_dict.get(item)
+                setattr(self, item, "" if value is None else value)
 
         @property
         def width(self):
