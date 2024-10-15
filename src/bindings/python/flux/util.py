@@ -900,8 +900,9 @@ class OutputFormat:
         #
         format_list = self.format_list.copy()
         for entry in lst:
-            entry["spec"].width = entry["maxwidth"]
-            format_list[entry["index"]][2] = str(entry["spec"])
+            if entry["type"] in ("maxwidth", "both"):
+                entry["spec"].width = entry["maxwidth"]
+                format_list[entry["index"]][2] = str(entry["spec"])
 
         #  Remove any entries that were empty from self.format_list
         #  After this line saved indices in entry["index"] will no longer
