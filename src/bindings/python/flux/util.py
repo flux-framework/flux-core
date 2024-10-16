@@ -687,7 +687,7 @@ class OutputFormat:
 
         @property
         def width(self):
-            return int(self.width_str) if self.width_str else 0
+            return int(self.width_str) if self.width_str else ""
 
         @width.setter
         def width(self, val):
