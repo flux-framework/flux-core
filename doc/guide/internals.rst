@@ -5,5 +5,6 @@ Resources for Flux Developers
    :maxdepth: 1
    :caption: Contents:
 
+   debug
    kvs
    broker
