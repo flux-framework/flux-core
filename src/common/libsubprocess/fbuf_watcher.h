@@ -21,8 +21,8 @@ enum {
 /* read watcher
  *
  * - data from fd copied into buffer
- * - when data is available, triggers callback
- * - on eof, callback will be called with an empty buffer
+ * - when data is available, triggers callback (FLUX_POLLIN)
+ * - on eof, callback will be called with an empty buffer (FLUX_POLLIN)
  * - if line buffered, second to last callback may not contain a full line
  * - users should read from the buffer or stop the watcher, to avoid
  *   excessive event loop iterations without progress
