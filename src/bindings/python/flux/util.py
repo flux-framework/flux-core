@@ -655,6 +655,12 @@ class OutputFormat:
 
         def __init__(self, spec):
 
+            # If spec contains two colons ('::') then this is a special
+            # datetime conversion spec and the format spec is after the
+            # two colons:
+            if "::" in spec:
+                spec = spec[spec.find("::") + 2 :]
+
             # Regex taken from https://stackoverflow.com/a/78351366
             # 'hyphen' and 'truncate' are Flux extensions
             spec_re = re.compile(
