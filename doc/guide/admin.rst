@@ -626,7 +626,7 @@ Example file installed path: ``/etc/flux/system/conf.d/system.toml``
 See also: :man5:`flux-config-exec`, :man5:`flux-config-access`
 :man5:`flux-config-bootstrap`, :man5:`flux-config-tbon`,
 :man5:`flux-config-resource`, :man5:`flux-config-ingest`,
-:man5:`flux-config-archive`, :man5:`flux-config-job-manager`,
+:man5:`flux-config-job-manager`,
 :man5:`flux-config-policy`, :man5:`flux-config-kvs`,
 :sched:man5:`flux-config-sched-fluxion-qmanager`,
 :sched:man5:`flux-config-sched-fluxion-resource`.
@@ -660,8 +660,6 @@ restarts.
 
 The ``statedir`` directory is used for the ``content.sqlite`` file that
 contains content addressable storage backing the Flux key value store (KVS).
-The ``job-archive.sqlite`` file is also located there, if job archival is
-enabled.
 
 Adding Job Prolog/Epilog Scripts
 ================================

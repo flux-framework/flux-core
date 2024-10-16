@@ -30,7 +30,6 @@ done
 modrm 0 heartbeat
 modrm 0 sched-simple
 modrm all resource
-modrm 0 job-archive
 modrm 0 job-exec
 modrm 0 job-list
 modrm all job-info
