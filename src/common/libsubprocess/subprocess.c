@@ -75,11 +75,11 @@ struct subprocess_channel *channel_create (flux_subprocess_t *p,
         return NULL;
     c->p = p;
     c->output_cb = output_cb;
+    c->parent_fd = -1;
+    c->child_fd = -1;
     if (!(c->name = strdup (name)))
         goto error;
     c->flags = flags;
-    c->parent_fd = -1;
-    c->child_fd = -1;
     return c;
 error:
     channel_destroy (c);
