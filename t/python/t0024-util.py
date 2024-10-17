@@ -10,11 +10,14 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import os
+import time
 import unittest
+from collections import namedtuple
 from datetime import datetime
 
 import subflux  # noqa: F401 - To set up PYTHONPATH
-from flux.util import UtilDatetime, parse_datetime
+from flux.util import OutputFormat, UtilDatetime, parse_datetime
 from pycotap import TAPTestRunner
 
 
@@ -97,6 +100,108 @@ class TestUtilDatetime(unittest.TestCase):
         self.assertEqual(f"{self.ts:%b%d %R::h}", "Jun10 08:00")
         self.assertEqual(f"{self.ts:%b%d %R::>12}", " Jun10 08:00")
         self.assertEqual(f"{self.ts:%b%d %R::>12h}", " Jun10 08:00")
+
+
+class Item:
+    def __init__(self, s="foo", i=42, f=1234.567, d=978336000.0):
+        self.s = s
+        self.i = i
+        self.f = f
+        self.d = d
+
+
+TestData = namedtuple(
+    "TestData",
+    (
+        "input",
+        "fmt",
+        "hdrfmt",
+        "fields",
+        "header",
+        "result",
+    ),
+)
+
+
+class TestOutputFormat(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+
+        # Set timezone to UTC so rendered datetimes match expected value
+        os.environ["TZ"] = "UTC"
+        time.tzset()
+
+        self.headings = {
+            "s": "STRING",
+            "i": "INTEGER",
+            "f": "FLOAT",
+            "d": "DATETIME",
+        }
+        self.item = Item()
+        self.cases = [
+            TestData("", "", "", [], "", ""),
+            TestData("{s}", "{0.s}", "{s}", ["s"], "STRING", "foo"),
+            TestData("{i}", "{0.i}", "{i}", ["i"], "INTEGER", "42"),
+            TestData("{f}", "{0.f}", "{f}", ["f"], "FLOAT", "1234.567"),
+            TestData("{d}", "{0.d}", "{d}", ["d"], "DATETIME", "978336000.0"),
+            TestData(
+                "{s:<6} {i:>7d}",
+                "{0.s:<6} {0.i:>7d}",
+                "{s:<6} {i:>7}",
+                ["s", "i"],
+                "STRING INTEGER",
+                "foo         42",
+            ),
+            TestData(
+                "{s:<6} {f:>8.2f}",
+                "{0.s:<6} {0.f:>8.2f}",
+                "{s:<6} {f:>8}",
+                ["s", "f"],
+                "STRING    FLOAT",
+                "foo     1234.57",
+            ),
+            TestData(
+                "a {s:<6} b{f:>8.2f} ",
+                "a {0.s:<6} b{0.f:>8.2f} ",
+                "a {s:<6} b{f:>8} ",
+                ["s", "f"],
+                "a STRING b   FLOAT ",
+                "a foo    b 1234.57 ",
+            ),
+            TestData(
+                "{i:>7d} {d!d:%b%d %R::^20}",
+                "{0.i:>7d} {0.d!d:%b%d %R::^20}",
+                "{i:>7} {d:^20}",
+                ["i", "d"],
+                "INTEGER       DATETIME      ",
+                "     42     Jan01 08:00     ",
+            ),
+        ]
+
+    def test_basic(self):
+        for t in self.cases:
+            fmt = OutputFormat(t.input, headings=self.headings)
+            self.assertEqual(fmt.get_format(), t.fmt)
+            self.assertEqual(fmt.header_format(), t.hdrfmt)
+            self.assertEqual(fmt.fields, t.fields)
+            self.assertEqual(fmt.header(), t.header)
+            self.assertEqual(fmt.format(self.item), t.result)
+
+    def test_filter(self):
+        a = Item("", 0, 2.2)
+        d = Item("", 1, 1.1)
+        z = Item("", 23456789, 1.0)
+
+        items = [a, d, z]
+        fmt = OutputFormat(
+            "?+:{i:>7} ?:{s:>6} ?:{f:8.2}", headings=self.headings
+        ).filter(items)
+        self.assertEqual(fmt, "{i:>8} {f:8.2}")
+
+        fmt = OutputFormat(
+            "?+:{i:>7} ?:{s:>6} ?+:{f:.2}", headings=self.headings
+        ).filter(items)
+        self.assertEqual(fmt, "{i:>8} {f:3.2}")
 
 
 if __name__ == "__main__":
