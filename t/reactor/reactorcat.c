@@ -42,6 +42,7 @@ static void write_cb (flux_reactor_t *r, flux_watcher_t *w,
             fprintf (stderr, "error: close: %s\n", strerror (errnum));
         flux_watcher_stop (w);
     }
+    /* else ignore reports of buffer space changes */
 }
 
 static void read_cb (flux_reactor_t *r, flux_watcher_t *w,

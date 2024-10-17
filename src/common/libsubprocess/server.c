@@ -16,6 +16,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <flux/core.h>
+#include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
@@ -29,6 +30,7 @@
 #include "command_private.h"
 #include "server.h"
 #include "client.h"
+#include "util.h"
 
 /* Keys used to store subprocess server, exec request
  * (i.e. rexec.exec), and 'subprocesses' zlistx handle in the
@@ -301,6 +303,85 @@ error:
     proc_internal_fatal (p);
 }
 
+static void proc_credit_cb (flux_subprocess_t *p, const char *stream, int bytes)
+{
+    subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
+    const flux_msg_t *request = flux_subprocess_aux_get (p, msgkey);
+
+    if (flux_respond_pack (s->h,
+                           request,
+                           "{s:s s:{s:i}}",
+                           "type", "add-credit",
+                           "channels",
+                             stream, bytes) < 0) {
+        llog_error (s,
+                    "error responding to %s.exec request: %s",
+                    s->service_name,
+                    strerror (errno));
+        goto error;
+    }
+
+    return;
+
+error:
+    proc_internal_fatal (p);
+}
+
+static void initial_credits_cb (flux_reactor_t *r,
+                                flux_watcher_t *w,
+                                int revents,
+                                void *arg)
+{
+    flux_subprocess_t *p = arg;
+    subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
+    const flux_msg_t *request = flux_subprocess_aux_get (p, msgkey);
+    struct subprocess_channel *c;
+    json_t *o = NULL;
+
+    if (!p->ops.on_credit)
+        return;
+
+    if (!(o = json_object ())) {
+        llog_error (s, "json_object create failure");
+        return;
+    }
+
+    c = zhash_first (p->channels);
+    while (c) {
+        if (c->flags & CHANNEL_WRITE) {
+            int bufsize = cmd_option_bufsize (p, c->name);
+            /* should have been checked at setup */
+            assert (bufsize > 0);
+            if (json_object_set (o, c->name, json_integer (bufsize)) < 0) {
+                llog_error (s, "json_object_set failure");
+                goto error;
+            }
+        }
+        c = zhash_next (p->channels);
+    }
+
+    if (flux_respond_pack (s->h,
+                           request,
+                           "{s:s s:O}",
+                           "type", "add-credit",
+                           "channels", o) < 0) {
+        llog_error (s,
+                    "error responding to %s.exec request: %s",
+                    s->service_name,
+                    strerror (errno));
+        goto error;
+    }
+
+    /* initial credits sent, we don't know need this watcher anymore */
+    flux_watcher_stop (p->initial_credits_w);
+    json_decref (o);
+    return;
+
+error:
+    proc_internal_fatal (p);
+    json_decref (o);
+}
+
 static void server_exec_cb (flux_t *h,
                             flux_msg_handler_t *mh,
                             const flux_msg_t *msg,
@@ -316,6 +397,7 @@ static void server_exec_cb (flux_t *h,
         .on_channel_out = proc_output_cb,
         .on_stdout = proc_output_cb,
         .on_stderr = proc_output_cb,
+        .on_credit = proc_credit_cb,
     };
     char **env = NULL;
     const char *errmsg = NULL;
@@ -344,6 +426,8 @@ static void server_exec_cb (flux_t *h,
         ops.on_stdout = NULL;
     if (!(flags & SUBPROCESS_REXEC_STDERR))
         ops.on_stderr = NULL;
+    if (!(flags & SUBPROCESS_REXEC_WRITE_CREDIT))
+        ops.on_credit = NULL;
 
     if (!(cmd = cmd_fromjson (cmd_obj, NULL))) {
         errmsg = "error parsing command string";
@@ -369,8 +453,11 @@ static void server_exec_cb (flux_t *h,
      */
     flux_cmd_unsetenv (cmd, "FLUX_PROXY_REMOTE");
 
+    /* Set NO_INITIAL_CREDITS, we will send initial credits via our own
+     * prep watcher
+     */
     if (!(p = flux_local_exec_ex (flux_get_reactor (s->h),
-                                  0,
+                                  FLUX_SUBPROCESS_FLAGS_NO_INITIAL_CREDITS,
                                   cmd,
                                   &ops,
                                   NULL,
@@ -390,6 +477,15 @@ static void server_exec_cb (flux_t *h,
     }
     if (flux_subprocess_aux_set (p, srvkey, s, NULL) < 0)
         goto error;
+    if (flags & SUBPROCESS_REXEC_WRITE_CREDIT) {
+        /* to send initial credits the size of each channel buffer */
+        p->initial_credits_w = flux_prepare_watcher_create (p->reactor,
+                                                            initial_credits_cb,
+                                                            p);
+        if (!p->initial_credits_w)
+            goto error;
+        flux_watcher_start (p->initial_credits_w);
+    }
     if (proc_save (s, p) < 0)
         goto error;
 

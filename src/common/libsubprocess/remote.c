@@ -155,6 +155,24 @@ static void process_new_state (flux_subprocess_t *p,
         state_change_start (p);
 }
 
+static void process_add_credit (flux_subprocess_t *p, json_t *credits)
+{
+    if (p->ops.on_credit && credits) {
+        const char *key;
+        json_t *value;
+
+        json_object_foreach (credits, key, value) {
+            int bytes;
+            if (!json_is_integer (value)) {
+                llog_debug (p, "credits are not in integer bytes");
+                continue;
+            }
+            bytes = json_integer_value (value);
+            p->ops.on_credit (p, key, bytes);
+        }
+    }
+}
+
 static bool remote_out_data_available (struct subprocess_channel *c)
 {
     /* no need to handle failure states, on fatal error, the
@@ -483,6 +501,7 @@ static void rexec_continuation (flux_future_t *f, void *arg)
     flux_subprocess_t *p = arg;
     const char *stream;
     const char *data;
+    json_t *credits = NULL;
     int len;
     bool eof;
 
@@ -518,6 +537,9 @@ static void rexec_continuation (flux_future_t *f, void *arg)
     else if (subprocess_rexec_is_finished (f, &p->status)) {
         process_new_state (p, FLUX_SUBPROCESS_EXITED);
     }
+    else if (subprocess_rexec_is_add_credit (f, &credits)) {
+        process_add_credit (p, credits);
+    }
     else if (subprocess_rexec_is_output (f, &stream, &data, &len, &eof)) {
         if (p->flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF) {
             if (remote_output_local_unbuf (p, stream, data, len, eof) < 0)
@@ -550,6 +572,8 @@ int remote_exec (flux_subprocess_t *p)
         flags |= SUBPROCESS_REXEC_STDOUT;
     if (p->ops.on_stderr)
         flags |= SUBPROCESS_REXEC_STDERR;
+    if (p->ops.on_credit)
+        flags |= SUBPROCESS_REXEC_WRITE_CREDIT;
 
     if (!(f = subprocess_rexec (p->h, p->service_name, p->rank, p->cmd, flags))
         || flux_future_then (f, -1., rexec_continuation, p) < 0) {
