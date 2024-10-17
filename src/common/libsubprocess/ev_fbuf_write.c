@@ -26,8 +26,11 @@ static void buffer_write_cb (struct ev_loop *loop, ev_io *iow, int revents)
 
     if (revents & EV_WRITE) {
 
-        if (fbuf_read_to_fd (ebw->fb, ebw->fd, -1) < 0)
+        if (fbuf_read_to_fd (ebw->fb, ebw->fd, -1) < 0) {
+            if (ebw->cb)
+                ebw->cb (loop, ebw, EV_ERROR);
             return;
+        }
 
         if (!fbuf_bytes (ebw->fb) && ebw->eof) {
             if (close (ebw->fd) < 0)
