@@ -618,7 +618,9 @@ class OutputFormat:
         self.format_list = [[s or "" for s in t] for t in format_list]
 
         #  Store list of requested fields in self.fields
-        self._fields = [field for (_, field, _, _) in self.format_list]
+        #  (ignore any empty fields, which may be present due to text
+        #   at the end of a format string):
+        self._fields = [field for (_, field, _, _) in self.format_list if field]
 
         #  Throw an exception if any requested fields are invalid:
         for field in self._fields:
@@ -653,6 +655,12 @@ class OutputFormat:
 
         def __init__(self, spec):
 
+            # If spec contains two colons ('::') then this is a special
+            # datetime conversion spec and the format spec is after the
+            # two colons:
+            if "::" in spec:
+                spec = spec[spec.find("::") + 2 :]
+
             # Regex taken from https://stackoverflow.com/a/78351366
             # 'hyphen' and 'truncate' are Flux extensions
             spec_re = re.compile(
@@ -672,19 +680,25 @@ class OutputFormat:
                 self._spec_dict = spec_re.fullmatch(spec).groupdict()
             except AttributeError:
                 self._spec_dict = {}
+
             for item in self.components:
-                setattr(self, item, self._spec_dict.get(item, ""))
+                value = self._spec_dict.get(item)
+                setattr(self, item, "" if value is None else value)
 
         @property
         def width(self):
-            return int(self.width_str) if self.width_str else 0
+            return int(self.width_str) if self.width_str else ""
 
         @width.setter
         def width(self, val):
             self.width_str = str(val)
 
-            # Also adjust precision if necessary
-            if self.precision and self.precision < self.width:
+            # Also adjust precision if necessary (only for string type)
+            if (
+                self.type in (None, "s")
+                and self.precision
+                and self.precision < self.width
+            ):
                 self.precision = self.width
 
         @property
@@ -728,17 +742,13 @@ class OutputFormat:
         """
         format_list = []
         for text, field, spec, _ in self.format_list:
-            #  Remove number formatting on any spec:
-            spec = re.sub(r"(0?\.)?(\d+)?[bcdoxXeEfFgGn%]$", r"\2", spec)
+            spec = self.FormatSpec(spec)
 
-            #  Only keep fill, align, and min width of the result.
+            #  Only keep align and min width of the result.
             #  This strips possible type-specific formatting spec that
             #   will not apply to a heading, but keeps width and alignment.
-            match = re.search(r"([<>=^])?(\d+)", spec)
-            if match is None:
-                spec = ""
-            else:
-                spec = match[0]
+            spec = f"{spec.align}{spec.width}"
+
             #  Remove any conversion, these do not make sense for headings
             format_list.append(self._fmt_tuple(text, field, spec, None))
         fmt = "".join(format_list)
@@ -900,8 +910,9 @@ class OutputFormat:
         #
         format_list = self.format_list.copy()
         for entry in lst:
-            entry["spec"].width = entry["maxwidth"]
-            format_list[entry["index"]][2] = str(entry["spec"])
+            if entry["type"] in ("maxwidth", "both"):
+                entry["spec"].width = entry["maxwidth"]
+                format_list[entry["index"]][2] = str(entry["spec"])
 
         #  Remove any entries that were empty from self.format_list
         #  After this line saved indices in entry["index"] will no longer
