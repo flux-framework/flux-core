@@ -25,11 +25,17 @@ static void buffer_write_cb (struct ev_loop *loop, ev_io *iow, int revents)
     struct ev_fbuf_write *ebw = iow->data;
 
     if (revents & EV_WRITE) {
+        int ret;
 
-        if (fbuf_read_to_fd (ebw->fb, ebw->fd, -1) < 0) {
+        if ((ret = fbuf_read_to_fd (ebw->fb, ebw->fd, -1)) < 0) {
             if (ebw->cb)
                 ebw->cb (loop, ebw, EV_ERROR);
             return;
+        }
+
+        if (ret) {
+            if (ebw->cb)
+                ebw->cb (loop, ebw, revents);
         }
 
         if (!fbuf_bytes (ebw->fb) && ebw->eof) {
