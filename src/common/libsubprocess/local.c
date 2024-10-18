@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <flux/core.h>
 
@@ -28,6 +29,7 @@
 #include "subprocess.h"
 #include "subprocess_private.h"
 #include "command_private.h"
+#include "fbuf.h"
 #include "local.h"
 #include "fork.h"
 #include "posix_spawn.h"
@@ -76,16 +78,47 @@ static void local_in_cb (flux_reactor_t *r,
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     int err = 0;
 
-    if (fbuf_write_watcher_is_closed (w, &err) == 1) {
-        if (err) {
-            llog_error (c->p,
-                        "fbuf_write_watcher close error: %s",
-                        strerror (err));
+    if (revents & FLUX_POLLOUT) {
+        if (fbuf_write_watcher_is_closed (w, &err) == 1) {
+            if (err) {
+                llog_error (c->p,
+                            "fbuf_write_watcher close error: %s",
+                            strerror (err));
+            }
+            else
+                c->parent_fd = -1;  /* closed by reactor */
+            flux_watcher_stop (w);  /* c->buffer_write_w */
+            local_channel_flush (c);
         }
-        else
-            c->parent_fd = -1;  /* closed by reactor */
-        flux_watcher_stop (w);  /* c->buffer_write_w */
-        local_channel_flush (c);
+        else {
+            /* If watcher is not closed, we were alerted to a change
+             * in buffer space
+             */
+            struct fbuf *fb;
+            int space;
+
+            if (!(fb = fbuf_write_watcher_get_buffer (c->buffer_write_w))) {
+                llog_error (c->p,
+                            "fbuf_write_watcher_get_buffer: %s",
+                            strerror (errno));
+                return;
+            }
+
+            space = fbuf_space (fb);
+
+            /* Only report credits when space is reclaimed, not when
+             * space is used up */
+            if (space > c->buffer_write_credits) {
+                int credits = space - c->buffer_write_credits;
+                /* N.B. Update buffer_write_credits BEFORE the
+                 * on_credit callback, as there is a good chance
+                 * on_credit callback may call
+                 * flux_subprocess_write() */
+                c->buffer_write_credits = space;
+                if (c->p->ops.on_credit)
+                    c->p->ops.on_credit (c->p, c->name, credits);
+            }
+        }
     }
     else {
         llog_error (c->p,
@@ -165,6 +198,36 @@ static void local_stderr_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     local_output (c, w, revents, c->p->ops.on_stderr);
+}
+
+static void initial_credits_cb (flux_reactor_t *r,
+                                flux_watcher_t *w,
+                                int revents,
+                                void *arg)
+{
+    flux_subprocess_t *p = arg;
+    struct subprocess_channel *c;
+
+    if (!p->ops.on_credit)
+        return;
+
+    c = zhash_first (p->channels);
+    while (c) {
+        if (c->flags & CHANNEL_WRITE) {
+            /* N.B. send cmd_option_bufsize() result not
+             * c->buffer_write_credits, to avoid chance
+             * c->buffer_write_credits already altered.
+             */
+            int bufsize = cmd_option_bufsize (p, c->name);
+            /* should have been checked at setup */
+            assert (bufsize > 0);
+            p->ops.on_credit (p, c->name, bufsize);
+        }
+        c = zhash_next (p->channels);
+    }
+
+    /* initial credits sent, we don't know need this watcher anymore */
+    flux_watcher_stop (p->initial_credits_w);
 }
 
 static int channel_local_setup (flux_subprocess_t *p,
@@ -424,6 +487,7 @@ static int create_process (flux_subprocess_t *p)
 static int start_local_watchers (flux_subprocess_t *p)
 {
     struct subprocess_channel *c;
+    bool write_credits = false;
 
     /* no-op if reactor is !FLUX_REACTOR_SIGCHLD */
     if (!(p->child_w = flux_child_watcher_create (p->reactor,
@@ -438,11 +502,30 @@ static int start_local_watchers (flux_subprocess_t *p)
 
     c = zhash_first (p->channels);
     while (c) {
+        if (c->flags & CHANNEL_WRITE)
+            write_credits = true;
         flux_watcher_start (c->buffer_write_w);
         flux_watcher_start (c->buffer_read_w);
         c->buffer_read_w_started = true;
         c = zhash_next (p->channels);
     }
+
+    if (p->ops.on_credit && write_credits) {
+        if (!(p->flags & FLUX_SUBPROCESS_FLAGS_NO_INITIAL_CREDITS)) {
+            /* to send initial credits the size of each channel buffer */
+            p->initial_credits_w = flux_prepare_watcher_create (p->reactor,
+                                                                initial_credits_cb,
+                                                                p);
+            if (!p->initial_credits_w) {
+                llog_debug (p,
+                            "flux_prepare_watcher_create: %s",
+                            strerror (errno));
+                return -1;
+            }
+            flux_watcher_start (p->initial_credits_w);
+        }
+    }
+
     return 0;
 }
 

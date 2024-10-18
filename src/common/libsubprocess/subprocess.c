@@ -79,6 +79,8 @@ struct subprocess_channel *channel_create (flux_subprocess_t *p,
     c->child_fd = -1;
     if (!(c->name = strdup (name)))
         goto error;
+    if ((c->buffer_write_credits = cmd_option_bufsize (p, name)) < 0)
+        goto error;
     c->flags = flags;
     return c;
 error:
@@ -130,6 +132,8 @@ static void subprocess_free (flux_subprocess_t *p)
         flux_watcher_destroy (p->completed_prep_w);
         flux_watcher_destroy (p->completed_idle_w);
         flux_watcher_destroy (p->completed_check_w);
+
+        flux_watcher_destroy (p->initial_credits_w);
 
         if (p->f)
             flux_future_destroy (p->f);
@@ -464,7 +468,8 @@ flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
     flux_subprocess_t *p = NULL;
     int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
                        | FLUX_SUBPROCESS_FLAGS_NO_SETPGRP
-                       | FLUX_SUBPROCESS_FLAGS_FORK_EXEC);
+                       | FLUX_SUBPROCESS_FLAGS_FORK_EXEC
+                       | FLUX_SUBPROCESS_FLAGS_NO_INITIAL_CREDITS);
 
     if (!r || !cmd) {
         errno = EINVAL;
@@ -531,7 +536,8 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
 {
     flux_subprocess_t *p = NULL;
     flux_reactor_t *r;
-    int valid_flags = FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF;
+    int valid_flags = (FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF
+                       | FLUX_SUBPROCESS_FLAGS_NO_INITIAL_CREDITS);
 
     if (!h
         || (rank < 0
@@ -699,6 +705,7 @@ int flux_subprocess_write (flux_subprocess_t *p,
             log_err ("fbuf_write");
             return -1;
         }
+        c->buffer_write_credits -= ret;
     }
     else {
         if (p->state != FLUX_SUBPROCESS_INIT

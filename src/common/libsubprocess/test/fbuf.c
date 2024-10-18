@@ -195,26 +195,26 @@ void notify_callback (void)
     ok (fbuf_write (fb, "foo", 3) == 3,
         "fbuf_write 3 bytes");
 
-    ok (count == 1,
-        "notify was not called again");
+    ok (count == 2,
+        "notify was called again");
 
     ok (fbuf_write (fb, "1234567", 7) == 7,
         "fbuf_write 7 bytes success");
 
-    ok (count == 1,
-        "notify was not called again on transition to full");
+    ok (count == 3,
+        "notify was called again on transition to full");
 
     ok (fbuf_read (fb, 1, &len) != NULL && len == 1,
         "fbuf_read cleared one byte");
 
-    ok (count == 2,
+    ok (count == 4,
         "notify was called again on transition from full");
 
     ok (fbuf_read (fb, -1, &len) != NULL && len == 15,
         "fbuf_read cleared all data");
 
-    ok (count == 2,
-        "notify was not called on transition to empty");
+    ok (count == 5,
+        "notify was called on transition to empty");
 
     fbuf_destroy (fb);
 }
