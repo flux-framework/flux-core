@@ -176,14 +176,22 @@ class TestOutputFormat(unittest.TestCase):
                 "INTEGER       DATETIME      ",
                 "     42     Jan01 08:00     ",
             ),
+            TestData(
+                "sort:i,-d {i:>7d} {d!d:%b%d %R::^20}",
+                "{0.i:>7d} {0.d!d:%b%d %R::^20}",
+                "{i:>7} {d:^20}",
+                ["i", "d"],
+                "INTEGER       DATETIME      ",
+                "     42     Jan01 08:00     ",
+            ),
         ]
 
     def test_basic(self):
         for t in self.cases:
             fmt = OutputFormat(t.input, headings=self.headings)
-            self.assertEqual(fmt.get_format(), t.fmt)
+            self.assertEqual(fmt.get_format(include_sort_prefix=False), t.fmt)
             self.assertEqual(fmt.header_format(), t.hdrfmt)
-            self.assertEqual(fmt.fields, t.fields)
+            self.assertCountEqual(fmt.fields, t.fields)
             self.assertEqual(fmt.header(), t.header)
             self.assertEqual(fmt.format(self.item), t.result)
 
@@ -202,6 +210,45 @@ class TestOutputFormat(unittest.TestCase):
             "?+:{i:>7} ?:{s:>6} ?+:{f:.2}", headings=self.headings
         ).filter(items)
         self.assertEqual(fmt, "{i:>8} {f:3.2}")
+
+    def test_sort(self):
+        a = Item("a", 0, 2.2)
+        d = Item("d", 33, 1.1)
+        z = Item("z", 11, 1.0)
+
+        items = [z, a, d]
+        formatter = OutputFormat("{s}:{i}:{f}", headings=self.headings)
+        formatter.set_sort_keys("s")
+        formatter.sort_items(items)
+        self.assertListEqual(items, [a, d, z])
+
+        items = [z, a, d]
+        formatter.set_sort_keys("-s")
+        formatter.sort_items(items)
+        self.assertListEqual(items, [z, d, a])
+
+        items = [z, a, d]
+        formatter.set_sort_keys("i")
+        formatter.sort_items(items)
+        self.assertListEqual(items, [a, z, d])
+
+        items = [z, a, d]
+        formatter.set_sort_keys("f")
+        formatter.sort_items(items)
+        self.assertListEqual(items, [z, d, a])
+
+        # Embedded sort prefix works
+        items = [z, a, d]
+        formatter = OutputFormat("sort:i {s}:{i}:{f}", headings=self.headings)
+        formatter.sort_items(items)
+        self.assertListEqual(items, [a, z, d])
+
+        # Embedded sort prefix can be overridden
+        items = [z, a, d]
+        formatter = OutputFormat("sort:i {s}:{i}:{f}", headings=self.headings)
+        formatter.set_sort_keys("f")
+        formatter.sort_items(items)
+        self.assertListEqual(items, [z, d, a])
 
 
 if __name__ == "__main__":

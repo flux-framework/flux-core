@@ -1575,5 +1575,30 @@ test_expect_success 'flux-jobs --stats works after jobs purged (defaultqueue)' '
 	head -1 statspurgeqdefault.output > statspurgeqdefault.actual &&
 	test_cmp statspurgeqdefault.expected statspurgeqdefault.actual
 '
-
+test_expect_success 'flux-jobs allows sorting order in format' '
+	flux jobs -ano "{ncores}	{t_submit}	{id.f58}" \
+		| sort -k1,2n \
+		| cut -f 3 >sort1.expected &&
+	flux jobs -ano "sort:ncores,t_submit {id.f58}" >sort1.out &&
+	test_cmp sort1.expected sort1.out
+'
+test_expect_success 'flux-jobs allows sorting order via --sort' '
+	flux jobs -ano "{ntasks}	{t_submit}	{id.f58}" \
+		| sort -k1n,2rn \
+		| cut -f 3 >sort2.expected &&
+	flux jobs -an --sort=ntasks,-t_submit -o "{id.f58}" >sort2.out &&
+	test_cmp sort2.expected sort2.out
+'
+test_expect_success 'flux-jobs --sort overrides sort: in format' '
+	flux jobs -ano "{ntasks}	{t_submit}	{id.f58}" \
+		| sort -k1n,2rn \
+		| cut -f 3 >sort3.expected &&
+	flux jobs -an --sort=ntasks,-t_submit -o "sort:t_submit {id.f58}" \
+		>sort3.out &&
+	test_cmp sort3.expected sort3.out
+'
+test_expect_success 'flux-jobs invalid sort key throws exception' '
+	test_must_fail flux jobs -a --sort=foo 2>sort.error &&
+	grep "Invalid sort key: foo" sort.error
+'
 test_done
