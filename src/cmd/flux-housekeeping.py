@@ -18,7 +18,7 @@ import flux.util
 from flux.hostlist import Hostlist
 from flux.idset import IDset
 from flux.job import JobID
-from flux.util import UtilConfig
+from flux.util import Deduplicator, UtilConfig
 
 LOGGER = logging.getLogger("flux-housekeeping")
 
@@ -78,8 +78,18 @@ class HousekeepingSet:
 
     def __init__(self, ranks, hostlist):
         self.ranks = IDset(ranks)
-        self.nnodes = len(self.ranks)
-        self.nodelist = hostlist[self.ranks]
+        self.hostlist = hostlist
+
+    @property
+    def nnodes(self):
+        return self.ranks.count()
+
+    @property
+    def nodelist(self):
+        return self.hostlist[self.ranks]
+
+    def update(self, other):
+        self.ranks += other.ranks
 
 
 class HousekeepingJob:
@@ -102,6 +112,15 @@ class HousekeepingJob:
     def nodelist(self):
         return self.allocated.nodelist
 
+    def filter(self, include_ranks):
+        """Filter this HousekeepingJob's ranks to only include include_ranks"""
+        self.pending.ranks = self.pending.ranks.intersect(include_ranks)
+        self.allocated.ranks = self.allocated.ranks.intersect(include_ranks)
+
+    def combine(self, other):
+        self.pending.update(other.pending)
+        self.allocated.update(other.allocated)
+
 
 def housekeeping_list(args):
     handle = flux.Flux()
@@ -109,15 +128,37 @@ def housekeeping_list(args):
     hostlist = Hostlist(handle.attr_get("hostlist"))
     stats = handle.rpc("job-manager.stats-get", {}).get()
 
-    jobs = []
-    for jobid, info in stats["housekeeping"]["running"].items():
-        jobs.append(HousekeepingJob(jobid, info, hostlist))
+    include_ranks = None
+    if args.include:
+        try:
+            include_ranks = IDset(args.include)
+        except ValueError:
+            include_ranks = IDset(hostlist.index(args.include))
 
     fmt = FluxHousekeepingConfig().load().get_format_string(args.format)
     try:
         formatter = HKFormat(fmt)
     except ValueError as err:
         raise ValueError(f"Error in user format: {err}")
+
+    jobs = Deduplicator(
+        formatter=formatter,
+        except_fields=[
+            "nodelist",
+            "ranks",
+            "nnodes",
+            "pending.nodelist",
+            "pending.ranks",
+            "pending.nnodes",
+        ],
+        combine=lambda job, other: job.combine(other),
+    )
+    for jobid, info in stats["housekeeping"]["running"].items():
+        job = HousekeepingJob(jobid, info, hostlist)
+        if include_ranks:
+            job.filter(include_ranks)
+        if job.nnodes > 0:
+            jobs.append(job)
 
     formatter.print_items(jobs, no_header=args.no_header)
 
@@ -161,6 +202,13 @@ def parse_args():
 
     list_parser = subparsers.add_parser(
         "list", formatter_class=flux.util.help_formatter()
+    )
+    list_parser.add_argument(
+        "-i",
+        "--include",
+        metavar="HOSTS|RANKS",
+        type=str,
+        help="Limit output to housekeeping jobs on HOSTS|RANKS",
     )
     list_parser.add_argument(
         "-n",

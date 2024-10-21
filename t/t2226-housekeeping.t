@@ -310,6 +310,18 @@ test_expect_success 'flux housekeeping list shows 4 jobs' '
 	test_debug "flux housekeeping list" &&
 	test $(flux housekeeping list -n | wc -l) -eq 4
 '
+test_expect_success 'flux housekeeping list -i, --include works' '
+	flux housekeeping list -i 0  &&
+	test "$(flux housekeeping list -i 0 -no {ranks})" = 0 &&
+	flux housekeeping list -i 0,3 &&
+	test "$(flux housekeeping list -i 0,3 -no {ranks})" = "0,3"
+'
+test_expect_success 'flux housekeeping list -i, --include works with hostname'  '
+	flux housekeeping list -i $(hostname)
+'
+test_expect_success 'flux housekeeping list -i, --include fails with bad hostlist' '
+	test_must_fail flux housekeeping list -i "foo["
+'
 test_expect_success 'send SIGTERM to the nodes by rank' '
 	kill_ranks 0-3 15
 '
