@@ -78,8 +78,18 @@ class HousekeepingSet:
 
     def __init__(self, ranks, hostlist):
         self.ranks = IDset(ranks)
-        self.nnodes = len(self.ranks)
-        self.nodelist = hostlist[self.ranks]
+        self.hostlist = hostlist
+
+    @property
+    def nnodes(self):
+        return self.ranks.count()
+
+    @property
+    def nodelist(self):
+        return self.hostlist[self.ranks]
+
+    def update(self, other):
+        self.ranks += other.ranks
 
 
 class HousekeepingJob:
