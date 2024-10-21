@@ -128,6 +128,13 @@ def housekeeping_list(args):
     hostlist = Hostlist(handle.attr_get("hostlist"))
     stats = handle.rpc("job-manager.stats-get", {}).get()
 
+    include_ranks = None
+    if args.include:
+        try:
+            include_ranks = IDset(args.include)
+        except ValueError:
+            include_ranks = IDset(hostlist.index(args.include))
+
     fmt = FluxHousekeepingConfig().load().get_format_string(args.format)
     try:
         formatter = HKFormat(fmt)
@@ -147,7 +154,11 @@ def housekeeping_list(args):
         combine=lambda job, other: job.combine(other),
     )
     for jobid, info in stats["housekeeping"]["running"].items():
-        jobs.append(HousekeepingJob(jobid, info, hostlist))
+        job = HousekeepingJob(jobid, info, hostlist)
+        if include_ranks:
+            job.filter(include_ranks)
+        if job.nnodes > 0:
+            jobs.append(job)
 
     formatter.print_items(jobs, no_header=args.no_header)
 
@@ -191,6 +202,13 @@ def parse_args():
 
     list_parser = subparsers.add_parser(
         "list", formatter_class=flux.util.help_formatter()
+    )
+    list_parser.add_argument(
+        "-i",
+        "--include",
+        metavar="HOSTS|RANKS",
+        type=str,
+        help="Limit output to housekeeping jobs on HOSTS|RANKS",
     )
     list_parser.add_argument(
         "-n",
