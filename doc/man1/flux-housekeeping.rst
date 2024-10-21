@@ -42,6 +42,12 @@ list
 
 :program:`flux housekeeping list` lists active housekeeping tasks by jobid.
 
+.. option:: -i, --include=TARGETS
+
+  Filter results to only include resources matching *TARGETS*, which may
+  be specified either as an idset of broker ranks or a list of hosts in
+  hostlist form. It is not an error to specify ranks or hosts that do not
+  exist.
 
 .. option:: -o, --format=FORMAT
 
