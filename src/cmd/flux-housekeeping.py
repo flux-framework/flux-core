@@ -18,7 +18,7 @@ import flux.util
 from flux.hostlist import Hostlist
 from flux.idset import IDset
 from flux.job import JobID
-from flux.util import UtilConfig
+from flux.util import Deduplicator, UtilConfig
 
 LOGGER = logging.getLogger("flux-housekeeping")
 
@@ -112,6 +112,15 @@ class HousekeepingJob:
     def nodelist(self):
         return self.allocated.nodelist
 
+    def filter(self, include_ranks):
+        """Filter this HousekeepingJob's ranks to only include include_ranks"""
+        self.pending.ranks = self.pending.ranks.intersect(include_ranks)
+        self.allocated.ranks = self.allocated.ranks.intersect(include_ranks)
+
+    def combine(self, other):
+        self.pending.update(other.pending)
+        self.allocated.update(other.allocated)
+
 
 def housekeeping_list(args):
     handle = flux.Flux()
@@ -119,15 +128,26 @@ def housekeeping_list(args):
     hostlist = Hostlist(handle.attr_get("hostlist"))
     stats = handle.rpc("job-manager.stats-get", {}).get()
 
-    jobs = []
-    for jobid, info in stats["housekeeping"]["running"].items():
-        jobs.append(HousekeepingJob(jobid, info, hostlist))
-
     fmt = FluxHousekeepingConfig().load().get_format_string(args.format)
     try:
         formatter = HKFormat(fmt)
     except ValueError as err:
         raise ValueError(f"Error in user format: {err}")
+
+    jobs = Deduplicator(
+        formatter=formatter,
+        except_fields=[
+            "nodelist",
+            "ranks",
+            "nnodes",
+            "pending.nodelist",
+            "pending.ranks",
+            "pending.nnodes",
+        ],
+        combine=lambda job, other: job.combine(other),
+    )
+    for jobid, info in stats["housekeeping"]["running"].items():
+        jobs.append(HousekeepingJob(jobid, info, hostlist))
 
     formatter.print_items(jobs, no_header=args.no_header)
 
