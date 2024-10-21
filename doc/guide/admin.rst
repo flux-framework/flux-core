@@ -660,8 +660,6 @@ restarts.
 
 The ``statedir`` directory is used for the ``content.sqlite`` file that
 contains content addressable storage backing the Flux key value store (KVS).
-The ``job-archive.sqlite`` file is also located there, if job archival is
-enabled.
 
 Adding Job Prolog/Epilog Scripts
 ================================

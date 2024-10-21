@@ -35,7 +35,6 @@ fluxmod_LTLIBRARIES = \
 	content-sqlite.la \
 	cron.la \
 	heartbeat.la \
-	job-archive.la \
 	job-exec.la \
 	job-info.la \
 	job-list.la \
@@ -136,19 +135,6 @@ heartbeat_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
 heartbeat_la_LDFLAGS = $(fluxmod_ldflags) -module
-
-job_archive_la_SOURCES = \
-	job-archive/job-archive.c
-job_archive_la_CPPFLAGS = \
-	$(AM_CPPFLAGS) \
-	$(SQLITE_CFLAGS) \
-	$(FLUX_SECURITY_CFLAGS)
-job_archive_la_LIBADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(JANSSON_LIBS) \
-	$(SQLITE_LIBS)
-job_archive_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 job_exec_la_SOURCES =
 job_exec_la_LIBADD = \
