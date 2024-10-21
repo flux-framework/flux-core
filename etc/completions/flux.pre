@@ -2048,6 +2048,7 @@ _flux_housekeeping()
     local subcmds="list kill"
     local split=false
     list_OPTS="\
+        -i --include= \
         -o --format= \
         -n --no-header \
     "
