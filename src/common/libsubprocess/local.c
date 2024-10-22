@@ -45,6 +45,9 @@ static void local_channel_flush (struct subprocess_channel *c)
         struct fbuf *fb;
         int len;
 
+        /* always a chance caller may destroy subprocess in callback */
+        subprocess_incref (c->p);
+
         if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w))) {
             llog_error (c->p,
                         "fbuf_read_watcher_get_buffer: %s",
@@ -65,6 +68,8 @@ static void local_channel_flush (struct subprocess_channel *c)
 
         if (c->p->state == FLUX_SUBPROCESS_EXITED && c->eof_sent_to_caller)
             subprocess_check_completed (c->p);
+
+        subprocess_decref (c->p);
     }
 }
 
@@ -101,6 +106,9 @@ static void local_output (struct subprocess_channel *c,
                           int revents,
                           flux_subprocess_output_f output_cb)
 {
+    /* always a chance caller may destroy subprocess in callback */
+    subprocess_incref (c->p);
+
     if (revents & FLUX_POLLIN) {
         bool eof_set = false;
         if (!c->eof_sent_to_caller) {
@@ -110,7 +118,7 @@ static void local_output (struct subprocess_channel *c,
                 llog_error (c->p,
                             "fbuf_read_watcher_get_buffer: %s",
                             strerror (errno));
-                return;
+                goto out;
             }
 
             if (!fbuf_bytes (fb)) {
@@ -142,6 +150,9 @@ static void local_output (struct subprocess_channel *c,
 
     if (c->p->state == FLUX_SUBPROCESS_EXITED && c->eof_sent_to_caller)
         subprocess_check_completed (c->p);
+
+out:
+    subprocess_decref (c->p);
 }
 
 static void local_out_cb (flux_reactor_t *r,

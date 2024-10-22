@@ -134,8 +134,13 @@ static void process_new_state (flux_subprocess_t *p,
         return;
 
     if (state == FLUX_SUBPROCESS_STOPPED) {
-        if (p->ops.on_state_change)
+        if (p->ops.on_state_change) {
+            /* always a chance caller may destroy subprocess in
+             * callback */
+            subprocess_incref (p);
             (*p->ops.on_state_change) (p, FLUX_SUBPROCESS_STOPPED);
+            subprocess_decref (p);
+        }
         return;
     }
 
@@ -189,6 +194,9 @@ static void remote_out_check_cb (flux_reactor_t *r,
 
     flux_watcher_stop (c->out_idle_w);
 
+    /* always a chance caller may destroy subprocess in callback */
+    subprocess_incref (c->p);
+
     if ((c->line_buffered
          && (fbuf_has_line (c->read_buffer)
              || !fbuf_space (c->read_buffer)
@@ -220,6 +228,8 @@ static void remote_out_check_cb (flux_reactor_t *r,
 
     if (c->p->state == FLUX_SUBPROCESS_EXITED && c->eof_sent_to_caller)
         subprocess_check_completed (c->p);
+
+    subprocess_decref (c->p);
 }
 
 static int remote_channel_setup (flux_subprocess_t *p,
@@ -390,6 +400,10 @@ static int remote_output_local_unbuf (flux_subprocess_t *p,
                                       bool eof)
 {
     struct subprocess_channel *c;
+    int rv = -1;
+
+    /* always a chance caller may destroy subprocess in callback */
+    subprocess_incref (p);
 
     if (!(c = zhash_lookup (p->channels, stream))) {
         llog_debug (p,
@@ -400,7 +414,7 @@ static int remote_output_local_unbuf (flux_subprocess_t *p,
                     stream);
         errno = EPROTO;
         set_failed (p, "error returning unknown channel %s", stream);
-        return -1;
+        goto out;
     }
 
     if (data && len) {
@@ -422,7 +436,11 @@ static int remote_output_local_unbuf (flux_subprocess_t *p,
         c->eof_sent_to_caller = true;
         c->p->channels_eof_sent++;
     }
-    return 0;
+
+    rv = 0;
+out:
+    subprocess_decref (p);
+    return rv;
 }
 
 static int remote_output_buffered (flux_subprocess_t *p,
