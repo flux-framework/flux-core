@@ -290,6 +290,7 @@ TESTSCRIPTS = \
 	python/t0027-constraint-parser.py \
 	python/t0028-compat36.py \
 	python/t0029-fileref.py \
+	python/t0030-journal.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY
