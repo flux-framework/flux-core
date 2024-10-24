@@ -57,6 +57,10 @@ extensions = [
 ]
 
 domainrefs = {
+    'rfc': {
+        'text': 'RFC %s',
+        'url': 'https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_%s.html'
+    },
     'linux:man1': {
         'text': '%s(1)',
         'url': 'https://linux.die.net/man/1/%s',

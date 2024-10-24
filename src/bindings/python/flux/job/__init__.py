@@ -42,3 +42,4 @@ from flux.job.output import (
     output_watch_lines_async,
 )
 from flux.job.watcher import JobWatcher
+from flux.job.journal import JournalConsumer
