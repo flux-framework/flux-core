@@ -27,6 +27,12 @@
 
 #include "rcmdsrv.h"
 
+enum {
+    WRITE_API,
+    WRITE_DIRECT,
+    WRITE_CREDIT,
+};
+
 struct iostress_ctx {
     flux_t *h;
     flux_subprocess_t *p;
@@ -34,12 +40,16 @@ struct iostress_ctx {
     flux_watcher_t *timer;
     pid_t pid;
     size_t linesize;
+    char *buf;
+    int buf_index;
     int linerecv;
     int batchcount;
     int batchlines;
     int batchcursor;
+    int batchlinescursor;
     int outputcount;
-    bool direct;
+    int write_type;
+    int stdin_credits;
     const char *name;
 };
 
@@ -99,7 +109,12 @@ static void iostress_state_cb (flux_subprocess_t *p,
         case FLUX_SUBPROCESS_INIT:
         case FLUX_SUBPROCESS_RUNNING:
             ctx->pid = flux_subprocess_pid (p);
-            flux_watcher_start (ctx->source); // start sourcing data
+            /* if credit based write, writing will be taken care of in
+             * iostress_credit_cb()
+             */
+            if (ctx->write_type == WRITE_API
+                || ctx->write_type == WRITE_DIRECT)
+                flux_watcher_start (ctx->source); // start sourcing data
             break;
         case FLUX_SUBPROCESS_STOPPED:
             break;
@@ -152,24 +167,21 @@ static void iostress_source_cb (flux_reactor_t *r,
                                 void *arg)
 {
     struct iostress_ctx *ctx = arg;
-    char *buf;
     uint32_t matchtag;
-
-    if (!(buf = malloc (ctx->linesize)))
-        BAIL_OUT ("out of memory");
-    memset (buf, 'F', ctx->linesize - 1);
-    buf[ctx->linesize - 1] = '\n';
 
     matchtag = flux_rpc_get_matchtag (ctx->p->f);
 
     for (int i = 0; i < ctx->batchlines; i++) {
-        if (ctx->direct) {
-            if (rexec_write (ctx->h, matchtag, buf, ctx->linesize) < 0)
+        if (ctx->write_type == WRITE_DIRECT) {
+            if (rexec_write (ctx->h, matchtag, ctx->buf, ctx->linesize) < 0)
                 BAIL_OUT ("rexec_write failed");
         }
-        else {
+        else if (ctx->write_type == WRITE_API) {
             int len;
-            len = flux_subprocess_write (ctx->p, "stdin", buf, ctx->linesize);
+            len = flux_subprocess_write (ctx->p,
+                                         "stdin",
+                                         ctx->buf,
+                                         ctx->linesize);
             if (len < 0) {
                 diag ("%s: source: %s", ctx->name, strerror (errno));
                 goto error;
@@ -181,7 +193,6 @@ static void iostress_source_cb (flux_reactor_t *r,
             }
         }
     }
-    free (buf);
     if (++ctx->batchcursor == ctx->batchcount) {
         if (flux_subprocess_close (ctx->p, "stdin") < 0) {
             diag ("%s: source: %s", ctx->name, strerror (errno));
@@ -191,8 +202,63 @@ static void iostress_source_cb (flux_reactor_t *r,
     }
     return;
 error:
-    free (buf);
     //flux_reactor_stop_error (r);
+    iostress_start_doomsday (ctx, 2.);
+}
+
+static void iostress_credit_cb (flux_subprocess_t *p,
+                                const char *stream,
+                                int bytes)
+{
+    struct iostress_ctx *ctx = flux_subprocess_aux_get (p, "ctx");
+
+    if (ctx->write_type != WRITE_CREDIT)
+        return;
+
+    // diag ("%s credit cb stream=%s bytes=%d", ctx->name, stream, bytes);
+
+    ctx->stdin_credits += bytes;
+
+    while (ctx->batchcursor < ctx->batchcount) {
+        while (ctx->batchlinescursor < ctx->batchlines) {
+            int wlen, len;
+
+            if ((ctx->linesize - ctx->buf_index) < ctx->stdin_credits)
+                wlen = ctx->linesize - ctx->buf_index;
+            else
+                wlen = ctx->stdin_credits;
+            len = flux_subprocess_write (ctx->p,
+                                         "stdin",
+                                         &ctx->buf[ctx->buf_index],
+                                         wlen);
+            if (len < 0) {
+                diag ("%s: source: %s", ctx->name, strerror (errno));
+                goto error;
+            }
+            ctx->stdin_credits -= len;
+            ctx->buf_index += len;
+            if (ctx->buf_index == ctx->linesize) {
+                ctx->buf_index = 0;
+                ctx->batchlinescursor++;
+            }
+            if (ctx->stdin_credits == 0)
+                break;
+        }
+        if (ctx->batchlinescursor == ctx->batchlines) {
+            ctx->batchlinescursor = 0;
+            if (++ctx->batchcursor == ctx->batchcount) {
+                if (flux_subprocess_close (ctx->p, "stdin") < 0) {
+                    diag ("%s: source: %s", ctx->name, strerror (errno));
+                    goto error;
+                }
+                break;
+            }
+        }
+        if (ctx->stdin_credits == 0)
+            break;
+    }
+    return;
+error:
     iostress_start_doomsday (ctx, 2.);
 }
 
@@ -200,11 +266,12 @@ flux_subprocess_ops_t iostress_ops = {
     .on_completion      = iostress_completion_cb,
     .on_state_change    = iostress_state_cb,
     .on_stdout          = iostress_output_cb,
+    .on_credit          = iostress_credit_cb,
 };
 
 bool iostress_run_check (flux_t *h,
                          const char *name,
-                         bool direct,
+                         int write_type,
                          int stdin_bufsize,
                          int stdout_bufsize,
                          int batchcount,
@@ -224,7 +291,13 @@ bool iostress_run_check (flux_t *h,
     ctx.batchlines = batchlines;
     ctx.linesize = linesize;
     ctx.name = name;
-    ctx.direct = direct;
+    ctx.write_type = write_type;
+    ctx.stdin_credits = 0;
+
+    if (!(ctx.buf = malloc (ctx.linesize)))
+        BAIL_OUT ("out of memory");
+    memset (ctx.buf, 'F', ctx.linesize - 1);
+    ctx.buf[ctx.linesize - 1] = '\n';
 
     if (!(cmd = flux_cmd_create (ARRAY_SIZE (cat_av) - 1, cat_av, environ)))
         BAIL_OUT ("flux_cmd_create failed");
@@ -276,6 +349,7 @@ bool iostress_run_check (flux_t *h,
     flux_watcher_destroy (ctx.timer);
     diag ("%s: destroying subprocess", name);
     flux_subprocess_destroy (ctx.p);
+    free (ctx.buf);
     flux_cmd_destroy (cmd);
 
     return ret;
@@ -289,7 +363,14 @@ int main (int argc, char *argv[])
 
     h = rcmdsrv_create ("rexec");
 
-    ok (iostress_run_check (h, "balanced", false, 0, 0, 8, 8, 80),
+    ok (iostress_run_check (h,
+                            "balanced",
+                            WRITE_API,
+                            0,
+                            0,
+                            8,
+                            8,
+                            80),
         "balanced worked");
 
     // stdout buffer is overrun
@@ -297,17 +378,60 @@ int main (int argc, char *argv[])
     // When the line size is greater than the buffer size, all the
     // data is transferred. flux_subprocess_read_line() will receive a
     // "line" that is not terminated with \n
-    ok (iostress_run_check (h, "tinystdout", false, 0, 128, 1, 1, 256),
+    ok (iostress_run_check (h,
+                            "tinystdout",
+                            WRITE_API,
+                            0,
+                            128,
+                            1,
+                            1,
+                            256),
         "tinystdout works");
 
     // local stdin buffer is overrun (immediately)
     // remote stdin buffer is also overwritten
-    ok (!iostress_run_check (h, "tinystdin", false, 128, 0, 1, 1, 4096),
+    ok (!iostress_run_check (h,
+                             "tinystdin",
+                             WRITE_API,
+                             128,
+                             0,
+                             1,
+                             1,
+                             4096),
         "tinystdin failed as expected");
 
     // remote stdin buffer is overwritten using direct RPC
-    ok (!iostress_run_check (h, "tinystdin-direct", true, 128, 0, 1, 1, 4096),
+    ok (!iostress_run_check (h,
+                             "tinystdin-direct",
+                             WRITE_DIRECT,
+                             128,
+                             0,
+                             1,
+                             1,
+                             4096),
         "tinystdin-direct failed as expected");
+
+    // remote stdin buffer managed via credits should work
+    ok (iostress_run_check (h,
+                            "tinystdin-credit",
+                            WRITE_CREDIT,
+                            128,
+                            0,
+                            1,
+                            1,
+                            4096),
+        "tinystdin-credit works as expected");
+
+    // credits w/ more data
+    ok (iostress_run_check (h,
+                            "tinystdin-credit-more",
+                            WRITE_CREDIT,
+                            128,
+                            0,
+                            8,
+                            8,
+                            4096),
+        "tinystdin-credit-more works as expected");
 
     test_server_stop (h);
     flux_close (h);

@@ -84,6 +84,9 @@ typedef void (*flux_subprocess_output_f) (flux_subprocess_t *p,
                                           const char *stream);
 typedef void (*flux_subprocess_state_f) (flux_subprocess_t *p,
                                          flux_subprocess_state_t state);
+typedef void (*flux_subprocess_credit_f) (flux_subprocess_t *p,
+                                          const char *stream,
+                                          int bytes);
 typedef void (*flux_subprocess_hook_f) (flux_subprocess_t *p, void *arg);
 
 /*
@@ -93,6 +96,8 @@ typedef void (*flux_subprocess_hook_f) (flux_subprocess_t *p, void *arg);
  *  flux_subprocess_read_line() and similar functions should be used
  *  to read buffered data.  If this is not done, it can lead to
  *  excessive callbacks and code "spinning".
+ *
+ *  The first call to on_credit will contain the full buffer size.
  *
  */
 typedef struct {
@@ -104,6 +109,7 @@ typedef struct {
     flux_subprocess_output_f on_channel_out; /* Read from channel when ready */
     flux_subprocess_output_f on_stdout; /* Read of stdout is ready           */
     flux_subprocess_output_f on_stderr; /* Read of stderr is ready           */
+    flux_subprocess_credit_f on_credit; /* Write buffer space available      */
 } flux_subprocess_ops_t;
 
 /*

@@ -22,6 +22,7 @@ enum {
     SUBPROCESS_REXEC_STDOUT = 1,
     SUBPROCESS_REXEC_STDERR = 2,
     SUBPROCESS_REXEC_CHANNEL = 4,
+    SUBPROCESS_REXEC_WRITE_CREDIT = 8,
 };
 
 flux_future_t *subprocess_rexec (flux_t *h,
@@ -39,6 +40,7 @@ bool subprocess_rexec_is_output (flux_future_t *f,
                                  const char **buf,
                                  int *len,
                                  bool *eof);
+bool subprocess_rexec_is_add_credit (flux_future_t *f, json_t **channels);
 
 int subprocess_write (flux_future_t *f,
                       const char *stream,

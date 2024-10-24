@@ -38,6 +38,7 @@ struct rexec_response {
     pid_t pid;
     int status;
     struct rexec_io io;
+    json_t *channels;
 };
 
 struct rexec_ctx {
@@ -53,6 +54,8 @@ static void rexec_response_clear (struct rexec_response *resp)
 {
     json_decref (resp->io.obj);
     free (resp->io.data);
+    json_decref (resp->channels);
+    resp->channels = NULL;
 
     memset (resp, 0, sizeof (*resp));
 
@@ -79,7 +82,8 @@ static struct rexec_ctx *rexec_ctx_create (flux_cmd_t *cmd,
     struct rexec_ctx *ctx;
     int valid_flags = SUBPROCESS_REXEC_STDOUT
         | SUBPROCESS_REXEC_STDERR
-        | SUBPROCESS_REXEC_CHANNEL;
+        | SUBPROCESS_REXEC_CHANNEL
+        | SUBPROCESS_REXEC_WRITE_CREDIT;
 
     if ((flags & ~valid_flags)) {
         errno = EINVAL;
@@ -150,11 +154,12 @@ int subprocess_rexec_get (flux_future_t *f)
     }
     rexec_response_clear (&ctx->response);
     if (flux_rpc_get_unpack (f,
-                             "{s:s s?i s?i s?O}",
+                             "{s:s s?i s?i s?O s?O}",
                              "type", &ctx->response.type,
                              "pid", &ctx->response.pid,
                              "status", &ctx->response.status,
-                             "io", &ctx->response.io.obj) < 0)
+                             "io", &ctx->response.io.obj,
+                             "channels", &ctx->response.channels) < 0)
         return -1;
     if (streq (ctx->response.type, "output")) {
         if (iodecode (ctx->response.io.obj,
@@ -164,6 +169,22 @@ int subprocess_rexec_get (flux_future_t *f)
                       &ctx->response.io.len,
                       &ctx->response.io.eof) < 0)
             return -1;
+    }
+    else if (streq (ctx->response.type, "add-credit")) {
+        const char *key;
+        json_t *value;
+
+        if (!ctx->response.channels
+            || !json_is_object (ctx->response.channels)) {
+            errno = EPROTO;
+            return -1;
+        }
+        json_object_foreach (ctx->response.channels, key, value) {
+            if (!json_is_integer (value)) {
+                errno = EPROTO;
+                return -1;
+            }
+        }
     }
     else if (!streq (ctx->response.type, "started")
         && !streq (ctx->response.type, "stopped")
@@ -228,6 +249,19 @@ bool subprocess_rexec_is_output (flux_future_t *f,
             *len = ctx->response.io.len;
         if (eof)
             *eof = ctx->response.io.eof;
+        return true;
+    }
+    return false;
+}
+
+bool subprocess_rexec_is_add_credit (flux_future_t *f, json_t **channels)
+{
+    struct rexec_ctx *ctx;
+    if ((ctx = flux_future_aux_get (f, "flux::rexec"))
+        && ctx->response.type != NULL
+        && streq (ctx->response.type, "add-credit")) {
+        if (channels)
+            (*channels) = ctx->response.channels;
         return true;
     }
     return false;

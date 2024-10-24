@@ -36,6 +36,8 @@ struct subprocess_channel {
     int parent_fd;
     int child_fd;
     flux_watcher_t *buffer_write_w;
+    int buffer_space;
+    bool initial_credits_sent;     /* accounting for on_credit callback */
     flux_watcher_t *buffer_read_w;
     /* buffer_read_stopped_w is a "sub-in" watcher if buffer_read_w is
      * stopped.  We need to put something into the reactor so we know

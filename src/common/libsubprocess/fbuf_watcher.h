@@ -50,7 +50,11 @@ void fbuf_read_watcher_decref (flux_watcher_t *w);
 /* write watcher
  *
  * - data from buffer written to fd
- * - callback triggered after fd closed (FLUX_POLLOUT) or error (FLUX_POLLERR)
+ * - callback triggered after:
+ *   - buffer space available (FLUX_POLLOUT)
+ *   - fbuf_write_watcher_close() was called AND any buffered data has
+ *     been written out (FLUX_POLLOUT)
+ *   - error (FLUX_POLLERR)
  */
 flux_watcher_t *fbuf_write_watcher_create (flux_reactor_t *r,
                                            int fd,
