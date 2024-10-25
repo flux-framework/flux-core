@@ -481,7 +481,7 @@ void test_attr (const char *dir)
     if (attrs == NULL)
         BAIL_OUT ("cannot continue without attrs");
 
-    rc = boot_config_attr (attrs, NULL);
+    rc = boot_config_attr (attrs, "localhost", NULL);
     ok (rc == 0,
         "boot_config_attr works NULL hosts");
     ok (attr_get (attrs, "hostlist", NULL, NULL) == 0,
@@ -494,7 +494,7 @@ void test_attr (const char *dir)
     hosts = json_array ();
     if (hosts == NULL)
         BAIL_OUT ("cannot continue without empty hosts array");
-    rc = boot_config_attr (attrs, hosts);
+    rc = boot_config_attr (attrs, "localhost", hosts);
     ok (rc == 0,
         "boot_config_attr works empty hosts");
     ok (attr_get (attrs, "hostlist", NULL, NULL) == 0,
@@ -512,7 +512,7 @@ void test_attr (const char *dir)
     attrs = attr_create ();
     if (!attrs)
         BAIL_OUT ("attr_create failed");
-    rc = boot_config_attr (attrs, hosts);
+    rc = boot_config_attr (attrs, "foo0", hosts);
     ok (rc == 0,
         "boot_config_attr works on input hosts");
     ok (attr_get (attrs, "hostlist", &val, &flags) == 0

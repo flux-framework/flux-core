@@ -239,14 +239,13 @@ static void trace_upmi (void *arg, const char *text)
     fprintf (stderr, "boot_pmi: %s\n", text);
 }
 
-int boot_pmi (struct overlay *overlay, attr_t *attrs)
+int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
 {
     const char *topo_uri;
     flux_error_t error;
     json_error_t jerror;
     char key[64];
     char *val;
-    char hostname[MAXHOSTNAMELEN + 1];
     char *bizcard = NULL;
     struct hostlist *hl = NULL;
     json_t *o;
@@ -308,10 +307,6 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     if (topology_set_rank (topo, info.rank) < 0
         || overlay_set_topology (overlay, topo) < 0)
         goto error;
-    if (gethostname (hostname, sizeof (hostname)) < 0) {
-        log_err ("gethostname");
-        goto error;
-    }
     if (!(hl = hostlist_create ())) {
         log_err ("hostlist_create");
         goto error;

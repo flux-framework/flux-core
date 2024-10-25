@@ -20,7 +20,10 @@
  *   tbon.endpoint (w)
  *   instance-level (w)
  */
-int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs);
+int boot_config (flux_t *h,
+                 const char *hostname,
+                 struct overlay *overlay,
+                 attr_t *attrs);
 
 /* The following is exported for unit testing.
  */
@@ -51,7 +54,7 @@ int boot_config_getrankbyname (json_t *hosts,
 int boot_config_parse (const flux_conf_t *cf,
                        struct boot_conf *conf,
                        json_t **hosts);
-int boot_config_attr (attr_t *attrs, json_t *hosts);
+int boot_config_attr (attr_t *attrs, const char *hostname, json_t *hosts);
 int boot_config_format_uri (char *buf,
                             int bufsz,
                             const char *fmt,
