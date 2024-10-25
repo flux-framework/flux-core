@@ -147,6 +147,15 @@ class JournalConsumer:
     def __next_event(self):
         return self.backlog.popleft()
 
+    def __set_then_cb(self):
+        if self.rpc is not None and self.cb is not None:
+            try:
+                self.rpc.then(self.__cb)
+            except OSError as exc:
+                if exc.errno == errno.EINVAL:
+                    # then callback is already set
+                    pass
+
     def start(self):
         """Start the stream of events by sending a request to the job manager
 
@@ -156,6 +165,9 @@ class JournalConsumer:
         self.rpc = self.handle.rpc(
             "job-manager.events-journal", {"full": self.full}, 0, FLUX_RPC_STREAMING
         )
+        #  Need to call self.rpc.then() if a user cb is registered:
+        self.__set_then_cb()
+
         return self
 
     def stop(self):
@@ -253,13 +265,8 @@ class JournalConsumer:
         self.cb = event_cb
         self.cb_args = args
         self.cb_kwargs = kwargs
-
-        try:
-            self.rpc.then(self.__cb)
-        except OSError as exc:
-            if exc.errno == errno.EINVAL:
-                # then callback is already set
-                pass
+        self.__set_then_cb()
+        return self
 
 
 # vi: ts=4 sw=4 expandtab
