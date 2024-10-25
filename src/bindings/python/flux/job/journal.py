@@ -161,6 +161,12 @@ class JournalConsumer:
 
         This function sends the job-manager.events-journal RPC to the
         job manager. It must be called to start the stream of events.
+
+        .. note::
+            If :func:`start` is called more than once the stream of events
+            will be restarted using the original options passed to the
+            constructor. This may cause duplicate events, or missed events
+            if *full* is False since no history will be included.
         """
         self.rpc = self.handle.rpc(
             "job-manager.events-journal", {"full": self.full}, 0, FLUX_RPC_STREAMING
