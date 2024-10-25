@@ -198,6 +198,42 @@ class TestJournalConsumer(unittest.TestCase):
         consumer.stop()
         self.assertIsNone(consumer.poll(timeout=5.0))
 
+    def test_poll_RuntimeError(self):
+
+        with self.assertRaises(RuntimeError):
+            flux.job.JournalConsumer(self.fh).poll(5.0)
+
+    def test_poll_cb_set_before_start(self):
+
+        def cb(event):
+            if event is None:
+                self.fh.reactor_stop()
+            elif event.is_empty():
+                consumer.stop()
+
+        consumer = flux.job.JournalConsumer(self.fh, include_sentinel=True)
+        consumer.set_callback(cb)
+        consumer.start()
+        self.fh.reactor_run()
+
+    def test_poll_cb_reset(self):
+        """test that the consumer callback can be reset"""
+
+        def cb(event):
+            self.fail("incorrect callback called")
+
+        def cb2(event):
+            if event is None:
+                self.fh.reactor_stop()
+            elif event.is_empty():
+                consumer.stop()
+
+        consumer = flux.job.JournalConsumer(self.fh, include_sentinel=True)
+        consumer.set_callback(cb)
+        consumer.start()
+        consumer.set_callback(cb2)
+        self.fh.reactor_run()
+
 
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):

@@ -147,15 +147,33 @@ class JournalConsumer:
     def __next_event(self):
         return self.backlog.popleft()
 
+    def __set_then_cb(self):
+        if self.rpc is not None and self.cb is not None:
+            try:
+                self.rpc.then(self.__cb)
+            except OSError as exc:
+                if exc.errno == errno.EINVAL:
+                    # then callback is already set
+                    pass
+
     def start(self):
         """Start the stream of events by sending a request to the job manager
 
         This function sends the job-manager.events-journal RPC to the
         job manager. It must be called to start the stream of events.
+
+        .. note::
+            If :func:`start` is called more than once the stream of events
+            will be restarted using the original options passed to the
+            constructor. This may cause duplicate events, or missed events
+            if *full* is False since no history will be included.
         """
         self.rpc = self.handle.rpc(
             "job-manager.events-journal", {"full": self.full}, 0, FLUX_RPC_STREAMING
         )
+        #  Need to call self.rpc.then() if a user cb is registered:
+        self.__set_then_cb()
+
         return self
 
     def stop(self):
@@ -180,11 +198,17 @@ class JournalConsumer:
         historical events have been processed. Historical events will sorted
         in time order and returned once per :func:`poll` call.
 
+        :func:`start` must be called before this function.
+
         Args:
             timeout (float): Only wait *timeout* seconds for the next event.
                 If the timeout expires then a :exc:`TimeoutError` is raised.
                 A *timeout* of -1.0 disables any timeout.
+        Raises:
+            RuntimeError:  :func:`poll` was called before :func:`start`.
         """
+        if self.rpc is None:
+            raise RuntimeError("poll() called before start()")
 
         if self.processing_inactive:
             # process backlog. Time order events once done:
@@ -247,13 +271,8 @@ class JournalConsumer:
         self.cb = event_cb
         self.cb_args = args
         self.cb_kwargs = kwargs
-
-        try:
-            self.rpc.then(self.__cb)
-        except OSError as exc:
-            if exc.errno == errno.EINVAL:
-                # then callback is already set
-                pass
+        self.__set_then_cb()
+        return self
 
 
 # vi: ts=4 sw=4 expandtab
