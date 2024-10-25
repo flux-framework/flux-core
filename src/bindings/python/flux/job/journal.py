@@ -180,11 +180,17 @@ class JournalConsumer:
         historical events have been processed. Historical events will sorted
         in time order and returned once per :func:`poll` call.
 
+        :func:`start` must be called before this function.
+
         Args:
             timeout (float): Only wait *timeout* seconds for the next event.
                 If the timeout expires then a :exc:`TimeoutError` is raised.
                 A *timeout* of -1.0 disables any timeout.
+        Raises:
+            RuntimeError:  :func:`poll` was called before :func:`start`.
         """
+        if self.rpc is None:
+            raise RuntimeError("poll() called before start()")
 
         if self.processing_inactive:
             # process backlog. Time order events once done:
