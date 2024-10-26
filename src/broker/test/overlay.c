@@ -382,7 +382,8 @@ void trio (flux_t *h)
     ok (rmsg != NULL,
         "%s: response was received by overlay", ctx[0]->name);
     ok (!flux_msg_is_local (rmsg),
-        "%s: flux_msg_is_local returns false for response from child");
+        "%s: flux_msg_is_local returns false for response from child",
+        ctx[0]->name);
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "m000"),
         "%s: received message has expected topic", ctx[0]->name);
     ok (flux_msg_route_count (rmsg) == 0,
@@ -402,7 +403,8 @@ void trio (flux_t *h)
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "eeek"),
         "%s: received message has expected topic", ctx[0]->name);
     ok (!flux_msg_is_local (rmsg),
-        "%s: flux_msg_is_local returns false for event from child");
+        "%s: flux_msg_is_local returns false for event from child",
+        ctx[0]->name);
 
     /* Response 0->1
      */
