@@ -86,7 +86,6 @@ void ctx_destroy (struct context *ctx)
 }
 
 struct context *ctx_create (flux_t *h,
-                            const char *name,
                             int size,
                             int rank,
                             const char *topo_uri,
@@ -109,7 +108,7 @@ struct context *ctx_create (flux_t *h,
     ctx->h = h;
     ctx->size = size;
     ctx->rank = rank;
-    snprintf (ctx->name, sizeof (ctx->name), "%s-%d", name, rank);
+    snprintf (ctx->name, sizeof (ctx->name), "test%d", rank);
     if (!(ctx->ov = overlay_create (h, ctx->attrs, zctx, cb, ctx)))
         BAIL_OUT ("overlay_create");
     if (!(ctx->uuid = overlay_get_uuid (ctx->ov)))
@@ -122,7 +121,7 @@ struct context *ctx_create (flux_t *h,
 
 void single (flux_t *h)
 {
-    struct context *ctx = ctx_create (h, "single", 1, 0, "kary:2", NULL);
+    struct context *ctx = ctx_create (h, 1, 0, "kary:2", NULL);
     flux_msg_t *msg;
     char *s;
     struct idset *critical_ranks;
@@ -286,7 +285,7 @@ void trio (flux_t *h)
     struct cert *cert;
     const char *sender;
 
-    ctx[0] = ctx_create (h, "trio", size, 0, "kary:2", recv_cb);
+    ctx[0] = ctx_create (h, size, 0, "kary:2", recv_cb);
 
     ok (overlay_set_topology (ctx[0]->ov, ctx[0]->topo) == 0,
         "%s: overlay_set_topology works", ctx[0]->name);
@@ -298,7 +297,7 @@ void trio (flux_t *h)
     ok (overlay_bind (ctx[0]->ov, parent_uri) == 0,
         "%s: overlay_bind %s works", ctx[0]->name, parent_uri);
 
-    ctx[1] = ctx_create (h, "trio", size, 1, "kary:2", recv_cb);
+    ctx[1] = ctx_create (h, size, 1, "kary:2", recv_cb);
 
     ok (overlay_set_topology (ctx[1]->ov, ctx[1]->topo) == 0,
         "%s: overlay_set_topology works", ctx[1]->name);
@@ -507,7 +506,6 @@ void trio (flux_t *h)
 }
 
 void test_create (flux_t *h,
-                  const char *name,
                   int size,
                   struct context *ctx[])
 {
@@ -515,7 +513,7 @@ void test_create (flux_t *h,
     int rank;
 
     for (rank = 0; rank < size; rank++) {
-        ctx[rank] = ctx_create (h, name, size, rank, NULL, recv_cb);
+        ctx[rank] = ctx_create (h, size, rank, NULL, recv_cb);
         if (overlay_set_topology (ctx[rank]->ov, ctx[rank]->topo) < 0)
             BAIL_OUT ("%s: overlay_set_topology failed", ctx[rank]->name);
         if (rank == 0) {
@@ -579,12 +577,11 @@ void monitor_cb (struct overlay *ov, uint32_t rank, void *arg)
 void check_monitor (flux_t *h)
 {
     const int size = 5;
-    const char *name = "mon";
     struct context *ctx[size];
 
     diag ("check_monitor BEGIN");
 
-    test_create (h, name, size, ctx);
+    test_create (h, size, ctx);
 
     diag ("check_monitor test_create returned");
 
@@ -661,7 +658,8 @@ void wrongness (flux_t *h)
         && errno == EINVAL,
         "overlay_create h=NULL fails with EINVAL");
     errno = 0;
-    ok (overlay_create (h, NULL, zctx, NULL, NULL) == NULL && errno == EINVAL,
+    ok (overlay_create (h, NULL, zctx, NULL, NULL) == NULL
+        && errno == EINVAL,
         "overlay_create attrs=NULL fails with EINVAL");
     attr_destroy (attrs);
 
@@ -716,7 +714,7 @@ int main (int argc, char *argv[])
         BAIL_OUT ("could not create loop handle");
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
         BAIL_OUT ("flux_attr_set_cacheonly rank failed");
-    if (flux_attr_set_cacheonly (h, "hostlist", "test") < 0)
+    if (flux_attr_set_cacheonly (h, "hostlist", "test[0-7]") < 0)
         BAIL_OUT ("flux_attr_set_cacheonly hostlist failed");
     flux_log_set_redirect (h, diag_logger, NULL);
     flux_log (h, LOG_INFO, "test log message");
