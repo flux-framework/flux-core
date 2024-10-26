@@ -109,7 +109,7 @@ struct context *ctx_create (flux_t *h,
     ctx->size = size;
     ctx->rank = rank;
     snprintf (ctx->name, sizeof (ctx->name), "test%d", rank);
-    if (!(ctx->ov = overlay_create (h, ctx->attrs, zctx, cb, ctx)))
+    if (!(ctx->ov = overlay_create (h, ctx->name, ctx->attrs, zctx, cb, ctx)))
         BAIL_OUT ("overlay_create");
     if (!(ctx->uuid = overlay_get_uuid (ctx->ov)))
         BAIL_OUT ("overlay_get_uuid failed");
@@ -654,18 +654,18 @@ void wrongness (flux_t *h)
     if (!(attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
     errno = 0;
-    ok (overlay_create (NULL, attrs, zctx, NULL, NULL) == NULL
+    ok (overlay_create (NULL, "test0", attrs, zctx, NULL, NULL) == NULL
         && errno == EINVAL,
         "overlay_create h=NULL fails with EINVAL");
     errno = 0;
-    ok (overlay_create (h, NULL, zctx, NULL, NULL) == NULL
+    ok (overlay_create (h, "test0", NULL, zctx, NULL, NULL) == NULL
         && errno == EINVAL,
         "overlay_create attrs=NULL fails with EINVAL");
     attr_destroy (attrs);
 
     if (!(attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
-    if (!(ov = overlay_create (h, attrs, zctx, NULL, NULL)))
+    if (!(ov = overlay_create (h, "test0", attrs, zctx, NULL, NULL)))
         BAIL_OUT ("overlay_create failed");
 
     errno = 0;

@@ -330,6 +330,7 @@ int main (int argc, char *argv[])
     }
 
     if (!(ctx.overlay = overlay_create (ctx.h,
+                                        ctx.hostname,
                                         ctx.attrs,
                                         NULL,
                                         overlay_recv_cb,
