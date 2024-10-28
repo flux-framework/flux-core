@@ -3,6 +3,18 @@
 #  Ensure resource module resets ranks of R to match hostlist attribute
 #
 
+#  Do what flux start --test-hosts does, but using FLUX_TASK_RANK
+#   to find fake hostname in provided hostlist
+cat <<EOF2 >t4182-broker-wrapper.sh
+#!/bin/bash
+# Usage: t4182-broker-wrapper.sh hostlist ARGS ...
+
+hostlist=\$1; shift
+FLUX_FAKE_HOSTNAME=\$(flux hostlist --nth=\$FLUX_TASK_RANK "\$hostlist")
+flux broker -Shostlist="\$hostlist" "\$@"
+EOF2
+chmod +x t4182-broker-wrapper.sh
+
 cat <<EOF >t4182-test.sh
 #!/bin/bash -e
 
@@ -22,18 +34,26 @@ flux dmesg | grep 'sched-simple.*ready'  | tail -1
 
 flux resource list
 
+#  Disable rlist/hwloc resource verification
+#    --test-hosts set FLUX_FAKE_HOSTNAME but hwloc doesn't know about that
+echo "resource.noverify = true" >t4182-resource.toml
+
 #  ensure R rerank failure is ignored (i.e. job completes successfully)
 flux run -o per-resource.type=node -o cpu-affinity=off -n 11 \
-        flux start flux getattr hostlist
+	flux start -o,--config-path=t4182-resource.toml \
+	flux getattr hostlist
 
 #  ensure R is reranked based on hostlist attribute:
 flux run -o per-resource.type=node -o cpu-affinity=off -n 11 \
-        flux broker --setattr hostlist="foo[3,2,1,0]" \
+	./t4182-broker-wrapper.sh "foo[3,2,1,0]" \
+	--config-path=t4182-resource.toml \
 	sh -c 'flux kvs get resource.R' >t4182-test.out
 
 EOF
 
-flux start -o,-Shostlist=foo[0-3] --test-size=4 bash ./t4182-test.sh
+#  Use --test-hosts instead of setting hostlist attr so that overlay
+#   hello check for expected hostname:rank won't fail and abort the test
+flux start --test-hosts="foo[0-3]" --test-size=4 bash ./t4182-test.sh
 
 jq -S . <t4182-test.out
 
