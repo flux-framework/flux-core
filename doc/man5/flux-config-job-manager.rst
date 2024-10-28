@@ -21,8 +21,8 @@ inactive-age-limit
    (optional) String (in RFC 23 Flux Standard Duration format) that specifies
    the maximum age of inactive jobs retained in the KVS.  The age is computed
    since the job became inactive.  Once a job is removed from the KVS, its job
-   data is only available via the job-archive, if configured.  Inactive jobs
-   can also be manually purged with :man1:`flux-job` ``purge``.
+   data is not longer available.  Inactive jobs can also be manually purged
+   with :man1:`flux-job` ``purge``.
 
 inactive-num-limit
    (optional) Integer maximum number of inactive jobs retained in the KVS.

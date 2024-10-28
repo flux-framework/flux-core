@@ -154,7 +154,6 @@ TESTSCRIPTS = \
 	t2240-queue-cmd.t \
 	t2241-queue-cmd-list.t \
 	t2245-policy-config.t \
-	t2250-job-archive.t \
 	t2260-job-list.t \
 	t2261-job-list-update.t \
 	t2262-job-list-stats.t \
