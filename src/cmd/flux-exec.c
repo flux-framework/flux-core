@@ -72,7 +72,7 @@ int exit_code = 0;
 zhashx_t *exitsets;
 struct idset *hanging;
 
-zlist_t *subprocesses;
+zlistx_t *subprocesses;
 
 optparse_t *opts = NULL;
 
@@ -232,22 +232,22 @@ static void stdin_cb (flux_reactor_t *r,
         log_err_exit ("fbuf_read");
 
     if (lenp) {
-        p = zlist_first (subprocesses);
+        p = zlistx_first (subprocesses);
         while (p) {
             if (flux_subprocess_state (p) == FLUX_SUBPROCESS_INIT
                 || flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
                 if (flux_subprocess_write (p, "stdin", ptr, lenp) < 0)
                     log_err_exit ("flux_subprocess_write");
             }
-            p = zlist_next (subprocesses);
+            p = zlistx_next (subprocesses);
         }
     }
     else {
-        p = zlist_first (subprocesses);
+        p = zlistx_first (subprocesses);
         while (p) {
             if (flux_subprocess_close (p, "stdin") < 0)
                 log_err_exit ("flux_subprocess_close");
-            p = zlist_next (subprocesses);
+            p = zlistx_next (subprocesses);
         }
         flux_watcher_stop (stdin_w);
     }
@@ -291,9 +291,9 @@ static flux_subprocess_t *imp_kill (flux_subprocess_t *p, int signum)
                        &ops);
 }
 
-static void killall (zlist_t *l, int signum)
+static void killall (zlistx_t *l, int signum)
 {
-    flux_subprocess_t *p = zlist_first (l);
+    flux_subprocess_t *p = zlistx_first (l);
     while (p) {
         if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
             if (use_imp) {
@@ -316,7 +316,7 @@ static void killall (zlist_t *l, int signum)
                 flux_future_destroy (f);
             }
         }
-        p = zlist_next (l);
+        p = zlistx_next (l);
     }
 }
 
@@ -361,9 +361,9 @@ static void signal_cb (int signum)
     }
 }
 
-void subprocess_destroy (void *arg)
+void subprocess_destroy (void **arg)
 {
-    flux_subprocess_t *p = arg;
+    flux_subprocess_t *p = *arg;
     flux_subprocess_destroy (p);
 }
 
@@ -704,8 +704,9 @@ int main (int argc, char *argv[])
         free (nodeset);
     }
 
-    if (!(subprocesses = zlist_new ()))
-        log_err_exit ("zlist_new");
+    if (!(subprocesses = zlistx_new ()))
+        log_err_exit ("zlistx_new");
+    zlistx_set_destructor (subprocesses, subprocess_destroy);
 
     if (!(exitsets = zhashx_new ()))
         log_err_exit ("zhashx_new()");
@@ -725,10 +726,8 @@ int main (int argc, char *argv[])
                                  NULL,
                                  NULL)))
             log_err_exit ("flux_rexec");
-        if (zlist_append (subprocesses, p) < 0)
-            log_err_exit ("zlist_append");
-        if (!zlist_freefn (subprocesses, p, subprocess_destroy, true))
-            log_err_exit ("zlist_freefn");
+        if (!zlistx_add_end (subprocesses, p))
+            log_err_exit ("zlistx_add_end");
         rank = idset_next (targets, rank);
     }
 
@@ -739,11 +738,11 @@ int main (int argc, char *argv[])
      */
     if (optparse_getopt (opts, "noinput", NULL) > 0) {
         flux_subprocess_t *p;
-        p = zlist_first (subprocesses);
+        p = zlistx_first (subprocesses);
         while (p) {
             if (flux_subprocess_close (p, "stdin") < 0)
                 log_err_exit ("flux_subprocess_close");
-            p = zlist_next (subprocesses);
+            p = zlistx_next (subprocesses);
         }
     }
     /* configure stdin watcher
@@ -800,7 +799,7 @@ int main (int argc, char *argv[])
     log_fini ();
 
     zhashx_destroy (&exitsets);
-    zlist_destroy (&subprocesses);
+    zlistx_destroy (&subprocesses);
 
     return exit_code;
 }
