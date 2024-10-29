@@ -250,6 +250,56 @@ test_expect_success 'stdin redirect from /dev/null works with -n' '
 	test_expect_code 0 run_timeout 10 flux exec -n -r0-3 cat
 '
 
+test_expect_success 'create large file for tests' '
+	dd if=/dev/urandom of=5Mfile bs=5M count=1
+'
+
+test_expect_success 'create test script to redirect stdin to a file' '
+	cat <<-EOT >stdin2file &&
+	#!/bin/bash
+	rank=\$(flux getattr rank)
+	dd of=cpy.\$rank
+	EOT
+	chmod +x stdin2file
+'
+
+# piping a 5M file using a 4K buffer should overflow if flow control
+# is not functioning correctly
+test_expect_success 'stdin flow control works (1 rank)' '
+	cat 5Mfile | flux exec -r 0 --setopt=stdin_BUFSIZE=4096 ./stdin2file &&
+	cmp 5Mfile cpy.0 &&
+	rm cpy.0
+'
+
+test_expect_success 'stdin flow control works (all ranks)' '
+	cat 5Mfile | flux exec -r 0-3 --setopt=stdin_BUFSIZE=4096 ./stdin2file &&
+	cmp 5Mfile cpy.0 &&
+	cmp 5Mfile cpy.1 &&
+	cmp 5Mfile cpy.2 &&
+	cmp 5Mfile cpy.3 &&
+	rm cpy.*
+'
+
+test_expect_success 'create test script to redirect stdin to a file, one rank exits early' '
+	cat <<-EOT >stdin2file &&
+	#!/bin/bash
+	rank=\$(flux getattr rank)
+	if test \$rank -ne 0; then
+		dd of=cpy.\$rank
+	fi
+	EOT
+	chmod +x stdin2file
+'
+
+test_expect_success 'stdin flow control works (all ranks, one rank will exit early)' '
+	cat 5Mfile | flux exec -r 0-3 --setopt=stdin_BUFSIZE=4096 ./stdin2file &&
+	test_must_fail ls cpy.0 &&
+	cmp 5Mfile cpy.1 &&
+	cmp 5Mfile cpy.2 &&
+	cmp 5Mfile cpy.3 &&
+	rm cpy.*
+'
+
 test_expect_success 'stdin broadcast -- multiple lines' '
 	dd if=/dev/urandom bs=1024 count=4 | base64 >expected &&
 	cat expected | run_timeout 10 flux exec -l -r0-3 cat >output &&
