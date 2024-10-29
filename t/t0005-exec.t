@@ -247,7 +247,7 @@ test_expect_success 'stdin redirect from /dev/null works without -n' '
 '
 
 test_expect_success 'stdin redirect from /dev/null works with -n' '
-       test_expect_code 0 run_timeout 10 flux exec -n -r0-3 cat
+	test_expect_code 0 run_timeout 10 flux exec -n -r0-3 cat
 '
 
 test_expect_success 'stdin broadcast -- multiple lines' '
