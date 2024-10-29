@@ -43,6 +43,7 @@ typedef int (*overlay_recv_f)(flux_msg_t **msg,
  * Note: If zctx is NULL, it is created/destroyed on demand internally.
  */
 struct overlay *overlay_create (flux_t *h,
+                                const char *hostname,
                                 attr_t *attrs,
                                 void *zctx,
                                 overlay_recv_f cb,

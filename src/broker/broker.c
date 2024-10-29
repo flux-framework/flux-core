@@ -234,6 +234,12 @@ int main (int argc, char *argv[])
 
     init_attrs (ctx.attrs, getpid (), &ctx.cred);
 
+    const char *hostname = getenv ("FLUX_FAKE_HOSTNAME");
+    if (hostname)
+        strlcpy (ctx.hostname, hostname, sizeof (ctx.hostname));
+    else if (gethostname (ctx.hostname, sizeof (ctx.hostname)) < 0)
+        log_err_exit ("gethostname");
+
     parse_command_line_arguments (argc, argv, &ctx);
 
     /* Block all signals but those that we want to generate core dumps.
@@ -324,6 +330,7 @@ int main (int argc, char *argv[])
     }
 
     if (!(ctx.overlay = overlay_create (ctx.h,
+                                        ctx.hostname,
                                         ctx.attrs,
                                         NULL,
                                         overlay_recv_cb,
@@ -364,13 +371,13 @@ int main (int argc, char *argv[])
             method = NULL;
     }
     if (!method || !streq (method, "config")) {
-        if (boot_pmi (ctx.overlay, ctx.attrs) < 0) {
+        if (boot_pmi (ctx.hostname, ctx.overlay, ctx.attrs) < 0) {
             log_msg ("bootstrap failed");
             goto cleanup;
         }
     }
     else {
-        if (boot_config (ctx.h, ctx.overlay, ctx.attrs) < 0) {
+        if (boot_config (ctx.h, ctx.hostname, ctx.overlay, ctx.attrs) < 0) {
             log_msg ("bootstrap failed");
             goto cleanup;
         }
@@ -1035,20 +1042,16 @@ out:
 }
 
 static flux_future_t *set_uri_job_memo (flux_t *h,
+                                        const char *hostname,
                                         flux_jobid_t id,
                                         attr_t *attrs)
 {
     const char *local_uri = NULL;
     const char *path;
     char uri [1024];
-    char hostname [MAXHOSTNAMELEN + 1];
 
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
         log_err ("Unexpectedly unable to fetch local-uri attribute");
-        return NULL;
-    }
-    if (gethostname (hostname, sizeof (hostname)) < 0) {
-        log_err ("gethostname failure");
         return NULL;
     }
     path = local_uri + 8; /* forward past "local://" */
@@ -1165,7 +1168,7 @@ static int execute_parental_notifications (struct broker *ctx)
     }
 
     /*  Perform any RPCs to parent in parallel */
-    if (!(f = set_uri_job_memo (h, id, ctx->attrs)))
+    if (!(f = set_uri_job_memo (h, ctx->hostname, id, ctx->attrs)))
         goto out;
 
     /*  Note: not an error if rpc to set critical ranks fails, but

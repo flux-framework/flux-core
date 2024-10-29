@@ -287,7 +287,7 @@ int boot_config_parse (const flux_conf_t *cf,
     return 0;
 }
 
-int boot_config_attr (attr_t *attrs, json_t *hosts)
+int boot_config_attr (attr_t *attrs, const char *hostname, json_t *hosts)
 {
     struct hostlist *hl = NULL;
     struct taskmap *map = NULL;
@@ -298,13 +298,10 @@ int boot_config_attr (attr_t *attrs, json_t *hosts)
     int rv = -1;
 
     if (!hosts || json_array_size (hosts) == 0) {
-        char hostname[MAXHOSTNAMELEN + 1];
-
-        if (gethostname (hostname, sizeof (hostname)) < 0
-            || attr_add (attrs,
-                         "hostlist",
-                         hostname,
-                         ATTR_IMMUTABLE) < 0) {
+        if (attr_add (attrs,
+                      "hostlist",
+                      hostname,
+                      ATTR_IMMUTABLE) < 0) {
             log_err ("failed to set hostlist attribute to localhost");
             goto error;
         }
@@ -530,7 +527,10 @@ done:
     free (cpy);
 }
 
-int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
+int boot_config (flux_t *h,
+                 const char *hostname,
+                 struct overlay *overlay,
+                 attr_t *attrs)
 {
     struct boot_conf conf;
     uint32_t rank;
@@ -545,23 +545,14 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
     if (boot_config_parse (flux_get_conf (h), &conf, &hosts) < 0)
         return -1;
 
-    if (boot_config_attr (attrs, hosts) < 0)
+    if (boot_config_attr (attrs, hostname, hosts) < 0)
         goto error;
 
     /* If hosts array was specified, match hostname to determine rank,
      * and size is the length of the hosts array.  O/w rank=0, size=1.
      */
     if (hosts != NULL) {
-        const char *fakehost = getenv ("FLUX_FAKE_HOSTNAME"); // for testing;
-        char hostname[MAXHOSTNAMELEN + 1];
-
-        if (gethostname (hostname, sizeof (hostname)) < 0) {
-            log_err ("gethostbyname");
-            goto error;
-        }
-        if (boot_config_getrankbyname (hosts,
-                                      fakehost ? fakehost : hostname,
-                                      &rank) < 0)
+        if (boot_config_getrankbyname (hosts, hostname, &rank) < 0)
             goto error;
         size = json_array_size (hosts);
     }

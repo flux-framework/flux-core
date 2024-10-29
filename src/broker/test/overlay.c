@@ -86,7 +86,6 @@ void ctx_destroy (struct context *ctx)
 }
 
 struct context *ctx_create (flux_t *h,
-                            const char *name,
                             int size,
                             int rank,
                             const char *topo_uri,
@@ -109,8 +108,8 @@ struct context *ctx_create (flux_t *h,
     ctx->h = h;
     ctx->size = size;
     ctx->rank = rank;
-    snprintf (ctx->name, sizeof (ctx->name), "%s-%d", name, rank);
-    if (!(ctx->ov = overlay_create (h, ctx->attrs, zctx, cb, ctx)))
+    snprintf (ctx->name, sizeof (ctx->name), "test%d", rank);
+    if (!(ctx->ov = overlay_create (h, ctx->name, ctx->attrs, zctx, cb, ctx)))
         BAIL_OUT ("overlay_create");
     if (!(ctx->uuid = overlay_get_uuid (ctx->ov)))
         BAIL_OUT ("overlay_get_uuid failed");
@@ -122,7 +121,7 @@ struct context *ctx_create (flux_t *h,
 
 void single (flux_t *h)
 {
-    struct context *ctx = ctx_create (h, "single", 1, 0, "kary:2", NULL);
+    struct context *ctx = ctx_create (h, 1, 0, "kary:2", NULL);
     flux_msg_t *msg;
     char *s;
     struct idset *critical_ranks;
@@ -286,7 +285,7 @@ void trio (flux_t *h)
     struct cert *cert;
     const char *sender;
 
-    ctx[0] = ctx_create (h, "trio", size, 0, "kary:2", recv_cb);
+    ctx[0] = ctx_create (h, size, 0, "kary:2", recv_cb);
 
     ok (overlay_set_topology (ctx[0]->ov, ctx[0]->topo) == 0,
         "%s: overlay_set_topology works", ctx[0]->name);
@@ -298,7 +297,7 @@ void trio (flux_t *h)
     ok (overlay_bind (ctx[0]->ov, parent_uri) == 0,
         "%s: overlay_bind %s works", ctx[0]->name, parent_uri);
 
-    ctx[1] = ctx_create (h, "trio", size, 1, "kary:2", recv_cb);
+    ctx[1] = ctx_create (h, size, 1, "kary:2", recv_cb);
 
     ok (overlay_set_topology (ctx[1]->ov, ctx[1]->topo) == 0,
         "%s: overlay_set_topology works", ctx[1]->name);
@@ -382,7 +381,8 @@ void trio (flux_t *h)
     ok (rmsg != NULL,
         "%s: response was received by overlay", ctx[0]->name);
     ok (!flux_msg_is_local (rmsg),
-        "%s: flux_msg_is_local returns false for response from child");
+        "%s: flux_msg_is_local returns false for response from child",
+        ctx[0]->name);
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "m000"),
         "%s: received message has expected topic", ctx[0]->name);
     ok (flux_msg_route_count (rmsg) == 0,
@@ -402,7 +402,8 @@ void trio (flux_t *h)
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "eeek"),
         "%s: received message has expected topic", ctx[0]->name);
     ok (!flux_msg_is_local (rmsg),
-        "%s: flux_msg_is_local returns false for event from child");
+        "%s: flux_msg_is_local returns false for event from child",
+        ctx[0]->name);
 
     /* Response 0->1
      */
@@ -505,7 +506,6 @@ void trio (flux_t *h)
 }
 
 void test_create (flux_t *h,
-                  const char *name,
                   int size,
                   struct context *ctx[])
 {
@@ -513,7 +513,7 @@ void test_create (flux_t *h,
     int rank;
 
     for (rank = 0; rank < size; rank++) {
-        ctx[rank] = ctx_create (h, name, size, rank, NULL, recv_cb);
+        ctx[rank] = ctx_create (h, size, rank, NULL, recv_cb);
         if (overlay_set_topology (ctx[rank]->ov, ctx[rank]->topo) < 0)
             BAIL_OUT ("%s: overlay_set_topology failed", ctx[rank]->name);
         if (rank == 0) {
@@ -577,12 +577,11 @@ void monitor_cb (struct overlay *ov, uint32_t rank, void *arg)
 void check_monitor (flux_t *h)
 {
     const int size = 5;
-    const char *name = "mon";
     struct context *ctx[size];
 
     diag ("check_monitor BEGIN");
 
-    test_create (h, name, size, ctx);
+    test_create (h, size, ctx);
 
     diag ("check_monitor test_create returned");
 
@@ -655,17 +654,18 @@ void wrongness (flux_t *h)
     if (!(attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
     errno = 0;
-    ok (overlay_create (NULL, attrs, zctx, NULL, NULL) == NULL
+    ok (overlay_create (NULL, "test0", attrs, zctx, NULL, NULL) == NULL
         && errno == EINVAL,
         "overlay_create h=NULL fails with EINVAL");
     errno = 0;
-    ok (overlay_create (h, NULL, zctx, NULL, NULL) == NULL && errno == EINVAL,
+    ok (overlay_create (h, "test0", NULL, zctx, NULL, NULL) == NULL
+        && errno == EINVAL,
         "overlay_create attrs=NULL fails with EINVAL");
     attr_destroy (attrs);
 
     if (!(attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
-    if (!(ov = overlay_create (h, attrs, zctx, NULL, NULL)))
+    if (!(ov = overlay_create (h, "test0", attrs, zctx, NULL, NULL)))
         BAIL_OUT ("overlay_create failed");
 
     errno = 0;
@@ -714,7 +714,7 @@ int main (int argc, char *argv[])
         BAIL_OUT ("could not create loop handle");
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
         BAIL_OUT ("flux_attr_set_cacheonly rank failed");
-    if (flux_attr_set_cacheonly (h, "hostlist", "test") < 0)
+    if (flux_attr_set_cacheonly (h, "hostlist", "test[0-7]") < 0)
         BAIL_OUT ("flux_attr_set_cacheonly hostlist failed");
     flux_log_set_redirect (h, diag_logger, NULL);
     flux_log (h, LOG_INFO, "test log message");

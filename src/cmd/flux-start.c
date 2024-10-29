@@ -240,7 +240,7 @@ int main (int argc, char *argv[])
             if (opts[i].name
                 && strstarts (opts[i].name, "test-")
                 && optparse_hasopt (ctx.opts, opts[i].name))
-                log_msg_exit ("%s only works with --test-size", opts[0].name);
+                log_msg_exit ("--%s only works with --test-size", opts[i].name);
         }
     }
 

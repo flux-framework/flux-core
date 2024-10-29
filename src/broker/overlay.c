@@ -148,6 +148,7 @@ struct overlay {
     int enable_ipv6;
 
     flux_t *h;
+    char *hostname;
     attr_t *attrs;
     flux_reactor_t *reactor;
     flux_msg_handler_t **handlers;
@@ -1156,15 +1157,17 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     flux_msg_t *response;
     const char *uuid;
     int status;
+    const char *hostname = NULL;
     int hello_log_level = LOG_DEBUG;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:I s:i s:s s:i}",
+                             "{s:I s:i s:s s:i s?s}",
                              "rank", &rank,
                              "version", &version,
                              "uuid", &uuid,
-                             "status", &status) < 0)
+                             "status", &status,
+                             "hostname", &hostname) < 0)
         goto error; // EPROTO (unlikely)
 
     if (flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0) {
@@ -1180,6 +1183,21 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
                       "v0.46.1 has a message encoding bug, please upgrade");
         }
         goto error; // EPERM
+    }
+    // flux-framework/flux-core#6389
+    if (hostname && !streq (hostname, flux_get_hostbyrank (ov->h, rank))) {
+        errprintf (&error,
+                  "%s is configured as rank %lu: mismatched config?",
+                  flux_get_hostbyrank (ov->h, rank),
+                  (unsigned long)rank);
+        flux_log (ov->h,
+                  LOG_ERR,
+                  "rejecting connection from %s (rank %lu): %s",
+                  hostname,
+                  (unsigned long)rank,
+                  error.text);
+        errno = EINVAL;
+        goto error;
     }
     if (!(child = child_lookup_byrank (ov, rank))) {
         errprintf (&error,
@@ -1283,11 +1301,12 @@ static int hello_request_send (struct overlay *ov,
 
     if (!(msg = flux_request_encode ("overlay.hello", NULL))
         || flux_msg_pack (msg,
-                          "{s:I s:i s:s s:i}",
+                          "{s:I s:i s:s s:i s:s}",
                           "rank", rank,
                           "version", ov->version,
                           "uuid", ov->uuid,
-                          "status", ov->status) < 0
+                          "status", ov->status,
+                          "hostname", ov->hostname) < 0
         || flux_msg_set_rolemask (msg, FLUX_ROLE_OWNER) < 0
         || overlay_sendmsg_parent (ov, msg) < 0) {
         flux_msg_decref (msg);
@@ -2374,6 +2393,7 @@ void overlay_destroy (struct overlay *ov)
         topology_decref (ov->topo);
         if (!ov->zctx_external)
             zmq_ctx_term (ov->zctx);
+        free (ov->hostname);
         free (ov);
         errno = saved_errno;
     }
@@ -2432,6 +2452,7 @@ static const struct flux_msg_handler_spec htab[] = {
 };
 
 struct overlay *overlay_create (flux_t *h,
+                                const char *hostname,
                                 attr_t *attrs,
                                 void *zctx,
                                 overlay_recv_f cb,
@@ -2442,6 +2463,8 @@ struct overlay *overlay_create (flux_t *h,
 
     if (!(ov = calloc (1, sizeof (*ov))))
         return NULL;
+    if (!(ov->hostname = strdup (hostname)))
+        goto error;
     ov->attrs = attrs;
     ov->rank = FLUX_NODEID_ANY;
     ov->parent.lastsent = -1;

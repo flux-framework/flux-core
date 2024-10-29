@@ -5,7 +5,7 @@ test_description='Test resource drain/undrain'
 . `dirname $0`/sharness.sh
 
 SIZE=4
-test_under_flux $SIZE full -o,-Shostlist=fake[0-3]
+test_under_flux $SIZE full --test-hosts=fake[0-3]
 
 
 # Usage: waitup N
