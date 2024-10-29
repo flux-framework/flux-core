@@ -286,4 +286,52 @@ test_expect_success 'logs contain quorum delayed/reached messages' '
 	grep "quorum reached" timeout.log
 '
 
+test_expect_success 'broker.cleanup-timeout default is none' '
+	flux start ${ARGS} \
+		flux getattr broker.cleanup-timeout >cto.out &&
+	cat >cto.exp <<-EOT &&
+	none
+	EOT
+	test_cmp cto.exp cto.out
+'
+
+test_expect_success 'broker.cleanup-timeout=3h is accepted' '
+	flux start ${ARGS} \
+		-o,-Sbroker.cleanup-timeout=3h \
+		flux getattr broker.cleanup-timeout >cto2.out &&
+	cat >cto2.exp <<-EOT &&
+	3h
+	EOT
+	test_cmp cto2.exp cto2.out
+'
+test_expect_success 'broker.cleanup-timeout=x fails' '
+	test_must_fail flux start ${ARGS} \
+		-o,-Sbroker.cleanup-timeout=x true
+'
+test_expect_success 'create rc1 that hangs in cleanup' '
+	cat <<-EOT >rc1_cleanup &&
+	#!/bin/sh
+	rank=\$(flux getattr rank)
+	test \$rank -eq 0 || exit 0
+	echo "sleep 30" | flux admin cleanup-push
+	EOT
+	chmod +x rc1_cleanup
+'
+test_expect_success 'create initial program that SIGTERMs broker' '
+	cat <<-EOT >killbroker &&
+	#!/bin/sh
+	# Usage: killbroker signum sleepsec
+	kill -\$1 \$(flux getattr broker.pid)
+	sleep \$2
+	EOT
+	chmod +x killbroker
+'
+test_expect_success 'cleanup gets SIGHUP after broker.cleanup-timeout expires' '
+	test_expect_code 129 flux start -s2 ${ARGS} \
+		-o,-Slog-filename=cleanup.log \
+		-o,-Sbroker.rc1_path="$(pwd)/rc1_cleanup" \
+		-o,-Sbroker.cleanup-timeout=1s \
+		./killbroker 15 60
+'
+
 test_done
