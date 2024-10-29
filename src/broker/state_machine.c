@@ -835,17 +835,19 @@ static int quorum_configure (struct state_machine *s)
     return 0;
 }
 
-static int quorum_timeout_configure (struct state_machine *s)
+static int timeout_configure (struct state_machine *s,
+                              const char *name,
+                              double *value,
+                              double default_value)
 {
-    const char *name = "broker.quorum-timeout";
     const char *val;
     char fsd[32];
 
     if (attr_get (s->ctx->attrs, name, &val, NULL) == 0) {
         if (streq (val, "none"))
-            s->quorum.timeout = -1;
+            *value = -1;
         else {
-            if (fsd_parse_duration (val, &s->quorum.timeout) < 0) {
+            if (fsd_parse_duration (val, value) < 0) {
                 log_msg ("Error parsing %s attribute", name);
                 return -1;
             }
@@ -854,11 +856,11 @@ static int quorum_timeout_configure (struct state_machine *s)
             return -1;
     }
     else
-        s->quorum.timeout = default_quorum_timeout;
-    if (s->quorum.timeout == -1)
+        *value = default_value;
+    if (*value == -1)
         snprintf (fsd, sizeof (fsd), "none");
     else {
-        if (fsd_format_duration (fsd, sizeof (fsd), s->quorum.timeout) < 0)
+        if (fsd_format_duration (fsd, sizeof (fsd), *value) < 0)
             return -1;
     }
     if (attr_add (s->ctx->attrs, name, fsd, ATTR_IMMUTABLE) < 0)
@@ -1267,7 +1269,10 @@ struct state_machine *state_machine_create (struct broker *ctx)
         goto error;
 
     if (quorum_configure (s) < 0
-        || quorum_timeout_configure (s) < 0) {
+        || timeout_configure (s,
+                              "broker.quorum-timeout",
+                              &s->quorum.timeout,
+                              default_quorum_timeout) < 0) {
         log_err ("error configuring quorum attributes");
         goto error;
     }
