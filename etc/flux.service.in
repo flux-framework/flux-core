@@ -21,6 +21,7 @@ ExecStart=/bin/bash -c '\
   -Sbroker.rc2_none \
   -Sbroker.quorum=1 \
   -Sbroker.quorum-timeout=none \
+  -Sbroker.cleanup-timeout=45 \
   -Sbroker.exit-norestart=42 \
   -Sbroker.sd-notify=1 \
   -Scontent.dump=auto \
