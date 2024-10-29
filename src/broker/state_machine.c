@@ -48,6 +48,12 @@ struct quorum {
     flux_watcher_t *timer;
 };
 
+struct cleanup {
+    bool expedite;
+    double timeout;
+    flux_watcher_t *timer;
+};
+
 struct monitor {
     struct flux_msglist *requests;
 
@@ -71,6 +77,7 @@ struct state_machine {
 
     struct monitor monitor;
     struct quorum quorum;
+    struct cleanup cleanup;
 
     struct flux_msglist *wait_requests;
 
@@ -152,6 +159,7 @@ static struct state_next nexttab[] = {
 };
 
 static const double default_quorum_timeout = 60; // log slow joiners
+static const double default_cleanup_timeout = -1;
 static const double goodbye_timeout = 60;
 
 static void state_action (struct state_machine *s, broker_state_t state)
@@ -360,6 +368,19 @@ static void action_run (struct state_machine *s)
 #endif
 }
 
+/* Abort the cleanup script if cleanup.timeout expires while it is running.
+ */
+static void cleanup_timer_cb (flux_reactor_t *r,
+                              flux_watcher_t *w,
+                              int revents,
+                              void *arg)
+{
+    struct state_machine *s = arg;
+
+    if (s->state == STATE_CLEANUP)
+        (void)runat_abort (s->ctx->runat, "cleanup");
+}
+
 static void action_cleanup (struct state_machine *s)
 {
     /* Prevent new downstream clients from saying hello, but
@@ -372,6 +393,14 @@ static void action_cleanup (struct state_machine *s)
         if (runat_start (s->ctx->runat, "cleanup", runat_completion_cb, s) < 0) {
             flux_log_error (s->ctx->h, "runat_start cleanup");
             state_machine_post (s, "cleanup-fail");
+        }
+        /* If the broker is shutting down on a terminating signal,
+         * impose a timeout on the cleanup script.
+         * See flux-framework/flux-core#6388.
+         */
+        if (s->cleanup.expedite && s->cleanup.timeout >= 0) {
+            flux_timer_watcher_reset (s->cleanup.timer, s->cleanup.timeout, 0.);
+            flux_watcher_start (s->cleanup.timer);
         }
     }
     else
@@ -549,6 +578,8 @@ void state_machine_post (struct state_machine *s, const char *event)
 void state_machine_kill (struct state_machine *s, int signum)
 {
     flux_t *h = s->ctx->h;
+
+    s->cleanup.expedite = true;
 
     switch (s->state) {
         case STATE_INIT:
@@ -1223,6 +1254,7 @@ void state_machine_destroy (struct state_machine *s)
         idset_destroy (s->quorum.online);
         flux_watcher_destroy (s->quorum.timer);
         flux_future_destroy (s->quorum.f);
+        flux_watcher_destroy (s->cleanup.timer);
         free (s);
         errno = saved_errno;
     }
@@ -1252,7 +1284,12 @@ struct state_machine *state_machine_create (struct broker *ctx)
                                                           0.,
                                                           0.,
                                                           quorum_timer_cb,
-                                                          s)))
+                                                          s))
+        || !(s->cleanup.timer = flux_timer_watcher_create (r,
+                                                           0.,
+                                                           0.,
+                                                           cleanup_timer_cb,
+                                                           s)))
         goto error;
     flux_watcher_start (s->prep);
     flux_watcher_start (s->check);
@@ -1274,6 +1311,13 @@ struct state_machine *state_machine_create (struct broker *ctx)
                               &s->quorum.timeout,
                               default_quorum_timeout) < 0) {
         log_err ("error configuring quorum attributes");
+        goto error;
+    }
+    if (timeout_configure (s,
+                           "broker.cleanup-timeout",
+                           &s->cleanup.timeout,
+                           default_cleanup_timeout) < 0) {
+        log_err ("error configuring cleanup timeout attribute");
         goto error;
     }
     norestart_configure (s);
