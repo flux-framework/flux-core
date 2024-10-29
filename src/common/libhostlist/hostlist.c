@@ -466,7 +466,13 @@ static int append_range_list_with_suffix (struct hostlist *hl,
         for (j = rng->lo; j <= rng->hi; j++) {
             char host[size];
             struct hostrange * hr;
-            sprintf (host, "%s%0*lu%s", pfx, rng->width, j, sfx);
+            snprintf (host,
+                      sizeof (host),
+                      "%s%0*lu%s",
+                      pfx,
+                      rng->width,
+                      j,
+                      sfx);
             if (!(hr = hostrange_create_single (host)))
                 return -1;
             hostlist_append_range (hl, hr);
