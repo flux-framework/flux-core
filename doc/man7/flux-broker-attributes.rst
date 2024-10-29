@@ -115,6 +115,11 @@ broker.quorum-timeout [Updates: C]
    rank 0 broker waits for the ``broker.quorum`` set to come online before
    aborting the Flux instance.   Default: ``60s``.
 
+broker.cleanup-timeout [Updates: C]
+   The amount of time (in RFC 23 Flux Standard Duration format) that the
+   rank 0 broker waits for cleanup actions to complete when the broker has
+   received a terminating signal.  Default: ``none``.
+
 broker.rc1_path [Updates: C]
    The path to the broker's rc1 script.  Default: ``${prefix}/etc/flux/rc1``.
 
