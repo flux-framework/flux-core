@@ -1243,12 +1243,15 @@ struct state_machine *state_machine_create (struct broker *ctx)
         goto error;
     if (!(s->wait_requests = flux_msglist_create ()))
         goto error;
-    s->prep = flux_prepare_watcher_create (r, prep_cb, s);
-    s->check = flux_check_watcher_create (r, check_cb, s);
-    s->idle = flux_idle_watcher_create (r, NULL, NULL);
-    s->quorum.timer = flux_timer_watcher_create (r, 0., 0., quorum_timer_cb, s);
-    if (!s->prep || !s->check || !s->idle || !s->quorum.timer)
-        goto nomem;
+    if (!(s->prep = flux_prepare_watcher_create (r, prep_cb, s))
+        || !(s->check = flux_check_watcher_create (r, check_cb, s))
+        || !(s->idle = flux_idle_watcher_create (r, NULL, NULL))
+        || !(s->quorum.timer = flux_timer_watcher_create (r,
+                                                          0.,
+                                                          0.,
+                                                          quorum_timer_cb,
+                                                          s)))
+        goto error;
     flux_watcher_start (s->prep);
     flux_watcher_start (s->check);
     if (!(s->monitor.requests = flux_msglist_create ()))
