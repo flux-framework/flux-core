@@ -308,6 +308,17 @@ matrix.add_build(
     args="--enable-broken-locale-mode",
 )
 
+# el8 - test install
+matrix.add_build(
+    name="el8 - test-install",
+    image="el8",
+    env=dict(
+        TEST_INSTALL="t",
+    ),
+    args="--with-flux-security",
+    docker_tag=True,
+)
+
 # RHEL8 clone, system, coverage
 matrix.add_build(
     name="el8 - system,coverage",
