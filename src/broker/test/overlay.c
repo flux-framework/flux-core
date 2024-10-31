@@ -725,6 +725,15 @@ int main (int argc, char *argv[])
     trio (h);
     clear_list (logs);
 
+    /* trio() and check_monitor() tests will bind to the same address
+     * in their tests.  Test can be racy and fail with EADDRINUSE if
+     * prior tests did not complete cleanup.  To ensure there are no
+     * issues, destroy & recreate zctx.  See issue 6404.
+     */
+    zmq_ctx_term (zctx);
+    if (!(zctx = zmq_ctx_new ()))
+        BAIL_OUT ("failed to recreate zmq context");
+
     check_monitor (h);
     clear_list (logs);
 
