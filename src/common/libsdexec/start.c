@@ -155,6 +155,26 @@ static int prop_add_bool (json_t *prop, const char *name, int val)
     return 0;
 }
 
+// per systemd.syntax(7), boolean values are: 1|yes|true|on, 0|no|false|off
+static bool is_true (const char *s)
+{
+    if (streq (s, "1")
+        || !strcasecmp (s, "yes")
+        || !strcasecmp (s, "true")
+        || !strcasecmp (s, "on"))
+        return true;
+    return false;
+}
+static bool is_false (const char *s)
+{
+    if (streq (s, "0")
+        || !strcasecmp (s, "no")
+        || !strcasecmp (s, "false")
+        || !strcasecmp (s, "off"))
+        return true;
+    return false;
+}
+
 static int prop_add_u32 (json_t *prop, const char *name, uint32_t val)
 {
     json_int_t i = val;
@@ -253,6 +273,17 @@ static int prop_add (json_t *prop, const char *name, const char *val)
             return -1;
         }
         free (bitmap);
+    }
+    else if (streq (name, "SendSIGKILL")) {
+        bool value;
+        if (is_false (val))
+            value = false;
+        else if (is_true (val))
+            value = true;
+        else
+            return -1;
+        if (prop_add_bool (prop, name, value) < 0)
+            return -1;
     }
     else {
         if (prop_add_string (prop, name, val) < 0)
