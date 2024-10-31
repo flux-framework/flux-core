@@ -164,6 +164,33 @@ test_expect_success 'sdexec can set unit Description property' '
 	        t2409-desc.service >desc.out &&
 	test_cmp desc.exp desc.out
 '
+test_expect_success 'sdexec can set unit SendSIGKILL property to no' '
+	cat >sigkill.exp <<-EOT &&
+	SendSIGKILL=no
+	EOT
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-sigkill.service" \
+	    --setopt=SDEXEC_PROP_SendSIGKILL=no \
+	    $systemctl --user show --property SendSIGKILL \
+	        t2409-sigkill.service >sigkill.out &&
+	test_cmp sigkill.exp sigkill.out
+'
+test_expect_success 'setting SendSIGKILL to an invalid value fails' '
+	test_must_fail $sdexec -r 0 --setopt=SDEXEC_PROP_SendSIGKILL=zzz \
+	    $true 2>sigkill_badval.err &&
+	grep "error setting property" sigkill_badval.err
+'
+test_expect_success 'sdexec can set unit KillMode property to process' '
+	cat >killmode.exp <<-EOT &&
+	KillMode=process
+	EOT
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-killmode.service" \
+	    --setopt=SDEXEC_PROP_KillMode=process \
+	    $systemctl --user show --property KillMode \
+	        t2409-killmode.service >killmode.out &&
+	test_cmp killmode.exp killmode.out
+'
 # Check that we can set resource control attributes on our transient units,
 # but expect resource control testing to occur elsewhere.
 # See also:
