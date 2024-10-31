@@ -824,8 +824,6 @@ static void kill_continuation (flux_future_t *f, void *arg)
  * only the pids of units started with sdexec.exec since the sdexec module
  * was loaded.  Since this sends an sdbus RPC, the response is handled in
  * kill_continuation() when the sdbus response is received.
- * N.B. in a typical system instance, job-exec would remotely execute
- * flux-imp kill and this would not be used.
  */
 static void kill_cb (flux_t *h,
                      flux_msg_handler_t *mh,

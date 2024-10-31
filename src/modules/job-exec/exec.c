@@ -607,6 +607,20 @@ static int exec_init (struct jobinfo *job)
             flux_log_error (job->h, "exec_init: flux_cmd_setenvf");
             goto err;
         }
+        /* The systemd user instance running as user flux is not privileged
+         * to signal guest processes, therefore only signal the IMP and
+         * never use SIGKILL.  See flux-framework/flux-core#6399
+         */
+        if (streq (service, "sdexec")) {
+            if (flux_cmd_setopt (cmd, "SDEXEC_PROP_KillMode", "process") < 0
+                || flux_cmd_setopt (cmd,
+                                    "SDEXEC_PROP_SendSIGKILL",
+                                    "off") < 0) {
+                flux_log_error (job->h,
+                                "Unable to set multiuser sdexec options");
+                return -1;
+            }
+        }
         if (flux_cmd_argv_append (cmd, config_get_imp_path ()) < 0
             || flux_cmd_argv_append (cmd, "exec") < 0) {
             flux_log_error (job->h, "exec_init: flux_cmd_argv_append");
