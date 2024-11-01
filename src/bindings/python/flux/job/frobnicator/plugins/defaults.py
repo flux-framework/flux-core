@@ -12,6 +12,8 @@
 
 """
 
+import copy
+
 from flux.job.frobnicator import FrobnicatorPlugin
 
 
@@ -49,15 +51,19 @@ class DefaultsConfig:
             self.queue_defaults(queue)
 
     def queue_defaults(self, name):
+        """Create a copy of self.defaults updated with queue-specific values"""
+        defaults = copy.deepcopy(self.defaults)
         if name and self.queues:
             if name not in self.queues:
-                raise ValueError(f"invalid queue {name} specified")
+                raise ValueError(f"Invalid queue '{name}' specified")
             qconf = self.queues[name]
             try:
-                return qconf["policy"]["jobspec"]["defaults"]["system"]
+                qdefaults = qconf["policy"]["jobspec"]["defaults"]["system"]
+                defaults.update(qdefaults)
+                return defaults
             except KeyError:
-                return None
-        return None
+                return defaults
+        return defaults
 
     def setattr_default(self, jobspec, attr, value):
         if attr == "duration" and jobspec.duration == 0:
@@ -68,18 +74,12 @@ class DefaultsConfig:
     def apply_defaults(self, jobspec):
         """Apply general defaults then queue-specific defaults to jobspec"""
 
-        for attr in self.defaults:
-            self.setattr_default(jobspec, attr, self.defaults[attr])
-
-        if jobspec.queue:
-            if jobspec.queue not in self.queues:
-                raise ValueError(f"Invalid queue '{jobspec.queue}' specified")
-            queue_defaults = self.queue_defaults(jobspec.queue)
-            if queue_defaults:
-                for attr in queue_defaults:
-                    self.setattr_default(jobspec, attr, queue_defaults[attr])
-        elif self.queues:
+        queue = jobspec.queue or self.defaults.get("queue")
+        if queue is None and self.queues:
             raise ValueError("no queue specified")
+
+        for attr, value in self.queue_defaults(queue).items():
+            self.setattr_default(jobspec, attr, value)
 
 
 class Frobnicator(FrobnicatorPlugin):

@@ -92,8 +92,38 @@ test_expect_success 'job-frobnicator sets specified queue duration' '
 	flux run --env=-* --queue=batch --dry-run hostname \
 		| flux job-frobnicator --jobspec-only --plugins=defaults \
 		> queue-batch.out &&
+	jq ".data.attributes.system.queue" < queue-batch.out &&
 	jq -e ".data.attributes.system.queue == \"batch\"" < queue-batch.out &&
+	jq ".data.attributes.system.duration"  < queue-batch.out &&
 	jq -e ".data.attributes.system.duration == 28800"  < queue-batch.out
+'
+test_expect_success 'add default duration with specific queue duration' '
+	cat <<-EOF >conf.d/conf.toml &&
+	[policy.jobspec.defaults.system]
+	queue = "debug"
+	duration = "2h"
+	[queues.debug]
+	[queues.batch]
+	policy.jobspec.defaults.system.duration = "8h"
+	EOF
+	flux config reload
+'
+test_expect_success 'job-frobnicator overrides default duration with queue duration' '
+	flux run --env=-* --dry-run hostname \
+		| flux job-frobnicator --jobspec-only --plugins=defaults \
+		> default-debug.out &&
+	flux run --env=-* --queue=debug --dry-run hostname \
+		| flux job-frobnicator --jobspec-only --plugins=defaults \
+		> default-debug2.out &&
+	flux run --env=-* --queue=batch --dry-run hostname \
+		| flux job-frobnicator --jobspec-only --plugins=defaults \
+		> default-batch.out &&
+	jq .data.attributes.system.duration < default-debug.out &&
+	jq -e ".data.attributes.system.duration == 7200" < default-debug.out &&
+	jq .data.attributes.system.duration < default-debug2.out &&
+	jq -e ".data.attributes.system.duration == 7200" < default-debug2.out &&
+	jq .data.attributes.system.duration < default-batch.out &&
+	jq -e ".data.attributes.system.duration == 28800" < default-batch.out
 '
 test_expect_success 'configure queue constraints' '
 	cat <<-EOF >conf.d/conf.toml &&
