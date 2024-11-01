@@ -14,16 +14,6 @@ case "$cmd" in
         printf "test-imp: Going to fail on rank 1\n" >&2
         if test $(flux getattr rank) = 1; then exit 0; fi
         exec "$@" ;;
-    kill)
-        #  Note: kill must be implemented in test since job-exec
-        #  module will run `flux-imp kill PID`.
-        #
-        signal=$2;
-        pid=$3;
-        printf "test-imp: kill -$signal $pid\n" >&2
-        shift 3;
-        printf "test-imp: Kill pid $pid signal $signal\n" >&2
-        kill -$signal $pid ;;
     *)
         printf "test-imp: Fatal: Unknown cmd=$cmd\n" >&2; exit 1 ;;
 esac

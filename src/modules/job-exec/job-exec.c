@@ -438,13 +438,21 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
 {
     struct jobinfo *job = arg;
     struct idset *active_ranks;
+    int actual_kill_signal = kill_signal;
+
+    /* RFC 15 states that the IMP handles SIGUSR1 by sending SIGKILL to
+     * the entire cgroup.  Sending SIGKILL to the IMP is not productive.
+     */
+    if (job->multiuser)
+        actual_kill_signal = SIGUSR1;
 
     flux_log (job->h,
               LOG_DEBUG,
-              "Sending %s to job shell for job %s",
-              sigutil_signame (kill_signal),
+              "Sending %s to %s for job %s",
+              sigutil_signame (actual_kill_signal),
+              job->multiuser ? "IMP" : "job shell",
               idf58 (job->id));
-    (*job->impl->kill) (job, kill_signal);
+    (*job->impl->kill) (job, actual_kill_signal);
     job->kill_shell_count++;
 
     /* Since we've transitioned to killing the shell directly, stop the
