@@ -190,8 +190,6 @@ static struct allocation *allocation_create (struct housekeeping *hk,
                                               id,
                                               "housekeeping",
                                                a))
-        || (hk->imp_path
-            && bulk_exec_set_imp_path (a->bulk_exec, hk->imp_path) < 0)
         || update_cmd_env (hk->cmd, id, userid) < 0
         || bulk_exec_push_cmd (a->bulk_exec, a->pending, hk->cmd, 0) < 0) {
         allocation_destroy (a);
