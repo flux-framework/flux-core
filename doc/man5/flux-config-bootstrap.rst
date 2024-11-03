@@ -215,6 +215,22 @@ create a tree topology with three levels.
    parent = "test128"
 
 
+Note that the first block of hosts defines the entire tree, with nodes test0 through test255. The second block has a comma instead of a dash, indicating a group of two members (1 and 128) and not a range. The resulting tree looks like this. The numbers on the left indicate the level of the tree.
+
+::
+
+        ┌───────┐                          
+    1)  │ test0 │                          
+        └───┬───┴──────────┐               
+            │              │               
+        ┌───┴───┐     ┌────┴────┐          
+    2)  │ test1 │     │ test128 │          
+        └───┬───┘     └────┬────┘          
+            │              │               
+        ┌───┴─────────┐   ┌┴──────────────┐
+    3)  │ test[2-127] │   │ test[129-255] │
+        └─────────────┘   └───────────────┘
+    
 RESOURCES
 =========
 
