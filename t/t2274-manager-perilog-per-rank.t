@@ -345,12 +345,35 @@ test_expect_success 'perilog: epilog failure drains ranks' '
 	test "$(flux resource drain -no {reason})" = "epilog failed for job $jobid" &&
 	undrain_all
 '
+test_expect_success 'perilog: job does not start when prolog cancel times out' '
+	undrain_all &&
+	flux config load <<-EOF &&
+	[job-manager.prolog]
+	per-rank = true
+	command = [ "sh",
+	            "-c",
+	            "trap \"\" 15; sleep 2" ]
+	kill-timeout = 1
+	timeout = ".25s"
+	[job-manager.epilog]
+	per-rank = true
+	command = [ "true" ]
+	EOF
+	flux jobtap query perilog.so | jq &&
+	jobid=$(flux submit hostname) &&
+	flux job wait-event -vHt 30 $jobid clean &&
+	flux job eventlog -H $jobid >prolog-cancel-eventlog.out &&
+	cat prolog-cancel-eventlog.out &&
+	test_must_fail grep "start$" prolog-cancel-eventlog.out &&
+	grep epilog-start prolog-cancel-eventlog.out
+'
 test_expect_success 'perilog: load offline plugin before perilog.so' '
 	flux jobtap remove perilog.so &&
 	flux jobtap load $OFFLINE_PLUGIN &&
 	flux jobtap load perilog.so
 '
 test_expect_success 'perilog: load simple prolog for offline rank testing' '
+	undrain_all &&
 	flux config load <<-EOF
 	[job-manager.prolog]
 	per-rank = true
