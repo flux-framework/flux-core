@@ -1026,10 +1026,11 @@ static void proc_kill_timeout_cb (flux_reactor_t *r,
 {
     struct perilog_proc *proc = arg;
     flux_t *h = flux_jobtap_get_flux (proc->p);
-    flux_log_error (h,
-                    "%s: timed out waiting for SIGTERM to terminate %s",
-                    idf58 (proc->id),
-                    perilog_proc_name (proc));
+    flux_log (h,
+              LOG_ERR,
+              "%s: timed out waiting for SIGTERM to terminate %s",
+              idf58 (proc->id),
+              perilog_proc_name (proc));
     /*  Drain active ranks and post finish event
      */
     proc->cancel_timeout = true;
