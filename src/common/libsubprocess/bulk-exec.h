@@ -60,11 +60,6 @@ int bulk_exec_aux_set (struct bulk_exec *exec,
  */
 int bulk_exec_set_max_per_loop (struct bulk_exec *exec, int max);
 
-/*  Set path to an IMP to use for bulk_exec_kill().
- */
-int bulk_exec_set_imp_path (struct bulk_exec *exec,
-                            const char *imp_path);
-
 void bulk_exec_destroy (struct bulk_exec *exec);
 
 int bulk_exec_push_cmd (struct bulk_exec *exec,

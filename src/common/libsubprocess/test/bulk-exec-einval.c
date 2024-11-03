@@ -27,16 +27,12 @@ int main (int argc, char *argv[])
         "bulk_exec_aux_set (NULL, ..) returns EINVAL");
     ok (bulk_exec_set_max_per_loop (NULL, 1) < 0 && errno == EINVAL,
         "bulk_exec_set_max_per_loop (NULL, 1) returns EINVAL");
-    ok (bulk_exec_set_imp_path (NULL, NULL) < 0 && errno == EINVAL,
-        "bulk_exec_set_imp_path (NULL, NULL) returns EINVAL");
     ok (bulk_exec_push_cmd (NULL, NULL, NULL, 0) < 0 && errno == EINVAL,
         "bulk_exec_push_cmd (NULL, ...) returns EINVAL");
     ok (bulk_exec_start (NULL, NULL) < 0 && errno == EINVAL,
         "bulk_exec_start (NULL, NULL) returns EINVAL");
     ok (bulk_exec_kill (NULL, NULL, 0) == NULL && errno == EINVAL,
         "bulk_exec_kill (NULL, NULL, 0) returns EINVAL");
-    ok (bulk_exec_imp_kill (NULL, NULL, NULL, 0) == NULL && errno == EINVAL,
-        "bulk_exec_imp_kill (NULL, NULL, NULL, 0) returns EINVAL");
     ok (bulk_exec_cancel (NULL) < 0 && errno == EINVAL,
         "bulk_exec_cancel (NULL) returns EINVAL");
     ok (bulk_exec_rc (NULL) < 0 && errno == EINVAL,
