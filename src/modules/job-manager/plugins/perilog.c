@@ -111,6 +111,7 @@ struct perilog_proc {
     bool cancel_on_exception;
     bool canceled;
     bool timedout;
+    bool cancel_timeout;
     double kill_timeout;
     flux_future_t *kill_f;
     flux_future_t *drain_f;
@@ -359,7 +360,7 @@ static void emit_finish_event (struct perilog_proc *proc,
          *   event is emitted to ensure job isn't halfway started before
          *   the exception is raised:
          */
-        if (status != 0 && !proc->canceled) {
+        if ((status != 0 && !proc->canceled) || proc->cancel_timeout) {
             flux_t *h = flux_jobtap_get_flux (proc->p);
             int code = WIFEXITED (status) ? WEXITSTATUS (status) : -1;
             int sig;
@@ -369,7 +370,14 @@ static void emit_finish_event (struct perilog_proc *proc,
             if (!(hosts = flux_hostmap_lookup (h, proc->failed_ranks, NULL)))
                 hosts = strdup ("unknown");
 
-            if (proc->timedout) {
+            if (proc->cancel_timeout) {
+                rc = asprintf (&errmsg,
+                               "prolog canceled then timed out on %s (rank %s)",
+                               hosts,
+                               proc->failed_ranks);
+                status = 1;
+            }
+            else if (proc->timedout) {
                 rc = asprintf (&errmsg,
                                "prolog timed out on %s (rank %s)",
                                hosts,
@@ -1024,6 +1032,7 @@ static void proc_kill_timeout_cb (flux_reactor_t *r,
                     perilog_proc_name (proc));
     /*  Drain active ranks and post finish event
      */
+    proc->cancel_timeout = true;
     proc_drain_and_finish (proc, false, true);
 }
 
