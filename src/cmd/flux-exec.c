@@ -335,68 +335,27 @@ static void stdin_cb (flux_reactor_t *r,
     }
 }
 
-static void kill_completion_cb (flux_subprocess_t *p)
-{
-    flux_subprocess_destroy (p);
-}
-
-static flux_subprocess_t *imp_kill (flux_subprocess_t *p, int signum)
-{
-    flux_cmd_t *cmd;
-    flux_subprocess_ops_t ops = {
-        .on_completion = kill_completion_cb,
-        .on_state_change = NULL,
-        .on_channel_out = NULL,
-        .on_stdout = output_cb,
-        .on_stderr = output_cb,
-    };
-
-    pid_t pid = flux_subprocess_pid (p);
-    int rank = flux_subprocess_rank (p);
-
-    if (!(cmd = flux_cmd_create (0, NULL, environ))
-        || flux_cmd_argv_append (cmd, imp_path) < 0
-        || flux_cmd_argv_append (cmd, "kill") < 0
-        || flux_cmd_argv_appendf (cmd, "%d", signum) < 0
-        || flux_cmd_argv_appendf (cmd, "-%ld", (long) pid) < 0) {
-        fprintf (stderr,
-                 "Failed to create flux-imp kill command for rank %d pid %d\n",
-                 rank, pid);
-        return NULL;
-    }
-    /* Note: subprocess object destroyed in completion callback
-     */
-    return flux_rexec (flux_handle,
-                       rank,
-                       FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF,
-                       cmd,
-                       &ops);
-}
-
 static void killall (zlistx_t *l, int signum)
 {
     flux_subprocess_t *p = zlistx_first (l);
     while (p) {
         if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
-            if (use_imp) {
-                if (!imp_kill (p, signum))
+            /* RFC 15 states that the IMP will treat SIGUSR1 as a surrogate
+             * for SIGKILL.
+             */
+            if (use_imp && signum == SIGKILL)
+                signum = SIGUSR1;
+
+            flux_future_t *f = flux_subprocess_kill (p, signum);
+            if (!f) {
+                if (optparse_getopt (opts, "verbose", NULL) > 0)
                     fprintf (stderr,
                              "failed to signal rank %d: %s\n",
-                             flux_subprocess_rank (p),
-                             strerror (errno));
+                            flux_subprocess_rank (p),
+                            strerror (errno));
             }
-            else {
-                flux_future_t *f = flux_subprocess_kill (p, signum);
-                if (!f) {
-                    if (optparse_getopt (opts, "verbose", NULL) > 0)
-                        fprintf (stderr,
-                                 "failed to signal rank %d: %s\n",
-                                flux_subprocess_rank (p),
-                                strerror (errno));
-                }
-                /* don't care about response */
-                flux_future_destroy (f);
-            }
+            /* don't care about response */
+            flux_future_destroy (f);
         }
         p = zlistx_next (l);
     }

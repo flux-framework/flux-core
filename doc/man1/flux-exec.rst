@@ -95,11 +95,7 @@ OPTIONS
 
    Prepend the full path to :program:`flux-imp run` to *COMMAND*. This option
    is mostly meant for testing or as a convenience to execute a configured
-   ``prolog`` or ``epilog`` command under the IMP. Note: When this option is
-   used, or if :program:`flux-imp` is detected as the first argument of
-   *COMMAND*, :program:`flux exec` will use :program:`flux-imp kill` to
-   signal remote commands instead of the normal builtin subprocess signaling
-   mechanism.
+   ``prolog`` or ``epilog`` command under the IMP.
 
 CAVEATS
 =======
