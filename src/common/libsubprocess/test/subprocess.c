@@ -24,6 +24,7 @@
 #include "src/common/libsubprocess/subprocess_private.h"
 #include "src/common/libsubprocess/server.h"
 #include "ccan/str/str.h"
+#include "ccan/array_size/array_size.h"
 
 extern char **environ;
 
@@ -1073,6 +1074,67 @@ void test_fail_notacommand_fork (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 }
 
+int fdcleanup_fdcount;
+
+void fdcleanup_output (flux_subprocess_t *p, const char *stream)
+{
+    const char *buf = NULL;
+    int len;
+
+    len = flux_subprocess_read_line (p, stream, &buf);
+
+    if (len > 0 && buf != NULL) {
+        diag ("%s: %.*s", stream, len, buf);
+        if (streq (stream, "stdout"))
+            fdcleanup_fdcount = strtoul (buf, NULL, 10);
+    }
+}
+
+/* This test ensures that subprocs aren't gifted with bonus file descriptors.
+ * N.B. Occasionally an extra file descriptor matches the glob.  Assume this
+ * is the "syncfd" and we are racing with its removal. Therefore, allow the
+ * fd count to match expected_fdcount or one more than that.
+ */
+void test_fdcleanup (flux_reactor_t *r,
+                     const char *desc,
+                     int flags,
+                     int expected_fdcount)
+{
+    char *av[] = {
+        "sh",
+        "-c",
+        "ls -1 /proc/$$/fd | wc -w",
+        NULL
+    };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (ARRAY_SIZE (av) - 1, av, NULL)) != NULL,
+        "flux_cmd_create");
+
+    flux_subprocess_ops_t ops = {
+        .on_stdout =  fdcleanup_output,
+        .on_stderr =  fdcleanup_output,
+        .on_completion = completion_cb,
+    };
+    p = flux_local_exec (r, flags, cmd, &ops);
+    ok (p != NULL, "flux_local_exec %s", desc);
+    completion_cb_count = 0;
+    fdcleanup_fdcount = 0;
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    ok (fdcleanup_fdcount == expected_fdcount
+        || fdcleanup_fdcount == expected_fdcount + 1,
+        "%d file descriptors are open (expected %d-%d)",
+        fdcleanup_fdcount,
+        expected_fdcount,
+        expected_fdcount + 1);
+
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *r;
@@ -1129,6 +1191,10 @@ int main (int argc, char *argv[])
     test_fail_notacommand (r);
     diag ("fail_notacommand_fork");
     test_fail_notacommand_fork (r);
+    diag ("test_fdcleanup fork-exec");
+    test_fdcleanup (r, "fork-exec", FLUX_SUBPROCESS_FLAGS_FORK_EXEC, 3);
+    diag ("test_fdcleanup posix-spawn");
+    test_fdcleanup (r, "posix-spawn", 0, 3);
 
     end_fdcount = fdcount ();
 
