@@ -25,6 +25,8 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/aux.h"
+#include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
@@ -92,6 +94,7 @@ struct idset *subprocess_childfds (flux_subprocess_t *p)
 {
     struct subprocess_channel *c;
     struct idset *ids;
+    const char *stdchan[] = { "stdin", "stdout", "stderr" };
 
     /*  fds 0,1,2 always remain open in the child (stdin,out,err)
      */
@@ -103,7 +106,13 @@ struct idset *subprocess_childfds (flux_subprocess_t *p)
 
     c = zhash_first (p->channels);
     while (c) {
+        // invalidate (don't protect) file descriptors that are duped to stdio
+        for (int i = 0; i < ARRAY_SIZE (stdchan); i++) {
+            if (streq (c->name, stdchan[i]))
+                goto next;
+        }
         idset_set (ids, c->child_fd);
+next:
         c = zhash_next (p->channels);
     }
     return ids;
