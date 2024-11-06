@@ -302,8 +302,8 @@ static int handle_compare_response (flux_t *h,
 }
 
 static int handle_append_response (flux_t *h,
-                                    struct watcher *w,
-                                    json_t *val)
+                                   struct watcher *w,
+                                   json_t *val)
 {
     if (!w->responded) {
         /* this is the first response case, store the first response
