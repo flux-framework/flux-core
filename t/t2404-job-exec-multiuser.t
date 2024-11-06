@@ -81,7 +81,7 @@ test_expect_success 'job-exec: reconfig and reload module' '
 	flux config reload &&
 	flux module reload -f job-exec
 '
-test_expect_success NO_ASAN 'job-exec: kill multiuser job uses the IMP' '
+test_expect_success NO_ASAN 'job-exec: kill multiuser job works' '
 	FAKE_USERID=42 &&
 	flux run --dry-run -n2 -N2 sleep 1000 | \
 		flux python ${SIGN_AS} ${FAKE_USERID} > sleep-job.signed &&
@@ -91,8 +91,7 @@ test_expect_success NO_ASAN 'job-exec: kill multiuser job uses the IMP' '
 	jq -e ".userid == 42" < ${id}.json &&
 	flux job wait-event -p exec -vt 30 ${id} shell.start &&
 	flux cancel ${id} &&
-	test_expect_code 143 run_timeout 30 flux job status -v ${id} &&
-	flux dmesg | grep "test-imp: Kill .*signal 15"
+	test_expect_code 143 run_timeout 30 flux job status -v ${id}
 '
 
 #  Configure failing IMP

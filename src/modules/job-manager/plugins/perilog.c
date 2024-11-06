@@ -827,15 +827,6 @@ static struct perilog_proc *procdesc_run (flux_t *h,
                         idf58 (id));
         goto error;
     }
-    /*  If using IMP, push path to IMP into bulk_exec for IMP kill support:
-     */
-    if (pd->uses_imp
-        && bulk_exec_set_imp_path (bulk_exec, perilog_config.imp_path) < 0) {
-        flux_log_error (h,
-                        "%s: failed to set IMP path",
-                        perilog_proc_name (proc));
-        goto error;
-    }
     if (bulk_exec_start (h, bulk_exec) < 0) {
         flux_log_error (h, "%s: bulk_exec_start", perilog_proc_name (proc));
         goto error;

@@ -560,10 +560,6 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: bulk_exec_create");
         goto err;
     }
-    if (job->multiuser && bulk_exec_set_imp_path (exec, imp_path)) {
-        flux_log_error (job->h, "exec_ctx_create: bulk_exec_set_imp_path");
-        goto err;
-    }
     if (!(ctx = exec_ctx_create (job, ranks, &error))) {
         flux_log (job->h, LOG_ERR, "exec_ctx_create: %s", error.text);
         goto err;
