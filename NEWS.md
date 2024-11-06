@@ -1,3 +1,62 @@
+flux-core version 0.68.0 - 2024-11-06
+-------------------------------------
+
+This release requires flux-security >= 0.13.0 as the IMP signal handling
+strategy has changed per RFC 15.
+
+## New Features
+ * update multi-user signaling to track flux-security 0.13.0 IMP changes
+   (#6408)
+ * add cleanup timeout for systemctl stop flux on rank 0 (#6397)
+ * flux-exec: use subprocess credits to avoid overflowing stdin buffers
+   (#6370)
+ * libsubprocess: support flow control on writes via credits (#6353)
+ * python: usability improvements for `JournalConsumer` class (#6390)
+ * python: add `flux.job.JournalConsumer` class with a simplified interface
+   for job manager journal consumers (#6386)
+ * support `sort:` prefix for format strings and `--sort` option to `flux
+   jobs` (#6380)
+ * flux-housekeeping: add `-i, --include=TARGETS` option to `flux
+   housekeeping list` (#6382)
+ * show response result in message traces (#6359)
+ * libsubprocess: invert SETPGRP flag logic (#6082)
+ * add --full option to display payloads in message tracing programs (#6347)
+
+
+## Fixes
+ * libsubprocess: close extra file descriptors (#6416)
+ * resolve perilog plugin issue that lets a job start after prolog timeout
+   when cancellation fails (#6412)
+ * frobnicator: allow queue-specific defaults to override global defaults
+   (#6403)
+ * sdexec: set KillMode=process SendSIGKILL=no for multi-user jobs (#6402)
+ * broker: detect mismatched bootstrap.hosts configuration (#6393)
+ * libsubprocess: take reference on callbacks (#6384)
+ * python: cleanup, fixes, and unit tests for flux.util.OutputFormat (#6374)
+ * libsubprocess: misc fixes (#6379)
+ * sched-simple: improve unsupported resource type exception (#6372)
+ * libsubprocess: ensure bulk-exec output is terminated (#6368)
+ * libsubprocess: check bufsize is > 0 (#6365)
+ * kvs: fix whitespace issues (#6356)
+ * allow project to be built with NDEBUG (#6355)
+ * systemd: make scripts fail if systemctl start does (#6346)
+ * improve policy/queues config error messages (#6339)
+ * make flux resource drain -o long reason expandable (#6338)
+
+## Cleanup
+ * job-archive: remove module (#6378)
+
+## CI/Testsuite/Documentation
+ * broker/test: avoid race in zeromq cleanup (#6405)
+ * docker: add missing tag of flux-core el8 image (#6401)
+ * doc: add debugging notes (#6369)
+ * doc: update link to flux-accounting guide (#6373)
+ * flux-jobs(1): document unlimited --count value (#6364)
+ * testsuite: add --raw-response opt to rpc test program (#6342)
+ * testsuite: improve test_must_fail_or_be_killed function (#6343)
+ * docs: rfc flux-config-bootstrap diagram (#6411)
+
+
 flux-core version 0.67.0 - 2024-10-01
 -------------------------------------
 
