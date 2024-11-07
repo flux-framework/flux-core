@@ -441,9 +441,7 @@ static void handle_lookup_response (flux_future_t *f,
     }
     else {
         /* First check for ENOENT */
-        if (!flux_rpc_get_unpack (f, "{ s:i s:i }",
-                                  "errno", &errnum,
-                                  "rootseq", &root_seq)) {
+        if (!flux_rpc_get_unpack (f, "{ s:i }", "errno", &errnum)) {
             assert (errnum == ENOENT);
             errno = errnum;
             goto error;
