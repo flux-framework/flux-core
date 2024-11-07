@@ -21,6 +21,8 @@
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_util_private.h"
 #include "src/common/libutil/blobref.h"
+#include "src/common/libcontent/content.h"
+#include "src/common/libutil/errprintf.h"
 
 /* State for one watcher */
 struct watcher {
@@ -37,10 +39,13 @@ struct watcher {
     char *key;                  // lookup key
     int flags;                  // kvs_lookup flags
     zlist_t *lookups;           // list of futures, in commit order
+    zlist_t *loads;             // list of futures, content loads in ref order
 
     struct ns_monitor *nsm;     // back pointer for removal
     json_t *prev;               // previous watch value for KVS_WATCH_FULL/UNIQ
-    int append_offset;          // offset for KVS_WATCH_APPEND
+    bool index_valid;           // flag if prev_start_index/prev_end_index set
+    int prev_start_index;       // previous start index loaded
+    int prev_end_index;         // previous end index loaded
     void *handle;               // zlistx_t handle
 };
 
@@ -90,6 +95,12 @@ static void watcher_destroy (struct watcher *w)
                 flux_future_destroy (f);
             zlist_destroy (&w->lookups);
         }
+        if (w->loads) {
+            flux_future_t *f;
+            while ((f = zlist_pop (w->loads)))
+                flux_future_destroy (f);
+            zlist_destroy (&w->loads);
+        }
         json_decref (w->prev);
         free (w);
         errno = saved_errno;
@@ -110,6 +121,8 @@ static struct watcher *watcher_create (const flux_msg_t *msg,
     if (!(w->key = kvs_util_normalize_key (key, NULL)))
         goto error;
     if (!(w->lookups = zlist_new ()))
+        goto error_nomem;
+    if (!(w->loads = zlist_new ()))
         goto error_nomem;
     w->flags = flags;
     w->rootseq = -1;
@@ -230,7 +243,7 @@ static bool key_match (json_t *o, const char *key)
 static void watcher_cleanup (struct ns_monitor *nsm, struct watcher *w)
 {
     /* wait for all in flight lookups to complete before destroying watcher */
-    if (zlist_size (w->lookups) == 0)
+    if (zlist_size (w->lookups) == 0 && zlist_size (w->loads) == 0)
         zlistx_delete (nsm->watchers, w->handle);
     /* if nsm->getrootf, destroy when getroot_continuation completes */
     if (zlistx_size (nsm->watchers) == 0
@@ -238,11 +251,114 @@ static void watcher_cleanup (struct ns_monitor *nsm, struct watcher *w)
         zhash_delete (nsm->ctx->namespaces, nsm->ns_name);
 }
 
+static void handle_load_response (flux_future_t *f, struct watcher *w)
+{
+    flux_t *h = flux_future_get_flux (f);
+    const void *data;
+    int size;
+    flux_error_t err;
+
+    if (content_load_get (f, &data, &size) < 0) {
+        errprintf (&err, "failed to load content data");
+        goto error_respond;
+    }
+
+    if (!w->mute) {
+        json_t *val = treeobj_create_val (data, size);
+        if (!val) {
+            errprintf (&err, "failed to create treeobj value");
+            goto error_respond;
+        }
+        if (flux_respond_pack (h, w->request, "{ s:o }", "val", val) < 0) {
+            flux_log_error (h,
+                            "%s: failed to respond to kvs-watch.lookup",
+                            __FUNCTION__);
+            json_decref (val);
+            goto finished;
+        }
+        w->responded = true;
+    }
+
+    return;
+error_respond:
+    if (!w->mute) {
+        if (flux_respond_error (h, w->request, errno, err.text) < 0)
+            flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    }
+finished:
+    w->finished = true;
+}
+
+static void load_continuation (flux_future_t *f, void *arg)
+{
+    struct watcher *w = arg;
+    struct ns_monitor *nsm = w->nsm;
+
+    while ((f = zlist_first (w->loads)) && flux_future_is_ready (f)) {
+        f = zlist_pop (w->loads);
+        if (!w->finished)
+            handle_load_response (f, w);
+        flux_future_destroy (f);
+        /* if WAITCREATE and !WATCH, then we only care about sending
+         * one response and being done.  We can use the responded flag
+         * to indicate that condition.
+         */
+        if (w->responded
+            && (w->flags & FLUX_KVS_WAITCREATE)
+            && !(w->flags & FLUX_KVS_WATCH))
+            w->finished = true;
+    }
+    if (w->finished)
+        watcher_cleanup (nsm, w);
+}
+
+static flux_future_t *load_ref (flux_t *h, struct watcher *w, const char *ref)
+{
+    flux_future_t *f = NULL;
+
+    if (!(f = content_load_byblobref (h, ref, 0))
+        || flux_future_then (f, -1., load_continuation, w) < 0)
+        goto error;
+    if (zlist_append (w->loads, f) < 0) {
+        errno = ENOMEM;
+        goto error;
+    }
+
+    return f;
+
+error:
+    flux_future_destroy (f);
+    return NULL;
+}
+
+static int load_range (flux_t *h,
+                       struct watcher *w,
+                       int start_index,
+                       int end_index,
+                       json_t *val)
+{
+    int i;
+
+    for (i = start_index; i <= end_index; i++) {
+        flux_future_t *f;
+        const char *ref = treeobj_get_blobref (val, i);
+        if (!ref)
+            return -1;
+        if (!(f = load_ref (h, w, ref)))
+            return -1;
+    }
+    return 0;
+}
+
 static int handle_initial_response (flux_t *h,
                                     struct watcher *w,
                                     json_t *val,
-                                    int root_seq)
+                                    const char *root_ref,
+                                    int root_seq,
+                                    const char *namespace)
 {
+    flux_error_t err;
+
     /* this is the first response case, store the first response
      * val */
     if ((w->flags & FLUX_KVS_WATCH_FULL)
@@ -250,14 +366,46 @@ static int handle_initial_response (flux_t *h,
         w->prev = json_incref (val);
 
     if ((w->flags & FLUX_KVS_WATCH_APPEND)) {
-        if (treeobj_decode_val (val,
-                                NULL,
-                                &w->append_offset) < 0) {
-            flux_log_error (h, "%s: treeobj_decode_val", __FUNCTION__);
+        /* The very first response may be a 'val' treeobj instead of
+         * 'valref', if there have been no appends yet.
+         */
+        if (treeobj_is_val (val)) {
+            w->index_valid = true;
+            w->prev_start_index = 0;
+            w->prev_end_index = 0;
+            /* since this is a val object, we can just return it */
+            goto out;
+        }
+        else if (treeobj_is_valref (val)) {
+            w->index_valid = true;
+            w->prev_start_index = 0;
+            w->prev_end_index = treeobj_get_count (val) - 1;
+        }
+        else {
+            errprintf (&err,
+                       "%s cannot be watched with WATCH_APPEND",
+                       treeobj_type_name (val));
+            errno = EINVAL;
             goto error_respond;
         }
+
+        if (load_range (h,
+                        w,
+                        w->prev_start_index,
+                        w->prev_end_index,
+                        val) < 0) {
+            errprintf (&err,
+                       "error sending request for content blobs [%d:%d]",
+                       w->prev_start_index,
+                       w->prev_end_index);
+            goto error_respond;
+        }
+
+        w->initial_rootseq = root_seq;
+        return 0;
     }
 
+out:
     if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
         flux_log_error (h,
                         "%s: failed to respond to kvs-watch.lookup",
@@ -271,7 +419,7 @@ static int handle_initial_response (flux_t *h,
 
 error_respond:
     if (!w->mute) {
-        if (flux_respond_error (h, w->request, errno, NULL) < 0)
+        if (flux_respond_error (h, w->request, errno, err.text) < 0)
             flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     }
     return -1;
@@ -318,78 +466,127 @@ static int handle_compare_response (flux_t *h,
 
 static int handle_append_response (flux_t *h,
                                    struct watcher *w,
-                                   json_t *val)
+                                   json_t *val,
+                                   const char *root_ref,
+                                   int root_seq,
+                                   const char *namespace)
 {
+    flux_error_t err;
+
     if (!w->responded) {
         /* this is the first response case, store the first response
          * info.  This is here b/c initial response could have been
-         * ENOENT case */
-        if (treeobj_decode_val (val,
-                                NULL,
-                                &w->append_offset) < 0) {
-            flux_log_error (h, "%s: treeobj_decode_val", __FUNCTION__);
-            goto error_respond;
-        }
-
-        if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
-            flux_log_error (h,
-                            "%s: failed to respond to kvs-watch.lookup",
-                            __FUNCTION__);
-            return -1;
-        }
-
-        w->responded = true;
-    }
-    else {
-        json_t *new_val = NULL;
-        void *new_data = NULL;
-        int new_offset;
-
-        if (treeobj_decode_val (val,
-                                &new_data,
-                                &new_offset) < 0) {
-            flux_log_error (h, "%s: treeobj_decode_val", __FUNCTION__);
-            goto error_respond;
-        }
-
-        /* check length to determine if append actually happened, note
-         * that zero length append is legal
+         * ENOENT case.
          *
-         * Note that this check does not ensure that the key was not
-         * "fake" appended to.  i.e. the key overwritten with data
-         * longer than the original.
+         * The very first response may be a 'val' treeobj instead of
+         * 'valref', if there have been no appends yet.
          */
-        if (new_offset < w->append_offset) {
-            free (new_data);
+        if (treeobj_is_val (val)) {
+            w->index_valid = true;
+            w->prev_start_index = 0;
+            w->prev_end_index = 0;
+            /* since this is a val object, we can just return it */
+            if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
+                flux_log_error (h,
+                                "%s: failed to respond to kvs-watch.lookup",
+                                __FUNCTION__);
+                goto error_out;
+            }
+            w->responded = true;
+        }
+        else if (treeobj_is_valref (val)) {
+            /* N.B. It may not be obvious why we have to check
+             * w->index_valid if we have not yet responded.  It is
+             * possible we have received a setroot response and an
+             * updated valref before loads from the content store have
+             * returned to the caller.
+             */
+            if (w->index_valid) {
+                int new_end_index = treeobj_get_count (val) - 1;
+                if (new_end_index > w->prev_end_index) {
+                    w->prev_start_index = w->prev_end_index + 1;
+                    w->prev_end_index = new_end_index;
+                }
+                else if (new_end_index < w->prev_end_index) {
+                    errprintf (&err, "key watched with WATCH_APPEND truncated");
+                    errno = EINVAL;
+                    goto error_respond;
+                }
+                else
+                    goto out;
+            }
+            else {
+                w->index_valid = true;
+                w->prev_start_index = 0;
+                w->prev_end_index = treeobj_get_count (val) - 1;
+            }
+
+            if (load_range (h,
+                            w,
+                            w->prev_start_index,
+                            w->prev_end_index,
+                            val) < 0) {
+                errprintf (&err,
+                           "error sending request for content blobs [%d:%d]",
+                           w->prev_start_index,
+                           w->prev_end_index);
+                goto error_respond;
+            }
+        }
+        else {
+            errprintf (&err,
+                       "%s cannot be watched with WATCH_APPEND",
+                       treeobj_type_name (val));
             errno = EINVAL;
             goto error_respond;
         }
+    }
+    else {
+        if (treeobj_is_valref (val)) {
+            int new_end_index;
+            if (!w->index_valid) {
+                errno = EPROTO;
+                goto error_respond;
+            }
+            new_end_index = treeobj_get_count (val) - 1;
+            if (new_end_index > w->prev_end_index) {
+                w->prev_start_index = w->prev_end_index + 1;
+                w->prev_end_index = new_end_index;
+            }
+            else if (new_end_index < w->prev_end_index) {
+                errprintf (&err, "key watched with WATCH_APPEND shortened");
+                errno = EINVAL;
+                goto error_respond;
+            }
+            else
+                goto out;
 
-        if (!(new_val = treeobj_create_val (new_data + w->append_offset,
-                                            new_offset - w->append_offset))) {
-            free (new_data);
-            goto error_respond;
+            if (load_range (h,
+                            w,
+                            w->prev_start_index,
+                            w->prev_end_index,
+                            val) < 0) {
+                errprintf (&err, "error loading reference");
+                goto error_respond;
+            }
         }
-
-        free (new_data);
-        w->append_offset = new_offset;
-
-        if (flux_respond_pack (h, w->request, "{ s:o }", "val", new_val) < 0) {
-            json_decref (new_val);
-            flux_log_error (h,
-                            "%s: failed to respond to kvs-watch.lookup",
-                            __FUNCTION__);
-            return -1;
+        else {
+            errprintf (&err,
+                       "value of key watched with WATCH_APPEND overwritten");
+            errno = EINVAL;
+            goto error_respond;
         }
     }
 
+out:
     return 0;
 
 error_respond:
     if (!w->mute) {
-        if (flux_respond_error (h, w->request, errno, NULL) < 0)
+        if (flux_respond_error (h, w->request, errno, err.text) < 0)
             flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     }
+error_out:
     return -1;
 }
 
@@ -420,6 +617,7 @@ static void handle_lookup_response (flux_future_t *f,
 {
     flux_t *h = flux_future_get_flux (f);
     int errnum;
+    const char *root_ref;
     int root_seq;
     json_t *val;
 
@@ -443,8 +641,9 @@ static void handle_lookup_response (flux_future_t *f,
         }
 
         if (flux_rpc_get_unpack (f,
-                                 "{ s:o s:i }",
+                                 "{ s:o s:s s:i }",
                                  "val", &val,
+                                 "rootref", &root_ref,
                                  "rootseq", &root_seq) < 0) {
             /* It is worth mentioning ENOTSUP error conditions here.
              *
@@ -466,7 +665,12 @@ static void handle_lookup_response (flux_future_t *f,
             goto error;
         }
 
-        if (handle_initial_response (h, w, val, root_seq) < 0)
+        if (handle_initial_response (h,
+                                     w,
+                                     val,
+                                     root_ref,
+                                     root_seq,
+                                     w->nsm->ns_name) < 0)
             goto finished;
     }
     else {
@@ -478,8 +682,9 @@ static void handle_lookup_response (flux_future_t *f,
         }
 
         if (flux_rpc_get_unpack (f,
-                                 "{ s:o s:i }",
+                                 "{ s:o s:s s:i }",
                                  "val", &val,
+                                 "rootref", &root_ref,
                                  "rootseq", &root_seq) < 0)
             goto error;
 
@@ -495,7 +700,12 @@ static void handle_lookup_response (flux_future_t *f,
                     goto finished;
             }
             else if (w->flags & FLUX_KVS_WATCH_APPEND) {
-                if (handle_append_response (h, w, val) < 0)
+                if (handle_append_response (h,
+                                            w,
+                                            val,
+                                            root_ref,
+                                            root_seq,
+                                            w->nsm->ns_name) < 0)
                     goto finished;
             }
             else {
@@ -559,15 +769,18 @@ static flux_future_t *lookupat (flux_t *h,
     json_t *o = NULL;
     flux_future_t *f;
     int saved_errno;
+    int flags = w->flags;
 
     if (!(msg = flux_request_encode ("kvs.lookup-plus", NULL)))
         return NULL;
+    if (flags & FLUX_KVS_WATCH_APPEND)
+        flags |= FLUX_KVS_TREEOBJ;
     if (!w->initial_rpc_sent) {
         if (flux_msg_pack (msg,
                            "{s:s s:s s:i}",
                            "key", w->key,
                            "namespace", ns,
-                           "flags", w->flags) < 0)
+                           "flags", flags) < 0)
             goto error;
     }
     else {
@@ -576,7 +789,7 @@ static flux_future_t *lookupat (flux_t *h,
         if (flux_msg_pack (msg,
                            "{s:s s:i s:i s:O}",
                            "key", w->key,
-                           "flags", w->flags,
+                           "flags", flags,
                            "rootseq", root_seq,
                            "rootdir", o) < 0)
             goto error;
