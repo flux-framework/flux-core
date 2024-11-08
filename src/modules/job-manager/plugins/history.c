@@ -165,13 +165,13 @@ static int jobtap_cb (flux_plugin_t *p,
             job_entry_destroy (entry);
             return 0;
         }
-        if (!hola_list_insert (hist->users, key, entry, false)) {
+        if (!hola_list_insert (hist->users, key, entry, true)) {
             job_entry_destroy (entry);
             return -1;
         }
     }
     else if (streq (topic, "job.new")) {
-        if (!hola_list_insert (hist->users, key, entry, false)) {
+        if (!hola_list_insert (hist->users, key, entry, true)) {
             job_entry_destroy (entry);
             return -1;
         }
