@@ -176,6 +176,19 @@ test_expect_success 'flux job eventlog --time-format=iso works' '
 	get_timestamp_field submit eventlog_time_format2.out | grep T | grep Z
 '
 
+test "$(TZ=America/Los_Angeles date +%z)" != "+0000" &&
+  test "$(TZ=America/Los_Angeles date +%Z)" != "UTC" &&
+  test_set_prereq HAVE_TZ
+test_expect_success HAVE_TZ 'flux job eventlog --time-format=iso uses local time' '
+	jobid=$(submit_job) &&
+	TZ=America/Los_Angeles \
+	    flux job eventlog --time-format=iso $jobid > tzlocal.out &&
+	test_debug "cat tzlocal.out" &&
+	get_timestamp_field submit tzlocal.out \
+	    | grep -E \
+	    "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]+-[0-9]{2}:[0-9]{2}"
+'
+
 test_expect_success 'flux job eventlog --time-format=offset works' '
 	jobid=$(submit_job) &&
 	flux job eventlog --time-format=offset $jobid > eventlog_time_format3.out &&
