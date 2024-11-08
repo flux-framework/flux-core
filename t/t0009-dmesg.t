@@ -117,6 +117,21 @@ test_expect_success 'logged non-ascii printable characters are unmodified' '
 test_expect_success 'dmesg request with empty payload fails with EPROTO(71)' '
 	${RPC} log.dmesg 71 </dev/null
 '
+# Note: TZ=UTC is set by default for sharness
+test_expect_success 'dmesg with TZ=UTC uses "Z" as offset' '
+	flux dmesg \
+	    | grep -E \
+	    "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]+Z"
+'
+
+test "$(TZ=America/Los_Angeles date +%z)" != "+0000" &&
+  test "$(TZ=America/Los_Angeles date +%Z)" != "UTC" &&
+  test_set_prereq HAVE_TZ
+test_expect_success HAVE_TZ 'dmesg with TZ=America/Los_Angeles uses tz offset' '
+	TZ=America/Los_Angeles flux dmesg >dmesgLA.out &&
+	test_debug "cat dmesgLA.out" &&
+	grep -E "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]+-[0-9]{2}:[0-9]{2}" dmesgLA.out
+'
 test_expect_success 'dmesg -H, --human works' '
 	#
 	#  Note: --human option should format first timestamp of dmesg output
