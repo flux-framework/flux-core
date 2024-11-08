@@ -108,7 +108,7 @@ static const char *months[] = {
     NULL
 };
 
-void print_iso_timestamp (struct dmesg_ctx *ctx, struct stdlog_header hdr)
+void print_iso_timestamp (struct dmesg_ctx *ctx, struct stdlog_header *hdr)
 {
     struct tm tm;
     struct timeval tv;
@@ -121,13 +121,13 @@ void print_iso_timestamp (struct dmesg_ctx *ctx, struct stdlog_header hdr)
      * - getting current timezone offset fails
      * - timestamp_tzoffset() returns "Z" (hdr timestamp already in Zulu time)
      */
-    if (timestamp_parse (hdr.timestamp, &tm, &tv) < 0
+    if (timestamp_parse (hdr->timestamp, &tm, &tv) < 0
         || strftime (buf, len, "%Y-%m-%dT%T", &tm) == 0
         || timestamp_tzoffset (&tm, tz, sizeof (tz)) < 0
         || streq (tz, "Z")) {
         printf ("%s%s%s ",
                 dmesg_color (ctx, DMESG_COLOR_TIME),
-                hdr.timestamp,
+                hdr->timestamp,
                 dmesg_color_reset (ctx));
         return;
     }
@@ -139,14 +139,14 @@ void print_iso_timestamp (struct dmesg_ctx *ctx, struct stdlog_header hdr)
             dmesg_color_reset (ctx));
 }
 
-void print_human_timestamp (struct dmesg_ctx *ctx, struct stdlog_header hdr)
+void print_human_timestamp (struct dmesg_ctx *ctx, struct stdlog_header *hdr)
 {
     struct tm tm;
     struct timeval tv;
-    if (timestamp_parse (hdr.timestamp, &tm, &tv) < 0) {
+    if (timestamp_parse (hdr->timestamp, &tm, &tv) < 0) {
         printf ("%s[%s]%s ",
                 dmesg_color (ctx, DMESG_COLOR_TIME),
-                hdr.timestamp,
+                hdr->timestamp,
                 dmesg_color_reset (ctx));
     }
     if (tm.tm_year == ctx->last_tm.tm_year
@@ -200,7 +200,7 @@ static const char *severity_color (struct dmesg_ctx *ctx, int severity)
 }
 
 typedef void (*timestamp_print_f) (struct dmesg_ctx *ctx,
-                                   struct stdlog_header hdr);
+                                   struct stdlog_header *hdr);
 
 void dmesg_print (struct dmesg_ctx *ctx,
                   const char *buf,
@@ -217,7 +217,7 @@ void dmesg_print (struct dmesg_ctx *ctx,
     else {
         nodeid = strtoul (hdr.hostname, NULL, 10);
         severity = STDLOG_SEVERITY (hdr.pri);
-        (*timestamp_print) (ctx, hdr);
+        (*timestamp_print) (ctx, &hdr);
         printf ("%s%s.%s[%" PRIu32 "]%s: %s%.*s%s\n",
                 dmesg_color (ctx, DMESG_COLOR_NAME),
                 hdr.appname,
