@@ -48,6 +48,10 @@ const char *tab3 = \
 const char *tab3_json = \
 "{\"tab3\": {\"id\": 4}}";
 
+const char *tab4 = \
+"[tab]\n" \
+"added = \"bar\"";
+
 
 static void
 create_test_file (const char *dir,
@@ -109,6 +113,7 @@ void test_basic (void)
     char path1[PATH_MAX + 1];
     char path2[PATH_MAX + 1];
     char path3[PATH_MAX + 1];
+    char path4[PATH_MAX + 1];
     char pathj[PATH_MAX + 1];
     char invalid[PATH_MAX + 1];
     flux_error_t error;
@@ -136,6 +141,7 @@ void test_basic (void)
     create_test_file (dir, "01", "toml", path1, sizeof (path1), t1);
     create_test_file (dir, "02", "toml", path2, sizeof (path2), tab2);
     create_test_file (dir, "03", "toml", path3, sizeof (path3), tab3);
+    create_test_file (dir, "04", "toml", path4, sizeof (path4), tab4);
     create_test_file (NULL, "03", "json", pathj, sizeof (pathj), tab3_json);
 
     /* Parse of one file works
@@ -242,6 +248,18 @@ void test_basic (void)
     ok (rc == 0 && i == 42,
         "unpacked integer from [tab] and got expected value");
 
+    /* Check that tab was updated with added value from tab4
+     */
+    rc = flux_conf_unpack (conf,
+                           &error,
+                           "{s:{s:s}}",
+                           "tab",
+                           "added", &s);
+    diag ("added = %s", s);
+    ok (rc == 0 && streq (s, "bar"),
+        "unpacked added string from [tab] and got expected value");
+
+
     /* Check table from second toml file
      */
     i = 0;
@@ -331,6 +349,7 @@ void test_basic (void)
     if (   (unlink (path1) < 0)
         || (unlink (path2) < 0)
         || (unlink (path3) < 0)
+        || (unlink (path4) < 0)
         || (unlink (pathj) < 0)
         || (unlink (invalid) < 0) )
         BAIL_OUT ("unlink: %s", strerror (errno));
