@@ -40,6 +40,15 @@ int timestamp_parse (const char *s,
  */
 int timestamp_from_double (double ts, struct tm *tm, struct timeval *tv);
 
+/* Get the current timezone offset for `tm` in the form [+-]HH:MM
+ * and place it into the supplied buffer. As a special case, +00:00
+ * is converted to "Z" (Zulu time) for backwards compatibility when
+ * the current timezone is UTC.
+ *
+ * Returns -1 on failure, 0 for success.
+ */
+int timestamp_tzoffset (struct tm *tm, char *buf, int size);
+
 #endif /* !_UTIL_TIMESTAMP_H */
 
 /*

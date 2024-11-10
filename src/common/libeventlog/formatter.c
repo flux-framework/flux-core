@@ -322,9 +322,11 @@ static int event_timestamp (struct eventlog_formatter *evf,
         time_t sec = timestamp;
         unsigned long usec = (timestamp - sec)*1E6;
         struct tm tm;
-        if (!gmtime_r (&sec, &tm))
+        char tz[16];
+
+        if (!localtime_r (&sec, &tm))
             return errprintf (errp,
-                              "gmtime(%lf): %s",
+                              "localtime(%lf): %s",
                               timestamp,
                               strerror (errno));
         if (snprintf (buf,
@@ -335,7 +337,8 @@ static int event_timestamp (struct eventlog_formatter *evf,
                               "failed to write timestamp color to buffer");
         size -= strlen (buf);
         buf += strlen (buf);
-        if (strftime (buf, size, "%Y-%m-%dT%T", &tm) == 0)
+        if (strftime (buf, size, "%Y-%m-%dT%T", &tm) == 0
+            || timestamp_tzoffset (&tm, tz, sizeof (tz)) < 0)
             return errprintf (errp,
                               "strftime(%lf): %s",
                               timestamp,
@@ -344,8 +347,9 @@ static int event_timestamp (struct eventlog_formatter *evf,
         buf += strlen (buf);
         if (snprintf (buf,
                       size,
-                      ".%.6luZ%s",
+                      ".%.6lu%s%s",
                       usec,
+                      tz,
                       eventlog_color_reset (evf)) >= size)
             return errprintf (errp,
                               "buffer truncated writing ISO 8601 timestamp");

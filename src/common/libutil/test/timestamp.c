@@ -276,6 +276,18 @@ static void test_all ()
     }
 }
 
+void test_tzoffset (void)
+{
+    struct tm tm;
+
+    ok (timestamp_tzoffset (NULL, NULL, 0) < 0 && errno == EINVAL,
+        "timestamp_tzoffset (NULL, NULL, 0) returns EINVAL");
+
+    memset (&tm, 0, sizeof (tm));
+    ok (timestamp_tzoffset (&tm, NULL, 0) < 0 && errno == EINVAL,
+        "timestamp_tzoffset (&tm, NULL, 0) returns EINVAL");
+}
+
 int main (int argc, char *argv[])
 {
 
@@ -286,6 +298,7 @@ int main (int argc, char *argv[])
 
     test_all ();
     test_invalid ();
+    test_tzoffset ();
 
     done_testing ();
 }

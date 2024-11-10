@@ -108,14 +108,45 @@ static const char *months[] = {
     NULL
 };
 
-void print_human_timestamp (struct dmesg_ctx *ctx, struct stdlog_header hdr)
+void print_iso_timestamp (struct dmesg_ctx *ctx, struct stdlog_header *hdr)
 {
     struct tm tm;
     struct timeval tv;
-    if (timestamp_parse (hdr.timestamp, &tm, &tv) < 0) {
+    char buf[128];
+    char tz[16];
+    int len = sizeof (buf);
+
+    /* Fall back to using the hdr timestamp string if
+     * - the timestamp fails to parse
+     * - getting current timezone offset fails
+     * - timestamp_tzoffset() returns "Z" (hdr timestamp already in Zulu time)
+     */
+    if (timestamp_parse (hdr->timestamp, &tm, &tv) < 0
+        || strftime (buf, len, "%Y-%m-%dT%T", &tm) == 0
+        || timestamp_tzoffset (&tm, tz, sizeof (tz)) < 0
+        || streq (tz, "Z")) {
+        printf ("%s%s%s ",
+                dmesg_color (ctx, DMESG_COLOR_TIME),
+                hdr->timestamp,
+                dmesg_color_reset (ctx));
+        return;
+    }
+    printf ("%s%s.%.6lu%s%s ",
+            dmesg_color (ctx, DMESG_COLOR_TIME),
+            buf,
+            tv.tv_usec,
+            tz,
+            dmesg_color_reset (ctx));
+}
+
+void print_human_timestamp (struct dmesg_ctx *ctx, struct stdlog_header *hdr)
+{
+    struct tm tm;
+    struct timeval tv;
+    if (timestamp_parse (hdr->timestamp, &tm, &tv) < 0) {
         printf ("%s[%s]%s ",
                 dmesg_color (ctx, DMESG_COLOR_TIME),
-                hdr.timestamp,
+                hdr->timestamp,
                 dmesg_color_reset (ctx));
     }
     if (tm.tm_year == ctx->last_tm.tm_year
@@ -168,7 +199,13 @@ static const char *severity_color (struct dmesg_ctx *ctx, int severity)
     return "";
 }
 
-void dmesg_print_human (struct dmesg_ctx *ctx, const char *buf, int len)
+typedef void (*timestamp_print_f) (struct dmesg_ctx *ctx,
+                                   struct stdlog_header *hdr);
+
+void dmesg_print (struct dmesg_ctx *ctx,
+                  const char *buf,
+                  int len,
+                  timestamp_print_f timestamp_print)
 {
     struct stdlog_header hdr;
     const char *msg;
@@ -180,35 +217,8 @@ void dmesg_print_human (struct dmesg_ctx *ctx, const char *buf, int len)
     else {
         nodeid = strtoul (hdr.hostname, NULL, 10);
         severity = STDLOG_SEVERITY (hdr.pri);
-        print_human_timestamp (ctx, hdr);
-        printf ("%s%s[%" PRIu32 "]%s: %s%.*s%s\n",
-                 dmesg_color (ctx, DMESG_COLOR_NAME),
-                 hdr.appname,
-                 nodeid,
-                 dmesg_color_reset (ctx),
-                 severity_color (ctx, severity),
-                 msglen, msg,
-                 dmesg_color_reset (ctx));
-    }
-    fflush (stdout);
-}
-
-void dmesg_print (struct dmesg_ctx *ctx, const char *buf, int len)
-{
-    struct stdlog_header hdr;
-    const char *msg;
-    int msglen, severity;
-    uint32_t nodeid;
-
-    if (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) < 0)
-        printf ("%.*s\n", len, buf);
-    else {
-        nodeid = strtoul (hdr.hostname, NULL, 10);
-        severity = STDLOG_SEVERITY (hdr.pri);
-        printf ("%s%s%s %s%s.%s[%" PRIu32 "]%s: %s%.*s%s\n",
-                dmesg_color (ctx, DMESG_COLOR_TIME),
-                hdr.timestamp,
-                dmesg_color_reset (ctx),
+        (*timestamp_print) (ctx, &hdr);
+        printf ("%s%s.%s[%" PRIu32 "]%s: %s%.*s%s\n",
                 dmesg_color (ctx, DMESG_COLOR_NAME),
                 hdr.appname,
                 stdlog_severity_to_string (severity),
@@ -278,10 +288,10 @@ static int cmd_dmesg (optparse_t *p, int ac, char *av[])
                                  "nobacklog", optparse_hasopt (p, "new"))))
             log_err_exit ("error sending log.dmesg request");
         while (flux_rpc_get (f, &buf) == 0) {
+            timestamp_print_f ts_print = print_iso_timestamp;
             if (optparse_hasopt (p, "human"))
-                dmesg_print_human (&ctx, buf, strlen (buf));
-            else
-                dmesg_print (&ctx, buf, strlen (buf));
+                ts_print = print_human_timestamp;
+            dmesg_print (&ctx, buf, strlen (buf), ts_print);
             flux_future_reset (f);
         }
         if (errno != ENODATA)

@@ -18,6 +18,7 @@
 #include <time.h>
 
 #include "timestamp.h"
+#include "ccan/str/str.h"
 
 /*
  *  GNU libc has timegm(3), but the manual states:
@@ -129,6 +130,48 @@ int timestamp_from_double (double ts, struct tm *tm, struct timeval *tv)
          *  allow the truncation to simulate floor(3).
          */
         tv->tv_usec = ((ts - tv->tv_sec) * 1000000) + 0.5;
+    }
+    return 0;
+}
+
+int timestamp_tzoffset (struct tm *tm, char *buf, int len)
+{
+    if (!tm || !buf || len <= 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (strftime (buf, len, "%z", tm) == 0)
+        return -1;
+    /* Special case: use "Z" for UTC for backwards compatibility
+     */
+    if (streq (buf, "+0000")) {
+        buf[0] = 'Z';
+        buf[1] = '\0';
+        return 0;
+    }
+    /* O/w, insert `:` in offset if it is of the form [+-]NNNN for
+     * enhanced readability.
+     */
+    if (strlen (buf) == 5
+        && len >= 7
+        && (buf[0] == '-' || buf[0] == '+')) {
+        char minutes[3];
+
+        /* Save last two characters of current tz string:
+         * (Note: due to strlen check above, we know this only copies
+         *  2 characters, so it is safe to use strcpy())
+         */
+        strcpy (minutes, buf+3);
+
+        /* Insert colon after [+-]NN
+         */
+        buf[3] = ':';
+
+        /* Copy minutes back to end of string.
+         * (Note: we know minutes only contains 2 characters, so it is
+         *  safe to use strcpy())
+         */
+        strcpy (buf+4, minutes);
     }
     return 0;
 }
