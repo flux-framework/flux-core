@@ -20,6 +20,9 @@
 #include <glob.h>
 #include <jansson.h>
 #include <flux/core.h>
+#if !HAVE_JSON_OBJECT_UPDATE_RECURSIVE
+#include "src/common/libmissing/json_object_update_recursive.h"
+#endif
 
 #include "src/common/libutil/intree.h"
 #include "src/common/libutil/errno_safe.h"
@@ -234,7 +237,7 @@ static int conf_update_obj (flux_conf_t *conf,
                             json_t *obj,
                             flux_error_t *error)
 {
-    if (json_object_update (conf->obj, obj) < 0) {
+    if (json_object_update_recursive (conf->obj, obj) < 0) {
         errprintf (error,
                    "%s: updating JSON object: out of memory",
                    filename);
