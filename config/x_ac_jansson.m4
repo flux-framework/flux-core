@@ -30,6 +30,8 @@ AC_DEFUN([X_AC_JANSSON], [
         AC_MSG_ERROR([flux cannot be built on a system with 16 bit ints])
     ])
 
+    AC_REPLACE_FUNCS(json_object_update_recursive)
+
     LIBS="$ac_save_LIBS"
     CFLAGS="$ac_save_CFLAGS"
   ]
