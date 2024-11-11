@@ -31,6 +31,8 @@ housekeeping service. It supports listing the resources currently executing
 housekeeping actions and a command to forcibly terminate actions on a per-job
 or per-node basis.
 
+In a Flux system instance, housekeeping is configured by default to run as a
+one-shot :linux:man5:`systemd.unit`.  See :ref:`troubleshooting` below.
 
 COMMANDS
 ========
@@ -126,6 +128,51 @@ The following field names can be specified for
 
 **pending.ranks**
    The list of nodes that still need to complete housekeeping.
+
+.. _troubleshooting:
+
+TROUBLESHOOTING
+===============
+
+In a Flux system instance, housekeeping is configured by default to run as a
+:linux:man5:`systemd.unit` named ``flux-housekeeping@JOBID``.
+
+:linux:man1:`systemctl` can show the status of housekeeping units running
+on the local node::
+
+  $ systemctl status flux-housekeeping@*
+
+:linux:man1:`journalctl` shows standard output and error of a housekeeping
+run::
+
+  $ journalctl -u flux-housekeeping@f4aTGTz2SN3
+
+When housekeeping fails, the systemd unit script drains the failing nodes
+with the reason obtained from systemd.  For example, housekeeping runs
+that failed due to a nonzero exit code are distinguished from those that
+were aborted early due to a signal.  In addition, a failure message is
+logged to Flux and can be accessed with :man1:`flux-dmesg`.
+
+When housekeeping hangs, no automated action is taken by Flux.  Sending
+housekeeping a signal with :program:`flux housekeeping kill` causes
+:program:`systemctl stop` to be run on the housekeeping unit.  Generally,
+it is best to let systemd take over from there.  Its default action is to
+send SIGTERM to all processes in the control group, then SIGKILL if any
+processes have not terminated after a 90s delay.
+
+.. note::
+
+  On systems with scheduler configurations that permit jobs to share nodes,
+  multiple housekeeping units may execute concurrently on a single node.
+  Housekeeping scripts must be crafted with that in mind on such systems.
+
+CAVEATS
+=======
+
+The ``flux-housekeeping@`` systemd unit is responsible for draining nodes
+when housekeeping fails.  Therefore if the system is configured to bypass
+the systemd unit file, or if housekeeping is misconfigured such that the
+the systemd unit file is not started, this draining does not occur.
 
 RESOURCES
 =========
