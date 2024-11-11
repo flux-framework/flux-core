@@ -15,7 +15,7 @@ DESCRIPTION
 
 .. program:: flux housekeeping
 
-The `EXPERIMENTAL`_ housekeeping service provides similar functionality to
+The housekeeping service provides similar functionality to
 a job epilog, with a few advantages
 
  - Housekeeping runs after the job, which is then allowed to exit CLEANUP
@@ -126,11 +126,6 @@ The following field names can be specified for
 
 **pending.ranks**
    The list of nodes that still need to complete housekeeping.
-
-EXPERIMENTAL
-============
-
-.. include:: common/experimental.rst
 
 RESOURCES
 =========

@@ -34,7 +34,7 @@ plugins
 
 housekeeping
    (optional) Table of configuration for the job-manager housekeeping
-   service. The housekeeping service is an `EXPERIMENTAL`_ alternative for
+   service. The housekeeping service is an alternative for
    handling administrative job epilog workloads. If enabled, resources are
    released by jobs to housekeeping, which runs a command or a systemd unit
    and releases resources to the scheduler on completion. See configuration
@@ -198,11 +198,6 @@ EXAMPLE
    [job-manager.housekeeping]
    release-after = "1m"
 
-
-EXPERIMENTAL
-============
-
-.. include:: common/experimental.rst
 
 RESOURCES
 =========
