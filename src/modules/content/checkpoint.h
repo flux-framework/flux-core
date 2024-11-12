@@ -19,8 +19,6 @@ struct content_checkpoint *content_checkpoint_create (
     struct content_cache *cache);
 void content_checkpoint_destroy (struct content_checkpoint *checkpoint);
 
-int checkpoints_flush (struct content_checkpoint *checkpoint);
-
 #endif /* !_CONTENT_CHECKPOINT_H */
 
 /*
