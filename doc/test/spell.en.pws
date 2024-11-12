@@ -929,3 +929,6 @@ CIDR
 enp
 mincores
 minnodes
+cgroup
+cgroups
+fs
