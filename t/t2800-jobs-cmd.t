@@ -133,7 +133,7 @@ test_expect_success 'submit jobs for job list testing' '
 	#
 	#  Submit a set of jobs with non-default urgencies
 	#
-	for u in 31 25 20 15 10 5; do
+	for u in 31 25 20 15 10 5 0; do
 		flux job submit --urgency=$u sleeplong.json >> sched.ids
 	done &&
 	listjobs > active.ids &&
@@ -552,6 +552,7 @@ test_expect_success 'flux-jobs --format={urgency},{priority} works' '
 	echo 15,15 >> urgency_priority.exp &&
 	echo 10,10 >> urgency_priority.exp &&
 	echo 5,5 >> urgency_priority.exp &&
+	echo 0,0 >> urgency_priority.exp &&
 	for i in `seq 1 $(job_list_state_count run)`; do
 		echo "16,16" >> urgency_priority.exp
 	done &&
@@ -559,6 +560,18 @@ test_expect_success 'flux-jobs --format={urgency},{priority} works' '
 		echo "16,16" >> urgency_priority.exp
 	done &&
 	test_cmp urgency_priority.out urgency_priority.exp
+'
+
+test_expect_success 'flux-jobs --format={contextual_info} shows held job' '
+	flux jobs -no {urgency}:{contextual_info} | grep 0:held
+'
+
+# There is no simple way to create a job with urgency > 0 and priority == 0,
+# so test priority-hold using --from-stdin:
+test_expect_success 'flux-jobs {contextual_info} shows priority-hold job' '
+	echo "{\"id\":195823665152,\"state\":8,\"priority\":0,\"urgency\":16}" \
+		| flux jobs --from-stdin -no {priority}:{contextual_info} \
+		| grep 0:priority-hold
 '
 
 test_expect_success 'flux-jobs --format={state},{state_single} works' '
