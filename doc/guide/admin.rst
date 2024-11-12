@@ -529,6 +529,26 @@ the other nodes, preserving owner and mode.
     and directories non-writable by user ``flux`` adds an extra layer of
     security for the system instance configuration.
 
+Systemd and cgroup unified hierarchy
+====================================
+
+The flux systemd unit launches a systemd user instance as the flux user.
+It is recommended to use this to run user jobs, as it provides cgroups
+containment and the ability to enforce memory limits.  To do this, Flux
+requires the cgroup version 2 unified hierarchy:
+
+- The cgroup2 file system must be mounted on  ``/sys/fs/cgroup``
+
+- On some systems, add ``systemd.unified_cgroup_hierarchy=1`` to the
+  kernel command line (RHEL 8).
+
+- On some systems, add ``cgroup_enable=memory`` to the kernel command line
+  (debian 12).
+
+The configuration that follows presumes jobs will be launched through systemd,
+although it is not strictly required if your system cannot meet these
+prerequisites.
+
 Configuring the Flux System Instance
 ====================================
 
@@ -541,9 +561,20 @@ Example file installed path: ``/etc/flux/system/conf.d/system.toml``
 
 .. code-block:: toml
 
+ # Enable the sdbus and sdexec broker modules
+ [systemd]
+ enable = true
+
  # Flux needs to know the path to the IMP executable
  [exec]
  imp = "/usr/libexec/flux/flux-imp"
+
+ # Run jobs in a systemd user instance
+ service = "sdexec"
+
+ # Limit jobs to a percentage of physical memory
+ [exec.sdexec-properties]
+ MemoryMax = "95%"
 
  # Allow users other than the instance owner (guests) to connect to Flux
  # Optionally, root may be given "owner privileges" for convenience
@@ -628,6 +659,7 @@ See also: :man5:`flux-config-exec`, :man5:`flux-config-access`
 :man5:`flux-config-resource`, :man5:`flux-config-ingest`,
 :man5:`flux-config-job-manager`,
 :man5:`flux-config-policy`, :man5:`flux-config-kvs`,
+:man5:`flux-config-systemd`,
 :sched:man5:`flux-config-sched-fluxion-qmanager`,
 :sched:man5:`flux-config-sched-fluxion-resource`.
 
