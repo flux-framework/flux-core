@@ -549,6 +549,8 @@ The configuration that follows presumes jobs will be launched through systemd,
 although it is not strictly required if your system cannot meet these
 prerequisites.
 
+.. _config-flux:
+
 Configuring the Flux System Instance
 ====================================
 
@@ -693,27 +695,39 @@ restarts.
 The ``statedir`` directory is used for the ``content.sqlite`` file that
 contains content addressable storage backing the Flux key value store (KVS).
 
-Adding Job Prolog/Epilog Scripts
-================================
+Adding Prolog/Epilog/Housekeeping Scripts
+=========================================
 
-The current best practice for enabling per-job prolog/epilog scripts
-is to use the job-manager prolog/epilog configuration supported by the
-``perilog.so`` jobtap plugin. The perilog plugin optionally initiates a
-prolog action when a job enters the RUN state before any job shells are
-launched, and an epilog action that can be started after all job shells
-complete but before resources are returned to the scheduler.
+Flux can execute site-defined scripts as root on compute nodes before and
+after each job.
 
-.. note::
-   The perilog plugin now supports directly executing the configured
-   prolog/epilog across all ranks of a job, which makes the previous solution
-   using ``flux perilog-run`` obsolete.
+prolog
+  The prolog runs as soon as the job enters RUN state.  Job shells are not
+  launched until all prolog tasks have completed.  If the prolog fails on
+  any nodes, or if any node takes longer than a fail-safe timeout (default
+  30m), those nodes are drained and a fatal exception is raised on the job.
+  If the job is canceled or reaches its time limit during the prolog, the
+  prolog is simply aborted and the job enters COMPLETING state.
 
-The configuration of a prolog and epilog that runs as root requires the
-following steps:
+epilog
+  The epilog runs after job shell exits on all nodes, with the job held
+  in COMPLETING state until all epilog tasks have terminated.  If the epilog
+  fails on any nodes, those nodes are drained and a fatal exception is raised
+  on the job.  There is no default epilog timeout.
 
- 1. Create executable scripts named ``prolog`` and ``epilog`` in
-    ``/etc/flux/system``.  A suggested approach is to have these scripts run
-    all executables found in ``prolog.d`` and ``epilog.d``.  For example:
+housekeeping
+  Housekeeping runs after the job has reached the INACTIVE state.  It is not
+  recorded in the job eventlog and does not affect the job result.  If
+  housekeeping fails on any nodes, those nodes are drained.  Housekeeping
+  releases resources to the scheduler as they complete.
+
+The configuration of prolog, epilog, and housekeeping requires the following
+steps:
+
+ 1. Create executable scripts named ``prolog``, ``epilog``, and
+    ``housekeeping`` in ``/etc/flux/system``.  A suggested approach is to have
+    these scripts run all executables found in ``prolog.d``, ``epilog.d``,
+    and ``housekeeping.d`` respectively.  For example:
 
     .. code-block:: sh
 
@@ -739,42 +753,38 @@ following steps:
 
        exit $exit_rc
 
- 2. Flux provides systemd *oneshot* units ``flux-prolog@`` and
-    ``flux-epilog@``, templated by jobid, which run the user-provided
-    ``prolog`` and ``epilog`` scripts installed in the previous step.
-    Configure the IMP to allow the system instance user to start these
-    units as root via the provided provided wrapper scripts:
+    Scripts may use :envvar:`FLUX_JOB_ID` and :envvar:`FLUX_JOB_USERID`
+    to take job or user specific actions.  Flux commands can be run from
+    the scripts with instance owner credentials if the system is configured
+    for root access as suggested in :ref:`config-flux`.
+
+    The IMP sets :envvar:`PATH` to a safe ``/usr/sbin:/usr/bin:/sbin:/bin``.
+
+ 2. Flux provides systemd *oneshot* units ``flux-prolog@``, ``flux-epilog@``,
+    and ``flux-housekeeping@`` templated by jobid, which run the user-provided
+    scripts installed in the previous step.  Configure the IMP to allow the
+    system instance user to start these units as root via the provided
+    provided wrapper scripts:
 
     .. code-block:: toml
 
        [run.prolog]
        allowed-users = [ "flux" ]
+       allowed-environment = [ "FLUX_*" ]
        path = "/usr/libexec/flux/cmd/flux-run-prolog"
 
        [run.epilog]
        allowed-users = [ "flux" ]
+       allowed-environment = [ "FLUX_*" ]
        path = "/usr/libexec/flux/cmd/flux-run-epilog"
 
-    By default, the IMP will set the environment variables
-    ``FLUX_OWNER_USERID``, ``FLUX_JOB_USERID``, ``FLUX_JOB_ID``, ``HOME``
-    and ``USER`` for the prolog and epilog processes. ``PATH`` will
-    be set explicitly to ``/usr/sbin:/usr/bin:/sbin:/bin``. To allow extra
-    environment variables to be passed from the enclosing environment,
-    use the ``allowed-environment`` key, which is an array of ``glob(7)``
-    patterns for acceptable environment variables, e.g.
-
-    .. code-block:: toml
-
-       [run.prolog]
+       [run.housekeeping]
+       allowed-users = [ "flux" ]
        allowed-environment = [ "FLUX_*" ]
-
-    will pass all ``FLUX_`` environment variables to the IMP ``run``
-    commands.
+       path = "/usr/libexec/flux/cmd/flux-run-housekeeping"
 
 
- 3. Configure the Flux system instance to load the job-manager ``perilog.so``
-    plugin, which is not active by default. This plugin enables job-manager
-    prolog/epilog support in the instance:
+ 3. Configure the Flux system instance to run prolog, epilog, and housekeeping:
 
     .. code-block:: toml
 
@@ -782,21 +792,6 @@ following steps:
        plugins = [
          { load = "perilog.so" }
        ]
-
- 4. Configure the Flux system instance to run a prolog and epilog across
-    the ranks of each job using the job-manager prolog/epilog as supported
-    by the ``perilog.so`` plugin. See :man5:`flux-config-job-manager` for
-    a detailed description of supported ``perilog.so`` configuration.
-
-    .. note::
-        A command need not be specified in ``[job-manager.prolog]`` or
-        ``[job-manager.epilog]`` when ``exec.imp`` (the path to the IMP)
-        is configured. In this case, the default is to run the prolog/epilog
-        defined in IMP configuration via ``flux-imp run [prolog|epilog]``.
-
-    For example:
-
-    .. code-block:: toml
 
        [job-manager.prolog]
        per-rank = true
@@ -806,8 +801,18 @@ following steps:
        per-rank = true
        # timeout = "0"
 
-See also: :man5:`flux-config-job-manager`,
-:security:man5:`flux-config-security-imp`.
+       [job-manager.housekeeping]
+       release-after = "30s"
+
+Standard output and standard error of the prolog, epilog, and housekeeping
+units are captured by the systemd journal.  Standard systemd tools like
+:linux:man1:`systemctl` and :linux:man1:`journalctl` can be used to
+observe and manipulate the prolog, epilog, and housekeeping systemd units.
+
+See also:
+:man1:`flux-housekeeping`.
+:man5:`flux-config-job-manager`,
+:security:man5:`flux-config-security-imp`,
 
 Adding Job Request Validation
 =============================
