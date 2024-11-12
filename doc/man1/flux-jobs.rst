@@ -524,11 +524,13 @@ the state of the job or other context:
 
 **contextual_info**
    Returns selected information based on the job's current state.  If the
-   job is in PRIORITY state, then the string ``priority-wait`` is returned,
-   if the job is in DEPEND state, then a list of outstanding  dependencies
-   is returned, if the job is in SCHED state then an estimated time the
-   job will run is returned (if the scheduler supports it). Otherwise,
-   the assigned nodelist is returned (if resources were assigned).
+   job is in PRIORITY state, then the string ``priority-wait`` is returned.
+   If the job is in DEPEND state, then a list of outstanding dependencies
+   is returned. If the job is in SCHED state and its priority is currently
+   0, then one of ``held`` or ``priority-hold`` will be printed depending
+   on if urgency is also 0, otherwise an estimated time the job will run is
+   returned (if supported by the scheduler). In other states, the assigned
+   nodelist is returned (if resources were assigned).
 
 **contextual_info**
    Returns the job runtime for jobs in RUN state or later, otherwise the
