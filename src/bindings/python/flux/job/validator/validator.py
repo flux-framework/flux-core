@@ -191,6 +191,10 @@ class JobValidator:
         )
         return self
 
+    def stop(self):
+        """Stop the validator."""
+        self.executor.shutdown()
+
     def validate(self, jobinfo):
         """Validate jobinfo using all loaded validators
 
