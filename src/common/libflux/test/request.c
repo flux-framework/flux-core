@@ -13,9 +13,7 @@
 #endif
 #include <errno.h>
 #include <string.h>
-
-#include "message.h"
-#include "request.h"
+#include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"

@@ -11,10 +11,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
-
-#include "future.h"
 
 /*  Type-specific data for a composite future:
  */

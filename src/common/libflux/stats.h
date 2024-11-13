@@ -11,8 +11,6 @@
 #ifndef _FLUX_CORE_STATS_H
 #define _FLUX_CORE_STATS_H
 
-#include "handle.h"
-
 /* Metric types:
  * Counter - An integer value that will, on the backend (brubeck) send the
  *           count and reset to 0 at each flush. It calculates the change

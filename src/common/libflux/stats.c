@@ -12,11 +12,10 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-
 #include <stdio.h>
+#include <flux/core.h>
 
 #include "fripp.h"
-#include "stats.h"
 
 #define FRIPP_AUX_TAG "flux::fripp"
 

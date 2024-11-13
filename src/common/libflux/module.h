@@ -14,8 +14,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "handle.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

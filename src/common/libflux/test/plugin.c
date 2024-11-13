@@ -13,8 +13,8 @@
 #endif
 #include <string.h>
 #include <errno.h>
+#include <flux/core.h>
 
-#include "src/common/libflux/plugin.h"
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"
 

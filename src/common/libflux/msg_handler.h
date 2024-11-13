@@ -11,9 +11,6 @@
 #ifndef _FLUX_CORE_MSG_HANDLER_H
 #define _FLUX_CORE_MSG_HANDLER_H
 
-#include "message.h"
-#include "handle.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

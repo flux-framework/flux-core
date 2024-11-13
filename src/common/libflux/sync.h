@@ -11,8 +11,6 @@
 #ifndef _FLUX_CORE_SYNC_H
 #define _FLUX_CORE_SYNC_H
 
-#include <flux/core.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif

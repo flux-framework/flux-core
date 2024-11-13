@@ -21,11 +21,7 @@
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
-
-#include "attr.h"
-#include "flog.h"
-#include "fripp.h"
-#include "reactor.h"
+#include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/iterators.h"

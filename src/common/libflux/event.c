@@ -15,12 +15,9 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <jansson.h>
+#include <flux/core.h>
 
 #include "ccan/base64/base64.h"
-
-#include "event.h"
-#include "rpc.h"
-#include "message.h"
 
 flux_future_t *flux_event_subscribe_ex (flux_t *h,
                                         const char *topic,

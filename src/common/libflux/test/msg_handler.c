@@ -13,7 +13,6 @@
 #endif
 #include <flux/core.h>
 
-#include "src/common/libflux/msg_handler.h"
 #include "src/common/libtap/tap.h"
 
 /* Create a flux handle with no implementation operation callbacks

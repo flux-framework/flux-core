@@ -13,8 +13,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
-#include "src/common/libflux/reactor.h"
+#include <flux/core.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,6 +25,7 @@ extern "C" {
 flux_watcher_t *zmqutil_watcher_create (flux_reactor_t *r,
                                         void *zsock, int events,
                                         flux_watcher_f cb, void *arg);
+
 void *zmqutil_watcher_get_zsock (flux_watcher_t *w);
 
 #ifdef __cplusplus

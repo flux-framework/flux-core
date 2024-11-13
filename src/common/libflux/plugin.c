@@ -24,13 +24,12 @@
 #include <assert.h>
 #include <flux/core.h>
 #include <pthread.h>
+#include <flux/core.h>
 
 #include "src/common/libflux/plugin_private.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
 #include "ccan/str/str.h"
-
-#include "plugin.h"
 
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers

@@ -15,16 +15,15 @@
 #include <jansson.h>
 #include <string.h>
 #include <errno.h>
+#include <flux/core.h>
 
-#include "kvs.h"
+#include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
+
 #include "kvs_txn_private.h"
 #include "kvs_dir_private.h"
 #include "treeobj.h"
 
-#include "src/common/libflux/flux.h"
-#include "kvs_dir.h"
-#include "src/common/libtap/tap.h"
-#include "ccan/str/str.h"
 
 void jdiag (json_t *o)
 {

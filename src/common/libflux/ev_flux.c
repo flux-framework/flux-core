@@ -13,8 +13,7 @@
 #endif
 #include <stddef.h>
 #include <stdbool.h>
-
-#include "handle.h"
+#include <flux/core.h>
 
 #include "src/common/libev/ev.h"
 

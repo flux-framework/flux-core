@@ -24,6 +24,7 @@
 #include <caliper/cali.h>
 #include <sys/syscall.h>
 #endif
+#include <flux/core.h>
 
 #include "src/common/libflux/plugin_private.h"
 #include "src/common/librouter/rpc_track.h"
@@ -38,13 +39,6 @@
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 
-#include "handle.h"
-#include "reactor.h"
-#include "connector.h"
-#include "message.h"
-#include "msg_handler.h" // for flux_sleep_on ()
-#include "flog.h"
-#include "conf.h"
 #include "msg_deque.h"
 #include "message_private.h" // to check msg refcount in flux_send_new ()
 

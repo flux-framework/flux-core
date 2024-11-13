@@ -17,13 +17,13 @@
 #include <jansson.h>
 #include <string.h>
 #include <assert.h>
+#include <flux/core.h>
 
-#include "src/common/libflux/message.h"
-#include "src/common/libflux/message_proto.h"
-#include "src/common/libflux/message_private.h"
 #include "src/common/libtap/tap.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
+
+#include "message_private.h"
 
 static bool verbose = false;
 

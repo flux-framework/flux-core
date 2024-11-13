@@ -24,6 +24,14 @@ typedef struct {
     char text[160];
 } flux_error_t;
 
+/* libflux convenience typedefs
+ */
+typedef struct flux_msg flux_msg_t;
+typedef struct flux_handle flux_t;
+typedef struct flux_watcher flux_watcher_t;
+typedef struct flux_reactor flux_reactor_t;
+typedef struct flux_future flux_future_t;
+
 /* FLUX_DEPRECATED may be altered during pre-processing, check for
  * definition */
 #ifndef FLUX_DEPRECATED

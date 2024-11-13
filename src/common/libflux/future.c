@@ -16,12 +16,10 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <assert.h>
+#include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
-
-#include "future.h"
-#include "flog.h"
 
 struct now_context {
     flux_t *h;              // (optional) cloned flux_t handle

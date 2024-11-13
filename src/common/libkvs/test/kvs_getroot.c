@@ -16,8 +16,6 @@
 #include <errno.h>
 #include <flux/core.h>
 
-#include "src/common/libflux/flux.h"
-#include "kvs_getroot.h"
 #include "src/common/libtap/tap.h"
 
 void errors (void)

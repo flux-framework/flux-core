@@ -16,8 +16,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdlib.h>
+#include <flux/core.h>
 
-#include "src/common/libflux/reactor.h"
 #include "src/common/libtap/tap.h"
 
 #include "src/common/libzmqutil/reactor.h"

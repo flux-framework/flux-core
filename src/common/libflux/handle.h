@@ -15,14 +15,9 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "types.h"
-#include "message.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef struct flux_handle flux_t;
 
 typedef struct {
     int request_tx;

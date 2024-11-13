@@ -16,9 +16,9 @@
 #include <errno.h>
 #include <flux/core.h>
 
-#include "src/common/libflux/flux.h"
-#include "kvs_checkpoint.h"
 #include "src/common/libtap/tap.h"
+
+#include "kvs_checkpoint.h"
 
 void errors (void)
 {

@@ -11,9 +11,6 @@
 #ifndef _FLUX_CORE_RPC_H
 #define _FLUX_CORE_RPC_H
 
-#include "handle.h"
-#include "future.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

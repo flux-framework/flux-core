@@ -15,16 +15,12 @@
 #include <sys/stat.h>
 #include <stdbool.h>
 
-#include "handle.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* Reactor
  */
-
-typedef struct flux_reactor flux_reactor_t;
 
 /* Flags for flux_reactor_run()
  */
@@ -66,8 +62,6 @@ void flux_reactor_active_decref (flux_reactor_t *r);
 
 /* Watchers
  */
-
-typedef struct flux_watcher flux_watcher_t;
 
 typedef void (*flux_watcher_f)(flux_reactor_t *r,
                                flux_watcher_t *w,

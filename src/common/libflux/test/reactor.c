@@ -17,8 +17,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
+#include <flux/core.h>
 
-#include "src/common/libflux/reactor.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libtap/tap.h"

@@ -21,10 +21,6 @@
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"
 
-#include "future.h"
-#include "reactor.h"
-#include "response.h"
-
 int aux_destroy_called;
 void *aux_destroy_arg;
 void aux_destroy_fun (void *arg)

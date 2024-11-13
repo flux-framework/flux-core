@@ -14,15 +14,13 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <jansson.h>
+#include <flux/core.h>
 
 #include "ccan/str/str.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/errprintf.h"
-
-#include "attr.h"
-#include "rpc.h"
 
 enum {
     FLUX_ATTRFLAG_IMMUTABLE = 1,

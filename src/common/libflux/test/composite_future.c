@@ -12,9 +12,8 @@
 #include "config.h"
 #endif
 #include <stdio.h>
+#include <flux/core.h>
 
-#include "src/common/libflux/reactor.h"
-#include "src/common/libflux/future.h"
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"
 

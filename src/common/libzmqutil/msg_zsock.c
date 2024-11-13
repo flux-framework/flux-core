@@ -17,8 +17,8 @@
 #include <assert.h>
 #include <inttypes.h>
 #include <zmq.h>
+#include <flux/core.h>
 
-#include "src/common/libflux/message.h"
 #include "src/common/libflux/message_iovec.h"
 #include "src/common/libflux/message_proto.h"
 #include "src/common/libutil/errno_safe.h"

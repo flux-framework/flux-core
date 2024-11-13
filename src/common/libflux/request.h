@@ -11,8 +11,6 @@
 #ifndef _FLUX_CORE_REQUEST_H
 #define _FLUX_CORE_REQUEST_H
 
-#include "message.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -16,11 +16,13 @@
 #include <string.h>
 #include <assert.h>
 #include <zmq.h>
+#include <flux/core.h>
 
 #include "src/common/libev/ev.h"
 #include "src/common/libflux/reactor_private.h"
 
 #include "ev_zmq.h"
+#include "reactor.h"
 
 /* 0MQ sockets
  */

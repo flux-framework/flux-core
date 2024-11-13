@@ -46,12 +46,11 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <errno.h>
+#include <flux/core.h>
 
 #include "ccan/list/list.h"
 
-#include "message.h"
 #include "message_private.h" // for access to msg->list
-
 #include "msg_deque.h"
 
 struct msg_deque {

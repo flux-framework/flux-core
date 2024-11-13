@@ -15,10 +15,10 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/eventfd.h>
+#include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
-#include "message.h"
 #include "msglist.h"
 
 struct flux_msglist {

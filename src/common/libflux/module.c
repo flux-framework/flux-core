@@ -15,10 +15,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <jansson.h>
-
-#include "module.h"
-#include "message.h"
-#include "rpc.h"
+#include <flux/core.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/dirwalk.h"

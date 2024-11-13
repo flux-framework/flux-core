@@ -16,15 +16,13 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <fcntl.h>
-
-#include "handle.h"
-#include "reactor.h"
-#include "ev_flux.h"
+#include <flux/core.h>
 
 #include "src/common/libev/ev.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdutils.h"
 
+#include "ev_flux.h"
 #include "reactor_private.h"
 
 static int valid_flags (int flags, int valid)

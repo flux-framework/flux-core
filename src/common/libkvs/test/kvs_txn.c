@@ -15,13 +15,14 @@
 #include <jansson.h>
 #include <string.h>
 #include <errno.h>
-
-#include "kvs.h"
-#include "kvs_txn_private.h"
-#include "treeobj.h"
+#include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"
+
+#include "kvs_txn_private.h"
+#include "treeobj.h"
+
 
 void jdiag (json_t *o)
 {
