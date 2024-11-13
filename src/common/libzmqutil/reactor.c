@@ -57,9 +57,9 @@ flux_watcher_t *zmqutil_watcher_create (flux_reactor_t *r,
     ev_zmq *zw;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, sizeof (*zw), &zmq_watcher, cb, arg)))
+    if (!(w = watcher_create (r, sizeof (*zw), &zmq_watcher, cb, arg)))
         return NULL;
-    zw = flux_watcher_get_data (w);
+    zw = watcher_get_data (w);
     ev_zmq_init (zw, zmq_cb, zsock, events_to_libev (events) & ~EV_ERROR);
     zw->data = w;
 
@@ -68,7 +68,7 @@ flux_watcher_t *zmqutil_watcher_create (flux_reactor_t *r,
 
 void *zmqutil_watcher_get_zsock (flux_watcher_t *w)
 {
-    if (flux_watcher_get_ops (w) != &zmq_watcher) {
+    if (watcher_get_ops (w) != &zmq_watcher) {
         errno = EINVAL;
         return NULL;
     }

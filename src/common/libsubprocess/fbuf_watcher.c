@@ -81,14 +81,14 @@ flux_watcher_t *fbuf_read_watcher_create (flux_reactor_t *r,
         return NULL;
     }
 
-    if (!(w = flux_watcher_create (r,
-                                   sizeof (*ebr),
-                                   &buffer_read_watcher,
-                                   cb,
-                                   arg)))
+    if (!(w = watcher_create (r,
+                              sizeof (*ebr),
+                              &buffer_read_watcher,
+                              cb,
+                              arg)))
         goto cleanup;
 
-    ebr = flux_watcher_get_data (w);
+    ebr = watcher_get_data (w);
 
     if (ev_fbuf_read_init (ebr,
                            fd,
@@ -207,14 +207,14 @@ flux_watcher_t *fbuf_write_watcher_create (flux_reactor_t *r,
         return NULL;
     }
 
-    if (!(w = flux_watcher_create (r,
-                                   sizeof (*ebw),
-                                   &buffer_write_watcher,
-                                   cb,
-                                   arg)))
+    if (!(w = watcher_create (r,
+                              sizeof (*ebw),
+                              &buffer_write_watcher,
+                              cb,
+                              arg)))
         goto cleanup;
 
-    ebw = flux_watcher_get_data (w);
+    ebw = watcher_get_data (w);
 
     if (ev_fbuf_write_init (ebw,
                             fd,

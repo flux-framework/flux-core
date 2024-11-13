@@ -70,19 +70,42 @@ static inline int libev_to_events (int events)
  *  Caller retrieves pointer to allocated implementation data with
  *   flux_watcher_data (w).
  */
-flux_watcher_t * flux_watcher_create (flux_reactor_t *r,
-                                      size_t data_size,
-                                      struct flux_watcher_ops *ops,
-                                      flux_watcher_f fn,
-                                      void *arg);
+static inline flux_watcher_t *watcher_create (flux_reactor_t *r,
+                                              size_t data_size,
+                                              struct flux_watcher_ops *ops,
+                                              flux_watcher_f fn,
+                                              void *arg)
+{
+    struct flux_watcher *w = calloc (1, sizeof (*w) + data_size);
+    if (!w)
+        return NULL;
+    w->r = r;
+    w->ops = ops;
+    w->data = w + 1;
+    w->fn = fn;
+    w->arg = arg;
+    flux_reactor_incref (r);
+    return w;
+}
 
 /*  Return pointer to implementation data reserved by watcher object 'w'.
  */
-void * flux_watcher_get_data (flux_watcher_t *w);
+static inline void *watcher_get_data (flux_watcher_t *w)
+{
+    if (w)
+        return w->data;
+    return NULL;
+}
 
 /*  Return pointer to flux_watcher_ops structure for this watcher.
  */
-struct flux_watcher_ops * flux_watcher_get_ops (flux_watcher_t *w);
+static inline struct flux_watcher_ops *watcher_get_ops (flux_watcher_t *w)
+{
+    if (w)
+        return w->ops;
+    return NULL;
+}
+
 
 #ifdef __cplusplus
 }
