@@ -34,7 +34,7 @@ static int valid_flags (int flags, int valid)
     return 0;
 }
 
-static void reactor_usecount_decr (flux_reactor_t *r)
+void flux_reactor_decref (flux_reactor_t *r)
 {
     if (r && --r->usecount == 0) {
         int saved_errno = errno;
@@ -49,14 +49,15 @@ static void reactor_usecount_decr (flux_reactor_t *r)
     }
 }
 
-static void reactor_usecount_incr (flux_reactor_t *r)
+void flux_reactor_incref (flux_reactor_t *r)
 {
-    r->usecount++;
+    if (r)
+        r->usecount++;
 }
 
 void flux_reactor_destroy (flux_reactor_t *r)
 {
-    reactor_usecount_decr (r);
+    flux_reactor_decref (r);
 }
 
 flux_reactor_t *flux_reactor_create (int flags)
@@ -154,7 +155,7 @@ flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
     w->data = w + 1;
     w->fn = fun;
     w->arg = arg;
-    reactor_usecount_incr (r);
+    flux_reactor_incref (r);
     return w;
 }
 
@@ -203,8 +204,7 @@ void flux_watcher_destroy (flux_watcher_t *w)
             w->ops->stop (w);
         if (w->ops->destroy)
             w->ops->destroy (w);
-        if (w->r)
-            reactor_usecount_decr (w->r);
+        flux_reactor_decref (w->r);
         free (w);
     }
 }
