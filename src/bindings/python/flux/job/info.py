@@ -503,7 +503,8 @@ class JobInfo:
         Generate contextual nodelist/reason information based on job state:
          PRIORITY: returns "priority-wait"
          DEPEND:   returns depends:dependencies list
-         SCHED:    returns eta:sched.t_estimate if available
+         SCHED:    returns eta:sched.t_estimate if available, "held" if
+                   urgency=0, or "priority-hold" if urgency>0 and priority=0.
          RUN+:     returns assigned nodelist
         """
         # Required for pylint, o/w it thinks state is a callable:
@@ -521,6 +522,12 @@ class JobInfo:
                     eta = flux.util.fsd(eta)
                 return f"eta:{eta}"
             except TypeError:
+                # No eta available. Print "held" if job is held, or
+                # priority-hold if priority == 0, otherwise nothing.
+                if self.urgency == 0:
+                    return "held"
+                elif self.priority == 0:
+                    return "priority-hold"
                 return ""
         else:
             return self.nodelist
@@ -687,7 +694,14 @@ def job_fields_to_attrs(fields):
         "t_remaining": ("expiration", "state", "result"),
         "annotations": ("annotations",),
         "dependencies": ("dependencies",),
-        "contextual_info": ("state", "dependencies", "annotations", "nodelist"),
+        "contextual_info": (
+            "state",
+            "dependencies",
+            "annotations",
+            "nodelist",
+            "priority",
+            "urgency",
+        ),
         "contextual_time": ("state", "t_run", "t_cleanup", "duration"),
         "inactive_reason": (
             "state",
