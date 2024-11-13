@@ -122,6 +122,10 @@ struct perilog_proc {
     char *failed_ranks;
 };
 
+/* The default time (sec) to wait for the prolog to terminate after SIGTERM.
+ */
+static double default_kill_timeout = 60.;
+
 static struct perilog_proc *procdesc_run (flux_t *h,
                                           flux_plugin_t *p,
                                           struct perilog_procdesc *pd,
@@ -250,7 +254,7 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     }
 
     pd->cmd = cmd;
-    pd->kill_timeout = kill_timeout > 0. ? kill_timeout : 10.;
+    pd->kill_timeout = kill_timeout > 0. ? kill_timeout : default_kill_timeout;
     pd->per_rank = per_rank;
     pd->prolog = prolog;
     pd->uses_imp = uses_imp;
