@@ -17,9 +17,11 @@
 #include <poll.h>
 #include <errno.h>
 #include <time.h>
-#include <flux/core.h>
 #include <math.h>
 #include <systemd/sd-bus.h>
+#include <flux/core.h>
+
+#include "src/common/libflux/reactor_private.h"
 
 #include "watcher.h"
 
