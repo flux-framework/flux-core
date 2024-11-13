@@ -645,11 +645,15 @@ static void watcher_respond (struct ns_monitor *nsm, struct watcher *w)
     }
     /* flux_kvs_lookup (FLUX_KVS_WATCH)
      *
-     * Ordering note: KVS lookups can be returned out of order.  KVS lookup
-     * futures are added to the w->lookups zlist in commit order here, and
-     * in lookup_continuation(), fulfilled futures are popped off the head
-     * of w->lookups until an unfulfilled future is encountered, so that
-     * responses are always returned to the watcher in commit order.
+     * Ordering note: KVS lookups can be returned out of order because
+     * they are processed asynchronously.  For example, some values
+     * may be cached within the KVS while others are not.
+     *
+     * KVS lookup futures are added to the w->lookups zlist in commit
+     * order here, and in lookup_continuation(), fulfilled futures are
+     * popped off the head of w->lookups until an unfulfilled future
+     * is encountered, so that responses are always returned to the
+     * watcher in commit order.
      *
      * Security note: although the requester has already been authenticated
      * to access the namespace by check_authorization() above, we make the
