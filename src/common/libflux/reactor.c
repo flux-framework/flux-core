@@ -81,34 +81,6 @@ flux_reactor_t *flux_reactor_create (int flags)
     return r;
 }
 
-int flux_set_reactor (flux_t *h, flux_reactor_t *r)
-{
-    if (flux_aux_get (h, "flux::reactor")) {
-        errno = EEXIST;
-        return -1;
-    }
-    if (flux_aux_set (h, "flux::reactor", r, NULL) < 0)
-        return -1;
-    return 0;
-}
-
-flux_reactor_t *flux_get_reactor (flux_t *h)
-{
-    flux_reactor_t *r = flux_aux_get (h, "flux::reactor");
-    if (!r) {
-        if ((r = flux_reactor_create (0))) {
-            if (flux_aux_set (h,
-                              "flux::reactor",
-                              r,
-                              (flux_free_f)flux_reactor_destroy) < 0) {
-                flux_reactor_destroy (r);
-                r = NULL;
-            }
-        }
-    }
-    return r;
-}
-
 int flux_reactor_run (flux_reactor_t *r, int flags)
 {
     int ev_flags = 0;

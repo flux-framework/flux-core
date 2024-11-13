@@ -40,9 +40,6 @@ enum {
 flux_reactor_t *flux_reactor_create (int flags);
 void flux_reactor_destroy (flux_reactor_t *r);
 
-flux_reactor_t *flux_get_reactor (flux_t *h);
-int flux_set_reactor (flux_t *h, flux_reactor_t *r);
-
 int flux_reactor_run (flux_reactor_t *r, int flags);
 
 void flux_reactor_stop (flux_reactor_t *r);

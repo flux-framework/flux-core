@@ -95,6 +95,13 @@ void flux_decref(flux_t *h);
  */
 flux_t *flux_clone (flux_t *orig);
 
+/* Get/set the reactor associated with the handle.
+ * A reactor is created with flags=0 if 'get' is called before one is set.
+ * 'set' fails if there is already a reactor.
+ */
+flux_reactor_t *flux_get_reactor (flux_t *h);
+int flux_set_reactor (flux_t *h, flux_reactor_t *r);
+
 /* Drop connection to broker and re-establish, if supported by connector.
  */
 int flux_reconnect (flux_t *h);
