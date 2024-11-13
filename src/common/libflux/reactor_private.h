@@ -14,10 +14,6 @@
 #include "src/common/libev/ev.h"
 #include "reactor.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 struct flux_watcher_ops {
     void (*set_priority) (flux_watcher_t *w, int priority);
     void (*start) (flux_watcher_t *w);
@@ -105,11 +101,6 @@ static inline struct flux_watcher_ops *watcher_get_ops (flux_watcher_t *w)
         return w->ops;
     return NULL;
 }
-
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* !_FLUX_CORE_REACTOR_PRIVATE_H */
 
