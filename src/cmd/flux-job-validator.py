@@ -110,6 +110,8 @@ def main():
             result = validator.validate(line)
         print(result, flush=True)
 
+    validator.stop()
+
     sys.exit(exitcode)
 
 
