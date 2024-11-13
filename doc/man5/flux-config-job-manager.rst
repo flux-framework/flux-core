@@ -128,7 +128,7 @@ prolog
       sending it a SIGTERM signal. ``kill-timeout`` is the number of
       seconds to wait until any nodes with prolog tasks that are still
       active will be drained. The drain reason will include the string
-      "canceled then timed out". The default is 10.
+      "canceled then timed out". The default is 60.
    cancel-on-exception
       (optional) A boolean indicating whether a fatal job exception raised
       while the prolog is active terminates the prolog. The default is true.
