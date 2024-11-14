@@ -1010,6 +1010,16 @@ static const char *attach_notify_msg (struct attach_ctx *ctx,
     else if (streq (event->name, "start")) {
         msg = "started";
     }
+    else if (streq (event->name, "jobspec-update")) {
+        /* Keep existing status msg, but clear current queue name in case
+         * the queue was updated. This will force current queue and its
+         * status to be refreshed.
+         */
+        msg = ctx->status_msg;
+        free (ctx->queue);
+        ctx->queue = NULL;
+        ctx->queue_stopped = false;
+    }
     else {
         /* Keep existing status msg for any event not handled above
          */
