@@ -14,7 +14,7 @@ BinPackParameters : false
 BinPackArguments : false
 AllowAllParametersOfDeclarationOnNextLine : false
 AlignTrailingComments : true
-ColumnLimit : 88
+ColumnLimit : 80
 
 # do not put all arguments on one line unless it's the same line as the call
 PenaltyBreakBeforeFirstCallParameter : 10000000
