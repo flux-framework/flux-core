@@ -73,6 +73,9 @@ AllowAllParametersOfDeclarationOnNextLine : false
 SpaceBeforeSquareBrackets: false
 IndentPPDirectives: None
 
+# will appear in clang-20
+AlignConsecutiveMacros: true
+
 #
 # vi:tabstop=4 shiftwidth=4 expandtab ft=yaml
 #
