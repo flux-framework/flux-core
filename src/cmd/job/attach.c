@@ -118,7 +118,8 @@ struct attach_ctx {
     double timestamp_zero;
     int eventlog_watch_count;
     bool statusline;
-    struct attach_event *last_event;
+    char *status_msg;
+    int prolog_running;
     bool fatal_exception;
     int last_queue_update;
     char *queue;
@@ -912,48 +913,6 @@ done:
     attach_completed_check (ctx);
 }
 
-struct job_event_notifications {
-    const char *event;
-    const char *msg;
-    int count;
-};
-
-static struct job_event_notifications attach_notifications[] = {
-    { "validate",
-      "resolving dependencies",
-      0,
-    },
-    { "depend",
-      "waiting for priority assignment",
-      0,
-    },
-    { "priority",
-      "waiting for resources",
-      0,
-    },
-    { "alloc",
-      "starting",
-      0,
-    },
-    { "prolog-start",
-      "waiting for job prolog",
-      0,
-    },
-    { "prolog-finish",
-      "starting",
-      0,
-    },
-    { "start",
-      "started",
-      0,
-    },
-    { "exception",
-      "canceling due to exception",
-      0,
-    },
-    { NULL, NULL, 0},
-};
-
 static void queue_status_cb (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
@@ -1009,65 +968,85 @@ static void fetch_job_queue (struct attach_ctx *ctx)
         flux_future_destroy (f);
 }
 
-static const char *job_event_notify_string (const char *name)
+static const char *attach_notify_msg (struct attach_ctx *ctx,
+                                      struct attach_event *event)
 {
-    struct job_event_notifications *t = attach_notifications;
-    while (t->event) {
-        if (streq (t->event, name)) {
-            /*  Special handling for prolog-start and prolog-finish:
-             *  prolog-start adds a reference to prolog-finish, and
-             *  prolog-finish decrements its reference by 1. Only
-             *  print 'starting' if prolog-finish refcount is <= 0.
-             */
-            if (streq (name, "prolog-start"))
-                (t+1)->count++;
-            else if (streq (name, "prolog-finish")
-                    && --t->count > 0)
-                    t--;
-            return t->msg;
-        }
-        t++;
+    const char *msg;
+    int severity;
+
+    if (!event) {
+        msg = ctx->status_msg;
     }
-    return NULL;
+    else if (streq (event->name, "submit")) {
+        msg = "submitted";
+    }
+    else if (streq (event->name, "validate")) {
+        msg = "resolving dependencies";
+    }
+    else if (streq (event->name, "depend")) {
+        msg = "waiting for priority assignment";
+    }
+    else if (streq (event->name, "priority")) {
+        msg = "waiting for resources";
+    }
+    else if (streq (event->name, "alloc")) {
+        msg = "starting";
+    }
+    else if (streq (event->name, "prolog-start")) {
+        msg = "waiting for prolog";
+        ctx->prolog_running++;
+    }
+    else if (streq (event->name, "prolog-finish")) {
+        if (--ctx->prolog_running > 0)
+            msg = "waiting for prolog";
+        else
+            msg = "starting";
+    }
+    else if (streq (event->name, "exception")
+            && json_unpack (event->context, "{s:i}", "severity", &severity)
+            && severity == 0) {
+        msg = "canceling due to exception";
+    }
+    else if (streq (event->name, "start")) {
+        msg = "started";
+    }
+    else {
+        /* Keep existing status msg for any event not handled above
+         */
+        msg = ctx->status_msg;
+    }
+    return msg;
 }
 
 static void attach_notify (struct attach_ctx *ctx,
                            struct attach_event *event,
                            double ts)
 {
-    char buf[64];
-    const char *msg;
-
-    if (!event)
-        return;
-
-    /* job_event_notify_string must be called for all events even if
+    /* The following must be called for all events even if
      * the statusline is not active for prolog-start/finish refcounting.
      */
-    msg = job_event_notify_string (event->name);
-    if (msg
-        && ctx->statusline
-        && !ctx->fatal_exception) {
+    if (!ctx->fatal_exception) {
         int dt = ts - ctx->timestamp_zero;
         int width = 80;
         struct winsize w;
+        char buf[64];
+        const char *msg;
+        char *msgcpy;
 
-        if (streq (msg, "waiting for resources")) {
-            /*  Fetch job queue if not already available so queue status
-             *  can be checked in case allocations are stopped:
+        if (!(msg = attach_notify_msg (ctx, event)))
+            return;
+
+        if (strstarts (msg, "waiting for resources")) {
+            /*  Fetch job queue so queue status can be checked
              */
-            if (!ctx->queue)
+            if (!ctx->queue) {
                 fetch_job_queue (ctx);
-            else {
-                /*  Check queue status, only check again every ~10s
-                 */
-                if (ctx->last_queue_update <= 0
-                    || (dt - ctx->last_queue_update >= 10)) {
-                    ctx->last_queue_update = dt;
-                    fetch_queue_status (ctx);
-                }
             }
-
+            else if (ctx->last_queue_update <= 0
+                     || (dt - ctx->last_queue_update >= 10)) {
+                ctx->last_queue_update = dt;
+                fetch_queue_status (ctx);
+            }
             /*  Amend status if queue is stopped:
              */
             if (ctx->queue_stopped) {
@@ -1080,28 +1059,40 @@ static void attach_notify (struct attach_ctx *ctx,
             }
         }
 
-        /* Adjust width of status so timer is right justified:
-         */
-        if (ioctl(0, TIOCGWINSZ, &w) == 0)
-            width = w.ws_col;
-        width -= 10 + strlen (ctx->jobid) + 10;
-
-        fprintf (stderr,
-                 "\rflux-job: %s %-*s %02d:%02d:%02d\r",
-                 ctx->jobid,
-                 width,
-                 msg,
-                 dt/3600,
-                 (dt/60) % 60,
-                 dt % 60);
-    }
-    if (streq (event->name, "start")
-        || streq (event->name, "clean")) {
         if (ctx->statusline) {
-            fprintf (stderr, "\n");
-            ctx->statusline = false;
+            /* Adjust width of status so timer is right justified:
+             */
+            if (ioctl(0, TIOCGWINSZ, &w) == 0)
+                width = w.ws_col;
+            width -= 10 + strlen (ctx->jobid) + 10;
+
+            fprintf (stderr,
+                     "\rflux-job: %s %-*s %02d:%02d:%02d\r",
+                     ctx->jobid,
+                     width,
+                     msg,
+                     dt/3600,
+                     (dt/60) % 60,
+                     dt % 60);
         }
-        flux_watcher_stop (ctx->notify_timer);
+
+        /*  Save current statusline message for future callbacks:
+         */
+        if ((msgcpy = strdup (msg))) {
+            free (ctx->status_msg);
+            ctx->status_msg = msgcpy;
+        }
+    }
+
+    if (event) {
+        if (streq (event->name, "start")
+            || streq (event->name, "clean")) {
+            if (ctx->statusline) {
+                fprintf (stderr, "\n");
+                ctx->statusline = false;
+            }
+            flux_watcher_stop (ctx->notify_timer);
+        }
     }
 }
 
@@ -1110,7 +1101,7 @@ void attach_notify_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     struct attach_ctx *ctx = arg;
     ctx->statusline = true;
-    attach_notify (ctx, ctx->last_event, flux_reactor_time ());
+    attach_notify (ctx, NULL, flux_reactor_time ());
 }
 
 
@@ -1208,17 +1199,16 @@ void attach_event_continuation (flux_future_t *f, void *arg)
 
     attach_notify (ctx, event, event->timestamp);
 
-    attach_event_destroy (ctx->last_event);
-    ctx->last_event = event;
-
     if (streq (event->name, ctx->wait_event)) {
         flux_job_event_watch_cancel (f);
         goto done;
     }
 
+    attach_event_destroy (event);
     flux_future_reset (f);
     return;
 done:
+    attach_event_destroy (event);
     flux_future_destroy (f);
     ctx->eventlog_f = NULL;
     ctx->eventlog_watch_count--;
@@ -1368,7 +1358,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     free (totalview_jobid);
     free (ctx.queue);
     free (ctx.stdin_ranks);
-    attach_event_destroy (ctx.last_event);
+    free (ctx.status_msg);
 
     if (ctx.fatal_exception && ctx.exit_code == 0)
         ctx.exit_code = 1;
