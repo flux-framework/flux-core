@@ -24,6 +24,7 @@ flux_future_t *worker_request (struct worker *w, const char *s);
 int worker_queue_depth (struct worker *w);
 int worker_request_count (struct worker *w);
 int worker_error_count (struct worker *w);
+int worker_trash_count (struct worker *w);
 bool worker_is_running (struct worker *w);
 pid_t worker_pid (struct worker *w);
 

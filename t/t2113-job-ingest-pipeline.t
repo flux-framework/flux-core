@@ -91,4 +91,14 @@ test_expect_success 'job was validated but not frobbed' '
 	test_cmp frob3.count frob4.count &&
 	test_must_fail test_cmp val3.count val4.count
 '
+test_expect_success 'stop validator 0' '
+	valpid=$(jq -r ".pipeline.validator.pids[0]" <stats8.out) &&
+	kill -STOP $valpid
+'
+test_expect_success 'remove job-ingest to trigger cleanup' '
+	flux setattr log-stderr-level 7 &&
+	flux module remove job-ingest &&
+	flux setattr log-stderr-level 1
+'
+
 test_done
