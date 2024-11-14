@@ -360,6 +360,7 @@ static void wait_event_continuation (flux_future_t *f, void *arg)
         if (!ctx->quiet) {
             if (eventlog_entry_dumpf (ctx->evf, stdout, &error, o) < 0)
                 log_err ("failed to print eventlog entry: %s", error.text);
+            fflush (stdout);
         }
         if (flux_job_event_watch_cancel (f) < 0)
             log_err_exit ("flux_job_event_watch_cancel");
@@ -367,6 +368,7 @@ static void wait_event_continuation (flux_future_t *f, void *arg)
         if (!ctx->got_event) {
             if (eventlog_entry_dumpf (ctx->evf, stdout, &error, o) < 0)
                 log_err ("failed to print eventlog entry: %s", error.text);
+            fflush (stdout);
         }
     }
 
