@@ -38,6 +38,7 @@
 #include "src/common/libterminus/pty.h"
 #include "src/common/libdebugged/debugged.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 #include "job/common.h"
@@ -117,12 +118,54 @@ struct attach_ctx {
     double timestamp_zero;
     int eventlog_watch_count;
     bool statusline;
-    char *last_event;
+    struct attach_event *last_event;
     bool fatal_exception;
     int last_queue_update;
     char *queue;
     bool queue_stopped;
 };
+
+struct attach_event {
+    json_t *entry;
+    double timestamp;
+    const char *name;
+    json_t *context;
+};
+
+static void attach_event_destroy (struct attach_event *event)
+{
+    if (event) {
+        int saved_errno = errno;
+        json_decref (event->entry);
+        event->name = NULL;
+        event->context = NULL;
+        free (event);
+        errno = saved_errno;
+    }
+}
+static struct attach_event *attach_event_decode (const char *entry,
+                                                 flux_error_t *errp)
+{
+    struct attach_event *event = calloc (1, sizeof (*event));
+    if (!event)
+        return NULL;
+
+    if (!(event->entry = eventlog_entry_decode (entry))) {
+        errprintf (errp, "eventlog_entry_decode: %s", strerror (errno));
+        goto err;
+    }
+    if (eventlog_entry_parse (event->entry,
+                              &event->timestamp,
+                              &event->name,
+                              &event->context) < 0) {
+        errprintf (errp, "eventlog_entry_parse: %s", strerror (errno));
+        goto err;
+    }
+    return event;
+err:
+    attach_event_destroy (event);
+    return NULL;
+}
 
 void attach_completed_check (struct attach_ctx *ctx)
 {
@@ -147,23 +190,22 @@ void attach_completed_check (struct attach_ctx *ctx)
 /* Print eventlog entry to 'fp'.
  * Prefix and context may be NULL.
  */
-void print_eventlog_entry (FILE *fp,
+void print_eventlog_entry (struct attach_ctx *ctx,
+                           FILE *fp,
                            const char *prefix,
-                           double timestamp,
-                           const char *name,
-                           json_t *context)
+                           struct attach_event *event)
 {
     char *context_s = NULL;
 
-    if (context) {
-        if (!(context_s = json_dumps (context, JSON_COMPACT)))
+    if (event->context) {
+        if (!(context_s = json_dumps (event->context, JSON_COMPACT)))
             log_err_exit ("%s: error re-encoding context", __func__);
     }
     fprintf (stderr, "%.3fs: %s%s%s%s%s\n",
-             timestamp,
+             event->timestamp - ctx->timestamp_zero,
              prefix ? prefix : "",
              prefix ? "." : "",
-             name,
+             event->name,
              context_s ? " " : "",
              context_s ? context_s : "");
     free (context_s);
@@ -782,11 +824,9 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
     const char *entry;
-    json_t *o;
-    double timestamp;
-    const char *name;
-    json_t *context;
+    struct attach_event *event;
     const char *service;
+    flux_error_t error;
 
     if (flux_job_event_watch_get (f, &entry) < 0) {
         if (errno == ENODATA)
@@ -794,14 +834,12 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
         log_msg_exit ("flux_job_event_watch_get: %s",
                       future_strerror (f, errno));
     }
-    if (!(o = eventlog_entry_decode (entry)))
-        log_err_exit ("eventlog_entry_decode");
-    if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
-        log_err_exit ("eventlog_entry_parse");
+    if (!(event = attach_event_decode (entry, &error)))
+        log_err_exit ("%s", error.text);
 
-    if (streq (name, "shell.init")) {
+    if (streq (event->name, "shell.init")) {
         const char *pty_service = NULL;
-        if (json_unpack (context,
+        if (json_unpack (event->context,
                          "{s:i s:s s?s s?i}",
                          "leader-rank",
                          &ctx->leader_rank,
@@ -831,10 +869,13 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
         }
         else
             attach_setup_stdin (ctx);
-    } else if (streq (name, "shell.start")) {
+    } else if (streq (event->name, "shell.start")) {
         if (MPIR_being_debugged) {
             int stop_tasks_in_exec = 0;
-            if (json_unpack (context, "{s?b}", "sync", &stop_tasks_in_exec) < 0)
+            if (json_unpack (event->context,
+                             "{s?b}",
+                             "sync",
+                             &stop_tasks_in_exec) < 0)
                 log_err ("error decoding shell.start context");
             mpir_setup_interface (ctx->h,
                                   ctx->id,
@@ -843,29 +884,25 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
                                   ctx->leader_rank,
                                   ctx->service);
         }
-        handle_stdin_ranks (ctx, context);
+        handle_stdin_ranks (ctx, event->context);
     }
-    else if (streq (name, "log")) {
-        handle_exec_log_msg (ctx, timestamp, context);
+    else if (streq (event->name, "log")) {
+        handle_exec_log_msg (ctx, event->timestamp, event->context);
     }
 
     /*  If job is complete, and we haven't started watching
      *   output eventlog, then start now in case shell.init event
      *   was never emitted (failure in initialization)
      */
-    if (streq (name, "complete") && !ctx->output_f)
+    if (streq (event->name, "complete") && !ctx->output_f)
         attach_output_start (ctx);
 
     if (optparse_hasopt (ctx->p, "show-exec")
-        && !streq (name, "log")) {
-        print_eventlog_entry (stderr,
-                              "exec",
-                              timestamp - ctx->timestamp_zero,
-                              name,
-                              context);
+        && !streq (event->name, "log")) {
+        print_eventlog_entry (ctx, stderr, "exec", event);
     }
 
-    json_decref (o);
+    attach_event_destroy (event);
     flux_future_reset (f);
     return;
 done:
@@ -995,19 +1032,19 @@ static const char *job_event_notify_string (const char *name)
 }
 
 static void attach_notify (struct attach_ctx *ctx,
-                           const char *event_name,
+                           struct attach_event *event,
                            double ts)
 {
     char buf[64];
     const char *msg;
 
-    if (!event_name)
+    if (!event)
         return;
 
     /* job_event_notify_string must be called for all events even if
      * the statusline is not active for prolog-start/finish refcounting.
      */
-    msg = job_event_notify_string (event_name);
+    msg = job_event_notify_string (event->name);
     if (msg
         && ctx->statusline
         && !ctx->fatal_exception) {
@@ -1058,17 +1095,13 @@ static void attach_notify (struct attach_ctx *ctx,
                  (dt/60) % 60,
                  dt % 60);
     }
-    if (streq (event_name, "start")
-        || streq (event_name, "clean")) {
+    if (streq (event->name, "start")
+        || streq (event->name, "clean")) {
         if (ctx->statusline) {
             fprintf (stderr, "\n");
             ctx->statusline = false;
         }
         flux_watcher_stop (ctx->notify_timer);
-    }
-    if (!ctx->last_event || !streq (event_name, ctx->last_event)) {
-        free (ctx->last_event);
-        ctx->last_event = strdup (event_name);
     }
 }
 
@@ -1093,10 +1126,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
     const char *entry;
-    json_t *o = NULL;
-    double timestamp;
-    const char *name;
-    json_t *context;
+    struct attach_event *event = NULL;
+    flux_error_t error;
     int status;
 
     if (flux_job_event_watch_get (f, &entry) < 0) {
@@ -1110,26 +1141,24 @@ void attach_event_continuation (flux_future_t *f, void *arg)
         log_msg_exit ("flux_job_event_watch_get: %s",
                       future_strerror (f, errno));
     }
-    if (!(o = eventlog_entry_decode (entry)))
-        log_err_exit ("eventlog_entry_decode");
-    if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
-        log_err_exit ("eventlog_entry_parse");
+    if (!(event = attach_event_decode (entry, &error)))
+        log_err_exit ("%s", error.text);
 
     if (ctx->timestamp_zero == 0.)
-        ctx->timestamp_zero = timestamp;
+        ctx->timestamp_zero = event->timestamp;
 
-    if (streq (name, "exception")) {
+    if (streq (event->name, "exception")) {
         const char *type;
         int severity;
         const char *note;
 
-        if (json_unpack (context, "{s:s s:i s:s}",
+        if (json_unpack (event->context, "{s:s s:i s:s}",
                          "type", &type,
                          "severity", &severity,
                          "note", &note) < 0)
             log_err_exit ("error decoding exception context");
         fprintf (stderr, "%.3fs: job.exception type=%s severity=%d %s\n",
-                         timestamp - ctx->timestamp_zero,
+                         event->timestamp - ctx->timestamp_zero,
                          type,
                          severity,
                          note);
@@ -1147,7 +1176,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
             ctx->pty_client = NULL;
         }
     }
-    else if (streq (name, "submit")) {
+    else if (streq (event->name, "submit")) {
         if (!(ctx->exec_eventlog_f = flux_job_event_watch (ctx->h,
                                                            ctx->id,
                                                            "guest.exec.eventlog",
@@ -1162,9 +1191,9 @@ void attach_event_continuation (flux_future_t *f, void *arg)
         ctx->eventlog_watch_count++;
     }
     else {
-        if (streq (name, "finish")) {
+        if (streq (event->name, "finish")) {
             flux_error_t error;
-            if (json_unpack (context, "{s:i}", "status", &status) < 0)
+            if (json_unpack (event->context, "{s:i}", "status", &status) < 0)
                 log_err_exit ("error decoding finish context");
             ctx->exit_code = flux_job_waitstatus_to_exitcode (status, &error);
             if (ctx->exit_code != 0)
@@ -1173,26 +1202,23 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     }
 
     if (optparse_hasopt (ctx->p, "show-events")
-        && !streq (name, "exception")) {
-        print_eventlog_entry (stderr,
-                              "job",
-                              timestamp - ctx->timestamp_zero,
-                              name,
-                              context);
+        && !streq (event->name, "exception")) {
+        print_eventlog_entry (ctx, stderr, "job", event);
     }
 
-    attach_notify (ctx, name, timestamp);
+    attach_notify (ctx, event, event->timestamp);
 
-    if (streq (name, ctx->wait_event)) {
+    attach_event_destroy (ctx->last_event);
+    ctx->last_event = event;
+
+    if (streq (event->name, ctx->wait_event)) {
         flux_job_event_watch_cancel (f);
         goto done;
     }
 
-    json_decref (o);
     flux_future_reset (f);
     return;
 done:
-    json_decref (o);
     flux_future_destroy (f);
     ctx->eventlog_f = NULL;
     ctx->eventlog_watch_count--;
@@ -1340,9 +1366,9 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     flux_close (ctx.h);
     free (ctx.service);
     free (totalview_jobid);
-    free (ctx.last_event);
     free (ctx.queue);
     free (ctx.stdin_ranks);
+    attach_event_destroy (ctx.last_event);
 
     if (ctx.fatal_exception && ctx.exit_code == 0)
         ctx.exit_code = 1;
