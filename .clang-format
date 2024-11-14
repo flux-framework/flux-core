@@ -64,7 +64,6 @@ ForEachMacros :
 - json_array_foreach
 - json_object_foreach
 
-# These improve formatting results but require clang 3.6/7 or higher
 SortIncludes : false
 BreakBeforeBinaryOperators : NonAssignment
 AlignAfterOpenBracket: Align
