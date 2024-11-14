@@ -14,10 +14,12 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
+#include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libkvs/kvs_util_private.h"
 #include "ccan/str/str.h"
+
+#include "kvs_util_private.h"
 
 void kvs_util_normalize_key_path_tests (void)
 {

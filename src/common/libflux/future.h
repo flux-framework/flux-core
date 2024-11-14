@@ -11,12 +11,6 @@
 #ifndef _FLUX_CORE_FUTURE_H
 #define _FLUX_CORE_FUTURE_H
 
-#include "reactor.h"
-#include "types.h"
-#include "handle.h"
-#include "msg_handler.h"
-#include "flog.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -24,8 +18,6 @@ extern "C" {
 /* Interfaces useful for all classes that return futures.
  * See flux_future_then(3).
  */
-
-typedef struct flux_future flux_future_t;
 
 typedef void (*flux_continuation_f)(flux_future_t *f, void *arg);
 

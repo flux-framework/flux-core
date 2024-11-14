@@ -32,5 +32,6 @@ struct ev_flux {
 int ev_flux_init (struct ev_flux *w, ev_flux_f cb, flux_t *h, int events);
 void ev_flux_start (struct ev_loop *loop, struct ev_flux *w);
 void ev_flux_stop (struct ev_loop *loop, struct ev_flux *w);
+bool ev_flux_is_active (struct ev_flux *w);
 
 #endif /* !_EV_FLUX_H */

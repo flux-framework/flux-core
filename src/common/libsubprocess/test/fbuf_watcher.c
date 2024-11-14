@@ -422,12 +422,18 @@ static void test_buffer (flux_reactor_t *reactor)
     ok (w != NULL,
         "buffer: write created");
 
+    ok (flux_watcher_is_active (w) == false,
+        "flux_watcher_is_active() returns false on write buffer after create");
+
     fb = fbuf_write_watcher_get_buffer (w);
 
     ok (fb != NULL,
         "buffer: buffer retrieved");
 
     flux_watcher_start (w);
+
+    ok (flux_watcher_is_active (w) == true,
+        "flux_watcher_is_active() returns true on write buffer after start");
 
     ok (fbuf_write (fb, "bazbar", 6) == 6,
         "buffer: write to buffer success");
@@ -914,6 +920,9 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
     ok (w != NULL,
         "buffer corner case: read created");
 
+    ok (flux_watcher_is_active (w) == false,
+        "flux_watcher_is_active() returns false on read buffer after create");
+
     fb = fbuf_read_watcher_get_buffer (w);
 
     ok (fb != NULL,
@@ -923,6 +932,8 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
         "buffer corner case: write to socketpair success");
 
     flux_watcher_start (w);
+    ok (flux_watcher_is_active (w) == true,
+        "flux_watcher_is_active() returns true on read buffer after start");
 
     ok (flux_reactor_run (reactor, 0) == 0,
         "buffer corner case: reactor ran to completion");

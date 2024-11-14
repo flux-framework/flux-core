@@ -11,7 +11,6 @@
 #ifndef _FLUX_CORE_CONF_H
 #define _FLUX_CORE_CONF_H
 
-#include <flux/core.h>
 #include <stdarg.h>
 
 #ifdef __cplusplus

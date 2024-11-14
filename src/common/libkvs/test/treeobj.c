@@ -13,14 +13,16 @@
 #endif
 #include <string.h>
 #include <errno.h>
-
-#include "src/common/libkvs/treeobj.h"
+#include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/sha1.h"
 #include "src/common/libutil/blobref.h"
 #include "ccan/str/str.h"
+
+#include "treeobj.h"
+
 
 const int large_dir_entries = 5000;
 json_t *create_large_dir (void)

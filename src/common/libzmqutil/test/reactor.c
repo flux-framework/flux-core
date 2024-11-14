@@ -16,8 +16,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdlib.h>
+#include <flux/core.h>
 
-#include "src/common/libflux/reactor.h"
 #include "src/common/libtap/tap.h"
 
 #include "src/common/libzmqutil/reactor.h"
@@ -94,11 +94,17 @@ static void test_zmq (flux_reactor_t *reactor)
     w = zmqutil_watcher_create (reactor, zs[1], FLUX_POLLOUT, zmqwriter, NULL);
     ok (r != NULL && w != NULL,
         "zmq: nonblocking reader and writer created");
+    ok (flux_watcher_is_active (r) == false,
+        "flux_watcher_is_active() returns false on create");
     flux_watcher_start (r);
+    ok (flux_watcher_is_active (r) == true,
+        "flux_watcher_is_active() returns true after start");
     flux_watcher_start (w);
     ok (flux_reactor_run  (reactor, 0) == 0,
         "zmq: reactor ran to completion after %d messages", zmqwriter_msgcount);
     flux_watcher_stop (r);
+    ok (flux_watcher_is_active (r) == false,
+        "flux_watcher_is_active() returns false after stop");
     flux_watcher_stop (w);
     flux_watcher_destroy (r);
     flux_watcher_destroy (w);

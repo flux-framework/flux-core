@@ -21,17 +21,9 @@
 #include <sys/syscall.h>
 #endif
 #include <jansson.h>
+#include <flux/core.h>
 
 #include "src/common/libutil/errno_safe.h"
-
-#include "request.h"
-#include "response.h"
-#include "message.h"
-#include "attr.h"
-#include "rpc.h"
-#include "reactor.h"
-#include "msg_handler.h"
-#include "flog.h"
 
 struct flux_rpc {
     uint32_t matchtag;

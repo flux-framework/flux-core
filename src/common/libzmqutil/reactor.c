@@ -16,11 +16,13 @@
 #include <string.h>
 #include <assert.h>
 #include <zmq.h>
+#include <flux/core.h>
 
 #include "src/common/libev/ev.h"
 #include "src/common/libflux/reactor_private.h"
 
 #include "ev_zmq.h"
+#include "reactor.h"
 
 /* 0MQ sockets
  */
@@ -35,6 +37,11 @@ static void zmq_stop (flux_watcher_t *w)
     ev_zmq_stop (w->r->loop, (ev_zmq *)w->data);
 }
 
+static bool zmq_is_active (flux_watcher_t *w)
+{
+    return ev_zmq_is_active (w->data);
+}
+
 static void zmq_cb (struct ev_loop *loop, ev_zmq *pw, int revents)
 {
     struct flux_watcher *w = pw->data;
@@ -46,6 +53,7 @@ static struct flux_watcher_ops zmq_watcher  = {
     .start = zmq_start,
     .stop = zmq_stop,
     .destroy = NULL,
+    .is_active = zmq_is_active,
 };
 
 flux_watcher_t *zmqutil_watcher_create (flux_reactor_t *r,
@@ -55,9 +63,9 @@ flux_watcher_t *zmqutil_watcher_create (flux_reactor_t *r,
     ev_zmq *zw;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, sizeof (*zw), &zmq_watcher, cb, arg)))
+    if (!(w = watcher_create (r, sizeof (*zw), &zmq_watcher, cb, arg)))
         return NULL;
-    zw = flux_watcher_get_data (w);
+    zw = watcher_get_data (w);
     ev_zmq_init (zw, zmq_cb, zsock, events_to_libev (events) & ~EV_ERROR);
     zw->data = w;
 
@@ -66,7 +74,7 @@ flux_watcher_t *zmqutil_watcher_create (flux_reactor_t *r,
 
 void *zmqutil_watcher_get_zsock (flux_watcher_t *w)
 {
-    if (flux_watcher_get_ops (w) != &zmq_watcher) {
+    if (watcher_get_ops (w) != &zmq_watcher) {
         errno = EINVAL;
         return NULL;
     }

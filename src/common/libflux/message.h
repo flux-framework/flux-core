@@ -17,13 +17,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#include "types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef struct flux_msg flux_msg_t;
 
 enum {
     FLUX_MSGTYPE_REQUEST    = 0x01,

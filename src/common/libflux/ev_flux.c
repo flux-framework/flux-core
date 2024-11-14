@@ -13,8 +13,7 @@
 #endif
 #include <stddef.h>
 #include <stdbool.h>
-
-#include "handle.h"
+#include <flux/core.h>
 
 #include "src/common/libev/ev.h"
 
@@ -95,6 +94,11 @@ void ev_flux_stop (struct ev_loop *loop, struct ev_flux *w)
     ev_check_stop (loop, &w->check_w);
     ev_io_stop (loop, &w->io_w);
     ev_idle_stop (loop, &w->idle_w);
+}
+
+bool ev_flux_is_active (struct ev_flux *w)
+{
+    return ev_is_active (&w->prepare_w);
 }
 
 /*

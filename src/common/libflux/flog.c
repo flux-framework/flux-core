@@ -20,12 +20,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <inttypes.h>
-
-#include "flog.h"
-#include "attr.h"
-#include "message.h"
-#include "request.h"
-#include "rpc.h"
+#include <flux/core.h>
 
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"

@@ -31,7 +31,6 @@
 #include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
-#include "conf.h"
 #include "conf_private.h"
 
 struct builtin {

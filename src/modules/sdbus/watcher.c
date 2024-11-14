@@ -17,9 +17,11 @@
 #include <poll.h>
 #include <errno.h>
 #include <time.h>
-#include <flux/core.h>
 #include <math.h>
 #include <systemd/sd-bus.h>
+#include <flux/core.h>
+
+#include "src/common/libflux/reactor_private.h"
 
 #include "watcher.h"
 
@@ -99,22 +101,28 @@ static void bus_cb (flux_reactor_t *r,
 
 static void op_start (flux_watcher_t *w)
 {
-    struct sdbus_watcher *sdw = flux_watcher_get_data (w);
+    struct sdbus_watcher *sdw = watcher_get_data (w);
     flux_watcher_start (sdw->prep);
 }
 
 static void op_stop (flux_watcher_t *w)
 {
-    struct sdbus_watcher *sdw = flux_watcher_get_data (w);
+    struct sdbus_watcher *sdw = watcher_get_data (w);
     flux_watcher_stop (sdw->prep);
     flux_watcher_stop (sdw->in);
     flux_watcher_stop (sdw->out);
     flux_watcher_stop (sdw->tmout);
 }
 
+static bool op_is_active (flux_watcher_t *w)
+{
+    struct sdbus_watcher *sdw = watcher_get_data (w);
+    return ev_is_active (sdw->prep);
+}
+
 static void op_destroy (flux_watcher_t *w)
 {
-    struct sdbus_watcher *sdw = flux_watcher_get_data (w);
+    struct sdbus_watcher *sdw = watcher_get_data (w);
     flux_watcher_destroy (sdw->prep);
     flux_watcher_destroy (sdw->in);
     flux_watcher_destroy (sdw->out);
@@ -125,6 +133,7 @@ static struct flux_watcher_ops sdbus_watcher_ops = {
     .start = op_start,
     .stop = op_stop,
     .destroy = op_destroy,
+    .is_active = op_is_active,
 };
 
 flux_watcher_t *sdbus_watcher_create (flux_reactor_t *r,
@@ -140,13 +149,13 @@ flux_watcher_t *sdbus_watcher_create (flux_reactor_t *r,
         errno = -fd;
         return NULL;
     }
-    if (!(w = flux_watcher_create (r,
-                                   sizeof (*sdw),
-                                   &sdbus_watcher_ops,
-                                   cb,
-                                   arg)))
+    if (!(w = watcher_create (r,
+                              sizeof (*sdw),
+                              &sdbus_watcher_ops,
+                              cb,
+                              arg)))
         return NULL;
-    sdw = flux_watcher_get_data (w);
+    sdw = watcher_get_data (w);
     sdw->bus = bus;
     sdw->w = w;
     sdw->cb = cb;

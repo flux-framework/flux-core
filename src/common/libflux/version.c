@@ -11,8 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-
-#include "version.h"
+#include <flux/core.h>
 
 const char *flux_core_version_string (void)
 {

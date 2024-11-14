@@ -11,8 +11,6 @@
 #ifndef _FLUX_CORE_SERVICE_H
 #define _FLUX_CORE_SERVICE_H
 
-#include "handle.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

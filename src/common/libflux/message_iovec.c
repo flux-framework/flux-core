@@ -17,8 +17,8 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <inttypes.h>
+#include <flux/core.h>
 
-#include "message.h"
 #include "message_private.h"
 #include "message_route.h"
 #include "message_proto.h"

@@ -38,6 +38,11 @@ static void buffer_read_stop (flux_watcher_t *w)
     ev_fbuf_read_stop (w->r->loop, ebr);
 }
 
+static bool buffer_read_is_active (flux_watcher_t *w)
+{
+    return ev_fbuf_read_is_active (w->data);
+}
+
 static void buffer_read_destroy (flux_watcher_t *w)
 {
     struct ev_fbuf_read *ebr = (struct ev_fbuf_read *)w->data;
@@ -57,6 +62,7 @@ static struct flux_watcher_ops buffer_read_watcher = {
     .start = buffer_read_start,
     .stop = buffer_read_stop,
     .destroy = buffer_read_destroy,
+    .is_active = buffer_read_is_active,
 };
 
 flux_watcher_t *fbuf_read_watcher_create (flux_reactor_t *r,
@@ -81,14 +87,14 @@ flux_watcher_t *fbuf_read_watcher_create (flux_reactor_t *r,
         return NULL;
     }
 
-    if (!(w = flux_watcher_create (r,
-                                   sizeof (*ebr),
-                                   &buffer_read_watcher,
-                                   cb,
-                                   arg)))
+    if (!(w = watcher_create (r,
+                              sizeof (*ebr),
+                              &buffer_read_watcher,
+                              cb,
+                              arg)))
         goto cleanup;
 
-    ebr = flux_watcher_get_data (w);
+    ebr = watcher_get_data (w);
 
     if (ev_fbuf_read_init (ebr,
                            fd,
@@ -163,6 +169,11 @@ static void buffer_write_stop (flux_watcher_t *w)
     ev_fbuf_write_stop (w->r->loop, ebw);
 }
 
+static bool buffer_write_is_active (flux_watcher_t *w)
+{
+    return ev_fbuf_write_is_active (w->data);
+}
+
 static void buffer_write_destroy (flux_watcher_t *w)
 {
     struct ev_fbuf_write *ebw = (struct ev_fbuf_write *)w->data;
@@ -182,6 +193,7 @@ static struct flux_watcher_ops buffer_write_watcher = {
     .start = buffer_write_start,
     .stop = buffer_write_stop,
     .destroy = buffer_write_destroy,
+    .is_active = buffer_write_is_active,
 };
 
 flux_watcher_t *fbuf_write_watcher_create (flux_reactor_t *r,
@@ -207,14 +219,14 @@ flux_watcher_t *fbuf_write_watcher_create (flux_reactor_t *r,
         return NULL;
     }
 
-    if (!(w = flux_watcher_create (r,
-                                   sizeof (*ebw),
-                                   &buffer_write_watcher,
-                                   cb,
-                                   arg)))
+    if (!(w = watcher_create (r,
+                              sizeof (*ebw),
+                              &buffer_write_watcher,
+                              cb,
+                              arg)))
         goto cleanup;
 
-    ebw = flux_watcher_get_data (w);
+    ebw = watcher_get_data (w);
 
     if (ev_fbuf_write_init (ebw,
                             fd,

@@ -11,9 +11,6 @@
 #ifndef _FLUX_CORE_EVENT_H
 #define _FLUX_CORE_EVENT_H
 
-#include "message.h"
-#include "future.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

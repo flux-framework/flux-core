@@ -16,8 +16,6 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include "handle.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

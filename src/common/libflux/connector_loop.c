@@ -15,7 +15,6 @@
 #endif
 #include <unistd.h>
 #include <poll.h>
-
 #include <flux/core.h>
 
 #include "ccan/str/str.h"

@@ -14,9 +14,8 @@
 
 #include <string.h>
 #include <errno.h>
+#include <flux/core.h>
 
-#include "src/common/libflux/flux.h"
-#include "kvs.h"
 #include "src/common/libtap/tap.h"
 
 void errors (void)

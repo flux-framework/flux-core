@@ -113,6 +113,11 @@ void ev_zmq_stop (struct ev_loop *loop, ev_zmq *w)
     ev_idle_stop (loop, &w->idle_w);
 }
 
+bool ev_zmq_is_active (ev_zmq *w)
+{
+    return ev_is_active (&w->prepare_w);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

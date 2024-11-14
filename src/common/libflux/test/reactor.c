@@ -17,8 +17,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
+#include <flux/core.h>
 
-#include "src/common/libflux/reactor.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libtap/tap.h"
@@ -104,7 +104,11 @@ static void test_fd (flux_reactor_t *reactor)
     w = flux_fd_watcher_create (reactor, fd[1], FLUX_POLLOUT, fdwriter, NULL);
     ok (r != NULL && w != NULL,
         "fd: reader and writer created");
+    ok (!flux_watcher_is_active (r),
+        "flux_watcher_is_active() returns false");
     flux_watcher_start (r);
+    ok (flux_watcher_is_active (r),
+        "flux_watcher_is_active() returns true after flux_watcher_start()");
     flux_watcher_start (w);
     ok (flux_reactor_run (reactor, 0) == 0,
         "fd: reactor ran to completion after %lu bytes", fdwriter_bufsize);
@@ -156,7 +160,11 @@ static void test_timer (flux_reactor_t *reactor)
         "timer: creating negative repeat fails with EINVAL");
     ok ((w = flux_timer_watcher_create (reactor, 0, 0, oneshot, NULL)) != NULL,
         "timer: creating zero timeout oneshot works");
+    ok (!flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns false");
     flux_watcher_start (w);
+    ok (flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns true after flux_watcher_start()");
     oneshot_runs = 0;
     t0 = flux_reactor_now (reactor);
     ok (flux_reactor_run (reactor, 0) == 0,
@@ -265,7 +273,11 @@ static void test_periodic (flux_reactor_t *reactor)
     ok ((w = flux_periodic_watcher_create (reactor, 0, 0, NULL, oneshot, NULL))
         != NULL,
         "periodic: creating zero offset/interval works");
+    ok (!flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns false");
     flux_watcher_start (w);
+    ok (flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns true after flux_watcher_start()");
     oneshot_runs = 0;
     ok (flux_reactor_run (reactor, 0) == 0,
         "periodic: reactor ran to completion");
@@ -335,7 +347,11 @@ static void test_idle (flux_reactor_t *reactor)
     w = flux_idle_watcher_create (reactor, idle_cb, NULL);
     ok (w != NULL,
         "created idle watcher");
+    ok (!flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns false");
     flux_watcher_start (w);
+    ok (flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns true after flux_watcher_start()");
 
     ok (flux_reactor_run (reactor, 0) == 0,
         "reactor ran successfully");
@@ -376,7 +392,11 @@ static void test_prepcheck (flux_reactor_t *reactor)
                                    prepchecktimer_cb, NULL);
     ok (w != NULL,
         "created timer watcher that fires every 0.01s");
+    ok (!flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns false");
     flux_watcher_start (w);
+    ok (flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns true after flux_watcher_start()");
 
     prep = flux_prepare_watcher_create (reactor, prepare_cb, NULL);
     ok (w != NULL,
@@ -427,7 +447,11 @@ static void test_signal (flux_reactor_t *reactor)
     w = flux_signal_watcher_create (reactor, SIGUSR1, sigusr1_cb, NULL);
     ok (w != NULL,
         "created signal watcher");
+    ok (!flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns false");
     flux_watcher_start (w);
+    ok (flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns true after flux_watcher_start()");
 
     idle = flux_idle_watcher_create (reactor, sigidle_cb, NULL);
     ok (idle != NULL,
@@ -478,7 +502,11 @@ static void test_child  (flux_reactor_t *reactor)
 
     ok (kill (child_pid, SIGHUP) == 0,
         "sent child SIGHUP");
+    ok (!flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns false");
     flux_watcher_start (w);
+    ok (flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns true after flux_watcher_start()");
 
     ok (flux_reactor_run (r, 0) == 0,
         "reactor ran successfully");
@@ -544,7 +572,11 @@ static void test_stat (flux_reactor_t *reactor)
     w = flux_stat_watcher_create (reactor, ctx.path, 0., stat_cb, &ctx);
     ok (w != NULL,
         "created stat watcher");
+    ok (!flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns false");
     flux_watcher_start (w);
+    ok (flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns true after flux_watcher_start()");
 
     tw = flux_timer_watcher_create (reactor, 0.01, 0.01,
                                     stattimer_cb, &ctx);
@@ -588,7 +620,12 @@ static void test_active_ref (flux_reactor_t *r)
 
     if (!(w = flux_idle_watcher_create (r, active_idle_cb, &count)))
         BAIL_OUT ("flux_idle_watcher_create failed");
+
+    ok (!flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns false");
     flux_watcher_start (w);
+    ok (flux_watcher_is_active (w),
+        "flux_watcher_is_active() returns true after flux_watcher_start()");
 
     count = 0;
     ok (flux_reactor_run (r, 0) < 0 && count == 16,
@@ -720,6 +757,9 @@ int main (int argc, char *argv[])
 
     ok (flux_reactor_run (reactor, 0) == 0,
         "reactor ran to completion (no watchers)");
+
+    ok (!flux_watcher_is_active (NULL),
+        "flux_watcher_is_active (NULL) returns false");
 
     test_timer (reactor);
     test_periodic (reactor);

@@ -27,13 +27,13 @@
 #include <unistd.h>
 #include <poll.h>
 #include <pthread.h>
-
 #include <flux/core.h>
 
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/aux.h"
 #include "ccan/list/list.h"
 #include "ccan/str/str.h"
+
 #include "message_private.h" // for access to msg->aux
 #include "msg_deque.h"
 

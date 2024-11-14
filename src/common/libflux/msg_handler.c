@@ -16,17 +16,12 @@
 #include <caliper/cali.h>
 #include <sys/syscall.h>
 #endif
+#include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/errno_safe.h"
-
-#include "message.h"
-#include "reactor.h"
-#include "msg_handler.h"
-#include "response.h"
-#include "flog.h"
 
 struct handler_stack {
     flux_msg_handler_t *mh;  // current message handler in stack

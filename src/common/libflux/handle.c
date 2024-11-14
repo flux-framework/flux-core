@@ -24,6 +24,7 @@
 #include <caliper/cali.h>
 #include <sys/syscall.h>
 #endif
+#include <flux/core.h>
 
 #include "src/common/libflux/plugin_private.h"
 #include "src/common/librouter/rpc_track.h"
@@ -38,13 +39,6 @@
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 
-#include "handle.h"
-#include "reactor.h"
-#include "connector.h"
-#include "message.h"
-#include "msg_handler.h" // for flux_sleep_on ()
-#include "flog.h"
-#include "conf.h"
 #include "msg_deque.h"
 #include "message_private.h" // to check msg refcount in flux_send_new ()
 
@@ -402,6 +396,34 @@ flux_t *flux_open (const char *uri, int flags)
 void flux_close (flux_t *h)
 {
     flux_handle_destroy (h);
+}
+
+int flux_set_reactor (flux_t *h, flux_reactor_t *r)
+{
+    if (flux_aux_get (h, "flux::reactor")) {
+        errno = EEXIST;
+        return -1;
+    }
+    if (flux_aux_set (h, "flux::reactor", r, NULL) < 0)
+        return -1;
+    return 0;
+}
+
+flux_reactor_t *flux_get_reactor (flux_t *h)
+{
+    flux_reactor_t *r = flux_aux_get (h, "flux::reactor");
+    if (!r) {
+        if ((r = flux_reactor_create (0))) {
+            if (flux_aux_set (h,
+                              "flux::reactor",
+                              r,
+                              (flux_free_f)flux_reactor_destroy) < 0) {
+                flux_reactor_destroy (r);
+                r = NULL;
+            }
+        }
+    }
+    return r;
 }
 
 /* Create an idset that is configured as an allocator per idset_alloc(3) to

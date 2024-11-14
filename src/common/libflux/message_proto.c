@@ -14,6 +14,7 @@
 #include "config.h"
 #endif
 #include <errno.h>
+#include <flux/core.h>
 
 #include "ccan/pushpull/pushpull.h"
 #include "ccan/endian/endian.h"

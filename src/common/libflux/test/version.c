@@ -12,8 +12,8 @@
 #include "config.h"
 #endif
 #include <string.h>
+#include <flux/core.h>
 
-#include "src/common/libflux/version.h"
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"
 

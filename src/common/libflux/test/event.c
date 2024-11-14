@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
+
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
 #include "ccan/str/str.h"

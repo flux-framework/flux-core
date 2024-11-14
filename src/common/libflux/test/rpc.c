@@ -13,13 +13,14 @@
 #endif
 #include <flux/core.h>
 #include <jansson.h>
+#include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libflux/message_proto.h"
-#include "src/common/libflux/message_private.h"
 #include "src/common/libtestutil/util.h"
 #include "src/common/libtestutil/util_rpc.h"
 #include "ccan/str/str.h"
+
+#include "message_private.h"
 
 
 /* increment integer and send it back */

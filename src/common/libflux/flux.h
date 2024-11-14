@@ -12,11 +12,11 @@
 #define _FLUX_CORE_FLUX_H
 
 #include "types.h"
+#include "message.h"
 #include "handle.h"
 #include "reactor.h"
 #include "msg_handler.h"
 #include "connector.h"
-#include "message.h"
 #include "msglist.h"
 #include "request.h"
 #include "response.h"
