@@ -346,18 +346,46 @@ int worker_stop_notify (struct worker *w, process_exit_f cb, void *arg)
     return count;
 }
 
+static void worker_kill_add (struct worker *w,
+                             flux_future_t **cf,
+                             flux_subprocess_t *p,
+                             int signo)
+{
+    long pid = flux_subprocess_pid (p);
+    flux_future_t *f = NULL;
+
+    flux_log (w->h,
+              LOG_DEBUG,
+              "killing %s (%spid=%ld)",
+              w->name,
+              w->p == p ? "" : "trash ",
+              pid);
+    if ((!*cf && !(*cf = flux_future_wait_all_create ()))
+        || !(f = flux_subprocess_kill (p, signo))
+        || flux_future_push (*cf, NULL, f) < 0) {
+        flux_log_error (w->h, "kill %s (pid=%ld)", w->name, pid);
+        flux_future_destroy (f);
+    }
+}
+
 flux_future_t *worker_kill (struct worker *w, int signo)
 {
-    flux_future_t *f = NULL;
-    if (w->p) {
-        flux_log (w->h,
-                  LOG_DEBUG,
-                  "killing %s (pid=%ld)",
-                  w->name,
-                  (long) flux_subprocess_pid (w->p));
-        f = flux_subprocess_kill (w->p, signo);
+    flux_future_t *cf = NULL;
+    flux_subprocess_t *p;
+
+    if (w->p)
+        worker_kill_add (w, &cf, w->p, signo);
+    p = zlist_first (w->trash);
+    while (p) {
+        worker_kill_add (w, &cf, p, signo);
+        p = zlist_next (w->trash);
     }
-    return f;
+    // N.B. cf could be empty if worker_kill_add() fails to add future
+    if (cf && !flux_future_first_child (cf)) {
+        flux_future_destroy (cf);
+        return NULL;
+    }
+    return cf;
 }
 
 static int worker_start (struct worker *w)
