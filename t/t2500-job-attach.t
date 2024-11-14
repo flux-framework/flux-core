@@ -109,7 +109,7 @@ test_expect_success 'attach: exit code reflects cancellation' '
 	! flux job attach $(cat jobid2)
 '
 test_expect_success 'attach: reports task exit code with nonzero exit' '
-	id=$(flux submit sh -c 'exit 42') &&
+	id=$(flux submit sh -c "exit 42") &&
 	test_must_fail flux job attach $id 2>exited.err &&
 	test_debug "cat exited.err" &&
 	grep "exited with exit code 42" exited.err
