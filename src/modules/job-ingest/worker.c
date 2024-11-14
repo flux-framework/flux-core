@@ -396,6 +396,11 @@ int worker_error_count (struct worker *w)
     return w ? w->error_count : 0;
 }
 
+int worker_trash_count (struct worker *w)
+{
+    return w ? zlist_size (w->trash) : 0;
+}
+
 bool worker_is_running (struct worker *w)
 {
     return (w && w->p ? true : false);

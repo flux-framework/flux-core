@@ -256,12 +256,14 @@ json_t *workcrew_stats_get (struct workcrew *crew)
         int requests = 0;
         int errors = 0;
         int backlog = 0;
+        int trash = 0;
         json_t *pids = json_array ();
 
         for (int i = 0; i < WORKCREW_SIZE; i++) {
             running += worker_is_running (crew->worker[i]) ? 1 : 0;
             requests += worker_request_count (crew->worker[i]);
             errors += worker_error_count (crew->worker[i]);
+            trash += worker_trash_count (crew->worker[i]);
             backlog += worker_queue_depth (crew->worker[i]);
             if (pids) {
                 json_t *pid = json_integer (worker_pid (crew->worker[i]));
@@ -269,10 +271,11 @@ json_t *workcrew_stats_get (struct workcrew *crew)
                     json_decref (pid);
             }
         }
-        o = json_pack ("{s:i s:i s:i s:i s:O}",
+        o = json_pack ("{s:i s:i s:i s:i s:i s:O}",
                        "running", running,
                        "requests", requests,
                        "errors", errors,
+                       "trash", trash,
                        "backlog", backlog,
                        "pids", pids ? pids : json_null ());
         json_decref (pids);
