@@ -1158,6 +1158,9 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                          "severity", &severity,
                          "note", &note) < 0)
             log_err_exit ("error decoding exception context");
+
+        if (ctx->statusline)
+            fprintf (stderr, "\r\033[K");
         fprintf (stderr, "%.3fs: job.exception type=%s severity=%d %s\n",
                          event->timestamp - ctx->timestamp_zero,
                          type,
