@@ -108,6 +108,11 @@ test_expect_success 'flux uri resolves hierarchical jobids with ?local' '
 	test_debug "echo ${jobid}/${jobid2}?local is ${uri}"
 
 '
+test_expect_success 'flux uri --wait can resolve URI for pending job' '
+	uri=$(flux uri --wait $(flux batch -n1 --wrap hostname)) &&
+	flux job wait-event -vt 30 $(flux job last) clean  &&
+	test "$uri" = "$(flux jobs -no {uri} $(flux job last))"
+'
 test_expect_success 'terminate batch job cleanly' '
 	flux proxy $(flux uri --local ${jobid}) flux cancel --all &&
 	flux job wait-event -vt 30 ${jobid} clean
