@@ -264,6 +264,31 @@ f
         test_cmp expected append1.out
 '
 
+# N.B. When the data is small `flux kvs put foo=...` create a "val" treeobj.
+# when the value is larger, it creates a "valref" treeobj
+largeval="abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: basic --watch & --append works (initial valref)' '
+        flux kvs unlink -Rf test &&
+        echo -n ${largeval} | flux kvs put --raw test.append.test=- &&
+        flux kvs get --treeobj test.append.test | grep valref &&
+        flux kvs get --watch --append --count=4 \
+                     test.append.test > append1.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put --append test.append.test="1" &&
+        flux kvs put --append test.append.test="2" &&
+        flux kvs put --append test.append.test="3" &&
+        wait $pid &&
+	cat >expected <<-EOF &&
+abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz
+1
+2
+3
+	EOF
+        test_cmp expected append1.out
+'
+
 test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works with empty string' '
         flux kvs unlink -Rf test &&
         flux kvs put test.append.test="abc" &&
@@ -393,6 +418,21 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on fake append' 
         flux kvs put --append test.append.test="d" &&
         flux kvs put --append test.append.test="e" &&
         flux kvs put test.append.test="abcdef" &&
+        test_must_fail wait $pid
+'
+
+# N.B. valref treeobj now has fewer entries
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on fake append (valref)' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.append.test="abc" &&
+        flux kvs get --watch --append --count=4 \
+                     test.append.test > append7.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put --append test.append.test="d" &&
+        flux kvs put --append test.append.test="e" &&
+        echo -n ${largeval} | flux kvs put --raw test.append.test=- &&
+        flux kvs get --treeobj test.append.test | grep valref &&
         test_must_fail wait $pid
 '
 
