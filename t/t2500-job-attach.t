@@ -96,6 +96,19 @@ test_expect_success NO_CHAIN_LINT 'attach: --show-status notes stopped named que
 	flux config load </dev/null &&
 	flux queue status
 '
+test_expect_success NO_CHAIN_LINT 'attach: ignores non-fatal exceptions' '
+	flux queue stop &&
+	test_when_finished "flux queue start" &&
+	jobid=$(flux submit hostname) &&
+	$runpty -f asciicast -o status-exception.out \
+		flux job attach --show-status $jobid &
+	waitfile.lua -v -t 15 -p "waiting for resources" status-exception.out &&
+	flux job raise --severity=2 --type=test -m test $(flux job last) &&
+	flux queue start &&
+	wait &&
+	test_must_fail grep "canceling due to exception" status-exception.out &&
+	grep "job.exception" status-exception.out
+'
 test_expect_success 'attach: shows output from job' '
 	run_timeout 5 flux job attach $(cat jobid1) | grep foo
 '
