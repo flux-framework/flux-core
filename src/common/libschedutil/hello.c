@@ -78,16 +78,20 @@ int schedutil_hello (schedutil_t *util)
 {
     flux_future_t *f;
     int rc = -1;
+    int partial_ok = 0;
 
     if (!util || !util->ops->hello) {
         errno = EINVAL;
         return -1;
     }
-    if (!(f = flux_rpc (util->h,
-                        "job-manager.sched-hello",
-                        NULL,
-                        FLUX_NODEID_ANY,
-                        FLUX_RPC_STREAMING)))
+    if ((util->flags & SCHEDUTIL_HELLO_PARTIAL_OK))
+        partial_ok = 1;
+    if (!(f = flux_rpc_pack (util->h,
+                             "job-manager.sched-hello",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_STREAMING,
+                             "{s:b}",
+                             "partial-ok", partial_ok)))
         return -1;
     while (1) {
         const flux_msg_t *msg;
