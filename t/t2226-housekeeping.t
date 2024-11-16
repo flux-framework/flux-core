@@ -332,8 +332,7 @@ test_expect_success 'flux resource list shows 0 nodes allocated' '
 	test $(flux resource list -s allocated -no {nnodes}) -eq 0
 '
 # The following tests exercise recovery from RFC 27 hello protocol
-# with partial release. Once partial release is added to RFC 27, these
-# tests should be removed or changed.
+# with partial release.
 test_expect_success 'configure housekeeping with immediate release' '
 	flux config load <<-EOT
 	[job-manager.housekeeping]
@@ -347,9 +346,9 @@ test_expect_success 'run job that uses 4 nodes to trigger housekeeping' '
 test_expect_success 'housekeeping is running for 1 job' '
 	wait_for_running 1
 '
-test_expect_success 'reload scheduler' '
+test_expect_success 'reload scheduler without partial hello capability' '
 	flux dmesg -C &&
-	flux module reload -f sched-simple &&
+	flux module reload -f sched-simple test-hello-nopartial &&
 	flux dmesg -H
 '
 test_expect_success 'wait for housekeeping to finish' '
