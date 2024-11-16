@@ -184,6 +184,8 @@ static struct simple_sched * simple_sched_create (void)
      * concurrency being excessively large.
      */
     ss->alloc_limit = 8;
+
+    ss->schedutil_flags = SCHEDUTIL_HELLO_PARTIAL_OK;
     return ss;
 }
 
@@ -544,24 +546,28 @@ static int hello_cb (flux_t *h,
     unsigned int priority;
     uint32_t userid;
     double t_submit;
+    const char *free_ranks = NULL;
 
     if (flux_msg_unpack (msg,
-                         "{s:I s:i s:i s:f}",
+                         "{s:I s:i s:i s:f s?s}",
                          "id", &id,
                          "priority", &priority,
                          "userid", &userid,
-                         "t_submit", &t_submit) < 0) {
+                         "t_submit", &t_submit,
+                         "free", &free_ranks) < 0) {
         flux_log_error (h, "hello: invalid hello payload");
         return -1;
     }
 
     flux_log (h,
               LOG_DEBUG,
-              "hello: id=%s priority=%u userid=%u t_submit=%0.1f",
+              "hello: id=%s priority=%u userid=%u t_submit=%0.1f %s%s",
               idf58 (id),
               priority,
               (unsigned int)userid,
-              t_submit);
+              t_submit,
+              free_ranks ? "free=" : "",
+              free_ranks ? free_ranks : "");
 
     alloc = rlist_from_R (R);
     if (!alloc) {
@@ -957,6 +963,9 @@ static int process_args (flux_t *h, struct simple_sched *ss,
         }
         else if (streq (argv[i], "test-free-nolookup")) {
             ss->schedutil_flags |= SCHEDUTIL_FREE_NOLOOKUP;
+        }
+        else if (streq (argv[i], "test-hello-nopartial")) {
+            ss->schedutil_flags &= ~SCHEDUTIL_HELLO_PARTIAL_OK;
         }
         else {
             flux_log_error (h, "Unknown module option: '%s'", argv[i]);
