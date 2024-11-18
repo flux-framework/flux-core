@@ -113,7 +113,6 @@ dist_fluxcmd_SCRIPTS = \
 	flux-job-validator.py \
 	flux-job-frobnicator.py \
 	flux-job-exec-override.py \
-	flux-perilog-run.py \
 	flux-uri.py \
 	flux-pstree.py \
 	flux-pgrep.py \

@@ -117,7 +117,19 @@ test_expect_success 'perilog: invalid config is rejected' '
 	kill-timeout = 5.5
 	EOF
 	test_debug "cat config.err.$i" &&
-	grep "kill-timeout not allowed for epilog" config.err.$i
+	grep "kill-timeout not allowed for epilog" config.err.$i &&
+	test_must_fail flux config load <<-EOF 2>config.err.$((i+=1)) &&
+	[job-manager.perilog]
+	log-ignore = "foo"
+	EOF
+	test_debug "cat config.err.$i" &&
+	grep "not an array" config.err.$i &&
+	test_must_fail flux config load <<-EOF 2>config.err.$((i+=1)) &&
+	[job-manager.perilog]
+	log-ignore = [ "[" ]
+	EOF
+	test_debug "cat config.err.$i" &&
+	grep "[fF]ailed to compile" config.err.$i
 '
 test_expect_success 'perilog: config uses IMP with exec.imp and no command' '
 	flux config load <<-EOF &&
@@ -302,6 +314,50 @@ test_expect_success 'perilog: prolog can drain multiple ranks' '
 	test "$(drained_ranks)" = "0-3" &&
 	undrain_all
 '
+test_expect_success 'perilog: nonfatal exception does not cancel prolog' '
+	undrain_all &&
+	flux config load <<-EOF &&
+	[job-manager.prolog]
+	per-rank = true
+	command = [ "sh",
+                    "-c",
+		    """flux job raise -s2 --type=test \$FLUX_JOB_ID
+                    flux job wait-event \$FLUX_JOB_ID exception""" ]
+	EOF
+	jobid=$(flux submit hostname) &&
+	flux job wait-event -t 15 $jobid prolog-start &&
+	flux job wait-event -t 15 $jobid prolog-finish &&
+	flux job wait-event -t 15 $jobid clean &&
+	flux jobs $jobid &&
+	flux job status -vvv $jobid &&
+	no_drained_ranks
+'
+test_expect_success 'perilog: job can time out after prolog' '
+	undrain_all &&
+	flux config load <<-EOF &&
+	[job-manager.prolog]
+	per-rank = true
+	command = [ "sleep", "1" ]
+	EOF
+	jobid=$(flux submit -t0.5s sleep 10) &&
+	flux job wait-event -t 15 $jobid prolog-finish &&
+	flux job wait-event -vt 15 $jobid exception &&
+	flux job wait-event -vt 15 $jobid clean &&
+	flux job status -v $jobid 2>&1 | grep type=timeout
+'
+test_expect_success 'perilog: job can be canceled after prolog is complete' '
+	undrain_all &&
+	flux config load <<-EOF &&
+	[job-manager.prolog]
+	per-rank = true
+	command = [ "sleep", "0" ]
+	EOF
+	jobid=$(flux submit sleep 300) &&
+	flux job wait-event -t 15 $jobid prolog-finish &&
+	flux cancel $jobid &&
+	flux job wait-event -t 15 $jobid exception &&
+	test_must_fail_or_be_terminated flux job status $jobid
+'
 test_expect_success 'perilog: epilog runs on all ranks with per-rank' '
 	undrain_all &&
 	flux config load <<-EOF &&
@@ -366,6 +422,22 @@ test_expect_success 'perilog: job does not start when prolog cancel times out' '
 	cat prolog-cancel-eventlog.out &&
 	test_must_fail grep "start$" prolog-cancel-eventlog.out &&
 	grep epilog-start prolog-cancel-eventlog.out
+'
+test_expect_success 'perilog: log-ignore works' '
+	undrain_all &&
+	flux config load <<-EOF &&
+	[job-manager.prolog]
+	command = [ "printf", "foo: whee!\nbar: woo!\nbaz: important!\n" ]
+	[job-manager.perilog]
+	log-ignore = [ "^foo:.*", "^bar:" ]
+	EOF
+	flux dmesg -c >/dev/null &&
+	flux run hostname &&
+	flux dmesg -H > dmesg.out &&
+	test_debug "cat dmesg.out" &&
+	test_must_fail grep foo: dmesg.out &&
+	test_must_fail grep bar: dmesg.out &&
+	grep baz: dmesg.out
 '
 test_expect_success 'perilog: load offline plugin before perilog.so' '
 	flux jobtap remove perilog.so &&
