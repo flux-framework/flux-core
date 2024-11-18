@@ -246,19 +246,18 @@ static int set_string (json_t *o, const char *key, const char *val)
     return 0;
 }
 
-static int queue_save_queue_append (json_t *a, struct queue *q)
+static int queue_ctx_save_one (json_t *a, struct queue *q)
 {
     json_t *entry;
-    int save_errno;
-    if (!q->name)
-        entry = json_pack ("{s:b s:b}",
-                           "enable", q->enable,
-                           "start", q->checkpoint_start);
-    else
-        entry = json_pack ("{s:s s:b s:b}",
-                           "name", q->name,
-                           "enable", q->enable,
-                           "start", q->checkpoint_start);
+
+    if (!(entry = json_pack ("{s:b s:b}",
+                             "enable", q->enable,
+                             "start", q->checkpoint_start)))
+        goto nomem;
+    if (q->name) {
+        if (set_string (entry, "name", q->name) < 0)
+            goto error;
+    }
     if (!entry)
         goto nomem;
     if (!q->enable) {
@@ -275,9 +274,7 @@ static int queue_save_queue_append (json_t *a, struct queue *q)
 nomem:
     errno = ENOMEM;
 error:
-    save_errno = errno;
-    json_decref (entry);
-    errno = save_errno;
+    ERRNO_SAFE_WRAP (json_decref, entry);
     return -1;
 }
 
@@ -290,17 +287,11 @@ json_t *queue_ctx_save (struct queue_ctx *qctx)
         errno = ENOMEM;
         return NULL;
     }
-    if (qctx->have_named_queues) {
-        q = zhashx_first (qctx->named);
-        while (q) {
-            if (queue_save_queue_append (a, q) < 0)
-                goto error;
-            q = zhashx_next (qctx->named);
-        }
-    }
-    else {
-        if (queue_save_queue_append (a, qctx->anon) < 0)
+    q = queue_first (qctx);
+    while (q) {
+        if (queue_ctx_save_one (a, q) < 0)
             goto error;
+        q = queue_next (qctx);
     }
     return a;
 error:
@@ -329,11 +320,8 @@ static int restore_state_v0 (struct queue_ctx *qctx, json_t *entry)
     /* "reason" is backwards compatible field name for "disable_reason" */
     if (!disable_reason && reason)
         disable_reason = reason;
-    if (name && qctx->have_named_queues)
-        q = zhashx_lookup (qctx->named, name);
-    else if (!name && !qctx->have_named_queues)
-        q = qctx->anon;
-    if (q) {
+
+    if ((q = queue_lookup (qctx, name, NULL))) {
         if (enable) {
             if (queue_enable (q) < 0)
                 return -1;
