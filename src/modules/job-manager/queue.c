@@ -9,6 +9,38 @@
 \************************************************************/
 
 /* queue.c - job queues
+ *
+ * The job manager currently has only one actual queue in alloc.c,
+ * a vestigal design from before named queues.  Therefore, 'struct queue'
+ * below is currently a container for queue state, not for jobs as one
+ * might reasonably expect.
+ *
+ * Notes:
+ * - By default, only a single anonymous queue is defined.  If any named queues
+ *   are defined, the anonymous queue is removed.
+ *
+ * - A job requests to be in a particular queue by requiring the resource
+ *   property associated with the nodes in the queue.  If it requires nothing,
+ *   the anonymous queue is assumed.  the 'default' frobnicator plugin may be
+ *   configured to add a default queue name when one is unspecified.
+ *
+ * - When a queue is enabled, jobs submitted for that queue are accepted.
+ *   When it is disabled, the job submission program fails immediately.
+ *
+ * - When a queue is started, alloc requests for jobs in SCHED state are
+ *   presented to the scheduler.  When it is stopped, those alloc requests
+ *   are canceled.
+ *
+ * - After a queue is stopped, the job manager continues to send free
+ *   requests to the scheduler for the queue as resources are released.
+ *   Jobs/housekeeping are not canceled when a queue is stopped.
+ *
+ * - When a queue is enabled and stopped, job submissions to the queue are
+ *   accepted, but the jobs will not run until the queue is started.
+ *
+ * See also:
+ * RFC 33/Flux Job Queues
+ * RFC 27/Resource Allocation Protocol Version 1
  */
 
 #if HAVE_CONFIG_H
@@ -32,14 +64,6 @@
 #include "restart.h"
 #include "queue.h"
 
-/* What it means to be administratively stopped:
- *
- * While allocation is stopped, the scheduler can remain loaded and
- * handle requests, but the job manager won't send any more allocation
- * requests.  Pending alloc requests are canceled.  The job manager
- * continues to send free requests to the scheduler as jobs relinquish
- * resources.
- */
 struct queue {
     char *name;
     bool is_enabled;    // jobs may be submitted to this queue
