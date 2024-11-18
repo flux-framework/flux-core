@@ -96,7 +96,7 @@ mkdir -p -m 0755 $CMDDIR
 for cmd in \
 	terminus ping keygen logger event module kvs start job queue exec \
 	cron mini jobs resource admin jobtap job-validator \
-	job-exec-override perilog-run uri pstree; do
+	job-exec-override uri pstree; do
 	cat <<-EOF >${CMDDIR}/flux-${cmd}
 	#!/bin/sh
 	printf "Error: running poison command $0\n"

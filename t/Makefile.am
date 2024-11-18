@@ -161,7 +161,6 @@ TESTSCRIPTS = \
 	t2271-job-dependency-after.t \
 	t2272-job-begin-time.t \
 	t2273-job-alloc-bypass.t \
-	t2274-manager-perilog.t \
 	t2274-manager-perilog-per-rank.t \
 	t2275-job-duration-validator.t \
 	t2276-job-requires.t \
@@ -196,7 +195,6 @@ TESTSCRIPTS = \
 	t2409-sdexec.t \
 	t2410-sdexec-memlimit.t \
 	t2411-sdexec-job.t \
-	t2412-sdexec-perilog.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
 	t2600-job-shell-rcalc.t \

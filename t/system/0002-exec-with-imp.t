@@ -74,23 +74,3 @@ test_expect_success HAVE_IMP 'flux exec flux-imp run forwards signals' '
 	test_expect_code 130 run_timeout 30 sudo -u flux ./test_signal.sh INT &&
 	test_expect_code 143 run_timeout 30 sudo -u flux ./test_signal.sh TERM
 '
-test_expect_success HAVE_IMP 'flux-perilog-run --with-imp works' '
-	flux run -vv hostname &&
-	TEST_ARG=0 FLUX_JOB_ID=$(flux job last) sudo -E -u flux \
-		flux perilog-run prolog --with-imp -ve test > prolog-imp.out &&
-	grep id=0 prolog-imp.out &&
-	grep "calling sleep 0" prolog-imp.out
-'
-test_expect_success HAVE_IMP 'flux-perilog-run --with-imp --timeout works' '
-	TEST_ARG=120 FLUX_JOB_ID=$(flux job last) \
-		test_expect_code 143 \
-		run_timeout 60 \
-		sudo -E -u flux \
-		flux perilog-run prolog --with-imp -t 1s -ve test \
-		    > prolog-imp-timeout.out &&
-	test_debug "cat prolog-imp-timeout.out" &&
-	jobid=$(flux job last) &&
-	sudo -u flux flux resource undrain $(flux jobs -no {ranks} $jobid) &&
-	grep id=0 prolog-imp-timeout.out &&
-	grep "calling sleep 120" prolog-imp-timeout.out
-'

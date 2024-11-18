@@ -56,8 +56,9 @@ test_expect_success 'unload plugins' '
 #
 test_expect_success 'configure epilog with 2s delay' '
 	flux config load <<-EOT &&
-	[job-manager]
-	epilog.command = [ "flux", "perilog-run", "epilog", "-e", "sleep,2" ]
+	[job-manager.epilog]
+	per-rank = true
+	command = [ "sleep", "2" ]
 	EOT
 	flux jobtap load perilog.so
 '
