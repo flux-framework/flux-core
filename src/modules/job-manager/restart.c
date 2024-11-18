@@ -311,7 +311,7 @@ int restart_save_state_to_txn (struct job_manager *ctx, flux_kvs_txn_t *txn)
 {
     json_t *queue;
 
-    if (!(queue = queue_save_state (ctx->queue)))
+    if (!(queue = queue_ctx_save (ctx->queue)))
         return -1;
     if (flux_kvs_txn_pack (txn,
                            0,
@@ -368,7 +368,7 @@ static int restart_restore_state (struct job_manager *ctx)
     if (ctx->max_jobid < id)
         ctx->max_jobid = id;
     if (queue) {
-        if (queue_restore_state (ctx->queue, version, queue) < 0)
+        if (queue_ctx_restore (ctx->queue, version, queue) < 0)
             goto error;
     }
     flux_future_destroy (f);

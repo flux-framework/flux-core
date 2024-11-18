@@ -34,7 +34,7 @@ struct job_manager {
     struct annotate *annotate;
     struct journal *journal;
     struct purge *purge;
-    struct queue *queue;
+    struct queue_ctx *queue;
     struct update *update;
     struct jobtap *jobtap;
 };
