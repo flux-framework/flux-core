@@ -15,17 +15,17 @@
 
 #include "job-manager.h"
 
-struct queue *queue_create (struct job_manager *ctx);
-void queue_destroy (struct queue *queue);
+struct queue_ctx *queue_ctx_create (struct job_manager *ctx);
+void queue_ctx_destroy (struct queue_ctx *qctx);
 
-json_t *queue_save_state (struct queue *queue);
-int queue_restore_state (struct queue *queue, int version, json_t *o);
+json_t *queue_ctx_save (struct queue_ctx *qctx);
+int queue_ctx_restore (struct queue_ctx *qctx, int version, json_t *o);
 
-int queue_submit_check (struct queue *queue,
+int queue_submit_check (struct queue_ctx *qctx,
                         json_t *jobspec,
                         flux_error_t *error);
 
-bool queue_started (struct queue *queue, struct job *job);
+bool queue_started (struct queue_ctx *qctx, struct job *job);
 
 #endif /* ! _FLUX_JOB_MANAGER_QUEUE_H */
 

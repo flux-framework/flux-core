@@ -189,7 +189,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating purge context");
         goto done;
     }
-    if (!(ctx.queue = queue_create (&ctx))) {
+    if (!(ctx.queue = queue_ctx_create (&ctx))) {
         flux_log_error (h, "error creating queue context");
         goto done;
     }
@@ -258,7 +258,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (ctx.handlers);
-    queue_destroy (ctx.queue);
+    queue_ctx_destroy (ctx.queue);
     purge_destroy (ctx.purge);
     journal_ctx_destroy (ctx.journal);
     annotate_ctx_destroy (ctx.annotate);
