@@ -109,88 +109,105 @@ error:
     return NULL;
 }
 
-static int queue_enable (struct queue *q,
-                         bool enable,
-                         const char *disable_reason)
+static struct queue *queue_first (struct queue_ctx *qctx)
 {
-    if (enable) {
-        q->enable = true;
-        free (q->disable_reason);
-        q->disable_reason = NULL;
-    }
-    else {
-        char *cpy;
-        if (!(cpy = strdup (disable_reason)))
+    if (qctx->have_named_queues)
+        return zhashx_first (qctx->named);
+    return qctx->anon;
+}
+
+static struct queue *queue_next (struct queue_ctx *qctx)
+{
+    if (qctx->have_named_queues)
+        return zhashx_next (qctx->named);
+    return NULL;
+}
+
+static int queue_enable (struct queue *q)
+{
+    q->enable = true;
+    free (q->disable_reason);
+    q->disable_reason = NULL;
+    return 0;
+}
+
+static int queue_disable (struct queue *q, const char *reason)
+{
+    char *cpy;
+    if (!(cpy = strdup (reason)))
+        return -1;
+    free (q->disable_reason);
+    q->disable_reason = cpy;
+    q->enable = false;
+    return 0;
+}
+
+static int queue_start (struct queue *q, bool nocheckpoint)
+{
+    q->start = true;
+    if (!nocheckpoint)
+        q->checkpoint_start = true;
+    free (q->stop_reason);
+    q->stop_reason = NULL;
+    return 0;
+}
+static int queue_stop (struct queue *q, const char *reason, bool nocheckpoint)
+{
+    char *cpy = NULL;
+    if (reason) {
+        if (!(cpy = strdup (reason)))
             return -1;
-        free (q->disable_reason);
-        q->disable_reason = cpy;
-        q->enable = false;
+    }
+    free (q->stop_reason);
+    q->stop_reason = cpy;
+    q->start = false;
+    if (!nocheckpoint)
+        q->checkpoint_start = false;
+    return 0;
+}
+
+static int queue_enable_all (struct queue_ctx *qctx)
+{
+    struct queue *q = queue_first (qctx);
+    while (q) {
+        if (queue_enable (q) < 0)
+            return -1;
+        q = queue_next (qctx);
     }
     return 0;
 }
 
-static int queue_start (struct queue *q,
-                        bool start,
-                        const char *stop_reason,
-                        bool nocheckpoint)
+static int queue_disable_all (struct queue_ctx *qctx, const char *reason)
 {
-    if (start) {
-        q->start = true;
-        if (!nocheckpoint)
-            q->checkpoint_start = true;
-        free (q->stop_reason);
-        q->stop_reason = NULL;
-    }
-    else {
-        char *cpy = NULL;
-        if (stop_reason) {
-            if (!(cpy = strdup (stop_reason)))
-                return -1;
-        }
-        free (q->stop_reason);
-        q->stop_reason = cpy;
-        q->start = false;
-        if (!nocheckpoint)
-            q->checkpoint_start = false;
+    struct queue *q = queue_first (qctx);
+    while (q) {
+        if (queue_disable (q, reason) < 0)
+            return -1;
+        q = queue_next (qctx);
     }
     return 0;
 }
 
-static int queue_enable_all (struct queue_ctx *qctx,
-                             bool enable,
-                             const char *disable_reason)
+static int queue_start_all (struct queue_ctx *qctx, bool nocheckpoint)
 {
-    if (qctx->have_named_queues) {
-        struct queue *q = zhashx_first (qctx->named);
-        while (q) {
-            if (queue_enable (q, enable, disable_reason) < 0)
-                return -1;
-            q = zhashx_next (qctx->named);
-        }
-    }
-    else {
-        if (queue_enable (qctx->anon, enable, disable_reason) < 0)
+    struct queue *q = queue_first (qctx);
+    while (q) {
+        if (queue_start (q, nocheckpoint) < 0)
             return -1;
+        q = queue_next (qctx);
     }
     return 0;
 }
 
-static int queue_start_all (struct queue_ctx *qctx,
-                            bool start,
-                            const char *stop_reason,
-                            bool nocheckpoint)
+static int queue_stop_all (struct queue_ctx *qctx,
+                           const char *reason,
+                           bool nocheckpoint)
 {
-    if (qctx->have_named_queues) {
-        struct queue *q = zhashx_first (qctx->named);
-        while (q) {
-            if (queue_start (q, start, stop_reason, nocheckpoint) < 0)
-                return -1;
-            q = zhashx_next (qctx->named);
-        }
-    }
-    else {
-        if (queue_start (qctx->anon, start, stop_reason, nocheckpoint) < 0)
+    struct queue *q = queue_first (qctx);
+    while (q) {
+        if (queue_stop (q, reason, nocheckpoint) < 0)
             return -1;
+        q = queue_next (qctx);
     }
     return 0;
 }
@@ -317,8 +334,14 @@ static int restore_state_v0 (struct queue_ctx *qctx, json_t *entry)
     else if (!name && !qctx->have_named_queues)
         q = qctx->anon;
     if (q) {
-        if (queue_enable (q, enable, disable_reason) < 0)
-            return -1;
+        if (enable) {
+            if (queue_enable (q) < 0)
+                return -1;
+        }
+        else {
+            if (queue_disable (q, disable_reason) < 0)
+                return -1;
+        }
     }
     return 0;
 }
@@ -347,10 +370,22 @@ static int restore_state_v1 (struct queue_ctx *qctx, json_t *entry)
     else if (!name && !qctx->have_named_queues)
         q = qctx->anon;
     if (q) {
-        if (queue_enable (q, enable, disable_reason) < 0)
-            return -1;
-        if (queue_start (q, start, stop_reason, false) < 0)
-            return -1;
+        if (enable) {
+            if (queue_enable (q) < 0)
+                return -1;
+        }
+        else {
+            if (queue_disable (q, disable_reason) < 0)
+                return -1;
+        }
+        if (start) {
+            if (queue_start (q, false) < 0)
+                return -1;
+        }
+        else {
+            if (queue_stop (q, stop_reason, false) < 0)
+                return -1;
+        }
     }
     return 0;
 }
@@ -615,8 +650,14 @@ static void queue_enable_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (queue_enable_all (qctx, enable, disable_reason))
-            goto error;
+        if (enable) {
+            if (queue_enable_all (qctx))
+                goto error;
+        }
+        else {
+            if (queue_disable_all (qctx, disable_reason))
+                goto error;
+        }
     }
     else {
         struct queue *q;
@@ -625,8 +666,14 @@ static void queue_enable_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (queue_enable (q, enable, disable_reason) < 0)
-            goto error;
+        if (enable) {
+            if (queue_enable (q) < 0)
+                goto error;
+        }
+        else {
+            if (queue_disable (q, disable_reason) < 0)
+                goto error;
+        }
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to job-manager.queue-enable");
@@ -701,14 +748,17 @@ static void queue_start_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (queue_start_all (qctx, start, stop_reason, nocheckpoint))
-            goto error;
         if (start) {
+            if (queue_start_all (qctx, nocheckpoint))
+                goto error;
             if (enqueue_jobs (qctx, NULL) < 0)
                 goto error;
         }
-        else
+        else {
+            if (queue_stop_all (qctx, stop_reason, nocheckpoint))
+                goto error;
             dequeue_jobs (qctx, NULL);
+        }
     }
     else {
         struct queue *q;
@@ -717,14 +767,17 @@ static void queue_start_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (queue_start (q, start, stop_reason, nocheckpoint) < 0)
-            goto error;
         if (start) {
+            if (queue_start (q, nocheckpoint) < 0)
+                goto error;
             if (enqueue_jobs (qctx, name) < 0)
                 goto error;
         }
-        else
+        else {
+            if (queue_stop (q, stop_reason, nocheckpoint) < 0)
+                goto error;
             dequeue_jobs (qctx, name);
+        }
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to job-manager.queue-start");
