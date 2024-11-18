@@ -40,7 +40,7 @@
  * continues to send free requests to the scheduler as jobs relinquish
  * resources.
  */
-struct jobq {
+struct queue {
     char *name;
     bool enable;    // jobs may be submitted to this queue
     char *disable_reason;   // reason if disabled
@@ -55,13 +55,13 @@ struct queue_ctx {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
     union {
-        struct jobq *anon;
+        struct queue *anon;
         zhashx_t *named;
     };
     bool have_named_queues;
 };
 
-static void jobq_destroy (struct jobq *q)
+static void queue_destroy (struct queue *q)
 {
     if (q) {
         int saved_errno = errno;
@@ -74,17 +74,17 @@ static void jobq_destroy (struct jobq *q)
 }
 
 // zhashx_destructor_fn signature
-static void jobq_destructor (void **item)
+static void queue_destructor (void **item)
 {
     if (item) {
-        jobq_destroy (*item);
+        queue_destroy (*item);
         *item = NULL;
     }
 }
 
-static struct jobq *jobq_create (const char *name, json_t *config)
+static struct queue *queue_create (const char *name, json_t *config)
 {
-    struct jobq *q;
+    struct queue *q;
 
     if (!(q = calloc (1, sizeof (*q))))
         return NULL;
@@ -105,13 +105,13 @@ static struct jobq *jobq_create (const char *name, json_t *config)
     }
     return q;
 error:
-    jobq_destroy (q);
+    queue_destroy (q);
     return NULL;
 }
 
-static int jobq_enable (struct jobq *q,
-                        bool enable,
-                        const char *disable_reason)
+static int queue_enable (struct queue *q,
+                         bool enable,
+                         const char *disable_reason)
 {
     if (enable) {
         q->enable = true;
@@ -129,10 +129,10 @@ static int jobq_enable (struct jobq *q,
     return 0;
 }
 
-static int jobq_start (struct jobq *q,
-                       bool start,
-                       const char *stop_reason,
-                       bool nocheckpoint)
+static int queue_start (struct queue *q,
+                        bool start,
+                        const char *stop_reason,
+                        bool nocheckpoint)
 {
     if (start) {
         q->start = true;
@@ -156,51 +156,51 @@ static int jobq_start (struct jobq *q,
     return 0;
 }
 
-static int jobq_enable_all (struct queue_ctx *qctx,
-                            bool enable,
-                            const char *disable_reason)
+static int queue_enable_all (struct queue_ctx *qctx,
+                             bool enable,
+                             const char *disable_reason)
 {
     if (qctx->have_named_queues) {
-        struct jobq *q = zhashx_first (qctx->named);
+        struct queue *q = zhashx_first (qctx->named);
         while (q) {
-            if (jobq_enable (q, enable, disable_reason) < 0)
+            if (queue_enable (q, enable, disable_reason) < 0)
                 return -1;
             q = zhashx_next (qctx->named);
         }
     }
     else {
-        if (jobq_enable (qctx->anon, enable, disable_reason) < 0)
+        if (queue_enable (qctx->anon, enable, disable_reason) < 0)
             return -1;
     }
     return 0;
 }
 
-static int jobq_start_all (struct queue_ctx *qctx,
-                           bool start,
-                           const char *stop_reason,
-                           bool nocheckpoint)
+static int queue_start_all (struct queue_ctx *qctx,
+                            bool start,
+                            const char *stop_reason,
+                            bool nocheckpoint)
 {
     if (qctx->have_named_queues) {
-        struct jobq *q = zhashx_first (qctx->named);
+        struct queue *q = zhashx_first (qctx->named);
         while (q) {
-            if (jobq_start (q, start, stop_reason, nocheckpoint) < 0)
+            if (queue_start (q, start, stop_reason, nocheckpoint) < 0)
                 return -1;
             q = zhashx_next (qctx->named);
         }
     }
     else {
-        if (jobq_start (qctx->anon, start, stop_reason, nocheckpoint) < 0)
+        if (queue_start (qctx->anon, start, stop_reason, nocheckpoint) < 0)
             return -1;
     }
     return 0;
 }
 
-struct jobq *queue_lookup (struct queue_ctx *qctx,
-                           const char *name,
-                           flux_error_t *error)
+struct queue *queue_lookup (struct queue_ctx *qctx,
+                            const char *name,
+                            flux_error_t *error)
 {
     if (name) {
-        struct jobq *q;
+        struct queue *q;
 
         if (!qctx->have_named_queues
             || !(q = zhashx_lookup (qctx->named, name))) {
@@ -229,7 +229,7 @@ static int set_string (json_t *o, const char *key, const char *val)
     return 0;
 }
 
-static int queue_save_jobq_append (json_t *a, struct jobq *q)
+static int queue_save_queue_append (json_t *a, struct queue *q)
 {
     json_t *entry;
     int save_errno;
@@ -267,7 +267,7 @@ error:
 json_t *queue_ctx_save (struct queue_ctx *qctx)
 {
     json_t *a;
-    struct jobq *q;
+    struct queue *q;
 
     if (!(a = json_array ())) {
         errno = ENOMEM;
@@ -276,13 +276,13 @@ json_t *queue_ctx_save (struct queue_ctx *qctx)
     if (qctx->have_named_queues) {
         q = zhashx_first (qctx->named);
         while (q) {
-            if (queue_save_jobq_append (a, q) < 0)
+            if (queue_save_queue_append (a, q) < 0)
                 goto error;
             q = zhashx_next (qctx->named);
         }
     }
     else {
-        if (queue_save_jobq_append (a, qctx->anon) < 0)
+        if (queue_save_queue_append (a, qctx->anon) < 0)
             goto error;
     }
     return a;
@@ -297,7 +297,7 @@ static int restore_state_v0 (struct queue_ctx *qctx, json_t *entry)
     const char *reason = NULL;
     const char *disable_reason = NULL;
     int enable;
-    struct jobq *q = NULL;
+    struct queue *q = NULL;
 
     if (json_unpack (entry,
                      "{s?s s:b s?s s?s}",
@@ -317,7 +317,7 @@ static int restore_state_v0 (struct queue_ctx *qctx, json_t *entry)
     else if (!name && !qctx->have_named_queues)
         q = qctx->anon;
     if (q) {
-        if (jobq_enable (q, enable, disable_reason) < 0)
+        if (queue_enable (q, enable, disable_reason) < 0)
             return -1;
     }
     return 0;
@@ -330,7 +330,7 @@ static int restore_state_v1 (struct queue_ctx *qctx, json_t *entry)
     const char *stop_reason = NULL;
     int enable;
     int start;
-    struct jobq *q = NULL;
+    struct queue *q = NULL;
 
     if (json_unpack (entry,
                      "{s?s s:b s?s s:b s?s}",
@@ -347,9 +347,9 @@ static int restore_state_v1 (struct queue_ctx *qctx, json_t *entry)
     else if (!name && !qctx->have_named_queues)
         q = qctx->anon;
     if (q) {
-        if (jobq_enable (q, enable, disable_reason) < 0)
+        if (queue_enable (q, enable, disable_reason) < 0)
             return -1;
-        if (jobq_start (q, start, stop_reason, false) < 0)
+        if (queue_start (q, start, stop_reason, false) < 0)
             return -1;
     }
     return 0;
@@ -383,7 +383,7 @@ int queue_submit_check (struct queue_ctx *qctx,
                         json_t *jobspec,
                         flux_error_t *error)
 {
-    struct jobq *q;
+    struct queue *q;
     json_t *o;
     const char *name = NULL;
 
@@ -408,7 +408,7 @@ int queue_submit_check (struct queue_ctx *qctx,
 bool queue_started (struct queue_ctx *qctx, struct job *job)
 {
     if (qctx->have_named_queues) {
-        struct jobq *q;
+        struct queue *q;
         if (!job->queue)
             return false;
         if (!(q = zhashx_lookup (qctx->named, job->queue))) {
@@ -438,17 +438,17 @@ static int queue_configure (const flux_conf_t *conf,
         && json_object_size (queues) > 0) {
         const char *name;
         json_t *value;
-        struct jobq *q;
+        struct queue *q;
         zlistx_t *keys;
 
         /* destroy anon queue and create hash if necessary
          */
         if (!qctx->have_named_queues) {
             qctx->have_named_queues = true;
-            jobq_destroy (qctx->anon);
+            queue_destroy (qctx->anon);
             if (!(qctx->named = zhashx_new ()))
                 goto nomem;
-            zhashx_set_destructor (qctx->named, jobq_destructor);
+            zhashx_set_destructor (qctx->named, queue_destructor);
         }
         /* remove any queues that disappeared from config
          */
@@ -468,7 +468,7 @@ static int queue_configure (const flux_conf_t *conf,
          */
         json_object_foreach (queues, name, value) {
             if (!zhashx_lookup (qctx->named, name)) {
-                if (!(q = jobq_create (name, value)))
+                if (!(q = queue_create (name, value)))
                     goto nomem;
                 (void)zhashx_insert (qctx->named, name, q);
             }
@@ -478,7 +478,7 @@ static int queue_configure (const flux_conf_t *conf,
         if (qctx->have_named_queues) {
             qctx->have_named_queues = false;
             zhashx_destroy (&qctx->named);
-            if (!(qctx->anon = jobq_create (NULL, NULL)))
+            if (!(qctx->anon = queue_create (NULL, NULL)))
                 goto nomem;
         }
     }
@@ -495,7 +495,7 @@ static void queue_list_cb (flux_t *h,
                            void *arg)
 {
     struct queue_ctx *qctx = arg;
-    struct jobq *q;
+    struct queue *q;
     json_t *a = NULL;;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
@@ -536,7 +536,7 @@ static void queue_status_cb (flux_t *h,
     flux_error_t error;
     const char *errmsg = NULL;
     const char *name = NULL;
-    struct jobq *q;
+    struct queue *q;
     json_t *o = NULL;
     bool start;
     const char *stop_reason = NULL;
@@ -615,17 +615,17 @@ static void queue_enable_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (jobq_enable_all (qctx, enable, disable_reason))
+        if (queue_enable_all (qctx, enable, disable_reason))
             goto error;
     }
     else {
-        struct jobq *q;
+        struct queue *q;
         if (!(q = queue_lookup (qctx, name, &error))) {
             errmsg = error.text;
             errno = EINVAL;
             goto error;
         }
-        if (jobq_enable (q, enable, disable_reason) < 0)
+        if (queue_enable (q, enable, disable_reason) < 0)
             goto error;
     }
     if (flux_respond (h, msg, NULL) < 0)
@@ -636,7 +636,7 @@ error:
         flux_log_error (h, "error responding to job-manager.queue-enable");
 }
 
-static int queue_start (struct queue_ctx *qctx, const char *name)
+static int enqueue_jobs (struct queue_ctx *qctx, const char *name)
 {
     struct job *job = zhashx_first (qctx->ctx->active_jobs);
     while (job) {
@@ -655,7 +655,7 @@ static int queue_start (struct queue_ctx *qctx, const char *name)
     return 0;
 }
 
-static void queue_stop (struct queue_ctx *qctx, const char *name)
+static void dequeue_jobs (struct queue_ctx *qctx, const char *name)
 {
     if (alloc_queue_count (qctx->ctx->alloc) > 0
         || alloc_pending_count (qctx->ctx->alloc) > 0) {
@@ -701,30 +701,30 @@ static void queue_start_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (jobq_start_all (qctx, start, stop_reason, nocheckpoint))
+        if (queue_start_all (qctx, start, stop_reason, nocheckpoint))
             goto error;
         if (start) {
-            if (queue_start (qctx, NULL) < 0)
+            if (enqueue_jobs (qctx, NULL) < 0)
                 goto error;
         }
         else
-            queue_stop (qctx, NULL);
+            dequeue_jobs (qctx, NULL);
     }
     else {
-        struct jobq *q;
+        struct queue *q;
         if (!(q = queue_lookup (qctx, name, &error))) {
             errmsg = error.text;
             errno = EINVAL;
             goto error;
         }
-        if (jobq_start (q, start, stop_reason, nocheckpoint) < 0)
+        if (queue_start (q, start, stop_reason, nocheckpoint) < 0)
             goto error;
         if (start) {
-            if (queue_start (qctx, name) < 0)
+            if (enqueue_jobs (qctx, name) < 0)
                 goto error;
         }
         else
-            queue_stop (qctx, name);
+            dequeue_jobs (qctx, name);
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to job-manager.queue-start");
@@ -771,7 +771,7 @@ void queue_ctx_destroy (struct queue_ctx *qctx)
         if (qctx->have_named_queues)
             zhashx_destroy (&qctx->named);
         else
-            jobq_destroy (qctx->anon);
+            queue_destroy (qctx->anon);
         free (qctx);
         errno = saved_errno;
     }
@@ -800,7 +800,7 @@ static int constraints_match_check (struct queue_ctx *qctx,
 {
     int rc = -1;
     json_t *expected = NULL;
-    struct jobq *q;
+    struct queue *q;
 
     /*  Return an error if the job's current queue doesn't exist since we
      *  can't validate current constraints (This should not happen in normal
@@ -849,7 +849,7 @@ static int queue_update_cb (flux_plugin_t *p,
     const char *current_queue = NULL;
     json_t *constraints = NULL;
     flux_error_t error;
-    struct jobq *newq;
+    struct queue *newq;
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
@@ -950,7 +950,7 @@ struct queue_ctx *queue_ctx_create (struct job_manager *ctx)
     if (!(qctx = calloc (1, sizeof (*qctx))))
         return NULL;
     qctx->ctx = ctx;
-    if (!(qctx->anon = jobq_create (NULL, NULL)))
+    if (!(qctx->anon = queue_create (NULL, NULL)))
         goto error;
     if (flux_msg_handler_addvec (ctx->h,
                                  htab,
