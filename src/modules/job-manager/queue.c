@@ -42,11 +42,10 @@
  */
 struct queue {
     char *name;
-    bool enable;    // jobs may be submitted to this queue
+    bool is_enabled;    // jobs may be submitted to this queue
     char *disable_reason;   // reason if disabled
-    bool start;
-    bool checkpoint_start;  // may be different that actual start due
-                            // to nocheckpoint flag
+    bool is_started;    // current queue state
+    bool is_started_sticky; // tracks is_started unless --nocheckpoint
     char *stop_reason; // reason if stopped (optionally set)
     json_t *requires;  // required properties array
 };
@@ -90,19 +89,17 @@ static struct queue *queue_create (const char *name, json_t *config)
         return NULL;
     if (name && !(q->name = strdup (name)))
         goto error;
-    q->enable = true;
+    q->is_enabled = true;
 
     if (config && json_unpack (config, "{s?O}", "requires", &q->requires) < 0)
         goto error;
 
-    if (name) {
-        q->start = false;
-        q->checkpoint_start = false;
-    }
-    else {
-        q->start = true;
-        q->checkpoint_start = true;
-    }
+    /* The anonymous queue begins life started, while named queues do not.
+     */
+    if (name)
+        q->is_started_sticky = q->is_started = false;
+    else
+        q->is_started_sticky = q->is_started = true;
     return q;
 error:
     queue_destroy (q);
@@ -125,7 +122,7 @@ static struct queue *queue_next (struct queue_ctx *qctx)
 
 static int queue_enable (struct queue *q)
 {
-    q->enable = true;
+    q->is_enabled = true;
     free (q->disable_reason);
     q->disable_reason = NULL;
     return 0;
@@ -138,15 +135,15 @@ static int queue_disable (struct queue *q, const char *reason)
         return -1;
     free (q->disable_reason);
     q->disable_reason = cpy;
-    q->enable = false;
+    q->is_enabled = false;
     return 0;
 }
 
 static int queue_start (struct queue *q, bool nocheckpoint)
 {
-    q->start = true;
+    q->is_started = true;
     if (!nocheckpoint)
-        q->checkpoint_start = true;
+        q->is_started_sticky = q->is_started;
     free (q->stop_reason);
     q->stop_reason = NULL;
     return 0;
@@ -160,9 +157,9 @@ static int queue_stop (struct queue *q, const char *reason, bool nocheckpoint)
     }
     free (q->stop_reason);
     q->stop_reason = cpy;
-    q->start = false;
+    q->is_started = false;
     if (!nocheckpoint)
-        q->checkpoint_start = false;
+        q->is_started_sticky = q->is_started;
     return 0;
 }
 
@@ -251,8 +248,8 @@ static int queue_ctx_save_one (json_t *a, struct queue *q)
     json_t *entry;
 
     if (!(entry = json_pack ("{s:b s:b}",
-                             "enable", q->enable,
-                             "start", q->checkpoint_start)))
+                             "enable", q->is_enabled,
+                             "start", q->is_started_sticky)))
         goto nomem;
     if (q->name) {
         if (set_string (entry, "name", q->name) < 0)
@@ -260,11 +257,11 @@ static int queue_ctx_save_one (json_t *a, struct queue *q)
     }
     if (!entry)
         goto nomem;
-    if (!q->enable) {
+    if (!q->is_enabled) {
         if (set_string (entry, "disable_reason", q->disable_reason) < 0)
             goto error;
     }
-    if (!q->checkpoint_start && q->stop_reason) {
+    if (!q->is_started_sticky && q->stop_reason) {
         if (set_string (entry, "stop_reason", q->stop_reason) < 0)
             goto error;
     }
@@ -417,7 +414,7 @@ int queue_submit_check (struct queue_ctx *qctx,
         errno = EINVAL;
         return -1;
     }
-    if (!q->enable) {
+    if (!q->is_enabled) {
         errprintf (error, "job submission%s%s is disabled: %s",
                    name ? " to " : "",
                    name ? name : "",
@@ -440,10 +437,10 @@ bool queue_started (struct queue_ctx *qctx, struct job *job)
                       __FUNCTION__, idf58 (job->id), job->queue);
             return false;
         }
-        return q->start;
+        return q->is_started;
     }
 
-    return qctx->anon->start;
+    return qctx->anon->is_started;
 }
 
 /* N.B. the basic queue configuration should have already been validated by
@@ -579,16 +576,16 @@ static void queue_status_cb (flux_t *h,
         stop_reason = "Scheduler is offline";
     }
     else {
-        start = q->start;
+        start = q->is_started;
         stop_reason = q->stop_reason;
     }
     if (!(o = json_pack ("{s:b s:b}",
-                         "enable", q->enable,
+                         "enable", q->is_enabled,
                          "start", start))) {
         errno = ENOMEM;
         goto error;
     }
-    if (!q->enable) {
+    if (!q->is_enabled) {
         if (set_string (o, "disable_reason", q->disable_reason) < 0)
             goto error;
     }
@@ -923,7 +920,7 @@ static int queue_update_cb (flux_plugin_t *p,
         flux_jobtap_error (p, args, "%s", error.text);
         return -1;
     }
-    if (!newq->enable) {
+    if (!newq->is_enabled) {
         flux_jobtap_error (p,
                            args,
                            "queue %s is currently disabled",
