@@ -138,7 +138,8 @@ libflux_idset_la_LDFLAGS = \
 libflux_schedutil_la_SOURCES =
 libflux_schedutil_la_LIBADD = \
 	$(builddir)/libschedutil/libschedutil.la \
-	$(builddir)/libczmqcontainers/libczmqcontainers.la \
+	$(builddir)/librlist/librlist.la \
+	libflux-internal.la \
 	libflux-core.la \
 	$(JANSSON_LIBS)
 libflux_schedutil_la_LDFLAGS = \
