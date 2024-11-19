@@ -168,8 +168,7 @@ job_info_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
-	$(JANSSON_LIBS) \
-	$(HWLOC_LIBS)
+	$(JANSSON_LIBS)
 job_info_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 job_list_la_SOURCES =
@@ -184,8 +183,7 @@ job_list_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
-	$(JANSSON_LIBS) \
-	$(HWLOC_LIBS)
+	$(JANSSON_LIBS)
 job_list_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 job_ingest_la_SOURCES =
@@ -211,8 +209,7 @@ job_manager_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
-	$(JANSSON_LIBS) \
-	$(HWLOC_LIBS)
+	$(JANSSON_LIBS)
 job_manager_la_LDFLAGS = \
 	$(fluxlib_ldflags) \
 	-avoid-version \
@@ -265,8 +262,7 @@ sched_simple_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
-	$(JANSSON_LIBS) \
-	$(HWLOC_LIBS)
+	$(JANSSON_LIBS)
 sched_simple_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 sdexec_la_SOURCES = \
