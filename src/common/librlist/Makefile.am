@@ -15,7 +15,8 @@ AM_CPPFLAGS = \
 	$(HWLOC_CFLAGS)
 
 noinst_LTLIBRARIES = \
-	librlist.la
+	librlist.la \
+	librlist-hwloc.la
 
 librlist_la_SOURCES = \
 	rnode.h \
@@ -24,6 +25,9 @@ librlist_la_SOURCES = \
 	match.c \
 	rlist.c \
 	rlist.h \
+	rlist_private.h
+
+librlist_hwloc_la_SOURCES = \
 	rhwloc.c \
 	rhwloc.h
 
@@ -85,6 +89,7 @@ test_rhwloc_t_CPPFLAGS = \
 	$(test_cppflags)
 test_rhwloc_t_LDADD = \
 	librlist.la \
+	librlist-hwloc.la \
 	$(test_ldadd)
 test_rhwloc_t_LDFLAGS = \
 	$(test_ldflags)

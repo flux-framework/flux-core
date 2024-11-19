@@ -48,4 +48,8 @@ char * rhwloc_core_idset_string (hwloc_topology_t topo);
  */
 char * rhwloc_gpu_idset_string (hwloc_topology_t topo);
 
+/*  Return rlist object from local hwloc topology, or from xml if non-NULL.
+ */
+struct rlist *rlist_from_hwloc (int my_rank, const char *xml);
+
 #endif /* !HAVE_UTIL_RHWLOC */

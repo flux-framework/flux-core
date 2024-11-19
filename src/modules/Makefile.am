@@ -245,6 +245,7 @@ resource_la_CPPFLAGS = \
 	$(HWLOC_CFLAGS)
 resource_la_LIBADD = \
 	$(builddir)/resource/libresource.la \
+	$(top_builddir)/src/common/librlist/librlist-hwloc.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \

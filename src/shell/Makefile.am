@@ -106,6 +106,7 @@ flux_shell_LDADD = \
 	$(builddir)/libshell.la \
 	$(builddir)/libmpir.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
+	$(top_builddir)/src/common/librlist/librlist-hwloc.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/bindings/lua/libfluxlua.la \
 	$(top_builddir)/src/common/libflux-core.la \
