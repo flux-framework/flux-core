@@ -136,8 +136,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(LIBPTHREAD) \
-	$(JANSSON_LIBS) \
-	$(HWLOC_LIBS)
+	$(JANSSON_LIBS)
 
 test_cppflags = \
 	$(AM_CPPFLAGS)

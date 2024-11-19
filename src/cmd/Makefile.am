@@ -27,7 +27,6 @@ fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(FLUX_SECURITY_LIBS) \
 	$(LIBPTHREAD) \
-	$(HWLOC_LIBS) \
 	$(JANSSON_LIBS)
 
 LDADD = $(fluxcmd_ldadd)
@@ -196,6 +195,7 @@ flux_terminus_LDADD = \
 
 flux_R_LDADD = \
 	$(fluxcmd_ldadd) \
+	$(top_builddir)/src/common/librlist/librlist-hwloc.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
 	$(top_builddir)/src/common/libhostlist/libhostlist.la \

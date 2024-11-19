@@ -15,7 +15,8 @@ AM_CPPFLAGS = \
 	$(HWLOC_CFLAGS)
 
 noinst_LTLIBRARIES = \
-	librlist.la
+	librlist.la \
+	librlist-hwloc.la
 
 librlist_la_SOURCES = \
 	rnode.h \
@@ -24,6 +25,9 @@ librlist_la_SOURCES = \
 	match.c \
 	rlist.c \
 	rlist.h \
+	rlist_private.h
+
+librlist_hwloc_la_SOURCES = \
 	rhwloc.c \
 	rhwloc.h
 
@@ -31,8 +35,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(LIBPTHREAD) \
-	$(JANSSON_LIBS) \
-	$(HWLOC_LIBS)
+	$(JANSSON_LIBS)
 
 test_cppflags = \
 	$(AM_CPPFLAGS)
@@ -85,6 +88,8 @@ test_rhwloc_t_CPPFLAGS = \
 	$(test_cppflags)
 test_rhwloc_t_LDADD = \
 	librlist.la \
-	$(test_ldadd)
+	librlist-hwloc.la \
+	$(test_ldadd) \
+	$(HWLOC_LIBS)
 test_rhwloc_t_LDFLAGS = \
 	$(test_ldflags)

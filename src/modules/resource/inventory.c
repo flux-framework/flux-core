@@ -89,7 +89,8 @@
 #include <jansson.h>
 #include <flux/core.h>
 
-#include <src/common/librlist/rlist.h>
+#include "src/common/librlist/rlist.h"
+#include "src/common/librlist/rhwloc.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"

@@ -225,8 +225,6 @@ struct rlist *rlist_from_R (const char *R);
  */
 struct rlist *rlist_from_json (json_t *o, json_error_t *err);
 
-struct rlist *rlist_from_hwloc (int my_rank, const char *xml);
-
 /*  Verify resources in rlist 'actual' meet or exceed resources in
  *   matching ranks of rlist 'expected'
  *  Returns:
@@ -288,5 +286,6 @@ int rlist_assign_properties (struct rlist *rl,
 char *rlist_properties_encode (const struct rlist *rl);
 
 struct rlist *rlist_from_config (json_t *conf, flux_error_t *errp);
+
 
 #endif /* !HAVE_SCHED_RLIST_H */

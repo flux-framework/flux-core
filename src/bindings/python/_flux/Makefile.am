@@ -128,7 +128,6 @@ _idset_la_LIBADD = $(common_libs)
 nodist__rlist_la_SOURCES = _rlist.c
 _rlist_la_LIBADD = \
 	$(top_builddir)/src/common/librlist/librlist.la \
-	$(HWLOC_LIBS) \
 	$(common_libs)
 
 if HAVE_FLUX_SECURITY

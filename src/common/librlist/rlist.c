@@ -28,7 +28,7 @@
 #include "rnode.h"
 #include "match.h"
 #include "rlist.h"
-#include "rhwloc.h"
+#include "rlist_private.h"
 
 static int by_rank (const void *item1, const void *item2);
 
@@ -200,7 +200,7 @@ static int rlist_add_rnode_new (struct rlist *rl, struct rnode *n)
  *   by this function (either the rnode is consumed by the rlist, or
  *   the rnode is destroyed after its resources are applied to 'rl')
  */
-static int rlist_add_rnode (struct rlist *rl, struct rnode *n)
+int rlist_add_rnode (struct rlist *rl, struct rnode *n)
 {
     struct rnode *found = rlist_find_rank (rl, n->rank);
     if (found) {
@@ -2353,50 +2353,6 @@ int rlist_mark_up (struct rlist *rl, const char *ids)
         count = rlist_mark_state (rl, true, ids);
     rl->avail += count;
     return 0;
-}
-
-
-struct rlist *rlist_from_hwloc (int rank, const char *xml)
-{
-    char *ids = NULL;
-    struct rnode *n = NULL;
-    hwloc_topology_t topo = NULL;
-    const char *name;
-    struct rlist *rl = rlist_create ();
-
-    if (!rl)
-        return NULL;
-
-    if (xml)
-        topo = rhwloc_xml_topology_load (xml, RHWLOC_NO_RESTRICT);
-    else
-        topo = rhwloc_local_topology_load (0);
-    if (!topo)
-        goto fail;
-    if (!(ids = rhwloc_core_idset_string (topo))
-        || !(name = rhwloc_hostname (topo)))
-        goto fail;
-
-    if (!(n = rnode_create (name, rank, ids))
-        || rlist_add_rnode (rl, n) < 0)
-        goto fail;
-
-    free (ids);
-
-    if ((ids = rhwloc_gpu_idset_string (topo))
-        && rnode_add_child (n, "gpu", ids) < 0)
-        goto fail;
-
-    hwloc_topology_destroy (topo);
-    free (ids);
-    return rl;
-fail:
-    rlist_destroy (rl);
-    rnode_destroy (n);
-    free (ids);
-    if (topo)
-        hwloc_topology_destroy (topo);
-    return NULL;
 }
 
 /*  Check if a resource set provided by configuration is valid.
