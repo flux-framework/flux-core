@@ -15,6 +15,9 @@
 #include <jansson.h>
 
 #include "src/common/libjob/idf58.h"
+#include "src/common/librlist/rlist.h"
+#include "src/common/libutil/errno_safe.h"
+
 #include "schedutil_private.h"
 #include "init.h"
 #include "hello.h"
@@ -39,6 +42,27 @@ static void raise_exception (flux_t *h, flux_jobid_t id, const char *note)
     flux_future_destroy (f);
 }
 
+static const char *create_partial_R (const flux_msg_t *msg,
+                                     const char *R_orig,
+                                     const char *free_ranks)
+{
+    struct idset *ids;
+    struct rlist *rl = NULL;
+    char *R_new = NULL;
+
+    if (!(ids = idset_decode (free_ranks))
+        || !(rl = rlist_from_R (R_orig))
+        || rlist_remove_ranks (rl, ids) < 0
+        || !(R_new = rlist_encode (rl))
+        || flux_msg_aux_set (msg, NULL, R_new, (flux_free_f)free) < 0) {
+        ERRNO_SAFE_WRAP (free, R_new);
+        R_new = NULL;
+    }
+    rlist_destroy (rl);
+    idset_destroy (ids);
+    return R_new;
+}
+
 static int schedutil_hello_job (schedutil_t *util,
                                 const flux_msg_t *msg)
 {
@@ -46,8 +70,12 @@ static int schedutil_hello_job (schedutil_t *util,
     flux_future_t *f = NULL;
     const char *R;
     flux_jobid_t id;
+    const char *free_ranks = NULL;
 
-    if (flux_msg_unpack (msg, "{s:I}", "id", &id) < 0)
+    if (flux_msg_unpack (msg,
+                         "{s:I s?s}",
+                         "id", &id,
+                         "free", &free_ranks) < 0)
         goto error;
     if (flux_job_kvs_key (key, sizeof (key), id, "R") < 0) {
         errno = EPROTO;
@@ -57,6 +85,10 @@ static int schedutil_hello_job (schedutil_t *util,
         goto error;
     if (flux_kvs_lookup_get (f, &R) < 0)
         goto error;
+    if (free_ranks) {
+        if (!(R = create_partial_R (msg, R, free_ranks)))
+            goto error;
+    }
     if (util->ops->hello (util->h,
                           msg,
                           R,
