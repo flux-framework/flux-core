@@ -170,7 +170,7 @@ static void alloc_continuation (flux_future_t *f, void *arg)
     struct alloc *ctx = flux_future_aux_get (f, "flux::alloc_ctx");
     json_t *payload = NULL;
 
-    schedutil_remove_outstanding_future (util, f);
+    remove_outstanding_future (util, f);
     if (flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "commit R");
         goto error;
@@ -227,7 +227,7 @@ int schedutil_alloc_respond_success_pack (schedutil_t *util,
     }
     if (flux_future_then (f, -1, alloc_continuation, util) < 0)
         goto error;
-    schedutil_add_outstanding_future (util, f);
+    add_outstanding_future (util, f);
     return 0;
 error:
     alloc_destroy (ctx);

@@ -30,13 +30,12 @@ struct schedutil_ctx {
 /* Track futures that need to be destroyed on scheduler unload.
  * Return 0 on success and -1 on error.
  */
-int schedutil_add_outstanding_future (schedutil_t *util, flux_future_t *fut);
-int schedutil_remove_outstanding_future (schedutil_t *util,
-                                         flux_future_t *fut);
+int add_outstanding_future (schedutil_t *util, flux_future_t *fut);
+int remove_outstanding_future (schedutil_t *util, flux_future_t *fut);
 
 /* (Un-)register callbacks for alloc, free, cancel.
  */
-int schedutil_ops_register (schedutil_t *util);
-void schedutil_ops_unregister (schedutil_t *util);
+int ops_register (schedutil_t *util);
+void ops_unregister (schedutil_t *util);
 
 #endif /* HAVE_SCHEDUTIL_PRIVATE_H */

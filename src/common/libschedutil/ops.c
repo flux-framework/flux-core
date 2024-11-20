@@ -95,7 +95,7 @@ static int service_register (flux_t *h)
     return 0;
 }
 
-int schedutil_ops_register (schedutil_t *util)
+int ops_register (schedutil_t *util)
 {
     flux_t *h = util->h;
 
@@ -109,7 +109,7 @@ int schedutil_ops_register (schedutil_t *util)
     return 0;
 }
 
-void schedutil_ops_unregister (schedutil_t *util)
+void ops_unregister (schedutil_t *util)
 {
     if (!util)
         return;
