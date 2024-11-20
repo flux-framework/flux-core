@@ -400,10 +400,9 @@ AC_ARG_WITH([flux-security], AS_HELP_STRING([--with-flux-security],
              [Build with flux-security]))
 AS_IF([test "x$with_flux_security" = "xyes"], [
     PKG_CHECK_MODULES([FLUX_SECURITY], [flux-security >= 0.13.0],
-                      [flux_sec_incdir=`$PKG_CONFIG --variable=includedir flux-security`],
-                      [flux_sec_incdir=;])
+      [flux_sec_incdir=`$PKG_CONFIG --variable=includedir flux-security`])
     AS_IF([test "x$flux_sec_incdir" = x],
-          [AC_MSG_ERROR([couldn't find flux-security or include directory])])
+          [AC_MSG_ERROR([couldn't find flux-security include directory])])
     AC_CHECK_HEADERS([flux/security/version.h])
     AC_DEFINE([HAVE_FLUX_SECURITY], [1], [Define flux-security is available])
     AC_SUBST(FLUX_SECURITY_INCDIR, $flux_sec_incdir)
