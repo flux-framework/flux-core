@@ -56,7 +56,7 @@ schedutil_t *schedutil_create (flux_t *h,
     if (!(util->outstanding_futures = zlistx_new ()))
         goto error;
     zlistx_set_destructor (util->outstanding_futures, future_destructor);
-    if (schedutil_ops_register (util) < 0)
+    if (ops_register (util) < 0)
         goto error;
 
     return util;
@@ -71,20 +71,20 @@ void schedutil_destroy (schedutil_t *util)
     if (util) {
         int saved_errno = errno;
         zlistx_destroy (&util->outstanding_futures);
-        schedutil_ops_unregister (util);
+        ops_unregister (util);
         free (util);
         errno = saved_errno;
     }
 }
 
-int schedutil_add_outstanding_future (schedutil_t *util, flux_future_t *fut)
+int add_outstanding_future (schedutil_t *util, flux_future_t *fut)
 {
     if (zlistx_add_end (util->outstanding_futures, fut) == NULL)
         return -1;
     return 0;
 }
 
-int schedutil_remove_outstanding_future (schedutil_t *util, flux_future_t *fut)
+int remove_outstanding_future (schedutil_t *util, flux_future_t *fut)
 {
     if (!zlistx_find (util->outstanding_futures, fut))
         return -1;
