@@ -5,7 +5,7 @@ Maintainer: Mark A. Grondona <mark.grondona@gmail.com>
 Standards-Version: 4.1.2
 Build-Depends:
   debhelper (>= 10),
-  flux-security (>= 0.8.0),
+  flux-security (>= 0.13.0),
   libarchive-dev,
   uuid-dev,
   libzmq3-dev,
