@@ -257,7 +257,9 @@ static int handle_initial_response (flux_t *h,
     }
 
     if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
-        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        flux_log_error (h,
+                        "%s: failed to respond to kvs-watch.lookup",
+                        __FUNCTION__);
         return -1;
     }
 
@@ -277,7 +279,9 @@ static int handle_compare_response (flux_t *h,
         w->prev = json_incref (val);
 
         if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
-            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+            flux_log_error (h,
+                            "%s: failed to respond to kvs-watch.lookup",
+                            __FUNCTION__);
             return -1;
         }
 
@@ -293,7 +297,9 @@ static int handle_compare_response (flux_t *h,
         w->prev = json_incref (val);
 
         if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
-            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+            flux_log_error (h,
+                            "%s: failed to respond to kvs-watch.lookup",
+                            __FUNCTION__);
             return -1;
         }
     }
@@ -317,7 +323,9 @@ static int handle_append_response (flux_t *h,
         }
 
         if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
-            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+            flux_log_error (h,
+                            "%s: failed to respond to kvs-watch.lookup",
+                            __FUNCTION__);
             return -1;
         }
 
@@ -359,7 +367,9 @@ static int handle_append_response (flux_t *h,
 
         if (flux_respond_pack (h, w->request, "{ s:o }", "val", new_val) < 0) {
             json_decref (new_val);
-            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+            flux_log_error (h,
+                            "%s: failed to respond to kvs-watch.lookup",
+                            __FUNCTION__);
             return -1;
         }
     }
@@ -372,7 +382,9 @@ static int handle_normal_response (flux_t *h,
                                    json_t *val)
 {
     if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
-        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        flux_log_error (h,
+                        "%s: failed to respond to kvs-watch.lookup",
+                        __FUNCTION__);
         return -1;
     }
 
@@ -1063,7 +1075,9 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                            "watchers", watchers,
                            "namespace-count", (int)zhash_size (ctx->namespaces),
                            "namespaces", stats) < 0)
-        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        flux_log_error (h,
+                        "%s: failed to respond to kvs-watch.stats-get",
+                        __FUNCTION__);
     json_decref (stats);
     return;
 nomem:
