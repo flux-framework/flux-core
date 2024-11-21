@@ -252,7 +252,7 @@ static int handle_initial_response (flux_t *h,
                                 NULL,
                                 &w->append_offset) < 0) {
             flux_log_error (h, "%s: treeobj_decode_val", __FUNCTION__);
-            return -1;
+            goto error_respond;
         }
     }
 
@@ -266,6 +266,13 @@ static int handle_initial_response (flux_t *h,
     w->initial_rootseq = root_seq;
     w->responded = true;
     return 0;
+
+error_respond:
+    if (!w->mute) {
+        if (flux_respond_error (h, w->request, errno, NULL) < 0)
+            flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    }
+    return -1;
 }
 
 static int handle_compare_response (flux_t *h,
@@ -319,7 +326,7 @@ static int handle_append_response (flux_t *h,
                                 NULL,
                                 &w->append_offset) < 0) {
             flux_log_error (h, "%s: treeobj_decode_val", __FUNCTION__);
-            return -1;
+            goto error_respond;
         }
 
         if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
@@ -340,7 +347,7 @@ static int handle_append_response (flux_t *h,
                                 &new_data,
                                 &new_offset) < 0) {
             flux_log_error (h, "%s: treeobj_decode_val", __FUNCTION__);
-            return -1;
+            goto error_respond;
         }
 
         /* check length to determine if append actually happened, note
@@ -353,13 +360,13 @@ static int handle_append_response (flux_t *h,
         if (new_offset < w->append_offset) {
             free (new_data);
             errno = EINVAL;
-            return -1;
+            goto error_respond;
         }
 
         if (!(new_val = treeobj_create_val (new_data + w->append_offset,
                                             new_offset - w->append_offset))) {
             free (new_data);
-            return -1;
+            goto error_respond;
         }
 
         free (new_data);
@@ -375,6 +382,13 @@ static int handle_append_response (flux_t *h,
     }
 
     return 0;
+
+error_respond:
+    if (!w->mute) {
+        if (flux_respond_error (h, w->request, errno, NULL) < 0)
+            flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    }
+    return -1;
 }
 
 static int handle_normal_response (flux_t *h,
@@ -449,7 +463,7 @@ static void handle_lookup_response (flux_future_t *f,
         }
 
         if (handle_initial_response (h, w, val, root_seq) < 0)
-            goto error;
+            goto finished;
     }
     else {
         /* First check for ENOENT */
@@ -473,15 +487,15 @@ static void handle_lookup_response (flux_future_t *f,
             if ((w->flags & FLUX_KVS_WATCH_FULL)
                 || (w->flags & FLUX_KVS_WATCH_UNIQ)) {
                 if (handle_compare_response (h, w, val) < 0)
-                    goto error;
+                    goto finished;
             }
             else if (w->flags & FLUX_KVS_WATCH_APPEND) {
                 if (handle_append_response (h, w, val) < 0)
-                    goto error;
+                    goto finished;
             }
             else {
                 if (handle_normal_response (h, w, val) < 0)
-                    goto error;
+                    goto finished;
             }
         }
     }
@@ -491,6 +505,7 @@ error:
         if (flux_respond_error (h, w->request, errno, NULL) < 0)
             flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     }
+finished:
     w->finished = true;
 }
 
