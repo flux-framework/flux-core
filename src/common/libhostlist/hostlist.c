@@ -41,12 +41,6 @@
 /* max number of ranges that will be processed between brackets */
 #define MAX_RANGES    10240    /* 10K Ranges */
 
-/* size of internal hostname buffer (+ some slop), hostnames will probably
- * be truncated if longer than MAXHOSTNAMELEN */
-#ifndef MAXHOSTNAMELEN
-#define MAXHOSTNAMELEN    64
-#endif
-
 /* max size of internal hostrange buffer */
 #define MAXHOSTRANGELEN 1024
 

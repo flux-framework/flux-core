@@ -11,7 +11,7 @@
 #ifndef _BROKER_H
 #define _BROKER_H
 
-#include <sys/param.h>
+#include <limits.h>
 #include <flux/optparse.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -23,7 +23,7 @@ struct broker {
     flux_watcher_t *w_internal;
     flux_reactor_t *reactor;
     optparse_t *opts;
-    char hostname[MAXHOSTNAMELEN + 1];
+    char hostname[_POSIX_HOST_NAME_MAX + 1];
 
     struct overlay *overlay;
     uint32_t rank;

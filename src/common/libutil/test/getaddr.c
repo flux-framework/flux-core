@@ -11,7 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <sys/param.h>
+#include <limits.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/ipaddr.h"
@@ -20,7 +20,7 @@
 
 int main(int argc, char** argv)
 {
-    char buf[MAXHOSTNAMELEN + 1];
+    char buf[_POSIX_HOST_NAME_MAX + 1];
     flux_error_t error;
     char *name = getenv ("FLUX_IPADDR_INTERFACE");
     int flags = 0;
