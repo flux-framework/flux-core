@@ -449,18 +449,6 @@ void channel_cb (flux_subprocess_t *p, const char *stream)
     }
 }
 
-void add_args_list (char **argz,
-                    size_t *argz_len,
-                    optparse_t *opt,
-                    const char *name)
-{
-    const char *arg;
-    optparse_getopt_iterator_reset (opt, name);
-    while ((arg = optparse_getopt_next (opt, name)))
-        if (argz_add (argz, argz_len, arg) != 0)
-            log_err_exit ("argz_add");
-}
-
 void add_argzf (char **argz, size_t *argz_len, const char *fmt, ...)
 {
     va_list ap;
@@ -471,6 +459,18 @@ void add_argzf (char **argz, size_t *argz_len, const char *fmt, ...)
     va_end (ap);
     if (argz_add (argz, argz_len, arg) != 0)
         log_err_exit ("argz_add");
+}
+
+void add_args_list (char **argz,
+                    size_t *argz_len,
+                    optparse_t *opt,
+                    const char *name,
+                    const char *prepend)
+{
+    const char *arg;
+    optparse_getopt_iterator_reset (opt, name);
+    while ((arg = optparse_getopt_next (opt, name)))
+        add_argzf (argz, argz_len, "%s%s", prepend, arg);
 }
 
 char *create_rundir (void)
@@ -610,12 +610,12 @@ int add_args_common (char **argz,
 {
     bool system_recovery = false;
 
-    add_args_list (argz, argz_len, ctx.opts, "wrap");
+    add_args_list (argz, argz_len, ctx.opts, "wrap", "");
     if (argz_add (argz, argz_len, broker_path) != 0) {
         errno = ENOMEM;
         return -1;
     }
-    add_args_list (argz, argz_len, ctx.opts, "broker-opts");
+    add_args_list (argz, argz_len, ctx.opts, "broker-opts", "");
 
     if (optparse_hasopt (ctx.opts, "recovery"))
         process_recovery_option (argz, argz_len, &system_recovery);
