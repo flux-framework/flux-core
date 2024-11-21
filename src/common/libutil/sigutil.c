@@ -55,7 +55,9 @@ static const struct signal_info signals[] = {
     SIGDEF(SIGPIPE),
     SIGDEF(SIGALRM),
     SIGDEF(SIGTERM),
+#ifdef SIGSTKFLT
     SIGDEF(SIGSTKFLT),
+#endif
     SIGDEF(SIGCHLD),
     SIGDEF(SIGCONT),
     SIGDEF(SIGSTOP),
@@ -69,11 +71,13 @@ static const struct signal_info signals[] = {
     SIGDEF(SIGPROF),
     SIGDEF(SIGWINCH),
     SIGDEF(SIGIO),
+#ifdef SIGPWR
     SIGDEF(SIGPWR),
+#endif
     SIGDEF(SIGSYS),
 };
 
-static bool isnumber (const char *s, int *result)
+static bool strisnumber (const char *s, int *result)
 {
     char *endptr;
     long int l;
@@ -94,7 +98,7 @@ int sigutil_signum (const char *s)
         errno = EINVAL;
         return -1;
     }
-    if (isnumber (s, &signum)) {
+    if (strisnumber (s, &signum)) {
         if (signum <= 0) {
             errno = EINVAL;
             return -1;
