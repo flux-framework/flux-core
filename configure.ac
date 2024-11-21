@@ -187,6 +187,7 @@ AC_CHECK_HEADERS( \
   xlocale.h \
   endian.h \
   inttypes.h \
+  link.h \
 )
 
 ##
