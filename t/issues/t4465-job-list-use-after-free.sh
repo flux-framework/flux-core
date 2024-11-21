@@ -22,10 +22,10 @@ mkdir ${STATEDIR}
 # a different order than submitted, hence number of jobs submitted equals
 # number of broker ranks.
 #
-flux start --test-size=8 -o,-Sstatedir=${STATEDIR} \
+flux start --test-size=8 -Sstatedir=${STATEDIR} \
     bash -c "flux submit --cc 1-8 --quiet /bin/true && flux queue drain"
 
-flux start --test-size=1 -o,-Sstatedir=${STATEDIR} \
+flux start --test-size=1 -Sstatedir=${STATEDIR} \
     --wrap=libtool,e,${VALGRIND} \
     --wrap=--tool=memcheck \
     --wrap=--trace-children=no \

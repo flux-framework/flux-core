@@ -26,7 +26,7 @@ sdexec-debug = true
 service-override = true
 EOT
 
-test_under_flux 2 full -o,--config-path=$(pwd)/config
+test_under_flux 2 full --config-path=$(pwd)/config
 
 flux exec flux setattr log-stderr-level 7
 

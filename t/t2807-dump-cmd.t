@@ -4,7 +4,7 @@ test_description='Test flux dump/restore'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1 minimal -o,-Sstatedir=$(pwd)
+test_under_flux 1 minimal -Sstatedir=$(pwd)
 
 QUERYCMD="flux python ${FLUX_SOURCE_DIR}/t/scripts/sqlite-query.py"
 
@@ -193,14 +193,14 @@ test_expect_success 'restore --no-cache with no backing store fails' '
 '
 test_expect_success 'run a flux instance, preserving content.sqlite' '
 	mkdir test &&
-	flux start -o,-Sstatedir=$(pwd)/test /bin/true
+	flux start -Sstatedir=$(pwd)/test /bin/true
 '
 
 reader() {
 	local dbdir=$1
-        flux start -o,-Sbroker.rc1_path= \
-                -o,-Sbroker.rc3_path=\
-                -o,-Sstatedir=$dbdir\
+        flux start -Sbroker.rc1_path= \
+                -Sbroker.rc3_path=\
+                -Sstatedir=$dbdir\
                 bash -c "\
                         flux module load content && \
                         flux module load content-sqlite && \
@@ -212,9 +212,9 @@ reader() {
 
 writer() {
 	local dbdir=$1
-        flux start -o,-Sbroker.rc1_path= \
-                -o,-Sbroker.rc3_path= \
-                -o,-Sstatedir=$dbdir \
+        flux start -Sbroker.rc1_path= \
+                -Sbroker.rc3_path= \
+                -Sstatedir=$dbdir \
                 bash -c "\
                         flux module load content && \
                         flux module load content-sqlite && \
@@ -231,7 +231,7 @@ test_expect_success 'perform offline garbage collection with dump/restore' '
 '
 
 test_expect_success 'restart flux instance and try to run a job' '
-	flux start -o,-Sstatedir=test \
+	flux start -Sstatedir=test \
 		flux run /bin/true
 '
 
@@ -260,7 +260,7 @@ test_expect_success 'restore bigdump.tar with size limit' '
 test_expect_success 'rc1 skips blob that exceeds 100M limit' '
 	dd if=/dev/zero of=big/hugeblob bs=1048576 count=120 &&
 	tar cvf bigdump2.tar big &&
-	flux start -o,-Scontent.restore=bigdump2.tar \
+	flux start -Scontent.restore=bigdump2.tar \
 		/bin/true 2>bigdump3.err &&
 	grep "exceeds" bigdump3.err
 '

@@ -154,7 +154,7 @@ test_expect_success '[bootstrap] config with with unknown parent' '
 	]
 	EOT
 	test_must_fail flux start --test-size=1 --test-hosts=fake0 \
-	    -o,-c conf4d /bin/true
+	    -c conf4d /bin/true
 '
 
 test_expect_success '[bootstrap] config with with impossible parent' '
@@ -166,7 +166,7 @@ test_expect_success '[bootstrap] config with with impossible parent' '
 	]
 	EOT
 	test_must_fail flux start --test-size=1 --test-hosts=fake0 \
-	    -o,-c conf4e /bin/true
+	    -c conf4e /bin/true
 '
 
 test_expect_success '[bootstrap] config with hostname not found' '
@@ -226,8 +226,8 @@ test_expect_success 'start size=2 instance with ipc://' '
 	host = "fake1"
 	EOT
 	flux start -s2 --test-hosts=fake[0-1] \
-		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
-		-o,--config-path=conf8 \
+		-Sbroker.rc1_path= -Sbroker.rc3_path= \
+		--config-path=conf8 \
 		./attrdump.sh >ipc.out &&
 	cat <<-EXP >ipc.exp &&
 	2
@@ -256,8 +256,8 @@ test_expect_success 'start size=3 instance with ipc:// and custom topology' '
 	parent = "fake1"
 	EOT
 	flux start --test-size=3 --test-hosts=fake[0-2] \
-		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
-		-o,--config-path=conf8a \
+		-Sbroker.rc1_path= -Sbroker.rc3_path= \
+		--config-path=conf8a \
 		flux getattr tbon.maxlevel >conf8a.out &&
 	echo 2 >conf8a.exp &&
 	test_cmp conf8a.exp conf8a.out
@@ -288,7 +288,7 @@ test_expect_success NO_CHAIN_LINT 'a warning is printed when upstream URI has un
 	host = "fake1"
 	EOT
 	FLUX_FAKE_HOSTNAME=fake1 \
-		flux broker -vv -Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		flux broker -vv -Sbroker.rc1_path= -Sbroker.rc3_path= \
 		--config-path=conf8b 2>warn.err &
 	echo $! >warn.pid &&
 	waitgrep "unable to resolve upstream peer" warn.err 30
@@ -324,8 +324,8 @@ test_expect_success 'start size=4 instance with tcp://' '
 	host = "fake[2-3]"
 	EOT
 	flux start -s4 --test-hosts=fake[0-3] \
-		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
-		-o,--config-path=conf9 \
+		-Sbroker.rc1_path= -Sbroker.rc3_path= \
+		--config-path=conf9 \
 		./attrdump.sh >tcp.out &&
 	cat <<-EXP >tcp.exp &&
 	4
@@ -519,7 +519,7 @@ test_expect_success 'tbon.zmq_io_threads config only applies to rank 0' '
 	0: 4
 	1: 1
 	EOT2
-	flux start -s2 -o,--config-path=zmq_io_threads.toml \
+	flux start -s2 --config-path=zmq_io_threads.toml \
 		flux exec --label-io flux getattr tbon.zmq_io_threads \
 		| sort >t4.out &&
 	test_cmp t4.exp t4.out
@@ -530,8 +530,8 @@ test_expect_success 'tbon.zmq_io_threads broker attr overrides' '
 	1: 1
 	EOT2
 	flux start -s2 \
-		-o,--config-path=zmq_io_threads.toml \
-		-o,-Stbon.zmq_io_threads=2 \
+		--config-path=zmq_io_threads.toml \
+		-Stbon.zmq_io_threads=2 \
 		flux exec --label-io flux getattr tbon.zmq_io_threads \
 		| sort >t2.out &&
 	test_cmp t2.exp t2.out

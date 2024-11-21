@@ -13,22 +13,22 @@ if test -n "$S3_ACCESS_KEY_ID"; then
 fi
 
 test_expect_success 'run a job in persistent instance' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 	           flux submit /bin/true >id1.out
 '
 
 test_expect_success 'restart instance and run another job' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 	           flux submit /bin/true >id2.out
 '
 
 test_expect_success 'restart instance and run another job' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 	           flux submit /bin/true >id3.out
 '
 
 test_expect_success 'restart instance and list inactive jobs' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 	           flux jobs --no-header --format={id} \
 		   	--filter=INACTIVE >list.out
 '
@@ -45,7 +45,7 @@ test_expect_success 'job IDs were issued in ascending order' '
 '
 
 test_expect_success 'restart instance and capture startlog' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 	           flux startlog >startlog.out
 '
 test_expect_success 'startlog shows 5 run periods' '
@@ -56,14 +56,14 @@ test_expect_success 'most recent period is still running' '
 '
 
 test_expect_success 'doctor startlog to look like a crash' '
-	flux start -o,--setattr=statedir=$(pwd) \
-		-o,-Sbroker.rc1_path=$SHARNESS_TEST_SRCDIR/rc/rc1-kvs \
-		-o,-Sbroker.rc3_path=$SHARNESS_TEST_SRCDIR/rc/rc3-kvs \
+	flux start --setattr=statedir=$(pwd) \
+		-Sbroker.rc1_path=$SHARNESS_TEST_SRCDIR/rc/rc1-kvs \
+		-Sbroker.rc3_path=$SHARNESS_TEST_SRCDIR/rc/rc3-kvs \
 		flux startlog --post-start-event
 '
 test_expect_success 'run flux and capture logs on stderr' '
-	flux start -o,--setattr=statedir=$(pwd) \
-		-o,--setattr=log-stderr-level=6 \
+	flux start --setattr=statedir=$(pwd) \
+		--setattr=log-stderr-level=6 \
 		/bin/true 2>improper.err
 '
 test_expect_success 'improper shutdown was logged' '
@@ -72,14 +72,14 @@ test_expect_success 'improper shutdown was logged' '
 
 test_expect_success 'run a job in persistent instance (content-files)' '
 	flux start \
-	    -o,-Scontent.backing-module=content-files \
-	    -o,-Sstatedir=$(pwd) \
+	    -Scontent.backing-module=content-files \
+	    -Sstatedir=$(pwd) \
 	    flux submit /bin/true >files_id1.out
 '
 test_expect_success 'restart instance and list inactive jobs' '
 	flux start \
-	    -o,-Scontent.backing-module=content-files \
-	    -o,-Sstatedir=$(pwd) \
+	    -Scontent.backing-module=content-files \
+	    -Sstatedir=$(pwd) \
 	    flux jobs --no-header --format={id} \
 	        --filter=INACTIVE >files_list.out
 '
@@ -108,12 +108,12 @@ test_expect_success S3 'create content-s3.toml from env' '
 
 test_expect_success S3 'run a job in persistent instance (content-s3)' '
 	flux start \
-	    -o,-Scontent.backing-module=content-s3 \
+	    -Scontent.backing-module=content-s3 \
 	    flux submit /bin/true >files_id2.out
 '
 test_expect_success S3 'restart instance and list inactive jobs' '
 	flux start \
-	    -o,-Scontent.backing-module=content-s3 \
+	    -Scontent.backing-module=content-s3 \
 	    flux jobs --no-header --format={id} \
 	        --filter=INACTIVE >files_list2.out
 '

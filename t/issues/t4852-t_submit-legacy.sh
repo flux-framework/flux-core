@@ -41,9 +41,9 @@ STATEDIR=issue4852-statedir
 mkdir issue4852-statedir
 
 flux start -s 1 \
-    -o,--setattr=statedir=${STATEDIR} \
+    --setattr=statedir=${STATEDIR} \
     ./t4852setup.sh
 
 flux start -s 1 \
-    -o,--setattr=statedir=${STATEDIR} \
+    --setattr=statedir=${STATEDIR} \
     ./t4852test.sh

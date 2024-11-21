@@ -18,21 +18,21 @@ if test -n "$S3_ACCESS_KEY_ID"; then
 fi
 
 test_expect_success 'Started instance with content.hash=sha1' '
-	OUT=$(flux start -o,-Scontent.hash=sha1 \
+	OUT=$(flux start -Scontent.hash=sha1 \
 	    flux getattr content.hash) &&
 	test "$OUT" = "sha1"
 '
 
 test_expect_success 'Started instance with content.hash=sha256' '
-	OUT=$(flux start -o,-Scontent.hash=sha256 \
+	OUT=$(flux start -Scontent.hash=sha256 \
 	    flux getattr content.hash) &&
 	test "$OUT" = "sha256"
 '
 
 test_expect_success 'Started instance with content.hash=sha256,content-files' '
-	OUT=$(flux start -o,-Scontent.hash=sha256 \
-	    -o,-Scontent.backing-module=content-files \
-	    -o,-Sstatedir=$(pwd) \
+	OUT=$(flux start -Scontent.hash=sha256 \
+	    -Scontent.backing-module=content-files \
+	    -Sstatedir=$(pwd) \
 	    flux getattr content.hash) &&
 	test "$OUT" = "sha256" &&
 	ls -1 content.files | tail -1 | grep sha256
@@ -58,20 +58,20 @@ test_expect_success S3 'create content-s3.toml from env' '
 '
 
 test_expect_success S3 'Started instance with content.hash=sha256,content-s3' '
-	OUT=$(flux start -o,-Scontent.hash=sha256 \
-	    -o,-Scontent.backing-module=content-s3 \
+	OUT=$(flux start -Scontent.hash=sha256 \
+	    -Scontent.backing-module=content-s3 \
 	    flux getattr content.hash) &&
 	test "$OUT" = "sha256"
 '
 test_expect_success S3 'Content store nil returns correct hash for sha256' '
-	OUT=$(flux start -o,-Scontent.hash=sha256 \
-	    -o,-Scontent.backing-module=content-s3 \
+	OUT=$(flux start -Scontent.hash=sha256 \
+	    -Scontent.backing-module=content-s3 \
 	    flux content store </dev/null) &&
 	test "$OUT" = "$nil256"
 '
 
 test_expect_success 'Attempt to start instance with invalid hash fails hard' '
-	test_must_fail flux start -o,-Scontent.hash=wronghash /bin/true
+	test_must_fail flux start -Scontent.hash=wronghash /bin/true
 '
 
 test_done

@@ -27,8 +27,8 @@ test_expect_success 'flux still operates with content-sqlite running out of spac
 	rm -rf /test/tmpfs-1m/* &&
 	mkdir /test/tmpfs-1m/statedir &&
 	test_must_fail flux start \
-	    -o,-Scontent.backing-module=content-sqlite \
-	    -o,-Sstatedir=/test/tmpfs-1m/statedir \
+	    -Scontent.backing-module=content-sqlite \
+	    -Sstatedir=/test/tmpfs-1m/statedir \
 	    "./fillstatedir.sh; flux dmesg; flux run echo helloworld" > sql.out 2> sql.err &&
 	grep -q "No space left on device" sql.out &&
 	grep "helloworld" sql.out
@@ -39,8 +39,8 @@ test_expect_success 'flux still operates with content-files running out of space
 	rm -rf /test/tmpfs-1m/* &&
 	mkdir /test/tmpfs-1m/statedir &&
 	test_must_fail flux start \
-	    -o,-Scontent.backing-module=content-files \
-	    -o,-Sstatedir=/test/tmpfs-1m/statedir \
+	    -Scontent.backing-module=content-files \
+	    -Sstatedir=/test/tmpfs-1m/statedir \
 	    "./fillstatedir.sh; flux dmesg; flux run echo helloworld" > files.out 2> files.err &&
 	grep -q "No space left on device" files.out &&
 	grep "helloworld" files.out
@@ -51,8 +51,8 @@ test_expect_success 'content flush returns error on ENOSPC' '
 	rm -rf /test/tmpfs-1m/* &&
 	mkdir /test/tmpfs-1m/statedir &&
 	test_must_fail flux start \
-	    -o,-Scontent.backing-module=content-sqlite \
-	    -o,-Sstatedir=/test/tmpfs-1m/statedir \
+	    -Scontent.backing-module=content-sqlite \
+	    -Sstatedir=/test/tmpfs-1m/statedir \
 	    "./fillstatedir.sh; flux dmesg; flux content flush" > flush.out 2> flush.err &&
 	grep -q "No space left on device" flush.out &&
 	grep "content.flush: No space left on device" flush.err

@@ -127,12 +127,12 @@ test_expect_success 'flux-queue: status reports no reason for stop' '
 
 test_expect_success 'flux-queue: stop with --nocheckpoint works' '
 	flux start \
-	    -o,-Scontent.dump=dump_queue_nocheckpoint1.tar \
+	    -Scontent.dump=dump_queue_nocheckpoint1.tar \
 	    flux queue stop &&
 	tar -xvf dump_queue_nocheckpoint1.tar &&
 	cat checkpoint/job-manager | jq -e ".queue[0].start == false" &&
 	flux start \
-	    -o,-Scontent.dump=dump_queue_nocheckpoint2.tar \
+	    -Scontent.dump=dump_queue_nocheckpoint2.tar \
 	    flux queue stop --nocheckpoint &&
 	tar -xvf dump_queue_nocheckpoint2.tar &&
 	cat checkpoint/job-manager | jq -e ".queue[0].start == true"
@@ -547,14 +547,14 @@ test_expect_success 'flux-queue: stop with named queues and --nocheckpoint works
 	EOT
 	chmod +x ./stopqueues.sh &&
 	chmod +x ./stopqueuesnocheckpoint.sh &&
-	flux start -o,--config-path=$(pwd)/conf.d \
-	    -o,-Scontent.dump=dump_queue_named_nocheckpoint1.tar \
+	flux start --config-path=$(pwd)/conf.d \
+	    -Scontent.dump=dump_queue_named_nocheckpoint1.tar \
 	    ./stopqueues.sh &&
 	tar -xvf dump_queue_named_nocheckpoint1.tar &&
 	cat checkpoint/job-manager | jq -e ".queue[0].start == false" &&
 	cat checkpoint/job-manager | jq -e ".queue[1].start == false" &&
-	flux start -o,--config-path=$(pwd)/conf.d \
-	    -o,-Scontent.dump=dump_queue_named_nocheckpoint2.tar \
+	flux start --config-path=$(pwd)/conf.d \
+	    -Scontent.dump=dump_queue_named_nocheckpoint2.tar \
 	    ./stopqueuesnocheckpoint.sh &&
 	tar -xvf dump_queue_named_nocheckpoint2.tar &&
 	cat checkpoint/job-manager | jq -e ".queue[0].start == true" &&

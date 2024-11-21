@@ -6,7 +6,7 @@ test_description='Test content-files backing store service'
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 1 minimal -o,-Sstatedir=$(pwd)
+test_under_flux 1 minimal -Sstatedir=$(pwd)
 
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc

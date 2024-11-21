@@ -31,7 +31,7 @@ if test "$FREE_RANGE_TEST_ACTIVE" != "t"; then
     exec flux start -s 4 \
         --test-exit-mode=leader \
         --test-pmi-clique=per-broker \
-        -o -Stbon.topo=kary:0 $0
+        -Stbon.topo=kary:0 $0
 fi
 
 #  Start a job with tbon.topo=kary:0

@@ -24,7 +24,7 @@ test_expect_success 'job-exec: kill-timeout can be set in exec conf' '
 	[exec]
 	kill-timeout = ".5m"
 	EOF
-	flux start -o,--config-path=${name}.toml -s1 \
+	flux start --config-path=${name}.toml -s1 \
 		flux module stats job-exec > ${name}.json 2>&1 &&
 	test_debug "jq -S . < ${name}.json" &&
 	cat ${name}.json | jq ".[\"kill-timeout\"] == 30"
@@ -41,7 +41,7 @@ test_expect_success 'job-exec: bad kill-timeout config causes module failure' '
 	[exec]
 	kill-timeout = "foo"
 	EOF
-	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
+	test_must_fail flux start --config-path=${name}.toml -s1 \
 		flux dmesg > ${name}.log 2>&1 &&
 	grep "invalid kill-timeout: foo" ${name}.log
 '
@@ -87,7 +87,7 @@ test_expect_success 'job-exec: term/kill-signal can be set in exec conf' '
 	kill-signal = "SIGINT"
 	term-signal = "SIGHUP"
 	EOF
-	flux start -o,--config-path=${name}.toml -s1 \
+	flux start --config-path=${name}.toml -s1 \
 		flux module stats job-exec > ${name}.json 2>&1 &&
 	cat ${name}.json | jq ".[\"kill-signal\"] == \"SIGINT\"" &&
 	cat ${name}.json | jq ".[\"term-signal\"] == \"SIGTERM\""
@@ -98,7 +98,7 @@ test_expect_success 'job-exec: bad term/kill-signal config causes module failure
 	[exec]
 	kill-signal = "foo"
 	EOF
-	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
+	test_must_fail flux start --config-path=${name}.toml -s1 \
 		flux dmesg > ${name}.log 2>&1 &&
 	grep "invalid kill-signal: foo" ${name}.log
 '
@@ -127,7 +127,7 @@ test_expect_success 'job-exec: job-shell can be set in exec conf' '
 	[exec]
 	job-shell = "my-flux-shell"
 	EOF
-	flux start -o,--config-path=${name}.toml -s1 \
+	flux start --config-path=${name}.toml -s1 \
 		flux module stats -p bulk-exec.config.default_job_shell job-exec > ${name}.out 2>&1 &&
 	grep "my-flux-shell" ${name}.out
 '
@@ -137,7 +137,7 @@ test_expect_success 'job-exec: bad job-shell config causes module failure' '
 	[exec]
 	job-shell = 42
 	EOF
-	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
+	test_must_fail flux start --config-path=${name}.toml -s1 \
 		flux dmesg > ${name}.log 2>&1 &&
 	grep "error reading config value exec.job-shell" ${name}.log
 '
@@ -178,7 +178,7 @@ test_expect_success 'job-exec: imp path can be set in exec conf' '
 	[exec]
 	imp = "my-flux-imp"
 	EOF
-	flux start -o,--config-path=${name}.toml -s1 \
+	flux start --config-path=${name}.toml -s1 \
 		flux module stats -p bulk-exec.config.flux_imp_path job-exec > ${name}.out 2>&1 &&
 	grep "my-flux-imp" ${name}.out
 '
@@ -188,7 +188,7 @@ test_expect_success 'job-exec: bad imp config causes module failure' '
 	[exec]
 	imp = 42
 	EOF
-	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
+	test_must_fail flux start --config-path=${name}.toml -s1 \
 		flux dmesg > ${name}.log 2>&1 &&
 	grep "error reading config value exec.imp" ${name}.log
 '
@@ -230,7 +230,7 @@ test_expect_success 'job-exec: exec service can be set in exec conf' '
 	[exec]
 	service = "bar"
 	EOF
-	flux start -o,--config-path=${name}.toml -s1 \
+	flux start --config-path=${name}.toml -s1 \
 		flux module stats -p bulk-exec.config.exec_service job-exec > ${name}.out 2>&1 &&
 	grep "bar" ${name}.out
 '
@@ -268,7 +268,7 @@ test_expect_success 'job-exec: exec service override can be set in exec conf' '
 	service = "bar"
 	service-override = true
 	EOF
-	flux start -o,--config-path=${name}.toml -s1 \
+	flux start --config-path=${name}.toml -s1 \
 		flux module stats -p bulk-exec.config.exec_service_override job-exec > ${name}.out 2>&1 &&
 	val=$(cat ${name}.out) &&
 	test $val -eq 1
@@ -298,7 +298,7 @@ test_expect_success 'job-exec: sdexex properties can be set in exec conf' '
 	MemoryHigh = "200M"
 	MemoryMax = "100M"
 	EOF
-	flux start -o,--config-path=${name}.toml -s1 \
+	flux start --config-path=${name}.toml -s1 \
 		flux module stats -p bulk-exec.config.sdexec_properties job-exec > ${name}.out 2>&1 &&
 	jq -e ".MemoryHigh == \"200M\"" < ${name}.out &&
 	jq -e ".MemoryMax == \"100M\"" < ${name}.out
@@ -310,7 +310,7 @@ test_expect_success 'job-exec: bad sdexec properties causes module failure (type
 	service = "sdexec"
 	sdexec-properties = 42
 	EOF
-	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
+	test_must_fail flux start --config-path=${name}.toml -s1 \
 		flux dmesg > ${name}.log 2>&1 &&
 	grep "exec.sdexec-properties is not a table" ${name}.log
 '
@@ -322,7 +322,7 @@ test_expect_success 'job-exec: bad sdexec properties causes module failure (type
 	[exec.sdexec-properties]
 	MemoryHigh = 42
 	EOF
-	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
+	test_must_fail flux start --config-path=${name}.toml -s1 \
 		flux dmesg > ${name}.log 2>&1 &&
 	grep "exec.sdexec-properties.MemoryHigh is not a string" ${name}.log
 '

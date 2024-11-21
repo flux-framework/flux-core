@@ -7,13 +7,13 @@ test_description='Test the brokers tbon.* configuration'
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
-ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
+ARGS="-Sbroker.rc1_path= -Sbroker.rc3_path="
 
 test_expect_success 'flux-start with size 2 works with tbon.zmqdebug' '
-	flux start ${ARGS} -o,-Stbon.zmqdebug=1 -s2 /bin/true
+	flux start ${ARGS} -Stbon.zmqdebug=1 -s2 /bin/true
 '
 test_expect_success 'flux-start with non-integer tbon.zmqdebug fails' '
-	test_must_fail flux start ${ARGS} -o,-Stbon.zmqdebug=foo /bin/true
+	test_must_fail flux start ${ARGS} -Stbon.zmqdebug=foo /bin/true
 '
 test_expect_success 'tbon.endpoint can be read' '
 	ATTR_VAL=`flux start ${ARGS} -s2 flux getattr tbon.endpoint` &&
@@ -30,25 +30,25 @@ test_expect_success 'tbon.endpoint uses tcp:// if process mapping unavailable' '
 	grep "^tcp" endpoint2.out
 '
 test_expect_success 'tbon.endpoint uses tcp:// if tbon.prefertcp is set' '
-	flux start ${ARGS} -s2 -o,-Stbon.prefertcp=1 \
+	flux start ${ARGS} -s2 -Stbon.prefertcp=1 \
 		flux getattr tbon.endpoint >endpoint2.out &&
 	grep "^tcp" endpoint2.out
 '
 test_expect_success 'FLUX_IPADDR_INTERFACE=lo works' '
 	FLUX_IPADDR_INTERFACE=lo flux start \
-		${ARGS} -s2 -o,-Stbon.prefertcp=1 \
+		${ARGS} -s2 -Stbon.prefertcp=1 \
 		flux getattr tbon.endpoint >endpoint3.out &&
 	grep "127.0.0.1" endpoint3.out
 '
 test_expect_success 'tbon.interface-hint=lo works' '
-	flux start -o,-Stbon.interface-hint=lo \
-		${ARGS} -s2 -o,-Stbon.prefertcp=1 \
+	flux start -Stbon.interface-hint=lo \
+		${ARGS} -s2 -Stbon.prefertcp=1 \
 		flux getattr tbon.endpoint >endpoint3a.out &&
 	grep "127.0.0.1" endpoint3a.out
 '
 test_expect_success 'tbon.interface-hint=127.0.0.0/8 works' '
-	flux start -o,-Stbon.interface-hint=127.0.0.0/8 \
-		${ARGS} -s2 -o,-Stbon.prefertcp=1 \
+	flux start -Stbon.interface-hint=127.0.0.0/8 \
+		${ARGS} -s2 -Stbon.prefertcp=1 \
 		flux getattr tbon.endpoint >endpoint3b.out &&
 	grep "127.0.0.1" endpoint3b.out
 '
@@ -56,8 +56,8 @@ test_expect_success 'TOML tbon.interface-hint=127.0.0.0/8 works' '
 	cat >hint.toml <<-EOT &&
 	tbon.interface-hint = "127.0.0.0/8"
 	EOT
-	flux start -o,--config-path=hint.toml \
-		${ARGS} -s2 -o,-Stbon.prefertcp=1 \
+	flux start --config-path=hint.toml \
+		${ARGS} -s2 -Stbon.prefertcp=1 \
 		flux getattr tbon.endpoint >endpoint3c.out &&
 	grep "127.0.0.1" endpoint3c.out
 '
@@ -65,19 +65,19 @@ test_expect_success 'TOML tbon.interface-hint=wrong type fails' '
 	cat >badhint.toml <<-EOT &&
 	tbon.interface-hint = 42
 	EOT
-	test_must_fail flux start -o,--config-path=badhint.toml ${ARGS} true
+	test_must_fail flux start --config-path=badhint.toml ${ARGS} true
 '
 test_expect_success 'tbon.interface-hint=badiface fails' '
 	test_must_fail_or_be_terminated flux start \
-		-o,-Stbon.interface-hint=badiface \
-		${ARGS} -s2 -o,-Stbon.prefertcp=1 true
+		-Stbon.interface-hint=badiface \
+		${ARGS} -s2 -Stbon.prefertcp=1 true
 '
 test_expect_success 'tbon.interface-hint=default-route works' '
-	flux start -o,-Stbon.interface-hint=default-route,-Stbon.prefertcp=1 \
+	flux start -Stbon.interface-hint=default-route -Stbon.prefertcp=1 \
 		${ARGS} -s2 true
 '
 test_expect_success 'tbon.interface-hint=hostname works' '
-	flux start -o,-Stbon.interface-hint=hostname,-Stbon.prefertcp=1 \
+	flux start -Stbon.interface-hint=hostname -Stbon.prefertcp=1 \
 		${ARGS} -s2 true
 '
 test_expect_success 'tbon.interface-hint defaults to default-router' '
@@ -85,19 +85,19 @@ test_expect_success 'tbon.interface-hint defaults to default-router' '
 	grep default-route defhint.out
 '
 test_expect_success 'tbon.interface-hint default comes from parent' '
-	flux start -o,-Stbon.interface-hint=hostname \
+	flux start -Stbon.interface-hint=hostname \
 	    flux alloc -N1 flux getattr tbon.interface-hint >childhint.out &&
 	grep hostname childhint.out
 '
 test_expect_success 'tbon.interface-hint from parent can be overridden' '
-	flux start -o,-Stbon.interface-hint=hostname \
+	flux start -Stbon.interface-hint=hostname \
 	    flux alloc -N1 --broker-opts=-Stbon.interface-hint=default-router \
 	    flux getattr tbon.interface-hint >childhint2.out &&
 	grep default-router childhint2.out
 '
 test_expect_success 'tbon.endpoint cannot be set' '
 	test_must_fail_or_be_terminated flux start ${ARGS} -s2 \
-		-o,--setattr=tbon.endpoint=ipc:///tmp/customflux /bin/true
+		--setattr=tbon.endpoint=ipc:///tmp/customflux /bin/true
 '
 test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '
 	test_must_fail flux start ${ARGS} -s2 flux getattr tbon.parent-endpoint
@@ -108,28 +108,28 @@ test_expect_success 'tbon.parent-endpoint can be read on not rank 0' '
 '
 test_expect_success 'broker -Stbon.fanout=4 is an alias for tbon.topo=kary:4' '
 	echo kary:4 >fanout.exp &&
-	flux start ${ARGS} -o,-Stbon.fanout=4 \
+	flux start ${ARGS} -Stbon.fanout=4 \
 		flux getattr tbon.topo >fanout.out &&
 	test_cmp fanout.exp fanout.out
 '
 test_expect_success 'broker -Stbon.topo=kary:8 option works' '
 	echo kary:8 >topo.exp &&
-	flux start ${ARGS} -o,-Stbon.topo=kary:8 \
+	flux start ${ARGS} -Stbon.topo=kary:8 \
 		flux getattr tbon.topo >topo.out &&
 	test_cmp topo.exp topo.out
 '
 test_expect_success 'broker -Stbon.topo=kary:0 works' '
-	flux start ${ARGS} -o,-Stbon.topo=kary:0 /bin/true
+	flux start ${ARGS} -Stbon.topo=kary:0 /bin/true
 '
 test_expect_success 'broker -Stbon.topo=custom option works' '
 	echo custom >topo2.exp &&
-	flux start ${ARGS} -o,-Stbon.topo=custom \
+	flux start ${ARGS} -Stbon.topo=custom \
 		flux getattr tbon.topo >topo2.out &&
 	test_cmp topo2.exp topo2.out
 '
 test_expect_success 'broker -Stbon.topo=binomial option works' '
 	echo binomial >topo_binomial.exp &&
-	flux start ${ARGS} -o,-Stbon.topo=binomial \
+	flux start ${ARGS} -Stbon.topo=binomial \
 		flux getattr tbon.topo >topo_binomial.out &&
 	test_cmp topo_binomial.exp topo_binomial.out
 '

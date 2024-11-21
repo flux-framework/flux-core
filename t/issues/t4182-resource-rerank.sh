@@ -40,7 +40,7 @@ echo "resource.noverify = true" >t4182-resource.toml
 
 #  ensure R rerank failure is ignored (i.e. job completes successfully)
 flux run -o per-resource.type=node -o cpu-affinity=off -n 11 \
-	flux start -o,--config-path=t4182-resource.toml \
+	flux start --config-path=t4182-resource.toml \
 	flux getattr hostlist
 
 #  ensure R is reranked based on hostlist attribute:

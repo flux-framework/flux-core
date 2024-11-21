@@ -7,7 +7,7 @@
 #  3. Ensure job exception is raised and includes appropriate error note
 #
 export startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
-SHELL=/bin/sh flux start -s 4 -o,-Stbon.topo=kary:4 --test-exit-mode=leader '\
+SHELL=/bin/sh flux start -s 4 -Stbon.topo=kary:4 --test-exit-mode=leader '\
    id=$(flux submit -n4 -N4 sleep 300) \
 && flux job wait-event $id start \
 && $startctl kill 3 9 \

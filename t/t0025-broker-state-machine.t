@@ -9,7 +9,7 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SRPC=${FLUX_BUILD_DIR}/t/request/rpc_stream
-ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
+ARGS="-Sbroker.rc1_path= -Sbroker.rc3_path="
 GROUPSCMD="flux python ${SHARNESS_TEST_SRCDIR}/scripts/groups.py"
 
 test_expect_success 'quorum reached on instance with 1 TBON level' '
@@ -31,28 +31,28 @@ test_expect_success 'quorum reached on instance with 3 TBON levels' '
 '
 
 test_expect_success 'broker.quorum can be set on the command line' '
-	flux start -s3 ${ARGS} -o,-Sbroker.quorum=3 \
+	flux start -s3 ${ARGS} -Sbroker.quorum=3 \
 		${GROUPSCMD} get broker.online >full1_explicit.out &&
 	test_cmp full1.exp full1_explicit.out
 '
 
 test_expect_success 'broker fails with malformed broker.quorum' '
 	test_must_fail flux start ${ARGS} \
-		-o,-Sbroker.quorum=9-10 /bin/true 2>qmalformed.err &&
+		-Sbroker.quorum=9-10 /bin/true 2>qmalformed.err &&
 	grep "Error parsing broker.quorum attribute" qmalformed.err
 '
 
 test_expect_success 'broker fails with broker.quorum that exceeds size' '
 	test_must_fail flux start ${ARGS} \
-		-o,-Sbroker.quorum=99 /bin/true 2>qtoobig.err &&
+		-Sbroker.quorum=99 /bin/true 2>qtoobig.err &&
 	grep "Error parsing broker.quorum attribute" qtoobig.err
 '
 test_expect_success 'broker.quorum can be 0 for compatibility' '
-	flux start ${ARGS} -o,-Sbroker.quorum=0 /bin/true 2>compat1.err &&
+	flux start ${ARGS} -Sbroker.quorum=0 /bin/true 2>compat1.err &&
 	grep assuming compat1.err
 '
 test_expect_success 'broker.quorum can be 0-1 (size=2) for compatibility' '
-	flux start -s2 ${ARGS} -o,-Sbroker.quorum=0-1 /bin/true 2>compat2.err &&
+	flux start -s2 ${ARGS} -Sbroker.quorum=0-1 /bin/true 2>compat2.err &&
 	grep assuming compat2.err
 '
 test_expect_success 'create rc1 that blocks on FIFO for rank != 0' '
@@ -81,10 +81,10 @@ test_expect_success 'instance functions with late-joiner' '
 	mkfifo fifo &&
 	run_timeout 60 \
 		flux start -s2 \
-		-o,-Slog-stderr-level=6 \
-		-o,-Sbroker.rc1_path="$(pwd)/rc1_block" \
-		-o,-Sbroker.rc3_path= \
-		-o,-Sbroker.quorum=1 \
+		-Slog-stderr-level=6 \
+		-Sbroker.rc1_path="$(pwd)/rc1_block" \
+		-Sbroker.rc3_path= \
+		-Sbroker.quorum=1 \
 		$(pwd)/rc2_unblock >late.out &&
 	test_cmp late.exp late.out
 '
@@ -114,8 +114,8 @@ test_expect_success 'create rc script that prints current state' '
 test_expect_success 'monitor reports INIT(2) in rc1' '
 	echo 2 >rc1.exp &&
 	flux start \
-		-o,-Sbroker.rc1_path=$(pwd)/rc_getstate \
-		-o,-Sbroker.rc3_path= \
+		-Sbroker.rc1_path=$(pwd)/rc_getstate \
+		-Sbroker.rc3_path= \
 		/bin/true &&
 	test_cmp rc1.exp rc.out
 '
@@ -123,8 +123,8 @@ test_expect_success 'monitor reports INIT(2) in rc1' '
 test_expect_success 'monitor reports RUN(4) in rc2' '
 	echo 4 >rc2.exp &&
 	flux start \
-		-o,-Sbroker.rc1_path= \
-		-o,-Sbroker.rc3_path= \
+		-Sbroker.rc1_path= \
+		-Sbroker.rc3_path= \
 		$(pwd)/rc_getstate &&
 	test_cmp rc2.exp rc.out
 '
@@ -132,8 +132,8 @@ test_expect_success 'monitor reports RUN(4) in rc2' '
 test_expect_success 'monitor reports CLEANUP(5) in cleanup script' '
 	echo 5 >cleanup.exp &&
 	flux start \
-		-o,-Sbroker.rc1_path= \
-		-o,-Sbroker.rc3_path= \
+		-Sbroker.rc1_path= \
+		-Sbroker.rc3_path= \
 		bash -c "echo $(pwd)/rc_getstate | flux admin cleanup-push" &&
 	test_cmp cleanup.exp rc.out
 '
@@ -141,14 +141,14 @@ test_expect_success 'monitor reports CLEANUP(5) in cleanup script' '
 test_expect_success 'monitor reports FINALIZE(7) in rc3' '
 	echo 7 >rc3.exp &&
 	flux start \
-		-o,-Sbroker.rc1_path= \
-		-o,-Sbroker.rc3_path=$(pwd)/rc_getstate \
+		-Sbroker.rc1_path= \
+		-Sbroker.rc3_path=$(pwd)/rc_getstate \
 		/bin/true &&
 	test_cmp rc3.exp rc.out
 '
 
 test_expect_success 'capture state transitions from size=1 instance' '
-	flux start ${ARGS} -o,-Slog-filename=states.log /bin/true
+	flux start ${ARGS} -Slog-filename=states.log /bin/true
 '
 
 test_expect_success 'all expected events and state transitions occurred' '
@@ -165,7 +165,7 @@ test_expect_success 'all expected events and state transitions occurred' '
 
 test_expect_success 'capture state transitions from size=2 instance' '
 	flux start ${ARGS} --test-size=2 \
-		-o,-Slog-stderr-level=6,-Slog-stderr-mode=local \
+		-Slog-stderr-level=6 -Slog-stderr-mode=local \
 		/bin/true 2>states2.log
 '
 
@@ -195,9 +195,9 @@ test_expect_success 'all expected events and state transitions occurred on rank 
 
 test_expect_success 'capture state transitions from instance with rc1 failure' '
 	test_expect_code 1 flux start \
-	    -o,-Slog-filename=states_rc1.log \
-	    -o,-Sbroker.rc1_path=/bin/false \
-	    -o,-Sbroker.rc3_path= \
+	    -Slog-filename=states_rc1.log \
+	    -Sbroker.rc1_path=/bin/false \
+	    -Sbroker.rc3_path= \
 	    /bin/true
 '
 
@@ -212,7 +212,7 @@ test_expect_success 'all expected events and state transitions occurred' '
 
 test_expect_success 'capture state transitions from instance with rc2 failure' '
 	test_expect_code 1 flux start \
-	    -o,-Slog-filename=states_rc2.log \
+	    -Slog-filename=states_rc2.log \
 	    ${ARGS} \
 	    /bin/false
 '
@@ -231,9 +231,9 @@ test_expect_success 'all expected events and state transitions occurred' '
 
 test_expect_success 'capture state transitions from instance with rc3 failure' '
 	test_expect_code 1 flux start \
-	    -o,-Slog-filename=states_rc3.log \
-	    -o,-Sbroker.rc1_path= \
-	    -o,-Sbroker.rc3_path=/bin/false \
+	    -Slog-filename=states_rc3.log \
+	    -Sbroker.rc1_path= \
+	    -Sbroker.rc3_path=/bin/false \
 	    /bin/true
 '
 
@@ -251,21 +251,21 @@ test_expect_success 'all expected events and state transitions occurred' '
 
 test_expect_success 'instance rc1 failure exits with norestart code' '
 	test_expect_code 99 flux start \
-	    -o,-Sbroker.exit-norestart=99 \
-	    -o,-Sbroker.rc1_path=/bin/false \
-	    -o,-Sbroker.rc3_path= \
+	    -Sbroker.exit-norestart=99 \
+	    -Sbroker.rc1_path=/bin/false \
+	    -Sbroker.rc3_path= \
 	    /bin/true
 '
 
 test_expect_success 'broker.quorum-timeout=none is accepted' '
-	flux start ${ARGS} -o,-Sbroker.quorum-timeout=none /bin/true
+	flux start ${ARGS} -Sbroker.quorum-timeout=none /bin/true
 '
 
 test_expect_success 'broker.quorum-timeout=3h is accepted' '
-	flux start ${ARGS} -o,-Sbroker.quorum-timeout=3h /bin/true
+	flux start ${ARGS} -Sbroker.quorum-timeout=3h /bin/true
 '
 test_expect_success 'broker.quorum-timeout=x fails' '
-	test_must_fail flux start ${ARGS} -o,-Sbroker.quorum-timeout=x /bin/true
+	test_must_fail flux start ${ARGS} -Sbroker.quorum-timeout=x /bin/true
 '
 test_expect_success 'create rc1 that sleeps for 2s on rank != 0' '
 	cat <<-EOT >rc1_sleep &&
@@ -277,9 +277,9 @@ test_expect_success 'create rc1 that sleeps for 2s on rank != 0' '
 '
 test_expect_success 'broker.quorum-timeout works' '
 	flux start -s2 ${ARGS} \
-		-o,-Slog-filename=timeout.log \
-		-o,-Sbroker.rc1_path="$(pwd)/rc1_sleep" \
-		-o,-Sbroker.quorum-timeout=1s /bin/true
+		-Slog-filename=timeout.log \
+		-Sbroker.rc1_path="$(pwd)/rc1_sleep" \
+		-Sbroker.quorum-timeout=1s /bin/true
 '
 test_expect_success 'logs contain quorum delayed/reached messages' '
 	grep "quorum delayed" timeout.log &&
@@ -297,7 +297,7 @@ test_expect_success 'broker.cleanup-timeout default is none' '
 
 test_expect_success 'broker.cleanup-timeout=3h is accepted' '
 	flux start ${ARGS} \
-		-o,-Sbroker.cleanup-timeout=3h \
+		-Sbroker.cleanup-timeout=3h \
 		flux getattr broker.cleanup-timeout >cto2.out &&
 	cat >cto2.exp <<-EOT &&
 	3h
@@ -306,7 +306,7 @@ test_expect_success 'broker.cleanup-timeout=3h is accepted' '
 '
 test_expect_success 'broker.cleanup-timeout=x fails' '
 	test_must_fail flux start ${ARGS} \
-		-o,-Sbroker.cleanup-timeout=x true
+		-Sbroker.cleanup-timeout=x true
 '
 test_expect_success 'create rc1 that hangs in cleanup' '
 	cat <<-EOT >rc1_cleanup &&
@@ -328,9 +328,9 @@ test_expect_success 'create initial program that SIGTERMs broker' '
 '
 test_expect_success 'cleanup gets SIGHUP after broker.cleanup-timeout expires' '
 	test_expect_code 129 flux start -s2 ${ARGS} \
-		-o,-Slog-filename=cleanup.log \
-		-o,-Sbroker.rc1_path="$(pwd)/rc1_cleanup" \
-		-o,-Sbroker.cleanup-timeout=1s \
+		-Slog-filename=cleanup.log \
+		-Sbroker.rc1_path="$(pwd)/rc1_cleanup" \
+		-Sbroker.cleanup-timeout=1s \
 		./killbroker 15 60
 '
 

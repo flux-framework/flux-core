@@ -155,7 +155,7 @@ test_expect_success 'flux fortune with art works' '
 
 # Minimal is sufficient for these tests, but test_under_flux unavailable
 # clear the RC paths
-ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
+ARGS="-Sbroker.rc1_path= -Sbroker.rc3_path="
 
 test_expect_success 'flux-start in exec mode works' "
 	flux start ${ARGS} flux getattr size | grep -x 1
@@ -168,7 +168,7 @@ test_expect_success 'and broker.boot-method=simple' "
 		flux getattr broker.boot-method) = "simple"
 "
 test_expect_success 'although method can be forced to single with attribute' "
-	test $(flux start ${ARGS} -s1 -o,-Sbroker.boot-method=single \
+	test $(flux start ${ARGS} -s1 -Sbroker.boot-method=single \
 		flux getattr broker.boot-method) = "single"
 "
 test_expect_success 'or forced by setting FLUX_PMI_CLIENT_METHODS' "
@@ -176,7 +176,7 @@ test_expect_success 'or forced by setting FLUX_PMI_CLIENT_METHODS' "
 		flux getattr broker.boot-method) = "single"
 "
 test_expect_success 'start fails when broker.boot-method=unknown' "
-	test_must_fail flux start ${ARGS} -o,-Sbroker.boot-method=unknown \
+	test_must_fail flux start ${ARGS} -Sbroker.boot-method=unknown \
 		/bin/true
 "
 test_expect_success 'flux-start in subprocess/pmi mode works (size 2)' "
@@ -347,7 +347,7 @@ test_expect_success 'flux-start works with multiple files in rc1.d' '
 	printf "echo rc-one\n" >rc1.d/one &&
 	printf "echo rc-two\n" >rc1.d/two &&
 	chmod +x rc1.d/* &&
-	FLUX_RC_EXTRA=$(pwd) flux start -o-Slog-stderr-level=6 \
+	FLUX_RC_EXTRA=$(pwd) flux start -Slog-stderr-level=6 \
 		echo rc-three >rc-multi.out 2>&1 &&
 	test_debug "cat rc-multi.out" &&
 	grep rc-one rc-multi.out &&
@@ -394,7 +394,7 @@ test_expect_success HWLOC_LS 'FLUX_HWLOC_XMLFILE works' '
 	norestrict = true
 	EOF
 	FLUX_HWLOC_XMLFILE=test.xml \
-		flux start -s2 -o,--conf=norestrict.conf \
+		flux start -s2 --conf=norestrict.conf \
 			flux resource info >rinfo.out &&
 	test_debug "cat rinfo.out" &&
 	grep "12 Cores" rinfo.out
@@ -425,6 +425,10 @@ test_expect_success NO_ASAN 'test_under_flux fails if loaded modules are not unl
 
 test_expect_success 'flux-start -o,--setattr ATTR=VAL can set broker attributes' '
 	ATTR_VAL=`flux start ${ARGS} -o,--setattr=foo-test=42 flux getattr foo-test` &&
+	test $ATTR_VAL -eq 42
+'
+test_expect_success 'flux-start --setattr ATTR=VAL can set broker attributes' '
+	ATTR_VAL=`flux start ${ARGS} --setattr=foo-test=42 flux getattr foo-test` &&
 	test $ATTR_VAL -eq 42
 '
 test_expect_success 'hostlist attr is set on size 1 instance' '
@@ -492,7 +496,7 @@ test_expect_success 'flux start --test-rundir with not-directory fails' '
 '
 test_expect_success 'rundir override works' '
 	RUNDIR=`mktemp -d` &&
-	DIR=`flux start ${ARGS} -o,--setattr=rundir=$RUNDIR flux getattr rundir` &&
+	DIR=`flux start ${ARGS} --setattr=rundir=$RUNDIR flux getattr rundir` &&
 	test "$DIR" = "$RUNDIR" &&
 	test -d $RUNDIR &&
 	rm -rf $RUNDIR
@@ -500,7 +504,7 @@ test_expect_success 'rundir override works' '
 test_expect_success 'rundir override creates nonexistent dirs and cleans up' '
 	RUNDIR=`mktemp -d` &&
 	rmdir $RUNDIR &&
-	flux start ${ARGS} -o,--setattr=rundir=$RUNDIR sh -c "test -d $RUNDIR" &&
+	flux start ${ARGS} --setattr=rundir=$RUNDIR sh -c "test -d $RUNDIR" &&
 	test_expect_code 1 test -d $RUNDIR
 '
 test_expect_success 'broker fails gracefully when rundir buffer overflows' '
@@ -514,25 +518,25 @@ test_expect_success 'broker fails gracefully on nonexistent TMPDIR' '
 '
 test_expect_success 'broker fails gracefully on non-directory rundir' '
 	touch notdir &&
-	test_must_fail flux start ${ARGS} -o,-Srundir=notdir \
+	test_must_fail flux start ${ARGS} -Srundir=notdir \
 		/bin/true 2>notdir.err &&
 	grep "Not a directory" notdir.err
 '
 test_expect_success 'broker fails gracefully on unwriteable rundir' '
 	mkdir -p privdir &&
 	chmod u-w privdir &&
-	test_must_fail flux start ${ARGS} -o,-Srundir=privdir \
+	test_must_fail flux start ${ARGS} -Srundir=privdir \
 		/bin/true 2>privdir.err &&
 	grep "permissions" privdir.err
 '
 # statedir created here is reused in the next several tests
 test_expect_success 'broker statedir is not cleaned up' '
 	mkdir -p statedir &&
-	flux start ${ARGS} -o,-Sstatedir=$(pwd)/statedir /bin/true &&
+	flux start ${ARGS} -Sstatedir=$(pwd)/statedir /bin/true &&
 	test -d statedir
 '
 test_expect_success 'broker statedir cannot be changed at runtime' '
-	test_must_fail flux start ${ARGS} -o,-Sstatedir=$(pwd)/statedir \
+	test_must_fail flux start ${ARGS} -Sstatedir=$(pwd)/statedir \
 		flux setattr statedir $(pwd)/statedir 2>rostatedir.err &&
 	grep "Operation not permitted" rostatedir.err
 '
@@ -543,7 +547,7 @@ test_expect_success 'broker statedir cannot be set at runtime' '
 '
 test_expect_success 'broker fails when statedir does not exist' '
 	rm -rf statedir &&
-	test_must_fail flux start ${ARGS} -o,-Sstatedir=$(pwd)/statedir \
+	test_must_fail flux start ${ARGS} -Sstatedir=$(pwd)/statedir \
 		/bin/true 2>nostatedir.err &&
 	grep "cannot stat" nostatedir.err
 '
@@ -559,31 +563,31 @@ test_expect_success 'local-uri override works' '
 	newsock=local://$sockdir/meep &&
 	echo $newsock >uri.exp &&
 	flux start ${ARGS} \
-		-o,-Slocal-uri=$newsock \
+		-Slocal-uri=$newsock \
 		printenv FLUX_URI >uri.out &&
 	test_cmp uri.exp uri.out &&
 	rm -rf $sockdir
 '
 test_expect_success 'broker fails gracefully when local-uri is malformed' '
-	test_must_fail flux start ${ARGS} -o,-Slocal-uri=baduri \
+	test_must_fail flux start ${ARGS} -Slocal-uri=baduri \
 		/bin/true 2>baduri.err &&
 	grep malformed baduri.err
 '
 test_expect_success 'broker fails gracefully when local-uri buffer overflows' '
 	longuri="local://$(head -c 1024 < /dev/zero | tr \\0 D)" &&
-	test_must_fail flux start ${ARGS} -o,-Slocal-uri=${longuri} \
+	test_must_fail flux start ${ARGS} -Slocal-uri=${longuri} \
 		/bin/true 2>longuri.err &&
 	grep "buffer overflow" longuri.err
 '
 test_expect_success 'broker fails gracefully when local-uri in missing dir' '
-	test_must_fail flux start ${ARGS} -o,-Slocal-uri=local:///noexist/x \
+	test_must_fail flux start ${ARGS} -Slocal-uri=local:///noexist/x \
 		/bin/true 2>nodiruri.err &&
 	grep "cannot stat" nodiruri.err
 '
 test_expect_success 'broker fails gracefully when local-uri in non-dir' '
 	touch urinotdir &&
 	test_must_fail flux start ${ARGS} \
-		-o,-Slocal-uri=local://$(pwd)/urinotdir/x \
+		-Slocal-uri=local://$(pwd)/urinotdir/x \
 		/bin/true 2>urinotdir.err &&
 	grep "Not a directory" urinotdir.err
 '
@@ -591,18 +595,18 @@ test_expect_success 'broker fails gracefully when local-uri in unwritable dir' '
 	mkdir -p privdir &&
 	chmod u-w privdir &&
 	test_must_fail flux start ${ARGS} \
-		-o,-Slocal-uri=local://$(pwd)/privdir/x \
+		-Slocal-uri=local://$(pwd)/privdir/x \
 		/bin/true 2>uriprivdir.err &&
 	grep "permissions" uriprivdir.err
 '
 test_expect_success 'broker broker.pid attribute is immutable' '
-	test_must_fail flux start ${ARGS} -o,--setattr=broker.pid=1234 flux getattr broker.pid
+	test_must_fail flux start ${ARGS} --setattr=broker.pid=1234 flux getattr broker.pid
 '
 test_expect_success 'broker --verbose option works' '
 	flux start ${ARGS} -o,-v /bin/true
 '
 test_expect_success 'broker fails on invalid broker.critical-ranks option' '
-	test_must_fail flux start ${ARGS} -o,-Sbroker.critical-ranks=0-1
+	test_must_fail flux start ${ARGS} -Sbroker.critical-ranks=0-1
 '
 test_expect_success 'broker fails on unknown option' '
 	test_must_fail flux start ${ARGS} -o,--not-an-option /bin/true
@@ -728,7 +732,7 @@ test_expect_success 'setting rundir to a long directory fails (#3925)' '
 	longdir=rundir-01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789 &&
 	mkdir -p $longdir &&
 	test_must_fail flux start ${ARGS} \
-		-o,-Srundir=$longdir \
+		-Srundir=$longdir \
 		/bin/true 2>longrun.err &&
 	grep "exceeds max" longrun.err
 '
@@ -737,7 +741,7 @@ test_expect_success 'setting local-uri to a long path fails (#3925)' '
 	longdir=rundir-01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789 &&
 	mkdir -p $longdir &&
 	test_must_fail flux start ${ARGS} \
-		-o,-Slocal-uri=local://$longdir/local-0 \
+		-Slocal-uri=local://$longdir/local-0 \
 		/bin/true 2>longuri.err &&
 	grep "exceeds max" longuri.err
 '

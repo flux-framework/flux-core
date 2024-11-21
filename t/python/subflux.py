@@ -60,10 +60,10 @@ def rerun_under_flux(size=1, personality="full"):
         for rc_num in [1, 3]:
             attr = "broker.rc{}_path".format(rc_num)
             if personality == "minimal":
-                command.append("-o,-S{}=".format(attr))
+                command.append("-S{}=".format(attr))
             else:
                 path = "{}/t/rc/rc{}-{}".format(srcdir, rc_num, personality)
-                command.append("-o,-S{}={}".format(attr, path))
+                command.append("-S{}={}".format(attr, path))
                 if not is_exe(path):
                     print("cannot execute {}".format(path), file=sys.stderr)
                     sys.exit(1)

@@ -333,36 +333,36 @@ test_expect_success 'reload module with no options and verify modes' '
 
 
 test_expect_success 'run flux without statedir and verify modes' '
-	flux start -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	flux start -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
 	    flux dmesg >logs3 &&
 	grep "journal_mode=OFF synchronous=OFF" logs3
 '
 test_expect_success 'run flux with statedir and verify modes' '
-	flux start -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
-	    -o,-Sstatedir=$(pwd) flux dmesg >logs4  &&
+	flux start -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
+	    -Sstatedir=$(pwd) flux dmesg >logs4  &&
 	grep "journal_mode=WAL synchronous=NORMAL" logs4
 '
 test_expect_success 'run flux without statedir and verify config' '
-	flux start -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	flux start -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
 	    flux module stats content-sqlite >stats1 &&
 	$jq -e ".config.journal_mode == \"OFF\"" < stats1 &&
 	$jq -e ".config.synchronous == \"OFF\"" < stats1
 '
 test_expect_success 'run flux with statedir and verify config' '
-	flux start -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
-	    -o,-Sstatedir=$(pwd) flux module stats content-sqlite >stats2  &&
+	flux start -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
+	    -Sstatedir=$(pwd) flux module stats content-sqlite >stats2  &&
 	$jq -e ".config.journal_mode == \"WAL\"" < stats2 &&
 	$jq -e ".config.synchronous == \"NORMAL\"" < stats2
 '
 test_expect_success 'flux fails with invalid journal_mode config' '
-	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+	flux start -Sbroker.rc1_path= -Sbroker.rc3_path= \
 	    "flux module load content; \
 	    flux module load content-sqlite journal_mode=FOO; \
 	    flux module remove content" > invalid1.out 2> invalid1.err &&
 	grep "content-sqlite: Invalid argument" invalid1.err
 '
 test_expect_success 'flux fails with invalid synchronous config' '
-	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+	flux start -Sbroker.rc1_path= -Sbroker.rc3_path= \
 	    "flux module load content; \
 	    flux module load content-sqlite synchronous=BAR; \
 	    flux module remove content" > invalid2.out 2> invalid2.err &&
@@ -374,8 +374,8 @@ test_expect_success 'test config via config file works' '
 	journal_mode = "PERSIST"
 	synchronous = "EXTRA"
 	EOT
-	flux start -o,--config-path=$(pwd) \
-	   -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	flux start --config-path=$(pwd) \
+	   -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
 	   flux module stats content-sqlite > configstats.out &&
 	$jq -e ".config.journal_mode == \"PERSIST\"" < configstats.out &&
 	$jq -e ".config.synchronous == \"EXTRA\"" < configstats.out &&
@@ -387,8 +387,8 @@ test_expect_success 'invalid config fails (journal_mode)' '
 	journal_mode = "FOO"
 	synchronous = "EXTRA"
 	EOT
-	test_must_fail flux start -o,--config-path=$(pwd) \
-	   -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	test_must_fail flux start --config-path=$(pwd) \
+	   -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
 	   flux module stats content-sqlite &&
 	rm content-sqlite.toml
 '
@@ -398,8 +398,8 @@ test_expect_success 'invalid config fails (synchronous)' '
 	journal_mode = "PERSIST"
 	synchronous = "BAR"
 	EOT
-	test_must_fail flux start -o,--config-path=$(pwd) \
-	   -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	test_must_fail flux start --config-path=$(pwd) \
+	   -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
 	   flux module stats content-sqlite &&
 	rm content-sqlite.toml
 '
@@ -408,8 +408,8 @@ test_expect_success 'invalid config fails (synchronous)' '
 # Will create in WAL mode since statedir is set
 recreate_database()
 {
-	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
-	    -o,-Sstatedir=$(pwd) bash -c \
+	flux start -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    -Sstatedir=$(pwd) bash -c \
 	    "flux module load content &&
 	    flux module load content-sqlite truncate && \
 	    flux module remove content-sqlite && \
@@ -417,8 +417,8 @@ recreate_database()
 }
 load_module_xfail()
 {
-	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
-	    -o,-Sstatedir=$(pwd) bash -c \
+	flux start -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    -Sstatedir=$(pwd) bash -c \
 	    "flux module load content; \
 	    flux module load content-sqlite; \
 	    rc=\$?; \
@@ -443,7 +443,7 @@ test_expect_success 'module load fails with corrupt database' '
 	test_must_fail load_module_xfail
 '
 test_expect_success 'full instance start fails corrupt database' '
-	test_must_fail flux start -o,-Sstatedir=$(pwd) /bin/true
+	test_must_fail flux start -Sstatedir=$(pwd) /bin/true
 '
 
 test_expect_success 'flux module stats content-sqlite is open to guests' '
