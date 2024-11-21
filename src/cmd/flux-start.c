@@ -682,9 +682,7 @@ struct client *client_create (const char *broker_path,
     if (add_args_common (&argz, &argz_len, broker_path) < 0)
         goto fail;
 
-    char *dir_arg = xasprintf ("--setattr=rundir=%s", rundir);
-    argz_add (&argz, &argz_len, dir_arg);
-    free (dir_arg);
+    add_argzf (&argz, &argz_len, "--setattr=rundir=%s", rundir);
 
     if (rank == 0 && cmd_argz)
         argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len); /* must be last arg */
