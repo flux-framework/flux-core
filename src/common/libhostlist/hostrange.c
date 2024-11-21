@@ -18,7 +18,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <ctype.h>
-#include <sys/param.h>
+#include <limits.h>
 #include <unistd.h>
 #include <stdbool.h>
 
@@ -30,13 +30,6 @@
 
 /* max number of ranges that will be processed between brackets */
 #define MAX_RANGES    10240    /* 10K Ranges */
-
-/* size of internal hostname buffer (+ some slop), hostnames will probably
- * be truncated if longer than MAXHOSTNAMELEN
- */
-#ifndef MAXHOSTNAMELEN
-#define MAXHOSTNAMELEN    64
-#endif
 
 /* max size of internal hostrange buffer */
 #define MAXHOSTRANGELEN 1024
@@ -457,7 +450,7 @@ size_t hostrange_numstr (struct hostrange * hr, size_t n, char *buf)
 
 char * hostrange_host_tostring (struct hostrange * hr, int depth)
 {
-    char buf[MAXHOSTNAMELEN + 16];
+    char buf[_POSIX_HOST_NAME_MAX + 16];
     int len;
 
     if (!hr || depth < 0) {
@@ -475,7 +468,7 @@ char * hostrange_host_tostring (struct hostrange * hr, int depth)
             errno = ERANGE;
             return NULL;
         }
-        snprintf (buf+len, MAXHOSTNAMELEN+15 - len, "%0*lu",
+        snprintf (buf+len, sizeof (buf) - len, "%0*lu",
                  hr->width, hr->lo + depth);
     }
     return strdup (buf);

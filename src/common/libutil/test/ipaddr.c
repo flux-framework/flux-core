@@ -11,7 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <sys/param.h>
+#include <limits.h>
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
@@ -20,7 +20,7 @@
 
 int main(int argc, char** argv)
 {
-    char host[MAXHOSTNAMELEN + 1];
+    char host[_POSIX_HOST_NAME_MAX + 1];
     flux_error_t error;
     int n;
 

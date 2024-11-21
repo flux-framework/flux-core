@@ -22,6 +22,9 @@
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
+#ifndef HAVE_PIPE2
+#include "src/common/libmissing/pipe2.h"
+#endif
 
 #include "popen2.h"
 #include "fdwalk.h"

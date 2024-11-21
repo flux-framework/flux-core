@@ -11,7 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <sys/param.h>
+#include <limits.h>
 #include <unistd.h>
 #include <jansson.h>
 #include <flux/hostlist.h>
@@ -164,7 +164,7 @@ static int format_bind_uri (char *buf, int bufsz, attr_t *attrs, int rank)
             goto overflow;
     }
     else {
-        char ipaddr[HOST_NAME_MAX + 1];
+        char ipaddr[_POSIX_HOST_NAME_MAX + 1];
         flux_error_t error;
         int flags = 0;
         const char *interface = NULL;

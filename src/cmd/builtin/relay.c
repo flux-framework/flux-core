@@ -36,7 +36,7 @@
 #include "builtin.h"
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/param.h>
+#include <limits.h>
 #include <stdio.h>
 #include <glob.h>
 #include <ctype.h>
@@ -131,7 +131,7 @@ static int cmd_relay (optparse_t *p, int ac, char *av[])
     flux_t *h;
     int optindex;
     char *uri;
-    char hostname [HOST_NAME_MAX + 1];
+    char hostname [_POSIX_HOST_NAME_MAX + 1];
 
     /*  If possible, initialize logging prefix as local hostname. (In the
      *  unlikely event gethostname(3) fails, use "unknown-host".)

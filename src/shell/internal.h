@@ -14,7 +14,7 @@
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <flux/shell.h>
-#include <sys/param.h>
+#include <limits.h>
 
 #include "src/common/libutil/aux.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -27,7 +27,7 @@ struct flux_shell {
     flux_jobid_t jobid;
     int broker_rank;
     uid_t broker_owner;
-    char hostname [MAXHOSTNAMELEN + 1];
+    char hostname [_POSIX_HOST_NAME_MAX + 1];
     int protocol_fd[2];
 
     optparse_t *p;

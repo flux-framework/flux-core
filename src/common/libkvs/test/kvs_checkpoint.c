@@ -16,6 +16,10 @@
 #include <errno.h>
 #include <flux/core.h>
 
+#ifndef EDEADLOCK
+#define EDEADLOCK EDEADLK
+#endif
+
 #include "src/common/libtap/tap.h"
 
 #include "kvs_checkpoint.h"

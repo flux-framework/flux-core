@@ -11,7 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <sys/param.h>
+#include <limits.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -178,7 +178,7 @@ static int getprimary_hostaddr (char *buf,
                                 int prefer_family,
                                 flux_error_t *error)
 {
-    char hostname[HOST_NAME_MAX + 1];
+    char hostname[_POSIX_HOST_NAME_MAX + 1];
     struct addrinfo hints, *res = NULL;
     struct addrinfo *rp;
     int e;

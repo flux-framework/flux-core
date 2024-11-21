@@ -187,6 +187,7 @@ AC_CHECK_HEADERS( \
   xlocale.h \
   endian.h \
   inttypes.h \
+  link.h \
 )
 
 ##
@@ -232,12 +233,15 @@ AC_REPLACE_FUNCS( \
   argz_add \
   envz_add \
   strerrorname_np \
+  pipe2 \
+  mempcpy \
 )
 X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
 X_AC_CHECK_COND_LIB(dl, dlerror)
 X_AC_MALLOC
 AC_CHECK_LIB(m, floor)
+AC_SEARCH_LIBS(epoll, libepoll-shim)
 
 AC_ARG_ENABLE([docs],
 	      AS_HELP_STRING([--disable-docs], [disable building docs]))

@@ -65,6 +65,10 @@
 
 #include <string.h>
 
+#ifndef HAVE_MEMPCPY
+#include "src/common/libmissing/mempcpy.h"
+#endif
+
 #ifdef VMS
 # include <unixlib.h>
 #endif

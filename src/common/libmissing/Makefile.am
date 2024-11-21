@@ -50,4 +50,6 @@ EXTRA_libmissing_la_SOURCES = \
 	envz.c \
 	macros.h \
 	strerrorname_np.h \
-	json_object_update_recursive.h
+	json_object_update_recursive.h \
+	pipe2.h \
+	mempcpy.h

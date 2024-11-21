@@ -12,7 +12,9 @@ EXTRA_DIST = \
 	NEWS.md \
 	scripts/requirements-dev.txt \
 	scripts/install-deps-deb.sh \
-	scripts/install-deps-rpm.sh
+	scripts/install-deps-rpm.sh \
+	scripts/install-deps-macos.sh \
+	scripts/configure-macos.sh
 
 ACLOCAL_AMFLAGS = -I config
 

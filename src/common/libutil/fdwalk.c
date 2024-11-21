@@ -93,6 +93,7 @@ struct linux_dirent64
 
 #include "fdwalk.h"
 
+#ifdef __linux__
 // Parses a file descriptor number in base 10, requiring the strict format used
 // in /proc/*/fd. Returns the value, or -1 if not a valid string.
 static int parse_fd(const char *s) {
@@ -111,6 +112,7 @@ static int parse_fd(const char *s) {
     } while (*s);
     return val;
 }
+#endif /* __linux__ */
 
 int _fdwalk_portable (void (*func)(void *, int), void *data)
 {
@@ -121,15 +123,16 @@ int _fdwalk_portable (void (*func)(void *, int), void *data)
 
 }
 
-int fdwalk (void (*func)(void *, int), void *data) {
-    int fd;
-    int rc = 0;
+int fdwalk (void (*func)(void *, int), void *data){
 
     /* On Linux use getdents64 to avoid malloc in opendir() and
      *  still walk only open fds. If not on linux or open() of /proc/self
      *  fails, fall back to iterating over all possible fds.
      */
 #ifdef __linux__
+    int fd;
+    int rc = 0;
+
     int dir_fd = open ("/proc/self/fd", O_RDONLY | O_DIRECTORY);
     if (dir_fd >= 0) {
         char buf [4096];

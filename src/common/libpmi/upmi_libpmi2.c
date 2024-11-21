@@ -14,7 +14,9 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <dlfcn.h>
+#if HAVE_LINK_H
 #include <link.h>
+#endif
 
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
@@ -58,10 +60,13 @@ static const char *plugin_name = "libpmi2";
 
 static const char *dlinfo_name (void *dso)
 {
-    struct link_map *p;
-    if (dlinfo (dso, RTLD_DI_LINKMAP, &p) < 0)
-        return NULL;
-    return p->l_name;
+#if HAVE_LINK_H
+    struct link_map *p = NULL;
+    (void)dlinfo (dso, RTLD_DI_LINKMAP, &p);
+    if (p && p->l_name)
+        return p->l_name;
+#endif
+    return "unknown";
 }
 
 static int dlopen_wrap (const char *path,
@@ -412,9 +417,6 @@ static int op_preinit (flux_plugin_t *p,
     int appnum;
     int result;
     const char *name = dlinfo_name (ctx->dso);
-
-    if (!name)
-        name = "unknown";
 
     result = ctx->init (&spawned, &ctx->size, &ctx->rank, &appnum);
     if (result != PMI2_SUCCESS)

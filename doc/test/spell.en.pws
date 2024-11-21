@@ -625,6 +625,8 @@ gc
 tgz
 tmpfiles
 EDEADLOCK
+EDEADLK
+BSD
 setpgrp
 nosetpgrp
 checkpointed
