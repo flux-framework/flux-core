@@ -309,7 +309,9 @@ char *find_broker (const char *searchpath)
     return dir ? xstrdup (path) : NULL;
 }
 
-void exit_timeout (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+void exit_timeout (flux_reactor_t *r,
+                   flux_watcher_t *w,
+                   int revents, void *arg)
 {
     struct client *cli;
 
@@ -455,7 +457,7 @@ void add_args_list (char **argz,
     const char *arg;
     optparse_getopt_iterator_reset (opt, name);
     while ((arg = optparse_getopt_next (opt, name)))
-        if (argz_add  (argz, argz_len, arg) != 0)
+        if (argz_add (argz, argz_len, arg) != 0)
             log_err_exit ("argz_add");
 }
 
@@ -674,7 +676,7 @@ struct client *client_create (const char *broker_path,
 {
     struct client *cli = xzmalloc (sizeof (*cli));
     char *arg;
-    char * argz = NULL;
+    char *argz = NULL;
     size_t argz_len = 0;
 
     cli->rank = rank;
@@ -684,8 +686,8 @@ struct client *client_create (const char *broker_path,
 
     add_argzf (&argz, &argz_len, "--setattr=rundir=%s", rundir);
 
-    if (rank == 0 && cmd_argz)
-        argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len); /* must be last arg */
+    if (rank == 0 && cmd_argz) /* must be last arg */
+        argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len);
 
     if (!(cli->cmd = flux_cmd_create (0, NULL, environ)))
         goto fail;
@@ -748,7 +750,9 @@ void client_dumpargs (struct client *cli)
 void pmi_server_initialize (int flags)
 {
     struct taskmap *map;
-    const char *mode = optparse_get_str (ctx.opts, "test-pmi-clique", "single");
+    const char *mode = optparse_get_str (ctx.opts,
+                                         "test-pmi-clique",
+                                         "single");
     struct pmi_simple_ops ops = {
         .abort = pmi_abort,
         .kvs_put = pmi_kvs_put,
@@ -1098,8 +1102,10 @@ int start_session (const char *cmd_argz,
     if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
     if (!(ctx.timer = flux_timer_watcher_create (ctx.reactor,
-                                                 ctx.exit_timeout, 0.,
-                                                 exit_timeout, NULL)))
+                                                 ctx.exit_timeout,
+                                                 0.,
+                                                 exit_timeout,
+                                                 NULL)))
         log_err_exit ("flux_timer_watcher_create");
     if (!(ctx.clients = zlist_new ()))
         log_err_exit ("zlist_new");
