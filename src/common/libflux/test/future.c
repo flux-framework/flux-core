@@ -16,6 +16,10 @@
 #include <string.h>
 #include <flux/core.h>
 
+#ifndef EDEADLOCK
+#define EDEADLOCK EDEADLK
+#endif
+
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"

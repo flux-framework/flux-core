@@ -118,7 +118,7 @@ ETIMEDOUT
    A timeout passed to :func:`flux_future_wait_for` expired before the future
    was fulfilled.
 
-EDEADLOCK
+EDEADLOCK (or EDEADLK on BSD systems)
    :func:`flux_future_wait_for` would likely deadlock due to an
    improperly initialized future.
 
