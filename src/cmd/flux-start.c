@@ -602,6 +602,28 @@ void process_recovery_option (char **argz,
         add_argzf (argz, argz_len, "-Scontent.restore=%s", optarg);
 }
 
+int add_args_common (char **argz,
+                     size_t *argz_len,
+                     const char *broker_path)
+{
+    bool system_recovery = false;
+
+    add_args_list (argz, argz_len, ctx.opts, "wrap");
+    if (argz_add (argz, argz_len, broker_path) != 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    add_args_list (argz, argz_len, ctx.opts, "broker-opts");
+
+    if (optparse_hasopt (ctx.opts, "recovery"))
+        process_recovery_option (argz, argz_len, &system_recovery);
+
+    if (system_recovery || optparse_hasopt (ctx.opts, "sysconfig"))
+        add_argzf (argz, argz_len, "-c%s", default_config_path);
+
+    return 0;
+}
+
 /* Directly exec() a single flux broker.  It is assumed that we
  * are running in an environment with an external PMI service, and the
  * broker will figure out how to bootstrap without any further aid from
@@ -613,18 +635,10 @@ int exec_broker (const char *cmd_argz,
 {
     char *argz = NULL;
     size_t argz_len = 0;
-    bool system_recovery = false;
 
-    add_args_list (&argz, &argz_len, ctx.opts, "wrap");
-    if (argz_add (&argz, &argz_len, broker_path) != 0)
-        goto nomem;
-    add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
+    if (add_args_common (&argz, &argz_len, broker_path) < 0)
+        goto error;
 
-    if (optparse_hasopt (ctx.opts, "recovery"))
-        process_recovery_option (&argz, &argz_len, &system_recovery);
-
-    if (system_recovery || optparse_hasopt (ctx.opts, "sysconfig"))
-        add_argzf (&argz, &argz_len, "-c%s", default_config_path);
     if (cmd_argz) {
         if (argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len) != 0)
             goto nomem;
@@ -662,19 +676,16 @@ struct client *client_create (const char *broker_path,
     char *arg;
     char * argz = NULL;
     size_t argz_len = 0;
-    bool system_recovery = false;
 
     cli->rank = rank;
-    add_args_list (&argz, &argz_len, ctx.opts, "wrap");
-    argz_add (&argz, &argz_len, broker_path);
+
+    if (add_args_common (&argz, &argz_len, broker_path) < 0)
+        goto fail;
+
     char *dir_arg = xasprintf ("--setattr=rundir=%s", rundir);
     argz_add (&argz, &argz_len, dir_arg);
     free (dir_arg);
-    if (optparse_hasopt (ctx.opts, "recovery") && rank == 0)
-        process_recovery_option (&argz, &argz_len, &system_recovery);
-    if (system_recovery || optparse_hasopt (ctx.opts, "sysconfig"))
-        add_argzf (&argz, &argz_len, "-c%s", default_config_path);
-    add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
+
     if (rank == 0 && cmd_argz)
         argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len); /* must be last arg */
 
@@ -705,8 +716,8 @@ struct client *client_create (const char *broker_path,
             log_err_exit ("error setting up environment for rank %d", rank);
     return cli;
 fail:
-    free (argz);
-    client_destroy (cli);
+    ERRNO_SAFE_WRAP (free, argz);
+    ERRNO_SAFE_WRAP (client_destroy, cli);
     return NULL;
 }
 
