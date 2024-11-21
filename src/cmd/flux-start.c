@@ -457,13 +457,15 @@ void channel_cb (flux_subprocess_t *p, const char *stream)
 void add_argzf (char **argz, size_t *argz_len, const char *fmt, ...)
 {
     va_list ap;
-    char arg[1024];
+    char *arg = NULL;
 
     va_start (ap, fmt);
-    (void)vsnprintf (arg, sizeof (arg), fmt, ap);
+    if (vasprintf (&arg, fmt, ap) < 0)
+        log_err_exit ("vasprintf");
     va_end (ap);
     if (argz_add (argz, argz_len, arg) != 0)
         log_err_exit ("argz_add");
+    free (arg);
 }
 
 void add_args_list (char **argz,
