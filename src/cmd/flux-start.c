@@ -99,6 +99,9 @@ const char *default_statedir = "/var/lib/flux";
 
 const char *usage_msg = "[OPTIONS] command ...";
 static struct optparse_option opts[] = {
+    { .name = "setattr",    .key = 'S', .has_arg = 1, .arginfo = "ATTR=VAL",
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
+      .usage = "Set broker attribute", },
     { .name = "recovery",   .key = 'r', .has_arg = 2, .arginfo = "[TARGET]",
       .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
       .usage = "Start instance in recovery mode with dump file or statedir", },
@@ -615,6 +618,7 @@ int add_args_common (char **argz,
         errno = ENOMEM;
         return -1;
     }
+    add_args_list (argz, argz_len, ctx.opts, "setattr", "-S");
     add_args_list (argz, argz_len, ctx.opts, "broker-opts", "");
 
     if (optparse_hasopt (ctx.opts, "recovery"))
