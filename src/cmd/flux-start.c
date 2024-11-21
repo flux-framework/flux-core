@@ -102,6 +102,8 @@ static struct optparse_option opts[] = {
     { .name = "setattr",    .key = 'S', .has_arg = 1, .arginfo = "ATTR=VAL",
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Set broker attribute", },
+    { .name = "config-path",.key = 'c', .has_arg = 1, .arginfo = "PATH",
+      .usage = "Set broker config from PATH (default: none)", },
     { .name = "recovery",   .key = 'r', .has_arg = 2, .arginfo = "[TARGET]",
       .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
       .usage = "Start instance in recovery mode with dump file or statedir", },
@@ -612,6 +614,7 @@ int add_args_common (char **argz,
                      const char *broker_path)
 {
     bool system_recovery = false;
+    const char *config_path = NULL;
 
     add_args_list (argz, argz_len, ctx.opts, "wrap", "");
     if (argz_add (argz, argz_len, broker_path) != 0) {
@@ -625,7 +628,16 @@ int add_args_common (char **argz,
         process_recovery_option (argz, argz_len, &system_recovery);
 
     if (system_recovery || optparse_hasopt (ctx.opts, "sysconfig"))
-        add_argzf (argz, argz_len, "-c%s", default_config_path);
+        config_path = default_config_path;
+    if (optparse_hasopt (ctx.opts, "config-path")) {
+        const char *conf = optparse_get_str (ctx.opts, "config-path", NULL);
+        if (config_path)
+            log_msg ("Warning: overriding recovery/--sysconfig path with %s",
+                     conf);
+        config_path = conf;
+    }
+    if (config_path)
+        add_argzf (argz, argz_len, "-c%s", config_path);
 
     return 0;
 }
