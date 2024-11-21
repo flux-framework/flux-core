@@ -241,6 +241,7 @@ X_AC_CHECK_COND_LIB(rt, clock_gettime)
 X_AC_CHECK_COND_LIB(dl, dlerror)
 X_AC_MALLOC
 AC_CHECK_LIB(m, floor)
+AC_SEARCH_LIBS(epoll, libepoll-shim)
 
 AC_ARG_ENABLE([docs],
 	      AS_HELP_STRING([--disable-docs], [disable building docs]))
