@@ -13,7 +13,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux \
-	-DABS_TOP_BUILDDIR=\"$(abs_top_builddir)\"
+	-DABS_TOP_BUILDDIR=\"$(abs_top_builddir)\" \
+	$(JANSSON_CFLAGS)
 
 noinst_LTLIBRARIES = libutil.la
 
