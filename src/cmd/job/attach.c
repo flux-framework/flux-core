@@ -38,6 +38,7 @@
 #include "src/common/libterminus/pty.h"
 #include "src/common/libdebugged/debugged.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 #include "job/common.h"
@@ -117,12 +118,55 @@ struct attach_ctx {
     double timestamp_zero;
     int eventlog_watch_count;
     bool statusline;
-    char *last_event;
+    char *status_msg;
+    int prolog_running;
     bool fatal_exception;
     int last_queue_update;
     char *queue;
     bool queue_stopped;
 };
+
+struct attach_event {
+    json_t *entry;
+    double timestamp;
+    const char *name;
+    json_t *context;
+};
+
+static void attach_event_destroy (struct attach_event *event)
+{
+    if (event) {
+        int saved_errno = errno;
+        json_decref (event->entry);
+        event->name = NULL;
+        event->context = NULL;
+        free (event);
+        errno = saved_errno;
+    }
+}
+static struct attach_event *attach_event_decode (const char *entry,
+                                                 flux_error_t *errp)
+{
+    struct attach_event *event = calloc (1, sizeof (*event));
+    if (!event)
+        return NULL;
+
+    if (!(event->entry = eventlog_entry_decode (entry))) {
+        errprintf (errp, "eventlog_entry_decode: %s", strerror (errno));
+        goto err;
+    }
+    if (eventlog_entry_parse (event->entry,
+                              &event->timestamp,
+                              &event->name,
+                              &event->context) < 0) {
+        errprintf (errp, "eventlog_entry_parse: %s", strerror (errno));
+        goto err;
+    }
+    return event;
+err:
+    attach_event_destroy (event);
+    return NULL;
+}
 
 void attach_completed_check (struct attach_ctx *ctx)
 {
@@ -147,23 +191,22 @@ void attach_completed_check (struct attach_ctx *ctx)
 /* Print eventlog entry to 'fp'.
  * Prefix and context may be NULL.
  */
-void print_eventlog_entry (FILE *fp,
+void print_eventlog_entry (struct attach_ctx *ctx,
+                           FILE *fp,
                            const char *prefix,
-                           double timestamp,
-                           const char *name,
-                           json_t *context)
+                           struct attach_event *event)
 {
     char *context_s = NULL;
 
-    if (context) {
-        if (!(context_s = json_dumps (context, JSON_COMPACT)))
+    if (event->context) {
+        if (!(context_s = json_dumps (event->context, JSON_COMPACT)))
             log_err_exit ("%s: error re-encoding context", __func__);
     }
     fprintf (stderr, "%.3fs: %s%s%s%s%s\n",
-             timestamp,
+             event->timestamp - ctx->timestamp_zero,
              prefix ? prefix : "",
              prefix ? "." : "",
-             name,
+             event->name,
              context_s ? " " : "",
              context_s ? context_s : "");
     free (context_s);
@@ -782,11 +825,9 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
     const char *entry;
-    json_t *o;
-    double timestamp;
-    const char *name;
-    json_t *context;
+    struct attach_event *event;
     const char *service;
+    flux_error_t error;
 
     if (flux_job_event_watch_get (f, &entry) < 0) {
         if (errno == ENODATA)
@@ -794,14 +835,12 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
         log_msg_exit ("flux_job_event_watch_get: %s",
                       future_strerror (f, errno));
     }
-    if (!(o = eventlog_entry_decode (entry)))
-        log_err_exit ("eventlog_entry_decode");
-    if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
-        log_err_exit ("eventlog_entry_parse");
+    if (!(event = attach_event_decode (entry, &error)))
+        log_err_exit ("%s", error.text);
 
-    if (streq (name, "shell.init")) {
+    if (streq (event->name, "shell.init")) {
         const char *pty_service = NULL;
-        if (json_unpack (context,
+        if (json_unpack (event->context,
                          "{s:i s:s s?s s?i}",
                          "leader-rank",
                          &ctx->leader_rank,
@@ -831,10 +870,13 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
         }
         else
             attach_setup_stdin (ctx);
-    } else if (streq (name, "shell.start")) {
+    } else if (streq (event->name, "shell.start")) {
         if (MPIR_being_debugged) {
             int stop_tasks_in_exec = 0;
-            if (json_unpack (context, "{s?b}", "sync", &stop_tasks_in_exec) < 0)
+            if (json_unpack (event->context,
+                             "{s?b}",
+                             "sync",
+                             &stop_tasks_in_exec) < 0)
                 log_err ("error decoding shell.start context");
             mpir_setup_interface (ctx->h,
                                   ctx->id,
@@ -843,29 +885,25 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
                                   ctx->leader_rank,
                                   ctx->service);
         }
-        handle_stdin_ranks (ctx, context);
+        handle_stdin_ranks (ctx, event->context);
     }
-    else if (streq (name, "log")) {
-        handle_exec_log_msg (ctx, timestamp, context);
+    else if (streq (event->name, "log")) {
+        handle_exec_log_msg (ctx, event->timestamp, event->context);
     }
 
     /*  If job is complete, and we haven't started watching
      *   output eventlog, then start now in case shell.init event
      *   was never emitted (failure in initialization)
      */
-    if (streq (name, "complete") && !ctx->output_f)
+    if (streq (event->name, "complete") && !ctx->output_f)
         attach_output_start (ctx);
 
     if (optparse_hasopt (ctx->p, "show-exec")
-        && !streq (name, "log")) {
-        print_eventlog_entry (stderr,
-                              "exec",
-                              timestamp - ctx->timestamp_zero,
-                              name,
-                              context);
+        && !streq (event->name, "log")) {
+        print_eventlog_entry (ctx, stderr, "exec", event);
     }
 
-    json_decref (o);
+    attach_event_destroy (event);
     flux_future_reset (f);
     return;
 done:
@@ -874,48 +912,6 @@ done:
     ctx->eventlog_watch_count--;
     attach_completed_check (ctx);
 }
-
-struct job_event_notifications {
-    const char *event;
-    const char *msg;
-    int count;
-};
-
-static struct job_event_notifications attach_notifications[] = {
-    { "validate",
-      "resolving dependencies",
-      0,
-    },
-    { "depend",
-      "waiting for priority assignment",
-      0,
-    },
-    { "priority",
-      "waiting for resources",
-      0,
-    },
-    { "alloc",
-      "starting",
-      0,
-    },
-    { "prolog-start",
-      "waiting for job prolog",
-      0,
-    },
-    { "prolog-finish",
-      "starting",
-      0,
-    },
-    { "start",
-      "started",
-      0,
-    },
-    { "exception",
-      "canceling due to exception",
-      0,
-    },
-    { NULL, NULL, 0},
-};
 
 static void queue_status_cb (flux_future_t *f, void *arg)
 {
@@ -972,65 +968,95 @@ static void fetch_job_queue (struct attach_ctx *ctx)
         flux_future_destroy (f);
 }
 
-static const char *job_event_notify_string (const char *name)
+static const char *attach_notify_msg (struct attach_ctx *ctx,
+                                      struct attach_event *event)
 {
-    struct job_event_notifications *t = attach_notifications;
-    while (t->event) {
-        if (streq (t->event, name)) {
-            /*  Special handling for prolog-start and prolog-finish:
-             *  prolog-start adds a reference to prolog-finish, and
-             *  prolog-finish decrements its reference by 1. Only
-             *  print 'starting' if prolog-finish refcount is <= 0.
-             */
-            if (streq (name, "prolog-start"))
-                (t+1)->count++;
-            else if (streq (name, "prolog-finish")
-                    && --t->count > 0)
-                    t--;
-            return t->msg;
-        }
-        t++;
+    const char *msg;
+    int severity;
+
+    if (!event) {
+        msg = ctx->status_msg;
     }
-    return NULL;
+    else if (streq (event->name, "submit")) {
+        msg = "submitted";
+    }
+    else if (streq (event->name, "validate")) {
+        msg = "resolving dependencies";
+    }
+    else if (streq (event->name, "depend")) {
+        msg = "waiting for priority assignment";
+    }
+    else if (streq (event->name, "priority")) {
+        msg = "waiting for resources";
+    }
+    else if (streq (event->name, "alloc")) {
+        msg = "starting";
+    }
+    else if (streq (event->name, "prolog-start")) {
+        msg = "waiting for prolog";
+        ctx->prolog_running++;
+    }
+    else if (streq (event->name, "prolog-finish")) {
+        if (--ctx->prolog_running > 0)
+            msg = "waiting for prolog";
+        else
+            msg = "starting";
+    }
+    else if (streq (event->name, "exception")
+            && json_unpack (event->context, "{s:i}", "severity", &severity)
+            && severity == 0) {
+        msg = "canceling due to exception";
+    }
+    else if (streq (event->name, "start")) {
+        msg = "started";
+    }
+    else if (streq (event->name, "jobspec-update")) {
+        /* Keep existing status msg, but clear current queue name in case
+         * the queue was updated. This will force current queue and its
+         * status to be refreshed.
+         */
+        msg = ctx->status_msg;
+        free (ctx->queue);
+        ctx->queue = NULL;
+        ctx->queue_stopped = false;
+    }
+    else {
+        /* Keep existing status msg for any event not handled above
+         */
+        msg = ctx->status_msg;
+    }
+    return msg;
 }
 
 static void attach_notify (struct attach_ctx *ctx,
-                           const char *event_name,
+                           struct attach_event *event,
                            double ts)
 {
-    char buf[64];
-    const char *msg;
-
-    if (!event_name)
-        return;
-
-    /* job_event_notify_string must be called for all events even if
+    /* The following must be called for all events even if
      * the statusline is not active for prolog-start/finish refcounting.
      */
-    msg = job_event_notify_string (event_name);
-    if (msg
-        && ctx->statusline
-        && !ctx->fatal_exception) {
+    if (!ctx->fatal_exception) {
         int dt = ts - ctx->timestamp_zero;
         int width = 80;
         struct winsize w;
+        char buf[64];
+        const char *msg;
+        char *msgcpy;
 
-        if (streq (msg, "waiting for resources")) {
-            /*  Fetch job queue if not already available so queue status
-             *  can be checked in case allocations are stopped:
+        if (!(msg = attach_notify_msg (ctx, event)))
+            return;
+
+        if (strstarts (msg, "waiting for resources")) {
+            /*  Fetch job queue so queue status can be checked
              */
-            if (!ctx->queue)
+            if (!ctx->queue) {
                 fetch_job_queue (ctx);
-            else {
-                /*  Check queue status, only check again every ~10s
-                 */
-                if (ctx->last_queue_update <= 0
-                    || (dt - ctx->last_queue_update >= 10)) {
-                    ctx->last_queue_update = dt;
-                    fetch_queue_status (ctx);
-                }
             }
-
+            else if (ctx->last_queue_update <= 0
+                     || (dt - ctx->last_queue_update >= 10)) {
+                ctx->last_queue_update = dt;
+                fetch_queue_status (ctx);
+            }
             /*  Amend status if queue is stopped:
              */
             if (ctx->queue_stopped) {
@@ -1043,32 +1069,40 @@ static void attach_notify (struct attach_ctx *ctx,
             }
         }
 
-        /* Adjust width of status so timer is right justified:
-         */
-        if (ioctl(0, TIOCGWINSZ, &w) == 0)
-            width = w.ws_col;
-        width -= 10 + strlen (ctx->jobid) + 10;
-
-        fprintf (stderr,
-                 "\rflux-job: %s %-*s %02d:%02d:%02d\r",
-                 ctx->jobid,
-                 width,
-                 msg,
-                 dt/3600,
-                 (dt/60) % 60,
-                 dt % 60);
-    }
-    if (streq (event_name, "start")
-        || streq (event_name, "clean")) {
         if (ctx->statusline) {
-            fprintf (stderr, "\n");
-            ctx->statusline = false;
+            /* Adjust width of status so timer is right justified:
+             */
+            if (ioctl(0, TIOCGWINSZ, &w) == 0)
+                width = w.ws_col;
+            width -= 10 + strlen (ctx->jobid) + 10;
+
+            fprintf (stderr,
+                     "\rflux-job: %s %-*s %02d:%02d:%02d\r",
+                     ctx->jobid,
+                     width,
+                     msg,
+                     dt/3600,
+                     (dt/60) % 60,
+                     dt % 60);
         }
-        flux_watcher_stop (ctx->notify_timer);
+
+        /*  Save current statusline message for future callbacks:
+         */
+        if ((msgcpy = strdup (msg))) {
+            free (ctx->status_msg);
+            ctx->status_msg = msgcpy;
+        }
     }
-    if (!ctx->last_event || !streq (event_name, ctx->last_event)) {
-        free (ctx->last_event);
-        ctx->last_event = strdup (event_name);
+
+    if (event) {
+        if (streq (event->name, "start")
+            || streq (event->name, "clean")) {
+            if (ctx->statusline) {
+                fprintf (stderr, "\n");
+                ctx->statusline = false;
+            }
+            flux_watcher_stop (ctx->notify_timer);
+        }
     }
 }
 
@@ -1077,7 +1111,7 @@ void attach_notify_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     struct attach_ctx *ctx = arg;
     ctx->statusline = true;
-    attach_notify (ctx, ctx->last_event, flux_reactor_time ());
+    attach_notify (ctx, NULL, flux_reactor_time ());
 }
 
 
@@ -1093,10 +1127,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
     const char *entry;
-    json_t *o = NULL;
-    double timestamp;
-    const char *name;
-    json_t *context;
+    struct attach_event *event = NULL;
+    flux_error_t error;
     int status;
 
     if (flux_job_event_watch_get (f, &entry) < 0) {
@@ -1110,26 +1142,27 @@ void attach_event_continuation (flux_future_t *f, void *arg)
         log_msg_exit ("flux_job_event_watch_get: %s",
                       future_strerror (f, errno));
     }
-    if (!(o = eventlog_entry_decode (entry)))
-        log_err_exit ("eventlog_entry_decode");
-    if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
-        log_err_exit ("eventlog_entry_parse");
+    if (!(event = attach_event_decode (entry, &error)))
+        log_err_exit ("%s", error.text);
 
     if (ctx->timestamp_zero == 0.)
-        ctx->timestamp_zero = timestamp;
+        ctx->timestamp_zero = event->timestamp;
 
-    if (streq (name, "exception")) {
+    if (streq (event->name, "exception")) {
         const char *type;
         int severity;
         const char *note;
 
-        if (json_unpack (context, "{s:s s:i s:s}",
+        if (json_unpack (event->context, "{s:s s:i s:s}",
                          "type", &type,
                          "severity", &severity,
                          "note", &note) < 0)
             log_err_exit ("error decoding exception context");
+
+        if (ctx->statusline)
+            fprintf (stderr, "\r\033[K");
         fprintf (stderr, "%.3fs: job.exception type=%s severity=%d %s\n",
-                         timestamp - ctx->timestamp_zero,
+                         event->timestamp - ctx->timestamp_zero,
                          type,
                          severity,
                          note);
@@ -1147,7 +1180,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
             ctx->pty_client = NULL;
         }
     }
-    else if (streq (name, "submit")) {
+    else if (streq (event->name, "submit")) {
         if (!(ctx->exec_eventlog_f = flux_job_event_watch (ctx->h,
                                                            ctx->id,
                                                            "guest.exec.eventlog",
@@ -1162,9 +1195,9 @@ void attach_event_continuation (flux_future_t *f, void *arg)
         ctx->eventlog_watch_count++;
     }
     else {
-        if (streq (name, "finish")) {
+        if (streq (event->name, "finish")) {
             flux_error_t error;
-            if (json_unpack (context, "{s:i}", "status", &status) < 0)
+            if (json_unpack (event->context, "{s:i}", "status", &status) < 0)
                 log_err_exit ("error decoding finish context");
             ctx->exit_code = flux_job_waitstatus_to_exitcode (status, &error);
             if (ctx->exit_code != 0)
@@ -1173,26 +1206,22 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     }
 
     if (optparse_hasopt (ctx->p, "show-events")
-        && !streq (name, "exception")) {
-        print_eventlog_entry (stderr,
-                              "job",
-                              timestamp - ctx->timestamp_zero,
-                              name,
-                              context);
+        && !streq (event->name, "exception")) {
+        print_eventlog_entry (ctx, stderr, "job", event);
     }
 
-    attach_notify (ctx, name, timestamp);
+    attach_notify (ctx, event, event->timestamp);
 
-    if (streq (name, ctx->wait_event)) {
+    if (streq (event->name, ctx->wait_event)) {
         flux_job_event_watch_cancel (f);
         goto done;
     }
 
-    json_decref (o);
+    attach_event_destroy (event);
     flux_future_reset (f);
     return;
 done:
-    json_decref (o);
+    attach_event_destroy (event);
     flux_future_destroy (f);
     ctx->eventlog_f = NULL;
     ctx->eventlog_watch_count--;
@@ -1340,9 +1369,9 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     flux_close (ctx.h);
     free (ctx.service);
     free (totalview_jobid);
-    free (ctx.last_event);
     free (ctx.queue);
     free (ctx.stdin_ranks);
+    free (ctx.status_msg);
 
     if (ctx.fatal_exception && ctx.exit_code == 0)
         ctx.exit_code = 1;

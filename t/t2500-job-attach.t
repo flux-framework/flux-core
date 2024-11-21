@@ -96,6 +96,19 @@ test_expect_success NO_CHAIN_LINT 'attach: --show-status notes stopped named que
 	flux config load </dev/null &&
 	flux queue status
 '
+test_expect_success NO_CHAIN_LINT 'attach: ignores non-fatal exceptions' '
+	flux queue stop &&
+	test_when_finished "flux queue start" &&
+	jobid=$(flux submit hostname) &&
+	$runpty -f asciicast -o status-exception.out \
+		flux job attach --show-status $jobid &
+	waitfile.lua -v -t 15 -p "waiting for resources" status-exception.out &&
+	flux job raise --severity=2 --type=test -m test $(flux job last) &&
+	flux queue start &&
+	wait &&
+	test_must_fail grep "canceling due to exception" status-exception.out &&
+	grep "job.exception" status-exception.out
+'
 test_expect_success 'attach: shows output from job' '
 	run_timeout 5 flux job attach $(cat jobid1) | grep foo
 '
@@ -109,7 +122,7 @@ test_expect_success 'attach: exit code reflects cancellation' '
 	! flux job attach $(cat jobid2)
 '
 test_expect_success 'attach: reports task exit code with nonzero exit' '
-	id=$(flux submit sh -c 'exit 42') &&
+	id=$(flux submit sh -c "exit 42") &&
 	test_must_fail flux job attach $id 2>exited.err &&
 	test_debug "cat exited.err" &&
 	grep "exited with exit code 42" exited.err
