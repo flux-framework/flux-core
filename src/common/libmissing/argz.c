@@ -22,7 +22,9 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-
+#ifndef HAVE_MEMPCPY
+#include "mempcpy.h"
+#endif
 
 
 /* Add BUF, of length BUF_LEN to the argz vector in ARGZ & ARGZ_LEN.  */

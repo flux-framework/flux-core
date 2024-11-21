@@ -234,6 +234,7 @@ AC_REPLACE_FUNCS( \
   envz_add \
   strerrorname_np \
   pipe2 \
+  mempcpy \
 )
 X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(rt, clock_gettime)

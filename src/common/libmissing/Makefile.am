@@ -51,4 +51,5 @@ EXTRA_libmissing_la_SOURCES = \
 	macros.h \
 	strerrorname_np.h \
 	json_object_update_recursive.h \
-	pipe2.h
+	pipe2.h \
+	mempcpy.h
