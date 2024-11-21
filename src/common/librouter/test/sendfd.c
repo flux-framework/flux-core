@@ -15,6 +15,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#ifndef HAVE_PIPE2
+#include "src/common/libmissing/pipe2.h"
+#endif
+
 
 #include <flux/core.h>
 
