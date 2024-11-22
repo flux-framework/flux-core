@@ -45,7 +45,7 @@ int main (int argc, char *argv[])
     flux_kvs_txn_t *txn1 = NULL;
     flux_kvs_txn_t *txn2 = NULL;
 
-    log_init (basename (argv[0]));
+    log_init (argv[0]);
 
     if (argc != 2)
         usage ();

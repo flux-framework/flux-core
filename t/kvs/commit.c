@@ -130,7 +130,7 @@ int main (int argc, char *argv[])
     tstat_t ts;
     struct timespec t0;
 
-    log_init (basename (argv[0]));
+    log_init (argv[0]);
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
