@@ -25,6 +25,10 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#ifndef EBADE
+#define EBADE EINVAL
+#endif
+
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libccan/ccan/list/list.h"
 #include "src/common/libkvs/treeobj.h"
