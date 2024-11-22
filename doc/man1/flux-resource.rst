@@ -106,6 +106,15 @@ all
   hostlist form. It is not an error to specify ranks, nodes, or hosts which
   do not exist.
 
+.. option:: --skip-empty
+
+  Skip lines with empty resource sets in output. This is the default when
+  `-i, --include` is used.
+
+.. options:: --no-skip-empty
+
+  Do not skip empty resource sets in output, even with `-i, --include`.
+
 .. option:: -o, --format=FORMAT
 
   Customize the output format (See the `OUTPUT FORMAT`_ section below).
