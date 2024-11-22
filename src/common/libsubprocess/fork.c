@@ -14,6 +14,7 @@
 
 #include <sys/wait.h>
 #include <unistd.h>
+#include <signal.h>
 #include <errno.h>
 
 #include <flux/core.h>
@@ -24,6 +25,8 @@
 
 #include "subprocess_private.h"
 #include "command_private.h"
+
+extern char **environ;
 
 static int sigmask_unblock_all (void)
 {

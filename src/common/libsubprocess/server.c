@@ -31,6 +31,8 @@
 #include "client.h"
 #include "util.h"
 
+extern char **environ;
+
 /* Keys used to store subprocess server, exec request
  * (i.e. rexec.exec), and 'subprocesses' zlistx handle in the
  * subprocess object.

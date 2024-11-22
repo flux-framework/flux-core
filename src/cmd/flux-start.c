@@ -48,6 +48,8 @@
 
 #define DEFAULT_EXIT_TIMEOUT 20.0
 
+extern char **environ;
+
 static struct {
     struct termios saved_termios;
     double exit_timeout;
