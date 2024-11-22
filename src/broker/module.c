@@ -106,7 +106,11 @@ static int setup_module_profiling (module_t *p)
         name_ptr = local_name;
     }
     // Set the name of each thread to its module name
+#if HAVE_PTHREAD_SETNAME_NP_WITH_TID
     (void) pthread_setname_np (pthread_self (), name_ptr);
+#else // e.g. macos
+    (void) pthread_setname_np (name_ptr);
+#endif
     return (0);
 }
 

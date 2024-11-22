@@ -246,6 +246,17 @@ X_AC_MALLOC
 AC_CHECK_LIB(m, floor)
 AC_SEARCH_LIBS(epoll, libepoll-shim)
 
+AC_MSG_CHECKING([for pthread_setname_np with tid parameter])
+AC_COMPILE_IFELSE(
+  [AC_LANG_PROGRAM(
+    [#include <pthread.h>],
+    [pthread_setname_np(pthread_self(), "example")])],
+  [AC_MSG_RESULT(yes)
+    AC_DEFINE(HAVE_PTHREAD_SETNAME_NP_WITH_TID, 1,
+      [Have pthread_setname_np() with tid])],
+  [AC_MSG_RESULT(no)]
+)
+
 AC_ARG_ENABLE([docs],
 	      AS_HELP_STRING([--disable-docs], [disable building docs]))
 
