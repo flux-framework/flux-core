@@ -134,7 +134,7 @@ void print_iso_timestamp (struct dmesg_ctx *ctx, struct stdlog_header *hdr)
     printf ("%s%s.%.6lu%s%s ",
             dmesg_color (ctx, DMESG_COLOR_TIME),
             buf,
-            tv.tv_usec,
+            (unsigned long)tv.tv_usec,
             tz,
             dmesg_color_reset (ctx));
 }
