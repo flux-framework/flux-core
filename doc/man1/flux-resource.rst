@@ -102,8 +102,9 @@ all
 .. option:: -i, --include=TARGETS
 
   Filter results to only include resources matching *TARGETS*, which may be
-  specified either as an idset of broker ranks or list of hosts in hostlist
-  form. It is not an error to specify ranks or hosts which do not exist.
+  specified either as an idset of broker ranks or list of hosts or nodes in
+  hostlist form. It is not an error to specify ranks, nodes, or hosts which
+  do not exist.
 
 .. option:: -o, --format=FORMAT
 
@@ -138,8 +139,9 @@ example::
 .. option:: -i, --include=TARGETS
 
   Filter results to only include resources matching *TARGETS*, which may be
-  specified either as an idset of broker ranks or list of hosts in hostlist
-  form. It is not an error to specify ranks or hosts which do not exist.
+  specified either as an idset of broker ranks or list of hosts or nodes in
+  hostlist form. It is not an error to specify ranks, nodes, or hosts which
+  do not exist.
 
 R
 -
@@ -163,8 +165,9 @@ Emit an RFC 20 Resource Set based on the scheduler view of resources.
 .. option:: -i, --include=TARGETS
 
   Filter results to only include resources matching *TARGETS*, which may be
-  specified either as an idset of broker ranks or list of hosts in hostlist
-  form. It is not an error to specify ranks or hosts which do not exist.
+  specified either as an idset of broker ranks or list of hosts or nodes in
+  hostlist form. It is not an error to specify ranks, nodes, or hosts which
+  do not exist.
 
 status
 ------
@@ -230,10 +233,10 @@ resources that share a state and online/offline state.
 
 .. option:: -i, --include=TARGETS
 
-  Filter the results to only include resources matching *TARGETS*, which
-  may be specified either as an idset of broker ranks or list of hosts in
-  hostlist form. It is not an error to specify ranks or hosts which do not
-  exist.
+  Filter results to only include resources matching *TARGETS*, which may be
+  specified either as an idset of broker ranks or list of hosts or nodes in
+  hostlist form. It is not an error to specify ranks, nodes, or hosts which
+  do not exist.
 
 .. option:: -o, --format=FORMAT
 
@@ -275,10 +278,10 @@ following options are available:
 
 .. option:: -i, --include=TARGETS
 
-  Filter the results to only include resources matching *TARGETS*, which
-  may be specified either as an idset of broker ranks or list of hosts in
-  hostlist form. It is not an error to specify ranks or hosts which do not
-  exist.
+  Filter results to only include resources matching *TARGETS*, which may be
+  specified either as an idset of broker ranks or list of hosts or nodes in
+  hostlist form. It is not an error to specify ranks, nodes, or hosts which
+  do not exist.
 
 If specified with *targets* (IDSET or HOSTLIST), drain the specified nodes.
 Any remaining free arguments are recorded as a reason for the drain event.
