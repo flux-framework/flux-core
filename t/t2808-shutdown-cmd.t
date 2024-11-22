@@ -81,7 +81,7 @@ test_expect_success 'cancel that job' '
 
 test_expect_success 'run instance with no initial program and wait for it to start' '
 	flux submit --wait-event=start \
-		flux start -o,-Sbroker.rc2_none >jobid3 &&
+		flux start -Sbroker.rc2_none >jobid3 &&
 	run_timeout 30 bash -c "while ! flux uri $(cat jobid3) >uri3; do \
 		sleep 0.1; \
 	done"

@@ -42,7 +42,7 @@ test_expect_success 'flux-job last lists inactive jobs after instance restart' '
 	flux job last "[:]" >lastdump.exp &&
 	flux queue idle &&
 	flux dump dump.tgz &&
-	flux start -o,-Scontent.restore=dump.tgz \
+	flux start -Scontent.restore=dump.tgz \
 		flux job last "[:]" >lastdump.out &&
 	test_cmp lastdump.exp lastdump.out
 '

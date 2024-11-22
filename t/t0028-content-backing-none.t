@@ -85,7 +85,7 @@ test_expect_success 'unload kvs' '
 '
 
 test_expect_success 'content.backing-module input of none works' '
-        flux start -o,-Scontent.backing-module=none /bin/true
+        flux start -Scontent.backing-module=none /bin/true
 '
 
 test_expect_success 'removedcontent module' '

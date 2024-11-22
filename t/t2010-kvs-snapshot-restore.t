@@ -16,7 +16,7 @@ CHANGECHECKPOINT=${FLUX_SOURCE_DIR}/t/kvs/change-checkpoint.py
 #
 
 test_expect_success 'run instance with statedir set (sqlite)' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 		   flux kvs put --sequence testkey=42 \
 		   > start_sequence_sqlite.out
 '
@@ -27,7 +27,7 @@ test_expect_success 'content.sqlite file exists after instance exited' '
 '
 
 test_expect_success 're-run instance with statedir set (sqlite)' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 		   flux kvs get testkey >getsqlite.out
 '
 
@@ -41,7 +41,7 @@ test_expect_success 'content from previous instance survived (sqlite)' '
 # increase over several restarts
 
 test_expect_success 're-run instance, get sequence number 1 (sqlite)' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 		   flux kvs version > restart_version_sqlite1.out
 '
 
@@ -52,7 +52,7 @@ test_expect_success 'restart sequence number increasing 1 (sqlite)' '
 '
 
 test_expect_success 're-run instance, get sequence number 2 (sqlite)' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 		   flux kvs version > restart_version_sqlite2.out
 '
 
@@ -63,7 +63,7 @@ test_expect_success 'restart sequence number increasing 2 (sqlite)' '
 '
 
 test_expect_success 're-run instance, verify checkpoint date saved (sqlite)' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 		   flux dmesg >dmesgsqlite1.out
 '
 
@@ -74,7 +74,7 @@ test_expect_success 'verify date in flux logs (sqlite)' '
 '
 
 test_expect_success 're-run instance, get rootref (sqlite)' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 		   flux kvs getroot -b > getrootsqlite.out
 '
 
@@ -84,7 +84,7 @@ test_expect_success 'write rootref to checkpoint path, emulating checkpoint vers
 '
 
 test_expect_success 're-run instance, verify checkpoint correctly loaded (sqlite)' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 		   flux dmesg >dmesgsqlite2.out
 '
 
@@ -114,9 +114,9 @@ EOF
 '
 
 test_expect_success 'run instance with statedir set (files)' '
-	flux start -o,--setattr=statedir=$(pwd) \
-		   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
-		   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+	flux start --setattr=statedir=$(pwd) \
+		   --setattr=broker.rc1_path=$(pwd)/rc1-content-files \
+		   --setattr=broker.rc3_path=$(pwd)/rc3-content-files \
 		   flux kvs put --sequence testkey=43 > start_sequence_files.out
 '
 
@@ -126,9 +126,9 @@ test_expect_success 'content.files dir and kvs-primary exist after instance exit
 '
 
 test_expect_success 're-run instance with statedir set (files)' '
-	flux start -o,--setattr=statedir=$(pwd) \
-		   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
-		   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+	flux start --setattr=statedir=$(pwd) \
+		   --setattr=broker.rc1_path=$(pwd)/rc1-content-files \
+		   --setattr=broker.rc3_path=$(pwd)/rc3-content-files \
 		   flux kvs get testkey >getfiles.out
 '
 
@@ -142,7 +142,7 @@ test_expect_success 'content from previous instance survived (files)' '
 # increase over several restarts
 
 test_expect_success 're-run instance, get sequence number 1 (files)' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 		   flux kvs version > restart_version_files1.out
 '
 
@@ -153,7 +153,7 @@ test_expect_success 'restart sequence number increasing 1 (files)' '
 '
 
 test_expect_success 're-run instance, get sequence number 2 (files)' '
-	flux start -o,--setattr=statedir=$(pwd) \
+	flux start --setattr=statedir=$(pwd) \
 		   flux kvs version > restart_version_files2.out
 '
 
@@ -164,9 +164,9 @@ test_expect_success 'restart sequence number increasing 2 (files)' '
 '
 
 test_expect_success 're-run instance, verify checkpoint date saved (files)' '
-	flux start -o,--setattr=statedir=$(pwd) \
-		   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
-		   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+	flux start --setattr=statedir=$(pwd) \
+		   --setattr=broker.rc1_path=$(pwd)/rc1-content-files \
+		   --setattr=broker.rc3_path=$(pwd)/rc3-content-files \
 		   flux dmesg >dmesgfiles.out
 '
 

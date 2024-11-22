@@ -122,6 +122,15 @@ as long as the Flux instance is running.  It covers the following use cases:
 
 OPTIONS
 =======
+.. option:: -S, --setattr=ATTR=VAL
+
+   Set broker attribute *ATTR* to *VAL*. This is equivalent to
+   :option:`-o,-SATTR=VAL`.
+
+.. option:: -c, --config-path=PATH
+
+   Set the *PATH* for broker configuration. See :man1:`flux-broker` for
+   option details. This is equivalent to :option:`-o,-cPATH`.
 
 .. option:: -o, --broker-opts=OPTIONS
 
@@ -282,7 +291,7 @@ If :program:`flux start` appears to hang, the following tips may be helpful:
    See :man7:`flux-environment`.
 
 #. More logging can be enabled by adding the
-   :option:`flux start -o,-Slog-stderr-level=7` option, which instructs the
+   :option:`flux start -Slog-stderr-level=7` option, which instructs the
    broker to forward its internal log buffer to stderr.  See
    :man7:`flux-broker-attributes`.
 

@@ -23,7 +23,7 @@ f = [ "fubar", "barfu" ]
 a = true
 EOF
 
-test_under_flux 1 minimal -o,--config-path=$(pwd)/config
+test_under_flux 1 minimal --config-path=$(pwd)/config
 
 runas_guest() {
         local userid=$(($(id -u)+1))

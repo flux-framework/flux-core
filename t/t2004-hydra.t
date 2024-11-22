@@ -7,7 +7,7 @@ test_description='Test that MPICH Hydra can launch Flux'
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
-ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
+ARGS="-Sbroker.rc1_path= -Sbroker.rc3_path="
 
 if ! which mpiexec.hydra 2>/dev/null; then
     skip_all='skipping hydra-launching-flux tests, mpiexec.hydra unavailable'

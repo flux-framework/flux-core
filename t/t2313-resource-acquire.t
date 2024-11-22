@@ -10,7 +10,7 @@ exclude = "0"
 EOT
 
 SIZE=4
-test_under_flux $SIZE full -o,--config-path=$(pwd)/exclude.toml
+test_under_flux $SIZE full --config-path=$(pwd)/exclude.toml
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 RPC_STREAM=${FLUX_BUILD_DIR}/t/request/rpc_stream

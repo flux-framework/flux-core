@@ -130,14 +130,14 @@ test_expect_success 'generate a script to submit a testexec+alloc-bypass job' '
 '
 test_expect_success 'run test job in a persistent instance' '
 	FLUX_DISABLE_JOB_CLEANUP=t flux start -s1 \
-	    -o,--config-path=config.toml \
-	    -o,-Sstatedir=$(pwd) \
+	    --config-path=config.toml \
+	    -Sstatedir=$(pwd) \
 	    ./prog.sh
 '
 test_expect_success 'restart that instance and get the resource alloc count' '
 	FLUX_DISABLE_JOB_CLEANUP=t flux start -s1 \
-	    -o,--config-path=config.toml \
-	    -o,-Sstatedir=$(pwd) \
+	    --config-path=config.toml \
+	    -Sstatedir=$(pwd) \
 	    sh -c "flux jobs -no {state} \$(flux job last); \
 	        FLUX_RESOURCE_LIST_RPC=sched.resource-status \
 		flux resource list -s allocated -no {nnodes}" >restart.out
@@ -151,8 +151,8 @@ test_expect_success 'the job was running and resources were not allocated' '
 '
 test_expect_success 'restart that instance and cancel the job' '
 	flux start -s1 \
-	    -o,--config-path=config.toml \
-	    -o,-Sstatedir=$(pwd) \
+	    --config-path=config.toml \
+	    -Sstatedir=$(pwd) \
 	    sh -c "flux cancel \$(flux job last); \
 	    flux job wait-event -vvv \$(flux job last) clean"
 '

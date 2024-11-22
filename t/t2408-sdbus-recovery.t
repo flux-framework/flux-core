@@ -24,7 +24,7 @@ cat >config/config.toml <<EOF
 sdbus-debug = true
 EOF
 
-test_under_flux 1 minimal -o,--config-path=$(pwd)/config
+test_under_flux 1 minimal --config-path=$(pwd)/config
 
 flux setattr log-stderr-level 1
 

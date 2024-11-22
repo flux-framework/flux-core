@@ -252,7 +252,7 @@ test_expect_success 'new instance with bad config fails to start' '
 	[job-manager]
 	inactive-num-limit = -42
 	EOT
-	test_must_fail flux start -o,--config-path=$(pwd)/config \
+	test_must_fail flux start --config-path=$(pwd)/config \
 		/bin/true 2>badnum2.err &&
 	grep "must be >= 0" badnum2.err
 '

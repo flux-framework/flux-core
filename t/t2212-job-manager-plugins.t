@@ -8,7 +8,7 @@ test_description='Test job manager jobtap plugin interface'
 
 mkdir -p config
 
-test_under_flux 4 job -o,--config-path=$(pwd)/config
+test_under_flux 4 job --config-path=$(pwd)/config
 
 flux setattr log-stderr-level 1
 
@@ -85,7 +85,7 @@ test_expect_success 'job-manager: plugins can be loaded by configuration' '
 	  { load = "${PLUGINPATH}/args.so" },
 	]
 	EOF
-	flux start -o,-c $(pwd)/testconf flux jobtap list > confplugins.out &&
+	flux start -c $(pwd)/testconf flux jobtap list > confplugins.out &&
 	test_debug "cat confplugins.out" &&
 	grep args confplugins.out &&
 	grep test confplugins.out
@@ -110,7 +110,7 @@ test_expect_success 'job-manager: bad plugins config is detected' '
 	EOF
 	test_must_fail \
 	    flux bulksubmit -n1 --watch --log=badconf.{}.log \
-	        flux start -o,-c$(pwd)/badconf/{} /bin/true ::: a b c d &&
+	        flux start -c$(pwd)/badconf/{} /bin/true ::: a b c d &&
 	test_debug "echo a:; cat badconf.a.log" &&
 	grep "config must be an array" badconf.a.log &&
 	test_debug "echo b:; cat badconf.b.log" &&

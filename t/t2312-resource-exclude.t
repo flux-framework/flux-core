@@ -10,7 +10,7 @@ exclude = "0"
 EOT
 
 SIZE=4
-test_under_flux $SIZE full -o,--config-path=$(pwd)/exclude.toml
+test_under_flux $SIZE full --config-path=$(pwd)/exclude.toml
 
 # Usage: waitup N
 #   where N is a count of online ranks
@@ -56,7 +56,7 @@ test_expect_success 'config with bad exclude idset fails' '
 	[resource]
 	exclude = "xxzz"
 	EOT
-	test_must_fail flux start -o,--config-path=resource.toml true
+	test_must_fail flux start --config-path=resource.toml true
 '
 
 test_expect_success 'config with out of range exclude idset fails' '
@@ -64,7 +64,7 @@ test_expect_success 'config with out of range exclude idset fails' '
 	[resource]
 	exclude = "1"
 	EOT
-	test_must_fail flux start -o,--config-path=resource.toml true
+	test_must_fail flux start --config-path=resource.toml true
 '
 
 # See flux-framework/flux-core#5337
@@ -73,7 +73,7 @@ test_expect_success 'test instance can exclude ranks' '
 	[resource]
 	exclude = "1"
 	EOT
-	test $(flux start -s2 -o,--config-path=exclude.toml \
+	test $(flux start -s2 --config-path=exclude.toml \
 	    flux resource status -s exclude -no {nnodes}) -eq 1
 '
 test_expect_success 'test instance fails to exclude hostnames' '
@@ -81,7 +81,7 @@ test_expect_success 'test instance fails to exclude hostnames' '
 	[resource]
 	exclude = "$(hostname -s)"
 	EOT
-	test_must_fail flux start -s2 -o,--config-path=exclude2.toml \
+	test_must_fail flux start -s2 --config-path=exclude2.toml \
 	    /bin/true 2>exclude2.err &&
 	grep "R is unavailable" exclude2.err
 '
@@ -94,7 +94,7 @@ test_expect_success 'instance with configured R can exclude hostnames' '
 	hosts = "$(hostname -s)"
 	cores = "0"
 	EOT
-	test $(flux start -s1 -o,--config-path=exclude3.toml \
+	test $(flux start -s1 --config-path=exclude3.toml \
 	    flux resource status -s exclude -no {nnodes}) -eq 1
 '
 test_expect_success 'incorrect excluded hostnames raises correct error' '
@@ -106,7 +106,7 @@ test_expect_success 'incorrect excluded hostnames raises correct error' '
 	hosts = "$(hostname -s)"
 	cores = "0"
 	EOT
-	test_must_fail flux start -o,--config-path=exclude4.toml true \
+	test_must_fail flux start --config-path=exclude4.toml true \
 		2>exclude4.err &&
 	test_debug "cat exclude4.err" &&
 	grep "invalid hosts: badhost" exclude4.err

@@ -51,7 +51,7 @@ test_expect_success \
 	run_timeout 300 \
 	flux start -s ${VALGRIND_NBROKERS} \
 		--test-exit-timeout=120 \
-		-o,--config-path=valgrind.toml \
+		--config-path=valgrind.toml \
 		--wrap=libtool,e,${VALGRIND} \
 		--wrap=--tool=memcheck \
 		--wrap=--leak-check=full \

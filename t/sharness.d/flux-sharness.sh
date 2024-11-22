@@ -118,14 +118,14 @@ make_bootstrap_config() {
 	    path = "$workdir/R"
 	    noverify = true
 	EOT2
-    echo "--test-hosts=$fakehosts -o,-c$workdir/conf.d"
+    echo "--test-hosts=$fakehosts -c$workdir/conf.d"
     echo "--test-exit-mode=${TEST_UNDER_FLUX_EXIT_MODE:-leader}"
     echo "--test-exit-timeout=${TEST_UNDER_FLUX_EXIT_TIMEOUT:-0}"
-    echo "-o,-Sbroker.quorum=${TEST_UNDER_FLUX_QUORUM:-$size}"
+    echo "-Sbroker.quorum=${TEST_UNDER_FLUX_QUORUM:-$size}"
     echo "--test-start-mode=${TEST_UNDER_FLUX_START_MODE:-all}"
-    echo "-o,-Stbon.topo=${TEST_UNDER_FLUX_TOPO:-custom}"
-    echo "-o,-Stbon.zmqdebug=1"
-    echo "-o,-Sstatedir=$workdir/state"
+    echo "-Stbon.topo=${TEST_UNDER_FLUX_TOPO:-custom}"
+    echo "-Stbon.zmqdebug=1"
+    echo "-Sstatedir=$workdir/state"
 }
 
 #
@@ -263,7 +263,7 @@ test_under_flux() {
         # Set log_path for ASan o/w errors from broker may be lost
         ASAN_OPTIONS=${ASAN_OPTIONS}:log_path=${TEST_NAME}.asan
     fi
-    logopts="-o -Slog-filename=${log_file},-Slog-forward-level=7"
+    logopts="-o -Slog-filename=${log_file} -Slog-forward-level=7"
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
     TEST_UNDER_FLUX_PERSONALITY="${personality:-default}" \

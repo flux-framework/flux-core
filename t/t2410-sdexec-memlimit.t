@@ -57,7 +57,7 @@ if ! $(pwd)/getcg.sh cgroup.controllers | grep memory; then
 	test_done
 fi
 
-test_under_flux 1 full -o,--config-path=$(pwd)/config
+test_under_flux 1 full --config-path=$(pwd)/config
 
 flux setattr log-stderr-level 7
 

@@ -12,7 +12,7 @@ plugins = [
 command = [ "touch", "t5892-epilog-flag" ]
 EOF
 
-flux start -o,--config-path=t5892.toml \
+flux start --config-path=t5892.toml \
 	flux submit sleep inf
 
 rc=0

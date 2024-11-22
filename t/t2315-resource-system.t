@@ -24,7 +24,7 @@ test_expect_success 'create config file pointing to test R' '
 
 test_expect_success 'start instance with config file and dump R' '
 	flux start -s2 \
-		-o,--config-path=$(pwd),-Slog-filename=logfile \
+		--config-path=$(pwd) -Slog-filename=logfile \
 		flux kvs get resource.R >R.out
 '
 
@@ -47,7 +47,7 @@ test_expect_success 'invalid R causes instance to fail with error' '
 	path = "$(pwd)/bad/R"
 	EOF
 	test_must_fail flux start -s2 \
-		-o,--config-path=$(pwd)/bad,-Slog-filename=bad/logfile \
+		--config-path=$(pwd)/bad -Slog-filename=bad/logfile \
 		flux kvs get resource.R >bad/R.out &&
 	grep "error parsing R: invalid version=42" bad/logfile
 '
@@ -60,8 +60,8 @@ test_expect_success 'missing scheduling key causes instance to fail with error' 
 	scheduling = "missing"
 	EOF
 	test_must_fail flux start -s2 \
-	       -o,--config-path=$(pwd)/sched.enoent \
-	       -o,,-Slog-filename=sched.enoent/logfile \
+	       --config-path=$(pwd)/sched.enoent \
+	       -Slog-filename=sched.enoent/logfile \
 	       flux kvs get resource.R >sched.enoent/R.out &&
 	grep -i "resource.scheduling:.*no such" sched.enoent/logfile
 '
@@ -78,8 +78,8 @@ test_expect_success 'resource.scheduling key amends resource.path' '
 	scheduling = "$(pwd)/sched.good/sched.json"
 	EOF
 	flux start -s2 \
-	       -o,--config-path=$(pwd)/sched.good \
-	       -o,,-Slog-filename=sched.good/logfile \
+	       --config-path=$(pwd)/sched.good \
+	       -Slog-filename=sched.good/logfile \
 	       flux kvs get resource.R >sched.good/R.out &&
 	jq -S < sched.good/R.out &&
 	jq -e < sched.good/R.out ".scheduling == {\"test\": 1}"
@@ -97,8 +97,8 @@ test_expect_success 'invalid scheduling key causes instance to fail with error' 
 	scheduling = "$(pwd)/sched.bad/sched.json"
 	EOF
 	test_must_fail flux start -s2 \
-	       -o,--config-path=$(pwd)/sched.bad \
-	       -o,,-Slog-filename=sched.bad/logfile \
+	       --config-path=$(pwd)/sched.bad \
+	       -Slog-filename=sched.bad/logfile \
 	       flux kvs get resource.R >sched.bad/R.out &&
 	grep "error loading resource.scheduling" sched.bad/logfile
 '
@@ -111,7 +111,7 @@ test_expect_success 'missing ranks in R are drained' '
 	path = "$(pwd)/missing/R"
 	EOF
 	flux start -s3 \
-		-o,--config-path=$(pwd)/missing,-Slog-filename=missing/logfile \
+		--config-path=$(pwd)/missing -Slog-filename=missing/logfile \
 		flux kvs get resource.R >missing/R.out &&
 	grep "draining: rank 2 not found in expected ranks" missing/logfile
 '
@@ -126,7 +126,7 @@ test_expect_success 'ranks can be excluded by configuration' '
 	exclude = "0"
 	EOF
 	flux start -s 2 \
-		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
 		flux resource list -s up -no {nnodes} > ${name}/nnodes &&
 	test "$(cat ${name}/nnodes)" = "1"
 '
@@ -141,7 +141,7 @@ test_expect_success 'invalid exclude ranks cause instance failure' '
 	exclude = "0-4"
 	EOF
 	test_must_fail flux start -s 2 \
-		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
 		flux resource list -s up -no {nnodes} > ${name}/nnodes &&
     grep "out of range" ${name}/logfile
 '
@@ -156,7 +156,7 @@ test_expect_success 'invalid exclude hosts cause instance failure' '
 	exclude = "nosuchhost"
 	EOF
 	test_must_fail flux start -s 2 \
-		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
 		flux resource list -s up -no {nnodes} > ${name}/nnodes &&
     grep "invalid hosts: nosuchhost" ${name}/logfile
 '
@@ -171,7 +171,7 @@ test_expect_success 'gpu resources in configured R are not verified' '
 	path = "$(pwd)/${name}/R"
 	EOF
 	flux start -s 1\
-		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
 		flux resource list -s up -no {rlist} > ${name}/rlist &&
 	test_debug "cat ${name}/rlist" &&
 	grep "gpu\[42-43\]" ${name}/rlist
@@ -187,7 +187,7 @@ test_expect_success MULTICORE 'resource norestrict option works' '
 	norestrict = true
 	EOF
 	hwloc-bind core:0 flux start -s1 \
-		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
 		flux run -N1 --exclusive \
 		  sh -c "hwloc-bind --get | hwloc-calc --number-of core | tail -n1" \
 		    >${name}/ncores &&
@@ -215,7 +215,7 @@ test_expect_success 'resources can be configured in TOML' '
 	properties = ["batch"]
 	EOF
 	flux start -s 1 \
-		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
 		flux resource list -s all -n \
 		   -o "{state} {properties} {nnodes} {ncores} {ngpus} {nodelist}" \
 		   > ${name}/output &&
@@ -235,7 +235,7 @@ test_expect_success 'bad resource.config causes instance failure' '
 	config = []
 	EOF
 	test_must_fail flux start -s 1 \
-		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
 		flux resource list -s up > ${name}/output 2>&1 &&
 	test_debug "cat ${name}/output" &&
 	grep "no hosts configured" ${name}/output
@@ -256,7 +256,7 @@ test_expect_success 'resource.scheduling key amends [resource.config]' '
 	cores = "0-3"
 	EOF
 	flux start -s 1 \
-		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
 		flux kvs get resource.R > ${name}/R.json &&
 	jq -S < ${name}/R.json &&
 	jq -e < ${name}/R.json ".scheduling.foo == true"

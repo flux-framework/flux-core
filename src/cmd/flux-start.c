@@ -99,6 +99,11 @@ const char *default_statedir = "/var/lib/flux";
 
 const char *usage_msg = "[OPTIONS] command ...";
 static struct optparse_option opts[] = {
+    { .name = "setattr",    .key = 'S', .has_arg = 1, .arginfo = "ATTR=VAL",
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
+      .usage = "Set broker attribute", },
+    { .name = "config-path",.key = 'c', .has_arg = 1, .arginfo = "PATH",
+      .usage = "Set broker config from PATH (default: none)", },
     { .name = "recovery",   .key = 'r', .has_arg = 2, .arginfo = "[TARGET]",
       .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
       .usage = "Start instance in recovery mode with dump file or statedir", },
@@ -309,7 +314,9 @@ char *find_broker (const char *searchpath)
     return dir ? xstrdup (path) : NULL;
 }
 
-void exit_timeout (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+void exit_timeout (flux_reactor_t *r,
+                   flux_watcher_t *w,
+                   int revents, void *arg)
 {
     struct client *cli;
 
@@ -447,28 +454,30 @@ void channel_cb (flux_subprocess_t *p, const char *stream)
     }
 }
 
+void add_argzf (char **argz, size_t *argz_len, const char *fmt, ...)
+{
+    va_list ap;
+    char *arg = NULL;
+
+    va_start (ap, fmt);
+    if (vasprintf (&arg, fmt, ap) < 0)
+        log_err_exit ("vasprintf");
+    va_end (ap);
+    if (argz_add (argz, argz_len, arg) != 0)
+        log_err_exit ("argz_add");
+    free (arg);
+}
+
 void add_args_list (char **argz,
                     size_t *argz_len,
                     optparse_t *opt,
-                    const char *name)
+                    const char *name,
+                    const char *prepend)
 {
     const char *arg;
     optparse_getopt_iterator_reset (opt, name);
     while ((arg = optparse_getopt_next (opt, name)))
-        if (argz_add  (argz, argz_len, arg) != 0)
-            log_err_exit ("argz_add");
-}
-
-void add_argzf (char **argz, size_t *argz_len, const char *fmt, ...)
-{
-    va_list ap;
-    char arg[1024];
-
-    va_start (ap, fmt);
-    (void)vsnprintf (arg, sizeof (arg), fmt, ap);
-    va_end (ap);
-    if (argz_add (argz, argz_len, arg) != 0)
-        log_err_exit ("argz_add");
+        add_argzf (argz, argz_len, "%s%s", prepend, arg);
 }
 
 char *create_rundir (void)
@@ -602,6 +611,39 @@ void process_recovery_option (char **argz,
         add_argzf (argz, argz_len, "-Scontent.restore=%s", optarg);
 }
 
+int add_args_common (char **argz,
+                     size_t *argz_len,
+                     const char *broker_path)
+{
+    bool system_recovery = false;
+    const char *config_path = NULL;
+
+    add_args_list (argz, argz_len, ctx.opts, "wrap", "");
+    if (argz_add (argz, argz_len, broker_path) != 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    add_args_list (argz, argz_len, ctx.opts, "setattr", "-S");
+    add_args_list (argz, argz_len, ctx.opts, "broker-opts", "");
+
+    if (optparse_hasopt (ctx.opts, "recovery"))
+        process_recovery_option (argz, argz_len, &system_recovery);
+
+    if (system_recovery || optparse_hasopt (ctx.opts, "sysconfig"))
+        config_path = default_config_path;
+    if (optparse_hasopt (ctx.opts, "config-path")) {
+        const char *conf = optparse_get_str (ctx.opts, "config-path", NULL);
+        if (config_path)
+            log_msg ("Warning: overriding recovery/--sysconfig path with %s",
+                     conf);
+        config_path = conf;
+    }
+    if (config_path)
+        add_argzf (argz, argz_len, "-c%s", config_path);
+
+    return 0;
+}
+
 /* Directly exec() a single flux broker.  It is assumed that we
  * are running in an environment with an external PMI service, and the
  * broker will figure out how to bootstrap without any further aid from
@@ -613,18 +655,10 @@ int exec_broker (const char *cmd_argz,
 {
     char *argz = NULL;
     size_t argz_len = 0;
-    bool system_recovery = false;
 
-    add_args_list (&argz, &argz_len, ctx.opts, "wrap");
-    if (argz_add (&argz, &argz_len, broker_path) != 0)
-        goto nomem;
-    add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
+    if (add_args_common (&argz, &argz_len, broker_path) < 0)
+        goto error;
 
-    if (optparse_hasopt (ctx.opts, "recovery"))
-        process_recovery_option (&argz, &argz_len, &system_recovery);
-
-    if (system_recovery || optparse_hasopt (ctx.opts, "sysconfig"))
-        add_argzf (&argz, &argz_len, "-c%s", default_config_path);
     if (cmd_argz) {
         if (argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len) != 0)
             goto nomem;
@@ -660,23 +694,18 @@ struct client *client_create (const char *broker_path,
 {
     struct client *cli = xzmalloc (sizeof (*cli));
     char *arg;
-    char * argz = NULL;
+    char *argz = NULL;
     size_t argz_len = 0;
-    bool system_recovery = false;
 
     cli->rank = rank;
-    add_args_list (&argz, &argz_len, ctx.opts, "wrap");
-    argz_add (&argz, &argz_len, broker_path);
-    char *dir_arg = xasprintf ("--setattr=rundir=%s", rundir);
-    argz_add (&argz, &argz_len, dir_arg);
-    free (dir_arg);
-    if (optparse_hasopt (ctx.opts, "recovery") && rank == 0)
-        process_recovery_option (&argz, &argz_len, &system_recovery);
-    if (system_recovery || optparse_hasopt (ctx.opts, "sysconfig"))
-        add_argzf (&argz, &argz_len, "-c%s", default_config_path);
-    add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
-    if (rank == 0 && cmd_argz)
-        argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len); /* must be last arg */
+
+    if (add_args_common (&argz, &argz_len, broker_path) < 0)
+        goto fail;
+
+    add_argzf (&argz, &argz_len, "--setattr=rundir=%s", rundir);
+
+    if (rank == 0 && cmd_argz) /* must be last arg */
+        argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len);
 
     if (!(cli->cmd = flux_cmd_create (0, NULL, environ)))
         goto fail;
@@ -705,8 +734,8 @@ struct client *client_create (const char *broker_path,
             log_err_exit ("error setting up environment for rank %d", rank);
     return cli;
 fail:
-    free (argz);
-    client_destroy (cli);
+    ERRNO_SAFE_WRAP (free, argz);
+    ERRNO_SAFE_WRAP (client_destroy, cli);
     return NULL;
 }
 
@@ -739,7 +768,9 @@ void client_dumpargs (struct client *cli)
 void pmi_server_initialize (int flags)
 {
     struct taskmap *map;
-    const char *mode = optparse_get_str (ctx.opts, "test-pmi-clique", "single");
+    const char *mode = optparse_get_str (ctx.opts,
+                                         "test-pmi-clique",
+                                         "single");
     struct pmi_simple_ops ops = {
         .abort = pmi_abort,
         .kvs_put = pmi_kvs_put,
@@ -1089,8 +1120,10 @@ int start_session (const char *cmd_argz,
     if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
     if (!(ctx.timer = flux_timer_watcher_create (ctx.reactor,
-                                                 ctx.exit_timeout, 0.,
-                                                 exit_timeout, NULL)))
+                                                 ctx.exit_timeout,
+                                                 0.,
+                                                 exit_timeout,
+                                                 NULL)))
         log_err_exit ("flux_timer_watcher_create");
     if (!(ctx.clients = zlist_new ()))
         log_err_exit ("zlist_new");

@@ -180,7 +180,7 @@ test_expect_success 'a bad config is detected at initialization too' '
 	cat >badconf.toml <<-EOT &&
 	policy.foo = 1
 	EOT
-	test_must_fail flux start -o,--config-path=badconf.toml true
+	test_must_fail flux start --config-path=badconf.toml true
 '
 
 test_done

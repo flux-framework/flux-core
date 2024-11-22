@@ -17,9 +17,9 @@ test_expect_success 'create test script' '
 '
 test_expect_success 'run instance that leaves an auto dump' '
 	mkdir -p state &&
-	flux start -o,-Sstatedir=state \
-	    -o,-Scontent.dump=auto \
-	    -o,-Slog-filename=dmesg.log \
+	flux start -Sstatedir=state \
+	    -Scontent.dump=auto \
+	    -Slog-filename=dmesg.log \
 	    ./runjobs.sh >object_count
 '
 test_expect_success 'broker logs report dump activity' '
@@ -31,9 +31,9 @@ test_expect_success 'dump exists and RESTORE symlink is valid' '
 	test -f $(cat archive)
 '
 test_expect_success 'restart instance with auto restore' '
-	flux start -o,-Sstatedir=state \
-	    -o,-Scontent.restore=auto \
-	    -o,-Slog-filename=dmesg2.log \
+	flux start -Sstatedir=state \
+	    -Scontent.restore=auto \
+	    -Slog-filename=dmesg2.log \
 	    flux module stats \
 	        --type int --parse object_count content-sqlite >object_count2
 '
@@ -59,9 +59,9 @@ test_expect_success 'archive file remains' '
 # - explicitly named dump file (not auto)
 #
 test_expect_success 'run instance that leaves a named dump' '
-	flux start -o,-Slog-filename=dmesg3.log \
-	    -o,-Scontent.dump=foo.tgz \
-	    -o,-Scontent.backing-module=content-files \
+	flux start -Slog-filename=dmesg3.log \
+	    -Scontent.dump=foo.tgz \
+	    -Scontent.backing-module=content-files \
 	    ./runjobs.sh >object_count3
 '
 test_expect_success 'broker logs report dump activity' '
@@ -74,9 +74,9 @@ test_expect_success 'no RESTORE link was created because path is explicit' '
 	test_must_fail test -h dump/RESTORE
 '
 test_expect_success 'restart instance and restore' '
-	flux start -o,-Slog-filename=dmesg4.log \
-	    -o,-Scontent.restore=foo.tgz \
-	    -o,-Scontent.backing-module=content-files \
+	flux start -Slog-filename=dmesg4.log \
+	    -Scontent.restore=foo.tgz \
+	    -Scontent.backing-module=content-files \
 	    flux module stats \
 	        --type int --parse object_count content-files >object_count4
 '
