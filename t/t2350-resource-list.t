@@ -76,6 +76,13 @@ for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
         test_debug "cat $name.output" &&
         test_cmp ${base}.expected $name.output
     '
+    test_expect_success "flux-resource list --skip-empty: $testname" '
+        awk "\$3!=0 {print}" ${base}.expected > skip-empty.${name}.expected &&
+        flux resource list -o "$FORMAT" \
+            --skip-empty \
+            --from-stdin < $input > skip-empty.${name}.output 2>&1 &&
+        test_cmp skip-empty.${name}.expected skip-empty.${name}.output
+    '
     test_expect_success "flux-resource info input check: $testname" '
         flux resource info --from-stdin < $input > ${name}-info.output 2>&1 &&
         test_debug "cat ${name}-info.output" &&
@@ -178,6 +185,11 @@ test_expect_success 'flux-resource list supports --include' '
 	test $(wc -l <list-include.output) -eq 1
 '
 INPUT=${SHARNESS_TEST_SRCDIR}/flux-resource/list/normal-new.json
+test_expect_success 'flux-resource list --include skips empty lines by default' '
+	flux resource list -s all -ni 0 --from-stdin < $INPUT >skip-empty.out &&
+	test_debug "cat skip-empty.out" &&
+	test $(wc -l <skip-empty.out) -eq 1
+'
 test_expect_success 'flux-resource list: --include works with ranks' '
 	flux resource list -s all -o "{nnodes} {ranks}" -ni 0,3 --from-stdin \
 	    --no-skip-empty \
