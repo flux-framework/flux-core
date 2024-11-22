@@ -35,6 +35,14 @@
 
 #include <jansson.h>
 
+// Try BSD request names if linux ones are not defined
+#ifndef PTRACE_TRACEME
+#define PTRACE_TRACEME PT_TRACE_ME
+#endif
+#ifndef PTRACE_DETACH
+#define PTRACE_DETACH PT_DETACH
+#endif
+
 #include "builtins.h"
 
 static int ptrace_traceme (flux_plugin_t *p,
