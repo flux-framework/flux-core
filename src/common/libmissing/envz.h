@@ -23,8 +23,6 @@
 #include "config.h"
 #endif
 
-#include <features.h>
-
 #include <errno.h>
 
 /* Envz's are argz's too, and should be created etc., using the same
