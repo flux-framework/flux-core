@@ -693,6 +693,8 @@ def list_handler(args):
         resources, args.states, formatter, config, queues=args.queue
     )
     items = sort_output(args, lines.values())
+    if args.skip_empty:
+        items = [x for x in items if x.ranks]
     formatter.print_items(items, no_header=args.no_header)
 
 
@@ -902,6 +904,11 @@ def main():
         help="Include only specified queues in output",
     )
     list_parser.add_argument(
+        "--skip-empty",
+        action="store_true",
+        help="Skip empty lines",
+    )
+    list_parser.add_argument(
         "-n", "--no-header", action="store_true", help="Suppress header output"
     )
     list_parser.add_argument(
@@ -939,6 +946,13 @@ def main():
         "--from-stdin", action="store_true", help=argparse.SUPPRESS
     )
     info_parser.add_argument("--config-file", help=argparse.SUPPRESS)
+    # Options required in `info` because they are also present in `list`:
+    info_parser.add_argument(
+        "--skip-empty",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+
     info_parser.set_defaults(func=info)
 
     reload_parser = subparsers.add_parser(
