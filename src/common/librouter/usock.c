@@ -39,6 +39,9 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#if HAVE_SYS_UCRED_H
+#include <sys/ucred.h>
+#endif
 #include <poll.h>
 #include <unistd.h>
 #include <errno.h>
@@ -387,14 +390,14 @@ void usock_server_destroy (struct usock_server *server)
 
 static int usock_get_cred (int fd, struct flux_msg_cred *cred)
 {
-    struct ucred ucred;
-    socklen_t crlen;
 
     if (fd < 0 || !cred) {
         errno = EINVAL;
         return -1;
     }
-    crlen = sizeof (ucred);
+#if defined(SO_PEERCRED)
+    struct ucred ucred;
+    socklen_t crlen = sizeof (ucred);
     if (getsockopt (fd,
                     SOL_SOCKET,
                     SO_PEERCRED,
@@ -406,6 +409,19 @@ static int usock_get_cred (int fd, struct flux_msg_cred *cred)
         return -1;
     }
     cred->userid = ucred.uid;
+#elif defined(LOCAL_PEERCRED)
+    struct xucred ucred;
+    socklen_t crlen = sizeof (ucred);
+    if (getsockopt (fd, 0, LOCAL_PEERCRED, &ucred, &crlen) < 0)
+        return -1;
+    if (ucred.cr_version != XUCRED_VERSION) {
+        errno = EINVAL;
+        return -1;
+    }
+    cred->userid = ucred.cr_uid;
+#else
+#error Neither SO_PEERCRED nor LOCAL_PEERCRED are defined
+#endif
     cred->rolemask = FLUX_ROLE_NONE;
     return 0;
 }
