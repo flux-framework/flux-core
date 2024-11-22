@@ -34,6 +34,7 @@
 #include "src/common/libsubprocess/fbuf.h"
 #include "src/common/libsubprocess/fbuf_watcher.h"
 #include "src/common/libtaskmap/taskmap_private.h"
+#include "src/common/libjob/idf58.h"
 
 #include "src/common/libterminus/pty.h"
 #include "src/common/libdebugged/debugged.h"
@@ -1161,11 +1162,13 @@ void attach_event_continuation (flux_future_t *f, void *arg)
 
         if (ctx->statusline)
             fprintf (stderr, "\r\033[K");
-        fprintf (stderr, "%.3fs: job.exception type=%s severity=%d %s\n",
-                         event->timestamp - ctx->timestamp_zero,
-                         type,
-                         severity,
-                         note);
+        fprintf (stderr,
+                 "%.3fs: job.exception %s type=%s severity=%d %s\n",
+                 event->timestamp - ctx->timestamp_zero,
+                 ctx->jobid,
+                 type,
+                 severity,
+                 note);
 
         ctx->fatal_exception = (severity == 0);
 
