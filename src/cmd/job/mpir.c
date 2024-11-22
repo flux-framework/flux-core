@@ -16,6 +16,10 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <libgen.h>
+#ifndef HAVE_GET_CURRENT_DIR_NAME
+#include "src/common/libmissing/get_current_dir_name.h"
+#endif
 
 #include <flux/core.h>
 #include <flux/optparse.h>

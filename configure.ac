@@ -236,6 +236,7 @@ AC_REPLACE_FUNCS( \
   strerrorname_np \
   pipe2 \
   mempcpy \
+  get_current_dir_name \
 )
 X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(rt, clock_gettime)

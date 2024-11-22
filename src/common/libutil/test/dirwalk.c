@@ -20,6 +20,9 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <stdio.h>
+#ifndef HAVE_GET_CURRENT_DIR_NAME
+#include "src/common/libmissing/get_current_dir_name.h"
+#endif
 
 #include <dirent.h>
 
