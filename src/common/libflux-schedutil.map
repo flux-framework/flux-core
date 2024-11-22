@@ -1,6 +1,0 @@
-{ global:
-    schedutil_*;
-    __asan*;
-    local: *;
-};
-

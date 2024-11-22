@@ -1,6 +1,0 @@
-{ global:
-    hostlist_*;
-    __asan*;
-    local: *;
-};
-

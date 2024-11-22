@@ -1,6 +1,0 @@
-{ global:
-    flux_shell_*;
-    flux_plugin_get_shell;
-    __asan*;
-  local: *;
-};

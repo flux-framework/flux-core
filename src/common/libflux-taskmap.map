@@ -1,6 +1,0 @@
-{ global:
-    taskmap_*;
-    __asan*;
-    local: *;
-};
-

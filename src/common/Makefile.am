@@ -98,7 +98,7 @@ libflux_core_la_LIBADD = \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	libflux-internal.la
 libflux_core_la_LDFLAGS = \
-	-Wl,--version-script=$(srcdir)/libflux-core.map \
+	-export-symbols-regex "^(flux_|__asan)" \
 	-version-info @LIBFLUX_CORE_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	-Wl,--gc-sections \
@@ -114,7 +114,7 @@ libflux_optparse_la_LIBADD = \
 	$(builddir)/libmissing/libmissing.la \
 	$(LIBPTHREAD)
 libflux_optparse_la_LDFLAGS = \
-	-Wl,--version-script=$(srcdir)/libflux-optparse.map \
+	-export-symbols-regex "^(optparse_|__asan)" \
 	-version-info @LIBFLUX_OPTPARSE_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	-Wl,--gc-sections \
@@ -124,7 +124,7 @@ libflux_idset_la_SOURCES =
 libflux_idset_la_LIBADD = \
 	$(builddir)/libidset/libidset.la
 libflux_idset_la_LDFLAGS = \
-	-Wl,--version-script=$(srcdir)/libflux-idset.map \
+	-export-symbols-regex "^(idset_|__asan)" \
 	-version-info @LIBFLUX_IDSET_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	-Wl,--gc-sections \
@@ -137,7 +137,7 @@ libflux_schedutil_la_LIBADD = \
 	libflux-core.la \
 	$(JANSSON_LIBS)
 libflux_schedutil_la_LDFLAGS = \
-	-Wl,--version-script=$(srcdir)/libflux-schedutil.map \
+	-export-symbols-regex "^(schedutil_|__asan)" \
 	-version-info @LIBFLUX_SCHEDUTIL_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	-Wl,--gc-sections \
@@ -147,7 +147,7 @@ libflux_hostlist_la_SOURCES =
 libflux_hostlist_la_LIBADD = \
 	$(builddir)/libhostlist/libhostlist.la
 libflux_hostlist_la_LDFLAGS = \
-	-Wl,--version-script=$(srcdir)/libflux-hostlist.map \
+	-export-symbols-regex "^(hostlist_|__asan)" \
 	-version-info @LIBFLUX_HOSTLIST_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	-Wl,--gc-sections \
@@ -165,7 +165,7 @@ libflux_taskmap_la_LIBADD = \
 	libflux-idset.la \
 	$(JANSSON_LIBS)
 libflux_taskmap_la_LDFLAGS = \
-	-Wl,--version-script=$(srcdir)/libflux-taskmap.map \
+	-export-symbols-regex "^(taskmap_|__asan)" \
 	-version-info @LIBFLUX_TASKMAP_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	-Wl,--gc-sections \
@@ -181,7 +181,7 @@ flux_libpmi_la_LIBADD = \
 	$(builddir)/libmissing/libmissing.la
 
 flux_libpmi_la_LDFLAGS = \
-	-Wl,--version-script=$(srcdir)/libpmi.map \
+	-export-symbols-regex "^(PMI_|flux_pmi_library|__asan)" \
 	-version-info 0:0:0 \
 	-Wl,--defsym=flux_pmi_library=1 \
 	-shared -export-dynamic --disable-static \
@@ -197,19 +197,9 @@ flux_libpmi2_la_LIBADD = \
 	$(builddir)/libutil/aux.lo \
 	$(builddir)/libmissing/libmissing.la
 flux_libpmi2_la_LDFLAGS = \
-	-Wl,--version-script=$(srcdir)/libpmi2.map \
+	-export-symbols-regex "^(PMI2_|flux_pmi_library|__asan)" \
 	-version-info 0:0:0 \
 	-Wl,--defsym=flux_pmi_library=1 \
 	-shared -export-dynamic --disable-static \
 	-Wl,--gc-sections \
 	$(san_ld_zdef_flag)
-
-EXTRA_DIST = \
-	libflux-core.map \
-	libflux-optparse.map \
-	libflux-idset.map \
-	libflux-schedutil.map \
-	libflux-hostlist.map \
-	libflux-taskmap.map \
-	libpmi.map \
-	libpmi2.map
