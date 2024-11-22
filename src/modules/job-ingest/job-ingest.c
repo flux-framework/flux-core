@@ -936,7 +936,7 @@ int mod_main (flux_t *h, int argc, char **argv)
             goto done;
         }
     }
-    flux_log (h, LOG_DEBUG, "fluid ts=%jums", (uint64_t)ctx.gen.timestamp);
+    flux_log (h, LOG_DEBUG, "fluid ts=%jums", (uintmax_t)ctx.gen.timestamp);
     if (flux_reactor_run (r, 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done;

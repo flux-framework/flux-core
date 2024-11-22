@@ -82,7 +82,7 @@ static void event_handler (flux_t *h,
                 flux_log (h,
                           LOG_DEBUG,
                           "cron-%ju: delaying %4.03fs due to min interval",
-                          e->id,
+                          (uintmax_t)e->id,
                           remaining);
             }
             return;

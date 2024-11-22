@@ -115,7 +115,7 @@ static double reschedule_cb (flux_watcher_t *w, double now, void *arg)
         if (e->repeat == 0 || e->repeat < e->stats.count + 1) {
             flux_log_error (dt->h,
                             "cron-%ju: Unable to get next wakeup. Stopping.",
-                            e->id);
+                            (uintmax_t)e->id);
         }
         cron_entry_stop_safe (e);
         return now + 1.e19;
