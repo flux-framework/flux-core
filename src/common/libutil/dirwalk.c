@@ -28,6 +28,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
+#include "basename.h"
 #include "dirwalk.h"
 
 struct direntry {
@@ -153,7 +154,7 @@ const char * dirwalk_name (dirwalk_t *d)
     if (!d->current)
         return NULL;
     if (!d->current->basename)
-        d->current->basename = basename (d->current->path);
+        d->current->basename = basename_simple (d->current->path);
     return d->current->basename;
 }
 

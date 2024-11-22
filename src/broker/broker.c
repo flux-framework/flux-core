@@ -53,6 +53,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/intree.h"
+#include "src/common/libutil/basename.h"
 #include "src/common/librouter/subhash.h"
 #include "src/common/libfluxutil/method.h"
 #include "ccan/array_size/array_size.h"
@@ -689,8 +690,7 @@ static bool is_interactive_shell (const char *argz, size_t argz_len)
         char *shell;
         char *cmd = argz_next (argz, argz_len, NULL);
         while ((shell = getusershell ())) {
-            if (streq (cmd, shell)
-                || streq (cmd, basename (shell))) {
+            if (streq (cmd, shell) || streq (cmd, basename_simple (shell))) {
                 result = true;
                 break;
             }

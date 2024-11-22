@@ -22,6 +22,7 @@
 #include <locale.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libutil/basename.h"
 #include "toml.h"
 
 #define EX1 "\
@@ -243,7 +244,7 @@ void parse_bad_input (void)
 
     for (i = 0; i < results.gl_pathc; i++) {
         char errbuf[255];
-        char *name = basename (results.gl_pathv[i]);
+        char *name = basename_simple (results.gl_pathv[i]);
         const char *reason;
         bool blocklist = matchtab (name, bad_input_blocklist, &reason);
 
@@ -299,7 +300,7 @@ void parse_good_input (void)
     for (i = 0; i < results.gl_pathc; i++) {
         char errbuf[255];
         ok (parse_good_file (results.gl_pathv[i], errbuf, 255) == true,
-            "%s: %s", basename (results.gl_pathv[i]), errbuf);
+            "%s: %s", basename_simple (results.gl_pathv[i]), errbuf);
     }
     globfree (&results);
 }

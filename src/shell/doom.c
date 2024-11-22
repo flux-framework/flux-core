@@ -39,6 +39,7 @@
 
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/basename.h"
 
 #include "builtins.h"
 #include "internal.h"
@@ -100,9 +101,7 @@ static const char *doom_exit_host (struct shell_doom *doom)
 static const char *get_jobspec_command_arg0 (struct shell_doom *doom)
 {
     json_t *s = json_array_get (doom->shell->info->jobspec->command, 0);
-    const char *path = json_string_value (s);
-    const char *p = strrchr (path, '/');
-    return p ? p + 1 : path;
+    return basename_simple (json_string_value (s));
 }
 
 static void doom_check (struct shell_doom *doom,

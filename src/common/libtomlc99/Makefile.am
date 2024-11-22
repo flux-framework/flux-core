@@ -38,7 +38,8 @@ test_cppflags = \
 
 test_ldadd = \
 	$(top_builddir)/src/common/libtomlc99/libtomlc99.la \
-	$(top_builddir)/src/common/libtap/libtap.la
+	$(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/common/libutil/libutil.la
 
 toml_cat_SOURCES = toml_cat.c
 toml_cat_LDADD = $(test_ldadd)

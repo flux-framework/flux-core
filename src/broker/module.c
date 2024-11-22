@@ -37,6 +37,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/basename.h"
 #include "src/common/librouter/subhash.h"
 #include "ccan/str/str.h"
 
@@ -289,23 +290,16 @@ static void module_cb (flux_reactor_t *r,
         p->poller_cb (p, p->poller_arg);
 }
 
-static char *module_name_from_path (const char *s)
+static char *module_name_from_path (const char *path)
 {
-    char *path, *name, *cpy;
+    char *name;
     char *cp;
 
-    if (!(path = strdup (s))
-        || !(name = basename (path)))
-        goto error;
+    name = basename_simple (path);
+    // if path ends in .so or .so.VERSION, strip it off
     if ((cp = strstr (name, ".so")))
-        *cp = '\0';
-    if (!(cpy = strdup (name)))
-        goto error;
-    free (path);
-    return cpy;
-error:
-    ERRNO_SAFE_WRAP (free, path);
-    return NULL;
+        return strndup (name, cp - name);
+    return strdup (name);
 }
 
 module_t *module_create (flux_t *h,

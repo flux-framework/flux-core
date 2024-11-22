@@ -27,6 +27,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/iterators.h"
+#include "src/common/libutil/basename.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/aux.h"
@@ -1377,7 +1378,7 @@ static int plugin_try_load (struct jobtap *jobtap,
         return errprintf (errp,
                           "%s",
                           flux_plugin_strerror (p));
-    if (!(name = strdup (basename (fullpath)))
+    if (!(name = strdup (basename_simple (fullpath)))
         || flux_plugin_aux_set (p, "jobtap::basename", name, free) < 0) {
         ERRNO_SAFE_WRAP (free, name);
         return errprintf (errp,
