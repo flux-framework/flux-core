@@ -26,6 +26,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/aux.h"
+#include "src/common/libutil/fdutils.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 
@@ -177,8 +178,15 @@ static flux_subprocess_t *subprocess_create (
 
     /* set CLOEXEC on sync_fds, so on exec(), child sync_fd is closed
      * and seen by parent */
+#if SOCK_CLOEXEC
     if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, p->sync_fds) < 0)
         goto error;
+#else
+    if (socketpair (PF_LOCAL, SOCK_STREAM, 0, p->sync_fds) < 0
+        || fd_set_cloexec (p->sync_fds[0]) < 0
+        || fd_set_cloexec (p->sync_fds[1]) < 0)
+        goto error;
+#endif
 
     if (!(p->channels = zhash_new ()))
         goto error;
