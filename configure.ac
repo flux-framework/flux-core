@@ -189,6 +189,7 @@ AC_CHECK_HEADERS( \
   inttypes.h \
   link.h \
   [sys/ucred.h] \
+  [sys/prctl.h] \
 )
 
 ##

@@ -15,7 +15,9 @@
 #include <signal.h>
 #include <locale.h>
 #include <inttypes.h>
+#ifdef HAVE_SYS_PRCTL_H
 #include <sys/prctl.h>
+#endif
 #include <sys/resource.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -665,9 +667,11 @@ static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
 
 static void set_proctitle (uint32_t rank)
 {
+#ifdef PR_SET_NAME
     static char proctitle[32];
     snprintf (proctitle, sizeof (proctitle), "flux-broker-%"PRIu32, rank);
     (void)prctl (PR_SET_NAME, proctitle, 0, 0, 0);
+#endif
 }
 
 static bool is_interactive_shell (const char *argz, size_t argz_len)
