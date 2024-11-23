@@ -252,7 +252,7 @@ bool flux_is_installed (void)
 {
     int rc = executable_is_intree ();
     if (rc < 0)
-        log_err_exit ("Failed to to determine if flux is installed");
+        log_err_exit ("Failed to determine if flux is installed");
     return (rc == 0);
 }
 
