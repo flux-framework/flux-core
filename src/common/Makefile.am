@@ -183,7 +183,6 @@ flux_libpmi_la_LIBADD = \
 flux_libpmi_la_LDFLAGS = \
 	-export-symbols-regex "^(PMI_|flux_pmi_library|__asan)" \
 	-version-info 0:0:0 \
-	-Wl,--defsym=flux_pmi_library=1 \
 	-shared -export-dynamic --disable-static \
 	$(ld_gc_sections) \
 	$(san_ld_zdef_flag)
@@ -199,7 +198,6 @@ flux_libpmi2_la_LIBADD = \
 flux_libpmi2_la_LDFLAGS = \
 	-export-symbols-regex "^(PMI2_|flux_pmi_library|__asan)" \
 	-version-info 0:0:0 \
-	-Wl,--defsym=flux_pmi_library=1 \
 	-shared -export-dynamic --disable-static \
 	$(ld_gc_sections) \
 	$(san_ld_zdef_flag)
