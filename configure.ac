@@ -244,7 +244,7 @@ X_AC_CHECK_COND_LIB(rt, clock_gettime)
 X_AC_CHECK_COND_LIB(dl, dlerror)
 X_AC_MALLOC
 AC_CHECK_LIB(m, floor)
-AC_SEARCH_LIBS(epoll, libepoll-shim)
+AC_SEARCH_LIBS(epoll_create1, epoll-shim)
 
 AC_MSG_CHECKING([for pthread_setname_np with tid parameter])
 AC_COMPILE_IFELSE(
