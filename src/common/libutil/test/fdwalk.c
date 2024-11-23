@@ -46,6 +46,14 @@ static void set_fd (void *data, int fd)
     fds[fd]++;
 }
 
+static void set_fd_if_open (void *data, int fd)
+{
+    if (fcntl (fd, F_GETFL) < 0 && errno == EBADF)
+        return;
+    int *fds = data;
+    fds[fd]++;
+}
+
 static int * get_open_fds (int maxfd)
 {
     /* Valgrind may show open fds > maxfd, so double the space
@@ -53,7 +61,7 @@ static int * get_open_fds (int maxfd)
      */
     int * fds = calloc (maxfd * 2, sizeof (int));
     if (fds)
-        ok (fdwalk (set_fd, fds) == 0,
+        ok (fdwalk (set_fd_if_open, fds) == 0,
             "fdwalk () worked");
     return fds;
 }
