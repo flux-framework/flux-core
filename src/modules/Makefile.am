@@ -80,7 +80,8 @@ content_la_SOURCES = \
 content_la_LIBADD = \
 	$(top_builddir)/src/common/libfilemap/libfilemap.la \
 	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la
+	$(top_builddir)/src/common/libflux-core.la \
+	$(LIBARCHIVE_LIBS)
 content_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 content_files_la_SOURCES =
