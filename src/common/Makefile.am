@@ -161,6 +161,7 @@ libflux_taskmap_la_LIBADD = \
 	$(builddir)/libccan/libccan.la  \
 	$(builddir)/libtomlc99/libtomlc99.la  \
 	$(builddir)/libyuarel/libyuarel.la  \
+	$(builddir)/libmissing/libmissing.la  \
 	libflux-core.la \
 	libflux-idset.la \
 	$(JANSSON_LIBS)
