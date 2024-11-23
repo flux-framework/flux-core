@@ -18,7 +18,7 @@ fluxconnector_LTLIBRARIES = \
 connector_ldflags = -module $(san_ld_zdef_flag) \
 	-export-symbols-regex '^connector_init$$' \
 	--disable-static -avoid-version -shared -export-dynamic \
-	-Wl,--gc-sections
+	$(ld_gc_sections)
 
 ssh_la_SOURCES = \
 	ssh/ssh.c

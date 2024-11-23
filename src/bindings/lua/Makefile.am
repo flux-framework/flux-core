@@ -42,7 +42,7 @@ noinst_LTLIBRARIES = \
 
 luamod_ldflags = \
 	-avoid-version -module -shared --disable-static \
-	-Wl,--gc-sections \
+	$(ld_gc_sections) \
 	$(san_ld_zdef_flag)
 
 luamod_libadd = \

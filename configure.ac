@@ -549,13 +549,13 @@ AC_SUBST(fluxbindingincludedir)
 ##
 # Macros to avoid repetition in Makefiles.am's
 ##
-fluxmod_ldflags="$san_ld_zdef_flag -avoid-version -export-symbols-regex '^mod_(main|name)\$\$' --disable-static -shared -export-dynamic -Wl,--gc-sections"
+fluxmod_ldflags="$san_ld_zdef_flag -avoid-version -export-symbols-regex '^mod_(main|name)\$\$' --disable-static -shared -export-dynamic $ld_gc_sections"
 AC_SUBST(fluxmod_ldflags)
 
-fluxplugin_ldflags="-avoid-version -export-symbols-regex '^flux_plugin_init\$\$' --disable-static -shared -export-dynamic -Wl,--gc-sections"
+fluxplugin_ldflags="-avoid-version -export-symbols-regex '^flux_plugin_init\$\$' --disable-static -shared -export-dynamic $ld_gc_sections"
 AC_SUBST(fluxplugin_ldflags)
 
-fluxlib_ldflags="-shared -export-dynamic --disable-static $san_ld_zdef_flag -Wl,--gc-sections"
+fluxlib_ldflags="-shared -export-dynamic --disable-static $san_ld_zdef_flag $ld_gc_sections"
 AC_SUBST(fluxlib_ldflags)
 
 ##
