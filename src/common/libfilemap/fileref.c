@@ -98,7 +98,7 @@ static json_t *blobvec_create (int fd,
 #endif
         if (offset < size) {
             off_t notdata;
-            int blobsize;
+            size_t blobsize;
 
 #ifdef SEEK_HOLE
             // N.B. returns size if there are no more holes
