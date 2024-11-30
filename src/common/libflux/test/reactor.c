@@ -26,8 +26,10 @@
 
 static const size_t fdwriter_bufsize = 10*1024*1024;
 
-static void fdwriter (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
+static void fdwriter (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     int fd = flux_fd_watcher_get_fd (w);
     static char *buf = NULL;
@@ -42,9 +44,10 @@ static void fdwriter (flux_reactor_t *r, flux_watcher_t *w,
     }
     if (revents & FLUX_POLLOUT) {
         if ((n = write (fd, buf + count, fdwriter_bufsize - count)) < 0
-                                && errno != EWOULDBLOCK && errno != EAGAIN) {
+            && errno != EWOULDBLOCK && errno != EAGAIN) {
             fprintf (stderr, "%s: write failed: %s\n",
-                     __FUNCTION__, strerror (errno));
+                     __FUNCTION__,
+                     strerror (errno));
             goto error;
         }
         if (n > 0) {
@@ -59,8 +62,10 @@ static void fdwriter (flux_reactor_t *r, flux_watcher_t *w,
 error:
     flux_reactor_stop_error (r);
 }
-static void fdreader (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void fdreader (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     int fd = flux_fd_watcher_get_fd (w);
     static char *buf = NULL;
@@ -75,9 +80,10 @@ static void fdreader (flux_reactor_t *r, flux_watcher_t *w,
     }
     if (revents & FLUX_POLLIN) {
         if ((n = read (fd, buf + count, fdwriter_bufsize - count)) < 0
-                            && errno != EWOULDBLOCK && errno != EAGAIN) {
+            && errno != EWOULDBLOCK && errno != EAGAIN) {
             fprintf (stderr, "%s: read failed: %s\n",
-                     __FUNCTION__, strerror (errno));
+                     __FUNCTION__,
+                     strerror (errno));
             goto error;
         }
         if (n > 0) {
@@ -121,8 +127,10 @@ static void test_fd (flux_reactor_t *reactor)
 }
 
 static int repeat_countdown = 10;
-static void repeat (flux_reactor_t *r, flux_watcher_t *w,
-                    int revents, void *arg)
+static void repeat (flux_reactor_t *r,
+                    flux_watcher_t *w,
+                    int revents,
+                    void *arg)
 {
     repeat_countdown--;
     if (repeat_countdown == 0)
@@ -131,8 +139,10 @@ static void repeat (flux_reactor_t *r, flux_watcher_t *w,
 
 static int oneshot_runs = 0;
 static int oneshot_errno = 0;
-static void oneshot (flux_reactor_t *r, flux_watcher_t *w,
-                     int revents, void *arg)
+static void oneshot (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
 {
     oneshot_runs++;
     if (oneshot_errno != 0) {
@@ -221,8 +231,10 @@ static void test_timer (flux_reactor_t *reactor)
 
 /* A reactor callback that immediately stops reactor without error */
 static bool do_stop_callback_ran = false;
-static void do_stop_reactor (flux_reactor_t *r, flux_watcher_t *w,
-                     int revents, void *arg)
+static void do_stop_reactor (flux_reactor_t *r,
+                             flux_watcher_t *w,
+                             int revents,
+                             void *arg)
 {
     do_stop_callback_ran = true;
     flux_reactor_stop (r);
@@ -288,8 +300,12 @@ static void test_periodic (flux_reactor_t *reactor)
     flux_watcher_destroy (w);
 
     repeat_countdown = 5;
-    ok ((w = flux_periodic_watcher_create (reactor, 0.01, 0.01,
-                                           NULL, repeat, NULL)) != NULL,
+    ok ((w = flux_periodic_watcher_create (reactor,
+                                           0.01,
+                                           0.01,
+                                           NULL,
+                                           repeat,
+                                           NULL)) != NULL,
         "periodic: creating 10ms interval works");
     flux_watcher_start (w);
     ok (flux_reactor_run (reactor, 0) == 0,
@@ -307,8 +323,12 @@ static void test_periodic (flux_reactor_t *reactor)
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
 
-    ok ((w = flux_periodic_watcher_create (reactor, 0, 0, resched_cb,
-                                           do_stop_reactor, reactor)) != NULL,
+    ok ((w = flux_periodic_watcher_create (reactor,
+                                           0,
+                                           0,
+                                           resched_cb,
+                                           do_stop_reactor,
+                                           reactor)) != NULL,
         "periodic: creating with resched callback works");
     flux_watcher_start (w);
     ok (flux_reactor_run (reactor, 0) >= 0,
@@ -320,8 +340,12 @@ static void test_periodic (flux_reactor_t *reactor)
     flux_watcher_destroy (w);
 
     do_stop_callback_ran = false;
-    ok ((w = flux_periodic_watcher_create (reactor, 0, 0, resched_cb_negative,
-                                           do_stop_reactor, reactor)) != NULL,
+    ok ((w = flux_periodic_watcher_create (reactor,
+                                           0,
+                                           0,
+                                           resched_cb_negative,
+                                           do_stop_reactor,
+                                           reactor)) != NULL,
         "periodic: create watcher with misconfigured resched callback");
     flux_watcher_start (w);
     ok (flux_reactor_run (reactor, 0) == 0,
@@ -333,8 +357,10 @@ static void test_periodic (flux_reactor_t *reactor)
 }
 
 static int idle_count = 0;
-static void idle_cb (flux_reactor_t *r, flux_watcher_t *w,
-                     int revents, void *arg)
+static void idle_cb (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
 {
     if (++idle_count == 42)
         flux_watcher_stop (w);
@@ -361,22 +387,28 @@ static void test_idle (flux_reactor_t *reactor)
 }
 
 static int prepare_count = 0;
-static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg)
+static void prepare_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
     prepare_count++;
 }
 
 static int check_count = 0;
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void check_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     check_count++;
 }
 
 static int prepchecktimer_count = 0;
-static void prepchecktimer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                               int revents, void *arg)
+static void prepchecktimer_cb (flux_reactor_t *r,
+                               flux_watcher_t *w,
+                               int revents,
+                               void *arg)
 {
     if (++prepchecktimer_count == 8)
         flux_reactor_stop (r);
@@ -388,8 +420,11 @@ static void test_prepcheck (flux_reactor_t *reactor)
     flux_watcher_t *prep;
     flux_watcher_t *chk;
 
-    w = flux_timer_watcher_create (reactor, 0.01, 0.01,
-                                   prepchecktimer_cb, NULL);
+    w = flux_timer_watcher_create (reactor,
+                                   0.01,
+                                   0.01,
+                                   prepchecktimer_cb,
+                                   NULL);
     ok (w != NULL,
         "created timer watcher that fires every 0.01s");
     ok (!flux_watcher_is_active (w),
@@ -412,8 +447,10 @@ static void test_prepcheck (flux_reactor_t *reactor)
         "reactor ran successfully");
     ok (prepchecktimer_count == 8,
         "timer fired 8 times, then reactor was stopped");
-    diag ("prep %d check %d timer %d", prepare_count, check_count,
-                                       prepchecktimer_count);
+    diag ("prep %d check %d timer %d",
+          prepare_count,
+          check_count,
+          prepchecktimer_count);
     ok (prepare_count >= 8,
         "prepare watcher ran at least once per timer");
     ok (check_count >= 8,
@@ -425,15 +462,19 @@ static void test_prepcheck (flux_reactor_t *reactor)
 }
 
 static int sigusr1_count = 0;
-static void sigusr1_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg)
+static void sigusr1_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
     if (++sigusr1_count == 8)
         flux_reactor_stop (r);
 }
 
-static void sigidle_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg)
+static void sigidle_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
     if (kill (getpid (), SIGUSR1) < 0)
         flux_reactor_stop_error (r);
@@ -468,8 +509,10 @@ static void test_signal (flux_reactor_t *reactor)
 }
 
 static pid_t child_pid = -1;
-static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void child_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     int pid = flux_child_watcher_get_rpid (w);
     int rstatus = flux_child_watcher_get_rstatus (w);
@@ -521,8 +564,10 @@ struct stat_ctx {
     int stat_nlink;
     enum { STAT_APPEND, STAT_WAIT, STAT_UNLINK } state;
 };
-static void stat_cb (flux_reactor_t *r, flux_watcher_t *w,
-                     int revents, void *arg)
+static void stat_cb (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
 {
     struct stat_ctx *ctx = arg;
     struct stat new, old;
@@ -542,8 +587,10 @@ static void stat_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
-static void stattimer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                          int revents, void *arg)
+static void stattimer_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
 {
     struct stat_ctx *ctx = arg;
     if (ctx->state == STAT_APPEND) {
@@ -578,8 +625,11 @@ static void test_stat (flux_reactor_t *reactor)
     ok (flux_watcher_is_active (w),
         "flux_watcher_is_active() returns true after flux_watcher_start()");
 
-    tw = flux_timer_watcher_create (reactor, 0.01, 0.01,
-                                    stattimer_cb, &ctx);
+    tw = flux_timer_watcher_create (reactor,
+                                    0.01,
+                                    0.01,
+                                    stattimer_cb,
+                                    &ctx);
     ok (tw != NULL,
         "created timer watcher");
     flux_watcher_start (tw);

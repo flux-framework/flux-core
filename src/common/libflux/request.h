@@ -20,15 +20,18 @@ extern "C" {
  * If s is non-NULL, assign the string payload or set to NULL if none
  * exists.  Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_request_decode (const flux_msg_t *msg, const char **topic,
+int flux_request_decode (const flux_msg_t *msg,
+                         const char **topic,
                          const char **s);
 
 /* Decode a request message with required json payload.  These functions use
  * jansson unpack style variable arguments for decoding the JSON object
  * payload directly.  Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_request_unpack (const flux_msg_t *msg, const char **topic,
-                         const char *fmt, ...);
+int flux_request_unpack (const flux_msg_t *msg,
+                         const char **topic,
+                         const char *fmt,
+                         ...);
 
 /* Decode a request message with optional raw payload.
  * If topic is non-NULL, assign the request topic string.
@@ -36,8 +39,10 @@ int flux_request_unpack (const flux_msg_t *msg, const char **topic,
  * If there is no payload, they will be assigned NULL and zero.
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_request_decode_raw (const flux_msg_t *msg, const char **topic,
-                             const void **data, int *len);
+int flux_request_decode_raw (const flux_msg_t *msg,
+                             const char **topic,
+                             const void **data,
+                             int *len);
 
 /* Encode a request message with optional string payload.
  * If s is non-NULL, assign the string payload.
@@ -49,7 +54,8 @@ flux_msg_t *flux_request_encode (const char *topic, const char *s);
  * Otherwise there will be no payload.
  */
 flux_msg_t *flux_request_encode_raw (const char *topic,
-                                     const void *data, int len);
+                                     const void *data,
+                                     int len);
 
 #ifdef __cplusplus
 }

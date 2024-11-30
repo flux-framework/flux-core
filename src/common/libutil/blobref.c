@@ -46,13 +46,22 @@
 #error BLOBREF_MAX_DIGEST_SIZE is too small
 #endif
 
-static void sha1_hash (const void *data, int data_len, void *hash, int hash_len);
-static void sha256_hash (const void *data, int data_len, void *hash, int hash_len);
+static void sha1_hash (const void *data,
+                       int data_len,
+                       void *hash,
+                       int hash_len);
+static void sha256_hash (const void *data,
+                         int data_len,
+                         void *hash,
+                         int hash_len);
 
 struct blobhash {
     char *name;
     int hashlen;
-    void (*hashfun)(const void *data, int data_len, void *hash, int hash_len);
+    void (*hashfun)(const void *data,
+                    int data_len,
+                    void *hash,
+                    int hash_len);
 };
 
 static struct blobhash blobtab[] = {
@@ -67,7 +76,10 @@ static struct blobhash blobtab[] = {
     { NULL, 0, 0 },
 };
 
-static void sha1_hash (const void *data, int data_len, void *hash, int hash_len)
+static void sha1_hash (const void *data,
+                       int data_len,
+                       void *hash,
+                       int hash_len)
 {
     SHA1_CTX ctx;
 
@@ -77,7 +89,10 @@ static void sha1_hash (const void *data, int data_len, void *hash, int hash_len)
     SHA1_Final (&ctx, hash);
 }
 
-static void sha256_hash (const void *data, int data_len, void *hash, int hash_len)
+static void sha256_hash (const void *data,
+                         int data_len,
+                         void *hash,
+                         int hash_len)
 {
     SHA256_CTX ctx;
 
@@ -136,8 +151,10 @@ inval:
 }
 
 static int hashtostr (struct blobhash *bh,
-                      const void *hash, int len,
-                      char *blobref, int blobref_len)
+                      const void *hash,
+                      int len,
+                      char *blobref,
+                      int blobref_len)
 {
     int offset;
 
@@ -157,8 +174,10 @@ inval:
 }
 
 int blobref_hashtostr (const char *hashtype,
-                       const void *hash, int len,
-                       void *blobref, int blobref_len)
+                       const void *hash,
+                       int len,
+                       void *blobref,
+                       int blobref_len)
 {
     struct blobhash *bh;
 
@@ -171,8 +190,10 @@ int blobref_hashtostr (const char *hashtype,
 
 
 int blobref_hash (const char *hashtype,
-                  const void *data, int len,
-                  void *blobref, int blobref_len)
+                  const void *data,
+                  int len,
+                  void *blobref,
+                  int blobref_len)
 {
     struct blobhash *bh;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
@@ -186,8 +207,10 @@ int blobref_hash (const char *hashtype,
 }
 
 int blobref_hash_raw (const char *hashtype,
-                      const void *data, int len,
-                      void *hash, int hash_len)
+                      const void *data,
+                      int len,
+                      void *hash,
+                      int hash_len)
 {
     struct blobhash *bh;
 

@@ -68,7 +68,8 @@ int flux_conf_vunpack (const flux_conf_t *conf,
 
 int flux_conf_unpack (const flux_conf_t *conf,
                       flux_error_t *error,
-                      const char *fmt, ...);
+                      const char *fmt,
+                      ...);
 
 #ifdef __cplusplus
 }

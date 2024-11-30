@@ -21,8 +21,10 @@ extern "C" {
 
 typedef void (*flux_continuation_f)(flux_future_t *f, void *arg);
 
-int flux_future_then (flux_future_t *f, double timeout,
-                      flux_continuation_f cb, void *arg);
+int flux_future_then (flux_future_t *f,
+                      double timeout,
+                      flux_continuation_f cb,
+                      void *arg);
 
 int flux_future_wait_for (flux_future_t *f, double timeout);
 
@@ -33,8 +35,10 @@ void flux_future_reset (flux_future_t *f);
 void flux_future_destroy (flux_future_t *f);
 
 void *flux_future_aux_get (flux_future_t *f, const char *name);
-int flux_future_aux_set (flux_future_t *f, const char *name,
-                         void *aux, flux_free_f destroy);
+int flux_future_aux_set (flux_future_t *f,
+                         const char *name,
+                         void *aux,
+                         flux_free_f destroy);
 
 /* Functions primarily used by implementors of classes that return futures.
  * See flux_future_create(3).
@@ -47,7 +51,9 @@ flux_future_t *flux_future_create (flux_future_init_f cb, void *arg);
 int flux_future_get (flux_future_t *f, const void **result);
 
 void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn);
-void flux_future_fulfill_error (flux_future_t *f, int errnum, const char *errstr);
+void flux_future_fulfill_error (flux_future_t *f,
+                                int errnum,
+                                const char *errstr);
 
 int flux_future_fulfill_with (flux_future_t *f, flux_future_t *p);
 
@@ -96,13 +102,15 @@ flux_future_t *flux_future_get_child (flux_future_t *cf, const char *name);
  *  has been used.
  */
 flux_future_t *flux_future_and_then (flux_future_t *f,
-                                     flux_continuation_f cb, void *arg);
+                                     flux_continuation_f cb,
+                                     void *arg);
 
 /* Like flux_future_and_then(3), but run the continuation `cb` when
  *  future `f` is fulfilled with an error.
  */
 flux_future_t *flux_future_or_then (flux_future_t *f,
-                                    flux_continuation_f cb, void *arg);
+                                    flux_continuation_f cb,
+                                    void *arg);
 
 /* Set the next future for the chained future `prev` to `f`.
  *  This function steals a reference to `f` and thus flux_future_destroy()
@@ -114,7 +122,8 @@ int flux_future_continue (flux_future_t *prev, flux_future_t *f);
 /*  Set the next future for the chained future `prev` to be fulfilled
  *   with an error `errnum` and an optional error string.
  */
-void flux_future_continue_error (flux_future_t *prev, int errnum,
+void flux_future_continue_error (flux_future_t *prev,
+                                 int errnum,
                                  const char *errstr);
 
 /*  Fulfill the next future in the chain immediately with a result.

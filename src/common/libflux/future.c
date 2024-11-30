@@ -70,12 +70,18 @@ struct flux_future {
     int refcount;
 };
 
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg);
-static void now_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                          int revents, void *arg);
-static void then_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                           int revents, void *arg);
+static void check_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg);
+static void now_timer_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg);
+static void then_timer_cb (flux_reactor_t *r,
+                           flux_watcher_t *w,
+                           int revents,
+                           void *arg);
 
 /* "now" reactor context - used for flux_future_wait_on()
  * This is set up lazily; wait until the user calls flux_future_wait_on().
@@ -107,15 +113,19 @@ error:
 }
 
 static int now_context_set_timeout (struct now_context *now,
-                                    double timeout, void *arg)
+                                    double timeout,
+                                    void *arg)
 {
     if (now) {
         if (timeout < 0.)       // disable
             flux_watcher_stop (now->timer);
         else {
             if (!now->timer) {  // set
-                now->timer = flux_timer_watcher_create (now->r, timeout, 0.,
-                                                        now_timer_cb, arg);
+                now->timer = flux_timer_watcher_create (now->r,
+                                                        timeout,
+                                                        0.,
+                                                        now_timer_cb,
+                                                        arg);
                 if (!now->timer)
                     return -1;
             }
@@ -179,7 +189,8 @@ static void then_context_stop (struct then_context *then)
 }
 
 static int then_context_set_timeout (struct then_context *then,
-                                     double timeout, void *arg)
+                                     double timeout,
+                                     void *arg)
 {
     if (then) {
         then->timeout = timeout;
@@ -187,8 +198,11 @@ static int then_context_set_timeout (struct then_context *then,
             flux_watcher_stop (then->timer);
         else {
             if (!then->timer) {
-                then->timer = flux_timer_watcher_create (then->r, 0., timeout,
-                                                         then_timer_cb, arg);
+                then->timer = flux_timer_watcher_create (then->r,
+                                                         0.,
+                                                         timeout,
+                                                         then_timer_cb,
+                                                         arg);
                 if (!then->timer)
                     return -1;
             }
@@ -216,7 +230,8 @@ static void clear_result (struct future_result *fs)
     init_result (fs);
 }
 
-static void set_result_value (struct future_result *fs, void *value,
+static void set_result_value (struct future_result *fs,
+                              void *value,
                               flux_free_f value_free)
 {
     assert (fs->is_error == false);
@@ -224,7 +239,8 @@ static void set_result_value (struct future_result *fs, void *value,
     fs->value_free = value_free;
 }
 
-static int set_result_errnum (struct future_result *fs, int errnum,
+static int set_result_errnum (struct future_result *fs,
+                              int errnum,
                               const char *errstr)
 {
     assert (!fs->value && !fs->value_free);
@@ -537,8 +553,10 @@ int flux_future_get (flux_future_t *f, const void **result)
  * Lazily set up the "then" reactor context.
  * If timer expires, fulfill the future with ETIMEDOUT error.
  */
-int flux_future_then (flux_future_t *f, double timeout,
-                      flux_continuation_f cb, void *arg)
+int flux_future_then (flux_future_t *f,
+                      double timeout,
+                      flux_continuation_f cb,
+                      void *arg)
 {
     if (!f || !f->r || !cb) {
         errno = EINVAL;
@@ -577,8 +595,10 @@ void *flux_future_aux_get (flux_future_t *f, const char *name)
 
 /* Store 'aux' object by name.
  */
-int flux_future_aux_set (flux_future_t *f, const char *name,
-                         void *aux, flux_free_f destroy)
+int flux_future_aux_set (flux_future_t *f,
+                         const char *name,
+                         void *aux,
+                         flux_free_f destroy)
 {
     if (!f) {
         errno = EINVAL;
@@ -635,7 +655,8 @@ void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn)
     }
 }
 
-void flux_future_fulfill_error (flux_future_t *f, int errnum,
+void flux_future_fulfill_error (flux_future_t *f,
+                                int errnum,
                                 const char *errstr)
 {
     if (f) {
@@ -692,8 +713,9 @@ int flux_future_fulfill_with (flux_future_t *f, flux_future_t *p)
     if (p->fatal_errnum_valid)
         flux_future_fatal_error (f, p->fatal_errnum, p->fatal_errnum_string);
     else if (p->result.is_error)
-        flux_future_fulfill_error (f, p->result.errnum,
-                                      p->result.errnum_string);
+        flux_future_fulfill_error (f,
+                                   p->result.errnum,
+                                   p->result.errnum_string);
     else {
         /*  Nornal result, if result has a free_fn registered, then we have
          *   to steal the reference for the result. We do this by copying
@@ -767,8 +789,10 @@ const char *flux_future_error_string (flux_future_t *f)
 /* timer - for flux_future_then() timeout
  * fulfill the future with an error
  */
-static void then_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                           int revents, void *arg)
+static void then_timer_cb (flux_reactor_t *r,
+                           flux_watcher_t *w,
+                           int revents,
+                           void *arg)
 {
     flux_future_t *f = arg;
     flux_future_fulfill_error (f, ETIMEDOUT, NULL);
@@ -777,8 +801,10 @@ static void then_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
 /* timer - for flux_future_wait_for() timeout
  * stop the reactor but don't fulfill the future
  */
-static void now_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                          int revents, void *arg)
+static void now_timer_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
 {
     errno = ETIMEDOUT;
     flux_reactor_stop_error (r);
@@ -786,8 +812,10 @@ static void now_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 /* check - if results are ready, call the continuation
  */
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void check_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     flux_future_t *f = arg;
 

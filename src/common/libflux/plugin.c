@@ -256,8 +256,10 @@ const char * flux_plugin_get_path (flux_plugin_t *p)
     return NULL;
 }
 
-int flux_plugin_aux_set (flux_plugin_t *p, const char *key,
-                         void *val, aux_free_f free_fn)
+int flux_plugin_aux_set (flux_plugin_t *p,
+                         const char *key,
+                         void *val,
+                         aux_free_f free_fn)
 {
     return aux_set (&p->aux, key, val, free_fn);
 }
@@ -323,9 +325,11 @@ int flux_plugin_set_conf (flux_plugin_t *p, const char *json_str)
     if (!p || !json_str)
         return plugin_seterror (p, EINVAL, NULL);
     if (!(p->conf = json_loads (json_str, 0, &err))) {
-        return plugin_seterror (p, errno,
+        return plugin_seterror (p,
+                                errno,
                                 "parse error: col %d: %s",
-                                 err.column, err.text);
+                                err.column,
+                                err.text);
     }
     if (p->conf_str) {
         free (p->conf_str);
@@ -455,18 +459,22 @@ int flux_plugin_register (flux_plugin_t *p,
     return 0;
 }
 
-static int arg_seterror (flux_plugin_arg_t *arg, int errnum,
-                         const char *fmt, ...)
+static int arg_seterror (flux_plugin_arg_t *arg,
+                         int errnum,
+                         const char *fmt,
+                         ...)
 {
     if (fmt) {
         va_list ap;
         va_start (ap, fmt);
         vsnprintf (arg->error.text, sizeof (arg->error.text), fmt, ap);
         va_end (ap);
-    } else if (arg) {
+    }
+    else if (arg) {
         snprintf (arg->error.text,
                   sizeof (arg->error.text),
-                  "%s", strerror (errno));
+                  "%s",
+                  strerror (errno));
     }
     errno = errnum;
     return -1;
@@ -547,8 +555,10 @@ int flux_plugin_arg_get (flux_plugin_arg_t *args, int flags, char **json_str)
     return 0;
 }
 
-int flux_plugin_arg_vpack (flux_plugin_arg_t *args, int flags,
-                           const char *fmt, va_list ap)
+int flux_plugin_arg_vpack (flux_plugin_arg_t *args,
+                           int flags,
+                           const char *fmt,
+                           va_list ap)
 {
     json_t *o;
     arg_clear_error (args);
@@ -559,8 +569,10 @@ int flux_plugin_arg_vpack (flux_plugin_arg_t *args, int flags,
     return arg_set (args, flags, o);
 }
 
-int flux_plugin_arg_pack (flux_plugin_arg_t *args, int flags,
-                          const char *fmt, ...)
+int flux_plugin_arg_pack (flux_plugin_arg_t *args,
+                          int flags,
+                          const char *fmt,
+                          ...)
 {
     int rc;
     va_list ap;
@@ -570,8 +582,10 @@ int flux_plugin_arg_pack (flux_plugin_arg_t *args, int flags,
     return rc;
 }
 
-int flux_plugin_arg_vunpack (flux_plugin_arg_t *args, int flags,
-                             const char *fmt, va_list ap)
+int flux_plugin_arg_vunpack (flux_plugin_arg_t *args,
+                             int flags,
+                             const char *fmt,
+                             va_list ap)
 {
     json_t **op;
     arg_clear_error (args);
@@ -581,8 +595,10 @@ int flux_plugin_arg_vunpack (flux_plugin_arg_t *args, int flags,
     return json_vunpack_ex (*op, &args->error, 0, fmt, ap);
 }
 
-int flux_plugin_arg_unpack (flux_plugin_arg_t *args, int flags,
-                            const char *fmt, ...)
+int flux_plugin_arg_unpack (flux_plugin_arg_t *args,
+                            int flags,
+                            const char *fmt,
+                            ...)
 {
     int rc;
     va_list ap;
@@ -592,7 +608,8 @@ int flux_plugin_arg_unpack (flux_plugin_arg_t *args, int flags,
     return rc;
 }
 
-int flux_plugin_call (flux_plugin_t *p, const char *string,
+int flux_plugin_call (flux_plugin_t *p,
+                      const char *string,
                       flux_plugin_arg_t *args)
 {
     const struct flux_plugin_handler *h = NULL;
