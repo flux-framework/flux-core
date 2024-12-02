@@ -50,7 +50,7 @@ SYNOPSIS
                              int flags,
                              const char *key,
                              const void *data,
-                             int len);
+                             size_t len);
 
    int flux_kvs_txn_put_treeobj (flux_kvs_txn_t *txn,
                                  int flags,

@@ -18,7 +18,7 @@ SYNOPSIS
    int flux_response_decode_raw (const flux_msg_t *msg,
                                  const char **topic,
                                  const void **data,
-                                 int *len);
+                                 size_t *len);
 
    int flux_response_decode_error (const flux_msg_t *msg,
                                    const char *errstr);

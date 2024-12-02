@@ -18,7 +18,7 @@ SYNOPSIS
    int flux_event_decode_raw (const flux_msg_t *msg,
                               const char **topic,
                               const void **data,
-                              int *len);
+                              size_t *len);
 
    int flux_event_unpack (const flux_msg_t *msg,
                           const char **topic,
@@ -29,7 +29,7 @@ SYNOPSIS
 
    flux_msg_t *flux_event_encode_raw (const char *topic,
                                       const void *data,
-                                      int len);
+                                      size_t len);
 
    flux_msg_t *flux_event_pack (const char *topic,
                                 const char *fmt,
