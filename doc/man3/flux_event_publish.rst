@@ -26,7 +26,7 @@ SYNOPSIS
                                           const char *topic,
                                           int flags,
                                           const void *data,
-                                          int len);
+                                          size_t len);
 
    int flux_event_publish_get_seq (flux_future_t *f, int *seq);
 

@@ -23,7 +23,7 @@ SYNOPSIS
    int flux_respond_raw (flux_t *h,
                          const flux_msg_t *request,
                          const void *data,
-                         int length);
+                         size_t length);
 
    int flux_respond_error (flux_t *h,
                            const flux_msg_t *request,
