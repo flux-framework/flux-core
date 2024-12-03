@@ -15,12 +15,11 @@ tmpfiles_DATA = flux.conf
 dist_cron_DATA = \
 	kvs-backup.cron
 
-dist_fluxconf_SCRIPTS = \
-        rc1 \
-        rc3
-
-dist_fluxrc1_SCRIPTS = \
-        rc1.d/02-cron
+nobase_dist_fluxconf_SCRIPTS = \
+	rc1 \
+	rc3 \
+	modprobe/rc1.py \
+	modprobe/rc3.py
 
 nobase_dist_fluxconf_DATA = \
 	modprobe/modprobe.toml
