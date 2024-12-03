@@ -35,6 +35,7 @@
 
 #include <jansson.h>
 #include <assert.h>
+#include <libgen.h>
 
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/fsd.h"
@@ -96,6 +97,14 @@ static const char *doom_exit_host (struct shell_doom *doom)
     return hostlist_nth (doom->hl, nth);
 }
 
+static const char *get_jobspec_command_arg0 (struct shell_doom *doom)
+{
+    json_t *s = json_array_get (doom->shell->info->jobspec->command, 0);
+    const char *path = json_string_value (s);
+    const char *p = strrchr (path, '/');
+    return p ? p + 1 : path;
+}
+
 static void doom_check (struct shell_doom *doom,
                         int rank,
                         int exitcode,
@@ -118,7 +127,8 @@ static void doom_check (struct shell_doom *doom,
 
     if (doom->exit_on_error && doom->exit_rc != 0) {
         shell_die (doom->exit_rc,
-                   "%srank %d on host %s failed and exit-on-error is set",
+                   "%s: %srank %d on host %s failed and exit-on-error is set",
+                   get_jobspec_command_arg0 (doom),
                    doom->lost_shell ? "shell " : "",
                    doom->exit_rank,
                    doom_exit_host (doom));
@@ -206,7 +216,8 @@ static void doom_timeout (flux_reactor_t *r,
 
     fsd_format_duration (fsd, sizeof (fsd), doom->timeout);
     shell_die (doom->exit_rc,
-               "%srank %d on host %s exited and exit-timeout=%s has expired",
+               "%s: %srank %d on host %s exited and exit-timeout=%s has expired",
+               get_jobspec_command_arg0 (doom),
                doom->lost_shell ? "shell " : "",
                doom->exit_rank,
                doom_exit_host (doom),

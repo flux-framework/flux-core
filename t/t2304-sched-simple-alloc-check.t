@@ -71,7 +71,7 @@ test_expect_success 'submit consecutive jobs that exceed their time limit' '
 	done) 2>joberr
 '
 test_expect_success 'some jobs received timeout exception' '
-	grep "job.exception type=timeout" joberr
+	grep "job.exception" joberr | grep "type=timeout"
 '
 test_expect_success 'no jobs received alloc-check exception' '
 	test_must_fail grep "job.exception type=alloc-check" joberr
