@@ -1,3 +1,43 @@
+flux-core version 0.69.0 - 2024-12-03
+-------------------------------------
+
+## New Features
+ * add flux module stats `--rusage=[self|children|thread]` optional argument
+   (#6471)
+ * add `-S, --setattr` and `-c, --config-path` options directly to `flux
+   start` (#6452)
+ * job-ingest: improve cleanup and stats output (#6438)
+ * libflux: add `flux_watcher_is_active()` (#6436)
+ * indicate held jobs in the` INFO` column of `flux jobs` output (#6430)
+ * recursively update instead of replacing tables when loading Flux
+   configuration (#6424)
+ * convert ISO timestamp output from UTC to local time + offset in `flux
+   dmesg` and eventlog commands (#6423)
+ * support flux uri --wait JOBID (#6443)
+ * skip "empty" lines of output in `flux resource list` with `--skip-empty`
+   or `--include` (#6460)
+
+## Fixes
+ * libfileref: fix segfault for files >2G (#6462)
+ * fix macos portability issues (#6454, #6468)
+ * fix multiple issues in the `flux job attach` statusline (#6442)
+ * librlist: avoid unnecessary hwloc dependencies (#6450)
+ * python: call shutdown() on executor in job validator (#6435)
+ * increase default prolog kill-timeout from 10s to 1m (#6431)
+ * job-manager/history: optimize list insertion (#6422)
+
+## Cleanup
+ * kvs-watch: misc cleanup (#6458)
+ * build: misc cleanup (#6451)
+ * job-manager: clean up queue code (#6448)
+ * remove `flux-perilog-run` (#6447)
+
+## CI/Testsuite/Documentation
+ * doc: improve `--include` documentation in flux-resource(1) (#6459)
+ * doc: improve housekeeping documentation (#6425)
+ * doc: launch jobs with systemd in the admin guide (#6427)
+
+
 flux-core version 0.68.0 - 2024-11-06
 -------------------------------------
 
