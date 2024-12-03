@@ -543,6 +543,8 @@ _flux_resource()
         -n --no-header \
         -q --queue= \
         -i --include= \
+        --skip-empty \
+        --no-skip-empty \
     "
     local status_OPTS="\
         ${list_OPTS} \

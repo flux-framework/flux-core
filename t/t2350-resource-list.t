@@ -76,6 +76,13 @@ for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
         test_debug "cat $name.output" &&
         test_cmp ${base}.expected $name.output
     '
+    test_expect_success "flux-resource list --skip-empty: $testname" '
+        awk "\$3!=0 {print}" ${base}.expected > skip-empty.${name}.expected &&
+        flux resource list -o "$FORMAT" \
+            --skip-empty \
+            --from-stdin < $input > skip-empty.${name}.output 2>&1 &&
+        test_cmp skip-empty.${name}.expected skip-empty.${name}.output
+    '
     test_expect_success "flux-resource info input check: $testname" '
         flux resource info --from-stdin < $input > ${name}-info.output 2>&1 &&
         test_debug "cat ${name}-info.output" &&
@@ -96,12 +103,13 @@ for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
     name=$(basename $base) &&
     test_expect_success "flux-resource list input --include check: $name" '
         flux resource list -o "{ranks} {nodelist}" --include=0 \
+	    --no-skip-empty \
             --from-stdin < $input >$name-include.output 2>&1 &&
         test_debug "cat $name-include.output" &&
         grep "^0[^,-]" $name-include.output
     '
     test_expect_success "flux-resource info input --include check: $testname" '
-        flux resource info --from-stdin -i0 < $input \
+        flux resource info --from-stdin --no-skip-empty -i0 < $input \
             > ${name}-info-include.output 2>&1 &&
         test_debug "cat ${name}-info-include.output" &&
 	grep "1 Node" ${name}-info-include.output
@@ -172,13 +180,19 @@ test_expect_success 'flux-resource -q, --queue reports invalid queue' '
 	grep "foo: no such queue" badqueue.err
 '
 test_expect_success 'flux-resource list supports --include' '
-	flux resource list -s all -ni 0 >list-include.output &&
+	flux resource list -s all -ni 0 --no-skip-empty >list-include.output &&
 	test_debug "cat list-include.output" &&
 	test $(wc -l <list-include.output) -eq 1
 '
 INPUT=${SHARNESS_TEST_SRCDIR}/flux-resource/list/normal-new.json
+test_expect_success 'flux-resource list --include skips empty lines by default' '
+	flux resource list -s all -ni 0 --from-stdin < $INPUT >skip-empty.out &&
+	test_debug "cat skip-empty.out" &&
+	test $(wc -l <skip-empty.out) -eq 1
+'
 test_expect_success 'flux-resource list: --include works with ranks' '
 	flux resource list -s all -o "{nnodes} {ranks}" -ni 0,3 --from-stdin \
+	    --no-skip-empty \
 		< $INPUT >include-ranks.out &&
 	test_debug "cat include-ranks.out" &&
 	grep "^2 0,3" include-ranks.out
@@ -270,7 +284,8 @@ test_expect_success 'flux-resource list: -i works with excluded hosts #5266' '
 '
 test_expect_success 'flux-resource list: --include works with invalid host' '
 	flux resource list -s all -o "{nnodes} {nodelist}" -ni pi7 \
-		--from-stdin < $INPUT >include-invalid-hosts.out &&
+		--from-stdin --no-skip-empty \
+		< $INPUT >include-invalid-hosts.out &&
 	test_debug "cat include-invalid-hosts.out" &&
 	grep "^0" include-invalid-hosts.out
 '
