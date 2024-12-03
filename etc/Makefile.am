@@ -16,11 +16,10 @@ dist_cron_DATA = \
 	kvs-backup.cron
 
 dist_fluxconf_SCRIPTS = \
-        rc1 \
-        rc3
-
-dist_fluxrc1_SCRIPTS = \
-        rc1.d/02-cron
+	rc1 \
+	rc3 \
+	rc1.py \
+	rc3.py
 
 dist_fluxconf_DATA = \
 	modprobe.toml
