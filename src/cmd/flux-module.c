@@ -96,8 +96,10 @@ static struct optparse_option stats_opts[] =  {
     { .name = "type", .key = 't', .has_arg = 1, .arginfo = "int|double",
       .usage = "Convert JSON value to specified type",
     },
-    { .name = "rusage", .key = 'R', .has_arg = 0,
-      .usage = "Request rusage data instead of stats",
+    { .name = "rusage", .key = 'R', .has_arg = 2,
+      .arginfo = "[self|children|thread]",
+      .usage = "Request rusage data instead of stats (default: self)",
+      .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
     },
     { .name = "clear", .key = 'c', .has_arg = 0,
       .usage = "Clear stats on target rank",
@@ -672,10 +674,22 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
         flux_msg_destroy (msg);
     } else if (optparse_hasopt (p, "rusage")) {
         topic = xasprintf ("%s.rusage", service);
-        if (!(f = flux_rpc (h, topic, NULL, nodeid, 0)))
-            log_err_exit ("%s", topic);
+        const char *optarg = optparse_get_str (p, "rusage", NULL);
+        if (optarg) {
+            if (!(f = flux_rpc_pack (h,
+                                     topic,
+                                     nodeid,
+                                     0,
+                                     "{s:s}",
+                                     "who", optarg)))
+                log_err_exit ("%s", topic);
+        }
+        else {
+            if (!(f = flux_rpc (h, topic, NULL, nodeid, 0)))
+                log_err_exit ("%s", topic);
+        }
         if (flux_rpc_get (f, &json_str) < 0)
-            log_err_exit ("%s", topic);
+            log_msg_exit ("%s: %s", topic, future_strerror (f, errno));
         if (!json_str)
             log_errn_exit (EPROTO, "%s", topic);
         parse_json (p, json_str);
