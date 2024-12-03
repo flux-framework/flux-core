@@ -66,6 +66,7 @@ nobase_fluxpy_PYTHON = \
 	idset.py \
 	progress.py \
 	queue.py \
+	modprobe.py \
 	uri/uri.py \
 	uri/__init__.py \
 	uri/resolvers/jobid.py \
