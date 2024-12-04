@@ -388,7 +388,7 @@ static void log_timestamp (FILE *fp,
         || strftime (datetime, sizeof (datetime), "%b %d %T", &tm) == 0
         || strftime (timezone, sizeof (timezone), "%Z", &tm) == 0)
         fprintf (fp, "%s ", hdr->timestamp);
-    fprintf (fp, "%s.%06ld %s ", datetime, tv.tv_usec, timezone);
+    fprintf (fp, "%s.%06ld %s ", datetime, (long)tv.tv_usec, timezone);
 }
 
 /* Log a message to 'fp', if non-NULL.

@@ -31,6 +31,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/fdutils.h"
+#include "src/common/libutil/basename.h"
 #include "src/common/libtaskmap/taskmap_private.h"
 #include "ccan/str/str.h"
 
@@ -1051,7 +1052,7 @@ static int mustache_render_name (flux_shell_t *shell,
         json_t *cmd = json_array_get (shell->info->jobspec->command, 0);
         if (!cmd
             || !(jobname = json_string_value (cmd))
-            || !(jobname = basename (jobname)))
+            || !(jobname = basename_simple (jobname)))
             jobname = "unknown";
     }
     if (fputs (jobname, fp) == EOF) {

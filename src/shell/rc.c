@@ -361,10 +361,12 @@ static int l_source_rcfiles (lua_State *L)
     int rc;
     glob_t gl;
     const char *pattern = lua_tostring (L, -1);
+    int glob_flags = 0;
 
-    /* XXX: using GLOB_TILDE GNU extension for now
-     */
-    if ((rc = glob (pattern, GLOB_TILDE_CHECK, NULL, &gl)) != 0) {
+#ifdef GLOB_TILDE_CHECK
+    glob_flags |= GLOB_TILDE_CHECK;
+#endif
+    if ((rc = glob (pattern, glob_flags, NULL, &gl)) != 0) {
         globfree (&gl);
         if (rc == GLOB_NOMATCH) {
             if (!isa_pattern (pattern))

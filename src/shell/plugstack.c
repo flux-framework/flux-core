@@ -233,8 +233,13 @@ static int plugstack_glob (struct plugstack *st,
 {
     glob_t gl;
     int rc = -1;
+    int flags = 0;
 
-    rc = glob (pattern, GLOB_TILDE_CHECK, NULL, &gl);
+#ifdef GLOB_TILDE_CHECK
+    flags |= GLOB_TILDE_CHECK;
+#endif
+
+    rc = glob (pattern, flags, NULL, &gl);
     switch (rc) {
         case 0:
             rc = load_from_glob (st, &gl, conf);

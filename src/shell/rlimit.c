@@ -52,18 +52,26 @@ static int rlimit_name_to_string (const char *name)
         return RLIMIT_NPROC;
     if (streq (name, "memlock"))
         return RLIMIT_MEMLOCK;
+#ifdef RLIMIT_MSGQUEUE
     if (streq (name, "msgqueue"))
         return RLIMIT_MSGQUEUE;
+#endif
+#ifdef RLIMIT_NICE
     if (streq (name, "nice"))
         return RLIMIT_NICE;
+#endif
+#ifdef RLIMIT_RTPRIO
     if (streq (name, "rtprio"))
         return RLIMIT_RTPRIO;
+#endif
 #ifdef RLIMIT_RTTIME
     if (streq (name, "rttime"))
         return RLIMIT_RTTIME;
 #endif
+#ifdef RLIMIT_SIGPENDING
     if (streq (name, "sigpending"))
         return RLIMIT_SIGPENDING;
+#endif
     return -1;
 }
 

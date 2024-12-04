@@ -31,6 +31,9 @@
 #include <signal.h>
 #include <flux/core.h>
 #include <jansson.h>
+#ifndef HAVE_GET_CURRENT_DIR_NAME
+#include "src/common/libmissing/get_current_dir_name.h"
+#endif
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"

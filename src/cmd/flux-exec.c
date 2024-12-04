@@ -21,6 +21,9 @@
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <signal.h>
+#ifndef HAVE_GET_CURRENT_DIR_NAME
+#include "src/common/libmissing/get_current_dir_name.h"
+#endif
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -28,6 +31,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/basename.h"
 #include "src/common/libsubprocess/fbuf.h"
 #include "src/common/libsubprocess/fbuf_watcher.h"
 #include "ccan/str/str.h"
@@ -447,7 +451,7 @@ static bool check_for_imp_run (int argc, char *argv[], const char **ppath)
     /* If argv0 basename is flux-imp, then we'll likely have to use
      *  flux-imp kill to signal the resulting subprocesses
      */
-    if (streq (basename (argv[0]), "flux-imp")) {
+    if (streq (basename_simple (argv[0]), "flux-imp")) {
         *ppath = argv[0];
         return true;
     }

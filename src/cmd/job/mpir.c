@@ -16,11 +16,16 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <libgen.h>
+#ifndef HAVE_GET_CURRENT_DIR_NAME
+#include "src/common/libmissing/get_current_dir_name.h"
+#endif
 
 #include <flux/core.h>
 #include <flux/optparse.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/basename.h"
 #include "src/common/libjob/idf58.h"
 #include "src/common/libdebugged/debugged.h"
 #include "src/shell/mpir/proctable.h"
@@ -139,7 +144,7 @@ static void completion_cb (flux_subprocess_t *p)
     int rank = flux_subprocess_rank (p);
     int exitcode = flux_subprocess_exit_code (p);
     int signum = flux_subprocess_signaled (p);
-    const char *prog = basename (MPIR_executable_path);
+    const char *prog = basename_simple (MPIR_executable_path);
 
     if (signum > 0)
         log_msg ("MPIR: rank %d: %s: %s", rank, prog, strsignal (signum));
@@ -183,7 +188,7 @@ static void output_cb (flux_subprocess_t *p, const char *stream)
 {
     const char *line;
     int len = 0;
-    const char *prog = basename (MPIR_executable_path);
+    const char *prog = basename_simple (MPIR_executable_path);
     int rank = flux_subprocess_rank (p);
 
     len = flux_subprocess_read_trimmed_line (p, stream, &line);
@@ -196,7 +201,7 @@ static void output_cb (flux_subprocess_t *p, const char *stream)
 static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 {
     if (state == FLUX_SUBPROCESS_FAILED) {
-        const char *prog = basename (MPIR_executable_path);
+        const char *prog = basename_simple (MPIR_executable_path);
         int rank = flux_subprocess_rank (p);
         const char *errmsg = flux_subprocess_fail_error (p);
         log_msg ("MPIR: rank %d: %s: %s", rank, prog, errmsg);

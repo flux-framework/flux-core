@@ -122,7 +122,7 @@ int main (int argc, char *argv[])
     flux_reactor_t *r;
     int i, rc, ch;
 
-    log_init (basename (argv[0]));
+    log_init (argv[0]);
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {

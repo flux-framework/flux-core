@@ -21,6 +21,7 @@
 #include "src/common/libmissing/macros.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/aux.h"
+#include "src/common/libutil/basename.h"
 #include "ccan/str/str.h"
 #include "ccan/array_size/array_size.h"
 
@@ -75,12 +76,8 @@ int sdexec_unit_aux_set (struct unit *unit,
 
 const char *sdexec_unit_name (struct unit *unit)
 {
-    if (unit) {
-        const char *cp;
-        if ((cp = strrchr (unit->path, '/')))
-            return cp + 1;
-        return unit->path;
-    }
+    if (unit)
+        return basename_simple (unit->path);
     return "internal error: unit is null";
 }
 

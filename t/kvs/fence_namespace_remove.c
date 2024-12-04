@@ -46,7 +46,7 @@ int main (int argc, char *argv[])
     flux_future_t *f = NULL;
     flux_kvs_txn_t *txn = NULL;
 
-    log_init (basename (argv[0]));
+    log_init (argv[0]);
 
     if (argc != 3)
         usage ();

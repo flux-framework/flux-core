@@ -46,6 +46,7 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/basename.h"
 #include "ccan/str/str.h"
 
 #include "worker.h"
@@ -500,7 +501,7 @@ struct worker *worker_create (flux_t *h, double inactivity_timeout,
         goto error;
     if (!(w->trash = zlist_new()))
         goto error;
-    if (!(w->name = strdup (basename (name))))
+    if (!(w->name = strdup (basename_simple (name))))
         goto error;
     if (!(w->queue = zlist_new ()))
         goto error;

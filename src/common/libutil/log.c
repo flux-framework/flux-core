@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <signal.h>
 
+#include "basename.h"
 #include "log.h"
 
 extern char *__progname;
@@ -34,7 +35,7 @@ log_init (char *p)
     if (!p)
         prog = __progname;
     else
-        prog = basename (p);
+        prog = basename_simple (p);
 }
 
 void

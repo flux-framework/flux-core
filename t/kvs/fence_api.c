@@ -137,7 +137,7 @@ int main (int argc, char *argv[])
     thd_t *thd;
     int i, ch, num, rc;
 
-    log_init (basename (argv[0]));
+    log_init (argv[0]);
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {

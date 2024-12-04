@@ -34,7 +34,7 @@ int main (int argc, char *argv[])
     char *key = NULL;
     flux_future_t *f = NULL;
 
-    log_init (basename (argv[0]));
+    log_init (argv[0]);
 
     if (argc != 2)
         usage ();

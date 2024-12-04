@@ -20,13 +20,17 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <stdio.h>
+#ifndef HAVE_GET_CURRENT_DIR_NAME
+#include "src/common/libmissing/get_current_dir_name.h"
+#endif
 
 #include <dirent.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
-#include "src/common/libutil/dirwalk.h"
+#include "basename.h"
+#include "dirwalk.h"
 
 static int makepath (const char *fmt, ...)
 {
@@ -265,7 +269,7 @@ int main(int argc, char** argv)
     l = dirwalk_find (tmp, 0, "foo", 1, NULL, 0);
     ok (l != NULL, "dirwalk_find");
     ok (l && zlist_size (l) == 1, "dirwalk_find stopped at 1 result");
-    ok (streq (basename (zlist_first (l)), "foo"),
+    ok (streq (basename_simple (zlist_first (l)), "foo"),
         "breadth-first search got expected match");
     zlist_destroy (&l);
 

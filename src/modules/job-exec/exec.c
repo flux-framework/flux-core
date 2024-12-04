@@ -39,6 +39,7 @@
 
 #include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
+#include "src/common/libutil/basename.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libsubprocess/bulk-exec.h"
@@ -266,7 +267,7 @@ static void output_cb (struct bulk_exec *exec,
     }
     jobinfo_log_output (job,
                         flux_subprocess_rank (p),
-                        basename (cmd),
+                        basename_simple (cmd),
                         stream,
                         data,
                         len);

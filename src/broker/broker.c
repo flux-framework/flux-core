@@ -15,7 +15,9 @@
 #include <signal.h>
 #include <locale.h>
 #include <inttypes.h>
+#ifdef HAVE_SYS_PRCTL_H
 #include <sys/prctl.h>
+#endif
 #include <sys/resource.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -51,6 +53,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/intree.h"
+#include "src/common/libutil/basename.h"
 #include "src/common/librouter/subhash.h"
 #include "src/common/libfluxutil/method.h"
 #include "ccan/array_size/array_size.h"
@@ -665,9 +668,11 @@ static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
 
 static void set_proctitle (uint32_t rank)
 {
+#ifdef PR_SET_NAME
     static char proctitle[32];
     snprintf (proctitle, sizeof (proctitle), "flux-broker-%"PRIu32, rank);
     (void)prctl (PR_SET_NAME, proctitle, 0, 0, 0);
+#endif
 }
 
 static bool is_interactive_shell (const char *argz, size_t argz_len)
@@ -685,8 +690,7 @@ static bool is_interactive_shell (const char *argz, size_t argz_len)
         char *shell;
         char *cmd = argz_next (argz, argz_len, NULL);
         while ((shell = getusershell ())) {
-            if (streq (cmd, shell)
-                || streq (cmd, basename (shell))) {
+            if (streq (cmd, shell) || streq (cmd, basename_simple (shell))) {
                 result = true;
                 break;
             }

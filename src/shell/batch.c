@@ -26,6 +26,7 @@
 #include <flux/shell.h>
 
 #include "src/common/libutil/read_all.h"
+#include "src/common/libutil/basename.h"
 #include "ccan/str/str.h"
 
 #include "builtins.h"
@@ -138,7 +139,7 @@ static bool is_batch_command (flux_cmd_t *cmd)
     const char *argv1 = flux_cmd_arg (cmd, 1);
 
     return  (argv0
-             && streq (basename (argv0), "flux")
+             && streq (basename_simple (argv0), "flux")
              && (streq (argv1, "broker") || streq (argv1, "start")));
 }
 
