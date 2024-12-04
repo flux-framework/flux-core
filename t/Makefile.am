@@ -329,6 +329,9 @@ EXTRA_DIST= \
 	rc/rc1-job \
 	rc/rc3-kvs \
 	rc/rc3-job \
+	rc/rc1-kvs.py \
+	rc/rc1-job.py \
+	rc/rc3.py \
 	shell/input \
 	shell/output \
 	shell/initrc/tests \
