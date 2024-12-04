@@ -807,6 +807,45 @@ void test_corner_cases (void)
     json_decref (symlink);
 }
 
+void test_type_name (void)
+{
+    json_t *val, *valref, *dir, *dirref, *symlink, *notatreeobj;
+    const char *s;
+
+    val = treeobj_create_val ("a", 1);
+    valref = treeobj_create_valref (NULL);
+    dir = treeobj_create_dir ();
+    dirref = treeobj_create_dirref (NULL);
+    symlink = treeobj_create_symlink (NULL, "some-string");
+    notatreeobj = json_object ();
+    if (!val || !valref || !dir || !dirref || !symlink || !notatreeobj)
+        BAIL_OUT ("can't continue without test value");
+
+    s = treeobj_type_name (val);
+    ok (streq (s, "val"), "treeobj_type_name returns val correctly");
+    s = treeobj_type_name (valref);
+    ok (streq (s, "valref"), "treeobj_type_name returns valref correctly");
+    s = treeobj_type_name (dir);
+    ok (streq (s, "dir"), "treeobj_type_name returns dir correctly");
+    s = treeobj_type_name (dirref);
+    ok (streq (s, "dirref"), "treeobj_type_name returns dirref correctly");
+    s = treeobj_type_name (symlink);
+    ok (streq (s, "symlink"), "treeobj_type_name returns symlink correctly");
+    s = treeobj_type_name (notatreeobj);
+    ok (streq (s, "unknown"),
+        "treeobj_type_name returns unknown for non-treeobj");
+    s = treeobj_type_name (NULL);
+    ok (streq (s, "unknown"),
+        "treeobj_type_name returns unknown on invalid input");
+
+    json_decref (val);
+    json_decref (valref);
+    json_decref (dir);
+    json_decref (dirref);
+    json_decref (symlink);
+    json_decref (notatreeobj);
+}
+
 int main(int argc, char** argv)
 {
     plan (NO_PLAN);
@@ -820,6 +859,7 @@ int main(int argc, char** argv)
     test_deep_copy ();
     test_symlink ();
     test_corner_cases ();
+    test_type_name ();
 
     test_codec ();
 
