@@ -10,7 +10,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
-	-I$(top_builddir)/src/common/libflux
+	-I$(top_builddir)/src/common/libflux \
+	$(JANSSON_CFLAGS)
 
 noinst_LTLIBRARIES = libcontent-files.la
 

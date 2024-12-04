@@ -91,7 +91,7 @@ static int cron_entry_run_task (cron_entry_t *e)
 {
     flux_t *h = e->ctx->h;
     if (cron_task_run (e->task, e->rank, e->command, e->cwd, e->env) < 0) {
-        flux_log_error (h, "cron-%ju: cron_task_run", e->id);
+        flux_log_error (h, "cron-%ju: cron_task_run", (uintmax_t)e->id);
         /* Run "finished" handler since this task is done */
         cron_entry_finished_handler (h, e->task, e);
         return (-1);
@@ -116,7 +116,7 @@ int cron_entry_schedule_task (cron_entry_t *e)
         flux_log (h,
                   LOG_INFO,
                   "cron-%ju: %s: task still running or scheduled",
-                  e->id,
+                  (uintmax_t)e->id,
                   e->name);
         return (0);
     }
@@ -149,7 +149,7 @@ static void cron_entry_io_cb (flux_t *h, cron_task_t *t, void *arg,
     flux_log (h,
               level,
               "cron-%ju[%s]: rank=%d: command=\"%s\": \"%s\"",
-              e->id,
+              (uintmax_t)e->id,
               e->name,
               e->rank,
               e->command,
@@ -182,7 +182,7 @@ static void cron_entry_failure (cron_entry_t *e)
         flux_log (e->ctx->h,
                   LOG_ERR,
                   "cron-%ju: exceeded failure limit of %d. stopping",
-                  e->id,
+                  (uintmax_t)e->id,
                   e->stop_on_failure);
         cron_entry_stop (e);
     }
@@ -193,17 +193,23 @@ static void cron_entry_finished_handler (flux_t *h, cron_task_t *t, void *arg)
     cron_entry_t *e = arg;
 
     if (streq (cron_task_state (t), "Exec Failure")) {
-        flux_log_error (h, "cron-%ju: failed to run %s", e->id, e->command);
+        flux_log_error (h,
+                        "cron-%ju: failed to run %s",
+                        (uintmax_t)e->id,
+                        e->command);
         cron_entry_failure (e);
     }
     else if (streq (cron_task_state (t), "Rexec Failure")) {
-        flux_log_error (h, "cron-%ju: failure running %s", e->id, e->command);
+        flux_log_error (h,
+                        "cron-%ju: failure running %s",
+                        (uintmax_t)e->id,
+                        e->command);
         cron_entry_failure (e);
     }
     else if (cron_task_status (t) != 0) {
         flux_log (h,
                   LOG_ERR, "cron-%ju: \"%s\": Failed: %s",
-                  e->id,
+                  (uintmax_t)e->id,
                   e->command,
                   cron_task_state (t));
         cron_entry_failure (e);
@@ -366,7 +372,7 @@ static int cron_entry_defer (cron_entry_t *e)
     flux_log (ctx->h,
               LOG_DEBUG,
               "deferring cron-%ju to next %s event",
-              e->id,
+              (uintmax_t)e->id,
               ctx->sync_event);
 
     if (zlist_size (ctx->deferred) == 1)

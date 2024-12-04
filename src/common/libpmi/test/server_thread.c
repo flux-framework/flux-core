@@ -218,8 +218,16 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
 
     for (i = 0; i < size; i++) {
         int fd[2];
+#ifdef SOCK_CLOEXEC
         if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, fd) < 0)
             BAIL_OUT ("socketpair failed");
+#else
+        if (socketpair (PF_LOCAL, SOCK_STREAM, 0, fd) < 0
+            || fd_set_cloexec (fd[0]) < 0
+            || fd_set_cloexec (fd[1]) < 0)
+            BAIL_OUT ("socketpair failed");
+#endif
+
         cfd[i] = fd[0];
         ctx->cli[i].sfd = fd[1];
         ctx->cli[i].rank = i;

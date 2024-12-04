@@ -38,6 +38,7 @@
 #include "src/common/librouter/usock.h"
 #include "src/common/librouter/router.h"
 
+extern char **environ;
 
 struct proxy_command {
     struct usock_server *server;

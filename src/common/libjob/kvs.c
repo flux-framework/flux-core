@@ -79,7 +79,7 @@ int flux_job_kvs_namespace (char *buf, int bufsz, flux_jobid_t id)
     int len;
     if (buffer_arg_check (buf, bufsz) < 0)
         return -1;
-    if ((len = snprintf (buf, bufsz, "job-%ju", id)) >= bufsz) {
+    if ((len = snprintf (buf, bufsz, "job-%ju", (uintmax_t)id)) >= bufsz) {
         errno = EOVERFLOW;
         return -1;
     }

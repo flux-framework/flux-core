@@ -39,6 +39,9 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#if HAVE_SYS_UCRED_H
+#include <sys/ucred.h>
+#endif
 #include <poll.h>
 #include <unistd.h>
 #include <errno.h>
@@ -387,14 +390,14 @@ void usock_server_destroy (struct usock_server *server)
 
 static int usock_get_cred (int fd, struct flux_msg_cred *cred)
 {
-    struct ucred ucred;
-    socklen_t crlen;
 
     if (fd < 0 || !cred) {
         errno = EINVAL;
         return -1;
     }
-    crlen = sizeof (ucred);
+#if defined(SO_PEERCRED)
+    struct ucred ucred;
+    socklen_t crlen = sizeof (ucred);
     if (getsockopt (fd,
                     SOL_SOCKET,
                     SO_PEERCRED,
@@ -406,6 +409,19 @@ static int usock_get_cred (int fd, struct flux_msg_cred *cred)
         return -1;
     }
     cred->userid = ucred.uid;
+#elif defined(LOCAL_PEERCRED)
+    struct xucred ucred;
+    socklen_t crlen = sizeof (ucred);
+    if (getsockopt (fd, 0, LOCAL_PEERCRED, &ucred, &crlen) < 0)
+        return -1;
+    if (ucred.cr_version != XUCRED_VERSION) {
+        errno = EINVAL;
+        return -1;
+    }
+    cred->userid = ucred.cr_uid;
+#else
+#error Neither SO_PEERCRED nor LOCAL_PEERCRED are defined
+#endif
     cred->rolemask = FLUX_ROLE_NONE;
     return 0;
 }
@@ -460,8 +476,17 @@ static struct usock_conn *server_accept (struct usock_server *server,
     struct usock_conn *conn;
     int cfd;
 
+#ifdef SOCK_CLOEXEC
     if ((cfd = accept4 (server->fd, NULL, NULL, SOCK_CLOEXEC)) < 0)
         return NULL;
+#else
+    if ((cfd = accept (server->fd, NULL, NULL)) < 0)
+        return NULL;
+    if (fd_set_cloexec (cfd) < 0) {
+        ERRNO_SAFE_WRAP (close, cfd);
+        return NULL;
+    }
+#endif
     if (!(conn = usock_conn_create (r, cfd, cfd))
         || usock_get_cred (cfd, &conn->cred) < 0) {
         ERRNO_SAFE_WRAP (close, cfd);
@@ -537,8 +562,14 @@ struct usock_server *usock_server_create (flux_reactor_t *r,
     }
     if (!(server = calloc (1, sizeof (*server))))
         return NULL;
+#ifdef SOCK_CLOEXEC
     if ((server->fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)) < 0)
         goto error;
+#else
+    if ((server->fd = socket (AF_UNIX, SOCK_STREAM, 0)) < 0
+        || fd_set_cloexec (server->fd) < 0)
+        goto error;
+#endif
     if (!(server->sockpath = strdup (sockpath)))
         goto error;
     if (remove (sockpath) < 0 && errno != ENOENT)
@@ -688,8 +719,15 @@ int usock_client_connect (const char *sockpath,
         errno = EINVAL;
         return -1;
     }
+#ifdef SOCK_CLOEXEC
     if ((fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)) < 0)
         return -1;
+#else
+    if ((fd = socket (AF_UNIX, SOCK_STREAM, 0)) < 0)
+        return -1;
+    if (fd_set_cloexec (fd) < 0)
+        goto error;
+#endif
 
     memset (&addr, 0, sizeof (addr));
     addr.sun_family = AF_UNIX;

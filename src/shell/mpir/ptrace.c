@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/ptrace.h>
+#include <signal.h>
 
 #include <flux/core.h>
 #include <flux/shell.h>

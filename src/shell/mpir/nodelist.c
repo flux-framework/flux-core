@@ -109,7 +109,7 @@ static char *make_hostname (const char *prefix, int64_t n)
 {
     char *result = NULL;
     if (n >= 0) {
-        if (asprintf (&result, "%s%jd", prefix, n) < 0)
+        if (asprintf (&result, "%s%jd", prefix, (intmax_t)n) < 0)
             return NULL;
     }
     else if (n != RANGELIST_END)

@@ -50,6 +50,8 @@
 
 #include "worker.h"
 
+extern char **environ;
+
 const char *worker_auxkey = "flux::worker";
 
 struct worker {

@@ -61,7 +61,7 @@ static void update_ctx_destroy (void *data)
 static char *get_index_key (flux_jobid_t id, const char *key)
 {
     char *s;
-    if (asprintf (&s, "%ju-%s", id, key) < 0)
+    if (asprintf (&s, "%ju-%s", (uintmax_t)id, key) < 0)
         return NULL;
     return s;
 }

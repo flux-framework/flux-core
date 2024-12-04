@@ -188,6 +188,7 @@ AC_CHECK_HEADERS( \
   endian.h \
   inttypes.h \
   link.h \
+  [sys/ucred.h] \
 )
 
 ##

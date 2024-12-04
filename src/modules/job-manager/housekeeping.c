@@ -101,6 +101,8 @@
 
 #include "housekeeping.h"
 
+extern char **environ;
+
 // -1 = never, 0 = immediate, >0 = time in seconds
 static const double default_release_after = -1;
 
