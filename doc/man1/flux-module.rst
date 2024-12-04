@@ -105,10 +105,11 @@ the object may be customized on a module basis.
   Multiply the returned (int or double) value by the specified
   floating point value.
 
-.. option:: -R, --rusage
+.. option:: -R, --rusage=[self|children|thread]
 
   Return a JSON object representing an *rusage* structure
-  returned by :linux:man2:`getrusage`.
+  returned by :linux:man2:`getrusage`.  If specified, the optional argument
+  specifies the query target (default: self).
 
 .. option:: -c, --clear
 

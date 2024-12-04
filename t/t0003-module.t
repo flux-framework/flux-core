@@ -184,25 +184,21 @@ test_expect_success 'flux module stats --scale works' '
 	test "$EVENT_TX2" -eq $((${EVENT_TX}*2))
 '
 
-
 test_expect_success 'flux module stats --rusage works' '
-	flux module stats --rusage $REALMOD >rusage.stats &&
-	grep -q utime rusage.stats &&
-	grep -q stime rusage.stats &&
-	grep -q maxrss rusage.stats &&
-	grep -q ixrss rusage.stats &&
-	grep -q idrss rusage.stats &&
-	grep -q isrss rusage.stats &&
-	grep -q minflt rusage.stats &&
-	grep -q majflt rusage.stats &&
-	grep -q nswap rusage.stats &&
-	grep -q inblock rusage.stats &&
-	grep -q oublock rusage.stats &&
-	grep -q msgsnd rusage.stats &&
-	grep -q msgrcv rusage.stats &&
-	grep -q nsignals rusage.stats &&
-	grep -q nvcsw rusage.stats &&
-	grep -q nivcsw rusage.stats
+	flux module stats --rusage $REALMOD
+'
+test_expect_success 'flux module stats -Rself works' '
+	flux module stats -Rself $REALMOD
+'
+test_expect_success 'flux module stats --rusage=children works' '
+	flux module stats --rusage=children $REALMOD
+'
+# RUSAGE_THREAD is a non-portable GNU extension
+test_expect_success 'flux module stats --rusage=thread might work :-)' '
+	test_might_fail flux module stats --rusage=thread $REALMOD
+'
+test_expect_success 'flux module stats --rusage=badopt fails' '
+	test_must_fail flux module stats --rusage=badopt $REALMOD
 '
 
 test_expect_success 'flux module stats --rusage --parse maxrss works' '

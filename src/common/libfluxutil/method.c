@@ -17,6 +17,8 @@
 #include <sys/resource.h>
 
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
+#include "ccan/str/str.h"
 
 #include "method.h"
 
@@ -125,9 +127,29 @@ void method_rusage_cb (flux_t *h,
                        void *arg)
 {
     struct rusage ru;
+    const char *s = NULL;
+    int who;
+    const char *errmsg = NULL;
+    flux_error_t error;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0
-        || getrusage (RUSAGE_THREAD, &ru) < 0)
+    if (flux_request_unpack (msg, NULL, "{s?s}", "who", &s) < 0
+        && flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (!s || streq (s, "self"))
+        who = RUSAGE_SELF;
+    else if (streq (s, "children"))
+        who = RUSAGE_CHILDREN;
+#ifdef RUSAGE_THREAD
+    else if (streq (s, "thread"))
+        who = RUSAGE_THREAD;
+#endif
+    else {
+        errprintf (&error, "%s is unsupported", s);
+        errmsg = error.text;
+        errno = EINVAL;
+        goto error;
+    }
+    if (getrusage (who, &ru) < 0)
         goto error;
     if (flux_respond_pack (h, msg,
             "{s:f s:f s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i}",
@@ -150,7 +172,7 @@ void method_rusage_cb (flux_t *h,
         flux_log_error (h, "error responding to rusage request");
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "error responding to rusage request");
 }
 
