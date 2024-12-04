@@ -150,3 +150,12 @@
    fun:hwloc_topology_load
    ...
 }
+{
+   <libuuid_tls_leak>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   ...
+   fun:uuid_generate*
+   ...
+}
