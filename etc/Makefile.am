@@ -22,6 +22,9 @@ dist_fluxconf_SCRIPTS = \
 dist_fluxrc1_SCRIPTS = \
         rc1.d/02-cron
 
+nobase_dist_fluxconf_DATA = \
+	modprobe/modprobe.toml
+
 fluxhelpdir = $(datadir)/flux/help.d
 fluxhelp_DATA = flux/help.d/core.json
 flux/help.d/core.json: $(top_srcdir)/doc/manpages.py
