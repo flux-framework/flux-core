@@ -16,7 +16,6 @@ default_args = (
     " --with-systemdsystemunitdir=/etc/systemd/system"
     " --localstatedir=/var"
     " --with-flux-security"
-    " --enable-caliper"
 )
 
 DOCKER_REPO = "fluxrm/flux-core"
@@ -197,7 +196,6 @@ common_args = (
     " --with-systemdsystemunitdir=/etc/systemd/system"
     " --localstatedir=/var"
     " --with-flux-security"
-    " --enable-caliper"
 )
 matrix.add_multiarch_build(
     name="bookworm",
@@ -251,7 +249,7 @@ matrix.add_build(
     env=dict(
         TEST_INSTALL="t",
     ),
-    args="--with-flux-security --enable-caliper",
+    args="--with-flux-security",
     docker_tag=True,
 )
 
@@ -273,7 +271,7 @@ matrix.add_build(
         CXX="g++12",
         DISTCHECK="t",
     ),
-    args="--with-flux-security --enable-caliper",
+    args="--with-flux-security",
     test_s3=True,
 )
 
@@ -297,7 +295,7 @@ matrix.add_build(
     image="bookworm",
     coverage_flags="ci-basic",
     coverage=True,
-    args="--with-flux-security --enable-caliper",
+    args="--with-flux-security",
 )
 
 # RHEL8 clone
@@ -326,7 +324,7 @@ matrix.add_build(
     image="el8",
     coverage=True,
     command_args="--system",
-    args="--with-flux-security --enable-caliper",
+    args="--with-flux-security",
 )
 
 # inception

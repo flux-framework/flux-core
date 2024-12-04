@@ -109,15 +109,3 @@ RUN apt-get update \
 
 RUN locale-gen en_US.UTF-8
 ENV LANG=C.UTF-8
-
-# Install caliper by hand for now:
-RUN mkdir caliper \
- && cd caliper \
- && wget -O - https://github.com/LLNL/Caliper/archive/v1.7.0.tar.gz | tar xvz --strip-components 1 \
- && mkdir build \
- && cd build \
- && CC=gcc CXX=g++ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DWITH_GOTCHA=Off \
- && make -j 4 \
- && make install \
- && cd ../.. \
- && rm -rf caliper

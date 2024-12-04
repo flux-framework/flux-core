@@ -12,10 +12,6 @@
 #include "config.h"
 #endif
 #include <assert.h>
-#if HAVE_CALIPER
-#include <caliper/cali.h>
-#include <sys/syscall.h>
-#endif
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -38,11 +34,6 @@ struct dispatch {
     int running_count;
     int usecount;
     zlist_t *unmatched;
-#if HAVE_CALIPER
-    cali_id_t prof_msg_type;
-    cali_id_t prof_msg_topic;
-    cali_id_t prof_msg_dispatch;
-#endif
 };
 
 #define HANDLER_MAGIC 0x44433322
@@ -260,17 +251,6 @@ static struct dispatch *dispatch_get (flux_t *h)
 
         if (!(d->handlers_method = method_hash_create ()))
             goto nomem;
-#if HAVE_CALIPER
-        d->prof_msg_type = cali_create_attribute ("flux.message.type",
-                                                  CALI_TYPE_STRING,
-                                                  CALI_ATTR_SKIP_EVENTS);
-        d->prof_msg_topic = cali_create_attribute ("flux.message.topic",
-                                                   CALI_TYPE_STRING,
-                                                   CALI_ATTR_SKIP_EVENTS);
-        d->prof_msg_dispatch = cali_create_attribute ("flux.message.dispatch",
-                                                      CALI_TYPE_BOOL,
-                                                      CALI_ATTR_DEFAULT);
-#endif
         if (flux_aux_set (h, "flux::dispatch", d, dispatch_destroy) < 0)
             goto error;
     }
@@ -457,7 +437,7 @@ static void handle_cb (flux_reactor_t *r,
         goto done;
     }
     if (flux_msg_get_topic (msg, &topic) < 0)
-        topic = "unknown"; /* used for logging/caliper trace */
+        topic = "unknown"; /* used for logging */
 
     /* Add any new handlers here, making handler creation
      * safe to call during handlers list traversal below.
@@ -465,23 +445,7 @@ static void handle_cb (flux_reactor_t *r,
     if (transfer_items_zlist (d->handlers_new, d->handlers) < 0)
         goto done;
 
-#if defined(HAVE_CALIPER)
-    cali_begin_string (d->prof_msg_type, flux_msg_typestr (type));
-    cali_begin_string (d->prof_msg_topic, topic);
-    cali_begin (d->prof_msg_dispatch);
-    cali_end (d->prof_msg_topic);
-    cali_end (d->prof_msg_type);
-#endif
-
     match = dispatch_message (d, msg, type);
-
-#if defined(HAVE_CALIPER)
-    cali_begin_string (d->prof_msg_type, flux_msg_typestr (type));
-    cali_begin_string (d->prof_msg_topic, topic);
-    cali_end (d->prof_msg_dispatch);
-    cali_end (d->prof_msg_topic);
-    cali_end (d->prof_msg_type);
-#endif
 
     /* Message was not "consumed".
      * If in a cloned handle, queue message for later.

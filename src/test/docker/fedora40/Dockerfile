@@ -82,10 +82,6 @@ RUN printf "LANG=C.UTF-8" > /etc/locale.conf
 
 COPY src/test/docker/fedora40/config.site /usr/share/config.site
 
-# Install caliper by hand for now:
-COPY scripts/fetch-and-build-caliper.sh /fetch-and-build-caliper.sh
-RUN /fetch-and-build-caliper.sh
-
 # the psm3 connector added to libfabrics in ~1.12 causes errors when allowed to
 # use non-local connectors on a system with virtual NICs, since we're in a
 # docker container, prevent this

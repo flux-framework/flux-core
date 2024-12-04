@@ -118,10 +118,6 @@ RUN locale-gen en_US.UTF-8
 # NOTE: luaposix installed by rocks due to Ubuntu bug: #1752082 https://bugs.launchpad.net/ubuntu/+source/lua-posix/+bug/1752082
 RUN luarocks install luaposix
 
-# Install caliper by hand for now:
-COPY scripts/fetch-and-build-caliper.sh /fetch-and-build-caliper.sh
-RUN /fetch-and-build-caliper.sh
-
 # Install catch by hand for now:
 COPY scripts/fetch-and-build-catch.sh /fetch-and-build-catch.sh
 RUN /fetch-and-build-catch.sh

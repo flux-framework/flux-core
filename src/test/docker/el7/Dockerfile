@@ -76,18 +76,6 @@ RUN wget -q --no-check-certificate https://cmake.org/files/v3.10/cmake-3.10.1-Li
  && rm -rf cmake-3.10.1-Linux-x86_64\
  && rm cmake-3.10.1-Linux-x86_64.tar.gz
 
-# Install caliper by hand for now:
-RUN mkdir caliper \
- && cd caliper \
- && wget -O - https://github.com/LLNL/Caliper/archive/v1.7.0.tar.gz | tar xvz --strip-components 1 \
- && mkdir build \
- && cd build \
- && cmake .. -DCMAKE_INSTALL_PREFIX=/usr \
- && make -j 4 \
- && make install \
- && cd ../.. \
- && rm -rf caliper
-
 COPY config.site /usr/share/config.site
 
 ENV LANG=en_US.UTF-8
