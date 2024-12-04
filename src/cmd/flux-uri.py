@@ -48,12 +48,19 @@ def main():
         default=os.environ.get("FLUX_URI_RESOLVE_LOCAL"),
     )
     parser.add_argument(
+        "--wait",
+        action="store_true",
+        help="wait for a URI to become available, if supported",
+    )
+    parser.add_argument(
         "uri",
         metavar="TARGET",
         help="A Flux jobid or URI in scheme:argument form (e.g. jobid:f1234)",
     )
 
     args = parser.parse_args()
+    if args.wait:
+        args.uri = args.uri + "?wait"
     uri = resolver.resolve(args.uri)
     if args.remote:
         print(uri.remote)

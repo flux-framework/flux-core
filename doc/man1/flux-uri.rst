@@ -74,8 +74,15 @@ OPTIONS
 
    Return the *local* (``local://``) equivalent of the resolved URI.
    Warning: the resulting URI may be invalid for the current system
-   if the network host specified by an ``ssh`` URI is not the current
+   if the network host specified by an :program:`ssh` URI is not the current
    host.
+
+.. option:: --wait
+
+   Wait for the URI to become available if the resolver scheme supports it.
+   This is the same as specifying :command:`flux uri TARGET?wait`. Currently
+   only supported by the ``jobid`` resolver. It will be ignored by other
+   schemes.
 
 URI SCHEMES
 ===========
@@ -91,19 +98,26 @@ jobid:ID[/ID...]
    job ``f1234`` in the current instance. This scheme will raise an error
    if the target job is not running.
 
+   The ``jobid`` scheme supports the optional query parameter ``?wait``, which
+   causes the resolver to wait until a URI has been posted to the job eventlog
+   for the target jobs(s), if the job is in RUN state or any previous state.
+   Note that the resolver could wait until the job is inactive if the ``?wait``
+   query parameter is used on a job that is not an instance of Flux.
+
 pid:PID
-  This scheme attempts to read the :envvar:`FLUX_URI` value from the process id
-  *PID* using ``/proc/PID/environ``. If *PID* refers to a ``flux-broker``,
-  then the scheme reads :envvar:`FLUX_URI` from the broker's initial program or
-  another child process since :envvar:`FLUX_URI` in the broker's environment
-  would refer to *its* parent (or may not be set at all in the case of a
-  test instance started with :option:`flux start --test-size=N`).
+  This scheme attempts to read the :envvar:`FLUX_URI` value from the
+  process id *PID* using ``/proc/PID/environ``. If *PID* refers to a
+  :program:`flux-broker`, then the scheme reads :envvar:`FLUX_URI` from the
+  broker's initial program or another child process since :envvar:`FLUX_URI`
+  in the broker's environment would refer to *its* parent (or may not be
+  set at all in the case of a test instance started with :option:`flux
+  start --test-size=N`).
 
 slurm:JOBID
   This scheme makes a best-effort to resolve the URI of a Flux instance
-  launched under Slurm. It invokes ``srun`` to run ``scontrol listpids``
-  on the first node of the job, and then uses the ``pid`` resolver until
-  it finds a valid :envvar:`FLUX_URI`.
+  launched under Slurm. It invokes :program:`srun` to run :program:`scontrol
+  listpids` on the first node of the job, and then uses the ``pid``
+  resolver until it finds a valid :envvar:`FLUX_URI`.
 
 
 EXAMPLES
@@ -142,6 +156,15 @@ Get the URI of a local flux-broker
 
    $ flux uri pid:$(pidof -s flux-broker)
    local:///tmp/flux-sLuBkZ/local-0
+
+The following submits a batch job and returns the instance URI once it is
+available. Without the :option:`--wait` flag, :command:`flux uri` would fail
+immediately with "job is not running":
+
+::
+
+   $ flux uri --wait $(flux batch -n1 --wrap flux run myprogram)
+
 
 Get the URI for a Flux instance running as a Slurm job:
 
