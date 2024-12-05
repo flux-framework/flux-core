@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <unistd.h> // environ def
+#include <signal.h>
 #include <jansson.h>
 #include <flux/core.h>
 

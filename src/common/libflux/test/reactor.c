@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <time.h>
+#include <signal.h>
 #include <math.h>
 #include <flux/core.h>
 
