@@ -27,6 +27,11 @@ kill_ranks () {
 	flux housekeeping kill --targets=$1 --signal=$2
 }
 
+# Usage: straggler_count
+straggler_count () {
+	flux housekeeping list -no {nnodes}
+}
+
 # Note: the hand off of resources to housekeeping occurs just before the job
 # becomes inactive, therefore it is safe to assume that housekeeping has run
 # for the job if it is enclosed between successful 'wait_for_running 0' calls.
@@ -36,6 +41,16 @@ kill_ranks () {
 wait_for_running () {
 	count=0
 	while test $(list_jobs | wc -l) -ne $1; do
+		count=$(($count+1));
+		test $count -eq 300 && return 1 # max 300 * 0.1s sleep = 30s
+		sleep 0.1
+	done
+}
+
+# Usage: wait_for_straggler_count count
+wait_for_straggler_count () {
+	count=0
+	while test $(straggler_count) -gt $1; do
 		count=$(($count+1));
 		test $count -eq 300 && return 1 # max 300 * 0.1s sleep = 30s
 		sleep 0.1
@@ -332,8 +347,7 @@ test_expect_success 'flux resource list shows 0 nodes allocated' '
 	test $(flux resource list -s allocated -no {nnodes}) -eq 0
 '
 # The following tests exercise recovery from RFC 27 hello protocol
-# with partial release. Once partial release is added to RFC 27, these
-# tests should be removed or changed.
+# with partial release.
 test_expect_success 'configure housekeeping with immediate release' '
 	flux config load <<-EOT
 	[job-manager.housekeeping]
@@ -344,12 +358,13 @@ test_expect_success 'configure housekeeping with immediate release' '
 test_expect_success 'run job that uses 4 nodes to trigger housekeeping' '
 	flux run -N4 true
 '
-test_expect_success 'housekeeping is running for 1 job' '
-	wait_for_running 1
+test_expect_success 'housekeeping completed except for one straggler' '
+	wait_for_running 1 &&
+	wait_for_straggler_count 1
 '
-test_expect_success 'reload scheduler' '
+test_expect_success 'reload scheduler without partial hello capability' '
 	flux dmesg -C &&
-	flux module reload -f sched-simple &&
+	flux module reload -f sched-simple test-hello-nopartial &&
 	flux dmesg -H
 '
 test_expect_success 'wait for housekeeping to finish' '
@@ -357,5 +372,27 @@ test_expect_success 'wait for housekeeping to finish' '
 '
 test_expect_success 'housekeeping jobs were terminated due to sched reload' '
 	flux dmesg | grep "housekeeping:.*will be terminated"
+'
+test_expect_success 'no node are allocated' '
+	test $(flux resource list -s allocated -no {nnodes}) -eq 0 &&
+	test $(FLUX_RESOURCE_LIST_RPC=sched.resource-status \
+		flux resource list -s allocated -no {nnodes}) -eq 0
+'
+test_expect_success 'run job that uses 4 nodes to trigger housekeeping' '
+	flux run -N4 true
+'
+test_expect_success 'housekeeping completed except for one straggler' '
+	wait_for_running 1 &&
+	wait_for_straggler_count 1
+'
+test_expect_success 'reload scheduler WITH partial hello capability' '
+	flux dmesg -C &&
+	flux module reload -f sched-simple &&
+	flux dmesg -H
+'
+test_expect_success 'one node is allocated' '
+	test $(flux resource list -s allocated -no {nnodes}) -eq 1 &&
+	test $(FLUX_RESOURCE_LIST_RPC=sched.resource-status \
+		flux resource list -s allocated -no {nnodes}) -eq 1
 '
 test_done
