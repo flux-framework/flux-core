@@ -14,7 +14,7 @@ AM_LDFLAGS = \
 	-module \
 	$(san_ld_zdef_flag) \
 	-Wl,-rpath,$(PYTHON_PREFIX)/lib \
-	-Wl,--gc-sections \
+	$(ld_gc_sections) \
 	$(CODE_COVERAGE_LIBS)
 
 common_libs = \

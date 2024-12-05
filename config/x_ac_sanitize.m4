@@ -27,7 +27,7 @@ AC_DEFUN([X_AC_ENABLE_SANITIZER], [
         AS_VAR_SET(san_ld_zdef_flag, [])
         AC_SUBST(san_ld_zdef_flag)
     elif test "x$san_enabled" = "xno" ; then
-        AS_VAR_SET(san_ld_zdef_flag, [-Wl,--no-undefined])
+        AS_VAR_SET(san_ld_zdef_flag, [-no-undefined])
         AC_SUBST(san_ld_zdef_flag)
     else
         AC_MSG_ERROR($san_enabled is a unsupported option.)

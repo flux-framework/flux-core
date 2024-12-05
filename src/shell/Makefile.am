@@ -128,10 +128,7 @@ flux_shell_LDADD = \
 
 flux_shell_LDFLAGS = \
 	-export-dynamic \
-	-Wl,--version-script=$(srcdir)/flux-shell.map
-
-EXTRA_DIST = \
-	flux-shell.map
+	-export-symbols-regex "(flux_shell_.*|flux_plugin_get_shell|__asan.*)"
 
 TESTS = \
 	test_jobspec.t \
