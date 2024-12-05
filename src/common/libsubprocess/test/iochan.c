@@ -40,6 +40,8 @@ struct iochan_ctx {
     const char *name;
 };
 
+extern char **environ;
+
 const int linesize = 80;
 const char *test_fdcopy = TEST_SUBPROCESS_DIR "test_fdcopy";
 

@@ -54,6 +54,8 @@ struct simple_ctx {
     struct simple_scorecard scorecard;
 };
 
+extern char **environ;
+
 void corner_case_test (flux_t *h)
 {
     char *true_av[] = { "/bin/true", NULL };
