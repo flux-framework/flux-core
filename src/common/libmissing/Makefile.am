@@ -34,7 +34,8 @@ AM_CFLAGS = \
         $(CODE_COVERAGE_CFLAGS)
 
 AM_CPPFLAGS = \
-	$(CODE_COVERAGE_CPPFLAGS)
+	$(CODE_COVERAGE_CPPFLAGS) \
+	-I$(top_srcdir)
 
 noinst_LTLIBRARIES = libmissing.la
 

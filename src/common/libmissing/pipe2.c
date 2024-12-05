@@ -15,14 +15,26 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include "src/common/libutil/fdutils.h"
+
 #include "pipe2.h"
 
 static int setflags (int fd, int flags)
 {
-    int oflags;
-    if ((oflags = fcntl (fd, F_GETFL)) < 0
-        || fcntl (fd, F_SETFL, oflags | flags) < 0)
+    int valid_flags = O_CLOEXEC | O_NONBLOCK;
+
+    if ((flags & ~valid_flags)) {
+        errno = EINVAL;
         return -1;
+    }
+    if ((flags & O_CLOEXEC)) {
+        if (fd_set_cloexec (fd) < 0)
+            return -1;
+    }
+    if ((flags & O_NONBLOCK)) {
+        if (fd_set_nonblocking (fd) < 0)
+            return -1;
+    }
     return 0;
 }
 

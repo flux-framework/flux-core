@@ -20,6 +20,7 @@
 #include <libgen.h>    /* dirname(3) */
 #include <pthread.h>
 
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/str/str.h"
 
 
@@ -38,6 +39,52 @@ static char *strip_trailing_dot_libs (char *dir)
     return (dir);
 }
 
+#if __APPLE__
+#include <mach-o/dyld.h>
+static char *nsget_wrap (void)
+{
+    char *path = NULL;
+    uint32_t size = 0;
+
+    (void)_NSGetExecutablePath (path, &size); // get the required buffer size
+    if (!(path = calloc (1, size))
+        || _NSGetExecutablePath (path, &size) < 0) {
+        ERRNO_SAFE_WRAP (free, path);
+        return NULL;
+    }
+    return path;
+}
+static int executable_self (char *buf, size_t bufsize)
+{
+    char *path;
+    char *newpath = NULL;
+    int rc = -1;
+
+    if (!(path = nsget_wrap ())
+        || !(newpath = realpath (path, NULL))) {
+        goto done;
+    }
+    if (strlcpy (buf, newpath, bufsize) >= bufsize) {
+        errno = EOVERFLOW;
+        goto done;
+    }
+    rc = 0;
+done:
+    ERRNO_SAFE_WRAP (free, newpath);
+    ERRNO_SAFE_WRAP (free, path);
+    return rc;
+}
+#else
+static int executable_self (char *buf, size_t bufsize)
+{
+    ssize_t len = readlink ("/proc/self/exe", buf, bufsize - 1);
+    if (len < 0)
+        return -1;
+    buf[len] = '\0';
+    return 0;
+}
+#endif
+
 /*  Return directory containing this executable.
  */
 const char *executable_selfdir (void)
@@ -47,8 +94,7 @@ const char *executable_selfdir (void)
     static char *current_exe_dir = NULL;
     pthread_mutex_lock (&selfdir_lock);
     if (!current_exe_dir) {
-        memset (current_exe_path, 0, sizeof (current_exe_path));
-        if (readlink ("/proc/self/exe", current_exe_path, MAXPATHLEN - 1) < 0)
+        if (executable_self (current_exe_path, sizeof (current_exe_path)) < 0)
             goto out;
         current_exe_dir = strip_trailing_dot_libs (dirname (current_exe_path));
     }

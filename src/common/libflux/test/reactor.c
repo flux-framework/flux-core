@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <time.h>
+#include <signal.h>
 #include <math.h>
 #include <flux/core.h>
 
@@ -104,7 +105,13 @@ static void test_fd (flux_reactor_t *reactor)
     int fd[2];
     flux_watcher_t *r, *w;
 
+#ifdef SOCK_NONBLOCK
     ok (socketpair (PF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0, fd) == 0,
+#else
+    ok (socketpair (PF_LOCAL, SOCK_STREAM, 0, fd) == 0
+	&& fd_set_nonblocking (fd[0]) >= 0
+	&& fd_set_nonblocking (fd[1]) >= 0,
+#endif
         "fd: successfully created non-blocking socketpair");
     r = flux_fd_watcher_create (reactor, fd[0], FLUX_POLLIN, fdreader, NULL);
     w = flux_fd_watcher_create (reactor, fd[1], FLUX_POLLOUT, fdwriter, NULL);

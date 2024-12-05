@@ -81,7 +81,9 @@ static struct shell_builtin * builtins [] = {
     &builtin_cyclic,
     &builtin_hostfile,
     &builtin_signal,
+#if HAVE_INOTIFY_INIT1
     &builtin_oom,
+#endif
     &builtin_hwloc,
     &builtin_rexec,
     &builtin_list_end,

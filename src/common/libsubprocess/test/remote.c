@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <unistd.h> // environ def
+#include <signal.h>
 #include <jansson.h>
 #include <flux/core.h>
 
@@ -52,6 +53,8 @@ struct simple_ctx {
     flux_t *h;
     struct simple_scorecard scorecard;
 };
+
+extern char **environ;
 
 void corner_case_test (flux_t *h)
 {

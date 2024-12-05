@@ -98,9 +98,12 @@ flux_shell_SOURCES = \
 	taskmap/hostfile.c \
 	signal.c \
 	files.c \
-	oom.c \
 	hwloc.c \
 	rexec.c
+
+if HAVE_INOTIFY
+flux_shell_SOURCES += oom.c
+endif
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \

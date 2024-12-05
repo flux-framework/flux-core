@@ -53,6 +53,8 @@ struct iostress_ctx {
     const char *name;
 };
 
+extern char **environ;
+
 static void iostress_timer_cb (flux_reactor_t *r,
                                flux_watcher_t *w,
                                int revents,
