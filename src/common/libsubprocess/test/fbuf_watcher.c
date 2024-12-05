@@ -272,6 +272,20 @@ static void buffer_read_overflow (flux_reactor_t *r, flux_watcher_t *w,
     return;
 }
 
+int create_socketpair_nonblock (int *fd)
+{
+#ifdef SOCK_NONBLOCK
+    if (socketpair (PF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0, fd) < 0)
+        return -1;
+#else
+    if (socketpair (PF_LOCAL, SOCK_STREAM, 0, fd) < 0
+        || fd_set_nonblocking (fd[0]) < 0
+        || fd_set_nonblocking (fd[1]) < 0)
+        return -1;
+#endif
+    return 0;
+}
+
 static void test_buffer (flux_reactor_t *reactor)
 {
     int errnum = 0;
@@ -282,7 +296,7 @@ static void test_buffer (flux_reactor_t *reactor)
     int count;
     char buf[1024];
 
-    ok (socketpair (PF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0, fd) == 0,
+    ok (create_socketpair_nonblock (fd) == 0,
         "buffer: successfully created socketpair");
 
     /* read buffer test */
@@ -862,7 +876,7 @@ static void test_buffer_refcnt (flux_reactor_t *reactor)
 
     /* read buffer decref test - other end closes stream */
 
-    ok (socketpair (PF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0, fd) == 0,
+    ok (create_socketpair_nonblock (fd) == 0,
         "buffer decref: successfully created socketpair");
 
     bfc.count = 0;
@@ -906,7 +920,7 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
 
     /* read buffer corner case test - other end closes stream */
 
-    ok (socketpair (PF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0, fd) == 0,
+    ok (create_socketpair_nonblock (fd) == 0,
         "buffer corner case: successfully created socketpair");
 
     bfc.count = 0;
@@ -948,7 +962,7 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
 
     /* read line buffer corner case test - other end closes stream */
 
-    ok (socketpair (PF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0, fd) == 0,
+    ok (create_socketpair_nonblock (fd) == 0,
         "buffer corner case: successfully created socketpair");
 
     bfc.count = 0;
@@ -985,7 +999,7 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
 
     /* read line buffer corner case test - left over data not a line */
 
-    ok (socketpair (PF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0, fd) == 0,
+    ok (create_socketpair_nonblock (fd) == 0,
         "buffer corner case: successfully created socketpair");
 
     bfc.count = 0;
