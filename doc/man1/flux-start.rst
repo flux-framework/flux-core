@@ -146,13 +146,6 @@ OPTIONS
 
    Don't execute anything. This option is most useful with -v.
 
-.. option:: --caliper-profile=PROFILE
-
-   Run brokers with Caliper profiling enabled, using a Caliper
-   configuration profile named *PROFILE*. Requires a version of Flux
-   built with :option:`--enable-caliper`. Unless :envvar:`CALI_LOG_VERBOSITY`
-   is already set in the environment, it will default to 0 for all brokers.
-
 .. option:: --rundir=DIR
 
    (only with :option:`--test-size`) Set the directory that will be

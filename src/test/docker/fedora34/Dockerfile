@@ -72,18 +72,6 @@ RUN yum -y update \
 #  Add /usr/bin/mpicc link so MPI tests are built
 RUN alternatives --install /usr/bin/mpicc mpicc /usr/lib64/mpich/bin/mpicc 100
 
-# Install caliper by hand for now:
-RUN mkdir caliper \
- && cd caliper \
- && wget -O - https://github.com/LLNL/Caliper/archive/v1.7.0.tar.gz | tar xvz --strip-components 1 \
- && mkdir build \
- && cd build \
- && cmake .. -DCMAKE_INSTALL_PREFIX=/usr \
- && make -j 4 \
- && make install \
- && cd ../.. \
- && rm -rf caliper
-
 ENV LANG=C.UTF-8
 RUN printf "LANG=C.UTF-8" > /etc/locale.conf
 

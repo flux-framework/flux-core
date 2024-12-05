@@ -115,7 +115,6 @@ TESTSCRIPTS = \
 	t1107-heartbeat.t \
 	t1200-stats-basic.t \
 	t2004-hydra.t \
-	t2007-caliper.t \
 	t2008-althash.t \
 	t2010-kvs-snapshot-restore.t \
 	t2100-job-ingest.t \

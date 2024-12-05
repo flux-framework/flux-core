@@ -28,10 +28,6 @@
 #endif
 #include <flux/core.h>
 #include <jansson.h>
-#if HAVE_CALIPER
-#include <caliper/cali.h>
-#include <sys/syscall.h>
-#endif
 
 #include "src/common/libflux/plugin_private.h"
 #include "src/common/libutil/log.h"
@@ -90,12 +86,6 @@ struct broker_module {
 
 static int setup_module_profiling (module_t *p)
 {
-#if HAVE_CALIPER
-    cali_begin_string_byname ("flux.type", "module");
-    cali_begin_int_byname ("flux.tid", syscall (SYS_gettid));
-    cali_begin_int_byname ("flux.rank", p->rank);
-    cali_begin_string_byname ("flux.name", p->name);
-#endif
     size_t len = strlen (p->name);
     // one character longer than target to pass -Wstringop-truncation
     char local_name[17] = {0};

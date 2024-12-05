@@ -79,10 +79,6 @@ RUN yum -y update \
 #  Set default /usr/bin/python to python3
 RUN alternatives --set python /usr/bin/python3
 
-# Install caliper by hand for now:
-COPY scripts/fetch-and-build-caliper.sh /fetch-and-build-caliper.sh
-RUN /fetch-and-build-caliper.sh
-
 # Install catch by hand for now:
 COPY scripts/fetch-and-build-catch.sh /fetch-and-build-catch.sh
 RUN /fetch-and-build-catch.sh

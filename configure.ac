@@ -427,18 +427,6 @@ AS_IF([test "x$with_flux_security" = "xyes"], [
 ])
 AM_CONDITIONAL([HAVE_FLUX_SECURITY], [test "x$with_flux_security" = "xyes"])
 
-AC_ARG_ENABLE(caliper,
-	[  --enable-caliper[=OPTS]   Use caliper for profiling. [default=no] [OPTS=no/yes]], ,
-	[enable_caliper="no"])
-
-if test "$enable_caliper" = "yes"; then
-    PKG_CHECK_MODULES([CALIPER], [caliper], [], [])
-    CFLAGS="${CFLAGS} ${CALIPER_CFLAGS} "
-    # Do not use CALIPER_LIBS, only link to libcaliper-stub
-    LIBS="${LIBS} $(pkg-config --libs-only-L caliper) -lcaliper-stub -lrt "
-    AC_DEFINE([HAVE_CALIPER], [1], [Define if you have libcaliper])
-fi
-
 AC_ARG_ENABLE([content-s3],
     AS_HELP_STRING([--enable-content-s3], [Enable S3 storage backend]))
 

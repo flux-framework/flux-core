@@ -20,10 +20,6 @@
 #include <dlfcn.h>
 #include <sys/epoll.h>
 #include <poll.h>
-#if HAVE_CALIPER
-#include <caliper/cali.h>
-#include <sys/syscall.h>
-#endif
 #include <flux/core.h>
 
 #include "src/common/libflux/plugin_private.h"
@@ -41,23 +37,6 @@
 
 #include "msg_deque.h"
 #include "message_private.h" // to check msg refcount in flux_send_new ()
-
-#if HAVE_CALIPER
-struct profiling_context {
-    int initialized;
-    cali_id_t msg_type;
-    cali_id_t msg_seq;
-    cali_id_t msg_topic;
-    cali_id_t msg_sender;
-    cali_id_t msg_rpc;
-    cali_id_t msg_rpc_nodeid;
-    cali_id_t msg_rpc_resp_expected;
-    cali_id_t msg_action;
-    cali_id_t msg_match_type;
-    cali_id_t msg_match_tag;
-    cali_id_t msg_match_glob;
-};
-#endif
 
 struct flux_handle {
     flux_t          *parent; // if FLUX_O_CLONE, my parent
@@ -78,9 +57,6 @@ struct flux_handle {
     void            *comms_error_arg;
     bool            comms_error_in_progress;
     bool            destroy_in_progress;
-#if HAVE_CALIPER
-    struct profiling_context prof;
-#endif
     struct rpc_track *tracker;
 };
 
@@ -120,107 +96,6 @@ static flux_t *lookup_clone_ancestor (flux_t *h)
         h = h->parent;
     return h;
 }
-
-#if HAVE_CALIPER
-void profiling_context_init (struct profiling_context* prof)
-{
-    prof->msg_type = cali_create_attribute ("flux.message.type",
-                                            CALI_TYPE_STRING,
-                                            CALI_ATTR_DEFAULT | CALI_ATTR_ASVALUE);
-    prof->msg_seq = cali_create_attribute ("flux.message.seq",
-                                           CALI_TYPE_INT,
-                                           CALI_ATTR_SKIP_EVENTS);
-    prof->msg_topic = cali_create_attribute ("flux.message.topic",
-                                             CALI_TYPE_STRING,
-                                             CALI_ATTR_DEFAULT | CALI_ATTR_ASVALUE);
-    prof->msg_sender = cali_create_attribute ("flux.message.sender",
-                                              CALI_TYPE_STRING,
-                                              CALI_ATTR_SKIP_EVENTS);
-    // if flux.message.rpc is set, we're inside an RPC, it will be set to a
-    // type, single or multi
-    prof->msg_rpc = cali_create_attribute ("flux.message.rpc",
-                                           CALI_TYPE_STRING,
-                                           CALI_ATTR_SKIP_EVENTS);
-    prof->msg_rpc_nodeid = cali_create_attribute ("flux.message.rpc.nodeid",
-                                                  CALI_TYPE_INT,
-                                                  CALI_ATTR_SKIP_EVENTS);
-    prof->msg_rpc_resp_expected =
-        cali_create_attribute ("flux.message.response_expected",
-                               CALI_TYPE_INT,
-                               CALI_ATTR_SKIP_EVENTS);
-    prof->msg_action = cali_create_attribute ("flux.message.action",
-                                              CALI_TYPE_STRING,
-                                              CALI_ATTR_DEFAULT | CALI_ATTR_ASVALUE);
-    prof->msg_match_type = cali_create_attribute ("flux.message.match.type",
-                                                  CALI_TYPE_INT,
-                                                  CALI_ATTR_SKIP_EVENTS);
-    prof->msg_match_tag = cali_create_attribute ("flux.message.match.tag",
-                                                 CALI_TYPE_INT,
-                                                 CALI_ATTR_SKIP_EVENTS);
-    prof->msg_match_glob = cali_create_attribute ("flux.message.match.glob",
-                                                  CALI_TYPE_STRING,
-                                                  CALI_ATTR_SKIP_EVENTS);
-    prof->initialized=1;
-}
-
-static void profiling_msg_snapshot (flux_t *h,
-                          const flux_msg_t *msg,
-                          int flags,
-                          const char *msg_action)
-{
-    h = lookup_clone_ancestor (h);
-    cali_id_t attributes[3];
-    const void * data[3];
-    size_t size[3];
-
-    // This can get called before the handle is really ready
-    if(! h->prof.initialized) return;
-
-    int len = 0;
-
-    if (msg_action) {
-        attributes[len] = h->prof.msg_action;
-        data[len] = msg_action;
-        size[len] = strlen(msg_action);
-        ++len;
-    }
-
-    int type;
-    flux_msg_get_type (msg, &type);
-    const char *msg_type = flux_msg_typestr (type);
-    if (msg_type) {
-        attributes[len] = h->prof.msg_type;
-        data[len] = msg_type;
-        size[len] = strlen(msg_type);
-        ++len;
-    }
-
-    const char *msg_topic;
-    if (type != FLUX_MSGTYPE_CONTROL)
-        flux_msg_get_topic (msg, &msg_topic);
-    else
-        msg_topic = "NONE";
-    /* attributes[len] = h->prof.msg_topic; */
-    /* data[len] = msg_topic; */
-    /* size[len] = strlen(msg_topic); */
-    /* ++len; */
-
-    if (type == FLUX_MSGTYPE_EVENT) {
-        uint32_t seq;
-        flux_msg_get_seq (msg, &seq);
-        cali_begin_int (h->prof.msg_seq, seq);
-    }
-    cali_push_snapshot (CALI_SCOPE_PROCESS | CALI_SCOPE_THREAD,
-                        len /* n_entries */,
-                        attributes /* event_attributes */,
-                        data /* event_data */,
-                        size /* event_size */);
-    if (type == FLUX_MSGTYPE_EVENT)
-        cali_end (h->prof.msg_seq);
-}
-
-
-#endif
 
 static connector_init_f *find_connector_builtin (const char *scheme)
 {
@@ -352,9 +227,6 @@ flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
         goto error;
     }
     h->dso = dso;
-#if HAVE_CALIPER
-    profiling_context_init(&h->prof);
-#endif
     if ((s = getenv ("FLUX_HANDLE_USERID"))) {
         uint32_t userid = strtoul (s, NULL, 10);
         if (flux_opt_set (h,
@@ -877,9 +749,6 @@ int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
     flags |= h->flags;
     update_tx_stats (h, msg);
     handle_trace_message (h, msg);
-#if HAVE_CALIPER
-    profiling_msg_snapshot(h, msg, flags, "send");
-#endif
     while (h->ops->send (h->impl, msg, flags) < 0) {
         if (comms_error (h, errno) < 0)
             return -1;
@@ -913,9 +782,6 @@ int flux_send_new (flux_t *h, flux_msg_t **msg, int flags)
     flags |= h->flags;
     update_tx_stats (h, *msg);
     handle_trace_message (h, *msg);
-#if HAVE_CALIPER
-    profiling_msg_snapshot(h, *msg, flags, "send");
-#endif
     while (h->ops->send_new (h->impl, msg, flags) < 0) {
         if (comms_error (h, errno) < 0)
             return -1;
@@ -1017,22 +883,6 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
     if (defer_requeue (&l, h) < 0)
         goto error;
     defer_destroy (&l);
-#if HAVE_CALIPER
-    cali_begin_int (h->prof.msg_match_type, match.typemask);
-    cali_begin_int (h->prof.msg_match_tag, match.matchtag);
-    cali_begin_string (h->prof.msg_match_glob,
-                       match.topic_glob ? match.topic_glob : "NONE");
-    const char *sender;
-    sender = flux_msg_route_first (msg);
-    if (sender)
-        cali_begin_string (h->prof.msg_sender, sender);
-    profiling_msg_snapshot (h, msg, flags, "recv");
-    if (sender)
-        cali_end (h->prof.msg_sender);
-    cali_end (h->prof.msg_match_type);
-    cali_end (h->prof.msg_match_tag);
-    cali_end (h->prof.msg_match_glob);
-#endif
     rpc_track_update (h->tracker, msg);
     return msg;
 error:

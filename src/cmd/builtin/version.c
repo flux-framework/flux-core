@@ -61,9 +61,6 @@ static int cmd_version (optparse_t *p, int ac, char *av[])
 #if __SANITIZE_THREAD__
     printf ("+tsan");
 #endif
-#if HAVE_CALIPER
-    printf ("+caliper");
-#endif
 #if HAVE_LIBSYSTEMD
     printf ("+systemd");
 #endif

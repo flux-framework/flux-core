@@ -194,8 +194,7 @@ if [[ "$INSTALL_ONLY" == "t" ]]; then
                ./configure --prefix=/usr --sysconfdir=/etc \
                 --with-systemdsystemunitdir=/etc/systemd/system \
                 --localstatedir=/var \
-                --with-flux-security \
-                --enable-caliper &&
+                --with-flux-security &&
                make clean &&
                make -j${JOBS}"
     RC=$?

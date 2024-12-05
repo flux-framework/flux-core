@@ -92,7 +92,6 @@ int exec_broker (const char *cmd_argz,
 char *create_rundir (void);
 void client_destroy (struct client *cli);
 char *find_broker (const char *searchpath);
-static void setup_profiling_env (void);
 static void client_wait_respond (struct client *cli);
 static void client_run_respond (struct client *cli, int errnum);
 
@@ -119,14 +118,6 @@ static struct optparse_option opts[] = {
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Add comma-separated broker options, e.g. \"-o,-v\"", },
     /* Option group 1, these options will be listed after those above */
-#if HAVE_CALIPER
-    { .group = 1,
-      .name = "caliper-profile", .has_arg = 1,
-      .arginfo = "PROFILE",
-      .usage = "Enable profiling in brokers using Caliper configuration "
-               "profile named `PROFILE'",
-    },
-#endif /* !HAVE_CALIPER */
     { .group = 1,
       .name = "wrap", .has_arg = 1, .arginfo = "ARGS,...",
       .flags = OPTPARSE_OPT_AUTOSPLIT,
@@ -239,8 +230,6 @@ int main (int argc, char *argv[])
             log_msg_exit ("--test-size argument must be > 0");
     }
 
-    setup_profiling_env ();
-
     if (!optparse_hasopt (ctx.opts, "test-size")) {
         int i;
         for (i = 0; i < ARRAY_SIZE (opts); i++) {
@@ -269,36 +258,6 @@ int main (int argc, char *argv[])
 
     return status;
 }
-
-static void setup_profiling_env (void)
-{
-#if HAVE_CALIPER
-    const char *profile;
-    /*
-     *  If --profile was used, set or append libcaliper.so in LD_PRELOAD
-     *   to subprocess environment, swapping stub symbols for the actual
-     *   libcaliper symbols.
-     */
-    if (optparse_getopt (ctx.opts, "caliper-profile", &profile) == 1) {
-        const char *pl = getenv ("LD_PRELOAD");
-        int rc = setenvf ("LD_PRELOAD",
-                          1,
-                          "%s%s%s",
-                          pl ? pl : "",
-                          pl ? " ": "",
-                          "libcaliper.so");
-        if (rc < 0)
-            log_err_exit ("Unable to set LD_PRELOAD in environment");
-
-        if ((profile != NULL) &&
-            (setenv ("CALI_CONFIG_PROFILE", profile, 1) < 0))
-                log_err_exit ("setenv (CALI_CONFIG_PROFILE)");
-        setenv ("CALI_LOG_VERBOSITY", "0", 0);
-    }
-#endif
-}
-
-
 
 char *find_broker (const char *searchpath)
 {

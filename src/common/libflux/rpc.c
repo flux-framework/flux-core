@@ -16,10 +16,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
-#if HAVE_CALIPER
-#include <caliper/cali.h>
-#include <sys/syscall.h>
-#endif
 #include <jansson.h>
 #include <flux/core.h>
 
@@ -183,12 +179,6 @@ static void response_cb (flux_t *h,
     int saved_errno;
     const char *errstr;
 
-#if HAVE_CALIPER
-    cali_begin_string_byname ("flux.message.rpc", "single");
-#endif
-#if HAVE_CALIPER
-    cali_end_byname ("flux.message.rpc");
-#endif
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto error;
     if (!(cpy = flux_msg_copy (msg, true)))
@@ -270,18 +260,7 @@ static flux_future_t *flux_rpc_message_send_new (flux_t *h,
     }
     if (flux_msg_set_nodeid (*msg, nodeid) < 0)
         goto error;
-#if HAVE_CALIPER
-    cali_begin_string_byname ("flux.message.rpc", "single");
-    cali_begin_int_byname ("flux.message.rpc.nodeid", nodeid);
-    cali_begin_int_byname ("flux.message.response_expected",
-                           !(flags & FLUX_RPC_NORESPONSE));
-#endif
     int rc = flux_send_new (h, msg, 0);
-#if HAVE_CALIPER
-    cali_end_byname ("flux.message.response_expected");
-    cali_end_byname ("flux.message.rpc.nodeid");
-    cali_end_byname ("flux.message.rpc");
-#endif
     if (rc < 0)
         goto error;
     rpc->sent = true;

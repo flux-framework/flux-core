@@ -79,10 +79,6 @@ RUN dnf -y install 'dnf-command(config-manager)' \
 #  Set default /usr/bin/python to python3
 RUN ln -s /usr/bin/python3 /usr/bin/python
 
-# Install caliper by hand for now:
-COPY scripts/fetch-and-build-caliper.sh /fetch-and-build-caliper.sh
-RUN /fetch-and-build-caliper.sh
-
 # Install catch by hand for now:
 COPY scripts/fetch-and-build-catch.sh /fetch-and-build-catch.sh
 RUN /fetch-and-build-catch.sh

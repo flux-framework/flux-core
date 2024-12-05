@@ -102,10 +102,6 @@ RUN apt-get update \
 # to /usr/bin/man to make this behave
 RUN ln -sf /usr/bin/man.REAL /usr/bin/man
 
-# Install caliper by hand for now:
-COPY scripts/fetch-and-build-caliper.sh /fetch-and-build-caliper.sh
-RUN /fetch-and-build-caliper.sh
-
 ENV LANG=C.UTF-8
 
 # the image has a UID 1000 named ubuntu now for some reason, fix it

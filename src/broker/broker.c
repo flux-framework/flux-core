@@ -31,10 +31,6 @@
 #endif
 #include <flux/core.h>
 #include <jansson.h>
-#if HAVE_CALIPER
-#include <caliper/cali.h>
-#include <sys/syscall.h>
-#endif
 #if HAVE_VALGRIND
 # if HAVE_VALGRIND_H
 #  include <valgrind.h>
@@ -168,22 +164,6 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
                               &ctx->init_shell_cmd_len)) != 0)
             log_errn_exit (e, "argz_create");
     }
-}
-
-static int setup_profiling (const char *program, int rank)
-{
-#if HAVE_CALIPER
-    cali_begin_string_byname ("flux.type", "main");
-    cali_begin_int_byname ("flux.tid", syscall (SYS_gettid));
-    cali_begin_string_byname ("binary", program);
-    cali_begin_int_byname ("flux.rank", rank);
-    // TODO: this is a stopgap until we have better control over
-    // instrumemtation in child processes. If we want to see what children
-    // that load libflux are up to, this should be disabled
-    unsetenv ("CALI_SERVICES_ENABLE");
-    unsetenv ("CALI_CONFIG_PROFILE");
-#endif
-    return (0);
 }
 
 static int increase_rlimits (void)
@@ -405,9 +385,6 @@ int main (int argc, char *argv[])
                   ctx.size,
                   flux_reactor_now (ctx.reactor) - ctx.starttime);
     }
-
-    // Setup profiling
-    setup_profiling (argv[0], ctx.rank);
 
     /* Initialize logging.
      * OK to call flux_log*() after this.
