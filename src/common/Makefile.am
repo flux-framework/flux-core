@@ -111,6 +111,7 @@ libflux_optparse_la_LIBADD = \
 	$(builddir)/liblsd/liblsd.la \
 	$(builddir)/libutil/fsd.lo \
 	$(builddir)/libutil/parse_size.lo \
+	$(builddir)/libutil/fdutils.lo \
 	$(builddir)/libmissing/libmissing.la \
 	$(LIBPTHREAD)
 libflux_optparse_la_LDFLAGS = \
@@ -179,6 +180,7 @@ flux_libpmi_la_LIBADD = \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libpmi/libpmi_common.la \
 	$(builddir)/libutil/aux.lo \
+	$(builddir)/libutil/fdutils.lo \
 	$(builddir)/libmissing/libmissing.la
 
 flux_libpmi_la_LDFLAGS = \
@@ -195,6 +197,7 @@ flux_libpmi2_la_LIBADD = \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libpmi/libpmi_common.la \
 	$(builddir)/libutil/aux.lo \
+	$(builddir)/libutil/fdutils.lo \
 	$(builddir)/libmissing/libmissing.la
 flux_libpmi2_la_LDFLAGS = \
 	-export-symbols-regex "^(PMI2_|flux_pmi_library|__asan)" \
