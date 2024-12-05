@@ -17,6 +17,7 @@ import sys
 import flux
 import flux.util
 from flux.hostlist import Hostlist
+from flux.idset import IDset
 from flux.job import JobID, job_list_id
 from flux.resource import resource_status
 
@@ -67,9 +68,9 @@ def parse_args():
     group.add_argument(
         "-n",
         "--nth",
-        type=int,
-        metavar="N",
-        help="Output host at index N (-N to index from end)",
+        type=str,
+        metavar="[-]IDS",
+        help="Output hosts at indices in idset IDS (-IDS to index from end)",
     )
     parser.add_argument(
         "-L",
@@ -375,10 +376,14 @@ def main():
         sys.stdout = open(os.devnull, "w")
 
     if args.nth is not None:
-        host = hl[args.nth]
-        if host:
-            print(host)
-    elif args.count:
+        if args.nth.startswith("-"):
+            # Iterate idset in reverse so that resultant hostlist is in
+            # the same order as the input hostlist instead of reversed:
+            hl = Hostlist([hl[-x] for x in reversed(list(IDset(args.nth[1:])))])
+        else:
+            hl = hl[IDset(args.nth)]
+
+    if args.count:
         print(f"{hl.count()}")
     elif args.expand:
         # Convert '\n' specified on command line to actual newline char
