@@ -65,7 +65,7 @@ def parse_args():
         action="store_true",
         help="Print the total number of hosts",
     )
-    group.add_argument(
+    parser.add_argument(
         "-n",
         "--nth",
         type=str,
