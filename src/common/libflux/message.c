@@ -1417,8 +1417,8 @@ int msg_frames (const flux_msg_t *msg)
 }
 
 struct flux_match flux_match_init (int typemask,
-                                     uint32_t matchtag,
-                                     const char *topic_glob)
+                                   uint32_t matchtag,
+                                   const char *topic_glob)
 {
     struct flux_match m = {typemask, matchtag, topic_glob};
     return m;

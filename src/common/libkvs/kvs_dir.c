@@ -55,8 +55,10 @@ void flux_kvsdir_destroy (flux_kvsdir_t *dir)
 
 flux_kvsdir_t *flux_kvsdir_copy (const flux_kvsdir_t *dir)
 {
-    return kvsdir_create_fromobj (dir->handle, dir->rootref,
-                                  dir->key, dir->dirobj);
+    return kvsdir_create_fromobj (dir->handle,
+                                  dir->rootref,
+                                  dir->key,
+                                  dir->dirobj);
 }
 
 /* If rootref is non-NULL, the kvsdir records the root reference
@@ -236,8 +238,10 @@ flux_kvsdir_t *kvsdir_create_fromobj (flux_t *handle,
 {
     flux_kvsdir_t *dir = NULL;
 
-    if (!key || !treeobj || treeobj_validate (treeobj) < 0
-                         || !treeobj_is_dir (treeobj)) {
+    if (!key
+        || !treeobj
+        || treeobj_validate (treeobj) < 0
+        || !treeobj_is_dir (treeobj)) {
         errno = EINVAL;
         goto error;
     }

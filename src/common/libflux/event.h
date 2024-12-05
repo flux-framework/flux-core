@@ -35,14 +35,16 @@ flux_future_t *flux_event_unsubscribe_ex (flux_t *h,
  * If s is non-NULL, assign string payload or set to NULL if none
  * exists.  Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_event_decode (const flux_msg_t *msg, const char **topic,
+int flux_event_decode (const flux_msg_t *msg,
+                       const char **topic,
                        const char **s);
 
 /* Decode an event message with required JSON payload.  These functions use
  * jansson unpack style variable arguments for decoding the JSON object
  * payload directly.  Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_event_unpack (const flux_msg_t *msg, const char **topic,
+int flux_event_unpack (const flux_msg_t *msg,
+                       const char **topic,
                        const char *fmt, ...);
 
 /* Encode an event message with optional string payload.
@@ -60,7 +62,8 @@ flux_msg_t *flux_event_pack (const char *topic, const char *fmt, ...);
 /* Encode an event message with raw payload.
  */
 flux_msg_t *flux_event_encode_raw (const char *topic,
-                                   const void *data, int len);
+                                   const void *data,
+                                   int len);
 
 /* Decode an event message, with optional raw payload.
  * If topic is non-NULL, assign the event topic string.
@@ -68,28 +71,35 @@ flux_msg_t *flux_event_encode_raw (const char *topic,
  * If there is no payload, they will be assigned NULL and zero.
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_event_decode_raw (const flux_msg_t *msg, const char **topic,
-                           const void **data, int *len);
+int flux_event_decode_raw (const flux_msg_t *msg,
+                           const char **topic,
+                           const void **data,
+                           int *len);
 
 /* Publish an event with optional string payload.
  * The future is fulfilled once the event has been assigned a sequence number,
  * and does not indicate that the event has yet reached all subscribers.
  */
 flux_future_t *flux_event_publish (flux_t *h,
-                                   const char *topic, int flags,
+                                   const char *topic,
+                                   int flags,
                                    const char *s);
 
 /* Publish an event with JSON payload.
  */
 flux_future_t *flux_event_publish_pack (flux_t *h,
-                                        const char *topic, int flags,
-                                        const char *fmt, ...);
+                                        const char *topic,
+                                        int flags,
+                                        const char *fmt,
+                                        ...);
 
 /* Publish an event with optional raw payload.
  */
 flux_future_t *flux_event_publish_raw (flux_t *h,
-                                       const char *topic, int flags,
-                                       const void *data, int len);
+                                       const char *topic,
+                                       int flags,
+                                       const void *data,
+                                       int len);
 
 /* Obtain the event sequence number from the fulfilled
  * flux_event_publish() future.

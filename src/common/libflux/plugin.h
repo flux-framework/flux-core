@@ -154,15 +154,22 @@ int flux_plugin_arg_get (flux_plugin_arg_t *args,
 
 /*  Pack/unpack arguments into plugin arg object using jansson pack style args
  */
-int flux_plugin_arg_pack (flux_plugin_arg_t *args, int flags,
+int flux_plugin_arg_pack (flux_plugin_arg_t *args,
+                          int flags,
                           const char *fmt, ...);
-int flux_plugin_arg_vpack (flux_plugin_arg_t *args, int flags,
-                           const char *fmt, va_list ap);
+int flux_plugin_arg_vpack (flux_plugin_arg_t *args,
+                           int flags,
+                           const char *fmt,
+                           va_list ap);
 
-int flux_plugin_arg_unpack (flux_plugin_arg_t *args, int flags,
-                            const char *fmt, ...);
-int flux_plugin_arg_vunpack (flux_plugin_arg_t *args, int flags,
-                             const char *fmt, va_list ap);
+int flux_plugin_arg_unpack (flux_plugin_arg_t *args,
+                            int flags,
+                            const char *fmt,
+                            ...);
+int flux_plugin_arg_vunpack (flux_plugin_arg_t *args,
+                             int flags,
+                             const char *fmt,
+                             va_list ap);
 
 /*  Call first plugin callback matching 'name', passing optional plugin
  *   arguments in 'args'.
@@ -171,7 +178,8 @@ int flux_plugin_arg_vunpack (flux_plugin_arg_t *args, int flags,
  *   called with return value < 0, and 1 if callback was called with
  *   return value >= 0.
  */
-int flux_plugin_call (flux_plugin_t *p, const char *name,
+int flux_plugin_call (flux_plugin_t *p,
+                      const char *name,
                       flux_plugin_arg_t *args);
 
 /*  Load a plugin from a shared object found in 'path'

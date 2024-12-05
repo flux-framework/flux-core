@@ -227,9 +227,12 @@ int fripp_gauge (struct fripp_ctx *ctx,
         return 0;
 
     if (ctx->period == 0)
-        return fripp_sendf (ctx, inc && value > 0 ?
-                            "%s.%s:+%zd|g\n" : "%s.%s:%zd|g\n",
-                            ctx->prefix, name, value);
+        return fripp_sendf (ctx,
+                            "%s.%s:%s%zd|g\n",
+                            ctx->prefix,
+                            name,
+                            inc && value > 0 ? "+" : "",
+                            value);
 
     struct metric *m;
 
@@ -310,7 +313,7 @@ static void timer_cb (flux_reactor_t *r,
 
     FOREACH_ZHASHX (ctx->metrics, name, m) {
         if ((m->type == BRUBECK_COUNTER || m->type == BRUBECK_GAUGE)
-                && m->cur.l == m->prev.l) {
+            && m->cur.l == m->prev.l) {
             zlist_append (ctx->done, (void *) name);
             continue;
         }

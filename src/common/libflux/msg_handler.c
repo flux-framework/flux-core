@@ -47,8 +47,10 @@ struct flux_msg_handler {
     uint8_t running:1;
 };
 
-static void handle_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg);
+static void handle_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg);
 static void free_msg_handler (flux_msg_handler_t *mh);
 
 static size_t matchtag_hasher (const void *key);
@@ -578,7 +580,8 @@ void flux_msg_handler_destroy (flux_msg_handler_t *mh)
 
 flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
                                              const struct flux_match match,
-                                             flux_msg_handler_f cb, void *arg)
+                                             flux_msg_handler_f cb,
+                                             void *arg)
 {
     struct dispatch *d;
     flux_msg_handler_t *mh;

@@ -491,7 +491,10 @@ int flux_conf_reload_decode (const flux_msg_t *msg, const flux_conf_t **confp)
             return -1;
         json_decref (conf->obj);
         conf->obj = json_incref (o);
-        if (flux_msg_aux_set (msg, auxkey, (flux_conf_t *)conf, (flux_free_f)flux_conf_decref) < 0) {
+        if (flux_msg_aux_set (msg,
+                              auxkey,
+                              (flux_conf_t *)conf,
+                              (flux_free_f)flux_conf_decref) < 0) {
             flux_conf_decref (conf);
             return -1;
         }
