@@ -17,6 +17,7 @@ import sys
 import flux
 import flux.util
 from flux.hostlist import Hostlist
+from flux.idset import IDset
 from flux.job import JobID, job_list_id
 from flux.resource import resource_status
 
@@ -64,12 +65,12 @@ def parse_args():
         action="store_true",
         help="Print the total number of hosts",
     )
-    group.add_argument(
+    parser.add_argument(
         "-n",
         "--nth",
-        type=int,
-        metavar="N",
-        help="Output host at index N (-N to index from end)",
+        type=str,
+        metavar="[-]IDS",
+        help="Output hosts at indices in idset IDS (-IDS to index from end)",
     )
     parser.add_argument(
         "-L",
@@ -87,9 +88,9 @@ def parse_args():
     parser.add_argument(
         "-x",
         "--exclude",
-        metavar="HOSTS",
+        metavar="IDS|HOSTS",
         type=Hostlist,
-        help="Exclude all occurrences of HOSTS from final result",
+        help="Exclude all occurrences of HOSTS or indices from final result",
     )
     parser.add_argument(
         "-u",
@@ -356,8 +357,17 @@ def main():
 
     if args.exclude:
         # Delete all occurrences of args.exclude
+        count = len(hl)
         while hl.delete(args.exclude) > 0:
             pass
+        if len(hl) == count:
+            # No hosts were deleted, try args.exclude as idset of indices:
+            try:
+                exclude = IDset(args.exclude)
+                hl = Hostlist([hl[i] for i in range(count) if i not in exclude])
+            except ValueError:
+                # not a valid idset, just pass unaltered hostlist along
+                pass
 
     if args.sort:
         hl.sort()
@@ -375,10 +385,14 @@ def main():
         sys.stdout = open(os.devnull, "w")
 
     if args.nth is not None:
-        host = hl[args.nth]
-        if host:
-            print(host)
-    elif args.count:
+        if args.nth.startswith("-"):
+            # Iterate idset in reverse so that resultant hostlist is in
+            # the same order as the input hostlist instead of reversed:
+            hl = Hostlist([hl[-x] for x in reversed(list(IDset(args.nth[1:])))])
+        else:
+            hl = hl[IDset(args.nth)]
+
+    if args.count:
         print(f"{hl.count()}")
     elif args.expand:
         # Convert '\n' specified on command line to actual newline char

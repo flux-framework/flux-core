@@ -63,10 +63,12 @@ OPTIONS
   Emit the number of hosts in the result hostlist instead of the hostlist
   itself.
 
-.. option:: -n, --nth=N
+.. option:: -n, --nth=IDS
 
-  Output only the host at index *N* (*-N* to index from the end). The command
-  will fail if *N* is not a valid index.
+  Output only the hosts at indices *IDS* (*-IDS* to index from the end),
+  where *IDS* is a valid RFC 22 idset (e.g. '0' will return the first host,
+  '0-1' will return the first and second, '-1' returns the last host).  The
+  command will fail if any id in *IDS* is not a valid index.
 
 .. option:: -L, --limit=N
 
@@ -82,9 +84,11 @@ OPTIONS
   other manipulation options, this is equivalent to returning the set
   union of all provided hosts. (By default, all inputs are concatenated).
 
-.. option:: -x, --exclude=HOSTS
+.. option:: -x, --exclude=HOSTS|IDS
 
-  Exclude all occurrences of *HOSTS* form the result.
+  Exclude all hosts in  *HOSTS* or indices in idset *IDS* from the result.
+  It is not an error if any hosts or indices do not exist in the target
+  hostlist.
 
 .. option:: -i, --intersect
 
@@ -147,6 +151,12 @@ List the hosts for one job: (Note: this is the same as
 
   $ flux hostlist JOBID
   host[1-2]
+
+List the hosts for one job, excluding the first node:
+
+::
+
+  $ flux hostlist -x 0 JOBID
 
 List the unordered, unique hosts for multiple jobs:
 
@@ -216,6 +226,7 @@ FLUX RFC
 ========
 
 :doc:`rfc:spec_29`
+:doc:`rfc:spec_22`
 
 
 SEE ALSO
