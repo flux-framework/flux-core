@@ -88,9 +88,9 @@ def parse_args():
     parser.add_argument(
         "-x",
         "--exclude",
-        metavar="HOSTS",
+        metavar="IDS|HOSTS",
         type=Hostlist,
-        help="Exclude all occurrences of HOSTS from final result",
+        help="Exclude all occurrences of HOSTS or indices from final result",
     )
     parser.add_argument(
         "-u",
@@ -357,8 +357,17 @@ def main():
 
     if args.exclude:
         # Delete all occurrences of args.exclude
+        count = len(hl)
         while hl.delete(args.exclude) > 0:
             pass
+        if len(hl) == count:
+            # No hosts were deleted, try args.exclude as idset of indices:
+            try:
+                exclude = IDset(args.exclude)
+                hl = Hostlist([hl[i] for i in range(count) if i not in exclude])
+            except ValueError:
+                # not a valid idset, just pass unaltered hostlist along
+                pass
 
     if args.sort:
         hl.sort()
