@@ -35,9 +35,11 @@ static int validate (flux_plugin_t *p,
                                   "validate-test-id", &i) < 0)
         return 0;
     if (i == reject_id)
-        return flux_jobtap_reject_job (p, args,
+        return flux_jobtap_reject_job (p,
+			               args,
 			               "Job had reject_id == %d jobid=%ju",
-			               i, jobid);
+			               i,
+				       (uintmax_t)jobid);
     return 0;
 }
 

@@ -81,7 +81,13 @@ static int cb (flux_plugin_t *p,
         flux_log (h,
                   LOG_ERR,
                   "%s: res=%p id=%ju uid=%d  urg=%d, pri=%d, t_submit=%f",
-                  topic, resources, id, userid, urgency, priority, t_submit);
+                  topic,
+                  resources,
+                  (uintmax_t)id,
+                  userid,
+                  urgency,
+                  priority,
+                  t_submit);
         return -1;
     }
     flux_log (h, LOG_INFO, "args-check: %s: OK", topic);
