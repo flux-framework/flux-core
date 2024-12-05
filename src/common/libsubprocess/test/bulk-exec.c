@@ -18,6 +18,9 @@
 #include <unistd.h>
 #include <assert.h>
 #include <signal.h>
+#ifndef HAVE_GET_CURRENT_DIR_NAME
+#include "src/common/libmissing/get_current_dir_name.h"
+#endif
 
 #include <flux/core.h>
 #include <flux/idset.h>
