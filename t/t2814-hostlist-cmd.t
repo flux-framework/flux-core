@@ -100,8 +100,29 @@ test_expect_success 'flux-hostlist -n, --nth works' '
 	test "$(flux hostlist --nth=1 foo[1-10])" = foo2 &&
 	test "$(flux hostlist --nth=-1 foo[1-10])" = foo10
 '
+test_expect_success 'flux-hostlist -n, --nth works with an idset' '
+	flux hostlist --nth=1,3-4 foo[1-10] &&
+	test "$(flux hostlist --nth=1,3-4 foo[1-10])" = "foo[2,4-5]" &&
+	flux hostlist --nth=-1,3-4 foo[1-10] &&
+	test "$(flux hostlist --nth=-1,3-4 foo[1-10])" = "foo[7-8,10]"
+'
+test_expect_success 'flux-hostlist -n, --nth works with --expand' '
+	test "$(flux hostlist -e --nth=1,3-4 foo[1-10])" = "foo2 foo4 foo5"
+'
 test_expect_success 'flux-hostlist -n errors with invalid index' '
-	test_must_fail flux hostlist -n 10 foo[1-10]
+	test_must_fail flux hostlist -n 10 foo[1-10] &&
+	test_must_fail flux hostlist -n 1,10 foo[1-10]
+'
+test_expect_success 'flux-hostlist -x, --exclude works' '
+	test "$(flux hostlist -x foo1 foo[0-10])" = "foo[0,2-10]" &&
+	test "$(flux hostlist -x foo[0-9] foo[0-10])" = "foo10"
+'
+test_expect_success 'flux-hostlist -x, --exclude works with indices' '
+	test "$(flux hostlist -x 1 foo[0-10])" = "foo[0,2-10]" &&
+	test "$(flux hostlist -x 0-9 foo[0-10])" = "foo10"
+'
+test_expect_success 'flux-hostlist -n works after -x' '
+	test "$(flux hostlist -x foo5 -n 5-6 foo[1-10])" = "foo[7-8]"
 '
 test_expect_success 'flux-hostlist -L, --limit works' '
 	test "$(flux hostlist -L 2 foo[1-10])" = "foo[1-2]" &&
