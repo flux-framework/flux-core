@@ -264,6 +264,31 @@ f
         test_cmp expected append1.out
 '
 
+# N.B. When the data is small `flux kvs put foo=...` create a "val" treeobj.
+# when the value is larger, it creates a "valref" treeobj
+largeval="abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: basic --watch & --append works (initial valref)' '
+        flux kvs unlink -Rf test &&
+        echo -n ${largeval} | flux kvs put --raw test.append.test=- &&
+        flux kvs get --treeobj test.append.test | grep valref &&
+        flux kvs get --watch --append --count=4 \
+                     test.append.test > append1.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put --append test.append.test="1" &&
+        flux kvs put --append test.append.test="2" &&
+        flux kvs put --append test.append.test="3" &&
+        wait $pid &&
+	cat >expected <<-EOF &&
+abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz
+1
+2
+3
+	EOF
+        test_cmp expected append1.out
+'
+
 test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works with empty string' '
         flux kvs unlink -Rf test &&
         flux kvs put test.append.test="abc" &&
@@ -305,7 +330,7 @@ f
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works with multiple appends in a transaction' '
         flux kvs unlink -Rf test &&
-        flux kvs get --watch --waitcreate --append --count=4 \
+        flux kvs get --watch --waitcreate --append --count=7 \
                      test.append.test > append4.out 2>&1 &
         pid=$! &&
         wait_watcherscount_nonzero primary &&
@@ -316,9 +341,12 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works with multiple ap
         wait $pid &&
 	cat >expected <<-EOF &&
 abc
-de
-fg
-hi
+d
+e
+f
+g
+h
+i
 	EOF
         test_cmp expected append4.out
 '
@@ -358,6 +386,7 @@ flux-kvs: test.append.test: No such file or directory
         test_cmp expected append5.out
 '
 
+# N.B. valref treeobj expected, but treeobj is now a dirref
 test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on change to non-value' '
         flux kvs unlink -Rf test &&
         flux kvs put test.append.test="abc" &&
@@ -373,12 +402,13 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on change to non
 abc
 d
 e
-flux-kvs: test.append.test: Is a directory
+flux-kvs: test.append.test: Invalid argument
 	EOF
         test_cmp expected append6.out
 '
 
-test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works on fake append' '
+# N.B. valref treeobj expected, but treeobj is now a val
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on fake append' '
         flux kvs unlink -Rf test &&
         flux kvs put test.append.test="abc" &&
         flux kvs get --watch --append --count=4 \
@@ -388,73 +418,22 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works on fake append' 
         flux kvs put --append test.append.test="d" &&
         flux kvs put --append test.append.test="e" &&
         flux kvs put test.append.test="abcdef" &&
-        wait $pid &&
-	cat >expected <<-EOF &&
-abc
-d
-e
-f
-	EOF
-        test_cmp expected append7.out
+        test_must_fail wait $pid
 '
 
-test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works on fake append wiping data' '
+# N.B. valref treeobj now has fewer entries
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on fake append (valref)' '
         flux kvs unlink -Rf test &&
         flux kvs put test.append.test="abc" &&
         flux kvs get --watch --append --count=4 \
-                     test.append.test > append8.out 2>&1 &
+                     test.append.test > append7.out 2>&1 &
         pid=$! &&
         wait_watcherscount_nonzero primary &&
         flux kvs put --append test.append.test="d" &&
         flux kvs put --append test.append.test="e" &&
-        flux kvs put test.append.test="foobar" &&
-        wait $pid &&
-	cat >expected <<-EOF &&
-abc
-d
-e
-r
-	EOF
-        test_cmp expected append8.out
-'
-
-test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works on fake zero length append' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.append.test="abc" &&
-        flux kvs get --watch --append --count=4 \
-                     test.append.test > append9.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put --append test.append.test="d" &&
-        flux kvs put --append test.append.test="e" &&
-        flux kvs put test.append.test="abcde" &&
-        wait $pid &&
-	cat >expected <<-EOF &&
-abc
-d
-e
-	EOF
-        test_cmp expected append9.out
-'
-
-test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on shortened write' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.append.test="abc" &&
-        flux kvs get --watch --append --count=4 \
-                     test.append.test > append10.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put --append test.append.test="d" &&
-        flux kvs put --append test.append.test="e" &&
-        flux kvs put test.append.test="foo" &&
-        ! wait $pid &&
-	cat >expected <<-EOF &&
-abc
-d
-e
-flux-kvs: test.append.test: Invalid argument
-	EOF
-        test_cmp expected append10.out
+        echo -n ${largeval} | flux kvs put --raw test.append.test=- &&
+        flux kvs get --treeobj test.append.test | grep valref &&
+        test_must_fail wait $pid
 '
 
 # full checks

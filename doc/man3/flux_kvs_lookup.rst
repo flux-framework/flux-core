@@ -151,10 +151,9 @@ FLUX_KVS_WATCH_UNIQ
 FLUX_KVS_WATCH_APPEND
    Specified along with FLUX_KVS_WATCH, this flag will alter watch
    behavior to only respond when :var:`key` is mentioned verbatim in a
-   committed transaction and the key has been appended to. The response
-   will only contain the additional appended data. Note that only data
-   length is considered for appends and no guarantee is made that prior
-   data hasn't been overwritten.
+   committed transaction and the key has been appended to. The
+   response will only contain the additional appended data.  If the
+   value is overwritten, the lookup fails with EINVAL.
 
 FLUX_KVS_WATCH_FULL
    Specified along with FLUX_KVS_WATCH, this flag will alter watch

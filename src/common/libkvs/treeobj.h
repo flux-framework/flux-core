@@ -138,6 +138,12 @@ json_t *treeobj_decode (const char *buf);
 json_t *treeobj_decodeb (const char *buf, size_t buflen);
 char *treeobj_encode (const json_t *obj);
 
+/* Get treeobj type name
+ * Returns "symlink", "val", "valref", "dir", "dirref" or NULL if
+ * invalid treeobj.
+ */
+const char *treeobj_type_name (const json_t *obj);
+
 #endif /* !_FLUX_KVS_TREEOBJ_H */
 
 /*

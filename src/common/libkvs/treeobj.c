@@ -648,6 +648,21 @@ char *treeobj_encode (const json_t *obj)
     return json_dumps (obj, JSON_COMPACT|JSON_SORT_KEYS);
 }
 
+const char *treeobj_type_name (const json_t *obj)
+{
+    if (treeobj_is_symlink (obj))
+        return "symlink";
+    else if (treeobj_is_val (obj))
+        return "val";
+    else if (treeobj_is_valref (obj))
+        return "valref";
+    else if (treeobj_is_dir (obj))
+        return "dir";
+    else if (treeobj_is_dirref (obj))
+        return "dirref";
+    return "unknown";
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
