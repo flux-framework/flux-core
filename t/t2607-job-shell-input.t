@@ -51,6 +51,21 @@ test_expect_success LONGTEST 'flux-shell: 10K line lptest piped input works' '
 	test_cmp lptestXXL_input pipe3.out
 '
 
+# Note: This test is racy. It tries to ensure the shell has had a chance
+# to read the stdin data and write to the target task, but the cancel could
+# come before that since there is no way to synchronize. Thus, the test may
+# give false positive results (ok) but never a false negative (no ok).
+#
+test_expect_success NO_CHAIN_LINT 'flux-shell: ignores SIGPIPE if task closes stdin' '
+	id=$(flux submit sh -c "exec <&-; sleep 60") &&
+	flux job wait-event $id start &&
+	flux job wait-event -vp exec $id shell.start &&
+	(echo foo | flux job attach $id &) &&
+	flux job wait-event -vp input $id data &&
+	flux cancel $id &&
+	test_expect_code 143 flux job status $id
+'
+
 #
 # sharness will redirect /dev/null to stdin by default, so we create a named pipe
 # and pipe that in for tests in which we need "no stdin".
