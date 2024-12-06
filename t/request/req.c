@@ -74,20 +74,26 @@ error:
 
 /* Return number of queued clog requests
  */
-void count_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+void count_request_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     t_req_ctx_t *ctx = getctx (h);
 
-    if (flux_respond_pack (h, msg, "{s:i}",
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i}",
                            "count", zlist_size (ctx->clog_requests)) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
 }
 
 /* Don't reply to request - just queue it for later.
  */
-void clog_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+void clog_request_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     t_req_ctx_t *ctx = getctx (h);
     flux_msg_t *cpy = flux_msg_copy (msg, true);
@@ -98,8 +104,10 @@ void clog_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
 /* Reply to all queued requests.
  */
-void flush_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+void flush_request_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     t_req_ctx_t *ctx = getctx (h);
     flux_msg_t *req;
@@ -117,8 +125,10 @@ void flush_request_cb (flux_t *h, flux_msg_handler_t *mh,
 /* Accept a json payload, verify it and return error if it doesn't
  * match expected.
  */
-void sink_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+void sink_request_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     double d;
 
@@ -138,8 +148,10 @@ error:
 
 /* Return a fixed json payload
  */
-void src_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                     const flux_msg_t *msg, void *arg)
+void src_request_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
 {
     if (flux_respond_pack (h, msg, "{s:i}", "wormz", 42) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
@@ -147,8 +159,10 @@ void src_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
 /* Return 'n' sequenced responses.
  */
-void nsrc_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+void nsrc_request_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     int i, count;
 
@@ -166,8 +180,10 @@ error:
 
 /* Always return an error 42
  */
-void err_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                     const flux_msg_t *msg, void *arg)
+void err_request_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
 {
     if (flux_respond_error (h, msg, 42, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
@@ -175,8 +191,10 @@ void err_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
 /* Echo a json payload back to requestor.
  */
-void echo_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+void echo_request_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     const char *json_str;
 
@@ -196,8 +214,10 @@ error:
 
 /* Proxy ping.
  */
-void xping_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+void xping_request_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     t_req_ctx_t *ctx = arg;
     int rank, seq = ctx->ping_seq++;
@@ -205,16 +225,23 @@ void xping_request_cb (flux_t *h, flux_msg_handler_t *mh,
     char *hashkey = NULL;
     flux_msg_t *cpy;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s:s}", "rank", &rank,
-                                                     "service", &service) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i s:s}",
+                             "rank", &rank,
+                             "service", &service) < 0)
         goto error;
     flux_log (h, LOG_DEBUG, "Rxping rank=%d service=%s", rank, service);
 
     flux_log (h, LOG_DEBUG, "Tping seq=%d %d!%s", seq, rank, service);
 
     flux_future_t *f;
-    if (!(f = flux_rpc_pack (h, service, rank, 0,
-                             "{s:i}", "seq", seq)))
+    if (!(f = flux_rpc_pack (h,
+                             service,
+                             rank,
+                             0,
+                             "{s:i}",
+                             "seq", seq)))
         goto error;
     flux_future_destroy (f);
     if (!(cpy = flux_msg_copy (msg, true)))
@@ -232,8 +259,10 @@ error:
 /* Handle ping response for proxy ping.
  * Match it with a request and respond to that request.
  */
-void ping_response_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+void ping_response_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     t_req_ctx_t *ctx = arg;
     int seq;
@@ -248,8 +277,7 @@ void ping_response_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
     if (!json_str || !(o = json_loads (json_str, 0, NULL))
-            || json_unpack (o, "{s:i s:s}", "seq", &seq,
-                                            "route", &route) < 0) {
+        || json_unpack (o, "{s:i s:s}", "seq", &seq, "route", &route) < 0) {
         flux_log (h, LOG_ERR, "%s: error decoding payload", __FUNCTION__);
         goto done;
     }
@@ -270,12 +298,15 @@ done:
 /* Handle the simplest possible request.
  * Verify that everything is as expected; log it and stop the reactor if not.
  */
-void null_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+void null_request_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     t_req_ctx_t *ctx = arg;
     const char *topic;
-    int type, size;
+    int type;
+    size_t size;
     const void *buf;
     uint32_t nodeid;
 
@@ -288,7 +319,10 @@ void null_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (type != FLUX_MSGTYPE_REQUEST) {
-        flux_log (h, LOG_ERR, "%s: unexpected type %s", __FUNCTION__,
+        flux_log (h,
+                  LOG_ERR,
+                  "%s: unexpected type %s",
+                  __FUNCTION__,
                   flux_msg_typestr (type));
         goto error;
     }
@@ -297,7 +331,10 @@ void null_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (nodeid != ctx->rank && nodeid != FLUX_NODEID_ANY) {
-        flux_log (h, LOG_ERR, "%s: unexpected nodeid: %"PRIu32"", __FUNCTION__,
+        flux_log (h,
+                  LOG_ERR,
+                  "%s: unexpected nodeid: %"PRIu32"",
+                  __FUNCTION__,
                   nodeid);
         goto error;
     }
@@ -311,12 +348,18 @@ void null_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (flux_msg_get_payload (msg, &buf, &size) == 0) {
-        flux_log (h, LOG_ERR, "%s: unexpected payload size %d", __FUNCTION__,
+        flux_log (h,
+                  LOG_ERR,
+                  "%s: unexpected payload size %zu",
+                  __FUNCTION__,
                   size);
         goto error;
     }
     if (errno != EPROTO) {
-        flux_log (h, LOG_ERR, "%s: get nonexistent payload: %s", __FUNCTION__,
+        flux_log (h,
+                  LOG_ERR,
+                  "%s: get nonexistent payload: %s",
+                  __FUNCTION__,
                   strerror (errno));
         goto error;
     }

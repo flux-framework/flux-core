@@ -102,7 +102,7 @@ static int mpart_append (zlist_t *mpart, zmq_msg_t *part)
     return 0;
 }
 
-int mpart_addmem (zlist_t *mpart, const void *buf, int size)
+int mpart_addmem (zlist_t *mpart, const void *buf, size_t size)
 {
     zmq_msg_t *part;
 

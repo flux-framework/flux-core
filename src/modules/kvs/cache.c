@@ -182,7 +182,8 @@ void cache_entry_decref (struct cache_entry *entry)
         entry->refcount--;
 }
 
-int cache_entry_get_raw (struct cache_entry *entry, const void **data,
+int cache_entry_get_raw (struct cache_entry *entry,
+                         const void **data,
                          int *len)
 {
     if (!entry || !entry->valid)

@@ -65,7 +65,7 @@ static int forward_logbuf (flux_t *h,
 {
     struct stdlog_header hdr;
     const char *txt;
-    int txtlen;
+    size_t txtlen;
     char buf[FLUX_MAX_LOGBUF];
     int loglevel;
 
@@ -86,7 +86,7 @@ static int forward_logbuf (flux_t *h,
                      hdr.appname,
                      stdlog_severity_to_string (STDLOG_SEVERITY (hdr.pri)),
                      strtoul (hdr.hostname, NULL, 10),
-                     txtlen,
+                     (int)txtlen,
                      txt) >= sizeof (buf))
         return 0;
     return flux_respond_pack (h, request, "{s:s}", "log", buf);

@@ -286,15 +286,18 @@ static int attr_set_log (const char *name, const char *val, void *arg)
         int level = strtol (val, NULL, 10);
         if (logbuf_set_forward_level (logbuf, level) < 0)
             goto done;
-    } else if (streq (name, "log-critical-level")) {
+    }
+    else if (streq (name, "log-critical-level")) {
         int level = strtol (val, NULL, 10);
         if (logbuf_set_critical_level (logbuf, level) < 0)
             goto done;
-    } else if (streq (name, "log-stderr-level")) {
+    }
+    else if (streq (name, "log-stderr-level")) {
         int level = strtol (val, NULL, 10);
         if (logbuf_set_stderr_level (logbuf, level) < 0)
             goto done;
-    } else if (streq (name, "log-stderr-mode")) {
+    }
+    else if (streq (name, "log-stderr-mode")) {
         if (streq (val, "leader"))
             logbuf->stderr_mode = MODE_LEADER;
         else if (streq (val, "local"))
@@ -303,18 +306,22 @@ static int attr_set_log (const char *name, const char *val, void *arg)
             errno = EINVAL;
             goto done;
         }
-    } else if (streq (name, "log-ring-size")) {
+    }
+    else if (streq (name, "log-ring-size")) {
         int size = strtol (val, NULL, 10);
         if (logbuf_set_ring_size (logbuf, size) < 0)
             goto done;
-    } else if (streq (name, "log-filename")) {
+    }
+    else if (streq (name, "log-filename")) {
         if (logbuf_set_filename (logbuf, val) < 0)
             goto done;
-    } else if (streq (name, "log-level")) {
+    }
+    else if (streq (name, "log-level")) {
         int level = strtol (val, NULL, 10);
         if (logbuf_set_level (logbuf, level) < 0)
             goto done;
-    } else {
+    }
+    else {
         errno = ENOENT;
         goto done;
     }
@@ -331,32 +338,61 @@ static int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
      * Only allowed to be set on rank 0 (ignore initial value on rank > 0).
      */
     if (logbuf->rank == 0) {
-        if (attr_add_active (attrs, "log-filename", 0,
-                             attr_get_log, attr_set_log, logbuf) < 0)
+        if (attr_add_active (attrs,
+                             "log-filename",
+                             0,
+                             attr_get_log,
+                             attr_set_log,
+                             logbuf) < 0)
             goto done;
-    } else {
+    }
+    else {
         (void)attr_delete (attrs, "log-filename", true);
         if (attr_add (attrs, "log-filename", NULL, ATTR_IMMUTABLE) < 0)
             goto done;
     }
 
-    if (attr_add_active (attrs, "log-stderr-level", 0,
-                         attr_get_log, attr_set_log, logbuf) < 0)
+    if (attr_add_active (attrs,
+                         "log-stderr-level",
+                         0,
+                         attr_get_log,
+                         attr_set_log,
+                         logbuf) < 0)
         goto done;
-    if (attr_add_active (attrs, "log-stderr-mode", 0,
-                         attr_get_log, attr_set_log, logbuf) < 0)
+    if (attr_add_active (attrs,
+                         "log-stderr-mode",
+                         0,
+                         attr_get_log,
+                         attr_set_log,
+                         logbuf) < 0)
         goto done;
-    if (attr_add_active (attrs, "log-level", 0,
-                         attr_get_log, attr_set_log, logbuf) < 0)
+    if (attr_add_active (attrs,
+                         "log-level",
+                         0,
+                         attr_get_log,
+                         attr_set_log,
+                         logbuf) < 0)
         goto done;
-    if (attr_add_active (attrs, "log-forward-level", 0,
-                         attr_get_log, attr_set_log, logbuf) < 0)
+    if (attr_add_active (attrs,
+                         "log-forward-level",
+                         0,
+                         attr_get_log,
+                         attr_set_log,
+                         logbuf) < 0)
         goto done;
-    if (attr_add_active (attrs, "log-critical-level", 0,
-                         attr_get_log, attr_set_log, logbuf) < 0)
+    if (attr_add_active (attrs,
+                         "log-critical-level",
+                         0,
+                         attr_get_log,
+                         attr_set_log,
+                         logbuf) < 0)
         goto done;
-    if (attr_add_active (attrs, "log-ring-size", 0,
-                         attr_get_log, attr_set_log, logbuf) < 0)
+    if (attr_add_active (attrs,
+                         "log-ring-size",
+                         0,
+                         attr_get_log,
+                         attr_set_log,
+                         logbuf) < 0)
         goto done;
     rc = 0;
 done:
@@ -366,8 +402,12 @@ done:
 static int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
 {
     flux_future_t *f;
-    if (!(f = flux_rpc_raw (logbuf->h, "log.append", buf, len,
-                              FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
+    if (!(f = flux_rpc_raw (logbuf->h,
+                            "log.append",
+                            buf,
+                            len,
+                            FLUX_NODEID_UPSTREAM,
+                            FLUX_RPC_NORESPONSE)))
         return -1;
     flux_future_destroy (f);
     return 0;
@@ -398,7 +438,8 @@ static void log_fp (FILE *fp, int flags, const char *buf, int len)
 {
     struct stdlog_header hdr;
     const char *msg;
-    int msglen, severity;
+    size_t msglen;
+    int severity;
     uint32_t nodeid;
 
     if (fp) {
@@ -408,11 +449,13 @@ static void log_fp (FILE *fp, int flags, const char *buf, int len)
             nodeid = strtoul (hdr.hostname, NULL, 10);
             severity = STDLOG_SEVERITY (hdr.pri);
             log_timestamp (fp, &hdr, flags);
-            fprintf (fp, "%s.%s[%" PRIu32 "]: %.*s\n",
+            fprintf (fp,
+                     "%s.%s[%" PRIu32 "]: %.*s\n",
                      hdr.appname,
                      stdlog_severity_to_string (severity),
                      nodeid,
-                     msglen, msg);
+                     (int)msglen,
+                     msg);
         }
     }
     fflush (fp);
@@ -438,8 +481,8 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
                 rc = -1;
         }
         if (severity <= logbuf->critical_level
-                    || (severity <= logbuf->stderr_level
-                    && logbuf->stderr_mode == MODE_LOCAL)) {
+            || (severity <= logbuf->stderr_level
+            && logbuf->stderr_mode == MODE_LOCAL)) {
             int flags = 0;
             if (logbuf->stderr_mode == MODE_LOCAL)
                 flags |= LOG_NO_TIMESTAMP; // avoid dup in syslog journal
@@ -450,15 +493,17 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
     if (severity <= logbuf->forward_level) {
         if (logbuf->rank == 0) {
             log_fp (logbuf->f, 0, buf, len);
-        } else {
+        }
+        else {
             if (logbuf_forward (logbuf, buf, len) < 0)
                 rc = -1;
         }
     }
-    if (!logged_stderr && severity <= logbuf->stderr_level
-                       && logbuf->stderr_mode == MODE_LEADER
-                       && logbuf->rank == 0) {
-            log_fp (stderr, 0, buf, len);
+    if (!logged_stderr
+        && severity <= logbuf->stderr_level
+        && logbuf->stderr_mode == MODE_LEADER
+        && logbuf->rank == 0) {
+        log_fp (stderr, 0, buf, len);
     }
     return rc;
 }
@@ -475,13 +520,15 @@ static void logbuf_append_redirect (const char *buf, int len, void *arg)
 
 /* N.B. log requests have no response.
  */
-static void append_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void append_request_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     logbuf_t *logbuf = arg;
     uint32_t matchtag;
     const char *buf;
-    int len;
+    size_t len;
 
     if (flux_msg_get_matchtag (msg, &matchtag) < 0) {
         log_msg ("%s: malformed log request", __FUNCTION__);
@@ -503,8 +550,10 @@ error:
     }
 }
 
-static void clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void clear_request_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
     logbuf_t *logbuf = arg;
 
@@ -513,8 +562,10 @@ static void clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 }
 
-static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void dmesg_request_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
     logbuf_t *logbuf = arg;
     struct logbuf_entry *e;

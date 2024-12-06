@@ -23,7 +23,7 @@
 
 flux_future_t *content_load_byhash (flux_t *h,
                                     const void *hash,
-                                    int hash_size,
+                                    size_t hash_size,
                                     int flags)
 {
     const char *topic = "content.load";
@@ -47,19 +47,19 @@ flux_future_t *content_load_byblobref (flux_t *h,
                                        int flags)
 {
     uint32_t hash[BLOBREF_MAX_DIGEST_SIZE];
-    int hash_size;
+    ssize_t hash_size;
 
     if ((hash_size = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
         return NULL;
     return content_load_byhash (h, hash, hash_size, flags);
 }
 
-int content_load_get (flux_future_t *f, const void **buf, int *len)
+int content_load_get (flux_future_t *f, const void **buf, size_t *len)
 {
     return flux_rpc_get_raw (f, buf, len);
 }
 
-flux_future_t *content_store (flux_t *h, const void *buf, int len, int flags)
+flux_future_t *content_store (flux_t *h, const void *buf, size_t len, int flags)
 {
     const char *topic = "content.store";
     uint32_t rank = FLUX_NODEID_ANY;
@@ -73,10 +73,12 @@ flux_future_t *content_store (flux_t *h, const void *buf, int len, int flags)
     return flux_rpc_raw (h, topic, buf, len, rank, 0);
 }
 
-int content_store_get_hash (flux_future_t *f, const void **hash, int *hash_size)
+int content_store_get_hash (flux_future_t *f,
+                            const void **hash,
+                            size_t *hash_size)
 {
     const void *buf;
-    int buf_size;
+    size_t buf_size;
 
     if (flux_rpc_get_raw (f, &buf, &buf_size) < 0)
         return -1;
@@ -96,7 +98,7 @@ int content_store_get_blobref (flux_future_t *f,
 
     if (!(result = flux_future_aux_get (f, auxkey))) {
         const void *hash;
-        int hash_len;
+        size_t hash_len;
         char buf[BLOBREF_MAX_STRING_SIZE];
         char *cpy = NULL;
 

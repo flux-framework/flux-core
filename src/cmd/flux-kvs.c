@@ -712,7 +712,7 @@ void lookup_continuation (flux_future_t *f, void *arg)
     }
     else if (optparse_hasopt (ctx->p, "raw")) {
         const void *data;
-        int len;
+        size_t len;
         if (flux_kvs_lookup_get_raw (f, &data, &len) < 0)
             log_err_exit ("%s", key);
         if (optparse_hasopt (ctx->p, "label"))
@@ -1291,7 +1291,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
             if (!dopt) {
                 const char *value;
                 const void *buf;
-                int len;
+                size_t len;
                 if (rootref) {
                     if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
                         log_err_exit ("%s", key);
@@ -1303,7 +1303,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                 if (flux_kvs_lookup_get (f, &value) == 0) // null terminated
                     dump_kvs_val (key, maxcol, value);
                 else if (flux_kvs_lookup_get_raw  (f, &buf, &len) == 0)
-                    kv_printf (key, maxcol, "%.*s", len, (char *)buf);
+                    kv_printf (key, maxcol, "%.*s", (int)len, (char *)buf);
                 else
                     log_err_exit ("%s", key);
                 flux_future_destroy (f);

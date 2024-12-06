@@ -41,7 +41,7 @@ int main (int argc, char *argv[])
     ssize_t inlen;
     void *inbuf;
     const char *outbuf;
-    int outlen;
+    size_t outlen;
     int expected_errno = -1;
     int ch;
     bool raw_request = false;

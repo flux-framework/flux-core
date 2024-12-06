@@ -63,7 +63,7 @@ flux_msg_t *flux_event_pack (const char *topic, const char *fmt, ...);
  */
 flux_msg_t *flux_event_encode_raw (const char *topic,
                                    const void *data,
-                                   int len);
+                                   size_t len);
 
 /* Decode an event message, with optional raw payload.
  * If topic is non-NULL, assign the event topic string.
@@ -74,7 +74,7 @@ flux_msg_t *flux_event_encode_raw (const char *topic,
 int flux_event_decode_raw (const flux_msg_t *msg,
                            const char **topic,
                            const void **data,
-                           int *len);
+                           size_t *len);
 
 /* Publish an event with optional string payload.
  * The future is fulfilled once the event has been assigned a sequence number,
@@ -99,7 +99,7 @@ flux_future_t *flux_event_publish_raw (flux_t *h,
                                        const char *topic,
                                        int flags,
                                        const void *data,
-                                       int len);
+                                       size_t len);
 
 /* Obtain the event sequence number from the fulfilled
  * flux_event_publish() future.

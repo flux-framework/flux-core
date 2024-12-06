@@ -29,7 +29,7 @@
 int check_null_value (json_t *dirent)
 {
     char *data = "";
-    int len = -1;
+    size_t len = 42;
 
     if (treeobj_decode_val (dirent, (void **)&data, &len) < 0) {
         diag ("%s: initial base64 decode failed", __FUNCTION__);
@@ -45,7 +45,7 @@ int check_null_value (json_t *dirent)
 int check_raw_value (json_t *dirent, const char *expected, int expected_len)
 {
     char *data = NULL;
-    int len;
+    size_t len;
     int rc = -1;
 
     if (treeobj_decode_val (dirent, (void **)&data, &len) < 0) {

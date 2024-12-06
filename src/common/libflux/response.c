@@ -71,11 +71,11 @@ done:
 int flux_response_decode_raw (const flux_msg_t *msg,
                               const char **topic,
                               const void **data,
-                              int *len)
+                              size_t *len)
 {
     const char *ts;
     const void *d = NULL;
-    int l = 0;
+    size_t l = 0;
     int rc = -1;
 
     if (!data || !len) {
@@ -167,7 +167,7 @@ error:
 
 flux_msg_t *flux_response_encode_raw (const char *topic,
                                       const void *data,
-                                      int len)
+                                      size_t len)
 {
     flux_msg_t *msg;
 

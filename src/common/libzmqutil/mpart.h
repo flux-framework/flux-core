@@ -20,7 +20,7 @@
  */
 void mpart_destroy (zlist_t *mpart);
 zlist_t *mpart_create (void);
-int mpart_addmem (zlist_t *mpart, const void *buf, int size);
+int mpart_addmem (zlist_t *mpart, const void *buf, size_t size);
 int mpart_addstr (zlist_t *mpart, const char *s);
 zlist_t *mpart_recv (void *sock);
 int mpart_send (void *sock, zlist_t *mpart);

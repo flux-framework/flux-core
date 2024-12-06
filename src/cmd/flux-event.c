@@ -73,8 +73,10 @@ static bool match_payload (const char *s1, const char *s2)
     return streq (s1, s2);
 }
 
-static bool match_payload_raw (const void *p1, int p1sz,
-                               const char *p2, int p2sz)
+static bool match_payload_raw (const void *p1,
+                               int p1sz,
+                               const char *p2,
+                               int p2sz)
 {
     if (!p1 && !p2)
         return true;
@@ -83,8 +85,11 @@ static bool match_payload_raw (const void *p1, int p1sz,
     return !memcmp (p1, p2, p1sz);
 }
 
-static int publish_raw_sync (flux_t *h, const char *topic, int flags,
-                             char *payload, int payloadsz)
+static int publish_raw_sync (flux_t *h,
+                             const char *topic,
+                             int flags,
+                             char *payload,
+                             int payloadsz)
 {
     flux_future_t *f;
     int seq;
@@ -100,8 +105,11 @@ done:
     return rc;
 }
 
-static int publish_raw (flux_t *h, const char *topic, int flags,
-                        char *payload, int payloadsz)
+static int publish_raw (flux_t *h,
+                        const char *topic,
+                        int flags,
+                        char *payload,
+                        int payloadsz)
 {
     flux_msg_t *msg;
     int rc = -1;
@@ -118,7 +126,9 @@ done:
     return rc;
 }
 
-static int publish_json_sync (flux_t *h, const char *topic, int flags,
+static int publish_json_sync (flux_t *h,
+                              const char *topic,
+                              int flags,
                               char *payload)
 {
     flux_future_t *f;
@@ -136,7 +146,9 @@ done:
     return rc;
 }
 
-static int publish_json (flux_t *h, const char *topic, int flags,
+static int publish_json (flux_t *h,
+                         const char *topic,
+                         int flags,
                          char *payload)
 {
     flux_msg_t *msg;
@@ -172,8 +184,12 @@ static struct optparse_option pub_opts[] = {
 
 static void event_pub_register (optparse_t *parent)
 {
-    if (optparse_reg_subcommand (parent, "pub", event_pub,
-                                 "[OPTIONS] topic [payload]", NULL, 0,
+    if (optparse_reg_subcommand (parent,
+                                 "pub",
+                                 event_pub,
+                                 "[OPTIONS] topic [payload]",
+                                 NULL,
+                                 0,
                                  pub_opts) != OPTPARSE_SUCCESS)
         log_err_exit ("optparse_reg_subcommand");
 }
@@ -240,15 +256,15 @@ static int event_pub (optparse_t *p, int argc, char **argv)
                 log_err_exit ("flux_recv error");
             if (optparse_hasopt (p, "raw")) {
                 const void *data;
-                int len;
+                size_t len;
                 if ((flux_event_decode_raw (msg, NULL, &data, &len) == 0
-                        && match_payload_raw (payload, payloadsz, data, len)))
+                    && match_payload_raw (payload, payloadsz, data, len)))
                     received = true;
             }
             else {
                 const char *json_str;
                 if ((flux_event_decode (msg, NULL, &json_str) == 0
-                        && match_payload (payload, json_str)))
+                    && match_payload (payload, json_str)))
                     received = true;
             }
             flux_msg_destroy (msg);
@@ -315,26 +331,34 @@ static const struct optparse_option sub_opts [] = {
 
 void event_sub_register (optparse_t *parent)
 {
-    if (optparse_reg_subcommand (parent, "sub", event_sub,
-                                 "[OPTIONS] [topic...]", NULL, 0,
+    if (optparse_reg_subcommand (parent,
+                                 "sub",
+                                 event_sub,
+                                 "[OPTIONS] [topic...]",
+                                 NULL,
+                                 0,
                                  sub_opts) != OPTPARSE_SUCCESS)
         log_err_exit ("optparse_reg_subcommand");
 }
 
-static void event_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void event_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     optparse_t *p = arg;
     int max_count = optparse_get_int (p, "count", 0);
     static int recv_count = 0;
     const char *payload;
-    int payloadsz;
+    size_t payloadsz;
     const char *topic;
 
     if (flux_event_decode (msg, &topic, &payload) == 0)
         printf ("%s\t%s\n", topic, payload ? payload : "");
-    else if (flux_event_decode_raw (msg, &topic, (const void **)&payload,
-                                                          &payloadsz) == 0) {
+    else if (flux_event_decode_raw (msg,
+                                    &topic,
+                                    (const void **)&payload,
+                                    &payloadsz) == 0) {
         int maxlen = payloadsz; // no truncation
         char *s = make_printable (payload, payloadsz, maxlen);
         printf ("%s\t%s\n", topic, s);

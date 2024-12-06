@@ -48,17 +48,19 @@ void test_split (void)
     char buf[2048];
     char *xtra;
     struct stdlog_header hdr;
-    int len;
-    int msglen;
+    int n;
+    size_t len;
+    size_t msglen;
     const char *msg;
 
     stdlog_init (&hdr);
 
     /* orig=foo\nbar\nbaz */
-    len = stdlog_encode (buf, sizeof (buf), &hdr, STDLOG_NILVALUE,
+    n = stdlog_encode (buf, sizeof (buf), &hdr, STDLOG_NILVALUE,
                          "foo\nbar\nbaz");
-    ok (len >= 0,
+    ok (n >= 0,
         "stdlog_encode encoded foo\\nbar\\nbaz");
+    len = n;
     xtra = stdlog_split_message (buf, &len, "\r\n");
     ok (xtra != NULL && streq (xtra, "bar\nbaz"),
         "stdlog_split_message got bar\\nbaz");
@@ -67,9 +69,10 @@ void test_split (void)
         "and truncated orig message to foo");
 
     /* xtra=bar\nbaz */
-    len = stdlog_encode (buf, sizeof (buf), &hdr, STDLOG_NILVALUE, xtra);
-    ok (len >= 0,
+    n = stdlog_encode (buf, sizeof (buf), &hdr, STDLOG_NILVALUE, xtra);
+    ok (n >= 0,
         "stdlog_encode encoded bar\\nbaz");
+    len = n;
     free (xtra);
     xtra = stdlog_split_message (buf, &len, "\r\n");
     ok (xtra != NULL && streq (xtra, "baz"),
@@ -80,9 +83,10 @@ void test_split (void)
         "and truncated orig message to bar");
 
     /* xtra=baz */
-    len = stdlog_encode (buf, sizeof (buf), &hdr, STDLOG_NILVALUE, xtra);
-    ok (len >= 0,
+    n = stdlog_encode (buf, sizeof (buf), &hdr, STDLOG_NILVALUE, xtra);
+    ok (n >= 0,
         "stdlog_encode encoded baz");
+    len = n;
     free (xtra);
     xtra = stdlog_split_message (buf, &len, "\r\n");
     ok (xtra == NULL,
@@ -93,15 +97,19 @@ int main(int argc, char** argv)
 {
     char buf[2048];
     struct stdlog_header hdr, cln;
-    int n, len;
+    int n;
+    size_t len;
     const char *sd, *msg;
-    int sdlen, msglen;
+    size_t sdlen, msglen;
 
     plan (NO_PLAN);
 
     stdlog_init (&hdr);
-    len = stdlog_encode (buf, sizeof (buf), &hdr,
-                         STDLOG_NILVALUE, STDLOG_NILVALUE);
+    len = stdlog_encode (buf,
+                         sizeof (buf),
+                         &hdr,
+                         STDLOG_NILVALUE,
+                         STDLOG_NILVALUE);
     ok (len >= 0,
         "stdlog_init encoded defaults");
     diag ("%.*s", len, buf);
