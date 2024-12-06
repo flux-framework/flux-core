@@ -48,6 +48,11 @@ static const char *conf_auxkey = "flux::conf_object";
 
 static struct builtin builtin_tab[] = {
     {
+        .key = "confdir",
+        .val_installed = FLUXCONFDIR,
+        .val_intree = ABS_TOP_SRCDIR "/etc",
+    },
+    {
         .key = "lua_cpath_add",
         .val_installed = LUAEXECDIR "/?.so",
         .val_intree = ABS_TOP_BUILDDIR "/src/bindings/lua/?.so",
