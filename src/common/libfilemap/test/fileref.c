@@ -656,26 +656,6 @@ void test_expfail (void)
     ok (o == NULL && errno == EINVAL,
         "fileref_create_ex param.hashtype=smurfette fails with EINVAL");
 
-    errno = 0;
-    param.chunksize = -1;
-    param.hashtype = "sha1";
-    param.small_file_threshold = 0;
-    o = fileref_create_ex (mkpath ("test"), &param, NULL, &error);
-    if (!o)
-        diag ("%s", error.text);
-    ok (o == NULL && errno == EINVAL,
-        "fileref_create_ex param.chunksize=-1 fails with EINVAL");
-
-    errno = 0;
-    param.chunksize = 1024;
-    param.hashtype = "sha1";
-    param.small_file_threshold = -1;
-    o = fileref_create_ex (mkpath ("test"), &param, NULL, &error);
-    if (!o)
-        diag ("%s", error.text);
-    ok (o == NULL && errno == EINVAL,
-        "fileref_create_ex param.small_file_threshold=-1 fails with EINVAL");
-
     rmfile ("test");
 }
 

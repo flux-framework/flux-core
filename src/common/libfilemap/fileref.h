@@ -19,9 +19,9 @@
 
 struct blobvec_param {
     const char *hashtype;
-    int chunksize;              // maximum size of each blob
-    int small_file_threshold;   // no blobvec encoding for regular files of
-};                              //  size <= thresh (0=always blobvec)
+    size_t chunksize;              // maximum size of each blob
+    size_t small_file_threshold;   // no blobvec encoding for regular files of
+};                                 //  size <= thresh (0=always blobvec)
 
 struct blobvec_mapinfo {
     void *base;

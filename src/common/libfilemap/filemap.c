@@ -37,7 +37,7 @@
 static int decode_data (const char *s, void **data, size_t *data_size)
 {
     if (s) {
-        int len = strlen (s);
+        size_t len = strlen (s);
         size_t bufsize = base64_decoded_length (len);
         void *buf;
         ssize_t n;

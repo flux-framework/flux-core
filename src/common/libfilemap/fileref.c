@@ -75,7 +75,7 @@ static json_t *blobvec_create (int fd,
                                const void *mapbuf,
                                size_t size,
                                const char *hashtype,
-                               int chunksize)
+                               size_t chunksize)
 {
     json_t *blobvec;
     off_t offset = 0;
@@ -154,7 +154,7 @@ static json_t *fileref_create_blobvec (const char *path,
                                        void *mapbuf,
                                        struct stat *sb,
                                        const char *hashtype,
-                                       int chunksize,
+                                       size_t chunksize,
                                        flux_error_t *error)
 {
     json_t *blobvec;
@@ -336,9 +336,7 @@ json_t *fileref_create_ex (const char *path,
     int saved_errno;
 
     if (param) {
-        if (param->chunksize < 0
-            || param->hashtype == NULL
-            || param->small_file_threshold < 0) {
+        if (param->hashtype == NULL) {
             errprintf (error, "invalid blobvec encoding parameters");
             goto inval;
         }
@@ -380,7 +378,7 @@ json_t *fileref_create_ex (const char *path,
     else if (S_ISREG (sb.st_mode)
         && param != NULL
         && sb.st_size > param->small_file_threshold) {
-        int chunksize;
+        size_t chunksize;
 
         mapinfo.size = sb.st_size;
         mapinfo.base = mmap (NULL, mapinfo.size, PROT_READ, MAP_PRIVATE, fd, 0);
