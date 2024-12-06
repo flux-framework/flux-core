@@ -21,7 +21,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
-#include "reactor.h"
+#include "zwatcher.h"
 #include "sockopt.h"
 #include "mpart.h"
 #include "cert.h"

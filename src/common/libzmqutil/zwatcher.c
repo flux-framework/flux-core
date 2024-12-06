@@ -22,7 +22,7 @@
 #include "src/common/libflux/reactor_private.h"
 
 #include "ev_zmq.h"
-#include "reactor.h"
+#include "zwatcher.h"
 
 /* 0MQ sockets
  */

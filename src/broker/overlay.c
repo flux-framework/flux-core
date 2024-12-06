@@ -24,7 +24,7 @@
 
 #include "src/common/libzmqutil/msg_zsock.h"
 #include "src/common/libzmqutil/sockopt.h"
-#include "src/common/libzmqutil/reactor.h"
+#include "src/common/libzmqutil/zwatcher.h"
 #include "src/common/libzmqutil/zap.h"
 #include "src/common/libzmqutil/cert.h"
 #include "src/common/libzmqutil/monitor.h"
