@@ -23,8 +23,10 @@ extern "C" {
  */
 
 flux_watcher_t *zmqutil_watcher_create (flux_reactor_t *r,
-                                        void *zsock, int events,
-                                        flux_watcher_f cb, void *arg);
+                                        void *zsock,
+                                        int events,
+                                        flux_watcher_f cb,
+                                        void *arg);
 
 void *zmqutil_watcher_get_zsock (flux_watcher_t *w);
 
