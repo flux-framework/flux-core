@@ -17,7 +17,7 @@
 
 #include "ccan/array_size/array_size.h"
 
-#include "reactor.h"
+#include "zwatcher.h"
 #include "sockopt.h"
 #include "monitor.h"
 
