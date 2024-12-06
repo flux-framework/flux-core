@@ -39,7 +39,7 @@ void check_cornercase (void)
     uint32_t tag;
     const char *topic;
     const void *payload;
-    int payload_size;
+    size_t payload_size;
 
     errno = 0;
     ok (flux_msg_create (0xFFFF) == NULL && errno == EINVAL,
@@ -634,7 +634,8 @@ void check_payload (void)
     flux_msg_t *msg;
     const void *buf;
     void *pay[1024];
-    int plen = sizeof (pay), len;
+    size_t plen = sizeof (pay);
+    size_t len;
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "flux_msg_create works");
@@ -995,7 +996,7 @@ void check_copy (void)
     flux_msg_t *msg, *cpy;
     int type;
     const char *topic;
-    int cpylen;
+    size_t cpylen;
     const char buf[] = "xxxxxxxxxxxxxxxxxx";
     const void *cpybuf;
     const char *s;

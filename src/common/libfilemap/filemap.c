@@ -82,7 +82,7 @@ static int extract_blob (flux_t *h,
     } entry;
     flux_future_t *f;
     const void *buf;
-    int size;
+    size_t size;
 
     if (json_unpack (o,
                      "[I,I,s]",

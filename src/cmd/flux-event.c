@@ -256,7 +256,7 @@ static int event_pub (optparse_t *p, int argc, char **argv)
                 log_err_exit ("flux_recv error");
             if (optparse_hasopt (p, "raw")) {
                 const void *data;
-                int len;
+                size_t len;
                 if ((flux_event_decode_raw (msg, NULL, &data, &len) == 0
                     && match_payload_raw (payload, payloadsz, data, len)))
                     received = true;
@@ -350,7 +350,7 @@ static void event_cb (flux_t *h,
     int max_count = optparse_get_int (p, "count", 0);
     static int recv_count = 0;
     const char *payload;
-    int payloadsz;
+    size_t payloadsz;
     const char *topic;
 
     if (flux_event_decode (msg, &topic, &payload) == 0)

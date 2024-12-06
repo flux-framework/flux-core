@@ -256,7 +256,7 @@ static void load_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, v
 {
     struct content_s3 *ctx = arg;
     const void *hash;
-    int hash_size;
+    size_t hash_size;
     char blobref[BLOBREF_MAX_STRING_SIZE];
     void *data = NULL;
     size_t size;
@@ -300,7 +300,7 @@ void store_cb (flux_t *h,
 {
     struct content_s3 *ctx = arg;
     const void *data;
-    int size;
+    size_t size;
     char blobref[BLOBREF_MAX_STRING_SIZE];
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
     int hash_size;

@@ -218,7 +218,7 @@ int treeobj_get_symlink (const json_t *obj,
     return 0;
 }
 
-int treeobj_decode_val (const json_t *obj, void **dp, int *lp)
+int treeobj_decode_val (const json_t *obj, void **dp, size_t *lp)
 {
     const char *type, *xdatastr;
     const json_t *xdata;
@@ -517,9 +517,9 @@ json_t *treeobj_create_symlink (const char *ns, const char *target)
     return obj;
 }
 
-json_t *treeobj_create_val (const void *data, int len)
+json_t *treeobj_create_val (const void *data, size_t len)
 {
-    int xlen;
+    ssize_t xlen;
     char *xdata;
     json_t *obj = NULL;
 

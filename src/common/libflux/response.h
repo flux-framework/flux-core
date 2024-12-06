@@ -38,7 +38,7 @@ int flux_response_decode (const flux_msg_t *msg,
 int flux_response_decode_raw (const flux_msg_t *msg,
                               const char **topic,
                               const void **data,
-                              int *len);
+                              size_t *len);
 
 /* If failed response includes an error string payload, assign to 'errstr',
  * otherwise fail.
@@ -55,7 +55,7 @@ flux_msg_t *flux_response_encode (const char *topic, const char *s);
  */
 flux_msg_t *flux_response_encode_raw (const char *topic,
                                       const void *data,
-                                      int len);
+                                      size_t len);
 
 /* Encode an error response with 'errnum' (must be nonzero) and
  * if non-NULL, an error string payload.

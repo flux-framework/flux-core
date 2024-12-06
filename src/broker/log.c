@@ -527,7 +527,7 @@ static void append_request_cb (flux_t *h,
     logbuf_t *logbuf = arg;
     uint32_t matchtag;
     const char *buf;
-    int len;
+    size_t len;
 
     if (flux_msg_get_matchtag (msg, &matchtag) < 0) {
         log_msg ("%s: malformed log request", __FUNCTION__);

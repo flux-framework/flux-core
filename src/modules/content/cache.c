@@ -62,7 +62,7 @@ struct msgstack {
 
 struct cache_entry {
     const void *data;
-    int len;
+    size_t len;
     void *data_container;
     void *hash;                     // key storage is contiguous with struct
     uint8_t valid:1;                // entry contains valid data
@@ -417,7 +417,7 @@ static void content_load_request (flux_t *h,
 {
     struct content_cache *cache = arg;
     const void *hash;
-    int hash_size;
+    size_t hash_size;
     struct cache_entry *e;
     const char *errmsg = NULL;
 
@@ -535,7 +535,7 @@ static void cache_store_continuation (flux_future_t *f, void *arg)
     struct content_cache *cache = arg;
     struct cache_entry *e = flux_future_aux_get (f, "entry");
     const void *hash;
-    int hash_size;
+    size_t hash_size;
 
     e->store_pending = 0;
     assert (cache->flush_batch_count > 0);
@@ -630,7 +630,7 @@ static void content_store_request (flux_t *h,
 {
     struct content_cache *cache = arg;
     const void *data;
-    int len;
+    size_t len;
     struct cache_entry *e = NULL;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
     int hash_size;

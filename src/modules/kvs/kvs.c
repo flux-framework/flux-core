@@ -501,7 +501,7 @@ static void content_load_completion (flux_future_t *f, void *arg)
 {
     struct kvs_ctx *ctx = arg;
     const void *data;
-    int size;
+    size_t size;
     const char *blobref;
     struct cache_entry *entry;
 

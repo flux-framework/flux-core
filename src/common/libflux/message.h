@@ -166,8 +166,10 @@ int flux_msg_get_topic (const flux_msg_t *msg, const char **topic);
  * Any old payload is deleted.
  * flux_msg_get_payload returns pointer to msg-owned buf.
  */
-int flux_msg_get_payload (const flux_msg_t *msg, const void **buf, int *size);
-int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size);
+int flux_msg_get_payload (const flux_msg_t *msg,
+                          const void **buf,
+                          size_t *size);
+int flux_msg_set_payload (flux_msg_t *msg, const void *buf, size_t size);
 bool flux_msg_has_payload (const flux_msg_t *msg);
 
 /* Test/set/clear message flags

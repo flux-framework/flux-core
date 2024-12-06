@@ -24,7 +24,7 @@
  * Return JSON object on success, NULL on failure with errno set.
  */
 json_t *treeobj_create_symlink (const char *ns, const char *target);
-json_t *treeobj_create_val (const void *data, int len);
+json_t *treeobj_create_val (const void *data, size_t len);
 json_t *treeobj_create_valref (const char *blobref);
 json_t *treeobj_create_dir (void);
 json_t *treeobj_create_dirref (const char *blobref);
@@ -67,7 +67,7 @@ int treeobj_get_symlink (const json_t *obj,
  * If len > 0, data will be followed by an extra NULL byte in memory.
  * Caller must free returned data.
  */
-int treeobj_decode_val (const json_t *obj, void **data, int *len);
+int treeobj_decode_val (const json_t *obj, void **data, size_t *len);
 
 /* get type-specific count.
  * For dirref/valref, this is the number of blobrefs.
