@@ -20,8 +20,8 @@ noinst_LTLIBRARIES = \
 libzmqutil_la_SOURCES = \
 	msg_zsock.h \
 	msg_zsock.c \
-	reactor.h \
-	reactor.c \
+	zwatcher.h \
+	zwatcher.c \
 	ev_zmq.h \
 	ev_zmq.c \
 	zap.h \
@@ -36,7 +36,7 @@ libzmqutil_la_SOURCES = \
 	cert.c
 
 TESTS = test_msg_zsock.t \
-	test_reactor.t \
+	test_zwatcher.t \
 	test_ev.t \
 	test_zap.t \
 	test_monitor.t \
@@ -72,10 +72,10 @@ test_msg_zsock_t_CPPFLAGS = $(test_cppflags)
 test_msg_zsock_t_LDADD = $(test_ldadd)
 test_msg_zsock_t_LDFLAGS = $(test_ldflags)
 
-test_reactor_t_SOURCES = test/reactor.c
-test_reactor_t_CPPFLAGS = $(test_cppflags)
-test_reactor_t_LDADD = $(test_ldadd)
-test_reactor_t_LDFLAGS = $(test_ldflags)
+test_zwatcher_t_SOURCES = test/zwatcher.c
+test_zwatcher_t_CPPFLAGS = $(test_cppflags)
+test_zwatcher_t_LDADD = $(test_ldadd)
+test_zwatcher_t_LDFLAGS = $(test_ldflags)
 
 test_ev_t_SOURCES = test/ev.c
 test_ev_t_CPPFLAGS = $(test_cppflags)

@@ -20,7 +20,7 @@
 
 #include "src/common/libtap/tap.h"
 
-#include "src/common/libzmqutil/reactor.h"
+#include "zwatcher.h"
 
 static const size_t zmqwriter_msgcount = 1024;
 static void *zctx;
