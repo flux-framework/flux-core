@@ -116,7 +116,10 @@ static int parse_config (struct resource_ctx *ctx,
             return -1;
         }
     }
-    if (scheduling_path) {
+    /* resource.scheduling key, if configured, is only required on rank 0,
+     * since by definition it is used only by the scheduler.
+     */
+    if (scheduling_path && ctx->rank == 0) {
         json_t *scheduling;
         json_error_t e;
         if (!o) {
