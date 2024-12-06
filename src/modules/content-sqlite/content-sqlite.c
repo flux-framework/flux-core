@@ -305,7 +305,7 @@ static void load_cb (flux_t *h,
 {
     struct content_sqlite *ctx = arg;
     const void *hash;
-    int hash_size;
+    size_t hash_size;
     const void *data;
     int size;
     struct timespec t0;
@@ -339,7 +339,7 @@ void store_cb (flux_t *h,
 {
     struct content_sqlite *ctx = arg;
     const void *data;
-    int size;
+    size_t size;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
     int hash_size;
     struct timespec t0;

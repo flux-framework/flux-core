@@ -305,7 +305,8 @@ void null_request_cb (flux_t *h,
 {
     t_req_ctx_t *ctx = arg;
     const char *topic;
-    int type, size;
+    int type;
+    size_t size;
     const void *buf;
     uint32_t nodeid;
 
@@ -349,7 +350,7 @@ void null_request_cb (flux_t *h,
     if (flux_msg_get_payload (msg, &buf, &size) == 0) {
         flux_log (h,
                   LOG_ERR,
-                  "%s: unexpected payload size %d",
+                  "%s: unexpected payload size %zu",
                   __FUNCTION__,
                   size);
         goto error;

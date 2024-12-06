@@ -37,7 +37,7 @@ void jdiag (json_t *o)
 int check_null_value (json_t *dirent)
 {
     char *data = "";
-    int len = -1;
+    size_t len = 42;
 
     if (treeobj_decode_val (dirent, (void **)&data, &len) < 0) {
         diag ("%s: initial base64 decode failed", __FUNCTION__);
@@ -56,7 +56,8 @@ int check_null_value (json_t *dirent)
 int check_int_value (json_t *dirent, int expected)
 {
     char *data;
-    int rc, len, i;
+    int rc, i;
+    size_t len;
     json_t *val;
 
     if (treeobj_decode_val (dirent, (void **)&data, &len) < 0) {
@@ -89,7 +90,8 @@ int check_int_value (json_t *dirent, int expected)
 int check_string_value (json_t *dirent, const char *expected)
 {
     char *data;
-    int rc, len;
+    int rc;
+    size_t len;
     const char *s;
     json_t *val;
 
@@ -121,7 +123,7 @@ int check_string_value (json_t *dirent, const char *expected)
 int check_raw_value (json_t *dirent, const char *expected, int expected_len)
 {
     char *data;
-    int len;
+    size_t len;
 
     if (treeobj_decode_val (dirent, (void **)&data, &len) < 0) {
         diag ("%s: initial base64 decode failed", __FUNCTION__);
@@ -304,7 +306,8 @@ void test_raw_values (void)
     char buf[13], *nbuf;
     json_t *entry, *dirent;
     const char *key;
-    int flags, nlen;
+    int flags;
+    size_t nlen;
 
     memset (buf, 'c', sizeof (buf));
 

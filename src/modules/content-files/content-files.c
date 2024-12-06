@@ -122,7 +122,7 @@ static void load_cb (flux_t *h,
 {
     struct content_files *ctx = arg;
     const void *hash;
-    int hash_size;
+    size_t hash_size;
     char blobref[BLOBREF_MAX_STRING_SIZE];
     void *data = NULL;
     size_t size;
@@ -164,7 +164,7 @@ void store_cb (flux_t *h,
 {
     struct content_files *ctx = arg;
     const void *data;
-    int size;
+    size_t size;
     char blobref[BLOBREF_MAX_STRING_SIZE];
     char hash[BLOBREF_MAX_DIGEST_SIZE];
     int hash_size;

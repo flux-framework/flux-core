@@ -191,7 +191,7 @@ void test_val (void)
     json_t *val, *val2;
     char buf[32];
     char *outbuf;
-    int outlen;
+    size_t outlen;
 
     memset (buf, 'x', sizeof (buf));
 
@@ -720,7 +720,7 @@ void test_corner_cases (void)
     json_t *val, *valref, *dir, *symlink;
     json_t *array, *object;
     char *outbuf;
-    int outlen;
+    size_t outlen;
 
     val = treeobj_create_val ("a", 1);
     if (!val)

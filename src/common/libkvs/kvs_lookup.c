@@ -31,7 +31,7 @@ struct lookup_ctx {
     json_t *treeobj;
     char *treeobj_str; // json_dumps of tree object returned from lookup
     void *val_data;    // result of base64 decode of val object data
-    int val_len;
+    size_t val_len;
     bool val_valid;
     json_t *val_obj;
     flux_kvsdir_t *dir;
@@ -333,7 +333,7 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
     return rc;
 }
 
-int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len)
+int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, size_t *len)
 {
     struct lookup_ctx *ctx;
 

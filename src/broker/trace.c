@@ -54,7 +54,7 @@ static void trace_msg (flux_t *h,
     int type = 0;
     char buf[64];
     const char *topic = NULL;
-    int payload_size = 0;
+    size_t payload_size = 0;
     json_t *payload_json = NULL;
     int errnum = 0;
     const char *errstr = NULL;

@@ -29,7 +29,7 @@ void ping_cb (flux_t *h,
               void *arg)
 {
     const void *payload;
-    int payload_len;
+    size_t payload_len;
 
     if (flux_request_decode_raw (msg, NULL, &payload, &payload_len) < 0)
         goto error;

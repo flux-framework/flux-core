@@ -51,7 +51,7 @@
 
 struct append_data {
     void *data;
-    int len;
+    size_t len;
 };
 
 struct compact_key {

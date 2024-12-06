@@ -68,7 +68,7 @@ void test_large (void)
     char buf[8192];
     const char *topic;
     const void *buf2;
-    int buf2len;
+    size_t buf2len;
 #if defined(F_GETPIPE_SZ)
     int min_size = 16384;
     int size;
@@ -280,7 +280,7 @@ void test_nonblock (int size, int count)
     while ((msg = zlist_pop (ior->queue))) {
         const char *topic;
         const void *buf2;
-        int buf2len;
+        size_t buf2len;
 
         if (flux_request_decode_raw (msg, &topic, &buf2, &buf2len) < 0) {
             diag ("flux_request_decode_raw: %s", flux_strerror (errno));

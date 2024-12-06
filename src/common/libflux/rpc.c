@@ -123,7 +123,7 @@ done:
     return rc;
 }
 
-int flux_rpc_get_raw (flux_future_t *f, const void **data, int *len)
+int flux_rpc_get_raw (flux_future_t *f, const void **data, size_t *len)
 {
     const flux_msg_t *msg;
     int rc = -1;
@@ -331,7 +331,7 @@ flux_future_t *flux_rpc (flux_t *h,
 flux_future_t *flux_rpc_raw (flux_t *h,
                              const char *topic,
                              const void *data,
-                             int len,
+                             size_t len,
                              uint32_t nodeid,
                              int flags)
 {

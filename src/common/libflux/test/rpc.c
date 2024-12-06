@@ -124,7 +124,7 @@ void rpctest_rawecho_cb (flux_t *h,
                          void *arg)
 {
     const void *d = NULL;
-    int l = 0;
+    size_t l = 0;
 
     if (flux_request_decode_raw (msg, NULL, &d, &l) < 0)
         goto error;
@@ -494,7 +494,7 @@ void test_encoding (flux_t *h)
     /* working with-payload RPC (raw) */
     const void *d;
     const char data[] = "aaaaaaaaaaaaaaaaaaaa";
-    int l, len = strlen (data);
+    size_t l, len = strlen (data);
     ok ((r = flux_rpc_raw (h,
                            "rpctest.rawecho",
                            data,

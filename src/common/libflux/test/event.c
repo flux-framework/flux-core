@@ -25,8 +25,8 @@ void test_codec (void)
     const char data[] = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     int len = strlen (data);
     const void *d;
-    int l;
-    int i;
+    size_t l;
+    size_t i;
 
     /* no topic is an error */
     errno = 0;

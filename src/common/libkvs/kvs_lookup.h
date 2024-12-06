@@ -26,7 +26,7 @@ flux_future_t *flux_kvs_lookupat (flux_t *h,
 
 int flux_kvs_lookup_get (flux_future_t *f, const char **value);
 int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...);
-int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len);
+int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, size_t *len);
 int flux_kvs_lookup_get_treeobj (flux_future_t *f, const char **treeobj);
 int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dir);
 int flux_kvs_lookup_get_symlink (flux_future_t *f,
