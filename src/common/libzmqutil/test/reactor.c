@@ -25,8 +25,10 @@
 static const size_t zmqwriter_msgcount = 1024;
 static void *zctx;
 
-static void zmqwriter (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
+static void zmqwriter (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     void *sock = zmqutil_watcher_get_zsock (w);
     static int count = 0;
@@ -49,8 +51,10 @@ error:
     flux_reactor_stop_error (r);
 }
 
-static void zmqreader (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
+static void zmqreader (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     void *sock = zmqutil_watcher_get_zsock (w);
     static int count = 0;
