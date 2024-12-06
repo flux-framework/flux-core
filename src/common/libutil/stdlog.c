@@ -52,8 +52,11 @@ static int next_str (char **p, char **result)
     return 0;
 }
 
-static int next_structured_data (const char *buf, int len, int *offp,
-                                 const char **sp, int *slenp)
+static int next_structured_data (const char *buf,
+                                 int len,
+                                 int *offp,
+                                 const char **sp,
+                                 int *slenp)
 {
     int off = *offp;
     int this = *offp;
@@ -78,9 +81,13 @@ static int next_structured_data (const char *buf, int len, int *offp,
     return 0;
 }
 
-int stdlog_decode (const char *buf, int len, struct stdlog_header *hdr,
-                   const char **sdp, int *sdlenp,
-                   const char **msgp, int *msglenp)
+int stdlog_decode (const char *buf,
+                   int len,
+                   struct stdlog_header *hdr,
+                   const char **sdp,
+                   int *sdlenp,
+                   const char **msgp,
+                   int *msglenp)
 {
     int hdr_len = STDLOG_MAX_HEADER;
     char *p = &hdr->buf[0];
@@ -158,19 +165,31 @@ char *stdlog_split_message (const char *buf, int *len, const char *sep)
     return xtra;
 }
 
-int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
-                     const char *sd, const char *fmt, va_list ap)
+int stdlog_vencodef (char *buf,
+                     int len,
+                     struct stdlog_header *hdr,
+                     const char *sd,
+                     const char *fmt,
+                     va_list ap)
 {
     int m, n, i;
     int rc; // includes any overflow
 
-    m = snprintf (buf, len, "<%d>%d %.*s %.*s %.*s %.*s %.*s %s ",
-                  hdr->pri, hdr->version,
-                  STDLOG_MAX_TIMESTAMP, hdr->timestamp,
-                  STDLOG_MAX_HOSTNAME, hdr->hostname,
-                  STDLOG_MAX_APPNAME, hdr->appname,
-                  STDLOG_MAX_PROCID, hdr->procid,
-                  STDLOG_MAX_MSGID, hdr->msgid,
+    m = snprintf (buf,
+                  len,
+                  "<%d>%d %.*s %.*s %.*s %.*s %.*s %s ",
+                  hdr->pri,
+                  hdr->version,
+                  STDLOG_MAX_TIMESTAMP,
+                  hdr->timestamp,
+                  STDLOG_MAX_HOSTNAME,
+                  hdr->hostname,
+                  STDLOG_MAX_APPNAME,
+                  hdr->appname,
+                  STDLOG_MAX_PROCID,
+                  hdr->procid,
+                  STDLOG_MAX_MSGID,
+                  hdr->msgid,
                   sd);
     rc = m;
     if (m > len)
@@ -189,8 +208,12 @@ int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
     return rc;
 }
 
-int stdlog_encodef (char *buf, int len, struct stdlog_header *hdr,
-                    const char *sd, const char *fmt, ...)
+int stdlog_encodef (char *buf,
+                    int len,
+                    struct stdlog_header *hdr,
+                    const char *sd,
+                    const char *fmt,
+                    ...)
 {
     va_list ap;
     int rc;
@@ -201,8 +224,11 @@ int stdlog_encodef (char *buf, int len, struct stdlog_header *hdr,
     return rc;
 }
 
-int stdlog_encode (char *buf, int len, struct stdlog_header *hdr,
-                   const char *sd, const char *msg)
+int stdlog_encode (char *buf,
+                   int len,
+                   struct stdlog_header *hdr,
+                   const char *sd,
+                   const char *msg)
 {
     return stdlog_encodef (buf, len, hdr, sd, "%s", msg);
 }

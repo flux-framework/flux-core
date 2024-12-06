@@ -225,7 +225,8 @@ void dmesg_print (struct dmesg_ctx *ctx,
                 nodeid,
                 dmesg_color_reset (ctx),
                 severity_color (ctx, severity),
-                msglen, msg,
+                msglen,
+                msg,
                 dmesg_color_reset (ctx));
     }
     fflush (stdout);

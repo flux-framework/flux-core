@@ -99,7 +99,7 @@ const char *flux_strerror (int errnum)
     return strerror (errnum);
 }
 
-static int log_rpc (flux_t *h, const char *buf, int len)
+static int log_rpc (flux_t *h, const char *buf, size_t len)
 {
     flux_msg_t *msg;
 
@@ -116,7 +116,8 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     logctx_t *ctx;
     int saved_errno = errno;
     uint32_t rank;
-    int len;
+    int n;
+    size_t len;
     char timestamp[WALLCLOCK_MAXLEN];
     char hostname[STDLOG_MAX_HOSTNAME + 1];
     struct stdlog_header hdr;
@@ -148,10 +149,13 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     hdr.appname = ctx->appname;
     hdr.procid = ctx->procid;
 
-    len = stdlog_vencodef (ctx->buf, sizeof (ctx->buf), &hdr,
-                           STDLOG_NILVALUE, fmt, ap);
-    if (len >= sizeof (ctx->buf))
-        len = sizeof (ctx->buf);
+    n = stdlog_vencodef (ctx->buf,
+                         sizeof (ctx->buf),
+                         &hdr,
+                         STDLOG_NILVALUE,
+                         fmt,
+                         ap);
+    len = n >= sizeof (ctx->buf) ? sizeof (ctx->buf) : n;
     /* If log message contains multiple lines, log the first
      * line and save the rest.
      */

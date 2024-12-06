@@ -24,8 +24,10 @@
 
 
 /* increment integer and send it back */
-void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *mh,
-                     const flux_msg_t *msg, void *arg)
+void rpctest_incr_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     int i;
 
@@ -40,8 +42,10 @@ error:
 }
 
 /* request nodeid and flags returned in response */
-void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
-                        const flux_msg_t *msg, void *arg)
+void rpctest_nodeid_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
 {
     uint32_t nodeid;
 
@@ -49,9 +53,11 @@ void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     if (flux_msg_get_nodeid (msg, &nodeid) < 0)
         goto error;
-    if (flux_respond_pack (h, msg, "s:i s:i",
-                                   "nodeid", (int)nodeid,
-                                   "flags", msg->proto.flags) < 0)
+    if (flux_respond_pack (h,
+                           msg,
+                           "s:i s:i",
+                           "nodeid", (int)nodeid,
+                           "flags", msg->proto.flags) < 0)
         BAIL_OUT ("flux_respond_pack: %s", flux_strerror (errno));
     return;
 error:
@@ -60,8 +66,10 @@ error:
 }
 
 /* request payload echoed in response */
-void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+void rpctest_echo_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     const char *s;
 
@@ -80,14 +88,19 @@ error:
 }
 
 /* request payload sets error response content */
-void rpctest_echo_error_cb (flux_t *h, flux_msg_handler_t *mh,
-                            const flux_msg_t *msg, void *arg)
+void rpctest_echo_error_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     int errnum;
     const char *errstr = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s?s}",
-                             "errnum", &errnum, "errstr", &errstr) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i s?s}",
+                             "errnum", &errnum,
+                             "errstr", &errstr) < 0)
         goto error;
     if (errstr) {
         if (flux_respond_error (h, msg, errnum, errstr) < 0)
@@ -105,8 +118,10 @@ error:
 
 
 /* raw request payload echoed in response */
-void rpctest_rawecho_cb (flux_t *h, flux_msg_handler_t *mh,
-                         const flux_msg_t *msg, void *arg)
+void rpctest_rawecho_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
 {
     const void *d = NULL;
     int l = 0;
@@ -122,8 +137,10 @@ error:
 }
 
 /* no-payload response */
-void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+void rpctest_hello_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     const char *s;
 
@@ -141,8 +158,10 @@ error:
         BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
 }
 
-void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
-                        const flux_msg_t *msg, void *arg)
+void rpcftest_hello_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
 {
     if (flux_request_unpack (msg, NULL, "{ ! }") < 0)
         goto error;
@@ -156,14 +175,19 @@ error:
 
 /* Send back the requested number of responses followed an ENODATA error.
  */
-void rpctest_multi_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+void rpctest_multi_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     int i, count;
     int noterm;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s:i}", "count", &count,
-                                                     "noterm", &noterm) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i s:i}",
+                             "count", &count,
+                             "noterm", &noterm) < 0)
         goto error;
     if (!flux_msg_is_streaming (msg)) {
         errno = EPROTO;
@@ -366,7 +390,10 @@ void test_error (flux_t *h)
 
     /* Error response with error message payload.
      */
-    f = flux_rpc_pack (h, "rpctest.echoerr", FLUX_NODEID_ANY, 0,
+    f = flux_rpc_pack (h,
+                       "rpctest.echoerr",
+                       FLUX_NODEID_ANY,
+                       0,
                        "{s:i s:s}",
                        "errnum", 69,
                        "errstr", "Hello world");
@@ -385,7 +412,10 @@ void test_error (flux_t *h)
 
     /* Error response with no error message payload.
      */
-    f = flux_rpc_pack (h, "rpctest.echoerr", FLUX_NODEID_ANY, 0,
+    f = flux_rpc_pack (h,
+                       "rpctest.echoerr",
+                       FLUX_NODEID_ANY,
+                       0,
                        "{s:i}",
                        "errnum", ENOTDIR);
     ok (f != NULL,
@@ -465,8 +495,12 @@ void test_encoding (flux_t *h)
     const void *d;
     const char data[] = "aaaaaaaaaaaaaaaaaaaa";
     int l, len = strlen (data);
-    ok ((r = flux_rpc_raw (h, "rpctest.rawecho", data, len,
-                          FLUX_NODEID_ANY, 0)) != NULL,
+    ok ((r = flux_rpc_raw (h,
+                           "rpctest.rawecho",
+                           data,
+                           len,
+                           FLUX_NODEID_ANY,
+                           0)) != NULL,
         "flux_rpc_raw with payload when payload is expected works");
     d = NULL;
     l = -1;
@@ -478,8 +512,12 @@ void test_encoding (flux_t *h)
 
     /* use newish pack/unpack payload interfaces */
     int i = 0;
-    ok ((r = flux_rpc_pack (h, "rpctest.incr", FLUX_NODEID_ANY, 0,
-                            "{s:i}", "n", 107)) != NULL,
+    ok ((r = flux_rpc_pack (h,
+                            "rpctest.incr",
+                            FLUX_NODEID_ANY,
+                            0,
+                            "{s:i}",
+                            "n", 107)) != NULL,
         "flux_rpc_pack works");
     ok (flux_rpc_get_unpack (r, NULL) < 0
         && errno == EINVAL,
@@ -491,8 +529,12 @@ void test_encoding (flux_t *h)
     flux_future_destroy (r);
 
     /* cause remote EPROTO (unexpected payload) - will be picked up in _getf() */
-    ok ((r = flux_rpc_pack (h, "rpcftest.hello", FLUX_NODEID_ANY, 0,
-                            "{ s:i }", "foo", 42)) != NULL,
+    ok ((r = flux_rpc_pack (h,
+                            "rpcftest.hello",
+                            FLUX_NODEID_ANY,
+                            0,
+                            "{ s:i }",
+                            "foo", 42)) != NULL,
         "flux_rpc_pack with payload when none is expected works, at first");
     errno = 0;
     ok (flux_rpc_get_unpack (r, "{}") < 0
@@ -501,7 +543,11 @@ void test_encoding (flux_t *h)
     flux_future_destroy (r);
 
     /* cause local EPROTO (user incorrectly expects payload) */
-    ok ((r = flux_rpc_pack (h, "rpcftest.hello", FLUX_NODEID_ANY, 0, "{}")) != NULL,
+    ok ((r = flux_rpc_pack (h,
+                            "rpcftest.hello",
+                            FLUX_NODEID_ANY,
+                            0,
+                            "{}")) != NULL,
         "flux_rpc_pack with empty payload works");
     errno = 0;
     ok (flux_rpc_get_unpack (r, "{ s:i }", "foo", &i) < 0
@@ -511,7 +557,12 @@ void test_encoding (flux_t *h)
 
     /* cause local EPROTO (user incorrectly expects empty payload) */
     errno = 0;
-    ok ((r = flux_rpc_pack (h, "rpctest.echo", FLUX_NODEID_ANY, 0, "{ s:i }", "foo", 42)) != NULL,
+    ok ((r = flux_rpc_pack (h,
+                            "rpctest.echo",
+                            FLUX_NODEID_ANY,
+                            0,
+                            "{ s:i }",
+                            "foo", 42)) != NULL,
         "flux_rpc_pack with payload works");
     errno = 0;
     ok (flux_rpc_get_unpack (r, "{ ! }") < 0
@@ -576,13 +627,20 @@ void test_multi_response (flux_t *h)
     int t1, t2;
     const flux_msg_t *response;
 
-    f = flux_rpc_pack (h, "rpctest.multi", FLUX_NODEID_ANY, FLUX_RPC_STREAMING,
-                          "{s:i s:i}", "count", 3, "noterm", 0);
+    f = flux_rpc_pack (h,
+                       "rpctest.multi",
+                       FLUX_NODEID_ANY,
+                       FLUX_RPC_STREAMING,
+                       "{s:i s:i}",
+                       "count", 3,
+                       "noterm", 0);
     if (!f)
         BAIL_OUT ("flux_rpc_pack failed");
     errno = 0;
-    while (flux_rpc_get_unpack (f, "{s:i s:i}", "seq", &seq,
-                                                "flags", &inflags) == 0) {
+    while (flux_rpc_get_unpack (f,
+                                "{s:i s:i}",
+                                "seq", &seq,
+                                "flags", &inflags) == 0) {
         if (flux_future_get (f, (const void **)&response) == 0)
             outflags = response->proto.flags;
         count++;
@@ -613,8 +671,13 @@ void test_multi_response_noterm (flux_t *h)
     int t1, t2;
 
     // service will send two responses: seq=0, ENODATA
-    f = flux_rpc_pack (h, "rpctest.multi", FLUX_NODEID_ANY, FLUX_RPC_STREAMING,
-                          "{s:i s:i}", "count", 1, "noterm", 0);
+    f = flux_rpc_pack (h,
+                       "rpctest.multi",
+                       FLUX_NODEID_ANY,
+                       FLUX_RPC_STREAMING,
+                       "{s:i s:i}",
+                       "count", 1,
+                       "noterm", 0);
     if (!f)
         BAIL_OUT ("flux_rpc_pack failed");
     // consume seq=0 response
@@ -638,8 +701,13 @@ void test_multi_response_server_noterm (flux_t *h)
     flux_future_t *f;
 
     // service will send only seq=0 (not ENODATA).
-    f = flux_rpc_pack (h, "rpctest.multi", FLUX_NODEID_ANY, FLUX_RPC_STREAMING,
-                          "{s:i s:i}", "count", 1, "noterm", 1);
+    f = flux_rpc_pack (h,
+                       "rpctest.multi",
+                       FLUX_NODEID_ANY,
+                       FLUX_RPC_STREAMING,
+                       "{s:i s:i}",
+                       "count", 1,
+                       "noterm", 1);
     if (!f)
         BAIL_OUT ("flux_rpc_pack failed");
     flux_future_destroy (f);
@@ -674,8 +742,13 @@ void test_multi_response_then (flux_t *h)
 {
     flux_future_t *f;
 
-    f = flux_rpc_pack (h, "rpctest.multi", FLUX_NODEID_ANY, FLUX_RPC_STREAMING,
-                          "{s:i s:i}", "count", 3, "noterm", 0);
+    f = flux_rpc_pack (h,
+                       "rpctest.multi",
+                       FLUX_NODEID_ANY,
+                       FLUX_RPC_STREAMING,
+                       "{s:i s:i}",
+                       "count", 3,
+                       "noterm", 0);
     if (!f)
         BAIL_OUT ("flux_rpc_pack failed");
     ok (flux_future_then (f, -1., multi_then_cb, NULL) == 0,
@@ -726,8 +799,13 @@ void test_multi_response_then_chain (flux_t *h)
 {
     flux_future_t *f;
 
-    f = flux_rpc_pack (h, "rpctest.multi", FLUX_NODEID_ANY, FLUX_RPC_STREAMING,
-                          "{s:i s:i}", "count", 3, "noterm", 0);
+    f = flux_rpc_pack (h,
+                       "rpctest.multi",
+                       FLUX_NODEID_ANY,
+                       FLUX_RPC_STREAMING,
+                       "{s:i s:i}",
+                       "count", 3,
+                       "noterm", 0);
     if (!f)
         BAIL_OUT ("flux_rpc_pack failed");
     ok (flux_future_then (f, -1., multi_then_first_cb, NULL) == 0,
