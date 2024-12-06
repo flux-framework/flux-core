@@ -15,7 +15,11 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <fcntl.h>
-#include <ev.h>
+#if HAVE_LIBEV_INTERNAL
+# include "src/common/libev/ev.h"
+#else
+# include <ev.h>
+#endif
 #include <flux/core.h>
 
 #include "reactor_private.h"

@@ -8,6 +8,7 @@ apt install \
   pkg-config \
   libc6-dev \
   libzmq3-dev \
+  libuv1-dev \
   uuid-dev \
   libjansson-dev \
   liblz4-dev \
