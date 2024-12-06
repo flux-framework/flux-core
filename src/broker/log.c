@@ -438,7 +438,8 @@ static void log_fp (FILE *fp, int flags, const char *buf, int len)
 {
     struct stdlog_header hdr;
     const char *msg;
-    int msglen, severity;
+    size_t msglen;
+    int severity;
     uint32_t nodeid;
 
     if (fp) {
@@ -453,7 +454,7 @@ static void log_fp (FILE *fp, int flags, const char *buf, int len)
                      hdr.appname,
                      stdlog_severity_to_string (severity),
                      nodeid,
-                     msglen,
+                     (int)msglen,
                      msg);
         }
     }
