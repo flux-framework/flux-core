@@ -47,21 +47,21 @@
 #endif
 
 static void sha1_hash (const void *data,
-                       int data_len,
+                       size_t data_len,
                        void *hash,
-                       int hash_len);
+                       size_t hash_len);
 static void sha256_hash (const void *data,
-                         int data_len,
+                         size_t data_len,
                          void *hash,
-                         int hash_len);
+                         size_t hash_len);
 
 struct blobhash {
     char *name;
-    int hashlen;
+    size_t hashlen;
     void (*hashfun)(const void *data,
-                    int data_len,
+                    size_t data_len,
                     void *hash,
-                    int hash_len);
+                    size_t hash_len);
 };
 
 static struct blobhash blobtab[] = {
@@ -77,9 +77,9 @@ static struct blobhash blobtab[] = {
 };
 
 static void sha1_hash (const void *data,
-                       int data_len,
+                       size_t data_len,
                        void *hash,
-                       int hash_len)
+                       size_t hash_len)
 {
     SHA1_CTX ctx;
 
@@ -90,9 +90,9 @@ static void sha1_hash (const void *data,
 }
 
 static void sha256_hash (const void *data,
-                         int data_len,
+                         size_t data_len,
                          void *hash,
-                         int hash_len)
+                         size_t hash_len)
 {
     SHA256_CTX ctx;
 
@@ -131,11 +131,11 @@ static bool isxdigit_lower (char c)
     return false;
 }
 
-int blobref_strtohash (const char *blobref, void *hash, int size)
+ssize_t blobref_strtohash (const char *blobref, void *hash, size_t size)
 {
     struct blobhash *bh;
-    int len = strlen (blobref);
-    int offset;
+    size_t len = strlen (blobref);
+    size_t offset;
 
     if (!(bh = lookup_blobhash (blobref)) || size < bh->hashlen)
         goto inval;
@@ -152,16 +152,16 @@ inval:
 
 static int hashtostr (struct blobhash *bh,
                       const void *hash,
-                      int len,
+                      size_t len,
                       char *blobref,
-                      int blobref_len)
+                      size_t blobref_len)
 {
-    int offset;
+    size_t offset;
 
     if (len != bh->hashlen || !blobref)
         goto inval;
     offset = strlen (bh->name) + 1;
-    if (blobref_len - offset + 1 < (int)hex_str_size (bh->hashlen))
+    if (blobref_len < hex_str_size (bh->hashlen) + offset - 1)
         goto inval;
     strcpy (blobref, bh->name);
     strcat (blobref, "-");
@@ -175,9 +175,9 @@ inval:
 
 int blobref_hashtostr (const char *hashtype,
                        const void *hash,
-                       int len,
+                       size_t len,
                        void *blobref,
-                       int blobref_len)
+                       size_t blobref_len)
 {
     struct blobhash *bh;
 
@@ -191,9 +191,9 @@ int blobref_hashtostr (const char *hashtype,
 
 int blobref_hash (const char *hashtype,
                   const void *data,
-                  int len,
+                  size_t len,
                   void *blobref,
-                  int blobref_len)
+                  size_t blobref_len)
 {
     struct blobhash *bh;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
@@ -206,11 +206,11 @@ int blobref_hash (const char *hashtype,
     return hashtostr (bh, hash, bh->hashlen, blobref, blobref_len);
 }
 
-int blobref_hash_raw (const char *hashtype,
-                      const void *data,
-                      int len,
-                      void *hash,
-                      int hash_len)
+ssize_t blobref_hash_raw (const char *hashtype,
+                          const void *data,
+                          size_t len,
+                          void *hash,
+                          size_t hash_len)
 {
     struct blobhash *bh;
 
@@ -228,8 +228,8 @@ int blobref_hash_raw (const char *hashtype,
 int blobref_validate (const char *blobref)
 {
     struct blobhash *bh;
-    int len;
-    int offset;
+    size_t len;
+    size_t offset;
 
     if (!blobref || !(bh = lookup_blobhash (blobref)))
         goto inval;
