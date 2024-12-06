@@ -16,6 +16,7 @@
  * SIGINT  - forward to all local tasks
  * SIGTERM - forward
  * SIGALRM - forward
+ * SIGPIPE - ignore
  *
  * Notes:
  *
@@ -82,6 +83,9 @@ static int signals_init (flux_plugin_t *p,
         || trap_signal (shell, SIGTERM) < 0
         || trap_signal (shell, SIGALRM) < 0)
         shell_log_errno ("failed to set up signal watchers");
+
+    /* ignore SIGPIPE */
+    signal (SIGPIPE, SIG_IGN);
     return 0;
 }
 
