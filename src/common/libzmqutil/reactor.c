@@ -57,8 +57,10 @@ static struct flux_watcher_ops zmq_watcher  = {
 };
 
 flux_watcher_t *zmqutil_watcher_create (flux_reactor_t *r,
-                                        void *zsock, int events,
-                                        flux_watcher_f cb, void *arg)
+                                        void *zsock,
+                                        int events,
+                                        flux_watcher_f cb,
+                                        void *arg)
 {
     ev_zmq *zw;
     flux_watcher_t *w;
