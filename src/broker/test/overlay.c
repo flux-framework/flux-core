@@ -692,7 +692,8 @@ void diag_logger (const char *buf, int len, void *arg)
     if (asprintf (&s,
                   "%s: %.*s\n",
                   stdlog_severity_to_string (severity),
-                  msglen, msg) < 0)
+                  msglen,
+                  msg) < 0)
         BAIL_OUT ("asprintf failed");
     diag (s);
     if (zlist_append (logs, s) < 0)

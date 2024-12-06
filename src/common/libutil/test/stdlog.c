@@ -100,8 +100,11 @@ int main(int argc, char** argv)
     plan (NO_PLAN);
 
     stdlog_init (&hdr);
-    len = stdlog_encode (buf, sizeof (buf), &hdr,
-                         STDLOG_NILVALUE, STDLOG_NILVALUE);
+    len = stdlog_encode (buf,
+                         sizeof (buf),
+                         &hdr,
+                         STDLOG_NILVALUE,
+                         STDLOG_NILVALUE);
     ok (len >= 0,
         "stdlog_init encoded defaults");
     diag ("%.*s", len, buf);
