@@ -209,7 +209,8 @@ void dmesg_print (struct dmesg_ctx *ctx,
 {
     struct stdlog_header hdr;
     const char *msg;
-    int msglen, severity;
+    size_t msglen;
+    int severity;
     uint32_t nodeid;
 
     if (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) < 0)
@@ -225,7 +226,7 @@ void dmesg_print (struct dmesg_ctx *ctx,
                 nodeid,
                 dmesg_color_reset (ctx),
                 severity_color (ctx, severity),
-                msglen,
+                (int)msglen,
                 msg,
                 dmesg_color_reset (ctx));
     }

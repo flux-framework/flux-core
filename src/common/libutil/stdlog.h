@@ -44,28 +44,28 @@ struct stdlog_header {
 };
 
 int stdlog_decode (const char *buf,
-                   int len,
+                   size_t len,
                    struct stdlog_header *hdr,
                    const char **sd,
-                   int *sdlen,
+                   size_t *sdlen,
                    const char **msg,
-                   int *msglen);
+                   size_t *msglen);
 
 int stdlog_encode (char *buf,
-                   int len,
+                   size_t len,
                    struct stdlog_header *hdr,
                    const char *sd,
                    const char *msg);
 
 int stdlog_vencodef (char *buf,
-                     int len,
+                     size_t len,
                      struct stdlog_header *hdr,
                      const char *sd,
                      const char *fmt,
                      va_list ap);
 
 int stdlog_encodef (char *buf,
-                    int len,
+                    size_t len,
                     struct stdlog_header *hdr,
                     const char *sd,
                     const char *fmt,
@@ -77,7 +77,7 @@ int stdlog_encodef (char *buf,
  * Returns NULL if no 'sep' chars or on alloc failure.
  * If non-NULL, caller must free returned value.
  */
-char *stdlog_split_message (const char *buf, int *len, const char *sep);
+char *stdlog_split_message (const char *buf, size_t *len, const char *sep);
 
 void stdlog_init (struct stdlog_header *hdr);
 

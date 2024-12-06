@@ -53,13 +53,13 @@ static int next_str (char **p, char **result)
 }
 
 static int next_structured_data (const char *buf,
-                                 int len,
-                                 int *offp,
+                                 size_t len,
+                                 size_t *offp,
                                  const char **sp,
-                                 int *slenp)
+                                 size_t *slenp)
 {
-    int off = *offp;
-    int this = *offp;
+    size_t off = *offp;
+    size_t this = *offp;
     int level = 0;
 
     while (off < len) {
@@ -82,17 +82,17 @@ static int next_structured_data (const char *buf,
 }
 
 int stdlog_decode (const char *buf,
-                   int len,
+                   size_t len,
                    struct stdlog_header *hdr,
                    const char **sdp,
-                   int *sdlenp,
+                   size_t *sdlenp,
                    const char **msgp,
-                   int *msglenp)
+                   size_t *msglenp)
 {
-    int hdr_len = STDLOG_MAX_HEADER;
+    size_t hdr_len = STDLOG_MAX_HEADER;
     char *p = &hdr->buf[0];
     const char *sd;
-    int off, sdlen;
+    size_t off, sdlen;
 
     if (hdr_len > len)
         hdr_len = len;
@@ -133,14 +133,14 @@ int stdlog_decode (const char *buf,
     return 0;
 }
 
-char *stdlog_split_message (const char *buf, int *len, const char *sep)
+char *stdlog_split_message (const char *buf, size_t *len, const char *sep)
 {
     struct stdlog_header hdr;
     const char *msg;
-    int msglen;
-    int off;
+    size_t msglen;
+    size_t off;
     char *xtra;
-    int xtra_len;
+    size_t xtra_len;
 
     if (stdlog_decode (buf, *len, &hdr, NULL, NULL, &msg, &msglen) < 0)
         return NULL;
@@ -166,7 +166,7 @@ char *stdlog_split_message (const char *buf, int *len, const char *sep)
 }
 
 int stdlog_vencodef (char *buf,
-                     int len,
+                     size_t len,
                      struct stdlog_header *hdr,
                      const char *sd,
                      const char *fmt,
@@ -209,7 +209,7 @@ int stdlog_vencodef (char *buf,
 }
 
 int stdlog_encodef (char *buf,
-                    int len,
+                    size_t len,
                     struct stdlog_header *hdr,
                     const char *sd,
                     const char *fmt,
@@ -225,7 +225,7 @@ int stdlog_encodef (char *buf,
 }
 
 int stdlog_encode (char *buf,
-                   int len,
+                   size_t len,
                    struct stdlog_header *hdr,
                    const char *sd,
                    const char *msg)
