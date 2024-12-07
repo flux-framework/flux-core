@@ -20,7 +20,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/errno_safe.h"
-#include "src/common/libflux/reactor_private.h"
+#include "src/common/libflux/watcher_private.h"
 
 #include "fbuf_watcher.h"
 #include "fbuf.h"
