@@ -62,6 +62,7 @@ libflux_la_SOURCES = \
 	connector_local.c \
 	reactor.c \
 	reactor_private.h \
+	hwatcher.c \
 	msg_handler.c \
 	message.c \
 	message_private.h \
@@ -79,8 +80,6 @@ libflux_la_SOURCES = \
 	module.c \
 	conf_private.h \
 	conf.c \
-	ev_flux.h \
-	ev_flux.c \
 	control.c \
 	future.c \
 	composite_future.c \

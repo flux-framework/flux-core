@@ -22,7 +22,6 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdutils.h"
 
-#include "ev_flux.h"
 #include "reactor_private.h"
 
 static int valid_flags (int flags, int valid)
@@ -206,62 +205,6 @@ static void watcher_stop_safe (flux_watcher_t *w)
 static bool wrap_ev_active (flux_watcher_t *w)
 {
     return ev_is_active (w->data);
-}
-
-/* flux_t handle
- */
-
-static void handle_start (flux_watcher_t *w)
-{
-    ev_flux_start (w->r->loop, (struct ev_flux *)w->data);
-}
-
-static void handle_stop (flux_watcher_t *w)
-{
-    ev_flux_stop (w->r->loop, (struct ev_flux *)w->data);
-}
-
-static bool handle_is_active (flux_watcher_t *w)
-{
-    return ev_flux_is_active (w->data);
-}
-
-static void handle_cb (struct ev_loop *loop, struct ev_flux *fw, int revents)
-{
-    struct flux_watcher *w = fw->data;
-    if (w->fn)
-        w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
-}
-
-static struct flux_watcher_ops handle_watcher = {
-    .start = handle_start,
-    .stop = handle_stop,
-    .is_active = handle_is_active,
-    .destroy = NULL,
-};
-
-flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
-                                            flux_t *h,
-                                            int events,
-                                            flux_watcher_f cb,
-                                            void *arg)
-{
-    struct ev_flux *fw;
-    flux_watcher_t *w;
-    if (!(w = watcher_create (r, sizeof (*fw), &handle_watcher, cb, arg)))
-        return NULL;
-    fw = watcher_get_data (w);
-    ev_flux_init (fw, handle_cb, h, events_to_libev (events) & ~EV_ERROR);
-    fw->data = w;
-
-    return w;
-}
-
-flux_t *flux_handle_watcher_get_flux (flux_watcher_t *w)
-{
-    assert (watcher_get_ops (w) == &handle_watcher);
-    struct ev_flux *fw = w->data;
-    return fw->h;
 }
 
 /* file descriptors
