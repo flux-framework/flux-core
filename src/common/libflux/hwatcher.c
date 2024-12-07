@@ -17,7 +17,7 @@
 
 #include "src/common/libutil/errno_safe.h"
 
-#include "reactor_private.h"
+#include "watcher_private.h"
 
 struct hwatcher {
     flux_watcher_t *fd_w;

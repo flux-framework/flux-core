@@ -142,6 +142,7 @@ job_exec_la_LIBADD = \
 	$(builddir)/job-exec/libjob-exec.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux/watcher.lo \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(JANSSON_LIBS)
@@ -206,6 +207,7 @@ job_manager_la_LIBADD = \
 	$(builddir)/job-manager/libjob-manager.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux/watcher.lo \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
@@ -282,6 +284,7 @@ sdexec_la_LDFLAGS = $(fluxmod_ldflags) -module
 sdbus_la_SOURCES =
 sdbus_la_LIBADD = \
 	$(builddir)/sdbus/libsdbus.la \
+	$(top_builddir)/src/common/libflux/watcher.lo \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(JANSSON_LIBS)
