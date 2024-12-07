@@ -36,10 +36,6 @@ libsubprocess_la_SOURCES = \
 	subprocess_private.h \
 	client.h \
 	client.c \
-	ev_fbuf_read.h \
-	ev_fbuf_read.c \
-	ev_fbuf_write.h \
-	ev_fbuf_write.c \
 	fbuf.h \
 	fbuf.c \
 	fbuf_watcher.h \
