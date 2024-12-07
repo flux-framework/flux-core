@@ -25,6 +25,7 @@ fluxcoreinclude_HEADERS = \
 	handle.h \
 	connector.h \
 	reactor.h \
+	watcher.h \
 	msg_handler.h \
 	message.h \
 	msglist.h \
@@ -62,6 +63,9 @@ libflux_la_SOURCES = \
 	connector_local.c \
 	reactor.c \
 	reactor_private.h \
+	watcher.c \
+	watcher_private.h \
+	watcher_wrap.c \
 	hwatcher.c \
 	msg_handler.c \
 	message.c \

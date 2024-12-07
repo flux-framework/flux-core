@@ -116,6 +116,7 @@ flux_shell_LDADD = \
 	$(top_builddir)/src/common/libflux-taskmap.la \
 	$(top_builddir)/src/common/libflux-idset.la \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(top_builddir)/src/common/libpmi/libpmi_common.la \
 	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \

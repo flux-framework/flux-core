@@ -21,7 +21,7 @@
 #include <systemd/sd-bus.h>
 #include <flux/core.h>
 
-#include "src/common/libflux/reactor_private.h"
+#include "src/common/libflux/watcher_private.h"
 
 #include "watcher.h"
 

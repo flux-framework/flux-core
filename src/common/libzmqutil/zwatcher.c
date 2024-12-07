@@ -38,7 +38,7 @@
 #include <zmq.h>
 #include <flux/core.h>
 
-#include "src/common/libflux/reactor_private.h"
+#include "src/common/libflux/watcher_private.h"
 #include "src/common/libutil/errno_safe.h"
 
 #include "zwatcher.h"

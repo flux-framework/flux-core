@@ -112,6 +112,8 @@ plugins_perilog_la_SOURCES = \
 plugins_perilog_la_LIBADD = \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
 	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libjob/libjob.la
 plugins_perilog_la_LDFLAGS = \
@@ -134,6 +136,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(LIBPTHREAD) \
 	$(JANSSON_LIBS)
