@@ -22,8 +22,6 @@ libzmqutil_la_SOURCES = \
 	msg_zsock.c \
 	zwatcher.h \
 	zwatcher.c \
-	ev_zmq.h \
-	ev_zmq.c \
 	zap.h \
 	zap.c \
 	monitor.h \
@@ -37,7 +35,6 @@ libzmqutil_la_SOURCES = \
 
 TESTS = test_msg_zsock.t \
 	test_zwatcher.t \
-	test_ev.t \
 	test_zap.t \
 	test_monitor.t \
 	test_mpart.t \
@@ -76,11 +73,6 @@ test_zwatcher_t_SOURCES = test/zwatcher.c
 test_zwatcher_t_CPPFLAGS = $(test_cppflags)
 test_zwatcher_t_LDADD = $(test_ldadd)
 test_zwatcher_t_LDFLAGS = $(test_ldflags)
-
-test_ev_t_SOURCES = test/ev.c
-test_ev_t_CPPFLAGS = $(test_cppflags)
-test_ev_t_LDADD = $(test_ldadd)
-test_ev_t_LDFLAGS = $(test_ldflags)
 
 test_zap_t_SOURCES = test/zap.c
 test_zap_t_CPPFLAGS = $(test_cppflags)
