@@ -117,7 +117,7 @@ static void op_stop (flux_watcher_t *w)
 static bool op_is_active (flux_watcher_t *w)
 {
     struct sdbus_watcher *sdw = watcher_get_data (w);
-    return ev_is_active (sdw->prep);
+    return flux_watcher_is_active (sdw->prep);
 }
 
 static void op_destroy (flux_watcher_t *w)
