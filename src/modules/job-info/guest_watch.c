@@ -117,7 +117,9 @@ struct guest_watch_ctx {
     bool guest_released;
 
     /* data from guest namespace */
-    int offset;
+    int guest_offset;
+    /* data from main namespace */
+    int main_offset;
 };
 
 static int get_main_eventlog (struct guest_watch_ctx *gw);
@@ -194,22 +196,8 @@ static int send_eventlog_watch_cancel (struct guest_watch_ctx *gw,
                 f = gw->wait_guest_namespace_f;
             else if (gw->state == GUEST_WATCH_STATE_GUEST_NAMESPACE_WATCH)
                 f = gw->guest_namespace_watch_f;
-            else if (gw->state == GUEST_WATCH_STATE_MAIN_NAMESPACE_LOOKUP) {
-                /* Since this is a lookup, we don't need to perform an actual
-                 * cancel to "job-info.eventlog-watch-cancel".  Just return
-                 * ENODATA to the caller if necessary.
-                 */
-                gw->eventlog_watch_canceled = true;
-                if (gw->cancel) {
-                    if (flux_respond_error (gw->ctx->h,
-                                            gw->msg,
-                                            ENODATA,
-                                            NULL) < 0)
-                        flux_log_error (gw->ctx->h, "%s: flux_respond_error",
-                                        __FUNCTION__);
-                }
-                return 0;
-            }
+            else if (gw->state == GUEST_WATCH_STATE_MAIN_NAMESPACE_LOOKUP)
+                f = gw->main_namespace_lookup_f;
             else {
                 /* gw->state == GUEST_WATCH_STATE_INIT, eventlog-watch
                  * never started so sort of "auto-canceled" */
@@ -649,7 +637,7 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
         goto cleanup;
     }
 
-    gw->offset += strlen (event);
+    gw->guest_offset += strlen (event);
     flux_future_reset (f);
     return;
 
@@ -680,31 +668,36 @@ static int full_guest_path (struct guest_watch_ctx *gw,
 
 static int main_namespace_lookup (struct guest_watch_ctx *gw)
 {
-    const char *topic = "job-info.lookup";
+    const char *topic = "job-info.eventlog-watch";
+    int rpc_flags = FLUX_RPC_STREAMING;
     flux_msg_t *msg = NULL;
     int save_errno;
+    int flags = gw->flags;
     int rv = -1;
     char path[PATH_MAX];
 
     if (full_guest_path (gw, path, PATH_MAX) < 0)
         goto error;
 
-    /* If the eventlog has been migrated to the main KVS namespace, we
-     * know that the eventlog is complete, so no need to do a "watch",
-     * do a lookup instead */
+    /* the job has completed, so "waitcreate" has no meaning
+     * anymore, clear the flag
+     */
+    if (flags & FLUX_JOB_EVENT_WATCH_WAITCREATE)
+        flags &= ~FLUX_JOB_EVENT_WATCH_WAITCREATE;
 
     if (!(msg = cred_msg_pack (topic,
                                gw->cred,
-                               "{s:I s:[s] s:i}",
+                               "{s:I s:b s:s s:i}",
                                "id", gw->id,
-                               "keys", path,
-                               "flags", 0)))
+                               "guest_in_main", true,
+                               "path", path,
+                               "flags", flags)))
         goto error;
 
     if (!(gw->main_namespace_lookup_f = flux_rpc_message (gw->ctx->h,
                                                           msg,
                                                           FLUX_NODEID_ANY,
-                                                          0))) {
+                                                          rpc_flags))) {
         flux_log_error (gw->ctx->h, "%s: flux_rpc_message", __FUNCTION__);
         goto error;
     }
@@ -731,41 +724,43 @@ static void main_namespace_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct guest_watch_ctx *gw = arg;
     struct info_ctx *ctx = gw->ctx;
-    const char *s;
-    const char *input;
-    const char *tok;
-    size_t toklen;
-    char path[PATH_MAX];
+    const char *event;
 
-    if (full_guest_path (gw, path, PATH_MAX) < 0)
-        goto error;
-
-    if (flux_rpc_get_unpack (f, "{s:s}", path, &s) < 0) {
-        if (errno != ENOENT && errno != EPERM)
-            flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
+    if (flux_job_event_watch_get (f, &event) < 0) {
+        if (errno != ENOENT && errno != ENODATA)
+            flux_log_error (ctx->h,
+                            "%s: flux_job_event_watch_get",
+                            __FUNCTION__);
         goto error;
     }
 
     if (gw->eventlog_watch_canceled) {
-        /* already sent ENODATA via send_eventlog_watch_cancel(), so
-         * just cleanup */
+        if (gw->cancel) {
+            errno = ENODATA;
+            goto error;
+        }
         goto cleanup;
     }
 
-    input = s + gw->offset;
-    while (get_next_eventlog_entry (&input, &tok, &toklen)) {
-        if (flux_respond_pack (ctx->h, gw->msg,
-                               "{s:s#}",
-                               "event", tok, toklen) < 0) {
+    gw->main_offset += strlen (event);
+
+    if (gw->main_offset > gw->guest_offset) {
+        if (flux_respond_pack (ctx->h, gw->msg, "{s:s}", "event", event) < 0) {
             flux_log_error (ctx->h, "%s: flux_respond_pack",
                             __FUNCTION__);
+
+            /* If we haven't sent a cancellation yet, must do so so that
+             * the future's matchtag will eventually be freed */
+            if (!gw->eventlog_watch_canceled)
+                (void) send_eventlog_watch_cancel (gw,
+                                                   gw->main_namespace_lookup_f,
+                                                   false);
             goto cleanup;
         }
     }
 
-    /* We've moved to the main KVS namespace, so we know there's no
-     * more data, return ENODATA */
-    errno = ENODATA;
+    flux_future_reset (f);
+    return;
 
 error:
     if (flux_respond_error (ctx->h, gw->msg, errno, NULL) < 0)
