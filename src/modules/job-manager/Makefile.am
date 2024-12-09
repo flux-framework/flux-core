@@ -111,6 +111,7 @@ plugins_perilog_la_SOURCES = \
 	plugins/perilog.c
 plugins_perilog_la_LIBADD = \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux/watcher.lo \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libjob/libjob.la
@@ -131,6 +132,7 @@ test_ldadd = \
 	libjob-manager.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux/watcher.lo \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-core.la \
