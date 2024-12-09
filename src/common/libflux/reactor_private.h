@@ -103,6 +103,12 @@ static inline struct flux_watcher_ops *watcher_get_ops (flux_watcher_t *w)
     return NULL;
 }
 
+static inline void watcher_call (flux_watcher_t *w, int revents)
+{
+    if (w->fn)
+        w->fn (w->r, w, revents, w->arg);
+}
+
 #endif /* !_FLUX_CORE_REACTOR_PRIVATE_H */
 
 /*
