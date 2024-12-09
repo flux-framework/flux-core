@@ -309,17 +309,22 @@ static void hello_cb (flux_t *h,
 {
     struct job_manager *ctx = arg;
     struct job *job;
+    int partial_ok = 0;
 
     /* N.B. no "state" is set in struct alloc after a hello msg, so do
      * not set ctx->alloc->sched_sender in here.  Do so only in the
      * ready callback */
-    if (flux_request_decode (msg, NULL, NULL) < 0)
+    if (flux_request_unpack (msg, NULL, "{s?b}", "partial-ok", &partial_ok) < 0
+        && flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     if (!flux_msg_is_streaming (msg)) {
         errno = EPROTO;
         goto error;
     }
-    flux_log (h, LOG_DEBUG, "scheduler: hello");
+    flux_log (h,
+             LOG_DEBUG,
+             "scheduler: hello%s",
+             partial_ok ? " +partial-ok" : "");
     job = zhashx_first (ctx->active_jobs);
     while (job) {
         if (job->has_resources && !job->alloc_bypass) {
@@ -334,7 +339,7 @@ static void hello_cb (flux_t *h,
         }
         job = zhashx_next (ctx->active_jobs);
     }
-    if (housekeeping_hello_respond (ctx->housekeeping, msg) < 0)
+    if (housekeeping_hello_respond (ctx->housekeeping, msg, partial_ok) < 0)
         goto error;
     if (flux_respond_error (h, msg, ENODATA, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);

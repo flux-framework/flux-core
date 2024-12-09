@@ -78,6 +78,7 @@
 #include <flux/idset.h>
 #include <unistd.h>
 #include <signal.h>
+#include <jansson.h>
 #ifdef HAVE_ARGZ_ADD
 #include <argz.h>
 #else
@@ -110,11 +111,11 @@ struct allocation {
     flux_jobid_t id;
     struct rlist *rl;       // R, diminished each time a subset is released
     struct idset *pending;  // ranks in need of housekeeping
+    struct idset *free;     // ranks that have been released to the scheduler
     struct housekeeping *hk;
     flux_watcher_t *timer;
     bool timer_armed;
     bool timer_expired;
-    int free_count;         // number of releases
     double t_start;
     struct bulk_exec *bulk_exec;
     void *list_handle;
@@ -142,6 +143,7 @@ static void allocation_destroy (struct allocation *a)
         int saved_errno = errno;
         rlist_destroy (a->rl);
         idset_destroy (a->pending);
+        idset_destroy (a->free);
         flux_watcher_destroy (a->timer);
         bulk_exec_destroy (a->bulk_exec);
         free (a);
@@ -182,6 +184,7 @@ static struct allocation *allocation_create (struct housekeeping *hk,
     a->t_start = flux_reactor_now (flux_get_reactor (hk->ctx->h));
     if (!(a->rl = rlist_from_json (R, NULL))
         || !(a->pending = rlist_ranks (a->rl))
+        || !(a->free = idset_create (idset_universe_size (a->pending), 0))
         || !(a->timer = flux_timer_watcher_create (r,
                                                    0,
                                                    0.,
@@ -242,7 +245,8 @@ static void allocation_release (struct allocation *a)
         || !(rl = rlist_copy_ranks (a->rl, ranks))
         || !(R = rlist_to_R (rl))
         || alloc_send_free_request (ctx->alloc, R, a->id, final) < 0
-        || rlist_remove_ranks (a->rl, ranks) < 0) {
+        || rlist_remove_ranks (a->rl, ranks) < 0
+        || idset_add (a->free, ranks) < 0) {
         char *s = idset_encode (ranks, IDSET_FLAG_RANGE);
         flux_log (ctx->h,
                   LOG_ERR,
@@ -251,8 +255,6 @@ static void allocation_release (struct allocation *a)
                   s ? s : "NULL");
         free (s);
     }
-    else
-        a->free_count++;
     json_decref (R);
     rlist_destroy (rl);
     idset_destroy (ranks);
@@ -465,36 +467,61 @@ skip:
     return alloc_send_free_request (hk->ctx->alloc, R, id, true);
 }
 
+static int set_idset_string (json_t *obj, const char *key, struct idset *ids)
+{
+    char *s;
+    json_t *o = NULL;
+
+    if (!(s = idset_encode (ids, IDSET_FLAG_RANGE))
+        || !(o = json_string (s))
+        || json_object_set_new (obj, key, o) < 0) {
+        json_decref (o);
+        free (s);
+        return -1;
+    }
+    free (s);
+    return 0;
+}
+
 static int housekeeping_hello_respond_one (struct housekeeping *hk,
                                            const flux_msg_t *msg,
                                            struct allocation *a,
+                                           bool partial_ok,
                                            flux_error_t *error)
 {
     struct job *job;
+    json_t *payload = NULL;
 
-    if (a->free_count > 0) {
-        errprintf (error, "partial release is not supported by RFC 27 hello");
-        goto error;
+    if (!idset_empty (a->free) && !partial_ok) {
+        errprintf (error,
+                   "scheduler does not support restart with partially"
+                   " released resources");
+        return -1;
     }
     if (!(job = zhashx_lookup (hk->ctx->inactive_jobs, &a->id))
         && !(job = zhashx_lookup (hk->ctx->active_jobs, &a->id))) {
         errprintf (error, "the job could not be looked up during RFC 27 hello");
-        goto error;
+        return -1;
     }
-    if (flux_respond_pack (hk->ctx->h,
-                           msg,
-                           "{s:I s:I s:I s:f}",
-                           "id", job->id,
-                           "priority", job->priority,
-                           "userid", (json_int_t)job->userid,
-                           "t_submit", job->t_submit) < 0) {
-        errprintf (error,
-                   "the RFC 27 hello response could not be sent: %s",
-                   strerror (errno));
+    if (!(payload = json_pack ("{s:I s:I s:I s:f}",
+                               "id", job->id,
+                               "priority", job->priority,
+                               "userid", (json_int_t)job->userid,
+                               "t_submit", job->t_submit)))
         goto error;
+    if (!idset_empty (a->free)) {
+        if (set_idset_string (payload, "free", a->free) < 0)
+            goto error;
     }
+    if (flux_respond_pack (hk->ctx->h, msg, "O", payload) < 0)
+        goto error;
+    json_decref (payload);
     return 0;
 error:
+    errprintf (error,
+               "failed to send scheduler HELLO handshake: %s",
+               strerror (errno));
+    json_decref (payload);
     return -1;
 }
 
@@ -513,14 +540,20 @@ static void kill_continuation (flux_future_t *f, void *arg)
  * allocations.  Send remaining housekeeping tasks a SIGTERM, log an error,
  * and delete the allocation.
  */
-int housekeeping_hello_respond (struct housekeeping *hk, const flux_msg_t *msg)
+int housekeeping_hello_respond (struct housekeeping *hk,
+                                const flux_msg_t *msg,
+                                bool partial_ok)
 {
     struct allocation *a;
     flux_error_t error;
 
     a = zlistx_first (hk->allocations);
     while (a) {
-        if (housekeeping_hello_respond_one (hk, msg, a, &error) < 0) {
+        if (housekeeping_hello_respond_one (hk,
+                                            msg,
+                                            a,
+                                            partial_ok,
+                                            &error) < 0) {
             char *ranks;
             char *hosts = NULL;
             flux_future_t *f;
