@@ -14,6 +14,10 @@
 #include <stdbool.h>
 #include <jansson.h>
 
+#ifndef EBADE
+#define EBADE EINVAL
+#endif
+
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libtap/tap.h"
