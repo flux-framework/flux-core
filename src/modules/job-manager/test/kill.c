@@ -26,8 +26,8 @@ int main (int argc, char **argv)
         "kill_check_signal signum=SIGKILL works");
     ok (kill_check_signal (-1) < 0,
         "kill_check_signal signum=-1 fails");
-    ok (kill_check_signal (SIGRTMAX + 1) < 0,
-        "kill_check_signal signum=SIGRTMAX+1 fails");
+    ok (kill_check_signal (NSIG) < 0,
+        "kill_check_signal signum=NSIG fails");
 
     done_testing ();
 
