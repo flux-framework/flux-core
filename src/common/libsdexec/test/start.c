@@ -21,6 +21,8 @@
 #include "src/common/libutil/jpath.h"
 #include "start.h"
 
+extern char **environ;
+
 void test_inval (void)
 {
     char *av[] = { "/bin/ls", NULL };
