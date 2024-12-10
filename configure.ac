@@ -166,6 +166,20 @@ AC_PATH_PROGS(SSH, [rsh ssh], [/usr/bin/rsh])
 AC_DEFINE_UNQUOTED([PATH_SSH], "$SSH",
           [Define remote shell program to be used by the ssh:// connector])
 
+# macos linker doesn't support --gc-sections
+saved_LDFLAGS="$LDFLAGS"
+LDFLAGS="-Wl,--gc-sections $LDFLAGS"
+AC_MSG_CHECKING([whether ld supports --gc-sections])
+AC_LINK_IFELSE([AC_LANG_PROGRAM([])], [
+  AC_MSG_RESULT([yes])
+  ld_gc_sections="-Wl,--gc-sections"
+  AS_VAR_SET(ld_gc_sections, $ld_gc_sections)
+  AC_SUBST(ld_gc_sections)
+  ],[
+  AC_MSG_RESULT([no])
+])
+LDFLAGS=$saved_LDFLAGS
+
 LT_INIT
 AC_PROG_AWK
 
