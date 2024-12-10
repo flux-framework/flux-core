@@ -113,6 +113,22 @@ jobs:
         cd flux-pam &&
         src/test/docker/docker-run-checks.sh -j 4 -i el8
 
+  build-macos:
+    needs: [python-lint]
+    name: macos build only
+    runs-on: macos-14
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+    - name: Install dependencies
+      run: scripts/install-deps-macos.sh
+    - name: autogen, configure
+      run: scripts/configure-macos.sh
+    - name: make, including test programs
+      run: make check -j4 TESTS=
+
   generate-matrix:
     # https://stackoverflow.com/questions/59977364
     name: Generate build matrix
