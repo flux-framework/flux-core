@@ -2263,6 +2263,61 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
     return rc;
 }
 
+int flux_jobtap_jobspec_update_id_pack (flux_plugin_t *p,
+                                        flux_jobid_t id,
+                                        const char *fmt,
+                                        ...)
+{
+    int rc = -1;
+    va_list ap;
+    struct jobtap *jobtap;
+    struct job *job;
+    json_error_t error;
+    json_t *update = NULL;
+
+    if (!p
+        || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))
+        || !(job = jobtap_lookup_active_jobid (p, id))
+        || job->state == FLUX_JOB_STATE_RUN
+        || job->state == FLUX_JOB_STATE_CLEANUP
+        || job->eventlog_readonly) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* This interface is only appropriate from outside a jobtap callback,
+     * i.e. called asynchronously to update a job. If 'job' is equivalent
+     * to the current job at the top of the jobtap stack, return an error.
+     */
+    if (job == current_job (jobtap)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    va_start (ap, fmt);
+    update = json_vpack_ex (&error, 0, fmt, ap);
+    va_end (ap);
+    if (!update) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!validate_jobspec_updates (update)) {
+        errno = EINVAL;
+        goto out;
+    }
+    /* XXX: should job.validate be called on these updates before posting?
+     */
+    rc = event_job_post_pack (jobtap->ctx->event,
+                              job,
+                              "jobspec-update",
+                              0,
+                              "O",
+                              update);
+out:
+    ERRNO_SAFE_WRAP (json_decref, update);
+    return rc;
+}
+
 int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...)
 {
     int rc = -1;
