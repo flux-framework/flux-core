@@ -706,9 +706,9 @@ static int main_namespace_lookup (struct guest_watch_ctx *gw)
         goto error;
 
     if (!(gw->main_namespace_lookup_f = flux_rpc_message (gw->ctx->h,
-                                                         msg,
-                                                         FLUX_NODEID_ANY,
-                                                         0))) {
+                                                          msg,
+                                                          FLUX_NODEID_ANY,
+                                                          0))) {
         flux_log_error (gw->ctx->h, "%s: flux_rpc_message", __FUNCTION__);
         goto error;
     }
