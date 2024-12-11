@@ -11,6 +11,7 @@ nobase_fluxpy_PYTHON = \
 	memoized_property.py \
 	debugged.py \
 	importer.py \
+	conf_builtin.py \
 	cli/__init__.py \
 	cli/base.py \
 	cli/alloc.py \
