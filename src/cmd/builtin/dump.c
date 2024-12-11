@@ -154,7 +154,7 @@ static void dump_valref (struct archive *ar,
     int total_size = 0;
     struct archive_entry *entry;
     const void *data;
-    int len;
+    size_t len;
 
     /* We need the total size before we start writing archive data,
      * so make a first pass, saving the data for writing later.
@@ -220,7 +220,7 @@ static void dump_val (struct archive *ar,
 {
     struct archive_entry *entry;
     void *data;
-    int len;
+    size_t len;
 
     if (treeobj_decode_val (treeobj, &data, &len) < 0)
         log_err_exit ("%s: invalid value object", path);
@@ -296,7 +296,7 @@ static void dump_dirref (struct archive *ar,
 {
     flux_future_t *f;
     const void *buf;
-    int buflen;
+    size_t buflen;
     json_t *treeobj_deref = NULL;
 
     if (treeobj_get_count (treeobj) != 1)
@@ -356,7 +356,7 @@ static void dump_blobref (struct archive *ar,
 {
     flux_future_t *f;
     const void *buf;
-    int buflen;
+    size_t buflen;
     json_t *treeobj;
     json_t *dict;
     const char *key;

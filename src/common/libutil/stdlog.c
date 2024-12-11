@@ -52,11 +52,14 @@ static int next_str (char **p, char **result)
     return 0;
 }
 
-static int next_structured_data (const char *buf, int len, int *offp,
-                                 const char **sp, int *slenp)
+static int next_structured_data (const char *buf,
+                                 size_t len,
+                                 size_t *offp,
+                                 const char **sp,
+                                 size_t *slenp)
 {
-    int off = *offp;
-    int this = *offp;
+    size_t off = *offp;
+    size_t this = *offp;
     int level = 0;
 
     while (off < len) {
@@ -78,14 +81,18 @@ static int next_structured_data (const char *buf, int len, int *offp,
     return 0;
 }
 
-int stdlog_decode (const char *buf, int len, struct stdlog_header *hdr,
-                   const char **sdp, int *sdlenp,
-                   const char **msgp, int *msglenp)
+int stdlog_decode (const char *buf,
+                   size_t len,
+                   struct stdlog_header *hdr,
+                   const char **sdp,
+                   size_t *sdlenp,
+                   const char **msgp,
+                   size_t *msglenp)
 {
-    int hdr_len = STDLOG_MAX_HEADER;
+    size_t hdr_len = STDLOG_MAX_HEADER;
     char *p = &hdr->buf[0];
     const char *sd;
-    int off, sdlen;
+    size_t off, sdlen;
 
     if (hdr_len > len)
         hdr_len = len;
@@ -126,14 +133,14 @@ int stdlog_decode (const char *buf, int len, struct stdlog_header *hdr,
     return 0;
 }
 
-char *stdlog_split_message (const char *buf, int *len, const char *sep)
+char *stdlog_split_message (const char *buf, size_t *len, const char *sep)
 {
     struct stdlog_header hdr;
     const char *msg;
-    int msglen;
-    int off;
+    size_t msglen;
+    size_t off;
     char *xtra;
-    int xtra_len;
+    size_t xtra_len;
 
     if (stdlog_decode (buf, *len, &hdr, NULL, NULL, &msg, &msglen) < 0)
         return NULL;
@@ -158,19 +165,31 @@ char *stdlog_split_message (const char *buf, int *len, const char *sep)
     return xtra;
 }
 
-int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
-                     const char *sd, const char *fmt, va_list ap)
+int stdlog_vencodef (char *buf,
+                     size_t len,
+                     struct stdlog_header *hdr,
+                     const char *sd,
+                     const char *fmt,
+                     va_list ap)
 {
     int m, n, i;
     int rc; // includes any overflow
 
-    m = snprintf (buf, len, "<%d>%d %.*s %.*s %.*s %.*s %.*s %s ",
-                  hdr->pri, hdr->version,
-                  STDLOG_MAX_TIMESTAMP, hdr->timestamp,
-                  STDLOG_MAX_HOSTNAME, hdr->hostname,
-                  STDLOG_MAX_APPNAME, hdr->appname,
-                  STDLOG_MAX_PROCID, hdr->procid,
-                  STDLOG_MAX_MSGID, hdr->msgid,
+    m = snprintf (buf,
+                  len,
+                  "<%d>%d %.*s %.*s %.*s %.*s %.*s %s ",
+                  hdr->pri,
+                  hdr->version,
+                  STDLOG_MAX_TIMESTAMP,
+                  hdr->timestamp,
+                  STDLOG_MAX_HOSTNAME,
+                  hdr->hostname,
+                  STDLOG_MAX_APPNAME,
+                  hdr->appname,
+                  STDLOG_MAX_PROCID,
+                  hdr->procid,
+                  STDLOG_MAX_MSGID,
+                  hdr->msgid,
                   sd);
     rc = m;
     if (m > len)
@@ -189,8 +208,12 @@ int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
     return rc;
 }
 
-int stdlog_encodef (char *buf, int len, struct stdlog_header *hdr,
-                    const char *sd, const char *fmt, ...)
+int stdlog_encodef (char *buf,
+                    size_t len,
+                    struct stdlog_header *hdr,
+                    const char *sd,
+                    const char *fmt,
+                    ...)
 {
     va_list ap;
     int rc;
@@ -201,8 +224,11 @@ int stdlog_encodef (char *buf, int len, struct stdlog_header *hdr,
     return rc;
 }
 
-int stdlog_encode (char *buf, int len, struct stdlog_header *hdr,
-                   const char *sd, const char *msg)
+int stdlog_encode (char *buf,
+                   size_t len,
+                   struct stdlog_header *hdr,
+                   const char *sd,
+                   const char *msg)
 {
     return stdlog_encodef (buf, len, hdr, sd, "%s", msg);
 }

@@ -23,7 +23,7 @@ SYNOPSIS
    int flux_request_decode_raw (const flux_msg_t *msg,
                                 const char **topic,
                                 const void **data,
-                                int *len);
+                                size_t *len);
 
 Link with :command:`-lflux-core`.
 

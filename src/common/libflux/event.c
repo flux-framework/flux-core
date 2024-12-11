@@ -130,11 +130,11 @@ done:
 int flux_event_decode_raw (const flux_msg_t *msg,
                            const char **topicp,
                            const void **datap,
-                           int *lenp)
+                           size_t *lenp)
 {
     const char *topic;
     const void *data = NULL;
-    int len = 0;
+    size_t len = 0;
     int rc = -1;
 
     if (!datap || !lenp) {
@@ -224,7 +224,7 @@ error:
 
 flux_msg_t *flux_event_encode_raw (const char *topic,
                                    const void *data,
-                                   int len)
+                                   size_t len)
 {
     flux_msg_t *msg = flux_event_create (topic);
     if (!msg)
@@ -267,7 +267,7 @@ static flux_future_t *wrap_event_rpc (flux_t *h,
                                       const char *topic,
                                       int flags,
                                       const void *src,
-                                      int srclen)
+                                      size_t srclen)
 {
     flux_future_t *f;
 
@@ -371,7 +371,7 @@ flux_future_t *flux_event_publish_raw (flux_t *h,
                                        const char *topic,
                                        int flags,
                                        const void *data,
-                                       int len)
+                                       size_t len)
 {
     if (!h || !topic || (flags & ~(FLUX_MSGFLAG_PRIVATE)) != 0) {
         errno = EINVAL;

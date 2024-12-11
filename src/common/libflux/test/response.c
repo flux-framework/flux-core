@@ -27,7 +27,8 @@ int main (int argc, char *argv[])
     const char *json_str = "{\"a\":42}";
     const void *d;
     const char data[] = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    int l, len = strlen (data);
+    size_t l;
+    size_t len = strlen (data);
     int errnum;
 
     plan (NO_PLAN);

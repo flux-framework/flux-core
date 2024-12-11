@@ -43,17 +43,33 @@ struct stdlog_header {
     char *msgid;
 };
 
-int stdlog_decode (const char *buf, int len, struct stdlog_header *hdr,
-                   const char **sd, int *sdlen, const char **msg, int *msglen);
+int stdlog_decode (const char *buf,
+                   size_t len,
+                   struct stdlog_header *hdr,
+                   const char **sd,
+                   size_t *sdlen,
+                   const char **msg,
+                   size_t *msglen);
 
-int stdlog_encode (char *buf, int len, struct stdlog_header *hdr,
-                   const char *sd, const char *msg);
+int stdlog_encode (char *buf,
+                   size_t len,
+                   struct stdlog_header *hdr,
+                   const char *sd,
+                   const char *msg);
 
-int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
-                     const char *sd, const char *fmt, va_list ap);
+int stdlog_vencodef (char *buf,
+                     size_t len,
+                     struct stdlog_header *hdr,
+                     const char *sd,
+                     const char *fmt,
+                     va_list ap);
 
-int stdlog_encodef (char *buf, int len, struct stdlog_header *hdr,
-                    const char *sd, const char *fmt, ...);
+int stdlog_encodef (char *buf,
+                    size_t len,
+                    struct stdlog_header *hdr,
+                    const char *sd,
+                    const char *fmt,
+                    ...);
 
 /* If encoded stdlog message in buf, *len contains chars from 'sep'
  * (in the message part), truncate the original message and return
@@ -61,7 +77,7 @@ int stdlog_encodef (char *buf, int len, struct stdlog_header *hdr,
  * Returns NULL if no 'sep' chars or on alloc failure.
  * If non-NULL, caller must free returned value.
  */
-char *stdlog_split_message (const char *buf, int *len, const char *sep);
+char *stdlog_split_message (const char *buf, size_t *len, const char *sep);
 
 void stdlog_init (struct stdlog_header *hdr);
 

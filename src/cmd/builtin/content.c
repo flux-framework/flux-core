@@ -23,7 +23,7 @@ static void load_to_fd (flux_t *h, int fd, const char *blobref, int flags)
 {
     flux_future_t *f;
     const uint8_t *data;
-    int size;
+    size_t size;
 
     if (!(f = content_load_byblobref (h, blobref, flags))
         || content_load_get (f, (const void **)&data, &size) < 0)

@@ -255,7 +255,7 @@ static void handle_load_response (flux_future_t *f, struct watcher *w)
 {
     flux_t *h = flux_future_get_flux (f);
     const void *data;
-    int size;
+    size_t size;
     flux_error_t err;
 
     if (content_load_get (f, &data, &size) < 0) {

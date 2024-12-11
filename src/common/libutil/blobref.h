@@ -20,7 +20,9 @@
  * The hash algorithm is selected by the blobref prefix.
  * Returns hash length on success, or -1 on error, with errno set.
  */
-int blobref_strtohash (const char *blobref, void *hash, int size);
+ssize_t blobref_strtohash (const char *blobref,
+                           void *hash,
+                           size_t size);
 
 /* Convert a hash digest to null-terminated blobref string in 'blobref'.
  * The hash algorithm is selected by 'hashtype', e.g. "sha1".
@@ -28,9 +30,9 @@ int blobref_strtohash (const char *blobref, void *hash, int size);
  */
 int blobref_hashtostr (const char *hashtype,
                        const void *hash,
-                       int len,
+                       size_t len,
                        void *blobref,
-                       int blobref_len);
+                       size_t blobref_len);
 
 /* Compute hash over data and return null-terminated blobref string in
  * 'blobref'.  The hash algorithm is selected by 'hashtype', e.g. "sha1".
@@ -38,19 +40,19 @@ int blobref_hashtostr (const char *hashtype,
  */
 int blobref_hash (const char *hashtype,
                   const void *data,
-                  int len,
+                  size_t len,
                   void *blobref,
-                  int blobref_len);
+                  size_t blobref_len);
 
 /* Compute hash over data and store it in 'hash'.
  * The hash algorithm is selected by 'hashtype', e.g. "sha1".
  * Returns hash size on success, -1 on error with errno set.
  */
-int blobref_hash_raw (const char *hashtype,
-                      const void *data,
-                      int len,
-                      void *hash,
-                      int hash_len);
+ssize_t blobref_hash_raw (const char *hashtype,
+                          const void *data,
+                          size_t len,
+                          void *hash,
+                          size_t hash_len);
 
 /* Check validity of blobref string.
  */

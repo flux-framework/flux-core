@@ -842,7 +842,7 @@ static bool payload_overlap (flux_msg_t *msg, const void *b)
          && (char *)b <  (char *)msg->payload + msg->payload_size);
 }
 
-int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
+int flux_msg_set_payload (flux_msg_t *msg, const void *buf, size_t size)
 {
     if (msg_validate (msg) < 0)
         return -1;
@@ -968,7 +968,7 @@ int flux_msg_pack (flux_msg_t *msg, const char *fmt, ...)
     return rc;
 }
 
-int flux_msg_get_payload (const flux_msg_t *msg, const void **buf, int *size)
+int flux_msg_get_payload (const flux_msg_t *msg, const void **buf, size_t *size)
 {
     if (msg_validate (msg) < 0)
         return -1;
@@ -1003,7 +1003,7 @@ int flux_msg_get_string (const flux_msg_t *msg, const char **s)
 {
     const char *buf;
     const char *result;
-    int size;
+    size_t size;
 
     if (msg_validate (msg) < 0)
         return -1;
@@ -1366,7 +1366,7 @@ void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp)
     if (flux_msg_has_payload (msg)) {
         const char *s;
         const void *buf;
-        int size;
+        size_t size;
         if (flux_msg_get_string (msg, &s) == 0)
             fprintf (f, "%s %s\n", prefix, s);
         else if (flux_msg_get_payload (msg, &buf, &size) == 0) {

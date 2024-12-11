@@ -27,7 +27,7 @@ SYNOPSIS
    flux_future_t *flux_rpc_raw (flux_t *h,
                                 const char *topic,
                                 const void *data,
-                                int len,
+                                size_t len,
                                 uint32_t nodeid,
                                 int flags);
 
@@ -42,7 +42,7 @@ SYNOPSIS
 
    int flux_rpc_get_raw (flux_future_t *f,
                          const void **data,
-                         int *len);
+                         size_t *len);
 
    uint32_t flux_rpc_get_matchtag (flux_future_t *f);
 

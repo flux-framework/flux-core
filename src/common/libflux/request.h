@@ -42,7 +42,7 @@ int flux_request_unpack (const flux_msg_t *msg,
 int flux_request_decode_raw (const flux_msg_t *msg,
                              const char **topic,
                              const void **data,
-                             int *len);
+                             size_t *len);
 
 /* Encode a request message with optional string payload.
  * If s is non-NULL, assign the string payload.
@@ -55,7 +55,7 @@ flux_msg_t *flux_request_encode (const char *topic, const char *s);
  */
 flux_msg_t *flux_request_encode_raw (const char *topic,
                                      const void *data,
-                                     int len);
+                                     size_t len);
 
 #ifdef __cplusplus
 }

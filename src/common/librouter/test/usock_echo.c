@@ -139,7 +139,7 @@ static bool equal_message (const flux_msg_t *m1, const flux_msg_t *m2)
     int type1, type2;
     const char *topic1, *topic2;
     const void *buf1, *buf2;
-    int len1, len2;
+    size_t len1, len2;
 
     if (flux_msg_get_type (m1, &type1) < 0)
         return false;
