@@ -15,6 +15,7 @@
 #include "message.h"
 #include "handle.h"
 #include "reactor.h"
+#include "watcher.h"
 #include "msg_handler.h"
 #include "connector.h"
 #include "msglist.h"

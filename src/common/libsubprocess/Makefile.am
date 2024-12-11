@@ -36,10 +36,6 @@ libsubprocess_la_SOURCES = \
 	subprocess_private.h \
 	client.h \
 	client.c \
-	ev_fbuf_read.h \
-	ev_fbuf_read.c \
-	ev_fbuf_write.h \
-	ev_fbuf_write.c \
 	fbuf.h \
 	fbuf.c \
 	fbuf_watcher.h \
@@ -83,6 +79,7 @@ test_ldadd = \
         $(top_builddir)/src/common/libtestutil/libtestutil.la \
         $(top_builddir)/src/common/libtap/libtap.la \
         $(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+        $(top_builddir)/src/common/libflux/watcher.lo \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libflux-internal.la
 

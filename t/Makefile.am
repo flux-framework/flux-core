@@ -749,6 +749,7 @@ reactor_reactorcat_CPPFLAGS = $(test_cppflags)
 reactor_reactorcat_LDADD = $(test_ldadd)
 reactor_reactorcat_LDFLAGS = \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux/watcher.lo \
 	$(test_ldflags)
 
 rexec_rexec_SOURCES = rexec/rexec.c
@@ -756,6 +757,7 @@ rexec_rexec_CPPFLAGS = $(test_cppflags)
 rexec_rexec_LDADD = $(test_ldadd)
 rexec_rexec_LDFLAGS = \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux/watcher.lo \
 	$(test_ldflags)
 
 rexec_rexec_count_stdout_SOURCES = rexec/rexec_count_stdout.c
@@ -768,6 +770,7 @@ rexec_rexec_getline_CPPFLAGS = $(test_cppflags)
 rexec_rexec_getline_LDADD = $(test_ldadd)
 rexec_rexec_getline_LDFLAGS = \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux/watcher.lo \
 	$(test_ldflags)
 
 ingest_job_manager_la_SOURCES = ingest/job-manager.c

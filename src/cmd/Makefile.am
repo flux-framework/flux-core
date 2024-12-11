@@ -175,6 +175,7 @@ flux_start_LDADD = \
 
 flux_job_LDADD = \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux/watcher.lo \
 	$(top_builddir)/src/shell/libmpir.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -185,6 +186,7 @@ flux_job_LDADD = \
 
 flux_exec_LDADD = \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux/watcher.lo \
 	$(fluxcmd_ldadd)
 
 flux_terminus_LDADD = \
