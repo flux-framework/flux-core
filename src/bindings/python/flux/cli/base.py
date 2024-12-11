@@ -36,6 +36,7 @@ except ModuleNotFoundError:
 
 import flux
 from flux import debugged, job, util
+from flux.cli.plugin import CLIPluginRegistry
 from flux.constraint.parser import ConstraintParser, ConstraintSyntaxError
 from flux.idset import IDset
 from flux.job import JobspecV1, JobWatcher
@@ -751,7 +752,9 @@ class MiniCmd:
         self.exitcode = 0
         self.progress = None
         self.watcher = None
+        self.plugins = CLIPluginRegistry().load_plugins(prog)
         self.parser = self.create_parser(prog, usage, description, exclude_io)
+        self.plugins.add_options(self.parser)
 
     @staticmethod
     def create_parser(
@@ -1010,6 +1013,9 @@ class MiniCmd:
         """
         Create a jobspec from args and return it to caller
         """
+        # allow plugins to initialize args
+        self.plugins.preinit(args)
+
         jobspec = self.init_jobspec(args)
 
         jobspec.environment, env_expand = get_filtered_environment(args.env)
@@ -1126,6 +1132,8 @@ class MiniCmd:
         if args.add_file is not None:
             for arg in args.add_file:
                 self.handle_add_file_arg(jobspec, arg)
+
+        self.plugins.modify_jobspec(args, jobspec)
 
         return jobspec
 
