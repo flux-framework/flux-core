@@ -529,6 +529,22 @@ test_expect_success 'job-manager: plugins can update jobspec' '
 		--match-context=attributes.system.job.name=new \
 		$jobid jobspec-update
 '
+test_expect_success 'job-manager: plugin can asynchronously update jobspec' '
+	flux dmesg -H | grep jobspec-update &&
+	jobid=$(flux submit -n1 --urgency=hold sleep 0) &&
+	cat <<-EOF >update-test.py &&
+	import flux
+	from flux.job import JobID
+	id=JobID("$jobid")
+	flux.Flux().rpc(
+	    "job-manager.jobspec-update.update",
+	    dict(id=id, update={"attributes.system.job.name": "test"}),
+	).get()
+	EOF
+	flux python update-test.py &&
+	flux job wait-event -Hv -t 30 $jobid jobspec-update &&
+	flux jobs $jobid
+'
 test_expect_success 'job-manager: plugin fails to load on config.update error' '
 	flux jobtap remove all &&
 	test_must_fail flux jobtap load ${PLUGINPATH}/config.so 2>config.err

@@ -25,11 +25,13 @@ static int get_and_update_jobspec_name (flux_error_t *errp,
                                         const char **cur_namep,
                                         char *name)
 {
+    flux_jobid_t id;
     const char *current_name = NULL;
     char *copy = NULL;
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
-                                "{s:{s:{s?{s?{s?s}}}}}",
+                                "{s:I s:{s:{s?{s?{s?s}}}}}",
+                                "id", &id,
                                 "jobspec",
                                 "attributes",
                                 "system",
@@ -41,6 +43,20 @@ static int get_and_update_jobspec_name (flux_error_t *errp,
                    flux_plugin_arg_strerror (args));
         return -1;
     }
+
+    /* flux_jobtap_jobspec_update_id_pack() should fail here, since this
+     * function is always called in the context of a jobtap callback:
+     */
+    if (flux_jobtap_jobspec_update_id_pack (p,
+                                            id,
+                                            "{s:s}",
+                                            "attributes.system.foo",
+                                            "bar") == 0) {
+        errprintf (errp,
+                   "flux_jobtap_jobspec_update_id_pack() unexpected success");
+        return -1;
+    }
+
     if (current_name && !(copy = strdup (current_name))) {
         errprintf (errp, "failed to copy job name");
         return -1;
@@ -199,6 +215,20 @@ static int run_cb (flux_plugin_t *p,
     return 0;
 }
 
+static void update_msg_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    flux_plugin_t *p = arg;
+    flux_jobid_t id;
+    json_t *update;
+
+    if (flux_msg_unpack (msg, "{s:I s:o}", "id", &id, "update", &update) < 0
+        || flux_jobtap_jobspec_update_id_pack (p, id, "O", update) < 0)
+        flux_jobtap_raise_exception (p, id, "test", 0, "update failed");
+    flux_respond (h, msg, NULL);
+}
 
 static const struct flux_plugin_handler tab[] = {
     { "job.new", new_cb, NULL },
@@ -214,6 +244,9 @@ int flux_plugin_init (flux_plugin_t *p)
 {
     if (flux_plugin_register (p, "jobspec-update", tab) < 0)
         return -1;
+    if (flux_jobtap_service_register (p, "update", update_msg_cb, p) < 0)
+        flux_log_error (flux_jobtap_get_flux (p),
+                        "flux_jobtap_service_register");
     return 0;
 }
 

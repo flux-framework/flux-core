@@ -194,6 +194,19 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
  */
 int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...);
 
+/*  Similar to flux_jobtap_jobspec_update_pack(), but asynchronously update
+ *  a specific jobid. This version assumes the job is quiescent, so the event
+ *  is applied immediately.
+ *
+ *  Returns -1 with errno set to EINVAL for invalid arguments, if the job
+ *  does not exist, if the target job is in RUN, CLEANUP or INACTIVE states,
+ *  or if the function is called from a jobtap callback for the target job.
+ */
+int flux_jobtap_jobspec_update_id_pack (flux_plugin_t *p,
+                                        flux_jobid_t id,
+                                        const char *fmt,
+                                        ...);
+
 /*  Return a flux_plugin_arg_t object for a job.
  *
  *  The result can then be unpacked with flux_plugin_arg_unpack(3) to get
