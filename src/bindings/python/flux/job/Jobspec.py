@@ -126,10 +126,10 @@ def validate_jobspec(jobspec, require_version=None):
         return (1, "Unable to parse JSON")
     _validate_keys(Jobspec.top_level_keys, jobspec_obj.keys())
     if require_version == 1 or jobspec_obj.get("version", 0) == 1:
-        JobspecV1(**jobspec_obj)
+        jobspec = JobspecV1(**jobspec_obj)
     else:
-        Jobspec(**jobspec_obj)
-    return True
+        jobspec = Jobspec(**jobspec_obj)
+    return True, jobspec
 
 
 class Jobspec(object):
