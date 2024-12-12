@@ -17,6 +17,7 @@ supplied, then only that version of jobspec is permitted.
 
 import json
 
+from flux.cli.plugin import CLIPluginRegistry
 from flux.job import validate_jobspec
 from flux.job.validator import ValidatorPlugin
 
@@ -47,5 +48,12 @@ class Validator(ValidatorPlugin):
                 raise ValueError(f"Invalid argument to --require-version")
             self.require_version = None
 
+        self.plugins = CLIPluginRegistry("validate")
+
     def validate(self, args):
-        validate_jobspec(json.dumps(args.jobspec), self.require_version)
+        result, jobspec = validate_jobspec(
+            json.dumps(args.jobspec), self.require_version
+        )
+
+        # validate with any submit cli plugin validate methods
+        self.plugins.validate(jobspec)
