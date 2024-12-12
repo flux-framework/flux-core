@@ -157,17 +157,20 @@ static void eventlog_continuation (flux_future_t *f, void *arg)
 
     if (flux_job_event_watch_get (f, &s) < 0) {
         flux_log_error (ctx->h, "%s: flux_job_event_watch_get", __FUNCTION__);
-        goto error_cancel;
+        eventlog_watch_cancel (uc);
+        goto cleanup;
     }
 
     if (!(event = eventlog_entry_decode (s))) {
         flux_log_error (uc->ctx->h, "%s: eventlog_entry_decode", __FUNCTION__);
-        goto error_cancel;
+        eventlog_watch_cancel (uc);
+        goto cleanup;
     }
 
     if (eventlog_entry_parse (event, NULL, &name, &context) < 0) {
         flux_log_error (uc->ctx->h, "%s: eventlog_entry_decode", __FUNCTION__);
-        goto error_cancel;
+        eventlog_watch_cancel (uc);
+        goto cleanup;
     }
 
     if (context && streq (name, uc->update_name)) {
@@ -196,7 +199,8 @@ static void eventlog_continuation (flux_future_t *f, void *arg)
                                        "{s:O}",
                                        uc->key, uc->update_object) < 0) {
                     flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
-                    goto error_cancel;
+                    eventlog_watch_cancel (uc);
+                    goto cleanup;
                 }
                 msg = flux_msglist_next (uc->msglist);
             }
@@ -206,11 +210,6 @@ static void eventlog_continuation (flux_future_t *f, void *arg)
     flux_future_reset (f);
     json_decref (event);
     return;
-
-error_cancel:
-    /* Must do so so that the future's matchtag will eventually be
-     * freed */
-    eventlog_watch_cancel (uc);
 
 error:
     msg = flux_msglist_first (uc->msglist);
@@ -360,7 +359,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         if (flux_respond_pack (uc->ctx->h, msg, "{s:O}",
                                uc->key, uc->update_object) < 0) {
             flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
-            goto error;
+            goto cleanup;
         }
 
     next:
@@ -520,7 +519,7 @@ void update_watch_cb (flux_t *h,
                                    "{s:O}",
                                    uc->key, uc->update_object) < 0) {
                 flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
-                goto error;
+                goto cleanup;
             }
         }
         /* if uc->update_object has not been set, the initial lookup
@@ -536,6 +535,7 @@ void update_watch_cb (flux_t *h,
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+cleanup:
     free (index_key);
 }
 

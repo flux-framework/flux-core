@@ -639,23 +639,19 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
     if (flux_respond_pack (ctx->h, gw->msg, "{s:s}", "event", event) < 0) {
         flux_log_error (ctx->h, "%s: flux_respond_pack",
                         __FUNCTION__);
-        goto error_cancel;
+
+        /* If we haven't sent a cancellation yet, must do so so that
+         * the future's matchtag will eventually be freed */
+        if (!gw->eventlog_watch_canceled)
+            (void) send_eventlog_watch_cancel (gw,
+                                               gw->guest_namespace_watch_f,
+                                               false);
+        goto cleanup;
     }
 
     gw->offset += strlen (event);
     flux_future_reset (f);
     return;
-
-error_cancel:
-    /* If we haven't sent a cancellation yet, must do so so that
-     * the future's matchtag will eventually be freed */
-    if (!gw->eventlog_watch_canceled) {
-        int save_errno = errno;
-        (void) send_eventlog_watch_cancel (gw,
-                                           gw->guest_namespace_watch_f,
-                                           false);
-        errno = save_errno;
-    }
 
 error:
     if (flux_respond_error (ctx->h, gw->msg, errno, NULL) < 0)
@@ -763,7 +759,7 @@ static void main_namespace_lookup_continuation (flux_future_t *f, void *arg)
                                "event", tok, toklen) < 0) {
             flux_log_error (ctx->h, "%s: flux_respond_pack",
                             __FUNCTION__);
-            goto error;
+            goto cleanup;
         }
     }
 
