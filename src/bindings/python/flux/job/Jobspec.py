@@ -503,7 +503,7 @@ class Jobspec(object):
         self.setattr_shell_option("{}.{}.type".format(iotype, stream_name), "file")
         self.setattr_shell_option("{}.{}.path".format(iotype, stream_name), path)
 
-    def add_file(self, path, data, perms=0o0600, encoding=None):
+    def add_file(self, path, data, perms=None, encoding=None):
         """
         Add a file to the RFC 14 "files" dictionary in Jobspec. If
         ``data`` contains newlines or an encoding is explicitly provided,
@@ -524,6 +524,9 @@ class Jobspec(object):
         """
         if not (isinstance(data, abc.Mapping) or isinstance(data, str)):
             raise TypeError("data must be a Mapping or string")
+
+        if perms is None:
+            perms = 0o600
 
         files = self.jobspec["attributes"]["system"].get("files", {})
         if encoding is None and "\n" in data:
