@@ -46,6 +46,7 @@ struct watcher {
     bool index_valid;           // flag if prev_start_index/prev_end_index set
     int prev_start_index;       // previous start index loaded
     int prev_end_index;         // previous end index loaded
+    int loaded_blob_count;      // number of indices loaded (for FLUX_KVS_STREAM)
     void *handle;               // zlistx_t handle
 };
 
@@ -276,6 +277,7 @@ static void handle_load_response (flux_future_t *f, struct watcher *w)
             json_decref (val);
             goto finished;
         }
+        w->loaded_blob_count++;
         w->responded = true;
     }
 
@@ -299,14 +301,31 @@ static void load_continuation (flux_future_t *f, void *arg)
         if (!w->finished)
             handle_load_response (f, w);
         flux_future_destroy (f);
-        /* if WAITCREATE and !WATCH, then we only care about sending
-         * one response and being done.  We can use the responded flag
-         * to indicate that condition.
+        /* if WAITCREATE and (!WATCH and !STREAM), then we only care
+         * about sending one response and being done.  We can use the
+         * responded flag to indicate that condition.
          */
         if (w->responded
             && (w->flags & FLUX_KVS_WAITCREATE)
-            && !(w->flags & FLUX_KVS_WATCH))
+            && (!(w->flags & FLUX_KVS_WATCH)
+                && !(w->flags & FLUX_KVS_STREAM)))
             w->finished = true;
+    }
+    if ((w->flags & FLUX_KVS_STREAM)
+        && w->responded
+        && w->index_valid
+        && (w->loaded_blob_count
+            == (w->prev_end_index - w->prev_start_index + 1))) {
+        if (!w->mute) {
+            if (flux_respond_error (w->nsm->ctx->h,
+                                    w->request,
+                                    ENODATA,
+                                    NULL) < 0)
+                flux_log_error (w->nsm->ctx->h,
+                                "%s: flux_respond_error",
+                                __FUNCTION__);
+        }
+        w->finished = true;
     }
     if (w->finished)
         watcher_cleanup (nsm, w);
@@ -365,7 +384,8 @@ static int handle_initial_response (flux_t *h,
         || (w->flags & FLUX_KVS_WATCH_UNIQ))
         w->prev = json_incref (val);
 
-    if ((w->flags & FLUX_KVS_WATCH_APPEND)) {
+    if ((w->flags & FLUX_KVS_WATCH_APPEND)
+        || (w->flags & FLUX_KVS_STREAM)) {
         /* The very first response may be a 'val' treeobj instead of
          * 'valref', if there have been no appends yet.
          */
@@ -374,6 +394,7 @@ static int handle_initial_response (flux_t *h,
             w->prev_start_index = 0;
             w->prev_end_index = 0;
             /* since this is a val object, we can just return it */
+            w->loaded_blob_count++;
             goto out;
         }
         else if (treeobj_is_valref (val)) {
@@ -382,9 +403,14 @@ static int handle_initial_response (flux_t *h,
             w->prev_end_index = treeobj_get_count (val) - 1;
         }
         else {
-            errprintf (&err,
-                       "%s cannot be watched with WATCH_APPEND",
-                       treeobj_type_name (val));
+            if (w->flags & FLUX_KVS_WATCH_APPEND)
+                errprintf (&err,
+                           "%s cannot be watched with WATCH_APPEND",
+                           treeobj_type_name (val));
+            else
+                errprintf (&err,
+                           "%s cannot be streamed",
+                           treeobj_type_name (val));
             if (treeobj_is_dir (val)
                 || treeobj_is_dirref (val))
                 errno = EISDIR;
@@ -496,6 +522,7 @@ static int handle_append_response (flux_t *h,
                                 __FUNCTION__);
                 goto error_out;
             }
+            w->loaded_blob_count++;
             w->responded = true;
         }
         else if (treeobj_is_valref (val)) {
@@ -506,7 +533,10 @@ static int handle_append_response (flux_t *h,
              * returned to the caller.
              */
             if (w->index_valid) {
-                int new_end_index = treeobj_get_count (val) - 1;
+                int new_end_index;
+                if (w->flags & FLUX_KVS_STREAM)
+                    goto out;
+                new_end_index = treeobj_get_count (val) - 1;
                 if (new_end_index > w->prev_end_index) {
                     w->prev_start_index = w->prev_end_index + 1;
                     w->prev_end_index = new_end_index;
@@ -538,9 +568,14 @@ static int handle_append_response (flux_t *h,
             }
         }
         else {
-            errprintf (&err,
-                       "%s cannot be watched with WATCH_APPEND",
-                       treeobj_type_name (val));
+            if (w->flags & FLUX_KVS_WATCH_APPEND)
+                errprintf (&err,
+                           "%s cannot be watched with WATCH_APPEND",
+                           treeobj_type_name (val));
+            else
+                errprintf (&err,
+                           "%s cannot be streamed",
+                           treeobj_type_name (val));
             if (treeobj_is_dir (val)
                 || treeobj_is_dirref (val))
                 errno = EISDIR;
@@ -556,6 +591,8 @@ static int handle_append_response (flux_t *h,
                 errno = EPROTO;
                 goto error_respond;
             }
+            if (w->flags & FLUX_KVS_STREAM)
+                goto out;
             new_end_index = treeobj_get_count (val) - 1;
             if (new_end_index > w->prev_end_index) {
                 w->prev_start_index = w->prev_end_index + 1;
@@ -579,6 +616,10 @@ static int handle_append_response (flux_t *h,
             }
         }
         else {
+            /* If we're streaming, we don't care that the treeobject
+             * was overwritten */
+            if (w->flags & FLUX_KVS_STREAM)
+                goto out;
             errprintf (&err,
                        "value of key watched with WATCH_APPEND overwritten");
             errno = EINVAL;
@@ -707,7 +748,8 @@ static void handle_lookup_response (flux_future_t *f,
                 if (handle_compare_response (h, w, val) < 0)
                     goto finished;
             }
-            else if (w->flags & FLUX_KVS_WATCH_APPEND) {
+            else if ((w->flags & FLUX_KVS_WATCH_APPEND)
+                     || (w->flags & FLUX_KVS_STREAM)) {
                 if (handle_append_response (h,
                                             w,
                                             val,
@@ -722,6 +764,16 @@ static void handle_lookup_response (flux_future_t *f,
             }
         }
     }
+
+    if ((w->flags & FLUX_KVS_STREAM)
+        && w->responded
+        && w->index_valid
+        && (w->loaded_blob_count
+            == (w->prev_end_index - w->prev_start_index + 1))) {
+        errno = ENODATA;
+        goto error;
+    }
+
     return;
 error:
     if (!w->mute) {
@@ -746,13 +798,14 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         if (!w->finished)
             handle_lookup_response (f, w);
         flux_future_destroy (f);
-        /* if WAITCREATE and !WATCH, then we only care about sending
-         * one response and being done.  We can use the responded flag
-         * to indicate that condition.
+        /* if WAITCREATE and (!WATCH and !STREAM), then we only care
+         * about sending one response and being done.  We can use the
+         * responded flag to indicate that condition.
          */
         if (w->responded
             && (w->flags & FLUX_KVS_WAITCREATE)
-            && !(w->flags & FLUX_KVS_WATCH))
+            && (!(w->flags & FLUX_KVS_WATCH)
+                && !(w->flags & FLUX_KVS_STREAM)))
             w->finished = true;
     }
     if (w->finished)
@@ -781,7 +834,8 @@ static flux_future_t *lookupat (flux_t *h,
 
     if (!(msg = flux_request_encode ("kvs.lookup-plus", NULL)))
         return NULL;
-    if (flags & FLUX_KVS_WATCH_APPEND)
+    if ((flags & FLUX_KVS_WATCH_APPEND)
+        || (flags & FLUX_KVS_STREAM))
         flags |= FLUX_KVS_TREEOBJ;
     if (!w->initial_rpc_sent) {
         if (flux_msg_pack (msg,
@@ -1250,6 +1304,16 @@ static void lookup_cb (flux_t *h,
     if ((flags & FLUX_KVS_WATCH) && !flux_msg_is_streaming (msg)) {
         errno = EPROTO;
         errmsg = "KVS watch request rejected without streaming RPC flag";
+        goto error;
+    }
+    if ((flags & FLUX_KVS_STREAM) && !flux_msg_is_streaming (msg)) {
+        errno = EPROTO;
+        errmsg = "KVS stream request rejected without streaming RPC flag";
+        goto error;
+    }
+    if ((flags & FLUX_KVS_WATCH) && (flags & FLUX_KVS_STREAM)) {
+        errmsg = "Cannot KVS watch and stream at the same time";
+        errno = EINVAL;
         goto error;
     }
     if (!(nsm = namespace_monitor (ctx, ns)))
