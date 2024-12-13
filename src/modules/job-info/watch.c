@@ -252,8 +252,15 @@ static void watch_continuation (flux_future_t *f, void *arg)
     }
 
     if (!w->allow) {
-        if (eventlog_allow (ctx, w->msg, w->id, s) < 0)
-            goto error_cancel;
+        if (eventlog_allow (ctx, w->msg, w->id, s) < 0) {
+            if (!w->kvs_watch_canceled) {
+                if (flux_kvs_lookup_cancel (w->watch_f) < 0)
+                    flux_log_error (ctx->h,
+                                    "%s: flux_kvs_lookup_cancel",
+                                    __FUNCTION__);
+            }
+            goto cleanup;
+        }
         w->allow = true;
     }
 
@@ -266,7 +273,13 @@ static void watch_continuation (flux_future_t *f, void *arg)
             flux_log_error (ctx->h,
                             "%s: flux_respond_pack",
                             __FUNCTION__);
-            goto error_cancel;
+            if (!w->kvs_watch_canceled) {
+                if (flux_kvs_lookup_cancel (w->watch_f) < 0)
+                    flux_log_error (ctx->h,
+                                    "%s: flux_kvs_lookup_cancel",
+                                    __FUNCTION__);
+            }
+            goto cleanup;
         }
 
         /* When watching the main job eventlog, we return ENODATA back
@@ -293,18 +306,6 @@ static void watch_continuation (flux_future_t *f, void *arg)
 
     flux_future_reset (f);
     return;
-
-error_cancel:
-    /* If we haven't sent a cancellation yet, must do so so that
-     * the future's matchtag will eventually be freed */
-    if (!w->kvs_watch_canceled) {
-        int save_errno = errno;
-        if (flux_kvs_lookup_cancel (w->watch_f) < 0)
-            flux_log_error (ctx->h,
-                            "%s: flux_kvs_lookup_cancel",
-                            __FUNCTION__);
-        errno = save_errno;
-    }
 
 error:
     if (flux_respond_error (ctx->h, w->msg, errno, errmsg) < 0)
