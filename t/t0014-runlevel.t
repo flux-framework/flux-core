@@ -11,12 +11,12 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile --debug
 test_expect_success 'initial program is run when rc1/rc3 are nullified' '
 	flux start -Slog-stderr-level=6 \
 		-Sbroker.rc1_path= -Sbroker.rc3_path= \
-		/bin/true 2>normal.log
+		true 2>normal.log
 '
 
 test_expect_success 'rc1 failure causes instance failure' '
 	test_expect_code 1 flux start \
-		-Sbroker.rc1_path=/bin/false -Sbroker.rc3_path= \
+		-Sbroker.rc1_path=false -Sbroker.rc3_path= \
 		-Slog-stderr-level=6 \
 		sleep 3600 2>rc1_failure.log
 '
@@ -27,7 +27,7 @@ test_expect_success 'rc1 bad path handled same as failure' '
 	  test_expect_code 127 flux start \
 		-Sbroker.rc1_path=rc1-nonexist -Sbroker.rc3_path= \
 		-Slog-stderr-level=6 \
-		/bin/true 2>bad1.log
+		true 2>bad1.log
 	)
 '
 
@@ -50,9 +50,9 @@ test_expect_success 'rc2 failure if stdin not a tty' '
 
 test_expect_success 'rc3 failure causes instance failure' '
 	test_expect_code 1 flux start \
-		-Sbroker.rc3_path=/bin/false \
+		-Sbroker.rc3_path=false \
 		-Slog-stderr-level=6 \
-		/bin/true 2>rc3_failure.log
+		true 2>rc3_failure.log
 '
 
 test_expect_success 'broker.rc2_none terminates by signal without error' '
@@ -64,21 +64,21 @@ test_expect_success 'broker.rc2_none terminates by signal without error' '
 	done
 '
 
-test_expect_success 'flux admin cleanup-push /bin/true works' '
+test_expect_success 'flux admin cleanup-push true works' '
 	flux start -Slog-stderr-level=6 \
 		-Sbroker.rc1_path= -Sbroker.rc3_path= \
-		flux admin cleanup-push /bin/true
+		flux admin cleanup-push true
 '
 
-test_expect_success 'flux admin cleanup-push /bin/false causes instance failure' '
+test_expect_success 'flux admin cleanup-push false causes instance failure' '
 	test_expect_code 1 flux start -Slog-stderr-level=6 \
 		-Sbroker.rc1_path= -Sbroker.rc3_path= \
-		flux admin cleanup-push /bin/false
+		flux admin cleanup-push false
 '
 
 test_expect_success 'cleanup does not run if rc1 fails' '
 	test_expect_code 1 flux start -Slog-stderr-level=6 \
-		-Sbroker.rc1_path=/bin/false -Sbroker.rc3_path= \
+		-Sbroker.rc1_path=false -Sbroker.rc3_path= \
 		flux admin cleanup-push memorable-string 2>nocleanup.err && \
 	test_must_fail grep memorable-string nocleanup.err
 '
@@ -98,7 +98,7 @@ test_expect_success 'flux admin cleanup-push with no commands fails' '
 '
 
 test_expect_success 'flux admin cleanup-push (stdin) works' '
-	echo /bin/true | flux start -Slog-stderr-level=6 \
+	echo true | flux start -Slog-stderr-level=6 \
 		-Sbroker.rc1_path= -Sbroker.rc3_path= \
 		flux admin cleanup-push 2>push-stdin.err &&
 	grep cleanup.0 push-stdin.err

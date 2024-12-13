@@ -89,7 +89,7 @@ test_expect_success 'job-ingest: jobspec stored accurately in KVS' '
 '
 
 test_expect_success 'job-ingest: submit a job with environment' '
-	flux run --env=-* --env=FOO=bar --dry-run /bin/true \
+	flux run --env=-* --env=FOO=bar --dry-run true \
 	    >jobspec_env.json &&
 	jobid=$(flux job submit jobspec_env.json) &&
 	kvsdir=$(flux job id --to=kvs $jobid) &&

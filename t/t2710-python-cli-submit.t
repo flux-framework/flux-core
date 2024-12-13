@@ -59,11 +59,11 @@ test_expect_success 'flux submit --flags debug,waitable works' '
 	flux job eventlog $jobid | grep submit | grep flags=6
 '
 test_expect_success 'flux submit --flags=novalidate works' '
-	jobid=$(flux submit --flags novalidate /bin/true) &&
+	jobid=$(flux submit --flags novalidate true) &&
 	flux job eventlog $jobid | grep submit | grep flags=8
 '
 test_expect_success 'flux submit with bad flags fails' '
-	test_must_fail flux submit --flags notaflag /bin/true
+	test_must_fail flux submit --flags notaflag true
 '
 test_expect_success 'flux submit --time-limit=5d works' '
 	flux submit --dry-run --time-limit=5d hostname >t5d.out &&

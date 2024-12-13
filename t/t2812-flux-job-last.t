@@ -18,7 +18,7 @@ test_expect_success 'flux-job last fails when no jobs have been submitted' '
 
 '
 test_expect_success 'submit some jobs' '
-	flux submit --cc=0-9 /bin/true >jobids
+	flux submit --cc=0-9 true >jobids
 '
 test_expect_success 'flux job last lists the most recently submitted job' '
 	id=$(flux job last) &&

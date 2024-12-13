@@ -10,10 +10,10 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 ARGS="-Sbroker.rc1_path= -Sbroker.rc3_path="
 
 test_expect_success 'flux-start with size 2 works with tbon.zmqdebug' '
-	flux start ${ARGS} -Stbon.zmqdebug=1 -s2 /bin/true
+	flux start ${ARGS} -Stbon.zmqdebug=1 -s2 true
 '
 test_expect_success 'flux-start with non-integer tbon.zmqdebug fails' '
-	test_must_fail flux start ${ARGS} -Stbon.zmqdebug=foo /bin/true
+	test_must_fail flux start ${ARGS} -Stbon.zmqdebug=foo true
 '
 test_expect_success 'tbon.endpoint can be read' '
 	ATTR_VAL=`flux start ${ARGS} -s2 flux getattr tbon.endpoint` &&
@@ -97,7 +97,7 @@ test_expect_success 'tbon.interface-hint from parent can be overridden' '
 '
 test_expect_success 'tbon.endpoint cannot be set' '
 	test_must_fail_or_be_terminated flux start ${ARGS} -s2 \
-		--setattr=tbon.endpoint=ipc:///tmp/customflux /bin/true
+		--setattr=tbon.endpoint=ipc:///tmp/customflux true
 '
 test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '
 	test_must_fail flux start ${ARGS} -s2 flux getattr tbon.parent-endpoint
@@ -119,7 +119,7 @@ test_expect_success 'broker -Stbon.topo=kary:8 option works' '
 	test_cmp topo.exp topo.out
 '
 test_expect_success 'broker -Stbon.topo=kary:0 works' '
-	flux start ${ARGS} -Stbon.topo=kary:0 /bin/true
+	flux start ${ARGS} -Stbon.topo=kary:0 true
 '
 test_expect_success 'broker -Stbon.topo=custom option works' '
 	echo custom >topo2.exp &&

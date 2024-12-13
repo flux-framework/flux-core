@@ -384,7 +384,7 @@ void channel_nul_terminate_cb (flux_subprocess_t *p, const char *stream)
 
 void test_bufsize (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -427,7 +427,7 @@ void test_bufsize (flux_reactor_t *r)
 
 void test_bufsize_error (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     flux_subprocess_ops_t ops = {

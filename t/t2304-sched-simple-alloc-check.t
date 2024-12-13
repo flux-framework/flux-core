@@ -25,7 +25,7 @@ test_expect_success 'a regular job fails with an alloc-check exception' '
 	test_expect_code 1 \
 	    run_timeout 30 flux submit --flags=waitable -vvv \
 	    --wait-event=exception \
-	    -N1 /bin/true >bypass.jobid
+	    -N1 true >bypass.jobid
 '
 test_expect_success 'flux job wait says the job failed' '
 	test_must_fail flux job wait -v $(cat bypass.jobid)

@@ -16,11 +16,11 @@ rexec_script="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py"
 rexec="${FLUX_BUILD_DIR}/t/rexec/rexec"
 
 test_expect_success 'basic rexec functionality (process success)' '
-	$rexec /bin/true
+	$rexec true
 '
 
 test_expect_success 'basic rexec functionality (process fail)' '
-	! $rexec /bin/false
+	! $rexec false
 '
 
 test_expect_success 'basic rexec - cwd correct' '
@@ -57,7 +57,7 @@ test_expect_success 'basic rexec functionality (echo stdout/err)' '
 '
 
 test_expect_success 'basic rexec invalid rank' '
-	test_must_fail $rexec -r 32 /bin/true > output 2>&1 &&
+	test_must_fail $rexec -r 32 true > output 2>&1 &&
 	grep -q "$(strerror_symbol EHOSTUNREACH)" output
 '
 
@@ -77,14 +77,14 @@ test_expect_success 'basic rexec fail exec() ENOENT' '
 '
 
 test_expect_success 'basic rexec propagates exit code()' '
-	test_expect_code 0 $rexec /bin/true &&
-	test_expect_code 1 $rexec /bin/false &&
+	test_expect_code 0 $rexec true &&
+	test_expect_code 1 $rexec false &&
 	test_expect_code 2 $rexec sh -c "exit 2" &&
 	test_expect_code 3 $rexec sh -c "exit 3"
 '
 
 test_expect_success 'basic rexec functionality (check state changes)' '
-	$rexec -s /bin/true > output &&
+	$rexec -s true > output &&
 	echo "Running" > expected &&
 	echo "Exited" >> expected &&
 	test_cmp expected output
@@ -253,13 +253,13 @@ test_expect_success 'get URI for rank 1 and check that it works' '
 	test $(FLUX_URI=$(cat uri1) flux getattr rank) -eq 1
 '
 test_expect_success 'rexec from rank 0 to rank 1 works' '
-	$rexec -r 0 /bin/true
+	$rexec -r 0 true
 '
 test_expect_success 'rexec from rank 1 to rank 1 works' '
-	(FLUX_URI=$(cat uri1) $rexec -r 1 /bin/true)
+	(FLUX_URI=$(cat uri1) $rexec -r 1 true)
 '
 test_expect_success 'rexec from rank 1 to rank 0 is restricted' '
-	(FLUX_URI=$(cat uri1) test_must_fail $rexec -r 0 /bin/true)
+	(FLUX_URI=$(cat uri1) test_must_fail $rexec -r 0 true)
 '
 
 test_expect_success NO_CHAIN_LINT 'ps, kill work locally on rank 0' '
@@ -288,7 +288,7 @@ test_expect_success 'configure access.allow-guest-user = false' '
 	EOT
 '
 test_expect_success 'rexec from rank 1 to rank 0 works' '
-	(FLUX_URI=$(cat uri1) $rexec -r 0 /bin/true)
+	(FLUX_URI=$(cat uri1) $rexec -r 0 true)
 '
 
 test_expect_success NO_CHAIN_LINT 'kill fails with ESRCH when pid is unknown' '

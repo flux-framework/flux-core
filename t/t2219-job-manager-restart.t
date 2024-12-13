@@ -10,7 +10,7 @@ export FLUX_DISABLE_JOB_CLEANUP=t
 
 test_expect_success 'start instance with empty kvs, run one job, and dump' '
 	flux start -Scontent.dump=dump.tar \
-	    flux run --env-remove=* /bin/true &&
+	    flux run --env-remove=* true &&
 	test -f $(pwd)/dump.tar
 '
 
@@ -23,7 +23,7 @@ restart_flux() {
 # "not replayed" warnings were logged
 restart_with_job_warning() {
 	local out=$(basename $1).dmesg
-	flux start -Scontent.restore=$1 /bin/true 2>$out
+	flux start -Scontent.restore=$1 true 2>$out
 	result=$?
 	cat $out
 	test $result -eq 0 && grep -q "not replayed:" $out
@@ -61,7 +61,7 @@ test_expect_success 'and max_jobid is still greater than zero' '
 '
 
 test_expect_success 'purging all jobs triggers jobid checkpoint update' '
-	flux start bash -c "flux run --env-remove=* /bin/true && \
+	flux start bash -c "flux run --env-remove=* true && \
 	    flux job purge -f --num-limit=0 && \
 	    flux kvs get checkpoint.job-manager"
 '

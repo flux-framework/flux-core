@@ -62,7 +62,7 @@ test_expect_success 'flux alloc --bg option works' '
 	flux job wait-event $jobid clean
 '
 test_expect_success 'flux alloc --bg option works with a command' '
-	jobid=$(flux alloc -n1 -v --bg /bin/true) &&
+	jobid=$(flux alloc -n1 -v --bg true) &&
 	flux job wait-event -t 180 -v $jobid finish &&
 	flux job attach $jobid
 '
@@ -160,7 +160,7 @@ test_expect_success 'flux alloc: no duplication of output with pty.capture' '
 test_expect_success 'flux alloc: instance can bootstrap without update-watch RPC' '
 	flux alloc -N2 \
 	  --broker-opts=-Slog-stderr-level=7 \
-	  --conf=resource.no-update-watch=true /bin/true >alloc.log 2>&1 &&
+	  --conf=resource.no-update-watch=true true >alloc.log 2>&1 &&
 	test_debug "cat alloc.log" &&
 	grep "falling back to job-info.lookup" alloc.log
 '

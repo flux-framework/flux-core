@@ -21,7 +21,7 @@ json_diff() {
 flux setattr log-stderr-level 1
 
 test_expect_success 'submit job' '
-	flux submit -t 10s --wait-event=clean /bin/true | flux job id >jobid
+	flux submit -t 10s --wait-event=clean true | flux job id >jobid
 '
 test_expect_success 'job-manager getattr of R works' '
 	job_manager_getattr $(cat jobid) R  >R.out

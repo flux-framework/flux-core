@@ -4,7 +4,7 @@ set -x
 
 # Test info fetch
 
-id=$(flux submit -n 1 /bin/true)
+id=$(flux submit -n 1 true)
 flux job attach ${id}
 
 flux job info ${id} eventlog >/dev/null

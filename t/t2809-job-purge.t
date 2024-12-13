@@ -48,7 +48,7 @@ test_expect_success 'reload heartbeat module with fast rate' '
         flux module reload heartbeat period=0.1s
 '
 test_expect_success 'create 10 inactive jobs' '
-	flux submit --cc=1-10 /bin/true >jobids &&
+	flux submit --cc=1-10 true >jobids &&
 	flux queue drain
 '
 test_expect_success 'verify job KVS eventlogs exist' '
@@ -110,9 +110,9 @@ test_expect_success 'verify job KVS eventlogs do not exist' '
 	done
 '
 test_expect_success 'create 2 inactive jobs with known completion order' '
-	flux submit /bin/true >jobid1 &&
+	flux submit true >jobid1 &&
 	flux job wait-event $(cat jobid1) clean &&
-	flux submit /bin/true >jobid2 &&
+	flux submit true >jobid2 &&
 	flux job wait-event $(cat jobid2) clean
 '
 test_expect_success 'purge the oldest job - youngest is still there' '
@@ -127,7 +127,7 @@ test_expect_success 'purge the last job' '
 # purge w/ job ids tests
 #
 test_expect_success 'create 4 inactive jobs and 1 active job and save their jobids' '
-	flux submit --cc=1-4 /bin/true > inactive.ids &&
+	flux submit --cc=1-4 true > inactive.ids &&
 	flux queue drain &&
 	flux submit sleep inf > active.id
 '
@@ -192,7 +192,7 @@ test_expect_success 'cleanup running job' '
 # do the following "auto purge" tests last, as they could affect earlier tests
 #
 test_expect_success 'create 10 inactive jobs' '
-	flux submit --cc=1-10 /bin/true &&
+	flux submit --cc=1-10 true &&
 	flux queue drain
 '
 test_expect_success 'reconfigure job manager with inactive-num-limit=5' '
@@ -253,7 +253,7 @@ test_expect_success 'new instance with bad config fails to start' '
 	inactive-num-limit = -42
 	EOT
 	test_must_fail flux start --config-path=$(pwd)/config \
-		/bin/true 2>badnum2.err &&
+		true 2>badnum2.err &&
 	grep "must be >= 0" badnum2.err
 '
 

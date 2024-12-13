@@ -59,10 +59,10 @@ test_expect_success 'and deprecation warning was printed' '
 	grep deprecated depr.err
 '
 test_expect_success 'verify that stage-in fails with unknown option' '
-	test_must_fail flux run -N1 -ostage-in.badopt /bin/true
+	test_must_fail flux run -N1 -ostage-in.badopt true
 '
 test_expect_success 'verify that stage-in fails with unknown archive name' '
-	test_must_fail flux run -N1 -ostage-in.names=badarchive /bin/true
+	test_must_fail flux run -N1 -ostage-in.names=badarchive true
 '
 test_expect_success 'verify that stage-in.pattern works' '
 	flux run -N1 \
@@ -79,33 +79,33 @@ test_expect_success 'verify that stage-in.destination works' '
 	mkdir testdest &&
 	flux run -N1 \
 	    -o stage-in.destination=$(pwd)/testdest \
-	    /bin/true &&
+	    true &&
 	test -f testdest/main/hello
 '
 test_expect_success 'verify that stage-in.destination=local:path works' '
 	rm -rf testdest/main &&
 	flux run -N1 \
 	    -o stage-in.destination=local:$(pwd)/testdest \
-	    /bin/true &&
+	    true &&
 	test -f testdest/main/hello
 '
 test_expect_success 'verify that stage-in.destination=global:path works' '
 	rm -rf testdest/main &&
 	flux run -N2 \
 	    -o stage-in.destination=global:$(pwd)/testdest \
-	    /bin/true &&
+	    true &&
 	test -f testdest/main/hello
 '
 test_expect_success 'verify that stage-in.destination fails on bad dir' '
 	test_must_fail flux run -N1 \
 	    -o stage-in.destination=/noexist \
-	    /bin/true
+	    true
 '
 test_expect_success 'verify that stage-in.destination fails on bad prefix' '
 	rm -rf testdest/main &&
 	test_must_fail flux run -N1 \
 	    -o stage-in.destination=wrong:$(pwd)/testdest \
-	    /bin/true
+	    true
 '
 test_expect_success 'remove archives' '
 	flux archive remove &&
@@ -125,7 +125,7 @@ test_expect_success 'modify mapped test file without reducing its size' '
         dd if=/dev/zero of=foo bs=4096 count=1 conv=notrunc
 '
 test_expect_success 'content change should cause an error' '
-        test_must_fail flux run -N1 -o stage-in /bin/true 2>changed.err &&
+        test_must_fail flux run -N1 -o stage-in true 2>changed.err &&
 	grep changed changed.err
 '
 test_expect_success 'Create files for example 2 of flux-archive(1)' '

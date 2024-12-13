@@ -18,19 +18,19 @@ invalid_rank() {
 TMPDIR=$(cd /tmp && $(which pwd))
 
 test_expect_success 'basic exec functionality' '
-	flux exec -n /bin/true
+	flux exec -n true
 '
 
 test_expect_success 'exec to specific rank' '
-	flux exec -n -r 0 /bin/true
+	flux exec -n -r 0 true
 '
 
 test_expect_success 'exec to "all" ranks' '
-	flux exec -n -r all /bin/true
+	flux exec -n -r all true
 '
 
 test_expect_success 'exec to subset of ranks' '
-	flux exec -n -r 2-3 /bin/true
+	flux exec -n -r 2-3 true
 '
 
 test_expect_success 'exec to all except a set of ranks' '
@@ -50,7 +50,7 @@ test_expect_success 'configure access.allow-guest-user = true' '
 	EOT
 '
 test_expect_success 'exec to rank 0 from another rank is an error' '
-	test_must_fail flux exec -n -r 1 flux exec -n -r 0 /bin/true
+	test_must_fail flux exec -n -r 1 flux exec -n -r 0 true
 '
 test_expect_success 'configure access.allow-guest-user = false' '
 	flux config load <<-EOT
@@ -58,19 +58,19 @@ test_expect_success 'configure access.allow-guest-user = false' '
 	EOT
 '
 test_expect_success 'exec to rank 0 from another rank works' '
-	flux exec -n -r 1 flux exec -n -r 0 /bin/true
+	flux exec -n -r 1 flux exec -n -r 0 true
 '
 
 test_expect_success 'exec to non-existent rank is an error' '
-	test_must_fail flux exec -n -r $(invalid_rank) /bin/true
+	test_must_fail flux exec -n -r $(invalid_rank) true
 '
 
 test_expect_success 'exec to empty idset is an error' '
-	test_must_fail flux exec -n -r 0-1 -x 0-1 /bin/true
+	test_must_fail flux exec -n -r 0-1 -x 0-1 true
 '
 
 test_expect_success 'test_on_rank works' '
-	test_on_rank 1 /bin/true
+	test_on_rank 1 true
 '
 
 test_expect_success 'test_on_rank sends to correct rank' '

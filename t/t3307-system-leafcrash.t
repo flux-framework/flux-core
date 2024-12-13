@@ -57,7 +57,7 @@ test_expect_success 'and child returned to service' '
 # Side effect: let rc1 on rank 1 finish loading resource module
 # before shutdown begins, or it will complain
 test_expect_success 'run a 2 node job' '
-	flux run -n2 -N2 /bin/true
+	flux run -n2 -N2 true
 '
 
 test_done

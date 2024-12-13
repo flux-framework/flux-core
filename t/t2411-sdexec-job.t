@@ -36,7 +36,7 @@ rkill="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py kill -s sdexec"
 
 test_expect_success 'job gets exception if sdexec requested but not loaded' '
 	test_must_fail flux run --setattr system.exec.bulkexec.service=sdexec \
-	    -N1 /bin/true 2>except.err &&
+	    -N1 true 2>except.err &&
 	grep "sdexec service is not loaded" except.err
 '
 test_expect_success 'load sdbus,sdexec modules' '
@@ -48,18 +48,18 @@ test_expect_success 'clear broker logs' '
 '
 test_expect_success 'incorrect bulkexec.service fails' '
 	test_must_fail flux run --setattr system.exec.bulkexec.service=zzz \
-	    -N1 /bin/true
+	    -N1 true
 '
 test_expect_success '1-node job works' '
 	flux run --setattr system.exec.bulkexec.service=sdexec \
-	    -N1 /bin/true
+	    -N1 true
 '
 test_expect_success 'dump broker logs' '
         flux dmesg >dmesg.out
 '
 test_expect_success '2-node job works' '
 	flux run --setattr system.exec.bulkexec.service=sdexec \
-	    -N2 /bin/true
+	    -N2 true
 '
 test_expect_success 'create a shell userrc that dumps data to stderr' '
 	cat >userrc.lua <<-EOT

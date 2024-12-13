@@ -166,7 +166,7 @@ test_expect_success 'configuring housekeeping with no cmd or exec.imp fails' '
 test_expect_success 'but is accepted if exec.imp is defined' '
 	flux config load <<-EOT
 	[exec]
-	imp = "/bin/true"
+	imp = "/bin/echo"
 	[job-manager.housekeeping]
 	EOT
 '
@@ -174,7 +174,7 @@ test_expect_success 'deprecated use-systemd-unit is ignored with log warning' '
 	flux dmesg -C &&
 	flux config load <<-EOT &&
 	[exec]
-	imp = "/bin/true"
+	imp = "/bin/echo"
 	[job-manager.housekeeping]
 	use-systemd-unit = true
 	EOT
@@ -183,7 +183,7 @@ test_expect_success 'deprecated use-systemd-unit is ignored with log warning' '
 test_expect_success 'configuring housekeeping with bad fsd fails' '
 	test_must_fail flux config load 2>load2.err <<-EOT &&
 	[job-manager.housekeeping]
-	command = [ "/bin/true" ]
+	command = [ "/bin/echo" ]
 	release-after = "foo"
 	EOT
 	grep "FSD parse error" load2.err

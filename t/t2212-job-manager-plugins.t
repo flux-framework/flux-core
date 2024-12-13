@@ -110,7 +110,7 @@ test_expect_success 'job-manager: bad plugins config is detected' '
 	EOF
 	test_must_fail \
 	    flux bulksubmit -n1 --watch --log=badconf.{}.log \
-	        flux start -c$(pwd)/badconf/{} /bin/true ::: a b c d &&
+	        flux start -c$(pwd)/badconf/{} true ::: a b c d &&
 	test_debug "echo a:; cat badconf.a.log" &&
 	grep "config must be an array" badconf.a.log &&
 	test_debug "echo b:; cat badconf.b.log" &&
@@ -233,11 +233,11 @@ test_expect_success 'job-manager: load jobtap_api test plugin' '
 	id=$(flux submit sleep 1000) &&
 	flux run -vvv \
 		--setattr=system.lookup-id=$(flux job id $id) \
-		/bin/true &&
+		true &&
 	flux cancel $id &&
 	id=$(flux submit \
 		--setattr=system.expected-result=failed \
-		/bin/false) &&
+		false) &&
 	test_expect_code 1 flux job attach -vEX $id &&
 	test_must_fail flux job wait-event $id exception &&
 	id=$(flux submit -t 0.1s \
@@ -246,7 +246,7 @@ test_expect_success 'job-manager: load jobtap_api test plugin' '
 	test_must_fail flux job wait-event -vm type=test $id exception &&
 	id=$(flux submit --urgency=hold \
 		--setattr=system.expected-result=canceled \
-		/bin/true) &&
+		true) &&
 	flux cancel $id &&
 	test_must_fail flux job wait-event -vm type=test $id exception
 '

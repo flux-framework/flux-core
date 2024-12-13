@@ -12,7 +12,7 @@ INITRC_TESTDIR="${SHARNESS_TEST_SRCDIR}/shell/initrc"
 INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
 
 test_expect_success 'flux-shell: 1N: init and start shell events are emitted' '
-	id=$(flux submit -n1 -N1 /bin/true)  &&
+	id=$(flux submit -n1 -N1 true)  &&
 	flux job wait-event -vt 5 -p exec \
 		-m leader-rank=0 ${id} shell.init &&
 	flux job wait-event -vt 5 -p exec \
@@ -21,7 +21,7 @@ test_expect_success 'flux-shell: 1N: init and start shell events are emitted' '
 		${id} shell.start
 '
 test_expect_success 'flux-shell: 2N: init and start shell events are emitted' '
-	id=$(flux submit -n4 -N2 /bin/true)  &&
+	id=$(flux submit -n4 -N2 true)  &&
 	flux job wait-event -vt 5 -p exec \
 		-m leader-rank=0  ${id} shell.init &&
 	flux job wait-event -vt 5 -p exec \

@@ -5,7 +5,7 @@ set -x
 # Test job list
 
 # launch a few jobs just to ensure there are jobs to list
-flux submit -n 1 /bin/true
-flux submit -n 1 /bin/false
+flux submit -n 1 true
+flux submit -n 1 false
 
 flux jobs -a -A

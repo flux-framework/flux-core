@@ -14,7 +14,7 @@ runpty="flux ${SHARNESS_TEST_SRCDIR}/scripts/runpty.py"
 test_expect_success 'start a persistent instance of size 4' '
 	mkdir -p test1 &&
 	flux start --test-size=4 --test-exit-timeout=300s \
-		-Sstatedir=$(pwd)/test1 /bin/true
+		-Sstatedir=$(pwd)/test1 true
 '
 test_expect_success 'expected broker attributes are set in recovery mode' '
 	cat >recov_attrs.exp <<-EOT &&
@@ -50,7 +50,7 @@ test_expect_success '--recovery is not ignored if --test-size is specified' '
 '
 test_expect_success 'rc1 failure is ignored in recovery mode' '
 	flux start --recovery=$(pwd)/test1 \
-	    -Sbroker.rc1_path=/bin/false \
+	    -Sbroker.rc1_path=false \
 	    -Sbroker.rc3_path= \
 	    echo "hello world" >hello.out &&
 	grep hello hello.out

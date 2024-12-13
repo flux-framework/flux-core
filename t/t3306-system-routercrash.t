@@ -123,7 +123,7 @@ test_expect_success 'ping broker 2 via broker 0' '
 # Side effect: let rc1 on rank 2 finish loading resource module
 # before shutdown begins, or it will complain
 test_expect_success 'run a 3 node job' '
-        flux run -n3 -N3 /bin/true
+        flux run -n3 -N3 true
 '
 
 

@@ -72,7 +72,7 @@ test_expect_success NO_CHAIN_LINT 'flux-uri pid scheme fails for non-flux pid' '
 	kill $pid
 '
 test_expect_success 'flux uri fails for completed job' '
-	complete_id=$(flux submit --wait flux start /bin/true) &&
+	complete_id=$(flux submit --wait flux start true) &&
 	test_expect_code 1 flux uri ${complete_id} 2>jobid-notrunning.log &&
 	test_debug "cat jobid-notrunning.log" &&
 	grep "not running" jobid-notrunning.log

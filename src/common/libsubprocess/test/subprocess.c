@@ -68,7 +68,7 @@ void completion_cb (flux_subprocess_t *p)
 void test_corner_cases (flux_reactor_t *r)
 {
     flux_t *h = NULL;
-    char *avgood[] = { "/bin/true", NULL };
+    char *avgood[] = { "true", NULL };
     char *avbad[] = { NULL };
     flux_cmd_t *cmd;
 
@@ -106,7 +106,7 @@ void test_corner_cases (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 
     ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
-        "flux_cmd_create with /bin/true works");
+        "flux_cmd_create with true works");
     ok (flux_rexec (h, -10, 0, cmd, NULL) == NULL
         && errno == EINVAL,
         "flux_rexec fails with cmd with invalid rank");
@@ -174,7 +174,7 @@ void test_corner_cases (flux_reactor_t *r)
         "flux_subprocess_aux_get fails with NULL pointer input");
 
     ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
-        "flux_cmd_create with /bin/true works");
+        "flux_cmd_create with true works");
     ok (flux_local_exec (r,
                          FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF,
                          cmd,
@@ -188,7 +188,7 @@ void test_corner_cases (flux_reactor_t *r)
 
 void test_post_exec_errors (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -256,7 +256,7 @@ void test_post_exec_errors (flux_reactor_t *r)
 
 void test_basic (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd, *cmd2;
     flux_reactor_t *r2;
     flux_subprocess_t *p = NULL;
@@ -301,7 +301,7 @@ void completion_fail_cb (flux_subprocess_t *p)
 
 void test_basic_fail (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/false", NULL };
+    char *av[] = { "false", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -326,7 +326,7 @@ void test_basic_fail (flux_reactor_t *r)
 
 void test_flag_no_setpgrp (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -351,7 +351,7 @@ void test_flag_no_setpgrp (flux_reactor_t *r)
 
 void test_flag_fork_exec (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -651,7 +651,7 @@ void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 
 void test_state_change (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -771,7 +771,7 @@ void test_exec_fail (flux_reactor_t *r)
 
 void test_context (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     char *extra = "mydata";
@@ -804,7 +804,7 @@ void test_context (flux_reactor_t *r)
 
 void test_refcount (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     char *extra = "mydata";
@@ -849,7 +849,7 @@ void shmem_hook_cb (flux_subprocess_t *p, void *arg)
 
 void test_pre_exec_hook (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     int *shmem_count;
@@ -900,7 +900,7 @@ void count_hook_cb (flux_subprocess_t *p, void *arg)
 
 void test_post_fork_hook (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     int hook_count = 0;
@@ -940,7 +940,7 @@ void destroy_in_completion_cb (flux_subprocess_t *p)
 
 void test_destroy_in_completion (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd, *cmd2;
     flux_reactor_t *r2;
     flux_subprocess_t *p = NULL;

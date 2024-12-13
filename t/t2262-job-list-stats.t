@@ -37,7 +37,7 @@ test_expect_success NO_CHAIN_LINT 'start monitoring job-stats and wait for first
 	$waitfile stats.log
 '
 test_expect_success NO_CHAIN_LINT 'run a job to completion' '
-	flux run /bin/true
+	flux run true
 '
 test_expect_success NO_CHAIN_LINT 'wait until job-stats produces at least one more response' '
 	$waitfile --count=2 stats.log
