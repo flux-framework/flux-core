@@ -35,7 +35,8 @@ enum kvs_op {
     FLUX_KVS_APPEND = 32,
     FLUX_KVS_WATCH_FULL = 64,
     FLUX_KVS_WATCH_UNIQ = 128,
-    FLUX_KVS_WATCH_APPEND = 256
+    FLUX_KVS_WATCH_APPEND = 256,
+    FLUX_KVS_STREAM = 512
 };
 
 /* Namespace
