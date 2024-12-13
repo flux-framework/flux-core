@@ -14,17 +14,17 @@ fi
 
 test_expect_success 'run a job in persistent instance' '
 	flux start --setattr=statedir=$(pwd) \
-	           flux submit /bin/true >id1.out
+	           flux submit true >id1.out
 '
 
 test_expect_success 'restart instance and run another job' '
 	flux start --setattr=statedir=$(pwd) \
-	           flux submit /bin/true >id2.out
+	           flux submit true >id2.out
 '
 
 test_expect_success 'restart instance and run another job' '
 	flux start --setattr=statedir=$(pwd) \
-	           flux submit /bin/true >id3.out
+	           flux submit true >id3.out
 '
 
 test_expect_success 'restart instance and list inactive jobs' '
@@ -64,7 +64,7 @@ test_expect_success 'doctor startlog to look like a crash' '
 test_expect_success 'run flux and capture logs on stderr' '
 	flux start --setattr=statedir=$(pwd) \
 		--setattr=log-stderr-level=6 \
-		/bin/true 2>improper.err
+		true 2>improper.err
 '
 test_expect_success 'improper shutdown was logged' '
 	grep "Flux was not shut down properly" improper.err
@@ -74,7 +74,7 @@ test_expect_success 'run a job in persistent instance (content-files)' '
 	flux start \
 	    -Scontent.backing-module=content-files \
 	    -Sstatedir=$(pwd) \
-	    flux submit /bin/true >files_id1.out
+	    flux submit true >files_id1.out
 '
 test_expect_success 'restart instance and list inactive jobs' '
 	flux start \
@@ -109,7 +109,7 @@ test_expect_success S3 'create content-s3.toml from env' '
 test_expect_success S3 'run a job in persistent instance (content-s3)' '
 	flux start \
 	    -Scontent.backing-module=content-s3 \
-	    flux submit /bin/true >files_id2.out
+	    flux submit true >files_id2.out
 '
 test_expect_success S3 'restart instance and list inactive jobs' '
 	flux start \

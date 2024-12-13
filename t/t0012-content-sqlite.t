@@ -443,7 +443,7 @@ test_expect_success 'module load fails with corrupt database' '
 	test_must_fail load_module_xfail
 '
 test_expect_success 'full instance start fails corrupt database' '
-	test_must_fail flux start -Sstatedir=$(pwd) /bin/true
+	test_must_fail flux start -Sstatedir=$(pwd) true
 '
 
 test_expect_success 'flux module stats content-sqlite is open to guests' '

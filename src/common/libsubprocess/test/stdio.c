@@ -1085,7 +1085,7 @@ void test_line_buffer_disable (flux_reactor_t *r)
 
 void test_line_buffer_error (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 

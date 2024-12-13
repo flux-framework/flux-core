@@ -78,8 +78,8 @@ void basic (flux_t *h)
         "runat_is_defined name=test1 returns false");
     ok (runat_is_completed (r, "test1") == false,
         "runat_is_completed name=test1 returns false");
-    ok (runat_push_shell_command (r, "test1", "/bin/true", 0) == 0
-        && runat_push_shell_command (r, "test1", "/bin/true", 0) == 0,
+    ok (runat_push_shell_command (r, "test1", "true", 0) == 0
+        && runat_push_shell_command (r, "test1", "true", 0) == 0,
         "pushed true;true");
     ok (runat_is_defined (r, "test1") == true,
         "runat_is_defined name=test1 returns true after creation");
@@ -101,8 +101,8 @@ void basic (flux_t *h)
 
     /* run false;true */
     clear_list (logs);
-    ok (runat_push_shell_command (r, "test2", "/bin/true", 0) == 0
-        && runat_push_shell_command (r, "test2", "/bin/false", 0) == 0,
+    ok (runat_push_shell_command (r, "test2", "true", 0) == 0
+        && runat_push_shell_command (r, "test2", "false", 0) == 0,
         "pushed true;true");
     ok (runat_start (r, "test2", test_completion, &ctx) == 0,
         "runat_start works");
@@ -119,8 +119,8 @@ void basic (flux_t *h)
 
     /* run true;false */
     clear_list (logs);
-    ok (runat_push_command (r, "test3", "/bin/false", 11, 0) == 0
-        && runat_push_command (r, "test3", "/bin/true", 10, 0) == 0,
+    ok (runat_push_command (r, "test3", "false", 6, 0) == 0
+        && runat_push_command (r, "test3", "true", 5, 0) == 0,
         "pushed true;true");
     ok (runat_start (r, "test3", test_completion, &ctx) == 0,
         "runat_start works");
@@ -221,9 +221,9 @@ void basic (flux_t *h)
 #if __GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 24)
     flags |= RUNAT_FLAG_FORK_EXEC;
 #endif
-    ok (runat_push_shell_command (r, "test7", "/bin/true", flags) == 0
+    ok (runat_push_shell_command (r, "test7", "true", flags) == 0
             && runat_push_shell_command (r, "test7", "sleep 3600", flags) == 0,
-        "pushed /bin/true;sleep 3600");
+        "pushed true;sleep 3600");
     ok (runat_start (r, "test7", test_completion, &ctx) == 0,
         "runat_start works");
     ok (runat_abort (r, "test7") == 0,

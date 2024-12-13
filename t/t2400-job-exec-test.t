@@ -108,7 +108,7 @@ test_expect_success 'job-exec: test exec start override works' '
 '
 test_expect_success 'job-exec: override only works on jobs with flag set' '
 	jobid=$(flux submit \
-		--setattr=system.exec.test.run_duration=0. /bin/true) &&
+		--setattr=system.exec.test.run_duration=0. true) &&
 	flux job wait-event -t 5 ${jobid} alloc &&
 	test_must_fail flux job-exec-override start ${jobid} &&
 	flux cancel ${jobid} &&

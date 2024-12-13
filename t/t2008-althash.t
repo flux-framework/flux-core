@@ -71,7 +71,7 @@ test_expect_success S3 'Content store nil returns correct hash for sha256' '
 '
 
 test_expect_success 'Attempt to start instance with invalid hash fails hard' '
-	test_must_fail flux start -Scontent.hash=wronghash /bin/true
+	test_must_fail flux start -Scontent.hash=wronghash true
 '
 
 test_done

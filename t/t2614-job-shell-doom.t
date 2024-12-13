@@ -7,7 +7,7 @@ test_description='Test flux-shell task exit support'
 test_under_flux 2 job
 
 test_expect_success 'flux-shell: first task exit posts shell.task-exit event' '
-	jobid=$(flux submit /bin/true) &&
+	jobid=$(flux submit true) &&
 	run_timeout 10 flux job wait-event -p exec \
 		$jobid shell.task-exit
 '
@@ -60,19 +60,19 @@ test_expect_success 'flux-shell: exit-on-error catches lost shell' '
 		-n2 -N2 -o exit-on-error ./test2.sh
 '
 test_expect_success 'flux-shell: exit-timeout=aaa is rejected' '
-	test_must_fail flux run -o exit-timeout=aaa /bin/true
+	test_must_fail flux run -o exit-timeout=aaa true
 '
 test_expect_success 'flux-shell: exit-timeout=false is rejected' '
-	test_must_fail flux run -o exit-timeout=false /bin/true
+	test_must_fail flux run -o exit-timeout=false true
 '
 test_expect_success 'flux-shell: exit-timeout=none is accepted' '
-	flux run -o exit-timeout=none /bin/true
+	flux run -o exit-timeout=none true
 '
 test_expect_success 'flux-shell: exit-timeout=100 is accepted' '
-	flux run -o exit-timeout=100 /bin/true
+	flux run -o exit-timeout=100 true
 '
 test_expect_success 'flux-shell: exit-timeout=42.34 is accepted' '
-	flux run -o exit-timeout=42.34 /bin/true
+	flux run -o exit-timeout=42.34 true
 '
 
 test_done

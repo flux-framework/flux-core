@@ -99,7 +99,7 @@ test_expect_success 'cmddriver adds its own path to PATH' '
 	mkdir bin &&
 	cat <<-EOF >bin/flux &&
 	#!/bin/sh
-	/bin/true
+	true
 	EOF
 	chmod +x bin/flux &&
 	fluxcmd=$(command -v flux) &&

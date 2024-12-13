@@ -71,7 +71,7 @@ test_expect_success 'flux-queue: disable works' '
 '
 
 test_expect_success 'flux-queue: job submit fails with queue disabled' '
-	test_must_fail flux run /bin/true
+	test_must_fail flux run true
 '
 
 test_expect_success 'flux-queue: enable works' '
@@ -80,7 +80,7 @@ test_expect_success 'flux-queue: enable works' '
 '
 
 test_expect_success 'flux-queue: flux run works after enable' '
-	run_timeout 60 flux run /bin/true
+	run_timeout 60 flux run true
 '
 
 test_expect_success 'flux-queue: stop with bad broker connection fails' '
@@ -139,7 +139,7 @@ test_expect_success 'flux-queue: stop with --nocheckpoint works' '
 '
 
 test_expect_success 'flux-queue: submit some jobs' '
-	flux submit --cc 1-3 --wait-event=priority /bin/true
+	flux submit --cc 1-3 --wait-event=priority true
 '
 
 test_expect_success 'flux-queue: start scheduling' '
@@ -159,7 +159,7 @@ test_expect_success 'flux-queue: start long job that uses all cores' '
 '
 
 test_expect_success 'flux-queue: submit a job and make sure alloc sent' '
-	id=$(flux submit --flags debug /bin/true) &&
+	id=$(flux submit --flags debug true) &&
 	flux job wait-event ${id} debug.alloc-request
 '
 
@@ -195,7 +195,7 @@ test_expect_success 'flux-queue: unload scheduler' '
 '
 
 test_expect_success 'flux-queue: submit a job to ping scheduler' '
-	flux submit --flags debug /bin/true
+	flux submit --flags debug true
 '
 
 wait_for_sched_offline() {
@@ -244,8 +244,8 @@ test_expect_success 'flux-queue: submit a long job that uses all cores' '
 '
 
 test_expect_success 'flux-queue: submit 2 more jobs' '
-	flux submit /bin/true &&
-	flux submit /bin/true
+	flux submit true &&
+	flux submit true
 '
 
 test_expect_success 'flux-queue: there are 3 active jobs' '
@@ -392,8 +392,8 @@ test_expect_success 'start queues' '
 	test $(grep -c "Scheduling is started" mqstatus_initial.out) -eq 2
 '
 test_expect_success 'jobs may be submitted to either queue' '
-	flux submit -q batch /bin/true &&
-	flux submit -q debug /bin/true
+	flux submit -q batch true &&
+	flux submit -q debug true
 '
 test_expect_success 'flux-queue status can show one queue' '
 	flux queue status -q debug >mqstatus_debug.out &&
@@ -409,8 +409,8 @@ test_expect_success 'flux-queue disable --all affects all queues' '
 	test $(grep -c "submission is disabled: test reason" mqstatus_dis.out) -eq 2
 '
 test_expect_success 'jobs may not be submitted to either queue' '
-	test_must_fail flux submit -q batch /bin/true &&
-	test_must_fail flux submit -q debug /bin/true
+	test_must_fail flux submit -q batch true &&
+	test_must_fail flux submit -q debug true
 '
 test_expect_success 'flux-queue enable without --queue or --all fails' '
 	test_must_fail flux queue enable
@@ -428,8 +428,8 @@ test_expect_success 'flux-queue disable can do one queue' '
 	flux queue status >mqstatus_batchdis.out &&
 	test $(grep -c "submission is enabled" mqstatus_batchdis.out) -eq 1 &&
 	test $(grep -c "submission is disabled: nobatch" mqstatus_batchdis.out) -eq 1 &&
-	test_must_fail flux submit -q batch /bin/true &&
-	flux submit -q debug /bin/true
+	test_must_fail flux submit -q batch true &&
+	flux submit -q debug true
 '
 test_expect_success 'flux-queue enable can do one queue' '
 	flux queue enable -q batch > mqenable_batch.out &&
@@ -437,8 +437,8 @@ test_expect_success 'flux-queue enable can do one queue' '
 	test $(grep -c "submission is enabled" mqenable_batch.out) -eq 1 &&
 	flux queue status >mqstatus_batchena.out &&
 	test $(grep -c "submission is enabled" mqstatus_batchena.out) -eq 2 &&
-	flux submit -q batch /bin/true &&
-	flux submit -q debug /bin/true
+	flux submit -q batch true &&
+	flux submit -q debug true
 '
 
 
@@ -456,8 +456,8 @@ test_expect_success 'flux-queue stop w/o --all affects all queues but outputs wa
 	test $(grep -c "Scheduling is stopped: test reasons" mqstatus_stop2.out) -eq 2
 '
 test_expect_success 'jobs may be submitted to either queue' '
-	flux submit --wait-event=priority -q batch /bin/true > job_batch1.id &&
-	flux submit --wait-event=priority -q debug /bin/true > job_debug1.id
+	flux submit --wait-event=priority -q batch true > job_batch1.id &&
+	flux submit --wait-event=priority -q debug true > job_debug1.id
 '
 
 wait_state() {
@@ -510,8 +510,8 @@ test_expect_success 'flux-queue stop can do one queue' '
 	flux queue status >mqstatus_batchstop.out &&
 	test $(grep -c "Scheduling is started" mqstatus_batchstop.out) -eq 1 &&
 	test $(grep -c "Scheduling is stopped: nobatch" mqstatus_batchstop.out) -eq 1 &&
-	flux submit -q batch /bin/true > job_batch2.id &&
-	flux submit -q debug /bin/true > job_debug2.id
+	flux submit -q batch true > job_batch2.id &&
+	flux submit -q debug true > job_debug2.id
 '
 test_expect_success 'check one job ran, other job didnt' '
 	wait_state $(cat job_debug2.id) INACTIVE &&

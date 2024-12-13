@@ -34,7 +34,7 @@ test_expect_success 'flux-shutdown fails if job argument is unknown' '
 '
 
 test_expect_success 'run a test job to completion' '
-	flux submit --wait -n1 flux start /bin/true >jobid
+	flux submit --wait -n1 flux start true >jobid
 '
 test_expect_success 'flux-shutdown fails if job is not running' '
 	test_must_fail flux shutdown $(cat jobid) 2>notrun.err &&
@@ -141,7 +141,7 @@ test_expect_success 'submit batch script and wait for it to start' '
 	rm -f job6-has-started &&
 	cat >batch6.sh <<-EOT &&
 	#!/bin/sh
-	flux run /bin/true
+	flux run true
 	touch job6-has-started
 	sleep 300
 	EOT
@@ -200,7 +200,7 @@ test_expect_success 'submit batch script and wait for it to start (1)' '
 	rm -f job7-has-started &&
 	cat >batch7.sh <<-EOT &&
 	#!/bin/sh
-	flux run /bin/true
+	flux run true
 	touch job7-has-started
 	sleep 300
 	EOT

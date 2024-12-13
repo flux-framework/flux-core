@@ -82,7 +82,7 @@ test_expect_success 'test instance fails to exclude hostnames' '
 	exclude = "$(hostname -s)"
 	EOT
 	test_must_fail flux start -s2 --config-path=exclude2.toml \
-	    /bin/true 2>exclude2.err &&
+	    true 2>exclude2.err &&
 	grep "R is unavailable" exclude2.err
 '
 test_expect_success 'instance with configured R can exclude hostnames' '

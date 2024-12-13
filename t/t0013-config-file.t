@@ -66,7 +66,7 @@ test_expect_success 'FLUX_CONF_DIR also works to specify config dir' '
 '
 
 test_expect_success 'flux broker fails with specified config directory missing' "
-	test_must_fail flux broker ${ARGS} -c noexist /bin/true
+	test_must_fail flux broker ${ARGS} -c noexist true
 "
 
 test_expect_success 'broker fails with invalid TOML' '
@@ -75,7 +75,7 @@ test_expect_success 'broker fails with invalid TOML' '
 	[bootstrap]
 	bad-toml
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf1 /bin/true
+	test_must_fail flux broker ${ARGS} -c conf1 true
 '
 
 test_expect_success 'broker fails with invalid TOML file' '
@@ -83,7 +83,7 @@ test_expect_success 'broker fails with invalid TOML file' '
 	[bootstrap]
 	bad-toml
 	EOT
-	test_must_fail flux broker ${ARGS} -c invalid.toml /bin/true
+	test_must_fail flux broker ${ARGS} -c invalid.toml true
 '
 #
 # [bootstrap] tests
@@ -98,7 +98,7 @@ test_expect_success '[bootstrap] config with bad hosts array' '
 	[bootstrap]
 	hosts = 42
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf3 /bin/true
+	test_must_fail flux broker ${ARGS} -c conf3 true
 '
 
 test_expect_success '[bootstrap] config with bad hosts array element' '
@@ -109,7 +109,7 @@ test_expect_success '[bootstrap] config with bad hosts array element' '
 	    42
 	]
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf4 /bin/true
+	test_must_fail flux broker ${ARGS} -c conf4 true
 '
 
 test_expect_success '[bootstrap] config with hosts array element with extra key' '
@@ -120,7 +120,7 @@ test_expect_success '[bootstrap] config with hosts array element with extra key'
 	    { host = "xyz", extrakey = 42 },
 	]
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf4a /bin/true
+	test_must_fail flux broker ${ARGS} -c conf4a true
 '
 
 test_expect_success '[bootstrap] config with hosts array element missing host' '
@@ -131,7 +131,7 @@ test_expect_success '[bootstrap] config with hosts array element missing host' '
 	    { },
 	]
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf4b /bin/true
+	test_must_fail flux broker ${ARGS} -c conf4b true
 '
 
 test_expect_success '[bootstrap] config with bad hostlist' '
@@ -142,7 +142,7 @@ test_expect_success '[bootstrap] config with bad hostlist' '
 	    { host = "foo[0-254}" },
 	]
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf4c /bin/true
+	test_must_fail flux broker ${ARGS} -c conf4c true
 '
 
 test_expect_success '[bootstrap] config with with unknown parent' '
@@ -154,7 +154,7 @@ test_expect_success '[bootstrap] config with with unknown parent' '
 	]
 	EOT
 	test_must_fail flux start --test-size=1 --test-hosts=fake0 \
-	    -c conf4d /bin/true
+	    -c conf4d true
 '
 
 test_expect_success '[bootstrap] config with with impossible parent' '
@@ -166,7 +166,7 @@ test_expect_success '[bootstrap] config with with impossible parent' '
 	]
 	EOT
 	test_must_fail flux start --test-size=1 --test-hosts=fake0 \
-	    -c conf4e /bin/true
+	    -c conf4e true
 '
 
 test_expect_success '[bootstrap] config with hostname not found' '
@@ -179,7 +179,7 @@ test_expect_success '[bootstrap] config with hostname not found' '
 	    { host = "matchnobody" },
 	]
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf5 /bin/true
+	test_must_fail flux broker ${ARGS} -c conf5 true
 '
 
 test_expect_success '[bootstrap] hosts array can be missing' '
@@ -345,7 +345,7 @@ test_expect_success '[bootstrap] curve_cert is required for size > 1' '
 	    { host = "foo2" }
 	]
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf10 /bin/true
+	test_must_fail flux broker ${ARGS} -c conf10 true
 '
 
 test_expect_success '[bootstrap] curve_cert must exist' '
@@ -354,7 +354,7 @@ test_expect_success '[bootstrap] curve_cert must exist' '
 	[bootstrap]
 	curve_cert = "conf11/cert"
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf11 /bin/true
+	test_must_fail flux broker ${ARGS} -c conf11 true
 '
 
 test_expect_success '[bootstrap] curve_cert file must contain valid cert' '
@@ -365,7 +365,7 @@ test_expect_success '[bootstrap] curve_cert file must contain valid cert' '
 	[bootstrap]
 	curve_cert = "conf12/cert"
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf12 /bin/true
+	test_must_fail flux broker ${ARGS} -c conf12 true
 '
 
 test_expect_success '[bootstrap] curve_cert file must be mode g-r' '
@@ -376,7 +376,7 @@ test_expect_success '[bootstrap] curve_cert file must be mode g-r' '
 	[bootstrap]
 	curve_cert = "conf13/cert"
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf13 /bin/true
+	test_must_fail flux broker ${ARGS} -c conf13 true
 '
 
 test_expect_success '[bootstrap] curve_cert file must be mode o-r' '
@@ -387,7 +387,7 @@ test_expect_success '[bootstrap] curve_cert file must be mode o-r' '
 	[bootstrap]
 	curve_cert = "conf14/cert"
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf14 /bin/true
+	test_must_fail flux broker ${ARGS} -c conf14 true
 '
 
 #
@@ -427,7 +427,7 @@ test_expect_success MAXRT 'tbon.tcp_user_timeout command line overrides config' 
 test_expect_success MAXRT 'tbon.tcp_user_timeout with bad FSD on command line fails' '
 	test_must_fail flux broker ${ARGS} \
 		-Stbon.tcp_user_timeout=zzz \
-		/bin/true 2>badattr.err &&
+		true 2>badattr.err &&
 	grep "Error parsing" badattr.err
 '
 test_expect_success MAXRT 'tbon.tcp_user_timeout with bad FSD configured fails' '
@@ -437,7 +437,7 @@ test_expect_success MAXRT 'tbon.tcp_user_timeout with bad FSD configured fails' 
 	tcp_user_timeout = 42
 	EOT
 	test_must_fail flux broker ${ARGS} -c conf16 \
-		/bin/true 2>badconf.err &&
+		true 2>badconf.err &&
 	grep "Config file error" badconf.err
 '
 test_expect_success NOMAXRT 'tbon.tcp_user_timeout config cannot be set with old zeromq' '
@@ -447,13 +447,13 @@ test_expect_success NOMAXRT 'tbon.tcp_user_timeout config cannot be set with old
 	tcp_user_timeout = "30s"
 	EOT
 	test_must_fail flux broker ${ARGS} -c conf17 \
-		/bin/true 2>noconf.err &&
+		true 2>noconf.err &&
 	grep "unsupported by this zeromq version" noconf.err
 '
 test_expect_success NOMAXRT 'tbon.tcp_user_timeout attr cannot be set with old zeromq' '
 	test_must_fail flux broker ${ARGS} \
 		-Stbon.tcp_user_timeout=30s \
-		/bin/true 2>noattr.err &&
+		true 2>noattr.err &&
 	grep "unsupported by this zeromq version" noattr.err
 '
 
@@ -481,7 +481,7 @@ test_expect_success 'tbon.zmqdebug can be configured' '
 test_expect_success MAXRT 'tbon.zmqdebug with bad value on command line fails' '
 	test_must_fail flux broker ${ARGS} \
 		-Stbon.zmqdebug=zzz \
-		/bin/true 2>zbadattr.err &&
+		true 2>zbadattr.err &&
 	grep "value must be an integer" zbadattr.err
 '
 test_expect_success MAXRT 'tbon.zmqdebug configured with wrong type fails' '
@@ -491,7 +491,7 @@ test_expect_success MAXRT 'tbon.zmqdebug configured with wrong type fails' '
 	zmqdebug = "notint"
 	EOT
 	test_must_fail flux broker ${ARGS} -c conf19 \
-		/bin/true 2>zbadconf.err &&
+		true 2>zbadconf.err &&
 	grep "Expected integer" zbadconf.err
 '
 test_expect_success MAXRT 'tbon.zmqdebug configured with wrong type fails' '
@@ -501,7 +501,7 @@ test_expect_success MAXRT 'tbon.zmqdebug configured with wrong type fails' '
 	zmqdebug = "notint"
 	EOT
 	test_must_fail flux broker ${ARGS} -c conf20 \
-		/bin/true 2>zbadconf.err &&
+		true 2>zbadconf.err &&
 	grep "Expected integer" zbadconf.err
 '
 test_expect_success 'tbon.zmq_io_threads is 1 by default' '
@@ -589,7 +589,7 @@ test_expect_success 'tbon.torpid_max configured with wrong type fails' '
 	torpid_max = 5
 	EOT
 	test_must_fail flux broker ${ARGS} -c conf22 \
-		/bin/true 2>badtorpid.err &&
+		true 2>badtorpid.err &&
 	grep "Expected string" badtorpid.err
 '
 test_expect_success 'tbon.topo with unknown scheme fails' '
@@ -599,7 +599,7 @@ test_expect_success 'tbon.topo with unknown scheme fails' '
 	topo = "notascheme:42"
 	EOT
 	test_must_fail flux broker ${ARGS} -c conf23 \
-		/bin/true 2>badscheme.err &&
+		true 2>badscheme.err &&
 	grep "unknown topology scheme" badscheme.err
 '
 test_expect_success 'tbon.topo is kary:32 by default' '
@@ -671,13 +671,13 @@ test_expect_success NOCONNTO 'tbon.connect_timeout config cannot be set with old
 	connect_timeout = "35s"
 	EOT
 	test_must_fail flux broker ${ARGS} -c conf27 \
-		/bin/true 2>noconnto_conf.err &&
+		true 2>noconnto_conf.err &&
 	grep "unsupported by this zeromq version" noconnto_conf.err
 '
 test_expect_success NOCONNTO 'tbon.connect_timeout attr cannot be set with old zeromq' '
 	test_must_fail flux broker ${ARGS} \
 		-Stbon.connect_timeout=10s \
-		/bin/true 2>noconnto_attr.err &&
+		true 2>noconnto_attr.err &&
 	grep "unsupported by this zeromq version" noconnto_attr.err
 '
 test_expect_success CONNTO 'tbon.connect_timeout config can be set to 0' '

@@ -9,7 +9,7 @@ import flux.job
 from flux.job import JobspecV1
 
 handle = flux.Flux()
-jobspec = JobspecV1.from_command(command=["/bin/true"], num_tasks=1, num_nodes=1)
+jobspec = JobspecV1.from_command(command=["true"], num_tasks=1, num_nodes=1)
 jobid = flux.job.submit(handle, jobspec, waitable=True)
 flux.job.wait(handle, jobid=jobid)
 jobdir = flux.job.job_kvs(handle, jobid)

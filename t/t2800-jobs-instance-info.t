@@ -21,9 +21,9 @@ waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 #     jobs.
 #
 test_expect_success 'start a set of Flux instances' '
-	id=$(flux submit flux start /bin/true) &&
+	id=$(flux submit flux start true) &&
 	id2=$(flux submit -N2 -n2 -c1 flux start \
-		"flux run /bin/false ; \
+		"flux run false ; \
 		 flux submit --cc=1-4 sleep 300 && \
 		 touch ready && \
 		 flux queue idle") &&

@@ -76,7 +76,7 @@ test_expect_success 'flux-top does not display FLUX_JOBID_ANY jobid in title' '
 	test_must_fail grep jpXCZedGfVQ nojobs.out
 '
 test_expect_success 'run a test job to completion' '
-	flux submit --wait -n1 flux start /bin/true >jobid &&
+	flux submit --wait -n1 flux start true >jobid &&
 	job_list_wait_state $(cat jobid) INACTIVE
 '
 test_expect_success 'flux-top summary shows one completed job' '

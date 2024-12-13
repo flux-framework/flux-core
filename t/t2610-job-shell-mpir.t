@@ -26,7 +26,7 @@ for test in 1:1 2:2 2:4 4:4 4:8 4:7; do
     NODES=${test%:*}
     test_expect_success "flux-shell: ${NODES}N/${TASKS}P: trace+mpir works" '
 	id=$(flux submit -o stop-tasks-in-exec \
-	    -n${TASKS} -N${NODES} /bin/true)  &&
+	    -n${TASKS} -N${NODES} true)  &&
 	flux job wait-event -vt 5 -p exec -m sync=true ${id} shell.start &&
 	${mpir} -r $(shell_leader_rank $id) -s $(shell_service $id) &&
 	flux job kill -s CONT ${id} &&
@@ -36,7 +36,7 @@ done
 
 
 test_expect_success 'flux-shell: test security of proctable method' '
-	id=$(flux submit -o stop-tasks-in-exec /bin/true) &&
+	id=$(flux submit -o stop-tasks-in-exec true) &&
 	flux job wait-event -vt 5 -p exec -m sync=true ${id} shell.start &&
 	shell_rank=$(shell_leader_rank $id) &&
 	shell_service=$(shell_service $id) &&
@@ -49,7 +49,7 @@ test_expect_success 'flux-shell: test security of proctable method' '
 	flux job attach ${id}
 '
 test_expect_success 'mpir: tool launch is supported' '
-	id=$(flux submit -N4 -n8 -o stop-tasks-in-exec /bin/true) &&
+	id=$(flux submit -N4 -n8 -o stop-tasks-in-exec true) &&
 	flux job wait-event -vt 5 -p exec -m sync=true $id shell.start &&
 	shell_rank=$(shell_leader_rank $id) &&
 	shell_service=$(shell_service $id) &&
@@ -68,7 +68,7 @@ test_expect_success 'mpir: tool launch is supported' '
 # on broker rank 0 to ensure this configuration works with tool launch
 test_expect_success 'mpir: tool launch works with empty MPIR_server_arguments' '
 	id=$(flux submit --requires=rank:1,3 \
-	     -N2 -n2 -o stop-tasks-in-exec /bin/true) &&
+	     -N2 -n2 -o stop-tasks-in-exec true) &&
 	flux job wait-event -vt 5 -p exec -m sync=true $id shell.start &&
 	shell_rank=$(shell_leader_rank $id) &&
 	shell_service=$(shell_service $id) &&
@@ -82,7 +82,7 @@ test_expect_success 'mpir: tool launch works with empty MPIR_server_arguments' '
 	flux job attach $id
 '
 test_expect_success 'mpir: tool launch reports errors' '
-	id=$(flux submit -N2 -n2 -o stop-tasks-in-exec /bin/true) &&
+	id=$(flux submit -N2 -n2 -o stop-tasks-in-exec true) &&
 	flux job wait-event -vt 5 -p exec -m sync=true $id shell.start &&
 	shell_rank=$(shell_leader_rank $id) &&
 	shell_service=$(shell_service $id) &&

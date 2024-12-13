@@ -58,7 +58,7 @@ extern char **environ;
 
 void corner_case_test (flux_t *h)
 {
-    char *true_av[] = { "/bin/true", NULL };
+    char *true_av[] = { "true", NULL };
     flux_subprocess_t *p;
     flux_cmd_t *cmd;
 
@@ -243,7 +243,7 @@ void simple_test (flux_t *h)
 {
     struct simple_scorecard exp;
 
-    char *true_av[] = { "/bin/true", NULL };
+    char *true_av[] = { "true", NULL };
     memset (&exp, 0, sizeof (exp));
     exp.running = 1;
     exp.exited = 1;
@@ -251,12 +251,12 @@ void simple_test (flux_t *h)
     exp.stdout_eof = 1;
     exp.stderr_eof = 1;
     simple_run_check (h,
-                      "/bin/true",
+                      "true",
                       ARRAY_SIZE (true_av) - 1,
                       true_av,
                       &exp);
 
-    char *false_av[] = { "/bin/false", NULL };
+    char *false_av[] = { "false", NULL };
     memset (&exp, 0, sizeof (exp));
     exp.running = 1;
     exp.exited = 1;
@@ -265,7 +265,7 @@ void simple_test (flux_t *h)
     exp.stdout_eof = 1;
     exp.stderr_eof = 1;
     simple_run_check (h,
-                      "/bin/false",
+                      "false",
                       ARRAY_SIZE (false_av) - 1,
                       false_av,
                       &exp);

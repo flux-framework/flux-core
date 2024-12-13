@@ -63,16 +63,16 @@ test_expect_success 'flux run -o pmi=off does not set FLUX_PMI_LIBRARY_PATH' '
 	test_must_fail flux run -o pmi=off printenv FLUX_PMI_LIBRARY_PATH
 '
 test_expect_success 'flux run -o pmi.badopt fails' '
-	test_must_fail flux run -o pmi.badopt /bin/true
+	test_must_fail flux run -o pmi.badopt true
 '
 test_expect_success 'flux run -o pmi-simple.exchange.badopt fails' '
-	test_must_fail flux run -o pmi-simple.exchange.badopt /bin/true
+	test_must_fail flux run -o pmi-simple.exchange.badopt true
 '
 test_expect_success 'flux run -o pmi-simple.exchange.k=foo fails' '
-	test_must_fail flux run -o pmi-simple.exchange.k=foo /bin/true
+	test_must_fail flux run -o pmi-simple.exchange.k=foo true
 '
 test_expect_success 'flux run -o pmi-simple.nomap=foo fails' '
-	test_must_fail flux run -o pmi-simple.nomap=foo /bin/true
+	test_must_fail flux run -o pmi-simple.nomap=foo true
 '
 
 test_expect_success 'pmi_info works' '
@@ -262,7 +262,7 @@ test_expect_success 'flux-pmi --libpmi-noflux fails w/ flux libpmi.so' '
 test_expect_success 'flux broker refuses the Flux libpmi.so and goes single' '
 	FLUX_PMI_DEBUG=1 FLUX_PMI_CLIENT_METHODS="libpmi single" \
 	    LD_LIBRARY_PATH=$(dirname $(cat libpmi)) \
-            flux start /bin/true 2>debug.err &&
+            flux start true 2>debug.err &&
 	grep single debug.err
 '
 # method=libpmi2
@@ -309,7 +309,7 @@ test_expect_success 'flux-pmi --libpmi-noflux fails w/ flux libpmi2.so' '
 test_expect_success 'flux broker refuses the Flux pmi lib and goes single' '
 	FLUX_PMI_DEBUG=1 FLUX_PMI_CLIENT_METHODS="libpmi2 single" \
 	    LD_LIBRARY_PATH=$(dirname $(cat libpmi2)) \
-            flux start /bin/true 2>debug.err &&
+            flux start true 2>debug.err &&
 	grep single debug.err
 '
 # method=single

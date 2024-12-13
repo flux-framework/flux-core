@@ -31,24 +31,24 @@ test_expect_success "python FLUX_JOBID_ANY matches job.h" '
 '
 
 test_expect_success "wait works on waitable job run with flux submit" '
-	JOBID=$(flux submit --flags waitable /bin/true) &&
+	JOBID=$(flux submit --flags waitable true) &&
 	flux job wait ${JOBID}
 '
 
 test_expect_success "wait works on waitable job run with flux-job" '
-	flux submit --dry-run /bin/true >true.jobspec &&
+	flux submit --dry-run true >true.jobspec &&
 	JOBID=$(flux job submit --flags=waitable true.jobspec) &&
 	flux job wait ${JOBID}
 '
 
 test_expect_success "wait works on inactive,waitable job" '
-	JOBID=$(flux submit --flags waitable /bin/true) &&
+	JOBID=$(flux submit --flags waitable true) &&
 	flux job wait-event ${JOBID} clean &&
 	flux job wait ${JOBID}
 '
 
 test_expect_success "waitable inactive jobs are listed as zombies" '
-	JOBID=$(flux submit --flags waitable /bin/true) &&
+	JOBID=$(flux submit --flags waitable true) &&
 	echo ${JOBID} >id1.out &&
 	flux job wait-event ${JOBID} clean &&
 	${list_jobs} >list1.out &&
@@ -63,18 +63,18 @@ test_expect_success "zombies go away after they are waited for" '
 '
 
 test_expect_success "wait works on three waitable jobs in reverse order" '
-	JOB1=$(flux submit --flags waitable /bin/true) &&
-	JOB2=$(flux submit --flags waitable /bin/true) &&
-	JOB3=$(flux submit --flags waitable /bin/true) &&
+	JOB1=$(flux submit --flags waitable true) &&
+	JOB2=$(flux submit --flags waitable true) &&
+	JOB3=$(flux submit --flags waitable true) &&
 	flux job wait ${JOB3} &&
 	flux job wait ${JOB2} &&
 	flux job wait ${JOB1}
 '
 
 test_expect_success "wait FLUX_JOBID_ANY works on three waitable jobs" '
-	flux submit --flags waitable /bin/true >jobs.out &&
-	flux submit --flags waitable /bin/true >>jobs.out &&
-	flux submit --flags waitable /bin/true >>jobs.out &&
+	flux submit --flags waitable true >jobs.out &&
+	flux submit --flags waitable true >>jobs.out &&
+	flux submit --flags waitable true >>jobs.out &&
 	flux job wait >wait.out &&
 	flux job wait >>wait.out &&
 	flux job wait >>wait.out &&
@@ -118,7 +118,7 @@ test_expect_success "wait works when job terminated by exception" '
 '
 
 test_expect_success "wait works when job tasks exit 1" '
-	JOBID=$(flux submit --flags waitable /bin/false) &&
+	JOBID=$(flux submit --flags waitable false) &&
 	test_expect_code 1 flux job wait ${JOBID} 2>false.out &&
 	grep exit false.out
 '
@@ -133,31 +133,31 @@ test_expect_success "wait --all works with no waitable jobs" '
 '
 
 test_expect_success "wait --all works with one job" '
-	flux submit --flags waitable /bin/true &&
+	flux submit --flags waitable true &&
 	test_job_count 1 &&
 	flux job wait --all &&
 	test_job_count 0
 '
 
 test_expect_success "wait --all works with two jobs" '
-	flux submit --flags waitable /bin/true &&
-	flux submit --flags waitable /bin/true &&
+	flux submit --flags waitable true &&
+	flux submit --flags waitable true &&
 	test_job_count 2 &&
 	flux job wait --all &&
 	test_job_count 0
 '
 
 test_expect_success "wait --all fails when first job fails" '
-	flux submit --flags waitable /bin/false &&
-	flux submit --flags waitable /bin/true &&
+	flux submit --flags waitable false &&
+	flux submit --flags waitable true &&
 	test_job_count 2 &&
 	test_must_fail flux job wait --all &&
 	test_job_count 0
 '
 
 test_expect_success "wait --all fails when second job fails" '
-	flux submit --flags waitable /bin/true &&
-	flux submit --flags waitable /bin/false &&
+	flux submit --flags waitable true &&
+	flux submit --flags waitable false &&
 	test_job_count 2 &&
 	test_must_fail flux job wait --all &&
 	test_job_count 0
@@ -165,9 +165,9 @@ test_expect_success "wait --all fails when second job fails" '
 
 
 test_expect_success "wait --all --verbose emits one line per successful job" '
-	flux submit --flags waitable /bin/true &&
-	flux submit --flags waitable /bin/true &&
-	flux submit --flags waitable /bin/false &&
+	flux submit --flags waitable true &&
+	flux submit --flags waitable true &&
+	flux submit --flags waitable false &&
 	test_must_fail flux job wait --all --verbose 2>verbose.err &&
 	test $(wc -l <verbose.err) -eq 3
 '
@@ -182,7 +182,7 @@ test_expect_success "wait fails on non-waitable, active job" '
 '
 
 test_expect_success "wait fails on non-waitable, inactive job" '
-	JOBID=$(flux submit /bin/true) &&
+	JOBID=$(flux submit true) &&
 	flux job wait-event ${JOBID} clean &&
 	test_expect_code 2 flux job wait ${JOBID}
 '
@@ -194,7 +194,7 @@ test_expect_success "a second wait fails on waitable, active job" '
 '
 
 test_expect_success "a second wait fails on waitable, inactive job" '
-	JOBID=$(flux submit --flags waitable /bin/true) &&
+	JOBID=$(flux submit --flags waitable true) &&
 	flux job wait-event ${JOBID} clean &&
 	flux job wait ${JOBID} &&
 	test_expect_code 2 flux job wait ${JOBID}
@@ -202,12 +202,12 @@ test_expect_success "a second wait fails on waitable, inactive job" '
 
 test_expect_success "guest cannot submit job with WAITABLE flag" '
 	export FLUX_HANDLE_ROLEMASK=0x2 &&
-	test_must_fail flux submit --flags waitable /bin/true &&
+	test_must_fail flux submit --flags waitable true &&
 	unset FLUX_HANDLE_ROLEMASK
 '
 
 test_expect_success "guest cannot wait on a job" '
-	JOBID=$(flux submit --flags waitable /bin/true) &&
+	JOBID=$(flux submit --flags waitable true) &&
 	export FLUX_HANDLE_ROLEMASK=0x2 &&
 	test_expect_code 1 flux job wait ${JOBID} &&
 	unset FLUX_HANDLE_ROLEMASK
