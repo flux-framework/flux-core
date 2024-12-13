@@ -967,6 +967,20 @@ class MiniCmd:
         """
         raise NotImplementedError()
 
+    def handle_add_file_arg(self, jobspec, arg):
+        """Process a single argument to --add-file=ARG."""
+        name, _, data = arg.partition("=")
+        if not data:
+            # No '=' implies path-only argument (no multiline allowed)
+            if "\n" in name:
+                raise ValueError("--add-file: file name missing")
+            data = name
+            name = basename(data)
+        try:
+            jobspec.add_file(name, data)
+        except (TypeError, ValueError, OSError) as exc:
+            raise ValueError(f"--add-file={arg}: {exc}") from None
+
     # pylint: disable=too-many-branches,too-many-statements
     def jobspec_create(self, args):
         """
@@ -1081,17 +1095,7 @@ class MiniCmd:
 
         if args.add_file is not None:
             for arg in args.add_file:
-                name, _, data = arg.partition("=")
-                if not data:
-                    # No '=' implies path-only argument (no multiline allowed)
-                    if "\n" in name:
-                        raise ValueError("--add-file: file name missing")
-                    data = name
-                    name = basename(data)
-                try:
-                    jobspec.add_file(name, data)
-                except (TypeError, ValueError, OSError) as exc:
-                    raise ValueError(f"--add-file={arg}: {exc}") from None
+                self.handle_add_file_arg(jobspec, arg)
 
         return jobspec
 
