@@ -526,7 +526,7 @@ class Jobspec(object):
             raise TypeError("data must be a Mapping or string")
 
         files = self.jobspec["attributes"]["system"].get("files", {})
-        if "\n" in data and encoding is None:
+        if encoding is None and "\n" in data:
             #  Use default encoding of utf-8 if data contains newlines,
             #  since this is presumed to be file content.
             encoding = "utf-8"
