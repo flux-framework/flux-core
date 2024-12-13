@@ -340,6 +340,15 @@ test_expect_success 'flux submit --add-file=name=data works' '
 		cp {{tmpdir}}/add-file.test . &&
 	grep "this is a test" add-file.test
 '
+test_expect_success 'flux submit --add-file=name:perms=data works' '
+	flux submit -n1 --watch --add-file=test:0700="#!/bin/sh\ntrue\n" \
+		{{tmpdir}}/test
+'
+test_expect_success 'flux submit --add-file allows colon in name' '
+	flux submit -n1 --watch --add-file=add-file:test="this is a test\n" \
+		cp {{tmpdir}}/add-file:test . &&
+	grep "this is a test" add-file:test
+'
 test_expect_success 'flux submit --add-file complains for non-regular files' '
 	test_must_fail flux submit -n1 --add-file=/tmp hostname
 '

@@ -821,8 +821,9 @@ class MiniCmd:
             action="append",
             help="Add a file at PATH with optional NAME to jobspec. The "
             + "file will be extracted to {{tmpdir}}/NAME. If NAME is not "
-            + "specified, then the basename of PATH will be used. (multiple "
-            + "use OK)",
+            + "specified, then the basename of PATH will be used. If "
+            + "necessary, permissions may be specified via NAME:PERMS. "
+            + "(multiple use OK)",
             metavar="[NAME=]PATH",
         )
         parser.add_argument(
@@ -969,6 +970,7 @@ class MiniCmd:
 
     def handle_add_file_arg(self, jobspec, arg):
         """Process a single argument to --add-file=ARG."""
+        perms = None
         #  Note: Replace any newline escaped by the shell with literal '\n'
         #  so that newline detection below works for file data passed on
         #  on the command line:
@@ -979,8 +981,17 @@ class MiniCmd:
                 raise ValueError("--add-file: file name missing")
             data = name
             name = basename(data)
+        else:
+            # Check if name specifies permissions after ':'
+            tmpname, _, permstr = name.partition(":")
+            try:
+                perms = int(permstr, base=8)
+                name = tmpname
+            except ValueError:
+                # assume ':' was part of name
+                pass
         try:
-            jobspec.add_file(name, data)
+            jobspec.add_file(name, data, perms=perms)
         except (TypeError, ValueError, OSError) as exc:
             raise ValueError(f"--add-file={arg}: {exc}") from None
 
