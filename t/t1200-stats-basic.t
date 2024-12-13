@@ -49,13 +49,13 @@ test_expect_success 'nothing received with no endpoint' '
 
 test_expect_success 'FLUX_FRIPP_STATSD with colectomy' '
 	FLUX_FRIPP_STATSD=localhost \
-		flux start true sleep 1 2>colon.err &&
+		flux start true 2>colon.err &&
 	grep "parse error" colon.err
 '
 
 test_expect_success 'FLUX_FRIPP_STATSD with invalid hostname' '
 	FLUX_FRIPP_STATSD=thiscantpossiblybevalid:9000 \
-		flux start true sleep 1 2>host.err &&
+		flux start true 2>host.err &&
 	grep "parse error" host.err
 '
 
