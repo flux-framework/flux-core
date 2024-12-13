@@ -969,7 +969,10 @@ class MiniCmd:
 
     def handle_add_file_arg(self, jobspec, arg):
         """Process a single argument to --add-file=ARG."""
-        name, _, data = arg.partition("=")
+        #  Note: Replace any newline escaped by the shell with literal '\n'
+        #  so that newline detection below works for file data passed on
+        #  on the command line:
+        name, _, data = arg.replace("\\n", "\n").partition("=")
         if not data:
             # No '=' implies path-only argument (no multiline allowed)
             if "\n" in name:
