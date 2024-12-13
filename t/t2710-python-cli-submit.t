@@ -335,6 +335,11 @@ test_expect_success 'flux submit --add-file=name=file works' '
 		cp {{tmpdir}}/myfile . &&
 	test_cmp file.txt myfile
 '
+test_expect_success 'flux submit --add-file=name=data works' '
+	flux submit -n1 --watch --add-file=add-file.test="this is a test\n" \
+		cp {{tmpdir}}/add-file.test . &&
+	grep "this is a test" add-file.test
+'
 test_expect_success 'flux submit --add-file complains for non-regular files' '
 	test_must_fail flux submit -n1 --add-file=/tmp hostname
 '
