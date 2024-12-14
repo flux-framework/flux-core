@@ -380,8 +380,11 @@ nomem:
     return -1;
 }
 
-int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
-                        const char *name, const char *fmt, ...)
+int flux_shell_setenvf (flux_shell_t *shell,
+                        int overwrite,
+                        const char *name,
+                        const char *fmt,
+                        ...)
 {
     json_t *env;
     va_list ap;
@@ -1142,7 +1145,9 @@ static int mustache_render_name (flux_shell_t *shell,
 {
     const char *jobname = NULL;
     json_error_t error;
-    if (json_unpack_ex (shell->info->jobspec->jobspec, &error, 0,
+    if (json_unpack_ex (shell->info->jobspec->jobspec,
+                        &error,
+                        0,
                         "{s:{s:{s?{s?s}}}}",
                         "attributes",
                          "system",
@@ -1440,7 +1445,8 @@ static int load_initrc (flux_shell_t *shell, const char *default_rcfile)
     shell_debug ("Loading %s", rcfile);
 
     if (shell_rc (shell, rcfile) < 0) {
-        shell_die (1, "loading rc file %s%s%s",
+        shell_die (1,
+                   "loading rc file %s%s%s",
                    rcfile,
                    errno ? ": " : "",
                    errno ? strerror (errno) : "");
@@ -1665,13 +1671,17 @@ static int shell_register_event_context (flux_shell_t *shell)
         return 0;
     o = taskmap_encode_json (shell->info->taskmap, TASKMAP_ENCODE_WRAPPED);
     if (o == NULL
-        || flux_shell_add_event_context (shell, "shell.init", 0,
+        || flux_shell_add_event_context (shell,
+                                         "shell.init",
+                                         0,
                                          "{s:i s:i}",
                                          "leader-rank",
                                          shell->info->rankinfo.rank,
                                          "size",
                                          shell->info->shell_size) < 0
-        || flux_shell_add_event_context (shell, "shell.start", 0,
+        || flux_shell_add_event_context (shell,
+                                         "shell.start",
+                                         0,
                                          "{s:O}",
                                          "taskmap", o) < 0)
         goto out;
@@ -1768,7 +1778,8 @@ int main (int argc, char *argv[])
 
     /* Set no_process_group if nosetpgrp option is set */
     if (flux_shell_getopt_unpack (&shell,
-                                  "nosetpgrp", "i",
+                                  "nosetpgrp",
+                                  "i",
                                   &shell.nosetpgrp) < 0)
         shell_die (1, "failed to parse attributes.system.shell.nosetpgrp");
 
@@ -1861,7 +1872,8 @@ int main (int argc, char *argv[])
                 ec = 126;
             else if (errno == ENOENT)
                 ec = 127;
-            shell_die (ec, "task %d (host %s): start failed: %s: %s",
+            shell_die (ec,
+                       "task %d (host %s): start failed: %s: %s",
                        task->rank,
                        shell.hostname,
                        flux_cmd_arg (task->cmd, 0),

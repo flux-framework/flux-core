@@ -87,8 +87,10 @@ int flux_shell_get_environ (flux_shell_t *shell, char **json_str);
 
 /*  Set an environment variable in the global job environment
  */
-int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
-                        const char *name, const char *fmt, ...)
+int flux_shell_setenvf (flux_shell_t *shell,
+                        int overwrite,
+                        const char *name,
+                        const char *fmt, ...)
                         __attribute__ ((format (printf, 4, 5)));
 
 /*  Unset an environment variable in the global job environment
