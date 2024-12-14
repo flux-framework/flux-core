@@ -564,12 +564,6 @@ struct signalfd_siginfo
 # endif
 #endif
 
-/* disable timerfd on macos */
-#ifdef __APPLE__
-#  undef EV_USE_TIMERFD
-#  define EV_USE_TIMERFD 0
-#endif
-
 /*****************************************************************************/
 
 #if EV_VERIFY >= 3
