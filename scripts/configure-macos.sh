@@ -12,7 +12,8 @@ test -d macos-venv || die "please run $DEPS_SCRIPT first"
 
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
-CPPFLAGS=-I${HOMEBREW_PREFIX}/include/lua
+CPPFLAGS="-I${HOMEBREW_PREFIX}/include/lua"
+CPPFLAGS="-I$(brew --prefix libev)/include ${CPPFLAGS}"
 CPPFLAGS="-I$(brew --prefix epoll-shim)/include/libepoll-shim ${CPPFLAGS}"
 LDFLAGS=-L${HOMEBREW_PREFIX}/lib
 
@@ -25,5 +26,5 @@ source macos-venv/bin/activate
 
 ./autogen.sh
 
-CPPFLAGS=$CPPFLAGS LDFLAGS=$LDFLAGS PKG_CONFIG_PATH=$PKG_CONFIG_PATH \
-  ./configure
+CPPFLAGS="$CPPFLAGS" LDFLAGS=$LDFLAGS PKG_CONFIG_PATH=$PKG_CONFIG_PATH \
+  ./configure --with-external-libev

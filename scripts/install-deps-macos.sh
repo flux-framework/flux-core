@@ -16,6 +16,7 @@ brew install \
   make \
   pkg-config \
   epoll-shim \
+  libev \
   zeromq \
   jansson \
   lz4 \
