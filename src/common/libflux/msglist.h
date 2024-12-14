@@ -33,16 +33,6 @@ const flux_msg_t *flux_msglist_last (struct flux_msglist *l);
 
 int flux_msglist_count (struct flux_msglist *l);
 
-/* These functions are for integration of flux_msglist into an event loop.
- * The pollfd file descriptor becomes readable when a poll event has been
- * raised (edge triggered).  This indicates that the pollevents mask has been
- * updated.  The mask cnosists of POLLIN | POLLOUT | POLLERR.  N.B. POLLOUT
- * is always ready in the current implementation.
- * Both functions return -1 on error with errno set.
- */
-int flux_msglist_pollevents (struct flux_msglist *l);
-int flux_msglist_pollfd (struct flux_msglist *l);
-
 #ifdef __cplusplus
 }
 #endif
