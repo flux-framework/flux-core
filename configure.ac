@@ -483,9 +483,18 @@ RRA_WITH_SYSTEMD_UNITDIR
 
 
 ##
-# Embedded libev
+# libev
 ##
-m4_include([src/common/libev/libev.m4])
+AC_ARG_WITH([external-libev],
+  AS_HELP_STRING([--with-external-libev], [Use external libev]))
+AS_IF([test "x$with_external_libev" = "xyes"], [
+  AC_SEARCH_LIBS([ev_run], [ev], [], [
+    AC_MSG_ERROR([--with-external-libev requested but external libev not found])
+  ])
+],[
+  m4_include([src/common/libev/libev.m4])
+])
+AM_CONDITIONAL([INTERNAL_LIBEV],[test "x$with_external_libev" != "xyes"])
 
 AC_PKGCONFIG
 

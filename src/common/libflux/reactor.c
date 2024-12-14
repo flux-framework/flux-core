@@ -16,9 +16,8 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <fcntl.h>
+#include <ev.h>
 #include <flux/core.h>
-
-#include "src/common/libev/ev.h"
 
 #include "reactor_private.h"
 

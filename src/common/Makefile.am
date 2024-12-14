@@ -1,7 +1,6 @@
 SUBDIRS = \
 	libtap \
 	libtestutil \
-	libev \
 	libyuarel \
 	libpmi \
 	liblsd \
@@ -30,6 +29,9 @@ SUBDIRS = \
 	libfilemap \
 	libsdexec \
 	libmissing
+if INTERNAL_LIBEV
+SUBDIRS += libev
+endif
 
 AM_CFLAGS = $(WARNING_CFLAGS) $(CODE_COVERAGE_CFLAGS)
 AM_LDFLAGS = $(CODE_COVERAGE_LIBS)
@@ -45,7 +47,6 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libccan/libccan.la \
 	$(builddir)/libutil/libutil.la \
 	$(builddir)/libidset/libidset.la \
-	$(builddir)/libev/libev.la \
 	$(builddir)/libyuarel/libyuarel.la \
 	$(builddir)/libtomlc99/libtomlc99.la \
 	$(builddir)/libeventlog/libeventlog.la \
@@ -62,6 +63,9 @@ libflux_internal_la_LIBADD = \
 	$(LIBDL) \
 	$(LIBRT) \
 	$(FLUX_SECURITY_LIBS)
+if INTERNAL_LIBEV
+libflux_internal_la_LIBADD += $(builddir)/libev/libev.la
+endif
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 
 lib_LTLIBRARIES = libflux-core.la \
