@@ -22,13 +22,11 @@ brew install \
   libarchive \
   hwloc \
   sqlite \
-  lua@5.3 \
+  lua \
   python3 \
   cffi \
   libyaml \
   jq
-
-brew link lua@5.3
 
 python3 -m venv macos-venv
 source macos-venv/bin/activate
