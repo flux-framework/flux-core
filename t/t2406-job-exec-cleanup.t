@@ -102,7 +102,7 @@ test_expect_success 'job-exec: cancel test job to start kill timer' '
 test_expect_success 'job-exec: wait for job to be terminated by max-kill-count' '
 	flux job wait-event -vt 15 $jobid clean &&
 	flux dmesg -H | grep "exceeded max kill count" &&
-	flux resource drain -no {reason} | grep "unkillable processes"
+	flux resource drain -no {reason} | grep "unkillable user processes"
 '
 test_expect_success 'job-exec: kill orphan sleep PID' '
 	kill $sleep_pid
