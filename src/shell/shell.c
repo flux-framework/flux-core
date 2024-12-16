@@ -1095,6 +1095,42 @@ static int mustache_render_jobid (flux_shell_t *shell,
     return 0;
 }
 
+/*  Render the following task-specific mustache templates for the current
+ *   task:
+ *   - {{taskid}}
+ *   - {{task.id}}
+ *   - {{task.rank}}
+ *   - {{task.index}}
+ *   - {{task.localid}}
+ */
+static int mustache_render_task (flux_shell_t *shell,
+                                 const char *name,
+                                 FILE *fp)
+{
+    flux_shell_task_t *task;
+    const char *s;
+    int value;
+
+    if (!(task = flux_shell_current_task (shell))) {
+        errno = EAGAIN;
+        return -1;
+    }
+    s = name + 5; /* forward past 'task.' */
+    if (streq (s, "id") || streq (s, "rank"))
+        value = task->rank;
+    else if (streq (s, "index") || streq (s, "localid"))
+        value = task->index;
+    else {
+        errno = ENOENT;
+        return -1;
+    }
+    if (fprintf (fp, "%d", value) < 0) {
+        shell_log_errno ("memstream write failed for %s", name);
+        return -1;
+    }
+    return 0;
+}
+
 static int mustache_cb (FILE *fp, const char *name, void *arg)
 {
     int rc = -1;
@@ -1106,10 +1142,16 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
     /*  "jobid" is a synonym for "id" */
     if (strstarts (name, "jobid"))
         name += 3;
+    /* taskid is synonym for task.id */
+    else if (streq (name, "taskid"))
+        name = "task.id";
+
     if (strstarts (name, "id"))
         return mustache_render_jobid (shell, name, fp);
     if (streq (name, "name"))
         return mustache_render_name (shell, name, fp);
+    if (strstarts (name, "task."))
+        return mustache_render_task (shell, name, fp);
 
     if (snprintf (topic,
                   sizeof (topic),
