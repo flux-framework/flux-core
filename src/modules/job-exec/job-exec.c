@@ -425,7 +425,7 @@ static int drain_active_ranks (struct jobinfo *job, struct idset *active_ranks)
     }
     rc = jobinfo_drain_ranks (job,
                               ranks,
-                              "unkillable processes for job %s",
+                              "unkillable user processes for job %s",
                               idf58 (job->id));
     ERRNO_SAFE_WRAP (free, ranks);
     return rc;
