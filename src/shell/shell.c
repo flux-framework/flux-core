@@ -1131,6 +1131,51 @@ static int mustache_render_task (flux_shell_t *shell,
     return 0;
 }
 
+/* Render node specific tags:
+ *  - {{node.id}}: index of this shell relative to job
+ *  - {{node.ntasks}}: number of tasks local to this node
+ *  - {{node.name}}: hostname
+ *  - {{node.ncores}}: number of allocated cores on this node
+ *  - {{node.ngpus}}: number of allocated gpus on this node
+ *  - {{node.taskids}: task idset, e.g. 0-3
+ *  - {{node.coreids}}: core idset, e.g. "0-3"
+ *  - {{node.gpuids}}: gpu idset e.g. "0"
+ */
+static int mustache_render_node (flux_shell_t *shell,
+                                 const char *name,
+                                 FILE *fp)
+{
+    const char *s;
+    int rc = -1;
+
+    s = name + 5; /* forward past 'node.' */
+    if (streq (s, "id"))
+        rc = fprintf (fp, "%d", shell->info->rankinfo.nodeid);
+    else if (streq (s, "ntasks"))
+        rc = fprintf (fp, "%d", shell->info->rankinfo.ntasks);
+    else if (streq (s, "ncores"))
+        rc = fprintf (fp, "%d", shell->info->rankinfo.ncores);
+    else if (streq (s, "name"))
+        rc = fputs (shell->hostname, fp);
+    else if (streq (s, "taskids")) {
+        char *ids = idset_encode (shell->info->taskids, IDSET_FLAG_RANGE);
+        if (ids)
+            rc = fputs (ids, fp);
+        ERRNO_SAFE_WRAP (free, ids);
+    }
+    else if (streq (s, "coreids"))
+        rc = fputs (shell->info->rankinfo.cores, fp);
+    else if (streq (s, "gpuids"))
+        rc = fputs (shell->info->rankinfo.gpus, fp);
+    else {
+        errno = ENOENT;
+        return -1;
+    }
+    if (rc < 0)
+        shell_log_errno ("memstream write failed for %s", name);
+    return rc;
+}
+
 static int mustache_cb (FILE *fp, const char *name, void *arg)
 {
     int rc = -1;
@@ -1150,8 +1195,14 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
         return mustache_render_jobid (shell, name, fp);
     if (streq (name, "name"))
         return mustache_render_name (shell, name, fp);
+    if (streq (name, "nnodes"))
+        return fprintf (fp, "%d", shell->info->shell_size);
+    if (streq (name, "size"))
+        return fprintf (fp, "%d", shell->info->total_ntasks);
     if (strstarts (name, "task."))
         return mustache_render_task (shell, name, fp);
+    if (strstarts (name, "node."))
+        return mustache_render_node (shell, name, fp);
 
     if (snprintf (topic,
                   sizeof (topic),
