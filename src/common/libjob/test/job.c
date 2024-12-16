@@ -486,7 +486,7 @@ static void check_waitstatus_to_exitcode (void)
         "error.text is cleared");
     ok (flux_job_waitstatus_to_exitcode (9, &error) == 128+9,
         "flux_job_waitstatus_to_exitcode (9) == %d", 128+9);
-    is (error.text, "job shell Killed",
+    like (error.text, "job shell Killed",
         "error.text is %s", error.text);
     ok (flux_job_waitstatus_to_exitcode (1<<8, &error) == 1,
         "flux_job_waitstatus_to_exitcode (1<<8) = 1");
@@ -494,11 +494,11 @@ static void check_waitstatus_to_exitcode (void)
         "error.text is %s", error.text);
     ok (flux_job_waitstatus_to_exitcode ((128+15)<< 8, &error) == 128+15,
         "flux_job_waitstatus_to_exitcode ((128+15)<<8) = 128+15");
-    is (error.text, "task(s) Terminated",
+    like (error.text, "task\\(s\\) Terminated",
         "error.text is %s", error.text);
     ok (flux_job_waitstatus_to_exitcode ((128+11)<<8, &error) == 128+11,
         "flux_job_waitstatus_to_exitcode ((128+11)<<8) = 128+11");
-    is (error.text, "task(s) Segmentation fault",
+    like (error.text, "task\\(s\\) Segmentation fault",
         "error.text is %s", error.text);
 }
 

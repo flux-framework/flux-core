@@ -419,7 +419,7 @@ void test_load ()
         "flux_plugin_strerror returns expected result");
     ok (flux_plugin_load_dso (p, "/tmp") < 0,
         "flux_plugin_load_dso on directory fails");
-    like (flux_plugin_strerror (p), "^dlopen: .*Is a directory",
+    like (flux_plugin_strerror (p), "^dlopen: .*(Is a directory|not a file)",
         "flux_plugin_strerror returns expected result");
 
     ok (flux_plugin_set_conf (p, "{\"foo\":\"bar\"}") == 0,

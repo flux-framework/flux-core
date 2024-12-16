@@ -19,6 +19,10 @@ AM_CPPFLAGS = \
 	$(JANSSON_CFLAGS) \
 	$(LIBUUID_CFLAGS)
 
+if INTERNAL_LIBEV
+AM_CPPFLAGS += -I$(top_srcdir)/src/common/libev
+endif
+
 fluxcoreinclude_HEADERS = \
 	flux.h \
 	types.h \

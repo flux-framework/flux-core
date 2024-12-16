@@ -14,9 +14,8 @@
 #include "config.h"
 #endif
 #include <assert.h>
+#include <ev.h>
 #include <flux/core.h>
-
-#include "src/common/libev/ev.h"
 
 #include "reactor_private.h"
 #include "watcher_private.h"
