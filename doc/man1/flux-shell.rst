@@ -440,6 +440,13 @@ plugins include:
   takes place on all the job's nodes if the scope is local, versus only the
   first node of the job if the scope is global.
 
+.. warning::
+  The directory referenced by :envvar:`FLUX_JOB_TMPDIR` is cleaned up when the
+  job ends, is guaranteed to be unique, and is generally on fast local storage
+  such as a *tmpfs*.  If a destination is explicitly specified, use the
+  ``global:`` prefix where appropriate to avoid overwhelming a shared file
+  system, and be sure to clean up.
+
 .. option:: signal=OPTION
 
   Deliver signal ``SIGUSR1`` to the job 60s before job expiration.
@@ -467,13 +474,6 @@ plugins include:
   With :option:`hwloc.xmlfile`, restrict the exported topology XML to only
   the resources assigned to the current job. By default the XML is not
   restricted.
-
-.. warning::
-  The directory referenced by :envvar:`FLUX_JOB_TMPDIR` is cleaned up when the
-  job ends, is guaranteed to be unique, and is generally on fast local storage
-  such as a *tmpfs*.  If a destination is explicitly specified, use the
-  ``global:`` prefix where appropriate to avoid overwhelming a shared file
-  system, and be sure to clean up.
 
 .. _flux_shell_initrc:
 
