@@ -319,9 +319,9 @@ plugins include:
   be one of ``term``, ``kvs`` or ``file`` (Default: ``kvs``). If only
   ``output.stdout.type`` is set, then this option applies to both
   ``stdout`` and ``stderr``. If set to ``file``, then ``output.<stream>.path``
-  must also be set for the stream. Most users will not need to set
-  this option directly, as it will be set automatically by options
-  of higher level commands such as :man1:`flux-submit`.
+  must also be set for the stream.
+
+  See also: :option:`flux-submit --output`, :option:`flux-submit --error`.
 
 .. option:: output.limit=SIZE
 
@@ -343,8 +343,9 @@ plugins include:
 .. option:: input.stdin.type=TYPE
 
   Set job input for **stdin** to *TYPE*. *TYPE* may be either ``service``
-  or ``file``. Users should not need to set this option directly as it
-  will be handled by options of higher level commands like :man1:`flux-submit`.
+  or ``file``.
+
+  See also: :option:`flux-submit --input`.
 
 .. option:: exit-timeout=VALUE
 
@@ -362,9 +363,9 @@ plugins include:
 
   A dictionary of soft process resource limits to apply to the job before
   starting tasks. Resource limits are set to integer values by lowercase
-  name without the ``RLIMIT_`` prefix, e.g. ``core`` or ``nofile``. Users
-  should not need to set this shell option as it is handled by commands
-  like :man1:`flux-submit`.
+  name without the ``RLIMIT_`` prefix, e.g. ``core`` or ``nofile``.
+
+  See also: :option:`flux-submit --rlimit`.
 
 .. option:: taskmap
 
@@ -372,9 +373,9 @@ plugins include:
   consisting of required key ``scheme`` and optional key ``value``. The
   shell will attempt to call a ``taskmap.scheme`` plugin callback in the
   shell to invoke the alternate requested mapping. If ``value`` is set,
-  this will also be passed to the invoked plugin. Normally, this option will
-  be set by the :man1:`flux-submit` and related commands :option:`--taskmap`
-  option.
+  this will also be passed to the invoked plugin.
+
+  See also: :option:`flux-submit --taskmap`.
 
 .. option:: pmi=LIST
 
@@ -440,12 +441,21 @@ plugins include:
   takes place on all the job's nodes if the scope is local, versus only the
   first node of the job if the scope is global.
 
+.. warning::
+  The directory referenced by :envvar:`FLUX_JOB_TMPDIR` is cleaned up when the
+  job ends, is guaranteed to be unique, and is generally on fast local storage
+  such as a *tmpfs*.  If a destination is explicitly specified, use the
+  ``global:`` prefix where appropriate to avoid overwhelming a shared file
+  system, and be sure to clean up.
+
 .. option:: signal=OPTION
 
   Deliver signal ``SIGUSR1`` to the job 60s before job expiration.
   To customize the signal number or amount of time before expiration to
   deliver the signal, the ``signal`` option may be an object with one
   or both of the keys ``signum`` or ``timeleft``. (See below)
+
+  See also: :option:`flux-submit --signal`.
 
 .. option:: signal.signum=NUMBER
 
@@ -467,13 +477,6 @@ plugins include:
   With :option:`hwloc.xmlfile`, restrict the exported topology XML to only
   the resources assigned to the current job. By default the XML is not
   restricted.
-
-.. warning::
-  The directory referenced by :envvar:`FLUX_JOB_TMPDIR` is cleaned up when the
-  job ends, is guaranteed to be unique, and is generally on fast local storage
-  such as a *tmpfs*.  If a destination is explicitly specified, use the
-  ``global:`` prefix where appropriate to avoid overwhelming a shared file
-  system, and be sure to clean up.
 
 .. _flux_shell_initrc:
 
