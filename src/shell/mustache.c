@@ -20,8 +20,6 @@
 
 struct mustache_renderer {
     mustache_tag_f tag_f;
-    void *tag_arg;
-
     mustache_log_f llog;
     void *llog_data;
 };
@@ -32,8 +30,7 @@ void mustache_renderer_destroy (struct mustache_renderer *mr)
 }
 
 
-struct mustache_renderer * mustache_renderer_create (mustache_tag_f tagfn,
-                                                     void *arg)
+struct mustache_renderer * mustache_renderer_create (mustache_tag_f tagfn)
 {
     struct mustache_renderer *mr = NULL;
 
@@ -44,7 +41,6 @@ struct mustache_renderer * mustache_renderer_create (mustache_tag_f tagfn,
     if (!(mr = calloc (1, sizeof (*mr))))
         return NULL;
     mr->tag_f = tagfn;
-    mr->tag_arg = arg;
     return (mr);
 }
 
@@ -58,7 +54,9 @@ void mustache_renderer_set_log (struct mustache_renderer *mr,
     }
 }
 
-char *mustache_render (struct mustache_renderer *mr, const char *template)
+char *mustache_render (struct mustache_renderer *mr,
+                       const char *template,
+                       void *arg)
 {
     char name [1024];
     size_t size;
@@ -120,7 +118,7 @@ char *mustache_render (struct mustache_renderer *mr, const char *template)
         len = end - start;
         memcpy (name, start, len);
         name[len] = '\0';
-        if ((*mr->tag_f) (fp, name, mr->tag_arg) < 0) {
+        if ((*mr->tag_f) (fp, name, arg) < 0) {
             /*  If callback fails, just fail to expand the current mustache tag.
              */
             fprintf (fp, "{{%s}}", name);
