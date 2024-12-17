@@ -281,6 +281,33 @@ and the :ref:`flux_jobs_configuration` section of :man1:`flux-jobs`.
    :man1:`flux-queue`, and :man1:`flux-pgrep`.
 
 
+SYSTEM SCRIPTS
+==============
+
+The Flux :term:`system instance` may configure prolog, epilog, and/or
+housekeeping scripts to run as root before or after each job.  The script
+environment is restricted by the IMP for security reasons, but it always
+contains the following:
+
+- :envvar:`PATH` - a safe value for root such as
+  ``/usr/sbin:/usr/bin:/sbin:/bin``
+- :envvar:`USER` - ``root``
+- :envvar:`HOME` - root's home directory
+- :envvar:`FLUX_OWNER_USERID` - the uid of the Flux system
+  :term:`instance owner`
+- :envvar:`FLUX_JOB_ID` - the job id that triggered the script
+- :envvar:`FLUX_JOB_USERID` - the uid of the of the job owner
+
+If the IMP is configured to allow other ``FLUX_`` prefixed environment
+variables to be set as described in :man5:`flux-config-security-imp`,
+then the following are set to allow Flux commands to work from the script:
+
+- :envvar:`FLUX_URI`
+- :envvar:`FLUX_MODULE_PATH`
+- :envvar:`FLUX_EXEC_PATH`
+- :envvar:`FLUX_CONNECTOR_PATH`
+
+
 TESTING
 =======
 
