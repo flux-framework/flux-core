@@ -21,10 +21,10 @@ extern "C" {
 
 typedef struct schedutil_ctx schedutil_t;
 
-enum schedutil_flags {
-    SCHEDUTIL_FREE_NOLOOKUP = 1, // now the default so this flag is ignored
-    SCHEDUTIL_HELLO_PARTIAL_OK = 2,
-};
+/* schedutil_create() flags values
+ */
+#define SCHEDUTIL_FREE_NOLOOKUP 1 // now the default so this flag is ignored
+#define SCHEDUTIL_HELLO_PARTIAL_OK 2
 
 /* Create a handle for the schedutil convenience library.
  *
