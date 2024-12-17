@@ -131,9 +131,11 @@ int flux_shell_info_unpack (flux_shell_t *shell,
 /*  Return rank and task info for given shell rank as JSON string.
  *  {
  *   "broker_rank":i,
+ *   "id":i,      // same as shell_rank parameter
+ *   "name":s,    // hostname of this shell_rank
  *   "ntasks":i
  *   "taskids": s // task id list for this rank in RFC 22 idset form.
- *   "resources": { "cores":s, ... }
+ *   "resources": { "ncores":i, "cores":s, ... }
  *  }
  */
 int flux_shell_get_rank_info (flux_shell_t *shell,
