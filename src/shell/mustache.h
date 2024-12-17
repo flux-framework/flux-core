@@ -38,8 +38,7 @@ struct mustache_renderer;
 /*  Create a mustache renderer, with mustache tags expanded by tag
  *   callback `cb`. (See callback definition above).
  */
-struct mustache_renderer *mustache_renderer_create (mustache_tag_f cb,
-                                                    void *arg);
+struct mustache_renderer *mustache_renderer_create (mustache_tag_f cb);
 
 void mustache_renderer_destroy (struct mustache_renderer *mr);
 
@@ -48,10 +47,13 @@ void mustache_renderer_destroy (struct mustache_renderer *mr);
 void mustache_renderer_set_log (struct mustache_renderer *mr,
                                 mustache_log_f log,
                                 void *log_data);
-                                
+
 /*  Render the mustache template 'template' with renderer 'mr'.
+ *  The opaque argument 'arg' will be passed to the tag callback(s).
  */
-char * mustache_render (struct mustache_renderer *mr, const char *template);
+char * mustache_render (struct mustache_renderer *mr,
+                        const char *template,
+                        void *arg);
 
 #endif /* !_SHELL_MUSTACHE_H */
 

@@ -1030,7 +1030,7 @@ char *flux_shell_mustache_render (flux_shell_t *shell, const char *fmt)
         errno = EINVAL;
         return NULL;
     }
-    return mustache_render (shell->mr, fmt);
+    return mustache_render (shell->mr, fmt, shell);
 }
 
 static int mustache_render_name (flux_shell_t *shell,
@@ -1161,7 +1161,7 @@ static void shell_initialize (flux_shell_t *shell)
         shell_die_errno (1, "zhashx_new");
     zhashx_set_destructor (shell->completion_refs, item_free);
 
-    if (!(shell->mr = mustache_renderer_create (mustache_cb, shell)))
+    if (!(shell->mr = mustache_renderer_create (mustache_cb)))
         shell_die_errno (1, "mustache_renderer_create");
     mustache_renderer_set_log (shell->mr, shell_llog, NULL);
 
