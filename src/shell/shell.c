@@ -577,6 +577,8 @@ static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
     char *taskids = NULL;
     struct taskmap *map;
     struct rcalc_rankinfo rankinfo;
+    struct hostlist *hl;
+    const char *nodename;
 
     if (!shell->info)
         return NULL;
@@ -601,13 +603,26 @@ static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
     if (rcalc_get_nth (shell->info->rcalc, rank, &rankinfo) < 0)
         return NULL;
 
-    o = json_pack_ex (&error, 0, "{ s:i s:i s:s s:{s:s s:s?}}",
-                   "broker_rank", rankinfo.rank,
-                   "ntasks", taskmap_ntasks (map, rank),
-                   "taskids", taskids,
-                   "resources",
-                     "cores", rankinfo.cores,
-                     "gpus",  rankinfo.gpus);
+    /* Note: Drop const on `struct hostlist *` here. The cursor will be
+     * moved, but this should be fine here since the hostlist itself is not
+     * changing.
+     */
+    if (!(hl = (struct hostlist *) flux_shell_get_hostlist (shell))
+        || !(nodename = hostlist_nth (hl, rank)))
+        return NULL;
+
+    o = json_pack_ex (&error,
+                      0,
+                      "{s:i s:s s:i s:i s:s s:{s:i s:s s:s?}}",
+                      "id", rank,
+                      "name", nodename,
+                      "broker_rank", rankinfo.rank,
+                      "ntasks", taskmap_ntasks (map, rank),
+                      "taskids", taskids,
+                      "resources",
+                       "ncores", rankinfo.ncores,
+                       "cores", rankinfo.cores,
+                       "gpus",  rankinfo.gpus);
     free (taskids);
 
     if (o == NULL)
