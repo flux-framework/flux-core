@@ -170,6 +170,10 @@ FLUX_KVS_WAITCREATE
    fulfilled with an ENODATA error to ensure the cancel request has been
    received and processed.
 
+FLUX_KVS_STREAM
+   Return a potentially large value in multiple responses terminated
+   by an ENODATA error response.
+
 
 RETURN VALUE
 ============
