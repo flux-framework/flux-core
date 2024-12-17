@@ -43,7 +43,7 @@
  *
  * 2) If the guest namespace is already copied into the main namespace
  *    (event "release" and "final=true"), we watch the eventlog in the
- *    main namespace (main_namespace_lookup()).  This is the "easy" case
+ *    main namespace (main_namespace_watch()).  This is the "easy" case
  *    and is not so different from a typical call to
  *    'job-info.eventlog-watch'.
  *
@@ -89,13 +89,13 @@ struct guest_watch_ctx {
      * GET_MAIN_EVENTLOG -> GUEST_NAMESPACE_WATCH - guest namespace
      * created, so we should watch it
      *
-     * GET_MAIN_EVENTLOG -> MAIN_NAMESPACE_LOOKUP - guest namespace
+     * GET_MAIN_EVENTLOG -> MAIN_NAMESPACE_WATCH - guest namespace
      * moved to main namespace, so watch in main namespace
      *
      * WAIT_GUEST_NAMESPACE -> GUEST_NAMESPACE_WATCH - guest namespace
      * created, so we should watch it
      *
-     * GUEST_NAMESPACE_WATCH -> MAIN_NAMESPACE_LOOKUP - under a racy
+     * GUEST_NAMESPACE_WATCH -> MAIN_NAMESPACE_WATCH - under a racy
      * situation, guest namespace could be removed before we began to
      * read from it.  If so, transition to watch in main namespace
      */
@@ -104,13 +104,13 @@ struct guest_watch_ctx {
         GUEST_WATCH_STATE_GET_MAIN_EVENTLOG = 2,
         GUEST_WATCH_STATE_WAIT_GUEST_NAMESPACE = 3,
         GUEST_WATCH_STATE_GUEST_NAMESPACE_WATCH = 4,
-        GUEST_WATCH_STATE_MAIN_NAMESPACE_LOOKUP = 5,
+        GUEST_WATCH_STATE_MAIN_NAMESPACE_WATCH = 5,
     } state;
 
     flux_future_t *get_main_eventlog_f;
     flux_future_t *wait_guest_namespace_f;
     flux_future_t *guest_namespace_watch_f;
-    flux_future_t *main_namespace_lookup_f;
+    flux_future_t *main_namespace_watch_f;
 
     /* flags indicating what was found in main eventlog */
     bool guest_started;
@@ -128,8 +128,8 @@ static int wait_guest_namespace (struct guest_watch_ctx *gw);
 static void wait_guest_namespace_continuation (flux_future_t *f, void *arg);
 static int guest_namespace_watch (struct guest_watch_ctx *gw);
 static void guest_namespace_watch_continuation (flux_future_t *f, void *arg);
-static int main_namespace_lookup (struct guest_watch_ctx *gw);
-static void main_namespace_lookup_continuation (flux_future_t *f, void *arg);
+static int main_namespace_watch (struct guest_watch_ctx *gw);
+static void main_namespace_watch_continuation (flux_future_t *f, void *arg);
 
 static void guest_watch_ctx_destroy (void *data)
 {
@@ -141,7 +141,7 @@ static void guest_watch_ctx_destroy (void *data)
         flux_future_destroy (gw->get_main_eventlog_f);
         flux_future_destroy (gw->wait_guest_namespace_f);
         flux_future_destroy (gw->guest_namespace_watch_f);
-        flux_future_destroy (gw->main_namespace_lookup_f);
+        flux_future_destroy (gw->main_namespace_watch_f);
         free (gw);
         errno = save_errno;
     }
@@ -196,8 +196,8 @@ static int send_eventlog_watch_cancel (struct guest_watch_ctx *gw,
                 f = gw->wait_guest_namespace_f;
             else if (gw->state == GUEST_WATCH_STATE_GUEST_NAMESPACE_WATCH)
                 f = gw->guest_namespace_watch_f;
-            else if (gw->state == GUEST_WATCH_STATE_MAIN_NAMESPACE_LOOKUP)
-                f = gw->main_namespace_lookup_f;
+            else if (gw->state == GUEST_WATCH_STATE_MAIN_NAMESPACE_WATCH)
+                f = gw->main_namespace_watch_f;
             else {
                 /* gw->state == GUEST_WATCH_STATE_INIT, eventlog-watch
                  * never started so sort of "auto-canceled" */
@@ -338,7 +338,7 @@ static void get_main_eventlog_continuation (flux_future_t *f, void *arg)
 
     if (gw->guest_released) {
         /* guest namespace copied to main KVS, just watch it like normal */
-        if (main_namespace_lookup (gw) < 0)
+        if (main_namespace_watch (gw) < 0)
             goto error;
     }
     else if (gw->guest_started) {
@@ -601,7 +601,7 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
                     goto error;
                 goto cleanup;
             }
-            if (main_namespace_lookup (gw) < 0)
+            if (main_namespace_watch (gw) < 0)
                 goto error;
             return;
         }
@@ -666,7 +666,7 @@ static int full_guest_path (struct guest_watch_ctx *gw,
     return 0;
 }
 
-static int main_namespace_lookup (struct guest_watch_ctx *gw)
+static int main_namespace_watch (struct guest_watch_ctx *gw)
 {
     const char *topic = "job-info.eventlog-watch";
     int rpc_flags = FLUX_RPC_STREAMING;
@@ -694,24 +694,24 @@ static int main_namespace_lookup (struct guest_watch_ctx *gw)
                                "flags", flags)))
         goto error;
 
-    if (!(gw->main_namespace_lookup_f = flux_rpc_message (gw->ctx->h,
-                                                          msg,
-                                                          FLUX_NODEID_ANY,
-                                                          rpc_flags))) {
+    if (!(gw->main_namespace_watch_f = flux_rpc_message (gw->ctx->h,
+                                                         msg,
+                                                         FLUX_NODEID_ANY,
+                                                         rpc_flags))) {
         flux_log_error (gw->ctx->h, "%s: flux_rpc_message", __FUNCTION__);
         goto error;
     }
 
-    if (flux_future_then (gw->main_namespace_lookup_f,
+    if (flux_future_then (gw->main_namespace_watch_f,
                           -1,
-                          main_namespace_lookup_continuation,
+                          main_namespace_watch_continuation,
                           gw) < 0) {
         /* future cleanup handled with context destruction */
         flux_log_error (gw->ctx->h, "%s: flux_future_then", __FUNCTION__);
         goto error;
     }
 
-    gw->state = GUEST_WATCH_STATE_MAIN_NAMESPACE_LOOKUP;
+    gw->state = GUEST_WATCH_STATE_MAIN_NAMESPACE_WATCH;
     rv = 0;
 error:
     save_errno = errno;
@@ -720,7 +720,7 @@ error:
     return rv;
 }
 
-static void main_namespace_lookup_continuation (flux_future_t *f, void *arg)
+static void main_namespace_watch_continuation (flux_future_t *f, void *arg)
 {
     struct guest_watch_ctx *gw = arg;
     struct info_ctx *ctx = gw->ctx;
@@ -753,7 +753,7 @@ static void main_namespace_lookup_continuation (flux_future_t *f, void *arg)
              * the future's matchtag will eventually be freed */
             if (!gw->eventlog_watch_canceled)
                 (void) send_eventlog_watch_cancel (gw,
-                                                   gw->main_namespace_lookup_f,
+                                                   gw->main_namespace_watch_f,
                                                    false);
             goto cleanup;
         }
