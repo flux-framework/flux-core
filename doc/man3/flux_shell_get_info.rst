@@ -53,12 +53,15 @@ string with the following layout:
 
 ::
 
+   "id":i,
+   "name":s,
    "broker_rank":i,
    "ntasks":i
    "taskids":s
-   "resources": { "cores":s, ... }
+   "resources": { "ncores":i, "cores":s, ... }
 
-where :var:`broker_rank` is the broker rank on which the target shell rank
+where :var:`id` is the shell rank, :var:`name` is the hostname of that shell
+rank, :var:`broker_rank` is the broker rank on which the target shell rank
 of the query is running, :var:`ntasks` is the number of tasks running under
 that shell rank, :var:`taskids` is a list of task id assignments for those
 tasks (an RFC 22 idset string), and :var:`resources` is a dictionary of
