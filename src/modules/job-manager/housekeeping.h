@@ -31,7 +31,9 @@ int housekeeping_start (struct housekeeping *hk,
  * It should inform the scheduler about resources that are still allocated,
  * but no longer directly held by jobs.
  */
-int housekeeping_hello_respond (struct housekeeping *hk, const flux_msg_t *msg);
+int housekeeping_hello_respond (struct housekeeping *hk,
+                                const flux_msg_t *msg,
+                                bool partial_ok);
 
 json_t *housekeeping_get_stats (struct housekeeping *hk);
 
