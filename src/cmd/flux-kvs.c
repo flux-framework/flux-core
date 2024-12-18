@@ -106,6 +106,9 @@ static struct optparse_option get_opts[] =  {
     { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "COUNT",
       .usage = "Display at most COUNT changes",
     },
+    { .name = "stream", .key = 'S', .has_arg = 0,
+      .usage = "Return potentially large values in multiple responses."
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -287,7 +290,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL,
     },
     { "get",
-      "[-N ns] [-r|-t] [-a treeobj] [-l] [-W] [-w] [-u] [-A] [-f] "
+      "[-N ns] [-r|-t] [-a treeobj] [-l] [-W] [-w] [-u] [-A] [-f] [-S] "
         "[-c COUNT] key [key...]",
       "Get value stored under key",
       cmd_get,
@@ -686,6 +689,7 @@ struct lookup_ctx {
     optparse_t *p;
     int maxcount;
     int count;
+    bool have_output;
     const char *ns;
 };
 
@@ -695,9 +699,13 @@ void lookup_continuation (flux_future_t *f, void *arg)
     struct lookup_ctx *ctx = arg;
     const char *key = flux_kvs_lookup_get_key (f);
 
-    if (optparse_hasopt (ctx->p, "watch")
+    if ((optparse_hasopt (ctx->p, "watch")
+         || optparse_hasopt (ctx->p, "stream"))
         && flux_rpc_get (f, NULL) < 0
         && errno == ENODATA) {
+        if (optparse_hasopt (ctx->p, "stream")
+            && ctx->have_output)
+            printf ("\n");
         flux_future_destroy (f);
         return; // EOF
     }
@@ -726,8 +734,13 @@ void lookup_continuation (flux_future_t *f, void *arg)
             log_err_exit ("%s", key);
         if (optparse_hasopt (ctx->p, "label"))
             printf ("%s=", key);
-        if (value)
-            printf ("%s\n", value);
+        if (value) {
+            if (optparse_hasopt (ctx->p, "stream"))
+                printf ("%s", value);
+            else
+                printf ("%s\n", value);
+            ctx->have_output = true;
+        }
     }
     fflush (stdout);
     if (optparse_hasopt (ctx->p, "watch")) {
@@ -736,6 +749,9 @@ void lookup_continuation (flux_future_t *f, void *arg)
             if (flux_kvs_lookup_cancel (f) < 0)
                 log_err_exit ("flux_kvs_lookup_cancel");
         }
+    }
+    else if (optparse_hasopt (ctx->p, "stream")) {
+        flux_future_reset (f);
     }
     else
         flux_future_destroy (f);
@@ -759,6 +775,8 @@ void cmd_get_one (flux_t *h, const char *key, struct lookup_ctx *ctx)
     }
     if (optparse_hasopt (ctx->p, "waitcreate"))
         flags |= FLUX_KVS_WAITCREATE;
+    if (optparse_hasopt (ctx->p, "stream"))
+        flags |= FLUX_KVS_STREAM;
     if (optparse_hasopt (ctx->p, "at")) {
         const char *reference = optparse_get_str (ctx->p, "at", NULL);
         if (!(f = flux_kvs_lookupat (h, flags, key, reference)))
@@ -790,6 +808,7 @@ int cmd_get (optparse_t *p, int argc, char **argv)
     ctx.p = p;
     ctx.count = 0;
     ctx.maxcount = optparse_get_int (p, "count", 0);
+    ctx.have_output = false;
     ctx.ns = optparse_get_str (p, "namespace", NULL);
 
     if (!(h = flux_open (NULL, 0)))
@@ -1985,11 +2004,12 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
     flux_error_t error;
     bool limit_reached = false;
 
-    /* Handle canceled lookup (FLUX_KVS_WATCH flag only).
+    /* Handle canceled (FLUX_KVS_WATCH) or finished (FLUX_KVS_STREAM) lookup.
      * Destroy the future and return (reactor will then terminate).
      * Errors other than ENODATA are handled by the flux_kvs_lookup_get().
      */
-    if (optparse_hasopt (ctx->p, "watch")
+    if ((optparse_hasopt (ctx->p, "watch")
+         || optparse_hasopt (ctx->p, "stream"))
         && flux_rpc_get (f, NULL) < 0
         && errno == ENODATA) {
         flux_future_destroy (f);
@@ -2003,12 +2023,18 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
         log_err_exit ("eventlog_decode");
 
     json_array_foreach (a, index, value) {
-        if (ctx->maxcount == 0 || ctx->count < ctx->maxcount) {
+        if (optparse_hasopt (ctx->p, "watch")) {
+            if (ctx->maxcount == 0 || ctx->count < ctx->maxcount) {
+                if (eventlog_entry_dumpf (ctx->evf, stdout, &error, value) < 0)
+                    log_msg ("failed to print eventlog entry: %s", error.text);
+            }
+            if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount)
+                limit_reached = true;
+        }
+        else {
             if (eventlog_entry_dumpf (ctx->evf, stdout, &error, value) < 0)
                 log_msg ("failed to print eventlog entry: %s", error.text);
         }
-        if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount)
-            limit_reached = true;
     }
 
     fflush (stdout);
@@ -2023,6 +2049,9 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
             if (flux_kvs_lookup_cancel (f) < 0)
                 log_err_exit ("flux_kvs_lookup_cancel");
         }
+    }
+    else if (optparse_hasopt (ctx->p, "stream")) {
+        flux_future_reset (f);
     }
     else
         flux_future_destroy (f);
@@ -2053,6 +2082,8 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
     }
     if (optparse_hasopt (p, "waitcreate"))
         flags |= FLUX_KVS_WAITCREATE;
+    if (optparse_hasopt (p, "stream"))
+        flags |= FLUX_KVS_STREAM;
 
     ctx.p = p;
     ctx.count = 0;
@@ -2225,6 +2256,9 @@ static struct optparse_option eventlog_get_opts[] =  {
       .usage = "Colorize output when supported; WHEN can be 'always' "
                "(default if omitted), 'never', or 'auto' (default)."
     },
+    { .name = "stream", .key = 'S', .has_arg = 0,
+      .usage = "Return potentially large values in multiple responses."
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -2267,7 +2301,7 @@ static struct optparse_subcommand eventlog_subcommands[] = {
       eventlog_append_opts,
     },
     { "get",
-      "[-N ns] [-u] [-W] [-w] [-c COUNT] [-H] [-L auto|always|never] key",
+      "[-N ns] [-u] [-W] [-w] [-c COUNT] [-H] [-S]  [-L auto|always|never] key",
       "Get eventlog",
       cmd_eventlog_get,
       0,
