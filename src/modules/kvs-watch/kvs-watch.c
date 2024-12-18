@@ -385,7 +385,11 @@ static int handle_initial_response (flux_t *h,
             errprintf (&err,
                        "%s cannot be watched with WATCH_APPEND",
                        treeobj_type_name (val));
-            errno = EINVAL;
+            if (treeobj_is_dir (val)
+                || treeobj_is_dirref (val))
+                errno = EISDIR;
+            else
+                errno = EINVAL;
             goto error_respond;
         }
 
@@ -537,7 +541,11 @@ static int handle_append_response (flux_t *h,
             errprintf (&err,
                        "%s cannot be watched with WATCH_APPEND",
                        treeobj_type_name (val));
-            errno = EINVAL;
+            if (treeobj_is_dir (val)
+                || treeobj_is_dirref (val))
+                errno = EISDIR;
+            else
+                errno = EINVAL;
             goto error_respond;
         }
     }
