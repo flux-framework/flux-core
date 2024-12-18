@@ -288,10 +288,11 @@ def get_filtered_environment(rules, environ=None):
     Filter environment dictionary 'environ' given a list of rules.
     Each rule can filter, set, or modify the existing environment.
     """
+    env_expand = {}
     if environ is None:
         environ = dict(os.environ)
     if rules is None:
-        return environ
+        return environ, env_expand
     for rule in rules:
         #
         #  If rule starts with '-' then the rest of the rule is a pattern
@@ -308,7 +309,8 @@ def get_filtered_environment(rules, environ=None):
             filename = os.path.expanduser(rule[1::])
             with open(filename) as envfile:
                 lines = [line.strip() for line in envfile]
-                environ = get_filtered_environment(lines, environ=environ)
+                environ, envx = get_filtered_environment(lines, environ=environ)
+                env_expand.update(envx)
         #
         #  Otherwise, the rule is an explicit variable assignment
         #   VAR=VAL. If =VAL is not provided then VAL refers to the
@@ -330,6 +332,11 @@ def get_filtered_environment(rules, environ=None):
                 for key, value in env.items():
                     if key not in environ:
                         environ[key] = value
+            elif "{{" in rest[0]:
+                #
+                #  Mustache template which should be expanded by job shell.
+                #  Place result in env_expand instead of environ:
+                env_expand[var] = rest[0]
             else:
                 #
                 #  Template lookup: use jobspec environment first, fallback
@@ -342,7 +349,7 @@ def get_filtered_environment(rules, environ=None):
                     raise
                 except KeyError as ex:
                     raise Exception(f"--env: Variable {ex} not found in {rule}")
-    return environ
+    return environ, env_expand
 
 
 class EnvFileAction(argparse.Action):
@@ -1001,7 +1008,13 @@ class MiniCmd:
         Create a jobspec from args and return it to caller
         """
         jobspec = self.init_jobspec(args)
-        jobspec.environment = get_filtered_environment(args.env)
+
+        jobspec.environment, env_expand = get_filtered_environment(args.env)
+        if env_expand:
+            # "expanded" environment variables are set in env-expand
+            # shell options dict and will be processed by the shell.
+            jobspec.setattr_shell_option("env-expand", env_expand)
+
         jobspec.cwd = args.cwd if args.cwd is not None else os.getcwd()
         rlimits = get_filtered_rlimits(args.rlimit)
         if rlimits:
