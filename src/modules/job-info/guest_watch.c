@@ -43,7 +43,7 @@
  *
  * 2) If the guest namespace is already copied into the main namespace
  *    (event "release" and "final=true"), we watch the eventlog in the
- *    main namespace (main_namespace_lookup()).  This is the "easy" case
+ *    main namespace (main_namespace_watch()).  This is the "easy" case
  *    and is not so different from a typical call to
  *    'job-info.eventlog-watch'.
  *
@@ -89,13 +89,13 @@ struct guest_watch_ctx {
      * GET_MAIN_EVENTLOG -> GUEST_NAMESPACE_WATCH - guest namespace
      * created, so we should watch it
      *
-     * GET_MAIN_EVENTLOG -> MAIN_NAMESPACE_LOOKUP - guest namespace
+     * GET_MAIN_EVENTLOG -> MAIN_NAMESPACE_WATCH - guest namespace
      * moved to main namespace, so watch in main namespace
      *
      * WAIT_GUEST_NAMESPACE -> GUEST_NAMESPACE_WATCH - guest namespace
      * created, so we should watch it
      *
-     * GUEST_NAMESPACE_WATCH -> MAIN_NAMESPACE_LOOKUP - under a racy
+     * GUEST_NAMESPACE_WATCH -> MAIN_NAMESPACE_WATCH - under a racy
      * situation, guest namespace could be removed before we began to
      * read from it.  If so, transition to watch in main namespace
      */
@@ -104,20 +104,22 @@ struct guest_watch_ctx {
         GUEST_WATCH_STATE_GET_MAIN_EVENTLOG = 2,
         GUEST_WATCH_STATE_WAIT_GUEST_NAMESPACE = 3,
         GUEST_WATCH_STATE_GUEST_NAMESPACE_WATCH = 4,
-        GUEST_WATCH_STATE_MAIN_NAMESPACE_LOOKUP = 5,
+        GUEST_WATCH_STATE_MAIN_NAMESPACE_WATCH = 5,
     } state;
 
     flux_future_t *get_main_eventlog_f;
     flux_future_t *wait_guest_namespace_f;
     flux_future_t *guest_namespace_watch_f;
-    flux_future_t *main_namespace_lookup_f;
+    flux_future_t *main_namespace_watch_f;
 
     /* flags indicating what was found in main eventlog */
     bool guest_started;
     bool guest_released;
 
     /* data from guest namespace */
-    int offset;
+    int guest_offset;
+    /* data from main namespace */
+    int main_offset;
 };
 
 static int get_main_eventlog (struct guest_watch_ctx *gw);
@@ -126,8 +128,8 @@ static int wait_guest_namespace (struct guest_watch_ctx *gw);
 static void wait_guest_namespace_continuation (flux_future_t *f, void *arg);
 static int guest_namespace_watch (struct guest_watch_ctx *gw);
 static void guest_namespace_watch_continuation (flux_future_t *f, void *arg);
-static int main_namespace_lookup (struct guest_watch_ctx *gw);
-static void main_namespace_lookup_continuation (flux_future_t *f, void *arg);
+static int main_namespace_watch (struct guest_watch_ctx *gw);
+static void main_namespace_watch_continuation (flux_future_t *f, void *arg);
 
 static void guest_watch_ctx_destroy (void *data)
 {
@@ -139,7 +141,7 @@ static void guest_watch_ctx_destroy (void *data)
         flux_future_destroy (gw->get_main_eventlog_f);
         flux_future_destroy (gw->wait_guest_namespace_f);
         flux_future_destroy (gw->guest_namespace_watch_f);
-        flux_future_destroy (gw->main_namespace_lookup_f);
+        flux_future_destroy (gw->main_namespace_watch_f);
         free (gw);
         errno = save_errno;
     }
@@ -194,22 +196,8 @@ static int send_eventlog_watch_cancel (struct guest_watch_ctx *gw,
                 f = gw->wait_guest_namespace_f;
             else if (gw->state == GUEST_WATCH_STATE_GUEST_NAMESPACE_WATCH)
                 f = gw->guest_namespace_watch_f;
-            else if (gw->state == GUEST_WATCH_STATE_MAIN_NAMESPACE_LOOKUP) {
-                /* Since this is a lookup, we don't need to perform an actual
-                 * cancel to "job-info.eventlog-watch-cancel".  Just return
-                 * ENODATA to the caller if necessary.
-                 */
-                gw->eventlog_watch_canceled = true;
-                if (gw->cancel) {
-                    if (flux_respond_error (gw->ctx->h,
-                                            gw->msg,
-                                            ENODATA,
-                                            NULL) < 0)
-                        flux_log_error (gw->ctx->h, "%s: flux_respond_error",
-                                        __FUNCTION__);
-                }
-                return 0;
-            }
+            else if (gw->state == GUEST_WATCH_STATE_MAIN_NAMESPACE_WATCH)
+                f = gw->main_namespace_watch_f;
             else {
                 /* gw->state == GUEST_WATCH_STATE_INIT, eventlog-watch
                  * never started so sort of "auto-canceled" */
@@ -350,7 +338,7 @@ static void get_main_eventlog_continuation (flux_future_t *f, void *arg)
 
     if (gw->guest_released) {
         /* guest namespace copied to main KVS, just watch it like normal */
-        if (main_namespace_lookup (gw) < 0)
+        if (main_namespace_watch (gw) < 0)
             goto error;
     }
     else if (gw->guest_started) {
@@ -613,7 +601,7 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
                     goto error;
                 goto cleanup;
             }
-            if (main_namespace_lookup (gw) < 0)
+            if (main_namespace_watch (gw) < 0)
                 goto error;
             return;
         }
@@ -649,7 +637,7 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
         goto cleanup;
     }
 
-    gw->offset += strlen (event);
+    gw->guest_offset += strlen (event);
     flux_future_reset (f);
     return;
 
@@ -678,47 +666,52 @@ static int full_guest_path (struct guest_watch_ctx *gw,
     return 0;
 }
 
-static int main_namespace_lookup (struct guest_watch_ctx *gw)
+static int main_namespace_watch (struct guest_watch_ctx *gw)
 {
-    const char *topic = "job-info.lookup";
+    const char *topic = "job-info.eventlog-watch";
+    int rpc_flags = FLUX_RPC_STREAMING;
     flux_msg_t *msg = NULL;
     int save_errno;
+    int flags = gw->flags;
     int rv = -1;
     char path[PATH_MAX];
 
     if (full_guest_path (gw, path, PATH_MAX) < 0)
         goto error;
 
-    /* If the eventlog has been migrated to the main KVS namespace, we
-     * know that the eventlog is complete, so no need to do a "watch",
-     * do a lookup instead */
+    /* the job has completed, so "waitcreate" has no meaning
+     * anymore, clear the flag
+     */
+    if (flags & FLUX_JOB_EVENT_WATCH_WAITCREATE)
+        flags &= ~FLUX_JOB_EVENT_WATCH_WAITCREATE;
 
     if (!(msg = cred_msg_pack (topic,
                                gw->cred,
-                               "{s:I s:[s] s:i}",
+                               "{s:I s:b s:s s:i}",
                                "id", gw->id,
-                               "keys", path,
-                               "flags", 0)))
+                               "guest_in_main", true,
+                               "path", path,
+                               "flags", flags)))
         goto error;
 
-    if (!(gw->main_namespace_lookup_f = flux_rpc_message (gw->ctx->h,
-                                                          msg,
-                                                          FLUX_NODEID_ANY,
-                                                          0))) {
+    if (!(gw->main_namespace_watch_f = flux_rpc_message (gw->ctx->h,
+                                                         msg,
+                                                         FLUX_NODEID_ANY,
+                                                         rpc_flags))) {
         flux_log_error (gw->ctx->h, "%s: flux_rpc_message", __FUNCTION__);
         goto error;
     }
 
-    if (flux_future_then (gw->main_namespace_lookup_f,
+    if (flux_future_then (gw->main_namespace_watch_f,
                           -1,
-                          main_namespace_lookup_continuation,
+                          main_namespace_watch_continuation,
                           gw) < 0) {
         /* future cleanup handled with context destruction */
         flux_log_error (gw->ctx->h, "%s: flux_future_then", __FUNCTION__);
         goto error;
     }
 
-    gw->state = GUEST_WATCH_STATE_MAIN_NAMESPACE_LOOKUP;
+    gw->state = GUEST_WATCH_STATE_MAIN_NAMESPACE_WATCH;
     rv = 0;
 error:
     save_errno = errno;
@@ -727,45 +720,47 @@ error:
     return rv;
 }
 
-static void main_namespace_lookup_continuation (flux_future_t *f, void *arg)
+static void main_namespace_watch_continuation (flux_future_t *f, void *arg)
 {
     struct guest_watch_ctx *gw = arg;
     struct info_ctx *ctx = gw->ctx;
-    const char *s;
-    const char *input;
-    const char *tok;
-    size_t toklen;
-    char path[PATH_MAX];
+    const char *event;
 
-    if (full_guest_path (gw, path, PATH_MAX) < 0)
-        goto error;
-
-    if (flux_rpc_get_unpack (f, "{s:s}", path, &s) < 0) {
-        if (errno != ENOENT && errno != EPERM)
-            flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
+    if (flux_job_event_watch_get (f, &event) < 0) {
+        if (errno != ENOENT && errno != ENODATA)
+            flux_log_error (ctx->h,
+                            "%s: flux_job_event_watch_get",
+                            __FUNCTION__);
         goto error;
     }
 
     if (gw->eventlog_watch_canceled) {
-        /* already sent ENODATA via send_eventlog_watch_cancel(), so
-         * just cleanup */
+        if (gw->cancel) {
+            errno = ENODATA;
+            goto error;
+        }
         goto cleanup;
     }
 
-    input = s + gw->offset;
-    while (get_next_eventlog_entry (&input, &tok, &toklen)) {
-        if (flux_respond_pack (ctx->h, gw->msg,
-                               "{s:s#}",
-                               "event", tok, toklen) < 0) {
+    gw->main_offset += strlen (event);
+
+    if (gw->main_offset > gw->guest_offset) {
+        if (flux_respond_pack (ctx->h, gw->msg, "{s:s}", "event", event) < 0) {
             flux_log_error (ctx->h, "%s: flux_respond_pack",
                             __FUNCTION__);
+
+            /* If we haven't sent a cancellation yet, must do so so that
+             * the future's matchtag will eventually be freed */
+            if (!gw->eventlog_watch_canceled)
+                (void) send_eventlog_watch_cancel (gw,
+                                                   gw->main_namespace_watch_f,
+                                                   false);
             goto cleanup;
         }
     }
 
-    /* We've moved to the main KVS namespace, so we know there's no
-     * more data, return ENODATA */
-    errno = ENODATA;
+    flux_future_reset (f);
+    return;
 
 error:
     if (flux_respond_error (ctx->h, gw->msg, errno, NULL) < 0)

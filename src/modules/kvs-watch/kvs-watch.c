@@ -46,6 +46,7 @@ struct watcher {
     bool index_valid;           // flag if prev_start_index/prev_end_index set
     int prev_start_index;       // previous start index loaded
     int prev_end_index;         // previous end index loaded
+    int append_send_count;      // number of indexes loaded (for FLUX_KVS_STREAM)
     void *handle;               // zlistx_t handle
 };
 
@@ -276,6 +277,7 @@ static void handle_load_response (flux_future_t *f, struct watcher *w)
             json_decref (val);
             goto finished;
         }
+        w->append_send_count++;
         w->responded = true;
     }
 
@@ -307,6 +309,22 @@ static void load_continuation (flux_future_t *f, void *arg)
             && (w->flags & FLUX_KVS_WAITCREATE)
             && !(w->flags & FLUX_KVS_WATCH))
             w->finished = true;
+    }
+    if ((w->flags & FLUX_KVS_STREAM)
+        && w->responded
+        && w->index_valid
+        && (w->append_send_count
+            == (w->prev_end_index - w->prev_start_index + 1))) {
+        if (!w->mute) {
+            if (flux_respond_error (w->nsm->ctx->h,
+                                    w->request,
+                                    ENODATA,
+                                    NULL) < 0)
+                flux_log_error (w->nsm->ctx->h,
+                                "%s: flux_respond_error",
+                                __FUNCTION__);
+        }
+        w->finished = true;
     }
     if (w->finished)
         watcher_cleanup (nsm, w);
@@ -365,7 +383,8 @@ static int handle_initial_response (flux_t *h,
         || (w->flags & FLUX_KVS_WATCH_UNIQ))
         w->prev = json_incref (val);
 
-    if ((w->flags & FLUX_KVS_WATCH_APPEND)) {
+    if ((w->flags & FLUX_KVS_WATCH_APPEND)
+        || (w->flags & FLUX_KVS_STREAM)) {
         /* The very first response may be a 'val' treeobj instead of
          * 'valref', if there have been no appends yet.
          */
@@ -374,6 +393,7 @@ static int handle_initial_response (flux_t *h,
             w->prev_start_index = 0;
             w->prev_end_index = 0;
             /* since this is a val object, we can just return it */
+            w->append_send_count++;
             goto out;
         }
         else if (treeobj_is_valref (val)) {
@@ -382,10 +402,19 @@ static int handle_initial_response (flux_t *h,
             w->prev_end_index = treeobj_get_count (val) - 1;
         }
         else {
-            errprintf (&err,
-                       "%s cannot be watched with WATCH_APPEND",
-                       treeobj_type_name (val));
-            errno = EINVAL;
+            if (w->flags & FLUX_KVS_WATCH_APPEND)
+                errprintf (&err,
+                           "%s cannot be watched with WATCH_APPEND",
+                           treeobj_type_name (val));
+            else
+                errprintf (&err,
+                           "%s cannot be streamed",
+                           treeobj_type_name (val));
+            if (treeobj_is_dir (val)
+                || treeobj_is_dirref (val))
+                errno = EISDIR;
+            else
+                errno = EINVAL;
             goto error_respond;
         }
 
@@ -492,6 +521,7 @@ static int handle_append_response (flux_t *h,
                                 __FUNCTION__);
                 goto error_out;
             }
+            w->append_send_count++;
             w->responded = true;
         }
         else if (treeobj_is_valref (val)) {
@@ -502,13 +532,19 @@ static int handle_append_response (flux_t *h,
              * returned to the caller.
              */
             if (w->index_valid) {
-                int new_end_index = treeobj_get_count (val) - 1;
+                int new_end_index;
+                if (w->flags & FLUX_KVS_STREAM)
+                    goto out;
+                new_end_index = treeobj_get_count (val) - 1;
                 if (new_end_index > w->prev_end_index) {
                     w->prev_start_index = w->prev_end_index + 1;
                     w->prev_end_index = new_end_index;
                 }
                 else if (new_end_index < w->prev_end_index) {
-                    errprintf (&err, "key watched with WATCH_APPEND truncated");
+                    if (w->flags & FLUX_KVS_WATCH_APPEND)
+                        errprintf (&err, "key watched with WATCH_APPEND truncated");
+                    else
+                        errprintf (&err, "key being streamed truncated");
                     errno = EINVAL;
                     goto error_respond;
                 }
@@ -534,10 +570,19 @@ static int handle_append_response (flux_t *h,
             }
         }
         else {
-            errprintf (&err,
-                       "%s cannot be watched with WATCH_APPEND",
-                       treeobj_type_name (val));
-            errno = EINVAL;
+            if (w->flags & FLUX_KVS_WATCH_APPEND)
+                errprintf (&err,
+                           "%s cannot be watched with WATCH_APPEND",
+                           treeobj_type_name (val));
+            else
+                errprintf (&err,
+                           "%s cannot be streamed",
+                           treeobj_type_name (val));
+            if (treeobj_is_dir (val)
+                || treeobj_is_dirref (val))
+                errno = EISDIR;
+            else
+                errno = EINVAL;
             goto error_respond;
         }
     }
@@ -548,13 +593,18 @@ static int handle_append_response (flux_t *h,
                 errno = EPROTO;
                 goto error_respond;
             }
+            if (w->flags & FLUX_KVS_STREAM)
+                goto out;
             new_end_index = treeobj_get_count (val) - 1;
             if (new_end_index > w->prev_end_index) {
                 w->prev_start_index = w->prev_end_index + 1;
                 w->prev_end_index = new_end_index;
             }
             else if (new_end_index < w->prev_end_index) {
-                errprintf (&err, "key watched with WATCH_APPEND shortened");
+                if (w->flags & FLUX_KVS_WATCH_APPEND)
+                    errprintf (&err, "key watched with WATCH_APPEND shortened");
+                else
+                    errprintf (&err, "key being streamed shortened");
                 errno = EINVAL;
                 goto error_respond;
             }
@@ -571,8 +621,12 @@ static int handle_append_response (flux_t *h,
             }
         }
         else {
-            errprintf (&err,
-                       "value of key watched with WATCH_APPEND overwritten");
+            if (w->flags & FLUX_KVS_WATCH_APPEND)
+                errprintf (&err,
+                           "value of key watched with WATCH_APPEND overwritten");
+            else
+                errprintf (&err,
+                           "value of key streamed was overwritten");
             errno = EINVAL;
             goto error_respond;
         }
@@ -699,7 +753,8 @@ static void handle_lookup_response (flux_future_t *f,
                 if (handle_compare_response (h, w, val) < 0)
                     goto finished;
             }
-            else if (w->flags & FLUX_KVS_WATCH_APPEND) {
+            else if ((w->flags & FLUX_KVS_WATCH_APPEND)
+                     || (w->flags & FLUX_KVS_STREAM)) {
                 if (handle_append_response (h,
                                             w,
                                             val,
@@ -714,6 +769,16 @@ static void handle_lookup_response (flux_future_t *f,
             }
         }
     }
+
+    if ((w->flags & FLUX_KVS_STREAM)
+        && w->responded
+        && w->index_valid
+        && (w->append_send_count
+            == (w->prev_end_index - w->prev_start_index + 1))) {
+        errno = ENODATA;
+        goto error;
+    }
+
     return;
 error:
     if (!w->mute) {
@@ -773,7 +838,8 @@ static flux_future_t *lookupat (flux_t *h,
 
     if (!(msg = flux_request_encode ("kvs.lookup-plus", NULL)))
         return NULL;
-    if (flags & FLUX_KVS_WATCH_APPEND)
+    if ((flags & FLUX_KVS_WATCH_APPEND)
+        || (flags & FLUX_KVS_STREAM))
         flags |= FLUX_KVS_TREEOBJ;
     if (!w->initial_rpc_sent) {
         if (flux_msg_pack (msg,
