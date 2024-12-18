@@ -1175,7 +1175,7 @@ static int mustache_render_jobid (flux_shell_t *shell,
 
     if (strlen (name) > 2) {
         if (name[2] != '.') {
-            shell_log_error ("Unknown mustache tag '%s'", name);
+            errno = ENOENT;
             return -1;
         }
         type = name+3;
@@ -1246,7 +1246,7 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
                                 "{s:s}",
                                 "result", &result) < 0
         || result == NULL) {
-        shell_log_error ("Unknown mustache tag '%s'", name);
+        errno = ENOENT;
         goto out;
     }
     if (fputs (result, fp) < 0) {
