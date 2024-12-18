@@ -87,7 +87,7 @@ static int set_timeleft_watcher (struct shell_signal *sig)
     double remaining;
 
     if (flux_shell_info_unpack (sig->shell,
-                                "{s:{s:{s:f}}}",
+                                "{s:{s:{s:F}}}",
                                 "R",
                                 "execution",
                                 "expiration", &expiration) < 0) {
