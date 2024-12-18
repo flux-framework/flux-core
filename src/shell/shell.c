@@ -1217,6 +1217,10 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
         return mustache_render_jobid (shell, name, fp);
     if (streq (name, "name"))
         return mustache_render_name (shell, name, fp);
+    if (streq (name, "nnodes"))
+        return fprintf (fp, "%d", shell->info->shell_size);
+    if (streq (name, "ntasks") || streq (name, "size"))
+        return fprintf (fp, "%d", shell->info->total_ntasks);
     if (strstarts (name, "task."))
         return mustache_render_task (shell, shell->current_task, name, fp);
     if (strstarts (name, "node."))
