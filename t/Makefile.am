@@ -422,6 +422,7 @@ check_PROGRAMS = \
 	kvs/dtree \
 	kvs/blobref \
 	kvs/watch_disconnect \
+	kvs/watch_stream \
 	kvs/commit \
 	kvs/fence_api \
 	kvs/transactionmerge \
@@ -665,6 +666,11 @@ kvs_watch_disconnect_SOURCES = kvs/watch_disconnect.c
 kvs_watch_disconnect_CPPFLAGS = $(test_cppflags)
 kvs_watch_disconnect_LDADD = $(test_ldadd)
 kvs_watch_disconnect_LDFLAGS = $(test_ldflags)
+
+kvs_watch_stream_SOURCES = kvs/watch_stream.c
+kvs_watch_stream_CPPFLAGS = $(test_cppflags)
+kvs_watch_stream_LDADD = $(test_ldadd)
+kvs_watch_stream_LDFLAGS = $(test_ldflags)
 
 kvs_issue1760_SOURCES = kvs/issue1760.c
 kvs_issue1760_CPPFLAGS = $(test_cppflags)

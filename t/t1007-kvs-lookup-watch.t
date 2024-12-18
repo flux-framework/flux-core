@@ -603,6 +603,33 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --watch, normalized key matching
         wait $pid
 '
 
+#
+# kvs stream flag
+#
+
+# N.B. watch_stream prefixes output with reply count
+test_expect_success 'watch-stream works on basic values' '
+	flux kvs put test.stream.a=42 &&
+	${FLUX_BUILD_DIR}/t/kvs/watch_stream test.stream.a > stream1.out &&
+	echo "1: 42" >stream1.exp &&
+	test_cmp stream1.exp stream1.out
+'
+
+test_expect_success 'watch-stream works on appended values' '
+	flux kvs eventlog append test.stream.log event1 &&
+	flux kvs eventlog append test.stream.log event2 &&
+	flux kvs eventlog append test.stream.log event3 &&
+	${FLUX_BUILD_DIR}/t/kvs/watch_stream test.stream.log > stream2.out &&
+	grep "1: " stream2.out | grep event1 &&
+	grep "2: " stream2.out | grep event2 &&
+	grep "3: " stream2.out | grep event3
+'
+
+test_expect_success 'watch-stream fails on non-values' '
+	test_must_fail ${FLUX_BUILD_DIR}/t/kvs/watch_stream test.stream 2> stream3.err &&
+	grep "Is a directory" stream3.err
+'
+
 # Security checks
 
 test_expect_success 'flux kvs get --watch denies guest access to primary namespace' '
