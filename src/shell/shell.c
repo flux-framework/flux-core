@@ -32,6 +32,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/basename.h"
+#include "src/common/libutil/jpath.h"
 #include "src/common/libtaskmap/taskmap_private.h"
 #include "ccan/str/str.h"
 
@@ -1048,6 +1049,56 @@ char *flux_shell_mustache_render (flux_shell_t *shell, const char *fmt)
     return mustache_render (shell->mr, fmt, shell);
 }
 
+/* Render "node.*" specific tags using the rank_info object for the
+ * requested shell rank. The part after `node.` will be fetched directly
+ * from the rank_info object.
+ */
+static int mustache_render_node (flux_shell_t *shell,
+                                 int shell_rank,
+                                 const char *name,
+                                 FILE *fp)
+{
+    int rc = -1;
+    const char *s;
+    char buf[24];
+    json_t *o;
+    json_t *val;
+
+    if (!(o = flux_shell_get_rank_info_object (shell, shell_rank)))
+        return -1;
+
+    /* forward past "node." */
+    s = name + 5;
+
+    /* Special case: allow node.{cores,gpus,...} as shorthand for
+     * node.resources.{cores,gpus,...}
+     */
+    if (streq (s, "cores") || streq (s, "gpus") || streq (s, "ncores")) {
+        (void) snprintf (buf, sizeof (buf), "resources.%s", s);
+        s = buf;
+    }
+    if ((val = jpath_get (o, s))) {
+        if (json_is_string (val))
+            rc = fputs (json_string_value (val), fp);
+        else if (json_is_integer (val))
+            rc = fprintf (fp, "%jd", (intmax_t) json_integer_value (val));
+        else {
+            /* Not expected, but template could be {{node.resources}}, handle
+             * that here by dumping the JSON to fp
+             */
+            rc = json_dumpf (val, fp, JSON_COMPACT|JSON_ENCODE_ANY);
+        }
+    }
+    else {
+        errno = ENOENT;
+        return -1;
+    }
+    if (rc < 0)
+        shell_log_errno ("memstream write failed for %s", name);
+    return rc;
+
+}
+
 /*  Render the following task-specific mustache templates for `task`
  *   {{task.id}}, {{task.rank}} - global task rank
  *   {{task.index}}, {{task.localid}} - local task index
@@ -1168,6 +1219,8 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
         return mustache_render_name (shell, name, fp);
     if (strstarts (name, "task."))
         return mustache_render_task (shell, shell->current_task, name, fp);
+    if (strstarts (name, "node."))
+        return mustache_render_node (shell, shell->info->shell_rank, name, fp);
 
     if (snprintf (topic,
                   sizeof (topic),
