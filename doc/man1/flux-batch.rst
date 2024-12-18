@@ -213,7 +213,10 @@ override those in the submission script, e.g.: ::
    $ flux jobs -no {name} ƒ112345
    test-name
 
+MUSTACHE TEMPLATES
+==================
 
+.. include:: common/job-mustache-templates.rst
 
 RESOURCES
 =========

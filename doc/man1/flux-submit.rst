@@ -154,6 +154,11 @@ Usage: :option:`flux submit -o NAME[=ARG]`.
 .. include:: common/job-shell-options.rst
 .. program:: flux submit
 
+MUSTACHE TEMPLATES
+==================
+
+.. include:: common/job-mustache-templates.rst
+
 RESOURCES
 =========
 
