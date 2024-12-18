@@ -141,6 +141,13 @@ the value is zero length.
   replaced.  The :option:`--full` option ensures these changes are reported
   as well, at greater overhead.
 
+.. option:: -S, --stream
+
+  Return potentially large values in multiple responses.  This may improve
+  response times of very large values in the KVS.
+
+  Will not work in combination with :option:`--watch`.
+
 put
 ---
 
