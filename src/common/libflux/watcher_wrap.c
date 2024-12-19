@@ -13,7 +13,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <assert.h>
 #include <ev.h>
 #include <flux/core.h>
 
@@ -141,9 +140,12 @@ flux_watcher_t *flux_fd_watcher_create (flux_reactor_t *r,
 
 int flux_fd_watcher_get_fd (flux_watcher_t *w)
 {
-    assert (watcher_get_ops (w) == &fd_watcher_ops);
-    struct fd_watcher *fdw = watcher_get_data (w);
-    return fdw->evw.fd;
+    if (watcher_get_ops (w) == &fd_watcher_ops) {
+        struct fd_watcher *fdw = watcher_get_data (w);
+        return fdw->evw.fd;
+    }
+    errno = EINVAL;
+    return -1;
 }
 
 /* Timer
@@ -209,17 +211,19 @@ flux_watcher_t *flux_timer_watcher_create (flux_reactor_t *r,
 
 void flux_timer_watcher_reset (flux_watcher_t *w, double after, double repeat)
 {
-    assert (watcher_get_ops (w) == &timer_watcher_ops);
-    struct timer_watcher *tmw = watcher_get_data (w);
-    ev_timer_set (&tmw->evw, after, repeat);
+    if (watcher_get_ops (w) == &timer_watcher_ops) {
+        struct timer_watcher *tmw = watcher_get_data (w);
+        ev_timer_set (&tmw->evw, after, repeat);
+    }
 }
 
 void flux_timer_watcher_again (flux_watcher_t *w)
 {
-    assert (watcher_get_ops (w) == &timer_watcher_ops);
-    struct timer_watcher *tmw = watcher_get_data (w);
-    struct ev_loop *loop = watcher_get_ev (w);
-    ev_timer_again (loop, &tmw->evw);
+    if (watcher_get_ops (w) == &timer_watcher_ops) {
+        struct timer_watcher *tmw = watcher_get_data (w);
+        struct ev_loop *loop = watcher_get_ev (w);
+        ev_timer_again (loop, &tmw->evw);
+    }
 }
 
 /* Periodic
@@ -266,7 +270,8 @@ static ev_tstamp periodic_watcher_reschedule_cb (ev_periodic *pw,
     struct periodic_watcher *pdw = pw->data;
     struct flux_watcher *w = pdw->w;
     ev_tstamp rc;
-    assert (pdw->reschedule_cb != NULL);
+    if (pdw->reschedule_cb == NULL)
+        return 0;
     rc = (ev_tstamp)pdw->reschedule_cb (w, (double)now, watcher_get_arg (w));
     if (rc < now) {
         /*  User reschedule cb returned time in the past. The watcher will
@@ -325,13 +330,14 @@ void flux_periodic_watcher_reset (flux_watcher_t *w,
 {
     struct ev_loop *loop = watcher_get_ev (w);
     struct periodic_watcher *pdw = watcher_get_data (w);
-    assert (watcher_get_ops (w) == &periodic_watcher_ops);
-    pdw->reschedule_cb = reschedule_cb;
-    ev_periodic_set (&pdw->evw,
-                     next,
-                     interval,
-                     reschedule_cb ? periodic_watcher_reschedule_cb : NULL);
-    ev_periodic_again (loop, &pdw->evw);
+    if (watcher_get_ops (w) == &periodic_watcher_ops) {
+        pdw->reschedule_cb = reschedule_cb;
+        ev_periodic_set (&pdw->evw,
+                         next,
+                         interval,
+                         reschedule_cb ? periodic_watcher_reschedule_cb : NULL);
+        ev_periodic_again (loop, &pdw->evw);
+    }
 }
 
 double flux_watcher_next_wakeup (flux_watcher_t *w)
@@ -740,11 +746,12 @@ void flux_stat_watcher_get_rstat (flux_watcher_t *w,
                                   struct stat *prev)
 {
     struct stat_watcher *sw = watcher_get_data (w);
-    assert (watcher_get_ops (w) == &stat_watcher_ops);
-    if (stat)
-        *stat = sw->evw.attr;
-    if (prev)
-        *prev = sw->evw.prev;
+    if (watcher_get_ops (w) == &stat_watcher_ops) {
+        if (stat)
+            *stat = sw->evw.attr;
+        if (prev)
+            *prev = sw->evw.prev;
+    }
 }
 
 /*
