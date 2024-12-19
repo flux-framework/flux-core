@@ -1067,19 +1067,48 @@ struct mustache_arg {
     int shell_rank;
 };
 
-char *flux_shell_mustache_render (flux_shell_t *shell, const char *fmt)
+static char *do_mustache_render (flux_shell_t *shell,
+                                 int shell_rank,
+                                 flux_shell_task_t *task,
+                                 const char *fmt)
 {
     if (!shell) {
         /* Note: shell->mr and fmt checked in mustache_render */
         errno = EINVAL;
         return NULL;
     }
+    /* Note: shell_rank >= shell_size is allowed so a caller can leave
+     * node-specific tags unrendered in the result.
+     */
+    if (shell_rank < 0)
+        shell_rank  = shell->info->shell_rank;
+    if (task == NULL)
+        task = shell->current_task;
     struct mustache_arg arg = {
         .shell = shell,
-        .task = shell->current_task,
-        .shell_rank = shell->info->shell_rank
+        .task = task,
+        .shell_rank = shell_rank
     };
     return mustache_render (shell->mr, fmt, &arg);
+}
+
+char *flux_shell_rank_mustache_render (flux_shell_t *shell,
+                                       int shell_rank,
+                                       const char *fmt)
+{
+    return do_mustache_render (shell, shell_rank, NULL, fmt);
+}
+
+char *flux_shell_task_mustache_render (flux_shell_t *shell,
+                                       flux_shell_task_t *task,
+                                       const char *fmt)
+{
+    return do_mustache_render (shell, -1, task, fmt);
+}
+
+char *flux_shell_mustache_render (flux_shell_t *shell, const char *fmt)
+{
+    return do_mustache_render (shell, -1, NULL, fmt);
 }
 
 /* Render "node.*" specific tags using the rank_info object for the
