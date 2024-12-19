@@ -20,6 +20,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 #include "usock.h"
 
 #include "usock_service.h"
@@ -134,6 +135,27 @@ error:
     usock_conn_destroy (uconn);
 }
 
+/* flux_handle_ops getopt signature */
+static int service_getopt (void *impl,
+                           const char *option,
+                           void *val,
+                           size_t size)
+{
+    struct service *ss = impl;
+    if (streq (option, "flux::listen_watcher")) {
+        flux_watcher_t *w = usock_server_listen_watcher (ss->usock_srv);
+        if (size != sizeof (w))
+            goto error;
+        memcpy (val, &w, size);
+    }
+    else
+        goto error;
+    return 0;
+error:
+    errno = EINVAL;
+    return -1;
+}
+
 /* flux_handle_ops send signature */
 static int service_handle_send (void *impl, const flux_msg_t *msg, int flags)
 {
@@ -226,9 +248,19 @@ flux_t *usock_service_create (flux_reactor_t *r,
     return ss->h;
 }
 
+flux_watcher_t *usock_service_listen_watcher (flux_t *h)
+{
+    flux_watcher_t *w;
+
+    if (flux_opt_get (h, "flux::listen_watcher", &w, sizeof (w)) < 0)
+        return NULL;
+    return w;
+}
+
 static const struct flux_handle_ops service_handle_ops = {
     .send = service_handle_send,
     .impl_destroy = service_destroy,
+    .getopt = service_getopt,
 };
 
 /*

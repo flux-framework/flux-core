@@ -34,6 +34,9 @@ flux_t *usock_service_create (flux_reactor_t *r,
                               const char *sockpath,
                               bool verbose);
 
+// accessor for star/stop/ref/unref
+flux_watcher_t *usock_service_listen_watcher (flux_t *h);
+
 #endif // _ROUTER_USOCK_SERVICE_H
 
 /*

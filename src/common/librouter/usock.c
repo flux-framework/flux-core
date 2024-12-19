@@ -601,6 +601,11 @@ error:
     return NULL;
 }
 
+flux_watcher_t *usock_server_listen_watcher (struct usock_server *server)
+{
+    return server ? server->w : NULL;
+}
+
 static bool is_poll_error (int revents)
 {
     if ((revents & POLLERR) || (revents & POLLHUP) || (revents & POLLNVAL))
