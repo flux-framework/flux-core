@@ -13,8 +13,7 @@
  * Intercept task stdout, stderr and dispose of it according to
  * selected I/O mode.
  *
- * If output goes to terminal, stdout/stderr is written to the KVS, or
- * stdout/stderr if written directly to a file, the leader shell
+ * If output is written to the KVS or directly to a file, the leader shell
  * implements an "shell-<id>.output" service that all ranks send task
  * output to.  Output objects accumulate in a json array on the
  * leader.  Depending on settings, output is written directly to
@@ -69,9 +68,8 @@
 #define OUTPUT_LIMIT_WARNING    104857600
 
 enum {
-    FLUX_OUTPUT_TYPE_TERM = 1,
-    FLUX_OUTPUT_TYPE_KVS = 2,
-    FLUX_OUTPUT_TYPE_FILE = 3,
+    FLUX_OUTPUT_TYPE_KVS = 1,
+    FLUX_OUTPUT_TYPE_FILE = 2,
 };
 
 struct shell_output_fd {
@@ -131,53 +129,6 @@ static void shell_output_control (struct shell_output *out, bool stop)
         }
         out->stopped = stop;
     }
-}
-
-static int shell_output_term_init (struct shell_output *out, json_t *header)
-{
-    // TODO: acquire per-stream encoding type
-    return 0;
-}
-
-static int shell_output_term (struct shell_output *out)
-{
-    json_t *entry;
-    size_t index;
-
-    json_array_foreach (out->output, index, entry) {
-        json_t *context;
-        const char *name;
-        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
-            shell_log_errno ("eventlog_entry_parse");
-            return -1;
-        }
-        if (streq (name, "data")) {
-            int output_type;
-            FILE *f;
-            const char *stream = NULL;
-            const char *rank = NULL;
-            char *data = NULL;
-            int len = 0;
-            if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
-                shell_log_errno ("iodecode");
-                return -1;
-            }
-            if (streq (stream, "stdout")) {
-                output_type = out->stdout_type;
-                f = stdout;
-            }
-            else {
-                output_type = out->stderr_type;
-                f = stderr;
-            }
-            if ((output_type == FLUX_OUTPUT_TYPE_TERM) && len > 0) {
-                fprintf (f, "%s: ", rank);
-                fwrite (data, len, 1, f);
-            }
-            free (data);
-        }
-    }
-    return 0;
 }
 
 static int shell_output_redirect_stream (struct shell_output *out,
@@ -594,13 +545,6 @@ static int shell_output_write_leader (struct shell_output *out,
         errno = ENOMEM;
         goto error;
     }
-    /* Error failing to commit is a fatal error.  Should be cleaner in
-     * future. Issue #2378 */
-    if ((out->stdout_type == FLUX_OUTPUT_TYPE_TERM
-         || (out->stderr_type == FLUX_OUTPUT_TYPE_TERM))) {
-        if (shell_output_term (out) < 0)
-            shell_die_errno (1, "shell_output_term");
-    }
     if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS
          || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS))) {
         if (shell_output_kvs (out) < 0)
@@ -775,11 +719,6 @@ void shell_output_destroy (struct shell_output *out)
             zlist_destroy (&out->pending_writes);
         }
         if (out->output && json_array_size (out->output) > 0) { // leader only
-            if ((out->stdout_type == FLUX_OUTPUT_TYPE_TERM)
-                || (out->stderr_type == FLUX_OUTPUT_TYPE_TERM)) {
-                if (shell_output_term (out) < 0)
-                    shell_log_errno ("shell_output_term");
-            }
             if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS)
                 || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS)) {
                 if (shell_output_kvs (out) < 0)
@@ -812,9 +751,7 @@ void shell_output_destroy (struct shell_output *out)
 /* check if this output type requires the service to be started */
 static bool output_type_requires_service (int type)
 {
-    if ((type == FLUX_OUTPUT_TYPE_TERM)
-        || (type == FLUX_OUTPUT_TYPE_KVS)
-        || (type == FLUX_OUTPUT_TYPE_FILE))
+    if ((type == FLUX_OUTPUT_TYPE_KVS) || (type == FLUX_OUTPUT_TYPE_FILE))
         return true;
     return false;
 }
@@ -1077,11 +1014,6 @@ static int shell_output_header (struct shell_output *out)
     if (!o) {
         errno = ENOMEM;
         goto error;
-    }
-    if ((out->stdout_type == FLUX_OUTPUT_TYPE_TERM)
-        || (out->stderr_type == FLUX_OUTPUT_TYPE_TERM)) {
-        if (shell_output_term_init (out, o) < 0)
-            shell_log_errno ("shell_output_term_init");
     }
     /* emit initial output events.
      */
