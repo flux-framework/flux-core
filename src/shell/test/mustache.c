@@ -68,22 +68,22 @@ int main (int argc, char **argv)
 
     plan (NO_PLAN);
 
-    mr = mustache_renderer_create (NULL, NULL);
+    mr = mustache_renderer_create (NULL);
     ok (mr == NULL && errno == EINVAL,
         "mustache_renderer_create fails with invalid callback");
 
     /*  Pass tests as tag_f argument so we have something non-NULL to test
      *   in the callback
      */
-    mr = mustache_renderer_create (cb, tests);
+    mr = mustache_renderer_create (cb);
     ok (mr != NULL,
         "mustache_renderer_create");
 
-    ok (mustache_render (mr, NULL) == NULL && errno == EINVAL,
+    ok (mustache_render (mr, NULL, tests) == NULL && errno == EINVAL,
         "mustache_render (mr, NULL) returns EINVAL");
 
     while (mp->template != NULL) {
-        char * result = mustache_render (mr, mp->template);
+        char * result = mustache_render (mr, mp->template, tests);
         if (mp->expected == NULL)
             ok (result == NULL && errno == mp->errnum,
                 "mustache_render '%s' failed with errno = %d",
