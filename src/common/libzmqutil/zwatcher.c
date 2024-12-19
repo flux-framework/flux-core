@@ -110,6 +110,26 @@ static void zwatcher_stop (flux_watcher_t *w)
     flux_watcher_stop (zw->idle_w);
 }
 
+static void zwatcher_ref (flux_watcher_t *w)
+{
+    struct zwatcher *zw = watcher_get_data (w);
+
+    flux_watcher_ref (zw->fd_w);
+    flux_watcher_ref (zw->prepare_w);
+    flux_watcher_ref (zw->idle_w);
+    flux_watcher_ref (zw->check_w);
+}
+
+static void zwatcher_unref (flux_watcher_t *w)
+{
+    struct zwatcher *zw = watcher_get_data (w);
+
+    flux_watcher_unref (zw->fd_w);
+    flux_watcher_unref (zw->prepare_w);
+    flux_watcher_unref (zw->idle_w);
+    flux_watcher_unref (zw->check_w);
+}
+
 static bool zwatcher_is_active (flux_watcher_t *w)
 {
     struct zwatcher *zw = watcher_get_data (w);
@@ -186,6 +206,8 @@ static void fd_cb (flux_reactor_t *r,
 static struct flux_watcher_ops zwatcher_ops = {
     .start = zwatcher_start,
     .stop = zwatcher_stop,
+    .ref = zwatcher_ref,
+    .unref = zwatcher_unref,
     .destroy = zwatcher_destroy,
     .is_active = zwatcher_is_active,
 };
