@@ -22,6 +22,7 @@ struct flux_watcher {
     flux_watcher_f fn;
     void *arg;
     struct flux_watcher_ops *ops;
+    bool unreferenced;
     void *data;
 };
 
@@ -99,6 +100,26 @@ void flux_watcher_stop (flux_watcher_t *w)
     }
 }
 
+void flux_watcher_ref (flux_watcher_t *w)
+{
+    if (w && w->unreferenced) {
+        if (w->ops->ref) {
+            w->ops->ref (w);
+            w->unreferenced = false;
+        }
+    }
+}
+
+void flux_watcher_unref (flux_watcher_t *w)
+{
+    if (w && !w->unreferenced) {
+        if (w->ops->unref) {
+            w->ops->unref(w);
+            w->unreferenced = true;
+        }
+    }
+}
+
 bool flux_watcher_is_active (flux_watcher_t *w)
 {
     if (w) {
@@ -106,6 +127,13 @@ bool flux_watcher_is_active (flux_watcher_t *w)
             return w->ops->is_active (w);
     }
     return false;
+}
+
+bool flux_watcher_is_referenced (flux_watcher_t *w)
+{
+    if (w)
+        return !w->unreferenced;
+    return true;
 }
 
 void flux_watcher_destroy (flux_watcher_t *w)
