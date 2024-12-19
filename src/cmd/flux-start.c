@@ -1038,13 +1038,9 @@ void start_server_initialize (const char *rundir, bool verbose)
         log_err_exit ("could not created embedded flux-start server");
     if (flux_msg_handler_addvec (ctx.h, htab, NULL, &ctx.handlers) < 0)
         log_err_exit ("could not register service methods");
-    /* Service related watchers:
-     * - usock server listen fd
-     * - flux_t handle watcher (adds 2 active prep/check watchers)
-     */
-    int ignore_watchers = 3;
-    while (ignore_watchers-- > 0)
-        flux_reactor_active_decref (ctx.reactor);
+
+    flux_watcher_unref (flux_get_handle_watcher (ctx.h));
+    flux_watcher_unref (usock_service_listen_watcher (ctx.h));
 }
 
 void start_server_finalize (void)
