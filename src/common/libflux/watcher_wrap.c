@@ -741,9 +741,9 @@ flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
     return w;
 }
 
-void flux_stat_watcher_get_rstat (flux_watcher_t *w,
-                                  struct stat *stat,
-                                  struct stat *prev)
+int flux_stat_watcher_get_rstat (flux_watcher_t *w,
+                                 struct stat *stat,
+                                 struct stat *prev)
 {
     struct stat_watcher *sw = watcher_get_data (w);
     if (watcher_get_ops (w) == &stat_watcher_ops) {
@@ -751,7 +751,10 @@ void flux_stat_watcher_get_rstat (flux_watcher_t *w,
             *stat = sw->evw.attr;
         if (prev)
             *prev = sw->evw.prev;
+        return 0;
     }
+    errno = EINVAL;
+    return -1;
 }
 
 /*

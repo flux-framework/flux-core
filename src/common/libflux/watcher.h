@@ -133,9 +133,9 @@ flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
                                           double interval,
                                           flux_watcher_f cb,
                                           void *arg);
-void flux_stat_watcher_get_rstat (flux_watcher_t *w,
-                                  struct stat *stat,
-                                  struct stat *prev);
+int flux_stat_watcher_get_rstat (flux_watcher_t *w,
+                                 struct stat *stat,
+                                 struct stat *prev);
 
 #ifdef __cplusplus
 }

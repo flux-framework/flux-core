@@ -641,6 +641,12 @@ static void test_stat (flux_reactor_t *reactor)
         "created timer watcher");
     flux_watcher_start (tw);
 
+    /* Make sure rstat accessor fails if passed the wrong watcher type.
+     */
+    errno = 0;
+    ok (flux_stat_watcher_get_rstat (tw, NULL, NULL) < 0 && errno == EINVAL,
+        "flux_stat_watcher_get_rstat fails with EINVAL on wrong watcher type");
+
     ok (flux_reactor_run (reactor, 0) == 0,
         "reactor ran successfully");
 
