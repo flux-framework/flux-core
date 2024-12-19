@@ -46,6 +46,26 @@ static void hwatcher_stop (flux_watcher_t *w)
     flux_watcher_stop (hw->idle_w);
 }
 
+static void hwatcher_ref (flux_watcher_t *w)
+{
+    struct hwatcher *hw = watcher_get_data (w);
+
+    flux_watcher_ref (hw->fd_w);
+    flux_watcher_ref (hw->prepare_w);
+    flux_watcher_ref (hw->idle_w);
+    flux_watcher_ref (hw->check_w);
+}
+
+static void hwatcher_unref (flux_watcher_t *w)
+{
+    struct hwatcher *hw = watcher_get_data (w);
+
+    flux_watcher_unref (hw->fd_w);
+    flux_watcher_unref (hw->prepare_w);
+    flux_watcher_unref (hw->idle_w);
+    flux_watcher_unref (hw->check_w);
+}
+
 static bool hwatcher_is_active (flux_watcher_t *w)
 {
     struct hwatcher *hw = watcher_get_data (w);
@@ -106,6 +126,8 @@ static void hwatcher_check_cb (flux_reactor_t *r,
 static struct flux_watcher_ops hwatcher_ops = {
     .start = hwatcher_start,
     .stop = hwatcher_stop,
+    .ref = hwatcher_ref,
+    .unref = hwatcher_unref,
     .is_active = hwatcher_is_active,
     .destroy = hwatcher_destroy,
 };
