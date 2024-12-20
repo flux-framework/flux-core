@@ -60,6 +60,8 @@
 #include "internal.h"
 #include "builtins.h"
 #include "log.h"
+#include "output/filehash.h"
+#include "output/client.h"
 
 #define SINGLEUSER_OUTPUT_LIMIT "1G"
 #define MULTIUSER_OUTPUT_LIMIT  "10M"
@@ -72,64 +74,30 @@ enum {
     FLUX_OUTPUT_TYPE_FILE = 2,
 };
 
-struct shell_output_fd {
-    int fd;
-};
-
-struct shell_output_type_file {
-    struct shell_output_fd *fdp;
-    char *path;
+struct output_stream {
+    int type;
+    size_t bytes;
+    const char *buffer_type;
+    const char *template;
+    const char *mode;
     int label;
-    int flags;
+    struct file_entry *fp;
 };
 
 struct shell_output {
     flux_shell_t *shell;
+    struct output_client *client;
     const char *kvs_limit_string;
     size_t kvs_limit_bytes;
     struct eventlogger *ev;
     double batch_timeout;
     int refcount;
     struct idset *active_shells;
-    zlist_t *pending_writes;
     json_t *output;
-    bool stopped;
-    int stdout_type;
-    int stderr_type;
-    size_t stdout_bytes;
-    size_t stderr_bytes;
-    struct shell_output_type_file stdout_file;
-    struct shell_output_type_file stderr_file;
-    zhash_t *fds;
-    const char *stdout_buffer_type;
-    const char *stderr_buffer_type;
+    struct filehash *files;
+    struct output_stream stdout;
+    struct output_stream stderr;
 };
-
-static const int shell_output_lwm = 100;
-static const int shell_output_hwm = 1000;
-
-/* Pause/resume output for all tasks.
- */
-static void shell_output_control (struct shell_output *out, bool stop)
-{
-    struct shell_task *task;
-
-    if (out->stopped != stop) {
-        task = zlist_first (out->shell->tasks);
-        while (task) {
-            if (stop) {
-                flux_subprocess_stream_stop (task->proc, "stdout");
-                flux_subprocess_stream_stop (task->proc, "stderr");
-            }
-            else {
-                flux_subprocess_stream_start (task->proc, "stdout");
-                flux_subprocess_stream_start (task->proc, "stderr");
-            }
-            task = zlist_next (out->shell->tasks);
-        }
-        out->stopped = stop;
-    }
-}
 
 static int shell_output_redirect_stream (struct shell_output *out,
                                          flux_kvs_txn_t *txn,
@@ -196,18 +164,18 @@ error:
 static int shell_output_redirect (struct shell_output *out, flux_kvs_txn_t *txn)
 {
     /* if file redirected, output redirect event */
-    if (out->stdout_type == FLUX_OUTPUT_TYPE_FILE) {
+    if (out->stdout.type == FLUX_OUTPUT_TYPE_FILE) {
         if (shell_output_redirect_stream (out,
                                           txn,
                                           "stdout",
-                                          out->stdout_file.path) < 0)
+                                          out->stdout.fp->path) < 0)
             return -1;
     }
-    if (out->stderr_type == FLUX_OUTPUT_TYPE_FILE) {
+    if (out->stderr.type == FLUX_OUTPUT_TYPE_FILE) {
         if (shell_output_redirect_stream (out,
                                           txn,
                                           "stderr",
-                                          out->stderr_file.path) < 0)
+                                          out->stderr.fp->path) < 0)
             return -1;
     }
     return 0;
@@ -271,9 +239,9 @@ static bool entry_output_is_kvs (struct shell_output *out,
             return 0;
         }
         if ((*stdoutp = streq (stream, "stdout")))
-            return (out->stdout_type == FLUX_OUTPUT_TYPE_KVS);
+            return (out->stdout.type == FLUX_OUTPUT_TYPE_KVS);
         else
-            return (out->stderr_type == FLUX_OUTPUT_TYPE_KVS);
+            return (out->stderr.type == FLUX_OUTPUT_TYPE_KVS);
     }
     return 0;
 }
@@ -288,11 +256,11 @@ static bool check_kvs_output_limit (struct shell_output *out,
 
     if (is_stdout) {
         stream = "stdout";
-        bytesp = &out->stdout_bytes;
+        bytesp = &out->stdout.bytes;
     }
     else {
         stream = "stderr";
-        bytesp = &out->stderr_bytes;
+        bytesp = &out->stderr.bytes;
     }
 
     prev = *bytesp;
@@ -330,34 +298,9 @@ static int shell_output_kvs (struct shell_output *out)
     return 0;
 }
 
-static int shell_output_write_fd (int fd, const void *buf, size_t len)
-{
-    size_t count = 0;
-    int n = 0;
-    while (count < len) {
-        if ((n = write (fd, buf + count, len - count)) < 0) {
-            if (errno != EINTR)
-                return -1;
-            continue;
-        }
-        count += n;
-    }
-    return n;
-}
-
-static int shell_output_label (struct shell_output_type_file *ofp,
-                               const char *rank)
-{
-    if (shell_output_write_fd (ofp->fdp->fd,  rank, strlen (rank)) < 0
-        || shell_output_write_fd (ofp->fdp->fd, ": ", 2) < 0)
-        return -1;
-    return 0;
-}
-
 static int shell_output_data (struct shell_output *out, json_t *context)
 {
-    struct shell_output_type_file *ofp;
-    int output_type;
+    struct output_stream *output;
     const char *stream = NULL;
     const char *rank = NULL;
     char *data = NULL;
@@ -368,20 +311,14 @@ static int shell_output_data (struct shell_output *out, json_t *context)
         shell_log_errno ("iodecode");
         return -1;
     }
-    if (streq (stream, "stdout")) {
-        output_type = out->stdout_type;
-        ofp = &out->stdout_file;
-    }
-    else {
-        output_type = out->stderr_type;
-        ofp = &out->stderr_file;
-    }
-    if ((output_type == FLUX_OUTPUT_TYPE_FILE) && len > 0) {
-        if (ofp->label
-            && shell_output_label (ofp, rank) < 0)
-            goto out;
-        if (shell_output_write_fd (ofp->fdp->fd, data, len) < 0)
-            goto out;
+    if (streq (stream, "stdout"))
+        output = &out->stdout;
+    else
+        output = &out->stderr;
+
+    if (output->type == FLUX_OUTPUT_TYPE_FILE) {
+        if (file_entry_write (output->fp, rank, data, len) < 0)
+        goto out;
     }
     rc = 0;
 out:
@@ -405,7 +342,7 @@ static void shell_output_log (struct shell_output *out, json_t *context)
     int rank = -1;
     int line = -1;
     int level = -1;
-    int fd = out->stderr_file.fdp->fd;
+    int fd = out->stderr.fp->fd;
     json_error_t error;
 
     if (json_unpack_ex (context,
@@ -460,36 +397,36 @@ static int shell_output_file (struct shell_output *out)
 static void output_truncation_warning (struct shell_output *out)
 {
     bool warned = false;
-    if (out->stderr_type == FLUX_OUTPUT_TYPE_KVS
-        && out->stderr_bytes > out->kvs_limit_bytes) {
+    if (out->stderr.type == FLUX_OUTPUT_TYPE_KVS
+        && out->stderr.bytes > out->kvs_limit_bytes) {
         shell_warn ("stderr: %zu of %zu bytes truncated",
-                    out->stderr_bytes - out->kvs_limit_bytes,
-                    out->stderr_bytes);
+                    out->stderr.bytes - out->kvs_limit_bytes,
+                    out->stderr.bytes);
         warned = true;
     }
-    if (out->stdout_type == FLUX_OUTPUT_TYPE_KVS &&
-        out->stdout_bytes > out->kvs_limit_bytes) {
+    if (out->stdout.type == FLUX_OUTPUT_TYPE_KVS &&
+        out->stdout.bytes > out->kvs_limit_bytes) {
         shell_warn ("stdout: %zu of %zu bytes truncated",
-                    out->stdout_bytes - out->kvs_limit_bytes,
-                    out->stdout_bytes);
+                    out->stdout.bytes - out->kvs_limit_bytes,
+                    out->stdout.bytes);
         warned = true;
     }
-    if (out->stderr_type == FLUX_OUTPUT_TYPE_KVS
-        && (out->stderr_bytes > OUTPUT_LIMIT_WARNING
-            && out->stderr_bytes <= OUTPUT_LIMIT_MAX)) {
+    if (out->stderr.type == FLUX_OUTPUT_TYPE_KVS
+        && (out->stderr.bytes > OUTPUT_LIMIT_WARNING
+            && out->stderr.bytes <= OUTPUT_LIMIT_MAX)) {
         shell_warn ("high stderr volume (%s), "
                     "consider redirecting to a file next time "
                     "(e.g. use --output=FILE)",
-                    encode_size (out->stderr_bytes));
+                    encode_size (out->stderr.bytes));
         warned = true;
     }
-    if (out->stdout_type == FLUX_OUTPUT_TYPE_KVS
-        && (out->stdout_bytes > OUTPUT_LIMIT_WARNING
-            && out->stdout_bytes <= OUTPUT_LIMIT_MAX)) {
+    if (out->stdout.type == FLUX_OUTPUT_TYPE_KVS
+        && (out->stdout.bytes > OUTPUT_LIMIT_WARNING
+            && out->stdout.bytes <= OUTPUT_LIMIT_MAX)) {
         shell_warn ("high stdout volume (%s), "
                     "consider redirecting to a file next time "
                     "(e.g. use --output=FILE)",
-                    encode_size (out->stdout_bytes));
+                    encode_size (out->stdout.bytes));
         warned = true;
     }
     /* Ensure KVS output is flushed to eventlogger if a warning was issued:
@@ -509,8 +446,8 @@ static void shell_output_decref (struct shell_output *out,
             shell_log_errno ("flux_shell_remove_completion_ref");
 
         /* no more output is coming, flush the last batch of output */
-        if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS
-            || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS))) {
+        if ((out->stdout.type == FLUX_OUTPUT_TYPE_KVS
+            || (out->stderr.type == FLUX_OUTPUT_TYPE_KVS))) {
             if (eventlogger_flush (out->ev) < 0)
                 shell_log_errno ("eventlogger_flush");
         }
@@ -545,13 +482,13 @@ static int shell_output_write_leader (struct shell_output *out,
         errno = ENOMEM;
         goto error;
     }
-    if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS
-         || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS))) {
+    if ((out->stdout.type == FLUX_OUTPUT_TYPE_KVS
+         || (out->stderr.type == FLUX_OUTPUT_TYPE_KVS))) {
         if (shell_output_kvs (out) < 0)
             shell_die_errno (1, "shell_output_kvs");
     }
-    if ((out->stdout_type == FLUX_OUTPUT_TYPE_FILE
-         || (out->stderr_type == FLUX_OUTPUT_TYPE_FILE))) {
+    if ((out->stdout.type == FLUX_OUTPUT_TYPE_FILE
+         || (out->stderr.type == FLUX_OUTPUT_TYPE_FILE))) {
         if (shell_output_file (out) < 0)
             shell_log_errno ("shell_output_file");
     }
@@ -594,51 +531,17 @@ error:
         shell_log_errno ("flux_respond");
 }
 
-static void shell_output_write_completion (flux_future_t *f, void *arg)
-{
-    struct shell_output *out = arg;
-
-    if (flux_future_get (f, NULL) < 0 && errno != ENOSYS)
-        shell_log_errno ("shell_output_write");
-    zlist_remove (out->pending_writes, f);
-    flux_future_destroy (f);
-
-    if (zlist_size (out->pending_writes) <= shell_output_lwm)
-        shell_output_control (out, false);
-}
-
 static int shell_output_write_type (struct shell_output *out,
                                     char *type,
                                     json_t *context)
 {
-    flux_future_t *f = NULL;
-    int shell_rank = out->shell->info->shell_rank;
-
-    if (shell_rank == 0) {
+    if (out->shell->info->shell_rank == 0) {
         if (shell_output_write_leader (out, type, 0, context, NULL) < 0)
             shell_log_errno ("shell_output_write_leader");
     }
-    else {
-        if (!(f = flux_shell_rpc_pack (out->shell,
-                                       "write",
-                                        0,
-                                        0,
-                                        "{s:s s:i s:O}",
-                                        "name", type,
-                                        "shell_rank", shell_rank,
-                                        "context", context)))
-            goto error;
-        if (flux_future_then (f, -1, shell_output_write_completion, out) < 0)
-            goto error;
-        if (zlist_append (out->pending_writes, f) < 0)
-            shell_log_error ("zlist_append failed");
-        if (zlist_size (out->pending_writes) >= shell_output_hwm)
-            shell_output_control (out, true);
-    }
+    else if (output_client_send (out->client, type, context) < 0)
+        shell_log_errno ("failed to send data to shell leader");
     return 0;
-error:
-    flux_future_destroy (f);
-    return -1;
 }
 
 static int shell_output_write (struct shell_output *out,
@@ -679,68 +582,27 @@ static int shell_output_handler (flux_plugin_t *p,
     return shell_output_write_type (out, "data", context);
 }
 
-static void shell_output_type_file_cleanup (struct shell_output_type_file *ofp)
-{
-    if (ofp->path)
-        free (ofp->path);
-}
-
 void shell_output_destroy (struct shell_output *out)
 {
     if (out) {
-        int shell_rank = out->shell->info->shell_rank;
         int saved_errno = errno;
-        flux_future_t *f = NULL;
 
-        if (shell_rank != 0) {
-            /* Nonzero shell rank: send EOF to leader shell to notify
-             *  that no more messages will be sent to shell.write
-             */
-            if (!(f = flux_shell_rpc_pack (out->shell,
-                                           "write",
-                                            0,
-                                            0,
-                                            "{s:s s:i s:{}}",
-                                            "name", "eof",
-                                            "shell_rank", shell_rank,
-                                            "context")))
-                shell_log_errno ("shell.write: eof");
-            flux_future_destroy (f);
-        }
+        output_client_destroy (out->client);
+        filehash_destroy (out->files);
 
-        if (out->pending_writes) {
-            flux_future_t *f;
-
-            while ((f = zlist_pop (out->pending_writes))) { // follower only
-                if (flux_future_get (f, NULL) < 0 && errno != ENOSYS)
-                    shell_log_errno ("shell_output_write");
-                flux_future_destroy (f);
-            }
-            zlist_destroy (&out->pending_writes);
-        }
         if (out->output && json_array_size (out->output) > 0) { // leader only
-            if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS)
-                || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS)) {
+            if ((out->stdout.type == FLUX_OUTPUT_TYPE_KVS)
+                || (out->stderr.type == FLUX_OUTPUT_TYPE_KVS)) {
                 if (shell_output_kvs (out) < 0)
                     shell_log_errno ("shell_output_kvs");
             }
-            if ((out->stdout_type == FLUX_OUTPUT_TYPE_FILE
-                 || (out->stderr_type == FLUX_OUTPUT_TYPE_FILE))) {
+            if ((out->stdout.type == FLUX_OUTPUT_TYPE_FILE
+                 || (out->stderr.type == FLUX_OUTPUT_TYPE_FILE))) {
                 if (shell_output_file (out) < 0)
                     shell_log_errno ("shell_output_file");
             }
         }
         json_decref (out->output);
-        shell_output_type_file_cleanup (&out->stdout_file);
-        shell_output_type_file_cleanup (&out->stderr_file);
-        if (out->fds) { // leader only
-            struct shell_output_fd *fdp = zhash_first (out->fds);
-            while (fdp) {
-                close (fdp->fd);
-                fdp = zhash_next (out->fds);
-            }
-            zhash_destroy (&out->fds);
-        }
         eventlogger_destroy (out->ev);
         idset_destroy (out->active_shells);
         free (out);
@@ -748,247 +610,45 @@ void shell_output_destroy (struct shell_output *out)
     }
 }
 
-/* check if this output type requires the service to be started */
-static bool output_type_requires_service (int type)
+static struct file_entry *shell_output_open_file (struct shell_output *out,
+                                                  struct output_stream *stream)
 {
-    if ((type == FLUX_OUTPUT_TYPE_KVS) || (type == FLUX_OUTPUT_TYPE_FILE))
-        return true;
-    return false;
-}
+    char *path = NULL;
+    int flags = O_CREAT | O_WRONLY;
+    struct file_entry *fp = NULL;
+    flux_error_t error;
 
-static int shell_output_parse_type (struct shell_output *out,
-                                    const char *typestr,
-                                    int *typep)
-{
-    if (streq (typestr, "kvs"))
-        (*typep) = FLUX_OUTPUT_TYPE_KVS;
-    else if (streq (typestr, "file"))
-        (*typep) = FLUX_OUTPUT_TYPE_FILE;
+    if (streq (stream->mode, "append"))
+        flags |= O_APPEND;
+    else if (streq (stream->mode, "truncate"))
+        flags |= O_TRUNC;
     else
-        return shell_log_errn (EINVAL,
-                               "invalid output type specified '%s'",
-                               typestr);
-    return 0;
-}
+        shell_warn ("ignoring invalid output.mode=%s", stream->mode);
 
-static int
-shell_output_setup_type_file (struct shell_output *out,
-                              const char *stream,
-                              struct shell_output_type_file *ofp,
-                              struct shell_output_type_file *ofp_copy)
-{
-    const char *path = NULL;
-    const char *mode = "truncate";
-
-    if (flux_shell_getopt_unpack (out->shell,
-                                  "output",
-                                  "{s?s s:{s?s s?b}}",
-                                  "mode", &mode,
-                                  stream,
-                                    "path", &path,
-                                    "label", &ofp->label) < 0)
-        return -1;
-
-    ofp->flags = O_CREAT | O_WRONLY;
-    if (streq (mode, "append"))
-        ofp->flags |= O_APPEND;
-    else if (streq (mode, "truncate"))
-        ofp->flags |= O_TRUNC;
-    else
-        shell_warn ("ignoring invalid output.mode=%s", mode);
-
-    if (path == NULL) {
-        shell_log_error ("path for %s file output not specified", stream);
-        return -1;
-    }
-
-    if (!(ofp->path = flux_shell_mustache_render (out->shell, path)))
-        return -1;
-
-    if (ofp_copy) {
-        if (!(ofp_copy->path = strdup (ofp->path)))
-            return -1;
-        ofp_copy->label = ofp->label;
-        ofp_copy->flags = ofp->flags;
-    }
-
-    return 0;
-}
-
-static int shell_output_setup_type (struct shell_output *out,
-                                    const char *stream,
-                                    int type,
-                                    bool copy_to_stderr)
-{
-    if (type == FLUX_OUTPUT_TYPE_FILE) {
-        struct shell_output_type_file *ofp = NULL;
-        struct shell_output_type_file *ofp_copy = NULL;
-
-        if (streq (stream, "stdout"))
-            ofp = &(out->stdout_file);
-        else
-            ofp = &(out->stderr_file);
-
-        if (copy_to_stderr)
-            ofp_copy = &(out->stderr_file);
-
-        if (shell_output_setup_type_file (out, stream, ofp, ofp_copy) < 0)
-            return -1;
-    }
-    return 0;
-}
-
-static int shell_output_check_alternate_output (struct shell_output *out)
-{
-    const char *stdout_typestr = NULL;
-    const char *stderr_typestr = NULL;
-
-    if (flux_shell_getopt_unpack (out->shell, "output",
-                                  "{s?{s?s}}",
-                                  "stdout", "type", &stdout_typestr) < 0)
-        return -1;
-
-    if (flux_shell_getopt_unpack (out->shell, "output",
-                                  "{s?{s?s}}",
-                                  "stderr", "type", &stderr_typestr) < 0)
-        return -1;
-
-    if (!stdout_typestr && !stderr_typestr)
-        return 0;
-
-    /* If stdout type is set but stderr type is not set, custom is for
-     * stderr type to follow stdout type, including all settings */
-    if (stdout_typestr && !stderr_typestr) {
-        if (shell_output_parse_type (out,
-                                     stdout_typestr,
-                                     &(out->stdout_type)) < 0)
-            return -1;
-
-        out->stderr_type = out->stdout_type;
-
-        if (shell_output_setup_type (out,
-                                     "stdout",
-                                     out->stdout_type,
-                                     true) < 0)
-            return -1;
-    }
-    else {
-        if (stdout_typestr) {
-            if (shell_output_parse_type (out,
-                                         stdout_typestr,
-                                         &(out->stdout_type)) < 0)
-                return -1;
-            if (shell_output_setup_type (out,
-                                         "stdout",
-                                         out->stdout_type,
-                                         false) < 0)
-                return -1;
-        }
-        if (stderr_typestr) {
-            if (shell_output_parse_type (out,
-                                         stderr_typestr,
-                                         &(out->stderr_type)) < 0)
-                return -1;
-            if (shell_output_setup_type (out,
-                                         "stderr",
-                                         out->stderr_type,
-                                         false) < 0)
-                return -1;
-        }
-    }
-    return 0;
-}
-
-static int parse_alternate_buffer_type (struct shell_output *out,
-                                        const char *stream,
-                                        const char **buffer_type_ptr)
-{
-    const char *buffer_type = NULL;
-
-    if (flux_shell_getopt_unpack (out->shell, "output",
-                                  "{s?{s?{s?s}}}",
-                                  stream,
-                                  "buffer",
-                                  "type", &buffer_type) < 0)
-        return -1;
-
-    if (buffer_type) {
-        if (strcasecmp (buffer_type, "none")
-            && strcasecmp (buffer_type, "line"))
-            shell_log_error ("invalid buffer type specified: %s",
-                             buffer_type);
-        else
-            (*buffer_type_ptr) = buffer_type;
-    }
-
-    return 0;
-}
-
-static int shell_output_check_alternate_buffer_type (struct shell_output *out)
-{
-    if (parse_alternate_buffer_type (out,
-                                     "stdout",
-                                     &out->stdout_buffer_type) < 0)
-        return -1;
-    if (parse_alternate_buffer_type (out,
-                                     "stderr",
-                                     &out->stderr_buffer_type) < 0)
-        return -1;
-    return 0;
-}
-
-static struct shell_output_fd *shell_output_fd_create (int fd)
-{
-    struct shell_output_fd *fdp = calloc (1, sizeof (*fdp));
-    if (!fdp)
+    if (stream->template == NULL) {
+        shell_log_error ("path for file output not specified");
         return NULL;
-    fdp->fd = fd;
-    return fdp;
+    }
+
+    if (!(path = flux_shell_mustache_render (out->shell, stream->template)))
+        return NULL;
+
+    if (!(fp = filehash_open (out->files, &error, path, flags, stream->label)))
+        shell_log_error ("%s", error.text);
+    free (path);
+    return fp;
 }
 
-static void shell_output_fd_destroy (void *data)
+static int shell_output_type_file_setup (struct shell_output *out)
 {
-    struct shell_output_fd *fdp = data;
-    if (fdp) {
-        close (fdp->fd);
-        free (fdp);
-    }
-}
+    if (out->stdout.type == FLUX_OUTPUT_TYPE_FILE
+        && !(out->stdout.fp = shell_output_open_file (out, &out->stdout)))
+        return -1;
 
-static int shell_output_type_file_setup (struct shell_output *out,
-                                         struct shell_output_type_file *ofp)
-{
-    mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-    struct shell_output_fd *fdp = NULL;
-    int saved_errno, fd = -1;
-
-    /* check if we're outputting to the same file as another stream */
-    if ((fdp = zhash_lookup (out->fds, ofp->path))) {
-        ofp->fdp = fdp;
-        return 0;
-    }
-
-    if ((fd = open (ofp->path, ofp->flags, mode)) < 0) {
-        shell_log_errno ("error opening output file '%s'", ofp->path);
-        goto error;
-    }
-
-    if (!(fdp = shell_output_fd_create (fd)))
-        goto error;
-
-    if (zhash_insert (out->fds, ofp->path, fdp) < 0) {
-        errno = EEXIST;
-        goto error;
-    }
-    zhash_freefn (out->fds, ofp->path, shell_output_fd_destroy);
-    ofp->fdp = fdp;
+    if (out->stderr.type == FLUX_OUTPUT_TYPE_FILE
+        && !(out->stderr.fp = shell_output_open_file (out, &out->stderr)))
+        return -1;
     return 0;
-
-error:
-    saved_errno = errno;
-    shell_output_fd_destroy (fdp);
-    errno = saved_errno;
-    return -1;
 }
 
 /* Write RFC 24 header event to KVS.  Assume:
@@ -1178,6 +838,45 @@ static int get_output_limit (struct shell_output *out)
     return 0;
 }
 
+static int output_stream_getopts (flux_shell_t *shell,
+                                  const char *name,
+                                  struct output_stream *stream)
+{
+    const char *type = NULL;
+
+    if (flux_shell_getopt_unpack (shell,
+                                  "output",
+                                  "{s?s s?{s?s s?s s?b s?{s?s}}}",
+                                  "mode", &stream->mode,
+                                  name,
+                                   "type", &type,
+                                   "path", &stream->template,
+                                   "label", &stream->label,
+                                   "buffer",
+                                     "type", &stream->buffer_type) < 0) {
+        shell_log_error ("failed to read %s output options", name);
+        return -1;
+    }
+    if (type && streq (type, "kvs")) {
+        stream->template = NULL;
+        stream->type = FLUX_OUTPUT_TYPE_KVS;
+        return 0;
+    }
+    if (stream->template)
+        stream->type = FLUX_OUTPUT_TYPE_FILE;
+
+    if (strcasecmp (stream->buffer_type, "none") == 0)
+        stream->buffer_type = "none";
+    else if (strcasecmp (stream->buffer_type, "line") == 0)
+        stream->buffer_type = "line";
+    else {
+        shell_log_error ("invalid buffer type specified: %s",
+                         stream->buffer_type);
+        stream->buffer_type = "line";
+    }
+    return 0;
+}
+
 struct shell_output *shell_output_create (flux_shell_t *shell)
 {
     struct shell_output *out;
@@ -1185,77 +884,70 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
     if (!(out = calloc (1, sizeof (*out))))
         return NULL;
     out->shell = shell;
-    out->stdout_type = FLUX_OUTPUT_TYPE_KVS;
-    out->stderr_type = FLUX_OUTPUT_TYPE_KVS;
-    out->stdout_buffer_type = "line";
-    out->stderr_buffer_type = "none";
+
+    out->stdout.type = FLUX_OUTPUT_TYPE_KVS;
+    out->stdout.mode = "truncate";
+    out->stdout.buffer_type = "line";
+    if (output_stream_getopts (shell, "stdout", &out->stdout) < 0)
+        goto error;
+
+    /* stderr defaults except for buffer_type inherit from stdout:
+     */
+    out->stderr = out->stdout;
+    out->stderr.buffer_type = "none";
+    if (output_stream_getopts (shell, "stderr", &out->stderr) < 0)
+        goto error;
 
     if (get_output_limit (out) < 0)
         goto error;
-    if (shell_output_check_alternate_output (out) < 0)
-        goto error;
-    if (shell_output_check_alternate_buffer_type (out) < 0)
-        goto error;
 
-    if (!(out->pending_writes = zlist_new ()))
-        goto error;
     if (shell->info->shell_rank == 0) {
         int ntasks = out->shell->info->rankinfo.ntasks;
-        if (output_type_requires_service (out->stdout_type)
-            || output_type_requires_service (out->stderr_type)) {
-            if (flux_shell_service_register (shell,
-                                             "write",
-                                             shell_output_write_cb,
-                                             out) < 0)
-                goto error;
+        if (flux_shell_service_register (shell,
+                                         "write",
+                                         shell_output_write_cb,
+                                         out) < 0)
+            goto error;
 
-            /*  The shell.output.write service needs to wait for all
-             *   remote shells and local tasks before the output destination
-             *   can be closed. Therefore, set a reference counter for
-             *   the number of remote shells (shell_size - 1), plus the
-             *   number of tasks on the leader shell.
-             *
-             *  Remote shells and local tasks will cause the refcount
-             *   to be decremented as they send EOF or exit.
-             */
-            out->refcount = (shell->info->shell_size - 1 + ntasks);
+        /*  The shell.output.write service needs to wait for all
+         *   remote shells and local tasks before the output destination
+         *   can be closed. Therefore, set a reference counter for
+         *   the number of remote shells (shell_size - 1), plus the
+         *   number of tasks on the leader shell.
+         *
+         *  Remote shells and local tasks will cause the refcount
+         *   to be decremented as they send EOF or exit.
+         */
+        out->refcount = (shell->info->shell_size - 1 + ntasks);
 
-            /*  Account for active shells to avoid double-decrement of
-             *  refcount when a shell exits prematurely
-             */
-            if (!(out->active_shells = idset_create (0, IDSET_FLAG_AUTOGROW))
-                || idset_range_set (out->active_shells,
-                                    0,
-                                    shell->info->shell_size - 1) < 0)
-                goto error;
-            if (flux_shell_add_completion_ref (shell, "output.write") < 0)
-                goto error;
-            if (!(out->output = json_array ())) {
-                errno = ENOMEM;
-                goto error;
-            }
+        /*  Account for active shells to avoid double-decrement of
+         *  refcount when a shell exits prematurely
+         */
+        if (!(out->active_shells = idset_create (0, IDSET_FLAG_AUTOGROW))
+            || idset_range_set (out->active_shells,
+                                0,
+                                shell->info->shell_size - 1) < 0)
+            goto error;
+        if (flux_shell_add_completion_ref (shell, "output.write") < 0)
+            goto error;
+        if (!(out->output = json_array ())) {
+            errno = ENOMEM;
+            goto error;
         }
-        if (out->stdout_type == FLUX_OUTPUT_TYPE_FILE
-            || out->stderr_type == FLUX_OUTPUT_TYPE_FILE) {
-            if (!(out->fds = zhash_new ())) {
-                errno = ENOMEM;
+        if (out->stdout.type == FLUX_OUTPUT_TYPE_FILE
+            || out->stderr.type == FLUX_OUTPUT_TYPE_FILE) {
+            if (!(out->files = filehash_create ())
+                || shell_output_type_file_setup (out) < 0)
                 goto error;
-            }
-            if (out->stdout_type == FLUX_OUTPUT_TYPE_FILE) {
-                if (shell_output_type_file_setup (out,
-                                                  &(out->stdout_file)) < 0)
-                    goto error;
-            }
-            if (out->stderr_type == FLUX_OUTPUT_TYPE_FILE) {
-                if (shell_output_type_file_setup (out,
-                                                  &(out->stderr_file)) < 0)
-                    goto error;
-            }
         }
         if (output_eventlogger_start (out) < 0)
             goto error;
         if (shell_output_header (out) < 0)
             goto error;
+    }
+    else if (!(out->client = output_client_create (shell))) {
+        shell_log_errno ("failed to create output service client");
+        goto error;
     }
     return out;
 error:
@@ -1365,30 +1057,30 @@ static int shell_output_task_init (flux_plugin_t *p,
     if (!shell || !out || !(task = flux_shell_current_task (shell)))
         return -1;
 
-    if (task_setup_buffering (task, "stdout", out->stdout_buffer_type) < 0)
+    if (task_setup_buffering (task, "stdout", out->stdout.buffer_type) < 0)
         return -1;
-    if (task_setup_buffering (task, "stderr", out->stderr_buffer_type) < 0)
+    if (task_setup_buffering (task, "stderr", out->stderr.buffer_type) < 0)
         return -1;
 
-    if (output_type_requires_service (out->stdout_type)) {
-        if (!strcasecmp (out->stdout_buffer_type, "line"))
-            output_cb = task_line_output_cb;
-        else
-            output_cb = task_none_output_cb;
-        if (flux_shell_task_channel_subscribe (task, "stdout",
-                                               output_cb, out) < 0)
+    if (!strcasecmp (out->stdout.buffer_type, "line"))
+        output_cb = task_line_output_cb;
+    else
+        output_cb = task_none_output_cb;
+    if (flux_shell_task_channel_subscribe (task,
+                                           "stdout",
+                                           output_cb,
+                                           out) < 0)
             return -1;
-    }
-    if (output_type_requires_service (out->stderr_type)) {
-        if (!strcasecmp (out->stderr_buffer_type, "line"))
-            output_cb = task_line_output_cb;
-        else
-            output_cb = task_none_output_cb;
-        if (flux_shell_task_channel_subscribe (task, "stderr",
-                                               output_cb, out) < 0)
-            return -1;
-    }
+    if (!strcasecmp (out->stderr.buffer_type, "line"))
+        output_cb = task_line_output_cb;
+    else
+        output_cb = task_none_output_cb;
 
+    if (flux_shell_task_channel_subscribe (task,
+                                           "stderr",
+                                           output_cb,
+                                           out) < 0)
+        return -1;
     return 0;
 }
 
@@ -1434,7 +1126,7 @@ static int shell_output_init (flux_plugin_t *p,
     /*  If stderr is redirected to file, be sure to also copy log messages
      *   there as soon as file is opened
      */
-    if (out->stderr_type == FLUX_OUTPUT_TYPE_FILE) {
+    if (out->stderr.type == FLUX_OUTPUT_TYPE_FILE) {
         shell_debug ("redirecting log messages to job output file");
         if (flux_plugin_add_handler (p, "shell.log", log_output, out) < 0)
             return shell_log_errno ("failed to add shell.log handler");
