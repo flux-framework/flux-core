@@ -32,6 +32,7 @@ struct watch_ctx {
     const flux_msg_t *msg;
     flux_jobid_t id;
     bool guest;
+    bool guest_in_main;         /* read guest in main namespace */
     char *path;
     int flags;
     flux_future_t *check_f;
@@ -62,6 +63,7 @@ static struct watch_ctx *watch_ctx_create (struct info_ctx *ctx,
                                            const flux_msg_t *msg,
                                            flux_jobid_t id,
                                            bool guest,
+                                           bool guest_in_main,
                                            const char *path,
                                            int flags)
 {
@@ -73,6 +75,7 @@ static struct watch_ctx *watch_ctx_create (struct info_ctx *ctx,
     w->ctx = ctx;
     w->id = id;
     w->guest = guest;
+    w->guest_in_main = guest_in_main;
     if (!(w->path = strdup (path))) {
         errno = ENOMEM;
         goto error;
@@ -121,6 +124,12 @@ static int watch_key (struct watch_ctx *w)
 
     if (w->flags & FLUX_JOB_EVENT_WATCH_WAITCREATE)
         flags |= FLUX_KVS_WAITCREATE;
+
+    /* guest_in_main means the job is inactive, we do not want to
+     * "watch" this, just stream the data that is there right now.
+     */
+    if (w->guest_in_main)
+        flags = FLUX_KVS_STREAM;
 
     if (w->guest) {
         if (flux_job_kvs_namespace (ns, sizeof (ns), w->id) < 0) {
@@ -321,12 +330,19 @@ static int watch (struct info_ctx *ctx,
                   flux_jobid_t id,
                   const char *path,
                   int flags,
-                  bool guest)
+                  bool guest,
+                  bool guest_in_main)
 {
     struct watch_ctx *w = NULL;
     uint32_t rolemask;
 
-    if (!(w = watch_ctx_create (ctx, msg, id, guest, path, flags)))
+    if (!(w = watch_ctx_create (ctx,
+                                msg,
+                                id,
+                                guest,
+                                guest_in_main,
+                                path,
+                                flags)))
         goto error;
 
     /* if user requested an alternate path and that alternate path is
@@ -388,6 +404,7 @@ void watch_cb (flux_t *h,
     struct watch_ctx *w = NULL;
     flux_jobid_t id;
     int guest = 0;
+    int guest_in_main = 0;
     const char *path = NULL;
     int flags;
     int valid_flags = FLUX_JOB_EVENT_WATCH_WAITCREATE;
@@ -412,15 +429,23 @@ void watch_cb (flux_t *h,
     }
     /* guest flag indicates to read path from guest namespace */
     (void)flux_request_unpack (msg, NULL, "{s:b}", "guest", &guest);
+    /* guest_in_main flag indicates to read "guest" path from main
+     * namespace, also meaning the job is inactive
+     */
+    (void)flux_request_unpack (msg,
+                               NULL,
+                               "{s:b}",
+                               "guest_in_main",
+                               &guest_in_main);
 
     /* if watching a "guest" path, forward to guest watcher for
      * handling */
-    if (strstarts (path, "guest.")) {
+    if (strstarts (path, "guest.") && !guest_in_main) {
         if (guest_watch (ctx, msg, id, path + 6, flags) < 0)
             goto error;
     }
     else {
-        if (watch (ctx, msg, id, path, flags, guest) < 0)
+        if (watch (ctx, msg, id, path, flags, guest, guest_in_main) < 0)
             goto error;
     }
 
