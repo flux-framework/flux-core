@@ -81,17 +81,21 @@ static int validate_lookup_flags (int flags, bool watch_ok)
     if ((flags & FLUX_KVS_WATCH_FLAGS)
         && !(flags & FLUX_KVS_WATCH))
         return -1;
-    /* FLUX_KVS_WAITCREATE does not require FLUX_KVS_WATCH to be set,
-     * but it requires that we be able to communicate with the
-     * kvs-watch module, so we use the watch_ok bool here.
+    /* FLUX_KVS_WAITCREATE and FLUX_KVS_STREAM do not require
+     * FLUX_KVS_WATCH to be set, but it requires that we be able to
+     * communicate with the kvs-watch module, so we use the watch_ok
+     * bool here.
      */
-    if ((flags & FLUX_KVS_WAITCREATE) && !watch_ok)
+    if (((flags & FLUX_KVS_WAITCREATE)
+         || (flags & FLUX_KVS_STREAM))
+        && !watch_ok)
         return -1;
 
     flags &= ~FLUX_KVS_WATCH;
     flags &= ~(FLUX_KVS_WATCH_FLAGS);
 
     flags &= ~FLUX_KVS_WAITCREATE;
+    flags &= ~FLUX_KVS_STREAM;
 
     switch (flags) {
         case 0:
@@ -129,9 +133,11 @@ flux_future_t *flux_kvs_lookup (flux_t *h,
     if (!(ctx = alloc_ctx (h, flags, key)))
         return NULL;
     if ((flags & FLUX_KVS_WATCH)
-        || (flags & FLUX_KVS_WAITCREATE))
+        || (flags & FLUX_KVS_WAITCREATE)
+        || (flags & FLUX_KVS_STREAM))
         topic = "kvs-watch.lookup"; // redirect to kvs-watch module
-    if ((flags & FLUX_KVS_WATCH))
+    if ((flags & FLUX_KVS_WATCH)
+        || (flags & FLUX_KVS_STREAM))
         rpc_flags |= FLUX_RPC_STREAMING;
     if (!(f = flux_rpc_pack (h,
                              topic,
@@ -420,7 +426,8 @@ int flux_kvs_lookup_cancel (flux_future_t *f)
     if (!f
         || !(ctx = flux_future_aux_get (f, auxkey))
         || (!(ctx->flags & FLUX_KVS_WATCH)
-            && !(ctx->flags & FLUX_KVS_WAITCREATE))) {
+            && !(ctx->flags & FLUX_KVS_WAITCREATE)
+            && !(ctx->flags & FLUX_KVS_STREAM))) {
         errno = EINVAL;
         return -1;
     }

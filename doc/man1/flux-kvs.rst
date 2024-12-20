@@ -141,6 +141,13 @@ the value is zero length.
   replaced.  The :option:`--full` option ensures these changes are reported
   as well, at greater overhead.
 
+.. option:: -S, --stream
+
+  Return potentially large values in multiple responses.  This may improve
+  response times of very large values in the KVS.
+
+  Will not work in combination with :option:`--watch`.
+
 put
 ---
 
@@ -505,6 +512,13 @@ Display the contents of an RFC 18 KVS eventlog referred to by *key*.
   Control output colorization. The optional argument *WHEN* can be one of
   'auto', 'never', or 'always'. The default value of *WHEN* if omitted is
   'always'. The default is 'auto' if the option is unused.
+
+.. option:: -S, --stream
+
+  Return potentially large eventlogs in multiple responses.  This may improve
+  response times of very large eventlogs in the KVS.
+
+  Will not work in combination with :option:`--watch`.
 
 eventlog append
 ---------------
