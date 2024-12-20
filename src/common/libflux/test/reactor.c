@@ -672,43 +672,6 @@ static void active_idle_cb (flux_reactor_t *r,
         flux_reactor_stop_error (r);
 }
 
-
-static void test_active_ref (flux_reactor_t *r)
-{
-    flux_watcher_t *w;
-    int count;
-
-    ok (flux_reactor_run (r, 0) == 0,
-        "flux_reactor_run with no watchers returned immediately");
-
-    if (!(w = flux_idle_watcher_create (r, active_idle_cb, &count)))
-        BAIL_OUT ("flux_idle_watcher_create failed");
-
-    ok (!flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns false");
-    flux_watcher_start (w);
-    ok (flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns true after flux_watcher_start()");
-
-    count = 0;
-    ok (flux_reactor_run (r, 0) < 0 && count == 16,
-        "flux_reactor_run with one watcher stopped after 16 iterations");
-
-    flux_reactor_active_decref (r);
-
-    count = 0;
-    ok (flux_reactor_run (r, 0) == 0 && count == 1,
-        "flux_reactor_run with one watcher+decref returned after 1 iteration");
-
-    flux_reactor_active_incref (r);
-
-    count = 0;
-    ok (flux_reactor_run (r, 0) < 0 && count == 16,
-        "flux_reactor_run with one watcher+incref stopped after 16 iterations");
-
-    flux_watcher_destroy (w);
-}
-
 static void reactor_destroy_early (void)
 {
     flux_reactor_t *r;
@@ -832,7 +795,6 @@ int main (int argc, char *argv[])
     test_signal (reactor);
     test_child (reactor);
     test_stat (reactor);
-    test_active_ref (reactor);
     test_reactor_flags (reactor);
     test_priority (reactor);
 

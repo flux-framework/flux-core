@@ -48,13 +48,6 @@ double flux_reactor_now (flux_reactor_t *r);
 void flux_reactor_now_update (flux_reactor_t *r);
 double flux_reactor_time (void);
 
-/* Change reactor reference count.
- * Each active watcher holds a reference.
- * When the reference count reaches zero, the reactor loop exits.
- */
-void flux_reactor_active_incref (flux_reactor_t *r);
-void flux_reactor_active_decref (flux_reactor_t *r);
-
 #ifdef __cplusplus
 }
 #endif
