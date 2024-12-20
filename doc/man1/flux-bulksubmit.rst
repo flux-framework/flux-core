@@ -238,6 +238,11 @@ Usage: :option:`flux bulksubmit -o NAME[=ARG]`.
 .. include:: common/job-shell-options.rst
 .. program:: flux bulksubmit
 
+MUSTACHE TEMPLATES
+==================
+
+.. include:: common/job-mustache-templates.rst
+
 RESOURCES
 =========
 

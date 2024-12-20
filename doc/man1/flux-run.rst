@@ -154,6 +154,11 @@ Usage: :option:`flux run -o NAME[=ARG]`.
 .. include:: common/job-shell-options.rst
 .. program:: flux run
 
+MUSTACHE TEMPLATES
+==================
+
+.. include:: common/job-mustache-templates.rst
+
 RESOURCES
 =========
 

@@ -610,13 +610,17 @@ supported. Job shell specific functions and tables are described below:
   then the current rank is used.  Returns a table of rank-specific
   information including:
 
+  **id**
+    The current shell rank (matches ``shell_rank`` input parameter)
+  **name**
+    The host name for ``shell_rank``
   **broker_rank**
     The broker rank on which ``shell_rank`` is running.
   **ntasks**
     The number of local tasks assigned to ``shell_rank``.
   **resources**
     A table of resources by name (e.g. "core", "gpu") assigned to
-    ``shell_rank``, e.g. ``{ core = "0-1", gpu = "0" }``.
+    ``shell_rank``, e.g. ``{ ncores = 2, core = "0-1", gpu = "0" }``.
 
 **shell.log(msg)**, **shell.debug(msg)**, **shell.log_error(msg)**
   Log messages to the shell log facility at INFO, DEBUG, and ERROR

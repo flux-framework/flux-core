@@ -32,6 +32,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/basename.h"
+#include "src/common/libutil/jpath.h"
 #include "src/common/libtaskmap/taskmap_private.h"
 #include "ccan/str/str.h"
 
@@ -577,6 +578,8 @@ static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
     char *taskids = NULL;
     struct taskmap *map;
     struct rcalc_rankinfo rankinfo;
+    struct hostlist *hl;
+    const char *nodename;
 
     if (!shell->info)
         return NULL;
@@ -601,13 +604,26 @@ static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
     if (rcalc_get_nth (shell->info->rcalc, rank, &rankinfo) < 0)
         return NULL;
 
-    o = json_pack_ex (&error, 0, "{ s:i s:i s:s s:{s:s s:s?}}",
-                   "broker_rank", rankinfo.rank,
-                   "ntasks", taskmap_ntasks (map, rank),
-                   "taskids", taskids,
-                   "resources",
-                     "cores", rankinfo.cores,
-                     "gpus",  rankinfo.gpus);
+    /* Note: Drop const on `struct hostlist *` here. The cursor will be
+     * moved, but this should be fine here since the hostlist itself is not
+     * changing.
+     */
+    if (!(hl = (struct hostlist *) flux_shell_get_hostlist (shell))
+        || !(nodename = hostlist_nth (hl, rank)))
+        return NULL;
+
+    o = json_pack_ex (&error,
+                      0,
+                      "{s:i s:s s:i s:i s:s s:{s:i s:s s:s?}}",
+                      "id", rank,
+                      "name", nodename,
+                      "broker_rank", rankinfo.rank,
+                      "ntasks", taskmap_ntasks (map, rank),
+                      "taskids", taskids,
+                      "resources",
+                       "ncores", rankinfo.ncores,
+                       "cores", rankinfo.cores,
+                       "gpus",  rankinfo.gpus);
     free (taskids);
 
     if (o == NULL)
@@ -1030,7 +1046,94 @@ char *flux_shell_mustache_render (flux_shell_t *shell, const char *fmt)
         errno = EINVAL;
         return NULL;
     }
-    return mustache_render (shell->mr, fmt);
+    return mustache_render (shell->mr, fmt, shell);
+}
+
+/* Render "node.*" specific tags using the rank_info object for the
+ * requested shell rank. The part after `node.` will be fetched directly
+ * from the rank_info object.
+ */
+static int mustache_render_node (flux_shell_t *shell,
+                                 int shell_rank,
+                                 const char *name,
+                                 FILE *fp)
+{
+    int rc = -1;
+    const char *s;
+    char buf[24];
+    json_t *o;
+    json_t *val;
+
+    if (!(o = flux_shell_get_rank_info_object (shell, shell_rank)))
+        return -1;
+
+    /* forward past "node." */
+    s = name + 5;
+
+    /* Special case: allow node.{cores,gpus,...} as shorthand for
+     * node.resources.{cores,gpus,...}
+     */
+    if (streq (s, "cores") || streq (s, "gpus") || streq (s, "ncores")) {
+        (void) snprintf (buf, sizeof (buf), "resources.%s", s);
+        s = buf;
+    }
+    if ((val = jpath_get (o, s))) {
+        if (json_is_string (val))
+            rc = fputs (json_string_value (val), fp);
+        else if (json_is_integer (val))
+            rc = fprintf (fp, "%jd", (intmax_t) json_integer_value (val));
+        else {
+            /* Not expected, but template could be {{node.resources}}, handle
+             * that here by dumping the JSON to fp
+             */
+            rc = json_dumpf (val, fp, JSON_COMPACT|JSON_ENCODE_ANY);
+        }
+    }
+    else {
+        errno = ENOENT;
+        return -1;
+    }
+    if (rc < 0)
+        shell_log_errno ("memstream write failed for %s", name);
+    return rc;
+
+}
+
+/*  Render the following task-specific mustache templates for `task`
+ *   {{task.id}}, {{task.rank}} - global task rank
+ *   {{task.index}}, {{task.localid}} - local task index
+ */
+static int mustache_render_task (flux_shell_t *shell,
+                                 flux_shell_task_t *task,
+                                 const char *name,
+                                 FILE *fp)
+{
+    const char *s;
+    int value;
+
+    if (!task) {
+        /* Possibly a current task was not available at this time.
+         * Return ENOENT so caller can handle errors
+         */
+        errno = ENOENT;
+        return -1;
+    }
+
+    /* forward past `task.` */
+    s = name + 5;
+    if (streq (s, "id") || streq (s, "rank"))
+        value = task->rank;
+    else if (streq (s, "index") || streq (s, "localid"))
+        value = task->index;
+    else {
+        errno = ENOENT;
+        return -1;
+    }
+    if (fprintf (fp, "%d", value) < 0) {
+        shell_log_errno ("memstream write failed for %s", name);
+        return -1;
+    }
+    return 0;
 }
 
 static int mustache_render_name (flux_shell_t *shell,
@@ -1072,7 +1175,7 @@ static int mustache_render_jobid (flux_shell_t *shell,
 
     if (strlen (name) > 2) {
         if (name[2] != '.') {
-            shell_log_error ("Unknown mustache tag '%s'", name);
+            errno = ENOENT;
             return -1;
         }
         type = name+3;
@@ -1106,10 +1209,22 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
     /*  "jobid" is a synonym for "id" */
     if (strstarts (name, "jobid"))
         name += 3;
+    /*  "taskid" is a synonym for "task.id" */
+    else if (streq (name, "taskid"))
+        name = "task.id";
+
     if (strstarts (name, "id"))
         return mustache_render_jobid (shell, name, fp);
     if (streq (name, "name"))
         return mustache_render_name (shell, name, fp);
+    if (streq (name, "nnodes"))
+        return fprintf (fp, "%d", shell->info->shell_size);
+    if (streq (name, "ntasks") || streq (name, "size"))
+        return fprintf (fp, "%d", shell->info->total_ntasks);
+    if (strstarts (name, "task."))
+        return mustache_render_task (shell, shell->current_task, name, fp);
+    if (strstarts (name, "node."))
+        return mustache_render_node (shell, shell->info->shell_rank, name, fp);
 
     if (snprintf (topic,
                   sizeof (topic),
@@ -1131,7 +1246,7 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
                                 "{s:s}",
                                 "result", &result) < 0
         || result == NULL) {
-        shell_log_error ("Unknown mustache tag '%s'", name);
+        errno = ENOENT;
         goto out;
     }
     if (fputs (result, fp) < 0) {
@@ -1161,7 +1276,7 @@ static void shell_initialize (flux_shell_t *shell)
         shell_die_errno (1, "zhashx_new");
     zhashx_set_destructor (shell->completion_refs, item_free);
 
-    if (!(shell->mr = mustache_renderer_create (mustache_cb, shell)))
+    if (!(shell->mr = mustache_renderer_create (mustache_cb)))
         shell_die_errno (1, "mustache_renderer_create");
     mustache_renderer_set_log (shell->mr, shell_llog, NULL);
 

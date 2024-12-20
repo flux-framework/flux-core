@@ -117,9 +117,23 @@ test_expect_success 'flux-shell: load alloc-bypass jobtap plugin' '
 '
 test_expect_success 'flux-shell: create multi-gpu R' '
 	cat >R.gpu <<-EOF
-	        {"version": 1, "execution":{ "R_lite":[
-                { "children": { "core": "0-1", "gpu": "0-3" }, "rank": "0" }
-        ]}}
+	{
+	  "version": 1,
+	  "execution": {
+	    "R_lite": [
+	      {
+		"children": {
+		  "core": "0-1",
+		  "gpu": "0-3"
+		},
+		"rank": "0"
+	      }
+	    ],
+	    "nodelist": [
+	      "$(hostname)"
+	    ]
+	  }
+	}
 	EOF
 '
 test_expect_success 'flux-shell: gpu-affinity works by default' '

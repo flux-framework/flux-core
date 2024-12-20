@@ -13,18 +13,8 @@
 .. option:: --output=TEMPLATE
 
    Specify the filename *TEMPLATE* for stdout redirection, bypassing
-   the KVS.  *TEMPLATE* may be a mustache template which supports the
-   following tags:
-
-   *{{id}}* or *{{jobid}}*
-     Expands to the current jobid in the F58 encoding. If needed, an
-     alternate encoding may be selected by using a subkey with the name
-     of the desired encoding, e.g. *{{id.dec}}*. Supported encodings
-     include *f58* (the default), *dec*, *hex*, *dothex*, and *words*.
-
-   *{{name}}*
-     Expands to the current job name. If a name is not set for the job,
-     then the basename of the command will be used.
+   the KVS.  *TEMPLATE* may be a mustache template.
+   See `MUSTACHE TEMPLATES`_ below for more information.
 
 .. option:: --error=TEMPLATE
 
