@@ -224,6 +224,12 @@ test_expect_success 'flux kvs eventlog get fails on bad input' '
 	test_must_fail flux kvs eventlog get
 '
 
+test_expect_success 'flux kvs eventlog get fails on not an eventlog' '
+	flux kvs put test.noteventlog=foo &&
+	test_must_fail flux kvs eventlog get test.noteventlog 2> noteventlog1.err &&
+	grep "cannot decode" noteventlog1.err
+'
+
 test_expect_success 'flux kvs eventlog append fails on bad input' '
 	test_must_fail flux kvs eventlog append
 '
@@ -234,6 +240,11 @@ test_expect_success 'flux kvs eventlog append fails with invalid context' '
 
 test_expect_success 'flux kvs eventlog wait-event fails on bad input' '
 	test_must_fail flux kvs eventlog wait-event
+'
+
+test_expect_success 'flux kvs eventlog wait-event fails on not an eventlog' '
+	test_must_fail flux kvs eventlog wait-event test.noteventlog foo 2> noteventlog2.err &&
+	grep "cannot decode" noteventlog2.err
 '
 
 #
