@@ -2019,8 +2019,11 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
     if (flux_kvs_lookup_get (f, &s) < 0)
         log_err_exit ("flux_kvs_lookup_get");
 
-    if (!(a = eventlog_decode (s)))
+    if (!(a = eventlog_decode (s))) {
+        if (errno == EINVAL)
+            log_msg_exit ("cannot decode improperly formatted eventlog");
         log_err_exit ("eventlog_decode");
+    }
 
     json_array_foreach (a, index, value) {
         if (optparse_hasopt (ctx->p, "watch")) {
@@ -2135,8 +2138,11 @@ void eventlog_wait_event_continuation (flux_future_t *f, void *arg)
             log_err_exit ("flux_kvs_lookup_get");
     }
 
-    if (!(a = eventlog_decode (s)))
+    if (!(a = eventlog_decode (s))) {
+        if (errno == EINVAL)
+            log_msg_exit ("cannot decode improperly formatted eventlog");
         log_err_exit ("eventlog_decode");
+    }
 
     json_array_foreach (a, index, value) {
         const char *name;
