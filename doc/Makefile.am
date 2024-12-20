@@ -208,6 +208,9 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_watcher_stop.3 \
 	man3/flux_watcher_is_active.3 \
 	man3/flux_watcher_destroy.3 \
+	man3/flux_watcher_ref.3 \
+	man3/flux_watcher_unref.3 \
+	man3/flux_watcher_is_referenced.3 \
 	man3/flux_watcher_next_wakeup.3 \
 	man3/flux_handle_watcher_get_flux.3 \
 	man3/flux_timer_watcher_reset.3 \
