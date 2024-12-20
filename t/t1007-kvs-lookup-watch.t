@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test KVS get --watch && --waitcreate'
+test_description='Test KVS get --watch && --waitcreate && --stream'
 
 . `dirname $0`/kvs/kvs-helper.sh
 
@@ -628,6 +628,86 @@ test_expect_success 'watch-stream works on appended values' '
 test_expect_success 'watch-stream fails on non-values' '
 	test_must_fail ${FLUX_BUILD_DIR}/t/kvs/watch_stream test.stream 2> stream3.err &&
 	grep "Is a directory" stream3.err
+'
+
+test_expect_success 'flux kvs get --stream works (basic value)' '
+	flux kvs get --stream test.stream.a > stream3.out &&
+	flux kvs get test.stream.a > stream3.exp &&
+	test_cmp stream3.exp stream3.out
+'
+
+test_expect_success 'flux kvs get --stream works (appended values)' '
+	flux kvs get --stream test.stream.log > stream4.out &&
+	flux kvs get test.stream.log > stream4.exp &&
+	test_cmp stream4.exp stream4.out
+'
+
+test_expect_success 'flux kvs get --stream works (empty value)' '
+	flux kvs put test.stream.empty= &&
+	flux kvs get --stream test.stream.empty > stream5.out &&
+	flux kvs get test.stream.empty > stream5.exp &&
+	test_cmp stream5.exp stream5.out
+'
+
+test_expect_success 'flux kvs get --stream and --watch fail' '
+	test_must_fail flux kvs get --watch --stream test.stream.a
+'
+
+test_expect_success 'flux kvs get --stream and --waitcreate works on existing key' '
+	run_timeout 2 flux kvs get --stream --waitcreate test.stream.a >stream6.out &&
+	echo "42" >stream6.exp &&
+	test_cmp stream6.exp stream6.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --stream and --waitcreate works on non-existent key' '
+	! flux kvs get test.stream.b &&
+	flux kvs get --stream --waitcreate test.stream.b > stream7.out &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.stream.b=43 &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="43" stream7.out >/dev/null &&
+	wait $pid
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --stream and --waitcreate works on non-existent namespace' '
+	! flux kvs get --namespace=ns_stream test.stream.c &&
+	flux kvs get --namespace=ns_stream --waitcreate \
+		     test.stream.c > stream8.out &
+	pid=$! &&
+	wait_watcherscount_nonzero ns_stream &&
+	flux kvs namespace create ns_stream &&
+	flux kvs put --namespace=ns_stream test.stream.c=44 &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="44" stream8.out >/dev/null &&
+        wait $pid
+'
+
+test_expect_success 'flux kvs eventlog get --stream works' '
+	flux kvs eventlog get --stream test.stream.log > stream9.out &&
+	flux kvs eventlog get test.stream.log > stream9.exp &&
+	test_cmp stream9.exp stream9.out
+'
+
+test_expect_success 'flux kvs eventlog get --stream and --watch fail' '
+	test_must_fail flux kvs eventlog get --watch --stream test.stream.log
+'
+
+test_expect_success 'flux kvs eventlog get --stream and --waitcreate works on existing key' '
+	run_timeout 5 flux kvs eventlog get --stream --waitcreate test.stream.log >stream11.out &&
+	flux kvs eventlog get test.stream.log > stream11.exp &&
+	test_cmp stream11.exp stream11.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs eventlog get --stream and --waitcreate works on non-existent key' '
+	! flux kvs eventlog get test.stream.log2 &&
+	flux kvs eventlog get --stream --waitcreate test.stream.log2 > stream12.out &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs eventlog append test.stream.log2 foo &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="foo" stream12.out >/dev/null &&
+	wait $pid
 '
 
 # Security checks
