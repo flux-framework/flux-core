@@ -782,7 +782,6 @@ static void content_register_backing_request (flux_t *h,
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to register-backing request");
     (void)cache_flush (cache);
-    (void)checkpoints_flush (cache->checkpoint);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
