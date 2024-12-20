@@ -177,7 +177,7 @@ class JobProgressBar(ProgressBar):
         #  Don't let this timer watcher contribute to the reactor's
         #   "active" reference count:
         #
-        self.timer.flux_handle.reactor_decref()
+        self.timer.unref()
         super().start()
         #  Override superclass `_t0` attribute to elapsed time is computed
         #  from this value and not the time of super().start():

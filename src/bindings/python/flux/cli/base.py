@@ -1536,7 +1536,7 @@ class SubmitBulkCmd(SubmitBaseCmd):
 
             #  Don't let this timer watcher contribute to the reactor's
             #   "active" reference count:
-            self.flux_handle.reactor_decref()
+            timer.unref()
 
         if submit:
             self.progress.update(
