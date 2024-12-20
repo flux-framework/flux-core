@@ -204,8 +204,6 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_reactor_run.3 \
 	man3/flux_reactor_stop.3 \
 	man3/flux_reactor_stop_error.3 \
-	man3/flux_reactor_active_incref.3 \
-	man3/flux_reactor_active_decref.3 \
 	man3/flux_fd_watcher_get_fd.3 \
 	man3/flux_watcher_stop.3 \
 	man3/flux_watcher_is_active.3 \

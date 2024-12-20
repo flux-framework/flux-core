@@ -202,8 +202,6 @@ man_pages = [
     ('man3/flux_reactor_create', 'flux_reactor_run', 'create/destroy/control event reactor object', [author], 3),
     ('man3/flux_reactor_create', 'flux_reactor_stop', 'create/destroy/control event reactor object', [author], 3),
     ('man3/flux_reactor_create', 'flux_reactor_stop_error', 'create/destroy/control event reactor object', [author], 3),
-    ('man3/flux_reactor_create', 'flux_reactor_active_incref', 'create/destroy/control event reactor object', [author], 3),
-    ('man3/flux_reactor_create', 'flux_reactor_active_decref', 'create/destroy/control event reactor object', [author], 3),
     ('man3/flux_reactor_create', 'flux_reactor_create', 'create/destroy/control event reactor object', [author], 3),
     ('man3/flux_reactor_now', 'flux_reactor_now_update', 'get/update reactor time', [author], 3),
     ('man3/flux_reactor_now', 'flux_reactor_now', 'get/update reactor time', [author], 3),
