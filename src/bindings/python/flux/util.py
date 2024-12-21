@@ -741,7 +741,7 @@ class OutputFormat:
 
             # Also adjust precision if necessary (only for string type)
             if (
-                self.type in (None, "s")
+                self.type in (None, "s", "")
                 and self.precision
                 and self.precision < self.width
             ):
