@@ -207,9 +207,9 @@ class TestOutputFormat(unittest.TestCase):
         self.assertEqual(fmt, "{i:>8} {f:8.2}")
 
         fmt = OutputFormat(
-            "?+:{i:>7} ?:{s:>6} ?+:{f:.2}", headings=self.headings
+            "?+:{i:>7} ?:{s:>6} ?+:{f:.2f}", headings=self.headings
         ).filter(items)
-        self.assertEqual(fmt, "{i:>8} {f:3.2}")
+        self.assertEqual(fmt, "{i:>8} {f:3.2f}")
 
     def test_sort(self):
         a = Item("a", 0, 2.2)
