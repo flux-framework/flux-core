@@ -250,6 +250,17 @@ class TestOutputFormat(unittest.TestCase):
         formatter.sort_items(items)
         self.assertListEqual(items, [z, d, a])
 
+    def test_issue6530(self):
+        a = Item("1234567890", 0, 2.2)
+        b = Item("abcdefghijklmnop", 2, 13)
+        c = Item("c", 4, 5.0)
+
+        items = [a, b, c]
+        fmt = OutputFormat(
+            "+:{s:5.5} +:{i:4d} +:{f:.2f}", headings=self.headings
+        ).filter(items)
+        self.assertEqual(fmt, "{s:16.16} {i:4d} {f:3.2f}")
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=TAPTestRunner())
