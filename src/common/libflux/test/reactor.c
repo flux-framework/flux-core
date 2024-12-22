@@ -692,6 +692,45 @@ static void test_stat (flux_reactor_t *reactor)
     free (ctx.path);
 }
 
+static int handle_counter = 0;
+static void handle_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
+{
+    handle_counter++;
+    flux_watcher_unref (w);
+}
+
+void test_handle (flux_reactor_t *r)
+{
+    flux_t *h;
+    flux_watcher_t *w;
+
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop handle");
+    w = flux_handle_watcher_create (r, h, FLUX_POLLIN, handle_cb, NULL);
+    ok (w != NULL,
+        "flux_handle_watcher_create works");
+    generic_watcher_check (w, "handle");
+    flux_watcher_start (w);
+
+    flux_msg_t *msg;
+    if (!(msg = flux_request_encode ("foo", "bar")))
+        BAIL_OUT ("could not encode message");
+    if (flux_send (h, msg, 0) < 0)
+        BAIL_OUT ("could not send message");
+    flux_msg_destroy (msg);
+
+    ok (flux_reactor_run (r, 0) == 0,
+        "flux_reactor_run ran");
+    ok (handle_counter == 1,
+        "watcher ran once");
+
+    flux_watcher_destroy (w);
+    flux_close (h);
+}
+
 static void unref_idle_cb (flux_reactor_t *r,
                             flux_watcher_t *w,
                             int revents,
@@ -916,6 +955,7 @@ int main (int argc, char *argv[])
     test_signal (reactor);
     test_child (reactor);
     test_stat (reactor);
+    test_handle (reactor);
     test_unref (reactor);
     test_reactor_flags (reactor);
     test_priority (reactor);
