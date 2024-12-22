@@ -28,6 +28,8 @@ SYNOPSIS
 
    void flux_msg_handler_stop (flux_msg_handler_t *mh);
 
+   flux_watcher_t *flux_get_handle_watcher(flux_t *h)
+
 Link with :command:`-lflux-core`.
 
 DESCRIPTION
@@ -46,7 +48,8 @@ The handle :var:`h` is monitored for FLUX_POLLIN events on the
 :type:`flux_reactor_t` associated with the handle as described in
 :man3:`flux_set_reactor`.  This internal "handle watcher" is started when the
 first message handler is started, and stopped when the last message handler
-is stopped.
+is stopped.  The handle watcher may be directly accessed with
+:func:`flux_get_handle_watcher`.
 
 Messages arriving on :var:`h` are internally read and dispatched to matching
 message handlers. If multiple handlers match the message, the following

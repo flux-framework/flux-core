@@ -189,6 +189,7 @@ man_pages = [
     ('man3/flux_msg_handler_create', 'flux_msg_handler_start', 'manage message handlers', [author], 3),
     ('man3/flux_msg_handler_create', 'flux_msg_handler_stop', 'manage message handlers', [author], 3),
     ('man3/flux_msg_handler_create', 'flux_msg_handler_create', 'manage message handlers', [author], 3),
+    ('man3/flux_msg_handler_create', 'flux_get_handle_watcher', 'manage message handlers', [author], 3),
     ('man3/flux_open', 'flux_clone', 'open/close connection to Flux Message Broker', [author], 3),
     ('man3/flux_open', 'flux_close', 'open/close connection to Flux Message Broker', [author], 3),
     ('man3/flux_open', 'flux_open', 'open/close connection to Flux Message Broker', [author], 3),

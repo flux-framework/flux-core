@@ -220,6 +220,7 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_msg_handler_destroy.3 \
 	man3/flux_msg_handler_start.3 \
 	man3/flux_msg_handler_stop.3 \
+	man3/flux_get_handle_watcher.3 \
 	man3/flux_msg_handler_delvec.3 \
 	man3/flux_child_watcher_get_rpid.3 \
 	man3/flux_child_watcher_get_rstatus.3 \
