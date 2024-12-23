@@ -32,6 +32,10 @@ flux_watcher_t *watcher_create (flux_reactor_t *r,
                                 flux_watcher_f fn,
                                 void *arg)
 {
+    if (!r || data_size == 0 || !ops) {
+        errno = EINVAL;
+        return NULL;
+    }
     struct flux_watcher *w = calloc (1, sizeof (*w) + data_size);
     if (!w)
         return NULL;
