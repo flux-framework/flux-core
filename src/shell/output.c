@@ -49,10 +49,7 @@
 #include <flux/core.h>
 
 #include "src/common/libidset/idset.h"
-#include "src/common/libeventlog/eventlog.h"
-#include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libioencode/ioencode.h"
-#include "src/common/libutil/parse_size.h"
 #include "ccan/str/str.h"
 
 #include "task.h"
@@ -62,12 +59,7 @@
 #include "log.h"
 #include "output/filehash.h"
 #include "output/client.h"
-
-#define SINGLEUSER_OUTPUT_LIMIT "1G"
-#define MULTIUSER_OUTPUT_LIMIT  "10M"
-#define OUTPUT_LIMIT_MAX        1073741824
-/* 104857600 = 100M */
-#define OUTPUT_LIMIT_WARNING    104857600
+#include "output/kvs.h"
 
 enum {
     FLUX_OUTPUT_TYPE_KVS = 1,
@@ -76,7 +68,6 @@ enum {
 
 struct output_stream {
     int type;
-    size_t bytes;
     const char *buffer_type;
     const char *template;
     const char *mode;
@@ -87,216 +78,14 @@ struct output_stream {
 struct shell_output {
     flux_shell_t *shell;
     struct output_client *client;
-    const char *kvs_limit_string;
-    size_t kvs_limit_bytes;
-    struct eventlogger *ev;
-    double batch_timeout;
+    struct kvs_output *kvs;
     int refcount;
     struct idset *active_shells;
-    json_t *output;
     struct filehash *files;
     struct output_stream stdout;
     struct output_stream stderr;
 };
 
-static int shell_output_redirect_stream (struct shell_output *out,
-                                         flux_kvs_txn_t *txn,
-                                         const char *stream,
-                                         const char *path)
-{
-    struct idset *idset = NULL;
-    json_t *entry = NULL;
-    char *entrystr = NULL;
-    int saved_errno, rc = -1;
-    char *rankptr = NULL;
-    int ntasks = out->shell->info->rankinfo.ntasks;
-
-    if (ntasks > 1) {
-        int flags = IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE;
-        if (!(idset = idset_create (ntasks, 0))) {
-            shell_log_errno ("idset_create");
-            goto error;
-        }
-        if (idset_range_set (idset, 0, ntasks - 1) < 0) {
-            shell_log_errno ("idset_range_set");
-            goto error;
-        }
-        if (!(rankptr = idset_encode (idset, flags))) {
-            shell_log_errno ("idset_encode");
-            goto error;
-        }
-    }
-    else {
-        if (asprintf (&rankptr, "%d", 0) < 0) {
-            shell_log_errno ("asprintf");
-            goto error;
-        }
-    }
-
-    if (!(entry = eventlog_entry_pack (0., "redirect",
-                                       "{ s:s s:s s:s }",
-                                       "stream", stream,
-                                       "rank", rankptr,
-                                       "path", path))) {
-        shell_log_errno ("eventlog_entry_pack");
-        goto error;
-    }
-    if (!(entrystr = eventlog_entry_encode (entry))) {
-        shell_log_errno ("eventlog_entry_encode");
-        goto error;
-    }
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", entrystr) < 0) {
-        shell_log_errno ("flux_kvs_txn_put");
-        goto error;
-    }
-    rc = 0;
-error:
-    /* on error, future destroyed via shell_output destroy */
-    saved_errno = errno;
-    json_decref (entry);
-    free (entrystr);
-    free (rankptr);
-    idset_destroy (idset);
-    errno = saved_errno;
-    return rc;
-}
-
-static int shell_output_redirect (struct shell_output *out, flux_kvs_txn_t *txn)
-{
-    /* if file redirected, output redirect event */
-    if (out->stdout.type == FLUX_OUTPUT_TYPE_FILE) {
-        if (shell_output_redirect_stream (out,
-                                          txn,
-                                          "stdout",
-                                          out->stdout.fp->path) < 0)
-            return -1;
-    }
-    if (out->stderr.type == FLUX_OUTPUT_TYPE_FILE) {
-        if (shell_output_redirect_stream (out,
-                                          txn,
-                                          "stderr",
-                                          out->stderr.fp->path) < 0)
-            return -1;
-    }
-    return 0;
-}
-
-static int shell_output_kvs_init (struct shell_output *out, json_t *header)
-{
-    flux_kvs_txn_t *txn = NULL;
-    flux_future_t *f = NULL;
-    char *headerstr = NULL;
-    int saved_errno;
-    int rc = -1;
-
-    if (!(headerstr = eventlog_entry_encode (header)))
-        goto error;
-    if (!(txn = flux_kvs_txn_create ()))
-        goto error;
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", headerstr) < 0)
-        goto error;
-    if (shell_output_redirect (out, txn) < 0)
-        goto error;
-    if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
-        goto error;
-    /* Wait synchronously for guest.output to be committed to kvs so
-     * that the output eventlog is guaranteed to exist before shell.init
-     * event is emitted to the exec.eventlog.
-     */
-    if (flux_future_get (f, NULL) < 0)
-        shell_die_errno (1, "failed to create header in output eventlog");
-    rc = 0;
-error:
-    saved_errno = errno;
-    flux_kvs_txn_destroy (txn);
-    free (headerstr);
-    flux_future_destroy (f);
-    errno = saved_errno;
-    return rc;
-}
-
-/*  Return true if entry is a kvs destination, false otherwise.
- *  If true, then then stream and len will be set to the stream and
- *   length of data in this entry.
- */
-static bool entry_output_is_kvs (struct shell_output *out,
-                                 json_t *entry,
-                                 bool *stdoutp,
-                                 int *lenp,
-                                 bool *eofp)
-{
-    json_t *context;
-    const char *name;
-    const char *stream;
-
-    if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
-        shell_log_errno ("eventlog_entry_parse");
-        return 0;
-    }
-    if (streq (name, "data")) {
-        if (iodecode (context, &stream, NULL, NULL, lenp, eofp) < 0) {
-            shell_log_errno ("iodecode");
-            return 0;
-        }
-        if ((*stdoutp = streq (stream, "stdout")))
-            return (out->stdout.type == FLUX_OUTPUT_TYPE_KVS);
-        else
-            return (out->stderr.type == FLUX_OUTPUT_TYPE_KVS);
-    }
-    return 0;
-}
-
-static bool check_kvs_output_limit (struct shell_output *out,
-                                    bool is_stdout,
-                                    int len)
-{
-    const char *stream;
-    size_t *bytesp;
-    size_t prev;
-
-    if (is_stdout) {
-        stream = "stdout";
-        bytesp = &out->stdout.bytes;
-    }
-    else {
-        stream = "stderr";
-        bytesp = &out->stderr.bytes;
-    }
-
-    prev = *bytesp;
-    *bytesp += len;
-
-    if (*bytesp > out->kvs_limit_bytes) {
-        /*  Only log an error when the threshold is reached.
-        */
-        if (prev <= out->kvs_limit_bytes)
-            shell_warn ("%s will be truncated, %s limit exceeded",
-                        stream,
-                        out->kvs_limit_string);
-        return true;
-    }
-    return false;
-}
-
-static int shell_output_kvs (struct shell_output *out)
-{
-    json_t *entry;
-    size_t index;
-    bool is_stdout;
-    int len;
-    bool eof;
-
-    json_array_foreach (out->output, index, entry) {
-        if (entry_output_is_kvs (out, entry, &is_stdout, &len, &eof)) {
-            bool truncate = check_kvs_output_limit (out, is_stdout, len);
-            if (!truncate || eof) {
-                if (eventlogger_append_entry (out->ev, 0, "output", entry) < 0)
-                    return shell_log_errno ("eventlogger_append");
-            }
-        }
-    }
-    return 0;
-}
 
 static int shell_output_data (struct shell_output *out, json_t *context)
 {
@@ -316,10 +105,8 @@ static int shell_output_data (struct shell_output *out, json_t *context)
     else
         output = &out->stderr;
 
-    if (output->type == FLUX_OUTPUT_TYPE_FILE) {
-        if (file_entry_write (output->fp, rank, data, len) < 0)
+    if (file_entry_write (output->fp, rank, data, len) < 0)
         goto out;
-    }
     rc = 0;
 out:
     free (data);
@@ -370,87 +157,34 @@ static void shell_output_log (struct shell_output *out, json_t *context)
     dprintf (fd, ": %s\n", msg);
 }
 
-static int shell_output_file (struct shell_output *out)
+static int shell_output_file (struct shell_output *out,
+                              const char *name,
+                              json_t *context)
 {
-    json_t *entry;
-    size_t index;
-
-    json_array_foreach (out->output, index, entry) {
-        json_t *context;
-        const char *name;
-        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
-            shell_log_errno ("eventlog_entry_parse");
+    if (streq (name, "data")) {
+        if (shell_output_data (out, context) < 0) {
+            shell_log_errno ("shell_output_data");
             return -1;
         }
-        if (streq (name, "data")) {
-            if (shell_output_data (out, context) < 0) {
-                shell_log_errno ("shell_output_data");
-                return -1;
-            }
-        }
-        else if (streq (name, "log"))
-            shell_output_log (out, context);
-   }
+    }
+    else if (streq (name, "log"))
+        shell_output_log (out, context);
     return 0;
-}
-
-static void output_truncation_warning (struct shell_output *out)
-{
-    bool warned = false;
-    if (out->stderr.type == FLUX_OUTPUT_TYPE_KVS
-        && out->stderr.bytes > out->kvs_limit_bytes) {
-        shell_warn ("stderr: %zu of %zu bytes truncated",
-                    out->stderr.bytes - out->kvs_limit_bytes,
-                    out->stderr.bytes);
-        warned = true;
-    }
-    if (out->stdout.type == FLUX_OUTPUT_TYPE_KVS &&
-        out->stdout.bytes > out->kvs_limit_bytes) {
-        shell_warn ("stdout: %zu of %zu bytes truncated",
-                    out->stdout.bytes - out->kvs_limit_bytes,
-                    out->stdout.bytes);
-        warned = true;
-    }
-    if (out->stderr.type == FLUX_OUTPUT_TYPE_KVS
-        && (out->stderr.bytes > OUTPUT_LIMIT_WARNING
-            && out->stderr.bytes <= OUTPUT_LIMIT_MAX)) {
-        shell_warn ("high stderr volume (%s), "
-                    "consider redirecting to a file next time "
-                    "(e.g. use --output=FILE)",
-                    encode_size (out->stderr.bytes));
-        warned = true;
-    }
-    if (out->stdout.type == FLUX_OUTPUT_TYPE_KVS
-        && (out->stdout.bytes > OUTPUT_LIMIT_WARNING
-            && out->stdout.bytes <= OUTPUT_LIMIT_MAX)) {
-        shell_warn ("high stdout volume (%s), "
-                    "consider redirecting to a file next time "
-                    "(e.g. use --output=FILE)",
-                    encode_size (out->stdout.bytes));
-        warned = true;
-    }
-    /* Ensure KVS output is flushed to eventlogger if a warning was issued:
-     */
-    if (warned)
-        shell_output_kvs (out);
 }
 
 static void shell_output_decref (struct shell_output *out,
                                  flux_msg_handler_t *mh)
 {
     if (--out->refcount == 0) {
-        output_truncation_warning (out);
         if (mh)
             flux_msg_handler_stop (mh);
         if (flux_shell_remove_completion_ref (out->shell, "output.write") < 0)
             shell_log_errno ("flux_shell_remove_completion_ref");
 
-        /* no more output is coming, flush the last batch of output */
-        if ((out->stdout.type == FLUX_OUTPUT_TYPE_KVS
-            || (out->stderr.type == FLUX_OUTPUT_TYPE_KVS))) {
-            if (eventlogger_flush (out->ev) < 0)
-                shell_log_errno ("eventlogger_flush");
-        }
+        /* no more output is coming, "close" kvs eventlog, check for
+         * any output truncation, etc.
+         */
+        kvs_output_close (out->kvs);
     }
 }
 
@@ -469,36 +203,27 @@ static int shell_output_write_leader (struct shell_output *out,
                                       json_t *o,
                                       flux_msg_handler_t *mh) // may be NULL
 {
-    json_t *entry;
+    struct output_stream *ostream = &out->stderr;
 
     if (streq (type, "eof")) {
         shell_output_decref_shell_rank (out, shell_rank, mh);
         return 0;
     }
-    if (!(entry = eventlog_entry_pack (0., type, "O", o))) // increfs 'o'
-        goto error;
-    if (json_array_append_new (out->output, entry) < 0) {
-        json_decref (entry);
-        errno = ENOMEM;
-        goto error;
+    if (streq (type, "data")) {
+        const char *stream = "stderr"; // default to stderr
+        (void) iodecode (o, &stream, NULL, NULL, NULL, NULL);
+        if (streq (stream, "stdout"))
+            ostream = &out->stdout;
     }
-    if ((out->stdout.type == FLUX_OUTPUT_TYPE_KVS
-         || (out->stderr.type == FLUX_OUTPUT_TYPE_KVS))) {
-        if (shell_output_kvs (out) < 0)
-            shell_die_errno (1, "shell_output_kvs");
+    if (ostream->type == FLUX_OUTPUT_TYPE_KVS) {
+        if (kvs_output_write_entry (out->kvs, type, o) < 0)
+            shell_die_errno (1, "kvs_output_write");
     }
-    if ((out->stdout.type == FLUX_OUTPUT_TYPE_FILE
-         || (out->stderr.type == FLUX_OUTPUT_TYPE_FILE))) {
-        if (shell_output_file (out) < 0)
+    else if (ostream->type == FLUX_OUTPUT_TYPE_FILE) {
+        if (shell_output_file (out, type, o) < 0)
             shell_log_errno ("shell_output_file");
     }
-    if (json_array_clear (out->output) < 0) {
-        shell_log_error ("json_array_clear failed");
-        goto error;
-    }
     return 0;
-error:
-    return -1;
 }
 
 /* Convert 'iodecode' object to an valid RFC 24 data event.
@@ -582,28 +307,13 @@ static int shell_output_handler (flux_plugin_t *p,
     return shell_output_write_type (out, "data", context);
 }
 
-void shell_output_destroy (struct shell_output *out)
+static void shell_output_destroy (struct shell_output *out)
 {
     if (out) {
         int saved_errno = errno;
-
         output_client_destroy (out->client);
         filehash_destroy (out->files);
-
-        if (out->output && json_array_size (out->output) > 0) { // leader only
-            if ((out->stdout.type == FLUX_OUTPUT_TYPE_KVS)
-                || (out->stderr.type == FLUX_OUTPUT_TYPE_KVS)) {
-                if (shell_output_kvs (out) < 0)
-                    shell_log_errno ("shell_output_kvs");
-            }
-            if ((out->stdout.type == FLUX_OUTPUT_TYPE_FILE
-                 || (out->stderr.type == FLUX_OUTPUT_TYPE_FILE))) {
-                if (shell_output_file (out) < 0)
-                    shell_log_errno ("shell_output_file");
-            }
-        }
-        json_decref (out->output);
-        eventlogger_destroy (out->ev);
+        kvs_output_destroy (out->kvs);
         idset_destroy (out->active_shells);
         free (out);
         errno = saved_errno;
@@ -637,107 +347,6 @@ static struct file_entry *shell_output_open_file (struct shell_output *out,
         shell_log_error ("%s", error.text);
     free (path);
     return fp;
-}
-
-static int shell_output_type_file_setup (struct shell_output *out)
-{
-    if (out->stdout.type == FLUX_OUTPUT_TYPE_FILE
-        && !(out->stdout.fp = shell_output_open_file (out, &out->stdout)))
-        return -1;
-
-    if (out->stderr.type == FLUX_OUTPUT_TYPE_FILE
-        && !(out->stderr.fp = shell_output_open_file (out, &out->stderr)))
-        return -1;
-    return 0;
-}
-
-/* Write RFC 24 header event to KVS.  Assume:
- * - fixed utf-8 encoding for stdout, stderr
- * - no options
- * - no stdlog
- */
-static int shell_output_header (struct shell_output *out)
-{
-    json_t *o = NULL;
-    int rc = -1;
-
-    o = eventlog_entry_pack (0, "header",
-                             "{s:i s:{s:s s:s} s:{s:i s:i} s:{}}",
-                             "version", 1,
-                             "encoding",
-                               "stdout", "UTF-8",
-                               "stderr", "UTF-8",
-                             "count",
-                               "stdout", out->shell->info->total_ntasks,
-                               "stderr", out->shell->info->total_ntasks,
-                             "options");
-    if (!o) {
-        errno = ENOMEM;
-        goto error;
-    }
-    /* emit initial output events.
-     */
-    if (shell_output_kvs_init (out, o) < 0) {
-        shell_log_errno ("shell_output_kvs_init");
-        goto error;
-    }
-    rc = 0;
-error:
-    json_decref (o);
-    return rc;
-}
-
-static void output_ref (struct eventlogger *ev, void *arg)
-{
-    struct shell_output *out = arg;
-    flux_shell_add_completion_ref (out->shell, "output.txn");
-}
-
-
-static void output_unref (struct eventlogger *ev, void *arg)
-{
-    struct shell_output *out = arg;
-    flux_shell_remove_completion_ref (out->shell, "output.txn");
-}
-
-static int output_eventlogger_reconnect (flux_plugin_t *p,
-                                         const char *topic,
-                                         flux_plugin_arg_t *args,
-                                         void *data)
-{
-    flux_shell_t *shell = flux_plugin_get_shell (p);
-
-    /* during a reconnect, response to event logging may not occur,
-     * thus output_unref() may not be called.  Clear all completion
-     * references to inflight transactions.
-     */
-
-    while (flux_shell_remove_completion_ref (shell, "output.txn") == 0);
-    return 0;
-}
-
-static int output_eventlogger_start (struct shell_output *out)
-{
-    flux_t *h = flux_shell_get_flux (out->shell);
-    struct eventlogger_ops ops = {
-        .busy = output_ref,
-        .idle = output_unref
-    };
-
-    out->batch_timeout = 0.5;
-
-    if (flux_shell_getopt_unpack (out->shell,
-                                  "output",
-                                  "{s?F}",
-                                  "batch-timeout", &out->batch_timeout) < 0)
-        return shell_log_errno ("invalid output.batch-timeout option");
-
-    shell_debug ("batch timeout = %.3fs", out->batch_timeout);
-
-    out->ev = eventlogger_create (h, out->batch_timeout, &ops, out);
-    if (!out->ev)
-        return shell_log_errno ("eventlogger_create");
-    return 0;
 }
 
 static int log_output (flux_plugin_t *p,
@@ -786,58 +395,6 @@ static int shell_lost (flux_plugin_t *p,
     return 0;
 }
 
-static int get_output_limit (struct shell_output *out)
-{
-    json_t *val = NULL;
-    uint64_t size;
-
-    /*  For single-user instances, cap at reasonable size limit.
-     *  O/w use the default multiuser output limit:
-     */
-    if (out->shell->broker_owner == getuid())
-        out->kvs_limit_string = SINGLEUSER_OUTPUT_LIMIT;
-    else
-        out->kvs_limit_string = MULTIUSER_OUTPUT_LIMIT;
-
-    if (flux_shell_getopt_unpack (out->shell,
-                                  "output",
-                                  "{s?o}",
-                                  "limit", &val) < 0) {
-        shell_log_error ("Unable to unpack shell output.limit");
-        return -1;
-    }
-    if (val != NULL) {
-        if (json_is_integer (val)) {
-            json_int_t limit = json_integer_value (val);
-            if (limit <= 0 || limit > OUTPUT_LIMIT_MAX) {
-                shell_log ("Invalid KVS output.limit=%ld", (long) limit);
-                return -1;
-            }
-            out->kvs_limit_bytes = (size_t) limit;
-            /*  Need a string representation of limit for errors
-             */
-            char *s = strdup (encode_size (out->kvs_limit_bytes));
-            if (s && flux_shell_aux_set (out->shell, NULL, s, free) < 0)
-                free (s);
-            else
-                out->kvs_limit_string = s;
-            return 0;
-        }
-        if (!(out->kvs_limit_string = json_string_value (val))) {
-            shell_log_error ("Unable to convert output.limit to string");
-            return -1;
-        }
-    }
-    if (parse_size (out->kvs_limit_string, &size) < 0
-        || size == 0
-        || size > OUTPUT_LIMIT_MAX) {
-        shell_log ("Invalid KVS output.limit=%s", out->kvs_limit_string);
-        return -1;
-    }
-    out->kvs_limit_bytes = (size_t) size;
-    return 0;
-}
-
 static int output_stream_getopts (flux_shell_t *shell,
                                   const char *name,
                                   struct output_stream *stream)
@@ -877,6 +434,25 @@ static int output_stream_getopts (flux_shell_t *shell,
     return 0;
 }
 
+static int shell_output_open_files (struct shell_output *out)
+{
+    if (out->stdout.type == FLUX_OUTPUT_TYPE_FILE) {
+        if (!(out->stdout.fp = shell_output_open_file (out, &out->stdout))
+            || kvs_output_redirect (out->kvs,
+                                    "stdout",
+                                    out->stdout.fp->path) < 0)
+            return -1;
+    }
+    if (out->stderr.type == FLUX_OUTPUT_TYPE_FILE) {
+        if (!(out->stderr.fp = shell_output_open_file (out, &out->stderr))
+            || kvs_output_redirect (out->kvs,
+                                    "stderr",
+                                    out->stderr.fp->path) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 struct shell_output *shell_output_create (flux_shell_t *shell)
 {
     struct shell_output *out;
@@ -898,7 +474,7 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
     if (output_stream_getopts (shell, "stderr", &out->stderr) < 0)
         goto error;
 
-    if (get_output_limit (out) < 0)
+    if (!(out->files = filehash_create ()))
         goto error;
 
     if (shell->info->shell_rank == 0) {
@@ -930,20 +506,20 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
             goto error;
         if (flux_shell_add_completion_ref (shell, "output.write") < 0)
             goto error;
-        if (!(out->output = json_array ())) {
-            errno = ENOMEM;
+
+        /* Create kvs output eventlog + header
+         */
+        if (!(out->kvs = kvs_output_create (shell)))
             goto error;
-        }
-        if (out->stdout.type == FLUX_OUTPUT_TYPE_FILE
-            || out->stderr.type == FLUX_OUTPUT_TYPE_FILE) {
-            if (!(out->files = filehash_create ())
-                || shell_output_type_file_setup (out) < 0)
-                goto error;
-        }
-        if (output_eventlogger_start (out) < 0)
+
+        /* Open all output files if necessary
+         */
+        if (shell_output_open_files (out) < 0)
             goto error;
-        if (shell_output_header (out) < 0)
-            goto error;
+
+        /* Flush kvs output so eventlog is created
+         */
+        kvs_output_flush (out->kvs);
     }
     else if (!(out->client = output_client_create (shell))) {
         shell_log_errno ("failed to create output service client");
@@ -1138,9 +714,19 @@ static int shell_output_init (flux_plugin_t *p,
     return 0;
 }
 
+static int shell_output_reconnect (flux_plugin_t *p,
+                                   const char *topic,
+                                   flux_plugin_arg_t *args,
+                                   void *data)
+{
+    struct shell_output *out = data;
+    kvs_output_reconnect (out->kvs);
+    return 0;
+}
+
 struct shell_builtin builtin_output = {
     .name = FLUX_SHELL_PLUGIN_NAME,
-    .reconnect = output_eventlogger_reconnect,
+    .reconnect = shell_output_reconnect,
     .init = shell_output_init,
     .task_init = shell_output_task_init,
     .task_exit = shell_output_task_exit,
