@@ -334,6 +334,7 @@ void shell_info_destroy (struct shell_info *info)
         rcalc_destroy (info->rcalc);
         taskmap_destroy (info->taskmap);
         idset_destroy (info->taskids);
+        hostlist_destroy (info->hostlist);
         free (info->hwloc_xml);
         free (info);
         errno = saved_errno;
