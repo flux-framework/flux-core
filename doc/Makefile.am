@@ -204,12 +204,13 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_reactor_run.3 \
 	man3/flux_reactor_stop.3 \
 	man3/flux_reactor_stop_error.3 \
-	man3/flux_reactor_active_incref.3 \
-	man3/flux_reactor_active_decref.3 \
 	man3/flux_fd_watcher_get_fd.3 \
 	man3/flux_watcher_stop.3 \
 	man3/flux_watcher_is_active.3 \
 	man3/flux_watcher_destroy.3 \
+	man3/flux_watcher_ref.3 \
+	man3/flux_watcher_unref.3 \
+	man3/flux_watcher_is_referenced.3 \
 	man3/flux_watcher_next_wakeup.3 \
 	man3/flux_handle_watcher_get_flux.3 \
 	man3/flux_timer_watcher_reset.3 \
@@ -219,6 +220,7 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_msg_handler_destroy.3 \
 	man3/flux_msg_handler_start.3 \
 	man3/flux_msg_handler_stop.3 \
+	man3/flux_get_handle_watcher.3 \
 	man3/flux_msg_handler_delvec.3 \
 	man3/flux_child_watcher_get_rpid.3 \
 	man3/flux_child_watcher_get_rstatus.3 \

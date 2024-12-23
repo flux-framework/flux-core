@@ -35,9 +35,12 @@ void flux_watcher_set_priority (flux_watcher_t *w, int priority);
 
 void flux_watcher_start (flux_watcher_t *w);
 void flux_watcher_stop (flux_watcher_t *w);
+void flux_watcher_ref (flux_watcher_t *w);
+void flux_watcher_unref (flux_watcher_t *w);
 void flux_watcher_destroy (flux_watcher_t *w);
 double flux_watcher_next_wakeup (flux_watcher_t *w);
 bool flux_watcher_is_active (flux_watcher_t *w);
+bool flux_watcher_is_referenced (flux_watcher_t *w);
 
 /* flux_t handle
  */
@@ -133,9 +136,9 @@ flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
                                           double interval,
                                           flux_watcher_f cb,
                                           void *arg);
-void flux_stat_watcher_get_rstat (flux_watcher_t *w,
-                                  struct stat *stat,
-                                  struct stat *prev);
+int flux_stat_watcher_get_rstat (flux_watcher_t *w,
+                                 struct stat *stat,
+                                 struct stat *prev);
 
 #ifdef __cplusplus
 }

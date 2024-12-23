@@ -729,6 +729,12 @@ int flux_dispatch_requeue (flux_t *h)
     return 0;
 }
 
+flux_watcher_t *flux_get_handle_watcher (flux_t *h)
+{
+    struct dispatch *d = dispatch_get (h);
+    return d ? d->w : NULL;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

@@ -25,6 +25,58 @@
 #include "src/common/libtap/tap.h"
 #include "ccan/array_size/array_size.h"
 
+void watcher_is (flux_watcher_t *w,
+                 bool exp_active,
+                 bool exp_referenced,
+                 const char *name,
+                 const char *what)
+{
+    bool is_active = flux_watcher_is_active (w);
+    bool is_referenced = flux_watcher_is_referenced (w);
+
+    ok (is_active == exp_active && is_referenced == exp_referenced,
+        "%s %sact%sref after %s",
+        name,
+        exp_active ? "+" : "-",
+        exp_referenced ? "+" : "-",
+        what);
+    if (is_active != exp_active)
+        diag ("%s is unexpectedly %sact", name, is_active ? "+" : "-");
+    if (is_referenced != exp_referenced)
+        diag ("%s is unexpectedly %sref", name, is_referenced ? "+" : "-");
+}
+
+/* Call this on newly created watcher to check start/stop/is_active and
+ * ref/unref/is_referenced basics.
+ */
+void generic_watcher_check (flux_watcher_t *w, const char *name)
+{
+    /* ref/unref while inactive causes ev_ref/ev_unref to run
+     * in the start/stop callbacks
+     */
+    watcher_is (w, false, true, name, "init");
+    flux_watcher_unref (w);
+    watcher_is (w, false, false, name, "unref");
+    flux_watcher_start (w);
+    watcher_is (w, true, false, name, "start");
+    flux_watcher_stop (w);
+    watcher_is (w, false, false, name, "stop");
+    flux_watcher_ref (w);
+    watcher_is (w, false, true, name, "ref");
+
+    /* ref/unref while active causes ev_ref/ev_unref to run
+     * in the ref/unref callbacks
+     */
+    flux_watcher_start (w);
+    watcher_is (w, true, true, name, "start");
+    flux_watcher_unref (w);
+    watcher_is (w, true, false, name, "unref");
+    flux_watcher_ref (w);
+    watcher_is (w, true, true, name, "ref");
+    flux_watcher_stop (w);
+    watcher_is (w, false, true, name, "stop");
+}
+
 static const size_t fdwriter_bufsize = 10*1024*1024;
 
 static void fdwriter (flux_reactor_t *r,
@@ -117,11 +169,8 @@ static void test_fd (flux_reactor_t *reactor)
     w = flux_fd_watcher_create (reactor, fd[1], FLUX_POLLOUT, fdwriter, NULL);
     ok (r != NULL && w != NULL,
         "fd: reader and writer created");
-    ok (!flux_watcher_is_active (r),
-        "flux_watcher_is_active() returns false");
+    generic_watcher_check (w, "fd");
     flux_watcher_start (r);
-    ok (flux_watcher_is_active (r),
-        "flux_watcher_is_active() returns true after flux_watcher_start()");
     flux_watcher_start (w);
     ok (flux_reactor_run (reactor, 0) == 0,
         "fd: reactor ran to completion after %lu bytes", fdwriter_bufsize);
@@ -177,11 +226,8 @@ static void test_timer (flux_reactor_t *reactor)
         "timer: creating negative repeat fails with EINVAL");
     ok ((w = flux_timer_watcher_create (reactor, 0, 0, oneshot, NULL)) != NULL,
         "timer: creating zero timeout oneshot works");
-    ok (!flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns false");
+    generic_watcher_check (w, "timer");
     flux_watcher_start (w);
-    ok (flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns true after flux_watcher_start()");
     oneshot_runs = 0;
     t0 = flux_reactor_now (reactor);
     ok (flux_reactor_run (reactor, 0) == 0,
@@ -292,11 +338,9 @@ static void test_periodic (flux_reactor_t *reactor)
     ok ((w = flux_periodic_watcher_create (reactor, 0, 0, NULL, oneshot, NULL))
         != NULL,
         "periodic: creating zero offset/interval works");
-    ok (!flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns false");
+    generic_watcher_check (w, "periodic");
     flux_watcher_start (w);
-    ok (flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns true after flux_watcher_start()");
+
     oneshot_runs = 0;
     ok (flux_reactor_run (reactor, 0) == 0,
         "periodic: reactor ran to completion");
@@ -380,11 +424,8 @@ static void test_idle (flux_reactor_t *reactor)
     w = flux_idle_watcher_create (reactor, idle_cb, NULL);
     ok (w != NULL,
         "created idle watcher");
-    ok (!flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns false");
+    generic_watcher_check (w, "idle");
     flux_watcher_start (w);
-    ok (flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns true after flux_watcher_start()");
 
     ok (flux_reactor_run (reactor, 0) == 0,
         "reactor ran successfully");
@@ -437,17 +478,17 @@ static void test_prepcheck (flux_reactor_t *reactor)
     ok (!flux_watcher_is_active (w),
         "flux_watcher_is_active() returns false");
     flux_watcher_start (w);
-    ok (flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns true after flux_watcher_start()");
 
     prep = flux_prepare_watcher_create (reactor, prepare_cb, NULL);
     ok (w != NULL,
         "created prepare watcher");
+    generic_watcher_check (prep, "prep");
     flux_watcher_start (prep);
 
     chk = flux_check_watcher_create (reactor, check_cb, NULL);
     ok (w != NULL,
         "created check watcher");
+    generic_watcher_check (chk, "check");
     flux_watcher_start (chk);
 
     ok (flux_reactor_run (reactor, 0) >= 0,
@@ -495,11 +536,8 @@ static void test_signal (flux_reactor_t *reactor)
     w = flux_signal_watcher_create (reactor, SIGUSR1, sigusr1_cb, NULL);
     ok (w != NULL,
         "created signal watcher");
-    ok (!flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns false");
+    generic_watcher_check (w, "signal");
     flux_watcher_start (w);
-    ok (flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns true after flux_watcher_start()");
 
     idle = flux_idle_watcher_create (reactor, sigidle_cb, NULL);
     ok (idle != NULL,
@@ -549,14 +587,11 @@ static void test_child  (flux_reactor_t *reactor)
     w = flux_child_watcher_create (r, child_pid, false, child_cb, NULL);
     ok (w != NULL,
         "created child watcher");
+    generic_watcher_check (w, "signal");
 
     ok (kill (child_pid, SIGHUP) == 0,
         "sent child SIGHUP");
-    ok (!flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns false");
     flux_watcher_start (w);
-    ok (flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns true after flux_watcher_start()");
 
     ok (flux_reactor_run (r, 0) == 0,
         "reactor ran successfully");
@@ -626,11 +661,8 @@ static void test_stat (flux_reactor_t *reactor)
     w = flux_stat_watcher_create (reactor, ctx.path, 0., stat_cb, &ctx);
     ok (w != NULL,
         "created stat watcher");
-    ok (!flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns false");
+    generic_watcher_check (w, "stat");
     flux_watcher_start (w);
-    ok (flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns true after flux_watcher_start()");
 
     tw = flux_timer_watcher_create (reactor,
                                     0.01,
@@ -640,6 +672,12 @@ static void test_stat (flux_reactor_t *reactor)
     ok (tw != NULL,
         "created timer watcher");
     flux_watcher_start (tw);
+
+    /* Make sure rstat accessor fails if passed the wrong watcher type.
+     */
+    errno = 0;
+    ok (flux_stat_watcher_get_rstat (tw, NULL, NULL) < 0 && errno == EINVAL,
+        "flux_stat_watcher_get_rstat fails with EINVAL on wrong watcher type");
 
     ok (flux_reactor_run (reactor, 0) == 0,
         "reactor ran successfully");
@@ -654,7 +692,46 @@ static void test_stat (flux_reactor_t *reactor)
     free (ctx.path);
 }
 
-static void active_idle_cb (flux_reactor_t *r,
+static int handle_counter = 0;
+static void handle_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
+{
+    handle_counter++;
+    flux_watcher_unref (w);
+}
+
+void test_handle (flux_reactor_t *r)
+{
+    flux_t *h;
+    flux_watcher_t *w;
+
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop handle");
+    w = flux_handle_watcher_create (r, h, FLUX_POLLIN, handle_cb, NULL);
+    ok (w != NULL,
+        "flux_handle_watcher_create works");
+    generic_watcher_check (w, "handle");
+    flux_watcher_start (w);
+
+    flux_msg_t *msg;
+    if (!(msg = flux_request_encode ("foo", "bar")))
+        BAIL_OUT ("could not encode message");
+    if (flux_send (h, msg, 0) < 0)
+        BAIL_OUT ("could not send message");
+    flux_msg_destroy (msg);
+
+    ok (flux_reactor_run (r, 0) == 0,
+        "flux_reactor_run ran");
+    ok (handle_counter == 1,
+        "watcher ran once");
+
+    flux_watcher_destroy (w);
+    flux_close (h);
+}
+
+static void unref_idle_cb (flux_reactor_t *r,
                             flux_watcher_t *w,
                             int revents,
                             void *arg)
@@ -666,41 +743,93 @@ static void active_idle_cb (flux_reactor_t *r,
         flux_reactor_stop_error (r);
 }
 
+static void unref_idle2_cb (flux_reactor_t *r,
+                            flux_watcher_t *w,
+                            int revents,
+                            void *arg)
+{
+    int *count = arg;
+    (*count)++;
 
-static void test_active_ref (flux_reactor_t *r)
+    if (flux_watcher_is_referenced (w)) {
+        diag ("calling flux_watcher_unref on count=%d", *count);
+        flux_watcher_unref (w); // calls ev_unref()
+    }
+    else {
+        diag ("calling flux_watcher_ref on count=%d", *count);
+        flux_watcher_ref (w); // calls ev_ref()
+    }
+}
+
+static void test_unref (flux_reactor_t *r)
 {
     flux_watcher_t *w;
+    flux_watcher_t *w2;
     int count;
 
     ok (flux_reactor_run (r, 0) == 0,
         "flux_reactor_run with no watchers returned immediately");
 
-    if (!(w = flux_idle_watcher_create (r, active_idle_cb, &count)))
+    if (!(w = flux_idle_watcher_create (r, unref_idle_cb, &count)))
+        BAIL_OUT ("flux_idle_watcher_create failed");
+    if (!(w2 = flux_idle_watcher_create (r, unref_idle2_cb, &count)))
         BAIL_OUT ("flux_idle_watcher_create failed");
 
-    ok (!flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns false");
-    flux_watcher_start (w);
-    ok (flux_watcher_is_active (w),
-        "flux_watcher_is_active() returns true after flux_watcher_start()");
+    /* Tests with unref_idle_cb()
+     * Show that ref/unref as expected with watcher inactive.
+     */
 
+    flux_watcher_start (w);
     count = 0;
     ok (flux_reactor_run (r, 0) < 0 && count == 16,
         "flux_reactor_run with one watcher stopped after 16 iterations");
+    flux_watcher_stop (w);
+    ok (flux_watcher_is_referenced (w),
+        "flux_watcher_is_referenced returns true after stop");
 
-    flux_reactor_active_decref (r);
-
+    flux_watcher_unref (w);
+    flux_watcher_start (w); // calls ev_unref()
+    ok (!flux_watcher_is_referenced (w),
+        "flux_watcher_is_referenced returns false after unref/start");
     count = 0;
     ok (flux_reactor_run (r, 0) == 0 && count == 1,
-        "flux_reactor_run with one watcher+decref returned after 1 iteration");
+        "flux_reactor_run with one unref watcher returned after 1 iteration");
+    flux_watcher_stop (w); // calls ev_ref()
 
-    flux_reactor_active_incref (r);
-
+    flux_watcher_ref (w);
+    flux_watcher_start (w);
+    ok (flux_watcher_is_referenced (w),
+        "flux_watcher_is_referenced returns true after ref/start");
     count = 0;
     ok (flux_reactor_run (r, 0) < 0 && count == 16,
-        "flux_reactor_run with one watcher+incref stopped after 16 iterations");
+        "flux_reactor_run with one ref watcher stopped after 16 iterations");
+    flux_watcher_stop (w);
+    ok (flux_watcher_is_referenced (w),
+        "flux_watcher_is_referenced returns true after reactor run");
 
     flux_watcher_destroy (w);
+
+    /* Tests with unref_idle2_cb()
+     * Show that ref/unref works as expected from watcher callback
+     */
+
+    flux_watcher_start (w2);
+
+    ok (flux_watcher_is_referenced (w2),
+        "flux_watcher_is_referenced returns true");
+    count = 0;
+    ok (flux_reactor_run (r, 0) == 0 && count == 1,
+        "flux_reactor_run with one ref watcher returned after 1 iteration");
+    ok (!flux_watcher_is_referenced (w2),
+        "flux_watcher_is_referenced returns false after reactor run");
+
+    count = 0;
+    ok (flux_reactor_run (r, 0) == 0 && count == 2,
+        "flux_reactor_run with one unref watcher returned after 2 iterations");
+    ok (!flux_watcher_is_referenced (w2),
+        "flux_watcher_is_referenced returns false");
+
+    flux_watcher_destroy (w2);
 }
 
 static void reactor_destroy_early (void)
@@ -826,7 +955,8 @@ int main (int argc, char *argv[])
     test_signal (reactor);
     test_child (reactor);
     test_stat (reactor);
-    test_active_ref (reactor);
+    test_handle (reactor);
+    test_unref (reactor);
     test_reactor_flags (reactor);
     test_priority (reactor);
 

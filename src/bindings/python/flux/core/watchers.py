@@ -46,6 +46,14 @@ class Watcher(object):
         raw.flux_watcher_stop(self.handle)
         return self
 
+    def ref(self):
+        raw.flux_watcher_ref(self.handle)
+        return self
+
+    def unref(self):
+        raw.flux_watcher_unref(self.handle)
+        return self
+
     def destroy(self):
         #  Remove this watcher from its owning Flux handle
         #  if the handle is still around. A try/except block

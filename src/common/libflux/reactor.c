@@ -11,7 +11,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <assert.h>
 #include <string.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -125,18 +124,6 @@ void flux_reactor_stop_error (flux_reactor_t *r)
 {
     r->errflag = 1;
     ev_break (r->loop, EVBREAK_ALL);
-}
-
-void flux_reactor_active_incref (flux_reactor_t *r)
-{
-    if (r)
-        ev_ref (r->loop);
-}
-
-void flux_reactor_active_decref (flux_reactor_t *r)
-{
-    if (r)
-        ev_unref (r->loop);
 }
 
 void *reactor_get_loop (flux_reactor_t *r)

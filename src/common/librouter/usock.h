@@ -59,6 +59,9 @@ void usock_server_set_acceptor (struct usock_server *server,
                                 usock_acceptor_f cb,
                                 void *arg);
 
+// accessor for start/stop/ref/unref
+flux_watcher_t *usock_server_listen_watcher (struct usock_server *server);
+
 /* Server connection for one client
  */
 

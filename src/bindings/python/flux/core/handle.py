@@ -331,18 +331,14 @@ class Flux(Wrapper):
             reactor_interrupted = True
             handle.reactor_stop(reactor)
 
-        with self.signal_watcher_create(signal.SIGINT, reactor_interrupt):
+        with self.signal_watcher_create(signal.SIGINT, reactor_interrupt) as w:
             with self.in_reactor():
                 # This signal watcher should not take a reference on reactor
                 #  o/w the reactor may not exit as expected when all other
                 #  active watchers and msghandlers are complete.
                 #
-                self.reactor_active_decref(reactor)
+                w.unref()
                 rc = self.flux_reactor_run(reactor, flags)
-                #  Re-establish signal watcher reference so reactor refcount
-                #   doesn't underflow when signal watcher is destroyed
-                #
-                self.reactor_active_incref(reactor)
             if reactor_interrupted:
                 raise KeyboardInterrupt
             Flux.raise_if_exception()
@@ -360,16 +356,6 @@ class Flux(Wrapper):
         if reactor is None:
             reactor = self.get_reactor()
         self.flux_reactor_stop_error(reactor)
-
-    def reactor_incref(self, reactor=None):
-        if reactor is None:
-            reactor = self.get_reactor()
-        self.reactor_active_incref(reactor)
-
-    def reactor_decref(self, reactor=None):
-        if reactor is None:
-            reactor = self.get_reactor()
-        self.reactor_active_decref(reactor)
 
     def service_register(self, name):
         return Future(self.flux_service_register(name))

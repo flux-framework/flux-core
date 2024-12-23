@@ -19,6 +19,8 @@ struct flux_watcher_ops {
     void (*set_priority) (flux_watcher_t *w, int priority);
     void (*start) (flux_watcher_t *w);
     void (*stop) (flux_watcher_t *w);
+    void (*ref) (flux_watcher_t *w);
+    void (*unref) (flux_watcher_t *w);
     void (*destroy) (flux_watcher_t *w);
     bool (*is_active) (flux_watcher_t *w);
 };

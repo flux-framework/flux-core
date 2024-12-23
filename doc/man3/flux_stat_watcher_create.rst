@@ -22,9 +22,9 @@ SYNOPSIS
                                              flux_watcher_f callback,
                                              void *arg);
 
-   void flux_stat_watcher_get_rstat (flux_watcher_t *w,
-                                     struct stat *stat,
-                                     struct stat *prev);
+   int flux_stat_watcher_get_rstat (flux_watcher_t *w,
+                                    struct stat *stat,
+                                    struct stat *prev);
 
 Link with :command:`-lflux-core`.
 
@@ -55,12 +55,18 @@ RETURN VALUE
 :func:`flux_stat_watcher_create` returns a :type:`flux_watcher_t` object
 on success.  On error, NULL is returned, and :var:`errno` is set appropriately.
 
+:func:`flux_stat_watcher_get_rstat` returns 0 on success.  On error, -1 is
+returned and :var:`errno` is set appropriately.
+
 
 ERRORS
 ======
 
 ENOMEM
    Out of memory.
+
+EINVAL
+   Invalid argument.
 
 
 RESOURCES

@@ -25,6 +25,25 @@
 static const size_t zmqwriter_msgcount = 1024;
 static void *zctx;
 
+void watcher_is (flux_watcher_t *w,
+                 bool exp_active,
+                 bool exp_referenced,
+                 const char *what)
+{
+    bool is_active = flux_watcher_is_active (w);
+    bool is_referenced = flux_watcher_is_referenced (w);
+
+    ok (is_active == exp_active && is_referenced == exp_referenced,
+        "%sact%sref after %s",
+        exp_active ? "+" : "-",
+        exp_referenced ? "+" : "-",
+        what);
+    if (is_active != exp_active)
+        diag ("unexpectedly %sact", is_active ? "+" : "-");
+    if (is_referenced != exp_referenced)
+        diag ("unexpectedly %sref", is_referenced ? "+" : "-");
+}
+
 static void zmqwriter (flux_reactor_t *r,
                        flux_watcher_t *w,
                        int revents,
@@ -87,6 +106,7 @@ static void test_zmq (flux_reactor_t *reactor)
     void *zs[2];
     flux_watcher_t *r, *w;
     const char *uri = "inproc://test_zmq";
+    flux_watcher_t *tmp;
 
     zs[0] = zmq_socket (zctx, ZMQ_PAIR);
     zs[1] = zmq_socket (zctx, ZMQ_PAIR);
@@ -94,21 +114,46 @@ static void test_zmq (flux_reactor_t *reactor)
         && zmq_bind (zs[0], uri) == 0
         && zmq_connect (zs[1], uri) == 0,
         "zmq: connected ZMQ_PAIR sockets over inproc");
+
+    errno = 0;
+    ok (zmqutil_watcher_create (NULL, zs[0], FLUX_POLLIN, NULL, NULL) == NULL
+        && errno == EINVAL,
+        "zmqutil_watcher_create r=NULL fails with EINVAL");
+
+    tmp = flux_idle_watcher_create (reactor, NULL, NULL);
+    if (!tmp)
+        BAIL_OUT ("could not create idle watcher");
+    errno = 0;
+    ok (zmqutil_watcher_get_zsock (tmp) == NULL && errno == EINVAL,
+        "zmqutil_watcher_get_zsock w=idle fails with EINVAL");
+    flux_watcher_destroy (tmp);
+
     r = zmqutil_watcher_create (reactor, zs[0], FLUX_POLLIN, zmqreader, NULL);
     w = zmqutil_watcher_create (reactor, zs[1], FLUX_POLLOUT, zmqwriter, NULL);
     ok (r != NULL && w != NULL,
         "zmq: nonblocking reader and writer created");
-    ok (flux_watcher_is_active (r) == false,
-        "flux_watcher_is_active() returns false on create");
+
+    flux_watcher_start (w);
+    watcher_is (w, true, true, "start");
+    flux_watcher_unref (w);
+    watcher_is (w, true, false, "unref");
+    flux_watcher_ref (w);
+    watcher_is (w, true, true, "ref");
+    flux_watcher_stop (w);
+    watcher_is (w, false, true, "stop");
+
     flux_watcher_start (r);
-    ok (flux_watcher_is_active (r) == true,
-        "flux_watcher_is_active() returns true after start");
     flux_watcher_start (w);
     ok (flux_reactor_run  (reactor, 0) == 0,
         "zmq: reactor ran to completion after %d messages", zmqwriter_msgcount);
     flux_watcher_stop (r);
     ok (flux_watcher_is_active (r) == false,
         "flux_watcher_is_active() returns false after stop");
+    ok (flux_watcher_is_referenced (w),
+        "flux_watcher_is_referenced() returns true");
+    flux_watcher_unref (w);
+    ok (!flux_watcher_is_referenced (w),
+        "flux_watcher_is_referenced() returns false after unref");
     flux_watcher_stop (w);
     flux_watcher_destroy (r);
     flux_watcher_destroy (w);

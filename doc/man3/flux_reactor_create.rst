@@ -21,10 +21,6 @@ SYNOPSIS
 
   void flux_reactor_stop_error (flux_reactor_t *r);
 
-  void flux_reactor_active_incref (flux_reactor_t *r);
-
-  void flux_reactor_active_decref (flux_reactor_t *r);
-
 Link with :command:`-lflux-core`.
 
 DESCRIPTION
@@ -80,16 +76,6 @@ The caller should ensure that a valid error code has been assigned to
 :func:`flux_reactor_destroy` releases an internal reference taken at
 :func:`flux_reactor_create` time. Freeing of the underlying resources will
 be deferred if there are any remaining watchers associated with the reactor.
-
-:func:`flux_reactor_active_decref` and :func:`flux_reactor_active_incref`
-manipulate the reactor's internal count of active watchers. Each active
-watcher takes a reference count on the reactor, and the reactor returns
-when this count reaches zero. It is useful sometimes to have a watcher that
-can remain active without preventing the reactor from exiting. To achieve this,
-call :func:`flux_reactor_active_decref` after the watcher is started, and
-:func:`flux_reactor_active_incref` before the watcher is stopped.
-Remember that destroying an active reactor internally stops it,
-so be sure to stop/incref such a watcher first.
 
 
 RETURN VALUE

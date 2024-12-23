@@ -62,6 +62,9 @@ void flux_msg_handler_delvec (flux_msg_handler_t *msg_handlers[]);
  */
 int flux_dispatch_requeue (flux_t *h);
 
+// accessor for start/stop/ref/unref
+flux_watcher_t *flux_get_handle_watcher (flux_t *h);
+
 #ifdef __cplusplus
 }
 #endif
