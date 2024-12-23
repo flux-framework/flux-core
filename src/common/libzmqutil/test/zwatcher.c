@@ -106,6 +106,7 @@ static void test_zmq (flux_reactor_t *reactor)
     void *zs[2];
     flux_watcher_t *r, *w;
     const char *uri = "inproc://test_zmq";
+    flux_watcher_t *tmp;
 
     zs[0] = zmq_socket (zctx, ZMQ_PAIR);
     zs[1] = zmq_socket (zctx, ZMQ_PAIR);
@@ -113,6 +114,20 @@ static void test_zmq (flux_reactor_t *reactor)
         && zmq_bind (zs[0], uri) == 0
         && zmq_connect (zs[1], uri) == 0,
         "zmq: connected ZMQ_PAIR sockets over inproc");
+
+    errno = 0;
+    ok (zmqutil_watcher_create (NULL, zs[0], FLUX_POLLIN, NULL, NULL) == NULL
+        && errno == EINVAL,
+        "zmqutil_watcher_create r=NULL fails with EINVAL");
+
+    tmp = flux_idle_watcher_create (reactor, NULL, NULL);
+    if (!tmp)
+        BAIL_OUT ("could not create idle watcher");
+    errno = 0;
+    ok (zmqutil_watcher_get_zsock (tmp) == NULL && errno == EINVAL,
+        "zmqutil_watcher_get_zsock w=idle fails with EINVAL");
+    flux_watcher_destroy (tmp);
+
     r = zmqutil_watcher_create (reactor, zs[0], FLUX_POLLIN, zmqreader, NULL);
     w = zmqutil_watcher_create (reactor, zs[1], FLUX_POLLOUT, zmqwriter, NULL);
     ok (r != NULL && w != NULL,
