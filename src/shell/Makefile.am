@@ -81,6 +81,9 @@ flux_shell_SOURCES = \
 	output/client.c \
 	output/kvs.h \
 	output/kvs.c \
+	output/conf.h \
+	output/conf.c \
+	output/output.h \
 	svc.c \
 	svc.h \
 	kill.c \

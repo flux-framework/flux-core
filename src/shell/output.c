@@ -60,31 +60,8 @@
 #include "output/filehash.h"
 #include "output/client.h"
 #include "output/kvs.h"
-
-enum {
-    FLUX_OUTPUT_TYPE_KVS = 1,
-    FLUX_OUTPUT_TYPE_FILE = 2,
-};
-
-struct output_stream {
-    int type;
-    const char *buffer_type;
-    const char *template;
-    const char *mode;
-    int label;
-    struct file_entry *fp;
-};
-
-struct shell_output {
-    flux_shell_t *shell;
-    struct output_client *client;
-    struct kvs_output *kvs;
-    int refcount;
-    struct idset *active_shells;
-    struct filehash *files;
-    struct output_stream stdout;
-    struct output_stream stderr;
-};
+#include "output/conf.h"
+#include "output/output.h"
 
 
 static int shell_output_data (struct shell_output *out, json_t *context)
@@ -101,9 +78,9 @@ static int shell_output_data (struct shell_output *out, json_t *context)
         return -1;
     }
     if (streq (stream, "stdout"))
-        output = &out->stdout;
+        output = &out->conf->out;
     else
-        output = &out->stderr;
+        output = &out->conf->err;
 
     if (file_entry_write (output->fp, rank, data, len) < 0)
         goto out;
@@ -129,7 +106,7 @@ static void shell_output_log (struct shell_output *out, json_t *context)
     int rank = -1;
     int line = -1;
     int level = -1;
-    int fd = out->stderr.fp->fd;
+    int fd = out->conf->err.fp->fd;
     json_error_t error;
 
     if (json_unpack_ex (context,
@@ -203,7 +180,7 @@ static int shell_output_write_leader (struct shell_output *out,
                                       json_t *o,
                                       flux_msg_handler_t *mh) // may be NULL
 {
-    struct output_stream *ostream = &out->stderr;
+    struct output_stream *ostream = &out->conf->err;
 
     if (streq (type, "eof")) {
         shell_output_decref_shell_rank (out, shell_rank, mh);
@@ -213,7 +190,7 @@ static int shell_output_write_leader (struct shell_output *out,
         const char *stream = "stderr"; // default to stderr
         (void) iodecode (o, &stream, NULL, NULL, NULL, NULL);
         if (streq (stream, "stdout"))
-            ostream = &out->stdout;
+            ostream = &out->conf->out;
     }
     if (ostream->type == FLUX_OUTPUT_TYPE_KVS) {
         if (kvs_output_write_entry (out->kvs, type, o) < 0)
@@ -311,6 +288,7 @@ static void shell_output_destroy (struct shell_output *out)
 {
     if (out) {
         int saved_errno = errno;
+        output_config_destroy (out->conf);
         output_client_destroy (out->client);
         filehash_destroy (out->files);
         kvs_output_destroy (out->kvs);
@@ -395,59 +373,21 @@ static int shell_lost (flux_plugin_t *p,
     return 0;
 }
 
-static int output_stream_getopts (flux_shell_t *shell,
-                                  const char *name,
-                                  struct output_stream *stream)
-{
-    const char *type = NULL;
-
-    if (flux_shell_getopt_unpack (shell,
-                                  "output",
-                                  "{s?s s?{s?s s?s s?b s?{s?s}}}",
-                                  "mode", &stream->mode,
-                                  name,
-                                   "type", &type,
-                                   "path", &stream->template,
-                                   "label", &stream->label,
-                                   "buffer",
-                                     "type", &stream->buffer_type) < 0) {
-        shell_log_error ("failed to read %s output options", name);
-        return -1;
-    }
-    if (type && streq (type, "kvs")) {
-        stream->template = NULL;
-        stream->type = FLUX_OUTPUT_TYPE_KVS;
-        return 0;
-    }
-    if (stream->template)
-        stream->type = FLUX_OUTPUT_TYPE_FILE;
-
-    if (strcasecmp (stream->buffer_type, "none") == 0)
-        stream->buffer_type = "none";
-    else if (strcasecmp (stream->buffer_type, "line") == 0)
-        stream->buffer_type = "line";
-    else {
-        shell_log_error ("invalid buffer type specified: %s",
-                         stream->buffer_type);
-        stream->buffer_type = "line";
-    }
-    return 0;
-}
-
 static int shell_output_open_files (struct shell_output *out)
 {
-    if (out->stdout.type == FLUX_OUTPUT_TYPE_FILE) {
-        if (!(out->stdout.fp = shell_output_open_file (out, &out->stdout))
+    if (out->conf->out.type == FLUX_OUTPUT_TYPE_FILE) {
+        if (!(out->conf->out.fp = shell_output_open_file (out,
+                                                             &out->conf->out))
             || kvs_output_redirect (out->kvs,
                                     "stdout",
-                                    out->stdout.fp->path) < 0)
+                                    out->conf->out.fp->path) < 0)
             return -1;
     }
-    if (out->stderr.type == FLUX_OUTPUT_TYPE_FILE) {
-        if (!(out->stderr.fp = shell_output_open_file (out, &out->stderr))
+    if (out->conf->err.type == FLUX_OUTPUT_TYPE_FILE) {
+        if (!(out->conf->err.fp = shell_output_open_file (out, &out->conf->err))
             || kvs_output_redirect (out->kvs,
                                     "stderr",
-                                    out->stderr.fp->path) < 0)
+                                    out->conf->err.fp->path) < 0)
             return -1;
     }
     return 0;
@@ -461,17 +401,7 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
         return NULL;
     out->shell = shell;
 
-    out->stdout.type = FLUX_OUTPUT_TYPE_KVS;
-    out->stdout.mode = "truncate";
-    out->stdout.buffer_type = "line";
-    if (output_stream_getopts (shell, "stdout", &out->stdout) < 0)
-        goto error;
-
-    /* stderr defaults except for buffer_type inherit from stdout:
-     */
-    out->stderr = out->stdout;
-    out->stderr.buffer_type = "none";
-    if (output_stream_getopts (shell, "stderr", &out->stderr) < 0)
+    if (!(out->conf = output_config_create (shell)))
         goto error;
 
     if (!(out->files = filehash_create ()))
@@ -633,12 +563,16 @@ static int shell_output_task_init (flux_plugin_t *p,
     if (!shell || !out || !(task = flux_shell_current_task (shell)))
         return -1;
 
-    if (task_setup_buffering (task, "stdout", out->stdout.buffer_type) < 0)
+    if (task_setup_buffering (task,
+                              "stdout",
+                              out->conf->out.buffer_type) < 0)
         return -1;
-    if (task_setup_buffering (task, "stderr", out->stderr.buffer_type) < 0)
+    if (task_setup_buffering (task,
+                              "stderr",
+                              out->conf->err.buffer_type) < 0)
         return -1;
 
-    if (!strcasecmp (out->stdout.buffer_type, "line"))
+    if (!strcasecmp (out->conf->out.buffer_type, "line"))
         output_cb = task_line_output_cb;
     else
         output_cb = task_none_output_cb;
@@ -647,7 +581,7 @@ static int shell_output_task_init (flux_plugin_t *p,
                                            output_cb,
                                            out) < 0)
             return -1;
-    if (!strcasecmp (out->stderr.buffer_type, "line"))
+    if (!strcasecmp (out->conf->err.buffer_type, "line"))
         output_cb = task_line_output_cb;
     else
         output_cb = task_none_output_cb;
@@ -702,7 +636,7 @@ static int shell_output_init (flux_plugin_t *p,
     /*  If stderr is redirected to file, be sure to also copy log messages
      *   there as soon as file is opened
      */
-    if (out->stderr.type == FLUX_OUTPUT_TYPE_FILE) {
+    if (out->conf->err.type == FLUX_OUTPUT_TYPE_FILE) {
         shell_debug ("redirecting log messages to job output file");
         if (flux_plugin_add_handler (p, "shell.log", log_output, out) < 0)
             return shell_log_errno ("failed to add shell.log handler");
