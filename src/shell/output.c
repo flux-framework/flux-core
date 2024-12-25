@@ -62,11 +62,12 @@
 #include "output/kvs.h"
 #include "output/conf.h"
 #include "output/output.h"
+#include "output/task.h"
 
 
 static int shell_output_data (struct shell_output *out, json_t *context)
 {
-    struct output_stream *output;
+    struct file_entry *fp;
     const char *stream = NULL;
     const char *rank = NULL;
     char *data = NULL;
@@ -78,11 +79,11 @@ static int shell_output_data (struct shell_output *out, json_t *context)
         return -1;
     }
     if (streq (stream, "stdout"))
-        output = &out->conf->out;
+        fp = out->stdout_fp;
     else
-        output = &out->conf->err;
+        fp = out->stderr_fp;
 
-    if (file_entry_write (output->fp, rank, data, len) < 0)
+    if (file_entry_write (fp, rank, data, len) < 0)
         goto out;
     rc = 0;
 out:
@@ -106,7 +107,7 @@ static void shell_output_log (struct shell_output *out, json_t *context)
     int rank = -1;
     int line = -1;
     int level = -1;
-    int fd = out->conf->err.fp->fd;
+    int fd = out->stderr_fp->fd;
     json_error_t error;
 
     if (json_unpack_ex (context,
@@ -246,29 +247,6 @@ static int shell_output_write_type (struct shell_output *out,
     return 0;
 }
 
-static int shell_output_write (struct shell_output *out,
-                               int rank,
-                               const char *stream,
-                               const char *data,
-                               int len,
-                               bool eof)
-{
-    int rc;
-    json_t *o = NULL;
-    char rankstr[13];
-
-    /* integer %d guaranteed to fit in 13 bytes
-     */
-    (void) snprintf (rankstr, sizeof (rankstr), "%d", rank);
-    if (!(o = ioencode (stream, rankstr, data, len, eof))) {
-        shell_log_errno ("ioencode");
-        return -1;
-    }
-    rc = shell_output_write_type (out, "data", o);
-    json_decref (o);
-    return rc;
-}
-
 static int shell_output_handler (flux_plugin_t *p,
                                  const char *topic,
                                  flux_plugin_arg_t *args,
@@ -290,41 +268,13 @@ static void shell_output_destroy (struct shell_output *out)
         int saved_errno = errno;
         output_config_destroy (out->conf);
         output_client_destroy (out->client);
+        task_output_list_destroy (out->task_outputs);
         filehash_destroy (out->files);
         kvs_output_destroy (out->kvs);
         idset_destroy (out->active_shells);
         free (out);
         errno = saved_errno;
     }
-}
-
-static struct file_entry *shell_output_open_file (struct shell_output *out,
-                                                  struct output_stream *stream)
-{
-    char *path = NULL;
-    int flags = O_CREAT | O_WRONLY;
-    struct file_entry *fp = NULL;
-    flux_error_t error;
-
-    if (streq (stream->mode, "append"))
-        flags |= O_APPEND;
-    else if (streq (stream->mode, "truncate"))
-        flags |= O_TRUNC;
-    else
-        shell_warn ("ignoring invalid output.mode=%s", stream->mode);
-
-    if (stream->template == NULL) {
-        shell_log_error ("path for file output not specified");
-        return NULL;
-    }
-
-    if (!(path = flux_shell_mustache_render (out->shell, stream->template)))
-        return NULL;
-
-    if (!(fp = filehash_open (out->files, &error, path, flags, stream->label)))
-        shell_log_error ("%s", error.text);
-    free (path);
-    return fp;
 }
 
 static int log_output (flux_plugin_t *p,
@@ -373,23 +323,33 @@ static int shell_lost (flux_plugin_t *p,
     return 0;
 }
 
-static int shell_output_open_files (struct shell_output *out)
+static int output_redirect_stream (struct shell_output *out,
+                                   const char *name,
+                                   struct output_stream *stream)
 {
-    if (out->conf->out.type == FLUX_OUTPUT_TYPE_FILE) {
-        if (!(out->conf->out.fp = shell_output_open_file (out,
-                                                             &out->conf->out))
-            || kvs_output_redirect (out->kvs,
-                                    "stdout",
-                                    out->conf->out.fp->path) < 0)
-            return -1;
+    if (stream->type == FLUX_OUTPUT_TYPE_FILE) {
+        /*  Note: per-rank or per-task redirect events are not generated
+         *  at this time. flux_shell_rank_mustache_render() with invalid
+         *  rank will leave any task/node specific tags unexpanded in the
+         *  posted path, e.g. flux-{{node.id}}-{{task.id}.out:
+         */
+        char *path;
+        int shell_size = out->shell->info->shell_size;
+        if (!(path = flux_shell_rank_mustache_render (out->shell,
+                                                      shell_size,
+                                                      stream->template))
+            || kvs_output_redirect (out->kvs, name, path) < 0)
+            shell_log_errno ("failed to post %s redirect event", name);
+        free (path);
     }
-    if (out->conf->err.type == FLUX_OUTPUT_TYPE_FILE) {
-        if (!(out->conf->err.fp = shell_output_open_file (out, &out->conf->err))
-            || kvs_output_redirect (out->kvs,
-                                    "stderr",
-                                    out->conf->err.fp->path) < 0)
-            return -1;
-    }
+    return 0;
+}
+
+static int shell_output_redirect (struct shell_output *out)
+{
+    if (output_redirect_stream (out, "stdout", &out->conf->out) < 0
+        || output_redirect_stream (out, "stderr", &out->conf->err) < 0)
+        return -1;
     return 0;
 }
 
@@ -405,6 +365,9 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
         goto error;
 
     if (!(out->files = filehash_create ()))
+        goto error;
+
+    if (!(out->task_outputs = task_output_list_create (out)))
         goto error;
 
     if (shell->info->shell_rank == 0) {
@@ -442,9 +405,9 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
         if (!(out->kvs = kvs_output_create (shell)))
             goto error;
 
-        /* Open all output files if necessary
+        /* If output is redirected to a file, post redirect event(s) to KVS
          */
-        if (shell_output_open_files (out) < 0)
+        if (shell_output_redirect (out) < 0)
             goto error;
 
         /* Flush kvs output so eventlog is created
@@ -461,152 +424,35 @@ error:
     return NULL;
 }
 
-static int task_setup_buffering (struct shell_task *task,
-                                 const char *stream,
-                                 const char *buffer_type)
-{
-    /* libsubprocess defaults to line buffering, so we only need to
-     * handle != line case */
-    if (!strcasecmp (buffer_type, "none")) {
-        char buf[64];
-        snprintf (buf, sizeof (buf), "%s_LINE_BUFFER", stream);
-        if (flux_cmd_setopt (task->cmd, buf, "false") < 0) {
-            shell_log_errno ("flux_cmd_setopt");
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
-static void task_line_output_cb (struct shell_task *task,
-                                 const char *stream,
-                                 void *arg)
-{
-    struct shell_output *out = arg;
-    const char *data;
-    int len;
-
-    len = flux_subprocess_getline (task->proc, stream, &data);
-    if (len < 0) {
-        shell_log_errno ("read %s task %d", stream, task->rank);
-    }
-    else if (len > 0) {
-        if (shell_output_write (out,
-                                task->rank,
-                                stream,
-                                data,
-                                len,
-                                false) < 0)
-            shell_log_errno ("write %s task %d", stream, task->rank);
-    }
-    else if (flux_subprocess_read_stream_closed (task->proc, stream)) {
-        if (shell_output_write (out,
-                                task->rank,
-                                stream,
-                                NULL,
-                                0,
-                                true) < 0)
-            shell_log_errno ("write eof %s task %d", stream, task->rank);
-    }
-}
-
-static void task_none_output_cb (struct shell_task *task,
-                                 const char *stream,
-                                 void *arg)
-{
-    struct shell_output *out = arg;
-    const char *data;
-    int len;
-
-    len = flux_subprocess_read_line (task->proc, stream, &data);
-    if (len < 0) {
-        shell_log_errno ("read line %s task %d", stream, task->rank);
-    }
-    else if (!len) {
-        /* stderr is unbuffered */
-        if ((len = flux_subprocess_read (task->proc, stream, &data)) < 0) {
-            shell_log_errno ("read %s task %d", stream, task->rank);
-            return;
-        }
-    }
-    if (len > 0) {
-        if (shell_output_write (out,
-                                task->rank,
-                                stream,
-                                data,
-                                len,
-                                false) < 0)
-            shell_log_errno ("write %s task %d", stream, task->rank);
-    }
-    else if (flux_subprocess_read_stream_closed (task->proc, stream)) {
-        if (shell_output_write (out,
-                                task->rank,
-                                stream,
-                                NULL,
-                                0,
-                                true) < 0)
-            shell_log_errno ("write eof %s task %d", stream, task->rank);
-    }
-}
-
-static int shell_output_task_init (flux_plugin_t *p,
-                                   const char *topic,
-                                   flux_plugin_arg_t *args,
-                                   void *data)
-{
-    flux_shell_t *shell = flux_plugin_get_shell (p);
-    struct shell_output *out = flux_plugin_aux_get (p, "builtin.output");
-    flux_shell_task_t *task;
-    void (*output_cb)(struct shell_task *, const char *, void *);
-
-    if (!shell || !out || !(task = flux_shell_current_task (shell)))
-        return -1;
-
-    if (task_setup_buffering (task,
-                              "stdout",
-                              out->conf->out.buffer_type) < 0)
-        return -1;
-    if (task_setup_buffering (task,
-                              "stderr",
-                              out->conf->err.buffer_type) < 0)
-        return -1;
-
-    if (!strcasecmp (out->conf->out.buffer_type, "line"))
-        output_cb = task_line_output_cb;
-    else
-        output_cb = task_none_output_cb;
-    if (flux_shell_task_channel_subscribe (task,
-                                           "stdout",
-                                           output_cb,
-                                           out) < 0)
-            return -1;
-    if (!strcasecmp (out->conf->err.buffer_type, "line"))
-        output_cb = task_line_output_cb;
-    else
-        output_cb = task_none_output_cb;
-
-    if (flux_shell_task_channel_subscribe (task,
-                                           "stderr",
-                                           output_cb,
-                                           out) < 0)
-        return -1;
-    return 0;
-}
-
 static int shell_output_task_exit (flux_plugin_t *p,
                                    const char *topic,
                                    flux_plugin_arg_t *args,
                                    void *data)
 {
     struct shell_output *out = flux_plugin_aux_get (p, "builtin.output");
-
-    /*  Leader shell: decrement output.write refcount for each exiting
-     *   task (in lieu of counting EOFs separately from stderr/out)
-     */
     if (out->shell->info->shell_rank == 0)
         shell_output_decref (out, NULL);
     return 0;
+}
+
+static void shell_output_setup_file_entries (flux_plugin_t *p,
+                                             struct shell_output *out)
+{
+    /* Set shell-wide stdout/stderr to go to the same place as the first
+     * task. This is used for log information, and on rank 0 if there is
+     * is only one output file for stdout and/or stderr.
+     *
+     * Note: these members are expected to be NULL if output is being
+     * sent to the KVS for one or both streams.
+     */
+    out->stdout_fp = task_output_file_entry (out->task_outputs, "stdout", 0);
+    out->stderr_fp = task_output_file_entry (out->task_outputs, "stderr", 0);
+    if (out->stderr_fp) {
+        shell_debug ("redirecting log messages to job output file");
+        if (flux_plugin_add_handler (p, "shell.log", log_output, out) < 0)
+            shell_log_errno ("failed to add shell.log handler");
+        flux_shell_log_setlevel (FLUX_SHELL_QUIET, "eventlog");
+    }
 }
 
 static int shell_output_init (flux_plugin_t *p,
@@ -618,6 +464,9 @@ static int shell_output_init (flux_plugin_t *p,
     struct shell_output *out = shell_output_create (shell);
     if (!out)
         return -1;
+
+    shell_output_setup_file_entries (p, out);
+
     if (flux_plugin_aux_set (p,
                              "builtin.output",
                              out,
@@ -633,15 +482,6 @@ static int shell_output_init (flux_plugin_t *p,
         return -1;
     }
 
-    /*  If stderr is redirected to file, be sure to also copy log messages
-     *   there as soon as file is opened
-     */
-    if (out->conf->err.type == FLUX_OUTPUT_TYPE_FILE) {
-        shell_debug ("redirecting log messages to job output file");
-        if (flux_plugin_add_handler (p, "shell.log", log_output, out) < 0)
-            return shell_log_errno ("failed to add shell.log handler");
-        flux_shell_log_setlevel (FLUX_SHELL_QUIET, "eventlog");
-    }
     if (flux_plugin_add_handler (p, "shell.lost", shell_lost, out) < 0)
         return shell_log_errno ("failed to add shell.log handler");
 
@@ -662,7 +502,6 @@ struct shell_builtin builtin_output = {
     .name = FLUX_SHELL_PLUGIN_NAME,
     .reconnect = shell_output_reconnect,
     .init = shell_output_init,
-    .task_init = shell_output_task_init,
     .task_exit = shell_output_task_exit,
 };
 

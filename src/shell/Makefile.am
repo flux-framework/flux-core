@@ -83,6 +83,8 @@ flux_shell_SOURCES = \
 	output/kvs.c \
 	output/conf.h \
 	output/conf.c \
+	output/task.h \
+	output/task.c \
 	output/output.h \
 	svc.c \
 	svc.h \

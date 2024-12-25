@@ -26,7 +26,7 @@ struct output_stream {
     const char *template;
     const char *mode;
     bool label;
-    struct file_entry *fp;
+    bool per_shell;
 };
 
 struct output_config {
