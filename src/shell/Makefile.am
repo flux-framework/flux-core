@@ -85,6 +85,8 @@ flux_shell_SOURCES = \
 	output/conf.c \
 	output/task.h \
 	output/task.c \
+	output/service.h \
+	output/service.c \
 	output/output.h \
 	svc.c \
 	svc.h \

@@ -63,6 +63,7 @@
 #include "output/conf.h"
 #include "output/output.h"
 #include "output/task.h"
+#include "output/service.h"
 
 
 static int shell_output_data (struct shell_output *out, json_t *context)
@@ -150,88 +151,63 @@ static int shell_output_file (struct shell_output *out,
     return 0;
 }
 
-static void shell_output_decref (struct shell_output *out,
-                                 flux_msg_handler_t *mh)
+int shell_output_write_entry (struct shell_output *out,
+                              const char *type,
+                              json_t *o)
 {
-    if (--out->refcount == 0) {
-        if (mh)
-            flux_msg_handler_stop (mh);
-        if (flux_shell_remove_completion_ref (out->shell, "output.write") < 0)
-            shell_log_errno ("flux_shell_remove_completion_ref");
+    struct file_entry *fp = out->stderr_fp;
 
-        /* no more output is coming, "close" kvs eventlog, check for
-         * any output truncation, etc.
-         */
-        kvs_output_close (out->kvs);
-    }
-}
-
-static void shell_output_decref_shell_rank (struct shell_output *out,
-                                            int shell_rank,
-                                            flux_msg_handler_t *mh)
-{
-    if (idset_test (out->active_shells, shell_rank)
-        && idset_clear (out->active_shells, shell_rank) == 0)
-        shell_output_decref (out, mh);
-}
-
-static int shell_output_write_leader (struct shell_output *out,
-                                      const char *type,
-                                      int shell_rank,
-                                      json_t *o,
-                                      flux_msg_handler_t *mh) // may be NULL
-{
-    struct output_stream *ostream = &out->conf->err;
-
-    if (streq (type, "eof")) {
-        shell_output_decref_shell_rank (out, shell_rank, mh);
-        return 0;
-    }
     if (streq (type, "data")) {
         const char *stream = "stderr"; // default to stderr
         (void) iodecode (o, &stream, NULL, NULL, NULL, NULL);
         if (streq (stream, "stdout"))
-            ostream = &out->conf->out;
+            fp = out->stdout_fp;
     }
-    if (ostream->type == FLUX_OUTPUT_TYPE_KVS) {
-        if (kvs_output_write_entry (out->kvs, type, o) < 0)
-            shell_die_errno (1, "kvs_output_write");
-    }
-    else if (ostream->type == FLUX_OUTPUT_TYPE_FILE) {
-        if (shell_output_file (out, type, o) < 0)
-            shell_log_errno ("shell_output_file");
-    }
-    return 0;
+    /* If there's an output file for this stream, write entry there:
+     */
+    if (fp)
+        return shell_output_file (out, type, o);
+
+    /* O/w, if this is not rank 0, then send RPC to leader shell:
+     */
+    if (out->shell->info->shell_rank != 0)
+        return output_client_send (out->client, type, o);
+
+    /* O/w, this is the leader shell and destination is KVS:
+     */
+    return kvs_output_write_entry (out->kvs, type, o);
 }
 
-/* Convert 'iodecode' object to an valid RFC 24 data event.
- * N.B. the iodecode object is a valid "context" for the event.
- */
-static void shell_output_write_cb (flux_t *h,
-                                   flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg,
-                                   void *arg)
+static void shell_output_close (struct shell_output *out)
 {
-    struct shell_output *out = arg;
-    int shell_rank;
-    json_t *o;
-    const char *type;
+    file_entry_close (out->stdout_fp);
+    file_entry_close (out->stderr_fp);
+    kvs_output_close (out->kvs);
+}
 
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{s:s s:i s:o}",
-                             "name", &type,
-                             "shell_rank", &shell_rank,
-                             "context", &o) < 0)
-        goto error;
-    if (shell_output_write_leader (out, type, shell_rank, o, mh) < 0)
-        goto error;
-    if (flux_respond (out->shell->h, msg, NULL) < 0)
-        shell_log_errno ("flux_respond");
-    return;
-error:
-    if (flux_respond_error (out->shell->h, msg, errno, NULL) < 0)
-        shell_log_errno ("flux_respond");
+void shell_output_incref (struct shell_output *out)
+{
+    if (out)
+        out->refcount++;
+}
+
+void shell_output_decref (struct shell_output *out)
+{
+    if (out && --out->refcount == 0)
+        shell_output_close (out);
+}
+
+static int shell_output_write_type (struct shell_output *out,
+                                    char *type,
+                                    json_t *context)
+{
+    if (out->shell->info->shell_rank == 0) {
+        if (shell_output_write_entry (out, type, context) < 0)
+            shell_log_errno ("shell_output_write_leader");
+    }
+    else if (output_client_send (out->client, type, context) < 0)
+        shell_log_errno ("failed to send data to shell leader");
+    return 0;
 }
 
 static int shell_output_handler (flux_plugin_t *p,
@@ -256,9 +232,9 @@ static void shell_output_destroy (struct shell_output *out)
         output_config_destroy (out->conf);
         output_client_destroy (out->client);
         task_output_list_destroy (out->task_outputs);
+        output_service_destroy (out->service);
         filehash_destroy (out->files);
         kvs_output_destroy (out->kvs);
-        idset_destroy (out->active_shells);
         free (out);
         errno = saved_errno;
     }
@@ -286,28 +262,6 @@ static int log_output (flux_plugin_t *p,
         rc = -1;
     }
     return rc;
-}
-
-static int shell_lost (flux_plugin_t *p,
-                       const char *topic,
-                       flux_plugin_arg_t *args,
-                       void *data)
-{
-    struct shell_output *out = data;
-    int shell_rank;
-
-    /*  A shell has been lost. We need to decref the output refcount by 1
-     *  since we'll never hear from that shell to avoid rank 0 shell from
-     *  hanging.
-     */
-    if (flux_plugin_arg_unpack (args,
-                                FLUX_PLUGIN_ARG_IN,
-                                "{s:i}",
-                                "shell_rank", &shell_rank) < 0)
-        return shell_log_errno ("shell.lost: unpack of shell_rank failed");
-    shell_output_decref_shell_rank (out, shell_rank, NULL);
-    shell_debug ("lost shell rank %d", shell_rank);
-    return 0;
 }
 
 static int output_redirect_stream (struct shell_output *out,
@@ -340,7 +294,8 @@ static int shell_output_redirect (struct shell_output *out)
     return 0;
 }
 
-struct shell_output *shell_output_create (flux_shell_t *shell)
+struct shell_output *shell_output_create (flux_plugin_t *p,
+                                          flux_shell_t *shell)
 {
     struct shell_output *out;
 
@@ -358,33 +313,11 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
         goto error;
 
     if (shell->info->shell_rank == 0) {
-        int ntasks = out->shell->info->rankinfo.ntasks;
-        if (flux_shell_service_register (shell,
-                                         "write",
-                                         shell_output_write_cb,
-                                         out) < 0)
-            goto error;
+        int size = shell->info->shell_size;
 
-        /*  The shell.output.write service needs to wait for all
-         *   remote shells and local tasks before the output destination
-         *   can be closed. Therefore, set a reference counter for
-         *   the number of remote shells (shell_size - 1), plus the
-         *   number of tasks on the leader shell.
-         *
-         *  Remote shells and local tasks will cause the refcount
-         *   to be decremented as they send EOF or exit.
+        /* Create 'shell.write' service
          */
-        out->refcount = (shell->info->shell_size - 1 + ntasks);
-
-        /*  Account for active shells to avoid double-decrement of
-         *  refcount when a shell exits prematurely
-         */
-        if (!(out->active_shells = idset_create (0, IDSET_FLAG_AUTOGROW))
-            || idset_range_set (out->active_shells,
-                                0,
-                                shell->info->shell_size - 1) < 0)
-            goto error;
-        if (flux_shell_add_completion_ref (shell, "output.write") < 0)
+        if (!(out->service = output_service_create (out, p, size)))
             goto error;
 
         /* Create kvs output eventlog + header
@@ -411,14 +344,28 @@ error:
     return NULL;
 }
 
+static int shell_output_task_init (flux_plugin_t *p,
+                                   const char *topic,
+                                   flux_plugin_arg_t *args,
+                                   void *data)
+{
+    struct shell_output *out = flux_plugin_aux_get (p, "builtin.output");
+    /* Add output reference for this task
+     */
+    shell_output_incref (out);
+    return 0;
+}
+
+
 static int shell_output_task_exit (flux_plugin_t *p,
                                    const char *topic,
                                    flux_plugin_arg_t *args,
                                    void *data)
 {
     struct shell_output *out = flux_plugin_aux_get (p, "builtin.output");
-    if (out->shell->info->shell_rank == 0)
-        shell_output_decref (out, NULL);
+    /* Remove output reference for this task
+     */
+    shell_output_decref (out);
     return 0;
 }
 
@@ -448,7 +395,7 @@ static int shell_output_init (flux_plugin_t *p,
                               void *data)
 {
     flux_shell_t *shell = flux_plugin_get_shell (p);
-    struct shell_output *out = shell_output_create (shell);
+    struct shell_output *out = shell_output_create (p, shell);
     if (!out)
         return -1;
 
@@ -468,10 +415,6 @@ static int shell_output_init (flux_plugin_t *p,
         shell_output_destroy (out);
         return -1;
     }
-
-    if (flux_plugin_add_handler (p, "shell.lost", shell_lost, out) < 0)
-        return shell_log_errno ("failed to add shell.log handler");
-
     return 0;
 }
 
@@ -489,6 +432,7 @@ struct shell_builtin builtin_output = {
     .name = FLUX_SHELL_PLUGIN_NAME,
     .reconnect = shell_output_reconnect,
     .init = shell_output_init,
+    .task_init = shell_output_task_init,
     .task_exit = shell_output_task_exit,
 };
 
