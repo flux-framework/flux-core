@@ -21,6 +21,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fdwalk.h"
+#include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/llog.h"
 
 #include "subprocess_private.h"
@@ -164,9 +165,13 @@ static int local_child (flux_subprocess_t *p)
     idset_destroy (ids);
 
     if (p->hooks.pre_exec) {
+        fd_set_nonblocking (STDERR_FILENO);
+        fd_set_nonblocking (STDOUT_FILENO);
         p->in_hook = true;
         (*p->hooks.pre_exec) (p, p->hooks.pre_exec_arg);
         p->in_hook = false;
+        fd_set_blocking (STDERR_FILENO);
+        fd_set_blocking (STDOUT_FILENO);
     }
 
     if (!(p->flags & FLUX_SUBPROCESS_FLAGS_NO_SETPGRP)
