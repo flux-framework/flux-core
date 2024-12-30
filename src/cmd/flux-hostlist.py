@@ -204,12 +204,14 @@ class AvailableHostlistResult:
         # Store local hostlist in self.hl:
         self.hl = LocalHostlistResult().result
         # Send resource status RPCs to get available idset
-        self.rstatus = resource_status(FluxHandle())
+        self.rpc = resource_status(FluxHandle())
 
     @property
     def result(self):
+        rstatus = self.rpc.get()
         # Restrict returned hostlist to only those available:
-        avail = self.rstatus.get().avail
+        # Note: avail includes down nodes, so subtract those
+        avail = rstatus.avail - rstatus.offline
         return self.hl[avail]
 
 
