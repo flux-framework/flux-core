@@ -4,7 +4,9 @@ test_description='Test flux hostlist command'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 2
+test_under_flux 2 system
+
+startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
 test_expect_success 'flux-hostlist --help works' '
 	flux hostlist --help >help.out &&
@@ -180,5 +182,15 @@ test_expect_success 'flux-hostlist -q, --quiet works' '
 	flux hostlist --quiet host[1-10] >quiet.out &&
 	test_must_be_empty quiet.out &&
 	test_must_fail flux hostlist --quiet --intersect host1 host2
+'
+test_expect_success 'shutdown broker rank 1' '
+	$startctl kill 1 15 &&
+	run_timeout 10 flux overlay status --timeout=0 --summary --wait partial
+'
+test_expect_success 'flux-hostlist avail ignores down nodes' '
+	test $(flux hostlist --count avail) -eq 1
+'
+test_expect_success 'run broker rank 1' '
+	$startctl run 1
 '
 test_done
