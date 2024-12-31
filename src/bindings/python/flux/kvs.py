@@ -385,8 +385,10 @@ class KVSTxn:
     Can be used as a context manager and commits will be handled at
     exit. e.g.
 
-    with KVSTxn(handle, "basedirectory") as kt:
-        kt.put("a", 1)
+    .. code-block::
+
+       with KVSTxn(handle, "basedirectory") as kt:
+           kt.put("a", 1)
 
     Args:
         flux_handle: A Flux handle obtained from flux.Flux()
@@ -478,20 +480,24 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
 
     KVS values can be read or written through this class's item accessor.  e.g.
 
-    mydir = KVSDir(flux_handle)
-    print(mydir["mykey"])
+    .. code-block::
 
-    mydir["newkey"] = "foo"
-    mydir.commit()
+       mydir = KVSDir(flux_handle)
+       print(mydir["mykey"])
+
+       mydir["newkey"] = "foo"
+       mydir.commit()
 
     Any KVS directories accessed through the item accessor will share
     the same internal KVS transaction, so that only a single call to
     commit() is necessary.  e.g.
 
-    mydir = KVSDir(flux_handle)
-    subdir = mydir["subdir"]
-    subdir["anotherkey"] = "bar"
-    mydir.commit()
+    .. code-block::
+
+       mydir = KVSDir(flux_handle)
+       subdir = mydir["subdir"]
+       subdir["anotherkey"] = "bar"
+       mydir.commit()
 
     Args:
         flux_handle: A Flux handle obtained from flux.Flux()
@@ -506,7 +512,6 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
     # pylint: disable=too-many-ancestors, too-many-public-methods
 
     class InnerWrapper(Wrapper):
-
         # pylint: disable=no-value-for-parameter
         def __init__(self, flux_handle=None, path=".", handle=None, namespace=None):
             dest = RAW.flux_kvsdir_destroy
