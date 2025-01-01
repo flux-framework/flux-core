@@ -389,13 +389,16 @@ int flux_shell_setenvf (flux_shell_t *shell,
     json_t *env;
     va_list ap;
     char *val;
-    int rc = -1;
+    int rc;
 
     if (!shell || !name || !fmt) {
         errno = EINVAL;
         return -1;
     }
 
+    /* Always update jobspec environment so that this environment update
+     * is reflected in a later flux_shell_getenv(3).
+     */
     env = shell->info->jobspec->environment;
     if (!overwrite && json_object_get (env, name))
         return 0;
@@ -403,23 +406,57 @@ int flux_shell_setenvf (flux_shell_t *shell,
     va_start (ap, fmt);
     rc = vasprintf (&val, fmt, ap);
     va_end (ap);
-    if (rc >= 0) {
-        rc = object_set_string (env, name, val);
+    if (rc < 0 || object_set_string (env, name, val) < 0) {
         ERRNO_SAFE_WRAP (free, val);
+        return -1;
     }
-    return rc;
+
+    if (!shell->tasks)
+        goto out;
+
+    /*  If tasks exist, also apply environment update to all tasks
+     */
+    flux_shell_task_t *task = zlist_first (shell->tasks);
+    while (task) {
+        flux_cmd_t *cmd = flux_shell_task_cmd (task);
+        if (flux_cmd_setenvf (cmd, overwrite, name, "%s", val) < 0) {
+            ERRNO_SAFE_WRAP (free, val);
+            return -1;
+        }
+        task = zlist_next (shell->tasks);
+    }
+out:
+    free (val);
+    return 0;
 }
 
 int flux_shell_unsetenv (flux_shell_t *shell, const char *name)
 {
-    int rc;
     if (!shell || !name) {
         errno = EINVAL;
         return -1;
     }
-    if ((rc = json_object_del (shell->info->jobspec->environment, name)) < 0)
+
+    /* Always apply unset to jobspec environment so this unsetenv is
+     * reflected in a subsequent flux_shell_getenv(3).
+     */
+    if (json_object_del (shell->info->jobspec->environment,name) < 0) {
         errno = ENOENT;
-    return rc;
+        return -1;
+    }
+
+    if (!shell->tasks)
+        return 0;
+
+    /*  Also, unset variable in all tasks
+     */
+    flux_shell_task_t *task = zlist_first (shell->tasks);
+    while (task) {
+        flux_cmd_t *cmd = flux_shell_task_cmd (task);
+        (void) flux_cmd_unsetenv (cmd, name);
+        task = zlist_next (shell->tasks);
+    }
+    return 0;
 }
 
 int flux_shell_get_hwloc_xml (flux_shell_t *shell, const char **xmlp)
