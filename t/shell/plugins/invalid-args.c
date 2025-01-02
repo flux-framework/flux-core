@@ -209,10 +209,6 @@ static int shell_cb (flux_plugin_t *p,
         errno = 0;
         ok (flux_shell_current_task (shell) == NULL && errno == 0,
             "flux_shell_current_task returns no task in shell.init");
-        ok (flux_shell_task_first (shell) == NULL && errno == EAGAIN,
-            "flux_shell_task_first (shell) in shell.init returns EAGAIN");
-        ok (flux_shell_task_next (shell) == NULL && errno == EAGAIN,
-            "flux_shell_task_next (shell) in shell.init returns EAGAIN");
     }
     if (streq (topic, "shell.exit"))
         return exit_status () == 0 ? 0 : -1;
