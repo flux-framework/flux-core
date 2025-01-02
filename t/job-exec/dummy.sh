@@ -150,8 +150,8 @@ test_mock_failure() {
 
 barrier() {
     if [[ ${NNODES} -gt 1 ]]; then
-        echo enter >&${FLUX_EXEC_PROTOCOL_FD:-1}
-        read -u ${FLUX_EXEC_PROTOCOL_FD:-0} line
+        echo enter >&1
+        read -u 0 line
         if [[ ${line##*=} -ne 0 ]]; then
             exit ${line##*=}
         fi
