@@ -33,6 +33,7 @@
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/basename.h"
 #include "src/common/libutil/jpath.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/libtaskmap/taskmap_private.h"
 #include "ccan/str/str.h"
 
@@ -1705,6 +1706,55 @@ out:
     return rc;
 }
 
+/*  Setup common environment for this job directly in the jobspec environment.
+ *  Task-specific environment is setup in shell_task_create().
+ */
+static int shell_setup_environment (flux_shell_t *shell)
+{
+    const char *uri;
+    const char *namespace;
+
+    (void) flux_shell_unsetenv (shell, "FLUX_PROXY_REMOTE");
+
+    if (!(uri = getenv ("FLUX_URI"))
+        || !(namespace = getenv ("FLUX_KVS_NAMESPACE"))
+        || flux_shell_setenvf (shell, 1, "FLUX_URI", "%s", uri) < 0
+        || flux_shell_setenvf (shell,
+                               1,
+                               "FLUX_KVS_NAMESPACE",
+                               "%s",
+                               namespace) < 0
+        || flux_shell_setenvf (shell,
+                               1,
+                               "FLUX_JOB_SIZE",
+                               "%d",
+                               shell->info->total_ntasks) < 0
+        || flux_shell_setenvf (shell,
+                               1,
+                               "FLUX_JOB_NNODES",
+                               "%d",
+                               shell->info->shell_size) < 0
+        || flux_shell_setenvf (shell,
+                               1,
+                               "FLUX_JOB_ID",
+                               "%s",
+                               idf58 (shell->info->jobid)) < 0)
+        return -1;
+
+    /* If HOSTNAME is set in job environment it is almost certain to be
+     * incorrect. Overwrite with the correct hostname.
+     */
+    if (flux_shell_getenv (shell, "HOSTNAME")
+        && flux_shell_setenvf (shell,
+                               1,
+                               "HOSTNAME",
+                               "%s",
+                               shell->hostname) < 0)
+        return -1;
+
+    return 0;
+}
+
 /*  Export a static list of environment variables from the job environment
  *   to the current shell environment. This is important for variables like
  *   FLUX_F58_FORCE_ASCII which should influence some shell behavior.
@@ -1821,6 +1871,11 @@ int main (int argc, char *argv[])
      */
     if (shell_register_event_context (&shell) < 0)
         shell_die (1, "failed to add standard shell event context");
+
+    /* Setup common environment for job.
+     */
+    if (shell_setup_environment (&shell) < 0)
+        shell_die (1, "failed to setup common job environment");
 
     /* Call "shell_init" plugins.
      */
