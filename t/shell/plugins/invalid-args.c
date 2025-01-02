@@ -38,6 +38,9 @@ static int shell_cb (flux_plugin_t *p,
     char *json_str;
     flux_shell_t *shell = flux_plugin_get_shell (p);
 
+    if (streq (topic, "shell.log"))
+        return 0;
+
     diag ("invalid-args: %s", topic);
     if (!shell)
         return die ("flux_plugin_get_shell: %s\n", strerror (errno));
