@@ -726,21 +726,13 @@ static int shell_output_handler (flux_plugin_t *p,
                                  void *arg)
 {
     struct shell_output *out = arg;
-    int rank;
-    const char *stream;
-    const void *data;
-    size_t len;
+    json_t *context;
 
-    if (flux_plugin_arg_unpack (args,
-                                FLUX_PLUGIN_ARG_IN,
-                                "{s:s s:i s:s%}",
-                                "stream", &stream,
-                                "rank", &rank,
-                                "data", &data, &len) < 0) {
+    if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN, "o", &context) < 0) {
         shell_log_errno ("shell.output: flux_plugin_arg_unpack");
         return -1;
     }
-    return shell_output_write (out, rank, stream, data, len, len == 0);
+    return shell_output_write_type (out, "data", context);
 }
 
 static void shell_output_type_file_cleanup (struct shell_output_type_file *ofp)

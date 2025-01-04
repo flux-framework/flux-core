@@ -69,7 +69,7 @@ shell_terminus_server_start (flux_shell_t *shell, const char *shell_service)
 static void pty_monitor (struct flux_pty *pty, void *data, int len)
 {
     flux_plugin_arg_t *args;
-    int rank;
+    const char *rank;
 
     /*  len == 0 indicates pty is closed. If there's a reference on
      *  stdout, release it here
@@ -81,10 +81,11 @@ static void pty_monitor (struct flux_pty *pty, void *data, int len)
         return;
     }
 
-    rank = ptr2int (flux_pty_aux_get (pty, "rank"));
+    rank = flux_pty_aux_get (pty, "rank");
     if (!(args = flux_plugin_arg_create ())
-        || flux_plugin_arg_pack (args, FLUX_PLUGIN_ARG_IN,
-                                 "{s:s s:i s:s#}",
+        || flux_plugin_arg_pack (args,
+                                 FLUX_PLUGIN_ARG_IN,
+                                 "{s:s s:s s:s#}",
                                  "stream", "stdout",
                                  "rank", rank,
                                  "data", data, len) < 0) {
@@ -371,12 +372,16 @@ static int pty_init (flux_plugin_t *p,
          *   ranks do not support interactive attach.
          */
         if (capture || rank != 0) {
-            if (flux_pty_aux_set (pty, "shell", shell, NULL) < 0
-                || flux_pty_aux_set (pty, "rank", int2ptr (rank), NULL) < 0
+            char *rankstr = NULL;
+
+            if (asprintf (&rankstr, "%d", rank) < 0
+                || flux_pty_aux_set (pty, "shell", shell, NULL) < 0
+                || flux_pty_aux_set (pty, "rank", rankstr, free) < 0
                 || flux_pty_aux_set (pty,
                                      "capture",
                                      int2ptr (capture),
                                      NULL) < 0) {
+                free (rankstr);
                 shell_log_errno ("flux_pty_aux_set");
                 goto error;
             }
