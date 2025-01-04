@@ -234,19 +234,6 @@ error:
         shell_log_errno ("flux_respond");
 }
 
-static int shell_output_write_type (struct shell_output *out,
-                                    char *type,
-                                    json_t *context)
-{
-    if (out->shell->info->shell_rank == 0) {
-        if (shell_output_write_leader (out, type, 0, context, NULL) < 0)
-            shell_log_errno ("shell_output_write_leader");
-    }
-    else if (output_client_send (out->client, type, context) < 0)
-        shell_log_errno ("failed to send data to shell leader");
-    return 0;
-}
-
 static int shell_output_handler (flux_plugin_t *p,
                                  const char *topic,
                                  flux_plugin_arg_t *args,
@@ -259,7 +246,7 @@ static int shell_output_handler (flux_plugin_t *p,
         shell_log_errno ("shell.output: flux_plugin_arg_unpack");
         return -1;
     }
-    return shell_output_write_type (out, "data", context);
+    return task_output_list_write (out->task_outputs, context);
 }
 
 static void shell_output_destroy (struct shell_output *out)
