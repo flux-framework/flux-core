@@ -64,9 +64,10 @@
 #include "output/output.h"
 #include "output/task.h"
 #include "output/service.h"
+#include "output/log.h"
 
 
-static int shell_output_data (struct shell_output *out, json_t *context)
+static int shell_output_file_data (struct shell_output *out, json_t *context)
 {
     struct file_entry *fp;
     const char *stream = NULL;
@@ -92,62 +93,19 @@ out:
     return rc;
 }
 
-/*  Level prefix strings. Nominally, output log event 'level' integers
- *   are Internet RFC 5424 severity levels. In the context of flux-shell,
- *   the first 3 levels are equivalently "fatal" errors.
- */
-static const char *levelstr[] = {
-    "FATAL", "FATAL", "FATAL", "ERROR", " WARN", NULL, "DEBUG", "TRACE"
-};
-
-static void shell_output_log (struct shell_output *out, json_t *context)
-{
-    const char *msg = NULL;
-    const char *file = NULL;
-    const char *component = NULL;
-    int rank = -1;
-    int line = -1;
-    int level = -1;
-    int fd = out->stderr_fp->fd;
-    json_error_t error;
-
-    if (json_unpack_ex (context,
-                        &error,
-                        0,
-                        "{ s?i s:i s:s s?s s?s s?i }",
-                        "rank", &rank,
-                        "level", &level,
-                        "message", &msg,
-                        "component", &component,
-                        "file", &file,
-                        "line", &line) < 0) {
-        /*  Ignore log messages that cannot be unpacked so we don't
-         *   log an error while logging.
-         */
-        return;
-    }
-    dprintf (fd, "flux-shell");
-    if (rank >= 0)
-        dprintf (fd, "[%d]", rank);
-    if (level >= 0 && level <= FLUX_SHELL_TRACE)
-        dprintf (fd, ": %s", levelstr [level]);
-    if (component)
-        dprintf (fd, ": %s", component);
-    dprintf (fd, ": %s\n", msg);
-}
-
 static int shell_output_file (struct shell_output *out,
                               const char *name,
                               json_t *context)
 {
     if (streq (name, "data")) {
-        if (shell_output_data (out, context) < 0) {
-            shell_log_errno ("shell_output_data");
+        if (shell_output_file_data (out, context) < 0) {
+            shell_log_errno ("shell_output_file_data");
             return -1;
         }
     }
-    else if (streq (name, "log"))
-        shell_output_log (out, context);
+    else if (streq (name, "log")) {
+        shell_output_log_file (out, context);
+    }
     return 0;
 }
 
@@ -197,19 +155,6 @@ void shell_output_decref (struct shell_output *out)
         shell_output_close (out);
 }
 
-static int shell_output_write_type (struct shell_output *out,
-                                    char *type,
-                                    json_t *context)
-{
-    if (out->shell->info->shell_rank == 0) {
-        if (shell_output_write_entry (out, type, context) < 0)
-            shell_log_errno ("shell_output_write_leader");
-    }
-    else if (output_client_send (out->client, type, context) < 0)
-        shell_log_errno ("failed to send data to shell leader");
-    return 0;
-}
-
 static int shell_output_handler (flux_plugin_t *p,
                                  const char *topic,
                                  flux_plugin_arg_t *args,
@@ -238,30 +183,6 @@ static void shell_output_destroy (struct shell_output *out)
         free (out);
         errno = saved_errno;
     }
-}
-
-static int log_output (flux_plugin_t *p,
-                       const char *topic,
-                       flux_plugin_arg_t *args,
-                       void *data)
-{
-    struct shell_output *out = data;
-    int rc = 0;
-    int level = -1;
-    json_t *context = NULL;
-
-    if (flux_plugin_arg_unpack (args,
-                                FLUX_PLUGIN_ARG_IN,
-                                "{s:i}",
-                                "level", &level) < 0)
-        return -1;
-    if (level > FLUX_SHELL_NOTICE + out->shell->verbose)
-        return 0;
-    if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN, "o", &context) < 0
-        || shell_output_write_type (out, "log", context) < 0) {
-        rc = -1;
-    }
-    return rc;
 }
 
 static int output_redirect_stream (struct shell_output *out,
@@ -381,12 +302,7 @@ static void shell_output_setup_file_entries (flux_plugin_t *p,
      */
     out->stdout_fp = task_output_file_entry (out->task_outputs, "stdout", 0);
     out->stderr_fp = task_output_file_entry (out->task_outputs, "stderr", 0);
-    if (out->stderr_fp) {
-        shell_debug ("redirecting log messages to job output file");
-        if (flux_plugin_add_handler (p, "shell.log", log_output, out) < 0)
-            shell_log_errno ("failed to add shell.log handler");
-        flux_shell_log_setlevel (FLUX_SHELL_QUIET, "eventlog");
-    }
+    shell_output_log_init (p, out);
 }
 
 static int shell_output_init (flux_plugin_t *p,
