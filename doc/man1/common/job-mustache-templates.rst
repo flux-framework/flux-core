@@ -57,9 +57,6 @@ these include:
 Task-specific tags are prefixed with *task.*, with the special case of
 *{{taskid}}*, which is an alias for *{{task.id}}*.
 
-.. note::
-   The :option:`--output` and :option:`--error` options do not support
-   task-specific tags at this time.
 
 *{{task.id}}*, *{{task.rank}}*, or *{{taskid}}*
   Expands to the global rank for the current task.
