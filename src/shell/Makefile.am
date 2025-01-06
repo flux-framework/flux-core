@@ -99,7 +99,8 @@ flux_shell_SOURCES = \
 	signal.c \
 	files.c \
 	hwloc.c \
-	rexec.c
+	rexec.c \
+	env-expand.c
 
 if HAVE_INOTIFY
 flux_shell_SOURCES += oom.c
