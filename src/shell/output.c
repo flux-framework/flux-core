@@ -457,14 +457,16 @@ static void shell_output_log (struct shell_output *out, json_t *context)
     int fd = out->stderr_file.fdp->fd;
     json_error_t error;
 
-    if (json_unpack_ex (context, &error, 0,
-                     "{ s?i s:i s:s s?s s?s s?i }",
-                     "rank", &rank,
-                     "level", &level,
-                     "message", &msg,
-                     "component", &component,
-                     "file", &file,
-                     "line", &line) < 0) {
+    if (json_unpack_ex (context,
+                        &error,
+                        0,
+                        "{ s?i s:i s:s s?s s?s s?i }",
+                        "rank", &rank,
+                        "level", &level,
+                        "message", &msg,
+                        "component", &component,
+                        "file", &file,
+                        "line", &line) < 0) {
         /*  Ignore log messages that cannot be unpacked so we don't
          *   log an error while logging.
          */
@@ -729,7 +731,8 @@ static int shell_output_handler (flux_plugin_t *p,
     const void *data;
     size_t len;
 
-    if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
                                 "{s:s s:i s:s%}",
                                 "stream", &stream,
                                 "rank", &rank,
@@ -1163,8 +1166,10 @@ static int log_output (flux_plugin_t *p,
     int level = -1;
     json_t *context = NULL;
 
-    if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
-                                "{s:i}", "level", &level) < 0)
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:i}",
+                                "level", &level) < 0)
         return -1;
     if (level > FLUX_SHELL_NOTICE + out->shell->verbose)
         return 0;
@@ -1487,8 +1492,10 @@ static int shell_output_init (flux_plugin_t *p,
     struct shell_output *out = shell_output_create (shell);
     if (!out)
         return -1;
-    if (flux_plugin_aux_set (p, "builtin.output", out,
-                            (flux_free_f) shell_output_destroy) < 0) {
+    if (flux_plugin_aux_set (p,
+                             "builtin.output",
+                             out,
+                             (flux_free_f) shell_output_destroy) < 0) {
         shell_output_destroy (out);
         return -1;
     }

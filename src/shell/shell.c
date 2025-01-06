@@ -33,6 +33,7 @@
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/basename.h"
 #include "src/common/libutil/jpath.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/libtaskmap/taskmap_private.h"
 #include "ccan/str/str.h"
 
@@ -380,19 +381,25 @@ nomem:
     return -1;
 }
 
-int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
-                        const char *name, const char *fmt, ...)
+int flux_shell_setenvf (flux_shell_t *shell,
+                        int overwrite,
+                        const char *name,
+                        const char *fmt,
+                        ...)
 {
     json_t *env;
     va_list ap;
     char *val;
-    int rc = -1;
+    int rc;
 
     if (!shell || !name || !fmt) {
         errno = EINVAL;
         return -1;
     }
 
+    /* Always update jobspec environment so that this environment update
+     * is reflected in a later flux_shell_getenv(3).
+     */
     env = shell->info->jobspec->environment;
     if (!overwrite && json_object_get (env, name))
         return 0;
@@ -400,23 +407,57 @@ int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
     va_start (ap, fmt);
     rc = vasprintf (&val, fmt, ap);
     va_end (ap);
-    if (rc >= 0) {
-        rc = object_set_string (env, name, val);
+    if (rc < 0 || object_set_string (env, name, val) < 0) {
         ERRNO_SAFE_WRAP (free, val);
+        return -1;
     }
-    return rc;
+
+    if (!shell->tasks)
+        goto out;
+
+    /*  If tasks exist, also apply environment update to all tasks
+     */
+    flux_shell_task_t *task = zlist_first (shell->tasks);
+    while (task) {
+        flux_cmd_t *cmd = flux_shell_task_cmd (task);
+        if (flux_cmd_setenvf (cmd, overwrite, name, "%s", val) < 0) {
+            ERRNO_SAFE_WRAP (free, val);
+            return -1;
+        }
+        task = zlist_next (shell->tasks);
+    }
+out:
+    free (val);
+    return 0;
 }
 
 int flux_shell_unsetenv (flux_shell_t *shell, const char *name)
 {
-    int rc;
     if (!shell || !name) {
         errno = EINVAL;
         return -1;
     }
-    if ((rc = json_object_del (shell->info->jobspec->environment, name)) < 0)
+
+    /* Always apply unset to jobspec environment so this unsetenv is
+     * reflected in a subsequent flux_shell_getenv(3).
+     */
+    if (json_object_del (shell->info->jobspec->environment,name) < 0) {
         errno = ENOENT;
-    return rc;
+        return -1;
+    }
+
+    if (!shell->tasks)
+        return 0;
+
+    /*  Also, unset variable in all tasks
+     */
+    flux_shell_task_t *task = zlist_first (shell->tasks);
+    while (task) {
+        flux_cmd_t *cmd = flux_shell_task_cmd (task);
+        (void) flux_cmd_unsetenv (cmd, name);
+        task = zlist_next (shell->tasks);
+    }
+    return 0;
 }
 
 int flux_shell_get_hwloc_xml (flux_shell_t *shell, const char **xmlp)
@@ -1014,29 +1055,10 @@ static const char *shell_conf_get (const char *name)
     return flux_conf_builtin_get (name, FLUX_CONF_AUTO);
 }
 
-static int get_protocol_fd (int *pfd)
+static void get_protocol_fd (int *pfd)
 {
-    const char *s;
-
-    if ((s = getenv ("FLUX_EXEC_PROTOCOL_FD"))) {
-        char *endptr;
-        int fd;
-
-        errno = 0;
-        fd = strtol (s, &endptr, 10);
-        if (errno != 0 || *endptr != '\0') {
-            errno = EINVAL;
-            return -1;
-        }
-        if (fd_set_cloexec (fd) < 0)
-            return -1;
-        pfd[0] = fd;
-        pfd[1] = fd;
-        return 0;
-    }
     pfd[0] = STDIN_FILENO;
     pfd[1] = STDOUT_FILENO;
-    return 0;
 }
 
 char *flux_shell_mustache_render (flux_shell_t *shell, const char *fmt)
@@ -1142,7 +1164,9 @@ static int mustache_render_name (flux_shell_t *shell,
 {
     const char *jobname = NULL;
     json_error_t error;
-    if (json_unpack_ex (shell->info->jobspec->jobspec, &error, 0,
+    if (json_unpack_ex (shell->info->jobspec->jobspec,
+                        &error,
+                        0,
                         "{s:{s:{s?{s?s}}}}",
                         "attributes",
                          "system",
@@ -1269,8 +1293,7 @@ static void shell_initialize (flux_shell_t *shell)
     if (gethostname (shell->hostname, sizeof (shell->hostname)) < 0)
         shell_die_errno (1, "gethostname");
 
-    if (get_protocol_fd (shell->protocol_fd) < 0)
-        shell_die_errno (1, "Failed to parse FLUX_EXEC_PROTOCOL_FD");
+    get_protocol_fd (shell->protocol_fd);
 
     if (!(shell->completion_refs = zhashx_new ()))
         shell_die_errno (1, "zhashx_new");
@@ -1397,9 +1420,6 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
     if (shell->info->shell_size == 1)
         return 0; // NO-OP
 
-    if (shell->protocol_fd[1] < 0)
-        shell_die (1, "required FLUX_EXEC_PROTOCOL_FD not set");
-
     if (dprintf (shell->protocol_fd[1], "enter\n") != 6)
         shell_die_errno (1, "shell_barrier: dprintf");
 
@@ -1440,7 +1460,8 @@ static int load_initrc (flux_shell_t *shell, const char *default_rcfile)
     shell_debug ("Loading %s", rcfile);
 
     if (shell_rc (shell, rcfile) < 0) {
-        shell_die (1, "loading rc file %s%s%s",
+        shell_die (1,
+                   "loading rc file %s%s%s",
                    rcfile,
                    errno ? ": " : "",
                    errno ? strerror (errno) : "");
@@ -1665,13 +1686,17 @@ static int shell_register_event_context (flux_shell_t *shell)
         return 0;
     o = taskmap_encode_json (shell->info->taskmap, TASKMAP_ENCODE_WRAPPED);
     if (o == NULL
-        || flux_shell_add_event_context (shell, "shell.init", 0,
+        || flux_shell_add_event_context (shell,
+                                         "shell.init",
+                                         0,
                                          "{s:i s:i}",
                                          "leader-rank",
                                          shell->info->rankinfo.rank,
                                          "size",
                                          shell->info->shell_size) < 0
-        || flux_shell_add_event_context (shell, "shell.start", 0,
+        || flux_shell_add_event_context (shell,
+                                         "shell.start",
+                                         0,
                                          "{s:O}",
                                          "taskmap", o) < 0)
         goto out;
@@ -1679,6 +1704,55 @@ static int shell_register_event_context (flux_shell_t *shell)
 out:
     json_decref (o);
     return rc;
+}
+
+/*  Setup common environment for this job directly in the jobspec environment.
+ *  Task-specific environment is setup in shell_task_create().
+ */
+static int shell_setup_environment (flux_shell_t *shell)
+{
+    const char *uri;
+    const char *namespace;
+
+    (void) flux_shell_unsetenv (shell, "FLUX_PROXY_REMOTE");
+
+    if (!(uri = getenv ("FLUX_URI"))
+        || !(namespace = getenv ("FLUX_KVS_NAMESPACE"))
+        || flux_shell_setenvf (shell, 1, "FLUX_URI", "%s", uri) < 0
+        || flux_shell_setenvf (shell,
+                               1,
+                               "FLUX_KVS_NAMESPACE",
+                               "%s",
+                               namespace) < 0
+        || flux_shell_setenvf (shell,
+                               1,
+                               "FLUX_JOB_SIZE",
+                               "%d",
+                               shell->info->total_ntasks) < 0
+        || flux_shell_setenvf (shell,
+                               1,
+                               "FLUX_JOB_NNODES",
+                               "%d",
+                               shell->info->shell_size) < 0
+        || flux_shell_setenvf (shell,
+                               1,
+                               "FLUX_JOB_ID",
+                               "%s",
+                               idf58 (shell->info->jobid)) < 0)
+        return -1;
+
+    /* If HOSTNAME is set in job environment it is almost certain to be
+     * incorrect. Overwrite with the correct hostname.
+     */
+    if (flux_shell_getenv (shell, "HOSTNAME")
+        && flux_shell_setenvf (shell,
+                               1,
+                               "HOSTNAME",
+                               "%s",
+                               shell->hostname) < 0)
+        return -1;
+
+    return 0;
 }
 
 /*  Export a static list of environment variables from the job environment
@@ -1721,11 +1795,86 @@ static int frob_command (flux_shell_t *shell, flux_cmd_t *cmd)
     return 0;
 }
 
+static int shell_create_tasks (flux_shell_t *shell)
+{
+    int i = 0;
+    int taskid;
+
+    if (!(shell->tasks = zlist_new ()))
+        shell_die (1, "zlist_new failed");
+
+    taskid = idset_first (shell->info->taskids);
+    while (taskid != IDSET_INVALID_ID) {
+        struct shell_task *task;
+
+        if (!(task = shell_task_create (shell, i, taskid)))
+            shell_die (1, "shell_task_create index=%d", i);
+
+        task->pre_exec_cb = shell_task_exec;
+        task->pre_exec_arg = shell;
+
+        if (zlist_append (shell->tasks, task) < 0)
+            shell_die (1, "zlist_append failed");
+        i++;
+        taskid = idset_next (shell->info->taskids, taskid);
+    }
+    return 0;
+}
+
+static int shell_start_tasks (flux_shell_t *shell)
+{
+    flux_shell_task_t *task;
+
+    task = zlist_first (shell->tasks);
+    while (task) {
+        shell->current_task = task;
+
+        /*  Call all plugin task_init callbacks:
+         */
+        if (shell_task_init (shell) < 0)
+            shell_die (1, "failed to initialize taskid=%d", task->rank);
+
+        /*  Render any mustache templates in command args
+         */
+        if (frob_command (shell, task->cmd))
+            shell_die (1, "failed rendering of mustachioed command args");
+
+        if (shell_task_start (shell, task, task_completion_cb, shell) < 0) {
+            int ec = 1;
+            /* bash standard, 126 for permission/access denied, 127
+             * for command not found.  Note that shell only launches
+             * local tasks, therefore no need to check for
+             * EHOSTUNREACH.
+             */
+            if (errno == EPERM || errno == EACCES)
+                ec = 126;
+            else if (errno == ENOENT)
+                ec = 127;
+            shell_die (ec,
+                       "task %d (host %s): start failed: %s: %s",
+                       task->rank,
+                       shell->hostname,
+                       flux_cmd_arg (task->cmd, 0),
+                       strerror (errno));
+        }
+
+        if (flux_shell_add_completion_ref (shell, "task%d", task->rank) < 0)
+            shell_die (1, "flux_shell_add_completion_ref");
+
+        /*  Call all plugin task_fork callbacks:
+         */
+        if (shell_task_forked (shell) < 0)
+            shell_die (1, "shell_task_forked");
+
+        task = zlist_next (shell->tasks);
+    }
+    shell->current_task = NULL;
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     flux_shell_t shell;
-    int i;
-    unsigned int taskid;
 
     /* Initialize locale from environment
      */
@@ -1768,7 +1917,8 @@ int main (int argc, char *argv[])
 
     /* Set no_process_group if nosetpgrp option is set */
     if (flux_shell_getopt_unpack (&shell,
-                                  "nosetpgrp", "i",
+                                  "nosetpgrp",
+                                  "i",
                                   &shell.nosetpgrp) < 0)
         shell_die (1, "failed to parse attributes.system.shell.nosetpgrp");
 
@@ -1797,6 +1947,17 @@ int main (int argc, char *argv[])
     if (shell_register_event_context (&shell) < 0)
         shell_die (1, "failed to add standard shell event context");
 
+    /* Setup common environment for job.
+     */
+    if (shell_setup_environment (&shell) < 0)
+        shell_die (1, "failed to setup common job environment");
+
+    /* Create all tasks but do not start them. Tasks are started later
+     * in shell_start_tasks().
+     */
+    if (shell_create_tasks (&shell) < 0)
+        shell_die_errno (1, "shell_create_tasks");
+
     /* Call "shell_init" plugins.
      */
     if (shell_init (&shell) < 0)
@@ -1823,68 +1984,10 @@ int main (int argc, char *argv[])
     if (shell_post_init (&shell) < 0)
         shell_die_errno (1, "shell_post_init");
 
-    /* Create tasks
+    /* Start all tasks
      */
-    if (!(shell.tasks = zlist_new ()))
-        shell_die (1, "zlist_new failed");
-
-    i = 0;
-    taskid = idset_first (shell.info->taskids);
-    while (taskid != IDSET_INVALID_ID) {
-        struct shell_task *task;
-
-        if (!(task = shell_task_create (&shell, i, taskid)))
-            shell_die (1, "shell_task_create index=%d", i);
-
-        task->pre_exec_cb = shell_task_exec;
-        task->pre_exec_arg = &shell;
-        shell.current_task = task;
-
-        /*  Call all plugin task_init callbacks:
-         */
-        if (shell_task_init (&shell) < 0)
-            shell_die (1, "failed to initialize taskid=%d", i);
-
-        /*  Render any mustache templates in command args
-         */
-        if (frob_command (&shell, task->cmd))
-            shell_die (1, "failed rendering of mustachioed command args");
-
-        if (shell_task_start (&shell, task, task_completion_cb, &shell) < 0) {
-            int ec = 1;
-            /* bash standard, 126 for permission/access denied, 127
-             * for command not found.  Note that shell only launches
-             * local tasks, therefore no need to check for
-             * EHOSTUNREACH.
-             */
-            if (errno == EPERM || errno == EACCES)
-                ec = 126;
-            else if (errno == ENOENT)
-                ec = 127;
-            shell_die (ec, "task %d (host %s): start failed: %s: %s",
-                       task->rank,
-                       shell.hostname,
-                       flux_cmd_arg (task->cmd, 0),
-                       strerror (errno));
-        }
-
-        if (zlist_append (shell.tasks, task) < 0)
-            shell_die (1, "zlist_append failed");
-
-        if (flux_shell_add_completion_ref (&shell, "task%d", task->rank) < 0)
-            shell_die (1, "flux_shell_add_completion_ref");
-
-        /*  Call all plugin task_fork callbacks:
-         */
-        if (shell_task_forked (&shell) < 0)
-            shell_die (1, "shell_task_forked");
-
-        i++;
-        taskid = idset_next (shell.info->taskids, taskid);
-    }
-    /*  Reset current task since we've left task-specific context:
-     */
-    shell.current_task = NULL;
+    if (shell_start_tasks (&shell) < 0)
+        shell_die (1, "shell_start_tasks failed");
 
     if (shell_start (&shell) < 0)
         shell_die_errno (1, "shell.start callback(s) failed");
