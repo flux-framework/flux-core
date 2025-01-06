@@ -13,28 +13,17 @@
  * Intercept task stdout, stderr and dispose of it according to
  * selected I/O mode.
  *
- * If output is written to the KVS or directly to a file, the leader shell
- * implements an "shell-<id>.output" service that all ranks send task
- * output to.  Output objects accumulate in a json array on the
- * leader.  Depending on settings, output is written directly to
- * stdout/stderr, output objects are written to the "output" key in
- * the job's guest KVS namespace per RFC24, or output is written to a
- * configured file.
+ * See component specific source files for details of operation.
+ * These include:
  *
- * Notes:
- * - leader takes a completion reference which it gives up once each
- *   task sends an EOF for both stdout and stderr.
- * - completion reference also taken for each KVS commit, to ensure
- *   commits complete before shell exits
- * - follower shells send I/O to the service with RPC
- * - Any errors getting I/O to the leader are logged by RPC completion
- *   callbacks.
- * - Any outstanding RPCs at shell_output_destroy() are synchronously waited for
- *   there (checked for error, then destroyed).
- * - Any outstanding file writes at shell_output_destroy() are
- *   synchronously waited for to complete.
- * - The number of in-flight write requests on each shell is limited to
- *   shell_output_hwm, to avoid matchtag exhaustion, etc. for chatty tasks.
+ * output/conf.[ch]:     jobspec output file options reader
+ * output/service.[ch]:  std output write service implementation
+ * output/client.[ch]:   std output leader service client
+ * output/kvs.[ch]:      std output kvs writer
+ * output/filehash.[ch]: std output file hash and writer
+ * output/log.[ch]:      shell.log output handling
+ * output/task.[ch]:     per-task std output handling
+ *
  */
 #define FLUX_SHELL_PLUGIN_NAME "output"
 
