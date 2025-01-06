@@ -45,5 +45,18 @@ test_expect_success 'mustache: unsupported tag is left alone' '
 	test_debug "cat output.4" &&
 	test "$(cat output.4)" = "{{foo}} {{node.foo}} {{task.foo}}"
 '
-
+test_expect_success 'mustache: mustache templates can be rendered in env' '
+	flux run --env=TEST={{tmpdir}} -N2 \
+		sh -c "test \$TEST = \$FLUX_JOB_TMPDIR"
+'
+test_expect_success 'mustache: env variables can have per-task tags' '
+	flux run --env=TEST={{taskid}} -N2 -n4 \
+		sh -c "test \$TEST = \$FLUX_TASK_RANK" &&
+	flux run --env=T1={{size}} --env=T2={{taskid}} -N2 -n4 \
+		sh -c "test \$T1 -eq 4 -a \$T2 = \$FLUX_TASK_RANK"
+'
+test_expect_success 'mustache: invalid tags in env vars are left unexpanded' '
+	flux run --env=TEST={{task.foo}} \
+		sh -c "test \$TEST = {{task.foo}}"
+'
 test_done
