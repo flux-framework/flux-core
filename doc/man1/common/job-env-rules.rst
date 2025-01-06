@@ -31,8 +31,13 @@ via a set of *RULE* expressions. The currently supported rules are
      * Advanced parameter substitution is not allowed, e.g. ``${var:-foo}``
        will raise an error.
 
+   ``VAL`` may also contain a mustache template, in which case the template
+   will be substituted in the job shell with the corresponding value before
+   launching job tasks. See `MUSTACHE TEMPLATES`_ for more information.
+
    Examples:
-       ``PATH=/bin``, ``PATH=$PATH:/bin``, ``FOO=${BAR}something``
+       ``PATH=/bin``, ``PATH=$PATH:/bin``, ``FOO=${BAR}something``,
+       ``PATH=${PATH}:/{{tmpdir}}/bin``
 
  * Otherwise, the rule is considered a pattern from which to match
    variables from the process environment if they do not exist in
