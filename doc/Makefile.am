@@ -119,7 +119,6 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_msg_cmp.3 \
 	man3/flux_msg_create.3 \
 	man3/flux_msg_handler_addvec.3 \
-	man3/flux_child_watcher_create.3 \
 	man3/flux_signal_watcher_create.3 \
 	man3/flux_stat_watcher_create.3 \
 	man3/flux_respond.3 \
@@ -222,8 +221,6 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_msg_handler_stop.3 \
 	man3/flux_get_handle_watcher.3 \
 	man3/flux_msg_handler_delvec.3 \
-	man3/flux_child_watcher_get_rpid.3 \
-	man3/flux_child_watcher_get_rstatus.3 \
 	man3/flux_signal_watcher_get_signum.3 \
 	man3/flux_stat_watcher_get_rstat.3 \
 	man3/flux_respond_raw.3 \
