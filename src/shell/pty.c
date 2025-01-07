@@ -69,7 +69,7 @@ shell_terminus_server_start (flux_shell_t *shell, const char *shell_service)
 static void pty_monitor (struct flux_pty *pty, void *data, int len)
 {
     flux_plugin_arg_t *args;
-    int rank;
+    const char *rank;
 
     /*  len == 0 indicates pty is closed. If there's a reference on
      *  stdout, release it here
@@ -81,10 +81,11 @@ static void pty_monitor (struct flux_pty *pty, void *data, int len)
         return;
     }
 
-    rank = ptr2int (flux_pty_aux_get (pty, "rank"));
+    rank = flux_pty_aux_get (pty, "rank");
     if (!(args = flux_plugin_arg_create ())
-        || flux_plugin_arg_pack (args, FLUX_PLUGIN_ARG_IN,
-                                 "{s:s s:i s:s#}",
+        || flux_plugin_arg_pack (args,
+                                 FLUX_PLUGIN_ARG_IN,
+                                 "{s:s s:s s:s#}",
                                  "stream", "stdout",
                                  "rank", rank,
                                  "data", data, len) < 0) {
@@ -154,10 +155,11 @@ static int pty_getopt (flux_shell_t *shell,
                        int *capture,
                        int *interactive)
 {
-    char *s;
+    char *s = NULL;
     const char *ranks;
     char rbuf [21];
-    json_t *o;
+    json_t *o = NULL;
+    *targets = NULL;
 
     /*  Only create a session for rank 0 if the pty option was specified
      */
@@ -173,7 +175,7 @@ static int pty_getopt (flux_shell_t *shell,
 
     if (!(o = json_loads (s, JSON_DECODE_ANY, NULL))) {
         shell_log_error ("Unable to parse pty shell option: %s", s);
-        return -1;
+        goto error;
     }
     if (json_is_object (o)) {
         json_error_t error;
@@ -187,7 +189,7 @@ static int pty_getopt (flux_shell_t *shell,
                             "capture", capture,
                             "interactive", interactive) < 0) {
             shell_die (1, "invalid shell pty option: %s", error.text);
-            return -1;
+            goto error;
         }
 
         if (*interactive) {
@@ -222,7 +224,7 @@ static int pty_getopt (flux_shell_t *shell,
     }
     if (!(*targets = shell_taskids_intersect (shell, shell_rank, ranks))) {
         shell_log_error ("pty: shell_taskids_intersect");
-        return -1;
+        goto error;
     }
 
     /*  If interactive, then always ensure rank 0 is in the set of targets
@@ -234,7 +236,14 @@ static int pty_getopt (flux_shell_t *shell,
         shell_warn ("pty: adding pty to rank 0 for interactive support");
         idset_set (*targets, 0);
     }
+    free (s);
+    json_decref (o);
     return 1;
+error:
+    free (s);
+    json_decref (o);
+    idset_destroy (*targets);
+    return -1;
 }
 
 static void server_empty (struct flux_terminus_server *ts, void *arg)
@@ -299,7 +308,6 @@ static int pty_init (flux_plugin_t *p,
             return -1;
         }
     }
-
 
     /*  Create a pty session for each local target
      */
@@ -371,12 +379,16 @@ static int pty_init (flux_plugin_t *p,
          *   ranks do not support interactive attach.
          */
         if (capture || rank != 0) {
-            if (flux_pty_aux_set (pty, "shell", shell, NULL) < 0
-                || flux_pty_aux_set (pty, "rank", int2ptr (rank), NULL) < 0
+            char *rankstr = NULL;
+
+            if (asprintf (&rankstr, "%d", rank) < 0
+                || flux_pty_aux_set (pty, "shell", shell, NULL) < 0
+                || flux_pty_aux_set (pty, "rank", rankstr, free) < 0
                 || flux_pty_aux_set (pty,
                                      "capture",
                                      int2ptr (capture),
                                      NULL) < 0) {
+                free (rankstr);
                 shell_log_errno ("flux_pty_aux_set");
                 goto error;
             }
