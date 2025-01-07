@@ -72,7 +72,7 @@ flux_reactor_t *flux_reactor_create (int flags)
     if ((flags & FLUX_REACTOR_SIGCHLD))
         r->loop = ev_default_loop (EVFLAG_SIGNALFD);
     else
-        r->loop = ev_loop_new (EVFLAG_NOSIGMASK);
+        r->loop = ev_loop_new (EVFLAG_NOSIGMASK | EVFLAG_SIGNALFD);
     if (!r->loop) {
         errno = ENOMEM;
         flux_reactor_destroy (r);

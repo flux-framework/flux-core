@@ -293,23 +293,16 @@ static int run_service (const char *service, int fd)
     struct flux_terminus_server *ts;
     flux_future_t *f;
     int rc = -1;
-    flux_reactor_t *r;
 
     if (fdwalk (terminus_server_closefd, &fd) < 0) {
         log_err ("fdwalk");
         goto err;
     }
 
-    r = flux_reactor_create (FLUX_REACTOR_SIGCHLD);
-    if (!r) {
-        log_err ("flux_reactor_create");
-        goto err;
-    }
     if (!(h = flux_open (NULL, 0))) {
         log_err ("flux_open");
         goto err;
     }
-    flux_set_reactor (h, r);
     if (!(f = flux_service_register (h, service))
         || flux_future_get (f, NULL) < 0) {
         log_err ("flux_service_register (%s)", service);
@@ -330,11 +323,10 @@ static int run_service (const char *service, int fd)
 
     /*  Set up to exit when the last session exits
      */
-    flux_terminus_server_notify_empty (ts, empty_cb, r);
+    flux_terminus_server_notify_empty (ts, empty_cb, flux_get_reactor (h));
 
     rc = flux_reactor_run (flux_get_reactor (h), 0);
     flux_terminus_server_destroy (ts);
-    flux_reactor_destroy (r);
     flux_close (h);
     return rc;
 err:

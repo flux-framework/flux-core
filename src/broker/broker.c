@@ -248,8 +248,7 @@ int main (int argc, char *argv[])
      * ctx.h is used conventionally within the broker for RPCs, message
      * handlers, etc.  ctx.h_internal belongs to the broker's routing logic
      * and is accessed using flux_send() and flux_recv() only.  Both handles
-     * share a reactor, which is created with FLUX_REACTOR_SIGCHLD in order
-     * to support libsubprocess.
+     * share a reactor.
      *
      * N.B. since both handles are in the same thread, synchronous RPCs on
      * ctx.h will deadlock.  The main broker reactor must run in order
@@ -257,7 +256,7 @@ int main (int argc, char *argv[])
      * Careful with flux_attr_get(), which hides a synchronous RPC if the
      * requested value is not cached.
      */
-    if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD))
+    if (!(ctx.reactor = flux_reactor_create (0))
         || !(ctx.h = flux_open ("interthread://broker", 0))
         || flux_set_reactor (ctx.h, ctx.reactor) < 0
         || !(ctx.h_internal = flux_open ("interthread://broker", 0))

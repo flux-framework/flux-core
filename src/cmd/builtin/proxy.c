@@ -385,10 +385,8 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     free (uri);
     flux_log_set_appname (ctx.h, "proxy");
     ctx.proxy_user = getuid ();
-    if (!(r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
-        log_err_exit ("flux_reactor_create");
-    if (flux_set_reactor (ctx.h, r) < 0)
-        log_err_exit ("flux_set_reactor");
+    if (!(r = flux_get_reactor (ctx.h)))
+        log_err_exit ("flux_get_reactor");
 
     /* Register handler for loss of broker connection if --reconnect
      */

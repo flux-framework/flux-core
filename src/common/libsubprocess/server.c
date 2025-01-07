@@ -30,6 +30,7 @@
 #include "server.h"
 #include "client.h"
 #include "util.h"
+#include "sigchld.h"
 
 extern char **environ;
 
@@ -55,6 +56,7 @@ struct subprocess_server {
     // The shutdown future is created when user calls shutdown,
     //  and fulfilled once subprocesses list becomes empty.
     flux_future_t *shutdown;
+    bool has_sigchld_ctx;
 };
 
 static void server_kill (flux_subprocess_t *p, int signum);
@@ -709,6 +711,8 @@ void subprocess_server_destroy (subprocess_server_t *s)
         flux_future_destroy (s->shutdown);
         free (s->service_name);
         free (s->local_uri);
+        if (s->has_sigchld_ctx)
+            sigchld_finalize ();
         free (s);
         errno = saved_errno;
     }
@@ -750,6 +754,11 @@ subprocess_server_t *subprocess_server_create (flux_t *h,
                                     &s->handlers) < 0)
         goto error;
 
+    /* Avoid unnecessary on-demand create/destroy of SIGCHLD handler + hash.
+     */
+    if (sigchld_initialize (flux_get_reactor (h)) < 0)
+        goto error;
+    s->has_sigchld_ctx = true;
     return s;
 
 error:

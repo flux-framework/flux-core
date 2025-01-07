@@ -1074,7 +1074,7 @@ int start_session (const char *cmd_argz,
         if (signal (SIGTTOU, SIG_IGN) == SIG_ERR)
             log_err_exit ("signal");
     }
-    if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
+    if (!(ctx.reactor = flux_reactor_create (0)))
         log_err_exit ("flux_reactor_create");
     if (!(ctx.timer = flux_timer_watcher_create (ctx.reactor,
                                                  ctx.exit_timeout,

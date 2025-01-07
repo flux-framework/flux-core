@@ -1886,9 +1886,9 @@ int main (int argc, char *argv[])
 
     shell_parse_cmdline (&shell, argc, argv);
 
-    /* Get reactor capable of monitoring subprocesses.
+    /* Get reactor.
      */
-    if (!(shell.r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
+    if (!(shell.r = flux_reactor_create (0)))
         shell_die_errno (1, "flux_reactor_create");
 
     /* Connect to broker:

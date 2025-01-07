@@ -478,7 +478,7 @@ int main (int argc, char *argv[])
     start_fdcount = fdcount ();
 
     // Create shared reactor for all tests
-    ok ((r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)) != NULL,
+    ok ((r = flux_reactor_create (0)) != NULL,
         "flux_reactor_create");
 
     diag ("channel_fd_env");

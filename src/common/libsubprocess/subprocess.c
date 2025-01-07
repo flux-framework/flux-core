@@ -37,6 +37,7 @@
 #include "remote.h"
 #include "client.h"
 #include "util.h"
+#include "sigchld.h"
 
 /*
  * Primary Structures
@@ -130,8 +131,6 @@ static void subprocess_free (flux_subprocess_t *p)
         if (p->channels)
             zhash_destroy (&p->channels);
 
-        flux_watcher_destroy (p->child_w);
-
         close_pair_fds (p->sync_fds);
 
         flux_watcher_destroy (p->state_prep_w);
@@ -145,6 +144,11 @@ static void subprocess_free (flux_subprocess_t *p)
         if (p->f)
             flux_future_destroy (p->f);
         free (p->service_name);
+
+        if (p->has_sigchld_ctx) {
+            sigchld_unregister (p->pid); // this is a no-op if already done
+            sigchld_finalize ();
+        }
 
         free (p);
         errno = saved_errno;
@@ -167,6 +171,12 @@ static flux_subprocess_t *subprocess_create (
 
     if (!p)
         return NULL;
+
+    if (local) {
+        if (sigchld_initialize (r) < 0)
+            goto error;
+        p->has_sigchld_ctx = true;
+    }
 
     p->llog = log_fn;
     p->llog_data = log_data;
@@ -206,9 +216,9 @@ static flux_subprocess_t *subprocess_create (
     p->h = h;
     p->reactor = r;
     p->rank = rank;
-    p->flags = flags;
-
     p->local = local;
+
+    p->flags = flags;
 
     p->refcount = 1;
     return (p);

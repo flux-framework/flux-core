@@ -33,6 +33,7 @@
 #include "fork.h"
 #include "posix_spawn.h"
 #include "util.h"
+#include "sigchld.h"
 
 static void local_channel_flush (struct subprocess_channel *c)
 {
@@ -449,20 +450,9 @@ static void close_child_fds (flux_subprocess_t *p)
     }
 }
 
-static void child_watch_cb (flux_reactor_t *r,
-                            flux_watcher_t *w,
-                            int revents,
-                            void *arg)
+static void sigchld_cb (pid_t pid, int status, void *arg)
 {
     flux_subprocess_t *p = arg;
-    int status;
-
-    if ((status = flux_child_watcher_get_rstatus (w)) < 0) {
-        llog_error (p,
-                    "flux_child_watcher_get_rstatus: %s",
-                    strerror (errno));
-        return;
-    }
 
     p->status = status;
 
@@ -480,9 +470,8 @@ static void child_watch_cb (flux_reactor_t *r,
             state_change_start (p);
         }
 
-        /*  Child watcher no longer needed, pid now invalid */
-        if (p->child_w)
-            flux_watcher_stop (p->child_w);
+        /*  callback no longer needed, pid now invalid */
+        sigchld_unregister (pid);
     }
 
     if (p->state == FLUX_SUBPROCESS_EXITED)
@@ -502,16 +491,10 @@ static int start_local_watchers (flux_subprocess_t *p)
 {
     struct subprocess_channel *c;
 
-    /* no-op if reactor is !FLUX_REACTOR_SIGCHLD */
-    if (!(p->child_w = flux_child_watcher_create (p->reactor,
-                                                  p->pid,
-                                                  true,
-                                                  child_watch_cb,
-                                                  p))) {
-        llog_debug (p, "flux_child_watcher_create: %s", strerror (errno));
+    if (sigchld_register (p->reactor, p->pid, sigchld_cb, p) < 0) {
+        llog_debug (p, "sigchld_register: %s", strerror (errno));
         return -1;
     }
-    flux_watcher_start (p->child_w);
 
     c = zhash_first (p->channels);
     while (c) {

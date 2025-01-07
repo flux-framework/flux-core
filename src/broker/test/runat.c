@@ -350,7 +350,6 @@ void badinput (flux_t *h)
 int main (int argc, char *argv[])
 {
     flux_t *h;
-    flux_reactor_t *r;
 
     plan (NO_PLAN);
 
@@ -360,12 +359,8 @@ int main (int argc, char *argv[])
 
     if (!(logs = zlist_new ()))
         BAIL_OUT ("zlist_new failed");
-    if (!(r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
-        BAIL_OUT ("flux_reactor_create failed");
     if (!(h = flux_open ("loop://", 0)))
         BAIL_OUT ("could not create loop handle");
-    if (flux_set_reactor (h, r) < 0)
-        BAIL_OUT ("flux_set_reactor failed");
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
         BAIL_OUT ("flux_attr_set_cacheonly rank failed");
     flux_log_set_redirect (h, diag_logger, NULL);
@@ -374,7 +369,6 @@ int main (int argc, char *argv[])
     basic (h);
     badinput (h);
 
-    flux_reactor_destroy (r);
     flux_close (h);
 
     clear_list (logs);

@@ -82,7 +82,6 @@ flux_t *rcmdsrv_create (const char *service_name)
     // to stdin of subprocess that has terminated
     signal (SIGPIPE, SIG_IGN);
 
-    // N.B. test reactor is created with FLUX_REACTOR_SIGCHLD flag
     if (!(h = test_server_create (0, test_server, (char *)service_name)))
         BAIL_OUT ("test_server_create failed");
 
