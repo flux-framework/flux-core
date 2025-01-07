@@ -11,6 +11,16 @@
 #ifndef _FLUX_RESOURCE_H
 #define _FLUX_RESOURCE_H
 
+struct resource_config {
+    json_t *R;
+    const char *exclude_idset;
+    bool rediscover;
+    bool noverify;
+    bool norestrict;
+    bool no_update_watch;
+    bool monitor_force_up;
+};
+
 struct resource_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;

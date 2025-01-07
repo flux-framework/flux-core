@@ -57,14 +57,14 @@
  * no-update-watch = false
  *   For testing purposes, simulate missing job-info.update-watch service
  *   in parent instance by sending to an invalid service name.
+ *
+ * rediscover = false
+ *   Force rediscovery of local resources via hwloc. Do not fetch R or hwloc
+ *   XML from the enclosing instance.
  */
 static int parse_config (struct resource_ctx *ctx,
                          const flux_conf_t *conf,
-                         const char **excludep,
-                         json_t **R,
-                         bool *noverifyp,
-                         bool *norestrictp,
-                         bool *no_update_watchp,
+                         struct resource_config *rconfig,
                          flux_error_t *errp)
 {
     flux_error_t error;
@@ -74,12 +74,13 @@ static int parse_config (struct resource_ctx *ctx,
     int noverify = 0;
     int norestrict = 0;
     int no_update_watch = 0;
+    int rediscover = 0;
     json_t *o = NULL;
     json_t *config = NULL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s s?o s?s s?b s?b s?b !}}",
+                          "{s?{s?s s?s s?o s?s s?b s?b s?b s?b !}}",
                           "resource",
                             "path", &path,
                             "scheduling", &scheduling_path,
@@ -87,7 +88,8 @@ static int parse_config (struct resource_ctx *ctx,
                             "exclude", &exclude,
                             "norestrict", &norestrict,
                             "noverify", &noverify,
-                            "no-update-watch", &no_update_watch) < 0) {
+                            "no-update-watch", &no_update_watch,
+                            "rediscover", &rediscover) < 0) {
         errprintf (errp,
                    "error parsing [resource] configuration: %s",
                    error.text);
@@ -143,16 +145,14 @@ static int parse_config (struct resource_ctx *ctx,
             return -1;
         }
     }
-    if (excludep)
-        *excludep = exclude;
-    if (noverifyp)
-        *noverifyp = noverify ? true : false;
-    if (norestrictp)
-        *norestrictp = norestrict ? true : false;
-    if (no_update_watchp)
-        *no_update_watchp = no_update_watch ? true : false;
-    if (R)
-        *R = o;
+    if (rconfig) {
+        rconfig->exclude_idset = exclude;
+        rconfig->noverify = noverify ? true : false;
+        rconfig->norestrict = norestrict ? true : false;
+        rconfig->no_update_watch = no_update_watch ? true : false;
+        rconfig->rediscover = rediscover ? true : false;
+        rconfig->R = o;
+    }
     else
         json_decref (o);
     return 0;
@@ -174,7 +174,7 @@ static void config_reload_cb (flux_t *h,
 
     if (flux_conf_reload_decode (msg, &conf) < 0)
         goto error;
-    if (parse_config (ctx, conf, NULL, NULL, NULL, NULL, NULL, &error) < 0) {
+    if (parse_config (ctx, conf, NULL, &error) < 0) {
         errstr = error.text;
         goto error;
     }
@@ -305,12 +305,9 @@ error:
     return -1;
 }
 
-int parse_args (flux_t *h,
-                int argc,
+int parse_args (flux_t *h, int argc,
                 char **argv,
-                bool *monitor_force_up,
-                bool *noverify,
-                bool *no_update_watch)
+                struct resource_config *config)
 {
     int i;
     for (i = 0; i < argc; i++) {
@@ -318,9 +315,9 @@ int parse_args (flux_t *h,
          * 'restart' event posted to resource.eventlog.
          */
         if (streq (argv[i], "monitor-force-up"))
-            *monitor_force_up = true;
+            config->monitor_force_up = true;
         else if (streq (argv[i], "noverify"))
-            *noverify = true;
+            config->noverify = true;
         else  {
             flux_log (h, LOG_ERR, "unknown option: %s", argv[i]);
             errno = EINVAL;
@@ -335,13 +332,8 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     struct resource_ctx *ctx;
     flux_error_t error;
-    const char *exclude_idset;
     json_t *eventlog = NULL;
-    bool monitor_force_up = false;
-    bool noverify = false;
-    bool norestrict = false;
-    bool no_update_watch = false;
-    json_t *R_from_config;
+    struct resource_config config = {0};
 
     if (!(ctx = resource_ctx_create (h)))
         goto error;
@@ -349,38 +341,22 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto error;
     if (flux_get_rank (h, &ctx->rank) < 0)
         goto error;
-    if (parse_config (ctx,
-                      flux_get_conf (h),
-                      &exclude_idset,
-                      &R_from_config,
-                      &noverify,
-                      &norestrict,
-                      &no_update_watch,
-                      &error) < 0) {
+    if (parse_config (ctx, flux_get_conf (h), &config, &error) < 0) {
         flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
     }
-    if (parse_args (h,
-                    argc,
-                    argv,
-                    &monitor_force_up,
-                    &noverify,
-                    &no_update_watch) < 0)
+    if (parse_args (h, argc, argv, &config) < 0)
         goto error;
     if (flux_attr_get (ctx->h, "broker.recovery-mode"))
-        noverify = true;
+        config.noverify = true;
 
     /*  Note: Order of creation of resource subsystems is important.
      *  Create inventory on all ranks first, since it is required by
      *  the exclude and drain subsystems on rank 0.
      */
-    if (!(ctx->inventory = inventory_create (ctx,
-                                             R_from_config,
-                                             no_update_watch)))
+    if (!(ctx->inventory = inventory_create (ctx, &config)))
         goto error;
-    /*  Done with R_from_config now, so free it.
-     */
-    json_decref (R_from_config);
+
     if (ctx->rank == 0) {
         /*  Create reslog and reload eventlog before initializing
          *  acquire, exclude, and drain subsystems, since these
@@ -403,7 +379,7 @@ int mod_main (flux_t *h, int argc, char **argv)
          *  the exclude idset to ensure drained ranks that are now
          *  excluded are ignored.
          */
-        if (!(ctx->exclude = exclude_create (ctx, exclude_idset)))
+        if (!(ctx->exclude = exclude_create (ctx, config.exclude_idset)))
             goto error;
         if (!(ctx->drain = drain_create (ctx, eventlog)))
             goto error;
@@ -411,11 +387,11 @@ int mod_main (flux_t *h, int argc, char **argv)
     /*  topology is initialized after exclude/drain etc since this
      *  rank may attempt to drain itself due to a topology mismatch.
      */
-    if (!(ctx->topology = topo_create (ctx, noverify, norestrict)))
+    if (!(ctx->topology = topo_create (ctx, &config)))
         goto error;
     if (!(ctx->monitor = monitor_create (ctx,
                                          inventory_get_size (ctx->inventory),
-                                         monitor_force_up)))
+                                         config.monitor_force_up)))
         goto error;
     if (!(ctx->status = status_create (ctx)))
         goto error;
@@ -427,10 +403,12 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     resource_ctx_destroy (ctx);
     json_decref (eventlog);
+    json_decref (config.R);
     return 0;
 error:
     resource_ctx_destroy (ctx);
     ERRNO_SAFE_WRAP (json_decref, eventlog);
+    ERRNO_SAFE_WRAP (json_decref, config.R);
     return -1;
 }
 

@@ -75,6 +75,10 @@ noverify
    (optional) If true, disable the draining of nodes when there is a
    discrepancy between configured resources and HWLOC-probed resources.
 
+rediscover
+   (optional) If true, force rediscovery of resources using HWLOC, rather
+   then using the R and HWLOC XML from the enclosing instance.
+
 Note that updates to the resource table are ignored until the next Flux
 restart.
 

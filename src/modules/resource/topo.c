@@ -275,7 +275,8 @@ void topo_destroy (struct topo *topo)
     }
 }
 
-static char *topo_get_local_xml (struct resource_ctx *ctx, bool no_restrict)
+static char *topo_get_local_xml (struct resource_ctx *ctx,
+                                 struct resource_config *config)
 {
     flux_t *parent_h;
     flux_future_t *f = NULL;
@@ -283,14 +284,15 @@ static char *topo_get_local_xml (struct resource_ctx *ctx, bool no_restrict)
     const char *xml;
 
     errno = 0;
-    if (!(parent_h = resource_parent_handle_open (ctx))
+    if (config->rediscover
+        || !(parent_h = resource_parent_handle_open (ctx))
         || !(f = flux_rpc (parent_h,
                            "resource.topo-get",
                            NULL,
                            FLUX_NODEID_ANY,
                            0))
         || flux_rpc_get (f, &xml) < 0) {
-        rhwloc_flags_t flags = no_restrict ? RHWLOC_NO_RESTRICT : 0;
+        rhwloc_flags_t flags = config->norestrict ? RHWLOC_NO_RESTRICT : 0;
         /*  ENOENT just means there is no parent instance.
          *  No need for an error.
          */
@@ -305,8 +307,8 @@ static char *topo_get_local_xml (struct resource_ctx *ctx, bool no_restrict)
     flux_log (ctx->h,
               LOG_INFO,
               "retrieved local hwloc XML from parent (norestrict=%s)",
-              no_restrict ? "true" : "false");
-    if (no_restrict) {
+              config->norestrict ? "true" : "false");
+    if (config->norestrict) {
         result = strdup (xml);
         goto out;
     }
@@ -320,8 +322,7 @@ out:
 }
 
 struct topo *topo_create (struct resource_ctx *ctx,
-                          bool no_verify,
-                          bool no_restrict)
+                          struct resource_config *config)
 {
     struct topo *topo;
     json_t *R;
@@ -329,7 +330,7 @@ struct topo *topo_create (struct resource_ctx *ctx,
     if (!(topo = calloc (1, sizeof (*topo))))
         return NULL;
     topo->ctx = ctx;
-    if (!(topo->xml = topo_get_local_xml (ctx, no_restrict))) {
+    if (!(topo->xml = topo_get_local_xml (ctx, config))) {
         flux_log (ctx->h, LOG_ERR, "error loading hwloc topology");
         goto error;
     }
@@ -345,7 +346,7 @@ struct topo *topo_create (struct resource_ctx *ctx,
 
         if (method && streq (method, "job-info"))
             nodrain = true;
-        if (!no_verify && topo_verify (topo, R, nodrain) < 0)
+        if (!config->noverify && topo_verify (topo, R, nodrain) < 0)
             goto error;
     }
     /* Reduce topo to rank 0 unconditionally in case it is needed.

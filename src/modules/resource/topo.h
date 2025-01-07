@@ -12,8 +12,7 @@
 #define _FLUX_RESOURCE_TOPO_H
 
 struct topo *topo_create (struct resource_ctx *ctx,
-                          bool no_verify,
-                          bool no_restrict);
+                          struct resource_config *config);
 void topo_destroy (struct topo *topo);
 
 
