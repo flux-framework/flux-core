@@ -595,7 +595,11 @@ static int start_resource_watch (struct inventory *inv,
     }
     flux_future_reset (f);
     inv->R_watch_f = f;
-    if (R) { // R = NULL if no conversion possible (fall through to discovery)
+
+    /* If R == NULL (no conversion possible) or rediscover == true, then
+     * we will fall through to dynamic discovery.
+     */
+    if (R && !config->rediscover) {
         if (inventory_put (inv, R, "job-info") < 0)
             goto done;
         if (flux_future_then (f,

@@ -284,7 +284,8 @@ static char *topo_get_local_xml (struct resource_ctx *ctx,
     const char *xml;
 
     errno = 0;
-    if (!(parent_h = resource_parent_handle_open (ctx))
+    if (config->rediscover
+        || !(parent_h = resource_parent_handle_open (ctx))
         || !(f = flux_rpc (parent_h,
                            "resource.topo-get",
                            NULL,

@@ -57,6 +57,10 @@
  * no-update-watch = false
  *   For testing purposes, simulate missing job-info.update-watch service
  *   in parent instance by sending to an invalid service name.
+ *
+ * rediscover = false
+ *   Force rediscovery of local resources via hwloc. Do not fetch R or hwloc
+ *   XML from the enclosing instance.
  */
 static int parse_config (struct resource_ctx *ctx,
                          const flux_conf_t *conf,
@@ -70,12 +74,13 @@ static int parse_config (struct resource_ctx *ctx,
     int noverify = 0;
     int norestrict = 0;
     int no_update_watch = 0;
+    int rediscover = 0;
     json_t *o = NULL;
     json_t *config = NULL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s s?o s?s s?b s?b s?b !}}",
+                          "{s?{s?s s?s s?o s?s s?b s?b s?b s?b !}}",
                           "resource",
                             "path", &path,
                             "scheduling", &scheduling_path,
@@ -83,7 +88,8 @@ static int parse_config (struct resource_ctx *ctx,
                             "exclude", &exclude,
                             "norestrict", &norestrict,
                             "noverify", &noverify,
-                            "no-update-watch", &no_update_watch) < 0) {
+                            "no-update-watch", &no_update_watch,
+                            "rediscover", &rediscover) < 0) {
         errprintf (errp,
                    "error parsing [resource] configuration: %s",
                    error.text);
@@ -144,6 +150,7 @@ static int parse_config (struct resource_ctx *ctx,
         rconfig->noverify = noverify ? true : false;
         rconfig->norestrict = norestrict ? true : false;
         rconfig->no_update_watch = no_update_watch ? true : false;
+        rconfig->rediscover = rediscover ? true : false;
         rconfig->R = o;
     }
     else

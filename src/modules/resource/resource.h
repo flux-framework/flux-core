@@ -14,6 +14,7 @@
 struct resource_config {
     json_t *R;
     const char *exclude_idset;
+    bool rediscover;
     bool noverify;
     bool norestrict;
     bool no_update_watch;
