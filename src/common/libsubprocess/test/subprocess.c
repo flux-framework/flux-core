@@ -1142,11 +1142,11 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
+    start_fdcount = fdcount ();
+
     // Create shared reactor for all tests
     ok ((r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)) != NULL,
         "flux_reactor_create");
-
-    start_fdcount = fdcount ();
 
     diag ("corner_cases");
     test_corner_cases (r);
@@ -1196,12 +1196,13 @@ int main (int argc, char *argv[])
     diag ("test_fdcleanup posix-spawn");
     test_fdcleanup (r, "posix-spawn", 0, 3);
 
+    flux_reactor_destroy (r);
+
     end_fdcount = fdcount ();
 
     ok (start_fdcount == end_fdcount,
         "no file descriptors leaked");
 
-    flux_reactor_destroy (r);
     done_testing ();
     return 0;
 }
