@@ -1,3 +1,52 @@
+flux-core version 0.70.0 - 2025-01-07
+-------------------------------------
+
+## New Features
+ * add `resource.rediscover` config key to force rediscovery of subinstance
+   resources (#6541)
+ * allow mustache templates in job environment variables (#6506)
+ * shell: make shell tasks available in `shell.init` callback (#6537)
+ * reactor: improve reactor referencing API (#6534)
+ * shell: support more mustache tags (#6525)
+ * kvs-watch: support `FLUX_KVS_STREAM` flag (#6523)
+ * support specification of file permissions in `--add-file` submission
+   option (#6505)
+ * add `flux.conf_builtin.conf_builtin_get()` to give Python access to
+   compiled-in config values (#6486)
+ * jobtap: add `flux_jobtap_jobspec_update_id_pack()` (#6500)
+ * kvs-watch: only fetch new data for appends (#6444)
+ * flux-hostlist: allow idset argument to `--nth` and `--exclude` options
+   (#6478)
+
+## Fixes
+ * shell: minor fixes for shell pty plugin (#6538)
+ * job-info: stream events even if job is inactive (#6518)
+ * flux-hostlist: fix `available` hostlist (#6536)
+ * fix possible truncation of strings with "expandable" output fields (#6533)
+ * flux-kvs: improve eventlog error messages (#6531)
+ * shell: fix signal plugin to work with Fluxion scheduler (#6522)
+ * libschedutil: use preprocessor symbols for flags (#6520)
+ * support partially allocated jobs across scheduler reload (#6445)
+ * job-exec: improve drain message for unkillable procs (#6515)
+ * fix macos portability issues (#6508, #6479, #6476, #6473)
+ * fix handling of `\n` in submission cli `--add-file=` option (#6504)
+ * job-info: avoid error response on failed rpc (#6502)
+ * libflux: update API to use `size_t` where appropriate (#6467)
+ * build: use -Wl,--gc-sections when appropriate (#6497)
+ * shell: ignore SIGPIPE (#6489)
+
+ * resource: only read `resource.scheduling` config on rank 0 (#6482)
+## Cleanup
+ * libflux: refactor reactor/watcher implementation (#6494)
+ * modernize code formatting (#6481)
+ * drop caliper support (#6475)
+
+## CI/Testsuite/Documentation
+ * minor man page improvements (#6519)
+ * ci: add macos builder (#6499, #6509)
+ * testsuite: don't assume /bin/true and /bin/false (#6507)
+
+
 flux-core version 0.69.0 - 2024-12-03
 -------------------------------------
 
