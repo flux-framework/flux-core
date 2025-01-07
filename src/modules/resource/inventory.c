@@ -519,7 +519,8 @@ done:
     return rc;
 }
 
-static int start_resource_watch (struct inventory *inv, bool no_resource_watch)
+static int start_resource_watch (struct inventory *inv,
+                                 struct resource_config *config)
 {
     flux_t *h = inv->ctx->h;
     const char *jobid;
@@ -534,7 +535,7 @@ static int start_resource_watch (struct inventory *inv, bool no_resource_watch)
      *  simulate start under an older instance that does not support this
      *  RPC.
      */
-    if (no_resource_watch)
+    if (config->no_update_watch)
         service = "job-info.update-watch-fake";
 
     if (!(jobid = flux_attr_get (h, "jobid")))
@@ -898,8 +899,7 @@ void inventory_destroy (struct inventory *inv)
 }
 
 struct inventory *inventory_create (struct resource_ctx *ctx,
-                                    json_t *conf_R,
-                                    bool no_update_watch)
+                                    struct resource_config *config)
 {
     struct inventory *inv;
     json_t *R = NULL;
@@ -909,14 +909,14 @@ struct inventory *inventory_create (struct resource_ctx *ctx,
     inv->ctx = ctx;
     if (flux_msg_handler_addvec (ctx->h, htab, inv, &inv->handlers) < 0)
         goto error;
-    if (conf_R && convert_R_conf (ctx->h, conf_R, &R) < 0)
+    if (config->R && convert_R_conf (ctx->h, config->R, &R) < 0)
         goto error;
     if (ctx->rank == 0) {
         if (R && inventory_put (inv, R, "configuration") < 0)
             goto error;
         if (!inv->R && get_from_kvs (inv, "resource.R") < 0)
             goto error;
-        if (!inv->R && start_resource_watch (inv, no_update_watch) < 0)
+        if (!inv->R && start_resource_watch (inv, config) < 0)
             goto error;
     }
     else {

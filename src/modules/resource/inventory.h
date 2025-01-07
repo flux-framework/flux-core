@@ -12,12 +12,11 @@
 #define _FLUX_RESOURCE_INVENTORY_H
 
 /* Create resource inventory.
- * R is configured resource object, if any (ref taken).
+ * config->R is configured resource object, if any (ref taken).
  * R is obtained from enclosing Flux instance or probed dynamically otherwise.
  */
 struct inventory *inventory_create (struct resource_ctx *ctx,
-                                    json_t *R,
-                                    bool no_update_watch);
+                                    struct resource_config *config);
 void inventory_destroy (struct inventory *inv);
 
 /* Get resource object.

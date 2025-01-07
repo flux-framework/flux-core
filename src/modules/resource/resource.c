@@ -347,9 +347,7 @@ int mod_main (flux_t *h, int argc, char **argv)
      *  Create inventory on all ranks first, since it is required by
      *  the exclude and drain subsystems on rank 0.
      */
-    if (!(ctx->inventory = inventory_create (ctx,
-                                             config.R,
-                                             config.no_update_watch)))
+    if (!(ctx->inventory = inventory_create (ctx, &config)))
         goto error;
 
     if (ctx->rank == 0) {
@@ -382,7 +380,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     /*  topology is initialized after exclude/drain etc since this
      *  rank may attempt to drain itself due to a topology mismatch.
      */
-    if (!(ctx->topology = topo_create (ctx, config.noverify, config.norestrict)))
+    if (!(ctx->topology = topo_create (ctx, &config)))
         goto error;
     if (!(ctx->monitor = monitor_create (ctx,
                                          inventory_get_size (ctx->inventory),
