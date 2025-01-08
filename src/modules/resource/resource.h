@@ -14,6 +14,7 @@
 struct resource_config {
     json_t *R;
     const char *exclude_idset;
+    const char *reserve;
     bool rediscover;
     bool noverify;
     bool norestrict;
@@ -29,6 +30,7 @@ struct resource_ctx {
     struct topo *topology;
     struct drain *drain;
     struct exclude *exclude;
+    struct reserve *reserve;
     struct acquire *acquire;
     struct reslog *reslog;
     struct status *status;

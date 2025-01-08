@@ -65,6 +65,7 @@
 #include "reslog.h"
 #include "inventory.h"
 #include "exclude.h"
+#include "reserve.h"
 #include "drain.h"
 #include "acquire.h"
 #include "monitor.h"
@@ -108,6 +109,7 @@ static int acquire_request_init (struct acquire_request *ar,
 {
     struct resource_ctx *ctx = acquire->ctx;
     const struct idset *exclude = exclude_get (ctx->exclude);
+    const struct rlist *reserved = reserve_get (ctx->reserve);
     json_error_t e;
     struct rlist *rl;
     struct idset *drain = NULL;
@@ -116,8 +118,11 @@ static int acquire_request_init (struct acquire_request *ar,
         errno = EINVAL;
         return -1;
     }
-    if (exclude && idset_count (exclude) > 0) {
-        (void)rlist_remove_ranks (rl, (struct idset *)exclude);
+    if (reserved || (exclude && idset_count (exclude) > 0)) {
+        if (exclude)
+            (void)rlist_remove_ranks (rl, (struct idset *)exclude);
+        if (reserved)
+            (void)rlist_subtract (rl, reserved);
         if (!(ar->resources = rlist_to_R (rl))) {
             errno = ENOMEM;
             goto error;

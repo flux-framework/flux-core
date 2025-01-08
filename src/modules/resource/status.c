@@ -21,6 +21,7 @@
 #include "rutil.h"
 #include "monitor.h"
 #include "exclude.h"
+#include "reserve.h"
 #include "status.h"
 #include "reslog.h"
 
@@ -282,9 +283,11 @@ done:
 
 /* Create an rlist object from R.  Omit the scheduling key.  Then:
  * - exclude the ranks in 'exclude' (if non-NULL)
+ * - exclude resources in 'reserved' (if non-NULL)
  */
 static struct rlist *create_rlist (const json_t *R,
-                                   const struct idset *exclude)
+                                   const struct idset *exclude,
+                                   const struct rlist *reserved)
 {
     json_t *cpy;
     struct rlist *rl;
@@ -302,6 +305,10 @@ static struct rlist *create_rlist (const json_t *R,
         if (rlist_remove_ranks (rl, (struct idset *)exclude) < 0)
             goto error;
     }
+    if (reserved) {
+        if (rlist_subtract (rl, reserved) < 0)
+            goto error;
+    }
     json_decref (cpy);
     return rl;
 error:
@@ -316,9 +323,10 @@ static struct rlist *get_resource_list (struct status *status)
     if (!status->cache.rl) {
         const json_t *R;
         const struct idset *exclude = exclude_get (status->ctx->exclude);
+        const struct rlist *reserved = reserve_get (status->ctx->reserve);
 
         if ((R = inventory_get (status->ctx->inventory)))
-            status->cache.rl = create_rlist (R, exclude);
+            status->cache.rl = create_rlist (R, exclude, reserved);
     }
     return status->cache.rl;
 }
