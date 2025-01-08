@@ -36,11 +36,17 @@
 #include "rutil.h"
 #include "status.h"
 #include "upgrade.h"
+#include "reserve.h"
 
 /* Parse [resource] table.
  *
  * exclude = "targets"
  *   Exclude specified broker rank(s) or hosts from scheduling
+ *
+ * reserve = "corespec"
+ *   Exclude specified coes from scheduling, corespec has the form:
+ *   "cores[@ranks]", where each of cores and ranks are non-empty
+ *   idsets.
  *
  * [[resource.confg]]
  *   Resource configuration array
@@ -71,6 +77,7 @@ static int parse_config (struct resource_ctx *ctx,
     const char *exclude  = NULL;
     const char *path = NULL;
     const char *scheduling_path = NULL;
+    const char *reserve = NULL;
     int noverify = 0;
     int norestrict = 0;
     int no_update_watch = 0;
@@ -80,12 +87,13 @@ static int parse_config (struct resource_ctx *ctx,
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s s?o s?s s?b s?b s?b s?b !}}",
+                          "{s?{s?s s?s s?o s?s s?s s?b s?b s?b s?b !}}",
                           "resource",
                             "path", &path,
                             "scheduling", &scheduling_path,
                             "config", &config,
                             "exclude", &exclude,
+                            "reserve", &reserve,
                             "norestrict", &norestrict,
                             "noverify", &noverify,
                             "no-update-watch", &no_update_watch,
@@ -147,6 +155,7 @@ static int parse_config (struct resource_ctx *ctx,
     }
     if (rconfig) {
         rconfig->exclude_idset = exclude;
+        rconfig->reserve = reserve;
         rconfig->noverify = noverify ? true : false;
         rconfig->norestrict = norestrict ? true : false;
         rconfig->no_update_watch = no_update_watch ? true : false;
@@ -238,6 +247,7 @@ static void resource_ctx_destroy (struct resource_ctx *ctx)
         topo_destroy (ctx->topology);
         monitor_destroy (ctx->monitor);
         exclude_destroy (ctx->exclude);
+        reserve_destroy (ctx->reserve);
         reslog_destroy (ctx->reslog);
         inventory_destroy (ctx->inventory);
         flux_msg_handler_delvec (ctx->handlers);
@@ -382,6 +392,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         if (!(ctx->exclude = exclude_create (ctx, config.exclude_idset)))
             goto error;
         if (!(ctx->drain = drain_create (ctx, eventlog)))
+            goto error;
+        if (!(ctx->reserve = reserve_create (ctx, config.reserve)))
             goto error;
     }
     /*  topology is initialized after exclude/drain etc since this
