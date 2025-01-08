@@ -25,6 +25,7 @@ librlist_la_SOURCES = \
 	match.c \
 	rlist.c \
 	rlist.h \
+	corespec.c \
 	rlist_private.h
 
 librlist_hwloc_la_SOURCES = \

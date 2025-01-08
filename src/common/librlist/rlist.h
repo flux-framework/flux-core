@@ -287,5 +287,17 @@ char *rlist_properties_encode (const struct rlist *rl);
 
 struct rlist *rlist_from_config (json_t *conf, flux_error_t *errp);
 
+/*  Create a copy of rlist 'rl' using 'core_spec', which indicates a
+ *  set of cores via the form:
+ *
+ *    cores[@ranks] [cores[@ranks]]...
+ *
+ *  Where 'cores' is an idset of cores to copy and the optional 'ranks'
+ *  and idset of ranks from which to copy them. It is not an error to
+ *  specify cores and or ranks that do not exist in the source rlist 'rl'.
+ */
+struct rlist *rlist_copy_core_spec (const struct rlist *rl,
+                                    const char *spec,
+                                    flux_error_t *errp);
 
 #endif /* !HAVE_SCHED_RLIST_H */
