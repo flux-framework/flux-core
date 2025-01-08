@@ -151,6 +151,11 @@ int rlist_append (struct rlist *rl, const struct rlist *rl2);
  */
 int rlist_add (struct rlist *rl, const struct rlist *rl2);
 
+/*  Subtract resources in `rl2` from `rl`. It is not an error if
+ *   resources in rl2 are not present in `rl`.
+ */
+int rlist_subtract (struct rlist *rl, const struct rlist *rl2);
+
 /*  Return the set difference of 'rlb' from 'rla'.
  */
 struct rlist *rlist_diff (const struct rlist *rla, const struct rlist *rlb);
