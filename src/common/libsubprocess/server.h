@@ -19,11 +19,10 @@ typedef int (*subprocess_server_auth_f) (const flux_msg_t *msg,
                                          void *arg,
                                          flux_error_t *error);
 
-/* Create a subprocess server.  The handle 'h' must contain a reactor
- * created with the FLUX_REACTOR_SIGCHLD flag.  Note that there can be
- * only one reactor per process with this flag set.  Also, it may be wise
- * to block SIGPIPE to avoid termination when writing to stdin of a subprocess
- * that has terminated.
+/* Create a subprocess server.
+ * This sets up a signal watcher for SIGCHLD.  Make sure SIGCHLD cannot be
+ * delivered to other threads. Also, it may be wise to block SIGPIPE to
+ * avoid termination when writing to stdin of a subprocess that has terminated.
  */
 subprocess_server_t *subprocess_server_create (flux_t *h,
                                                const char *service_name,

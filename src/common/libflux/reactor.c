@@ -39,12 +39,7 @@ void flux_reactor_decref (flux_reactor_t *r)
 {
     if (r && --r->usecount == 0) {
         int saved_errno = errno;
-        if (r->loop) {
-            if (ev_is_default_loop (r->loop))
-                ev_default_destroy ();
-            else
-                ev_loop_destroy (r->loop);
-        }
+        ev_loop_destroy (r->loop);
         free (r);
         errno = saved_errno;
     }
@@ -65,14 +60,13 @@ flux_reactor_t *flux_reactor_create (int flags)
 {
     flux_reactor_t *r;
 
-    if (valid_flags (flags, FLUX_REACTOR_SIGCHLD) < 0)
+    if (flags != 0) {
+        errno = EINVAL;
         return NULL;
+    }
     if (!(r = calloc (1, sizeof (*r))))
         return NULL;
-    if ((flags & FLUX_REACTOR_SIGCHLD))
-        r->loop = ev_default_loop (EVFLAG_SIGNALFD);
-    else
-        r->loop = ev_loop_new (EVFLAG_NOSIGMASK);
+    r->loop = ev_loop_new (EVFLAG_NOSIGMASK | EVFLAG_SIGNALFD);
     if (!r->loop) {
         errno = ENOMEM;
         flux_reactor_destroy (r);

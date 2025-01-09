@@ -37,6 +37,10 @@ When one :var:`callback` is shared by multiple watchers, the signal number that
 triggered the event can be obtained with
 :func:`flux_signal_watcher_get_signum`.
 
+Signal handling can be tricky in multi-threaded programs.  It is advisable
+to handle signals in the main thread only.  For example, block signals by
+calling :linux:man2:`sigprocmask` before spawning other threads, and register
+signal watchers only in the main thread.
 
 RETURN VALUE
 ============

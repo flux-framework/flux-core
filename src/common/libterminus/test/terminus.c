@@ -68,9 +68,6 @@ static int terminus_server (flux_t *h, void *arg)
     int rc = -1;
     struct flux_terminus_server *t;
 
-    /*  N.B.: test_server handle `h` already has reactor with SIGCHLD
-     *   flag set.
-     */
     t = flux_terminus_server_create (h, "terminus");
     if (!t)
         BAIL_OUT ("flux_terminus_server_create");
@@ -398,12 +395,10 @@ void test_open_close_session (void)
     struct flux_terminus_server *t = NULL;
     struct flux_terminus_server *t2 = NULL;
     flux_t *h = flux_open ("loop://", 0);
-    flux_reactor_t *r = flux_reactor_create (FLUX_REACTOR_SIGCHLD);
+    flux_reactor_t *r;
 
-    if (!h || !r)
-        BAIL_OUT ("Failed to create loopback handle/reactor");
-    flux_set_reactor (h, r);
-    flux_aux_set (h, NULL, r, (flux_free_f) flux_reactor_destroy);
+    if (!h || !(r = flux_get_reactor (h)))
+        BAIL_OUT ("Failed to create loopback handle");
 
     t = flux_terminus_server_create (h, "terminus");
     ok (t != NULL,

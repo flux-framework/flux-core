@@ -27,13 +27,6 @@ enum {
                               /*     one event occurs */
 };
 
-/* Flags for flux_reactor_create()
- */
-enum {
-    FLUX_REACTOR_SIGCHLD = 1,  /* enable use of child watchers */
-                               /*    only one thread can do this per program */
-};
-
 flux_reactor_t *flux_reactor_create (int flags);
 void flux_reactor_destroy (flux_reactor_t *r);
 void flux_reactor_incref (flux_reactor_t *r);

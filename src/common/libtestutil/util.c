@@ -14,6 +14,7 @@
 #include <flux/core.h>
 #include <uuid.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include "ccan/str/str.h"
 #include "src/common/libtap/tap.h"
@@ -121,7 +122,16 @@ flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
     struct test_server *a;
     int sflags = 0; // server connector flags
     char uri[64];
-    flux_reactor_t *r;
+
+    /* To support libsubprocess's SIGCHLD watcher in the server thread,
+     * block SIGCHLD before spawning threads to avoid it being delivered
+     * to the client thread occasionally.
+     */
+    sigset_t sigmask;
+    sigemptyset (&sigmask);
+    sigaddset (&sigmask, SIGCHLD);
+    if (sigprocmask (SIG_BLOCK, &sigmask, NULL) < 0)
+        BAIL_OUT ("sigprocmask failed");
 
     if (!(a = calloc (1, sizeof (*a))))
         BAIL_OUT ("calloc");
@@ -134,15 +144,10 @@ flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
     if (getenv ("FLUX_HANDLE_TRACE"))
         cflags |= FLUX_O_TRACE;
 
-
     /* Create back-to-back wired flux_t handles.
-     * Give the server side a SIGCHLD capable reactor for subprocess testing.
      */
     snprintf (uri, sizeof (uri), "interthread://%s", a->uuid_str);
     if (!(a->s = flux_open (uri, sflags))
-        || !(r = flux_reactor_create (FLUX_REACTOR_SIGCHLD))
-        || flux_set_reactor (a->s, r) < 0
-        || flux_aux_set (a->s, NULL, r, (flux_free_f)flux_reactor_destroy) < 0
         || flux_opt_set (a->s, FLUX_OPT_ROUTER_NAME, "server", 7) < 0)
         BAIL_OUT ("could not create server interthread handle");
     if (!(a->c = flux_open (uri, cflags)))

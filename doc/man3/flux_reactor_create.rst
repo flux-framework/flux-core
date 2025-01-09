@@ -27,14 +27,8 @@ DESCRIPTION
 ===========
 
 :func:`flux_reactor_create` creates a :type:`flux_reactor_t` object which can
-be used to monitor for events on file descriptors, ZeroMQ sockets, timers, and
-:type:`flux_t` broker handles.
-
-There is currently only one possible flag for reactor creation:
-
-FLUX_REACTOR_SIGCHLD
-   The reactor will internally register a SIGCHLD handler and be capable
-   of handling flux child watchers (see :man3:`flux_child_watcher_create`).
+be used to monitor for events on file descriptors, timers, and
+:type:`flux_t` broker handles.  :var:`flags` should be set to zero.
 
 For each event source and type that is to be monitored, a :type:`flux_watcher_t`
 object is created using a type-specific create function, and started

@@ -20,6 +20,8 @@ noinst_LTLIBRARIES = \
 libsubprocess_la_SOURCES = \
 	command.c \
 	command_private.h \
+	sigchld.c \
+	sigchld.h \
 	local.c \
 	local.h \
 	fork.c \
@@ -48,6 +50,7 @@ fluxcoreinclude_HEADERS = \
 	subprocess.h
 
 TESTS = \
+	test_sigchld.t \
 	test_command.t \
 	test_subprocess.t \
 	test_stdio.t \
@@ -101,6 +104,11 @@ bulk_exec_LDADD = \
 	$(top_builddir)/src/common/libflux-optparse.la
 
 bulk_exec_LDFLAGS = $(test_ldflags)
+
+test_sigchld_t_SOURCES = test/sigchld.c
+test_sigchld_t_CPPFLAGS = $(test_cppflags)
+test_sigchld_t_LDADD = $(test_ldadd)
+test_sigchld_t_LDFLAGS = $(test_ldflags)
 
 test_command_t_SOURCES = test/command.c
 test_command_t_CPPFLAGS = $(test_cppflags)
