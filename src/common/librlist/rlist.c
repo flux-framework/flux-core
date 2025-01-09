@@ -214,11 +214,9 @@ int rlist_add_rnode (struct rlist *rl, struct rnode *n)
     return 0;
 }
 
-typedef struct rnode * (*rnode_copy_f) (const struct rnode *, void *arg);
-
-static struct rlist *rlist_copy_internal (const struct rlist *orig,
-                                          rnode_copy_f cpfn,
-                                          void *arg)
+struct rlist *rlist_copy_internal (const struct rlist *orig,
+                                   rnode_copy_f cpfn,
+                                   void *arg)
 {
     struct rnode *n;
     struct rlist *rl = rlist_create ();
