@@ -123,6 +123,16 @@ flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
     char uri[64];
     flux_reactor_t *r;
 
+    /* To support libsubprocess's SIGCHLD watcher in the server thread,
+     * block SIGCHLD before spawning threads to avoid it being delivered
+     * to the client thread occasionally.
+     */
+    sigset_t sigmask;
+    sigemptyset (&sigmask);
+    sigaddset (&sigmask, SIGCHLD);
+    if (sigprocmask (SIG_BLOCK, &sigmask, NULL) < 0)
+        BAIL_OUT ("sigprocmask failed");
+
     if (!(a = calloc (1, sizeof (*a))))
         BAIL_OUT ("calloc");
     a->cb = cb;
@@ -133,7 +143,6 @@ flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
 
     if (getenv ("FLUX_HANDLE_TRACE"))
         cflags |= FLUX_O_TRACE;
-
 
     /* Create back-to-back wired flux_t handles.
      * Give the server side a SIGCHLD capable reactor for subprocess testing.
