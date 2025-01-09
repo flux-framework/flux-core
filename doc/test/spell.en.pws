@@ -940,3 +940,4 @@ cPATH
 SATTR
 myprogram
 unref
+sigprocmask
