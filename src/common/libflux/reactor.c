@@ -70,10 +70,9 @@ flux_reactor_t *flux_reactor_create (int flags)
     }
     if (!(r = calloc (1, sizeof (*r))))
         return NULL;
-    r->loop = ev_loop_new (EVFLAG_NOSIGMASK | EVFLAG_SIGNALFD);
-    if (!r->loop) {
+    if (!(r->loop = ev_loop_new (EVFLAG_NOSIGMASK | EVFLAG_SIGNALFD))) {
+        free (r);
         errno = ENOMEM;
-        flux_reactor_destroy (r);
         return NULL;
     }
     ev_set_userdata (r->loop, r);
