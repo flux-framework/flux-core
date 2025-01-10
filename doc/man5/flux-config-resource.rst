@@ -79,6 +79,21 @@ rediscover
    (optional) If true, force rediscovery of resources using HWLOC, rather
    then using the R and HWLOC XML from the enclosing instance.
 
+reserve
+   (optional) A string value that defines cores to reserve for the OS
+   and the broker ranks on which to reserve them. The argument is specified
+   as::
+
+    cores[@ranks] [cores[@ranks]]...
+
+   where cores is an RFC 22 idset specifying the cores to reserve, and
+   the optional ranks is an RFC 22 idset specifying the ranks on which to
+   reserve them. If ``@ranks`` is not supplied, then cores will be reserved
+   on all ranks. Multiple instances of ``cores[@ranks]`` may be specified
+   (separated by whitespace) to reserve a different set of cores on different
+   ranks. For example, ``0-3@0 0`` would reserve cores 0-3 on rank 0 and
+   core 0 on all other ranks.
+
 Note that updates to the resource table are ignored until the next Flux
 restart.
 
