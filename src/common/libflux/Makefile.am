@@ -99,6 +99,7 @@ libflux_la_SOURCES = \
 	fripp.c
 
 if LIBUV
+libflux_la_SOURCES += watcher_uv.c
 else
 libflux_la_SOURCES += watcher_ev.c
 endif
@@ -142,6 +143,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(LIBUUID_LIBS) \
 	$(JANSSON_LIBS) \
+	$(LIBUV_LIBS) \
 	$(LIBPTHREAD) \
 	$(LIBDL)
 

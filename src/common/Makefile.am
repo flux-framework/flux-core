@@ -62,6 +62,7 @@ libflux_internal_la_LIBADD = \
 	$(LIBPTHREAD) \
 	$(LIBDL) \
 	$(LIBRT) \
+	$(LIBUV_LIBS) \
 	$(FLUX_SECURITY_LIBS)
 if INTERNAL_LIBEV
 libflux_internal_la_LIBADD += $(builddir)/libev/libev.la
