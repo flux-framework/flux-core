@@ -143,12 +143,14 @@ bool flux_watcher_is_referenced (flux_watcher_t *w)
 void flux_watcher_destroy (flux_watcher_t *w)
 {
     if (w) {
+        int saved_errno = errno;
         if (w->ops->stop)
             w->ops->stop (w);
         if (w->ops->destroy)
             w->ops->destroy (w);
         flux_reactor_decref (w->r);
         free (w);
+        errno = saved_errno;
     }
 }
 
