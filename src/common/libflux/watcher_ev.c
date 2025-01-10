@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* watcher_wrap.c - wrapped libev watchers */
+/* watcher_ev.c - wrapped libev watchers */
 
 #if HAVE_CONFIG_H
 #include "config.h"

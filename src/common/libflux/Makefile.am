@@ -100,7 +100,7 @@ libflux_la_SOURCES = \
 
 if LIBUV
 else
-libflux_la_SOURCES += watcher_wrap.c
+libflux_la_SOURCES += watcher_ev.c
 endif
 
 libflux_la_LDFLAGS = \
