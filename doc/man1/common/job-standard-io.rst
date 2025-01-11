@@ -1,8 +1,8 @@
 .. note::
    Paths specified in the options :option:`--output`, :option:`--error`,
    and :option:`--input` will be opened relative to the working directory
-   on the first node of the job allocation, not on the node from which
-   the job is submitted.
+   of the job on the nodes on which the job is running, not on the node
+   from which the job is submitted.
 
 .. option:: --input=FILENAME|RANKS
 
@@ -13,7 +13,9 @@
 .. option:: --output=TEMPLATE
 
    Specify the filename *TEMPLATE* for stdout redirection, bypassing
-   the KVS.  *TEMPLATE* may be a mustache template.
+   the KVS.  *TEMPLATE* may be a mustache template. If the mustache template
+   contains node or task-specific tags, then a different output file will
+   be opened per node or task, respectively.
    See `MUSTACHE TEMPLATES`_ below for more information.
 
 .. option:: --error=TEMPLATE

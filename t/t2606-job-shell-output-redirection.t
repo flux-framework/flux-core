@@ -403,4 +403,33 @@ test_expect_success 'job-shell: invalid output.mode emits warning' '
 	test_debug "cat inval.out" &&
 	grep "ignoring invalid output.mode=foo" inval.err
 '
+test_expect_success 'job-shell: per-node output works' '
+	flux run -N4 -n4 --output=per-node.{{node.id}} \
+		sh -c "flux getattr rank" &&
+	ls -l per-node.* &&
+	for rank in $(seq 0 3); do test $(cat per-node.${rank}) -eq $rank; done
+'
+test_expect_success 'job-shell: per-task output works' '
+	flux run -N4 -n8 --output=per-task.{{task.id}} \
+		printenv FLUX_TASK_RANK &&
+	ls -l per-task.* &&
+	for rank in $(seq 0 7); do test $(cat per-task.${rank}) -eq $rank; done
+'
+test_expect_success 'job-shell: log messages are sent to correct output files' '
+	flux run -N4 -o verbose=2 --output=per-log.{{node.id}} hostname &&
+	grep flux-shell per-log.0 &&
+	grep flux-shell per-log.1 &&
+	grep flux-shell per-log.2 &&
+	grep flux-shell per-log.3
+'
+test_expect_success 'job-shell: pty output is saved in correct output files' '
+	flux run -N4 -n8 -o pty -o cpu-affinity=off \
+		--output=pty-output.{{task.id}} echo foo &&
+	grep . pty-output.* &&
+	for rank in $(seq 0 7); do grep foo pty-output.${rank}; done
+'
+test_expect_success 'job-shell: open of invalid output files fails' '
+	test_must_fail flux run -N4 -n8 \
+		--output=/nosuchdir/output.{{task.id}} hostname
+'
 test_done

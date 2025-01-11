@@ -1061,14 +1061,54 @@ static void get_protocol_fd (int *pfd)
     pfd[1] = STDOUT_FILENO;
 }
 
-char *flux_shell_mustache_render (flux_shell_t *shell, const char *fmt)
+struct mustache_arg {
+    flux_shell_t *shell;
+    flux_shell_task_t *task;
+    int shell_rank;
+};
+
+static char *do_mustache_render (flux_shell_t *shell,
+                                 int shell_rank,
+                                 flux_shell_task_t *task,
+                                 const char *fmt)
 {
     if (!shell) {
         /* Note: shell->mr and fmt checked in mustache_render */
         errno = EINVAL;
         return NULL;
     }
-    return mustache_render (shell->mr, fmt, shell);
+    /* Note: shell_rank >= shell_size is allowed so a caller can leave
+     * node-specific tags unrendered in the result.
+     */
+    if (shell_rank < 0)
+        shell_rank  = shell->info->shell_rank;
+    if (task == NULL)
+        task = shell->current_task;
+    struct mustache_arg arg = {
+        .shell = shell,
+        .task = task,
+        .shell_rank = shell_rank
+    };
+    return mustache_render (shell->mr, fmt, &arg);
+}
+
+char *flux_shell_rank_mustache_render (flux_shell_t *shell,
+                                       int shell_rank,
+                                       const char *fmt)
+{
+    return do_mustache_render (shell, shell_rank, NULL, fmt);
+}
+
+char *flux_shell_task_mustache_render (flux_shell_t *shell,
+                                       flux_shell_task_t *task,
+                                       const char *fmt)
+{
+    return do_mustache_render (shell, -1, task, fmt);
+}
+
+char *flux_shell_mustache_render (flux_shell_t *shell, const char *fmt)
+{
+    return do_mustache_render (shell, -1, NULL, fmt);
 }
 
 /* Render "node.*" specific tags using the rank_info object for the
@@ -1226,9 +1266,11 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
 {
     int rc = -1;
     flux_plugin_arg_t *args;
-    flux_shell_t *shell = arg;
+    struct mustache_arg *m_arg = arg;
     const char *result = NULL;
     char topic[128];
+
+    flux_shell_t *shell = m_arg->shell;
 
     /*  "jobid" is a synonym for "id" */
     if (strstarts (name, "jobid"))
@@ -1246,9 +1288,9 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
     if (streq (name, "ntasks") || streq (name, "size"))
         return fprintf (fp, "%d", shell->info->total_ntasks);
     if (strstarts (name, "task."))
-        return mustache_render_task (shell, shell->current_task, name, fp);
+        return mustache_render_task (shell, m_arg->task, name, fp);
     if (strstarts (name, "node."))
-        return mustache_render_node (shell, shell->info->shell_rank, name, fp);
+        return mustache_render_node (shell, m_arg->shell_rank, name, fp);
 
     if (snprintf (topic,
                   sizeof (topic),

@@ -415,6 +415,19 @@ int flux_shell_log_setlevel (int level, const char *dest);
  */
 char *flux_shell_mustache_render (flux_shell_t *shell, const char *fmt);
 
+/*  Same as flux_shell_mustache_render(3), but render for an alternate
+ *  shell rank. Caller must free result.
+ */
+char *flux_shell_rank_mustache_render (flux_shell_t *shell,
+                                       int shell_rank,
+                                       const char *fmt);
+
+/*  Same as flux_shell_mustache_render(3), but render for a specific task.
+ *  Caller must free result.
+ */
+char *flux_shell_task_mustache_render (flux_shell_t *shell,
+                                       flux_shell_task_t *task,
+                                       const char *fmt);
 
 #ifdef __cplusplus
 }
