@@ -57,11 +57,6 @@ CODE_COVERAGE_LCOV_OPTIONS =
 # recursive checks.
 check-local: all
 
-check-prep: all
-	cd src && $(MAKE) check
-	cd doc && $(MAKE) check
-	cd t && $(MAKE) check-prep
-
 export DEB_BUILD_OPTIONS ?= nocheck terse
 deb: debian scripts/debbuild.sh
 	+@$(top_srcdir)/scripts/debbuild.sh $(abs_top_srcdir)

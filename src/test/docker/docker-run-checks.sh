@@ -50,7 +50,7 @@ Options:\n\
  -d, --distcheck               Run 'make distcheck' instead of 'make check'\n\
  -r, --recheck                 Run 'make recheck' after failure\n\
  -u, --unit-test-only          Only run unit tests\n\
-     --quick-check             Only run check-prep and one basic test\n\
+     --quick-check             Only run 'make check TESTS=' and one basic test\n\
  -P, --no-poison               Do not install poison libflux and flux(1)\n\
  -D, --build-directory=DIRNAME Name of a subdir to build in, will be made\n\
      --workdir=PATH            Use PATH as working directory for build\n\

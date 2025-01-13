@@ -514,9 +514,6 @@ check_LTLIBRARIES = \
 	stats/stats-basic.la \
 	stats/stats-immediate.la
 
-check-prep:
-	$(MAKE) $(check_PROGRAMS) $(check_LTLIBRARIES)
-
 dist_check_DATA = \
 	hwloc-data/sierra2/0.xml \
 	hwloc-data/sierra2/1.xml \
