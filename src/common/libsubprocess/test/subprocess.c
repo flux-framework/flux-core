@@ -1090,11 +1090,8 @@ void fdcleanup_output (flux_subprocess_t *p, const char *stream)
     }
 }
 
-/* This test ensures that subprocs aren't gifted with bonus file descriptors.
- * N.B. Occasionally an extra file descriptor matches the glob.  Assume this
- * is the "syncfd" and we are racing with its removal. Therefore, allow the
- * fd count to match expected_fdcount or one more than that.
- */
+/* This test ensures that subprocs aren't gifted with bonus file
+ * descriptors. */
 void test_fdcleanup (flux_reactor_t *r,
                      const char *desc,
                      int flags,
@@ -1124,12 +1121,23 @@ void test_fdcleanup (flux_reactor_t *r,
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
-    ok (fdcleanup_fdcount == expected_fdcount
-        || fdcleanup_fdcount == expected_fdcount + 1,
+    /* N.B. It is believed there are two file descriptors that are
+     * racy here, so the fdcleanup_fdcount may be as high as 2 more
+     * than the expected_fdcount.
+     *
+     * 1) The `ls` in this test may result in a file descriptor in
+     * /proc/$$/fd (i.e. a file descriptor for reading
+     * /proc/SOMEPID/fd)
+     *
+     * 2) We are racing with the removal of the sync_fd in the
+     * subprocess.
+     */
+    ok ((fdcleanup_fdcount >= expected_fdcount)
+        && (fdcleanup_fdcount <= (expected_fdcount + 2)),
         "%d file descriptors are open (expected %d-%d)",
         fdcleanup_fdcount,
         expected_fdcount,
-        expected_fdcount + 1);
+        expected_fdcount + 2);
 
     flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
