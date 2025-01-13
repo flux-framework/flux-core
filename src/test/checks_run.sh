@@ -16,7 +16,7 @@
 #  DISTCHECK     Run `make distcheck` if set
 #  RECHECK       Run `make recheck` if `make check` fails the first time
 #  UNIT_TEST_ONLY Only run `make check` under ./src
-#  QUICK_CHECK   Run only `make check-prep` and a simple test
+#  QUICK_CHECK   Run only `make TESTS=` and a simple test
 #  PRELOAD       Set as LD_PRELOAD for make and tests
 #  POISON        Install poison libflux and flux(1) in image
 #  INCEPTION     Run tests under a flux instance
@@ -143,7 +143,7 @@ if test "$COVERAGE" = "t"; then
 	CHECKCMDS="\
 	export ENABLE_USER_SITE=1 && \
 	export COVERAGE_PROCESS_START=$(pwd)/coverage.rc && \
-	${MAKE} -j $JOBS check-prep && \
+	${MAKE} -j $JOBS check TESTS= && \
 	(cd t && ${MAKE} -j $JOBS check ${SYSTEM:+TESTS=\"$SYSTEM_TESTS\"})"
 	POSTCHECKCMDS="\
 	${MAKE} code-coverage-capture &&
@@ -163,7 +163,7 @@ elif test "$TEST_INSTALL" = "t"; then
 
 # Run checks as Flux jobs:
 elif test "$INCEPTION" = "t"; then
-	CHECKCMDS="make -j ${JOBS} check-prep && \
+	CHECKCMDS="make -j ${JOBS} check TESTS= && \
 	           cd t && ../src/cmd/flux start -s1 ./test-inception.sh && \
 	           cd .."
 fi
@@ -177,7 +177,7 @@ if test -n "$UNIT_TEST_ONLY"; then
 fi
 
 if test -n "$QUICK_CHECK"; then
-  CHECKCMDS="make -j ${JOBS} check-prep && \
+  CHECKCMDS="make -j ${JOBS} check TESTS= && \
 	     src/cmd/flux start -s 2 flux submit --cc=1-5 --watch -vvv hostname"
 fi
 
