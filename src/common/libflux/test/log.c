@@ -20,6 +20,8 @@
 int main (int argc, char *argv[])
 {
     flux_t *h;
+    char *s;
+    int truncation_size = 3073;
 
     plan (NO_PLAN);
 
@@ -41,6 +43,14 @@ int main (int argc, char *argv[])
     ok (flux_log (NULL, LOG_INFO, "# flux_t=NULL") == 0,
        "flux_log h=NULL works");
 
+    if (!(s = calloc (1, truncation_size)))
+        BAIL_OUT ("Failed to allocate memory for truncation test");
+    memset (s, 'a', truncation_size - 2);
+
+    ok (flux_log (NULL, LOG_INFO, "# %s", s) == 0,
+        "flux_log h=NULL works with long message");
+
+    free (s);
     test_server_stop (h);
     flux_close (h);
     done_testing();
