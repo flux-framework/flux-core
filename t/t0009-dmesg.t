@@ -171,4 +171,11 @@ test_expect_success 'dmesg with invalid --color option fails' '
 	test_must_fail flux dmesg --color=foo
 '
 
+test_expect_success 'dmesg: long lines are not truncated' '
+	python3 -c "print(\"x\"*3000)" | flux logger --appname=truncate &&
+	result=$(flux dmesg | sed -n "/truncate/s/^.*: //p" | wc -c) &&
+	test_debug "echo logged 3001 characters, got $result" &&
+	test $result -eq 3001
+'
+
 test_done
