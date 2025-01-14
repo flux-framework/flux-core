@@ -24,6 +24,7 @@
 
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"
+#include "src/common/libutil/errno_safe.h"
 
 typedef struct {
     char appname[STDLOG_MAX_APPNAME + 1];
@@ -111,6 +112,32 @@ static int log_rpc (flux_t *h, const char *buf, size_t len)
     return 0;
 }
 
+static int vlog_stderr (int level, const char *fmt, va_list ap)
+{
+    char buf[FLUX_MAX_LOGBUF];
+    char *result = buf;
+    char *mbuf = NULL;
+    const char *lstr = stdlog_severity_to_string (LOG_PRI (level));
+    int rc;
+    va_list ap_copy;
+
+    /* Copy va_list ap in case it reused on truncation below:
+     */
+    va_copy (ap_copy, ap);
+
+    if (vsnprintf (result, sizeof (buf), fmt, ap) >= sizeof (buf)) {
+        /* Message truncation occurred. Fall back to malloc. If that
+         * fails, just print the truncated message:
+         */
+        if (vasprintf (&mbuf, fmt, ap_copy) == 0)
+            result = mbuf;
+    }
+    rc = fprintf (stderr, "%s: %s\n", lstr, result);
+    va_end (ap_copy);
+    ERRNO_SAFE_WRAP (free, mbuf);
+    return rc < 0 ? -1 : 0;
+}
+
 int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
 {
     logctx_t *ctx;
@@ -122,16 +149,12 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     char hostname[STDLOG_MAX_HOSTNAME + 1];
     struct stdlog_header hdr;
     char *xtra = NULL;
+    char *mbuf = NULL;
+    char *result;
+    va_list ap_copy;
 
-    if (!h) {
-        char buf[FLUX_MAX_LOGBUF];
-        const char *lstr = stdlog_severity_to_string (LOG_PRI (level));
-
-        (void)vsnprintf (buf, sizeof (buf), fmt, ap);
-        if (fprintf (stderr, "%s: %s\n", lstr, buf) < 0)
-            return -1;
-        return 0;
-    }
+    if (!h)
+        return vlog_stderr (level, fmt, ap);
 
     if (!(ctx = getctx (h))) {
         errno = ENOMEM;
@@ -149,21 +172,52 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     hdr.appname = ctx->appname;
     hdr.procid = ctx->procid;
 
+    /* Copy va_list ap in case it reused on truncation below:
+     */
+    va_copy (ap_copy, ap);
+
     n = stdlog_vencodef (ctx->buf,
                          sizeof (ctx->buf),
                          &hdr,
                          STDLOG_NILVALUE,
                          fmt,
                          ap);
+    result = ctx->buf;
     len = n >= sizeof (ctx->buf) ? sizeof (ctx->buf) : n;
+
+    /* Unlikely: On overflow, try again with a buffer allocated on the heap.
+     * If this fails for any reason, fall back to truncated output.
+     */
+    if (n >= sizeof (ctx->buf)) {
+       if ((mbuf = malloc (n + 1))) {
+            /* Note: `n` returned from stdlog_vencodef() may be > actual
+             * length because if there's truncation then this function cannot
+             * drop trailing \r, \n from the result. Therefore, ignore return
+             * of stdlog_vencodef() here (if malloc(3) succeeds) because it is
+             * known the result will fit in the allocated buffer, but the
+             * expected return value is not known.
+             */
+            (void) stdlog_vencodef (mbuf,
+                                    n + 1,
+                                    &hdr,
+                                    STDLOG_NILVALUE,
+                                    fmt,
+                                    ap_copy);
+            result = mbuf;
+            len = n;
+        }
+    }
+
+    va_end (ap_copy);
+
     /* If log message contains multiple lines, log the first
      * line and save the rest.
      */
-    xtra = stdlog_split_message (ctx->buf, &len, "\r\n");
+    xtra = stdlog_split_message (result, &len, "\r\n");
     if (ctx->cb) {
-        ctx->cb (ctx->buf, len, ctx->cb_arg);
+        ctx->cb (result, len, ctx->cb_arg);
     } else {
-        if (log_rpc (h, ctx->buf, len) < 0)
+        if (log_rpc (h, result, len) < 0)
             goto fatal;
     }
     /* If addition log lines were saved above, log them separately.
@@ -171,10 +225,12 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     if (xtra)
         flux_log (h, level, "%s", xtra);
     free (xtra);
+    free (mbuf);
     errno = saved_errno;
     return 0;
 fatal:
     free (xtra);
+    free (mbuf);
     return -1;
 }
 
