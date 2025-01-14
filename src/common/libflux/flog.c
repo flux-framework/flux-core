@@ -26,6 +26,8 @@
 #include "src/common/libutil/stdlog.h"
 #include "src/common/libutil/errno_safe.h"
 
+#define FLUX_MAX_LOGBUF     2048
+
 typedef struct {
     char appname[STDLOG_MAX_APPNAME + 1];
     char procid[STDLOG_MAX_PROCID + 1];

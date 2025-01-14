@@ -20,9 +20,6 @@
 extern "C" {
 #endif
 
-
-#define FLUX_MAX_LOGBUF     2048
-
 typedef void (*flux_log_f)(const char *buf, int len, void *arg);
 
 /* Set log appname for handle instance.
