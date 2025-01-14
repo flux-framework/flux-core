@@ -21,6 +21,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/stdlog.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "shutdown.h"
 #include "state_machine.h"
@@ -66,30 +67,27 @@ static int forward_logbuf (flux_t *h,
     struct stdlog_header hdr;
     const char *txt;
     size_t txtlen;
-    char buf[FLUX_MAX_LOGBUF];
+    int len = strlen (stdlog);
+    char *buf;
     int loglevel;
+    int rc;
 
     if (flux_msg_unpack (request, "{s:i}", "loglevel", &loglevel) < 0)
         loglevel = LOG_ERR;
 
-    if (stdlog_decode (stdlog,
-                       strlen (stdlog),
-                       &hdr,
-                       NULL,
-                       NULL,
-                       &txt,
-                       &txtlen) < 0
+    if (stdlog_decode (stdlog, len, &hdr, NULL, NULL, &txt, &txtlen) < 0
         || STDLOG_SEVERITY (hdr.pri) > loglevel
-        || snprintf (buf,
-                     sizeof (buf),
+        || asprintf (&buf,
                      "%s.%s[%lu]: %.*s\n",
                      hdr.appname,
                      stdlog_severity_to_string (STDLOG_SEVERITY (hdr.pri)),
                      strtoul (hdr.hostname, NULL, 10),
                      (int)txtlen,
-                     txt) >= sizeof (buf))
+                     txt) < 0)
         return 0;
-    return flux_respond_pack (h, request, "{s:s}", "log", buf);
+    rc = flux_respond_pack (h, request, "{s:s}", "log", buf);
+    ERRNO_SAFE_WRAP (free, buf);
+    return rc;
 }
 
 static void dmesg_continuation (flux_future_t *f, void *arg)
