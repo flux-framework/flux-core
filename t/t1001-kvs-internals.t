@@ -505,6 +505,25 @@ test_expect_success 'kvs: 1 pending requests at end of tests before module remov
 '
 
 #
+# transaction module stats
+#
+
+test_expect_success 'kvs: module stats returns reasonable transaction stats' '
+        commitdata=$(flux module stats -p transaction-opcount.commit kvs) &&
+        echo $commitdata | jq -e ".count > 0" &&
+        echo $commitdata | jq -e ".min > 0" &&
+        echo $commitdata | jq -e ".max > 0" &&
+        echo $commitdata | jq -e ".mean > 0.0" &&
+        echo $commitdata | jq -e ".stddev >= 0.0" &&
+        fencedata=$(flux module stats -p transaction-opcount.fence kvs) &&
+        echo $fencedata | jq -e ".count > 0" &&
+        echo $fencedata | jq -e ".min > 0" &&
+        echo $fencedata | jq -e ".max > 0" &&
+        echo $fencedata | jq -e ".mean > 0.0" &&
+        echo $fencedata | jq -e ".stddev >= 0.0"
+'
+
+#
 # test clear of stats
 #
 
@@ -520,6 +539,21 @@ test_expect_success 'kvs: clear stats locally' '
 	! flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
 	flux module stats -c kvs &&
 	flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0
+'
+
+test_expect_success 'kvs: clear of transaction stats works' '
+        commitdata=$(flux module stats -p transaction-opcount.commit kvs) &&
+        echo $commitdata | jq -e ".count == 0" &&
+        echo $commitdata | jq -e ".min == 0" &&
+        echo $commitdata | jq -e ".max == 0" &&
+        echo $commitdata | jq -e ".mean == 0.0" &&
+        echo $commitdata | jq -e ".stddev == 0.0" &&
+        fencedata=$(flux module stats -p transaction-opcount.fence kvs) &&
+        echo $fencedata | jq -e ".count == 0" &&
+        echo $fencedata | jq -e ".min == 0" &&
+        echo $fencedata | jq -e ".max == 0" &&
+        echo $fencedata | jq -e ".mean == 0.0" &&
+        echo $fencedata | jq -e ".stddev == 0.0"
 '
 
 test_expect_success NO_ASAN 'kvs: clear stats globally' '
