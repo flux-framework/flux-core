@@ -40,13 +40,19 @@ static void register_builtin_subcommands (optparse_t *p);
 static void push_parent_environment (optparse_t *p, struct environment *env);
 
 static struct optparse_option opts[] = {
-    { .name = "verbose",         .key = 'v', .has_arg = 0,
+    { .name = "verbose",
+      .key = 'v',
+      .has_arg = 0,
       .usage = "Be verbose about environment and command search",
     },
-    { .name = "version",         .key = 'V', .has_arg = 0,
+    { .name = "version",
+      .key = 'V',
+      .has_arg = 0,
       .usage = "Display command and component versions",
     },
-    { .name = "parent",         .key = 'p', .has_arg = 0,
+    { .name = "parent",
+      .key = 'p',
+      .has_arg = 0,
       .usage = "Set environment of parent instead of current instance",
     },
     OPTPARSE_TABLE_END
@@ -64,7 +70,8 @@ void usage (optparse_t *p)
     const char *val = getenv ("FLUX_CMDHELP_PATTERN");
     const char *def = default_cmdhelp_pattern (p);
 
-    if (asprintf (&help_pattern, "%s%s%s",
+    if (asprintf (&help_pattern,
+                  "%s%s%s",
                   def ? def : "",
                   val ? ":" : "",
                   val ? val : "") < 0)
@@ -317,8 +324,10 @@ void setup_path (struct environment *env, const char *argv0)
 /* Check for a flux-<command>.py in dir and execute it under the configured
  * PYTHON_INTERPRETER if found.
  */
-void exec_subcommand_py (bool vopt, const char *dir,
-                         int argc, char *argv[],
+void exec_subcommand_py (bool vopt,
+                         const char *dir,
+                         int argc,
+                         char *argv[],
 	                     const char *prefix)
 {
     char *path = xasprintf ("%s%s%s%s.py",
@@ -345,13 +354,16 @@ void exec_subcommand_py (bool vopt, const char *dir,
     free (path);
 }
 
-void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
-        const char *prefix)
+void exec_subcommand_dir (bool vopt,
+                          const char *dir,
+                          char *argv[],
+                          const char *prefix)
 {
     char *path = xasprintf ("%s%s%s%s",
                             dir ? dir : "",
                             dir ? "/" : "",
-                            prefix ? prefix : "", argv[0]);
+                            prefix ? prefix : "",
+                            argv[0]);
     if (vopt)
         log_msg ("trying to exec %s", path);
     execvp (path, argv); /* no return if successful */
