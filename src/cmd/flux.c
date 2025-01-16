@@ -393,7 +393,7 @@ void exec_subcommand (const char *searchpath, bool vopt, int argc, char *argv[])
     }
 }
 
-static flux_t *flux_open_internal (optparse_t *p, const char *uri)
+static flux_t *flux_open_internal (optparse_t *p)
 {
     flux_t *h = NULL;
     if ((h = optparse_get_data (p, "flux_t")))
@@ -416,7 +416,7 @@ static void push_parent_environment (optparse_t *p, struct environment *env)
 {
     const char *uri;
     const char *ns;
-    flux_t *h = flux_open_internal (p, NULL);
+    flux_t *h = flux_open_internal (p);
 
     if (h == NULL)
         log_err_exit ("flux_open");
@@ -440,7 +440,7 @@ static void push_parent_environment (optparse_t *p, struct environment *env)
     /*  Now close current handle and connect to parent URI.
      */
     flux_close_internal (p);
-    if (!(h = flux_open_internal (p, uri)))
+    if (!(h = flux_open_internal (p)))
         log_err_exit ("flux_open (parent)");
 }
 
@@ -454,7 +454,7 @@ static void print_environment (struct environment *env)
 
 flux_t *builtin_get_flux_handle (optparse_t *p)
 {
-    return flux_open_internal (p, NULL);
+    return flux_open_internal (p);
 }
 
 static void register_builtin_subcommands (optparse_t *p)
