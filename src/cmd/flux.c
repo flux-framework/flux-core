@@ -437,11 +437,10 @@ static void push_parent_environment (optparse_t *p, struct environment *env)
     else
         environment_unset (env, "FLUX_KVS_NAMESPACE");
 
-    /*  Now close current handle and connect to parent URI.
+    /*  Now close current handle. Next call to `flux_open()` will
+     *  have FLUX_URI set to parent after environment_apply() is called.
      */
     flux_close_internal (p);
-    if (!(h = flux_open_internal (p)))
-        log_err_exit ("flux_open (parent)");
 }
 
 static void print_environment (struct environment *env)
