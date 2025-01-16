@@ -37,6 +37,11 @@ OPTIONS
    :envvar:`FLUX_KVS_NAMESPACE` if current instance is confined to a KVS
    namespace in the parent. This option may be specified multiple times.
 
+.. option:: -r, --root
+
+   Like :option:`--parent`, but connect to the top-level, or root, instance.
+   This overrides any other uses of the :option:`--parent` option.
+
 .. option:: -v, --verbose
 
    Display command environment, and the path search for *CMD*.
