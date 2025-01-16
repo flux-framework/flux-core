@@ -78,6 +78,8 @@ struct kvs_ctx {
     char *hash_name;
     unsigned int seq;           /* for commit transactions */
     kvs_checkpoint_t *kcp;
+    tstat_t txn_commit_stats;
+    tstat_t txn_fence_stats;
     zhashx_t *requests;         /* track unfinished requests */
     struct list_head work_queue;
 };
@@ -1721,6 +1723,8 @@ static void relaycommit_request_cb (flux_t *h,
         goto error;
     }
 
+    tstat_push (&ctx->txn_commit_stats, (double)json_array_size (ops));
+
     /* N.B. no request tracking for relay.  The relay does not get a
      * response, only the original via finalize_transaction_bynames().
      */
@@ -1812,6 +1816,8 @@ static void commit_request_cb (flux_t *h,
                             __FUNCTION__);
             goto error;
         }
+
+        tstat_push (&ctx->txn_commit_stats, (double)json_array_size (ops));
 
         work_queue_check_append (ctx, root);
     }
@@ -1919,6 +1925,9 @@ static void relayfence_request_cb (flux_t *h,
             flux_log_error (h, "%s: kvstxn_mgr_add_transaction", __FUNCTION__);
             goto error;
         }
+
+        tstat_push (&ctx->txn_fence_stats,
+                    (double)json_array_size (treq_get_ops (tr)));
 
         work_queue_check_append (ctx, root);
     }
@@ -2039,6 +2048,9 @@ static void fence_request_cb (flux_t *h,
                                 __FUNCTION__);
                 goto error;
             }
+
+            tstat_push (&ctx->txn_fence_stats,
+                        (double)json_array_size (treq_get_ops (tr)));
 
             work_queue_check_append (ctx, root);
         }
@@ -2349,6 +2361,21 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
     return 0;
 }
 
+static json_t *get_tstat_obj (tstat_t *ts, double scale)
+{
+    json_t *o = json_pack ("{ s:i s:I s:f s:f s:I }",
+                           "count", tstat_count (ts),
+                           "min", (json_int_t)(tstat_min (ts)*scale),
+                           "mean", tstat_mean (ts)*scale,
+                           "stddev", tstat_stddev (ts)*scale,
+                           "max", (json_int_t)(tstat_max (ts)*scale));
+    if (!o) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    return o;
+}
+
 static void stats_get_cb (flux_t *h,
                           flux_msg_handler_t *mh,
                           const flux_msg_t *msg,
@@ -2357,6 +2384,8 @@ static void stats_get_cb (flux_t *h,
     struct kvs_ctx *ctx = arg;
     json_t *tstats = NULL;
     json_t *cstats = NULL;
+    json_t *txncstats = NULL;
+    json_t *txnfstats = NULL;
     json_t *nsstats = NULL;
     tstat_t ts = { 0 };
     int size = 0, incomplete = 0, dirty = 0;
@@ -2371,12 +2400,7 @@ static void stats_get_cb (flux_t *h,
             goto error;
     }
 
-    if (!(tstats = json_pack ("{ s:i s:I s:f s:f s:I }",
-                              "count", tstat_count (&ts),
-                              "min", (json_int_t)tstat_min (&ts)*scale,
-                              "mean", tstat_mean (&ts)*scale,
-                              "stddev", tstat_stddev (&ts)*scale,
-                              "max", (json_int_t)tstat_max (&ts)*scale)))
+    if (!(tstats = get_tstat_obj (&ts, scale)))
         goto nomem;
 
     if (!(cstats = json_pack ("{ s:f s:O s:i s:i s:i }",
@@ -2385,6 +2409,12 @@ static void stats_get_cb (flux_t *h,
                               "#obj dirty", dirty,
                               "#obj incomplete", incomplete,
                               "#faults", ctx->faults)))
+        goto nomem;
+
+    if (!(txncstats = get_tstat_obj (&ctx->txn_commit_stats, 1.0)))
+        goto nomem;
+
+    if (!(txnfstats = get_tstat_obj (&ctx->txn_fence_stats, 1.0)))
         goto nomem;
 
     if (!(nsstats = json_object ()))
@@ -2415,13 +2445,18 @@ static void stats_get_cb (flux_t *h,
 
     if (flux_respond_pack (h,
                            msg,
-                           "{ s:O s:O s:i }",
+                           "{ s:O s:O s:{s:O s:O} s:i }",
                            "cache", cstats,
                            "namespace", nsstats,
+                           "transactions",
+                             "commit", txncstats,
+                             "fence", txnfstats,
                            "pending_requests", zhashx_size (ctx->requests)) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     json_decref (tstats);
     json_decref (cstats);
+    json_decref (txncstats);
+    json_decref (txnfstats);
     json_decref (nsstats);
     return;
 nomem:
@@ -2431,6 +2466,8 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (tstats);
     json_decref (cstats);
+    json_decref (txncstats);
+    json_decref (txnfstats);
     json_decref (nsstats);
 }
 
@@ -2443,6 +2480,8 @@ static int stats_clear_root_cb (struct kvsroot *root, void *arg)
 static void stats_clear (struct kvs_ctx *ctx)
 {
     ctx->faults = 0;
+    memset (&ctx->txn_commit_stats, '\0', sizeof (ctx->txn_commit_stats));
+    memset (&ctx->txn_fence_stats, '\0', sizeof (ctx->txn_fence_stats));
 
     if (kvsroot_mgr_iter_roots (ctx->krm, stats_clear_root_cb, NULL) < 0)
         flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
