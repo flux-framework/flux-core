@@ -38,6 +38,7 @@ void setup_keydir (struct environment *env, int flags);
 static void print_environment (struct environment *env);
 static void register_builtin_subcommands (optparse_t *p);
 static void push_parent_environment (optparse_t *p, struct environment *env);
+static int current_instance_level (optparse_t *p);
 
 static struct optparse_option opts[] = {
     { .name = "verbose",
@@ -54,6 +55,11 @@ static struct optparse_option opts[] = {
       .key = 'p',
       .has_arg = 0,
       .usage = "Set environment of parent instead of current instance",
+    },
+    { .name = "root",
+      .key = 'r',
+      .has_arg = 0,
+      .usage = "Set environment of root instead of current instance",
     },
     OPTPARSE_TABLE_END
 };
@@ -128,6 +134,7 @@ int main (int argc, char *argv[])
     const char *argv0 = argv[0];
     int flags = FLUX_CONF_INSTALLED;
     int optindex;
+    int n;
 
     log_init ("flux");
 
@@ -228,9 +235,14 @@ int main (int argc, char *argv[])
 
     environment_apply (env);
 
-    /* If --parent, push parent environment for each occurrence
+    /* If --parent, push parent environment for each occurrence.
+     * If --root, act as if --parent was used instance-level times.
      */
-    for (int n = optparse_getopt (p, "parent", NULL); n > 0; n--) {
+    if (optparse_hasopt (p, "root"))
+        n = current_instance_level (p);
+    else
+        n = optparse_getopt (p, "parent", NULL);
+    while (n-- > 0) {
         push_parent_environment (p, env);
         environment_apply (env);
     }
@@ -410,6 +422,27 @@ static void flux_close_internal (optparse_t *p)
         flux_close (h);
         optparse_set_data (p, "flux_t", NULL);
     }
+}
+
+static int current_instance_level (optparse_t *p)
+{
+    const char *s;
+    char *endptr;
+    long int l;
+    flux_t *h;
+
+    if (!(h = flux_open_internal (p)))
+        log_err_exit ("flux_open");
+
+    if (!(s = flux_attr_get (h, "instance-level")))
+        log_err_exit ("failed to get instance-level attribute");
+
+    errno = 0;
+    l = strtol (s, &endptr, 10);
+    if (errno != 0 || *endptr != '\0')
+        log_err_exit ("got invalid instance-level attribute: %s", s);
+
+    return (int) l;
 }
 
 static void push_parent_environment (optparse_t *p, struct environment *env)
