@@ -638,9 +638,11 @@ static void init_attrs_post_boot (attr_t *attrs)
      */
     unsetenv ("FLUX_PROXY_REMOTE");
 
-    val = getenv ("FLUX_KVS_NAMESPACE");
-    if (attr_add (attrs, "parent-kvs-namespace", val, ATTR_IMMUTABLE) < 0)
-        log_err_exit ("setattr parent-kvs-namespace");
+    if (instance_is_job) {
+        val = getenv ("FLUX_KVS_NAMESPACE");
+        if (attr_add (attrs, "parent-kvs-namespace", val, ATTR_IMMUTABLE) < 0)
+            log_err_exit ("setattr parent-kvs-namespace");
+    }
     unsetenv ("FLUX_KVS_NAMESPACE");
 }
 
