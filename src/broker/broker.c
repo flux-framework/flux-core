@@ -611,12 +611,21 @@ static void init_attrs_starttime (attr_t *attrs, double starttime)
 static void init_attrs_post_boot (attr_t *attrs)
 {
     const char *val;
+    bool instance_is_job;
+
+    /* Use the jobid attribute instead of FLUX_JOB_ID in the current
+     * environment to determine if this instance was run as a job. This
+     * is because the jobid attribute is only set by PMI, whereas
+     * FLUX_JOB_ID could leak from the calling environment, e.g.
+     * `flux run flux start --test-size=2`.
+     */
+    instance_is_job = attr_get (attrs, "jobid", NULL, NULL) == 0;
 
     /* Set the parent-uri attribute IFF this instance was run as a job
      * in the enclosing instance.  "parent" in this context reflects
      * a hierarchy of resource allocation.
      */
-    if (getenv ("FLUX_JOB_ID"))
+    if (instance_is_job)
         val = getenv ("FLUX_URI");
     else
         val = NULL;
