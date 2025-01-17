@@ -116,7 +116,7 @@ test_expect_success 'flux admin cleanup-push (stdin) retains cmd block order' '
 '
 
 test_expect_success 'capture the environment for all three rc scripts' '
-	SLURM_FOO=42 flux start \
+	SLURM_FOO=42 FLUX_ENCLOSING_ID=66 flux start \
 		-Slog-stderr-level=6 \
 		-Sbroker.rc1_path="bash -c printenv >rc1.env" \
 		-Sbroker.rc3_path="bash -c printenv >rc3.env" \
@@ -161,6 +161,10 @@ test_expect_success 'job environment is not set in rc scripts' '
 	var_is_unset FLUX_KVS_NAMESPACE *.env
 '
 
+test_expect_success 'FLUX_ENCLOSING_ID not set if instance is not a job' '
+	var_is_unset FLUX_ENCLOSING_ID *.env
+'
+
 test_expect_success 'capture the environment for instance run as a job' '
 	flux start flux run flux start \
 		-Slog-stderr-level=6 \
@@ -177,6 +181,10 @@ test_expect_success 'job environment is not set in rcs of subinstance' '
 	var_is_unset FLUX_TASK_RANK *.env2 &&
 	var_is_unset FLUX_TASK_LOCAL_ID *.env2 &&
 	var_is_unset FLUX_KVS_NAMESPACE *.env2
+'
+
+test_expect_success 'FLUX_ENCLOSING_ID is set if instance is a job' '
+	var_is_set FLUX_ENCLOSING_ID *.env2
 '
 
 test_done

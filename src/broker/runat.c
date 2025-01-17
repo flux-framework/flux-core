@@ -62,6 +62,7 @@ struct runat_entry {
 
 struct runat {
     flux_t *h;
+    const char *jobid;
     const char *local_uri;
     zhashx_t *entries;
     flux_msg_handler_t **handlers;
@@ -76,6 +77,7 @@ static const int abort_signal = SIGHUP;
 
 static const char *env_blocklist[] = {
     "FLUX_JOB_ID",
+    "FLUX_ENCLOSING_ID",
     "FLUX_JOB_SIZE",
     "FLUX_JOB_NNODES",
     "FLUX_JOB_TMPDIR",
@@ -363,11 +365,13 @@ error:
 }
 
 /* Unset blocklisted variables in command environment.
+ * Set FLUX_ENCLOSING_ID if "jobid" is non-NULL.
  * Set FLUX_URI if local_uri is non-NULL.
  */
 static int runat_command_modenv (struct runat_command *cmd,
                                  const char **blocklist,
-                                 const char *local_uri)
+                                 const char *local_uri,
+                                 const char *jobid)
 {
     if (blocklist) {
         int i;
@@ -376,6 +380,14 @@ static int runat_command_modenv (struct runat_command *cmd,
     }
     if (local_uri) {
         if (flux_cmd_setenvf (cmd->cmd, 1, "FLUX_URI", "%s", local_uri) < 0)
+            return -1;
+    }
+    if (jobid) {
+        if (flux_cmd_setenvf (cmd->cmd,
+                              1,
+                              "FLUX_ENCLOSING_ID",
+                              "%s",
+                              jobid) < 0)
             return -1;
     }
     return 0;
@@ -493,7 +505,7 @@ int runat_push_shell_command (struct runat *r,
         return -1;
     if (runat_command_set_cmdline (cmd, NULL, cmdline) < 0)
         goto error;
-    if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
+    if (runat_command_modenv (cmd, env_blocklist, r->local_uri, r->jobid) < 0)
         goto error;
     if (runat_push (r, name, cmd, false) < 0)
         goto error;
@@ -518,7 +530,7 @@ int runat_push_shell (struct runat *r,
         return -1;
     if (runat_command_set_cmdline (cmd, shell, NULL) < 0)
         goto error;
-    if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
+    if (runat_command_modenv (cmd, env_blocklist, r->local_uri, r->jobid) < 0)
         goto error;
     if (runat_push (r, name, cmd, true) < 0)
         goto error;
@@ -544,7 +556,7 @@ int runat_push_command (struct runat *r,
         return -1;
     if (runat_command_set_argz (cmd, argz, argz_len) < 0)
         goto error;
-    if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
+    if (runat_command_modenv (cmd, env_blocklist, r->local_uri, r->jobid) < 0)
         goto error;
     if (runat_push (r, name, cmd, false) < 0)
         goto error;
@@ -693,7 +705,10 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-struct runat *runat_create (flux_t *h, const char *local_uri, bool sdnotify)
+struct runat *runat_create (flux_t *h,
+                            const char *local_uri,
+                            const char *jobid,
+                            bool sdnotify)
 {
     struct runat *r;
 
@@ -705,6 +720,7 @@ struct runat *runat_create (flux_t *h, const char *local_uri, bool sdnotify)
         goto error;
     zhashx_set_destructor (r->entries, runat_entry_destroy_wrapper);
     r->h = h;
+    r->jobid = jobid;
     r->local_uri = local_uri;
     r->sd_notify = sdnotify;
     if (isatty (STDIN_FILENO)

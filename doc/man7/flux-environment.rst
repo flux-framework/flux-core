@@ -25,6 +25,22 @@ The following are set in the environment of each task spawned by
 
       NUMERIC_JOB_ID=$(flux job id $FLUX_JOB_ID)
 
+.. envvar:: FLUX_ENCLOSING_ID
+
+   The jobid of the enclosing Flux instance, if it has one. The enclosing
+   Flux instance is the one that ran :envvar:`FLUX_JOB_ID`. Depending on
+   how the enclosing Flux instance was started, it may or may not have
+   a jobid. If it was not launched by Flux, :envvar:`FLUX_ENCLOSING_ID`
+   is not set.
+
+   Example 1: A batch job that runs one MPI job is submitted to a Flux system
+   instance. In the environment of the MPI job, :envvar:`FLUX_ENCLOSING_ID`
+   refers to the batch jobid in the system instance.
+
+   Example 2: An MPI job is submitted directly to a Flux system
+   instance. Since the Flux system instance was not launched by Flux,
+   :envvar:`FLUX_ENCLOSING_ID` is not set in the environment of the MPI job.
+
 .. envvar:: FLUX_JOB_SIZE
 
    The number of tasks in the current job.
@@ -170,8 +186,9 @@ environment in other workload managers, for example:
    BATCH_NCORES=$(flux resource list -n -o {ncores})
    BATCH_NGPUS=$(flux resource list -n -o {ngpus})
    BATCH_HOSTLIST=$(flux getattr hostlist)
-   BATCH_JOBID=$(flux getattr jobid)
 
+Additionally, :envvar:`FLUX_ENCLOSING_ID` is set to the jobid of the
+enclosing instance, if it has one.
 
 PMI CLIENT
 ==========
