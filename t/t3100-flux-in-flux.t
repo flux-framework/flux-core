@@ -50,6 +50,19 @@ test_expect_success "flux --parent --parent works in subinstance" '
 	test_cmp guest2.test.exp guest2.test
 '
 
+test_expect_success "flux --root works in subinstance" '
+	id=$(flux batch -n1 --wrap \
+		flux run flux start ${ARGS} \
+		flux --root getattr instance-level) &&
+	flux job wait-event -vt 30 $id clean &&
+	test_debug "cat flux-${id}.out" &&
+	test "$(cat flux-${id}.out)" -eq 0
+'
+
+test_expect_success 'flux --root returns current instance at depth 0' '
+	test $(flux --root getattr instance-level) -eq 0
+'
+
 test_expect_success "instance-level attribute = 0 in new standalone instance" '
 	flux start ${ARGS} flux getattr instance-level >level_new.out &&
 	echo 0 >level_new.exp &&
