@@ -112,6 +112,8 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg);
 
 static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred);
 
+static void init_attrs_post_boot (attr_t *attrs);
+
 static void init_attrs_starttime (attr_t *attrs, double starttime);
 
 static int init_local_uri_attr (struct overlay *ov, attr_t *attrs);
@@ -365,6 +367,8 @@ int main (int argc, char *argv[])
         }
     }
 
+    init_attrs_post_boot (ctx.attrs);
+
     ctx.rank = overlay_get_rank (ctx.overlay);
     ctx.size = overlay_get_size (ctx.overlay);
 
@@ -601,7 +605,10 @@ static void init_attrs_starttime (attr_t *attrs, double starttime)
         log_err_exit ("error setting broker.starttime attribute");
 }
 
-static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
+/* Initialize attributes after bootstrap since these attributes may depend
+ * on whether this instance is a job or not.
+ */
+static void init_attrs_post_boot (attr_t *attrs)
 {
     const char *val;
 
@@ -626,7 +633,10 @@ static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
     if (attr_add (attrs, "parent-kvs-namespace", val, ATTR_IMMUTABLE) < 0)
         log_err_exit ("setattr parent-kvs-namespace");
     unsetenv ("FLUX_KVS_NAMESPACE");
+}
 
+static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
+{
     init_attrs_broker_pid (attrs, pid);
     init_attrs_rc_paths (attrs);
     init_attrs_shell_paths (attrs);
