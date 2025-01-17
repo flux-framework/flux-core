@@ -45,6 +45,20 @@ class TestJobURI(unittest.TestCase):
         self.assertEqual(uri.fragment, "")
         self.assertEqual(uri.params, "")
 
+    def test_parse_local_with_remote_hostname(self):
+        hostname = "fakehost"
+        uri = JobURI("local:///tmp/foo", remote_hostname=hostname)
+        self.assertEqual(uri.uri, "local:///tmp/foo")
+        self.assertEqual(str(uri), "local:///tmp/foo")
+        self.assertEqual(uri.remote, f"ssh://{hostname}/tmp/foo")
+        self.assertEqual(uri.local, "local:///tmp/foo")
+        self.assertEqual(uri.scheme, "local")
+        self.assertEqual(uri.netloc, "")
+        self.assertEqual(uri.path, "/tmp/foo")
+        self.assertEqual(uri.query, "")
+        self.assertEqual(uri.fragment, "")
+        self.assertEqual(uri.params, "")
+
     def test_parse_errors(self):
         with self.assertRaises(ValueError):
             JobURI("foo:///tmp/bar").remote
