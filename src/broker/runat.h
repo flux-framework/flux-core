@@ -27,7 +27,11 @@ typedef void (*runat_completion_f)(struct runat *r,
                                    const char *name,
                                    void *arg);
 
-struct runat *runat_create (flux_t *h, const char *local_uri, bool sdnotify);
+struct runat *runat_create (flux_t *h,
+                            const char *local_uri,
+                            const char *jobid,
+                            bool sdnotify);
+
 void runat_destroy (struct runat *r);
 
 /* Push command, to be run under shell -c, onto named list.

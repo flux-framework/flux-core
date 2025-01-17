@@ -700,8 +700,12 @@ static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
 
 static int create_runat_phases (broker_ctx_t *ctx)
 {
+    const char *jobid = NULL;
     const char *rc1, *rc3, *local_uri;
     bool rc2_none = false;
+
+    /* jobid may be NULL */
+    (void) attr_get (ctx->attrs, "jobid", &jobid, NULL);
 
     if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0) {
         log_err ("local-uri is not set");
@@ -718,7 +722,10 @@ static int create_runat_phases (broker_ctx_t *ctx)
     if (attr_get (ctx->attrs, "broker.rc2_none", NULL, NULL) == 0)
         rc2_none = true;
 
-    if (!(ctx->runat = runat_create (ctx->h, local_uri, ctx->sd_notify))) {
+    if (!(ctx->runat = runat_create (ctx->h,
+                                     local_uri,
+                                     jobid,
+                                     ctx->sd_notify))) {
         log_err ("runat_create");
         return -1;
     }
