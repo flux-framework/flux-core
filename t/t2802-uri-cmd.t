@@ -108,6 +108,23 @@ test_expect_success 'flux uri resolves hierarchical jobids with ?local' '
 	test_debug "echo ${jobid}/${jobid2}?local is ${uri}"
 
 '
+test_expect_success 'flux uri works with relative paths' '
+	root_uri=$(FLUX_SSH=$testssh flux uri --local .) &&
+	job1_uri=$(FLUX_SSH=$testssh flux uri --local ${jobid}) &&
+	job2_uri=$(FLUX_SSH=$testssh flux uri --local ${jobid}/${jobid2}) &&
+	uri=$(FLUX_SSH=$testssh flux proxy $job2_uri flux uri /) &&
+	test_debug "echo flux uri / got ${uri} expected ${root_uri}" &&
+	test "$uri" = "$root_uri" &&
+	uri=$(FLUX_SSH=$testssh flux proxy $job2_uri flux uri ../..) &&
+	test_debug "echo flux uri ../.. got ${uri} expected ${root_uri}" &&
+	test "$uri" = "$root_uri" &&
+	uri=$(FLUX_SSH=$testssh flux proxy $job2_uri flux uri ..) &&
+	test_debug "echo flux uri .. got ${uri} expected ${job1_uri}" &&
+	test "$uri" = "$job1_uri" &&
+	uri=$(FLUX_SSH=$testssh flux proxy $job2_uri flux uri .) &&
+	test_debug "echo flux uri . got ${uri} expected ${job2_uri}" &&
+	test "$uri" = "$job2_uri"
+'
 test_expect_success 'flux uri --wait can resolve URI for pending job' '
 	uri=$(flux uri --wait $(flux batch -n1 --wrap hostname)) &&
 	flux job wait-event -vt 30 $(flux job last) clean  &&
