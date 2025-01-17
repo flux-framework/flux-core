@@ -557,7 +557,17 @@ test_expect_success 'broker broker.pid attribute is readable' '
 	test -n "$BROKERPID" &&
 	test "$BROKERPID" -eq "$BROKERPID"
 '
-
+test_expect_success 'broker sets parent-uri attribute only for jobs' '
+	flux start flux run flux start flux getattr parent-uri &&
+	test_must_fail \
+		flux start flux run flux start -s1 flux getattr parent-uri
+'
+test_expect_success 'broker sets parent-kvs-namespace attribute only for jobs' '
+	flux start flux run flux start flux getattr parent-kvs-namespace &&
+	test_must_fail \
+		flux start flux run \
+			flux start -s1 flux getattr parent-kvs-namespace
+'
 test_expect_success 'local-uri override works' '
 	sockdir=$(mktemp -d) &&
 	newsock=local://$sockdir/meep &&
