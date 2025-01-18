@@ -2448,7 +2448,7 @@ static void stats_get_cb (flux_t *h,
                            "{ s:O s:O s:{s:O s:O} s:i }",
                            "cache", cstats,
                            "namespace", nsstats,
-                           "transactions",
+                           "transaction-opcount",
                              "commit", txncstats,
                              "fence", txnfstats,
                            "pending_requests", zhashx_size (ctx->requests)) < 0)
