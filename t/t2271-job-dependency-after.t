@@ -186,6 +186,32 @@ test_expect_success 'dependency=afternotok works' '
 	flux job wait-event -vt 15 \
 		-m type=dependency $ok1 exception
 '
+test_expect_success 'dependency=afternotok only applies to jobs that start' '
+	canceled_job=$(flux submit --urgency=hold false) &&
+	id2=$(flux submit --dependency=afternotok:$canceled_job hostname) &&
+	flux cancel $canceled_job &&
+	flux job wait-event -vt 15 -m type=dependency $id2 exception
+'
+test_expect_success 'chain of afternotok jobs are canceled if one fails before start' '
+	id=$(flux submit --urgency=hold false) &&
+	id2=$(flux submit --dependency=afternotok:$id hostname) &&
+	id3=$(flux submit --dependency=afternotok:$id2 hostname) &&
+	id4=$(flux submit --dependency=afternotok:$id3 hostname) &&
+	flux cancel $id &&
+	for i in $id2 $id3 $id4; do
+	    flux job wait-event -vt 15 -m type=dependency $id2 exception
+	done
+'
+test_expect_success 'chain of afternotok jobs are canceled if one succeeds' '
+	id=$(flux submit --urgency=hold true) &&
+	id2=$(flux submit --dependency=afternotok:$id hostname) &&
+	id3=$(flux submit --dependency=afternotok:$id2 hostname) &&
+	id4=$(flux submit --dependency=afternotok:$id3 hostname) &&
+	flux job urgency $id default &&
+	for i in $id2 $id3 $id4; do
+	    flux job wait-event -vt 15 -m type=dependency $id2 exception
+	done
+'
 test_expect_success 'dependency=after works for INACTIVE jobs' '
 	run_timeout 15 \
 		flux bulksubmit --wait --watch \
@@ -214,6 +240,9 @@ test_expect_success 'dependency=afternotok works for INACTIVE job' '
 		--dependency=afternotok:{} \
 		echo afterany:{} ::: ${job2} ${job3} &&
 	test_must_fail flux run --dependency=afternotok:${job1} hostname
+'
+test_expect_success 'afternotok fails for INACTIVE job with no start event' '
+	test_must_fail flux run --dependency=afternotok:${canceled_job} hostname
 '
 test_expect_success 'dependency=after fails for INACTIVE canceled job' '
 	job4=$(flux submit --urgency=hold hostname) &&
