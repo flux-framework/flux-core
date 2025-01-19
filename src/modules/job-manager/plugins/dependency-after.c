@@ -475,18 +475,20 @@ static void release_all (flux_plugin_t *p, zlistx_t *l, int typemask)
 /*
  *  Raise exceptions for all unhandled depednencies in list `l`.
  */
-static void raise_exceptions (flux_plugin_t *p, zlistx_t *l)
+static void raise_exceptions (flux_plugin_t *p, zlistx_t *l, const char *msg)
 {
     if (l) {
         struct after_info *after;
+        if (!msg)
+            msg = "can never be satisfied";
         FOREACH_ZLISTX (l, after) {
             if (flux_jobtap_raise_exception (p,
                                              after->depid,
                                              "dependency",
                                              0,
-                                             "%s %s can never be satisfied",
-                                             "dependency",
-                                             after->description) < 0)
+                                             "dependency %s %s",
+                                             after->description,
+                                             msg) < 0)
                 flux_log_error (flux_jobtap_get_flux (p),
                                 "id=%s: unable to raise exception for %s",
                                 idf58 (after->depid),
@@ -558,7 +560,7 @@ static int release_dependent_jobs (flux_plugin_t *p, zlistx_t *l)
     /*  Any remaining dependencies can't now be satisfied.
      *   Raise exceptions on any remaining members of list `l`
      */
-    raise_exceptions (p, l);
+    raise_exceptions (p, l, "can never be satisfied");
 
     return 0;
 }
