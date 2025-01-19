@@ -28,6 +28,13 @@ The following dependency schemes are built-in:
    has been submitted, then the submission will be rejected with an error
    that the target job cannot be found.
 
+.. note::
+   The ``after*`` dependency schemes below only satisfy dependencies for
+   jobs that entered the RUN state. A job that is canceled while pending
+   does not satisfy the `afterany` or `afternotok` dependencies. Thus,
+   canceling a job with a chain of dependencies causes all jobs in the
+   chain to be canceled.
+
 after:JOBID
    This dependency is satisfied after JOBID starts.
 

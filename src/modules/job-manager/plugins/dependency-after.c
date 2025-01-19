@@ -252,6 +252,15 @@ static int dependency_handle_inactive (flux_plugin_t *p,
                                        "dependency: failed to get %ss result",
                                        jobid);
 
+    /*  If the target job did not enter RUN state, immediately raise an
+     *  exception since after* dependencies only apply to jobs that actually
+     *  ran:
+     */
+    if (!flux_jobtap_job_event_posted (p, afterid, "alloc"))
+        return flux_jobtap_reject_job (p,
+                                       args,
+                                       "dependency: after: %s never started",
+                                       jobid);
     if (type == AFTER_START
         && !flux_jobtap_job_event_posted (p, afterid, "start"))
         return flux_jobtap_reject_job (p,
@@ -475,18 +484,20 @@ static void release_all (flux_plugin_t *p, zlistx_t *l, int typemask)
 /*
  *  Raise exceptions for all unhandled depednencies in list `l`.
  */
-static void raise_exceptions (flux_plugin_t *p, zlistx_t *l)
+static void raise_exceptions (flux_plugin_t *p, zlistx_t *l, const char *msg)
 {
     if (l) {
         struct after_info *after;
+        if (!msg)
+            msg = "can never be satisfied";
         FOREACH_ZLISTX (l, after) {
             if (flux_jobtap_raise_exception (p,
                                              after->depid,
                                              "dependency",
                                              0,
-                                             "%s %s can never be satisfied",
-                                             "dependency",
-                                             after->description) < 0)
+                                             "dependency %s %s",
+                                             after->description,
+                                             msg) < 0)
                 flux_log_error (flux_jobtap_get_flux (p),
                                 "id=%s: unable to raise exception for %s",
                                 idf58 (after->depid),
@@ -547,8 +558,17 @@ static int release_dependent_jobs (flux_plugin_t *p, zlistx_t *l)
         return -1;
     }
 
-    /*  Release dependent jobs based on requisite job result.
-     *   Entries will be removed from the list as they are processed.
+    /*  If this job never entered RUN state (i.e. got an exception before
+     *  the alloc event), then none of the after* dependencies can be
+     *  satisfied. Immediately raise exception(s).
+     */
+    if (!flux_jobtap_job_event_posted (p, FLUX_JOBTAP_CURRENT_JOB, "alloc")) {
+        raise_exceptions (p, l, "job never started");
+        return 0;
+    }
+
+    /*  O/w, release dependent jobs based on requisite job result.
+     *  Entries will be removed from the list as they are processed.
      */
     if (result != FLUX_JOB_RESULT_COMPLETED)
         release_all (p, l, AFTER_FINISH | AFTER_FAILURE);
@@ -558,7 +578,7 @@ static int release_dependent_jobs (flux_plugin_t *p, zlistx_t *l)
     /*  Any remaining dependencies can't now be satisfied.
      *   Raise exceptions on any remaining members of list `l`
      */
-    raise_exceptions (p, l);
+    raise_exceptions (p, l, "can never be satisfied");
 
     return 0;
 }
