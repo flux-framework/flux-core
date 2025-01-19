@@ -63,7 +63,7 @@ test_expect_success 'dependency=after works' '
 	test_debug "echo checking that job ${depid} is in DEPEND state" &&
 	test "$(flux jobs -no {state} $depid)" = "DEPEND" &&
 	flux job urgency $jobid default &&
-	flux job wait-event -vt 15 $depid clean 
+	flux job wait-event -vt 15 $depid clean
 '
 test_expect_success 'dependency=after does not release job until start event' '
 	jobid=$(flux submit \
@@ -96,7 +96,7 @@ test_expect_success 'dependency=after generates exception for failed job' '
 	test_debug "echo checking that job ${depid} is in DEPEND state" &&
 	test "$(flux jobs -no {state} $depid)" = "DEPEND" &&
 	flux cancel $jobid &&
-	flux job wait-event -m type=dependency -vt 15 $depid exception 
+	flux job wait-event -m type=dependency -vt 15 $depid exception
 '
 test_expect_success 'dependency=afterany works' '
 	flux bulksubmit \
@@ -205,7 +205,7 @@ test_expect_success 'dependency=afterok works for INACTIVE job' '
 		flux run --dependency=afterok:${job1} \
 		echo afterok:${job1} &&
 	test_must_fail flux run --dependency=afterok:${job2} hostname &&
-	test_must_fail flux run --dependency=afterok:${job3} hostname 
+	test_must_fail flux run --dependency=afterok:${job3} hostname
 '
 test_expect_success 'dependency=afternotok works for INACTIVE job' '
 	run_timeout 15 \
