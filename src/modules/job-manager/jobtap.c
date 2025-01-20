@@ -1969,10 +1969,8 @@ static struct job * jobtap_lookup_jobid (flux_plugin_t *p, flux_jobid_t id)
         return NULL;
     }
     job = current_job (jobtap);
-    if (id == FLUX_JOBTAP_CURRENT_JOB || (job && id == job->id)) {
-        errno = EINVAL;
+    if (id == FLUX_JOBTAP_CURRENT_JOB || (job && id == job->id))
         return job;
-    }
     return lookup_job (jobtap->ctx, id);
 }
 
