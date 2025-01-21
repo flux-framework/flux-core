@@ -2371,12 +2371,12 @@ static void stats_get_cb (flux_t *h,
             goto error;
     }
 
-    if (!(tstats = json_pack ("{ s:i s:f s:f s:f s:f }",
+    if (!(tstats = json_pack ("{ s:i s:I s:f s:f s:I }",
                               "count", tstat_count (&ts),
-                              "min", tstat_min (&ts)*scale,
+                              "min", (json_int_t)tstat_min (&ts)*scale,
                               "mean", tstat_mean (&ts)*scale,
                               "stddev", tstat_stddev (&ts)*scale,
-                              "max", tstat_max (&ts)*scale)))
+                              "max", (json_int_t)tstat_max (&ts)*scale)))
         goto nomem;
 
     if (!(cstats = json_pack ("{ s:f s:O s:i s:i s:i }",
