@@ -231,6 +231,16 @@ class ConstraintParser:
             to split values of that operator. For instance ``{"op": ","}``
             would autosplit operator ``op`` values on comma.
 
+        convert_values (dict): A mapping of operator name to callable which
+            should take a single list argument containing the values from
+            the obtained from the current term for the operator after the
+            operator_map and split_values operations have been applied. The
+            callable should return a new list of values. This can be used
+            to convert values to a new type or to combine multiple values
+            into a single element, e.g.  ::
+
+                convert_values = {"ints": lambda args: [int(x) for x in args]}
+
         combined_terms (set): A set of operator terms whose values can be
             combined when joined with the AND logical operator. E.g. if
             "test" is in ``combined_terms``, then
@@ -283,6 +293,10 @@ class ConstraintParser:
 
     # Combined terms
     combined_terms = set()
+
+    # Mapping of operator name to value conversion function.
+    # E.g. { "integer": lambda args: [ int(x) for x in args ] }
+    convert_values = {}
 
     def __init__(
         self, lexer=None, optimize=True, debug=False, write_tables=False, **kw_args
@@ -408,10 +422,12 @@ class ConstraintParser:
                 f"invalid character '{invalid}' in operator '{op}:'"
             )
 
+        values = [value]
         if op in self.split_values:
-            p[0] = {op: value.split(self.split_values[op])}
-        else:
-            p[0] = {op: [value]}
+            values = value.split(self.split_values[op])
+        if op in self.convert_values:
+            values = self.convert_values[op](values)
+        p[0] = {op: values}
 
     def p_quoted_token(self, p):
         """
