@@ -212,6 +212,32 @@ test_expect_success 'chain of afternotok jobs are canceled if one succeeds' '
 	    flux job wait-event -vt 15 -m type=dependency $id2 exception
 	done
 '
+test_expect_success 'dependency=afterexcept works' '
+	exc_id=$(flux submit sleep 60) &&
+	successid=$(flux submit --urgency=hold true) &&
+	failid=$(flux submit --urgency=hold false) &&
+	id1=$(flux submit --dependency=afterexcept:${exc_id} true) &&
+	id2=$(flux submit --dependency=afterexcept:${successid} true) &&
+	id3=$(flux submit --dependency=afterexcept:${failid} true) &&
+	flux job wait-event $exc_id start &&
+	flux cancel $exc_id &&
+	flux job wait-event $exc_id clean &&
+	flux job urgency $successid default &&
+	flux job urgency $failid default &&
+	flux job wait-event -vt 15 \
+		-m description=after-except=$exc_id \
+		$id1 dependency-remove &&
+	flux job wait-event -vt 15 \
+		-m type=dependency \
+		$id2 exception &&
+	flux job wait-event -vt 15 \
+		-m type=dependency \
+		$id3 exception
+'
+test_expect_success 'dependency=afterexcept works for INACTIVE jobs' '
+	flux run -vvv --dependency=afterexcept:${exc_id} true &&
+	test_must_fail flux submit --dependency=afterexcept:${successid} true
+'
 test_expect_success 'dependency=after works for INACTIVE jobs' '
 	run_timeout 15 \
 		flux bulksubmit --wait --watch \

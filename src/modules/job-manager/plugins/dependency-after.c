@@ -32,7 +32,8 @@ enum after_type {
     AFTER_START =   0x1,
     AFTER_FINISH =  0x2,
     AFTER_SUCCESS = 0x4,
-    AFTER_FAILURE = 0x8
+    AFTER_FAILURE = 0x8,
+    AFTER_EXCEPT  = 0x10
 };
 
 struct after_info {
@@ -60,6 +61,8 @@ static const char * after_typestr (enum after_type type)
             return "after-success";
         case AFTER_FAILURE:
             return "after-failure";
+        case AFTER_EXCEPT:
+            return "after-except";
     }
     return "";
 }
@@ -74,6 +77,8 @@ static int after_type_parse (const char *s, enum after_type *tp)
         *tp = AFTER_SUCCESS;
     else if (streq (s, "afternotok"))
         *tp = AFTER_FAILURE;
+    else if (streq (s, "afterexcept"))
+        *tp = AFTER_EXCEPT;
     else
         return -1;
     return 0;
@@ -231,6 +236,29 @@ static int lookup_job_uid_state (flux_plugin_t *p,
     return rc;
 }
 
+static int check_exception_end_event (flux_plugin_t *p, flux_jobid_t id)
+{
+    int rc = -1;
+    flux_plugin_arg_t *args;
+    char *name;
+
+    if (!(args = flux_jobtap_job_lookup (p, id))
+        || flux_plugin_arg_unpack (args,
+                                   FLUX_PLUGIN_ARG_IN,
+                                   "{s:{s:s}}",
+                                   "end_event",
+                                    "name", &name) < 0)
+        goto out;
+
+    /* If end_event is has name of "exception", then we know this job
+     * was terminated by a fatal exception:
+     */
+    rc = streq (name, "exception");
+out:
+    flux_plugin_arg_destroy (args);
+    return rc;
+}
+
 /*  Handle a job in INACTIVE state.
  *
  *  Get the job result and check for various error states (e.g. afterok
@@ -281,6 +309,21 @@ static int dependency_handle_inactive (flux_plugin_t *p,
                                        "dependency: afternotok:"
                                        " job %s succeeded",
                                         jobid);
+    if (type == AFTER_EXCEPT) {
+        if ((rc = check_exception_end_event (p, afterid)) < 0)
+            return flux_jobtap_reject_job (p,
+                                           args,
+                                           "dependency: afterexcept:"
+                                           " failed to get end event for %s",
+                                           jobid);
+        else if (rc == 0)
+            return flux_jobtap_reject_job (p,
+                                           args,
+                                           "dependency: afterexcept:"
+                                           " job %s: no exception",
+                                           jobid);
+    }
+
     rc = flux_jobtap_dependency_remove (p, after->depid, after->description);
     if (rc < 0)
         flux_log_error (flux_jobtap_get_flux (p),
@@ -543,7 +586,9 @@ static void release_dependency_references (flux_plugin_t *p)
         flux_log_error (h, "release_references: flux_jobtap_job_aux_delete");
 }
 
-static int release_dependent_jobs (flux_plugin_t *p, zlistx_t *l)
+static int release_dependent_jobs (flux_plugin_t *p,
+                                   const char *end_event_name,
+                                   zlistx_t *l)
 {
     flux_t *h = flux_jobtap_get_flux (p);
     flux_job_result_t result;
@@ -570,8 +615,12 @@ static int release_dependent_jobs (flux_plugin_t *p, zlistx_t *l)
     /*  O/w, release dependent jobs based on requisite job result.
      *  Entries will be removed from the list as they are processed.
      */
-    if (result != FLUX_JOB_RESULT_COMPLETED)
-        release_all (p, l, AFTER_FINISH | AFTER_FAILURE);
+    if (result != FLUX_JOB_RESULT_COMPLETED) {
+        int typemask = AFTER_FINISH | AFTER_FAILURE;
+        if (end_event_name && streq (end_event_name, "exception"))
+            typemask |= AFTER_EXCEPT;
+        release_all (p, l, typemask);
+    }
     else
         release_all (p, l, AFTER_FINISH | AFTER_SUCCESS);
 
@@ -632,10 +681,20 @@ static int inactive_cb (flux_plugin_t *p,
                        flux_plugin_arg_t *args,
                        void *data)
 {
+    const char *end_event_name = NULL;
+
+    /* Attempt to get end event name (event that cause transition to CLEANUP)
+     */
+    (void) flux_plugin_arg_unpack (args,
+                                   FLUX_PLUGIN_ARG_IN,
+                                   "{s?{s?s}}",
+                                   "end_event",
+                                    "name", &end_event_name);
+
     /*  Only need to check for dependent jobs if this job has an
      *   embedded dependency list
      */
-    release_dependent_jobs (p, after_list_check (p, 0));
+    release_dependent_jobs (p, end_event_name, after_list_check (p, 0));
 
     /*  "Release" any references this job had to any dependencies
      *  (references should still exist only if job skipped PRIORITY state.)
@@ -707,6 +766,7 @@ static const struct flux_plugin_handler tab[] = {
     { "job.dependency.afterok",    dependency_after_cb, NULL },
     { "job.dependency.afterany",   dependency_after_cb, NULL },
     { "job.dependency.afternotok", dependency_after_cb, NULL },
+    { "job.dependency.afterexcept",dependency_after_cb, NULL },
     { "job.state.priority",        priority_cb,         NULL },
     { "job.state.inactive",        inactive_cb,         NULL },
     { "job.event.start",           start_cb,            NULL },

@@ -91,6 +91,7 @@ urgency    i    current urgency
 priority   I    current priority
 t_submit   f    submit timestamp in floating point seconds
 entry      o    posted eventlog entry, including context
+end_event  o    copy of event that cause transition to CLEANUP, if available
 ========== ==== ==========================================
 
 Return arguments can be packed using the ``FLUX_PLUGIN_ARG_OUT`` and

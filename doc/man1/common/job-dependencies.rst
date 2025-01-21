@@ -50,6 +50,11 @@ afternotok:JOBID
    This dependency is satisfied after JOBID enters the INACTIVE state
    with an unsuccessful result.
 
+afterexcept:JOBID
+   This dependency is satisfied when JOBID enters the INACTIVE state
+   and a fatal job exception caused the transition to CLEANUP (e.g.,
+   node failure, timeout, cancel, etc.).
+
 begin-time:TIMESTAMP
    This dependency is satisfied after TIMESTAMP, which is specified in
    floating point seconds since the UNIX epoch. See the ``--begin-time``

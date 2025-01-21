@@ -198,6 +198,12 @@ static flux_plugin_arg_t *jobtap_args_create (struct jobtap *jobtap,
                                   "R", job->R_redacted) < 0)
             goto error;
     }
+    if (job->end_event)
+        if (flux_plugin_arg_pack (args,
+                                  FLUX_PLUGIN_ARG_IN,
+                                  "{s:O}",
+                                  "end_event", job->end_event) < 0)
+        goto error;
     /*
      *  Always start with empty OUT args. This allows unpack of OUT
      *   args to work without error, even if plugin does not set any
@@ -1963,10 +1969,8 @@ static struct job * jobtap_lookup_jobid (flux_plugin_t *p, flux_jobid_t id)
         return NULL;
     }
     job = current_job (jobtap);
-    if (id == FLUX_JOBTAP_CURRENT_JOB || (job && id == job->id)) {
-        errno = EINVAL;
+    if (id == FLUX_JOBTAP_CURRENT_JOB || (job && id == job->id))
         return job;
-    }
     return lookup_job (jobtap->ctx, id);
 }
 
