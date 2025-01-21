@@ -462,36 +462,6 @@ test_expect_success 'kvs: read-your-writes consistency on alt namespace' '
 '
 
 #
-# test clear of stats
-#
-
-# each store of largeval will increase the noop store count, b/c we
-# know that the identical large value will be cached as raw data
-
-test_expect_success 'kvs: clear stats locally' '
-	flux kvs unlink -Rf $DIR &&
-	flux module stats -c kvs &&
-	flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
-	flux kvs put $DIR.largeval1=$largeval &&
-	flux kvs put $DIR.largeval2=$largeval &&
-	! flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
-	flux module stats -c kvs &&
-	flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0
-'
-
-test_expect_success NO_ASAN 'kvs: clear stats globally' '
-	flux kvs unlink -Rf $DIR &&
-	flux module stats -C kvs &&
-	flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
-	for i in `seq 0 $((${SIZE} - 1))`; do
-	    flux exec -n -r $i sh -c "flux kvs put $DIR.$i.largeval1=$largeval $DIR.$i.largeval2=$largeval"
-	done &&
-	! flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
-	flux module stats -C kvs &&
-	flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0"
-'
-
-#
 # test fence api
 #
 
@@ -532,6 +502,70 @@ test_expect_success 'kvs: 1 pending requests at end of tests before module remov
 	test $pendingcount -eq 1 &&
 	pendingcount1=$(flux exec -n -r 1 sh -c "flux module stats -p pending_requests kvs") &&
 	test $pendingcount1 -eq 1
+'
+
+#
+# transaction module stats
+#
+
+test_expect_success 'kvs: module stats returns reasonable transaction stats' '
+        commitdata=$(flux module stats -p transaction-opcount.commit kvs) &&
+        echo $commitdata | jq -e ".count > 0" &&
+        echo $commitdata | jq -e ".min > 0" &&
+        echo $commitdata | jq -e ".max > 0" &&
+        echo $commitdata | jq -e ".mean > 0.0" &&
+        echo $commitdata | jq -e ".stddev >= 0.0" &&
+        fencedata=$(flux module stats -p transaction-opcount.fence kvs) &&
+        echo $fencedata | jq -e ".count > 0" &&
+        echo $fencedata | jq -e ".min > 0" &&
+        echo $fencedata | jq -e ".max > 0" &&
+        echo $fencedata | jq -e ".mean > 0.0" &&
+        echo $fencedata | jq -e ".stddev >= 0.0"
+'
+
+#
+# test clear of stats
+#
+
+# each store of largeval will increase the noop store count, b/c we
+# know that the identical large value will be cached as raw data
+
+test_expect_success 'kvs: clear stats locally' '
+	flux kvs unlink -Rf $DIR &&
+	flux module stats -c kvs &&
+	flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
+	flux kvs put $DIR.largeval1=$largeval &&
+	flux kvs put $DIR.largeval2=$largeval &&
+	! flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
+	flux module stats -c kvs &&
+	flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0
+'
+
+test_expect_success 'kvs: clear of transaction stats works' '
+        commitdata=$(flux module stats -p transaction-opcount.commit kvs) &&
+        echo $commitdata | jq -e ".count == 0" &&
+        echo $commitdata | jq -e ".min == 0" &&
+        echo $commitdata | jq -e ".max == 0" &&
+        echo $commitdata | jq -e ".mean == 0.0" &&
+        echo $commitdata | jq -e ".stddev == 0.0" &&
+        fencedata=$(flux module stats -p transaction-opcount.fence kvs) &&
+        echo $fencedata | jq -e ".count == 0" &&
+        echo $fencedata | jq -e ".min == 0" &&
+        echo $fencedata | jq -e ".max == 0" &&
+        echo $fencedata | jq -e ".mean == 0.0" &&
+        echo $fencedata | jq -e ".stddev == 0.0"
+'
+
+test_expect_success NO_ASAN 'kvs: clear stats globally' '
+	flux kvs unlink -Rf $DIR &&
+	flux module stats -C kvs &&
+	flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
+	for i in `seq 0 $((${SIZE} - 1))`; do
+	    flux exec -n -r $i sh -c "flux kvs put $DIR.$i.largeval1=$largeval $DIR.$i.largeval2=$largeval"
+	done &&
+	! flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
+	flux module stats -C kvs &&
+	flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0"
 '
 
 #
