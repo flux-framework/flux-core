@@ -400,4 +400,54 @@ test_expect_success 'kvs: no pending requests at end of tests' '
 	test $pendingcount -eq 0
 '
 
+#
+# test transaction-max-ops
+#
+
+test_expect_success 'configure illegal transaction-max-ops' '
+	test_must_fail flux config load <<-EOF
+	[kvs]
+	transaction-max-ops = "foobar"
+	EOF
+'
+
+test_expect_success 'configure bad transaction-max-ops' '
+	test_must_fail flux config load <<-EOF
+	[kvs]
+	transaction-max-ops = 0
+	EOF
+'
+
+test_expect_success 'configure small transaction-max-ops' '
+	flux exec flux config load <<-EOF
+	[kvs]
+	transaction-max-ops = 3
+	EOF
+'
+
+# N.B. flux kvs put will place each key=val on command line into 1
+# transaction
+
+test_expect_success 'kvs: txns of small size work' '
+	flux kvs put test.a=1 &&
+	flux kvs put test.b=1 test.c=1 &&
+	flux kvs put test.d=1 test.e=1 test.f=1
+'
+
+test_expect_success 'kvs: txns of small size work (not rank 0)' '
+	flux exec -r 1 flux kvs put test.a=1 &&
+	flux exec -r 1 flux kvs put test.b=1 test.c=1 &&
+	flux exec -r 1 flux kvs put test.d=1 test.e=1 test.f=1
+'
+
+test_expect_success 'kvs: txns above limit fail' '
+	test_must_fail flux kvs put test.a=2 test.b=2 test.c=2 test.d=2 2> fence1.err &&
+	grep "Argument list too long" fence1.err
+'
+
+test_expect_success 'kvs: txns above limit fail (not rank 0)' '
+	test_must_fail flux exec -r 1 flux kvs put test.a=3 test.b=3 test.c=3 test.d=3 2> fence2.err &&
+	grep "Argument list too long" fence2.err
+'
+
 test_done
