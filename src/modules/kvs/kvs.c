@@ -63,6 +63,10 @@ const double max_lastuse_age = 10.;
  */
 const double max_namespace_age = 3600.;
 
+/* Transaction max ops
+ */
+const uint64_t kvs_transaction_max_ops = 16384;
+
 struct kvs_ctx {
     struct cache *cache;    /* blobref => cache_entry */
     kvsroot_mgr_t *krm;
@@ -75,6 +79,7 @@ struct kvs_ctx {
     int transaction_merge;
     char initial_rootref[BLOBREF_MAX_STRING_SIZE];
     bool initial_rootref_set;
+    uint64_t transaction_max_ops;
     bool events_init;            /* flag */
     char *hash_name;
     unsigned int seq;           /* for commit transactions */
@@ -104,6 +109,9 @@ static void start_root_remove (struct kvs_ctx *ctx, const char *ns);
 static void work_queue_check_append (struct kvs_ctx *ctx,
                                      struct kvsroot *root);
 static void kvstxn_apply (kvstxn_t *kt);
+static int max_ops_parse (struct kvs_ctx *ctx,
+                          const flux_conf_t *conf,
+                          flux_error_t *errp);
 
 /*
  * kvs_ctx functions
@@ -183,6 +191,7 @@ static struct kvs_ctx *kvs_ctx_create (flux_t *h)
             goto error;
     }
     ctx->transaction_merge = 1;
+    ctx->transaction_max_ops = kvs_transaction_max_ops;
     if (!(ctx->requests = msg_hash_create (MSG_HASH_TYPE_UUID_MATCHTAG)))
         goto error;
     list_head_init (&ctx->work_queue);
@@ -1650,6 +1659,11 @@ static void commit_request_cb (flux_t *h,
         goto error;
     }
 
+    if (json_array_size (ops) > ctx->transaction_max_ops) {
+        errno = E2BIG;
+        goto error;
+    }
+
     if (!(root = getroot (ctx, ns, mh, msg, &stall))) {
         if (stall) {
             request_tracking_add (ctx, msg);
@@ -2485,6 +2499,10 @@ static void config_reload_cb (flux_t *h,
         errstr = "error unpacking config-reload request";
         goto error;
     }
+    if (max_ops_parse (ctx, conf, &error) < 0) {
+        errstr = error.text;
+        goto error;
+    }
     if (kvs_checkpoint_reload (ctx->kcp, conf, &error) < 0) {
         errstr = error.text;
         goto error_decref;
@@ -2611,11 +2629,39 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
+static int max_ops_parse (struct kvs_ctx *ctx,
+                          const flux_conf_t *conf,
+                          flux_error_t *errp)
+{
+    uint64_t t_max_ops = kvs_transaction_max_ops;
+    flux_error_t error;
+    if (flux_conf_unpack (conf,
+                          &error,
+                          "{s?{s?I}}",
+                          "kvs",
+                          "transaction-max-ops", &t_max_ops) < 0) {
+        errprintf (errp, "error reading config for kvs: %s", error.text);
+        return -1;
+    }
+    if (t_max_ops <= 0) {
+        errprintf (errp, "kvs transaction-max-ops invalid");
+        return -1;
+    }
+    ctx->transaction_max_ops = t_max_ops;
+    return 0;
+}
+
 static int process_config (struct kvs_ctx *ctx)
 {
     flux_error_t error;
+    const flux_conf_t *conf = flux_get_conf (ctx->h);
+
+    if (max_ops_parse (ctx, conf, &error) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s", error.text);
+        return -1;
+    }
     if (kvs_checkpoint_config_parse (ctx->kcp,
-                                     flux_get_conf (ctx->h),
+                                     conf,
                                      &error) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s", error.text);
         return -1;
