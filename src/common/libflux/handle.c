@@ -171,9 +171,26 @@ static char *strtrim (char *s, const char *trim)
     return *s ? s : NULL;
 }
 
+/* Return local URI from either FLUX_URI environment variable, or
+ * if that is not set, the builtin config. Caller must free result.
+ */
+static char *get_local_uri (void)
+{
+    const char *uri;
+    char *result = NULL;
+
+    if ((uri = getenv ("FLUX_URI")))
+        return strdup (uri);
+    if (asprintf (&result,
+                  "local://%s/local",
+                  flux_conf_builtin_get ("rundir", FLUX_CONF_INSTALLED)) < 0)
+        result = NULL;
+    return result;
+}
+
 flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
 {
-    char *default_uri = NULL;
+    char *tmp = NULL;
     char *path = NULL;
     char *scheme = NULL;
     void *dso = NULL;
@@ -198,14 +215,10 @@ flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
     /* Try to get URI from (in descending precedence):
      *   argument > environment > builtin
      */
-    if (!uri)
-        uri = getenv ("FLUX_URI");
     if (!uri) {
-        if (asprintf (&default_uri, "local://%s/local",
-                      flux_conf_builtin_get ("rundir",
-                                             FLUX_CONF_INSTALLED)) < 0)
+        if (!(tmp = get_local_uri ()))
             goto error;
-        uri = default_uri;
+        uri = tmp;
     }
     if (!(scheme = strdup (uri)))
         goto error;
@@ -244,13 +257,13 @@ flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
             goto error_handle;
     }
     free (scheme);
-    free (default_uri);
+    free (tmp);
     return h;
 error_handle:
     flux_handle_destroy (h);
 error:
     ERRNO_SAFE_WRAP (free, scheme);
-    ERRNO_SAFE_WRAP (free, default_uri);
+    ERRNO_SAFE_WRAP (free, tmp);
     /*
      *  Fill errp->text with strerror only when a more specific error has not
      *   already been set.
