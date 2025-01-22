@@ -442,4 +442,119 @@ test_expect_success 'kvs: no pending requests at end of tests' '
 	test $pendingcount -eq 0
 '
 
+#
+# test transaction-max-ops / fence-max-ops
+#
+
+test_expect_success 'configure illegal transaction-max-ops' '
+	test_must_fail flux config load <<-EOF
+	[kvs]
+	transaction-max-ops = "foobar"
+	EOF
+'
+
+test_expect_success 'configure bad transaction-max-ops' '
+	test_must_fail flux config load <<-EOF
+	[kvs]
+	transaction-max-ops = 0
+	EOF
+'
+
+test_expect_success 'configure illegal fence-max-ops' '
+	test_must_fail flux config load <<-EOF
+	[kvs]
+	fence-max-ops = "foobar"
+	EOF
+'
+
+test_expect_success 'configure bad fence-max-ops' '
+	test_must_fail flux config load <<-EOF
+	[kvs]
+	fence-max-ops = 0
+	EOF
+'
+
+test_expect_success 'configure small transaction-max-ops and fence-max-ops' '
+	flux exec flux config load <<-EOF
+	[kvs]
+	transaction-max-ops = 3
+	fence-max-ops = 12
+	EOF
+'
+
+# N.B. flux kvs put will place each key=val on command line into 1
+# transaction
+
+test_expect_success 'kvs: txns of small size work' '
+	flux kvs put test.a=1 &&
+	flux kvs put test.b=1 test.c=1 &&
+	flux kvs put test.d=1 test.e=1 test.f=1
+'
+
+test_expect_success 'kvs: txns of small size work (not rank 0)' '
+	flux exec -r 1 flux kvs put test.a=1 &&
+	flux exec -r 1 flux kvs put test.b=1 test.c=1 &&
+	flux exec -r 1 flux kvs put test.d=1 test.e=1 test.f=1
+'
+
+test_expect_success 'kvs: txns above limit fail' '
+	test_must_fail flux kvs put test.a=2 test.b=2 test.c=2 test.d=2 2> fence1.err &&
+	grep "Argument list too long" fence1.err
+'
+
+test_expect_success 'kvs: txns above limit fail (not rank 0)' '
+	test_must_fail flux exec -r 1 flux kvs put test.a=3 test.b=3 test.c=3 test.d=3 2> fence2.err &&
+	grep "Argument list too long" fence2.err
+'
+
+# N.B. fence_api issues one operation per thread by default
+
+test_expect_success 'kvs: small total fence ops works' '
+	${FLUX_BUILD_DIR}/t/kvs/fence_api 11 fence3
+'
+
+test_expect_success 'kvs: small fence ops per fence work' '
+	${FLUX_BUILD_DIR}/t/kvs/fence_api --opcount=3 2 fence4
+'
+
+test_expect_success 'kvs: small fence ops per fence work (not rank 0)' '
+	flux exec -r 1 ${FLUX_BUILD_DIR}/t/kvs/fence_api --opcount=3 2 fence5
+'
+
+test_expect_success 'kvs: fence ops per fence above limit fails' '
+	test_must_fail ${FLUX_BUILD_DIR}/t/kvs/fence_api --opcount=4 2 fence6 2> fence6.err &&
+	count=$(grep "Argument list too long" fence6.err | wc -l) &&
+	test $count -eq 2
+'
+
+test_expect_success 'kvs: fence ops per fence above limit fails (not rank 0)' '
+	test_must_fail flux exec -r 1 ${FLUX_BUILD_DIR}/t/kvs/fence_api --opcount=4 2 fence7 2> fence7.err &&
+	count=$(grep "Argument list too long" fence7.err | wc -l) &&
+	test $count -eq 2
+'
+
+test_expect_success 'kvs: total fence ops above limit fail (1 op per fence)' '
+	test_must_fail ${FLUX_BUILD_DIR}/t/kvs/fence_api 13 fence8 2> fence8.err &&
+	count=$(grep "Argument list too long" fence8.err | wc -l) &&
+	test $count -eq 13
+'
+
+test_expect_success 'kvs: total fence ops above limit fail (1 op per fence, not rank 0)' '
+	test_must_fail flux exec -r 1 ${FLUX_BUILD_DIR}/t/kvs/fence_api 13 fence9 2> fence9.err &&
+	count=$(grep "Argument list too long" fence9.err | wc -l) &&
+	test $count -eq 13
+'
+
+test_expect_success 'kvs: total fence ops above limit fail (4 op per fence)' '
+	test_must_fail ${FLUX_BUILD_DIR}/t/kvs/fence_api --opcount=4 4 fence10 2> fence10.err &&
+	count=$(grep "Argument list too long" fence10.err | wc -l) &&
+	test $count -eq 4
+'
+
+test_expect_success 'kvs: total fence ops above limit fail (3 op per fence, not rank 0)' '
+	test_must_fail flux exec -r 1 ${FLUX_BUILD_DIR}/t/kvs/fence_api --opcount=4 4 fence11 2> fence11.err &&
+	count=$(grep "Argument list too long" fence11.err | wc -l) &&
+	test $count -eq 4
+'
+
 test_done
