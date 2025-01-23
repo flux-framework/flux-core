@@ -27,10 +27,11 @@ def on_master_or_tag(matrix):
 
 DEFAULT_MULTIARCH_PLATFORMS = {
     "linux/arm64": {
-        "when": on_master_or_tag,
+        "when": lambda _: True,
+        # "when": on_master_or_tag,
         "suffix": " - arm64",
-        "command_args": "--install-only ",
-        "timeout_minutes": 90,
+        # "command_args": "--install-only ",
+        # "timeout_minutes": 90,
         "runner": "ubuntu-24.04-arm",
     },
     "linux/amd64": {"when": lambda _: True, "runner": "ubuntu-latest"},
