@@ -31,8 +31,9 @@ DEFAULT_MULTIARCH_PLATFORMS = {
         "suffix": " - arm64",
         "command_args": "--install-only ",
         "timeout_minutes": 90,
+        "runner": "ubuntu-24.04-arm",
     },
-    "linux/amd64": {"when": lambda _: True},
+    "linux/amd64": {"when": lambda _: True, "runner": "ubuntu-latest"},
 }
 
 
@@ -94,6 +95,7 @@ class BuildMatrix:
         platform=None,
         command_args="",
         timeout_minutes=60,
+        runner="ubuntu-latest",
     ):
         """Add a build to the matrix.include array"""
 
@@ -144,6 +146,7 @@ class BuildMatrix:
                 "env": env,
                 "command": command,
                 "image": image,
+                "runner": runner,
                 "tag": self.tag,
                 "branch": self.branch,
                 "coverage": coverage,
@@ -175,6 +178,7 @@ class BuildMatrix:
                     image=image if image is not None else name,
                     command_args=args.get("command_args", ""),
                     timeout_minutes=args.get("timeout_minutes", 30),
+                    runner=args["runner"],
                     **kwargs,
                 )
 
@@ -189,7 +193,11 @@ matrix = BuildMatrix()
 
 # Multi-arch builds, arm only builds on
 bookworm_platforms = deepcopy(DEFAULT_MULTIARCH_PLATFORMS)
-bookworm_platforms["linux/386"] = {"when": lambda _: True, "suffix": " - 32 bit"}
+bookworm_platforms["linux/386"] = {
+    "when": lambda _: True,
+    "suffix": " - 32 bit",
+    "runner": "ubuntu-latest",
+}
 common_args = (
     "--prefix=/usr"
     " --sysconfdir=/etc"

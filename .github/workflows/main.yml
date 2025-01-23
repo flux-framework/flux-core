@@ -151,7 +151,7 @@ jobs:
 
   ci-checks:
     needs: [generate-matrix]
-    runs-on: ubuntu-latest
+    runs-on: ${{matrix.runner}}
     env:
       TAP_DRIVER_QUIET: 1
       FLUX_TEST_TIMEOUT: 300
@@ -210,10 +210,6 @@ jobs:
     - name: docker buildx
       uses: docker/setup-buildx-action@v3
       if: matrix.needs_buildx
-
-    - name: setup qemu-user-static
-      run: |
-        docker run --rm --privileged aptman/qus -s -- -p --credential aarch64
 
     - name: docker-run-checks
       timeout-minutes: ${{matrix.timeout_minutes}}
