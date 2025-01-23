@@ -214,11 +214,9 @@ int rlist_add_rnode (struct rlist *rl, struct rnode *n)
     return 0;
 }
 
-typedef struct rnode * (*rnode_copy_f) (const struct rnode *, void *arg);
-
-static struct rlist *rlist_copy_internal (const struct rlist *orig,
-                                          rnode_copy_f cpfn,
-                                          void *arg)
+struct rlist *rlist_copy_internal (const struct rlist *orig,
+                                   rnode_copy_f cpfn,
+                                   void *arg)
 {
     struct rnode *n;
     struct rlist *rl = rlist_create ();
@@ -535,17 +533,9 @@ static struct rnode *rlist_detach_rank (struct rlist *rl, uint32_t rank)
     return n;
 }
 
-struct rlist *rlist_diff (const struct rlist *rla, const struct rlist *rlb)
+int rlist_subtract (struct rlist *rl, const struct rlist *rlb)
 {
-    struct rnode *n;
-    struct rlist *rl = rlist_create ();
-
-    if (!rl || rlist_append (rl, rla) < 0) {
-        rlist_destroy (rl);
-        return NULL;
-    }
-
-    n = zlistx_first (rlb->nodes);
+    struct rnode *n = zlistx_first (rlb->nodes);
     while (n) {
         /*  Attempt to find and "detach" the rank which we're diffing.
          */
@@ -566,6 +556,18 @@ struct rlist *rlist_diff (const struct rlist *rla, const struct rlist *rlb)
             rnode_destroy (na);
         }
         n = zlistx_next (rlb->nodes);
+    }
+    return 0;
+}
+
+struct rlist *rlist_diff (const struct rlist *rla, const struct rlist *rlb)
+{
+    struct rlist *rl = rlist_create ();
+    if (!rl
+        || rlist_append (rl, rla) < 0
+        || rlist_subtract (rl, rlb) < 0) {
+        rlist_destroy (rl);
+        return NULL;
     }
     return rl;
 }

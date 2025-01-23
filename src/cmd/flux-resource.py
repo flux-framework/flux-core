@@ -74,7 +74,7 @@ class FluxResourceConfig(UtilConfig):
             "description": "Format including resource list details",
             "format": (
                 "{state:>10} ?+:{queue:<5} ?:{propertiesx:<10.10+} {nnodes:>6} "
-                "+:{ncores:>6} ?:+{ngpus:>5} {rlist}"
+                "+:{ncores:>6} ?+:{ngpus:>5} {rlist}"
             ),
         },
     }

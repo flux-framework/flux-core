@@ -2149,6 +2149,74 @@ static void test_issue_5868 (void)
     free (R);
 }
 
+struct core_spec_test {
+    const char *ranks;
+    const char *cores;
+    const char *hosts;
+
+    const char *spec;
+    const char *result;
+    const char *error;
+};
+
+struct core_spec_test core_spec_tests[] = {
+    { "0-3", "0-3", "foo[0-3]", "0",     "rank[0-3]/core0",     NULL },
+    { "0-3", "0-3", "foo[0-3]", "0-1",   "rank[0-3]/core[0-1]", NULL },
+    { "0-3", "0-3", "foo[0-3]", "0@0",   "rank0/core0",         NULL },
+    { "0-3", "0-3", "foo[0-3]", "0,2@0", "rank0/core[0,2]",     NULL },
+    { "0-3", "0-3", "foo[0-3]", "0@0-1", "rank[0-1]/core0",     NULL },
+    { "0-3", "0-3", "foo[0-3]", "0-7@0", "rank0/core[0-3]",     NULL },
+    { "0-3",
+      "0-3",
+      "foo[0-3]",
+      "0-3@0 0@1-3",
+      "rank0/core[0-3] rank[1-3]/core0",
+      NULL },
+    { "0-3", "0-3", "foo[0-3]", "foo",   NULL, "error parsing range 'foo'"},
+    { "0-3", "0-3", "foo[0-3]", "0@",    NULL, "ranks/cores cannot be empty"},
+    { "0-3", "0-3", "foo[0-3]", "@0",    NULL, "ranks/cores cannot be empty"},
+    { "0-3", "0-3", "foo[0-3]", "0 0@",  NULL, "ranks/cores cannot be empty"},
+    { NULL, NULL, NULL, NULL, NULL, NULL },
+};
+
+static void test_core_spec (void)
+{
+    struct core_spec_test *te = &core_spec_tests[0];
+    while (te && te->ranks) {
+        char *R;
+        struct rlist *rl;
+        struct rlist *result;
+        flux_error_t error;
+
+        if (!(R = R_create (te->ranks, te->cores, NULL, te->hosts, NULL)))
+            BAIL_OUT ("test_core_spec: R_create");
+
+        if (!(rl = rlist_from_R (R)))
+            BAIL_OUT ("test_core_spec: rlist_from_R() failed");
+
+        result = rlist_copy_core_spec (rl, te->spec, &error);
+        if (result) {
+            char *s = rlist_dumps (result);
+            pass ("rlist_copy_core_spec (%s) returned %s", te->spec, s);
+            if (te->result)
+                is (s, te->result, "got expected result");
+            else
+                fail ("got %s but expected failure", s);
+            free (s);
+        }
+        else if (te->error) {
+            pass ("rlist_copy_core_spec (%s) failed as expected", te->spec);
+            is (error.text, te->error, "got expected error: %s", error.text);
+        }
+        else
+            diag ("rlist_copy_core_spec (%s): %s", te->spec, error.text);
+        free (R);
+        rlist_destroy (rl);
+        rlist_destroy (result);
+        te++;
+    }
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
@@ -2180,6 +2248,7 @@ int main (int ac, char *av[])
     test_issue4290 ();
     test_rlist_config_inval ();
     test_issue_5868 ();
+    test_core_spec ();
     done_testing ();
 }
 
