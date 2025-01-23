@@ -188,6 +188,164 @@ static char *get_local_uri (void)
     return result;
 }
 
+/* Return the current instance level as an integer using the
+ * instance-level broker attribute.
+ */
+static int get_instance_level (flux_t *h)
+{
+    long l;
+    char *endptr;
+    const char *level;
+
+    if (!(level = flux_attr_get (h, "instance-level")))
+        return -1;
+
+    errno = 0;
+    l = strtol (level, &endptr, 10);
+    if (errno != 0 || *endptr != '\0') {
+        errno = EINVAL;
+        return -1;
+    }
+    if (l < 0 || l > INT_MAX) {
+        errno = ERANGE;
+        return -1;
+    }
+    return (int) l;
+}
+
+/* Resolve the URI of an ancestor `n` levels up the hierarchy.
+ * If n is 0, then the current default uri (FLUX_URI or builtin) is returned.
+ * If n >= instance-level, then the URI of the root instance is returned.
+ */
+static char *resolve_ancestor_uri (flux_t *h, int n, flux_error_t *errp)
+{
+    int level;
+    int depth = 0;
+    const char *uri = NULL;
+    char *result = NULL;
+
+    if ((level = get_instance_level (h)) < 0) {
+        errprintf (errp,
+                   "Failed to get instance-level attribute: %s",
+                   strerror (errno));
+        return NULL;
+    }
+
+    /* If n is 0 (resolve current uri) or level is 0 (we're already
+     * in the root instance), return copy of local URI immediately:
+     */
+    if (n == 0 || level == 0) {
+        if (!(result = get_local_uri ())) {
+            errprintf (errp, "Failed to get local URI");
+            return NULL;
+        }
+        return result;
+    }
+
+    /* Resolve to depth 0 unless n is > 0 (but ensure depth not < 0)
+     */
+    if (n > 0 && (depth = level - n) < 0)
+        depth = 0;
+
+    /* Take a reference on h since it will be closed below
+     */
+    flux_incref (h);
+
+    while (!result) {
+        flux_t *parent_h;
+
+        if (!(uri = flux_attr_get (h, "parent-uri"))
+            || !(parent_h = flux_open_ex (uri, 0, errp)))
+            goto out;
+
+        if (--level == depth) {
+            if (!(result = strdup (uri))) {
+                errprintf (errp, "Out of memory");
+                goto out;
+            }
+        }
+        flux_close (h);
+        h = parent_h;
+    }
+out:
+    flux_close (h);
+    return result;
+}
+
+/* Count the number of parent elements ".." separated by one or more "/"
+ * in `path`. It is an error if anything but ".." or "." appears in each
+ * element ("." is ignored and indicates "current instance").
+ *
+ * `path` should have already been checked for a leading slash (an error).
+ */
+static int count_parents (const char *path, flux_error_t *errp)
+{
+    char *copy;
+    char *str;
+    char *s;
+    char *sp = NULL;
+    int n = 0;
+    int rc = -1;
+
+    if (!(copy = strdup (path))) {
+        errprintf (errp, "Out of memory");
+        return -1;
+    }
+    str = copy;
+    while ((s = strtok_r (str, "/", &sp))) {
+        if (streq (s, ".."))
+            n++;
+        else if (!streq (s, ".")) {
+            errprintf (errp, "%s: invalid URI path element '%s'", path, s);
+            errno = EINVAL;
+            goto out;
+        }
+        str = NULL;
+    }
+    rc = n;
+out:
+    ERRNO_SAFE_WRAP (free, copy);
+    return rc;
+}
+
+/* Resolve a path-like string where one or more ".." separated by "/" specify
+ * to resolve parent instance URIs (possibly multiple levels up),  "."
+ * indicates the current instance, and a single slash ("/") specifies the
+ * root instance URI.
+ */
+static char *resolve_path_uri (const char *path, flux_error_t *errp)
+{
+    char *uri = NULL;
+    int nparents;
+    flux_t *h;
+
+    /* Always start from current enclosing instance
+     */
+    if (!(h = flux_open_ex (NULL, 0, errp)))
+        return NULL;
+
+    if (path[0] == '/') {
+        /* Leading slash only allowed if it is the only character in the
+        * uri path string:
+        */
+        if (!streq (path, "/")) {
+            errprintf (errp, "%s: invalid URI", path);
+            errno = EINVAL;
+            goto out;
+        }
+        /* nparents < 0 means resolve to root
+         */
+        nparents = -1;
+    }
+    else if ((nparents = count_parents (path, errp)) < 0)
+        goto out;
+
+    uri = resolve_ancestor_uri (h, nparents, errp);
+out:
+    flux_close (h);
+    return uri;
+}
+
 flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
 {
     char *tmp = NULL;
@@ -214,9 +372,18 @@ flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
 
     /* Try to get URI from (in descending precedence):
      *   argument > environment > builtin
+     *
+     * If supplied argument starts with "." or "/", then treat it as
+     * a path-like argument which may reference an ancestor (as processed
+     * by resolve_path_uri())
      */
     if (!uri) {
         if (!(tmp = get_local_uri ()))
+            goto error;
+        uri = tmp;
+    }
+    else if (uri[0] == '.' || uri[0] == '/') {
+        if (!(tmp = resolve_path_uri (uri, errp)))
             goto error;
         uri = tmp;
     }
