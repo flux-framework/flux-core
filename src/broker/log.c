@@ -421,14 +421,16 @@ static void log_timestamp (FILE *fp,
     struct timeval tv;
     char datetime[16]; /* 'MMM DD HH:MM:SS' */
     char timezone[16]; /* TZ abbrev should be short, give 15 chars max */
+    char year[5];      /* 4 digit year */
 
     if (flags & LOG_NO_TIMESTAMP)
         return;
     if (timestamp_parse (hdr->timestamp, &tm, &tv) < 0
         || strftime (datetime, sizeof (datetime), "%b %d %T", &tm) == 0
-        || strftime (timezone, sizeof (timezone), "%Z", &tm) == 0)
+        || strftime (timezone, sizeof (timezone), "%Z", &tm) == 0
+        || strftime (year, sizeof (year), "%Y", &tm) == 0)
         fprintf (fp, "%s ", hdr->timestamp);
-    fprintf (fp, "%s.%06ld %s ", datetime, (long)tv.tv_usec, timezone);
+    fprintf (fp, "%s.%06ld %s %s ", datetime, (long)tv.tv_usec, timezone, year);
 }
 
 /* Log a message to 'fp', if non-NULL.
