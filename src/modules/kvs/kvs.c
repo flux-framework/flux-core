@@ -2046,7 +2046,7 @@ static void fence_request_cb (flux_t *h,
                 flux_log_error (h,
                                 "%s: kvstxn_mgr_add_transaction",
                                 __FUNCTION__);
-                goto error;
+                goto error_all;
             }
 
             tstat_push (&ctx->txn_fence_stats,
@@ -2075,6 +2075,16 @@ static void fence_request_cb (flux_t *h,
         flux_future_destroy (f);
     }
     request_tracking_add (ctx, msg);
+    return;
+
+error_all:
+    /* An error has occurred, so we will return an error similarly to
+     * how an error would be returned via a transaction error in
+     * kvstxn_apply().
+     */
+    if (error_event_send_to_name (ctx, ns, name, errno) < 0)
+        flux_log_error (h, "%s: error_event_send_to_name", __FUNCTION__);
+    request_tracking_remove (ctx, msg);
     return;
 
 error:
