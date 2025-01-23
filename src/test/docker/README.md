@@ -65,8 +65,8 @@ Docker buildx extensions, see
 
 and run
 ```
-$  docker buildx build --push --platform=linux/arm64,linux/amd64 --tag fluxrm/testenv:jammy src/test/docker/jammy
-$  docker buildx build --push --platform=linux/386,linux/amd64,linux/arm64 --tag fluxrm/testenv:bookworm src/test/docker/bookworm
+$  docker buildx build --push --platform=linux/arm64,linux/amd64 --tag fluxrm/testenv:jammy -f src/test/docker/jammy/Dockerfile .
+$  docker buildx build --push --platform=linux/386,linux/amd64,linux/arm64 --tag fluxrm/testenv:bookworm -f src/test/docker/bookworm/Dockerfile .
 ```
 
 to build and push images to docker hub.
