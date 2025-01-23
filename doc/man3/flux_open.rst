@@ -92,7 +92,7 @@ the Flux message broker.
 RETURN VALUE
 ============
 
-:func:`flux_open` and :func:`flux_clone` return a :type:`flux_t`` handle on
+:func:`flux_open` and :func:`flux_clone` return a :type:`flux_t` handle on
 success.  On error, NULL is returned, with :var:`errno` set.
 
 
