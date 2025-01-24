@@ -45,12 +45,14 @@ static char *fence_name;
 static bool syncflag = false;
 static bool symlinkflag = false;
 static const char *namespace = NULL;
+static int opcount = 1;
 
-#define OPTIONS "n:Ss"
+#define OPTIONS "n:Sso:"
 static const struct option longopts[] = {
     {"namespace", required_argument, 0, 'n'},
     {"sync",      no_argument,       0, 'S'},
     {"symlink",   no_argument,       0, 's'},
+    {"opcount",   required_argument, 0, 'o'},
     {0, 0, 0, 0},
 };
 
@@ -58,7 +60,7 @@ static void usage (void)
 {
     fprintf (stderr,
              "Usage: fence_api "
-             "[--sync] [--symlink] [--namespace=ns] "
+             "[--sync] [--symlink] [--namespace=ns] [--opcount=num] "
              "<fencecount> <prefix>\n");
     exit (1);
 }
@@ -66,7 +68,7 @@ static void usage (void)
 void *thread (void *arg)
 {
     thd_t *t = arg;
-    char *key;
+    char *key = NULL;
     uint32_t rank;
     flux_future_t *f;
     flux_kvs_txn_t *txn;
@@ -74,6 +76,7 @@ void *thread (void *arg)
     const char *rootref;
     int sequence;
     int flags = 0;
+    int i;
 
     if (!(t->h = flux_open (NULL, 0))) {
         log_err ("%d: flux_open", t->n);
@@ -90,15 +93,19 @@ void *thread (void *arg)
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
 
-    key = xasprintf ("%s.%"PRIu32".%d", prefix, rank, t->n);
+    for (i = 0; i < opcount; i++) {
+        key = xasprintf ("%s.%"PRIu32".%d.%d", prefix, rank, t->n, i);
 
-    if (symlinkflag) {
-        if (flux_kvs_txn_symlink (txn, 0, key, NULL, "a-target") < 0)
-            log_err_exit ("%s", key);
-    }
-    else {
-        if (flux_kvs_txn_pack (txn, 0, key, "i", 42) < 0)
-            log_err_exit ("%s", key);
+        if (symlinkflag) {
+            if (flux_kvs_txn_symlink (txn, 0, key, NULL, "a-target") < 0)
+                log_err_exit ("%s", key);
+        }
+        else {
+            if (flux_kvs_txn_pack (txn, 0, key, "i", 42 + i) < 0)
+                log_err_exit ("%s", key);
+        }
+
+        free (key);
     }
 
     if (syncflag)
@@ -131,7 +138,6 @@ void *thread (void *arg)
 
     flux_future_destroy (f);
 
-    free (key);
     flux_kvs_txn_destroy (txn);
 
 done:
@@ -158,6 +164,10 @@ int main (int argc, char *argv[])
         case 'n':
             namespace = optarg;
             break;
+        case 'o':
+            opcount = atoi (optarg);
+            if (opcount <= 0)
+                usage ();
         default:
             usage ();
         }
