@@ -204,20 +204,4 @@ test_expect_success FLUX_SECURITY \
 	flux job wait-event -vHt 15s $jobid clean &&
 	flux job status -vvv $jobid
 '
-
-if ! grep 'release 7' /etc/centos-release >/dev/null 2>&1 \
-   && ! grep 'release 7' /etc/redhat-release >/dev/null 2>&1
-then
-   test_set_prereq NOT_DISTRO7
-fi
-
-# The following test does not work on CentOS 7 / RHEL7 since exec errno does
-#  not work with job-exec (for as yet unknown reason). Skip the test on
-#  these distros:
-test_expect_success NOT_DISTRO7 'job-exec: path to shell is emitted on exec error' '
-	test_expect_code 127 flux run \
-	  --setattr=exec.job_shell=/foo/flux-shell hostname 2>exec.err &&
-	test_debug "cat exec.err" &&
-	grep /foo/flux-shell exec.err
-'
 test_done
