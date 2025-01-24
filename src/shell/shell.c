@@ -1918,6 +1918,8 @@ int main (int argc, char *argv[])
 {
     flux_shell_t shell;
 
+    memset (&shell, 0, sizeof (shell));
+
     /* Initialize locale from environment
      */
     setlocale (LC_ALL, "");
