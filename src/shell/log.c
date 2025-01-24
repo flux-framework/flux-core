@@ -249,7 +249,7 @@ void flux_shell_raise (const char *type,
     char buf [4096];
     va_list ap;
 
-    if (!shell || !shell->h || logger.exception_logged)
+    if (!shell || !shell->h || !shell->info || logger.exception_logged)
         return;
 
     va_start (ap, fmt);
