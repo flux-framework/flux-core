@@ -1950,10 +1950,10 @@ int main (int argc, char *argv[])
      * Fetches missing info from shell handle if set.
      */
     if (!(shell.info = shell_info_create (&shell)))
-        exit (1);
+        shell_die (1, "failed to initialize shell info");
 
     if (shell_export_environment_from_job (&shell) < 0)
-        exit (1);
+        shell_die (1, "failed to initialize shell environment");
 
     /* Set verbose flag if set in attributes.system.shell.verbose */
     if (flux_shell_getopt_unpack (&shell, "verbose", "i", &shell.verbose) < 0)
