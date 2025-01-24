@@ -220,4 +220,18 @@ test_expect_success 'flux-shell: stdout/err from task.exec works' '
 	grep "^this is stderr" print.err &&
 	grep "^this is stdout" print.out
 '
+# Note: the following test uses alloc-bypass.so to bypass the scheduler in
+# order to introduce a jobspec error, to be caught by the job shell early
+# in initialization.
+test_expect_success 'flux-shell: early fatal errors are captured in eventlog' '
+	flux jobtap load alloc-bypass.so &&
+	id=$(flux run --dry-run -Salloc-bypass.R="$(flux resource R -i0)" true | \
+	     jq .version=2 | \
+	     flux job submit --flags=novalidate) &&
+	echo jobid=$id &&
+	flux job wait-event -Hvt 30 $id clean &&
+	test_expect_code 1 flux job attach $id >early-errors.out 2>&1 &&
+	grep "error parsing jobspec" early-errors.out &&
+	flux jobtap remove alloc-bypass.so
+'
 test_done
