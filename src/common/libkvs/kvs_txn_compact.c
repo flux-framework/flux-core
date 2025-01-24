@@ -42,7 +42,7 @@
  *
  * append "A"
  * write "B"
- * append "c"
+ * append "C"
  *
  * we cannot combine the appends of "A" and "C".  In this scenario, we
  * generate an EINVAL error to the caller, indicating that the
