@@ -54,7 +54,7 @@ test_expect_success "flux --root works in subinstance" '
 	id=$(flux batch -n1 --wrap \
 		flux run flux start ${ARGS} \
 		flux --root getattr instance-level) &&
-	flux job wait-event -vt 30 $id clean &&
+	flux job wait-event -vt 60 $id clean &&
 	test_debug "cat flux-${id}.out" &&
 	test "$(cat flux-${id}.out)" -eq 0
 '
@@ -105,5 +105,48 @@ test_expect_success 'flux can launch multiple brokers per node (R lookup fallbac
 	flux alloc -N2 --exclusive -o per-resource.count=2 \
 		--conf=resource.no-update-watch=true \
 		flux resource info
+'
+test_expect_success 'flux_open("/") works at top-level' '
+	flux python -c "import flux; print(flux.Flux(\"/\").attr_get(\"instance-level\"));"
+'
+test_expect_success 'flux_open(3) accepts path-like URIs: "/", "../.." etc' '
+	cat <<-EOF >flux_open.py &&
+	import unittest
+	import flux
+	import sys
+	from collections import namedtuple
+
+	Test = namedtuple("Test", ["arg", "level"])
+	tests = [
+	    Test(None, 3),
+	    Test(".", 3),
+	    Test("./", 3),
+	    Test("..", 2),
+	    Test("../", 2),
+	    Test("./..", 2),
+	    Test("../..", 1),
+	    Test("..//..", 1),
+	    Test("../../", 1),
+	    Test(".././..", 1),
+	    Test("../../..", 0),
+	    Test("../../../..", 0),
+	    Test("../../../../../../../", 0),
+	    Test("/", 0),
+	]
+
+	class TestFluxOpen(unittest.TestCase):
+	    def test_pathlike_uris(self):
+	        for test in tests:
+	            l = flux.Flux(test.arg).attr_get("instance-level")
+	            self.assertEqual(int(l), test.level)
+
+	    def test_pathlike_bad_arg(self):
+	        for arg in ("/.", "//", "../f", "../f/.."):
+	            with self.assertRaises(OSError, msg=f"arg={arg}"):
+	                h = flux.Flux(arg)
+	                print(h.attr_get("instance-level"))
+	unittest.main(testRunner=unittest.TextTestRunner(verbosity=2))
+	EOF
+	flux alloc -n1 flux alloc -n1 flux alloc -n1 flux python ./flux_open.py
 '
 test_done

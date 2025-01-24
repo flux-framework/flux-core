@@ -33,10 +33,18 @@ to communicate with the Flux message broker. :func:`flux_open_ex` takes an
 optional pointer to a :type:`flux_error_t` structure which, when non-NULL, will
 be used to store any errors which may have otherwise gone to :var:`stderr`.
 
-The :var:`uri` scheme (before "://") specifies the "connector" that will be used
-to establish the connection. The :var:`uri` path (after "://") is parsed by the
-connector. If :var:`uri` is NULL, the value of :envvar:`FLUX_URI` is used.  If
-:envvar:`FLUX_URI` is not set, a compiled-in default URI is used.
+When set, the :var:`uri` argument may be a valid native URI, e.g. as
+returned from the :man1:`flux-uri` command or found in the :var:`local-uri`
+and :var:`parent-uri` broker attributes, or a path-like string referencing
+a possible instance ancestor like "/" for the top-level or root instance,
+or ".." for the parent instance. See `ANCESTOR PATHS`_ below.
+
+If :var:`uri` is NULL, the value of :envvar:`FLUX_URI` is used.
+If :envvar:`FLUX_URI` is not set, a compiled-in default URI is used.
+
+When :var:`uri` contains a native URI, the scheme (before "://") specifies
+the "connector" that will be used to establish the connection. The :var:`uri`
+path (after "://") is parsed by the connector.
 
 *flags* is the logical "or" of zero or more of the following flags:
 
@@ -89,10 +97,24 @@ original handle.
 the Flux message broker.
 
 
+ANCESTOR PATHS
+==============
+
+As an alternative to a URI, the :func:`flux_open` and :func:`flux_open_ex`
+functions also take a path-like string indicating that a handle to an ancestor
+instance should be opened. This string follows the following rules:
+
+ - One or more ".." separated by "/" refer to a parent instance
+   (possibly multiple levels up the hierarchy)
+ - "." indicates the current instance
+ - A single slash ("/") indicates the root instance
+ - ".." at the root is not an error, it just returns a handle to the root
+   instance
+
 RETURN VALUE
 ============
 
-:func:`flux_open` and :func:`flux_clone` return a :type:`flux_t`` handle on
+:func:`flux_open` and :func:`flux_clone` return a :type:`flux_t` handle on
 success.  On error, NULL is returned, with :var:`errno` set.
 
 

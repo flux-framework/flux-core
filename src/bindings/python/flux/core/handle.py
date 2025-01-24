@@ -32,6 +32,15 @@ class Flux(Wrapper):
     Example:
         >>> flux.Flux()
         <flux.core.Flux object at 0x...>
+
+    Args:
+        uri (str): A fully-qualified native path as returned by
+            :man1:`flux-uri`, or a path-like string that references any
+            ancestor in the current hierarchy, e.g. ``/`` refers to
+            the root instance, ``..`` refers to the parent, ``../..``
+            the parent's parent and so on. See :man3:`flux_open` for more
+            details.
+        flags (int): flags as described in :man3:`flux_open`.
     """
 
     #  Thread local storage to hold a reactor_running boolean, indicating
