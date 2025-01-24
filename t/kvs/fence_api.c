@@ -168,6 +168,7 @@ int main (int argc, char *argv[])
             opcount = atoi (optarg);
             if (opcount <= 0)
                 usage ();
+            break;
         default:
             usage ();
         }

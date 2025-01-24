@@ -67,6 +67,7 @@ const double max_namespace_age = 3600.;
 /* Transaction max ops
  */
 const uint64_t kvs_transaction_max_ops = 65536;
+const uint64_t kvs_fence_max_ops = 1048576;
 
 struct kvs_ctx {
     struct cache *cache;    /* blobref => cache_entry */
@@ -79,6 +80,7 @@ struct kvs_ctx {
     flux_watcher_t *check_w;
     int transaction_merge;
     uint64_t transaction_max_ops;
+    uint64_t fence_max_ops;
     bool events_init;            /* flag */
     char *hash_name;
     unsigned int seq;           /* for commit transactions */
@@ -192,6 +194,7 @@ static struct kvs_ctx *kvs_ctx_create (flux_t *h)
     }
     ctx->transaction_merge = 1;
     ctx->transaction_max_ops = kvs_transaction_max_ops;
+    ctx->fence_max_ops = kvs_fence_max_ops;
     if (!(ctx->requests = msg_hash_create (MSG_HASH_TYPE_UUID_MATCHTAG)))
         goto error;
     list_head_init (&ctx->work_queue);
@@ -1927,6 +1930,11 @@ static void relayfence_request_cb (flux_t *h,
          * earlier */
         assert (!treq_get_processed (tr));
 
+        if (json_array_size (treq_get_ops (tr)) > ctx->fence_max_ops) {
+            errno = E2BIG;
+            goto error;
+        }
+
         /* we use this flag to indicate if a treq has been added to
          * the ready queue */
         treq_set_processed (tr, true);
@@ -2052,6 +2060,11 @@ static void fence_request_cb (flux_t *h,
             /* If user called fence > nprocs time, should have been caught
              * earlier */
             assert (!treq_get_processed (tr));
+
+            if (json_array_size (treq_get_ops (tr)) > ctx->fence_max_ops) {
+                errno = E2BIG;
+                goto error_all;
+            }
 
             /* we use this flag to indicate if a treq has been added to
              * the ready queue */
@@ -3140,12 +3153,14 @@ static int max_ops_parse (struct kvs_ctx *ctx,
                           flux_error_t *errp)
 {
     uint64_t t_max_ops = kvs_transaction_max_ops;
+    uint64_t f_max_ops = kvs_fence_max_ops;
     flux_error_t error;
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?I}}",
+                          "{s?{s?I s?I}}",
                           "kvs",
-                          "transaction-max-ops", &t_max_ops) < 0) {
+                          "transaction-max-ops", &t_max_ops,
+                          "fence-max-ops", &f_max_ops) < 0) {
         errprintf (errp, "error reading config for kvs: %s", error.text);
         return -1;
     }
@@ -3153,7 +3168,12 @@ static int max_ops_parse (struct kvs_ctx *ctx,
         errprintf (errp, "kvs transaction-max-ops invalid");
         return -1;
     }
+    if (f_max_ops <= 0) {
+        errprintf (errp, "kvs fence-max-ops invalid");
+        return -1;
+    }
     ctx->transaction_max_ops = t_max_ops;
+    ctx->fence_max_ops = f_max_ops;
     return 0;
 }
 
