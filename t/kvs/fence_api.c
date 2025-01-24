@@ -36,6 +36,7 @@ typedef struct {
     char *treeobj;
     char *rootref;
     int sequence;
+    int errnum;
 } thd_t;
 
 static int fencecount = -1;
@@ -105,8 +106,15 @@ void *thread (void *arg)
 
     if (!(f = flux_kvs_fence (t->h, namespace, flags, fence_name,
                               fencecount, txn))
-        || flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_kvs_fence");
+        || flux_future_get (f, NULL) < 0) {
+        /* Do not call log_err_exit(), for tests that want to see the
+         * error that occurred.  Code in main() will check for errnum
+         * and exit after all threads are done.
+         */
+        log_err ("flux_kvs_fence");
+        t->errnum = errno;
+        return NULL;
+    }
 
     /* save off fence root information */
 
@@ -180,6 +188,11 @@ int main (int argc, char *argv[])
     for (i = 0; i < fencecount; i++) {
         if ((rc = pthread_join (thd[i].t, NULL)))
             log_errn (rc, "pthread_join");
+    }
+
+    for (i = 0; i < fencecount; i++) {
+        if (thd[i].errnum)
+            exit (1);
     }
 
     /* compare results from all of the fences, the root ref info
