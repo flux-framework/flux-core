@@ -239,17 +239,15 @@ matrix.add_multiarch_build(
         TEST_INSTALL="t",
     ),
 )
-# single arch builds that still produce a container
-matrix.add_build(
-    name="fedora40 - test-install",
-    image="fedora40",
+matrix.add_multiarch_build(
+    name="fedora40",
+    default_suffix=" - test-install",
     args=common_args,
     env=dict(
         TEST_INSTALL="t",
     ),
-    docker_tag=True,
 )
-
+# single arch builds that still produce a container
 # Ubuntu: TEST_INSTALL
 matrix.add_build(
     name="jammy - test-install",
