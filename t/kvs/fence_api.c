@@ -38,7 +38,7 @@ typedef struct {
     int sequence;
 } thd_t;
 
-static int count = -1;
+static int fencecount = -1;
 static char *prefix = NULL;
 static char *fence_name;
 static bool syncflag = false;
@@ -58,7 +58,7 @@ static void usage (void)
     fprintf (stderr,
              "Usage: fence_api "
              "[--sync] [--symlink] [--namespace=ns] "
-             "count prefix\n");
+             "<fencecount> <prefix>\n");
     exit (1);
 }
 
@@ -104,7 +104,7 @@ void *thread (void *arg)
         flags |= FLUX_KVS_SYNC;
 
     if (!(f = flux_kvs_fence (t->h, namespace, flags, fence_name,
-                              count, txn))
+                              fencecount, txn))
         || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_fence");
 
@@ -157,9 +157,9 @@ int main (int argc, char *argv[])
     if ((argc - optind) != 2)
         usage ();
 
-    count = strtoul (argv[optind], NULL, 10);
-    if (count <= 1)
-        log_msg_exit ("commit count must be > 1");
+    fencecount = strtoul (argv[optind], NULL, 10);
+    if (fencecount <= 1)
+        log_msg_exit ("thread count must be > 1");
     prefix = argv[optind+1];
 
     /* create a fence name for this test that is random-ish */
@@ -167,9 +167,9 @@ int main (int argc, char *argv[])
     num = rand ();
     fence_name = xasprintf ("%s-%d", prefix, num);
 
-    thd = xzmalloc (sizeof (*thd) * count);
+    thd = xzmalloc (sizeof (*thd) * fencecount);
 
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < fencecount; i++) {
         thd[i].n = i;
         if ((rc = pthread_attr_init (&thd[i].attr)))
             log_errn (rc, "pthread_attr_init");
@@ -177,7 +177,7 @@ int main (int argc, char *argv[])
             log_errn (rc, "pthread_create");
     }
 
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < fencecount; i++) {
         if ((rc = pthread_join (thd[i].t, NULL)))
             log_errn (rc, "pthread_join");
     }
@@ -185,7 +185,7 @@ int main (int argc, char *argv[])
     /* compare results from all of the fences, the root ref info
      * should all be the same
      */
-    for (i = 1; i < count; i++) {
+    for (i = 1; i < fencecount; i++) {
         if (!streq (thd[0].treeobj, thd[i].treeobj))
             log_msg_exit ("treeobj mismatch: %s != %s\n",
                           thd[0].treeobj, thd[i].treeobj);
@@ -197,7 +197,7 @@ int main (int argc, char *argv[])
                           thd[0].sequence, thd[i].sequence);
     }
 
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < fencecount; i++) {
         free (thd[i].treeobj);
         free (thd[i].rootref);
     }
