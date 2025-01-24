@@ -379,12 +379,12 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
         }
         else {
             jobinfo_fatal_error (job,
-                                 errnum,
+                                 0,
                                  "%s on broker %s (rank %d): %s",
                                  "job shell exec error",
                                  hostname,
                                  rank,
-                                 flux_cmd_arg (cmd, 0));
+                                 flux_subprocess_fail_error (p));
         }
     }
     else
