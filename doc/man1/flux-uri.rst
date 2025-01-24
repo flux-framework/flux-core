@@ -89,14 +89,21 @@ URI SCHEMES
 
 The following URI schemes are included by default:
 
-jobid:ID[/ID...]
+jobid:PATH
    This scheme attempts to get the URI for a Flux instance running as a
    job in the current enclosing instance. This is the assumed scheme if no
    ``scheme:`` is provided in *TARGET* passed to :program:`flux uri`, so the
-   ``jobid:`` prefix is optional. A hierarchy of Flux jobids is supported,
-   so ``f1234/f3456`` will resolve the URI for job ``f3456`` running in
-   job ``f1234`` in the current instance. This scheme will raise an error
-   if the target job is not running.
+   ``jobid:`` prefix is optional. *PATH* is a hierarchical path expression
+   that may contain an optional leading slash (``/``) (which references
+   the top-level, root instance explicitly), followed by zero or more job
+   IDs separated by slashes. The special IDs ``.`` and ``..`` indicate
+   the current instance (within the hierarchy) and its parent, respectively.
+   This allows resolution of a single job running in the current instance
+   via ``f1234``, explicitly within the root instance via ``/f2345``, or
+   a job running within another job via ``f3456/f789``. Completely relative
+   paths can also be used such as ``..`` to get the URI of the current
+   parent, or ``../..`` to get the URI of the parent's parent. Finally,
+   a single slash (``/``) may be used to get the root instance URI.
 
    The ``jobid`` scheme supports the optional query parameter ``?wait``, which
    causes the resolver to wait until a URI has been posted to the job eventlog
@@ -149,6 +156,13 @@ Get the URI of a nested job:
    With  the ``jobid`` resolver, ``?local`` only needs to be placed on
    the last component of the jobid "path" or hierarchy. This will resolve
    each URI in turn as a local URI.
+
+Get the URI of the root instance from within a job running at any depth:
+
+::
+
+   $ flux uri /
+   local:///run/flux/local
 
 Get the URI of a local flux-broker
 

@@ -57,17 +57,24 @@ class JobURI(URI):
       remote: If local URI, returns a remote URI substituting current hostname.
               If a remote URI, returns the URI.
       local: If a remote URI, convert to a local URI. Otherwise return the URI.
+
+    Args:
+      uri (str): The URI string with which to initialize the JobURI instance.
+      remote_hostname (str): If ``uri`` is a local URI, use the provided
+        hostname instead of the current hostname when rendering the remote
+        URI.
     """
 
     force_local = os.environ.get("FLUX_URI_RESOLVE_LOCAL", False)
 
-    def __init__(self, uri):
+    def __init__(self, uri, remote_hostname=None):
         super().__init__(uri)
         if self.scheme == "":
             raise ValueError(f"JobURI '{uri}' does not have a valid scheme")
         self.path = re.sub("/+", "/", self.path)
         self.remote_uri = None
         self.local_uri = None
+        self.remote_hostname = remote_hostname
 
     @property
     def remote(self):
@@ -75,8 +82,9 @@ class JobURI(URI):
             if self.scheme == "ssh":
                 self.remote_uri = self.uri
             elif self.scheme == "local":
-                hostname = platform.uname()[1]
-                self.remote_uri = f"ssh://{hostname}{self.path}"
+                if not self.remote_hostname:
+                    self.remote_hostname = platform.uname()[1]
+                self.remote_uri = f"ssh://{self.remote_hostname}{self.path}"
             else:
                 raise ValueError(
                     f"Cannot convert JobURI with scheme {self.scheme} to remote"
