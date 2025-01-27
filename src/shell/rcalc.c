@@ -126,12 +126,22 @@ static int rankinfo_get_children (struct rankinfo *ri,
     return 0;
 }
 
+static int cmp_rank (const void *a, const void *b)
+{
+    const struct rankinfo *ra = a;
+    const struct rankinfo *rb = b;
+    return (ra->rank < rb->rank ? -1 : 1);
+}
+
+
 static int rcalc_process_all_ranks (rcalc_t *r, flux_error_t *errp)
 {
     json_t *entry;
     size_t index;
     json_error_t error;
     int n = 0;
+    unsigned int max_rank = 0;
+    bool sorted = true;
 
     json_array_foreach (r->R_lite, index, entry) {
         const char *rank;
@@ -156,6 +166,14 @@ static int rcalc_process_all_ranks (rcalc_t *r, flux_error_t *errp)
             struct rankinfo *ri = &r->ranks[n];
             ri->id = n;
             ri->rank = i;
+
+            /* Detect if R_lite ranks are unordered:
+             */
+            if (i >= max_rank)
+                max_rank = i;
+            else
+                sorted = false;
+
             if (rankinfo_get_children (ri, children, errp) < 0) {
                 idset_destroy (ids);
                 return -1;
@@ -167,6 +185,15 @@ static int rcalc_process_all_ranks (rcalc_t *r, flux_error_t *errp)
         }
         idset_destroy (ids);
     }
+
+    if (!sorted) {
+        /* Need to sort r->ranks by broker rank and reassign local rank (id):
+         */
+        qsort (r->ranks, r->nranks, sizeof (struct rankinfo), cmp_rank);
+        for (int id = 0; id < r->nranks; id++)
+            r->ranks[id].id = id;
+    }
+
     return 0;
 }
 
