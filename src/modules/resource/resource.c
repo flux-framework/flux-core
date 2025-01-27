@@ -362,8 +362,6 @@ int mod_main (flux_t *h, int argc, char **argv)
          *  acquire, exclude, and drain subsystems, since these
          *  are required by acquire and exclude.
          */
-        if (!(ctx->reslog = reslog_create (ctx)))
-            goto error;
         if (reload_eventlog (h, &eventlog) < 0)
             goto error;
         /* One time only: purge the eventlog (including KVS) of
@@ -372,7 +370,7 @@ int mod_main (flux_t *h, int argc, char **argv)
          */
         if (upgrade_eventlog (h, &eventlog) < 0)
             goto error;
-        if (!(ctx->reslog = reslog_create (ctx)))
+        if (!(ctx->reslog = reslog_create (ctx, eventlog)))
             goto error;
         if (!(ctx->acquire = acquire_create (ctx)))
             goto error;

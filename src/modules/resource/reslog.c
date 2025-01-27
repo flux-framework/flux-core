@@ -16,6 +16,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "ccan/str/str.h"
 
 #include "resource.h"
 #include "reslog.h"
@@ -34,9 +35,19 @@ struct reslog {
     struct resource_ctx *ctx;
     zlist_t *pending;       // list of pending futures
     zlist_t *watchers;
+    json_t *eventlog;
 };
 
 static const char *auxkey = "flux::event_info";
+
+static bool match_event (json_t *entry, const char *val)
+{
+    const char *name;
+    if (eventlog_entry_parse (entry, NULL, &name, NULL) == 0
+        && streq (name, val))
+        return true;
+    return false;
+}
 
 /* zlist_compare_fn() footprint */
 static int watcher_compare (void *item1, void *item2)
@@ -162,9 +173,13 @@ int reslog_post_pack (struct reslog *reslog,
     va_start (ap, fmt);
     event = eventlog_entry_vpack (timestamp, name, fmt, ap);
     va_end (ap);
-
     if (!event)
         return -1;
+    if (json_array_append (reslog->eventlog, event) < 0) {
+        json_decref (event);
+        errno = ENOMEM;
+        return -1;
+    }
     if ((flags & EVENT_NO_COMMIT)) {
         if (!(f = flux_future_create (NULL, NULL)))
             goto error;
@@ -249,12 +264,13 @@ void reslog_destroy (struct reslog *reslog)
             zlist_destroy (&reslog->pending);
         }
         zlist_destroy (&reslog->watchers);
+        json_decref (reslog->eventlog);
         free (reslog);
         errno = saved_errno;
     }
 }
 
-struct reslog *reslog_create (struct resource_ctx *ctx)
+struct reslog *reslog_create (struct resource_ctx *ctx, json_t *eventlog)
 {
     struct reslog *reslog;
 
@@ -262,13 +278,25 @@ struct reslog *reslog_create (struct resource_ctx *ctx)
         return NULL;
     reslog->ctx = ctx;
     if (!(reslog->pending = zlist_new ())
-        || !(reslog->watchers = zlist_new ())) {
-        errno = ENOMEM;
-        goto error;
-    }
+        || !(reslog->watchers = zlist_new ()))
+        goto nomem;
     zlist_comparefn (reslog->watchers, watcher_compare);
+    if (!(reslog->eventlog = json_array ()))
+        goto nomem;
+    if (eventlog) {
+        size_t index;
+        json_t *entry;
+        json_array_foreach (eventlog, index, entry) {
+            // historical resource-define events are not helpful
+            if (match_event (entry, "resource-define"))
+                continue;
+            if (json_array_append (reslog->eventlog, entry) < 0)
+                goto nomem;
+        }
+    }
     return reslog;
-error:
+nomem:
+    errno = ENOMEM;
     reslog_destroy (reslog);
     return NULL;
 }
