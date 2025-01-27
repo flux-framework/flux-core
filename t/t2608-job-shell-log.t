@@ -226,7 +226,7 @@ test_expect_success 'flux-shell: stdout/err from task.exec works' '
 test_expect_success 'flux-shell: early fatal errors are captured in eventlog' '
 	flux jobtap load alloc-bypass.so &&
 	id=$(flux run --dry-run -Salloc-bypass.R="$(flux resource R -i0)" true | \
-	     jq .version=2 | \
+	     jq '.attributes.system.environment=1' | \
 	     flux job submit --flags=novalidate) &&
 	echo jobid=$id &&
 	flux job wait-event -Hvt 30 $id clean &&
