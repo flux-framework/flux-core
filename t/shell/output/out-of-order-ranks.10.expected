@@ -1,0 +1,4 @@
+Distributing 10 tasks across 2 nodes with 10 cores
+Used 2 nodes
+0: rank=0 ntasks=2 cores=0-1
+1: rank=1 ntasks=8 cores=0-7
