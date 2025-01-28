@@ -720,6 +720,41 @@ def emit_R(args):
     print(rset.encode())
 
 
+def print_events(events, follow, wait):
+    if not events and not follow and not wait:
+        return False
+    for entry in events:
+        print(json.dumps(entry))
+        if wait and entry["name"] == wait:
+            return False
+    return True
+
+
+def eventlog_continuation(f, follow, wait):
+    try:
+        payload = f.get()
+    except OSError as exc:
+        if exc.errno != errno.ENODATA:
+            raise
+        payload = None
+    if not payload or not print_events(payload["events"], follow, wait):
+        f.flux_handle.reactor_stop()
+    else:
+        f.reset()
+
+
+def eventlog(args):
+    """Show the resource eventlog"""
+    h = flux.Flux()
+    f = h.rpc(
+        "resource.journal",
+        nodeid=0,
+        flags=flux.constants.FLUX_RPC_STREAMING,
+    )
+    f.then(eventlog_continuation, args.follow, args.wait)
+    h.reactor_run()
+
+
 LOGGER = logging.getLogger("flux-resource")
 
 
@@ -1008,6 +1043,23 @@ def main():
     )
     R_parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
     R_parser.add_argument("--config-file", help=argparse.SUPPRESS)
+
+    eventlog_parser = subparsers.add_parser(
+        "eventlog", formatter_class=flux.util.help_formatter()
+    )
+    eventlog_parser.add_argument(
+        "-F",
+        "--follow",
+        action="store_true",
+        help="Display new events as they are posted",
+    )
+    eventlog_parser.add_argument(
+        "-w",
+        "--wait",
+        metavar="EVENT",
+        help="Display events until EVENT is posted",
+    )
+    eventlog_parser.set_defaults(func=eventlog)
 
     args = parser.parse_args()
     args.func(args)
