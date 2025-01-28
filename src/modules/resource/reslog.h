@@ -22,7 +22,7 @@ typedef void (*reslog_cb_f)(struct reslog *reslog,
                             json_t *context,
                             void *arg);
 
-struct reslog *reslog_create (flux_t *h);
+struct reslog *reslog_create (struct resource_ctx *ctx);
 void reslog_destroy (struct reslog *reslog);
 
 /* Post an event to the eventlog.  This function returns immediately,

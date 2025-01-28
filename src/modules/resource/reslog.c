@@ -17,6 +17,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libeventlog/eventlog.h"
 
+#include "resource.h"
 #include "reslog.h"
 
 struct reslog_watcher {
@@ -30,7 +31,7 @@ struct event_info {
 };
 
 struct reslog {
-    flux_t *h;
+    struct resource_ctx *ctx;
     zlist_t *pending;       // list of pending futures
     zlist_t *watchers;
 };
@@ -51,6 +52,7 @@ static int watcher_compare (void *item1, void *item2)
  */
 static void notify_callbacks (struct reslog *reslog, json_t *event)
 {
+    flux_t *h = reslog->ctx->h;
     const char *name;
     json_t *context;
     struct reslog_watcher *w;
@@ -59,7 +61,7 @@ static void notify_callbacks (struct reslog *reslog, json_t *event)
                      "{s:s s:o}",
                      "name", &name,
                      "context", &context) < 0) {
-        flux_log (reslog->h, LOG_ERR, "error unpacking event for callback");
+        flux_log (h, LOG_ERR, "error unpacking event for callback");
         return;
     }
     w = zlist_first (reslog->watchers);
@@ -93,21 +95,22 @@ static struct event_info *event_info_create (json_t *event,
 
 int post_handler (struct reslog *reslog, flux_future_t *f)
 {
+    flux_t *h = reslog->ctx->h;
     struct event_info *info = flux_future_aux_get (f, auxkey);
     int rc;
 
     if ((rc = flux_future_get (f, NULL)) < 0) {
-        flux_log_error (reslog->h, "committing to %s", RESLOG_KEY);
+        flux_log_error (h, "committing to %s", RESLOG_KEY);
         if (info->msg) {
-            if (flux_respond_error (reslog->h, info->msg, errno, NULL) < 0)
-                flux_log_error (reslog->h, "responding to request after post");
+            if (flux_respond_error (h, info->msg, errno, NULL) < 0)
+                flux_log_error (h, "responding to request after post");
         }
         goto done;
     }
     else {
         if (info->msg) {
-            if (flux_respond (reslog->h, info->msg, NULL) < 0)
-                flux_log_error (reslog->h, "responding to request after post");
+            if (flux_respond (h, info->msg, NULL) < 0)
+                flux_log_error (h, "responding to request after post");
         }
     }
     notify_callbacks (reslog, info->event);
@@ -148,6 +151,7 @@ int reslog_post_pack (struct reslog *reslog,
                       const char *fmt,
                       ...)
 {
+    flux_t *h = reslog->ctx->h;
     va_list ap;
     json_t *event;
     char *val = NULL;
@@ -164,7 +168,7 @@ int reslog_post_pack (struct reslog *reslog,
     if ((flags & EVENT_NO_COMMIT)) {
         if (!(f = flux_future_create (NULL, NULL)))
             goto error;
-        flux_future_set_flux (f, reslog->h);
+        flux_future_set_flux (f, h);
         if (zlist_size (reslog->pending) == 0)
             flux_future_fulfill (f, NULL, NULL);
     }
@@ -175,7 +179,7 @@ int reslog_post_pack (struct reslog *reslog,
             goto error;
         if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, RESLOG_KEY, val) < 0)
             goto error;
-        if (!(f = flux_kvs_commit (reslog->h, NULL, 0, txn)))
+        if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
             goto error;
     }
     if (!(info = event_info_create (event, request)))
@@ -250,13 +254,13 @@ void reslog_destroy (struct reslog *reslog)
     }
 }
 
-struct reslog *reslog_create (flux_t *h)
+struct reslog *reslog_create (struct resource_ctx *ctx)
 {
     struct reslog *reslog;
 
     if (!(reslog = calloc (1, sizeof (*reslog))))
         return NULL;
-    reslog->h = h;
+    reslog->ctx = ctx;
     if (!(reslog->pending = zlist_new ())
         || !(reslog->watchers = zlist_new ())) {
         errno = ENOMEM;

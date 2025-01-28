@@ -362,7 +362,7 @@ int mod_main (flux_t *h, int argc, char **argv)
          *  acquire, exclude, and drain subsystems, since these
          *  are required by acquire and exclude.
          */
-        if (!(ctx->reslog = reslog_create (h)))
+        if (!(ctx->reslog = reslog_create (ctx)))
             goto error;
         if (reload_eventlog (h, &eventlog) < 0)
             goto error;
@@ -371,6 +371,8 @@ int mod_main (flux_t *h, int argc, char **argv)
          * See flux-framework/flux-core#5931.
          */
         if (upgrade_eventlog (h, &eventlog) < 0)
+            goto error;
+        if (!(ctx->reslog = reslog_create (ctx)))
             goto error;
         if (!(ctx->acquire = acquire_create (ctx)))
             goto error;

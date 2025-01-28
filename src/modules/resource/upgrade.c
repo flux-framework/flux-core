@@ -42,6 +42,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "ccan/str/str.h"
 
+#include "resource.h"
 #include "reslog.h"
 #include "upgrade.h"
 
