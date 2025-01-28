@@ -203,6 +203,8 @@ static void disconnect_cb (flux_t *h,
         acquire_disconnect (ctx->acquire, msg);
     if (ctx->status)
         status_disconnect (ctx->status, msg);
+    if (ctx->reslog)
+        reslog_disconnect (ctx->reslog, msg);
 }
 
 flux_t *resource_parent_handle_open (struct resource_ctx *ctx)

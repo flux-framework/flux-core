@@ -47,6 +47,8 @@ int reslog_sync (struct reslog *reslog);
 int reslog_add_callback (struct reslog *reslog, reslog_cb_f cb, void *arg);
 void reslog_remove_callback (struct reslog *reslog, reslog_cb_f cb, void *arg);
 
+void reslog_disconnect (struct reslog *reslog, const flux_msg_t *msg);
+
 #define RESLOG_KEY "resource.eventlog"
 
 #endif /* !_FLUX_RESOURCE_RESLOG_H */

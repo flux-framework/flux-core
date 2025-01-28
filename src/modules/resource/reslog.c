@@ -19,6 +19,7 @@
 #include "ccan/str/str.h"
 
 #include "resource.h"
+#include "inventory.h"
 #include "reslog.h"
 
 struct reslog_watcher {
@@ -36,6 +37,8 @@ struct reslog {
     zlist_t *pending;       // list of pending futures
     zlist_t *watchers;
     json_t *eventlog;
+    struct flux_msglist *consumers;
+    flux_msg_handler_t **handlers;
 };
 
 static const char *auxkey = "flux::event_info";
@@ -83,6 +86,44 @@ static void notify_callbacks (struct reslog *reslog, json_t *event)
     }
 }
 
+static int notify_one_consumer (struct reslog *reslog,
+                                const flux_msg_t *msg,
+                                json_t *entry)
+{
+    flux_t *h = reslog->ctx->h;
+    int rc;
+
+    if (!match_event (entry, "resource-define")) {
+        rc = flux_respond_pack (h,
+                                msg,
+                                "{s:[O]}",
+                                "events", entry);
+    }
+    else {
+        rc = flux_respond_pack (h,
+                                msg,
+                                "{s:[O] s:O}",
+                                "events", entry,
+                                "R", inventory_get (reslog->ctx->inventory));
+    }
+    return rc;
+}
+
+static void notify_consumers (struct reslog *reslog, json_t *entry)
+{
+    flux_t *h = reslog->ctx->h;
+    const flux_msg_t *msg;
+
+    msg = flux_msglist_first (reslog->consumers);
+    while (msg) {
+        if (notify_one_consumer (reslog, msg, entry) < 0) {
+            flux_log_error (h, "error responding to journal request");
+            flux_msglist_delete (reslog->consumers);
+        }
+        msg = flux_msglist_next (reslog->consumers);
+    }
+}
+
 static void event_info_destroy (struct event_info *info)
 {
     if (info) {
@@ -125,6 +166,7 @@ int post_handler (struct reslog *reslog, flux_future_t *f)
         }
     }
     notify_callbacks (reslog, info->event);
+    notify_consumers (reslog, info->event);
 done:
     zlist_remove (reslog->pending, f);
     flux_future_destroy (f);
@@ -253,15 +295,107 @@ int reslog_add_callback (struct reslog *reslog, reslog_cb_f cb, void *arg)
     return 0;
 }
 
+// returns true if streaming should continue
+static bool send_backlog (struct reslog *reslog, const flux_msg_t *msg)
+{
+    flux_t *h = reslog->ctx->h;
+    size_t index;
+    json_t *entry;
+    json_array_foreach (reslog->eventlog, index, entry) {
+        if (notify_one_consumer (reslog, msg, entry) < 0)
+            goto error;
+    }
+    if (flux_respond_pack (h, msg, "{s:[]}", "events") < 0) // delimiter
+        goto error;
+    return true;
+error:
+    flux_log_error (h, "error responding to journal request");
+    return false;
+}
+
+static void journal_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
+{
+    struct reslog *reslog = arg;
+    const char *errstr = NULL;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (!flux_msg_is_streaming (msg)) {
+        errno = EPROTO;
+        errstr = "journal requires streaming RPC flag";
+        goto error;
+    }
+    if (!send_backlog (reslog, msg))
+        return;
+    if (flux_msglist_append (reslog->consumers, msg) < 0)
+        goto error;
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to journal request");
+}
+
+static void journal_cancel_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
+{
+    struct reslog *reslog = arg;
+
+    if (flux_msglist_cancel (h, reslog->consumers, msg) < 0)
+        flux_log_error (h, "error handling journal-cancel");
+}
+
+void reslog_disconnect (struct reslog *reslog, const flux_msg_t *msg)
+{
+    flux_t *h = reslog->ctx->h;
+    if (flux_msglist_disconnect (reslog->consumers, msg) < 0) {
+        flux_log_error (h, "error handling resource.disconnect (journal)");
+    }
+}
+
+static const struct flux_msg_handler_spec htab[] = {
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "resource.journal",
+        journal_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "resource.journal-cancel",
+        journal_cancel_cb,
+        0
+    },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
 void reslog_destroy (struct reslog *reslog)
 {
     if (reslog) {
         int saved_errno = errno;
+        flux_msg_handler_delvec (reslog->handlers);
         if (reslog->pending) {
             flux_future_t *f;
             while ((f = zlist_pop (reslog->pending)))
                 (void)post_handler (reslog, f);
             zlist_destroy (&reslog->pending);
+        }
+        if (reslog->consumers) {
+            const flux_msg_t *msg;
+            flux_t *h = reslog->ctx->h;
+
+            msg = flux_msglist_first (reslog->consumers);
+            while (msg) {
+                if (flux_respond_error (h, msg, ENODATA, NULL) < 0)
+                    flux_log_error (h, "error responding to journal request");
+                flux_msglist_delete (reslog->consumers);
+                msg = flux_msglist_next (reslog->consumers);
+            }
+            flux_msglist_destroy (reslog->consumers);
         }
         zlist_destroy (&reslog->watchers);
         json_decref (reslog->eventlog);
@@ -294,9 +428,14 @@ struct reslog *reslog_create (struct resource_ctx *ctx, json_t *eventlog)
                 goto nomem;
         }
     }
+    if (!(reslog->consumers = flux_msglist_create ()))
+        goto error;
+    if (flux_msg_handler_addvec (ctx->h, htab, reslog, &reslog->handlers) < 0)
+        goto error;
     return reslog;
 nomem:
     errno = ENOMEM;
+error:
     reslog_destroy (reslog);
     return NULL;
 }
