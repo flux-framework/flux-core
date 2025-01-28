@@ -36,20 +36,23 @@ typedef struct {
     char *treeobj;
     char *rootref;
     int sequence;
+    int errnum;
 } thd_t;
 
-static int count = -1;
+static int fencecount = -1;
 static char *prefix = NULL;
 static char *fence_name;
 static bool syncflag = false;
 static bool symlinkflag = false;
 static const char *namespace = NULL;
+static int opcount = 1;
 
-#define OPTIONS "n:Ss"
+#define OPTIONS "n:Sso:"
 static const struct option longopts[] = {
     {"namespace", required_argument, 0, 'n'},
     {"sync",      no_argument,       0, 'S'},
     {"symlink",   no_argument,       0, 's'},
+    {"opcount",   required_argument, 0, 'o'},
     {0, 0, 0, 0},
 };
 
@@ -57,15 +60,15 @@ static void usage (void)
 {
     fprintf (stderr,
              "Usage: fence_api "
-             "[--sync] [--symlink] [--namespace=ns] "
-             "count prefix\n");
+             "[--sync] [--symlink] [--namespace=ns] [--opcount=num] "
+             "<fencecount> <prefix>\n");
     exit (1);
 }
 
 void *thread (void *arg)
 {
     thd_t *t = arg;
-    char *key;
+    char *key = NULL;
     uint32_t rank;
     flux_future_t *f;
     flux_kvs_txn_t *txn;
@@ -73,6 +76,7 @@ void *thread (void *arg)
     const char *rootref;
     int sequence;
     int flags = 0;
+    int i;
 
     if (!(t->h = flux_open (NULL, 0))) {
         log_err ("%d: flux_open", t->n);
@@ -89,24 +93,35 @@ void *thread (void *arg)
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
 
-    key = xasprintf ("%s.%"PRIu32".%d", prefix, rank, t->n);
+    for (i = 0; i < opcount; i++) {
+        key = xasprintf ("%s.%"PRIu32".%d.%d", prefix, rank, t->n, i);
 
-    if (symlinkflag) {
-        if (flux_kvs_txn_symlink (txn, 0, key, NULL, "a-target") < 0)
-            log_err_exit ("%s", key);
-    }
-    else {
-        if (flux_kvs_txn_pack (txn, 0, key, "i", 42) < 0)
-            log_err_exit ("%s", key);
+        if (symlinkflag) {
+            if (flux_kvs_txn_symlink (txn, 0, key, NULL, "a-target") < 0)
+                log_err_exit ("%s", key);
+        }
+        else {
+            if (flux_kvs_txn_pack (txn, 0, key, "i", 42 + i) < 0)
+                log_err_exit ("%s", key);
+        }
+
+        free (key);
     }
 
     if (syncflag)
         flags |= FLUX_KVS_SYNC;
 
     if (!(f = flux_kvs_fence (t->h, namespace, flags, fence_name,
-                              count, txn))
-        || flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_kvs_fence");
+                              fencecount, txn))
+        || flux_future_get (f, NULL) < 0) {
+        /* Do not call log_err_exit(), for tests that want to see the
+         * error that occurred.  Code in main() will check for errnum
+         * and exit after all threads are done.
+         */
+        log_err ("flux_kvs_fence");
+        t->errnum = errno;
+        return NULL;
+    }
 
     /* save off fence root information */
 
@@ -123,7 +138,6 @@ void *thread (void *arg)
 
     flux_future_destroy (f);
 
-    free (key);
     flux_kvs_txn_destroy (txn);
 
 done:
@@ -150,6 +164,11 @@ int main (int argc, char *argv[])
         case 'n':
             namespace = optarg;
             break;
+        case 'o':
+            opcount = atoi (optarg);
+            if (opcount <= 0)
+                usage ();
+            break;
         default:
             usage ();
         }
@@ -157,9 +176,9 @@ int main (int argc, char *argv[])
     if ((argc - optind) != 2)
         usage ();
 
-    count = strtoul (argv[optind], NULL, 10);
-    if (count <= 1)
-        log_msg_exit ("commit count must be > 1");
+    fencecount = strtoul (argv[optind], NULL, 10);
+    if (fencecount <= 1)
+        log_msg_exit ("thread count must be > 1");
     prefix = argv[optind+1];
 
     /* create a fence name for this test that is random-ish */
@@ -167,9 +186,9 @@ int main (int argc, char *argv[])
     num = rand ();
     fence_name = xasprintf ("%s-%d", prefix, num);
 
-    thd = xzmalloc (sizeof (*thd) * count);
+    thd = xzmalloc (sizeof (*thd) * fencecount);
 
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < fencecount; i++) {
         thd[i].n = i;
         if ((rc = pthread_attr_init (&thd[i].attr)))
             log_errn (rc, "pthread_attr_init");
@@ -177,15 +196,20 @@ int main (int argc, char *argv[])
             log_errn (rc, "pthread_create");
     }
 
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < fencecount; i++) {
         if ((rc = pthread_join (thd[i].t, NULL)))
             log_errn (rc, "pthread_join");
+    }
+
+    for (i = 0; i < fencecount; i++) {
+        if (thd[i].errnum)
+            exit (1);
     }
 
     /* compare results from all of the fences, the root ref info
      * should all be the same
      */
-    for (i = 1; i < count; i++) {
+    for (i = 1; i < fencecount; i++) {
         if (!streq (thd[0].treeobj, thd[i].treeobj))
             log_msg_exit ("treeobj mismatch: %s != %s\n",
                           thd[0].treeobj, thd[i].treeobj);
@@ -197,7 +221,7 @@ int main (int argc, char *argv[])
                           thd[0].sequence, thd[i].sequence);
     }
 
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < fencecount; i++) {
         free (thd[i].treeobj);
         free (thd[i].rootref);
     }

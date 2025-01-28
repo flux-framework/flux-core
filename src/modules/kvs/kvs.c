@@ -64,6 +64,11 @@ const double max_lastuse_age = 10.;
  */
 const double max_namespace_age = 3600.;
 
+/* Transaction max ops
+ */
+const uint64_t kvs_transaction_max_ops = 65536;
+const uint64_t kvs_fence_max_ops = 1048576;
+
 struct kvs_ctx {
     struct cache *cache;    /* blobref => cache_entry */
     kvsroot_mgr_t *krm;
@@ -74,6 +79,8 @@ struct kvs_ctx {
     flux_watcher_t *idle_w;
     flux_watcher_t *check_w;
     int transaction_merge;
+    uint64_t transaction_max_ops;
+    uint64_t fence_max_ops;
     bool events_init;            /* flag */
     char *hash_name;
     unsigned int seq;           /* for commit transactions */
@@ -104,6 +111,9 @@ static void start_root_remove (struct kvs_ctx *ctx, const char *ns);
 static void work_queue_check_append (struct kvs_ctx *ctx,
                                      struct kvsroot *root);
 static void kvstxn_apply (kvstxn_t *kt);
+static int max_ops_parse (struct kvs_ctx *ctx,
+                          const flux_conf_t *conf,
+                          flux_error_t *errp);
 
 /*
  * kvs_ctx functions
@@ -183,6 +193,8 @@ static struct kvs_ctx *kvs_ctx_create (flux_t *h)
             goto error;
     }
     ctx->transaction_merge = 1;
+    ctx->transaction_max_ops = kvs_transaction_max_ops;
+    ctx->fence_max_ops = kvs_fence_max_ops;
     if (!(ctx->requests = msg_hash_create (MSG_HASH_TYPE_UUID_MATCHTAG)))
         goto error;
     list_head_init (&ctx->work_queue);
@@ -1773,6 +1785,11 @@ static void commit_request_cb (flux_t *h,
         goto error;
     }
 
+    if (json_array_size (ops) > ctx->transaction_max_ops) {
+        errno = E2BIG;
+        goto error;
+    }
+
     if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
         if (stall) {
             request_tracking_add (ctx, msg);
@@ -1913,6 +1930,11 @@ static void relayfence_request_cb (flux_t *h,
          * earlier */
         assert (!treq_get_processed (tr));
 
+        if (json_array_size (treq_get_ops (tr)) > ctx->fence_max_ops) {
+            errno = E2BIG;
+            goto error;
+        }
+
         /* we use this flag to indicate if a treq has been added to
          * the ready queue */
         treq_set_processed (tr, true);
@@ -1983,6 +2005,11 @@ static void fence_request_cb (flux_t *h,
         goto error;
     }
 
+    if (json_array_size (ops) > ctx->transaction_max_ops) {
+        errno = E2BIG;
+        goto error;
+    }
+
     if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
         if (stall) {
             request_tracking_add (ctx, msg);
@@ -2034,6 +2061,11 @@ static void fence_request_cb (flux_t *h,
              * earlier */
             assert (!treq_get_processed (tr));
 
+            if (json_array_size (treq_get_ops (tr)) > ctx->fence_max_ops) {
+                errno = E2BIG;
+                goto error_all;
+            }
+
             /* we use this flag to indicate if a treq has been added to
              * the ready queue */
             treq_set_processed (tr, true);
@@ -2046,7 +2078,7 @@ static void fence_request_cb (flux_t *h,
                 flux_log_error (h,
                                 "%s: kvstxn_mgr_add_transaction",
                                 __FUNCTION__);
-                goto error;
+                goto error_all;
             }
 
             tstat_push (&ctx->txn_fence_stats,
@@ -2075,6 +2107,16 @@ static void fence_request_cb (flux_t *h,
         flux_future_destroy (f);
     }
     request_tracking_add (ctx, msg);
+    return;
+
+error_all:
+    /* An error has occurred, so we will return an error similarly to
+     * how an error would be returned via a transaction error in
+     * kvstxn_apply().
+     */
+    if (error_event_send_to_name (ctx, ns, name, errno) < 0)
+        flux_log_error (h, "%s: error_event_send_to_name", __FUNCTION__);
+    request_tracking_remove (ctx, msg);
     return;
 
 error:
@@ -2946,6 +2988,10 @@ static void config_reload_cb (flux_t *h,
 
     if (flux_conf_reload_decode (msg, &conf) < 0)
         goto error;
+    if (max_ops_parse (ctx, conf, &error) < 0) {
+        errstr = error.text;
+        goto error;
+    }
     if (kvs_checkpoint_reload (ctx->kcp, conf, &error) < 0) {
         errstr = error.text;
         goto error;
@@ -3102,11 +3148,46 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
+static int max_ops_parse (struct kvs_ctx *ctx,
+                          const flux_conf_t *conf,
+                          flux_error_t *errp)
+{
+    uint64_t t_max_ops = kvs_transaction_max_ops;
+    uint64_t f_max_ops = kvs_fence_max_ops;
+    flux_error_t error;
+    if (flux_conf_unpack (conf,
+                          &error,
+                          "{s?{s?I s?I}}",
+                          "kvs",
+                          "transaction-max-ops", &t_max_ops,
+                          "fence-max-ops", &f_max_ops) < 0) {
+        errprintf (errp, "error reading config for kvs: %s", error.text);
+        return -1;
+    }
+    if (t_max_ops <= 0) {
+        errprintf (errp, "kvs transaction-max-ops invalid");
+        return -1;
+    }
+    if (f_max_ops <= 0) {
+        errprintf (errp, "kvs fence-max-ops invalid");
+        return -1;
+    }
+    ctx->transaction_max_ops = t_max_ops;
+    ctx->fence_max_ops = f_max_ops;
+    return 0;
+}
+
 static int process_config (struct kvs_ctx *ctx)
 {
     flux_error_t error;
+    const flux_conf_t *conf = flux_get_conf (ctx->h);
+
+    if (max_ops_parse (ctx, conf, &error) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s", error.text);
+        return -1;
+    }
     if (kvs_checkpoint_config_parse (ctx->kcp,
-                                     flux_get_conf (ctx->h),
+                                     conf,
                                      &error) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s", error.text);
         return -1;
