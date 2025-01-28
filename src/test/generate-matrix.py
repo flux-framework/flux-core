@@ -27,12 +27,14 @@ def on_master_or_tag(matrix):
 
 DEFAULT_MULTIARCH_PLATFORMS = {
     "linux/arm64": {
-        "when": on_master_or_tag,
+        "when": lambda _: True,
+        # "when": on_master_or_tag,
         "suffix": " - arm64",
-        "command_args": "--install-only ",
-        "timeout_minutes": 90,
+        # "command_args": "--install-only ",
+        # "timeout_minutes": 90,
+        "runner": "ubuntu-24.04-arm",
     },
-    "linux/amd64": {"when": lambda _: True},
+    "linux/amd64": {"when": lambda _: True, "runner": "ubuntu-latest"},
 }
 
 
@@ -94,6 +96,7 @@ class BuildMatrix:
         platform=None,
         command_args="",
         timeout_minutes=60,
+        runner="ubuntu-latest",
     ):
         """Add a build to the matrix.include array"""
 
@@ -144,6 +147,7 @@ class BuildMatrix:
                 "env": env,
                 "command": command,
                 "image": image,
+                "runner": runner,
                 "tag": self.tag,
                 "branch": self.branch,
                 "coverage": coverage,
@@ -175,6 +179,7 @@ class BuildMatrix:
                     image=image if image is not None else name,
                     command_args=args.get("command_args", ""),
                     timeout_minutes=args.get("timeout_minutes", 30),
+                    runner=args["runner"],
                     **kwargs,
                 )
 
@@ -189,7 +194,11 @@ matrix = BuildMatrix()
 
 # Multi-arch builds, arm only builds on
 bookworm_platforms = deepcopy(DEFAULT_MULTIARCH_PLATFORMS)
-bookworm_platforms["linux/386"] = {"when": lambda _: True, "suffix": " - 32 bit"}
+bookworm_platforms["linux/386"] = {
+    "when": lambda _: True,
+    "suffix": " - 32 bit",
+    "runner": "ubuntu-latest",
+}
 common_args = (
     "--prefix=/usr"
     " --sysconfdir=/etc"
@@ -231,17 +240,15 @@ matrix.add_multiarch_build(
         TEST_INSTALL="t",
     ),
 )
-# single arch builds that still produce a container
-matrix.add_build(
-    name="fedora40 - test-install",
-    image="fedora40",
+matrix.add_multiarch_build(
+    name="fedora40",
+    default_suffix=" - test-install",
     args=common_args,
     env=dict(
         TEST_INSTALL="t",
     ),
-    docker_tag=True,
 )
-
+# single arch builds that still produce a container
 # Ubuntu: TEST_INSTALL
 matrix.add_build(
     name="jammy - test-install",

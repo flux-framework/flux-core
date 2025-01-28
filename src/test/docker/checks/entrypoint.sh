@@ -1,3 +1,3 @@
 #!/bin/sh
-sudo runuser -u munge /usr/sbin/munged
+sudo -u munge /usr/sbin/munged
 exec "$@"
