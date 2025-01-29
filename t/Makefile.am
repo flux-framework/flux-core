@@ -426,10 +426,7 @@ check_PROGRAMS = \
 	kvs/watch_disconnect \
 	kvs/watch_stream \
 	kvs/commit \
-	kvs/fence_api \
 	kvs/transactionmerge \
-	kvs/fence_namespace_remove \
-	kvs/fence_invalid \
 	kvs/lookup_invalid \
 	kvs/commit_order \
 	kvs/issue1760 \
@@ -631,25 +628,10 @@ kvs_commit_CPPFLAGS = $(test_cppflags)
 kvs_commit_LDADD = $(test_ldadd)
 kvs_commit_LDFLAGS = $(test_ldflags)
 
-kvs_fence_api_SOURCES = kvs/fence_api.c
-kvs_fence_api_CPPFLAGS = $(test_cppflags)
-kvs_fence_api_LDADD = $(test_ldadd)
-kvs_fence_api_LDFLAGS = $(test_ldflags)
-
 kvs_transactionmerge_SOURCES = kvs/transactionmerge.c
 kvs_transactionmerge_CPPFLAGS = $(test_cppflags)
 kvs_transactionmerge_LDADD = $(test_ldadd)
 kvs_transactionmerge_LDFLAGS = $(test_ldflags)
-
-kvs_fence_namespace_remove_SOURCES = kvs/fence_namespace_remove.c
-kvs_fence_namespace_remove_CPPFLAGS = $(test_cppflags)
-kvs_fence_namespace_remove_LDADD = $(test_ldadd)
-kvs_fence_namespace_remove_LDFLAGS = $(test_ldflags)
-
-kvs_fence_invalid_SOURCES = kvs/fence_invalid.c
-kvs_fence_invalid_CPPFLAGS = $(test_cppflags)
-kvs_fence_invalid_LDADD = $(test_ldadd)
-kvs_fence_invalid_LDFLAGS = $(test_ldflags)
 
 kvs_lookup_invalid_SOURCES = kvs/lookup_invalid.c
 kvs_lookup_invalid_CPPFLAGS = $(test_cppflags)

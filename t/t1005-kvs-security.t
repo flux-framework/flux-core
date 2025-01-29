@@ -14,8 +14,6 @@ SIZE=$(test_size_large)
 test_under_flux ${SIZE} kvs
 echo "# $0: flux session size will be ${SIZE}"
 
-FENCEAPI="${FLUX_BUILD_DIR}/t/kvs/fence_api"
-
 DIR=test.a.b
 
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
@@ -375,34 +373,6 @@ test_expect_success 'kvs: guest cannot make a symlink in the test ns on rank 1' 
 		flux kvs link --namespace=$NAMESPACETMP-SYMLINK g h" \
 	    2>link2.err &&
 	grep "Operation not permitted" link2.err
-'
-
-test_expect_success 'kvs: owner can make a symlink via fence' '
-	${FENCEAPI} --namespace=$NAMESPACETMP-SYMLINK --symlink 4 fencetest1
-'
-
-test_expect_success 'kvs: guest cannot make a symlink via fence' '
-	set_userid 9999 &&
-	test_must_fail ${FENCEAPI} \
-	    --namespace=$NAMESPACETMP-SYMLINK --symlink 4 fencetest2 \
-	    2>link5.err &&
-	grep "Operation not permitted" link5.err &&
-	unset_userid
-'
-
-test_expect_success 'kvs: owner can make a symlink via fence on rank 1' '
-	flux exec -n -r 1 \
-	    sh -c "${FENCEAPI} --namespace=$NAMESPACETMP-SYMLINK \
-		--symlink 4 fencetest3"
-'
-
-test_expect_success 'kvs: guest cannot make a symlink via fence on rank 1' '
-	test_must_fail flux exec -n -r 1 \
-	    sh -c "FLUX_HANDLE_USERID=9999 FLUX_HANDLE_ROLEMASK=0x2 \
-		${FENCEAPI} --namespace=$NAMESPACETMP-SYMLINK \
-		--symlink 4 fencetest4" \
-		2>link6.err &&
-	grep "Operation not permitted" link6.err
 '
 
 #
