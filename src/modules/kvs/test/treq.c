@@ -111,7 +111,7 @@ void treq_basic_tests (void)
     ok (treq_get_processed (tr) == false,
         "treq_get_processed returns false initially");
 
-    treq_set_processed (tr, true);
+    treq_mark_processed (tr);
 
     ok (treq_get_processed (tr) == true,
         "treq_get_processed returns true");
