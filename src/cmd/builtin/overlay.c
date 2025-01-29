@@ -975,6 +975,8 @@ static int subcmd_errors (optparse_t *p, int ac, char *av[])
     print_errors (h, errhash);
 
     zhashx_destroy (&errhash);
+    flux_close (h);
+    json_decref (overlay_topology);
     return 0;
 }
 
