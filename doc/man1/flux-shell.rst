@@ -407,11 +407,6 @@ plugins include:
   Skip pre-populating the ``flux.taskmap`` and ``PMI_process_mapping`` keys
   in the ``simple`` implementation.
 
-.. option:: pmi-simple.kvs=native
-
-  Use the native Flux KVS instead of the PMI plugin's built-in key exchange
-  algorithm in the ``simple`` implementation.
-
 .. option:: pmi-simple.exchange.k=N
 
   Configure the PMI plugin's built-in key exchange algorithm to use a
