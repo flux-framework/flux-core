@@ -1090,7 +1090,16 @@ static int subcmd_errors (optparse_t *p, int ac, char *av[])
 {
     flux_t *h = builtin_get_flux_handle (p);
     struct overlay_errors *ctx = NULL;
+    uint32_t size;
     double timeout;
+
+    /* On large systems with a flat tbon, the default 0.5s timeout may be
+     * too short because processing the initial JSON response for rank 0
+     * can take longer than that. To address this, increase the timeout
+     * based on the instance size:
+     */
+    if (flux_get_size (h, &size) == 0 && size > 2048)
+        default_timeout *= (size / 2000.); /* ~2.5s timeout on 10K nodes */
 
     timeout = optparse_get_duration (p, "timeout", default_timeout);
     if (timeout == 0)
