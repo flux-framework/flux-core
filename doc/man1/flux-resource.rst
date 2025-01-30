@@ -22,6 +22,7 @@ SYNOPSIS
 | **flux** **resource** **reload** [-f] [--xml] *path*
 
 | **flux** **resource** **acquire-mute**
+| **flux** **resource** **eventlog** [*-w* *EVENT*] [*-F*]
 
 DESCRIPTION
 ===========
@@ -356,6 +357,24 @@ Tell the resource module to stop sending RFC 28 ``resource.acquire`` responses
 to the scheduler.  This is used during Flux instance shutdown to avoid asking
 the scheduler to needlessly process OFFLINE updates.
 
+eventlog
+--------
+
+.. program:: flux resource eventlog
+
+Watch the resource journal, which is described in RFC 44.
+
+.. option:: -F, --follow
+
+  After printing the current eventlog, wait for new events and print
+  them as they arrive.
+
+.. option:: -w, --wait=EVENT
+
+  Wait for the specified event to be posted, print it, then quit.
+  The current set of valid events events is *restart*, *resource-define*,
+  *online*, *offline*, *drain*, *undrain*, *torpid*, and *lively*.
+
 OUTPUT FORMAT
 =============
 
@@ -520,3 +539,4 @@ FLUX RFC
 | :doc:`rfc:spec_22`
 | :doc:`rfc:spec_27`
 | :doc:`rfc:spec_29`
+| :doc:`rfc:spec_44`
