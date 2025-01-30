@@ -129,6 +129,7 @@ man_pages = [
     ('man3/flux_idle_watcher_create', 'flux_idle_watcher_create', 'create prepare/check/idle watchers', [author], 3),
     ('man3/flux_kvs_commit', 'flux_kvs_fence', 'commit a KVS transaction', [author], 3),
     ('man3/flux_kvs_commit', 'flux_kvs_commit_get_treeobj', 'commit a KVS transaction', [author], 3),
+    ('man3/flux_kvs_commit', 'flux_kvs_commit_get_rootref', 'commit a KVS transaction', [author], 3),
     ('man3/flux_kvs_commit', 'flux_kvs_commit_get_sequence', 'commit a KVS transaction', [author], 3),
     ('man3/flux_kvs_commit', 'flux_kvs_commit', 'commit a KVS transaction', [author], 3),
     ('man3/flux_kvs_copy', 'flux_kvs_move', 'copy/move a KVS key', [author], 3),
