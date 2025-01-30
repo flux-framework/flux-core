@@ -162,8 +162,7 @@ void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm);
 /* kvstxn_mgr_add_transaction() will internally create a kvstxn_t and
  * store it in the queue of ready to process transactions.
  *
- * This should be called once per transaction (commit or fence)
- * request.
+ * This should be called once per transaction request.
  */
 int kvstxn_mgr_add_transaction (kvstxn_mgr_t *ktm,
                                 const char *name,
