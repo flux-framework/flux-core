@@ -1780,8 +1780,8 @@ static void commit_request_cb (flux_t *h,
         goto error;
     }
 
-    if (!(tr = treq_create_rank (ctx->rank, ctx->seq++, flags))) {
-        flux_log_error (h, "%s: treq_create_rank", __FUNCTION__);
+    if (!(tr = treq_create (ctx->rank, ctx->seq++, flags))) {
+        flux_log_error (h, "%s: treq_create", __FUNCTION__);
         goto error;
     }
     if (treq_mgr_add_transaction (root->trm, tr) < 0) {

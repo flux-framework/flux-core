@@ -179,7 +179,9 @@ void treq_destroy (treq_t *tr)
     }
 }
 
-static treq_t *treq_create_common (int flags)
+treq_t *treq_create (uint32_t rank,
+                     unsigned int seq,
+                     int flags)
 {
     treq_t *tr = NULL;
     int saved_errno;
@@ -193,59 +195,12 @@ static treq_t *treq_create_common (int flags)
         saved_errno = ENOMEM;
         goto error;
     }
-    tr->flags = flags;
-    tr->processed = false;
-
-    return tr;
-error:
-    treq_destroy (tr);
-    errno = saved_errno;
-    return NULL;
-}
-
-treq_t *treq_create (const char *name, int flags)
-{
-    treq_t *tr = NULL;
-    int saved_errno;
-
-    if (!name) {
-        saved_errno = EINVAL;
-        goto error;
-    }
-
-    if (!(tr = treq_create_common (flags))) {
-        saved_errno = EINVAL;
-        goto error;
-    }
-
-    if (!(tr->name = strdup (name))) {
-        saved_errno = errno;
-        goto error;
-    }
-
-    return tr;
-error:
-    treq_destroy (tr);
-    errno = saved_errno;
-    return NULL;
-}
-
-treq_t *treq_create_rank (uint32_t rank,
-                          unsigned int seq,
-                          int flags)
-{
-    treq_t *tr = NULL;
-    int saved_errno;
-
-    if (!(tr = treq_create_common (flags))) {
-        saved_errno = EINVAL;
-        goto error;
-    }
-
     if (asprintf (&(tr->name), "treq.%u.%u", rank, seq) < 0) {
         saved_errno = errno;
         goto error;
     }
+    tr->flags = flags;
+    tr->processed = false;
 
     return tr;
 error:
