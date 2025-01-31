@@ -12,6 +12,7 @@
 #include <flux/optparse.h>
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/environment.h"
 
 #ifndef HAVE_CMD_BUILTIN_H
 #define HAVE_CMD_BUILTIN_H 1
@@ -24,6 +25,7 @@ struct builtin_cmd {
 };
 
 void usage (optparse_t *p);
+void builtin_env_add_pythonpath (struct environment *env);
 flux_t *builtin_get_flux_handle (optparse_t *p);
 
 #endif /* !HAVE_CMD_BUILTIN_H */
