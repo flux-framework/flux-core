@@ -61,18 +61,6 @@ get_kvs_namespace_fails_all_ranks_loop() {
         return $(loophandlereturn $i)
 }
 
-wait_fencecount_nonzero() {
-        i=0
-        while (! flux exec -n -r $1 sh -c "flux module stats --parse namespace.$2.#transactions kvs" > /dev/null 2>& 1 \
-               || [ "$(flux exec -n -r $1 sh -c "flux module stats --parse namespace.$2.#transactions kvs" 2> /dev/null)" = "0" ]) \
-              && [ $i -lt ${KVS_WAIT_ITERS} ]
-        do
-                sleep 0.1
-                i=$((i + 1))
-        done
-        return $(loophandlereturn $i)
-}
-
 wait_versionwaiters_nonzero() {
         i=0
         while (! flux module stats --parse namespace.$1.#versionwaiters kvs > /dev/null 2>&1 \
@@ -417,37 +405,6 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait fails on invalid namespace' '
 
 test_expect_success 'kvs: wait fails on invalid namespace on rank 1' '
         ! flux exec -n -r 1 sh -c "flux kvs wait --namespace=$NAMESPACEBAD 1"
-'
-
-# When we call fence_namespace_remove, we know fence sent to server,
-# but no way of knowing if server has accepted/processed fence.  To
-# avoid racing in this test, we iterate on the fence stat until it is
-# non-zero to know it's ready for this test.
-test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence gets ENOTSUP when namespace is removed' '
-        flux kvs namespace create $NAMESPACETMP-REMOVE-FENCE0 &&
-        rm -f fence_out
-        ${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove $NAMESPACETMP-REMOVE-FENCE0 fence0 > fence_out &
-        watchpid=$! &&
-        wait_fencecount_nonzero 0 $NAMESPACETMP-REMOVE-FENCE0 &&
-        flux kvs namespace remove $NAMESPACETMP-REMOVE-FENCE0 &&
-        wait $watchpid &&
-        grep "flux_future_get: $(strerror_symbol ENOTSUP)" fence_out
-'
-
-
-# When we call fence_namespace_remove, we know fence sent to server,
-# but no way of knowing if server has accepted/processed fence.  To
-# avoid racing in this test, we iterate on the fence stat until it is
-# non-zero to know it's ready for this test.
-test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence on rank 1 gets ENOTSUP when namespace is removed' '
-        flux kvs namespace create $NAMESPACETMP-REMOVE-FENCE1 &&
-        rm -f fence_out
-        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove $NAMESPACETMP-REMOVE-FENCE1 fence1" > fence_out &
-        watchpid=$! &&
-        wait_fencecount_nonzero 1 $NAMESPACETMP-REMOVE-FENCE1 &&
-        flux kvs namespace remove $NAMESPACETMP-REMOVE-FENCE1 &&
-        wait $watchpid &&
-        grep "flux_future_get: $(strerror_symbol ENOTSUP)" fence_out
 '
 
 test_expect_success NO_CHAIN_LINT 'kvs: wait recognizes removed namespace' '

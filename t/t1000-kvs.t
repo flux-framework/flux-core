@@ -1257,9 +1257,6 @@ test_expect_success 'lookup-plus request with empty payload fails with EPROTO(71
 test_expect_success 'commit request with empty payload fails with EPROTO(71)' '
 	${RPC} kvs.commit 71 </dev/null
 '
-test_expect_success 'fence request with empty payload fails with EPROTO(71)' '
-	${RPC} kvs.fence 71 </dev/null
-'
 test_expect_success 'namespace-create request with empty payload fails with EPROTO(71)' '
 	${RPC} kvs.namespace-create 71 </dev/null
 '

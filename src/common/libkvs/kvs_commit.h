@@ -48,14 +48,7 @@ flux_future_t *flux_kvs_commit (flux_t *h,
                                 int flags,
                                 flux_kvs_txn_t *txn);
 
-flux_future_t *flux_kvs_fence (flux_t *h,
-                               const char *ns,
-                               int flags,
-                               const char *name,
-                               int nprocs,
-                               flux_kvs_txn_t *txn);
-
-/* accessors can be used for commit or fence futures */
+/* accessors can be used for commit futures */
 int flux_kvs_commit_get_treeobj (flux_future_t *f, const char **treeobj);
 int flux_kvs_commit_get_rootref (flux_future_t *f, const char **rootref);
 int flux_kvs_commit_get_sequence (flux_future_t *f, int *rootseq);

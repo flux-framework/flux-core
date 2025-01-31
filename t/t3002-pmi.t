@@ -113,16 +113,8 @@ test_expect_success 'kvstest fails with -o pmi-simple.kvs=unknown' '
 	test_must_fail flux run -o pmi-simple.kvs=unknown ${kvstest}
 '
 
-test_expect_success 'kvstest works with -o pmi-simple.kvs=native' '
-	flux run -n${SIZE} -N${SIZE} -o pmi-simple.kvs=native ${kvstest}
-'
-
 test_expect_success 'kvstest -N8 works' '
 	flux run -n${SIZE} -N${SIZE} ${kvstest} -N8
-'
-
-test_expect_success 'kvstest -N8 works with -o pmi-simple.kvs=native' '
-	flux run -n${SIZE} -N${SIZE} -o pmi-simple.kvs=native ${kvstest} -N8
 '
 
 test_expect_success 'verbose=2 shell option enables PMI server side tracing' '

@@ -462,28 +462,6 @@ test_expect_success 'kvs: read-your-writes consistency on alt namespace' '
 '
 
 #
-# test fence api
-#
-
-test_expect_success 'kvs: test fence returns identical root info on all responses' '
-	${FLUX_BUILD_DIR}/t/kvs/fence_api 8 apitest
-'
-
-#
-# test invalid fence arguments
-#
-
-test_expect_success 'kvs: test invalid fence arguments on rank 0' '
-	${FLUX_BUILD_DIR}/t/kvs/fence_invalid invalidtest1 > invalid_output &&
-	grep "flux_future_get: Invalid argument" invalid_output
-'
-
-test_expect_success 'kvs: test invalid fence arguments on rank 1' '
-	flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_invalid invalidtest2" > invalid_output &&
-	grep "flux_future_get: Invalid argument" invalid_output
-'
-
-#
 # test invalid lookup rpc
 #
 
@@ -496,12 +474,11 @@ test_expect_success 'kvs: test invalid lookup rpc' '
 # ensure pending requests are the expected number
 #
 
-# fence invalid tests above linger a pending request on both rank 0 and rank 1
-test_expect_success 'kvs: 1 pending requests at end of tests before module removal' '
+test_expect_success 'kvs: 0 pending requests at end of tests before module removal' '
 	pendingcount=$(flux module stats -p pending_requests kvs) &&
-	test $pendingcount -eq 1 &&
+	test $pendingcount -eq 0 &&
 	pendingcount1=$(flux exec -n -r 1 sh -c "flux module stats -p pending_requests kvs") &&
-	test $pendingcount1 -eq 1
+	test $pendingcount1 -eq 0
 '
 
 #
@@ -514,13 +491,7 @@ test_expect_success 'kvs: module stats returns reasonable transaction stats' '
         echo $commitdata | jq -e ".min > 0" &&
         echo $commitdata | jq -e ".max > 0" &&
         echo $commitdata | jq -e ".mean > 0.0" &&
-        echo $commitdata | jq -e ".stddev >= 0.0" &&
-        fencedata=$(flux module stats -p transaction-opcount.fence kvs) &&
-        echo $fencedata | jq -e ".count > 0" &&
-        echo $fencedata | jq -e ".min > 0" &&
-        echo $fencedata | jq -e ".max > 0" &&
-        echo $fencedata | jq -e ".mean > 0.0" &&
-        echo $fencedata | jq -e ".stddev >= 0.0"
+        echo $commitdata | jq -e ".stddev >= 0.0"
 '
 
 #
@@ -547,13 +518,7 @@ test_expect_success 'kvs: clear of transaction stats works' '
         echo $commitdata | jq -e ".min == 0" &&
         echo $commitdata | jq -e ".max == 0" &&
         echo $commitdata | jq -e ".mean == 0.0" &&
-        echo $commitdata | jq -e ".stddev == 0.0" &&
-        fencedata=$(flux module stats -p transaction-opcount.fence kvs) &&
-        echo $fencedata | jq -e ".count == 0" &&
-        echo $fencedata | jq -e ".min == 0" &&
-        echo $fencedata | jq -e ".max == 0" &&
-        echo $fencedata | jq -e ".mean == 0.0" &&
-        echo $fencedata | jq -e ".stddev == 0.0"
+        echo $commitdata | jq -e ".stddev == 0.0"
 '
 
 test_expect_success NO_ASAN 'kvs: clear stats globally' '

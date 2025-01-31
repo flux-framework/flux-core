@@ -72,29 +72,6 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop, m
 		$(basename ${SHARNESS_TEST_FILE})
 '
 
-# fence test
-
-test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop' '
-	THREADS=8 &&
-	flux exec -n ${FLUX_BUILD_DIR}/t/kvs/commit \
-		--fence $((${SIZE}*${THREADS})) ${THREADS} 100 \
-		$(basename ${SHARNESS_TEST_FILE})
-'
-
-test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop, no merging' '
-	THREADS=8 &&
-	flux exec -n ${FLUX_BUILD_DIR}/t/kvs/commit \
-		--fence $((${SIZE}*${THREADS})) --nomerge 1 ${THREADS} 100 \
-		$(basename ${SHARNESS_TEST_FILE})
-'
-
-test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop, mixed no merging' '
-	THREADS=8 &&
-	flux exec -n ${FLUX_BUILD_DIR}/t/kvs/commit \
-		--fence $((${SIZE}*${THREADS})) --nomerge 2 ${THREADS} 100 \
-		$(basename ${SHARNESS_TEST_FILE})
-'
-
 # large dirs
 
 test_expect_success 'kvs: store 10,000 keys in one dir' '

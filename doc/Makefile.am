@@ -283,7 +283,6 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_kvs_getroot_get_sequence.3 \
 	man3/flux_kvs_getroot_get_owner.3 \
 	man3/flux_kvs_getroot_cancel.3 \
-	man3/flux_kvs_fence.3 \
 	man3/flux_kvs_commit_get_treeobj.3 \
 	man3/flux_kvs_commit_get_rootref.3 \
 	man3/flux_kvs_commit_get_sequence.3 \

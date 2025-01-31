@@ -39,15 +39,12 @@ typedef struct {
 static int count = -1;
 static int nthreads = -1;
 static char *prefix = NULL;
-static bool fopt = false;
 static bool sopt = false;
 static bool nopt = false;
 static int nopt_divisor = 1;
-static int fence_nprocs;
 
-#define OPTIONS "f:sn:"
+#define OPTIONS "sn:"
 static const struct option longopts[] = {
-   {"fence",   required_argument,   0, 'f'},
    {"stats",   no_argument,         0, 's'},
    {"nomerge", required_argument,   0, 'n'},
    {0, 0, 0, 0},
@@ -55,7 +52,7 @@ static const struct option longopts[] = {
 
 static void usage (void)
 {
-    fprintf (stderr, "Usage: commit [--fence N] [--stats] [--nomerge N] nthreads count prefix\n");
+    fprintf (stderr, "Usage: commit [--stats] [--nomerge N] nthreads count prefix\n");
     exit (1);
 }
 
@@ -69,7 +66,7 @@ double *ddup (double d)
 void *thread (void *arg)
 {
     thd_t *t = arg;
-    char *key, *fence_name = NULL;
+    char *key;
     int i, flags = 0;
     struct timespec t0;
     uint32_t rank;
@@ -88,8 +85,6 @@ void *thread (void *arg)
         if (!(txn = flux_kvs_txn_create ()))
             log_err_exit ("flux_kvs_txn_create");
         key = xasprintf ("%s.%"PRIu32".%d.%d", prefix, rank, t->n, i);
-        if (fopt)
-            fence_name = xasprintf ("%s-%d", prefix, i);
         if (sopt)
             monotime (&t0);
         if (flux_kvs_txn_pack (txn, 0, key, "i", 42) < 0)
@@ -98,22 +93,13 @@ void *thread (void *arg)
             flags |= FLUX_KVS_NO_MERGE;
         else
             flags = 0;
-        if (fopt) {
-            if (!(f = flux_kvs_fence (t->h, NULL, flags, fence_name,
-                                                   fence_nprocs, txn))
-                    || flux_future_get (f, NULL) < 0)
-                log_err_exit ("flux_kvs_fence");
-            flux_future_destroy (f);
-        } else {
-            if (!(f = flux_kvs_commit (t->h, NULL, flags, txn))
-                    || flux_future_get (f, NULL) < 0)
-                log_err_exit ("flux_kvs_commit");
-            flux_future_destroy (f);
-        }
+        if (!(f = flux_kvs_commit (t->h, NULL, flags, txn))
+            || flux_future_get (f, NULL) < 0)
+            log_err_exit ("flux_kvs_commit");
+        flux_future_destroy (f);
         if (sopt && zlist_append (t->perf, ddup (monotime_since (t0))) < 0)
             oom ();
         free (key);
-        free (fence_name);
         flux_kvs_txn_destroy (txn);
     }
 done:
@@ -134,12 +120,6 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'f':
-                fopt = true;
-                fence_nprocs = strtoul (optarg, NULL, 10);
-                if (!fence_nprocs)
-                    log_msg_exit ("fence value must be > 0");
-                break;
             case 's':
                 sopt = true;
                 break;

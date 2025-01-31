@@ -46,27 +46,10 @@ test_expect_success 'kvs: checkpoint of kvs-primary should match rootref' '
         test_cmp syncblob.out checkpoint.out
 '
 
-test_expect_success 'kvs: fence some data to kvs and sync it' '
-        ${FLUX_BUILD_DIR}/t/kvs/fence_api --sync 4 apisynctest
-'
-
-test_expect_success 'kvs: rootref of kvs-primary should match rootref' '
-        flux kvs getroot -b > fenceroot.exp &&
-        checkpoint_get kvs-primary | jq -r .value.rootref > fenceroot.out &&
-        test_cmp fenceroot.exp fenceroot.out
-'
-
 test_expect_success 'kvs: sync fails against non-primary namespace' '
         flux kvs namespace create ${TESTNAMESPACE} &&
         flux kvs put --namespace=${TESTNAMESPACE} a=10 &&
         test_must_fail flux kvs put --namespace=${TESTNAMESPACE} --sync b=11
-'
-
-test_expect_success 'kvs: sync fence fails against non-primary namespace' '
-        ${FLUX_BUILD_DIR}/t/kvs/fence_api \
-                         --namespace=${TESTNAMESPACE} 4 apisynctestns &&
-        test_must_fail ${FLUX_BUILD_DIR}/t/kvs/fence_api \
-                         --namespace=${TESTNAMESPACE} --sync 4 apisynctestns
 '
 
 test_expect_success 'kvs: unload content-sqlite' '

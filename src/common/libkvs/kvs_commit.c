@@ -35,73 +35,6 @@ static void free_ctx (struct commit_ctx *ctx)
     }
 }
 
-static struct commit_ctx *alloc_ctx (void)
-{
-    struct commit_ctx *ctx;
-    if (!(ctx = calloc (1, sizeof (*ctx))))
-        return NULL;
-    return ctx;
-}
-
-flux_future_t *flux_kvs_fence (flux_t *h,
-                               const char *ns,
-                               int flags,
-                               const char *name,
-                               int nprocs,
-                               flux_kvs_txn_t *txn)
-{
-    flux_future_t *f;
-    struct commit_ctx *ctx = NULL;
-    json_t *ops;
-
-    if (!name || nprocs <= 0 || !txn) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if (!ns) {
-        if (!(ns = kvs_get_namespace ()))
-            return NULL;
-    }
-
-    if (flags & FLUX_KVS_TXN_COMPACT) {
-        if (txn_compact (txn) < 0)
-            return NULL;
-        flags &= ~FLUX_KVS_TXN_COMPACT;
-    }
-
-    if (!(ops = txn_get_ops (txn))) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if (!(ctx = alloc_ctx ()))
-        return NULL;
-
-    if (!(f = flux_rpc_pack (h,
-                             "kvs.fence",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:s s:i s:s s:i s:O}",
-                             "name", name,
-                             "nprocs", nprocs,
-                             "namespace", ns,
-                             "flags", flags,
-                             "ops", ops)))
-        goto error;
-
-    if (flux_future_aux_set (f, auxkey, ctx, (flux_free_f)free_ctx) < 0)
-        goto error_future;
-
-    return f;
-
-error_future:
-    flux_future_destroy (f);
-error:
-    free_ctx (ctx);
-    return NULL;
-}
-
 flux_future_t *flux_kvs_commit (flux_t *h,
                                 const char *ns,
                                 int flags,
@@ -132,7 +65,7 @@ flux_future_t *flux_kvs_commit (flux_t *h,
         return NULL;
     }
 
-    if (!(ctx = alloc_ctx ()))
+    if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
 
     if (!(f = flux_rpc_pack (h,
