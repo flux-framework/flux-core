@@ -16,6 +16,17 @@
 #include "builtin.h"
 #include "src/common/libutil/environment.h"
 
+static void prepare_environment (void)
+{
+    struct environment *env;
+
+    if (!(env = environment_create ()))
+        log_err_exit ("error creating environment");
+    builtin_env_add_pythonpath (env);
+    environment_apply (env);
+    environment_destroy (env);
+}
+
 static int cmd_python (optparse_t *p, int ac, char *av[])
 {
     /*
@@ -25,6 +36,9 @@ static int cmd_python (optparse_t *p, int ac, char *av[])
      *  that symlink'd binaries in virtualenvs are respected.
      */
     av[0] = PYTHON_INTERPRETER;
+
+    prepare_environment ();
+
     execv (PYTHON_INTERPRETER, av); /* no return if successful */
     log_err_exit ("execvp (%s)", PYTHON_INTERPRETER);
     return (0);

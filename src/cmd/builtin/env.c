@@ -16,9 +16,20 @@
 #include "builtin.h"
 #include "src/common/libutil/environment.h"
 
+static void set_pythonpath (void)
+{
+    struct environment *env;
+    if (!(env = environment_create ()))
+        log_err_exit ("error creating environment");
+    builtin_env_add_pythonpath (env);
+    environment_apply (env);
+    environment_destroy (env);
+}
+
 static void print_environment (struct environment *env)
 {
     const char *val;
+
     for (val = environment_first (env); val; val = environment_next (env))
         printf("export %s=\"%s\"\n", environment_cursor (env), val);
     fflush(stdout);
@@ -28,12 +39,15 @@ static int cmd_env (optparse_t *p, int ac, char *av[])
 {
     int n = optparse_option_index (p);
     if (av && av[n]) {
+        set_pythonpath ();
         execvp (av[n], av+n); /* no return if successful */
         log_err_exit ("execvp (%s)", av[n]);
     } else {
         struct environment *env = optparse_get_data (p, "env");
+
         if (env == NULL)
             log_msg_exit ("flux-env: failed to get flux environment!");
+        builtin_env_add_pythonpath (env);
         print_environment (env);
     }
     return (0);

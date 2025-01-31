@@ -184,12 +184,10 @@ int main (int argc, char *argv[])
                       flux_conf_builtin_get ("lua_path_add", flags));
     environment_push (env, "LUA_PATH", getenv ("FLUX_LUA_PATH_PREPEND"));
 
-    environment_from_env (env, "PYTHONPATH", "", ':');
-    environment_push (env,
-                      "PYTHONPATH",
-                      flux_conf_builtin_get ("python_path", flags));
-    environment_push (env, "PYTHONPATH", getenv ("FLUX_PYTHONPATH_PREPEND"));
-
+    if ((s = getenv ("FLUX_PYTHONPATH_PREPEND"))) {
+        environment_from_env (env, "PYTHONPATH", "", ':');
+        environment_push (env, "PYTHONPATH", s);
+    }
     if ((s = getenv ("MANPATH")) && strlen (s) > 0) {
         environment_from_env (env, "MANPATH", ":", ':');
         environment_push (env,
