@@ -14,7 +14,6 @@
 #include <unistd.h>
 
 #include "builtin.h"
-#include "config.h"
 #include "src/common/libutil/environment.h"
 
 static int cmd_python (optparse_t *p, int ac, char *av[])
