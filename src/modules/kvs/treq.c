@@ -219,11 +219,9 @@ int treq_get_flags (treq_t *tr)
     return tr->flags;
 }
 
-int treq_iter_request_copies (treq_t *tr, treq_msg_cb cb, void *data)
+const flux_msg_t *treq_get_request (treq_t *tr)
 {
-    if (cb (tr, tr->request, data) < 0)
-        return -1;
-    return 0;
+    return tr->request;
 }
 
 bool treq_get_processed (treq_t *tr)

@@ -19,8 +19,6 @@ typedef struct treq treq_t;
 
 typedef int (*treq_itr_f)(treq_t *tr, void *data);
 
-typedef int (*treq_msg_cb)(treq_t *tr, const flux_msg_t *req, void *data);
-
 /*
  * treq_mgr_t API
  */
@@ -62,14 +60,7 @@ void treq_destroy (treq_t *tr);
 
 const char *treq_get_name (treq_t *tr);
 int treq_get_flags (treq_t *tr);
-
-/* Call callback for each request message copy stored internally via
- * treq_add_request_copy().
- *
- * If cb returns < 0 on a message, this function was quit and return
- * -1.
- */
-int treq_iter_request_copies (treq_t *tr, treq_msg_cb cb, void *data);
+const flux_msg_t *treq_get_request (treq_t *tr);
 
 /* convenience processing flag
  */

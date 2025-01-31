@@ -1598,10 +1598,8 @@ error:
 
 static int finalize_transaction_req (treq_t *tr,
                                      const flux_msg_t *req,
-                                     void *data)
+                                     struct kvs_cb_data *cbd)
 {
-    struct kvs_cb_data *cbd = data;
-
     if (cbd->errnum) {
         if (flux_respond_error (cbd->ctx->h, req, cbd->errnum, NULL) < 0) {
             flux_log_error (cbd->ctx->h,
@@ -1643,7 +1641,15 @@ static void finalize_transaction_bynames (struct kvs_ctx *ctx,
         }
         nameval = json_string_value (name);
         if ((tr = treq_mgr_lookup_transaction (root->trm, nameval))) {
-            treq_iter_request_copies (tr, finalize_transaction_req, &cbd);
+            const flux_msg_t *msg = treq_get_request (tr);
+            if (!msg) {
+                flux_log (ctx->h,
+                          LOG_ERR,
+                          "%s: transaction without a request",
+                          __FUNCTION__);
+                return;
+            }
+            finalize_transaction_req (tr, msg, &cbd);
             if (treq_mgr_remove_transaction (root->trm, nameval) < 0) {
                 flux_log_error (ctx->h,
                                 "%s: treq_mgr_remove_transaction",

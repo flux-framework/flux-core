@@ -21,29 +21,13 @@
 #include "src/modules/kvs/treq.h"
 #include "ccan/str/str.h"
 
-int msg_cb (treq_t *tr, const flux_msg_t *req, void *data)
-{
-    int *count = data;
-    const char *topic;
-
-    if (!flux_msg_get_topic (req, &topic)
-        && streq (topic, "mytopic"))
-        (*count)++;
-
-    return 0;
-}
-
-int msg_cb_error (treq_t *tr, const flux_msg_t *req, void *data)
-{
-    return -1;
-}
-
 void treq_basic_tests (void)
 {
     treq_t *tr;
     flux_msg_t *request;
+    const flux_msg_t *tmp;
     const char *name;
-    int count = 0;
+    const char *topic;
 
     ok ((request = flux_request_encode ("mytopic", "{ bar : 1 }")) != NULL,
         "flux_request_encode works");
@@ -63,11 +47,14 @@ void treq_basic_tests (void)
     ok (treq_get_flags (tr) == 3,
         "treq_get_flags works");
 
-    ok (treq_iter_request_copies (tr, msg_cb, &count) == 0,
-        "second treq_iter_request_copies works");
+    ok ((tmp = treq_get_request (tr)) != NULL,
+        "treq_get_request works");
 
-    ok (count == 1,
-        "second treq_iter_request_copies count is 1");
+    if (flux_msg_get_topic (tmp, &topic) < 0)
+        BAIL_OUT ("flux_msg_get_topic");
+
+    ok (streq (topic, "mytopic"),
+        "treq_get_request returned correct request");
 
     ok (treq_get_processed (tr) == false,
         "treq_get_processed returns false initially");
@@ -78,32 +65,6 @@ void treq_basic_tests (void)
         "treq_get_processed returns true");
 
     flux_msg_destroy (request);
-
-    treq_destroy (tr);
-}
-
-void treq_request_tests (void)
-{
-    treq_t *tr;
-    flux_msg_t *request;
-    int count = 0;
-
-    ok ((request = flux_request_encode ("mytopic", "{ A : 1 }")) != NULL,
-        "flux_request_encode works");
-
-    ok ((tr = treq_create (request, 214, 3577, 3)) != NULL,
-        "treq_create works");
-
-    flux_msg_destroy (request);
-
-    ok (treq_iter_request_copies (tr, msg_cb_error, &count) == -1,
-        "treq_iter_request_copies errors when cb errors");
-
-    ok (treq_iter_request_copies (tr, msg_cb, &count) == 0,
-        "second treq_iter_request_copies works");
-
-    ok (count == 1,
-        "treq_iter_request_copies count is 1");
 
     treq_destroy (tr);
 }
@@ -246,7 +207,6 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     treq_basic_tests ();
-    treq_request_tests ();
     treq_mgr_basic_tests ();
     treq_mgr_iter_tests ();
 
