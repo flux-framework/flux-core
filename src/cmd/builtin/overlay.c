@@ -821,6 +821,19 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
     return 0;
 }
 
+struct overlay_errors {
+    flux_t *h;
+    double timeout;
+    int max_rpcs;
+    int active_rpcs;
+    struct idset *pending_ranks;
+    zhashx_t *errhash;
+
+    flux_watcher_t *idle;
+    flux_watcher_t *check;
+    flux_watcher_t *prep;
+};
+
 // zhashx_destructor_fn footprint
 static void idset_destructor (void **item)
 {
@@ -882,26 +895,74 @@ int errhash_add_children (zhashx_t *errhash, int rank, flux_t *h)
     return rc;
 }
 
-void gather_errors (flux_t *h,
-                    int rank,
-                    zhashx_t *errhash,
-                    double timeout)
+static void errhash_future_strerror (zhashx_t *errhash,
+                                     flux_t *h,
+                                     flux_future_t *f,
+                                     int rank)
 {
-    flux_future_t *f;
+    const char *error = future_strerror (f, errno);
+    if (errhash_add_one (errhash, rank, error) < 0
+        || errhash_add_children (errhash, rank, h) < 0)
+        log_msg_exit ("error adding to error hash");
+}
+
+void gather_errors (struct overlay_errors *ctx, int rank);
+
+static void errors_prep_cb (flux_reactor_t *r,
+                             flux_watcher_t *w,
+                             int revents,
+                             void *arg)
+{
+    struct overlay_errors *ctx = arg;
+
+    /* If no more ranks pending, then disable prep and check watchers.
+     * Otherwise, if more RPCs can be sent, start idle watcher so reactor
+     * does not block.
+     */
+    if (idset_count (ctx->pending_ranks) == 0) {
+        flux_watcher_stop (ctx->prep);
+        flux_watcher_stop (ctx->check);
+    }
+    else if (ctx->active_rpcs < ctx->max_rpcs)
+        flux_watcher_start (ctx->idle);
+}
+
+static void errors_check_cb (flux_reactor_t *r,
+                             flux_watcher_t *w,
+                             int revents,
+                             void *arg)
+{
+    struct overlay_errors *ctx = arg;
+    unsigned int rank;
+
+    flux_watcher_stop (ctx->idle);
+
+    /* Allow up to ctx->max_rpcs in flight:
+     */
+    rank = idset_first (ctx->pending_ranks);
+    while (rank != IDSET_INVALID_ID && ctx->active_rpcs < ctx->max_rpcs) {
+        gather_errors (ctx, rank);
+        rank = idset_next (ctx->pending_ranks, rank);
+    }
+}
+
+static void gather_errors_cb (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+    struct overlay_errors *ctx = arg;
     json_t *children;
     size_t index;
     json_t *value;
+    int rank = flux_rpc_get_nodeid (f);
 
-    if (!(f = health_rpc (h, rank, NULL, timeout))
-        || flux_rpc_get_unpack (f,
-                                "{s:o}",
-                                "children", &children) < 0) {
-        const char *error = future_strerror (f, errno);
-        if (errhash_add_one (errhash, rank, error) < 0
-            || errhash_add_children (errhash, rank, h) < 0)
-            log_msg_exit ("error adding to error hash");
-        goto done;
+    ctx->active_rpcs--;
+
+    if (flux_rpc_get_unpack (f, "{s:o}", "children", &children) < 0) {
+        errhash_future_strerror (ctx->errhash, h, f, rank);
+        flux_future_destroy (f);
+        return;
     }
+
     json_array_foreach (children, index, value) {
         int child_rank;
         const char *status;
@@ -916,23 +977,53 @@ void gather_errors (flux_t *h,
             if (!error)
                 error = "unknown error";
             // record error for child_rank and its children
-            if (errhash_add_one (errhash, child_rank, error) < 0
-                || errhash_add_children (errhash, child_rank, h) < 0)
+            if (errhash_add_one (ctx->errhash, child_rank, error) < 0
+                || errhash_add_children (ctx->errhash, child_rank, h) < 0)
                 log_msg_exit ("error adding to error hash");
         }
         else if (streq (status, "offline")) {
             // report offline only if there is error text
             if (error && strlen (error) > 0) {
-                if (errhash_add_one (errhash, child_rank, error) < 0)
+                if (errhash_add_one (ctx->errhash, child_rank, error) < 0)
                     log_msg_exit ("error adding to error hash");
             }
         }
-        else { // recurse
-            gather_errors (h, child_rank, errhash, timeout);
+        else {
+            /*  Send up to max_rpcs, otherwise append rank to set of
+             *  pending ranks
+             */
+            if (ctx->active_rpcs < ctx->max_rpcs)
+                gather_errors (ctx, child_rank);
+            else if (idset_set (ctx->pending_ranks, child_rank) < 0)
+                log_msg_exit ("error adding rank %d to pending ranks",
+                              child_rank);
         }
     }
-done:
+
+    /* Ensure prep/check watchers are started if there are any pending ranks:
+     */
+    if (idset_count (ctx->pending_ranks) > 0) {
+        flux_watcher_start (ctx->prep);
+        flux_watcher_start (ctx->check);
+    }
+
     flux_future_destroy (f);
+}
+
+void gather_errors (struct overlay_errors *ctx, int rank)
+{
+    flux_future_t *f;
+    if (!(f = flux_rpc (ctx->h, "overlay.health", NULL, rank, 0))
+        || flux_future_then (f, ctx->timeout, gather_errors_cb, ctx) < 0) {
+        errhash_future_strerror (ctx->errhash, ctx->h, f, rank);
+        flux_future_destroy (f);
+        return;
+    }
+    /* Clear rank from pending ranks if set
+     */
+    if (idset_clear (ctx->pending_ranks, rank) < 0)
+        log_msg_exit ("failed to clear pending rank %d\n", rank);
+    ctx->active_rpcs++;
 }
 
 void print_errors (flux_t *h, zhashx_t *errhash)
@@ -957,24 +1048,75 @@ void print_errors (flux_t *h, zhashx_t *errhash)
     }
 }
 
+static void overlay_errors_destroy (struct overlay_errors *ctx)
+{
+    if (ctx) {
+        int saved_errno = errno;
+        zhashx_destroy (&ctx->errhash);
+        flux_watcher_destroy (ctx->prep);
+        flux_watcher_destroy (ctx->check);
+        flux_watcher_destroy (ctx->idle);
+        idset_destroy (ctx->pending_ranks);
+        free (ctx);
+        errno = saved_errno;
+    }
+}
+
+static struct overlay_errors *overlay_errors_create (flux_t *h, double timeout)
+{
+    struct overlay_errors *ctx;
+    flux_reactor_t *r = flux_get_reactor (h);
+
+    if (!(ctx = malloc (sizeof (*ctx)))
+        || !(ctx->errhash = zhashx_new ())
+        || !(ctx->pending_ranks = idset_create (0, IDSET_FLAG_AUTOGROW))
+        || !(ctx->prep = flux_prepare_watcher_create (r, errors_prep_cb, ctx))
+        || !(ctx->check = flux_check_watcher_create (r, errors_check_cb, ctx))
+        || !(ctx->idle = flux_idle_watcher_create (r, NULL, NULL))) {
+        overlay_errors_destroy (ctx);
+        return NULL;
+    }
+    zhashx_set_destructor (ctx->errhash, idset_destructor);
+    ctx->h = h;
+    ctx->timeout = timeout;
+    ctx->max_rpcs = 512;
+    ctx->active_rpcs = 0;
+    flux_watcher_start (ctx->prep);
+    flux_watcher_start (ctx->check);
+    return ctx;
+}
+
 static int subcmd_errors (optparse_t *p, int ac, char *av[])
 {
     flux_t *h = builtin_get_flux_handle (p);
-    zhashx_t *errhash; // error string => ranks idset
+    struct overlay_errors *ctx = NULL;
+    uint32_t size;
     double timeout;
+
+    /* On large systems with a flat tbon, the default 0.5s timeout may be
+     * too short because processing the initial JSON response for rank 0
+     * can take longer than that. To address this, increase the timeout
+     * based on the instance size:
+     */
+    if (flux_get_size (h, &size) == 0 && size > 2048)
+        default_timeout *= (size / 2000.); /* ~2.5s timeout on 10K nodes */
 
     timeout = optparse_get_duration (p, "timeout", default_timeout);
     if (timeout == 0)
         timeout = -1.0; // disabled
 
-    if (!(errhash = zhashx_new ()))
-        log_msg_exit ("could not create error hash");
-    zhashx_set_destructor (errhash, idset_destructor);
+    if (!(ctx = overlay_errors_create (h, timeout)))
+        log_msg_exit ("could not create overlay errors context");
 
-    gather_errors (h, 0, errhash, timeout);
-    print_errors (h, errhash);
+    if (idset_set (ctx->pending_ranks, 0) < 0)
+        log_msg_exit ("failed to set rank 0 in pending ranks");
 
-    zhashx_destroy (&errhash);
+    flux_reactor_run (flux_get_reactor (h), 0);
+    print_errors (h, ctx->errhash);
+
+    overlay_errors_destroy (ctx);
+    flux_close (h);
+    json_decref (overlay_topology);
     return 0;
 }
 
