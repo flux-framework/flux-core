@@ -517,7 +517,7 @@ void kvstxn_mgr_merge_tests (void)
                          ops,
                          FLUX_KVS_NO_MERGE,
                          0,
-                         "unmerged transaction");
+                         "unmerged transaction (no merge 1)");
 
     json_decref (names);
     json_decref (ops);
@@ -539,7 +539,12 @@ void kvstxn_mgr_merge_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, 0, 0, "unmerged transaction");
+    verify_ready_kvstxn (ktm,
+                         names,
+                         ops,
+                         0,
+                         0,
+                         "unmerged transaction (no merge 2)");
 
     json_decref (names);
     json_decref (ops);
@@ -566,7 +571,7 @@ void kvstxn_mgr_merge_tests (void)
                          ops,
                          FLUX_KVS_SYNC,
                          0,
-                         "unmerged transaction");
+                         "unmerged transaction (sync 1)");
 
     json_decref (names);
     json_decref (ops);
@@ -588,7 +593,12 @@ void kvstxn_mgr_merge_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, 0, 0, "unmerged transaction");
+    verify_ready_kvstxn (ktm,
+                         names,
+                         ops,
+                         0,
+                         0,
+                         "unmerged transaction (sync 2)");
 
     json_decref (names);
     json_decref (ops);
@@ -610,7 +620,12 @@ void kvstxn_mgr_merge_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, 0, 0, "unmerged fence");
+    verify_ready_kvstxn (ktm,
+                         names,
+                         ops,
+                         0,
+                         0,
+                         "unmerged transaction (diff flags)");
 
     json_decref (names);
     json_decref (ops);

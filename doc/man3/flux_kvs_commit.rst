@@ -26,6 +26,9 @@ SYNOPSIS
    int flux_kvs_commit_get_treeobj (flux_future_t *f,
                                     const char **treeobj);
 
+   int flux_kvs_commit_get_rootref (flux_future_t *f,
+                                    const char **rootref);
+
    int flux_kvs_commit_get_sequence (flux_future_t *f, int *seq);
 
 Link with :command:`-lflux-core`.
@@ -57,21 +60,24 @@ complete.
 request has been received. :man3:`flux_future_wait_for` may be used to
 block until the response has been received. Both accept an optional timeout.
 
-:man3:`flux_future_get`, :func:`flux_kvs_commit_get_treeobj`, or
-:func:`flux_kvs_commit_get_sequence` can decode the response. A return of
-0 indicates success and the entire transaction was committed. A
-return of -1 indicates failure, none of the transaction was committed.
-All can be used on the :type:`flux_future_t` returned by :func:`flux_kvs_commit`
-or :func:`flux_kvs_fence`.
+:man3:`flux_future_get`, :func:`flux_kvs_commit_get_treeobj`,
+:func:`flux_kvs_commit_get_rootref`, or :func:`flux_kvs_commit_get_sequence`
+can decode the response. A return of 0 indicates success and the
+entire transaction was committed. A return of -1 indicates failure,
+none of the transaction was committed.  All can be used on the
+:type:`flux_future_t` returned by :func:`flux_kvs_commit` or
+:func:`flux_kvs_fence`.
 
 In addition to checking for success or failure,
-:func:`flux_kvs_commit_get_treeobj` and :func:`flux_kvs_commit_get_sequence`
-can return information about the root snapshot that the commit or
-fence has completed its transaction on.
+:func:`flux_kvs_commit_get_treeobj`, :func:`flux_kvs_commit_get_rootref()`,
+and :func:`flux_kvs_commit_get_sequence` can return information about the
+root snapshot that the commit or fence has completed its transaction on.
 
 :func:`flux_kvs_commit_get_treeobj` obtains the root hash in the form of
 an RFC 11 *dirref* treeobj, suitable to be passed to
 :man3:`flux_kvs_lookupat`.
+
+:func:`flux_kvs_commit_get_rootref` retrieves the blobref for the root.
 
 :func:`flux_kvs_commit_get_sequence` retrieves the monotonic sequence number
 for the root.

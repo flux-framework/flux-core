@@ -343,9 +343,9 @@ bool treq_get_processed (treq_t *tr)
     return tr->processed;
 }
 
-void treq_set_processed (treq_t *tr, bool p)
+void treq_mark_processed (treq_t *tr)
 {
-    tr->processed = p;
+    tr->processed = true;
 }
 
 /*

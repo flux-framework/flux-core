@@ -1805,7 +1805,7 @@ static void commit_request_cb (flux_t *h,
          * the ready queue.  We don't need to call
          * treq_count_reached() b/c this is a commit and nprocs is 1
          */
-        treq_set_processed (tr, true);
+        treq_mark_processed (tr);
 
         if (kvstxn_mgr_add_transaction (root->ktm,
                                         treq_get_name (tr),
@@ -1915,7 +1915,7 @@ static void relayfence_request_cb (flux_t *h,
 
         /* we use this flag to indicate if a treq has been added to
          * the ready queue */
-        treq_set_processed (tr, true);
+        treq_mark_processed (tr);
 
         if (kvstxn_mgr_add_transaction (root->ktm,
                                         treq_get_name (tr),
@@ -2036,7 +2036,7 @@ static void fence_request_cb (flux_t *h,
 
             /* we use this flag to indicate if a treq has been added to
              * the ready queue */
-            treq_set_processed (tr, true);
+            treq_mark_processed (tr);
 
             if (kvstxn_mgr_add_transaction (root->ktm,
                                             treq_get_name (tr),

@@ -91,7 +91,7 @@ int treq_iter_request_copies (treq_t *tr, treq_msg_cb cb, void *data);
 /* convenience processing flag
  */
 bool treq_get_processed (treq_t *tr);
-void treq_set_processed (treq_t *tr, bool p);
+void treq_mark_processed (treq_t *tr);
 
 #endif /* !_FLUX_KVS_TREQ_H */
 
