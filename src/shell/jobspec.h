@@ -14,6 +14,8 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "info.h"
+
 struct jobspec {
     json_t *jobspec;
     int version;                // jobspec version
@@ -30,7 +32,9 @@ struct jobspec {
     json_t *options;            // attributes.system.shell.options, if any
 };
 
-int jobspec_parse (struct jobspec *job, json_error_t *error);
+struct shell_info;
+
+int jobspec_parse (struct shell_info *info, json_error_t *error);
 void set_error (json_error_t *error, const char *fmt, ...);
 void jobspec_destroy (struct jobspec *job);
 

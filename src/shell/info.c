@@ -30,31 +30,33 @@
 #include "jobspec.h"
 
 /* Get jobspec from job-info.lookup future and assign.
- * Return struct jobspec* on success, NULL on failure (and set error).
+ * Return struct jobspec* on success or NULL on failure (and set error).
  * N.B. assigned values remain valid until future is destroyed.
  */
 struct jobspec *lookup_jobspec_get (flux_future_t *f, json_error_t *error)
 {
     flux_error_t flux_error;
     const char *J;
-    char *jobspec;
-    struct jobspec *job;
+    char *jobspec = NULL;
+    struct jobspec *job = NULL;
 
     if (flux_rpc_get_unpack (f, "{s:s}", "J", &J) < 0) {
         set_error (error, "job-info: %s", future_strerror (f, errno));
-        goto error;
+        goto out;
     }
     if (!(jobspec = flux_unwrap_string (J, true, NULL, &flux_error))) {
         set_error (error, "failed to unwrap J: %s", flux_error.text);
-        goto error;
+        goto out;
     }
 
     if (!(job = calloc (1, sizeof (*job)))) {
         set_error (error, "Out of memory");
-        goto error_destroy;
+        goto out;
     }
     if (!(job->jobspec = json_loads (jobspec, 0, error))) {
-        goto error_destroy;
+        jobspec_destroy (job);
+        job = NULL;
+        goto out;
     }
 
     /* N.B.: members of jobspec like environment and shell.options may
@@ -77,13 +79,12 @@ struct jobspec *lookup_jobspec_get (flux_future_t *f, json_error_t *error)
                                 "cwd", &job->cwd,
                                 "environment", &job->environment,
                                 "shell", "options", &job->options) < 0) {
-        goto error_destroy;
+        jobspec_destroy (job);
+        job = NULL;
     }
+out:
+    free (jobspec);
     return job;
-error_destroy:
-    jobspec_destroy (job);
-error:
-    return NULL;
 }
 
 /* Fetch J from the job-info service.
@@ -165,7 +166,6 @@ static int shell_init_jobinfo (flux_shell_t *shell, struct shell_info *info)
     flux_future_t *f_info = NULL;
     flux_future_t *f_hwloc = NULL;
     const char *xml;
-    char *jobspec = NULL;
     json_error_t error;
 
     /*  fetch hwloc topology from resource module to avoid having to
@@ -208,16 +208,20 @@ static int shell_init_jobinfo (flux_shell_t *shell, struct shell_info *info)
         shell_log_error ("error fetching jobspec: %s", error.text);
         goto out;
     }
-    if (jobspec_parse (info->jobspec, &error) < 0) {
-        shell_log_error ("error parsing jobspec: %s", error.text);
-        goto out;
-    }
 
     /*  Synchronously get initial version of R from first job-info
      *  watch response:
      */
     if (resource_watch_update (info) < 0)
         goto out;
+
+    /*  Parse jobspec after getting R such that resource ranges can
+     *  be resolved with true allocation in R:
+     */
+    if (jobspec_parse (info, &error) < 0) {
+        shell_log_error ("error parsing jobspec: %s", error.text);
+        goto out;
+    }
 
     /*  Register callback for future R updates:
      */
@@ -230,7 +234,6 @@ static int shell_init_jobinfo (flux_shell_t *shell, struct shell_info *info)
     }
     rc = 0;
 out:
-    free (jobspec);
     flux_future_destroy (f_hwloc);
     flux_future_destroy (f_info);
     return rc;
