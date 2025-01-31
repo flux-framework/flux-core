@@ -2377,37 +2377,12 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static int root_remove_process_transactions (treq_t *tr, void *data)
-{
-    struct kvs_cb_data *cbd = data;
-
-    /* Transactions that never reached their nprocs count will never
-     * finish, must alert them with ENOTSUP that namespace removed.
-     * Final call to treq_mgr_remove_transaction() done in
-     * finalize_transaction_bynames() */
-    if (!treq_get_processed (tr)) {
-        json_t *names = NULL;
-
-        if (!(names = json_pack ("[ s ]", treq_get_name (tr)))) {
-            errno = ENOMEM;
-            flux_log_error (cbd->ctx->h, "%s: json_pack", __FUNCTION__);
-            return -1;
-        }
-
-        finalize_transaction_bynames (cbd->ctx, cbd->root, names, ENOTSUP);
-        json_decref (names);
-    }
-    return 0;
-}
-
 static void start_root_remove (struct kvs_ctx *ctx, const char *ns)
 {
     struct kvsroot *root;
 
     /* safe lookup, if root removal in process, let it continue */
     if ((root = kvsroot_mgr_lookup_root_safe (ctx->krm, ns))) {
-        struct kvs_cb_data cbd = { .ctx = ctx, .root = root };
-
         root->remove = true;
 
         work_queue_remove (root);
@@ -2418,22 +2393,6 @@ static void start_root_remove (struct kvs_ctx *ctx, const char *ns)
          * sync.
          */
         kvs_wait_version_process (root, true);
-
-        /* Ready transactions will be processed and errors returned to
-         * callers via the code path in kvstxn_apply().  But not ready
-         * transactions must be dealt with separately here.
-         *
-         * Note that now that the root has been marked as removable,
-         * no new transactions can become ready in the future.  Checks
-         * in commit_request_cb() and relaycommit_request_cb() ensure
-         * this.
-         */
-
-        if (treq_mgr_iter_transactions (root->trm,
-                                        root_remove_process_transactions,
-                                        &cbd) < 0)
-            flux_log_error (ctx->h, "%s: treq_mgr_iter_transactions",
-                            __FUNCTION__);
     }
 }
 
