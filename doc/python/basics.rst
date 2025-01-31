@@ -5,8 +5,8 @@ Flux Python Basics
 Importing the ``flux`` Python package
 -------------------------------------
 
-.. note:: The ``flux`` package which is used to interact with Flux *cannot* be
-   installed into a virtual environment with pip or conda.
+.. note:: The ``flux`` package may now be installed via pip using the
+   ``flux-python`` package.
 
 Flux's Python bindings are available with any installation of Flux.
 When running in a Flux instance, Flux will export the
