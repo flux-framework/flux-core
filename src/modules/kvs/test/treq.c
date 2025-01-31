@@ -47,23 +47,17 @@ void treq_basic_tests (void)
     const char *name;
     int count = 0;
 
-    ok (treq_create (NULL, 0, 0) == NULL,
+    ok (treq_create (NULL, 0) == NULL,
         "treq_create fails on bad input");
 
-    ok ((tr = treq_create ("foo", 1, 3)) != NULL,
+    ok ((tr = treq_create ("foo", 3)) != NULL,
         "treq_create works");
-
-    ok (treq_count_reached (tr) == false,
-        "initial treq_count_reached() is false");
 
     ok ((name = treq_get_name (tr)) != NULL,
         "treq_get_name works");
 
     ok (streq (name, "foo"),
         "treq_get_name returns the correct name");
-
-    ok (treq_get_nprocs (tr) == 1,
-        "treq_get_nprocs works");
 
     ok (treq_get_flags (tr) == 3,
         "treq_get_flags works");
@@ -80,10 +74,6 @@ void treq_basic_tests (void)
 
     ok (json_equal (ops, o) == true,
         "initial treq_get_ops match");
-
-    ok (treq_add_request_ops (tr, ops) < 0
-        && errno == EOVERFLOW,
-        "treq_add_request_ops fails with EOVERFLOW when exceeding nprocs");
 
     json_decref (ops);
 
@@ -105,9 +95,6 @@ void treq_basic_tests (void)
     ok (count == 1,
         "second treq_iter_request_copies count is 1");
 
-    ok (treq_count_reached (tr) == true,
-        "later treq_count_reached() is true");
-
     ok (treq_get_processed (tr) == false,
         "treq_get_processed returns false initially");
 
@@ -120,10 +107,7 @@ void treq_basic_tests (void)
 
     treq_destroy (tr);
 
-    ok (treq_create_rank (1, 2, -1, 0) == NULL,
-        "treq_create_rank fails on bad input");
-
-    ok ((tr = treq_create_rank (214, 3577, 2, 4)) != NULL,
+    ok ((tr = treq_create_rank (214, 3577, 4)) != NULL,
         "treq_create_rank works");
 
     ok ((name = treq_get_name (tr)) != NULL,
@@ -144,17 +128,11 @@ void treq_ops_tests (void)
     json_t *ops;
     json_t *o;
 
-    ok ((tr = treq_create ("foo", 3, 3)) != NULL,
+    ok ((tr = treq_create ("foo", 3)) != NULL,
         "treq_create works");
-
-    ok (treq_count_reached (tr) == false,
-        "initial treq_count_reached() is false");
 
     ok (treq_add_request_ops (tr, NULL) == 0,
         "treq_add_request_ops works with NULL ops");
-
-    ok (treq_count_reached (tr) == false,
-        "treq_count_reached() is still false");
 
     /* for test ops can be anything */
     ops = json_array ();
@@ -165,9 +143,6 @@ void treq_ops_tests (void)
 
     json_decref (ops);
 
-    ok (treq_count_reached (tr) == false,
-        "treq_count_reached() is still false");
-
     /* for test ops can be anything */
     ops = json_array ();
     json_array_append_new (ops, json_string ("B"));
@@ -176,9 +151,6 @@ void treq_ops_tests (void)
         "treq_add_request_ops add works");
 
     json_decref (ops);
-
-    ok (treq_count_reached (tr) == true,
-        "treq_count_reached() is true");
 
     ok ((o = treq_get_ops (tr)) != NULL,
         "initial treq_get_ops call works");
@@ -201,7 +173,7 @@ void treq_request_tests (void)
     flux_msg_t *request;
     int count = 0;
 
-    ok ((tr = treq_create ("foo", 1, 3)) != NULL,
+    ok ((tr = treq_create ("foo", 3)) != NULL,
         "treq_create works");
 
     ok (treq_iter_request_copies (tr, msg_cb, &count) == 0,
@@ -249,7 +221,7 @@ void treq_mgr_basic_tests (void)
     ok (treq_mgr_transactions_count (trm) == 0,
         "treq_mgr_transactions_count returns 0 when no transactions added");
 
-    ok ((tr = treq_create ("treq1", 1, 0)) != NULL,
+    ok ((tr = treq_create ("treq1", 0)) != NULL,
         "treq_create works");
 
     ok (treq_mgr_add_transaction (trm, tr) == 0,
@@ -301,7 +273,7 @@ int treq_add_error_cb (treq_t *tr, void *data)
     treq_mgr_t *trm = data;
     treq_t *tr2;
 
-    tr2 = treq_create ("foobar", 1, 0);
+    tr2 = treq_create ("foobar", 0);
 
     if (treq_mgr_add_transaction (trm, tr2) < 0) {
         treq_destroy (tr2);
@@ -329,7 +301,7 @@ void treq_mgr_iter_tests (void)
         && count == 0,
         "treq_mgr_iter_transactions success when no transactions submitted");
 
-    ok ((tr = treq_create ("treq1", 1, 0)) != NULL,
+    ok ((tr = treq_create ("treq1", 0)) != NULL,
         "treq_create works");
 
     ok (treq_mgr_add_transaction (trm, tr) == 0,

@@ -1780,7 +1780,7 @@ static void commit_request_cb (flux_t *h,
         goto error;
     }
 
-    if (!(tr = treq_create_rank (ctx->rank, ctx->seq++, 1, flags))) {
+    if (!(tr = treq_create_rank (ctx->rank, ctx->seq++, flags))) {
         flux_log_error (h, "%s: treq_create_rank", __FUNCTION__);
         goto error;
     }
@@ -1801,8 +1801,7 @@ static void commit_request_cb (flux_t *h,
 
     if (ctx->rank == 0) {
         /* we use this flag to indicate if a treq has been added to
-         * the ready queue.  We don't need to call
-         * treq_count_reached() b/c this is a commit and nprocs is 1
+         * the ready queue.
          */
         treq_mark_processed (tr);
 

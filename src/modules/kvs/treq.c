@@ -34,8 +34,6 @@ struct treq_mgr {
 
 struct treq {
     char *name;
-    int nprocs;
-    int count;
     zlist_t *requests;
     json_t *ops;
     int flags;
@@ -181,15 +179,11 @@ void treq_destroy (treq_t *tr)
     }
 }
 
-static treq_t *treq_create_common (int nprocs, int flags)
+static treq_t *treq_create_common (int flags)
 {
     treq_t *tr = NULL;
     int saved_errno;
 
-    if (nprocs <= 0) {
-        saved_errno = EINVAL;
-        goto error;
-    }
     if (!(tr = calloc (1, sizeof (*tr)))) {
         saved_errno = errno;
         goto error;
@@ -199,7 +193,6 @@ static treq_t *treq_create_common (int nprocs, int flags)
         saved_errno = ENOMEM;
         goto error;
     }
-    tr->nprocs = nprocs;
     tr->flags = flags;
     tr->processed = false;
 
@@ -210,7 +203,7 @@ error:
     return NULL;
 }
 
-treq_t *treq_create (const char *name, int nprocs, int flags)
+treq_t *treq_create (const char *name, int flags)
 {
     treq_t *tr = NULL;
     int saved_errno;
@@ -220,7 +213,7 @@ treq_t *treq_create (const char *name, int nprocs, int flags)
         goto error;
     }
 
-    if (!(tr = treq_create_common (nprocs, flags))) {
+    if (!(tr = treq_create_common (flags))) {
         saved_errno = EINVAL;
         goto error;
     }
@@ -239,13 +232,12 @@ error:
 
 treq_t *treq_create_rank (uint32_t rank,
                           unsigned int seq,
-                          int nprocs,
                           int flags)
 {
     treq_t *tr = NULL;
     int saved_errno;
 
-    if (!(tr = treq_create_common (nprocs, flags))) {
+    if (!(tr = treq_create_common (flags))) {
         saved_errno = EINVAL;
         goto error;
     }
@@ -262,20 +254,9 @@ error:
     return NULL;
 }
 
-bool treq_count_reached (treq_t *tr)
-{
-    assert (tr->count <= tr->nprocs);
-    return (tr->count == tr->nprocs);
-}
-
 const char *treq_get_name (treq_t *tr)
 {
     return tr->name;
-}
-
-int treq_get_nprocs (treq_t *tr)
-{
-    return tr->nprocs;
 }
 
 int treq_get_flags (treq_t *tr)
@@ -293,11 +274,6 @@ int treq_add_request_ops (treq_t *tr, json_t *ops)
     json_t *op;
     int i;
 
-    if (tr->count == tr->nprocs) {
-        errno = EOVERFLOW;
-        return -1;
-    }
-
     if (ops) {
         for (i = 0; i < json_array_size (ops); i++) {
             if ((op = json_array_get (ops, i)))
@@ -307,7 +283,6 @@ int treq_add_request_ops (treq_t *tr, json_t *ops)
                 }
         }
     }
-    tr->count++;
     return 0;
 }
 
