@@ -552,10 +552,15 @@ of compiled-in install paths and the environment.
 .. envvar:: PYTHONPATH
             FLUX_PYTHONPATH_PREPEND
 
-   :envvar:`PYTHONPATH` is set so that sub-commands can find required Python
-   libraries:
+   With the :command:`flux python` and :man1:`flux-env` subcommands,
+   :envvar:`PYTHONPATH` is set such that the correct version of
+   Python modules can be found. In these cases the path is set
+   to the following:
 
       $FLUX_PYTHONPATH_PREPEND : install-path : $PYTHONPATH
+
+   The :man1:`flux` command does not otherwise modify :envvar:`PYTHONPATH`
+   unless :envvar:`FLUX_PYTHONPATH_PREPEND` is set.
 
    Values may include multiple directories separated by colons.
 
