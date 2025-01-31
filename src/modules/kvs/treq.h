@@ -63,13 +63,6 @@ void treq_destroy (treq_t *tr);
 const char *treq_get_name (treq_t *tr);
 int treq_get_flags (treq_t *tr);
 
-json_t *treq_get_ops (treq_t *tr);
-
-/* treq_add_request_ops() should be called with ops on each
- * request, even if ops is NULL
- */
-int treq_add_request_ops (treq_t *tr, json_t *ops);
-
 /* Call callback for each request message copy stored internally via
  * treq_add_request_copy().
  *

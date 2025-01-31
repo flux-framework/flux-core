@@ -35,7 +35,6 @@ struct treq_mgr {
 struct treq {
     char *name;
     const flux_msg_t *request;
-    json_t *ops;
     int flags;
     bool processed;
 };
@@ -173,7 +172,6 @@ void treq_destroy (treq_t *tr)
 {
     if (tr) {
         free (tr->name);
-        json_decref (tr->ops);
         flux_msg_decref (tr->request);
         free (tr);
     }
@@ -189,10 +187,6 @@ treq_t *treq_create (const flux_msg_t *request,
 
     if (!(tr = calloc (1, sizeof (*tr)))) {
         saved_errno = errno;
-        goto error;
-    }
-    if (!(tr->ops = json_array ())) {
-        saved_errno = ENOMEM;
         goto error;
     }
     if (request) {
@@ -223,28 +217,6 @@ const char *treq_get_name (treq_t *tr)
 int treq_get_flags (treq_t *tr)
 {
     return tr->flags;
-}
-
-json_t *treq_get_ops (treq_t *tr)
-{
-    return tr->ops;
-}
-
-int treq_add_request_ops (treq_t *tr, json_t *ops)
-{
-    json_t *op;
-    int i;
-
-    if (ops) {
-        for (i = 0; i < json_array_size (ops); i++) {
-            if ((op = json_array_get (ops, i)))
-                if (json_array_append (tr->ops, op) < 0) {
-                    errno = ENOMEM;
-                    return -1;
-                }
-        }
-    }
-    return 0;
 }
 
 int treq_iter_request_copies (treq_t *tr, treq_msg_cb cb, void *data)

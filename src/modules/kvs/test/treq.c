@@ -41,8 +41,6 @@ int msg_cb_error (treq_t *tr, const flux_msg_t *req, void *data)
 void treq_basic_tests (void)
 {
     treq_t *tr;
-    json_t *ops;
-    json_t *o;
     flux_msg_t *request;
     const char *name;
     int count = 0;
@@ -65,21 +63,6 @@ void treq_basic_tests (void)
     ok (treq_get_flags (tr) == 3,
         "treq_get_flags works");
 
-    /* for test ops can be anything */
-    ops = json_array ();
-    json_array_append_new (ops, json_string ("A"));
-
-    ok (treq_add_request_ops (tr, ops) == 0,
-        "initial treq_add_request_ops add works");
-
-    ok ((o = treq_get_ops (tr)) != NULL,
-        "initial treq_get_ops call works");
-
-    ok (json_equal (ops, o) == true,
-        "initial treq_get_ops match");
-
-    json_decref (ops);
-
     ok (treq_iter_request_copies (tr, msg_cb, &count) == 0,
         "second treq_iter_request_copies works");
 
@@ -95,51 +78,6 @@ void treq_basic_tests (void)
         "treq_get_processed returns true");
 
     flux_msg_destroy (request);
-
-    treq_destroy (tr);
-}
-
-void treq_ops_tests (void)
-{
-    treq_t *tr;
-    json_t *ops;
-    json_t *o;
-
-    ok ((tr = treq_create (NULL, 214, 3577, 3)) != NULL,
-        "treq_create works");
-
-    ok (treq_add_request_ops (tr, NULL) == 0,
-        "treq_add_request_ops works with NULL ops");
-
-    /* for test ops can be anything */
-    ops = json_array ();
-    json_array_append_new (ops, json_string ("A"));
-
-    ok (treq_add_request_ops (tr, ops) == 0,
-        "treq_add_request_ops add works");
-
-    json_decref (ops);
-
-    /* for test ops can be anything */
-    ops = json_array ();
-    json_array_append_new (ops, json_string ("B"));
-
-    ok (treq_add_request_ops (tr, ops) == 0,
-        "treq_add_request_ops add works");
-
-    json_decref (ops);
-
-    ok ((o = treq_get_ops (tr)) != NULL,
-        "initial treq_get_ops call works");
-
-    ops = json_array ();
-    json_array_append_new (ops, json_string ("A"));
-    json_array_append_new (ops, json_string ("B"));
-
-    ok (json_equal (ops, o) == true,
-        "treq_get_ops match");
-
-    json_decref (ops);
 
     treq_destroy (tr);
 }
@@ -308,7 +246,6 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     treq_basic_tests ();
-    treq_ops_tests ();
     treq_request_tests ();
     treq_mgr_basic_tests ();
     treq_mgr_iter_tests ();
