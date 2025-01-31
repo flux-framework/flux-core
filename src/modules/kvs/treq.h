@@ -50,8 +50,11 @@ int treq_mgr_transactions_count (treq_mgr_t *trm);
  * treq_t API
  */
 
-/* will create transaction name based on rank & seq */
-treq_t *treq_create (uint32_t rank,
+/* will create transaction name based on rank & seq
+ * - request copy saved in transaction for retrieval later
+ */
+treq_t *treq_create (const flux_msg_t *request,
+                     uint32_t rank,
                      unsigned int seq,
                      int flags);
 
@@ -66,11 +69,6 @@ json_t *treq_get_ops (treq_t *tr);
  * request, even if ops is NULL
  */
 int treq_add_request_ops (treq_t *tr, json_t *ops);
-
-/* copy the request message into the transaction, where it can be
- * retrieved later.
- */
-int treq_add_request_copy (treq_t *tr, const flux_msg_t *request);
 
 /* Call callback for each request message copy stored internally via
  * treq_add_request_copy().

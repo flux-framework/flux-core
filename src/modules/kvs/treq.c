@@ -34,7 +34,7 @@ struct treq_mgr {
 
 struct treq {
     char *name;
-    zlist_t *requests;
+    const flux_msg_t *request;
     json_t *ops;
     int flags;
     bool processed;
@@ -174,12 +174,13 @@ void treq_destroy (treq_t *tr)
     if (tr) {
         free (tr->name);
         json_decref (tr->ops);
-        zlist_destroy (&tr->requests);
+        flux_msg_decref (tr->request);
         free (tr);
     }
 }
 
-treq_t *treq_create (uint32_t rank,
+treq_t *treq_create (const flux_msg_t *request,
+                     uint32_t rank,
                      unsigned int seq,
                      int flags)
 {
@@ -190,10 +191,15 @@ treq_t *treq_create (uint32_t rank,
         saved_errno = errno;
         goto error;
     }
-    if (!(tr->ops = json_array ())
-        || !(tr->requests = zlist_new ())) {
+    if (!(tr->ops = json_array ())) {
         saved_errno = ENOMEM;
         goto error;
+    }
+    if (request) {
+        if (!(tr->request = flux_msg_incref (request))) {
+            saved_errno = errno;
+            goto error;
+        }
     }
     if (asprintf (&(tr->name), "treq.%u.%u", rank, seq) < 0) {
         saved_errno = errno;
@@ -241,30 +247,10 @@ int treq_add_request_ops (treq_t *tr, json_t *ops)
     return 0;
 }
 
-int treq_add_request_copy (treq_t *tr, const flux_msg_t *request)
-{
-    if (zlist_push (tr->requests, (void *)flux_msg_incref (request)) < 0) {
-        flux_msg_decref (request);
-        return -1;
-    }
-    zlist_freefn (tr->requests,
-                  (void *)request,
-                  (zlist_free_fn *)flux_msg_decref,
-                  false);
-    return 0;
-}
-
 int treq_iter_request_copies (treq_t *tr, treq_msg_cb cb, void *data)
 {
-    const flux_msg_t *msg;
-
-    msg = zlist_first (tr->requests);
-    while (msg) {
-        if (cb (tr, msg, data) < 0)
-            return -1;
-        msg = zlist_next (tr->requests);
-    }
-
+    if (cb (tr, tr->request, data) < 0)
+        return -1;
     return 0;
 }
 

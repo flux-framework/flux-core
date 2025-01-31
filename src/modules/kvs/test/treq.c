@@ -47,7 +47,10 @@ void treq_basic_tests (void)
     const char *name;
     int count = 0;
 
-    ok ((tr = treq_create (214, 3577, 3)) != NULL,
+    ok ((request = flux_request_encode ("mytopic", "{ bar : 1 }")) != NULL,
+        "flux_request_encode works");
+
+    ok ((tr = treq_create (request, 214, 3577, 3)) != NULL,
         "treq_create works");
 
     ok ((name = treq_get_name (tr)) != NULL,
@@ -78,18 +81,6 @@ void treq_basic_tests (void)
     json_decref (ops);
 
     ok (treq_iter_request_copies (tr, msg_cb, &count) == 0,
-        "initial treq_iter_request_copies works");
-
-    ok (count == 0,
-        "initial treq_iter_request_copies count is 0");
-
-    ok ((request = flux_request_encode ("mytopic", "{ bar : 1 }")) != NULL,
-        "flux_request_encode works");
-
-    ok (treq_add_request_copy (tr, request) == 0,
-        "initial treq_add_request_copy call works");
-
-    ok (treq_iter_request_copies (tr, msg_cb, &count) == 0,
         "second treq_iter_request_copies works");
 
     ok (count == 1,
@@ -114,7 +105,7 @@ void treq_ops_tests (void)
     json_t *ops;
     json_t *o;
 
-    ok ((tr = treq_create (214, 3577, 3)) != NULL,
+    ok ((tr = treq_create (NULL, 214, 3577, 3)) != NULL,
         "treq_create works");
 
     ok (treq_add_request_ops (tr, NULL) == 0,
@@ -159,28 +150,11 @@ void treq_request_tests (void)
     flux_msg_t *request;
     int count = 0;
 
-    ok ((tr = treq_create (214, 3577, 3)) != NULL,
-        "treq_create works");
-
-    ok (treq_iter_request_copies (tr, msg_cb, &count) == 0,
-        "initial treq_iter_request_copies works");
-
-    ok (count == 0,
-        "initial treq_iter_request_copies count is 0");
-
     ok ((request = flux_request_encode ("mytopic", "{ A : 1 }")) != NULL,
         "flux_request_encode works");
 
-    ok (treq_add_request_copy (tr, request) == 0,
-        "treq_add_request_copy works");
-
-    flux_msg_destroy (request);
-
-    ok ((request = flux_request_encode ("mytopic", "{ B : 1 }")) != NULL,
-        "flux_request_encode works");
-
-    ok (treq_add_request_copy (tr, request) == 0,
-        "treq_add_request_copy works");
+    ok ((tr = treq_create (request, 214, 3577, 3)) != NULL,
+        "treq_create works");
 
     flux_msg_destroy (request);
 
@@ -190,8 +164,8 @@ void treq_request_tests (void)
     ok (treq_iter_request_copies (tr, msg_cb, &count) == 0,
         "second treq_iter_request_copies works");
 
-    ok (count == 2,
-        "treq_iter_request_copies count is 2");
+    ok (count == 1,
+        "treq_iter_request_copies count is 1");
 
     treq_destroy (tr);
 }
@@ -209,7 +183,7 @@ void treq_mgr_basic_tests (void)
     ok (treq_mgr_transactions_count (trm) == 0,
         "treq_mgr_transactions_count returns 0 when no transactions added");
 
-    ok ((tr = treq_create (214, 3577, 3)) != NULL,
+    ok ((tr = treq_create (NULL, 214, 3577, 3)) != NULL,
         "treq_create works");
 
     ok ((tmp_name = treq_get_name (tr)) != NULL,
@@ -268,7 +242,7 @@ int treq_add_error_cb (treq_t *tr, void *data)
     treq_mgr_t *trm = data;
     treq_t *tr2;
 
-    if (!(tr2 = treq_create (123, 456, 7)))
+    if (!(tr2 = treq_create (NULL, 123, 456, 7)))
         BAIL_OUT ("treq_create");
 
     if (treq_mgr_add_transaction (trm, tr2) < 0) {
@@ -297,7 +271,7 @@ void treq_mgr_iter_tests (void)
         && count == 0,
         "treq_mgr_iter_transactions success when no transactions submitted");
 
-    ok ((tr = treq_create (214, 3577, 3)) != NULL,
+    ok ((tr = treq_create (NULL, 214, 3577, 3)) != NULL,
         "treq_create works");
 
     ok (treq_mgr_add_transaction (trm, tr) == 0,

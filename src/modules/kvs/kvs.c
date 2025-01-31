@@ -1780,7 +1780,11 @@ static void commit_request_cb (flux_t *h,
         goto error;
     }
 
-    if (!(tr = treq_create (ctx->rank, ctx->seq++, flags))) {
+    /* save copy of request, will be used later via
+     * finalize_transaction_bynames() to send error code to original
+     * send.
+     */
+    if (!(tr = treq_create (msg, ctx->rank, ctx->seq++, flags))) {
         flux_log_error (h, "%s: treq_create", __FUNCTION__);
         goto error;
     }
@@ -1791,13 +1795,6 @@ static void commit_request_cb (flux_t *h,
         errno = saved_errno;
         goto error;
     }
-
-    /* save copy of request, will be used later via
-     * finalize_transaction_bynames() to send error code to original
-     * send.
-     */
-    if (treq_add_request_copy (tr, msg) < 0)
-        goto error;
 
     if (ctx->rank == 0) {
         /* we use this flag to indicate if a treq has been added to
