@@ -121,94 +121,12 @@ void treq_mgr_basic_tests (void)
     free (name);
 }
 
-int treq_count_cb (treq_t *tr, void *data)
-{
-    int *count = data;
-    (*count)++;
-    return 0;
-}
-
-int treq_remove_cb (treq_t *tr, void *data)
-{
-    treq_mgr_t *trm = data;
-
-    treq_mgr_remove_transaction (trm, treq_get_name (tr));
-    return 0;
-}
-
-int treq_add_error_cb (treq_t *tr, void *data)
-{
-    treq_mgr_t *trm = data;
-    treq_t *tr2;
-
-    if (!(tr2 = treq_create (NULL, 123, 456, 7)))
-        BAIL_OUT ("treq_create");
-
-    if (treq_mgr_add_transaction (trm, tr2) < 0) {
-        treq_destroy (tr2);
-        return -1;
-    }
-    return 0;
-}
-
-int treq_error_cb (treq_t *tr, void *data)
-{
-    return -1;
-}
-
-void treq_mgr_iter_tests (void)
-{
-    treq_mgr_t *trm;
-    treq_t *tr;
-    int count;
-
-    ok ((trm = treq_mgr_create ()) != NULL,
-        "treq_mgr_create works");
-
-    count = 0;
-    ok (treq_mgr_iter_transactions (trm, treq_count_cb, &count) == 0
-        && count == 0,
-        "treq_mgr_iter_transactions success when no transactions submitted");
-
-    ok ((tr = treq_create (NULL, 214, 3577, 3)) != NULL,
-        "treq_create works");
-
-    ok (treq_mgr_add_transaction (trm, tr) == 0,
-        "treq_mgr_add_transaction works");
-
-    ok (treq_mgr_transactions_count (trm) == 1,
-        "treq_mgr_transactions_count returns correct count of transactions");
-
-    ok (treq_mgr_iter_transactions (trm, treq_error_cb, NULL) < 0,
-        "treq_mgr_iter_transactions error on callback error");
-
-    ok (treq_mgr_iter_transactions (trm, treq_add_error_cb, trm) < 0
-        && errno == EAGAIN,
-        "treq_mgr_iter_transactions error on callback error trying to add treq");
-
-    ok (treq_mgr_iter_transactions (trm, treq_remove_cb, trm) == 0,
-        "treq_mgr_iter_transactions success on remove");
-
-    count = 0;
-    ok (treq_mgr_iter_transactions (trm, treq_count_cb, &count) == 0,
-        "treq_mgr_iter_transactions success on count");
-
-    ok (count == 0,
-        "treq_mgr_iter_transactions returned correct count of transactions");
-
-    ok (treq_mgr_transactions_count (trm) == 0,
-        "treq_mgr_transactions_count returns correct count of transactions");
-
-    treq_mgr_destroy (trm);
-}
-
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
     treq_basic_tests ();
     treq_mgr_basic_tests ();
-    treq_mgr_iter_tests ();
 
     done_testing ();
     return (0);

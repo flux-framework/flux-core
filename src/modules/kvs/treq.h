@@ -17,8 +17,6 @@ typedef struct treq_mgr treq_mgr_t;
 
 typedef struct treq treq_t;
 
-typedef int (*treq_itr_f)(treq_t *tr, void *data);
-
 /*
  * treq_mgr_t API
  */
@@ -34,9 +32,6 @@ int treq_mgr_add_transaction (treq_mgr_t *trm, treq_t *tr);
 /* Lookup a transaction previously stored via
  * treq_mgr_add_transaction(), via name */
 treq_t *treq_mgr_lookup_transaction (treq_mgr_t *trm, const char *name);
-
-/* Iterate through all transactions */
-int treq_mgr_iter_transactions (treq_mgr_t *trm, treq_itr_f cb, void *data);
 
 /* remove a transaction from the treq manager */
 int treq_mgr_remove_transaction (treq_mgr_t *trm, const char *name);

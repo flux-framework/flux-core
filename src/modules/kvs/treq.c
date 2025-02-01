@@ -28,8 +28,6 @@
 
 struct treq_mgr {
     zhash_t *transactions;
-    bool iterating_transactions;
-    zlist_t *removelist;
 };
 
 struct treq {
@@ -56,11 +54,6 @@ treq_mgr_t *treq_mgr_create (void)
         saved_errno = ENOMEM;
         goto error;
     }
-    trm->iterating_transactions = false;
-    if (!(trm->removelist = zlist_new ())) {
-        saved_errno = ENOMEM;
-        goto error;
-    }
     return trm;
 
  error:
@@ -74,20 +67,12 @@ void treq_mgr_destroy (treq_mgr_t *trm)
     if (trm) {
         if (trm->transactions)
             zhash_destroy (&trm->transactions);
-        if (trm->removelist)
-            zlist_destroy (&trm->removelist);
         free (trm);
     }
 }
 
 int treq_mgr_add_transaction (treq_mgr_t *trm, treq_t *tr)
 {
-    /* Don't modify hash while iterating */
-    if (trm->iterating_transactions) {
-        errno = EAGAIN;
-        goto error;
-    }
-
     if (zhash_insert (trm->transactions, tr->name, tr) < 0) {
         errno = EEXIST;
         goto error;
@@ -106,56 +91,9 @@ treq_t *treq_mgr_lookup_transaction (treq_mgr_t *trm, const char *name)
     return zhash_lookup (trm->transactions, name);
 }
 
-int treq_mgr_iter_transactions (treq_mgr_t *trm, treq_itr_f cb, void *data)
-{
-    treq_t *tr;
-    char *name;
-
-    trm->iterating_transactions = true;
-
-    tr = zhash_first (trm->transactions);
-    while (tr) {
-        if (cb (tr, data) < 0)
-            goto error;
-
-        tr = zhash_next (trm->transactions);
-    }
-
-    trm->iterating_transactions = false;
-
-    while ((name = zlist_pop (trm->removelist))) {
-        treq_mgr_remove_transaction (trm, name);
-        free (name);
-    }
-
-    return 0;
-
- error:
-    while ((name = zlist_pop (trm->removelist)))
-        free (name);
-    trm->iterating_transactions = false;
-    return -1;
-}
-
 int treq_mgr_remove_transaction (treq_mgr_t *trm, const char *name)
 {
-    /* it's dangerous to remove if we're in the middle of an
-     * iteration, so save name for removal later.
-     */
-    if (trm->iterating_transactions) {
-        char *str = strdup (name);
-
-        if (!str)
-            return -1;
-
-        if (zlist_append (trm->removelist, str) < 0) {
-            free (str);
-            errno = ENOMEM;
-            return -1;
-        }
-    }
-    else
-        zhash_delete (trm->transactions, name);
+    zhash_delete (trm->transactions, name);
     return 0;
 }
 
