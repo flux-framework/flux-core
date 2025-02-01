@@ -56,14 +56,6 @@ void treq_basic_tests (void)
     ok (streq (topic, "mytopic"),
         "treq_get_request returned correct request");
 
-    ok (treq_get_processed (tr) == false,
-        "treq_get_processed returns false initially");
-
-    treq_mark_processed (tr);
-
-    ok (treq_get_processed (tr) == true,
-        "treq_get_processed returns true");
-
     flux_msg_destroy (request);
 
     treq_destroy (tr);

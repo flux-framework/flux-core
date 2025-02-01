@@ -1803,11 +1803,6 @@ static void commit_request_cb (flux_t *h,
     }
 
     if (ctx->rank == 0) {
-        /* we use this flag to indicate if a treq has been added to
-         * the ready queue.
-         */
-        treq_mark_processed (tr);
-
         if (kvstxn_mgr_add_transaction (root->ktm,
                                         treq_get_name (tr),
                                         ops,

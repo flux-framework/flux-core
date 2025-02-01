@@ -34,7 +34,6 @@ struct treq {
     char *name;
     const flux_msg_t *request;
     int flags;
-    bool processed;
 };
 
 /*
@@ -138,7 +137,6 @@ treq_t *treq_create (const flux_msg_t *request,
         goto error;
     }
     tr->flags = flags;
-    tr->processed = false;
 
     return tr;
 error:
@@ -160,16 +158,6 @@ int treq_get_flags (treq_t *tr)
 const flux_msg_t *treq_get_request (treq_t *tr)
 {
     return tr->request;
-}
-
-bool treq_get_processed (treq_t *tr)
-{
-    return tr->processed;
-}
-
-void treq_mark_processed (treq_t *tr)
-{
-    tr->processed = true;
 }
 
 /*

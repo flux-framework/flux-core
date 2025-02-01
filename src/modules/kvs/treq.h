@@ -57,11 +57,6 @@ const char *treq_get_name (treq_t *tr);
 int treq_get_flags (treq_t *tr);
 const flux_msg_t *treq_get_request (treq_t *tr);
 
-/* convenience processing flag
- */
-bool treq_get_processed (treq_t *tr);
-void treq_mark_processed (treq_t *tr);
-
 #endif /* !_FLUX_KVS_TREQ_H */
 
 /*
