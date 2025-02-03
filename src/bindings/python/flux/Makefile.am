@@ -60,6 +60,7 @@ nobase_fluxpy_PYTHON = \
 	resource/ResourceSet.py \
 	resource/list.py \
 	resource/status.py \
+	resource/journal.py \
 	hostlist.py \
 	idset.py \
 	progress.py \
