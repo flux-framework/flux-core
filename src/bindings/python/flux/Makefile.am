@@ -72,6 +72,8 @@ nobase_fluxpy_PYTHON = \
 	constraint/parser.py \
 	constraint/parsetab.py \
 	constraint/__init__.py \
+	abc/journal.py \
+	abc/__init__.py \
 	utils/parsedatetime/__init__.py \
 	utils/parsedatetime/parsedatetime.py \
 	utils/parsedatetime/warns.py \
