@@ -32,17 +32,20 @@ static const char *serv_interface = "org.freedesktop.systemd1.Service";
 static const char *prop_interface = "org.freedesktop.DBus.Properties";
 
 flux_future_t *sdexec_property_get_all (flux_t *h,
+                                        const char *service,
                                         uint32_t rank,
                                         const char *path)
 {
     flux_future_t *f;
+    char topic[256];
 
-    if (!h || !path) {
+    if (!h || !service || !path) {
         errno = EINVAL;
         return NULL;
     }
+    snprintf (topic, sizeof (topic), "%s.call", service);
     if (!(f = flux_rpc_pack (h,
-                             "sdbus.call",
+                             topic,
                              rank,
                              0,
                              "{s:s s:s s:s s:[s]}",
@@ -55,16 +58,19 @@ flux_future_t *sdexec_property_get_all (flux_t *h,
 }
 
 flux_future_t *sdexec_property_get (flux_t *h,
+                                    const char *service,
                                     uint32_t rank,
                                     const char *path,
                                     const char *name)
 {
     flux_future_t *f;
+    char topic[256];
 
-    if (!h || !path || !name) {
+    if (!h || !service || !path || !name) {
         errno = EINVAL;
         return NULL;
     }
+    snprintf (topic, sizeof (topic), "%s.call", service);
     if (!(f = flux_rpc_pack (h,
                              "sdbus.call",
                              rank,
@@ -79,13 +85,15 @@ flux_future_t *sdexec_property_get (flux_t *h,
 }
 
 flux_future_t *sdexec_property_changed (flux_t *h,
+                                        const char *service,
                                         uint32_t rank,
                                         const char *path)
 {
     flux_future_t *f;
     json_t *o;
+    char topic[256];
 
-    if (!h) {
+    if (!h || !service) {
         errno = EINVAL;
         return NULL;
     }
@@ -100,8 +108,9 @@ flux_future_t *sdexec_property_changed (flux_t *h,
             goto nomem;
         }
     }
+    snprintf (topic, sizeof (topic), "%s.subscribe", service);
     if (!(f = flux_rpc_pack (h,
-                             "sdbus.subscribe",
+                             topic,
                              rank,
                              FLUX_RPC_STREAMING,
                              "O", o)))

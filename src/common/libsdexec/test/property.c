@@ -52,13 +52,20 @@ void test_inval (void)
         BAIL_OUT ("could not create property dict for testing");
 
     errno = 0;
-    ok (sdexec_property_get (NULL, 0, "foo", "bar") == NULL && errno == EINVAL,
+    ok (sdexec_property_get (NULL, "sdexec", 0, "foo", "bar") == NULL
+        && errno == EINVAL,
         "sdexec_property_get h=NULL fails with EINVAL");
     errno = 0;
-    ok (sdexec_property_get (h, 0, NULL, "bar") == NULL && errno == EINVAL,
+    ok (sdexec_property_get (h, NULL, 0, "foo", "bar") == NULL
+        && errno == EINVAL,
+        "sdexec_property_get service=NULL fails with EINVAL");
+    errno = 0;
+    ok (sdexec_property_get (h, "sdexec", 0, NULL, "bar") == NULL
+        && errno == EINVAL,
         "sdexec_property_get path=NULL fails with EINVAL");
     errno = 0;
-    ok (sdexec_property_get (h, 0, "foo", NULL) == NULL && errno == EINVAL,
+    ok (sdexec_property_get (h, "sdexec", 0, "foo", NULL) == NULL
+        && errno == EINVAL,
         "sdexec_property_get name=NULL fails with EINVAL");
 
     errno = 0;
@@ -69,10 +76,16 @@ void test_inval (void)
         "sdexec_property_get_unpack fmt=NULL fails with EINVAL");
 
     errno = 0;
-    ok (sdexec_property_get_all (NULL, 0, "foo") == NULL && errno == EINVAL,
+    ok (sdexec_property_get_all (NULL, "sdexec", 0, "foo") == NULL
+        && errno == EINVAL,
         "sdexec_property_get_all h=NULL fails with EINVAL");
     errno = 0;
-    ok (sdexec_property_get_all (h, 0, NULL) == NULL && errno == EINVAL,
+    ok (sdexec_property_get_all (h, NULL, 0, "foo") == NULL
+        && errno == EINVAL,
+        "sdexec_property_get_all service=NULL fails with EINVAL");
+    errno = 0;
+    ok (sdexec_property_get_all (h, "sdexec", 0, NULL) == NULL
+        && errno == EINVAL,
         "sdexec_property_get_all path=NULL fails with EINVAL");
 
     errno = 0;
@@ -80,7 +93,8 @@ void test_inval (void)
         "sdexec_property_get_all_dict f=NULL fails with EINVAL");
 
     errno = 0;
-    ok (sdexec_property_changed (NULL, 0, "foo") == NULL && errno == EINVAL,
+    ok (sdexec_property_changed (NULL, "sdexec", 0, "foo") == NULL
+        && errno == EINVAL,
         "sdexec_property_changed h=NULL fails with EINVAL");
 
     errno = 0;
