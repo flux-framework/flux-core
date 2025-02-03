@@ -33,7 +33,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     flux_error_t error;
     int rc = -1;
 
-    if (!(ctx = sdbus_ctx_create (h, &error))) {
+    if (!(ctx = sdbus_ctx_create (h, argc, argv, &error))) {
         flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
     }

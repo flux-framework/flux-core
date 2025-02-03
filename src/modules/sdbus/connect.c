@@ -29,6 +29,7 @@ struct sdconnect {
     double retry_min;
     double retry_max;
     bool first_time;
+    bool system_bus;
 };
 
 static void sdconnect_destroy (struct sdconnect *sdc)
@@ -61,6 +62,16 @@ static void bus_destroy (sd_bus *bus)
     }
 }
 
+static void make_system_bus_path (char *buf, size_t size)
+{
+    char *path;
+
+    if ((path = getenv ("DBUS_SYSTEM_BUS_ADDRESS")))
+        strlcpy (buf, path, size);
+    else
+        strlcpy (buf, "sd_bus_open_system", size);
+}
+
 static void make_user_bus_path (char *buf, size_t size)
 {
     char *path;
@@ -88,15 +99,22 @@ static void timer_cb (flux_reactor_t *r,
     sd_bus *bus;
     int e;
     double timeout;
+    char path[1024];
 
     sdc->attempt++;
     timeout = sdc->retry_min * sdc->attempt;
     if (timeout > sdc->retry_max)
         timeout = sdc->retry_max;
 
-    if ((e = sd_bus_open_user (&bus)) < 0) {
-        char path[1024];
+    if (sdc->system_bus) {
+        make_system_bus_path (path, sizeof (path));
+        e = sd_bus_open_system (&bus);
+    }
+    else {
         make_user_bus_path (path, sizeof (path));
+        e = sd_bus_open_user (&bus);
+    }
+    if (e < 0) {
         flux_log (sdc->h,
                   LOG_INFO,
                   "%s: %s (retrying in %.0fs)",
@@ -105,7 +123,7 @@ static void timer_cb (flux_reactor_t *r,
                   timeout);
         goto retry;
     }
-    flux_log (sdc->h, LOG_INFO, "connected");
+    flux_log (sdc->h, LOG_INFO, "%s: connected", path);
     flux_future_fulfill (f, bus, (flux_free_f)bus_destroy);
     sdc->attempt = 0;
     return;
@@ -148,7 +166,8 @@ error:
 flux_future_t *sdbus_connect (flux_t *h,
                               bool first_time,
                               double retry_min,
-                              double retry_max)
+                              double retry_max,
+                              bool system_bus)
 {
     flux_future_t *f;
     struct sdconnect *sdc = NULL;
@@ -166,6 +185,7 @@ flux_future_t *sdbus_connect (flux_t *h,
     sdc->retry_min = retry_min;
     sdc->retry_max = retry_max;
     sdc->first_time = first_time;
+    sdc->system_bus = system_bus;
     flux_future_set_flux (f, h);
     return f;
 error:
