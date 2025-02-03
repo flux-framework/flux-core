@@ -18,6 +18,7 @@ j************************************************************/
  * Parse the returned value with sdexec_property_get_unpack().
  */
 flux_future_t *sdexec_property_get (flux_t *h,
+                                    const char *service,
                                     uint32_t rank,
                                     const char *path,
                                     const char *name);
@@ -28,6 +29,7 @@ int sdexec_property_get_unpack (flux_future_t *f, const char *fmt, ...);
  * which can be further parsed with sdexec_property_dict_unpack().
  */
 flux_future_t *sdexec_property_get_all (flux_t *h,
+                                        const char *service,
                                         uint32_t rank,
                                         const char *path);
 json_t *sdexec_property_get_all_dict (flux_future_t *f);
@@ -40,6 +42,7 @@ json_t *sdexec_property_get_all_dict (flux_future_t *f);
  * sdexec_property_changed_path() to get the path for each response.
  */
 flux_future_t *sdexec_property_changed (flux_t *h,
+                                        const char *service,
                                         uint32_t rank,
                                         const char *path);
 json_t *sdexec_property_changed_dict (flux_future_t *f);

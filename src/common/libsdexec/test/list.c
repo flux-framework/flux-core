@@ -31,10 +31,13 @@ void test_inval (void)
         BAIL_OUT ("could not create future for testing");
 
     errno = 0;
-    ok (sdexec_list_units (NULL, 0, "*") == NULL && errno == EINVAL,
+    ok (sdexec_list_units (NULL, "sdexec", 0, "*") == NULL && errno == EINVAL,
         "sdexec_list_units h=NULL fails with EINVAL");
     errno = 0;
-    ok (sdexec_list_units (h, 0, NULL) == NULL && errno == EINVAL,
+    ok (sdexec_list_units (h, NULL, 0, "*") == NULL && errno == EINVAL,
+        "sdexec_list_units service=NULL fails with EINVAL");
+    errno = 0;
+    ok (sdexec_list_units (h, "sdexec", 0, NULL) == NULL && errno == EINVAL,
         "sdexec_list_units pattern=NULL fails with EINVAL");
 
     ok (sdexec_list_units_next (NULL, &info) == false,
