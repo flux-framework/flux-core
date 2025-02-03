@@ -561,32 +561,32 @@ error:
 
 static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,
-      "sdbus.disconnect",
+      "disconnect",
       disconnect_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "sdbus.call",
+      "call",
       call_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "sdbus.subscribe",
+      "subscribe",
       subscribe_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "sdbus.subscribe-cancel",
+      "subscribe-cancel",
       subscribe_cancel_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "sdbus.reconnect",
+      "reconnect",
       reconnect_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "sdbus.config-reload",
+      "config-reload",
       reload_cb,
       0
     },
@@ -782,6 +782,7 @@ struct sdbus_ctx *sdbus_ctx_create (flux_t *h,
                                     flux_error_t *error)
 {
     struct sdbus_ctx *ctx;
+    const char *name = flux_aux_get (h, "flux::name");
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         goto error_create;
@@ -795,7 +796,7 @@ struct sdbus_ctx *sdbus_ctx_create (flux_t *h,
                                        retry_max,
                                        ctx->system_bus))
         || flux_future_then (ctx->f_conn, -1, connect_continuation, ctx) < 0
-        || flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0
+        || flux_msg_handler_addvec_ex (h, name, htab, ctx, &ctx->handlers) < 0
         || !(ctx->requests = flux_msglist_create ())
         || !(ctx->subscribers = flux_msglist_create ())
         || flux_get_rank (h, &ctx->rank) < 0)
