@@ -13,7 +13,10 @@
 
 #include <flux/core.h>
 
-struct sdbus_ctx *sdbus_ctx_create (flux_t *h, flux_error_t *error);
+struct sdbus_ctx *sdbus_ctx_create (flux_t *h,
+                                    int argc,
+                                    char **argv,
+                                    flux_error_t *error);
 void sdbus_ctx_destroy (struct sdbus_ctx *ctx);
 
 #endif /* !_SDBUS_SDBUS_H */
