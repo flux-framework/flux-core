@@ -395,4 +395,23 @@ test_expect_success 'one node is allocated' '
 	test $(FLUX_RESOURCE_LIST_RPC=sched.resource-status \
 		flux resource list -s allocated -no {nnodes}) -eq 1
 '
+# issue #6596
+test_expect_success 'release-after is 0 from last test' '
+	flux module stats job-manager | \
+		jq -e .housekeeping.config >config1.json &&
+	jq -e ".\"release-after\" == 0" config1.json
+'
+test_expect_success 'reconfigure housekeeping with default release-after' '
+	flux config load <<-EOT
+	[job-manager.housekeeping]
+	command = [ "true" ]
+	# NOTE: release-after was "0" before, now it should be unset
+	EOT
+'
+test_expect_success 'release-after is -1 after reconfig' '
+	flux module stats job-manager | \
+		jq -e .housekeeping.config >config2.json &&
+	jq -e ".\"release-after\" == -1" config2.json
+'
+
 test_done
