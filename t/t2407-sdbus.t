@@ -311,23 +311,27 @@ test_expect_success 'create list script' '
 	cat >list.py <<-EOT &&
 	import sys
 	import flux
-	print(flux.Flux().rpc("sdbus.call",{"member":"ListUnitsByPatterns","params":[[],["*"]]}).get_str())
+	print(flux.Flux().rpc(sys.argv[1] + ".call",{"member":"ListUnitsByPatterns","params":[[],["*"]]}).get_str())
 	EOT
 	chmod +x list.py
 '
 test_expect_success 'list from rank 0 is allowed' '
-	flux python ./list.py >/dev/null
+	flux python ./list.py sdbus >/dev/null
 '
 test_expect_success 'list from rank 1 is restricted' '
-	test_must_fail flux exec -r 1 flux python ./list.py 2>list1.err &&
+	test_must_fail flux exec -r 1 \
+	    flux python ./list.py sdbus 2>list1.err &&
 	grep "not allowed" list1.err
 '
 
-test_expect_success 'reload sdbus module wtih system option' '
-	flux module reload sdbus system
+test_expect_success 'load sdbus-sys module' '
+	flux module load --name sdbus-sys sdbus system
 '
 test_expect_success 'list system units works' '
-	flux python ./list.py >/dev/null
+	flux python ./list.py sdbus-sys >/dev/null
+'
+test_expect_success 'remove sdbus-sys module' '
+	flux module remove sdbus-sys
 '
 test_expect_success 'remove sdbus module' '
 	flux module remove sdbus
