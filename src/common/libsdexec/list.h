@@ -32,6 +32,7 @@ struct unit_info {
  * (E.g. use "*" for all).
  */
 flux_future_t *sdexec_list_units (flux_t *h,
+                                  const char *service,
                                   uint32_t rank,
                                   const char *pattern);
 
