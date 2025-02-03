@@ -52,6 +52,4 @@ error:
 #endif
 }
 
-MOD_NAME ("sdbus");
-
 // vi:ts=4 sw=4 expandtab
