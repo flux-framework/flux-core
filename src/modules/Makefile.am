@@ -44,6 +44,7 @@ fluxmod_LTLIBRARIES = \
 	kvs-watch.la \
 	resource.la \
 	sched-simple.la \
+	sdmon.la \
 	sdexec.la \
 	sdbus.la
 
@@ -267,6 +268,19 @@ sched_simple_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(JANSSON_LIBS)
 sched_simple_la_LDFLAGS = $(fluxmod_ldflags) -module
+
+sdmon_la_SOURCES = \
+	sdmon/sdmon.c
+sdmon_la_CPPFLAGS = \
+	$(AM_CPPFLAGS) \
+	$(LIBUUID_CFLAGS)
+sdmon_la_LIBADD = \
+	$(top_builddir)/src/common/libsdexec/libsdexec.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(LIBUUID_LIBS) \
+	$(JANSSON_LIBS)
+sdmon_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 sdexec_la_SOURCES = \
 	sdexec/sdexec.c
