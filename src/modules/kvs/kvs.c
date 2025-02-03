@@ -1596,8 +1596,7 @@ error:
 }
 
 
-static int finalize_transaction_req (treq_t *tr,
-                                     const flux_msg_t *req,
+static int finalize_transaction_req (const flux_msg_t *req,
                                      struct kvs_cb_data *cbd)
 {
     if (cbd->errnum) {
@@ -1649,7 +1648,7 @@ static void finalize_transaction_bynames (struct kvs_ctx *ctx,
                           __FUNCTION__);
                 return;
             }
-            finalize_transaction_req (tr, msg, &cbd);
+            finalize_transaction_req (msg, &cbd);
             if (treq_mgr_remove_transaction (root->trm, nameval) < 0) {
                 flux_log_error (ctx->h,
                                 "%s: treq_mgr_remove_transaction",
