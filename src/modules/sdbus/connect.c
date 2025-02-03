@@ -14,7 +14,10 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-
+#include <string.h>
+#ifndef HAVE_STRLCPY
+#include "src/common/libmissing/strlcpy.h"
+#endif
 #include <flux/core.h>
 #include <systemd/sd-bus.h>
 
@@ -58,6 +61,18 @@ static void bus_destroy (sd_bus *bus)
     }
 }
 
+static void make_user_bus_path (char *buf, size_t size)
+{
+    char *path;
+
+    if ((path = getenv ("DBUS_SESSION_BUS_ADDRESS")))
+        strlcpy (buf, path, size);
+    else if ((path = getenv ("XDG_RUNTIME_DIR")))
+        snprintf (buf, size, "unix:path:%s/bus", path);
+    else
+        strlcpy (buf, "sd_bus_open_user", size);
+}
+
 /* The timer callback calls sd_bus_open_user().  If it succeeds, the future
  * is fulfilled.  If it fails, the timer is re-armed for a calculated timeout.
  * Retries proceed forever.  If they need to be capped, this can be done by
@@ -80,16 +95,8 @@ static void timer_cb (flux_reactor_t *r,
         timeout = sdc->retry_max;
 
     if ((e = sd_bus_open_user (&bus)) < 0) {
-        char buf[1024];
-        const char *path = getenv ("DBUS_SESSION_BUS_ADDRESS");
-        if (!path) {
-            if ((path = getenv ("XDG_RUNTIME_DIR"))) {
-                snprintf (buf, sizeof (buf), "unix:path:%s/bus", path);
-                path = buf;
-            }
-        }
-        if (!path)
-            path = "sd_bus_open_user";
+        char path[1024];
+        make_user_bus_path (path, sizeof (path));
         flux_log (sdc->h,
                   LOG_INFO,
                   "%s: %s (retrying in %.0fs)",
