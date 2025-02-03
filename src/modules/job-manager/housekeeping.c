@@ -751,7 +751,8 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
     flux_error_t e;
     json_error_t jerror;
     json_t *cmdline = NULL;
-    const char *release_after = NULL;
+    const char *release_after_fsd = NULL;
+    double release_after = default_release_after;
     flux_cmd_t *cmd = NULL;
     const char *imp_path = NULL;
     char *imp_path_cpy = NULL;
@@ -773,7 +774,7 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
                         0,
                         "{s?o s?s s?b !}",
                         "command", &cmdline,
-                        "release-after", &release_after,
+                        "release-after", &release_after_fsd,
                         "use-systemd-unit", &use_systemd_unit) < 0)
         return errprintf (error, "job-manager.housekeeping: %s", jerror.text);
 
@@ -787,8 +788,8 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
     // let job-exec handle exec errors
     (void)flux_conf_unpack (conf, NULL, "{s?{s?s}}", "exec", "imp", &imp_path);
 
-    if (release_after) {
-        if (fsd_parse_duration (release_after, &hk->release_after) < 0)
+    if (release_after_fsd) {
+        if (fsd_parse_duration (release_after_fsd, &release_after) < 0)
             return errprintf (error,
                               "job-manager.housekeeping.release-after"
                               " FSD parse error");
@@ -822,6 +823,7 @@ done:
     hk->cmd = cmd;
     free (hk->imp_path);
     hk->imp_path = imp_path_cpy;
+    hk->release_after = release_after;
     flux_log (hk->ctx->h,
               LOG_DEBUG,
               "housekeeping is %sconfigured%s",
