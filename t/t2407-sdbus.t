@@ -20,7 +20,7 @@ fi
 
 test_under_flux 2 minimal
 
-flux setattr log-stderr-level 1
+flux setattr log-stderr-level 3
 
 #
 # N.B. ListUnitsByPatterns response payload is a 'params' array whose first
@@ -126,6 +126,12 @@ test_expect_success 'sdbus reconfig fails with bad sdbus-debug value' '
 	sdbus-debug = 42
 	EOT
 	grep "Expected true or false" config.err
+'
+test_expect_success 'restore correct config in case we reload later' '
+	flux config load <<-EOT
+	[systemd]
+	sdbus-debug = true
+	EOT
 '
 
 test_expect_success 'sdbus list-units works' '
@@ -317,7 +323,15 @@ test_expect_success 'list from rank 1 is restricted' '
 	grep "not allowed" list1.err
 '
 
+test_expect_success 'reload sdbus module wtih system option' '
+	flux module reload sdbus system
+'
+test_expect_success 'list system units works' '
+	flux python ./list.py >/dev/null
+'
 test_expect_success 'remove sdbus module' '
 	flux module remove sdbus
 '
+
+
 test_done
