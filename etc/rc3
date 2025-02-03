@@ -38,6 +38,7 @@ modrm all job-ingest
 
 modrm 0 cron
 modrm all sdexec
+modrm all sdbus-sys
 modrm all sdbus
 modrm all barrier
 
