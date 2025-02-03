@@ -1146,7 +1146,7 @@ nomem:
  * units that were started by that UUID a SIGKILL to begin cleanup.  Leave
  * the request in ctx->requests so the unit can be "reaped".  Let normal
  * cleanup of the request (including generating a response which shouldn't
- * hurt) to occur when that happens.
+ * hurt) occur when that happens.
  */
 static void disconnect_cb (flux_t *h,
                            flux_msg_handler_t *mh,
