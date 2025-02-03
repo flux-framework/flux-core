@@ -613,6 +613,7 @@ json_t *housekeeping_get_stats (struct housekeeping *hk)
     json_t *running;
     json_t *stats = NULL;
     struct allocation *a;
+    char *command = NULL;
 
     if (!(running = json_object ()))
         goto nomem;
@@ -626,11 +627,19 @@ json_t *housekeeping_get_stats (struct housekeeping *hk)
         }
         a = zlistx_next (hk->allocations);
     }
-    if (!(stats = json_pack ("{s:O}", "running", running)))
+    if (hk->cmd)
+        command = flux_cmd_stringify (hk->cmd);
+    if (!(stats = json_pack ("{s:O, s{s:f s:s}}",
+                             "running", running,
+                             "config",
+                               "release-after", hk->release_after,
+                               "command", command ? command : "")))
         goto nomem;
+    free (command);
     json_decref (running);
     return stats;
 nomem:
+    free (command);
     json_decref (running);
     errno = ENOMEM;
     return NULL;
