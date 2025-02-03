@@ -79,6 +79,9 @@ void basic_api_tests (void)
 
     /* test convenience functions */
 
+    /* invalid input to kvsroot_setroot() won't segfault */
+    kvsroot_setroot (NULL, NULL, NULL, 0);
+
     kvsroot_setroot (krm, root, "foobar", 18);
 
     ok (streq (root->ref, "foobar"),
@@ -86,6 +89,9 @@ void basic_api_tests (void)
 
     ok (root->seq == 18,
         "kvsroot_setroot set seq correctly");
+
+    ok (kvsroot_check_user (NULL, NULL, cred) < 0 && errno == EINVAL,
+        "invalid inputs to kvsroot_check_user returns EINVAL");
 
     cred.rolemask = FLUX_ROLE_OWNER;
     cred.userid = 0;
