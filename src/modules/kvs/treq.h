@@ -17,10 +17,6 @@ typedef struct treq_mgr treq_mgr_t;
 
 typedef struct treq treq_t;
 
-typedef int (*treq_itr_f)(treq_t *tr, void *data);
-
-typedef int (*treq_msg_cb)(treq_t *tr, const flux_msg_t *req, void *data);
-
 /*
  * treq_mgr_t API
  */
@@ -37,9 +33,6 @@ int treq_mgr_add_transaction (treq_mgr_t *trm, treq_t *tr);
  * treq_mgr_add_transaction(), via name */
 treq_t *treq_mgr_lookup_transaction (treq_mgr_t *trm, const char *name);
 
-/* Iterate through all transactions */
-int treq_mgr_iter_transactions (treq_mgr_t *trm, treq_itr_f cb, void *data);
-
 /* remove a transaction from the treq manager */
 int treq_mgr_remove_transaction (treq_mgr_t *trm, const char *name);
 
@@ -50,48 +43,19 @@ int treq_mgr_transactions_count (treq_mgr_t *trm);
  * treq_t API
  */
 
-/* treq_create - name is passed in */
-treq_t *treq_create (const char *name, int nprocs, int flags);
-
-/* treq_create_rank - internally will create name based on rank & seq */
-treq_t *treq_create_rank (uint32_t rank,
-                          unsigned int seq,
-                          int nprocs,
-                          int flags);
+/* will create transaction name based on rank & seq
+ * - request copy saved in transaction for retrieval later
+ */
+treq_t *treq_create (const flux_msg_t *request,
+                     uint32_t rank,
+                     unsigned int seq,
+                     int flags);
 
 void treq_destroy (treq_t *tr);
 
-/* if number of calls to treq_add_request_ops() is == nprocs */
-bool treq_count_reached (treq_t *tr);
-
 const char *treq_get_name (treq_t *tr);
-int treq_get_nprocs (treq_t *tr);
 int treq_get_flags (treq_t *tr);
-
-json_t *treq_get_ops (treq_t *tr);
-
-/* treq_add_request_ops() should be called with ops on each
- * request, even if ops is NULL
- */
-int treq_add_request_ops (treq_t *tr, json_t *ops);
-
-/* copy the request message into the transaction, where it can be
- * retrieved later.
- */
-int treq_add_request_copy (treq_t *tr, const flux_msg_t *request);
-
-/* Call callback for each request message copy stored internally via
- * treq_add_request_copy().
- *
- * If cb returns < 0 on a message, this function was quit and return
- * -1.
- */
-int treq_iter_request_copies (treq_t *tr, treq_msg_cb cb, void *data);
-
-/* convenience processing flag
- */
-bool treq_get_processed (treq_t *tr);
-void treq_mark_processed (treq_t *tr);
+const flux_msg_t *treq_get_request (treq_t *tr);
 
 #endif /* !_FLUX_KVS_TREQ_H */
 
