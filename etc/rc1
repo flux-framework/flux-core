@@ -28,6 +28,7 @@ if test "$(flux config get --default=false systemd.enable)" = "true"; then
     modload all sdbus
     modload all --name sdbus-sys sdbus system
     modload all sdexec
+    modload all sdmon
 fi
 
 if test $RANK -eq 0; then
