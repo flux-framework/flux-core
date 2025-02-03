@@ -32,7 +32,7 @@ void treq_basic_tests (void)
     ok ((request = flux_request_encode ("mytopic", "{ bar : 1 }")) != NULL,
         "flux_request_encode works");
 
-    ok ((tr = treq_create (request, 214, 3577, 3)) != NULL,
+    ok ((tr = treq_create (request, 214, 3577)) != NULL,
         "treq_create works");
 
     ok ((name = treq_get_name (tr)) != NULL,
@@ -43,9 +43,6 @@ void treq_basic_tests (void)
 
     ok (strstr (name, "3577") != NULL,
         "treq_get_name returns name with seq in it");
-
-    ok (treq_get_flags (tr) == 3,
-        "treq_get_flags works");
 
     ok ((tmp = treq_get_request (tr)) != NULL,
         "treq_get_request works");
@@ -74,7 +71,7 @@ void treq_mgr_basic_tests (void)
     ok (treq_mgr_transactions_count (trm) == 0,
         "treq_mgr_transactions_count returns 0 when no transactions added");
 
-    ok ((tr = treq_create (NULL, 214, 3577, 3)) != NULL,
+    ok ((tr = treq_create (NULL, 214, 3577)) != NULL,
         "treq_create works");
 
     ok ((tmp_name = treq_get_name (tr)) != NULL,

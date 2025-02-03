@@ -33,7 +33,6 @@ struct treq_mgr {
 struct treq {
     char *name;
     const flux_msg_t *request;
-    int flags;
 };
 
 /*
@@ -116,8 +115,7 @@ void treq_destroy (treq_t *tr)
 
 treq_t *treq_create (const flux_msg_t *request,
                      uint32_t rank,
-                     unsigned int seq,
-                     int flags)
+                     unsigned int seq)
 {
     treq_t *tr = NULL;
     int saved_errno;
@@ -136,7 +134,6 @@ treq_t *treq_create (const flux_msg_t *request,
         saved_errno = errno;
         goto error;
     }
-    tr->flags = flags;
 
     return tr;
 error:
@@ -148,11 +145,6 @@ error:
 const char *treq_get_name (treq_t *tr)
 {
     return tr->name;
-}
-
-int treq_get_flags (treq_t *tr)
-{
-    return tr->flags;
 }
 
 const flux_msg_t *treq_get_request (treq_t *tr)

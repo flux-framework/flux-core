@@ -1789,7 +1789,7 @@ static void commit_request_cb (flux_t *h,
      * finalize_transaction_bynames() to send error code to original
      * send.
      */
-    if (!(tr = treq_create (msg, ctx->rank, ctx->seq++, flags))) {
+    if (!(tr = treq_create (msg, ctx->rank, ctx->seq++))) {
         flux_log_error (h, "%s: treq_create", __FUNCTION__);
         goto error;
     }

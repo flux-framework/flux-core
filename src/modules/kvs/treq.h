@@ -48,13 +48,11 @@ int treq_mgr_transactions_count (treq_mgr_t *trm);
  */
 treq_t *treq_create (const flux_msg_t *request,
                      uint32_t rank,
-                     unsigned int seq,
-                     int flags);
+                     unsigned int seq);
 
 void treq_destroy (treq_t *tr);
 
 const char *treq_get_name (treq_t *tr);
-int treq_get_flags (treq_t *tr);
 const flux_msg_t *treq_get_request (treq_t *tr);
 
 #endif /* !_FLUX_KVS_TREQ_H */
