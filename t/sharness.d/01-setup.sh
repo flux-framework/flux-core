@@ -74,6 +74,15 @@ if ! test -x ${fluxbin}; then
     return 1
 fi
 
+#  flux(1) prepends the correct path(s) to PYTHONPATH when invoking
+#   Python subcommands or when `flux env` and `flux python` are invoked.
+#   However, this is not always the case for Python based test scripts
+#   run under sharness, so these test scripts can end up loading system
+#   installed Flux modules and fail in unpredictable ways. Therefore,
+#   export the correct PYTHONPATH here:
+#
+PYTHONPATH="$($FLUX_BUILD_DIR/src/cmd/flux env printenv PYTHONPATH)"
+
 #  Python's site module won't be able to determine the correct path
 #   for site.USER_SITE because sharness reassigns HOME to a per-test
 #   trash directory. Set up a REAL_HOME here from the passwd database

@@ -5,14 +5,10 @@ Flux Python Basics
 Importing the ``flux`` Python package
 -------------------------------------
 
-.. note:: The ``flux`` package which is used to interact with Flux *cannot* be
-   installed into a virtual environment with pip or conda.
+.. note:: The ``flux`` package may now be installed via pip using the
+   ``flux-python`` package.
 
 Flux's Python bindings are available with any installation of Flux.
-When running in a Flux instance, Flux will export the
-`PYTHONPATH <https://docs.python.org/3/using/cmdline.html#envvar-PYTHONPATH>`_
-environment variable so that Python processes can import the flux package
-by the usual import mechanism (``import flux``).
 
 If you want to import the package from outside of a Flux instance,
 running ``/path/to/flux env | grep PYTHONPATH`` in your shell will show you

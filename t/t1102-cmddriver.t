@@ -57,6 +57,30 @@ test_expect_success 'flux env passes cmddriver option to argument' "
 	(FLUX_URI=foo://xyx \
 		flux env sh -c 'echo \$FLUX_URI' | grep '^foo://xyx$')
 "
+test_expect_success 'flux env prepends to PYTHONPATH' '
+	expected=$(flux config builtin python_path | sed "s/:.*//") &&
+	result=$(PYTHONPATH= flux env sh -c "echo \$PYTHONPATH") &&
+	test_debug "echo expecting PYTHONPATH=$expected got $result" &&
+	echo "$result" | grep $expected
+'
+test_expect_success 'flux env outputs PYTHONPATH' '
+	expected=$(flux config builtin python_path | sed "s/:.*//") &&
+	result=$(PYTHONPATH= flux env | grep PYTHONPATH) &&
+	test_debug "echo expecting PYTHONPATH=$expected got $result" &&
+	echo "$result" | grep $expected
+'
+test_expect_success 'flux python prepends to PYTHONPATH' '
+	expected=$(flux config builtin python_path | sed "s/:.*//") &&
+	test_debug "echo expecting PYTHONPATH=$expected" &&
+	PYTHONPATH= \
+		flux python -c "import os; print(os.environ[\"PYTHONPATH\"])" \
+		| grep $expected
+'
+test_expect_success 'flux does not prepend to PYTHONPATH' '
+	printenv=$(which printenv) &&
+	( unset PYTHONPATH &&
+	  test_must_fail flux $printenv PYTHONPATH)
+'
 # push /foo twice onto PYTHONPATH -- ensure it is leftmost position:
 #test_expect_success 'cmddriver pushes dup path elements onto front of PATH' "
 #	flux -P /foo env flux -P /bar env flux -P /foo env \

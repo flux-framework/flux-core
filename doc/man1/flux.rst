@@ -80,9 +80,6 @@ is provided below:
    * - :envvar:`LUA_CPATH`
      - Lua binary module search path
 
-   * - :envvar:`PYTHONPATH`
-     - Python module search path:
-
 
 RESOURCES
 =========

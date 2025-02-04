@@ -84,6 +84,19 @@ def prepend_standard_python_paths(patharray):
     sys.path[0:0] = prepend_paths
 
 
+def restore_pythonpath():
+    """
+    Restore PYTHONPATH from the original caller's environment using
+    FLUX_PYTHONPATH_ORIG as set by flux(1)
+    """
+    try:
+        val = os.environ["FLUX_PYTHONPATH_ORIG"]
+        os.environ["PYTHONPATH"] = val
+    except KeyError:
+        # If FLUX_PYTHONPATH_ORIG not set, then unset PYTHONPATH:
+        del os.environ["PYTHONPATH"]
+
+
 if __name__ == "__main__":
     #  Pop first argument which is this script, modify sys.path as noted
     #  above, then invoke target script in this interpreter using
@@ -91,6 +104,7 @@ if __name__ == "__main__":
     #
     sys.argv.pop(0)
     prepend_standard_python_paths(sys.path)
+    restore_pythonpath()
     runpy.run_path(sys.argv[0], run_name="__main__")
 
 

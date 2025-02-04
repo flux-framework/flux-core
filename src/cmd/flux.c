@@ -184,12 +184,10 @@ int main (int argc, char *argv[])
                       flux_conf_builtin_get ("lua_path_add", flags));
     environment_push (env, "LUA_PATH", getenv ("FLUX_LUA_PATH_PREPEND"));
 
-    environment_from_env (env, "PYTHONPATH", "", ':');
-    environment_push (env,
-                      "PYTHONPATH",
-                      flux_conf_builtin_get ("python_path", flags));
-    environment_push (env, "PYTHONPATH", getenv ("FLUX_PYTHONPATH_PREPEND"));
-
+    if ((s = getenv ("FLUX_PYTHONPATH_PREPEND"))) {
+        environment_from_env (env, "PYTHONPATH", "", ':');
+        environment_push (env, "PYTHONPATH", s);
+    }
     if ((s = getenv ("MANPATH")) && strlen (s) > 0) {
         environment_from_env (env, "MANPATH", ":", ':');
         environment_push (env,
@@ -333,6 +331,37 @@ void setup_path (struct environment *env, const char *argv0)
         log_msg_exit ("Unable to determine flux executable dir");
 }
 
+void builtin_env_add_pythonpath (struct environment *env)
+{
+    /* prepend to PYTHONPATH, which is no longer done by default:
+     */
+    environment_from_env (env, "PYTHONPATH", "", ':');
+    environment_push (env,
+                      "PYTHONPATH",
+                      flux_conf_builtin_get ("python_path", FLUX_CONF_AUTO));
+    environment_push (env, "PYTHONPATH", getenv ("FLUX_PYTHONPATH_PREPEND"));
+}
+
+static void setup_python_wrapper_environment (void)
+{
+    struct environment *env;
+    const char *val;
+
+    /* Set FLUX_PYTHONPATH_ORIG to the current PYTHONPATH, then
+     * prepend the builtin python_path to PYTHONPATH so the the
+     * python wrapper py-runner.py can find the correct Flux
+     * bindings. The wrapper will then reset PYTHONPATH to
+     * FLUX_PYTHONPATH_ORIG to avoid polluting the user environment.
+     */
+    if (!(env = environment_create ()))
+        log_err_exit ("error creating environment");
+    if ((val = getenv ("PYTHONPATH")))
+        environment_set (env, "FLUX_PYTHONPATH_ORIG", val, ':');
+    builtin_env_add_pythonpath (env);
+    environment_apply (env);
+    environment_destroy (env);
+}
+
 /* Check for a flux-<command>.py in dir and execute it under the configured
  * PYTHON_INTERPRETER if found.
  */
@@ -361,6 +390,9 @@ void exec_subcommand_py (bool vopt,
                      PYTHON_INTERPRETER,
                      wrapper,
                      path);
+
+        setup_python_wrapper_environment ();
+
         execvp (PYTHON_INTERPRETER, av);
     }
     free (path);
