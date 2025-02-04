@@ -70,10 +70,12 @@ struct jobspec *lookup_jobspec_get (flux_future_t *f, json_error_t *error)
      *  json_t * objects)
      */
     if (json_unpack_ex (job->jobspec, error, 0,
-                        "{s:i s:o s:o s:{s?{s?s s?O s?{s?O}}}}",
+                        "{s:i s:o s:[{s:o s:o}] s:{s?{s?s s?O s?{s?O}}}}",
                         "version", &job->version,
                         "resources", &job->resources,
-                        "tasks", &job->tasks,
+                        "tasks",
+                            "command", &job->command,
+                            "count", &job->count,
                         "attributes",
                             "system",
                                 "cwd", &job->cwd,

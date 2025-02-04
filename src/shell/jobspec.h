@@ -25,9 +25,9 @@ struct jobspec {
     int slots_per_node;         // number of slots per node (-1=unspecified)
     int node_count;             // number of nodes (-1=unspecified)
     json_t *command;
+    json_t *count;
     const char *cwd;
     json_t *resources;
-    json_t *tasks;
     json_t *environment;
     json_t *options;            // attributes.system.shell.options, if any
 };
