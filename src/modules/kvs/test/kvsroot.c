@@ -90,6 +90,8 @@ void basic_api_tests (void)
     ok (root->seq == 18,
         "kvsroot_setroot set seq correctly");
 
+    cred.rolemask = 0;
+    cred.userid = 0;
     ok (kvsroot_check_user (NULL, NULL, cred) < 0 && errno == EINVAL,
         "invalid inputs to kvsroot_check_user returns EINVAL");
 
