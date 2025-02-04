@@ -69,22 +69,25 @@ void treq_mgr_destroy (treq_mgr_t *trm)
     }
 }
 
-int treq_mgr_add_transaction (treq_mgr_t *trm, treq_t *tr)
+int treq_mgr_add_transaction (treq_mgr_t *trm,
+                              const flux_msg_t *request,
+                              const char *name)
 {
-    if (zhash_insert (trm->transactions, tr->name, tr) < 0) {
+    if (zhash_insert (trm->transactions,
+                      name,
+                      (void *)flux_msg_incref (request)) < 0) {
+        flux_msg_decref (request);
         errno = EEXIST;
-        goto error;
+        return -1;
     }
 
     zhash_freefn (trm->transactions,
-                  treq_get_name (tr),
-                  (zhash_free_fn *)treq_destroy);
+                  name,
+                  (zhash_free_fn *)flux_msg_decref);
     return 0;
- error:
-    return -1;
 }
 
-treq_t *treq_mgr_lookup_transaction (treq_mgr_t *trm, const char *name)
+const flux_msg_t *treq_mgr_lookup_transaction (treq_mgr_t *trm, const char *name)
 {
     return zhash_lookup (trm->transactions, name);
 }
@@ -98,58 +101,6 @@ int treq_mgr_remove_transaction (treq_mgr_t *trm, const char *name)
 int treq_mgr_transactions_count (treq_mgr_t *trm)
 {
     return zhash_size (trm->transactions);
-}
-
-/*
- * treq_t functions
- */
-
-void treq_destroy (treq_t *tr)
-{
-    if (tr) {
-        free (tr->name);
-        flux_msg_decref (tr->request);
-        free (tr);
-    }
-}
-
-treq_t *treq_create (const flux_msg_t *request,
-                     uint32_t rank,
-                     unsigned int seq)
-{
-    treq_t *tr = NULL;
-    int saved_errno;
-
-    if (!(tr = calloc (1, sizeof (*tr)))) {
-        saved_errno = errno;
-        goto error;
-    }
-    if (request) {
-        if (!(tr->request = flux_msg_incref (request))) {
-            saved_errno = errno;
-            goto error;
-        }
-    }
-    if (asprintf (&(tr->name), "treq.%u.%u", rank, seq) < 0) {
-        saved_errno = errno;
-        goto error;
-    }
-
-    return tr;
-error:
-    treq_destroy (tr);
-    errno = saved_errno;
-    return NULL;
-}
-
-const char *treq_get_name (treq_t *tr)
-{
-    return tr->name;
-}
-
-const flux_msg_t *treq_get_request (treq_t *tr)
-{
-    return tr->request;
 }
 
 /*

@@ -1625,7 +1625,6 @@ static void finalize_transaction_bynames (struct kvs_ctx *ctx,
 {
     int i, len;
     json_t *name;
-    treq_t *tr;
     struct kvs_cb_data cbd = { .ctx = ctx, .root = root, .errnum = errnum };
 
     if (!(len = json_array_size (names))) {
@@ -1633,21 +1632,14 @@ static void finalize_transaction_bynames (struct kvs_ctx *ctx,
         return;
     }
     for (i = 0; i < len; i++) {
+        const flux_msg_t *msg;
         const char *nameval;
         if (!(name = json_array_get (names, i))) {
             flux_log_error (ctx->h, "%s: parsing array[%d]", __FUNCTION__, i);
             return;
         }
         nameval = json_string_value (name);
-        if ((tr = treq_mgr_lookup_transaction (root->trm, nameval))) {
-            const flux_msg_t *msg = treq_get_request (tr);
-            if (!msg) {
-                flux_log (ctx->h,
-                          LOG_ERR,
-                          "%s: transaction without a request",
-                          __FUNCTION__);
-                return;
-            }
+        if ((msg = treq_mgr_lookup_transaction (root->trm, nameval))) {
             finalize_transaction_req (msg, &cbd);
             if (treq_mgr_remove_transaction (root->trm, nameval) < 0) {
                 flux_log_error (ctx->h,
@@ -1755,12 +1747,12 @@ static void commit_request_cb (flux_t *h,
     struct kvs_ctx *ctx = arg;
     struct kvsroot *root;
     const char *ns;
-    int saved_errno, flags;
+    int flags;
     bool stall = false;
     json_t *ops = NULL;
-    treq_t *tr;
     flux_error_t error;
     const char *errmsg = NULL;
+    char name[128];
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -1789,21 +1781,21 @@ static void commit_request_cb (flux_t *h,
      * finalize_transaction_bynames() to send error code to original
      * send.
      */
-    if (!(tr = treq_create (msg, ctx->rank, ctx->seq++))) {
-        flux_log_error (h, "%s: treq_create", __FUNCTION__);
-        goto error;
-    }
-    if (treq_mgr_add_transaction (root->trm, tr) < 0) {
-        saved_errno = errno;
+
+    snprintf (name,
+              sizeof (name),
+              "transaction_req.%u.%u",
+              ctx->rank,
+              ctx->seq++);
+
+    if (treq_mgr_add_transaction (root->trm, msg, name) < 0) {
         flux_log_error (h, "%s: treq_mgr_add_transaction", __FUNCTION__);
-        treq_destroy (tr);
-        errno = saved_errno;
         goto error;
     }
 
     if (ctx->rank == 0) {
         if (kvstxn_mgr_add_transaction (root->ktm,
-                                        treq_get_name (tr),
+                                        name,
                                         ops,
                                         flags,
                                         0) < 0) {
@@ -1826,7 +1818,7 @@ static void commit_request_cb (flux_t *h,
                                  FLUX_RPC_NORESPONSE,
                                  "{ s:O s:s s:s s:i }",
                                  "ops", ops,
-                                 "name", treq_get_name (tr),
+                                 "name", name,
                                  "namespace", ns,
                                  "flags", flags))) {
             flux_log_error (h, "%s: flux_rpc_pack", __FUNCTION__);

@@ -21,49 +21,14 @@
 #include "src/modules/kvs/treq.h"
 #include "ccan/str/str.h"
 
-void treq_basic_tests (void)
-{
-    treq_t *tr;
-    flux_msg_t *request;
-    const flux_msg_t *tmp;
-    const char *name;
-    const char *topic;
-
-    ok ((request = flux_request_encode ("mytopic", "{ bar : 1 }")) != NULL,
-        "flux_request_encode works");
-
-    ok ((tr = treq_create (request, 214, 3577)) != NULL,
-        "treq_create works");
-
-    ok ((name = treq_get_name (tr)) != NULL,
-        "treq_get_name works");
-
-    ok (strstr (name, "214") != NULL,
-        "treq_get_name returns name with rank in it");
-
-    ok (strstr (name, "3577") != NULL,
-        "treq_get_name returns name with seq in it");
-
-    ok ((tmp = treq_get_request (tr)) != NULL,
-        "treq_get_request works");
-
-    if (flux_msg_get_topic (tmp, &topic) < 0)
-        BAIL_OUT ("flux_msg_get_topic");
-
-    ok (streq (topic, "mytopic"),
-        "treq_get_request returned correct request");
-
-    flux_msg_destroy (request);
-
-    treq_destroy (tr);
-}
-
 void treq_mgr_basic_tests (void)
 {
     treq_mgr_t *trm;
-    treq_t *tr, *tmp_tr;
-    const char *tmp_name;
-    char *name;
+    flux_msg_t *request;
+    const flux_msg_t *msg;
+
+    if (!(request = flux_request_encode ("mytopic", "{ bar : 1 }")))
+        BAIL_OUT ("flux_request_encode");
 
     ok ((trm = treq_mgr_create ()) != NULL,
         "treq_mgr_create works");
@@ -71,50 +36,41 @@ void treq_mgr_basic_tests (void)
     ok (treq_mgr_transactions_count (trm) == 0,
         "treq_mgr_transactions_count returns 0 when no transactions added");
 
-    ok ((tr = treq_create (NULL, 214, 3577)) != NULL,
-        "treq_create works");
-
-    ok ((tmp_name = treq_get_name (tr)) != NULL,
-        "treq_get_name works");
-
-    if (!(name = strdup (tmp_name)))
-        BAIL_OUT ("strdup");
-
-    ok (treq_mgr_add_transaction (trm, tr) == 0,
+    ok (treq_mgr_add_transaction (trm, request, "myname") == 0,
         "treq_mgr_add_transaction works");
 
-    ok (treq_mgr_add_transaction (trm, tr) < 0,
-        "treq_mgr_add_transaction fails on duplicate treq");
+    ok (treq_mgr_add_transaction (trm, request, "myname") < 0
+        && errno == EEXIST,
+        "treq_mgr_add_transaction fails on duplicate request");
 
-    ok ((tmp_tr = treq_mgr_lookup_transaction (trm, name)) != NULL,
+    ok ((msg = treq_mgr_lookup_transaction (trm, "myname")) != NULL,
         "treq_mgr_lookup_transaction works");
 
-    ok (tr == tmp_tr,
-        "treq_mgr_lookup_transaction returns correct treq");
+    ok (msg == request,
+        "treq_mgr_lookup_transaction returns correct msg");
 
     ok (treq_mgr_lookup_transaction (trm, "invalid") == NULL,
-        "treq_mgr_lookup_transaction can't find invalid treq");
+        "treq_mgr_lookup_transaction can't find invalid msg");
 
     ok (treq_mgr_transactions_count (trm) == 1,
-        "treq_mgr_transactions_count returns 1 when treq submitted");
+        "treq_mgr_transactions_count returns 1 when request saved");
 
-    treq_mgr_remove_transaction (trm, name);
+    treq_mgr_remove_transaction (trm, "myname");
 
     ok (treq_mgr_transactions_count (trm) == 0,
-        "treq_mgr_transactions_count returns 0 after treq remove");
+        "treq_mgr_transactions_count returns 0 after msg remove");
 
-    ok (treq_mgr_lookup_transaction (trm, name) == NULL,
-        "treq_mgr_lookup_transaction can't find removed treq");
+    ok (treq_mgr_lookup_transaction (trm, "myname") == NULL,
+        "treq_mgr_lookup_transaction can't find removed msg");
 
     treq_mgr_destroy (trm);
-    free (name);
+    flux_msg_decref (request);
 }
 
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
-    treq_basic_tests ();
     treq_mgr_basic_tests ();
 
     done_testing ();
