@@ -1,3 +1,49 @@
+flux-core version 0.71.0 - 2025-02-04
+-------------------------------------
+
+## New Features
+ * do not export `PYTHONPATH` by default in Flux commands (#6597)
+ * python: support relative and absolute path-like targets in jobid URI
+   resolver (#6562)
+ * libflux: support ancestor paths as alternative to URI in `flux_open(3)`
+   and `flux_open_ex(3)` (#6573)
+ * broker: add year to log timestamps (#6574)
+ * kvs: add transaction stats (#6556)
+ * support `afterexcept` dependency scheme (#6566)
+ * add `FLUX_ENCLOSING_ID` to initial program environment for instances
+   with a `jobid` broker attribute (#6558)
+ * add `flux --root` option (#6557)
+ * shell: refactor output plugin and enable per-node/task output files
+   (#6539)
+
+## Fixes
+ * fix housekeeping reconfiguration problem (#6598)
+ * improve scalability of `flux overlay errors` (#6593)
+ * shell: fix incorrect assignment of shell rank ids when broker ranks
+   appear unordered in R (#6584)
+ * job-exec: fix confusing "job shell exec error" log message (#6579)
+ * shell: fix lost log messages during initialization (#6578)
+ * broker: ensure `parent-uri` and `parent-kvs-namespace` are only set for
+   jobs (#6561)
+ * ensure only jobs that entered the RUN state can satisfy
+   `--dependency=afterany|afternotok` (#6565)
+ * prevent log message truncation (#6554)
+ * flux-exec: fix credits list update race (#6544)
+
+## Cleanup
+ * kvs: remove unused internal transaction request API code (#6595)
+ * kvs: remove fence support (#6592)
+ * kvs: misc minor cleanups (#6591)
+ * libflux: drop child watchers and the `FLUX_REACTOR_SIGCHLD` flag (#6543)
+
+## CI/Testsuite/Documentation
+
+ * doc: reword initial program section of `flux-environment(7)` (#6601)
+ * testsuite: fix flaky test in t0019-tbon-config.t (#6563)
+ * libsubprocess/test: Fix racy fd count in test (#6553)
+ * build: remove unnecessary `check-prep` target (#6550)
+
+
 flux-core version 0.70.0 - 2025-01-07
 -------------------------------------
 
