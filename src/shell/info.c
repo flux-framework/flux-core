@@ -175,6 +175,9 @@ static int shell_init_jobinfo (flux_shell_t *shell, struct shell_info *info)
         shell_log_error ("error parsing jobspec: %s", error.text);
         goto out;
     }
+    if (strstarts (error.text, "Unsupported jobspec version")) {
+        shell_warn ("warning parsing jobspec: %s", error.text);
+    }
 
     /*  Synchronously get initial version of R from first job-info
      *  watch response:
