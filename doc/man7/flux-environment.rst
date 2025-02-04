@@ -158,27 +158,27 @@ INITIAL PROGRAM ENVIRONMENT
 ===========================
 
 The :man1:`flux-alloc` interactive shell and the :man1:`flux-batch` batch
-script are examples of Flux initial programs.  Flux does not set many
-environment variables for the initial program.  In fact, the following
-are actively unset to avoid confusion when they are set by the *enclosing
-instance*:
+script are examples of Flux initial programs. Flux deliberately avoids
+setting many environment variables for the initial program to ensure
+consistency and predictability across all methods of launching a Flux
+instance.
 
- - :envvar:`FLUX_JOB_ID`
- - :envvar:`FLUX_JOB_SIZE`
- - :envvar:`FLUX_JOB_NNODES`
- - :envvar:`FLUX_JOB_TMPDIR`
- - :envvar:`FLUX_TASK_RANK`
- - :envvar:`FLUX_TASK_LOCAL_ID`
- - :envvar:`FLUX_KVS_NAMESPACE`
- - :envvar:`FLUX_PROXY_REMOTE`
- - :envvar:`FLUX_PMI_LIBRARY_PATH`
- - :envvar:`I_MPI_PMI_LIBRARY`
- - :envvar:`PMI_*`
- - :envvar:`SLURM_*`
+The initial program environment will have at least the following environment
+variables set:
 
-The :envvar:`FLUX_URI` variable is set, however, so Flux commands can be used
-as needed from the initial program to obtain information they might get via the
-environment in other workload managers, for example:
+.. envvar:: FLUX_URI
+
+   Allows Flux commands to connect to the enclosing instance (the instance
+   that started the initial program)
+
+.. envvar:: FLUX_ENCLOSING_ID
+
+   Set to the jobid of the enclosing instance, if it was launched as a Flux
+   job.
+
+If needed, Flux commands can be used to retrieve information that would
+typically be available from the environment in other workload managers. For
+example:
 
 .. code-block:: shell
 
@@ -187,8 +187,17 @@ environment in other workload managers, for example:
    BATCH_NGPUS=$(flux resource list -n -o {ngpus})
    BATCH_HOSTLIST=$(flux getattr hostlist)
 
-Additionally, :envvar:`FLUX_ENCLOSING_ID` is set to the jobid of the
-enclosing instance, if it has one.
+The advantage of this approach is that it works consistently, regardless
+of how the Flux instance was launched.
+
+The following set of environment variables are actively unset by the broker
+to avoid confusion when they are set by the enclosing instance or another
+resource manager: :envvar:`FLUX_JOB_ID`, :envvar:`FLUX_JOB_SIZE`,
+:envvar:`FLUX_JOB_NNODES`, :envvar:`FLUX_JOB_TMPDIR`,
+:envvar:`FLUX_TASK_RANK`, :envvar:`FLUX_TASK_LOCAL_ID`,
+:envvar:`FLUX_KVS_NAMESPACE`, :envvar:`FLUX_PROXY_REMOTE`,
+:envvar:`FLUX_PMI_LIBRARY_PATH`, :envvar:`I_MPI_PMI_LIBRARY`,
+:envvar:`PMI_*`, :envvar:`SLURM_*`
 
 PMI CLIENT
 ==========
