@@ -8,7 +8,13 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* issue1760.c - make kvs module sad */
+/* issue1760.c - make kvs module sad
+ *
+ * - it is assumed the directory passed in under argv[1] has already
+ * been created.  The command line `flux kvs` command does not allow
+ * a put & unlink to be done under a single transaction, thus the need
+ * for this utility test.
+ */
 
 /* Failure mode 1:
 ./issue1760 a
@@ -51,24 +57,6 @@ int main (int argc, char *argv[])
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-
-    /* Mkdir <dir>
-     */
-    if (!(txn = flux_kvs_txn_create ()))
-        log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_mkdir (txn, 0, dir) < 0)
-        log_err_exit ("flux_kvs_txn_mkdir");
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
-        log_err_exit ("flux_kvs_commit");
-    if (flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_future_get");
-    flux_future_destroy (f);
-    flux_kvs_txn_destroy (txn);
-
-    /* Expire internal kvs cache
-     */
-    if (flux_kvs_dropcache (h) < 0)
-        log_err_exit ("flux_kvs_dropcache");
 
     /* Commit the following:
      * put <dir>.a

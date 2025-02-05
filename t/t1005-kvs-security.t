@@ -379,12 +379,6 @@ test_expect_success 'kvs: guest cannot make a symlink in the test ns on rank 1' 
 # Basic tests, user can't perform non-namespace operations
 #
 
-test_expect_success 'kvs: dropcache fails (user)' '
-        set_userid 9999 &&
-        ! flux kvs dropcache &&
-        unset_userid
-'
-
 test_expect_success 'kvs: stats works (user)' '
         set_userid 9999 &&
         flux module stats kvs >/dev/null &&

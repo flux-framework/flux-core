@@ -1165,17 +1165,6 @@ test_expect_success 'kvs: --sequence on write ops works' '
 '
 
 #
-# dropcache tests
-#
-
-test_expect_success 'kvs: dropcache works' '
-	flux kvs dropcache
-'
-test_expect_success 'kvs: dropcache --all works' '
-	flux kvs dropcache --all
-'
-
-#
 # version/wait tests
 #
 

@@ -222,15 +222,6 @@ static int event_subscribe (struct kvs_ctx *ctx, const char *ns)
      */
 
     if (!(ctx->events_init)) {
-
-        /* These belong to all namespaces, subscribe once the first
-         * time we init a namespace */
-
-        if (flux_event_subscribe (ctx->h, "kvs.dropcache") < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
-            goto cleanup;
-        }
-
         /* On rank 0, we need to listen for all of these namespace
          * events, all of the time.  So subscribe to them just once on
          * rank 0. */
@@ -1170,62 +1161,6 @@ static void transaction_check_cb (flux_reactor_t *r,
 /*
  * rpc/event callbacks
  */
-
-static void dropcache_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                  const flux_msg_t *msg, void *arg)
-{
-    struct kvs_ctx *ctx = arg;
-    int size, expcount = 0;
-
-    /* irrelevant if root not initialized, drop cache entries */
-
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
-    size = cache_count_entries (ctx->cache);
-    if ((expcount = cache_expire_entries (ctx->cache, 0)) < 0) {
-        flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
-        goto error;
-    }
-    else {
-        flux_log (h,
-                  LOG_ALERT,
-                  "dropped %d of %d cache entries",
-                  expcount,
-                  size);
-    }
-    if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-}
-
-static void dropcache_event_cb (flux_t *h,
-                                flux_msg_handler_t *mh,
-                                const flux_msg_t *msg,
-                                void *arg)
-{
-    struct kvs_ctx *ctx = arg;
-    int size, expcount = 0;
-
-    /* irrelevant if root not initialized, drop cache entries */
-
-    if (flux_event_decode (msg, NULL, NULL) < 0) {
-        flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
-        return;
-    }
-    size = cache_count_entries (ctx->cache);
-    if ((expcount = cache_expire_entries (ctx->cache, 0)) < 0)
-        flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
-    else {
-        flux_log (h,
-                  LOG_ALERT,
-                  "dropped %d of %d cache entries",
-                  expcount,
-                  size);
-    }
-}
 
 static int heartbeat_root_cb (struct kvsroot *root, void *arg)
 {
@@ -2599,18 +2534,6 @@ static const struct flux_msg_handler_spec htab[] = {
         "kvs.getroot",
         getroot_request_cb,
         FLUX_ROLE_USER
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "kvs.dropcache",
-        dropcache_request_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_EVENT,
-        "kvs.dropcache",
-        dropcache_event_cb,
-        0
     },
     {
         FLUX_MSGTYPE_REQUEST,
