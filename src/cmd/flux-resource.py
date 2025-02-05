@@ -17,6 +17,7 @@ import sys
 from itertools import combinations
 
 import flux
+from flux.eventlog import EventLogFormatter
 from flux.hostlist import Hostlist
 from flux.idset import IDset
 from flux.resource import (
@@ -720,24 +721,24 @@ def emit_R(args):
     print(rset.encode())
 
 
-def print_events(events, follow, wait):
+def print_events(events, follow, wait, evf):
     if not events and not follow and not wait:
         return False
     for entry in events:
-        print(json.dumps(entry))
+        print(evf.format(entry))
         if wait and entry["name"] == wait:
             return False
     return True
 
 
-def eventlog_continuation(f, follow, wait):
+def eventlog_continuation(f, follow, wait, evf):
     try:
         payload = f.get()
     except OSError as exc:
         if exc.errno != errno.ENODATA:
             raise
         payload = None
-    if not payload or not print_events(payload["events"], follow, wait):
+    if not payload or not print_events(payload["events"], follow, wait, evf):
         f.flux_handle.reactor_stop()
     else:
         f.reset()
@@ -745,13 +746,22 @@ def eventlog_continuation(f, follow, wait):
 
 def eventlog(args):
     """Show the resource eventlog"""
+    if args.human:
+        args.format = "text"
+        args.time_format = "human"
+    if args.color is None:
+        args.color = "auto"
+
     h = flux.Flux()
+    evf = EventLogFormatter(
+        format=args.format, timestamp_format=args.time_format, color=args.color
+    )
     f = h.rpc(
         "resource.journal",
         nodeid=0,
         flags=flux.constants.FLUX_RPC_STREAMING,
     )
-    f.then(eventlog_continuation, args.follow, args.wait)
+    f.then(eventlog_continuation, args.follow, args.wait, evf)
     h.reactor_run()
 
 
@@ -1046,6 +1056,36 @@ def main():
 
     eventlog_parser = subparsers.add_parser(
         "eventlog", formatter_class=flux.util.help_formatter()
+    )
+    eventlog_parser.add_argument(
+        "-f",
+        "--format",
+        default="text",
+        metavar="FORMAT",
+        choices=["text", "json"],
+        help="Specify output format: text, json",
+    )
+    eventlog_parser.add_argument(
+        "-T",
+        "--time-format",
+        default="raw",
+        metavar="FORMAT",
+        choices=["raw", "iso", "offset", "human", "reltime"],
+        help="Specify time format: raw, iso, offset, human",
+    )
+    eventlog_parser.add_argument(
+        "-H", "--human", action="store_true", help="Display human-readable output."
+    )
+    eventlog_parser.add_argument(
+        "-L",
+        "--color",
+        type=str,
+        metavar="WHEN",
+        choices=["never", "always", "auto"],
+        nargs="?",
+        const="always",
+        default="auto",
+        help="Use color; WHEN can be 'never', 'always', or 'auto' (default)",
     )
     eventlog_parser.add_argument(
         "-F",
