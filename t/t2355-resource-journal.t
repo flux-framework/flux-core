@@ -11,7 +11,7 @@ test_expect_success 'unload the scheduler' '
 '
 
 test_expect_success 'flux resource eventlog --wait works' '
-	flux resource eventlog --wait=resource-define | tee eventlog
+	flux resource eventlog -f json --wait=resource-define | tee eventlog
 '
 test_expect_success '1st event: restart online=""' '
 	head -1 eventlog | tee eventlog.1 &&
@@ -37,7 +37,7 @@ test_expect_success 'reload resource with monitor-force-up' '
 	flux module reload resource monitor-force-up
 '
 test_expect_success 'flux resource eventlog works' '
-	flux resource eventlog --wait=resource-define >forcelog
+	flux resource eventlog -f json --wait=resource-define >forcelog
 '
 test_expect_success '1st event: restart online=0-1' '
 	head -1 forcelog >forcelog.1 &&
@@ -74,7 +74,7 @@ test_expect_success 'run restartable flux instance, drain 0' '
 '
 test_expect_success 'restart flux instance, dump eventlog' '
 	flux start --setattr=statedir=$(pwd) \
-	    flux resource eventlog --wait=resource-define | tee restartlog
+	    flux resource eventlog -f json --wait=resource-define | tee restartlog
 '
 test_expect_success '1st event: drain idset=0 reason=testing' '
 	head -1 restartlog | tee restartlog.1 &&
