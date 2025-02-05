@@ -380,7 +380,6 @@ static void getroot_completion (flux_future_t *f, void *arg)
         goto error;
     }
 
-    flux_msg_destroy (msg);
     flux_future_destroy (f);
     return;
 
@@ -394,7 +393,6 @@ error:
      * will deal with the success case.
      */
     request_tracking_remove (ctx, msg);
-    flux_msg_destroy (msg);
     flux_future_destroy (f);
 }
 
@@ -405,7 +403,6 @@ static int getroot_request_send (struct kvs_ctx *ctx,
                                  lookup_t *lh)
 {
     flux_future_t *f = NULL;
-    flux_msg_t *msgcpy = NULL;
     int saved_errno;
 
     if (!(f = flux_rpc_pack (ctx->h,
@@ -416,20 +413,18 @@ static int getroot_request_send (struct kvs_ctx *ctx,
                              "namespace", ns)))
         goto error;
 
-    if (!(msgcpy = flux_msg_copy (msg, true))) {
-        flux_log_error (ctx->h, "%s: flux_msg_copy", __FUNCTION__);
+    if (flux_future_aux_set (f,
+                             "msg",
+                             (void *)flux_msg_incref (msg),
+                             (flux_free_f)flux_msg_decref) < 0) {
+        flux_log_error (ctx->h, "%s: flux_future_aux_set", __FUNCTION__);
+        flux_msg_decref (msg);
         goto error;
     }
 
     if (lh
-        && flux_msg_aux_set (msgcpy, "lookup_handle", lh, NULL) < 0) {
+        && flux_msg_aux_set (msg, "lookup_handle", lh, NULL) < 0) {
         flux_log_error (ctx->h, "%s: flux_msg_aux_set", __FUNCTION__);
-        goto error;
-    }
-
-    /* we will manage destruction of the 'msg' on errors */
-    if (flux_future_aux_set (f, "msg", msgcpy, NULL) < 0) {
-        flux_log_error (ctx->h, "%s: flux_future_aux_set", __FUNCTION__);
         goto error;
     }
 
@@ -439,7 +434,6 @@ static int getroot_request_send (struct kvs_ctx *ctx,
     return 0;
 error:
     saved_errno = errno;
-    flux_msg_destroy (msgcpy);
     flux_future_destroy (f);
     errno = saved_errno;
     return -1;
