@@ -1070,7 +1070,7 @@ static void kvstxn_apply (kvstxn_t *kt)
         goto stall;
     }
     else if (ret == KVSTXN_PROCESS_SYNC_CONTENT_FLUSH) {
-        /* N.B. futre is managed by kvstxn, should not call
+        /* N.B. future is managed by kvstxn, should not call
          * flux_future_destroy() on it */
         flux_future_t *f = kvstxn_sync_content_flush (kt);
         if (!f) {
@@ -1084,7 +1084,7 @@ static void kvstxn_apply (kvstxn_t *kt)
         goto stall;
     }
     else if (ret == KVSTXN_PROCESS_SYNC_CHECKPOINT) {
-        /* N.B. futre is managed by kvstxn, should not call
+        /* N.B. future is managed by kvstxn, should not call
          * flux_future_destroy() on it */
         flux_future_t *f = kvstxn_sync_checkpoint (kt);
         if (!f) {
