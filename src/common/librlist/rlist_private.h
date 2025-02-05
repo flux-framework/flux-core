@@ -13,4 +13,10 @@
 
 int rlist_add_rnode (struct rlist *rl, struct rnode *n);
 
+typedef struct rnode * (*rnode_copy_f) (const struct rnode *, void *arg);
+
+struct rlist *rlist_copy_internal (const struct rlist *orig,
+                                   rnode_copy_f cpfn,
+                                   void *arg);
+
 #endif /* !HAVE_SCHED_RLIST_PRIVATE_H */
