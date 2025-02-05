@@ -221,10 +221,6 @@ static int event_subscribe (struct kvs_ctx *ctx, const char *ns)
      * See issue #2779 for more information.
      */
 
-    /* do not want to subscribe to events that are not within our
-     * namespace, so we subscribe to only specific ones.
-     */
-
     if (!(ctx->events_init)) {
 
         /* These belong to all namespaces, subscribe once the first
