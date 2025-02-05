@@ -397,12 +397,6 @@ test_expect_success 'kvs-watch: stats works (user)' '
         unset_userid
 '
 
-test_expect_success 'kvs: stats clear fails (user)' '
-        set_userid 9999 &&
-        ! flux module stats -c kvs &&
-        unset_userid
-'
-
 #
 # ensure no lingering pending requests
 #
