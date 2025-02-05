@@ -279,6 +279,10 @@ class Jobspec(object):
             raise TypeError("count must be a mapping")
 
         count = task["count"]
+        if len(count) != 1:
+            raise ValueError("count must have exactly one key set")
+        if count.keys().isdisjoint({"per_slot", "per_resource", "total"}):
+            raise ValueError("count per_slot, per_resource, or total must be set")
         if "total" in count:
             if not isinstance(count["total"], int):
                 raise TypeError("count total must be an int")
@@ -725,6 +729,11 @@ class JobspecV1(Jobspec):
             raise ValueError("attributes.system.duration is a required key")
         if not isinstance(system["duration"], numbers.Number):
             raise ValueError("attributes.system.duration must be a number")
+
+        # per_slot or total required in V1 tasks.count (no per_resource)
+        for task in tasks:
+            if task["count"].keys().isdisjoint({"per_slot", "total"}):
+                raise ValueError("count per_slot or total must be set")
 
     @classmethod
     # pylint: disable=too-many-branches,too-many-locals,too-many-statements
