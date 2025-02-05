@@ -214,8 +214,8 @@ static int recursive_parse_jobspec_resources (struct jobspec *job,
 struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
 {
     struct jobspec *job;
-    json_t *tasks;
     json_t *resources;
+    json_t *count;
 
     if (!(job = calloc (1, sizeof (*job)))) {
         set_error (error, "Out of memory");
@@ -235,10 +235,12 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
      *  json_t * objects)
      */
     if (json_unpack_ex (job->jobspec, error, 0,
-                        "{s:i s:o s:o s:{s?{s?s s?O s?{s?O}}}}",
+                        "{s:i s:o s:[{s:o s:o}] s:{s?{s?s s?O s?{s?O}}}}",
                         "version", &job->version,
                         "resources", &resources,
-                        "tasks", &tasks,
+                        "tasks",
+                            "command", &job->command,
+                            "count", &count,
                         "attributes",
                             "system",
                                 "cwd", &job->cwd,
@@ -271,14 +273,14 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
 
     /* Set job->task_count
      */
-    if (json_unpack_ex (tasks, NULL, 0,
-                        "[{s:{s:i}}]",
-                        "count", "total", &job->task_count) < 0) {
+    if (json_object_size (count) != 1) {
+        set_error (error, "tasks count must have exactly one key set");
+        goto error;
+    }
+    if (json_unpack (count, "{s:i}", "total", &job->task_count) < 0) {
         int per_slot;
-        if (json_unpack_ex (tasks, NULL, 0,
-                            "[{s:{s:i}}]",
-                            "count", "per_slot", &per_slot) < 0) {
-            set_error (error, "Unable to parse task count");
+        if (json_unpack (count, "{s:i}", "per_slot", &per_slot) < 0) {
+            set_error (error, "Unable to parse tasks count");
             goto error;
         }
         if (per_slot != 1) {
@@ -287,14 +289,8 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
         }
         job->task_count = job->slot_count;
     }
-    /* Get command
+    /* Check command
      */
-    if (json_unpack_ex (tasks, NULL, 0,
-                        "[{s:o}]",
-                        "command", &job->command) < 0) {
-        set_error (error, "Unable to parse command");
-        goto error;
-    }
     if (!json_is_array (job->command)) {
         set_error (error, "Malformed command entry");
         goto error;
