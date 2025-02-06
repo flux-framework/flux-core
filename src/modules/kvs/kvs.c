@@ -738,26 +738,19 @@ static int content_store_request_send (struct kvs_ctx *ctx,
                                        int len)
 {
     flux_future_t *f;
-    int saved_errno, rc = -1;
 
     if (!(f = content_store (ctx->h, data, len, 0)))
+        return -1;
+    if (flux_future_aux_set (f, "cache_blobref", (void *)blobref, NULL) < 0)
         goto error;
-    if (flux_future_aux_set (f, "cache_blobref", (void *)blobref, NULL) < 0) {
-        saved_errno = errno;
-        flux_future_destroy (f);
-        errno = saved_errno;
+    if (flux_future_then (f, -1., content_store_completion, ctx) < 0)
         goto error;
-    }
-    if (flux_future_then (f, -1., content_store_completion, ctx) < 0) {
-        saved_errno = errno;
-        flux_future_destroy (f);
-        errno = saved_errno;
-        goto error;
-    }
 
-    rc = 0;
+    return 0;
+
 error:
-    return rc;
+    flux_future_destroy (f);
+    return -1;
 }
 
 static int kvstxn_load_cb (kvstxn_t *kt, const char *ref, void *data)
@@ -914,16 +907,15 @@ static int error_event_send_to_name (struct kvs_ctx *ctx,
                                      int errnum)
 {
     json_t *names = NULL;
-    int rc = -1;
+    int rc;
 
     if (!(names = json_pack ("[ s ]", name))) {
         errno = ENOMEM;
         flux_log_error (ctx->h, "%s: json_pack", __FUNCTION__);
-        goto done;
+        return -1;
     }
 
     rc = error_event_send (ctx, ns, names, errnum);
-done:
     json_decref (names);
     return rc;
 }
