@@ -1434,15 +1434,17 @@ static lookup_t *lookup_common (flux_t *h,
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
 
+        /* do not destroy lookup_handle on message destruction, we
+         * manage it in here */
+        if (flux_msg_aux_set (msg, "lookup_handle", lh, NULL) < 0) {
+            flux_log_error (ctx->h, "%s: flux_msg_aux_set", __FUNCTION__);
+            goto done;
+        }
+
         if (!(wait = wait_create_msg_handler (h, mh, msg, ctx, replay_cb)))
             goto done;
 
         if (wait_set_error_cb (wait, lookup_wait_error_cb, lh) < 0)
-            goto done;
-
-        /* do not destroy lookup_handle on message destruction, we
-         * manage it in here */
-        if (wait_msg_aux_set (wait, "lookup_handle", lh, NULL) < 0)
             goto done;
 
         cbd.ctx = ctx;

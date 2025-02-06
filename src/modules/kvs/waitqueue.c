@@ -91,23 +91,6 @@ void wait_destroy (wait_t *w)
     }
 }
 
-int wait_msg_aux_set (wait_t *w,
-                      const char *name,
-                      void *aux,
-                      flux_free_f destroy)
-{
-    if (w && w->hand.msg)
-        return flux_msg_aux_set (w->hand.msg, name, aux, destroy);
-    return -1;
-}
-
-void *wait_msg_aux_get (wait_t *w, const char *name)
-{
-    if (w && w->hand.msg)
-        return flux_msg_aux_get (w->hand.msg, name);
-    return NULL;
-}
-
 waitqueue_t *wait_queue_create (void)
 {
     waitqueue_t *q = calloc (1, sizeof (*q));
