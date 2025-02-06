@@ -21,6 +21,7 @@ from flux.eventlog import EventLogFormatter
 from flux.hostlist import Hostlist
 from flux.idset import IDset
 from flux.resource import (
+    ResourceJournalConsumer,
     ResourceSet,
     ResourceStatus,
     SchedResourceList,
@@ -721,29 +722,6 @@ def emit_R(args):
     print(rset.encode())
 
 
-def print_events(events, follow, wait, evf):
-    if not events and not follow and not wait:
-        return False
-    for entry in events:
-        print(evf.format(entry))
-        if wait and entry["name"] == wait:
-            return False
-    return True
-
-
-def eventlog_continuation(f, follow, wait, evf):
-    try:
-        payload = f.get()
-    except OSError as exc:
-        if exc.errno != errno.ENODATA:
-            raise
-        payload = None
-    if not payload or not print_events(payload["events"], follow, wait, evf):
-        f.flux_handle.reactor_stop()
-    else:
-        f.reset()
-
-
 def eventlog(args):
     """Show the resource eventlog"""
     if args.human:
@@ -756,13 +734,15 @@ def eventlog(args):
     evf = EventLogFormatter(
         format=args.format, timestamp_format=args.time_format, color=args.color
     )
-    f = h.rpc(
-        "resource.journal",
-        nodeid=0,
-        flags=flux.constants.FLUX_RPC_STREAMING,
-    )
-    f.then(eventlog_continuation, args.follow, args.wait, evf)
-    h.reactor_run()
+    consumer = ResourceJournalConsumer(h, include_sentinel=True).start()
+    while True:
+        event = consumer.poll()
+        if event is None or event.is_empty():
+            break
+        print(evf.format(event))
+        if args.wait and event.name == args.wait:
+            break
+    consumer.stop()
 
 
 LOGGER = logging.getLogger("flux-resource")
