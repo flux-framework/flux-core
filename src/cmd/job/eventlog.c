@@ -146,7 +146,6 @@ static void formatter_parse_options (optparse_t *p,
     if (optparse_hasopt (p, "human")) {
         format = "text",
         time_format = "human";
-        when = "auto";
     }
 
     if (eventlog_formatter_set_format (evf, format) < 0)
