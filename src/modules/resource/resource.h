@@ -19,6 +19,7 @@ struct resource_config {
     bool norestrict;
     bool no_update_watch;
     bool monitor_force_up;
+    bool systemd_enable; // systemd.enable, not under [resource]
 };
 
 struct resource_ctx {
