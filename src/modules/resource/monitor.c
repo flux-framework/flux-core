@@ -17,6 +17,13 @@
  * the initial response to the request to watch broker.online cannot
  * be processed until the reactor runs.
  *
+ * If systemd is enabled, watch sdmon.online instead of broker.online.  This
+ * behaves exactly like broker.online, except that it isn't joined until
+ * sdmon has verified that the node has no running flux systemd units.
+ * This guards against scheduling new work on a node that hasn't been
+ * properly cleaned up.  As with broker.online, nodes are automatically
+ * removed from the group when they are shut down or lost.
+ *
  * Some synchronization notes:
  * - rc1 completes on rank 0 before any other ranks can join broker.online,
  *   therefore the scheduler must allow flux module load to complete with
@@ -444,7 +451,10 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
             goto error;
     }
     else if (!flux_attr_get (ctx->h, "broker.recovery-mode")) {
-        if (!(monitor->f_online = group_monitor (ctx->h, "broker.online"))
+        const char *online_group = "broker.online";
+        if (config->systemd_enable)
+            online_group = "sdmon.online";
+        if (!(monitor->f_online = group_monitor (ctx->h, online_group))
             || flux_future_then (monitor->f_online,
                                  -1,
                                  broker_online_cb,
