@@ -282,7 +282,7 @@ test_expect_success 'flux job eventlog/wait-event reject invalid --color' '
         test_must_fail flux job eventlog --color=foo $jobid &&
         test_must_fail flux job wait-event --color=foo $jobid
 '
-for opt in "-L" "-Lalways" "--color" "--color=always"; do
+for opt in "-HL" "-L" "-Lalways" "--color" "--color=always"; do
         test_expect_success "flux job eventlog $opt forces color on" '
                 name=notty${opt##--color=} &&
                 outfile=color-${name:-default}.out &&
