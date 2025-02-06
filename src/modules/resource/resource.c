@@ -151,6 +151,15 @@ static int parse_config (struct resource_ctx *ctx,
             return -1;
         }
     }
+    /* Check systemd.enable so we know whether sdmon.online will be populated.
+     * Configuration errors in [systemd] are handled elsewhere.
+     */
+    int systemd_enable = 0;
+    (void)flux_conf_unpack (conf,
+                            NULL,
+                            "{s?{s?b}}",
+                            "systemd",
+                              "enable", &systemd_enable);
     if (rconfig) {
         rconfig->journal_max = journal_max;
         rconfig->exclude_idset = exclude;
@@ -159,6 +168,7 @@ static int parse_config (struct resource_ctx *ctx,
         rconfig->no_update_watch = no_update_watch ? true : false;
         rconfig->rediscover = rediscover ? true : false;
         rconfig->R = o;
+        rconfig->systemd_enable = systemd_enable ? true : false;
     }
     else
         json_decref (o);
@@ -402,7 +412,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto error;
     if (!(ctx->monitor = monitor_create (ctx,
                                          inventory_get_size (ctx->inventory),
-                                         config.monitor_force_up)))
+                                         &config)))
         goto error;
     if (!(ctx->status = status_create (ctx)))
         goto error;
