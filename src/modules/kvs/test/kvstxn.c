@@ -18,6 +18,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/blobref.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libkvs/kvs.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_txn_private.h"
@@ -79,7 +80,6 @@ static int treeobj_hash (const char *hash_name, json_t *obj,
 static int cache_entry_set_treeobj (struct cache_entry *entry, const json_t *o)
 {
     char *s = NULL;
-    int saved_errno;
     int rc = -1;
 
     if (!entry || !o || treeobj_validate (o) < 0) {
@@ -92,9 +92,7 @@ static int cache_entry_set_treeobj (struct cache_entry *entry, const json_t *o)
         goto done;
     rc = 0;
  done:
-    saved_errno = errno;
-    free (s);
-    errno = saved_errno;
+    ERRNO_SAFE_WRAP (free, s);
     return rc;
 }
 

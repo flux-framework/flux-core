@@ -15,7 +15,7 @@
 #include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
-
+#include "src/common/libutil/errno_safe.h"
 #include "waitqueue.h"
 
 struct handler {
@@ -235,7 +235,6 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
     wait_t *w;
     int rc = -1;
     int count = 0;
-    int saved_errno;
 
     assert (q->magic == WAITQUEUE_MAGIC);
 
@@ -243,11 +242,11 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
     while (w) {
         if (w->hand.msg && cb != NULL && cb (w->hand.msg, arg)) {
             if (!tmp && !(tmp = zlist_new ())) {
-                saved_errno = ENOMEM;
+                errno = ENOMEM;
                 goto error;
             }
             if (zlist_append (tmp, w) < 0) {
-                saved_errno = ENOMEM;
+                errno = ENOMEM;
                 goto error;
             }
             /* prevent wait_runone from restarting handler by clearing
@@ -274,9 +273,7 @@ error:
      * the original queue yet.  Allow user to handle error as they see
      * fit.
      */
-    zlist_destroy (&tmp);
-    if (rc < 0)
-        errno = saved_errno;
+    ERRNO_SAFE_WRAP (zlist_destroy, &tmp);
     return rc;
 }
 

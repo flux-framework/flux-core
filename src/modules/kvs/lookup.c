@@ -25,6 +25,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/blobref.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_util_private.h"
 #include "ccan/str/str.h"
@@ -115,10 +116,9 @@ static zlist_t *walk_pathcomps_zlist_create (walk_level_t *wl)
 {
     char *next, *current;
     zlist_t *pathcomps = NULL;
-    int saved_errno;
 
     if (!(pathcomps = zlist_new ())) {
-        saved_errno = ENOMEM;
+        errno = ENOMEM;
         goto error;
     }
 
@@ -131,7 +131,7 @@ static zlist_t *walk_pathcomps_zlist_create (walk_level_t *wl)
         *next++ = '\0';
 
         if (zlist_append (pathcomps, current) < 0) {
-            saved_errno = ENOMEM;
+            errno = ENOMEM;
             goto error;
         }
 
@@ -139,15 +139,14 @@ static zlist_t *walk_pathcomps_zlist_create (walk_level_t *wl)
     }
 
     if (zlist_append (pathcomps, current) < 0) {
-        saved_errno = ENOMEM;
+        errno = ENOMEM;
         goto error;
     }
 
     return pathcomps;
 
  error:
-    zlist_destroy (&pathcomps);
-    errno = saved_errno;
+    ERRNO_SAFE_WRAP (zlist_destroy, &pathcomps);
     return NULL;
 }
 
@@ -155,6 +154,7 @@ static void walk_level_destroy (void *data)
 {
     walk_level_t *wl = (walk_level_t *)data;
     if (wl) {
+        int save_errno = errno;
         zlist_destroy (&wl->pathcomps);
         free (wl->root_ref);
         json_decref (wl->root_dirent);
@@ -162,6 +162,7 @@ static void walk_level_destroy (void *data)
         free (wl->path_copy);
         cache_entry_decref (wl->entry);
         free (wl);
+        errno = save_errno;
     }
 }
 
@@ -180,36 +181,24 @@ static walk_level_t *walk_level_create (const char *root_ref,
                                         int depth)
 {
     walk_level_t *wl = calloc (1, sizeof (*wl));
-    int saved_errno;
 
-    if (!wl) {
-        saved_errno = errno;
+    if (!wl)
         goto error;
-    }
-    if (!(wl->path_copy = strdup (path))) {
-        saved_errno = errno;
+    if (!(wl->path_copy = strdup (path)))
         goto error;
-    }
     wl->depth = depth;
-    if (!(wl->root_ref = strdup (root_ref))) {
-        saved_errno = errno;
+    if (!(wl->root_ref = strdup (root_ref)))
         goto error;
-    }
-    if (!(wl->root_dirent = treeobj_create_dirref (root_ref))) {
-        saved_errno = errno;
+    if (!(wl->root_dirent = treeobj_create_dirref (root_ref)))
         goto error;
-    }
-    if (!(wl->pathcomps = walk_pathcomps_zlist_create (wl))) {
-        saved_errno = errno;
+    if (!(wl->pathcomps = walk_pathcomps_zlist_create (wl)))
         goto error;
-    }
     walk_level_update_dirent (wl, wl->root_dirent, NULL);
 
     return wl;
 
  error:
     walk_level_destroy (wl);
-    errno = saved_errno;
     return NULL;
 }
 
@@ -528,7 +517,6 @@ lookup_t *lookup_create (struct cache *cache,
                          flux_t *h)
 {
     lookup_t *lh = NULL;
-    int saved_errno;
 
     if (!cache || !krm || !path) {
         errno = EINVAL;
@@ -541,32 +529,24 @@ lookup_t *lookup_create (struct cache *cache,
         return NULL;
     }
 
-    if (!(lh = calloc (1, sizeof (*lh)))) {
-        saved_errno = errno;
+    if (!(lh = calloc (1, sizeof (*lh))))
         goto cleanup;
-    }
 
     lh->cache = cache;
     lh->krm = krm;
 
     if (ns) {
         /* must duplicate strings, user may not keep pointer alive */
-        if (!(lh->ns_name = strdup (ns))) {
-            saved_errno = errno;
+        if (!(lh->ns_name = strdup (ns)))
             goto cleanup;
-        }
     }
 
-    if (!(lh->path = kvs_util_normalize_key (path, NULL))) {
-        saved_errno = errno;
+    if (!(lh->path = kvs_util_normalize_key (path, NULL)))
         goto cleanup;
-    }
 
     if (root_ref) {
-        if (!(lh->root_ref = strdup (root_ref))) {
-            saved_errno = errno;
+        if (!(lh->root_ref = strdup (root_ref)))
             goto cleanup;
-        }
         lh->root_seq = root_seq;
         lh->root_ref_set_by_user = true;
     }
@@ -582,7 +562,7 @@ lookup_t *lookup_create (struct cache *cache,
     lh->errnum = 0;
 
     if (!(lh->levels = zlist_new ())) {
-        saved_errno = ENOMEM;
+        errno = ENOMEM;
         goto cleanup;
     }
 
@@ -593,13 +573,13 @@ lookup_t *lookup_create (struct cache *cache,
 
  cleanup:
     lookup_destroy (lh);
-    errno = saved_errno;
     return NULL;
 }
 
 void lookup_destroy (lookup_t *lh)
 {
     if (lh) {
+        int save_errno = errno;
         free (lh->ns_name);
         free (lh->root_ref);
         free (lh->path);
@@ -607,6 +587,7 @@ void lookup_destroy (lookup_t *lh)
         free (lh->missing_namespace);
         zlist_destroy (&lh->levels);
         free (lh);
+        errno = save_errno;
     }
 }
 

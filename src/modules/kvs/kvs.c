@@ -30,6 +30,7 @@
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/timestamp.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libkvs/kvs_txn_private.h"
@@ -328,7 +329,6 @@ static void getroot_completion (flux_future_t *f, void *arg)
     uint32_t owner;
     const char *ref;
     struct kvsroot *root;
-    int save_errno;
 
     msg = flux_future_aux_get (f, "msg");
     assert (msg);
@@ -361,7 +361,7 @@ static void getroot_completion (flux_future_t *f, void *arg)
         }
 
         if (event_subscribe (ctx, ns) < 0) {
-            save_errno = errno;
+            int save_errno = errno;
             kvsroot_mgr_remove_root (ctx->krm, ns);
             errno = save_errno;
             flux_log_error (ctx->h, "%s: event_subscribe", __FUNCTION__);
@@ -805,14 +805,13 @@ static int setroot_event_send (struct kvs_ctx *ctx,
 {
     flux_msg_t *msg = NULL;
     char *setroot_topic = NULL;
-    int saved_errno, rc = -1;
+    int rc = -1;
 
     assert (ctx->rank == 0);
 
     if (asprintf (&setroot_topic,
                   "kvs.namespace-%s-setroot",
                   root->ns_name) < 0) {
-        saved_errno = errno;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
     }
@@ -825,24 +824,17 @@ static int setroot_event_send (struct kvs_ctx *ctx,
                                  "names", names,
                                  "keys", keys,
                                  "owner", root->owner))) {
-        saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto done;
     }
-    if (flux_msg_set_private (msg) < 0) {
-        saved_errno = errno;
+    if (flux_msg_set_private (msg) < 0)
         goto done;
-    }
-    if (flux_send (ctx->h, msg, 0) < 0) {
-        saved_errno = errno;
+    if (flux_send (ctx->h, msg, 0) < 0)
         goto done;
-    }
     rc = 0;
 done:
-    free (setroot_topic);
+    ERRNO_SAFE_WRAP (free, setroot_topic);
     flux_msg_destroy (msg);
-    if (rc < 0)
-        errno = saved_errno;
     return rc;
 }
 
@@ -853,10 +845,9 @@ static int error_event_send (struct kvs_ctx *ctx,
 {
     flux_msg_t *msg = NULL;
     char *error_topic = NULL;
-    int saved_errno, rc = -1;
+    int rc = -1;
 
     if (asprintf (&error_topic, "kvs.namespace-%s-error", ns) < 0) {
-        saved_errno = errno;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
     }
@@ -866,24 +857,17 @@ static int error_event_send (struct kvs_ctx *ctx,
                                  "namespace", ns,
                                  "names", names,
                                  "errnum", errnum))) {
-        saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto done;
     }
-    if (flux_msg_set_private (msg) < 0) {
-        saved_errno = errno;
+    if (flux_msg_set_private (msg) < 0)
         goto done;
-    }
-    if (flux_send (ctx->h, msg, 0) < 0) {
-        saved_errno = errno;
+    if (flux_send (ctx->h, msg, 0) < 0)
         goto done;
-    }
     rc = 0;
 done:
-    free (error_topic);
+    ERRNO_SAFE_WRAP (free, error_topic);
     flux_msg_destroy (msg);
-    if (rc < 0)
-        errno = saved_errno;
     return rc;
 }
 
@@ -2367,7 +2351,7 @@ static void start_root_remove (struct kvs_ctx *ctx, const char *ns)
 static int namespace_remove (struct kvs_ctx *ctx, const char *ns)
 {
     flux_msg_t *msg = NULL;
-    int saved_errno, rc = -1;
+    int rc = -1;
     char *topic = NULL;
 
     /* Namespace doesn't exist or is already in process of being
@@ -2377,32 +2361,23 @@ static int namespace_remove (struct kvs_ctx *ctx, const char *ns)
         goto done;
     }
 
-    if (asprintf (&topic, "kvs.namespace-%s-removed", ns) < 0) {
-        saved_errno = errno;
+    if (asprintf (&topic, "kvs.namespace-%s-removed", ns) < 0)
         goto cleanup;
-    }
     if (!(msg = flux_event_pack (topic, "{ s:s }", "namespace", ns))) {
-        saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto cleanup;
     }
-    if (flux_msg_set_private (msg) < 0) {
-        saved_errno = errno;
+    if (flux_msg_set_private (msg) < 0)
         goto cleanup;
-    }
-    if (flux_send (ctx->h, msg, 0) < 0) {
-        saved_errno = errno;
+    if (flux_send (ctx->h, msg, 0) < 0)
         goto cleanup;
-    }
 
     start_root_remove (ctx, ns);
 done:
     rc = 0;
 cleanup:
     flux_msg_destroy (msg);
-    free (topic);
-    if (rc < 0)
-        errno = saved_errno;
+    ERRNO_SAFE_WRAP (free, topic);
     return rc;
 }
 
@@ -2932,12 +2907,11 @@ error_uncache:
     saved_errno = errno;
     ret = cache_remove_entry (ctx->cache, ref);
     assert (ret == 1);
-error:
-    saved_errno = errno;
-    free (data);
-    flux_future_destroy (f);
-    json_decref (rootdir);
     errno = saved_errno;
+error:
+    ERRNO_SAFE_WRAP (free, data);
+    flux_future_destroy (f);
+    ERRNO_SAFE_WRAP (json_decref, rootdir);
     return -1;
 }
 
