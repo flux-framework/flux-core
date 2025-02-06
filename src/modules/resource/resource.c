@@ -203,6 +203,8 @@ static void disconnect_cb (flux_t *h,
         acquire_disconnect (ctx->acquire, msg);
     if (ctx->status)
         status_disconnect (ctx->status, msg);
+    if (ctx->reslog)
+        reslog_disconnect (ctx->reslog, msg);
 }
 
 flux_t *resource_parent_handle_open (struct resource_ctx *ctx)
@@ -362,8 +364,6 @@ int mod_main (flux_t *h, int argc, char **argv)
          *  acquire, exclude, and drain subsystems, since these
          *  are required by acquire and exclude.
          */
-        if (!(ctx->reslog = reslog_create (h)))
-            goto error;
         if (reload_eventlog (h, &eventlog) < 0)
             goto error;
         /* One time only: purge the eventlog (including KVS) of
@@ -371,6 +371,8 @@ int mod_main (flux_t *h, int argc, char **argv)
          * See flux-framework/flux-core#5931.
          */
         if (upgrade_eventlog (h, &eventlog) < 0)
+            goto error;
+        if (!(ctx->reslog = reslog_create (ctx, eventlog)))
             goto error;
         if (!(ctx->acquire = acquire_create (ctx)))
             goto error;

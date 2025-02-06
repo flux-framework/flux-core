@@ -112,6 +112,37 @@ static struct idset *group_get (flux_future_t *f)
     return idset_decode (members);
 }
 
+static int post_restart_event (struct monitor *monitor)
+{
+    struct idset *ranks = NULL;
+    char *ranks_str  = NULL;
+    char *online_str  = NULL;
+    const char *hostlist;
+    int rc = -1;
+
+    if (!(hostlist = flux_attr_get (monitor->ctx->h, "hostlist"))
+        || !(ranks = idset_create (monitor->size, 0))
+        || idset_range_set (ranks, 0, monitor->size - 1) < 0
+        || !(ranks_str  = idset_encode (ranks, IDSET_FLAG_RANGE))
+        || !(online_str  = idset_encode (monitor->up, IDSET_FLAG_RANGE))
+        || reslog_post_pack (monitor->ctx->reslog,
+                             NULL,
+                             0.,
+                             "restart",
+                             EVENT_NO_COMMIT,
+                             "{s:s s:s s:s}",
+                             "ranks", ranks_str,
+                             "online", online_str,
+                             "nodelist", hostlist) < 0)
+        goto done;
+    rc = 0;
+done:
+    ERRNO_SAFE_WRAP (free, online_str);
+    ERRNO_SAFE_WRAP (free, ranks_str);
+    idset_destroy (ranks);
+    return rc;
+}
+
 /* Post event 'name' with a context containing idset:s, where 's' is
  * the string encoding of 'ids'.  The event is not propagated to the KVS.
  */
@@ -361,6 +392,8 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
                                  monitor) < 0)
             goto error;
     }
+    if (post_restart_event (monitor) < 0)
+        goto error;
 done:
     return monitor;
 error:

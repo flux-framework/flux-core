@@ -22,7 +22,7 @@ typedef void (*reslog_cb_f)(struct reslog *reslog,
                             json_t *context,
                             void *arg);
 
-struct reslog *reslog_create (flux_t *h);
+struct reslog *reslog_create (struct resource_ctx *ctx, json_t *eventlog);
 void reslog_destroy (struct reslog *reslog);
 
 /* Post an event to the eventlog.  This function returns immediately,
@@ -46,6 +46,8 @@ int reslog_sync (struct reslog *reslog);
  */
 int reslog_add_callback (struct reslog *reslog, reslog_cb_f cb, void *arg);
 void reslog_remove_callback (struct reslog *reslog, reslog_cb_f cb, void *arg);
+
+void reslog_disconnect (struct reslog *reslog, const flux_msg_t *msg);
 
 #define RESLOG_KEY "resource.eventlog"
 
