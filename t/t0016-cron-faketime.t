@@ -8,6 +8,11 @@ if ! test_have_prereq NO_ASAN; then
     test_done
 fi
 
+if test "$(uname -m)" = "aarch64" ; then
+    skip_all='skipping faketime cron tests on aarch64'
+    test_done
+fi
+
 # allow libfaketime to be found on ubuntu, centos
 if test -d /usr/lib/x86_64-linux-gnu/faketime ; then
   export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/faketime"
