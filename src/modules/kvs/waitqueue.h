@@ -71,7 +71,7 @@ int wait_runqueue (waitqueue_t *q);
 
 /* Specialized wait_t for restarting message handlers (must be idempotent!).
  * The message handler will be reinvoked once the wait_t usecount reaches zero.
- * Message will be copied and destroyed with the wait_t.
+ * Message reference will taken in the wait_t.
  */
 wait_t *wait_create_msg_handler (flux_t *h,
                                  flux_msg_handler_t *mh,
