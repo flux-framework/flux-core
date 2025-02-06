@@ -399,8 +399,7 @@ error:
 static int getroot_request_send (struct kvs_ctx *ctx,
                                  const char *ns,
                                  flux_msg_handler_t *mh,
-                                 const flux_msg_t *msg,
-                                 lookup_t *lh)
+                                 const flux_msg_t *msg)
 {
     flux_future_t *f = NULL;
     int saved_errno;
@@ -422,12 +421,6 @@ static int getroot_request_send (struct kvs_ctx *ctx,
         goto error;
     }
 
-    if (lh
-        && flux_msg_aux_set (msg, "lookup_handle", lh, NULL) < 0) {
-        flux_log_error (ctx->h, "%s: flux_msg_aux_set", __FUNCTION__);
-        goto error;
-    }
-
     if (flux_future_then (f, -1., getroot_completion, ctx) < 0)
         goto error;
 
@@ -443,7 +436,6 @@ static struct kvsroot *getroot (struct kvs_ctx *ctx,
                                 const char *ns,
                                 flux_msg_handler_t *mh,
                                 const flux_msg_t *msg,
-                                lookup_t *lh,
                                 bool *stall)
 {
     struct kvsroot *root;
@@ -456,7 +448,7 @@ static struct kvsroot *getroot (struct kvs_ctx *ctx,
             return NULL;
         }
         else {
-            if (getroot_request_send (ctx, ns, mh, msg, lh) < 0) {
+            if (getroot_request_send (ctx, ns, mh, msg) < 0) {
                 flux_log_error (ctx->h, "getroot_request_send");
                 return NULL;
             }
@@ -1424,11 +1416,16 @@ static lookup_t *lookup_common (flux_t *h,
         ns = lookup_missing_namespace (lh);
         assert (ns);
 
-        root = getroot (ctx, ns, mh, msg, lh, &stall);
+        root = getroot (ctx, ns, mh, msg, &stall);
         assert (!root);
 
-        if (stall)
+        if (stall) {
+            if (flux_msg_aux_set (msg, "lookup_handle", lh, NULL) < 0) {
+                flux_log_error (ctx->h, "%s: flux_msg_aux_set", __FUNCTION__);
+                goto done;
+            }
             goto stall;
+        }
         goto done;
     }
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
@@ -1752,7 +1749,7 @@ static void commit_request_cb (flux_t *h,
         goto error;
     }
 
-    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, &stall))) {
         if (stall) {
             request_tracking_add (ctx, msg);
             return;
@@ -1840,7 +1837,7 @@ static void wait_version_request_cb (flux_t *h,
         goto error;
     }
 
-    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, &stall))) {
         if (stall) {
             request_tracking_add (ctx, msg);
             return;
@@ -1906,7 +1903,7 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
          * first.
          */
         bool stall = false;
-        if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
+        if (!(root = getroot (ctx, ns, mh, msg, &stall))) {
             if (stall) {
                 request_tracking_add (ctx, msg);
                 return;
@@ -2531,7 +2528,7 @@ static void setroot_pause_request_cb (flux_t *h,
         goto error;
     }
 
-    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, &stall))) {
         if (stall)
             return;
         goto error;
@@ -2596,7 +2593,7 @@ static void setroot_unpause_request_cb (flux_t *h,
         goto error;
     }
 
-    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, &stall))) {
         if (stall)
             return;
         goto error;
