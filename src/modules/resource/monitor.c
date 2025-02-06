@@ -401,7 +401,7 @@ void monitor_destroy (struct monitor *monitor)
 
 struct monitor *monitor_create (struct resource_ctx *ctx,
                                 int inventory_size,
-                                bool monitor_force_up)
+                                struct resource_config *config)
 {
     struct monitor *monitor;
 
@@ -439,7 +439,7 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
         || !(monitor->torpid = idset_create (monitor->size, 0))
         || !(monitor->lost = idset_create (monitor->size, 0)))
         goto error;
-    if (monitor_force_up) {
+    if (config->monitor_force_up) {
         if (idset_range_set (monitor->up, 0, monitor->size - 1) < 0)
             goto error;
     }
@@ -465,7 +465,6 @@ error:
     monitor_destroy (monitor);
     return NULL;
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
