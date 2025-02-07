@@ -22,7 +22,7 @@ SYNOPSIS
 | **flux** **resource** **reload** [-f] [--xml] *path*
 
 | **flux** **resource** **acquire-mute**
-| **flux** **resource** **eventlog** [*-w* *EVENT*] [*-F*]
+| **flux** **resource** **eventlog** [*-w* *EVENT*] [*-f* *FORMAT*] [*-T* *FORMAT*] [*-L* [*WHEN*]] [*-H*] [*-F*]
 
 DESCRIPTION
 ===========
@@ -363,6 +363,26 @@ eventlog
 .. program:: flux resource eventlog
 
 Watch the resource journal, which is described in RFC 44.
+
+.. option:: -f, --format=FORMAT
+
+  Specify the eventlog output format. Valid choices are *text* (the default)
+  or *json*.
+
+.. option:: -T, --time-format=FORMAT
+
+  Specify the timestamp format. Valid choices are *raw* (the default), *iso*,
+  *offset*, and *human*.
+
+.. option:: -H, --human
+
+  Display human-readable output. Equivalent to :option:`-T human -f text`.
+
+.. option:: -L, --color[=WHEN]
+
+  Control color output. The optional argument *WHEN* can be one of *auto*,
+  *never*, or *always*. If *WHEN* is omitted, it defaults to *always*.
+  Otherwise the default is *auto*.
 
 .. option:: -F, --follow
 
