@@ -468,10 +468,12 @@ _flux_submit_commands()
     "
     local batch_OPTS="\
         $COMMON_OPTIONS \
+        $BATCH_ALLOC_OPTIONS \
         $BATCH_OPTIONS \
     "
     local alloc_OPTS="\
         $COMMON_OPTIONS \
+        $BATCH_ALLOC_OPTIONS \
         $ALLOC_OPTIONS \
     "
     _flux_split_longopt && split=true
@@ -949,6 +951,7 @@ _flux_kvs_eventlog()
         -u --unformatted \
         -H --human \
         -L --color= \
+        -S --stream \
     "
     local wait_event_OPTS="\
         -N --namespace= \
@@ -1022,6 +1025,7 @@ _flux_kvs()
         -A --append \
         -f --full \
         -c --count= \
+        -S --stream \
     "
     put_OPTS="\
         -N --namespace= \
@@ -1137,7 +1141,7 @@ _flux_kvs()
 _flux_overlay()
 {
     local cmd=$1
-    local subcmds="status lookup parentof disconnect trace"
+    local subcmds="status lookup parentof disconnect trace errors"
     local split=false
 
     local status_OPTS="\
@@ -1171,6 +1175,10 @@ _flux_overlay()
         -H --human \
         -d --delta \
         -f --full \
+    "
+    local errors_OPTS="\
+        -h --help \
+        -t --timeout= \
     "
     _flux_split_longopt && split=true
     case $prev in
@@ -1415,6 +1423,7 @@ _flux_jobs()
         --threads= \
         --stats \
         --stats-only \
+        --sort= \
     "
 
     _flux_split_longopt && split=true
@@ -1427,7 +1436,7 @@ _flux_jobs()
             _flux_complete_format_name flux jobs
             return
             ;;
-        -!(-*)[Lcf])
+        --sort | -!(-*)[Lcf])
             return
             ;;
     esac
@@ -1983,10 +1992,17 @@ _flux_start()
         -o --broker-opts= \
         --wrap= \
         -s --test-size= \
+        -c --config-path = \
+        -S --setattr= \
     "
     _flux_split_longopt && split=true
     case $prev in
-        -!(-*)[os])
+        -!(-*)[osS])
+            return
+            ;;
+        --config-path | -!(-*)c)
+            compopt -o filenames
+            COMPREPLY=( $(compgen -f -- "$cur") $(compgen -d -- "$cur") )
             return
             ;;
     esac
@@ -2084,8 +2100,34 @@ _flux_housekeeping()
     fi
 }
 
+# flux-uri(1) completions
+_flux_uri()
+{
+    local cmd=$1
+    local split=false
+    local OPTS="\
+        --remote \
+        --local \
+        --wait
+    "
+    if [[ $cur != -* ]]; then
+        #  Attempt to substitute an active jobid
+        active_jobs=$(flux jobs -no $(_flux_id_fmt $cur))
+        COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
+        return 0
+    fi
+
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
 _flux_core()
 {
+    FLUX_OPTS="-v --verbose -V --version -p --parent -r --root"
     local cur prev cmd subcmd matched
     local cmds=$(__get_flux_subcommands)
     cmd=$(_flux_get_cmd)
@@ -2209,18 +2251,18 @@ _flux_core()
     housekeeping)
         _flux_housekeeping $subcmd
         ;;
-    -*)
-        COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )
+    uri)
+        _flux_uri $subcmd
         ;;
     help)
         COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
         ;;
     *)
         # return with no suggestions for unknown subcommands:
-        [[ "$prev" != "flux" ]] && return
+        [[ "$prev" != "flux" && "$prev" != -* ]] && return
 
         matched=f
-        COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
+        COMPREPLY=( $(compgen -W "${FLUX_OPTS} ${cmds}" -- "$cur") )
         ;;
     esac
 
