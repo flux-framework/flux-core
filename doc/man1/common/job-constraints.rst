@@ -32,8 +32,8 @@
    properties
      Require the set of specified properties. Properties may be
      comma-separated, in which case all specified properties are required.
-     As a convenience, if a property starts with ``^`` then a matching
-     resource must not have the specified property. In these commands,
+     As a convenience, if a property starts with ``-`` then a matching
+     resource must *not* have the specified property. In these commands,
      the ``properties`` operator is the default, so that ``a,b`` is equivalent
      to ``properties:a,b``.
 
