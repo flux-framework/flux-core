@@ -523,7 +523,7 @@ _flux_submit_commands()
 # flux-resource(1) completions
 _flux_resource()
 {
-    local subcmds="drain undrain status list R info reload"
+    local subcmds="drain undrain status list R info reload eventlog"
     local cmd=$1
     local split=false
     local states
@@ -570,15 +570,35 @@ _flux_resource()
         -q --queue= \
         -i --include= \
     "
+    local eventlog_OPTS="\
+        -h --help \
+        -f --format= \
+        -T --time-format=
+        -L --color= \
+        -F --follor \
+        -w --wait-event= \
+    "
+
     _flux_split_longopt && split=true
     case $prev in
         --queue | -!(-*)q)
             _flux_complete_queue
             return
             ;;
-        --format | -!(-*)o)
-            _flux_complete_format_name flux resource $cmd
-            return
+        --format | -!(-*)o | -!(-*)f)
+            case $cmd in
+                eventlog)
+                    COMPREPLY=( $(compgen -W "text json" -- "$cur") )
+                    return
+                    ;;
+                *)
+                    # Only eventlog takes -f as format
+                    if test "$prev" != "-f"; then
+                        _flux_complete_format_name flux resource $cmd
+                        return
+                    fi
+                    ;;
+            esac
             ;;
         --states | -!(-*)s)
             case $cmd in
