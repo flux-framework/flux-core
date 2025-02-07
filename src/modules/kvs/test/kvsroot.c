@@ -19,7 +19,6 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libkvs/kvs.h"
 #include "src/modules/kvs/kvsroot.h"
-#include "src/modules/kvs/treq.h"
 #include "ccan/str/str.h"
 
 int global = 0;
@@ -31,6 +30,7 @@ void basic_api_tests (void)
     struct kvsroot *root;
     struct kvsroot *tmproot;
     struct flux_msg_cred cred;
+    flux_msg_t *request;
 
     cache = cache_create (NULL);
 
@@ -78,6 +78,28 @@ void basic_api_tests (void)
         "kvsroot_mgr_lookup_root_safe returns NULL on root marked removed");
 
     /* test convenience functions */
+
+    ok (kvsroot_save_transaction_request (NULL, NULL, NULL) < 0
+        && errno == EINVAL,
+        "invalid inputs to kvsroot_save_transaction_request returns EINVAL");
+
+    ok (zhash_size (root->transaction_requests) == 0,
+        "before saving transaction, no transaction_requests in hash");
+
+    if (!(request = flux_request_encode ("mytopic", "{ bar : 1 }")))
+        BAIL_OUT ("flux_request_encode");
+
+    ok (kvsroot_save_transaction_request (root, request, "myname") == 0,
+        "kvsroot_save_transaction_request works");
+
+    ok (kvsroot_save_transaction_request (root, request, "myname") < 0
+        && errno == EEXIST,
+        "kvsroot_save_transaction_request fails on duplicate request");
+
+    flux_msg_destroy (request);
+
+    ok (zhash_size (root->transaction_requests) == 1,
+        "after saving transaction, one transaction_requests in hash");
 
     /* invalid input to kvsroot_setroot() won't segfault */
     kvsroot_setroot (NULL, NULL, NULL, 0);

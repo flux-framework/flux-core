@@ -42,7 +42,6 @@
 #include "cache.h"
 
 #include "lookup.h"
-#include "treq.h"
 #include "kvstxn.h"
 #include "kvsroot.h"
 #include "kvs_wait_version.h"
@@ -965,10 +964,9 @@ static void kvstxn_apply_cb (flux_future_t *f, void *arg)
     kvstxn_apply (kt);
 }
 
-/* Write all the ops for a particular commit request (rank 0
- * only).  The setroot event will cause responses to be sent to the
- * transaction requests and clean up the treq_t state.  This
- * function is idempotent.
+/* Write all the ops for a particular commit request (rank 0 only).
+ * The setroot event will cause responses to be sent to the
+ * transaction requests.  This function is idempotent.
  */
 static void kvstxn_apply (kvstxn_t *kt)
 {
@@ -1141,7 +1139,8 @@ done:
     wait_destroy (wait);
 
     /* Completed: remove from 'ready' list.
-     * N.B. treq_t remains in the treq_mgr_t hash until event is received.
+     * N.B. transaction request in the root->transaction_requests hash
+     * until event is received.
      */
     kvstxn_mgr_remove_transaction (root->ktm, kt, fallback);
 
@@ -1278,7 +1277,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
 
     if (root->remove) {
         if (!zlist_size (root->wait_version_list)
-            && !treq_mgr_transactions_count (root->trm)
+            && !zhash_size (root->transaction_requests)
             && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
 
             if (event_unsubscribe (ctx, root->ns_name) < 0)
@@ -1296,7 +1295,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
         && !root->is_primary
         && (now - root->last_update_time) > max_namespace_age
         && !zlist_size (root->wait_version_list)
-        && !treq_mgr_transactions_count (root->trm)
+        && !zhash_size (root->transaction_requests)
         && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
         /* remove a root if it not the primary one, has timed out
          * on a follower node, and it does not have any watchers,
@@ -1639,13 +1638,9 @@ static void finalize_transaction_bynames (struct kvs_ctx *ctx,
             return;
         }
         nameval = json_string_value (name);
-        if ((msg = treq_mgr_lookup_transaction (root->trm, nameval))) {
+        if ((msg = zhash_lookup (root->transaction_requests, nameval))) {
             finalize_transaction_req (msg, &cbd);
-            if (treq_mgr_remove_transaction (root->trm, nameval) < 0) {
-                flux_log_error (ctx->h,
-                                "%s: treq_mgr_remove_transaction",
-                                __FUNCTION__);
-            }
+            zhash_delete (root->transaction_requests, nameval);
         }
     }
 }
@@ -1788,8 +1783,10 @@ static void commit_request_cb (flux_t *h,
               ctx->rank,
               ctx->seq++);
 
-    if (treq_mgr_add_transaction (root->trm, msg, name) < 0) {
-        flux_log_error (h, "%s: treq_mgr_add_transaction", __FUNCTION__);
+    if (kvsroot_save_transaction_request (root, msg, name) < 0) {
+        flux_log_error (h,
+                        "%s: kvsroot_save_transaction_request",
+                        __FUNCTION__);
         goto error;
     }
 
@@ -2099,7 +2096,7 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
                          "#no-op stores",
                          kvstxn_mgr_get_noop_stores (root->ktm),
                          "#transactions",
-                         treq_mgr_transactions_count (root->trm),
+                         zhash_size (root->transaction_requests),
                          "#readytransactions",
                          kvstxn_mgr_ready_transaction_count (root->ktm),
                          "store revision", root->seq))) {
