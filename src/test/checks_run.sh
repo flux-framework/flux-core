@@ -144,6 +144,7 @@ if test "$COVERAGE" = "t"; then
 	export ENABLE_USER_SITE=1 && \
 	export COVERAGE_PROCESS_START=$(pwd)/coverage.rc && \
 	${MAKE} -j $JOBS check TESTS= && \
+	(cd src && ${MAKE} -j $JOBS check) && \
 	(cd t && ${MAKE} -j $JOBS check ${SYSTEM:+TESTS=\"$SYSTEM_TESTS\"})"
 	POSTCHECKCMDS="\
 	${MAKE} code-coverage-capture &&
