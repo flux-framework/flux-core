@@ -181,7 +181,11 @@ static int tasks_check (json_t *tasks, flux_jobspec1_error_t *error)
             goto error;
         }
     }
-    if (json_unpack (count, "{s:i}", "per_slot", &n) == 0) {
+    if (json_object_size (count) != 1) {
+        errprintf (error, "tasks count must have exactly one key set");
+        goto error;
+    }
+    else if (json_unpack (count, "{s:i}", "per_slot", &n) == 0) {
         if (n < 1) {
             errprintf (error, "tasks per_slot count must be >= 1");
             goto error;
