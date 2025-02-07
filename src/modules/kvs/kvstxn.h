@@ -140,7 +140,7 @@ int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
  */
 void kvstxn_cleanup_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry);
 
-/* on stall, get confent.flush future to wait for fulfillment on */
+/* on stall, get content.flush future to wait for fulfillment on */
 flux_future_t *kvstxn_sync_content_flush (kvstxn_t *kt);
 
 /* on stall, get checkpoint future to wait for fulfillment on */

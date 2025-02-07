@@ -23,6 +23,7 @@
 #include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/str/str.h"
 
 #include "kvsroot.h"
@@ -87,8 +88,8 @@ static void kvsroot_destroy (void *data)
             free (root->ns_name);
         if (root->ktm)
             kvstxn_mgr_destroy (root->ktm);
-        if (root->trm)
-            treq_mgr_destroy (root->trm);
+        if (root->transaction_requests)
+            zhash_destroy (&(root->transaction_requests));
         if (root->wait_version_list)
             zlist_destroy (&root->wait_version_list);
         if (root->setroot_queue)
@@ -135,8 +136,8 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
         goto error;
     }
 
-    if (!(root->trm = treq_mgr_create ())) {
-        flux_log_error (krm->h, "treq_mgr_create");
+    if (!(root->transaction_requests = zhash_new ())) {
+        flux_log_error (krm->h, "zhash_new");
         goto error;
     }
 
@@ -252,6 +253,29 @@ error:
 
 /* Convenience functions on struct kvsroot
  */
+
+int kvsroot_save_transaction_request (struct kvsroot *root,
+                                      const flux_msg_t *request,
+                                      const char *name)
+{
+    if (!root || !request) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (zhash_insert (root->transaction_requests,
+                      name,
+                      (void *)flux_msg_incref (request)) < 0) {
+        flux_msg_decref (request);
+        errno = EEXIST;
+        return -1;
+    }
+
+    zhash_freefn (root->transaction_requests,
+                  name,
+                  (zhash_free_fn *)flux_msg_decref);
+    return 0;
+}
 
 void kvsroot_setroot (kvsroot_mgr_t *krm,
                       struct kvsroot *root,

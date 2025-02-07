@@ -16,7 +16,6 @@
 
 #include "cache.h"
 #include "kvstxn.h"
-#include "treq.h"
 #include "waitqueue.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libccan/ccan/list/list.h"
@@ -31,7 +30,7 @@ struct kvsroot {
     int seq;
     char ref[BLOBREF_MAX_STRING_SIZE];
     kvstxn_mgr_t *ktm;
-    treq_mgr_t *trm;
+    zhash_t *transaction_requests;
     zlist_t *wait_version_list;
     double last_update_time;
     int flags;
@@ -74,6 +73,10 @@ int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg);
 
 /* Convenience functions on struct kvsroot
  */
+
+int kvsroot_save_transaction_request (struct kvsroot *root,
+                                      const flux_msg_t *request,
+                                      const char *name);
 
 void kvsroot_setroot (kvsroot_mgr_t *krm,
                       struct kvsroot *root,
