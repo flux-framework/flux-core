@@ -199,6 +199,7 @@ TESTSCRIPTS = \
 	t2410-sdexec-memlimit.t \
 	t2411-sdexec-job.t \
 	t2412-sdmon.t \
+	t2413-sdmon-resource.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
 	t2600-job-shell-rcalc.t \
