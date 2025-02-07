@@ -24,8 +24,6 @@ libkvs_la_SOURCES = \
 	waitqueue.h \
 	lookup.c \
 	lookup.h \
-	treq.c \
-	treq.h \
 	kvstxn.c \
 	kvstxn.h \
 	kvsroot.c \
@@ -39,7 +37,6 @@ TESTS = \
 	test_waitqueue.t \
 	test_cache.t \
 	test_lookup.t \
-	test_treq.t \
 	test_kvstxn.t \
 	test_kvsroot.t \
 	test_kvs_wait_version.t
@@ -92,17 +89,8 @@ test_lookup_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
 	$(top_builddir)/src/modules/kvs/kvsroot.o \
 	$(top_builddir)/src/modules/kvs/kvstxn.o \
-	$(top_builddir)/src/modules/kvs/treq.o \
 	$(test_ldadd)
 test_lookup_t_LDFLAGS = \
-	$(test_ldflags)
-
-test_treq_t_SOURCES = test/treq.c
-test_treq_t_CPPFLAGS = $(test_cppflags)
-test_treq_t_LDADD = \
-	$(top_builddir)/src/modules/kvs/treq.o \
-	$(test_ldadd)
-test_treq_t_LDFLAGS = \
 	$(test_ldflags)
 
 test_kvstxn_t_SOURCES = test/kvstxn.c
@@ -112,7 +100,6 @@ test_kvstxn_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/lookup.o \
 	$(top_builddir)/src/modules/kvs/kvsroot.o \
-	$(top_builddir)/src/modules/kvs/treq.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
 	$(test_ldadd)
 test_kvstxn_t_LDFLAGS = \
@@ -125,7 +112,6 @@ test_kvsroot_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
 	$(top_builddir)/src/modules/kvs/kvstxn.o \
 	$(top_builddir)/src/modules/kvs/cache.o \
-	$(top_builddir)/src/modules/kvs/treq.o \
 	$(test_ldadd)
 test_kvsroot_t_LDFLAGS = \
 	$(test_ldflags)
@@ -138,7 +124,6 @@ test_kvs_wait_version_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/kvsroot.o \
 	$(top_builddir)/src/modules/kvs/kvstxn.o \
 	$(top_builddir)/src/modules/kvs/cache.o \
-	$(top_builddir)/src/modules/kvs/treq.o \
 	$(test_ldadd)
 test_kvs_wait_version_t_LDFLAGS = \
 	$(test_ldflags)
