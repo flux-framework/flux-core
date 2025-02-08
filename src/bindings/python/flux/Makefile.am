@@ -11,6 +11,7 @@ nobase_fluxpy_PYTHON = \
 	memoized_property.py \
 	debugged.py \
 	importer.py \
+	eventlog.py \
 	conf_builtin.py \
 	cli/__init__.py \
 	cli/base.py \
@@ -59,6 +60,7 @@ nobase_fluxpy_PYTHON = \
 	resource/ResourceSet.py \
 	resource/list.py \
 	resource/status.py \
+	resource/journal.py \
 	hostlist.py \
 	idset.py \
 	progress.py \
@@ -71,6 +73,8 @@ nobase_fluxpy_PYTHON = \
 	constraint/parser.py \
 	constraint/parsetab.py \
 	constraint/__init__.py \
+	abc/journal.py \
+	abc/__init__.py \
 	utils/parsedatetime/__init__.py \
 	utils/parsedatetime/parsedatetime.py \
 	utils/parsedatetime/warns.py \

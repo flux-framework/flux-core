@@ -8,15 +8,11 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import errno
-from collections import deque
-
-from flux.constants import FLUX_RPC_NORESPONSE, FLUX_RPC_STREAMING
+from flux.abc import JournalConsumerBase, JournalEventBase
 from flux.job import JobID
-from flux.job.event import EventLogEvent
 
 
-class JournalEvent(EventLogEvent):
+class JournalEvent(JournalEventBase):
     """A container for an event from the job manager journal
 
     Attributes:
@@ -66,7 +62,7 @@ events to current events when a :obj:`JournalConsumer` is created with
 """
 
 
-class JournalConsumer:
+class JournalConsumer(JournalConsumerBase):
     """Class for consuming the job manager journal
 
     This class is a wrapper around the ``job-manager.events-journal`` RPC,
@@ -108,171 +104,37 @@ class JournalConsumer:
 
     """
 
+    SENTINEL_EVENT = SENTINEL_EVENT
+
     def __init__(self, flux_handle, full=True, since=0.0, include_sentinel=False):
-        self.handle = flux_handle
-        self.backlog = deque()
-        self.full = full
-        self.since = since
-        self.rpc = None
-        self.cb = None
-        self.cb_args = []
-        self.cb_kwargs = {}
-        self.processing_inactive = self.full
-        self.include_sentinel = include_sentinel
-
-    def __sort_backlog(self):
-        self.processing_inactive = False
-        self.backlog = deque(sorted(self.backlog, key=lambda x: x.timestamp))
-        if self.include_sentinel:
-            self.backlog.append(SENTINEL_EVENT)
-
-    def __enqueue_response(self, resp):
-        if resp is None:
-            # End of data, enqueue None:
-            self.backlog.append(None)
-            return
-
-        jobid = resp["id"]
-        jobspec = resp.get("jobspec")
-        R = resp.get("R")
-        for entry in resp["events"]:
-            event = JournalEvent(jobid, entry)
-            if event.timestamp > self.since:
-                if event.name == "submit":
-                    event.jobspec = jobspec or None
-                elif event.name == "alloc":
-                    event.R = R or None
-                self.backlog.append(event)
-
-    def __next_event(self):
-        return self.backlog.popleft()
-
-    def __set_then_cb(self):
-        if self.rpc is not None and self.cb is not None:
-            try:
-                self.rpc.then(self.__cb)
-            except OSError as exc:
-                if exc.errno == errno.EINVAL:
-                    # then callback is already set
-                    pass
-
-    def start(self):
-        """Start the stream of events by sending a request to the job manager
-
-        This function sends the job-manager.events-journal RPC to the
-        job manager. It must be called to start the stream of events.
-
-        .. note::
-            If :func:`start` is called more than once the stream of events
-            will be restarted using the original options passed to the
-            constructor. This may cause duplicate events, or missed events
-            if *full* is False since no history will be included.
-        """
-        self.rpc = self.handle.rpc(
-            "job-manager.events-journal", {"full": self.full}, 0, FLUX_RPC_STREAMING
-        )
-        #  Need to call self.rpc.then() if a user cb is registered:
-        self.__set_then_cb()
-
-        return self
-
-    def stop(self):
-        """Cancel the job-manager.events-journal RPC
-
-        Cancel the RPC. This will eventually stop the stream of events to
-        either :func:`poll` or the defined callback. After all events have
-        been processed an *event* of None will be returned by :func:`poll`
-        or the defined callback.
-        """
-        self.handle.rpc(
-            "job-manager.events-journal-cancel",
-            {"matchtag": self.rpc.pimpl.get_matchtag()},
-            0,
-            FLUX_RPC_NORESPONSE,
+        super().__init__(
+            flux_handle,
+            "job-manager.events-journal",
+            full=full,
+            since=since,
+            include_sentinel=include_sentinel,
         )
 
-    def poll(self, timeout=-1.0):
-        """Synchronously get the next job event
+    @property
+    def request_payload(self):
+        return {"full": self.full}
 
-        if *full* is True, then this call will not return until all
-        historical events have been processed. Historical events will sorted
-        in time order and returned once per :func:`poll` call.
+    def process_response(self, resp):
+        """Process a single job manager journal response
 
-        :func:`start` must be called before this function.
-
-        Args:
-            timeout (float): Only wait *timeout* seconds for the next event.
-                If the timeout expires then a :exc:`TimeoutError` is raised.
-                A *timeout* of -1.0 disables any timeout.
-        Raises:
-            RuntimeError:  :func:`poll` was called before :func:`start`.
+        The response will contain the jobid and possibly jobspec and R,
+        depending on the specific events in the payload. Return these in
+        a dict so they are passed as keyword arguments to create_event.
         """
-        if self.rpc is None:
-            raise RuntimeError("poll() called before start()")
+        return {
+            "jobid": resp.get("id"),
+            "jobspec": resp.get("jobspec"),
+            "R": resp.get("R"),
+        }
 
-        if self.processing_inactive:
-            # process backlog. Time order events once done:
-            while self.processing_inactive:
-                resp = self.rpc.wait_for(timeout).get()
-                if resp["id"] == -1:
-                    self.__sort_backlog()
-                else:
-                    self.__enqueue_response(resp)
-                self.rpc.reset()
-
-        while not self.backlog:
-            try:
-                resp = self.rpc.wait_for(timeout).get()
-            except OSError as exc:
-                if exc.errno != errno.ENODATA:
-                    raise
-                resp = None
-            self.__enqueue_response(resp)
-            self.rpc.reset()
-
-        return self.__next_event()
-
-    def __user_cb_flush(self):
-        if self.processing_inactive:
-            #  all events are accumulated in the backlog while we're still
-            #  processing inactive job events so that those events can be
-            #  sorted in timestamp order:
-            return
-        while self.backlog:
-            self.cb(self.__next_event(), *self.cb_args, **self.cb_kwargs)
-
-    def __cb(self, future):
-        try:
-            resp = future.get()
-            if self.processing_inactive and resp["id"] == -1:
-                self.__sort_backlog()
-            else:
-                self.__enqueue_response(resp)
-            self.__user_cb_flush()
-        except OSError as exc:
-            if exc.errno == errno.ENODATA:
-                self.__enqueue_response(None)
-        finally:
-            future.reset()
-
-    def set_callback(self, event_cb, *args, **kwargs):
-        """Register callback *event_cb* to be called for each job event
-
-        If provided, ``*args``, and ``**kwargs`` are passed along to
-        *event_cb*, whose only required argument is an *event*, e.g.
-
-        >>> def event_cb(event)
-        >>>     # do something with event
-
-        After a :obj:`JournalConsumer` is stopped and the final event is
-        received, *event_cb* will be called with an *event* of None, which
-        signals the end of the event stream.
-        """
-        self.cb = event_cb
-        self.cb_args = args
-        self.cb_kwargs = kwargs
-        self.__set_then_cb()
-        return self
+    def create_event(self, entry, jobid=-1, jobspec=None, R=None):
+        """Create a single JournalEvent from one event entry"""
+        return JournalEvent(jobid, entry, jobspec=jobspec, R=R)
 
 
 # vi: ts=4 sw=4 expandtab
