@@ -33,10 +33,6 @@ void iter_cb (wait_t *w, void *arg)
 {
     int *count = arg;
     (*count)++;
-
-    /* what "foobar" is set to not important, just set to count */
-    ok (wait_msg_aux_set (w, "foobar", count, NULL) == 0,
-        "wait_msg_aux_set works");
 }
 
 void msghand (flux_t *h, flux_msg_handler_t *mh,
@@ -67,7 +63,6 @@ int main (int argc, char *argv[])
     waitqueue_t *q2;
     wait_t *w, *w1, *w2;
     flux_msg_t *msg, *msg1, *msg2;
-    char *str;
     int count;
     int errnum;
     int i;
@@ -89,15 +84,10 @@ int main (int argc, char *argv[])
 
     /* corner case checks */
 
-    ok (wait_msg_aux_set (NULL, NULL, NULL, NULL) < 0,
-        "wait_msg_aux_set returns -1 on bad input");
-    ok (!wait_msg_aux_get (NULL, NULL),
-        "wait_msg_aux_set returns NULL on bad input");
     ok (wait_aux_get_errnum (NULL) < 0,
         "wait_aux_get_errnum returns -1 on bad input");
 
-    /* Create/destroy wait_t with msg handler, and set/get aux data
-     */
+    /* Create/destroy wait_t with msg handler */
     count = 0;
     msg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
     ok (msg != NULL,
@@ -105,11 +95,6 @@ int main (int argc, char *argv[])
     w = wait_create_msg_handler (NULL, NULL, msg, &count, msghand);
     ok (w != NULL,
         "wait_create_msg_handler with non-NULL msg works");
-    ok (wait_msg_aux_set (w, "aux", "val", NULL) == 0,
-        "wait_msg_aux_set works");
-    str = wait_msg_aux_get (w, "aux");
-    ok (str && streq (str, "val"),
-        "wait_msg_aux_get works and returns correct value");
     flux_msg_destroy (msg);
     wait_destroy (w);
     ok (count == 0,
@@ -157,10 +142,6 @@ int main (int argc, char *argv[])
         "wait_queue_iter works");
     ok (count == 2,
         "wait_queue_iter iterated the correct number of times");
-    ok (wait_msg_aux_get (w1, "foobar") != NULL,
-        "wait_queue_iter callback set aux correctly");
-    ok (wait_msg_aux_get (w2, "foobar") != NULL,
-        "wait_queue_iter callback set aux correctly");
     wait_queue_destroy (q);
     flux_msg_destroy (msg1);
     flux_msg_destroy (msg2);

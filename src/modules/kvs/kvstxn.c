@@ -26,6 +26,7 @@
 #include "src/common/libccan/ccan/base64/base64.h"
 #include "src/common/libutil/macros.h"
 #include "src/common/libutil/blobref.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libkvs/kvs_commit.h"
@@ -311,7 +312,7 @@ static int store_cache (kvstxn_t *kt, json_t *o,
                         struct cache_entry **entryp)
 {
     struct cache_entry *entry;
-    int saved_errno, rc;
+    int rc;
     const char *xdata;
     char *data = NULL;
     size_t xlen, databuflen;
@@ -379,9 +380,7 @@ static int store_cache (kvstxn_t *kt, json_t *o,
     return rc;
 
  error:
-    saved_errno = errno;
-    free (data);
-    errno = saved_errno;
+    ERRNO_SAFE_WRAP (free, data);
     return -1;
 }
 
@@ -629,19 +628,17 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
     char *next, *name;
     json_t *dir = rootdir;
     json_t *subdir = NULL, *dir_entry;
-    int saved_errno, rc = -1;
+    int rc = -1;
 
-    if (!(cpy = kvs_util_normalize_key (key, NULL))) {
-        saved_errno = errno;
+    if (!(cpy = kvs_util_normalize_key (key, NULL)))
         goto done;
-    }
 
     name = cpy;
 
     /* Special case root
      */
     if (streq (name, ".")) {
-        saved_errno = EINVAL;
+        errno = EINVAL;
         goto done;
     }
 
@@ -653,20 +650,17 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
         *next++ = '\0';
 
         if (!treeobj_is_dir (dir)) {
-            saved_errno = ENOTRECOVERABLE;
+            errno = ENOTRECOVERABLE;
             goto done;
         }
 
         if (!(dir_entry = treeobj_get_entry (dir, name))) {
             if (json_is_null (dirent))
                 goto success; /* key deletion - it doesn't exist so return */
-            if (!(subdir = treeobj_create_dir ())) {
-                saved_errno = errno;
+            if (!(subdir = treeobj_create_dir ()))
                 goto done;
-            }
             /* subdir just created above, no need to validate */
             if (treeobj_insert_entry_novalidate (dir, name, subdir) < 0) {
-                saved_errno = errno;
                 json_decref (subdir);
                 goto done;
             }
@@ -681,24 +675,20 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
             const json_t *subdirktmp;
             int refcount;
 
-            if ((refcount = treeobj_get_count (dir_entry)) < 0) {
-                saved_errno = errno;
+            if ((refcount = treeobj_get_count (dir_entry)) < 0)
                 goto done;
-            }
 
             if (refcount != 1) {
                 flux_log (kt->ktm->h,
                           LOG_ERR,
                           "invalid dirref count: %d",
                           refcount);
-                saved_errno = ENOTRECOVERABLE;
+                errno = ENOTRECOVERABLE;
                 goto done;
             }
 
-            if (!(ref = treeobj_get_blobref (dir_entry, 0))) {
-                saved_errno = errno;
+            if (!(ref = treeobj_get_blobref (dir_entry, 0)))
                 goto done;
-            }
 
             if (!(entry = cache_lookup (kt->ktm->cache, ref))
                 || !cache_entry_get_valid (entry)) {
@@ -707,19 +697,16 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
             }
 
             if (!(subdirktmp = cache_entry_get_treeobj (entry))) {
-                saved_errno = ENOTRECOVERABLE;
+                errno = ENOTRECOVERABLE;
                 goto done;
             }
 
             /* do not corrupt store by modifying orig. */
-            if (!(subdir = treeobj_deep_copy (subdirktmp))) {
-                saved_errno = errno;
+            if (!(subdir = treeobj_deep_copy (subdirktmp)))
                 goto done;
-            }
 
             /* copy from entry already in cache, assume novalidate ok */
             if (treeobj_insert_entry_novalidate (dir, name, subdir) < 0) {
-                saved_errno = errno;
                 json_decref (subdir);
                 goto done;
             }
@@ -731,21 +718,19 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
             char *nkey = NULL;
 
             if (treeobj_get_symlink (dir_entry, &ns, &target) < 0) {
-                saved_errno = EINVAL;
+                errno = EINVAL;
                 goto done;
             }
             assert (target);
 
             /* can't cross into a new namespace */
             if (ns && !streq (ns, kt->ktm->ns_name)) {
-                saved_errno = EINVAL;
+                errno = EINVAL;
                 goto done;
             }
 
-            if (asprintf (&nkey, "%s.%s", target, next) < 0) {
-                saved_errno = errno;
+            if (asprintf (&nkey, "%s.%s", target, next) < 0)
                 goto done;
-            }
             if (kvstxn_link_dirent (kt,
                                     rootdir,
                                     nkey,
@@ -753,7 +738,6 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
                                     flags,
                                     missing_ref,
                                     append) < 0) {
-                saved_errno = errno;
                 free (nkey);
                 goto done;
             }
@@ -763,13 +747,10 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
         else {
             if (json_is_null (dirent))
                 goto success; /* key deletion - it doesn't exist so return */
-            if (!(subdir = treeobj_create_dir ())) {
-                saved_errno = errno;
+            if (!(subdir = treeobj_create_dir ()))
                 goto done;
-            }
             /* subdir just created above, no need to validate */
             if (treeobj_insert_entry_novalidate (dir, name, subdir) < 0) {
-                saved_errno = errno;
                 json_decref (subdir);
                 goto done;
             }
@@ -783,10 +764,8 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
      */
     if (!json_is_null (dirent)) {
         if (flags & FLUX_KVS_APPEND) {
-            if (kvstxn_append (kt, dirent, dir, name, append) < 0) {
-                saved_errno = errno;
+            if (kvstxn_append (kt, dirent, dir, name, append) < 0)
                 goto done;
-            }
         }
         else {
             /* if not append, it's a normal insertion
@@ -795,27 +774,21 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
              * inserted must be checked.  So we cannot use the
              * novalidate alternative function.
              */
-            if (treeobj_insert_entry (dir, name, dirent) < 0) {
-                saved_errno = errno;
+            if (treeobj_insert_entry (dir, name, dirent) < 0)
                 goto done;
-            }
         }
     }
     else {
         if (treeobj_delete_entry (dir, name) < 0) {
             /* if ENOENT, it's ok since we're deleting */
-            if (errno != ENOENT) {
-                saved_errno = errno;
+            if (errno != ENOENT)
                 goto done;
-            }
         }
     }
  success:
     rc = 0;
  done:
-    free (cpy);
-    if (rc < 0)
-        errno = saved_errno;
+    ERRNO_SAFE_WRAP (free, cpy);
     return rc;
 }
 
@@ -1250,22 +1223,19 @@ kvstxn_mgr_t *kvstxn_mgr_create (struct cache *cache,
                                  void *aux)
 {
     kvstxn_mgr_t *ktm = NULL;
-    int saved_errno;
 
     if (!cache || !ns || !hash_name) {
-        saved_errno = EINVAL;
-        goto error;
+        errno = EINVAL;
+        return NULL;
     }
 
-    if (!(ktm = calloc (1, sizeof (*ktm)))) {
-        saved_errno = errno;
+    if (!(ktm = calloc (1, sizeof (*ktm))))
         goto error;
-    }
     ktm->cache = cache;
     ktm->ns_name = ns;
     ktm->hash_name = hash_name;
     if (!(ktm->ready = zlist_new ())) {
-        saved_errno = ENOMEM;
+        errno = ENOMEM;
         goto error;
     }
     ktm->h = h;
@@ -1274,16 +1244,17 @@ kvstxn_mgr_t *kvstxn_mgr_create (struct cache *cache,
 
  error:
     kvstxn_mgr_destroy (ktm);
-    errno = saved_errno;
     return NULL;
 }
 
 void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm)
 {
     if (ktm) {
+        int save_errno = errno;
         if (ktm->ready)
             zlist_destroy (&ktm->ready);
         free (ktm);
+        errno = save_errno;
     }
 }
 

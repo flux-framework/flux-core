@@ -20,6 +20,7 @@
 
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libutil/tstat.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libtap/tap.h"
 #include "src/modules/kvs/waitqueue.h"
 #include "src/modules/kvs/cache.h"
@@ -28,7 +29,6 @@
 static int cache_entry_set_treeobj (struct cache_entry *entry, const json_t *o)
 {
     char *s = NULL;
-    int saved_errno;
     int rc = -1;
 
     if (!entry || !o || treeobj_validate (o) < 0) {
@@ -41,9 +41,7 @@ static int cache_entry_set_treeobj (struct cache_entry *entry, const json_t *o)
         goto done;
     rc = 0;
 done:
-    saved_errno = errno;
-    free (s);
-    errno = saved_errno;
+    ERRNO_SAFE_WRAP (free, s);
     return rc;
 }
 

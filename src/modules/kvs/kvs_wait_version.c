@@ -21,6 +21,7 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "kvs_wait_version.h"
 
@@ -122,22 +123,21 @@ int kvs_wait_version_remove_msg (struct kvsroot *root,
     zlist_t *tmp = NULL;
     struct kvs_wait_version *kwv;
     int rc = -1;
-    int saved_errno;
 
     if (!root || !cmp) {
-        saved_errno = EINVAL;
-        goto error;
+        errno = EINVAL;
+        return -1;
     }
 
     kwv = zlist_first (root->wait_version_list);
     while (kwv) {
         if (cmp (kwv->msg, arg)) {
             if (!tmp && !(tmp = zlist_new ())) {
-                saved_errno = ENOMEM;
+                errno = ENOMEM;
                 goto error;
             }
             if (zlist_append (tmp, kwv) < 0) {
-                saved_errno = ENOMEM;
+                errno = ENOMEM;
                 goto error;
             }
         }
@@ -154,9 +154,7 @@ int kvs_wait_version_remove_msg (struct kvsroot *root,
      * the original queue yet.  Allow user to handle error as they see
      * fit.
      */
-    zlist_destroy (&tmp);
-    if (rc < 0)
-        errno = saved_errno;
+    ERRNO_SAFE_WRAP (zlist_destroy, &tmp);
     return rc;
 }
 

@@ -39,18 +39,15 @@ struct kvsroot_mgr {
 kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg)
 {
     kvsroot_mgr_t *krm = NULL;
-    int saved_errno;
 
-    if (!(krm = calloc (1, sizeof (*krm)))) {
-        saved_errno = ENOMEM;
+    if (!(krm = calloc (1, sizeof (*krm))))
         goto error;
-    }
     if (!(krm->roothash = zhash_new ())) {
-        saved_errno = ENOMEM;
+        errno = ENOMEM;
         goto error;
     }
     if (!(krm->removelist = zlist_new ())) {
-        saved_errno = ENOMEM;
+        errno = ENOMEM;
         goto error;
     }
     krm->iterating_roots = false;
@@ -60,18 +57,19 @@ kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg)
 
  error:
     kvsroot_mgr_destroy (krm);
-    errno = saved_errno;
     return NULL;
 }
 
 void kvsroot_mgr_destroy (kvsroot_mgr_t *krm)
 {
     if (krm) {
+        int save_errno = errno;
         if (krm->roothash)
             zhash_destroy (&krm->roothash);
         if (krm->removelist)
             zlist_destroy (&krm->removelist);
         free (krm);
+        errno = save_errno;
     }
 }
 
