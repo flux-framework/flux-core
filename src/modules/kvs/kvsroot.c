@@ -29,12 +29,14 @@
 #include "kvsroot.h"
 
 struct kvsroot_mgr {
-    zhash_t *roothash;
+    zhashx_t *roothash;
     zlist_t *removelist;
     bool iterating_roots;
     flux_t *h;
     void *arg;
 };
+
+static void kvsroot_destroy (void **data);
 
 kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg)
 {
@@ -42,10 +44,11 @@ kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg)
 
     if (!(krm = calloc (1, sizeof (*krm))))
         goto error;
-    if (!(krm->roothash = zhash_new ())) {
+    if (!(krm->roothash = zhashx_new ())) {
         errno = ENOMEM;
         goto error;
     }
+    zhashx_set_destructor (krm->roothash, kvsroot_destroy);
     if (!(krm->removelist = zlist_new ())) {
         errno = ENOMEM;
         goto error;
@@ -65,7 +68,7 @@ void kvsroot_mgr_destroy (kvsroot_mgr_t *krm)
     if (krm) {
         int save_errno = errno;
         if (krm->roothash)
-            zhash_destroy (&krm->roothash);
+            zhashx_destroy (&krm->roothash);
         if (krm->removelist)
             zlist_destroy (&krm->removelist);
         free (krm);
@@ -75,13 +78,14 @@ void kvsroot_mgr_destroy (kvsroot_mgr_t *krm)
 
 int kvsroot_mgr_root_count (kvsroot_mgr_t *krm)
 {
-    return zhash_size (krm->roothash);
+    return zhashx_size (krm->roothash);
 }
 
-static void kvsroot_destroy (void *data)
+/* zhashx_destructor_fn */
+static void kvsroot_destroy (void **data)
 {
     if (data) {
-        struct kvsroot *root = data;
+        struct kvsroot *root = *data;
         int save_errno = errno;
         if (root->ns_name)
             free (root->ns_name);
@@ -93,7 +97,7 @@ static void kvsroot_destroy (void *data)
             zlist_destroy (&root->wait_version_list);
         if (root->setroot_queue)
             flux_msglist_destroy (root->setroot_queue);
-        free (data);
+        free (root);
         errno = save_errno;
     }
 }
@@ -105,6 +109,8 @@ static void flux_msg_decref_wrapper (void **item)
     flux_msg_decref (msg);
 }
 
+/* zhashx_destructor_fn */
+
 struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
                                          struct cache *cache,
                                          const char *hash_name,
@@ -113,7 +119,6 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
                                          int flags)
 {
     struct kvsroot *root;
-    int save_errnum;
 
     /* Don't modify hash while iterating */
     if (krm->iterating_roots) {
@@ -163,17 +168,9 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
     root->flags = flags;
     root->remove = false;
 
-    if (zhash_insert (krm->roothash, ns, root) < 0) {
+    if (zhashx_insert (krm->roothash, ns, root) < 0) {
         errno = EEXIST;
-        flux_log_error (krm->h, "zhash_insert");
-        goto error;
-    }
-
-    if (!zhash_freefn (krm->roothash, ns, kvsroot_destroy)) {
-        flux_log_error (krm->h, "zhash_freefn");
-        save_errnum = errno;
-        zhash_delete (krm->roothash, ns);
-        errno = save_errnum;
+        flux_log_error (krm->h, "zhashx_insert");
         goto error;
     }
 
@@ -181,7 +178,7 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
     return root;
 
  error:
-    kvsroot_destroy (root);
+    kvsroot_destroy ((void **)&root);
     return NULL;
 }
 
@@ -204,14 +201,14 @@ int kvsroot_mgr_remove_root (kvsroot_mgr_t *krm, const char *ns)
         }
     }
     else
-        zhash_delete (krm->roothash, ns);
+        zhashx_delete (krm->roothash, ns);
     return 0;
 }
 
 struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *krm,
                                          const char *ns)
 {
-    return zhash_lookup (krm->roothash, ns);
+    return zhashx_lookup (krm->roothash, ns);
 }
 
 struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm,
@@ -233,7 +230,7 @@ int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg)
 
     krm->iterating_roots = true;
 
-    root = zhash_first (krm->roothash);
+    root = zhashx_first (krm->roothash);
     while (root) {
         int ret;
 
@@ -243,7 +240,7 @@ int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg)
         if (ret == 1)
             break;
 
-        root = zhash_next (krm->roothash);
+        root = zhashx_next (krm->roothash);
     }
 
     krm->iterating_roots = false;
