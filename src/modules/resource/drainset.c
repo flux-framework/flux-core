@@ -207,6 +207,44 @@ error:
     return NULL;
 }
 
+struct drainset *drainset_from_json (json_t *o)
+{
+    struct drainset *ds;
+    const char *key;
+    json_t *value;
+
+    if (!(ds = drainset_create ()))
+        return NULL;
+
+    json_object_foreach (o, key, value) {
+        double timestamp;
+        const char *reason;
+        struct idset *ids;
+        unsigned int i;
+
+        if (json_unpack (value,
+                         "{s:F s:s}",
+                         "timestamp", &timestamp,
+                         "reason", &reason) < 0
+            || !(ids = idset_decode (key)))
+            goto error;
+
+        i = idset_first (ids);
+        while (i != IDSET_INVALID_ID) {
+            if (drainset_drain_rank (ds, i, timestamp, reason) < 0) {
+                idset_destroy (ids);
+                goto error;
+            }
+            i = idset_next (ids, i);
+        }
+        idset_destroy (ids);
+    }
+    return ds;
+error:
+    drainset_destroy (ds);
+    return NULL;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

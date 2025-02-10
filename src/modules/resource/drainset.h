@@ -27,6 +27,8 @@ int drainset_drain_rank (struct drainset *dset,
 
 json_t *drainset_to_json (struct drainset *dset);
 
+struct drainset *drainset_from_json (json_t *o);
+
 #endif /* ! _FLUX_RESOURCE_DRAINSET_H */
 
 /*
