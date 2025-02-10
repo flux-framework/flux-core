@@ -30,7 +30,7 @@
 
 struct kvsroot_mgr {
     zhashx_t *roothash;
-    zlist_t *removelist;
+    zlistx_t *removelist;
     bool iterating_roots;
     flux_t *h;
     void *arg;
@@ -60,10 +60,11 @@ kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg)
         goto error;
     }
     zhashx_set_destructor (krm->roothash, kvsroot_destroy);
-    if (!(krm->removelist = zlist_new ())) {
+    if (!(krm->removelist = zlistx_new ())) {
         errno = ENOMEM;
         goto error;
     }
+    zlistx_set_duplicator (krm->removelist, (zlistx_duplicator_fn *)strdup);
     krm->iterating_roots = false;
     krm->h = h;
     krm->arg = arg;
@@ -81,7 +82,7 @@ void kvsroot_mgr_destroy (kvsroot_mgr_t *krm)
         if (krm->roothash)
             zhashx_destroy (&krm->roothash);
         if (krm->removelist)
-            zlist_destroy (&krm->removelist);
+            zlistx_destroy (&krm->removelist);
         free (krm);
         errno = save_errno;
     }
@@ -204,15 +205,7 @@ int kvsroot_mgr_remove_root (kvsroot_mgr_t *krm, const char *ns)
     /* don't want to remove while iterating, so save namespace for
      * later removal */
     if (krm->iterating_roots) {
-        char *str = strdup (ns);
-
-        if (!str) {
-            errno = ENOMEM;
-            return -1;
-        }
-
-        if (zlist_append (krm->removelist, str) < 0) {
-            free (str);
+        if (zlistx_add_end (krm->removelist, (void *)ns) < 0) {
             errno = ENOMEM;
             return -1;
         }
@@ -262,7 +255,8 @@ int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg)
 
     krm->iterating_roots = false;
 
-    while ((ns = zlist_pop (krm->removelist))) {
+    zlistx_head (krm->removelist);
+    while ((ns = zlistx_detach_cur (krm->removelist))) {
         kvsroot_mgr_remove_root (krm, ns);
         free (ns);
     }
@@ -270,8 +264,7 @@ int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg)
     return 0;
 
 error:
-    while ((ns = zlist_pop (krm->removelist)))
-        free (ns);
+    zlistx_purge (krm->removelist);
     krm->iterating_roots = false;
     return -1;
 }
