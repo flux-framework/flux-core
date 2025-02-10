@@ -1144,6 +1144,7 @@ static void overlay_monitor_cb (struct overlay *overlay,
                                 void *arg)
 {
     struct state_machine *s = arg;
+    int count;
 
     switch (s->state) {
         /* IN JOIN state, post parent-fail if something goes wrong with the
@@ -1166,8 +1167,19 @@ static void overlay_monitor_cb (struct overlay *overlay,
          * node) the exit event is posted immediately in action_shutdown().
          */
         case STATE_SHUTDOWN:
-            if (overlay_get_child_peer_count (overlay) == 0)
+            count = overlay_get_child_peer_count (overlay);
+            if (count == 0)
                 state_machine_post (s, "children-complete");
+#if HAVE_LIBSYSTEMD
+            else {
+                if (s->ctx->sd_notify) {
+                    sd_notifyf (0,
+                                "STATUS=Waiting for %d peer%s to shutdown",
+                                count,
+                                count > 1 ? "s" : "");
+                }
+            }
+#endif
             break;
         default:
             break;
