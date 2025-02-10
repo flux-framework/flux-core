@@ -28,6 +28,7 @@ static void check_drainset (struct drainset *ds,
     char *s;
     json_t *o = drainset_to_json (ds);
     json_t *expected = json_loads (json_str, 0, NULL);
+    struct drainset *ds2;
     if (!o || !expected)
         BAIL_OUT ("drainset_to_json failed");
     if (!(s = json_dumps (o, JSON_COMPACT)))
@@ -36,8 +37,21 @@ static void check_drainset (struct drainset *ds,
     diag ("expected =         %s", json_str);
     ok (json_equal (expected, o),
         "drainset_to_json got expected result");
-    json_decref (expected);
+
+    if (!(ds2 = drainset_from_json (o)))
+        BAIL_OUT ("drainset_from_json failed");
     json_decref (o);
+
+    ok (true, "drainset_from_json worked");
+    if (!(o = drainset_to_json (ds2)))
+        BAIL_OUT ("drainset_to_json failed");
+
+    ok (json_equal (expected, o),
+        "drainset_to_json after from_json got expected result");
+
+    drainset_destroy (ds2);
+    json_decref (o);
+    json_decref (expected);
     free (s);
 }
 
