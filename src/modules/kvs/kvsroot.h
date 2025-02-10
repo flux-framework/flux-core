@@ -30,7 +30,7 @@ struct kvsroot {
     int seq;
     char ref[BLOBREF_MAX_STRING_SIZE];
     kvstxn_mgr_t *ktm;
-    zhash_t *transaction_requests;
+    zhashx_t *transaction_requests;
     zlist_t *wait_version_list;
     double last_update_time;
     int flags;

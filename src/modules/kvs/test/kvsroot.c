@@ -305,7 +305,7 @@ void basic_transaction_request_tests (void)
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
-    ok (zhash_size (root->transaction_requests) == 0,
+    ok (zhashx_size (root->transaction_requests) == 0,
         "before saving transaction, no transaction_requests in hash");
 
     if (!(request = flux_request_encode ("mytopic", "{ bar : 1 }")))
@@ -320,7 +320,7 @@ void basic_transaction_request_tests (void)
 
     flux_msg_destroy (request);
 
-    ok (zhash_size (root->transaction_requests) == 1,
+    ok (zhashx_size (root->transaction_requests) == 1,
         "after saving transaction, one transaction_requests in hash");
 
     kvsroot_mgr_destroy (krm);

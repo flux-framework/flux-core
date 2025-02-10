@@ -88,7 +88,7 @@ static void kvsroot_destroy (void *data)
         if (root->ktm)
             kvstxn_mgr_destroy (root->ktm);
         if (root->transaction_requests)
-            zhash_destroy (&(root->transaction_requests));
+            zhashx_destroy (&(root->transaction_requests));
         if (root->wait_version_list)
             zlist_destroy (&root->wait_version_list);
         if (root->setroot_queue)
@@ -96,6 +96,13 @@ static void kvsroot_destroy (void *data)
         free (data);
         errno = save_errno;
     }
+}
+
+/* zhashx_destructor_fn */
+static void flux_msg_decref_wrapper (void **item)
+{
+    flux_msg_t *msg = *item;
+    flux_msg_decref (msg);
 }
 
 struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
@@ -136,10 +143,16 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
         goto error;
     }
 
-    if (!(root->transaction_requests = zhash_new ())) {
-        flux_log_error (krm->h, "zhash_new");
+    if (!(root->transaction_requests = zhashx_new ())) {
+        flux_log_error (krm->h, "zhashx_new");
         goto error;
     }
+
+    zhashx_set_duplicator (root->transaction_requests,
+                           (zhashx_duplicator_fn *)flux_msg_incref);
+
+    zhashx_set_destructor (root->transaction_requests,
+                           (zhashx_destructor_fn *)flux_msg_decref_wrapper);
 
     if (!(root->wait_version_list = zlist_new ())) {
         flux_log_error (krm->h, "zlist_new");
@@ -261,17 +274,13 @@ int kvsroot_save_transaction_request (struct kvsroot *root,
         return -1;
     }
 
-    if (zhash_insert (root->transaction_requests,
-                      name,
-                      (void *)flux_msg_incref (request)) < 0) {
-        flux_msg_decref (request);
+    if (zhashx_insert (root->transaction_requests,
+                       name,
+                       (void *)request) < 0) {
         errno = EEXIST;
         return -1;
     }
 
-    zhash_freefn (root->transaction_requests,
-                  name,
-                  (zhash_free_fn *)flux_msg_decref);
     return 0;
 }
 
