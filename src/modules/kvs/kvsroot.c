@@ -82,6 +82,7 @@ static void kvsroot_destroy (void *data)
 {
     if (data) {
         struct kvsroot *root = data;
+        int save_errno = errno;
         if (root->ns_name)
             free (root->ns_name);
         if (root->ktm)
@@ -93,6 +94,7 @@ static void kvsroot_destroy (void *data)
         if (root->setroot_queue)
             flux_msglist_destroy (root->setroot_queue);
         free (data);
+        errno = save_errno;
     }
 }
 
@@ -166,9 +168,7 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
     return root;
 
  error:
-    save_errnum = errno;
     kvsroot_destroy (root);
-    errno = save_errnum;
     return NULL;
 }
 
