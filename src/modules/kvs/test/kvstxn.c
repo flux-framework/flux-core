@@ -228,8 +228,6 @@ void kvstxn_mgr_basic_tests (void)
     ok (kvstxn_mgr_get_noop_stores (ktm) == 0,
         "kvstxn_mgr_get_noop_stores works");
 
-    kvstxn_mgr_clear_noop_stores (ktm);
-
     ok (kvstxn_mgr_ready_transaction_count (ktm) == 0,
         "kvstxn_mgr_ready_transaction_count is initially 0");
 

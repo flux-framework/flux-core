@@ -1343,11 +1343,6 @@ int kvstxn_mgr_get_noop_stores (kvstxn_mgr_t *ktm)
     return ktm->noop_stores;
 }
 
-void kvstxn_mgr_clear_noop_stores (kvstxn_mgr_t *ktm)
-{
-    ktm->noop_stores = 0;
-}
-
 int kvstxn_mgr_ready_transaction_count (kvstxn_mgr_t *ktm)
 {
     return zlist_size (ktm->ready);

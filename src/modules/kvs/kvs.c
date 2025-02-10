@@ -221,17 +221,12 @@ static int event_subscribe (struct kvs_ctx *ctx, const char *ns)
      * See issue #2779 for more information.
      */
 
-    /* do not want to subscribe to events that are not within our
-     * namespace, so we subscribe to only specific ones.
-     */
-
     if (!(ctx->events_init)) {
 
         /* These belong to all namespaces, subscribe once the first
          * time we init a namespace */
 
-        if (flux_event_subscribe (ctx->h, "kvs.stats.clear") < 0
-            || flux_event_subscribe (ctx->h, "kvs.dropcache") < 0) {
+        if (flux_event_subscribe (ctx->h, "kvs.dropcache") < 0) {
             flux_log_error (ctx->h, "flux_event_subscribe");
             goto cleanup;
         }
@@ -2180,44 +2175,6 @@ error:
     json_decref (nsstats);
 }
 
-static int stats_clear_root_cb (struct kvsroot *root, void *arg)
-{
-    kvstxn_mgr_clear_noop_stores (root->ktm);
-    return 0;
-}
-
-static void stats_clear (struct kvs_ctx *ctx)
-{
-    ctx->faults = 0;
-    memset (&ctx->txn_commit_stats, '\0', sizeof (ctx->txn_commit_stats));
-
-    if (kvsroot_mgr_iter_roots (ctx->krm, stats_clear_root_cb, NULL) < 0)
-        flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
-}
-
-static void stats_clear_event_cb (flux_t *h,
-                                  flux_msg_handler_t *mh,
-                                  const flux_msg_t *msg,
-                                  void *arg)
-{
-    struct kvs_ctx *ctx = arg;
-
-    stats_clear (ctx);
-}
-
-static void stats_clear_request_cb (flux_t *h,
-                                    flux_msg_handler_t *mh,
-                                    const flux_msg_t *msg,
-                                    void *arg)
-{
-    struct kvs_ctx *ctx = arg;
-
-    stats_clear (ctx);
-
-    if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-}
-
 static int namespace_create (struct kvs_ctx *ctx,
                              const char *ns,
                              const char *rootref,
@@ -2624,18 +2581,6 @@ static const struct flux_msg_handler_spec htab[] = {
         "kvs.stats-get",
         stats_get_cb,
         FLUX_ROLE_USER
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "kvs.stats-clear",
-        stats_clear_request_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_EVENT,
-        "kvs.stats-clear",
-        stats_clear_event_cb,
-        0
     },
     {
         FLUX_MSGTYPE_EVENT,

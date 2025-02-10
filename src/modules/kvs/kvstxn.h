@@ -201,7 +201,6 @@ void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm,
                                     bool fallback);
 
 int kvstxn_mgr_get_noop_stores (kvstxn_mgr_t *ktm);
-void kvstxn_mgr_clear_noop_stores (kvstxn_mgr_t *ktm);
 
 /* return count of ready transactions */
 int kvstxn_mgr_ready_transaction_count (kvstxn_mgr_t *ktm);
