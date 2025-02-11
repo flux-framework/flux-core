@@ -29,8 +29,6 @@ void basic_api_tests (void)
     struct cache *cache;
     struct kvsroot *root;
     struct kvsroot *tmproot;
-    struct flux_msg_cred cred;
-    flux_msg_t *request;
 
     if (!(cache = cache_create (NULL)))
         BAIL_OUT ("cache_create");
@@ -77,76 +75,6 @@ void basic_api_tests (void)
 
     ok (kvsroot_mgr_lookup_root_safe (krm, KVS_PRIMARY_NAMESPACE) == NULL,
         "kvsroot_mgr_lookup_root_safe returns NULL on root marked removed");
-
-    /* test convenience functions */
-
-    ok (kvsroot_save_transaction_request (NULL, NULL, NULL) < 0
-        && errno == EINVAL,
-        "invalid inputs to kvsroot_save_transaction_request returns EINVAL");
-
-    ok (zhash_size (root->transaction_requests) == 0,
-        "before saving transaction, no transaction_requests in hash");
-
-    if (!(request = flux_request_encode ("mytopic", "{ bar : 1 }")))
-        BAIL_OUT ("flux_request_encode");
-
-    ok (kvsroot_save_transaction_request (root, request, "myname") == 0,
-        "kvsroot_save_transaction_request works");
-
-    ok (kvsroot_save_transaction_request (root, request, "myname") < 0
-        && errno == EEXIST,
-        "kvsroot_save_transaction_request fails on duplicate request");
-
-    flux_msg_destroy (request);
-
-    ok (zhash_size (root->transaction_requests) == 1,
-        "after saving transaction, one transaction_requests in hash");
-
-    /* invalid input to kvsroot_setroot() won't segfault */
-    kvsroot_setroot (NULL, NULL, NULL, 0);
-
-    kvsroot_setroot (krm, root, "foobar", 18);
-
-    ok (streq (root->ref, "foobar"),
-        "kvsroot_setroot set ref correctly");
-
-    ok (root->seq == 18,
-        "kvsroot_setroot set seq correctly");
-
-    cred.rolemask = 0;
-    cred.userid = 0;
-    ok (kvsroot_check_user (NULL, NULL, cred) < 0 && errno == EINVAL,
-        "invalid inputs to kvsroot_check_user returns EINVAL");
-
-    cred.rolemask = FLUX_ROLE_OWNER;
-    cred.userid = 0;
-    ok (kvsroot_check_user (krm, NULL, cred) < 0
-        && errno == EINVAL,
-        "kvsroot_check_user failed with EINVAL on bad input");
-
-    cred.rolemask = FLUX_ROLE_OWNER;
-    cred.userid = 0;
-    ok (!kvsroot_check_user (krm, root, cred),
-        "kvsroot_check_user works on role owner");
-
-    cred.rolemask = FLUX_ROLE_OWNER;
-    cred.userid = 1234;
-    ok (!kvsroot_check_user (krm, root, cred),
-        "kvsroot_check_user works on role user and correct id");
-
-    cred.rolemask = FLUX_ROLE_USER;
-    cred.userid = 0;
-    ok (kvsroot_check_user (krm, root, cred) < 0
-        && errno == EPERM,
-        "kvsroot_check_user fails with EPERM on role user and incorrect id");
-
-    cred.rolemask = 0;
-    cred.userid = 0;
-    ok (kvsroot_check_user (krm, root, cred) < 0
-        && errno == EPERM,
-        "kvsroot_check_user fails with EPERM on bad role");
-
-    /* back to testing kvsroot_mgr functions */
 
     ok (kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE) == 0,
         "kvsroot_mgr_remove_root works");
@@ -329,6 +257,160 @@ void basic_kvstxn_mgr_tests (void)
     cache_destroy (cache);
 }
 
+void basic_convenience_corner_case_tests (void)
+{
+    kvsroot_mgr_t *krm;
+    struct flux_msg_cred cred;
+
+    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
+        "kvsroot_mgr_create works");
+
+    ok (kvsroot_save_transaction_request (NULL, NULL, NULL) < 0
+        && errno == EINVAL,
+        "invalid inputs to kvsroot_save_transaction_request returns EINVAL");
+
+    /* invalid input to kvsroot_setroot() won't segfault */
+    kvsroot_setroot (NULL, NULL, NULL, 0);
+
+    cred.rolemask = FLUX_ROLE_OWNER;
+    cred.userid = 0;
+    ok (kvsroot_check_user (krm, NULL, cred) < 0
+        && errno == EINVAL,
+        "kvsroot_check_user failed with EINVAL on bad input");
+
+    kvsroot_mgr_destroy (krm);
+}
+
+void basic_transaction_request_tests (void)
+{
+    kvsroot_mgr_t *krm;
+    struct cache *cache;
+    struct kvsroot *root;
+    flux_msg_t *request;
+
+    if (!(cache = cache_create (NULL)))
+        BAIL_OUT ("cache_create");
+
+    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
+        "kvsroot_mgr_create works");
+
+    ok (kvsroot_mgr_root_count (krm) == 0,
+        "kvsroot_mgr_root_count returns correct count of roots");
+
+    ok ((root = kvsroot_mgr_create_root (krm,
+                                         cache,
+                                         "sha1",
+                                         KVS_PRIMARY_NAMESPACE,
+                                         1234,
+                                         0)) != NULL,
+         "kvsroot_mgr_create_root works");
+
+    ok (zhash_size (root->transaction_requests) == 0,
+        "before saving transaction, no transaction_requests in hash");
+
+    if (!(request = flux_request_encode ("mytopic", "{ bar : 1 }")))
+        BAIL_OUT ("flux_request_encode");
+
+    ok (kvsroot_save_transaction_request (root, request, "myname") == 0,
+        "kvsroot_save_transaction_request works");
+
+    ok (kvsroot_save_transaction_request (root, request, "myname") < 0
+        && errno == EEXIST,
+        "kvsroot_save_transaction_request fails on duplicate request");
+
+    flux_msg_destroy (request);
+
+    ok (zhash_size (root->transaction_requests) == 1,
+        "after saving transaction, one transaction_requests in hash");
+
+    kvsroot_mgr_destroy (krm);
+    cache_destroy (cache);
+}
+
+void basic_setroot_tests (void)
+{
+    kvsroot_mgr_t *krm;
+    struct cache *cache;
+    struct kvsroot *root;
+
+    if (!(cache = cache_create (NULL)))
+        BAIL_OUT ("cache_create");
+
+    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
+        "kvsroot_mgr_create works");
+
+    ok ((root = kvsroot_mgr_create_root (krm,
+                                         cache,
+                                         "sha1",
+                                         KVS_PRIMARY_NAMESPACE,
+                                         1234,
+                                         0)) != NULL,
+         "kvsroot_mgr_create_root works");
+
+    kvsroot_setroot (krm, root, "foobar", 18);
+
+    ok (streq (root->ref, "foobar"),
+        "kvsroot_setroot set ref correctly");
+
+    ok (root->seq == 18,
+        "kvsroot_setroot set seq correctly");
+
+    kvsroot_mgr_destroy (krm);
+    cache_destroy (cache);
+}
+
+void basic_check_user_tests (void)
+{
+    kvsroot_mgr_t *krm;
+    struct cache *cache;
+    struct kvsroot *root;
+    struct flux_msg_cred cred;
+
+    if (!(cache = cache_create (NULL)))
+        BAIL_OUT ("cache_create");
+
+    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
+        "kvsroot_mgr_create works");
+
+    ok ((root = kvsroot_mgr_create_root (krm,
+                                         cache,
+                                         "sha1",
+                                         KVS_PRIMARY_NAMESPACE,
+                                         1234,
+                                         0)) != NULL,
+         "kvsroot_mgr_create_root works");
+
+    cred.rolemask = 0;
+    cred.userid = 0;
+    ok (kvsroot_check_user (NULL, NULL, cred) < 0 && errno == EINVAL,
+        "invalid inputs to kvsroot_check_user returns EINVAL");
+
+    cred.rolemask = FLUX_ROLE_OWNER;
+    cred.userid = 0;
+    ok (!kvsroot_check_user (krm, root, cred),
+        "kvsroot_check_user works on role owner");
+
+    cred.rolemask = FLUX_ROLE_OWNER;
+    cred.userid = 1234;
+    ok (!kvsroot_check_user (krm, root, cred),
+        "kvsroot_check_user works on role user and correct id");
+
+    cred.rolemask = FLUX_ROLE_USER;
+    cred.userid = 0;
+    ok (kvsroot_check_user (krm, root, cred) < 0
+        && errno == EPERM,
+        "kvsroot_check_user fails with EPERM on role user and incorrect id");
+
+    cred.rolemask = 0;
+    cred.userid = 0;
+    ok (kvsroot_check_user (krm, root, cred) < 0
+        && errno == EPERM,
+        "kvsroot_check_user fails with EPERM on bad role");
+
+    kvsroot_mgr_destroy (krm);
+    cache_destroy (cache);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -337,6 +419,10 @@ int main (int argc, char *argv[])
     basic_api_tests_non_primary ();
     basic_iter_tests ();
     basic_kvstxn_mgr_tests ();
+    basic_convenience_corner_case_tests ();
+    basic_transaction_request_tests ();
+    basic_setroot_tests ();
+    basic_check_user_tests ();
 
     done_testing ();
     return (0);
