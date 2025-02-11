@@ -53,7 +53,8 @@ void basic_api_tests (void)
     struct kvsroot *root;
     flux_msg_t *msg;
 
-    cache = cache_create (NULL);
+    if (!(cache = cache_create (NULL)))
+        BAIL_OUT ("cache_create");
 
     ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
         "kvsroot_mgr_create works");
@@ -190,7 +191,8 @@ void basic_remove_tests (void)
     struct kvsroot *root;
     int i;
 
-    cache = cache_create (NULL);
+    if (!(cache = cache_create (NULL)))
+        BAIL_OUT ("cache_create");
 
     ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
         "kvsroot_mgr_create works");
