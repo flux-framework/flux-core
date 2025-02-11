@@ -45,7 +45,6 @@
 #include "lookup.h"
 #include "kvstxn.h"
 #include "kvsroot.h"
-#include "kvs_wait_version.h"
 #include "kvs_checkpoint.h"
 
 /* heartbeat_sync_cb() is called periodically to manage cached content

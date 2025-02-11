@@ -43,6 +43,8 @@ struct kvsroot {
 /* return -1 on error, 0 on success, 1 on success & to stop iterating */
 typedef int (*kvsroot_root_f)(struct kvsroot *root, void *arg);
 
+typedef bool (*kvs_wait_version_test_msg_f)(const flux_msg_t *msg, void *arg);
+
 /* flux_t optional, if NULL logging will go to stderr */
 /* void *arg passed as arg value to kvstxn_mgr_create() internally */
 kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg);
@@ -86,6 +88,26 @@ void kvsroot_setroot (kvsroot_mgr_t *krm,
 int kvsroot_check_user (kvsroot_mgr_t *krm,
                         struct kvsroot *root,
                         struct flux_msg_cred cred);
+
+/* add a kvs_wait_version structure to the kvsroot synclist */
+int kvs_wait_version_add (struct kvsroot *root,
+                          flux_msg_handler_f cb,
+                          flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg,
+                          int seq);
+
+/* if a root sequence number has gone past a sequence number, call the
+ * callback.  If 'all' is true, run callback on all wait_version_list
+ * regardless.
+ */
+void kvs_wait_version_process (struct kvsroot *root, bool all);
+
+/* remove message on wait_version_list that meet 'cmp' conditions */
+int kvs_wait_version_remove_msg (struct kvsroot *root,
+                                 kvs_wait_version_test_msg_f cmp,
+                                 void *arg);
 
 #endif /* !_FLUX_KVS_KVSROOT_H */
 

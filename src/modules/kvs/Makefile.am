@@ -28,8 +28,6 @@ libkvs_la_SOURCES = \
 	kvstxn.h \
 	kvsroot.c \
 	kvsroot.h \
-	kvs_wait_version.c \
-	kvs_wait_version.h \
 	kvs_checkpoint.c \
 	kvs_checkpoint.h
 
@@ -38,8 +36,7 @@ TESTS = \
 	test_cache.t \
 	test_lookup.t \
 	test_kvstxn.t \
-	test_kvsroot.t \
-	test_kvs_wait_version.t
+	test_kvsroot.t
 
 test_ldadd = \
 	$(builddir)/libkvs.la \
@@ -114,18 +111,6 @@ test_kvsroot_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(test_ldadd)
 test_kvsroot_t_LDFLAGS = \
-	$(test_ldflags)
-
-test_kvs_wait_version_t_SOURCES = test/kvs_wait_version.c
-test_kvs_wait_version_t_CPPFLAGS = $(test_cppflags)
-test_kvs_wait_version_t_LDADD = \
-	$(top_builddir)/src/modules/kvs/kvs_wait_version.o \
-	$(top_builddir)/src/modules/kvs/waitqueue.o \
-	$(top_builddir)/src/modules/kvs/kvsroot.o \
-	$(top_builddir)/src/modules/kvs/kvstxn.o \
-	$(top_builddir)/src/modules/kvs/cache.o \
-	$(test_ldadd)
-test_kvs_wait_version_t_LDFLAGS = \
 	$(test_ldflags)
 
 EXTRA_DIST = README.md
