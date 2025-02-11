@@ -227,8 +227,6 @@ void basic_remove_tests (void)
     ok (zlist_size (root->wait_version_list) == 10,
         "wait_version_list is length 10");
 
-    count = 0;
-
     ok (!kvs_wait_version_remove_msg (root, msgcmp, NULL),
         "kvs_wait_version_remove_msg works");
 
