@@ -1027,7 +1027,6 @@ _flux_kvs()
         mkdir
         copy
         move
-        dropcache
         version
         wait
         getroot
@@ -1105,9 +1104,6 @@ _flux_kvs()
     "
     move_OPTS="\
         ${copy_OPTS}
-    "
-    dropcache_OPTS="\
-        -a --all
     "
     version_OPTS="\
         -N --namespace= \
