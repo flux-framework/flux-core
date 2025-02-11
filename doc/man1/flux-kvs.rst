@@ -14,7 +14,6 @@ SYNOPSIS
 | **flux** **kvs** **link** *target* *linkname*
 | **flux** **kvs** **readlink** *key...*
 | **flux** **kvs** **mkdir** *key...*
-| **flux** **kvs** **dropcache**
 
 | **flux** **kvs** **copy** *source* *destination*
 | **flux** **kvs** **move** *source* *destination*
@@ -360,18 +359,6 @@ Create an empty directory. If *key* exists, it is overwritten.
 
    After the commit has completed, display the new root sequence number
    or "version".
-
-dropcache
----------
-
-.. program:: flux kvs dropcache
-
-Tell the local KVS to drop any cache it is holding.
-
-.. option:: -a, --all
-
-  Publish an event across the Flux instance instructing the KVS module on
-  all ranks to drop their caches.
 
 copy
 ----
