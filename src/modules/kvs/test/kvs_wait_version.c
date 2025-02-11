@@ -25,7 +25,6 @@
 #include "ccan/str/str.h"
 
 const char *root_ref = "1234";  /* random string, doesn't matter for tests */
-int count = 0;
 
 void basic_corner_case_tests (void)
 {
@@ -43,7 +42,8 @@ void basic_corner_case_tests (void)
 
 void cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
 {
-    count++;
+    int *count = arg;
+    (*count)++;
 }
 
 void basic_api_tests (void)
@@ -52,6 +52,7 @@ void basic_api_tests (void)
     struct cache *cache;
     struct kvsroot *root;
     flux_msg_t *msg;
+    int count = 0;
 
     if (!(cache = cache_create (NULL)))
         BAIL_OUT ("cache_create");
@@ -72,11 +73,11 @@ void basic_api_tests (void)
 
     msg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
 
-    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, NULL, 2),
+    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, &count, 2),
         "kvs_wait_version_add w/ seq = 2 works");
-    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, NULL, 3),
+    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, &count, 3),
         "kvs_wait_version_add w/ seq = 3 works");
-    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, NULL, 4),
+    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, &count, 4),
         "kvs_wait_version_add w/ seq = 4 works");
 
     ok (zlist_size (root->wait_version_list) == 3,
@@ -118,11 +119,11 @@ void basic_api_tests (void)
     ok (zlist_size (root->wait_version_list) == 0,
         "wait_version_list is length 0");
 
-    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, NULL, 5),
+    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, &count, 5),
         "kvs_wait_version_add w/ seq = 5 works");
-    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, NULL, 6),
+    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, &count, 6),
         "kvs_wait_version_add w/ seq = 6 works");
-    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, NULL, 7),
+    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, &count, 7),
         "kvs_wait_version_add w/ seq = 7 works");
 
     ok (zlist_size (root->wait_version_list) == 3,
@@ -141,11 +142,11 @@ void basic_api_tests (void)
     /* cover some alternate insertion pattern, descending and
      * duplicate numbers */
 
-    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, NULL, 9),
+    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, &count, 9),
         "kvs_wait_version_add w/ seq = 9 works");
-    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, NULL, 8),
+    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, &count, 8),
         "kvs_wait_version_add w/ seq = 8 works");
-    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, NULL, 8),
+    ok (!kvs_wait_version_add (root, cb, NULL, NULL, msg, &count, 8),
         "kvs_wait_version_add w/ seq = 8 works");
 
     ok (zlist_size (root->wait_version_list) == 3,
