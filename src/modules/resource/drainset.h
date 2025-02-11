@@ -25,6 +25,15 @@ int drainset_drain_rank (struct drainset *dset,
                          double timestamp,
                          const char *reason);
 
+int drainset_drain_ex (struct drainset *dset,
+                       unsigned int rank,
+                       double timestamp,
+                       const char *reason,
+                       int overwrite);
+
+int drainset_undrain (struct drainset *dset,
+                      unsigned int rank);
+
 json_t *drainset_to_json (struct drainset *dset);
 
 struct drainset *drainset_from_json (json_t *o);

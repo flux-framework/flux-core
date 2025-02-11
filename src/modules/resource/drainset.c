@@ -146,10 +146,46 @@ static struct draininfo *drainset_find (struct drainset *ds,
     return zhashx_lookup (ds->map, &tmp);
 }
 
-int drainset_drain_rank (struct drainset *ds,
-                         unsigned int rank,
-                         double timestamp,
-                         const char *reason)
+static struct draininfo *drainset_find_rank (struct drainset *ds,
+                                             unsigned int rank)
+{
+    struct draininfo *di = zhashx_first (ds->map);
+    while (di) {
+        if (idset_test (di->ranks, rank))
+            return di;
+        di = zhashx_next (ds->map);
+    }
+    errno = ENOENT;
+    return NULL;
+}
+
+int drainset_undrain (struct drainset *ds, unsigned int rank)
+{
+    struct draininfo *match;
+
+    if (!ds) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(match = drainset_find_rank (ds, rank)))
+        return -1;
+
+    /* If there's only one rank in the matched entry, delete it.
+     * Otherwise, remove rank from the ranks idset.
+     */
+    if (idset_count (match->ranks) == 1)
+        zhashx_delete (ds->map, match);
+    else if (idset_clear (match->ranks, rank) < 0)
+        return -1;
+
+    return 0;
+}
+
+int drainset_drain_ex (struct drainset *ds,
+                       unsigned int rank,
+                       double timestamp,
+                       const char *reason,
+                       int overwrite)
 {
     int rc = -1;
     struct draininfo *match;
@@ -158,11 +194,49 @@ int drainset_drain_rank (struct drainset *ds,
         errno = EINVAL;
         return -1;
     }
+    if ((match = drainset_find_rank (ds, rank))) {
+        /* Found an entry for this rank, apply overwrite value.
+         * 0: return EEXIST
+         * 1: save timestamp
+         * 1 or 2: delete entry and recreate
+         */
+        if (overwrite == 0) {
+            errno = EEXIST;
+            return -1;
+        }
+        else if (overwrite == 1)
+            timestamp = match->timestamp;
+
+        if (idset_count (match->ranks) == 1) {
+            /* Undrain single entry for replacement. This is necessary
+             * since the entry will need to be rehashed.
+             */
+            if (drainset_undrain (ds, rank) < 0)
+                return -1;
+        }
+        else {
+            /* Remove this rank from its current entry. It will be
+             * recreated below
+             */
+            if (idset_clear (match->ranks, rank) < 0)
+                return -1;
+        }
+    }
+
+    /* Check for existing entry with matching timestamp+reason
+     */
     if ((match = drainset_find (ds, timestamp, reason))) {
+        if (idset_test (match->ranks, rank)) {
+            errno = EEXIST;
+            return -1;
+        }
         if (idset_set (match->ranks, rank) < 0)
             return -1;
         return 0;
     }
+
+    /* O/w, create new entry
+     */
     if (!(new = draininfo_create_rank (rank, reason, timestamp))
         || zhashx_insert (ds->map, new, new) < 0) {
         draininfo_destroy (new);
@@ -172,6 +246,15 @@ int drainset_drain_rank (struct drainset *ds,
 out:
     return rc;
 }
+
+int drainset_drain_rank (struct drainset *ds,
+                         unsigned int rank,
+                         double timestamp,
+                         const char *reason)
+{
+    return drainset_drain_ex (ds, rank, timestamp, reason, 0);
+}
+
 
 json_t *drainset_to_json (struct drainset *ds)
 {
