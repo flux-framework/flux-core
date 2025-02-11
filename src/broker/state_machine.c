@@ -54,6 +54,11 @@ struct cleanup {
     flux_watcher_t *timer;
 };
 
+struct shutdown {
+    double timeout;
+    flux_watcher_t *timer;
+};
+
 struct monitor {
     struct flux_msglist *requests;
 
@@ -78,6 +83,7 @@ struct state_machine {
     struct monitor monitor;
     struct quorum quorum;
     struct cleanup cleanup;
+    struct shutdown shutdown;
 
     struct flux_msglist *wait_requests;
 
@@ -159,6 +165,7 @@ static struct state_next nexttab[] = {
 };
 
 static const double default_quorum_timeout = 60; // log slow joiners
+static const double default_shutdown_timeout = 60; // log slow shutdown
 static const double default_cleanup_timeout = -1;
 static const double goodbye_timeout = 60;
 
@@ -424,10 +431,38 @@ static void action_finalize (struct state_machine *s)
         state_machine_post (s, "rc3-none");
 }
 
+static void shutdown_timer_cb (flux_reactor_t *r,
+                               flux_watcher_t *w,
+                               int revents,
+                               void *arg)
+{
+    struct state_machine *s = arg;
+    struct idset *ranks = overlay_get_child_peer_idset (s->ctx->overlay);
+    char *rankstr = idset_encode (ranks, IDSET_FLAG_RANGE);
+    char *hoststr = flux_hostmap_lookup (s->ctx->h, rankstr, NULL);
+
+    flux_log (s->ctx->h,
+              LOG_ERR,
+              "shutdown delayed: waiting for %d peers: %s (rank %s)",
+              overlay_get_child_peer_count (s->ctx->overlay),
+              hoststr ? hoststr : "?",
+              rankstr ? rankstr : "?");
+
+    free (hoststr);
+    free (rankstr);
+    idset_destroy (ranks);
+
+    flux_timer_watcher_reset (w, s->shutdown.timeout, 0.);
+    flux_watcher_start (w);
+}
+
+
 static void action_shutdown (struct state_machine *s)
 {
-    if (overlay_get_child_peer_count (s->ctx->overlay) == 0)
+    if (overlay_get_child_peer_count (s->ctx->overlay) == 0) {
         state_machine_post (s, "children-none");
+        return;
+    }
 #if HAVE_LIBSYSTEMD
     if (s->ctx->sd_notify) {
         sd_notifyf (0,
@@ -435,6 +470,10 @@ static void action_shutdown (struct state_machine *s)
                     overlay_get_child_peer_count (s->ctx->overlay));
     }
 #endif
+    if (s->shutdown.timeout >= 0) {
+        flux_timer_watcher_reset (s->shutdown.timer, s->shutdown.timeout, 0.);
+        flux_watcher_start (s->shutdown.timer);
+    }
 }
 
 static void goodbye_continuation (flux_future_t *f, void *arg)
@@ -1168,8 +1207,10 @@ static void overlay_monitor_cb (struct overlay *overlay,
          */
         case STATE_SHUTDOWN:
             count = overlay_get_child_peer_count (overlay);
-            if (count == 0)
+            if (count == 0) {
                 state_machine_post (s, "children-complete");
+                flux_watcher_stop (s->shutdown.timer);
+            }
 #if HAVE_LIBSYSTEMD
             else {
                 if (s->ctx->sd_notify) {
@@ -1267,6 +1308,7 @@ void state_machine_destroy (struct state_machine *s)
         flux_watcher_destroy (s->quorum.timer);
         flux_future_destroy (s->quorum.f);
         flux_watcher_destroy (s->cleanup.timer);
+        flux_watcher_destroy (s->shutdown.timer);
         free (s);
         errno = saved_errno;
     }
@@ -1301,7 +1343,12 @@ struct state_machine *state_machine_create (struct broker *ctx)
                                                            0.,
                                                            0.,
                                                            cleanup_timer_cb,
-                                                           s)))
+                                                           s))
+        || !(s->shutdown.timer = flux_timer_watcher_create (r,
+                                                            0.,
+                                                            0.,
+                                                            shutdown_timer_cb,
+                                                            s)))
         goto error;
     flux_watcher_start (s->prep);
     flux_watcher_start (s->check);
@@ -1330,6 +1377,13 @@ struct state_machine *state_machine_create (struct broker *ctx)
                            &s->cleanup.timeout,
                            default_cleanup_timeout) < 0) {
         log_err ("error configuring cleanup timeout attribute");
+        goto error;
+    }
+    if (timeout_configure (s,
+                           "broker.shutdown-timeout",
+                           &s->shutdown.timeout,
+                           default_shutdown_timeout) < 0) {
+        log_err ("error configuring shutdown timeout attribute");
         goto error;
     }
     norestart_configure (s);

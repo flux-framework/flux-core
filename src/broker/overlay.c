@@ -372,6 +372,24 @@ int overlay_get_child_peer_count (struct overlay *ov)
     return count;
 }
 
+struct idset *overlay_get_child_peer_idset (struct overlay *ov)
+{
+    struct idset *ids;
+    struct child *child;
+
+    if (!(ids = idset_create (ov->size, 0)))
+        return NULL;
+    foreach_overlay_child (ov, child) {
+        if (subtree_is_online (child->status))
+            if (idset_set (ids, child->rank) < 0)
+                goto error;
+    }
+    return ids;
+error:
+    idset_destroy (ids);
+    return NULL;
+}
+
 void overlay_set_ipv6 (struct overlay *ov, int enable)
 {
     ov->enable_ipv6 = enable;
