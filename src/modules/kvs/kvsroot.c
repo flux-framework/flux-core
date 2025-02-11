@@ -46,6 +46,8 @@ struct kvs_wait_version {
 };
 
 static void kvsroot_destroy (void **data);
+static void kvs_wait_version_destroy (void **data);
+static int kvs_wait_version_cmp (void *item1, void *item2);
 
 kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg)
 {
@@ -103,7 +105,7 @@ static void kvsroot_destroy (void **data)
         if (root->transaction_requests)
             zhashx_destroy (&(root->transaction_requests));
         if (root->wait_version_list)
-            zlist_destroy (&root->wait_version_list);
+            zlistx_destroy (&root->wait_version_list);
         if (root->setroot_queue)
             flux_msglist_destroy (root->setroot_queue);
         free (root);
@@ -168,10 +170,16 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
     zhashx_set_destructor (root->transaction_requests,
                            (zhashx_destructor_fn *)flux_msg_decref_wrapper);
 
-    if (!(root->wait_version_list = zlist_new ())) {
-        flux_log_error (krm->h, "zlist_new");
+    if (!(root->wait_version_list = zlistx_new ())) {
+        flux_log_error (krm->h, "zlistx_new");
         goto error;
     }
+
+    zlistx_set_destructor (root->wait_version_list,
+                           (zlistx_destructor_fn *)kvs_wait_version_destroy);
+
+    zlistx_set_comparator (root->wait_version_list,
+                           (zlistx_comparator_fn *)kvs_wait_version_cmp);
 
     root->owner = owner;
     root->flags = flags;
@@ -329,10 +337,10 @@ static int kvs_wait_version_cmp (void *item1, void *item2)
     return 0;
 }
 
-static void kvs_wait_version_destroy (void *data)
+static void kvs_wait_version_destroy (void **data)
 {
-    struct kvs_wait_version *ks = data;
-    if (ks) {
+    if (data) {
+        struct kvs_wait_version *ks = *data;
         int save_errno = errno;
         flux_msg_decref (ks->msg);
         free (ks);
@@ -352,11 +360,11 @@ int kvs_wait_version_add (struct kvsroot *root,
 
     if (!root || !msg || root->seq >= seq) {
         errno = EINVAL;
-        goto error;
+        return -1;
     }
 
     if (!(kwv = calloc (1, sizeof (*kwv))))
-        goto error;
+        return -1;
 
     kwv->msg = flux_msg_incref (msg);
     kwv->cb = cb;
@@ -365,21 +373,16 @@ int kvs_wait_version_add (struct kvsroot *root,
     kwv->arg = arg;
     kwv->seq = seq;
 
-    if (zlist_push (root->wait_version_list, kwv) < 0) {
+    if (!zlistx_add_start (root->wait_version_list, kwv)) {
         errno = ENOMEM;
         goto error;
     }
-    zlist_freefn (root->wait_version_list,
-                  kwv,
-                  kvs_wait_version_destroy,
-                  false);
-
-    zlist_sort (root->wait_version_list, kvs_wait_version_cmp);
+    zlistx_sort (root->wait_version_list);
 
     return 0;
 
  error:
-    kvs_wait_version_destroy (kwv);
+    kvs_wait_version_destroy ((void **)&kwv);
     return -1;
 }
 
@@ -392,12 +395,12 @@ void kvs_wait_version_process (struct kvsroot *root, bool all)
 
     /* notify sync waiters that version has been reached */
 
-    kwv = zlist_first (root->wait_version_list);
+    kwv = zlistx_first (root->wait_version_list);
     while (kwv && (all || root->seq >= kwv->seq)) {
-        kwv = zlist_pop (root->wait_version_list);
+        kwv = zlistx_detach_cur (root->wait_version_list);
         kwv->cb (kwv->h, kwv->mh, kwv->msg, kwv->arg);
-        kvs_wait_version_destroy (kwv);
-        kwv = zlist_first (root->wait_version_list);
+        kvs_wait_version_destroy ((void **)&kwv);
+        kwv = zlistx_first (root->wait_version_list);
     }
 }
 
@@ -405,42 +408,22 @@ int kvs_wait_version_remove_msg (struct kvsroot *root,
                                  kvs_wait_version_test_msg_f cmp,
                                  void *arg)
 {
-    zlist_t *tmp = NULL;
     struct kvs_wait_version *kwv;
-    int rc = -1;
 
     if (!root || !cmp) {
         errno = EINVAL;
         return -1;
     }
 
-    kwv = zlist_first (root->wait_version_list);
+    kwv = zlistx_first (root->wait_version_list);
     while (kwv) {
         if (cmp (kwv->msg, arg)) {
-            if (!tmp && !(tmp = zlist_new ())) {
-                errno = ENOMEM;
-                goto error;
-            }
-            if (zlist_append (tmp, kwv) < 0) {
-                errno = ENOMEM;
-                goto error;
-            }
+            zlistx_detach_cur (root->wait_version_list);
+            kvs_wait_version_destroy ((void **)&kwv);
         }
-        kwv = zlist_next (root->wait_version_list);
+        kwv = zlistx_next (root->wait_version_list);
     }
-    if (tmp) {
-        while ((kwv = zlist_pop (tmp)))
-            zlist_remove (root->wait_version_list, kwv);
-    }
-    rc = 0;
- error:
-    /* if an error occurs above in zlist_new() or zlist_append(),
-     * simply destroy the tmp list.  Nothing has been removed off of
-     * the original queue yet.  Allow user to handle error as they see
-     * fit.
-     */
-    ERRNO_SAFE_WRAP (zlist_destroy, &tmp);
-    return rc;
+    return 0;
 }
 
 /*

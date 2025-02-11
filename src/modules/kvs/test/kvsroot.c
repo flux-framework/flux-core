@@ -463,7 +463,7 @@ void basic_wait_version_add_tests (void)
     ok (!kvs_wait_version_add (root, wait_version_cb, NULL, NULL, msg, &count, 4),
         "kvs_wait_version_add w/ seq = 4 works");
 
-    ok (zlist_size (root->wait_version_list) == 3,
+    ok (zlistx_size (root->wait_version_list) == 3,
         "wait_version_list is length 3");
 
     kvsroot_setroot (krm, root, root_ref, 1);
@@ -475,7 +475,7 @@ void basic_wait_version_add_tests (void)
     ok (count == 0,
         "kvs_wait_version_process did not call cb on seq = 1");
 
-    ok (zlist_size (root->wait_version_list) == 3,
+    ok (zlistx_size (root->wait_version_list) == 3,
         "wait_version_list is length 3");
 
     kvsroot_setroot (krm, root, root_ref, 2);
@@ -487,7 +487,7 @@ void basic_wait_version_add_tests (void)
     ok (count == 1,
         "kvs_wait_version_process called callback once on seq = 2");
 
-    ok (zlist_size (root->wait_version_list) == 2,
+    ok (zlistx_size (root->wait_version_list) == 2,
         "wait_version_list is length 2");
 
     kvsroot_setroot (krm, root, root_ref, 4);
@@ -499,7 +499,7 @@ void basic_wait_version_add_tests (void)
     ok (count == 2,
         "kvs_wait_version_process called callback twice on seq = 4");
 
-    ok (zlist_size (root->wait_version_list) == 0,
+    ok (zlistx_size (root->wait_version_list) == 0,
         "wait_version_list is length 0");
 
     ok (!kvs_wait_version_add (root, wait_version_cb, NULL, NULL, msg, &count, 5),
@@ -509,7 +509,7 @@ void basic_wait_version_add_tests (void)
     ok (!kvs_wait_version_add (root, wait_version_cb, NULL, NULL, msg, &count, 7),
         "kvs_wait_version_add w/ seq = 7 works");
 
-    ok (zlist_size (root->wait_version_list) == 3,
+    ok (zlistx_size (root->wait_version_list) == 3,
         "wait_version_list is length 3");
 
     count = 0;
@@ -519,7 +519,7 @@ void basic_wait_version_add_tests (void)
     ok (count == 3,
         "kvs_wait_version_process called callback thrice on all flag = true");
 
-    ok (zlist_size (root->wait_version_list) == 0,
+    ok (zlistx_size (root->wait_version_list) == 0,
         "wait_version_list is length 0");
 
     /* cover some alternate insertion pattern, descending and
@@ -532,7 +532,7 @@ void basic_wait_version_add_tests (void)
     ok (!kvs_wait_version_add (root, wait_version_cb, NULL, NULL, msg, &count, 8),
         "kvs_wait_version_add w/ seq = 8 works");
 
-    ok (zlist_size (root->wait_version_list) == 3,
+    ok (zlistx_size (root->wait_version_list) == 3,
         "wait_version_list is length 3");
 
     count = 0;
@@ -608,25 +608,25 @@ void basic_wait_version_remove_msg_tests (void)
         flux_msg_destroy (msg);
     }
 
-    ok (zlist_size (root->wait_version_list) == 10,
+    ok (zlistx_size (root->wait_version_list) == 10,
         "wait_version_list is length 10");
 
     ok (!kvs_wait_version_remove_msg (root, msgcmp, NULL),
         "kvs_wait_version_remove_msg works");
 
-    ok (zlist_size (root->wait_version_list) == 5,
+    ok (zlistx_size (root->wait_version_list) == 5,
         "wait_version_list is length 5");
 
     ok (!kvs_wait_version_remove_msg (root, msgcmp, NULL),
         "kvs_wait_version_remove_msg works");
 
-    ok (zlist_size (root->wait_version_list) == 5,
+    ok (zlistx_size (root->wait_version_list) == 5,
         "wait_version_list is still length 5");
 
     ok (!kvs_wait_version_remove_msg (root, msgcmp_true, NULL),
         "kvs_wait_version_remove_msg works");
 
-    ok (zlist_size (root->wait_version_list) == 0,
+    ok (zlistx_size (root->wait_version_list) == 0,
         "wait_version_list is length 0");
 
     kvsroot_mgr_destroy (krm);
