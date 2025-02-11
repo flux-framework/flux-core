@@ -23,7 +23,7 @@
 
 int global = 0;
 
-void basic_api_tests (void)
+void basic_kvsroot_mgr_tests (void)
 {
     kvsroot_mgr_t *krm;
     struct cache *cache;
@@ -93,7 +93,7 @@ void basic_api_tests (void)
     cache_destroy (cache);
 }
 
-void basic_api_tests_non_primary (void)
+void basic_kvsroot_mgr_tests_non_primary (void)
 {
     kvsroot_mgr_t *krm;
     struct cache *cache;
@@ -148,7 +148,7 @@ int roots_remove_cb (struct kvsroot *root, void *arg)
     return 1;
 }
 
-void basic_iter_tests (void)
+void basic_kvsroot_mgr_iter_roots (void)
 {
     kvsroot_mgr_t *krm;
     struct cache *cache;
@@ -415,9 +415,9 @@ int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
-    basic_api_tests ();
-    basic_api_tests_non_primary ();
-    basic_iter_tests ();
+    basic_kvsroot_mgr_tests ();
+    basic_kvsroot_mgr_tests_non_primary ();
+    basic_kvsroot_mgr_iter_roots ();
     basic_kvstxn_mgr_tests ();
     basic_convenience_corner_case_tests ();
     basic_transaction_request_tests ();
