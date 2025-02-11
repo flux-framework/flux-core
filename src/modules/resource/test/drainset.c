@@ -62,6 +62,10 @@ static void test_empty ()
         BAIL_OUT ("drainset_create failed");
     diag ("empty drainset should return empty JSON object");
     check_drainset (ds, "{}");
+
+    ok (drainset_undrain (ds, 0) < 0 && errno == ENOENT,
+        "drainset_undrain() fails on empty drainset");
+
     drainset_destroy (ds);
 }
 
@@ -80,6 +84,19 @@ static void test_basic ()
     }
     check_drainset (ds,
                     "{\"0-7\":{\"timestamp\":1234.0,\"reason\":\"test\"}}");
+
+    ok (drainset_undrain (ds, 3) == 0,
+        "drainset_undrain(3) works");
+
+    check_drainset (ds,
+                    "{\"0-2,4-7\":{\"timestamp\":1234.0,\"reason\":\"test\"}}");
+
+    ok (drainset_undrain (ds, 0) == 0,
+        "drainset_undrain(0) works");
+
+    check_drainset (ds,
+                    "{\"1-2,4-7\":{\"timestamp\":1234.0,\"reason\":\"test\"}}");
+
     drainset_destroy (ds);
 }
 
@@ -106,6 +123,42 @@ static void test_multiple ()
                     "\"1\":{\"timestamp\":2345.0,\"reason\":\"test\"},"
                     "\"2\":{\"timestamp\":1234.0,\"reason\":\"test1\"},"
                     "\"4\":{\"timestamp\":1234.0,\"reason\":\"\"}}");
+
+    ok (drainset_undrain (ds, 1) == 0,
+        "drainset_undrain (1) works");
+
+    check_drainset (ds,
+                    "{\"0,3\":{\"timestamp\":1234.0,\"reason\":\"test\"},"
+                    "\"2\":{\"timestamp\":1234.0,\"reason\":\"test1\"},"
+                    "\"4\":{\"timestamp\":1234.0,\"reason\":\"\"}}");
+
+    /* drainset_drain_ex() invalid args
+     */
+    ok (drainset_drain_ex (NULL, 0, 0., NULL, 0) < 0 && errno == EINVAL,
+        "drainset_drain_ex() with invalid args returns EINVAL");
+
+    /* overwrite=1 - update reason but not timestamp
+     */
+    ok (drainset_drain_ex (ds, 0, 1235.0, "test2", 1) == 0,
+        "drainset_drain_ex with overwrite=1 works");
+
+    check_drainset (ds,
+                    "{\"3\":{\"timestamp\":1234.0,\"reason\":\"test\"},"
+                    "\"0\":{\"timestamp\":1234.0,\"reason\":\"test2\"},"
+                    "\"2\":{\"timestamp\":1234.0,\"reason\":\"test1\"},"
+                    "\"4\":{\"timestamp\":1234.0,\"reason\":\"\"}}");
+
+    /* overwrite=2 - update reason and timestamp
+     */
+    ok (drainset_drain_ex (ds, 4, 2345.0, "foo", 2) == 0,
+        "drainset_drain_ex with overwrite=1 works");
+
+    check_drainset (ds,
+                    "{\"3\":{\"timestamp\":1234.0,\"reason\":\"test\"},"
+                    "\"0\":{\"timestamp\":1234.0,\"reason\":\"test2\"},"
+                    "\"2\":{\"timestamp\":1234.0,\"reason\":\"test1\"},"
+                    "\"4\":{\"timestamp\":2345.0,\"reason\":\"foo\"}}");
+
     drainset_destroy (ds);
 }
 
