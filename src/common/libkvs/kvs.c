@@ -162,21 +162,6 @@ done:
     return ret;
 }
 
-int flux_kvs_dropcache (flux_t *h)
-{
-    flux_future_t *f;
-    int rc = -1;
-
-    if (!(f = flux_rpc (h, "kvs.dropcache", NULL, FLUX_NODEID_ANY, 0)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

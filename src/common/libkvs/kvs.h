@@ -66,12 +66,6 @@ flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *ns);
 int flux_kvs_get_version (flux_t *h, const char *ns, int *versionp);
 int flux_kvs_wait_version (flux_t *h, const char *ns, int version);
 
-/* Garbage collect the cache.  Drop all data that doesn't have a
- * reference in the namespace.
- * Returns -1 on error (errno set), 0 on success.
- */
-int flux_kvs_dropcache (flux_t *h);
-
 #ifdef __cplusplus
 }
 #endif
