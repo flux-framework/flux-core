@@ -36,7 +36,7 @@ struct reslog {
     struct resource_ctx *ctx;
     zlist_t *pending;       // list of pending futures
     zlist_t *watchers;
-    json_t *eventlog;
+    zlistx_t *eventlog;
     struct flux_msglist *consumers;
     flux_msg_handler_t **handlers;
 };
@@ -217,8 +217,7 @@ int reslog_post_pack (struct reslog *reslog,
     va_end (ap);
     if (!event)
         return -1;
-    if (json_array_append (reslog->eventlog, event) < 0) {
-        json_decref (event);
+    if (!zlistx_add_end (reslog->eventlog, json_incref (event))) {
         errno = ENOMEM;
         return -1;
     }
@@ -299,11 +298,11 @@ int reslog_add_callback (struct reslog *reslog, reslog_cb_f cb, void *arg)
 static bool send_backlog (struct reslog *reslog, const flux_msg_t *msg)
 {
     flux_t *h = reslog->ctx->h;
-    size_t index;
-    json_t *entry;
-    json_array_foreach (reslog->eventlog, index, entry) {
+    json_t *entry = zlistx_first (reslog->eventlog);
+    while (entry) {
         if (notify_one_consumer (reslog, msg, entry) < 0)
             goto error;
+        entry = zlistx_next (reslog->eventlog);
     }
     if (flux_respond_pack (h, msg, "{s:[]}", "events") < 0) // delimiter
         goto error;
@@ -398,9 +397,17 @@ void reslog_destroy (struct reslog *reslog)
             flux_msglist_destroy (reslog->consumers);
         }
         zlist_destroy (&reslog->watchers);
-        json_decref (reslog->eventlog);
+        zlistx_destroy (&reslog->eventlog);
         free (reslog);
         errno = saved_errno;
+    }
+}
+
+static void entry_destructor (void **item)
+{
+    if (*item) {
+        json_decref (*item);
+        *item = NULL;
     }
 }
 
@@ -415,8 +422,9 @@ struct reslog *reslog_create (struct resource_ctx *ctx, json_t *eventlog)
         || !(reslog->watchers = zlist_new ()))
         goto nomem;
     zlist_comparefn (reslog->watchers, watcher_compare);
-    if (!(reslog->eventlog = json_array ()))
+    if (!(reslog->eventlog = zlistx_new ()))
         goto nomem;
+    zlistx_set_destructor (reslog->eventlog, entry_destructor);
     if (eventlog) {
         size_t index;
         json_t *entry;
@@ -424,7 +432,7 @@ struct reslog *reslog_create (struct resource_ctx *ctx, json_t *eventlog)
             // historical resource-define events are not helpful
             if (match_event (entry, "resource-define"))
                 continue;
-            if (json_array_append (reslog->eventlog, entry) < 0)
+            if (!zlistx_add_end (reslog->eventlog, json_incref (entry)))
                 goto nomem;
         }
     }
