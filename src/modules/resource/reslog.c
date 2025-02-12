@@ -417,6 +417,12 @@ static void *entry_duplicator (const void *item)
     return json_incref ((json_t *) item);
 }
 
+void reslog_set_journal_max (struct reslog *reslog, int max)
+{
+    if (reslog)
+        reslog->journal_max = max;
+}
+
 struct reslog *reslog_create (struct resource_ctx *ctx,
                               json_t *eventlog,
                               int journal_max)

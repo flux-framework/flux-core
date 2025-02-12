@@ -27,6 +27,8 @@ struct reslog *reslog_create (struct resource_ctx *ctx,
                               int journal_max);
 void reslog_destroy (struct reslog *reslog);
 
+void reslog_set_journal_max (struct reslog *reslog, int max);
+
 /* Post an event to the eventlog.  This function returns immediately,
  * and the commit to the eventlog completes asynchronously.
  * If 'request' is non-NULL, a success/fail response is sent upon commit
