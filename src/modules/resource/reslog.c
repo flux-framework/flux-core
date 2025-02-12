@@ -412,6 +412,12 @@ static void entry_destructor (void **item)
     }
 }
 
+void reslog_set_journal_max (struct reslog *reslog, int max)
+{
+    if (reslog)
+        reslog->journal_max = max;
+}
+
 struct reslog *reslog_create (struct resource_ctx *ctx,
                               json_t *eventlog,
                               int journal_max)

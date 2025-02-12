@@ -178,13 +178,15 @@ static void config_reload_cb (flux_t *h,
     const flux_conf_t *conf;
     flux_error_t error;
     const char *errstr = NULL;
+    struct resource_config config = {0};
 
     if (flux_conf_reload_decode (msg, &conf) < 0)
         goto error;
-    if (parse_config (ctx, conf, NULL, &error) < 0) {
+    if (parse_config (ctx, conf, &config, &error) < 0) {
         errstr = error.text;
         goto error;
     }
+    reslog_set_journal_max (ctx->reslog, config.journal_max);
     if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
         errstr = "error updating cached configuration";
         goto error;
