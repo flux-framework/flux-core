@@ -37,6 +37,7 @@ struct reslog {
     zlist_t *pending;       // list of pending futures
     zlist_t *watchers;
     zlistx_t *eventlog;
+    int journal_max;
     struct flux_msglist *consumers;
     flux_msg_handler_t **handlers;
 };
@@ -416,13 +417,16 @@ static void *entry_duplicator (const void *item)
     return json_incref ((json_t *) item);
 }
 
-struct reslog *reslog_create (struct resource_ctx *ctx, json_t *eventlog)
+struct reslog *reslog_create (struct resource_ctx *ctx,
+                              json_t *eventlog,
+                              int journal_max)
 {
     struct reslog *reslog;
 
     if (!(reslog = calloc (1, sizeof (*reslog))))
         return NULL;
     reslog->ctx = ctx;
+    reslog->journal_max = journal_max;
     if (!(reslog->pending = zlist_new ())
         || !(reslog->watchers = zlist_new ()))
         goto nomem;
