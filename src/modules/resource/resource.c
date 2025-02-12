@@ -61,7 +61,11 @@
  * rediscover = false
  *   Force rediscovery of local resources via hwloc. Do not fetch R or hwloc
  *   XML from the enclosing instance.
+ *
+ * journal-max = 100000
+ *   Maximum size allowed of the resource journal before it is truncated.
  */
+
 static int parse_config (struct resource_ctx *ctx,
                          const flux_conf_t *conf,
                          struct resource_config *rconfig,
@@ -75,12 +79,13 @@ static int parse_config (struct resource_ctx *ctx,
     int norestrict = 0;
     int no_update_watch = 0;
     int rediscover = 0;
+    int journal_max = 100000;
     json_t *o = NULL;
     json_t *config = NULL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s s?o s?s s?b s?b s?b s?b !}}",
+                          "{s?{s?s s?s s?o s?s s?b s?b s?b s?b s?i !}}",
                           "resource",
                             "path", &path,
                             "scheduling", &scheduling_path,
@@ -89,7 +94,8 @@ static int parse_config (struct resource_ctx *ctx,
                             "norestrict", &norestrict,
                             "noverify", &noverify,
                             "no-update-watch", &no_update_watch,
-                            "rediscover", &rediscover) < 0) {
+                            "rediscover", &rediscover,
+                            "journal-max", &journal_max) < 0) {
         errprintf (errp,
                    "error parsing [resource] configuration: %s",
                    error.text);
@@ -146,6 +152,7 @@ static int parse_config (struct resource_ctx *ctx,
         }
     }
     if (rconfig) {
+        rconfig->journal_max = journal_max;
         rconfig->exclude_idset = exclude;
         rconfig->noverify = noverify ? true : false;
         rconfig->norestrict = norestrict ? true : false;
@@ -372,7 +379,7 @@ int mod_main (flux_t *h, int argc, char **argv)
          */
         if (upgrade_eventlog (h, &eventlog) < 0)
             goto error;
-        if (!(ctx->reslog = reslog_create (ctx, eventlog)))
+        if (!(ctx->reslog = reslog_create (ctx, eventlog, config.journal_max)))
             goto error;
         if (!(ctx->acquire = acquire_create (ctx)))
             goto error;

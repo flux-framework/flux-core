@@ -19,6 +19,7 @@ struct resource_config {
     bool norestrict;
     bool no_update_watch;
     bool monitor_force_up;
+    int journal_max;
 };
 
 struct resource_ctx {
