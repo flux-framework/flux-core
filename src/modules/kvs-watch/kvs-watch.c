@@ -81,7 +81,7 @@ struct ns_monitor {
 struct watch_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
-    zhash_t *namespaces;        // hash of monitored namespaces
+    zhashx_t *namespaces;        // hash of monitored namespaces
 };
 
 static void watcher_destroy (struct watcher *w)
@@ -164,9 +164,10 @@ static struct commit *commit_create (const char *rootref,
     return commit;
 }
 
-static void namespace_destroy (struct ns_monitor *nsm)
+static void namespace_destroy (void **data)
 {
-    if (nsm) {
+    if (data) {
+        struct ns_monitor *nsm = *data;
         int saved_errno = errno;
         commit_destroy (nsm->commit);
         zlistx_destroy (&nsm->watchers);
@@ -227,7 +228,7 @@ static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
     nsm->subscribed = true;
     return nsm;
 error:
-    namespace_destroy (nsm);
+    namespace_destroy ((void **)&nsm);
     return NULL;
 }
 
@@ -249,7 +250,7 @@ static void watcher_cleanup (struct ns_monitor *nsm, struct watcher *w)
     /* if nsm->getrootf, destroy when getroot_continuation completes */
     if (zlistx_size (nsm->watchers) == 0
         && !nsm->getrootf)
-        zhash_delete (nsm->ctx->namespaces, nsm->ns_name);
+        zhashx_delete (nsm->ctx->namespaces, nsm->ns_name);
 }
 
 static void handle_load_response (flux_future_t *f, struct watcher *w)
@@ -1072,7 +1073,7 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
                                 const flux_msg_t *msg,
                                 bool cancel)
 {
-    zlist_t *l;
+    zlistx_t *l;
     char *name;
     struct ns_monitor *nsm;
     uint32_t matchtag = FLUX_MATCHTAG_NONE;
@@ -1083,14 +1084,14 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
         return;
     }
 
-    if ((l = zhash_keys (ctx->namespaces))) {
-        name = zlist_first (l);
+    if ((l = zhashx_keys (ctx->namespaces))) {
+        name = zlistx_first (l);
         while (name) {
-            nsm = zhash_lookup (ctx->namespaces, name);
+            nsm = zhashx_lookup (ctx->namespaces, name);
             watcher_cancel_ns (nsm, msg, matchtag, cancel);
-            name = zlist_next (l);
+            name = zlistx_next (l);
         }
-        zlist_destroy (&l);
+        zlistx_destroy (&l);
     }
     else
         flux_log_error (ctx->h, "%s: zhash_keys", __FUNCTION__);
@@ -1112,7 +1113,7 @@ static void removed_cb (flux_t *h,
         flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
-    if ((nsm = zhash_lookup (ctx->namespaces, ns))) {
+    if ((nsm = zhashx_lookup (ctx->namespaces, ns))) {
         nsm->fatal_errnum = ENOTSUP;
         watcher_respond_ns (nsm);
     }
@@ -1145,7 +1146,7 @@ static void namespace_created_cb (flux_t *h,
         flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
-    if (!(nsm = zhash_lookup (ctx->namespaces, ns))
+    if (!(nsm = zhashx_lookup (ctx->namespaces, ns))
         || nsm->commit)
         return;
     if (!(commit = commit_create (rootref, rootseq, NULL))) {
@@ -1189,7 +1190,7 @@ static void setroot_cb (flux_t *h,
         flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
-    if (!(nsm = zhash_lookup (ctx->namespaces, ns))
+    if (!(nsm = zhashx_lookup (ctx->namespaces, ns))
             || (nsm->commit && rootseq <= nsm->commit->rootseq))
         return;
     if (!(commit = commit_create (rootref, rootseq, keys))) {
@@ -1219,7 +1220,7 @@ static void namespace_getroot_continuation (flux_future_t *f, void *arg)
 
     /* small racy chance watcher canceled before getroot completes */
     if (zlistx_size (nsm->watchers) == 0) {
-        zhash_delete (nsm->ctx->namespaces, nsm->ns_name);
+        zhashx_delete (nsm->ctx->namespaces, nsm->ns_name);
         return;
     }
     if (nsm->commit) {
@@ -1260,21 +1261,19 @@ struct ns_monitor *namespace_monitor (struct watch_ctx *ctx,
 {
     struct ns_monitor *nsm;
 
-    if (!(nsm = zhash_lookup (ctx->namespaces, ns))) {
+    if (!(nsm = zhashx_lookup (ctx->namespaces, ns))) {
         if (!(nsm = namespace_create (ctx, ns)))
             return NULL;
-        (void)zhash_insert (ctx->namespaces, ns, nsm);
-        zhash_freefn (ctx->namespaces, ns,
-                      (zhash_free_fn *)namespace_destroy);
+        (void)zhashx_insert (ctx->namespaces, ns, nsm);
         /* store future in namespace, so namespace can be destroyed
          * appropriately to avoid matchtag leak */
         if (!(nsm->getrootf = flux_kvs_getroot (ctx->h, ns, 0))) {
-            zhash_delete (ctx->namespaces, ns);
+            zhashx_delete (ctx->namespaces, ns);
             return NULL;
         }
         if (flux_future_then (nsm->getrootf, -1.,
                               namespace_getroot_continuation, nsm) < 0) {
-            zhash_delete (ctx->namespaces, ns);
+            zhashx_delete (ctx->namespaces, ns);
             return NULL;
         }
     }
@@ -1380,7 +1379,7 @@ static void stats_cb (flux_t *h,
 
     if (!(stats = json_object()))
         goto nomem;
-    nsm = zhash_first (ctx->namespaces);
+    nsm = zhashx_first (ctx->namespaces);
     while (nsm) {
         json_t *o = json_pack ("{s:i s:i s:s s:i}",
                                "owner", (int)nsm->owner,
@@ -1396,13 +1395,13 @@ static void stats_cb (flux_t *h,
             goto nomem;
         }
         watchers += zlistx_size (nsm->watchers);
-        nsm = zhash_next (ctx->namespaces);
+        nsm = zhashx_next (ctx->namespaces);
     }
     if (flux_respond_pack (h,
                            msg,
                            "{s:i s:i s:O}",
                            "watchers", watchers,
-                           "namespace-count", (int)zhash_size (ctx->namespaces),
+                           "namespace-count", (int)zhashx_size (ctx->namespaces),
                            "namespaces", stats) < 0)
         flux_log_error (h,
                         "%s: failed to respond to kvs-watch.stats-get",
@@ -1460,7 +1459,7 @@ static void watch_ctx_destroy (struct watch_ctx *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
-        zhash_destroy (&ctx->namespaces);
+        zhashx_destroy (&ctx->namespaces);
         flux_msg_handler_delvec (ctx->handlers);
         free (ctx);
         errno = saved_errno;
@@ -1475,8 +1474,10 @@ static struct watch_ctx *watch_ctx_create (flux_t *h)
     ctx->h = h;
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
         goto error;
-    if (!(ctx->namespaces = zhash_new ()))
+    if (!(ctx->namespaces = zhashx_new ()))
         goto error;
+    zhashx_set_destructor (ctx->namespaces,
+                           (zhashx_destructor_fn *)namespace_destroy);
     return ctx;
 error:
     watch_ctx_destroy (ctx);
