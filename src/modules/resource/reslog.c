@@ -20,6 +20,7 @@
 
 #include "resource.h"
 #include "inventory.h"
+#include "truncate.h"
 #include "reslog.h"
 
 struct reslog_watcher {
@@ -197,6 +198,53 @@ int reslog_sync (struct reslog *reslog)
     return 0;
 }
 
+/*  Truncate resource journal down to journal_max if it has
+ *  exceeded an upper limit (max + 1%).
+ */
+static int reslog_truncate (struct reslog *reslog)
+{
+    int rc = -1;
+    int count;
+    int size;
+    json_t *event;
+    struct truncate_info *ti;
+
+    /* Allow journal to grow to journal_max + 1% before truncation, this
+     * avoids a truncation after every append on large eventlogs.
+     */
+    size = reslog->journal_max + (reslog->journal_max/100);
+
+    if ((count = zlistx_size (reslog->eventlog)) <= size)
+        return 0;
+
+    if (!(ti = truncate_info_create ()))
+        return -1;
+
+    /*  Detach events until count is decreased to size using each event
+     *  to update truncate event:
+     */
+    while (count-- >= reslog->journal_max) {
+        if ((event = zlistx_detach_cur (reslog->eventlog))) {
+            rc = truncate_info_update (ti, event);
+            json_decref (event);
+            if (rc < 0) {
+                fprintf (stderr, "truncate_info_update failed\n");
+                goto out;
+            }
+        }
+    }
+    if (!(event = truncate_info_event (ti))
+        || !(zlistx_add_start (reslog->eventlog, event))) {
+        json_decref (event);
+        fprintf (stderr, "truncate_info_event failed\n");
+        goto out;
+    }
+    rc = 0;
+out:
+    truncate_info_destroy (ti);
+    return rc;
+}
+
 int reslog_post_pack (struct reslog *reslog,
                       const flux_msg_t *request,
                       double timestamp,
@@ -222,6 +270,8 @@ int reslog_post_pack (struct reslog *reslog,
         errno = ENOMEM;
         return -1;
     }
+    if (reslog_truncate (reslog) < 0)
+        flux_log_error (h, "failed to truncate eventlog");
     if ((flags & EVENT_NO_COMMIT)) {
         if (!(f = flux_future_create (NULL, NULL)))
             goto error;
@@ -414,8 +464,12 @@ static void entry_destructor (void **item)
 
 void reslog_set_journal_max (struct reslog *reslog, int max)
 {
-    if (reslog)
+    if (reslog) {
         reslog->journal_max = max;
+        if (reslog_truncate (reslog) < 0)
+            flux_log_error (reslog->ctx->h,
+                            "resource eventlog truncation failed");
+    }
 }
 
 struct reslog *reslog_create (struct resource_ctx *ctx,
@@ -444,6 +498,8 @@ struct reslog *reslog_create (struct resource_ctx *ctx,
                 continue;
             if (!zlistx_add_end (reslog->eventlog, json_incref (entry)))
                 goto nomem;
+            if (reslog_truncate (reslog) < 0)
+                flux_log_error (ctx->h, "eventlog truncate failed");
         }
     }
     if (!(reslog->consumers = flux_msglist_create ()))
