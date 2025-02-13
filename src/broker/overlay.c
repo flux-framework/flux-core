@@ -372,6 +372,24 @@ int overlay_get_child_peer_count (struct overlay *ov)
     return count;
 }
 
+struct idset *overlay_get_child_peer_idset (struct overlay *ov)
+{
+    struct idset *ids;
+    struct child *child;
+
+    if (!(ids = idset_create (ov->size, 0)))
+        return NULL;
+    foreach_overlay_child (ov, child) {
+        if (subtree_is_online (child->status))
+            if (idset_set (ids, child->rank) < 0)
+                goto error;
+    }
+    return ids;
+error:
+    idset_destroy (ids);
+    return NULL;
+}
+
 void overlay_set_ipv6 (struct overlay *ov, int enable)
 {
     ov->enable_ipv6 = enable;
@@ -945,6 +963,17 @@ static void child_cb (flux_reactor_t *r,
         goto done;
     }
     if (!(child = child_lookup_online (ov, uuid))) {
+        bool is_hello = false;
+        json_int_t rank = FLUX_NODEID_ANY;
+
+        if (type == FLUX_MSGTYPE_REQUEST
+            && flux_msg_get_topic (msg, &topic) == 0
+            && streq (topic, "overlay.hello")) {
+            // extract the hello rank so we can include it in the trace
+            (void)flux_request_unpack (msg, NULL, "{s:I}", "rank", &rank);
+            is_hello = true;
+        }
+        trace_overlay_msg (ov->h, "rx", rank, ov->trace_requests, msg);
         /* This is a new peer trying to introduce itself by sending an
          * overlay.hello request.
          * N.B. the broker generates a new UUID on startup, and hello is only
@@ -953,15 +982,7 @@ static void child_cb (flux_reactor_t *r,
          * we don't bother checking if we've seen this UUID before, which can
          * be slow given current design.  See flux-framework/flux-core#5864.
          */
-        if (type == FLUX_MSGTYPE_REQUEST
-            && flux_msg_get_topic (msg, &topic) == 0
-            && streq (topic, "overlay.hello")
-            && !ov->shutdown_in_progress) {
-            trace_overlay_msg (ov->h,
-                               "rx",
-                               FLUX_NODEID_ANY,
-                               ov->trace_requests,
-                               msg);
+        if (is_hello && !ov->shutdown_in_progress) {
             hello_request_handler (ov, msg);
         }
         /* Or one of the following cases occurred that requires (or at least

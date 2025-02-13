@@ -95,6 +95,7 @@ uint32_t overlay_get_rank (struct overlay *ov);
 void overlay_set_rank (struct overlay *ov, uint32_t rank); // test only
 uint32_t overlay_get_size (struct overlay *ov);
 int overlay_get_child_peer_count (struct overlay *ov);
+struct idset *overlay_get_child_peer_idset (struct overlay *ov);
 const char *overlay_get_bind_uri (struct overlay *ov);
 const char *overlay_get_parent_uri (struct overlay *ov);
 int overlay_set_parent_uri (struct overlay *ov, const char *uri);
@@ -148,6 +149,7 @@ int overlay_connect (struct overlay *ov);
  * The following accessors may be useful in the callback:
  * - overlay_parent_error() - test whether TBON parent connection has failed
  * - overlay_get_child_peer_count() - number of online children
+ * - overlay_get_child_peer_idset () - set of online children
  * - overlay_get_subtree_status (rank) - subtree status of child
  * - overlay_get_subtree_topo (rank) - topology of subtree rooted at child
  */

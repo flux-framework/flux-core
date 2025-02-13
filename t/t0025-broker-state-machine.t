@@ -334,4 +334,26 @@ test_expect_success 'cleanup gets SIGHUP after broker.cleanup-timeout expires' '
 		./killbroker 15 60
 '
 
+test_expect_success 'create hanging rc3 for rank > 0' '
+	cat <<-EOT >rc3_hang &&
+	#!/bin/sh
+	rank=\$(flux getattr rank)
+	test \$rank -eq 0 && exit 0
+	sleep 5
+	EOT
+	chmod +x rc3_hang
+'
+
+test_expect_success 'run instance with short shutdown timeout' '
+	flux start -s3 \
+		-Slog-filename=shutdown.log \
+		-Sbroker.rc1_path= \
+		-Sbroker.rc3_path="$(pwd)/rc3_hang" \
+		-Sbroker.shutdown-timeout=1s \
+		true
+'
+test_expect_success 'appropriate message was logged' '
+	grep "shutdown delayed" shutdown.log
+'
+
 test_done
