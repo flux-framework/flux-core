@@ -45,7 +45,6 @@
 #include "lookup.h"
 #include "kvstxn.h"
 #include "kvsroot.h"
-#include "kvs_wait_version.h"
 #include "kvs_checkpoint.h"
 
 /* heartbeat_sync_cb() is called periodically to manage cached content
@@ -1168,7 +1167,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
     double now = flux_reactor_now (flux_get_reactor (ctx->h));
 
     if (root->remove) {
-        if (!zlist_size (root->wait_version_list)
+        if (!zlistx_size (root->wait_version_list)
             && !zhashx_size (root->transaction_requests)
             && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
 
@@ -1186,7 +1185,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
         && !root->remove
         && !root->is_primary
         && (now - root->last_update_time) > max_namespace_age
-        && !zlist_size (root->wait_version_list)
+        && !zlistx_size (root->wait_version_list)
         && !zhashx_size (root->transaction_requests)
         && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
         /* remove a root if it not the primary one, has timed out
@@ -1991,7 +1990,7 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
 
     if (!(s = json_pack ("{ s:i s:i s:i s:i s:i }",
                          "#versionwaiters",
-                         zlist_size (root->wait_version_list),
+                         zlistx_size (root->wait_version_list),
                          "#no-op stores",
                          kvstxn_mgr_get_noop_stores (root->ktm),
                          "#transactions",

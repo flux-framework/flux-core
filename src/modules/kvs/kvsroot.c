@@ -30,13 +30,24 @@
 
 struct kvsroot_mgr {
     zhashx_t *roothash;
-    zlist_t *removelist;
+    zlistx_t *removelist;
     bool iterating_roots;
     flux_t *h;
     void *arg;
 };
 
+struct kvs_wait_version {
+    flux_msg_handler_f cb;
+    flux_t *h;
+    flux_msg_handler_t *mh;
+    const flux_msg_t *msg;
+    void *arg;
+    int seq;
+};
+
 static void kvsroot_destroy (void **data);
+static void kvs_wait_version_destroy (void **data);
+static int kvs_wait_version_cmp (void *item1, void *item2);
 
 kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg)
 {
@@ -49,10 +60,11 @@ kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg)
         goto error;
     }
     zhashx_set_destructor (krm->roothash, kvsroot_destroy);
-    if (!(krm->removelist = zlist_new ())) {
+    if (!(krm->removelist = zlistx_new ())) {
         errno = ENOMEM;
         goto error;
     }
+    zlistx_set_duplicator (krm->removelist, (zlistx_duplicator_fn *)strdup);
     krm->iterating_roots = false;
     krm->h = h;
     krm->arg = arg;
@@ -70,7 +82,7 @@ void kvsroot_mgr_destroy (kvsroot_mgr_t *krm)
         if (krm->roothash)
             zhashx_destroy (&krm->roothash);
         if (krm->removelist)
-            zlist_destroy (&krm->removelist);
+            zlistx_destroy (&krm->removelist);
         free (krm);
         errno = save_errno;
     }
@@ -94,7 +106,7 @@ static void kvsroot_destroy (void **data)
         if (root->transaction_requests)
             zhashx_destroy (&(root->transaction_requests));
         if (root->wait_version_list)
-            zlist_destroy (&root->wait_version_list);
+            zlistx_destroy (&root->wait_version_list);
         if (root->setroot_queue)
             flux_msglist_destroy (root->setroot_queue);
         free (root);
@@ -159,10 +171,16 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
     zhashx_set_destructor (root->transaction_requests,
                            (zhashx_destructor_fn *)flux_msg_decref_wrapper);
 
-    if (!(root->wait_version_list = zlist_new ())) {
-        flux_log_error (krm->h, "zlist_new");
+    if (!(root->wait_version_list = zlistx_new ())) {
+        flux_log_error (krm->h, "zlistx_new");
         goto error;
     }
+
+    zlistx_set_destructor (root->wait_version_list,
+                           (zlistx_destructor_fn *)kvs_wait_version_destroy);
+
+    zlistx_set_comparator (root->wait_version_list,
+                           (zlistx_comparator_fn *)kvs_wait_version_cmp);
 
     root->owner = owner;
     root->flags = flags;
@@ -187,15 +205,7 @@ int kvsroot_mgr_remove_root (kvsroot_mgr_t *krm, const char *ns)
     /* don't want to remove while iterating, so save namespace for
      * later removal */
     if (krm->iterating_roots) {
-        char *str = strdup (ns);
-
-        if (!str) {
-            errno = ENOMEM;
-            return -1;
-        }
-
-        if (zlist_append (krm->removelist, str) < 0) {
-            free (str);
+        if (zlistx_add_end (krm->removelist, (void *)ns) < 0) {
             errno = ENOMEM;
             return -1;
         }
@@ -245,7 +255,8 @@ int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg)
 
     krm->iterating_roots = false;
 
-    while ((ns = zlist_pop (krm->removelist))) {
+    zlistx_head (krm->removelist);
+    while ((ns = zlistx_detach_cur (krm->removelist))) {
         kvsroot_mgr_remove_root (krm, ns);
         free (ns);
     }
@@ -253,8 +264,7 @@ int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg)
     return 0;
 
 error:
-    while ((ns = zlist_pop (krm->removelist)))
-        free (ns);
+    zlistx_purge (krm->removelist);
     krm->iterating_roots = false;
     return -1;
 }
@@ -305,6 +315,107 @@ int kvsroot_check_user (kvsroot_mgr_t *krm,
     }
     if (flux_msg_cred_authorize (cred, root->owner) < 0)
         return -1;
+    return 0;
+}
+
+static int kvs_wait_version_cmp (void *item1, void *item2)
+{
+    struct kvs_wait_version *ks1 = item1;
+    struct kvs_wait_version *ks2 = item2;
+
+    if (ks1->seq < ks2->seq)
+        return -1;
+    if (ks1->seq > ks2->seq)
+        return 1;
+    return 0;
+}
+
+static void kvs_wait_version_destroy (void **data)
+{
+    if (data) {
+        struct kvs_wait_version *ks = *data;
+        int save_errno = errno;
+        flux_msg_decref (ks->msg);
+        free (ks);
+        errno = save_errno;
+    }
+}
+
+int kvs_wait_version_add (struct kvsroot *root,
+                          flux_msg_handler_f cb,
+                          flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg,
+                          int seq)
+{
+    struct kvs_wait_version *kwv = NULL;
+
+    if (!root || !msg || root->seq >= seq) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!(kwv = calloc (1, sizeof (*kwv))))
+        return -1;
+
+    kwv->msg = flux_msg_incref (msg);
+    kwv->cb = cb;
+    kwv->h = h;
+    kwv->mh = mh;
+    kwv->arg = arg;
+    kwv->seq = seq;
+
+    if (!zlistx_add_start (root->wait_version_list, kwv)) {
+        errno = ENOMEM;
+        goto error;
+    }
+    zlistx_sort (root->wait_version_list);
+
+    return 0;
+
+ error:
+    kvs_wait_version_destroy ((void **)&kwv);
+    return -1;
+}
+
+void kvs_wait_version_process (struct kvsroot *root, bool all)
+{
+    struct kvs_wait_version *kwv;
+
+    if (!root)
+        return;
+
+    /* notify sync waiters that version has been reached */
+
+    kwv = zlistx_first (root->wait_version_list);
+    while (kwv && (all || root->seq >= kwv->seq)) {
+        kwv = zlistx_detach_cur (root->wait_version_list);
+        kwv->cb (kwv->h, kwv->mh, kwv->msg, kwv->arg);
+        kvs_wait_version_destroy ((void **)&kwv);
+        kwv = zlistx_first (root->wait_version_list);
+    }
+}
+
+int kvs_wait_version_remove_msg (struct kvsroot *root,
+                                 kvs_wait_version_test_msg_f cmp,
+                                 void *arg)
+{
+    struct kvs_wait_version *kwv;
+
+    if (!root || !cmp) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    kwv = zlistx_first (root->wait_version_list);
+    while (kwv) {
+        if (cmp (kwv->msg, arg)) {
+            zlistx_detach_cur (root->wait_version_list);
+            kvs_wait_version_destroy ((void **)&kwv);
+        }
+        kwv = zlistx_next (root->wait_version_list);
+    }
     return 0;
 }
 
