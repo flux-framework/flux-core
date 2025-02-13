@@ -79,8 +79,14 @@ rediscover
    (optional) If true, force rediscovery of resources using HWLOC, rather
    then using the R and HWLOC XML from the enclosing instance.
 
-Note that updates to the resource table are ignored until the next Flux
-restart.
+journal-max
+   (optional) An integer containing the maximum number of resource eventlog
+   events held in the resource module for the ``resource.journal`` RPC. The
+   default is 100,000. This value takes immediate effect on a configuration
+   update.
+
+Note that, except where noted above, updates to the resource table are
+ignored until the next Flux restart.
 
 EXAMPLE
 =======
