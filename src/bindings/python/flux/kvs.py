@@ -366,17 +366,6 @@ def namespace_list(flux_handle):
     return nslist
 
 
-def dropcache(flux_handle):
-    """Drop KVS cache entries
-
-    Inform KVS module to drop cache entries without a reference.
-
-    Args:
-        flux_handle: A Flux handle obtained from flux.Flux()
-    """
-    RAW.flux_kvs_dropcache(flux_handle)
-
-
 class KVSTxn:
     """KVS Transaction Object
 

@@ -42,7 +42,6 @@ int cmd_readlink (optparse_t *p, int argc, char **argv);
 int cmd_mkdir (optparse_t *p, int argc, char **argv);
 int cmd_version (optparse_t *p, int argc, char **argv);
 int cmd_wait (optparse_t *p, int argc, char **argv);
-int cmd_dropcache (optparse_t *p, int argc, char **argv);
 int cmd_copy (optparse_t *p, int argc, char **argv);
 int cmd_move (optparse_t *p, int argc, char **argv);
 int cmd_dir (optparse_t *p, int argc, char **argv);
@@ -180,13 +179,6 @@ static struct optparse_option ls_opts[] =  {
     },
     { .name = "classify", .key = 'F', .has_arg = 0,
       .usage = "Append indicator (one of .@) to entries",
-    },
-    OPTPARSE_TABLE_END
-};
-
-static struct optparse_option dropcache_opts[] =  {
-    { .name = "all", .key = 'a', .has_arg = 0,
-      .usage = "Drop KVS across all ranks",
     },
     OPTPARSE_TABLE_END
 };
@@ -359,13 +351,6 @@ static struct optparse_subcommand subcommands[] = {
       cmd_move,
       0,
       copy_opts
-    },
-    { "dropcache",
-      "[--all]",
-      "Tell KVS to drop its cache",
-      cmd_dropcache,
-      0,
-      dropcache_opts
     },
     { "version",
       "[-N ns]",
@@ -1209,27 +1194,6 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     if (flux_kvs_wait_version (h, ns, vers) < 0)
         log_err_exit ("flux_kvs_wait_version");
-    flux_close (h);
-    return (0);
-}
-
-int cmd_dropcache (optparse_t *p, int argc, char **argv)
-{
-    flux_t *h;
-
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
-
-    if (optparse_hasopt (p, "all")) {
-        flux_msg_t *msg = flux_event_encode ("kvs.dropcache", NULL);
-        if (!msg || flux_send (h, msg, 0) < 0)
-            log_err_exit ("flux_send");
-        flux_msg_destroy (msg);
-    }
-    else {
-        if (flux_kvs_dropcache (h) < 0)
-            log_err_exit ("flux_kvs_dropcache");
-    }
     flux_close (h);
     return (0);
 }
