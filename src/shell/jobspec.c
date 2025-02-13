@@ -27,7 +27,7 @@ struct res_level {
     json_t *with;
 };
 
-static void set_error (json_error_t *error, const char *fmt, ...)
+void set_error (json_error_t *error, const char *fmt, ...)
 {
     va_list ap;
 
@@ -215,43 +215,10 @@ static int recursive_parse_jobspec_resources (struct jobspec *job,
     return rc;
 }
 
-struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
+int jobspec_parse (struct jobspec *job, json_error_t *error)
 {
-    struct jobspec *job;
-    json_t *resources;
     json_t *count;
 
-    if (!(job = calloc (1, sizeof (*job)))) {
-        set_error (error, "Out of memory");
-        goto error;
-    }
-    if (!(job->jobspec = json_loads (jobspec, 0, error)))
-        goto error;
-
-    /* N.B.: members of jobspec like environment and shell.options may
-     *  be modified with json_object_update_new() via the shell API
-     *  calls flux_shell_setenvf(3), flux_shell_unsetenv(3), and
-     *  flux_shell_setopt(3). Therefore, the refcount of these objects
-     *  is incremented during unpack (via the "O" specifier), so that
-     *  the objects have json_decref() called directly on them to
-     *  avoid potential leaks (the json_decref() of the outer jobspec
-     *  object itself doesn't seem to catch the changes to these inner
-     *  json_t * objects)
-     */
-    if (json_unpack_ex (job->jobspec, error, 0,
-                        "{s:i s:o s:[{s:o s:o}] s:{s?{s?s s?O s?{s?O}}}}",
-                        "version", &job->version,
-                        "resources", &resources,
-                        "tasks",
-                            "command", &job->command,
-                            "count", &count,
-                        "attributes",
-                            "system",
-                                "cwd", &job->cwd,
-                                "environment", &job->environment,
-                                "shell", "options", &job->options) < 0) {
-        goto error;
-    }
     if (job->version != 1) {
         shell_warn ("Unsupported jobspec version: expected 1 got %d",
                    job->version);
@@ -269,13 +236,16 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
         goto error;
     }
 
-    if (recursive_parse_jobspec_resources (job, resources, error) < 0) {
+    if (recursive_parse_jobspec_resources (job, job->resources, error) < 0) {
         // recursive_parse_jobspec_resources calls set_error
         goto error;
     }
 
     /* Set job->task_count
      */
+    if (json_unpack_ex (job->tasks, error, 0, "{s:o}", "count", &count) < 0) {
+        goto error;
+    }
     if (json_object_size (count) != 1) {
         set_error (error, "tasks count must have exactly one key set");
         goto error;
@@ -298,10 +268,9 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
         set_error (error, "Malformed command entry");
         goto error;
     }
-    return job;
+    return 0;
 error:
-    jobspec_destroy (job);
-    return NULL;
+    return -1;
 }
 
 /*
