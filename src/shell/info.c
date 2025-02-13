@@ -30,23 +30,60 @@
 #include "jobspec.h"
 
 /* Get jobspec from job-info.lookup future and assign.
- * Return 0 on success, -1 on failure (and log error).
+ * Return struct jobspec* on success, NULL on failure (and set error).
  * N.B. assigned values remain valid until future is destroyed.
  */
-static int lookup_jobspec_get (flux_future_t *f, char **jobspec)
+struct jobspec *lookup_jobspec_get (flux_future_t *f, json_error_t *error)
 {
-    flux_error_t error;
+    flux_error_t flux_error;
     const char *J;
-    if (flux_rpc_get_unpack (f, "{s:s}", "J", &J) < 0)
+    char *jobspec;
+    struct jobspec *job;
+
+    if (flux_rpc_get_unpack (f, "{s:s}", "J", &J) < 0) {
+        set_error (error, "job-info: %s", future_strerror (f, errno));
         goto error;
-    if (!(*jobspec = flux_unwrap_string (J, true, NULL, &error))) {
-        shell_log_error ("failed to unwrap J: %s", error.text);
-        return -1;
     }
-    return 0;
+    if (!(jobspec = flux_unwrap_string (J, true, NULL, &flux_error))) {
+        set_error (error, "failed to unwrap J: %s", flux_error.text);
+        goto error;
+    }
+
+    if (!(job = calloc (1, sizeof (*job)))) {
+        set_error (error, "Out of memory");
+        goto error_destroy;
+    }
+    if (!(job->jobspec = json_loads (jobspec, 0, error))) {
+        goto error_destroy;
+    }
+
+    /* N.B.: members of jobspec like environment and shell.options may
+     *  be modified with json_object_update_new() via the shell API
+     *  calls flux_shell_setenvf(3), flux_shell_unsetenv(3), and
+     *  flux_shell_setopt(3). Therefore, the refcount of these objects
+     *  is incremented during unpack (via the "O" specifier), so that
+     *  the objects have json_decref() called directly on them to
+     *  avoid potential leaks (the json_decref() of the outer jobspec
+     *  object itself doesn't seem to catch the changes to these inner
+     *  json_t * objects)
+     */
+    if (json_unpack_ex (job->jobspec, error, 0,
+                        "{s:i s:o s:o s:{s?{s?s s?O s?{s?O}}}}",
+                        "version", &job->version,
+                        "resources", &job->resources,
+                        "tasks", &job->tasks,
+                        "attributes",
+                            "system",
+                                "cwd", &job->cwd,
+                                "environment", &job->environment,
+                                "shell", "options", &job->options) < 0) {
+        goto error_destroy;
+    }
+    return job;
+error_destroy:
+    jobspec_destroy (job);
 error:
-    shell_log_error ("job-info: %s", future_strerror (f, errno));
-    return -1;
+    return NULL;
 }
 
 /* Fetch J from the job-info service.
@@ -167,11 +204,11 @@ static int shell_init_jobinfo (flux_shell_t *shell, struct shell_info *info)
             goto out;
         }
     }
-    if (lookup_jobspec_get (f_info, &jobspec) < 0) {
-        shell_log_error ("error fetching jobspec");
+    if (!(info->jobspec = lookup_jobspec_get (f_info, &error))) {
+        shell_log_error ("error fetching jobspec: %s", error.text);
         goto out;
     }
-    if (!(info->jobspec = jobspec_parse (jobspec, &error))) {
+    if (jobspec_parse (info->jobspec, &error) < 0) {
         shell_log_error ("error parsing jobspec: %s", error.text);
         goto out;
     }

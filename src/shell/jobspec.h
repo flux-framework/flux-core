@@ -24,11 +24,14 @@ struct jobspec {
     int node_count;             // number of nodes (-1=unspecified)
     json_t *command;
     const char *cwd;
+    json_t *resources;
+    json_t *tasks;
     json_t *environment;
     json_t *options;            // attributes.system.shell.options, if any
 };
 
-struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error);
+int jobspec_parse (struct jobspec *job, json_error_t *error);
+void set_error (json_error_t *error, const char *fmt, ...);
 void jobspec_destroy (struct jobspec *job);
 
 #endif /* !_SHELL_JOBSPEC_H */
