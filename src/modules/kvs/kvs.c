@@ -1234,7 +1234,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
 
     if (root->remove) {
         if (!zlist_size (root->wait_version_list)
-            && !zhash_size (root->transaction_requests)
+            && !zhashx_size (root->transaction_requests)
             && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
 
             if (event_unsubscribe (ctx, root->ns_name) < 0)
@@ -1252,7 +1252,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
         && !root->is_primary
         && (now - root->last_update_time) > max_namespace_age
         && !zlist_size (root->wait_version_list)
-        && !zhash_size (root->transaction_requests)
+        && !zhashx_size (root->transaction_requests)
         && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
         /* remove a root if it not the primary one, has timed out
          * on a follower node, and it does not have any watchers,
@@ -1602,9 +1602,9 @@ static void finalize_transaction_bynames (struct kvs_ctx *ctx,
             return;
         }
         nameval = json_string_value (name);
-        if ((msg = zhash_lookup (root->transaction_requests, nameval))) {
+        if ((msg = zhashx_lookup (root->transaction_requests, nameval))) {
             finalize_transaction_req (msg, &cbd);
-            zhash_delete (root->transaction_requests, nameval);
+            zhashx_delete (root->transaction_requests, nameval);
         }
     }
 }
@@ -2060,7 +2060,7 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
                          "#no-op stores",
                          kvstxn_mgr_get_noop_stores (root->ktm),
                          "#transactions",
-                         zhash_size (root->transaction_requests),
+                         zhashx_size (root->transaction_requests),
                          "#readytransactions",
                          kvstxn_mgr_ready_transaction_count (root->ktm),
                          "store revision", root->seq))) {

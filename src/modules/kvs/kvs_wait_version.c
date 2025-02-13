@@ -50,8 +50,10 @@ static void kvs_wait_version_destroy (void *data)
 {
     struct kvs_wait_version *ks = data;
     if (ks) {
+        int save_errno = errno;
         flux_msg_decref (ks->msg);
         free (ks);
+        errno = save_errno;
     }
 }
 
