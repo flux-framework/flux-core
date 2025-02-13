@@ -734,7 +734,9 @@ def eventlog(args):
     evf = EventLogFormatter(
         format=args.format, timestamp_format=args.time_format, color=args.color
     )
-    consumer = ResourceJournalConsumer(h, include_sentinel=True).start()
+    # The sentinel event is only used if we're not following the eventlog:
+    sentinel = not args.follow
+    consumer = ResourceJournalConsumer(h, include_sentinel=sentinel).start()
     while True:
         event = consumer.poll()
         if event is None or event.is_empty():
