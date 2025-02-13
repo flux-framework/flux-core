@@ -119,8 +119,10 @@ test_expect_success 'that event WAS posted to the KVS' '
 	test $(grep resource-define kvs2 | wc -l) -eq 2
 '
 test_expect_success NO_CHAIN_LINT 'watch eventlog in the background waiting on drain' '
-	flux resource eventlog -F --wait=drain >bgeventlog &
-	echo $! >bgpid
+	flux resource eventlog -HF --wait=drain >bgeventlog &
+	echo $! >bgpid &&
+	# ensure RPC is established before moving on
+	waitfile.lua -vt 15 bgeventlog
 '
 test_expect_success NO_CHAIN_LINT 'drain rank 1' '
 	flux resource drain 1
@@ -128,7 +130,10 @@ test_expect_success NO_CHAIN_LINT 'drain rank 1' '
 test_expect_success NO_CHAIN_LINT 'background watcher completed successfully' '
 	wait $(cat bgpid)
 '
-
+test_expect_success NO_CHAIN_LINT 'background watcher waited for drain event' '
+	test_debug "cat bgeventlog" &&
+	tail -1 bgeventlog | grep drain
+'
 test_expect_success 'run restartable flux instance, drain 0' '
 	flux start --setattr=statedir=$(pwd) \
 	    sh -c "flux resource eventlog --wait=resource-define \
