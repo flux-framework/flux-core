@@ -618,7 +618,9 @@ class OutputFormat:
                 return kwargs[field_name], None
             return super().get_field(field_name, args, kwargs)
 
-    def __init__(self, fmt, headings=None, prepend="0."):
+    def __init__(
+        self, fmt, headings=None, prepend="0.", nullify_expansion_sentinel=False
+    ):
         """
         Parse the input format ``fmt`` with string.Formatter.
         Save off the fields and list of format tokens for later use,
@@ -628,6 +630,9 @@ class OutputFormat:
             headings (dict): Set a mapping of field name to header string.
             prepend (str): Prepend each field with a string. (Default is
                 "0.", so ``{f1} {f2}`` becomes ``{0.f1} {0.f2}``.
+            nullify_expansion_sentinel (bool): Replace fields with an expansion
+                sentinel (``+:``) with just the field, e.g. ``+:{foo:<10.10}``
+                is replaced with ``{foo}``.
         """
         if headings is not None:
             self.headings = headings
@@ -813,7 +818,11 @@ class OutputFormat:
         return formatter.format(self.header_format(), **self.headings)
 
     def get_format_prepended(
-        self, prepend, except_fields=None, include_sort_prefix=True
+        self,
+        prepend,
+        except_fields=None,
+        include_sort_prefix=True,
+        nullify_expansion_sentinel=False,
     ):
         """
         Return the format string, ensuring that the string in "prepend"
@@ -825,6 +834,9 @@ class OutputFormat:
                 the format.
             include_sort_prefix (bool): If format specifies a list of sort
                 keys, include them in a ``sort:`` prefix. Default: True
+            nullify_expansion_sentinel (bool): If format specifies an expansion
+                prefix ``+:``, then substitute the field without any width
+                and precision, e.g. ``+:{foo:<10.10}`` becomes ``{foo}``.
         """
         if except_fields is None:
             except_fields = []
@@ -841,6 +853,11 @@ class OutputFormat:
             # If field doesn't have 'prepend' then add it
             if field and not field.startswith(prepend):
                 field = prepend + field
+            # If caller has requested `+:` prefix is to be nullified,
+            # and that prefix exists, then reset text and spec:
+            if nullify_expansion_sentinel and text.endswith("+:"):
+                text = ""
+                spec = ""
             lst.append(self._fmt_tuple(text, field, spec, conv))
         if include_sort_prefix:
             prefix = self._sort_prefix()
@@ -867,17 +884,22 @@ class OutputFormat:
             return self._sort_prefix() + fmt
         return fmt
 
-    def copy(self, except_fields=None):
+    def copy(self, except_fields=None, nullify_expansion=False):
         """
         Return a copy of the current formatter, optionally with some
         fields removed
 
         Args:
             except_fields (list): List of fields to remove from result.
+            nullify_expansion (bool): If True, replace any fields in original
+                that have an expansion sentinel with just the field, e.g.
+                ``+:{foo:>5.5}`` becomes ``{foo}`` in the copy.
         """
         cls = self.__class__
         return cls(
-            self.get_format_prepended("", except_fields),
+            self.get_format_prepended(
+                "", except_fields, nullify_expansion_sentinel=nullify_expansion
+            ),
             headings=self.headings,
             prepend=self.prepend,
         )
