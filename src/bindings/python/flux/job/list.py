@@ -10,13 +10,18 @@
 import errno
 import os
 import pwd
+import sys
 from collections.abc import Iterable
+from datetime import datetime
+from functools import reduce
 
 import flux.constants
+from flux.constraint.parser import ConstraintLexer, ConstraintParser
 from flux.future import WaitAllFuture
 from flux.job import JobID
-from flux.job.info import JobInfo
+from flux.job.info import JobInfo, strtoresult, strtostate
 from flux.rpc import RPC
+from flux.util import parse_datetime
 
 
 class JobListRPC(RPC):
@@ -341,3 +346,176 @@ class JobList:
         if hasattr(rpc, "errors"):
             self.errors = rpc.errors
         return [JobInfo(job) for job in jobs]
+
+
+def job_list_filter_to_mask(args, conv):
+    """
+    Convert all job state or result strings with conv() and combine into
+    a single state or result mask as accepted by the job-list constraints.
+
+    This is a convenience function for the JobListConstraintParser class.
+
+    Args:
+        args (list): list of values to convert
+        conv (callable): function to call on each arg to convert to a state
+            or result mask.
+    """
+    return reduce(lambda x, y: x | y, map(conv, args))
+
+
+class JobListConstraintParser(ConstraintParser):
+    operator_map = {
+        None: "filter",
+        "id": "jobid",
+        "host": "hostlist",
+        "hosts": "hostlist",
+        "rank": "ranks",
+    }
+    split_values = {"states": ",", "results": ",", "userid": ","}
+    convert_values = {
+        "userid": lambda args: [int(x) for x in args],
+        "states": lambda args: [job_list_filter_to_mask(args, strtostate)],
+        "results": lambda args: [job_list_filter_to_mask(args, strtoresult)],
+    }
+    valid_states = (
+        "depend",
+        "priority",
+        "sched",
+        "run",
+        "cleanup",
+        "inactive",
+        "pending",
+        "running",
+        "active",
+    )
+    valid_results = ("completed", "failed", "canceled", "timeout")
+
+    def convert_filter(self, arg):
+        #
+        # This is a generic state/result filter for backwards compat with
+        # --filter=. Split into separate states and results operators and
+        # return the new term(s) (joined by 'or' since that preserves the
+        # behavior of `--filter`).
+        #
+        states = []
+        results = []
+        for name in arg.split(","):
+            name = name.lower()
+            if name in self.valid_states:
+                states.append(name)
+            elif name in self.valid_results:
+                results.append(name)
+            else:
+                raise ValueError(f"Invalid filter specified: {name}")
+        arg = ""
+        if states:
+            arg += "states:" + ",".join(states) + " "
+            if results:
+                arg += "or "
+        if results:
+            arg += "results:" + ",".join(results)
+        return arg.rstrip()
+
+    @staticmethod
+    def convert_user(arg):
+        op, _, arg = arg.partition(":")
+        users = []
+        for user in arg.split(","):
+            try:
+                users.append(str(int(user)))
+            except ValueError:
+                users.append(str(pwd.getpwnam(user).pw_uid))
+        return "userid:" + ",".join(users)
+
+    @staticmethod
+    def convert_datetime(dt):
+        if isinstance(dt, (float, int)):
+            if dt == 0:
+                # A datetime of zero indicates unset, or an arbitrary time
+                # in the future. Return 12 months from now.
+                return parse_datetime("+12m")
+            dt = datetime.fromtimestamp(dt).astimezone()
+        else:
+            dt = parse_datetime(dt, assumeFuture=False)
+        return dt.timestamp()
+
+    def convert_range(self, arg):
+        arg = arg[1:]
+        if ".." in arg:
+            start, end = arg.split("..")
+            arg = "(not ("
+            if start:
+                dt = self.convert_datetime(start)
+                arg += f"'t_cleanup:<{dt}'"
+            if start and end:
+                arg += " or "
+            if end:
+                dt = self.convert_datetime(end)
+                arg += f"'t_run:>{dt}'"
+            arg += "))"
+        else:
+            dt = self.convert_datetime(arg)
+            arg = f"(t_run:'<={dt}' and t_cleanup:'>={dt}')"
+        return arg
+
+    def convert_timeop(self, arg):
+        op, _, arg = arg.partition(":")
+        prefix = ""
+        if arg[0] in (">", "<"):
+            if arg[1] == "=":
+                prefix = arg[:2]
+                arg = arg[2:]
+            else:
+                prefix = arg[0]
+                arg = arg[1:]
+        arg = self.convert_datetime(arg)
+        return f"'{op}:{prefix}{arg}'"
+
+    def convert_token(self, arg):
+        if arg.startswith("@"):
+            return self.convert_range(arg)
+        if arg.startswith("t_"):
+            return self.convert_timeop(arg)
+        if arg.startswith("user:"):
+            return self.convert_user(arg)
+        if ":" not in arg:
+            return self.convert_filter(arg)
+        return f"'{arg}'"
+
+    def parse(self, string, debug=False):
+        # First pass: traverse all tokens and apply convenience conversions
+        expression = ""
+        lexer = ConstraintLexer()
+        lexer.input(str(string))
+        if debug:
+            print(f"input: {string}", file=sys.stderr)
+
+        #  Get all tokens first so we can do lookahead in the next step for
+        #  proper use of whitespace:
+        tokens = []
+        while True:
+            tok = lexer.token()
+            if tok is None:
+                break
+            tokens.append(tok)
+
+        #  Reconstruct expression while converting tokens:
+        for i, tok in enumerate(tokens):
+            next_tok = None
+            if i < len(tokens) - 1:
+                next_tok = tokens[i + 1]
+            if debug:
+                print(tok, file=sys.stderr)
+            if tok.type != "TOKEN":
+                expression += tok.value
+            else:
+                expression += self.convert_token(tok.value)
+            if tok.type not in ("LPAREN", "NEGATE") and (
+                next_tok and next_tok.type not in ("RPAREN")
+            ):
+                expression += " "
+
+        if debug:
+            print(f"expression: '{expression}'", file=sys.stderr)
+
+        return super().parse(expression)

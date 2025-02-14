@@ -244,6 +244,17 @@ class FilterActionSetUpdate(argparse.Action):
         getattr(namespace, self.dest).update(values)
 
 
+class FilterActionConcatenate(argparse.Action):
+    """Concatenate filter arguments separated with space"""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, "filtered", True)
+        current = getattr(namespace, self.dest)
+        if current is not None:
+            values = current + " " + values
+        setattr(namespace, self.dest, values)
+
+
 # pylint: disable=redefined-builtin
 class FilterTrueAction(argparse.Action):
     def __init__(
@@ -349,7 +360,7 @@ def parse_fsd(fsd_string):
     return seconds
 
 
-def parse_datetime(string, now=None):
+def parse_datetime(string, now=None, assumeFuture=True):
     """Parse a possibly human readable datetime string or offset
 
     If string starts with `+` or `-`, then the remainder of the string
@@ -387,6 +398,9 @@ def parse_datetime(string, now=None):
 
     cal = Calendar()
     cal.ptc.StartHour = 0
+    if not assumeFuture:
+        cal.ptc.DOWParseStyle = 0
+        cal.ptc.YearParseStyle = 0
     time_struct, status = cal.parse(string, sourceTime=now.timetuple())
     if status == 0:
         raise ValueError(f'Invalid datetime: "{string}"')
