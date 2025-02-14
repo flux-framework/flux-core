@@ -380,7 +380,7 @@ static int exec_start_cmd (struct bulk_exec *exec,
         /* Set the unit name for the "sdexec" service.  This is done here
          * for each rank instead of once in bulk_exec_push_cmd() to ensure
          * the name is unique when there are multiple brokers per node.
-         * Ex: shell-0-fTE9HHdZvi3.service, imp-kill-1-fTE9HHdZvi3.service.
+         * Ex: shell-0-fTE9HHdZvi3.service.
          * (N.B. systemd doesn't like "ƒ" in the unit name hence f58plain).
          */
         if (streq (exec->service, "sdexec")) {
