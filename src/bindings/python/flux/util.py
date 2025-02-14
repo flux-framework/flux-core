@@ -1135,7 +1135,9 @@ class Deduplicator:
     """
 
     def __init__(self, formatter, except_fields=None, combine=None):
-        self.formatter = formatter.copy(except_fields=except_fields)
+        self.formatter = formatter.copy(
+            except_fields=except_fields, nullify_expansion=True
+        )
         self.combine = combine
         self.hash = {}
         self.items = []
