@@ -43,6 +43,17 @@ test_expect_success 'cancel running jobs' '
 	flux cancel --all &&
 	flux queue idle
 '
+# issue#6625:
+test_expect_success 'flux-resource status does not combine dissimilar drain reasons' '
+	test_when_finished "flux resource undrain -f 0-3" &&
+	flux resource drain -f 0-3 xxxxxxxx &&
+	flux resource drain -f 0   xxxxxxxxyy &&
+	flux resource status -no "{state:>12} {ranks:>6} +:{reason:<5.5+}" \
+		> drain.1 &&
+	flux resource status -no "{state:>12} {ranks:>6} {reason:<10}" \
+		> drain.2 &&
+	test_cmp drain.1 drain.2
+'
 test_expect_success 'flux-resource status shows housekeeping by default' '
 	flux config load <<-EOF &&
 	[job-manager.housekeeping]

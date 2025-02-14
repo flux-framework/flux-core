@@ -261,6 +261,26 @@ class TestOutputFormat(unittest.TestCase):
         ).filter(items)
         self.assertEqual(fmt, "{s:16.16} {i:4d} {f:3.2f}")
 
+    def test_copy(self):
+        original = "+:{s:5.5} {i:4d} {f:.2f}"
+
+        fmt = OutputFormat(original, headings=self.headings)
+        self.assertEqual(fmt.get_format_prepended(""), original)
+
+        # copy preserves original fmt
+        self.assertEqual(fmt.copy().get_format_prepended(""), original)
+
+        # except_fields can remove fields
+        self.assertEqual(
+            fmt.copy(except_fields=["s", "f"]).get_format_prepended(""), " {i:4d}"
+        )
+
+        # nullify_expansion removes formatting on +: fields
+        self.assertEqual(
+            fmt.copy(nullify_expansion=True).get_format_prepended(""),
+            "{s} {i:4d} {f:.2f}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=TAPTestRunner())
