@@ -70,7 +70,6 @@ int bulk_exec_push_cmd (struct bulk_exec *exec,
 int bulk_exec_start (flux_t *h, struct bulk_exec *exec);
 
 /* Send signal to ranks. Set ranks=NULL for all.
- * If an IMP path has been set then bulk_exec_imp_kill() will be used.
  */
 flux_future_t * bulk_exec_kill (struct bulk_exec *exec,
                                 const struct idset *ranks,
@@ -79,11 +78,6 @@ flux_future_t * bulk_exec_kill (struct bulk_exec *exec,
 /*  Log per-rank kill errors for a failed bulk_exec_kill() RPC.
  */
 void bulk_exec_kill_log_error (flux_future_t *f, flux_jobid_t id);
-
-flux_future_t *bulk_exec_imp_kill (struct bulk_exec *exec,
-                                   const char *imp_path,
-                                   const struct idset *ranks,
-                                   int signal);
 
 int bulk_exec_cancel (struct bulk_exec *exec);
 
