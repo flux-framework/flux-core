@@ -36,7 +36,8 @@ struct reslog {
     struct resource_ctx *ctx;
     zlist_t *pending;       // list of pending futures
     zlist_t *watchers;
-    json_t *eventlog;
+    zlistx_t *eventlog;
+    int journal_max;
     struct flux_msglist *consumers;
     flux_msg_handler_t **handlers;
 };
@@ -196,6 +197,45 @@ int reslog_sync (struct reslog *reslog)
     return 0;
 }
 
+/*  Truncate resource journal if needed to reslog->journal_max
+ */
+static int reslog_truncate (struct reslog *reslog)
+{
+    int rc = -1;
+    int count;
+    double timestamp;
+    json_t *event = NULL;
+
+    if ((count = zlistx_size (reslog->eventlog)) <= reslog->journal_max)
+        return 0;
+
+    /*  Detach events until count is decreased to max - 1.
+     *  Save timestamps for the truncate event.
+     */
+    while (count-- >= reslog->journal_max) {
+        event = zlistx_first (reslog->eventlog);
+        if (eventlog_entry_parse (event, &timestamp, NULL, NULL) < 0) {
+            /* Unlikely: failed to parse timestamp from first event, but
+             * timestamp of truncate event needs to come before any other
+             * event, so set it to a small value (not 0., because this will
+             * cause eventlog_entry_create() to use current timestamp.)
+             */
+            timestamp = 0.1;
+        }
+        zlistx_delete (reslog->eventlog, zlistx_cursor (reslog->eventlog));
+    }
+
+    /* Push truncate event onto front of list
+     */
+    if (!(event = eventlog_entry_create (timestamp, "truncate", NULL))
+        || !(zlistx_add_start (reslog->eventlog, event)))
+        goto out;
+    rc = 0;
+out:
+    json_decref (event);
+    return rc;
+}
+
 int reslog_post_pack (struct reslog *reslog,
                       const flux_msg_t *request,
                       double timestamp,
@@ -217,11 +257,12 @@ int reslog_post_pack (struct reslog *reslog,
     va_end (ap);
     if (!event)
         return -1;
-    if (json_array_append (reslog->eventlog, event) < 0) {
-        json_decref (event);
+    if (!zlistx_add_end (reslog->eventlog, event)) {
         errno = ENOMEM;
         return -1;
     }
+    if (reslog_truncate (reslog) < 0)
+        flux_log_error (h, "failed to truncate eventlog");
     if ((flags & EVENT_NO_COMMIT)) {
         if (!(f = flux_future_create (NULL, NULL)))
             goto error;
@@ -299,11 +340,11 @@ int reslog_add_callback (struct reslog *reslog, reslog_cb_f cb, void *arg)
 static bool send_backlog (struct reslog *reslog, const flux_msg_t *msg)
 {
     flux_t *h = reslog->ctx->h;
-    size_t index;
-    json_t *entry;
-    json_array_foreach (reslog->eventlog, index, entry) {
+    json_t *entry = zlistx_first (reslog->eventlog);
+    while (entry) {
         if (notify_one_consumer (reslog, msg, entry) < 0)
             goto error;
+        entry = zlistx_next (reslog->eventlog);
     }
     if (flux_respond_pack (h, msg, "{s:[]}", "events") < 0) // delimiter
         goto error;
@@ -398,25 +439,53 @@ void reslog_destroy (struct reslog *reslog)
             flux_msglist_destroy (reslog->consumers);
         }
         zlist_destroy (&reslog->watchers);
-        json_decref (reslog->eventlog);
+        zlistx_destroy (&reslog->eventlog);
         free (reslog);
         errno = saved_errno;
     }
 }
 
-struct reslog *reslog_create (struct resource_ctx *ctx, json_t *eventlog)
+static void entry_destructor (void **item)
+{
+    if (*item) {
+        json_decref (*item);
+        *item = NULL;
+    }
+}
+
+static void *entry_duplicator (const void *item)
+{
+    return json_incref ((json_t *) item);
+}
+
+void reslog_set_journal_max (struct reslog *reslog, int max)
+{
+    if (reslog) {
+        reslog->journal_max = max;
+        if (reslog_truncate (reslog) < 0)
+            flux_log_error (reslog->ctx->h,
+                            "resource eventlog truncation failed");
+    }
+}
+
+struct reslog *reslog_create (struct resource_ctx *ctx,
+                              json_t *eventlog,
+                              int journal_max)
 {
     struct reslog *reslog;
 
     if (!(reslog = calloc (1, sizeof (*reslog))))
         return NULL;
     reslog->ctx = ctx;
+    reslog->journal_max = journal_max;
     if (!(reslog->pending = zlist_new ())
         || !(reslog->watchers = zlist_new ()))
         goto nomem;
     zlist_comparefn (reslog->watchers, watcher_compare);
-    if (!(reslog->eventlog = json_array ()))
+    if (!(reslog->eventlog = zlistx_new ()))
         goto nomem;
+    zlistx_set_destructor (reslog->eventlog, entry_destructor);
+    zlistx_set_duplicator (reslog->eventlog, entry_duplicator);
     if (eventlog) {
         size_t index;
         json_t *entry;
@@ -424,8 +493,10 @@ struct reslog *reslog_create (struct resource_ctx *ctx, json_t *eventlog)
             // historical resource-define events are not helpful
             if (match_event (entry, "resource-define"))
                 continue;
-            if (json_array_append (reslog->eventlog, entry) < 0)
+            if (!zlistx_add_end (reslog->eventlog, entry))
                 goto nomem;
+            if (reslog_truncate (reslog) < 0)
+                flux_log_error (ctx->h, "eventlog truncate failed");
         }
     }
     if (!(reslog->consumers = flux_msglist_create ()))

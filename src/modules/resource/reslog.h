@@ -22,8 +22,12 @@ typedef void (*reslog_cb_f)(struct reslog *reslog,
                             json_t *context,
                             void *arg);
 
-struct reslog *reslog_create (struct resource_ctx *ctx, json_t *eventlog);
+struct reslog *reslog_create (struct resource_ctx *ctx,
+                              json_t *eventlog,
+                              int journal_max);
 void reslog_destroy (struct reslog *reslog);
+
+void reslog_set_journal_max (struct reslog *reslog, int max);
 
 /* Post an event to the eventlog.  This function returns immediately,
  * and the commit to the eventlog completes asynchronously.

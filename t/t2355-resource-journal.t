@@ -158,7 +158,55 @@ test_expect_success 'last event: resource-define method=kvs' '
 	jq -e ".name == \"resource-define\"" restartlog.3 &&
 	jq -e ".context.method == \"kvs\"" restartlog.3
 '
-
+test_expect_success 'ensure all ranks are undrained' '
+	ranks=$(flux resource status -no {ranks} -s drain) &&
+	if test -n "$ranks"; then
+	    flux resource undrain $ranks
+	fi
+'
+test_expect_success 'capture eventlog before truncation' '
+	flux resource eventlog -H &&
+	flux resource eventlog -f json > eventlog.pre.out
+'
+test_expect_success 'set a journal size limit 1 less than current entries' '
+	limit=$(($(flux resource eventlog | wc -l) - 1)) &&
+	test_debug "echo limiting resource.journal to $limit entries" &&
+	echo resource.journal-max=$limit | flux config load
+'
+test_expect_success 'eventlog is now truncated' '
+	flux resource eventlog -H &&
+	flux resource eventlog -f json > eventlog.trunc
+'
+test_expect_success 'truncated eventlog has expected number of entries' '
+	test_debug "wc -l eventlog.trunc" &&
+	test $(wc -l < eventlog.trunc) -eq $limit
+'
+test_expect_success '1st event is a truncate event' '
+	head -1 eventlog.trunc > eventlog.trunc.1 &&
+	jq -e ".name == \"truncate\"" eventlog.trunc.1
+'
+test_expect_success 'cause another event to be posted to the eventlog' '
+	flux resource drain 0
+'
+test_expect_success '1st event is still a truncate event' '
+	flux resource eventlog -H &&
+	flux resource eventlog -f json > eventlog2.trunc &&
+	head -1 eventlog2.trunc | jq -e ".name == \"truncate\""
+'
+test_expect_success 'truncated eventlog has expected number of entries' '
+	test $(wc -l < eventlog2.trunc) -eq $limit
+'
+test_expect_success 'cause another event to be posted to the eventlog' '
+	flux resource undrain 0
+'
+test_expect_success '1st event is still a truncate event' '
+	flux resource eventlog -H &&
+	flux resource eventlog -f json > eventlog3.trunc &&
+	head -1 eventlog3.trunc | jq -e ".name == \"truncate\""
+'
+test_expect_success 'truncated eventlog has expected number of entries' '
+	test $(wc -l < eventlog3.trunc) -eq $limit
+'
 test_expect_success 'reload the scheduler' '
 	flux module load sched-simple
 '
