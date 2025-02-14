@@ -943,3 +943,6 @@ myprogram
 unref
 sigprocmask
 iso
+SIGALRM
+backoff
+unkillable

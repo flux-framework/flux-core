@@ -36,19 +36,26 @@ job-shell
 
 sdexec-properties
    (optional) A table of systemd properties to set for all jobs.  All values
-   must be strings.  See SDEXEC PROPERTIES below.
+   must be strings. See :ref:`sdexec_properties` below.
 
 kill-timeout
-   (optional) The amount of time to wait after ``SIGTERM`` is sent to a job
-   before sending ``SIGKILL``.
+   (optional) The amount of time in FSD to wait after ``SIGTERM`` is
+   sent to a job before sending ``SIGKILL``. The default is "5s". See
+   :ref:`job_termination` below for details.
+
+max-kill-count
+   (optional) The maximum number of times a job will be sent ``kill-signal``
+   before the execution system will consider the job unkillable and drains
+   the node. The default is 8. See :ref:`job_termination` below for details.
+   for details.
 
 term-signal
-   (optional) Specify an alternate signal to ``SIGTERM`` when terminating
-   job tasks. Mainly used for testing.
+   (optional) A string specifying an alternate signal to ``SIGTERM`` when
+   terminating job tasks. Mainly used for testing.
 
 kill-signal
-   (optional) Specify an alternate signal to ``SIGKILL`` when killing tasks
-   and the job shell. Mainly used for testing.
+   (optional) A string specifying an alternate signal to ``SIGKILL`` when
+   killing tasks and the job shell. Mainly used for testing.
 
 barrier-timeout
    (optional) Specify the default job shell start barrier timeout in FSD.
@@ -64,6 +71,8 @@ testexec
    (options) A table of keys (see :ref:`testexec`) for configuring the
    **job-exec** test execution implementation (used in mainly for testing).
 
+
+.. _sdexec_properties:
 
 SDEXEC PROPERTIES
 =================
@@ -95,6 +104,24 @@ TESTEXEC
 allow-guests
   Boolean value enables access to the testexec implementation from guest
   users. By default, guests cannot use this implementation.
+
+.. _job_termination:
+
+JOB TERMINATION
+===============
+
+When a job is canceled or gets a fatal exception it is terminated using
+the following sequence
+
+ - The job shells are notified to send ``term-signal`` to job tasks, unless
+   the job is being terminated due to a time limit, in which case ``SIGALRM``
+   is sent instead.
+ - After ``kill-timeout``, any remaining shells are sent ``kill-signal``
+ - This continues with an exponential backoff, with the timeout doubling
+   after each attempt (capped at 300s)
+ - After a total of ``max-kill-count`` attempts, any nodes still running
+   processes are drained with the message: "unkillable user processes for job
+   JOBID"
 
 EXAMPLES
 ========
