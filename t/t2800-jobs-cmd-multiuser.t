@@ -63,4 +63,16 @@ test_expect_success '-A option shows all jobs' '
         flux jobs -a -n -A -o "{id},{userid}" > optionA.out &&
         test $(wc -l < optionA.out) -eq 3
 '
+test_expect_success '--include defaults to work against all user jobs' '
+        flux jobs -a -n -i $(hostname) -o "{id},{userid},{nodelist}" > includeall.out &&
+        test $(wc -l < includeall.out) -eq 3
+'
+test_expect_success '--include w/ -u only lists user jobs' '
+        flux jobs -a -n -i $(hostname) -u $id1 -o "{id},{userid}" > include1.out &&
+        test $(wc -l < include1.out) -eq 1 &&
+        grep $id1 include1.out &&
+        flux jobs -a -n -i $(hostname) -u $id2 -o "{id},{userid}" > include2.out &&
+        test $(wc -l < include2.out) -eq 1 &&
+        grep $id2 include2.out
+'
 test_done
