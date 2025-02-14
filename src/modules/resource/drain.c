@@ -416,7 +416,8 @@ done:
 
 static int undrain_rank_idset (struct drain *drain,
                                const flux_msg_t *msg,
-                               struct idset *idset)
+                               struct idset *idset,
+                               const char *reason)
 {
     char *idstr;
     char *nodelist = NULL;
@@ -429,14 +430,25 @@ static int undrain_rank_idset (struct drain *drain,
     if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE))
         || !(nodelist = flux_hostmap_lookup (drain->ctx->h, idstr, NULL)))
         goto done;
-    rc = reslog_post_pack (drain->ctx->reslog,
-                           msg,
-                           0.,
-                           "undrain",
-                           0,
-                           "{s:s s:s}",
-                           "idset", idstr,
-                           "nodelist", nodelist);
+    if (reason)
+        rc = reslog_post_pack (drain->ctx->reslog,
+                               msg,
+                               0.,
+                               "undrain",
+                               0,
+                               "{s:s s:s s:s}",
+                               "idset", idstr,
+                               "nodelist", nodelist,
+                               "reason", reason);
+    else
+        rc = reslog_post_pack (drain->ctx->reslog,
+                               msg,
+                               0.,
+                               "undrain",
+                               0,
+                               "{s:s s:s}",
+                               "idset", idstr,
+                               "nodelist", nodelist);
 done:
     ERRNO_SAFE_WRAP (free, nodelist);
     ERRNO_SAFE_WRAP (free, idstr);
@@ -454,6 +466,7 @@ static void undrain_cb (flux_t *h,
     struct drain *drain = arg;
     const char *s;
     const char *mode = NULL;
+    const char *reason = NULL;
     struct idset *idset = NULL;
     struct idset *undrained = NULL;
     unsigned int id;
@@ -463,9 +476,10 @@ static void undrain_cb (flux_t *h,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s?s}",
+                             "{s:s s?s s?s}",
                              "targets", &s,
-                             "mode", &mode) < 0)
+                             "mode", &mode,
+                             "reason", &reason) < 0)
         goto error;
     if (!(idset = drain_idset_decode (drain, s, &error))) {
         errstr = error.text;
@@ -527,7 +541,7 @@ static void undrain_cb (flux_t *h,
         if (flux_respond (h, msg, NULL) < 0)
             flux_log_error (h, "error responding to undrain request");
     }
-    else if (undrain_rank_idset (drain, msg, idset) < 0)
+    else if (undrain_rank_idset (drain, msg, idset, reason) < 0)
         goto error;
     idset_destroy (idset);
     idset_destroy (undrained);
