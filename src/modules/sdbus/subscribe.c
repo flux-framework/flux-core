@@ -27,13 +27,16 @@ static void subscribe_continuation (flux_future_t *f1, void *arg)
     flux_t *h = flux_future_get_flux (f1);
     const char *errmsg = NULL;
     flux_future_t *f2;
+    const char *name = flux_aux_get (h, "flux::name");
+    char topic[128];
 
     if (flux_rpc_get (f1, NULL) < 0) {
         errmsg = future_strerror (f1, errno);
         goto error;
     }
+    snprintf (topic, sizeof (topic), "%s.call", name);
     if (!(f2 = flux_rpc_pack (h,
-                              "sdbus.call",
+                              topic,
                               FLUX_NODEID_ANY,
                               0,
                               "{s:s s:s s:s s:s s:[s]}",
@@ -58,9 +61,12 @@ flux_future_t *sdbus_subscribe (flux_t *h)
 {
     flux_future_t *f1;
     flux_future_t *fc;
+    const char *name = flux_aux_get (h, "flux::name");
+    char topic[128];
 
+    snprintf (topic, sizeof (topic), "%s.call", name);
     if (!(f1 = flux_rpc_pack (h,
-                              "sdbus.call",
+                              topic,
                               FLUX_NODEID_ANY,
                               0,
                               "{s:s s:[]}",

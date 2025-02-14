@@ -27,7 +27,8 @@
 flux_future_t *sdbus_connect (flux_t *h,
                               bool first_time,
                               double retry_min,
-                              double retry_max);
+                              double retry_max,
+                              bool system_bus);
 
 #endif /* !_SDBUS_CONNECT_H */
 
