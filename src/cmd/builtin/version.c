@@ -64,7 +64,7 @@ static int cmd_version (optparse_t *p, int ac, char *av[])
 #if HAVE_LIBSYSTEMD
     printf ("+systemd");
 #endif
-    printf ("+hwloc==%d.%d.%d",
+    printf ("+hwloc.api==%d.%d.%d",
             HWLOC_API_VERSION >> 16 & 0x000000ff,
             HWLOC_API_VERSION >>  8 & 0x000000ff,
             HWLOC_API_VERSION       & 0x000000ff
