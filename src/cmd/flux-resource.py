@@ -45,7 +45,7 @@ class FluxResourceConfig(UtilConfig):
             "description": "Long flux-resource status format string",
             "format": (
                 "{state:>12} {color_up}{up:>2}{color_off} "
-                "{nnodes:>6} +:{reason:<30.30+} {nodelist}"
+                "{nnodes:>6} +:{reason:<30.30} {nodelist}"
             ),
         },
     }
@@ -54,7 +54,7 @@ class FluxResourceConfig(UtilConfig):
             "description": "Long flux-resource drain format string",
             "format": (
                 "{timestamp!d:%b%d %R::<12} {state:<8.8} {ranks:<8.8+} "
-                "+:{reason:<30.30+} {nodelist}"
+                "+:{reason:<30.30} {nodelist}"
             ),
         },
         "default": {
