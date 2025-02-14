@@ -36,7 +36,7 @@ job-shell
 
 sdexec-properties
    (optional) A table of systemd properties to set for all jobs.  All values
-   must be strings.  See SDEXEC PROPERTIES below.
+   must be strings. See :ref:`sdexec_properties` below.
 
 kill-timeout
    (optional) The amount of time in FSD to wait after ``SIGTERM`` is
@@ -71,6 +71,8 @@ testexec
    (options) A table of keys (see :ref:`testexec`) for configuring the
    **job-exec** test execution implementation (used in mainly for testing).
 
+
+.. _sdexec_properties:
 
 SDEXEC PROPERTIES
 =================
