@@ -56,18 +56,22 @@ void on_error (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
 {
     if (p) {
         flux_subprocess_state_t state = flux_subprocess_state (p);
-        log_msg ("%d: pid %ju: %s", flux_subprocess_rank (p),
-                (uintmax_t) flux_subprocess_pid (p),
-                flux_subprocess_state_string (state));
+        log_msg ("%d: pid %ju: %s",
+                 flux_subprocess_rank (p),
+                 (uintmax_t)flux_subprocess_pid (p),
+                 flux_subprocess_state_string (state));
     }
     flux_future_t *f = bulk_exec_kill (exec, NULL, 9);
     if (flux_future_get (f, NULL) < 0)
         log_err_exit ("bulk_exec_kill");
 }
 
-void on_output (struct bulk_exec *exec, flux_subprocess_t *p,
-                const char *stream, const char *data,
-                int data_len, void *arg)
+void on_output (struct bulk_exec *exec,
+                flux_subprocess_t *p,
+                const char *stream,
+                const char *data,
+                int data_len,
+                void *arg)
 {
     int rank = flux_subprocess_rank (p);
     FILE *fp = streq (stream, "stdout") ? stdout : stderr;
@@ -81,8 +85,10 @@ static void kill_cb (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
+static void signal_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     struct bulk_exec *exec = arg;
     int signum = flux_signal_watcher_get_signum (w);
@@ -94,8 +100,10 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_watcher_stop (w);
 }
 
-static void check_cancel_cb (flux_reactor_t *r, flux_watcher_t *w,
-                             int revents, void *arg)
+static void check_cancel_cb (flux_reactor_t *r,
+                             flux_watcher_t *w,
+                             int revents,
+                             void *arg)
 {
     struct bulk_exec *exec = arg;
     if (cancel_after && bulk_exec_started_count (exec) >= cancel_after) {
