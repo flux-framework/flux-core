@@ -833,7 +833,10 @@ class OutputFormat:
             # Skip this field if it is in except_fields
             if field in except_fields:
                 # Preserve any format "prefix" (i.e. the text):
-                lst.append(text)
+                # Unless it is whitespace or a sentinel (+:,  etc):
+                result = text.strip()
+                if result and result not in ("+:", "?:", "?+:"):
+                    lst.append(text)
                 continue
             # If field doesn't have 'prepend' then add it
             if field and not field.startswith(prepend):
