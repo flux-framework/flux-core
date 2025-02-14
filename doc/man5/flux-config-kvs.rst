@@ -29,6 +29,20 @@ gc-threshold
    point. (Default: garbage collection must be manually requested with
    `flux-shutdown --gc`).
 
+transaction-max-ops
+   (optional) Sets the maximum number of transactions that can be
+   performed in a single KVS commit.  This configuration is to prevent
+   a single transaction from taking up too much of the KVS's time
+   (i.e. to prevent a denial-of-service from a large transaction).  By
+   default the maximum is 65536.
+
+fence-max-ops
+   (optional) Sets the maximum number of operations that can be
+   performed in total by a KVS fence.  This configuration is to
+   prevent a single fence from taking up too much of the KVS's time
+   (i.e. to prevent a denial-of-service from a large transaction).  By
+   default the maximum is 1048576.
+
 
 EXAMPLE
 =======
