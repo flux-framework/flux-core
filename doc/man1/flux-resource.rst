@@ -17,7 +17,7 @@ SYNOPSIS
 
 | **flux** **resource** **drain** [*-n*] [*-o* *FORMAT*] [*-i* *TARGETS*]
 | **flux** **resource** **drain** [*-f*] [*-u*] [*targets*] [*reason*]
-| **flux** **resource** **undrain** [*-f*] *targets*
+| **flux** **resource** **undrain** [*-f*] *targets* [*reason*]
 
 | **flux** **resource** **reload** [-f] [--xml] *path*
 
@@ -323,6 +323,7 @@ undrain
 .. program:: flux resource undrain
 
 Undrain the nodes specified by the *targets* argument (IDSET or HOSTLIST).
+Any remaining free arguments are recorded as a reason for the undrain event.
 
 This command is restricted to the Flux instance owner.
 
