@@ -166,6 +166,8 @@ def undrain(args):
     payload = {"targets": args.targets}
     if args.force:
         payload["mode"] = "force"
+    if args.reason:
+        payload["reason"] = " ".join(args.reason)
     RPC(flux.Flux(), "resource.undrain", payload, nodeid=0).get()
 
 
@@ -840,6 +842,7 @@ def main():
     undrain_parser.add_argument(
         "targets", help="List of targets to resume (IDSET or HOSTLIST)"
     )
+    undrain_parser.add_argument("reason", help="Reason", nargs=argparse.REMAINDER)
     undrain_parser.set_defaults(func=undrain)
 
     status_parser = subparsers.add_parser(
