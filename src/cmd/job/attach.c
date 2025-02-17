@@ -97,6 +97,7 @@ struct attach_ctx {
     flux_jobid_t id;
     bool readonly;
     bool unbuffered;
+    bool output_started;
     char *stdin_ranks;
     const char *jobid;
     const char *wait_event;
@@ -531,7 +532,7 @@ void attach_stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
  */
 void attach_output_start (struct attach_ctx *ctx)
 {
-    if (ctx->output_f)
+    if (ctx->output_started)
         return;
 
     if (!(ctx->output_f = flux_job_event_watch (ctx->h,
@@ -545,6 +546,7 @@ void attach_output_start (struct attach_ctx *ctx)
                           ctx) < 0)
         log_err_exit ("flux_future_then");
 
+    ctx->output_started = true;
     ctx->eventlog_watch_count++;
 }
 
@@ -896,7 +898,7 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
      *   output eventlog, then start now in case shell.init event
      *   was never emitted (failure in initialization)
      */
-    if (streq (event->name, "complete") && !ctx->output_f)
+    if (streq (event->name, "complete"))
         attach_output_start (ctx);
 
     if (optparse_hasopt (ctx->p, "show-exec")
