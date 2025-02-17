@@ -11,6 +11,11 @@ used in our documentation that may not be familiar to all readers.
     the instance referred to by the :envvar:`FLUX_URI` environment variable,
     or if that is not set, it is the :term:`system instance`.
 
+  evolving
+    An evolving job is similar to a :term:`malleable` job, except that the
+    application, rather than the system, may initiate resource grow and
+    shrink at runtime [#Feitelson96]_.
+
   expedited
     A job is said to be expedited if its :term:`urgency` is set to the
     maximum value of 31.  An expedited job's :term:`priority` is always set
@@ -63,6 +68,15 @@ used in our documentation that may not be familiar to all readers.
     (the current version).  It includes the abstract resource requirements
     of the job and instructions for job execution.
 
+  malleable
+    A malleable job requests a variable, bounded quantity of resources
+    that the system may grow or shrink (within bounds) at runtime
+    [#Feitelson96]_.
+
+  moldable
+    A moldable job requests a variable, bounded quantity of resources
+    that, once allocated by the system, is fixed at runtime [#Feitelson96]_.
+
   priority
     The order in which the scheduler considers jobs.  By default, priority
     is derived from the :term:`urgency` and submit time, but a priority plugin
@@ -74,6 +88,10 @@ used in our documentation that may not be familiar to all readers.
 
   resource inventory
     The concrete set of resources managed by a given Flux instance.
+
+  rigid
+    A rigid job requests a fixed quantity of resources that remains
+    fixed at runtime [#Feitelson96]_.
 
   scheduler
     The Flux component that fulfills resource allocation requests from the
@@ -110,3 +128,8 @@ used in our documentation that may not be familiar to all readers.
     The range is 0 to 31, with a default value of 16.  Urgency is defined
     by :doc:`rfc:spec_30`.
 
+Footnotes
+---------
+
+.. [#Feitelson96] Feitelson, D.G., Rudolph, L.: *Toward convergence in job
+   scheduling for parallel supercomputers* (1996).
