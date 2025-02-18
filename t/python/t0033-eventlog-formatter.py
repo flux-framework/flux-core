@@ -25,6 +25,7 @@ TEST_EVENTLOG = """\
 {"timestamp":1738774194.107436,"name":"priority","context":{"priority":16}}
 {"timestamp":1738774194.110116,"name":"alloc","context":{"annotations":{"sched":{"resource_summary":"rank[0-3]/core[0-7]"}}}}
 {"timestamp":1738774194.1177957,"name":"start"}
+{"timestamp":1738774194.1777956,"name":"memo","context":{"test":"ƒ Φ Ψ Ω Ö"}}
 {"timestamp":1738774194.1820674,"name":"finish","context":{"status":0}}
 {"timestamp":1738774194.1853716,"name":"release","context":{"ranks":"all","final":true}}
 {"timestamp":1738774194.1854134,"name":"free"}
@@ -38,6 +39,7 @@ TEST_EVENTLOG_OUTPUT = """\
 1738774194.107436 priority priority=16
 1738774194.110116 alloc annotations={"sched":{"resource_summary":"rank[0-3]/core[0-7]"}}
 1738774194.117796 start
+1738774194.177796 memo test="ƒ Φ Ψ Ω Ö"
 1738774194.182067 finish status=0
 1738774194.185372 release ranks="all" final=true
 1738774194.185413 free
@@ -51,6 +53,7 @@ TEST_EVENTLOG_OUTPUT_HUMAN_UTC = """\
 [  +0.029003] priority priority=16
 [  +0.031683] alloc annotations={"sched":{"resource_summary":"rank[0-3]/core[0-7]"}}
 [  +0.039363] start
+[  +0.099363] memo test="ƒ Φ Ψ Ω Ö"
 [  +0.103634] finish status=0
 [  +0.106939] release ranks="all" final=true
 [  +0.106980] free
@@ -63,6 +66,7 @@ TEST_EVENTLOG_OUTPUT_HUMAN_COLOR = """\
 [32m[  +0.029003][0m [33mpriority[0m [34mpriority[0m=[37m16[0m
 [32m[  +0.031683][0m [33malloc[0m [34mannotations[0m=[35m{"sched":{"resource_summary":"rank[0-3]/core[0-7]"}}[0m
 [32m[  +0.039363][0m [33mstart[0m
+[32m[  +0.099363][0m [33mmemo[0m [34mtest[0m=[35m"ƒ Φ Ψ Ω Ö"[0m
 [32m[  +0.103634][0m [33mfinish[0m [34mstatus[0m=[37m0[0m
 [32m[  +0.106939][0m [33mrelease[0m [34mranks[0m=[35m"all"[0m [34mfinal[0m=[35mtrue[0m
 [32m[  +0.106980][0m [33mfree[0m
@@ -76,6 +80,7 @@ TEST_EVENTLOG_OUTPUT_OFFSET = """\
 0.029003 priority priority=16
 0.031683 alloc annotations={"sched":{"resource_summary":"rank[0-3]/core[0-7]"}}
 0.039363 start
+0.099363 memo test="ƒ Φ Ψ Ω Ö"
 0.103634 finish status=0
 0.106939 release ranks="all" final=true
 0.106980 free
@@ -89,6 +94,7 @@ TEST_EVENTLOG_OUTPUT_ISO_ZULU = """\
 2025-02-05T16:49:54.107435Z priority priority=16
 2025-02-05T16:49:54.110116Z alloc annotations={"sched":{"resource_summary":"rank[0-3]/core[0-7]"}}
 2025-02-05T16:49:54.117795Z start
+2025-02-05T16:49:54.177795Z memo test="ƒ Φ Ψ Ω Ö"
 2025-02-05T16:49:54.182067Z finish status=0
 2025-02-05T16:49:54.185371Z release ranks="all" final=true
 2025-02-05T16:49:54.185413Z free

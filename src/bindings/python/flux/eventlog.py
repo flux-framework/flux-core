@@ -171,7 +171,11 @@ class EventLogFormatter:
                 color = self._color("number")
             else:
                 color = self._color("value")
-            val = color + json.dumps(val, separators=(",", ":")) + self._reset()
+            val = (
+                color
+                + json.dumps(val, separators=(",", ":"), ensure_ascii=False)
+                + self._reset()
+            )
             context += f" {key}={val}"
 
         return f"{ts} {name}{context}"
@@ -180,7 +184,7 @@ class EventLogFormatter:
         # remove context if it is empty
         if "context" in entry and not entry["context"]:
             entry = {k: v for k, v in entry.items() if k != "context"}
-        return json.dumps(entry, separators=(",", ":"))
+        return json.dumps(entry, separators=(",", ":"), ensure_ascii=False)
 
     def format(self, entry):
         """Format an eventlog entry
