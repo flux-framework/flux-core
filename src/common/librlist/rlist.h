@@ -100,7 +100,7 @@ struct rlist *rlist_copy_constraint_string (const struct rlist *orig,
 
 /*  Delete ranks in idset 'ranks' from rlist 'rl'
  */
-int rlist_remove_ranks (struct rlist *rl, struct idset *ranks);
+int rlist_remove_ranks (struct rlist *rl, const struct idset *ranks);
 
 /*  Re-map ranks and all resources (except those named in rl->noremap hash)
  *   such that their IDs will be mapped 0 - count-1.
