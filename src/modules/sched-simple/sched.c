@@ -362,7 +362,7 @@ static int try_free (flux_t *h,
         return -1;
     }
     r = rlist_dumps (alloc);
-    if ((rc = rlist_free (ss->rlist, alloc)) < 0)
+    if ((rc = rlist_free_tolerant (ss->rlist, alloc)) < 0)
         flux_log_error (h, "free: %s", r);
     else {
         flux_log (h,
