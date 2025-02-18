@@ -800,7 +800,7 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
             return errprintf (error, "error creating housekeeping command");
     }
 
-    // if no command line was defined, assume "imp exec housekeeping"
+    // if no command line was defined, assume "imp run housekeeping"
     else {
         if (!imp_path) {
             return errprintf (error,
