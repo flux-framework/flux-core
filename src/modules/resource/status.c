@@ -41,6 +41,7 @@ struct status {
     struct flux_msglist *requests;
     struct status_cache cache;
     json_t *R_empty;
+    bool shrink_down_ranks; // lost ranks are removed from resource set
 };
 
 static void invalidate_cache (struct status_cache *cache, bool all)
@@ -316,9 +317,15 @@ static struct rlist *get_resource_list (struct status *status)
     if (!status->cache.rl) {
         const json_t *R;
         const struct idset *exclude = exclude_get (status->ctx->exclude);
+        const struct idset *lost = monitor_get_lost (status->ctx->monitor);
 
-        if ((R = inventory_get (status->ctx->inventory)))
+        if ((R = inventory_get (status->ctx->inventory))) {
             status->cache.rl = create_rlist (R, exclude);
+            if (status->shrink_down_ranks
+                && rlist_remove_ranks (status->cache.rl, lost) < 0)
+                flux_log_error (status->ctx->h,
+                                "status: failed to remove lost ranks");
+        }
     }
     return status->cache.rl;
 }
@@ -475,7 +482,17 @@ static void reslog_cb (struct reslog *reslog,
 {
     struct status *status = arg;
 
-    if (streq (name, "resource-define"))
+    if (streq (name, "resource-define")) {
+        const char *method;
+
+        if (json_unpack (context, "{s:s}", "method", &method) == 0
+            && !streq (method, "configuration"))
+            status->shrink_down_ranks = true;
+
+        invalidate_cache (&status->cache, true);
+    }
+    else if (status->shrink_down_ranks
+        && streq (name, "offline"))
         invalidate_cache (&status->cache, true);
     else if (streq (name, "online")
         || streq (name, "offline")
