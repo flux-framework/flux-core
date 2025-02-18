@@ -267,6 +267,10 @@ int rlist_set_allocated (struct rlist *rl, struct rlist *alloc);
  */
 int rlist_free (struct rlist *rl, struct rlist *to_free);
 
+/*  Same as rlist_free(), but ignore missing resources in `rl`
+ */
+int rlist_free_tolerant (struct rlist *rl, struct rlist *to_free);
+
 /*  Assign a single property 'name' to ranks in 'targets'
  */
 int rlist_add_property (struct rlist *rl,
