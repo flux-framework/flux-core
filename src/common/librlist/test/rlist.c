@@ -2149,6 +2149,61 @@ static void test_issue_5868 (void)
     free (R);
 }
 
+/* test allocate->shrink->free
+ */
+static void test_shrink ()
+{
+    char *R;
+    char *s;
+    struct rlist *rl;
+    struct rlist *result;
+    struct idset *ranks;
+    flux_error_t error;
+
+    if (!(R = R_create ("0-3",
+                        "0-3",
+                        NULL,
+                        "foo[0-3]",
+                        NULL)))
+        BAIL_OUT ("shrink: R_create");
+
+    if (!(rl = rlist_from_R (R)))
+        BAIL_OUT ("shrink: rlist_from_R() failed");
+
+    /* Allocate all resources
+     */
+    struct rlist_alloc_info ai = {
+        .nnodes = 4,
+        .slot_size = 1,
+        .nslots = 4,
+        .exclusive = true,
+    };
+    ok ((result = rlist_alloc (rl, &ai, &error)) != NULL,
+        "shrink: allocated 4 nodes");
+
+    /* shrink rank 3
+     */
+    if (!(ranks = idset_decode ("3")))
+        BAIL_OUT ("shrink: idset_decode failed");
+
+    ok (rlist_remove_ranks (rl, ranks) == 1,
+        "shrink: removed rank 3: %s", strerror (errno));
+
+    ok (rlist_free_tolerant (rl, result) == 0,
+        "shrink: rlist_free_tolerant tolerates missing ranks");
+
+    s = rlist_dumps (rl);
+    diag ("%s", s);
+    is (s, "rank[0-2]/core[0-3]",
+        "shrink: expected resources remain in resource set");
+
+    free (s);
+    free (R);
+    idset_destroy (ranks);
+    rlist_destroy (rl);
+    rlist_destroy (result);
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
@@ -2180,6 +2235,7 @@ int main (int ac, char *av[])
     test_issue4290 ();
     test_rlist_config_inval ();
     test_issue_5868 ();
+    test_shrink ();
     done_testing ();
 }
 
