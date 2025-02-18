@@ -151,7 +151,6 @@ flux_shell_LDFLAGS = \
 	-export-symbols-regex "(flux_shell_.*|flux_plugin_get_shell|__asan.*)"
 
 TESTS = \
-	test_jobspec.t \
 	test_plugstack.t \
 	test_mustache.t \
 	mpir/test_rangelist.t \
@@ -182,14 +181,6 @@ check_LTLIBRARIES = \
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
-
-test_jobspec_t_SOURCES = test/jobspec.c
-test_jobspec_t_CPPFLAGS = $(test_cppflags)
-test_jobspec_t_LDADD = \
-	$(builddir)/libshell.la \
-	$(test_ldadd)
-test_jobspec_t_LDFLAGS = \
-	$(test_ldflags)
 
 test_plugstack_t_SOURCES = plugstack.c test/plugstack.c
 test_plugstack_t_CPPFLAGS = $(test_cppflags) -DPLUGSTACK_STANDALONE
