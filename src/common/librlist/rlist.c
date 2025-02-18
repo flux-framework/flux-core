@@ -405,7 +405,7 @@ static int rlist_remove_rank (struct rlist *rl, int rank)
     return 0;
 }
 
-int rlist_remove_ranks (struct rlist *rl, struct idset *ranks)
+int rlist_remove_ranks (struct rlist *rl, const struct idset *ranks)
 {
     int count = 0;
     unsigned int i;
