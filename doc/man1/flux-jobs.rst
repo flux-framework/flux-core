@@ -56,7 +56,8 @@ OPTIONS
    List only jobs where the assigned resources intersect with the supplied
    argument, which may be specified either as an RFC 22 idset of broker ranks
    or an RFC 29 hostlist of host names. It is not an error to specify ranks or
-   hosts which do not exist.
+   hosts which do not exist.  This option implies :option:`-A` unless a specific
+   user has been selected via the :option:`-u, --user` option.
 
 .. option:: -c, --count=N
 

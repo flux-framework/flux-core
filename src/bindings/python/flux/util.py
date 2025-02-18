@@ -244,6 +244,13 @@ class FilterActionSetUpdate(argparse.Action):
         getattr(namespace, self.dest).update(values)
 
 
+class FilterActionUser(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, "filtered", True)
+        setattr(namespace, "filtereduser", True)
+        setattr(namespace, self.dest, values)
+
+
 # pylint: disable=redefined-builtin
 class FilterTrueAction(argparse.Action):
     def __init__(

@@ -24,6 +24,7 @@ from flux.job.stats import JobStats
 from flux.util import (
     FilterAction,
     FilterActionSetUpdate,
+    FilterActionUser,
     FilterTrueAction,
     UtilConfig,
     help_formatter,
@@ -167,6 +168,9 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
                 constraint = {"hostlist": [Hostlist(args.include).encode()]}
             except ValueError:
                 raise ValueError(f"-i/--include: invalid targets: {args.include}")
+        # --include implies check against all user jobs
+        if not args.filtereduser:
+            args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
 
     jobs_rpc = JobList(
         flux_handle,
@@ -261,7 +265,7 @@ def parse_args():
     parser.add_argument(
         "-u",
         "--user",
-        action=FilterAction,
+        action=FilterActionUser,
         type=str,
         metavar="[USERNAME|UID]",
         default=str(os.getuid()),
@@ -368,6 +372,7 @@ def parse_args():
     # Hidden '--from-stdin' option for testing only.
     parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
     parser.set_defaults(filtered=False)
+    parser.set_defaults(filtereduser=False)
     return parser.parse_args()
 
 
