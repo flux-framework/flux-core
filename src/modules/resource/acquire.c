@@ -17,7 +17,7 @@
  * First response:
  *   {resources:resource_object up:idset}
  * Subsequent responses:
- *   {up?:idset down?:idset}
+ *   {up?:idset down?:idset shrink?:idset}
  *
  * Where:
  * - resource_object maps execution target ids to resources
@@ -30,7 +30,9 @@
  *
  * As execution targets from the resource_object go online or are undrained,
  * they are marked "up".  As they go offline or are drained, they are marked
- * "down".
+ * "down". If the resource-define method is anything except "configuration",
+ * resources will never come back online, so they are added to the "shrink"
+ * idset.
  *
  * If the exclusion configuration changes, any newly excluded execution
  * targets from the resource_object are marked "down".  On the next
@@ -77,6 +79,7 @@ struct acquire_request {
     json_t *resources;                  // resource object
     struct idset *valid;                // valid targets
     struct idset *up;                   // available targets
+    struct idset *removed;              // targets removed due to shrink
 };
 
 struct acquire {
@@ -84,6 +87,7 @@ struct acquire {
     flux_msg_handler_t **handlers;
     struct flux_msglist *requests;      // N.B. there can be only one currently
     bool mute;                          // suspend responses during shutdown
+    bool shrink_down_ranks;             // shrink down ranks in acquire resp
 };
 
 
@@ -94,6 +98,7 @@ static void acquire_request_destroy (struct acquire_request *ar)
         json_decref (ar->resources);
         idset_destroy (ar->valid);
         idset_destroy (ar->up);
+        idset_destroy (ar->removed);
         free (ar);
         errno = saved_errno;
     }
@@ -139,6 +144,15 @@ static int acquire_request_init (struct acquire_request *ar,
         goto error;
     if (idset_subtract (ar->up, monitor_get_torpid (ctx->monitor)) < 0)
         goto error;
+
+    /* Remove lost ranks from valid set if acquire->shrink_down_ranks is true:
+     */
+    if (acquire->shrink_down_ranks) {
+        if (!(ar->removed = idset_copy (monitor_get_lost (ctx->monitor)))
+            || idset_subtract (ar->valid, ar->removed) < 0)
+            goto error;
+    }
+
     rlist_destroy (rl);
     idset_destroy (drain);
     return 0;
@@ -159,11 +173,13 @@ static int acquire_request_update (struct acquire_request *ar,
                                    struct acquire *acquire,
                                    const char *name,
                                    struct idset **up,
-                                   struct idset **dn)
+                                   struct idset **dn,
+                                   struct idset **shrink)
 {
     struct resource_ctx *ctx = acquire->ctx;
     struct idset *new_up;
     struct idset *drain = NULL;
+    const struct idset *lost;
 
     if (!(new_up = idset_copy (ar->valid)))
         return -1;
@@ -179,6 +195,31 @@ static int acquire_request_update (struct acquire_request *ar,
         goto error;
     if (rutil_idset_diff (ar->up, new_up, up, dn) < 0)
         goto error;
+
+    /* If "shrink" is enabled, and there are "lost" ranks, then add ranks
+     * that are not already in the removed set to the "shrink" key in this
+     * response.
+     */
+    *shrink = NULL;
+    lost = monitor_get_lost (ctx->monitor);
+    if (acquire->shrink_down_ranks && idset_count (lost) > 0) {
+        struct idset *to_remove;
+        if (!(to_remove = idset_difference (lost, ar->removed))
+            || idset_add (ar->removed, to_remove))
+            goto error;
+
+        /* If there are ranks to remove, subtract them from ar->valid and
+         * return them in the shrink key of the acquisition response.
+         */
+        if (idset_count (to_remove) > 0) {
+            if (idset_subtract (ar->valid, to_remove) < 0)
+                goto error;
+            *shrink = to_remove;
+        }
+        else
+            idset_destroy (to_remove);
+    }
+
     idset_destroy (ar->up);
     ar->up = new_up;
     idset_destroy (drain);
@@ -221,7 +262,8 @@ error:
 static int acquire_respond_next (flux_t *h,
                                  const flux_msg_t *msg,
                                  struct idset *up,
-                                 struct idset *down)
+                                 struct idset *down,
+                                 struct idset *shrink)
 {
     struct acquire_request *ar = flux_msg_aux_get (msg, "acquire");
     json_t *o;
@@ -231,6 +273,8 @@ static int acquire_respond_next (flux_t *h,
     if (up && rutil_set_json_idset (o, "up", up) < 0)
         goto error;
     if (down && rutil_set_json_idset (o, "down", down) < 0)
+        goto error;
+    if (shrink && rutil_set_json_idset (o, "shrink", shrink) < 0)
         goto error;
     if (flux_respond_pack (h, msg, "O", o) < 0)
         goto error;
@@ -352,6 +396,15 @@ static void reslog_cb (struct reslog *reslog,
     const char *errmsg = NULL;
     json_t *resobj;
     const flux_msg_t *msg;
+    const char *method;
+
+    /* Enable "shrink" of ranks that transition from online->offline
+     * if resource-define method is anything but "configuration".
+     */
+    if (streq (name, "resource-define")
+        && json_unpack (context, "{s:s}", "method", &method) == 0
+        && !streq (method, "configuration"))
+        acquire->shrink_down_ranks = true;
 
     if (acquire->mute)
         return;
@@ -408,21 +461,21 @@ static void reslog_cb (struct reslog *reslog,
                  || streq (name, "undrain")
                  || streq (name, "torpid")
                  || streq (name, "lively")) {
+
             if (ar->response_count > 0) {
-                struct idset *up, *dn;
+                struct idset *up, *dn, *shrink;
+
                 if (acquire_request_update (ar,
                                             acquire,
                                             name,
                                             &up,
-                                            &dn) < 0) {
+                                            &dn,
+                                            &shrink) < 0) {
                     errmsg = "error preparing resource.acquire update response";
                     goto error;
                 }
-                if (up || dn) {
-                    if (acquire_respond_next (h,
-                                              msg,
-                                              up,
-                                              dn) < 0) {
+                if (up || dn || shrink) {
+                    if (acquire_respond_next (h, msg, up, dn, shrink) < 0) {
                         flux_log_error (h,
                                     "error responding to resource.acquire (%s)",
                                     name);
@@ -430,6 +483,7 @@ static void reslog_cb (struct reslog *reslog,
                 }
                 idset_destroy (up);
                 idset_destroy (dn);
+                idset_destroy (shrink);
             }
         }
         msg = flux_msglist_next (acquire->requests);
