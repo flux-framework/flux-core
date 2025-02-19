@@ -55,6 +55,7 @@ struct monitor {
     struct idset *torpid;
     struct idset *up;
     struct idset *down; // cached result of monitor_get_down()
+    struct idset *lost; // ranks that transitioned online->offline
     flux_msg_handler_t **handlers;
     struct flux_msglist *waitup_requests;
     int size;
@@ -70,6 +71,11 @@ const struct idset *monitor_get_up (struct monitor *monitor)
 const struct idset *monitor_get_torpid (struct monitor *monitor)
 {
     return monitor->torpid;
+}
+
+const struct idset *monitor_get_lost (struct monitor *monitor)
+{
+    return monitor->lost;
 }
 
 const struct idset *monitor_get_down (struct monitor *monitor)
@@ -187,6 +193,15 @@ static int post_join_leave (struct monitor *monitor,
         || post_event (monitor, join_event, join) < 0
         || post_event (monitor, leave_event, leave) < 0)
         goto error;
+
+    /* Update the set of lost ranks. These are only the ranks that have
+     * left the online group (not ranks that never joined).
+     */
+    if (idset_add (monitor->lost, leave) < 0
+        || idset_subtract (monitor->lost, join) < 0) {
+        goto error;
+    }
+
     rc = 0;
 error:
     idset_destroy (join);
@@ -327,6 +342,7 @@ void monitor_destroy (struct monitor *monitor)
         idset_destroy (monitor->up);
         idset_destroy (monitor->down);
         idset_destroy (monitor->torpid);
+        idset_destroy (monitor->lost);
         flux_future_destroy (monitor->f_online);
         flux_future_destroy (monitor->f_torpid);
         flux_msglist_destroy (monitor->waitup_requests);
@@ -372,7 +388,8 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
      * to resource.eventlog.
      */
     if (!(monitor->up = idset_create (monitor->size, 0))
-        || !(monitor->torpid = idset_create (monitor->size, 0)))
+        || !(monitor->torpid = idset_create (monitor->size, 0))
+        || !(monitor->lost = idset_create (monitor->size, 0)))
         goto error;
     if (monitor_force_up) {
         if (idset_range_set (monitor->up, 0, monitor->size - 1) < 0)
