@@ -100,7 +100,7 @@ struct rlist *rlist_copy_constraint_string (const struct rlist *orig,
 
 /*  Delete ranks in idset 'ranks' from rlist 'rl'
  */
-int rlist_remove_ranks (struct rlist *rl, struct idset *ranks);
+int rlist_remove_ranks (struct rlist *rl, const struct idset *ranks);
 
 /*  Re-map ranks and all resources (except those named in rl->noremap hash)
  *   such that their IDs will be mapped 0 - count-1.
@@ -266,6 +266,10 @@ int rlist_set_allocated (struct rlist *rl, struct rlist *alloc);
 /*  Free resource list `to_free` from resource list `rl`
  */
 int rlist_free (struct rlist *rl, struct rlist *to_free);
+
+/*  Same as rlist_free(), but ignore missing resources in `rl`
+ */
+int rlist_free_tolerant (struct rlist *rl, struct rlist *to_free);
 
 /*  Assign a single property 'name' to ranks in 'targets'
  */

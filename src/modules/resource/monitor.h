@@ -21,6 +21,11 @@ const struct idset *monitor_get_up (struct monitor *monitor);
 
 const struct idset *monitor_get_torpid (struct monitor *monitor);
 
+/* Get idset of ranks that transitioned from online to offline.
+ * Does not include ranks that have not yet joined.
+ */
+const struct idset *monitor_get_lost (struct monitor *monitor);
+
 #endif /* !_FLUX_RESOURCE_MONITOR_H */
 
 /*

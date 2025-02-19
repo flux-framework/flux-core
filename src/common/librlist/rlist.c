@@ -405,7 +405,7 @@ static int rlist_remove_rank (struct rlist *rl, int rank)
     return 0;
 }
 
-int rlist_remove_ranks (struct rlist *rl, struct idset *ranks)
+int rlist_remove_ranks (struct rlist *rl, const struct idset *ranks)
 {
     int count = 0;
     unsigned int i;
@@ -2226,7 +2226,9 @@ static int rlist_alloc_rnode (struct rlist *rl, struct rnode *n)
     return 0;
 }
 
-int rlist_free (struct rlist *rl, struct rlist *alloc)
+static int rlist_free_ex (struct rlist *rl,
+                          struct rlist *alloc,
+                          bool ignore_missing)
 {
     zlistx_t *freed = NULL;
     struct rnode *n = NULL;
@@ -2236,9 +2238,17 @@ int rlist_free (struct rlist *rl, struct rlist *alloc)
 
     n = zlistx_first (alloc->nodes);
     while (n) {
-        if (rlist_free_rnode (rl, n) < 0
-            || !zlistx_add_end (freed, n))
+        int rc = rlist_free_rnode (rl, n);
+
+        /* Allow failure to free this rnode if ignore_missing is true.
+         * This may have occurred if the resource set shrunk before a
+         * job using the removed execution targets completed.
+         * Otherwise, add the node to the freed resource set on success.
+         */
+        if ((rc < 0 && !(ignore_missing && errno == ENOENT))
+            || (rc == 0  && !zlistx_add_end (freed, n)))
             goto cleanup;
+
         n = zlistx_next (alloc->nodes);
     }
     zlistx_destroy (&freed);
@@ -2252,6 +2262,16 @@ cleanup:
     }
     zlistx_destroy (&freed);
     return (-1);
+}
+
+int rlist_free (struct rlist *rl, struct rlist *alloc)
+{
+    return rlist_free_ex (rl, alloc, false);
+}
+
+int rlist_free_tolerant (struct rlist *rl, struct rlist *alloc)
+{
+    return rlist_free_ex (rl, alloc, true);
 }
 
 int rlist_set_allocated (struct rlist *rl, struct rlist *alloc)
