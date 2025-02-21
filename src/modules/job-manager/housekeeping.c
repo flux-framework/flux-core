@@ -90,6 +90,7 @@
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libjob/idf58.h"
 #include "src/common/libsubprocess/bulk-exec.h"
 #include "src/common/libsubprocess/command.h"
@@ -107,6 +108,8 @@ extern char **environ;
 // -1 = never, 0 = immediate, >0 = time in seconds
 static const double default_release_after = -1;
 
+static const char *default_exec_service = "rexec";
+
 struct allocation {
     flux_jobid_t id;
     struct rlist *rl;       // R, diminished each time a subset is released
@@ -119,12 +122,15 @@ struct allocation {
     double t_start;
     struct bulk_exec *bulk_exec;
     void *list_handle;
+    int kill_signal;
 };
 
 struct housekeeping {
     struct job_manager *ctx;
     flux_cmd_t *cmd; // NULL if not configured
+    char *exec_service;
     double release_after;
+    int kill_signal;
     zlistx_t *allocations;
     flux_msg_handler_t **handlers;
 };
@@ -180,6 +186,8 @@ static struct allocation *allocation_create (struct housekeeping *hk,
         return NULL;
     a->hk = hk;
     a->id = id;
+    a->kill_signal = hk->kill_signal;
+
     a->t_start = flux_reactor_now (flux_get_reactor (hk->ctx->h));
     if (!(a->rl = rlist_from_json (R, NULL))
         || !(a->pending = rlist_ranks (a->rl))
@@ -190,9 +198,9 @@ static struct allocation *allocation_create (struct housekeeping *hk,
                                                    allocation_timeout,
                                                    a))
         || !(a->bulk_exec = bulk_exec_create (&bulk_ops,
-                                              "rexec",
+                                              hk->exec_service,
                                               id,
-                                              "housekeeping",
+                                              "flux-housekeeping",
                                                a))
         || update_cmd_env (hk->cmd, id, userid) < 0
         || bulk_exec_push_cmd (a->bulk_exec, a->pending, hk->cmd, 0) < 0) {
@@ -697,7 +705,10 @@ static void housekeeping_kill_cb (flux_t *h,
     while (a) {
         if (a->id == jobid || jobid == FLUX_JOBID_ANY) {
             if (a->bulk_exec) {
-                f = bulk_exec_kill (a->bulk_exec, ids, signum);
+                int sig = signum;
+                if (sig == SIGKILL)
+                    sig = a->kill_signal;
+                f = bulk_exec_kill (a->bulk_exec, ids, sig);
                 if (flux_future_then (f, -1, kill_continuation, hk) < 0)
                     flux_future_destroy (f);
             }
@@ -743,21 +754,39 @@ done:
 
 /* Create the housekeeping command template based on parsed configuration.
  * If no 'cmdline' was configured, assume "imp run housekeeping".
+ * In addition, if the IMP will run as the main process in a transient
+ * systemd unit, set options for correct signal forwarding semantics.
+ * 'kill_signal' is assigned (only) if a SIGKILL proxy signal is needed.
  */
 static flux_cmd_t *create_cmd_template (json_t *cmdline,
-                                        const char *imp_path)
+                                        const char *exec_service,
+                                        const char *imp_path,
+                                        int *kill_signal)
 {
-    flux_cmd_t *cmd;
+    flux_cmd_t *cmd = NULL;
     json_t *o = NULL;
+    bool use_imp = false;
 
     if (!cmdline) {
         if (!(o = json_pack ("[sss]", imp_path, "run", "housekeeping")))
             return NULL;
         cmdline = o;
+        use_imp = true;
     }
-    cmd = create_cmd (cmdline);
+    if (!(cmd = create_cmd (cmdline)))
+        goto error;
+    if (use_imp && streq (exec_service, "sdexec")) {
+        if (flux_cmd_setopt (cmd, "SDEXEC_PROP_KillMode", "process") < 0
+            || flux_cmd_setopt (cmd, "SDEXEC_PROP_SendSIGKILL", "off") < 0)
+            goto error;
+        *kill_signal = SIGUSR1;
+    }
     json_decref (o);
     return cmd;
+error:
+    flux_cmd_destroy (cmd);
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return NULL;
 }
 
 static int housekeeping_parse_config (const flux_conf_t *conf,
@@ -774,6 +803,9 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
     flux_cmd_t *cmd = NULL;
     const char *imp_path = NULL;
     int use_systemd_unit = 0;
+    const char *exec_service = default_exec_service;
+    char *exec_service_cpy = NULL;
+    int kill_signal = SIGKILL;
 
     if (flux_conf_unpack (conf,
                           &e,
@@ -803,7 +835,12 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
     }
 
     // let job-exec handle exec parse errors
-    (void)flux_conf_unpack (conf, NULL, "{s?{s?s}}", "exec", "imp", &imp_path);
+    (void)flux_conf_unpack (conf,
+                            NULL,
+                            "{s?{s?s s?s}}",
+                            "exec",
+                              "imp", &imp_path,
+                              "service", &exec_service);
 
     if (!cmdline && !imp_path) {
             return errprintf (error,
@@ -818,13 +855,23 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
                               " FSD parse error");
     }
 
-    if (!(cmd = create_cmd_template (cmdline, imp_path)))
+    if (!(exec_service_cpy = strdup (exec_service)))
+        return errprintf (error, "error duplicating exec service");
+    if (!(cmd = create_cmd_template (cmdline,
+                                     exec_service,
+                                     imp_path,
+                                     &kill_signal))) {
+        ERRNO_SAFE_WRAP (free, exec_service_cpy);
         return errprintf (error, "could not create command template");
+    }
 
 done:
     flux_cmd_destroy (hk->cmd);
     hk->cmd = cmd;
+    free (hk->exec_service);
+    hk->exec_service = exec_service_cpy;
     hk->release_after = release_after;
+    hk->kill_signal = kill_signal;
     flux_log (hk->ctx->h,
               LOG_DEBUG,
               "housekeeping is %sconfigured%s",
@@ -851,6 +898,7 @@ void housekeeping_ctx_destroy (struct housekeeping *hk)
         flux_cmd_destroy (hk->cmd);
         zlistx_destroy (&hk->allocations);
         flux_msg_handler_delvec (hk->handlers);
+        free (hk->exec_service);
         free (hk);
         errno = saved_errno;
     }
@@ -865,10 +913,13 @@ struct housekeeping *housekeeping_ctx_create (struct job_manager *ctx)
         return NULL;
     hk->ctx = ctx;
     hk->release_after = default_release_after;
+    if (!(hk->exec_service = strdup (default_exec_service)))
+        goto error;
     if (!(hk->allocations = zlistx_new ())) {
         errno = ENOMEM;
         goto error;
     }
+    hk->kill_signal = SIGKILL;
     zlistx_set_destructor (hk->allocations, allocation_destructor);
     if (conf_register_callback (ctx->conf,
                                 &error,
