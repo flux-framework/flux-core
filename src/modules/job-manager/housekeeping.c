@@ -125,7 +125,6 @@ struct housekeeping {
     struct job_manager *ctx;
     flux_cmd_t *cmd; // NULL if not configured
     double release_after;
-    char *imp_path;
     zlistx_t *allocations;
     flux_msg_handler_t **handlers;
 };
@@ -742,6 +741,25 @@ done:
     return cmd;
 }
 
+/* Create the housekeeping command template based on parsed configuration.
+ * If no 'cmdline' was configured, assume "imp run housekeeping".
+ */
+static flux_cmd_t *create_cmd_template (json_t *cmdline,
+                                        const char *imp_path)
+{
+    flux_cmd_t *cmd;
+    json_t *o = NULL;
+
+    if (!cmdline) {
+        if (!(o = json_pack ("[sss]", imp_path, "run", "housekeeping")))
+            return NULL;
+        cmdline = o;
+    }
+    cmd = create_cmd (cmdline);
+    json_decref (o);
+    return cmd;
+}
+
 static int housekeeping_parse_config (const flux_conf_t *conf,
                                       flux_error_t *error,
                                       void *arg)
@@ -755,7 +773,6 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
     double release_after = default_release_after;
     flux_cmd_t *cmd = NULL;
     const char *imp_path = NULL;
-    char *imp_path_cpy = NULL;
     int use_systemd_unit = 0;
 
     if (flux_conf_unpack (conf,
@@ -785,8 +802,14 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
                   " - ignoring");
     }
 
-    // let job-exec handle exec errors
+    // let job-exec handle exec parse errors
     (void)flux_conf_unpack (conf, NULL, "{s?{s?s}}", "exec", "imp", &imp_path);
+
+    if (!cmdline && !imp_path) {
+            return errprintf (error,
+                              "job-manager.housekeeping implies IMP"
+                              " but exec.imp is undefined");
+    }
 
     if (release_after_fsd) {
         if (fsd_parse_duration (release_after_fsd, &release_after) < 0)
@@ -795,40 +818,18 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
                               " FSD parse error");
     }
 
-    if (cmdline) {
-        if (!(cmd = create_cmd (cmdline)))
-            return errprintf (error, "error creating housekeeping command");
-    }
+    if (!(cmd = create_cmd_template (cmdline, imp_path)))
+        return errprintf (error, "could not create command template");
 
-    // if no command line was defined, assume "imp run housekeeping"
-    else {
-        if (!imp_path) {
-            return errprintf (error,
-                              "job-manager.housekeeping implies IMP"
-                              " but exec.imp is undefined");
-        }
-        json_t *o;
-        if ((o = json_pack ("[sss]", imp_path, "run", "housekeeping")))
-            cmd = create_cmd (o);
-        json_decref (o);
-        if (!cmd)
-            return errprintf (error, "error creating housekeeping command");
-        if (!(imp_path_cpy = strdup (imp_path))) {
-            flux_cmd_destroy (cmd);
-            return errprintf (error, "error duplicating IMP path");
-        }
-    }
 done:
     flux_cmd_destroy (hk->cmd);
     hk->cmd = cmd;
-    free (hk->imp_path);
-    hk->imp_path = imp_path_cpy;
     hk->release_after = release_after;
     flux_log (hk->ctx->h,
               LOG_DEBUG,
               "housekeeping is %sconfigured%s",
               hk->cmd ? "" : "not ",
-              hk->imp_path ? " with IMP" : "");
+              (imp_path && !cmdline) ? " with IMP" : "");
     return 1; // allow dynamic changes
 }
 
@@ -850,7 +851,6 @@ void housekeeping_ctx_destroy (struct housekeeping *hk)
         flux_cmd_destroy (hk->cmd);
         zlistx_destroy (&hk->allocations);
         flux_msg_handler_delvec (hk->handlers);
-        free (hk->imp_path);
         free (hk);
         errno = saved_errno;
     }
