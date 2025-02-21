@@ -598,8 +598,8 @@ test_expect_success 'tbon.topo with unknown scheme fails' '
 	[tbon]
 	topo = "notascheme:42"
 	EOT
-	test_must_fail flux broker ${ARGS} -c conf23 \
-		true 2>badscheme.err &&
+	test_must_fail flux broker ${ARGS} -Sbroker.boot-method=single \
+	        -c conf23 true 2>badscheme.err &&
 	grep "unknown topology scheme" badscheme.err
 '
 test_expect_success 'tbon.topo is kary:32 by default' '
