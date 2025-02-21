@@ -329,8 +329,56 @@ error:
         flux_log_error (h, "error responding to monitor-waitup request");
 }
 
+/* Allow manual removal of ranks from monitor->up. Useful in tests where
+ * fake resources are used along with the module's monitor-force-up option.
+ * One caveat is that this will not affect running jobs, actual or testexec
+ * since connections to job shells are not severed via this option.
+ */
+static void force_down_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct monitor *monitor = arg;
+    const char *errstr = NULL;
+    struct idset *up = NULL;
+    const char *ranks;
+    idset_error_t error;
+
+    if (flux_request_unpack (msg, NULL, "{s:s}", "ranks", &ranks) < 0)
+        goto error;
+
+    if (!(up = idset_copy (monitor->up)))
+        goto error;
+
+    if (idset_decode_subtract (up, ranks, -1, &error) < 0) {
+        errstr = error.text;
+        goto error;
+    }
+
+    /* Note: post_join_leave() will adjust monitor->lost
+     */
+    if (post_join_leave (monitor, monitor->up, up, "online", "offline") < 0) {
+        errstr = "monitor: error posting online/offline event";
+        goto error;
+    }
+
+    idset_destroy (monitor->up);
+    monitor->up = up;
+
+    notify_waitup (monitor);
+
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to monitor-force-down request");
+    return;
+error:
+    idset_destroy (up);
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to monitor-force-down request");
+}
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "resource.monitor-waitup", waitup_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "resource.monitor-force-down", force_down_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
