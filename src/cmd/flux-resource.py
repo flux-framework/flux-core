@@ -724,6 +724,98 @@ def emit_R(args):
     print(rset.encode())
 
 
+def hl_intersect(hl1, hl2):
+    for host in hl1:
+        if host in hl2:
+            return True
+    return False
+
+
+class Targets:
+    """
+    Match a set of targets in the resource eventlog given as either hosts
+    or ranks. If targets is None, match all entries.
+    """
+
+    def __init__(self, handle, targets):
+        self.all = False
+        self.got_sentinel = False
+
+        # If no targets given then default to all targets
+        if targets is None:
+            self.all = True
+            return
+
+        self.got_ranks = False
+        self.got_hosts = False
+        self.ranks = None
+        self.hosts = None
+
+        self.hostlist = Hostlist(handle.attr_get("hostlist"))
+        try:
+            self.ranks = IDset(targets)
+            self.got_ranks = True
+        except ValueError:
+            try:
+                self.hosts = Hostlist(targets)
+                self.got_hosts = True
+            except ValueError:
+                raise ValueError(f"invalid targets {targets}")
+
+        self.__remap()
+
+    def __remap(self):
+        """Remap target hosts or ranks based on current hostlist"""
+        if not self.hosts:
+            self.hosts = self.hostlist[self.ranks]
+        else:
+            self.ranks = IDset(self.hostlist.index(self.hosts))
+
+    def __match_idset(self, event):
+        key = "idset"
+        if "ranks" in event.context:
+            key = "ranks"
+        if key in event.context:
+            ranks = IDset(event.context[key])
+            return len(self.ranks.intersect(ranks)) > 0
+        return False
+
+    def __match_nodelist(self, event):
+        if "nodelist" in event.context:
+            nodelist = Hostlist(event.context["nodelist"])
+            return hl_intersect(self.hosts, nodelist)
+        return False
+
+    def match(self, event):
+        """Return true if this event matches either idset or hosts"""
+        if self.all:
+            return True
+
+        if event.name == "restart":
+            # Note: the restart event should be used to recreate hosts and/or
+            # ranks based on the new mapping in this event. However, this is
+            # skipped for now since there is no guarantee that historical
+            # events (in which rank mapping may be different than now) are
+            # preceded by a "restart" event.
+            pass
+
+        # If user provided ranks, then only try to match ranks:
+        # This is needed in the case of multiple brokers per node to avoid
+        # erroneously matching all ranks.
+        if self.got_ranks:
+            return self.__match_idset(event)
+
+        # O/w, try to match nodelist first
+        if self.__match_nodelist(event):
+            return True
+
+        # Finally, if hosts provided, try idset (covers idset-only events):
+        if self.got_hosts and self.__match_idset(event):
+            return True
+
+        return False
+
+
 def eventlog(args):
     """Show the resource eventlog"""
     if args.human:
@@ -733,6 +825,8 @@ def eventlog(args):
         args.color = "auto"
 
     h = flux.Flux()
+    targets = Targets(h, args.include)
+
     evf = EventLogFormatter(
         format=args.format, timestamp_format=args.time_format, color=args.color
     )
@@ -743,9 +837,10 @@ def eventlog(args):
         event = consumer.poll()
         if event is None or event.is_empty():
             break
-        print(evf.format(event))
-        if args.wait and event.name == args.wait:
-            break
+        if targets.match(event):
+            print(evf.format(event))
+            if args.wait and event.name == args.wait:
+                break
     consumer.stop()
 
 
@@ -1083,6 +1178,12 @@ def main():
         "--wait",
         metavar="EVENT",
         help="Display events until EVENT is posted",
+    )
+    eventlog_parser.add_argument(
+        "-i",
+        "--include",
+        metavar="TARGETS",
+        help="Only display events that include TARGETS (hosts or ranks)",
     )
     eventlog_parser.set_defaults(func=eventlog)
 
