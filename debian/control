@@ -6,6 +6,7 @@ Standards-Version: 4.1.2
 Build-Depends:
   debhelper (>= 10),
   flux-security (>= 0.13.0),
+  libsystemd-dev (>= 0.23),
   libarchive-dev,
   uuid-dev,
   libzmq3-dev,
