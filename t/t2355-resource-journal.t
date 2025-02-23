@@ -13,6 +13,12 @@ test_expect_success 'unload the scheduler' '
 test_expect_success 'flux resource eventlog --wait works' '
 	flux resource eventlog -f json --wait=resource-define | tee eventlog
 '
+test_expect_success 'flux resource eventlog --include=BADARG raises error' '
+	test_must_fail flux resource eventlog --include=foo
+'
+test_expect_success 'flux resource eventlog --include=BADRANK raises error' '
+	test_must_fail flux resource eventlog --include=42
+'
 test_expect_success '1st event: restart online=""' '
 	head -1 eventlog | tee eventlog.1 &&
 	jq -e ".name == \"restart\"" eventlog.1 &&
@@ -164,6 +170,29 @@ test_expect_success 'ensure all ranks are undrained' '
 	    flux resource undrain $ranks
 	fi
 '
+test_idset_includes_rank1()
+{
+	echo "$1" \
+	| jq -e 'any(.context | .idset // .ranks; . == "1" or . == "0-1")'
+}
+test_expect_success 'flux resource eventlog --include works' '
+	flux resource eventlog --include=1 -f json > include1.json &&
+	# Note: we assume size=2 here such that matching ranks are only
+	# "0-1" or "1", not "0". If the test size is changed this test
+	# may need to be updated
+	cat include1.json | while read line; do
+		test_idset_includes_rank1 "$line"
+	done
+'
+# Note: all brokers running on same host so this feature
+# can't be fully tested here. Just make sure there's no errors and
+# the result is not empty:
+test_expect_success 'flux resource eventlog --include works with hostlist' '
+	flux resource eventlog -H --include="$(flux hostlist -ln1)" \
+		> include-host.out &&
+	test_must_fail test_must_be_empty include-host.out
+'
+# Truncation tests follow:
 test_expect_success 'capture eventlog before truncation' '
 	flux resource eventlog -H &&
 	flux resource eventlog -f json > eventlog.pre.out
