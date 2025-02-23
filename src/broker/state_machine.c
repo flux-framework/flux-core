@@ -230,7 +230,8 @@ static void action_join (struct state_machine *s)
         join_check_parent (s);
     }
 #if HAVE_LIBSYSTEMD
-    sd_notify (0, "READY=1");
+    if (s->ctx->sd_notify)
+        sd_notify (0, "READY=1");
 #endif
 }
 
