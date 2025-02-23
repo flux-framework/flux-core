@@ -80,6 +80,7 @@ struct perilog_procdesc {
     bool cancel_on_exception;
     double timeout;
     double kill_timeout;
+    int kill_signal;
 };
 
 /*  Global prolog/epilog configuration
@@ -88,6 +89,7 @@ static struct perilog_conf {
     bool initialized;
 
     char *imp_path;
+    char *exec_service;
     struct perilog_procdesc *prolog;
     struct perilog_procdesc *epilog;
 
@@ -124,6 +126,8 @@ struct perilog_proc {
 /* The default time (sec) to wait for the prolog to terminate after SIGTERM.
  */
 static double default_kill_timeout = 60.;
+
+static const char *default_exec_service = "rexec";
 
 static struct perilog_proc *procdesc_run (flux_t *h,
                                           flux_plugin_t *p,
@@ -181,6 +185,7 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     int cancel_on_exception = -1;
     const char *timeout;
     double kill_timeout = -1.;
+    bool use_imp = false;
     flux_cmd_t *cmd = NULL;
     json_t *command = NULL;
     json_error_t error;
@@ -228,6 +233,7 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
             errprintf (errp, "error creating %s command", name);
             return NULL;
         }
+        use_imp = true;
     }
     if (!(pd = calloc (1, sizeof (*pd)))) {
         errprintf (errp, "Out of memory");
@@ -250,6 +256,17 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
         goto error;
     }
 
+    /* If the IMP will run as the main process in a transient
+     * systemd unit, set options for correct signal forwarding semantics.
+     */
+    if (use_imp && streq (perilog_config.exec_service, "sdexec")) {
+        if (flux_cmd_setopt (cmd, "SDEXEC_PROP_KillMode", "process") < 0
+            || flux_cmd_setopt (cmd, "SDEXEC_PROP_SendSIGKILL", "off") < 0) {
+            errprintf (errp, "error setting sdexec options");
+            goto error;
+        }
+        pd->kill_signal = SIGUSR1;
+    }
     pd->cmd = cmd;
     pd->kill_timeout = kill_timeout > 0. ? kill_timeout : default_kill_timeout;
     pd->per_rank = per_rank;
@@ -815,10 +832,16 @@ static struct perilog_proc *procdesc_run (flux_t *h,
         goto error;
     }
 
+    /* If using sdexec, bulk-exec sets the unit name (and hence the cgroup
+     * name) to "NAME-RANK-JOBID.service", where NAME is the bulk_name below.
+     * The IMP checks the cgroup for a "flux-" prefix to change its signal
+     * forwarding and straggler handling behavior, so use that prefix here.
+     */
+    char *bulk_name = proc->prolog ? "flux-prolog" : "flux-epilog";
     if (!(bulk_exec = bulk_exec_create (&ops,
-                                        "rexec",
+                                        perilog_config.exec_service,
                                         id,
-                                        perilog_proc_name (proc),
+                                        bulk_name,
                                         NULL))
         || bulk_exec_push_cmd (bulk_exec, ranks, pd->cmd, 0) < 0) {
         flux_log_error (h,
@@ -1224,6 +1247,7 @@ static void free_config (struct perilog_conf *conf)
     perilog_procdesc_destroy (conf->epilog);
     zhashx_destroy (&conf->processes);
     zlistx_destroy (&conf->log_ignore);
+    free (conf->exec_service);
 }
 
 /*   Initialize a perilog_config object
@@ -1241,6 +1265,10 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
     }
     zhashx_set_destructor (conf->processes,
                            perilog_proc_destructor);
+    if (!(conf->exec_service = strdup (default_exec_service))) {
+        flux_log_error (h, "perilog: failed to duplicate exec service name");
+        goto error;
+    }
 
     /* Watch for broker transition to CLEANUP.
      */
@@ -1440,6 +1468,7 @@ static int conf_update_cb (flux_plugin_t *p,
     flux_error_t error;
     json_error_t jerror;
     const char *imp_path = NULL;
+    const char *exec_service = default_exec_service;
     json_t *prolog_config = NULL;
     json_t *epilog_config = NULL;
     struct perilog_procdesc *prolog = NULL;
@@ -1468,9 +1497,10 @@ static int conf_update_cb (flux_plugin_t *p,
     if (json_unpack_ex (conf,
                         &jerror,
                         0,
-                        "{s?{s?s} s?{s?o s?o s?{s?o}}}",
+                        "{s?{s?s s?s} s?{s?o s?o s?{s?o}}}",
                         "exec",
                           "imp", &imp_path,
+                          "service", &exec_service,
                         "job-manager",
                           "prolog", &prolog_config,
                           "epilog", &epilog_config,
@@ -1479,6 +1509,12 @@ static int conf_update_cb (flux_plugin_t *p,
         errprintf (&error,
                    "perilog: error unpacking config: %s",
                    jerror.text);
+        goto error;
+    }
+
+    free (perilog_config.exec_service);
+    if (!(perilog_config.exec_service = strdup (exec_service))) {
+        errprintf (&error, "failed to duplicate exec service name");
         goto error;
     }
 
