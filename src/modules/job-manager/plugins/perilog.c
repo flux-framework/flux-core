@@ -75,7 +75,6 @@ extern char **environ;
  */
 struct perilog_procdesc {
     flux_cmd_t *cmd;
-    bool uses_imp;
     bool prolog;
     bool per_rank;
     bool cancel_on_exception;
@@ -184,7 +183,6 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     double kill_timeout = -1.;
     flux_cmd_t *cmd = NULL;
     json_t *command = NULL;
-    bool uses_imp = false;
     json_error_t error;
 
     const char *name = prolog ? "prolog" : "epilog";
@@ -230,7 +228,6 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
             errprintf (errp, "error creating %s command", name);
             return NULL;
         }
-        uses_imp = true;
     }
     if (!(pd = calloc (1, sizeof (*pd)))) {
         errprintf (errp, "Out of memory");
@@ -257,7 +254,6 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     pd->kill_timeout = kill_timeout > 0. ? kill_timeout : default_kill_timeout;
     pd->per_rank = per_rank;
     pd->prolog = prolog;
-    pd->uses_imp = uses_imp;
 
     /* If cancel_on_exception unset, default to prolog=true, epilog=false
      * Otherwise, use set value:
