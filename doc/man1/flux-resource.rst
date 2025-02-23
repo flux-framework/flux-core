@@ -17,12 +17,12 @@ SYNOPSIS
 
 | **flux** **resource** **drain** [*-n*] [*-o* *FORMAT*] [*-i* *TARGETS*]
 | **flux** **resource** **drain** [*-f*] [*-u*] [*targets*] [*reason*]
-| **flux** **resource** **undrain** [*-f*] *targets*
+| **flux** **resource** **undrain** [*-f*] *targets* [*reason*]
 
 | **flux** **resource** **reload** [-f] [--xml] *path*
 
 | **flux** **resource** **acquire-mute**
-| **flux** **resource** **eventlog** [*-w* *EVENT*] [*-f* *FORMAT*] [*-T* *FORMAT*] [*-L* [*WHEN*]] [*-H*] [*-F*]
+| **flux** **resource** **eventlog** [*-w* *EVENT*] [*-f* *FORMAT*] [*-T* *FORMAT*] [*-L* [*WHEN*]] [*-H*] [*-F*] [*-i* *TARGETS*]
 
 DESCRIPTION
 ===========
@@ -323,6 +323,7 @@ undrain
 .. program:: flux resource undrain
 
 Undrain the nodes specified by the *targets* argument (IDSET or HOSTLIST).
+Any remaining free arguments are recorded as a reason for the undrain event.
 
 This command is restricted to the Flux instance owner.
 
@@ -394,6 +395,12 @@ Watch the resource journal, which is described in RFC 44.
   Wait for the specified event to be posted, print it, then quit.
   The current set of valid events events is *restart*, *resource-define*,
   *online*, *offline*, *drain*, *undrain*, *torpid*, and *lively*.
+
+.. option:: -i, --include=TARGETS
+
+  Filter events to only include those that apply to  *TARGETS*, which is
+  normally one or more hostnames in RFC 29 hostlist form. TARGETS can also
+  be broker ranks in RFC 22 idset form, useful mainly in test.
 
 OUTPUT FORMAT
 =============

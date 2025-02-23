@@ -159,15 +159,17 @@ test_expect_success 'two nodes are still drained' '
 	test $(flux resource list -n -s down -o {nnodes}) -eq 2
 '
 
-test_expect_success 'undrain remaining nodes' '
-	flux resource undrain 1-2 &&
+test_expect_success 'undrain remaining nodes with a reason' '
+	flux resource undrain 1-2 "reason for undrain" &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 0
 '
 
 test_expect_success 'resource.eventlog has three undrain events' '
 	test $(has_resource_event undrain | wc -l) -eq 3
 '
-
+test_expect_success 'final undrain event has a reason' '
+	flux resource eventlog -H | tail -1 | grep "reason for undrain"
+'
 test_expect_success 'reload resource module to simulate instance restart' '
 	flux module remove sched-simple &&
 	flux module reload resource noverify &&
