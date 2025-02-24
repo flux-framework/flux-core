@@ -64,10 +64,13 @@ static void progress_notify (flux_t *h)
 
 static void progress (flux_t *h, int delta_blob, int delta_keys)
 {
+    static int last_keycount = 0;
+
     blobcount += delta_blob;
     keycount += delta_keys;
 
-    if (!(keycount % 100 == 0 || keycount < 10))
+    if (last_keycount == keycount
+        || !(keycount % 100 == 0 || keycount < 10))
         return;
 
     if (!quiet && !verbose) {
@@ -78,7 +81,10 @@ static void progress (flux_t *h, int delta_blob, int delta_keys)
     }
     if (sd_notify_flag)
         progress_notify (h);
+
+    last_keycount = keycount;
 }
+
 static void progress_end (flux_t *h)
 {
     if (!quiet && !verbose) {
