@@ -110,10 +110,10 @@ broker.quorum [Updates: C]
    broker enters the RUN state and starts the initial program, if any.
    Default: instance size.
 
-broker.quorum-timeout [Updates: C]
+broker.quorum-warn [Updates: C]
    The amount of time (in RFC 23 Flux Standard Duration format) that the
    rank 0 broker waits for the ``broker.quorum`` set to come online before
-   aborting the Flux instance.   Default: ``60s``.
+   warning of slow joiners.   Default: ``60s``.
 
 broker.cleanup-timeout [Updates: C]
    The amount of time (in RFC 23 Flux Standard Duration format) that the

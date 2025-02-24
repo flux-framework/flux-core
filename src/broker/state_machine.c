@@ -43,9 +43,9 @@ struct quorum {
     struct idset *all;
     struct idset *online; // cumulative on rank 0, batch buffer on rank > 0
     flux_future_t *f;
-    double timeout;
+    double warn_period;
     bool warned;
-    flux_watcher_t *timer;
+    flux_watcher_t *warn_timer;
 };
 
 struct cleanup {
@@ -164,7 +164,7 @@ static struct state_next nexttab[] = {
     { "goodbye",            STATE_GOODBYE,      STATE_EXIT },
 };
 
-static const double default_quorum_timeout = 60; // log slow joiners
+static const double default_quorum_warn = 60; // log slow joiners
 static const double default_shutdown_timeout = 60; // log slow shutdown
 static const double default_cleanup_timeout = -1;
 static const double goodbye_timeout = 60;
@@ -234,10 +234,10 @@ static void action_join (struct state_machine *s)
 #endif
 }
 
-static void quorum_timer_cb (flux_reactor_t *r,
-                             flux_watcher_t *w,
-                             int revents,
-                             void *arg)
+static void quorum_warn_timer_cb (flux_reactor_t *r,
+                                  flux_watcher_t *w,
+                                  int revents,
+                                  void *arg)
 {
     struct state_machine *s = arg;
     flux_t *h = s->ctx->h;
@@ -273,7 +273,7 @@ static void quorum_timer_cb (flux_reactor_t *r,
               "quorum delayed: waiting for %s (rank %s)",
               hoststr,
               rankstr);
-    flux_timer_watcher_reset (w, s->quorum.timeout, 0.);
+    flux_timer_watcher_reset (w, s->quorum.warn_period, 0.);
     flux_watcher_start (w);
     s->quorum.warned = true;
 done:
@@ -313,9 +313,11 @@ static void action_quorum (struct state_machine *s)
     }
     if (s->ctx->rank > 0)
         quorum_check_parent (s);
-    else if (s->quorum.timeout > 0.) {
-        flux_timer_watcher_reset (s->quorum.timer, s->quorum.timeout, 0.);
-        flux_watcher_start (s->quorum.timer);
+    else if (s->quorum.warn_period > 0.) {
+        flux_timer_watcher_reset (s->quorum.warn_timer,
+                                  s->quorum.warn_period,
+                                  0.);
+        flux_watcher_start (s->quorum.warn_timer);
     }
 }
 
@@ -1309,7 +1311,7 @@ void state_machine_destroy (struct state_machine *s)
         flux_msglist_destroy (s->monitor.requests);
         idset_destroy (s->quorum.all);
         idset_destroy (s->quorum.online);
-        flux_watcher_destroy (s->quorum.timer);
+        flux_watcher_destroy (s->quorum.warn_timer);
         flux_future_destroy (s->quorum.f);
         flux_watcher_destroy (s->cleanup.timer);
         flux_watcher_destroy (s->shutdown.timer);
@@ -1338,10 +1340,10 @@ struct state_machine *state_machine_create (struct broker *ctx)
     if (!(s->prep = flux_prepare_watcher_create (r, prep_cb, s))
         || !(s->check = flux_check_watcher_create (r, check_cb, s))
         || !(s->idle = flux_idle_watcher_create (r, NULL, NULL))
-        || !(s->quorum.timer = flux_timer_watcher_create (r,
+        || !(s->quorum.warn_timer = flux_timer_watcher_create (r,
                                                           0.,
                                                           0.,
-                                                          quorum_timer_cb,
+                                                          quorum_warn_timer_cb,
                                                           s))
         || !(s->cleanup.timer = flux_timer_watcher_create (r,
                                                            0.,
@@ -1370,9 +1372,9 @@ struct state_machine *state_machine_create (struct broker *ctx)
 
     if (quorum_configure (s) < 0
         || timeout_configure (s,
-                              "broker.quorum-timeout",
-                              &s->quorum.timeout,
-                              default_quorum_timeout) < 0) {
+                              "broker.quorum-warn",
+                              &s->quorum.warn_period,
+                              default_quorum_warn) < 0) {
         log_err ("error configuring quorum attributes");
         goto error;
     }

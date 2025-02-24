@@ -1181,7 +1181,7 @@ Try to start the leader (rank 0) broker on the management node.
        Memory: 26.6M
           CPU: 3.506s
        CGroup: /system.slice/flux.service
-               └─287739 broker --config-path=/etc/flux/system/conf.d -Scron.directory=/etc/flux/system/cron.d -Srundir=/run/flux -Sstatedir=/var/lib/flux -Slocal-uri=local:///run/flux/local -Slog-stderr-level=6 -Slog-stderr-mode=local -Sbroker.rc2_none -Sbroker.quorum=1 -Sbroker.quorum-timeout=none -Sbroker.exit-norestart=42 -Sbroker.sd-notify=1 -Scontent.dump=auto -Scontent.restore=auto
+               └─287739 broker --config-path=/etc/flux/system/conf.d -Scron.directory=/etc/flux/system/cron.d -Srundir=/run/flux -Sstatedir=/var/lib/flux -Slocal-uri=local:///run/flux/local -Slog-stderr-level=6 -Slog-stderr-mode=local -Sbroker.rc2_none -Sbroker.quorum=1 -Sbroker.quorum-warn=none -Sbroker.exit-norestart=42 -Sbroker.sd-notify=1 -Scontent.dump=auto -Scontent.restore=auto
 
   Apr 23 07:36:46 test0 flux[287739]: sched-fluxion-resource.info[0]: version 0.33.1-40-g24255b38
   Apr 23 07:36:46 test0 flux[287739]: sched-fluxion-qmanager.info[0]: version 0.33.1-40-g24255b38

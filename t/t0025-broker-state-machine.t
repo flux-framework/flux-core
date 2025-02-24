@@ -257,15 +257,15 @@ test_expect_success 'instance rc1 failure exits with norestart code' '
 	    true
 '
 
-test_expect_success 'broker.quorum-timeout=none is accepted' '
-	flux start ${ARGS} -Sbroker.quorum-timeout=none true
+test_expect_success 'broker.quorum-warn=none is accepted' '
+	flux start ${ARGS} -Sbroker.quorum-warn=none true
 '
 
-test_expect_success 'broker.quorum-timeout=3h is accepted' '
-	flux start ${ARGS} -Sbroker.quorum-timeout=3h true
+test_expect_success 'broker.quorum-warn=3h is accepted' '
+	flux start ${ARGS} -Sbroker.quorum-warn=3h true
 '
-test_expect_success 'broker.quorum-timeout=x fails' '
-	test_must_fail flux start ${ARGS} -Sbroker.quorum-timeout=x true
+test_expect_success 'broker.quorum-warn=x fails' '
+	test_must_fail flux start ${ARGS} -Sbroker.quorum-warn=x true
 '
 test_expect_success 'create rc1 that sleeps for 2s on rank != 0' '
 	cat <<-EOT >rc1_sleep &&
@@ -275,11 +275,11 @@ test_expect_success 'create rc1 that sleeps for 2s on rank != 0' '
 	EOT
 	chmod +x rc1_sleep
 '
-test_expect_success 'broker.quorum-timeout works' '
+test_expect_success 'broker.quorum-warn works' '
 	flux start -s2 ${ARGS} \
 		-Slog-filename=timeout.log \
 		-Sbroker.rc1_path="$(pwd)/rc1_sleep" \
-		-Sbroker.quorum-timeout=1s true
+		-Sbroker.quorum-warn=1s true
 '
 test_expect_success 'logs contain quorum delayed/reached messages' '
 	grep "quorum delayed" timeout.log &&
