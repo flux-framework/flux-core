@@ -68,6 +68,11 @@ OPTIONS
    suffix k or K=1024, M=1024\*1024, or G=1024\*1024\*1024 (up to
    ``INT_MAX``).
 
+.. option:: --sd-notify
+
+   Regularly inform the broker of progress so it can provide human readable
+   progress for :program:`systemctl status flux`.
+
 RESOURCES
 =========
 

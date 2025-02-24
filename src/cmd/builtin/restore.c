@@ -402,8 +402,7 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
 
     h = builtin_get_flux_handle (p);
 
-    const char *s;
-    if ((s = flux_attr_get (h, "broker.sd-notify")) && !streq (s, "0"))
+    if (optparse_hasopt (p, "sd-notify"))
         sd_notify_flag = true;
 
     ar = restore_create (infile);
@@ -510,6 +509,9 @@ static struct optparse_option restore_opts[] = {
     },
     { .name = "size-limit", .has_arg = 1, .arginfo = "SIZE",
       .usage = "Do not restore blobs greater than SIZE bytes",
+    },
+    { .name = "sd-notify", .has_arg = 0,
+      .usage = "Send status updates to systemd via flux-broker(1)",
     },
     OPTPARSE_TABLE_END
 };
