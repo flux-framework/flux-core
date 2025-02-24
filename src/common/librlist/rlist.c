@@ -1193,18 +1193,20 @@ struct rlist *rlist_from_json (json_t *o, json_error_t *errp)
     json_t *nodelist = NULL;
     json_t *scheduling = NULL;
     json_t *properties = NULL;
+    int nslots = -1;
     double starttime = -1.;
     double expiration = -1.;
     flux_error_t error;
 
     if (json_unpack_ex (o, errp, 0,
-                        "{s:i s?O s:{s:o s?o s?o s?F s?F}}",
+                        "{s:i s?O s:{s:o s?o s?o s?i s?F s?F}}",
                         "version", &version,
                         "scheduling", &scheduling,
                         "execution",
                           "R_lite", &R_lite,
                           "nodelist", &nodelist,
                           "properties", &properties,
+                          "nslots", &nslots,
                           "starttime", &starttime,
                           "expiration", &expiration) < 0)
         goto err;
@@ -1221,6 +1223,8 @@ struct rlist *rlist_from_json (json_t *o, json_error_t *errp)
 
     if (scheduling)
         rl->scheduling = scheduling;
+    if (nslots > 0)
+        rl->nslots = nslots;
     if (starttime > 0.)
         rl->starttime = starttime;
     if (expiration > 0.)
@@ -1707,6 +1711,7 @@ json_t *rlist_to_R (const struct rlist *rl)
     json_t *R_lite = NULL;
     json_t *nodelist = NULL;
     json_t *properties = NULL;
+    json_t *nslots = NULL;
 
     if (!rl)
         return NULL;
@@ -1722,12 +1727,17 @@ json_t *rlist_to_R (const struct rlist *rl)
         || rlist_json_properties (rl, &properties) < 0)
         goto fail;
 
-    if (!(R = json_pack ("{s:i, s:{s:o s:f s:f}}",
+    if (rl->nslots > 0) {
+        nslots = json_integer (rl->nslots);
+    }
+
+    if (!(R = json_pack ("{s:i, s:{s:o s:o* s:f s:f}}",
                          "version", 1,
                          "execution",
-                         "R_lite", R_lite,
-                         "starttime", rl->starttime,
-                         "expiration", rl->expiration)))
+                           "R_lite", R_lite,
+                           "nslots", nslots,
+                           "starttime", rl->starttime,
+                           "expiration", rl->expiration)))
         goto fail;
     if (nodelist
         && json_object_set_new (json_object_get (R, "execution"),
@@ -2055,6 +2065,9 @@ static struct rlist *rlist_try_alloc (struct rlist *rl,
         result = rlist_alloc_first_fit (rl, ai->slot_size, ai->nslots);
     else
         errno = EINVAL;
+
+    if (result)
+        result->nslots = ai->nslots;
     return result;
 }
 
