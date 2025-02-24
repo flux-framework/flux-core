@@ -83,6 +83,11 @@ OPTIONS
    KVS key and treat it as a warning.  Without this option, content load
    failures are treated as immediate fatal errors.
 
+.. option:: --sd-notify
+
+   Regularly inform the broker of progress so it can reset the systemd
+   stop timer in rc3 context and provide human readable progress for
+   :program:`systemctl status flux`.
 
 OTHER NOTES
 ===========

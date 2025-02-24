@@ -65,7 +65,8 @@ if test $RANK -eq 0; then
             dumplink="${statedir:-.}/dump/RESTORE"
         fi
         echo "dumping content to ${dumpfile}"
-        if flux dump --quiet --ignore-failed-read --checkpoint ${dumpfile}; then
+        if flux dump --sd-notify --quiet --ignore-failed-read \
+	    --checkpoint ${dumpfile}; then
             test -n "$dumplink" && ln -s $(basename ${dumpfile}) ${dumplink}
         else
             exit_rc=1

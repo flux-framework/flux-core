@@ -430,8 +430,7 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
      * start/stop, we can use it to ensure systemd doesn't kill us
      * while dumping during shutdown.  See flux-framework/flux-core#5778.
      */
-    const char *s;
-    if ((s = flux_attr_get (h, "broker.sd-notify")) && !streq (s, "0"))
+    if (optparse_hasopt (p, "sd-notify"))
         sd_notify_flag = true;
 
     ar = dump_create (outfile);
@@ -484,6 +483,9 @@ static struct optparse_option dump_opts[] = {
     },
     { .name = "ignore-failed-read", .has_arg = 0,
       .usage = "Treat content load errors as non-fatal",
+    },
+    { .name = "sd-notify", .has_arg = 0,
+      .usage = "Send status updates to systemd via flux-broker(1)",
     },
     OPTPARSE_TABLE_END
 };
