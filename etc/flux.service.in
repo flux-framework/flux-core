@@ -24,6 +24,7 @@ ExecStart=/bin/bash -c '\
   -Sbroker.cleanup-timeout=45 \
   -Sbroker.exit-norestart=42 \
   -Sbroker.sd-notify=1 \
+  -Sbroker.sd-stop-timeout=90 \
   -Scontent.dump=auto \
   -Scontent.restore=auto \
 '
