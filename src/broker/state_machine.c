@@ -43,9 +43,9 @@ struct quorum {
     struct idset *all;
     struct idset *online; // cumulative on rank 0, batch buffer on rank > 0
     flux_future_t *f;
-    double timeout;
+    double warn_period;
     bool warned;
-    flux_watcher_t *timer;
+    flux_watcher_t *warn_timer;
 };
 
 struct cleanup {
@@ -55,8 +55,8 @@ struct cleanup {
 };
 
 struct shutdown {
-    double timeout;
-    flux_watcher_t *timer;
+    double warn_period;
+    flux_watcher_t *warn_timer;
 };
 
 struct monitor {
@@ -164,8 +164,8 @@ static struct state_next nexttab[] = {
     { "goodbye",            STATE_GOODBYE,      STATE_EXIT },
 };
 
-static const double default_quorum_timeout = 60; // log slow joiners
-static const double default_shutdown_timeout = 60; // log slow shutdown
+static const double default_quorum_warn = 60; // log slow joiners
+static const double default_shutdown_warn = 60; // log slow shutdown
 static const double default_cleanup_timeout = -1;
 static const double goodbye_timeout = 60;
 
@@ -234,10 +234,10 @@ static void action_join (struct state_machine *s)
 #endif
 }
 
-static void quorum_timer_cb (flux_reactor_t *r,
-                             flux_watcher_t *w,
-                             int revents,
-                             void *arg)
+static void quorum_warn_timer_cb (flux_reactor_t *r,
+                                  flux_watcher_t *w,
+                                  int revents,
+                                  void *arg)
 {
     struct state_machine *s = arg;
     flux_t *h = s->ctx->h;
@@ -273,7 +273,7 @@ static void quorum_timer_cb (flux_reactor_t *r,
               "quorum delayed: waiting for %s (rank %s)",
               hoststr,
               rankstr);
-    flux_timer_watcher_reset (w, s->quorum.timeout, 0.);
+    flux_timer_watcher_reset (w, s->quorum.warn_period, 0.);
     flux_watcher_start (w);
     s->quorum.warned = true;
 done:
@@ -313,9 +313,11 @@ static void action_quorum (struct state_machine *s)
     }
     if (s->ctx->rank > 0)
         quorum_check_parent (s);
-    else if (s->quorum.timeout > 0.) {
-        flux_timer_watcher_reset (s->quorum.timer, s->quorum.timeout, 0.);
-        flux_watcher_start (s->quorum.timer);
+    else if (s->quorum.warn_period > 0.) {
+        flux_timer_watcher_reset (s->quorum.warn_timer,
+                                  s->quorum.warn_period,
+                                  0.);
+        flux_watcher_start (s->quorum.warn_timer);
     }
 }
 
@@ -431,10 +433,10 @@ static void action_finalize (struct state_machine *s)
         state_machine_post (s, "rc3-none");
 }
 
-static void shutdown_timer_cb (flux_reactor_t *r,
-                               flux_watcher_t *w,
-                               int revents,
-                               void *arg)
+static void shutdown_warn_timer_cb (flux_reactor_t *r,
+                                    flux_watcher_t *w,
+                                    int revents,
+                                    void *arg)
 {
     struct state_machine *s = arg;
     struct idset *ranks = overlay_get_child_peer_idset (s->ctx->overlay);
@@ -452,7 +454,7 @@ static void shutdown_timer_cb (flux_reactor_t *r,
     free (rankstr);
     idset_destroy (ranks);
 
-    flux_timer_watcher_reset (w, s->shutdown.timeout, 0.);
+    flux_timer_watcher_reset (w, s->shutdown.warn_period, 0.);
     flux_watcher_start (w);
 }
 
@@ -470,9 +472,11 @@ static void action_shutdown (struct state_machine *s)
                     overlay_get_child_peer_count (s->ctx->overlay));
     }
 #endif
-    if (s->shutdown.timeout >= 0) {
-        flux_timer_watcher_reset (s->shutdown.timer, s->shutdown.timeout, 0.);
-        flux_watcher_start (s->shutdown.timer);
+    if (s->shutdown.warn_period >= 0) {
+        flux_timer_watcher_reset (s->shutdown.warn_timer,
+                                  s->shutdown.warn_period,
+                                  0.);
+        flux_watcher_start (s->shutdown.warn_timer);
     }
 }
 
@@ -1209,7 +1213,7 @@ static void overlay_monitor_cb (struct overlay *overlay,
             count = overlay_get_child_peer_count (overlay);
             if (count == 0) {
                 state_machine_post (s, "children-complete");
-                flux_watcher_stop (s->shutdown.timer);
+                flux_watcher_stop (s->shutdown.warn_timer);
             }
 #if HAVE_LIBSYSTEMD
             else {
@@ -1268,22 +1272,26 @@ static void disconnect_cb (flux_t *h,
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    {    FLUX_MSGTYPE_REQUEST,
+    {
+        FLUX_MSGTYPE_REQUEST,
         "state-machine.monitor",
         state_machine_monitor_cb,
-        0
+        0,
     },
-    {   FLUX_MSGTYPE_REQUEST,
+    {
+        FLUX_MSGTYPE_REQUEST,
         "state-machine.wait",
         state_machine_wait_cb,
-        FLUX_ROLE_USER
+        FLUX_ROLE_USER,
     },
-    {   FLUX_MSGTYPE_REQUEST,
+    {
+        FLUX_MSGTYPE_REQUEST,
         "state-machine.disconnect",
         disconnect_cb,
-        0
+        0,
     },
-    {    FLUX_MSGTYPE_REQUEST,
+    {
+        FLUX_MSGTYPE_REQUEST,
         "state-machine.get",
         state_machine_get_cb,
         FLUX_ROLE_USER,
@@ -1305,10 +1313,10 @@ void state_machine_destroy (struct state_machine *s)
         flux_msglist_destroy (s->monitor.requests);
         idset_destroy (s->quorum.all);
         idset_destroy (s->quorum.online);
-        flux_watcher_destroy (s->quorum.timer);
+        flux_watcher_destroy (s->quorum.warn_timer);
         flux_future_destroy (s->quorum.f);
         flux_watcher_destroy (s->cleanup.timer);
-        flux_watcher_destroy (s->shutdown.timer);
+        flux_watcher_destroy (s->shutdown.warn_timer);
         free (s);
         errno = saved_errno;
     }
@@ -1334,21 +1342,21 @@ struct state_machine *state_machine_create (struct broker *ctx)
     if (!(s->prep = flux_prepare_watcher_create (r, prep_cb, s))
         || !(s->check = flux_check_watcher_create (r, check_cb, s))
         || !(s->idle = flux_idle_watcher_create (r, NULL, NULL))
-        || !(s->quorum.timer = flux_timer_watcher_create (r,
+        || !(s->quorum.warn_timer = flux_timer_watcher_create (r,
                                                           0.,
                                                           0.,
-                                                          quorum_timer_cb,
+                                                          quorum_warn_timer_cb,
                                                           s))
         || !(s->cleanup.timer = flux_timer_watcher_create (r,
                                                            0.,
                                                            0.,
                                                            cleanup_timer_cb,
                                                            s))
-        || !(s->shutdown.timer = flux_timer_watcher_create (r,
-                                                            0.,
-                                                            0.,
-                                                            shutdown_timer_cb,
-                                                            s)))
+        || !(s->shutdown.warn_timer = flux_timer_watcher_create (r,
+                                                        0.,
+                                                        0.,
+                                                        shutdown_warn_timer_cb,
+                                                        s)))
         goto error;
     flux_watcher_start (s->prep);
     flux_watcher_start (s->check);
@@ -1366,9 +1374,9 @@ struct state_machine *state_machine_create (struct broker *ctx)
 
     if (quorum_configure (s) < 0
         || timeout_configure (s,
-                              "broker.quorum-timeout",
-                              &s->quorum.timeout,
-                              default_quorum_timeout) < 0) {
+                              "broker.quorum-warn",
+                              &s->quorum.warn_period,
+                              default_quorum_warn) < 0) {
         log_err ("error configuring quorum attributes");
         goto error;
     }
@@ -1380,10 +1388,10 @@ struct state_machine *state_machine_create (struct broker *ctx)
         goto error;
     }
     if (timeout_configure (s,
-                           "broker.shutdown-timeout",
-                           &s->shutdown.timeout,
-                           default_shutdown_timeout) < 0) {
-        log_err ("error configuring shutdown timeout attribute");
+                           "broker.shutdown-warn",
+                           &s->shutdown.warn_period,
+                           default_shutdown_warn) < 0) {
+        log_err ("error configuring shutdown warn attribute");
         goto error;
     }
     norestart_configure (s);
