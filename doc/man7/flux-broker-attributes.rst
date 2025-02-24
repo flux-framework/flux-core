@@ -138,6 +138,17 @@ broker.exit-restart [Updates: C, R]
 broker.starttime
    Timestamp of broker startup from :man3:`flux_reactor_now`.
 
+broker.sd-notify
+   A boolean indicating that the broker should use :linux:man3:`sd_notify`
+   to inform systemd of its status.  This is set to 1 in the Flux systemd
+   unit file.
+
+broker.sd-stop-timeout
+   A timeout value (in RFC 23 Flux Standard Duration format) used by the
+   broker to extend the systemd stop timeout while it is making progress
+   towards shutdown.  This is set to the same value as ``TimeoutStopSec``
+   in the Flux systemd unit file.
+
 conf.shell_initrc [Updates: C, R]
    The path to the :man1:`flux-shell` initrc script.  Default:
    ``${prefix}/etc/flux/shell/initrc.lua``.
