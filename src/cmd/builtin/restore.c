@@ -11,9 +11,6 @@
 #if HAVE_CONFIG_H
 # include <config.h>
 #endif
-#if HAVE_LIBSYSTEMD
-#include <systemd/sd-daemon.h>
-#endif
 #include <unistd.h>
 #include <stdarg.h>
 #include <jansson.h>
@@ -47,28 +44,42 @@ static int blobcount;
 static int keycount;
 static int blob_size_limit;
 
-static void progress (int delta_blob, int delta_keys)
+static void progress_notify (flux_t *h)
+{
+    flux_future_t *f;
+    char buf[64];
+
+    snprintf (buf,
+              sizeof (buf),
+              "flux-restore(1) has restored %d keys",
+              keycount);
+    f = flux_rpc_pack (h,
+                       "state-machine.sd-notify",
+                       FLUX_NODEID_ANY,
+                       FLUX_RPC_NORESPONSE,
+                       "{s:s}",
+                       "status", buf);
+    flux_future_destroy (f);
+}
+
+static void progress (flux_t *h, int delta_blob, int delta_keys)
 {
     blobcount += delta_blob;
     keycount += delta_keys;
 
-    if (!quiet
-        && !verbose
-        && (keycount % 100 == 0 || keycount < 10)) {
+    if (!(keycount % 100 == 0 || keycount < 10))
+        return;
+
+    if (!quiet && !verbose) {
         fprintf (stderr,
                  "\rflux-restore: restored %d keys (%d blobs)",
                  keycount,
                  blobcount);
     }
-#if HAVE_LIBSYSTEMD
-    if (sd_notify_flag
-        && (keycount % 100 == 0 || keycount < 10)) {
-        sd_notifyf (0, "EXTEND_TIMEOUT_USEC=%d", 10000000); // 10s
-        sd_notifyf (0, "STATUS=flux-restore(1) has restored %d keys", keycount);
-    }
-#endif
+    if (sd_notify_flag)
+        progress_notify (h);
 }
-static void progress_end (void)
+static void progress_end (flux_t *h)
 {
     if (!quiet && !verbose) {
         fprintf (stderr,
@@ -76,11 +87,8 @@ static void progress_end (void)
                  keycount,
                  blobcount);
     }
-#if HAVE_LIBSYSTEMD
-    if (sd_notify_flag) {
-        sd_notifyf (0, "STATUS=flux-restore(1) has restored %d keys", keycount);
-    }
-#endif
+    if (sd_notify_flag)
+        progress_notify (h);
 }
 
 static struct archive *restore_create (const char *infile)
@@ -141,7 +149,7 @@ static json_t *restore_dir (flux_t *h, const char *hash_type, json_t *dir)
         || content_store_get_blobref (f, hash_type, &blobref) < 0)
         log_msg_exit ("error storing dirref blob: %s",
                       future_strerror (f, errno));
-    progress (1, 0);
+    progress (h, 1, 0);
     if (!(dirref = treeobj_create_dirref (blobref)))
         log_msg_exit ("out of memory");
     free (s);
@@ -216,7 +224,7 @@ static void restore_symlink (flux_t *h,
     restore_treeobj (root, path, treeobj);
     json_decref (treeobj);
     free (cpy);
-    progress (0, 1);
+    progress (h, 0, 1);
 }
 
 static void restore_value (flux_t *h,
@@ -241,14 +249,14 @@ static void restore_value (flux_t *h,
             log_msg_exit ("error storing blob for %s: %s",
                           path,
                           future_strerror (f, errno));
-        progress (1, 0);
+        progress (h, 1, 0);
         if (!(treeobj = treeobj_create_valref (blobref)))
             log_err_exit ("error creating valref object for %s", path);
         flux_future_destroy (f);
     }
     restore_treeobj (root, path, treeobj);
     json_decref (treeobj);
-    progress (0, 1);
+    progress (h, 0, 1);
 }
 
 /* Restore archive and return a 'dirref' object pointing to it.
@@ -410,7 +418,7 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
 
         dirref = restore_snapshot (ar, h, hash_type);
         blobref = treeobj_get_blobref (dirref, 0);
-        progress_end ();
+        progress_end (h);
 
         if (!quiet) {
             log_msg ("writing snapshot %.*s to checkpoint for next KVS start",
@@ -442,7 +450,7 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
 
         dirref = restore_snapshot (ar, h, hash_type);
         blobref = treeobj_get_blobref (dirref, 0);
-        progress_end ();
+        progress_end (h);
 
         if (!quiet) {
             log_msg ("writing snapshot %.*s to KVS key '%s'",
