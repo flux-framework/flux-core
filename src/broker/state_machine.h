@@ -36,6 +36,8 @@ void state_machine_kill (struct state_machine *s, int signum);
 
 int state_machine_shutdown (struct state_machine *s, flux_error_t *error);
 
+void state_machine_sd_notify (struct state_machine *s, const char *status);
+
 #endif /* !_BROKER_STATE_MACHINE_H */
 
 /*

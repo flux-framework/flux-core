@@ -239,6 +239,25 @@ static void sd_timeout_reset (struct state_machine *s)
 #endif
 }
 
+/* Update systemd status, if enabled and status is non-NULL.
+ * Reset the systemd stop timeout also, if it is running.
+ * N.B. this is registered as a runat_notify_f callback and is called
+ * from the state-machine.sd-notify RPC handler.
+ */
+void state_machine_sd_notify (struct state_machine *s, const char *status)
+{
+    if (s) {
+#if HAVE_LIBSYSTEMD
+        if (s->ctx->sd_notify) {
+            if (s->sd.timeout_is_active)
+                sd_timeout_reset (s);
+            if (status)
+                sd_notifyf (0, "STATUS=%s", status);
+        }
+#endif
+    }
+}
+
 static void action_init (struct state_machine *s)
 {
     s->ctx->online = true;

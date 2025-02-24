@@ -27,10 +27,13 @@ typedef void (*runat_completion_f)(struct runat *r,
                                    const char *name,
                                    void *arg);
 
+typedef void (*runat_notify_f)(void *handle, const char *msg);
+
 struct runat *runat_create (flux_t *h,
                             const char *local_uri,
                             const char *jobid,
-                            bool sdnotify);
+                            runat_notify_f notify_cb,
+                            void *notify_handle);
 
 void runat_destroy (struct runat *r);
 

@@ -28,9 +28,6 @@
 #include "src/common/libmissing/argz.h"
 #endif
 #include <jansson.h>
-#if HAVE_LIBSYSTEMD
-#include <systemd/sd-daemon.h>
-#endif
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -68,6 +65,8 @@ struct runat {
     flux_msg_handler_t **handlers;
     bool sd_notify;
     struct termios saved_termios;
+    runat_notify_f notify_cb;
+    void *notify_handle;
 };
 
 static void runat_command_destroy (struct runat_command *cmd);
@@ -306,13 +305,16 @@ static void start_next_command (struct runat *r, struct runat_entry *entry)
     }
     else {
         while (!started && (cmd = zlist_head (entry->commands))) {
-#if HAVE_LIBSYSTEMD
-            if (r->sd_notify) {
+            if (r->notify_cb) {
                 char *s = get_cmdline (cmd->cmd);
-                sd_notifyf (0, "STATUS=Running %s", s ? s : "unknown command");
+                char buf[256];
+                snprintf (buf,
+                          sizeof (buf),
+                          "Running %s",
+                          s ? s : "unknown command");
+                r->notify_cb (r->notify_handle, buf);
                 free (s);
             }
-#endif
             if (!(cmd->p = start_command (r, entry, cmd))) {
                 log_command (r->h, entry, 1, 0, "error starting command");
                 if (entry->exit_code == 0)
@@ -708,7 +710,8 @@ static const struct flux_msg_handler_spec htab[] = {
 struct runat *runat_create (flux_t *h,
                             const char *local_uri,
                             const char *jobid,
-                            bool sdnotify)
+                            runat_notify_f notify_cb,
+                            void *notify_handle)
 {
     struct runat *r;
 
@@ -722,7 +725,8 @@ struct runat *runat_create (flux_t *h,
     r->h = h;
     r->jobid = jobid;
     r->local_uri = local_uri;
-    r->sd_notify = sdnotify;
+    r->notify_cb = notify_cb;
+    r->notify_handle = notify_handle;
     if (isatty (STDIN_FILENO)
         && tcgetattr (STDIN_FILENO, &r->saved_termios) < 0)
         flux_log_error (r->h, "failed to save terminal attributes");
