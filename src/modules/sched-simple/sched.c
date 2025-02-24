@@ -362,7 +362,7 @@ static int try_free (flux_t *h,
         return -1;
     }
     r = rlist_dumps (alloc);
-    if ((rc = rlist_free (ss->rlist, alloc)) < 0)
+    if ((rc = rlist_free_tolerant (ss->rlist, alloc)) < 0)
         flux_log_error (h, "free: %s", r);
     else {
         flux_log (h,
@@ -754,13 +754,15 @@ static int ss_resource_update (struct simple_sched *ss, flux_future_t *f)
 {
     const char *up = NULL;
     const char *down = NULL;
+    const char *shrink = NULL;
     double expiration = -1.;
     const char *s;
 
     int rc = flux_rpc_get_unpack (f,
-                                  "{s?s s?s s?F}",
+                                  "{s?s s?s s?s s?F}",
                                   "up", &up,
                                   "down", &down,
+                                  "shrink", &shrink,
                                   "expiration", &expiration);
     if (rc < 0) {
         flux_log (ss->h, LOG_ERR, "unpacking acquire response failed");
@@ -776,6 +778,18 @@ static int ss_resource_update (struct simple_sched *ss, flux_future_t *f)
         || (down && rlist_mark_down (ss->rlist, down) < 0)) {
         flux_log_error (ss->h, "failed to update resource state");
         goto err;
+    }
+
+    /* Handle shrink targets:
+     */
+    if (shrink) {
+        struct idset *ids = NULL;
+        if (!(ids = idset_decode (shrink))
+            || (rc = rlist_remove_ranks (ss->rlist, ids)) < 0)
+            flux_log_error (ss->h, "failed to shrink resource set");
+        idset_destroy (ids);
+        if (rc < 0)
+            goto err;
     }
 
     if (expiration >= 0. && ss->rlist->expiration != expiration) {
