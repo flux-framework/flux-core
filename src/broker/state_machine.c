@@ -1333,6 +1333,17 @@ static void disconnect_cb (flux_t *h,
         flux_log_error (h, "error handling state-machine.disconnect");
 }
 
+static void state_machine_sd_notify_cb (flux_t *h,
+                                        flux_msg_handler_t *mh,
+                                        const flux_msg_t *msg,
+                                        void *arg)
+{
+    struct state_machine *s = arg;
+    const char *status = NULL;
+    (void)flux_request_unpack (msg, NULL, "{s?s}", "status", &status);
+    state_machine_sd_notify (s, status);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -1357,6 +1368,12 @@ static const struct flux_msg_handler_spec htab[] = {
         "state-machine.get",
         state_machine_get_cb,
         FLUX_ROLE_USER,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "state-machine.sd-notify",
+        state_machine_sd_notify_cb,
+        0,
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
