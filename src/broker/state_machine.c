@@ -1268,22 +1268,26 @@ static void disconnect_cb (flux_t *h,
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    {    FLUX_MSGTYPE_REQUEST,
+    {
+        FLUX_MSGTYPE_REQUEST,
         "state-machine.monitor",
         state_machine_monitor_cb,
-        0
+        0,
     },
-    {   FLUX_MSGTYPE_REQUEST,
+    {
+        FLUX_MSGTYPE_REQUEST,
         "state-machine.wait",
         state_machine_wait_cb,
-        FLUX_ROLE_USER
+        FLUX_ROLE_USER,
     },
-    {   FLUX_MSGTYPE_REQUEST,
+    {
+        FLUX_MSGTYPE_REQUEST,
         "state-machine.disconnect",
         disconnect_cb,
-        0
+        0,
     },
-    {    FLUX_MSGTYPE_REQUEST,
+    {
+        FLUX_MSGTYPE_REQUEST,
         "state-machine.get",
         state_machine_get_cb,
         FLUX_ROLE_USER,
