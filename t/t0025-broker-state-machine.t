@@ -344,12 +344,12 @@ test_expect_success 'create hanging rc3 for rank > 0' '
 	chmod +x rc3_hang
 '
 
-test_expect_success 'run instance with short shutdown timeout' '
+test_expect_success 'run instance with short shutdown warn period' '
 	flux start -s3 \
 		-Slog-filename=shutdown.log \
 		-Sbroker.rc1_path= \
 		-Sbroker.rc3_path="$(pwd)/rc3_hang" \
-		-Sbroker.shutdown-timeout=1s \
+		-Sbroker.shutdown-warn=1s \
 		true
 '
 test_expect_success 'appropriate message was logged' '

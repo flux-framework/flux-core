@@ -115,6 +115,11 @@ broker.quorum-warn [Updates: C]
    rank 0 broker waits for the ``broker.quorum`` set to come online before
    warning of slow joiners.   Default: ``60s``.
 
+broker.shutdown-warn [Updates: C]
+   During shutdown, the amount of time (in RFC 23 Flux Standard Duration
+   format) that a broker waits for its TBON children to disconnect before
+   warning of slow peers.  Default: ``60s``.
+
 broker.cleanup-timeout [Updates: C]
    The amount of time (in RFC 23 Flux Standard Duration format) that the
    rank 0 broker waits for cleanup actions to complete when the broker has

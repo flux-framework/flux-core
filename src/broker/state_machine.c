@@ -55,8 +55,8 @@ struct cleanup {
 };
 
 struct shutdown {
-    double timeout;
-    flux_watcher_t *timer;
+    double warn_period;
+    flux_watcher_t *warn_timer;
 };
 
 struct monitor {
@@ -165,7 +165,7 @@ static struct state_next nexttab[] = {
 };
 
 static const double default_quorum_warn = 60; // log slow joiners
-static const double default_shutdown_timeout = 60; // log slow shutdown
+static const double default_shutdown_warn = 60; // log slow shutdown
 static const double default_cleanup_timeout = -1;
 static const double goodbye_timeout = 60;
 
@@ -433,10 +433,10 @@ static void action_finalize (struct state_machine *s)
         state_machine_post (s, "rc3-none");
 }
 
-static void shutdown_timer_cb (flux_reactor_t *r,
-                               flux_watcher_t *w,
-                               int revents,
-                               void *arg)
+static void shutdown_warn_timer_cb (flux_reactor_t *r,
+                                    flux_watcher_t *w,
+                                    int revents,
+                                    void *arg)
 {
     struct state_machine *s = arg;
     struct idset *ranks = overlay_get_child_peer_idset (s->ctx->overlay);
@@ -454,7 +454,7 @@ static void shutdown_timer_cb (flux_reactor_t *r,
     free (rankstr);
     idset_destroy (ranks);
 
-    flux_timer_watcher_reset (w, s->shutdown.timeout, 0.);
+    flux_timer_watcher_reset (w, s->shutdown.warn_period, 0.);
     flux_watcher_start (w);
 }
 
@@ -472,9 +472,11 @@ static void action_shutdown (struct state_machine *s)
                     overlay_get_child_peer_count (s->ctx->overlay));
     }
 #endif
-    if (s->shutdown.timeout >= 0) {
-        flux_timer_watcher_reset (s->shutdown.timer, s->shutdown.timeout, 0.);
-        flux_watcher_start (s->shutdown.timer);
+    if (s->shutdown.warn_period >= 0) {
+        flux_timer_watcher_reset (s->shutdown.warn_timer,
+                                  s->shutdown.warn_period,
+                                  0.);
+        flux_watcher_start (s->shutdown.warn_timer);
     }
 }
 
@@ -1211,7 +1213,7 @@ static void overlay_monitor_cb (struct overlay *overlay,
             count = overlay_get_child_peer_count (overlay);
             if (count == 0) {
                 state_machine_post (s, "children-complete");
-                flux_watcher_stop (s->shutdown.timer);
+                flux_watcher_stop (s->shutdown.warn_timer);
             }
 #if HAVE_LIBSYSTEMD
             else {
@@ -1314,7 +1316,7 @@ void state_machine_destroy (struct state_machine *s)
         flux_watcher_destroy (s->quorum.warn_timer);
         flux_future_destroy (s->quorum.f);
         flux_watcher_destroy (s->cleanup.timer);
-        flux_watcher_destroy (s->shutdown.timer);
+        flux_watcher_destroy (s->shutdown.warn_timer);
         free (s);
         errno = saved_errno;
     }
@@ -1350,11 +1352,11 @@ struct state_machine *state_machine_create (struct broker *ctx)
                                                            0.,
                                                            cleanup_timer_cb,
                                                            s))
-        || !(s->shutdown.timer = flux_timer_watcher_create (r,
-                                                            0.,
-                                                            0.,
-                                                            shutdown_timer_cb,
-                                                            s)))
+        || !(s->shutdown.warn_timer = flux_timer_watcher_create (r,
+                                                        0.,
+                                                        0.,
+                                                        shutdown_warn_timer_cb,
+                                                        s)))
         goto error;
     flux_watcher_start (s->prep);
     flux_watcher_start (s->check);
@@ -1386,10 +1388,10 @@ struct state_machine *state_machine_create (struct broker *ctx)
         goto error;
     }
     if (timeout_configure (s,
-                           "broker.shutdown-timeout",
-                           &s->shutdown.timeout,
-                           default_shutdown_timeout) < 0) {
-        log_err ("error configuring shutdown timeout attribute");
+                           "broker.shutdown-warn",
+                           &s->shutdown.warn_period,
+                           default_shutdown_warn) < 0) {
+        log_err ("error configuring shutdown warn attribute");
         goto error;
     }
     norestart_configure (s);
