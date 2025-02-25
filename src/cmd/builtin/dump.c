@@ -11,9 +11,6 @@
 #if HAVE_CONFIG_H
 # include <config.h>
 #endif
-#if HAVE_LIBSYSTEMD
-#include <systemd/sd-daemon.h>
-#endif
 #include <unistd.h>
 #include <stdarg.h>
 #include <jansson.h>
@@ -65,32 +62,50 @@ void read_error (const char *fmt, ...)
     va_end (ap);
 }
 
-static void progress (int delta_keys)
+static void progress_notify (flux_t *h)
 {
-    keycount += delta_keys;
+    if (sd_notify_flag) {
+        flux_future_t *f;
+        char buf[64];
 
-    if (!verbose
-        && !quiet
-        && (keycount % 100 == 0 || keycount < 10))
-        fprintf (stderr, "\rflux-dump: archived %d keys", keycount);
-#if HAVE_LIBSYSTEMD
-    if (sd_notify_flag
-        && (keycount % 100 == 0 || keycount < 10)) {
-        sd_notifyf (0, "EXTEND_TIMEOUT_USEC=%d", 10000000); // 10s
-        sd_notifyf (0, "STATUS=flux-dump(1) has archived %d keys", keycount);
+        snprintf (buf,
+                  sizeof (buf),
+                  "flux-dump(1) has archived %d keys",
+                  keycount);
+        f = flux_rpc_pack (h,
+                           "state-machine.sd-notify",
+                           FLUX_NODEID_ANY,
+                           FLUX_RPC_NORESPONSE,
+                           "{s:s}",
+                           "status", buf);
+        flux_future_destroy (f);
     }
-#endif
 }
 
-static void progress_end (void)
+static void progress (flux_t *h, int delta_keys)
+{
+    static int last_keycount = 0;
+
+    keycount += delta_keys;
+
+    if (last_keycount == keycount
+        || !(keycount % 100 == 0 || keycount < 10))
+        return;
+
+    if (!verbose && !quiet)
+        fprintf (stderr, "\rflux-dump: archived %d keys", keycount);
+    if (sd_notify_flag)
+        progress_notify (h);
+
+    last_keycount = keycount;
+}
+
+static void progress_end (flux_t *h)
 {
     if (!quiet && !verbose)
         fprintf (stderr, "\rflux-dump: archived %d keys\n", keycount);
-#if HAVE_LIBSYSTEMD
-    if (sd_notify_flag) {
-        sd_notifyf (0, "STATUS=flux-dump(1) has archived %d keys", keycount);
-    }
-#endif
+    if (sd_notify_flag)
+        progress_notify (h);
 }
 
 static struct archive *dump_create (const char *outfile)
@@ -209,7 +224,7 @@ static void dump_valref (struct archive *ar,
         flux_msg_decref (msg);
     }
     archive_entry_free (entry);
-    progress (1);
+    progress (h, 1);
     flux_msglist_destroy (l);
 }
 
@@ -234,7 +249,7 @@ static void dump_val (struct archive *ar,
     if (archive_write_header (ar, entry) != ARCHIVE_OK)
         log_msg_exit ("%s", archive_error_string (ar));
     dump_write_data (ar, data, len);
-    progress (1);
+    progress (h, 1);
 
     archive_entry_free (entry);
     free (data);
@@ -265,7 +280,7 @@ static void dump_symlink (struct archive *ar,
     archive_entry_set_symlink (entry, target);
     if (archive_write_header (ar, entry) != ARCHIVE_OK)
         log_msg_exit ("%s", archive_error_string (ar));
-    progress (1);
+    progress (h, 1);
 
     free (target_with_ns);
     archive_entry_free (entry);
@@ -420,8 +435,7 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
      * start/stop, we can use it to ensure systemd doesn't kill us
      * while dumping during shutdown.  See flux-framework/flux-core#5778.
      */
-    const char *s;
-    if ((s = flux_attr_get (h, "broker.sd-notify")) && !streq (s, "0"))
+    if (optparse_hasopt (p, "sd-notify"))
         sd_notify_flag = true;
 
     ar = dump_create (outfile);
@@ -451,7 +465,7 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
         flux_future_destroy (f);
     }
 
-    progress_end ();
+    progress_end (h);
 
     dump_destroy (ar);
     flux_close (h);
@@ -474,6 +488,9 @@ static struct optparse_option dump_opts[] = {
     },
     { .name = "ignore-failed-read", .has_arg = 0,
       .usage = "Treat content load errors as non-fatal",
+    },
+    { .name = "sd-notify", .has_arg = 0,
+      .usage = "Send status updates to systemd via flux-broker(1)",
     },
     OPTPARSE_TABLE_END
 };

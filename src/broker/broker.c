@@ -421,9 +421,6 @@ int main (int argc, char *argv[])
         || init_critical_ranks_attr (ctx.overlay, ctx.attrs) < 0)
         goto cleanup;
 
-    if (create_runat_phases (&ctx) < 0)
-        goto cleanup;
-
     /* Wire up the overlay.
      */
     if (ctx.rank > 0) {
@@ -474,6 +471,12 @@ int main (int argc, char *argv[])
         log_err ("error creating broker state machine");
         goto cleanup;
     }
+    /* This registers a state machine callback so call after
+     * state_machine_create().
+     */
+    if (create_runat_phases (&ctx) < 0)
+        goto cleanup;
+
     state_machine_post (ctx.state_machine, "start");
 
     /* Create shutdown mechanism
@@ -746,7 +749,8 @@ static int create_runat_phases (broker_ctx_t *ctx)
     if (!(ctx->runat = runat_create (ctx->h,
                                      local_uri,
                                      jobid,
-                                     ctx->sd_notify))) {
+                                     (runat_notify_f)state_machine_sd_notify,
+                                     ctx->state_machine))) {
         log_err ("runat_create");
         return -1;
     }

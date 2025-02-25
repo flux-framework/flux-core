@@ -467,6 +467,15 @@ static void sdproc_destroy (struct sdproc *proc)
     }
 }
 
+/* Unset key 'k' in the dictionary named 'name'.
+ */
+static void unset_dict (json_t *o, const char *name, const char *k)
+{
+    json_t *dict;
+    if ((dict = json_object_get (o, name)))
+        json_object_del (dict, k);
+}
+
 /* Set a key 'k', value 'v' pair in the dictionary named 'name'.
  * The dictionary is created if it does not exist.
  * If key is already set, the previous value is overwritten.
@@ -618,6 +627,7 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
      */
     if (set_dict (proc->cmd, "env", "FLUX_URI", ctx->local_uri) < 0)
         goto error;
+    unset_dict (proc->cmd, "env", "NOTIFY_SOCKET"); // see sd_notify(3)
     /* Create channels for stdio as required by flags.
      */
     if (!(proc->in = sdexec_channel_create_input (ctx->h, "stdin")))

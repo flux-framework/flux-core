@@ -68,6 +68,11 @@ struct monitor {
     unsigned int parent_error:1;
 };
 
+struct systemd {
+    bool timeout_is_active;
+    double stop_timeout;
+};
+
 struct state_machine {
     struct broker *ctx;
     broker_state_t state;
@@ -84,6 +89,8 @@ struct state_machine {
     struct quorum quorum;
     struct cleanup cleanup;
     struct shutdown shutdown;
+
+    struct systemd sd;
 
     struct flux_msglist *wait_requests;
 
@@ -167,6 +174,7 @@ static struct state_next nexttab[] = {
 static const double default_quorum_warn = 60; // log slow joiners
 static const double default_shutdown_warn = 60; // log slow shutdown
 static const double default_cleanup_timeout = -1;
+static const double default_sd_stop_timeout = -1;
 static const double goodbye_timeout = 60;
 
 static void state_action (struct state_machine *s, broker_state_t state)
@@ -202,6 +210,54 @@ static broker_state_t state_next (broker_state_t current, const char *event)
     return current;
 }
 
+/* When systemd is tracking service stop, a SIGKILL will be sent to the broker
+ * if TimeoutStopSec is exceeded.  Call this function when stop begins, and
+ * each time the broker enters a new state thereafter, to extend the timeout.
+ * That way if a state consumes a bunch of time but eventually completes,
+ * the remaining states aren't running under diminishing time constraints.
+ */
+static void sd_timeout_reset (struct state_machine *s)
+{
+#if HAVE_LIBSYSTEMD
+    if (s->ctx->sd_notify) {
+        if (s->sd.timeout_is_active) {
+            if (s->sd.stop_timeout > 0) {
+                double timeout_usec = s->sd.stop_timeout * 1E6;
+                sd_notifyf (0, "EXTEND_TIMEOUT_USEC=%d", (int)timeout_usec);
+            }
+        }
+        else {
+            /* Uncomment to tell systemd to transition the unit to
+             * "deactivating" state and begin the stop timeout.
+             * For now, we don't inform systemd so flux-shutdown(1)
+             * escapes the timeout.
+             */
+            //sd_notify (0, "STOPPING=1");
+            s->sd.timeout_is_active = true;
+        }
+    }
+#endif
+}
+
+/* Update systemd status, if enabled and status is non-NULL.
+ * Reset the systemd stop timeout also, if it is running.
+ * N.B. this is registered as a runat_notify_f callback and is called
+ * from the state-machine.sd-notify RPC handler.
+ */
+void state_machine_sd_notify (struct state_machine *s, const char *status)
+{
+    if (s) {
+#if HAVE_LIBSYSTEMD
+        if (s->ctx->sd_notify) {
+            if (s->sd.timeout_is_active)
+                sd_timeout_reset (s);
+            if (status)
+                sd_notifyf (0, "STATUS=%s", status);
+        }
+#endif
+    }
+}
+
 static void action_init (struct state_machine *s)
 {
     s->ctx->online = true;
@@ -230,7 +286,8 @@ static void action_join (struct state_machine *s)
         join_check_parent (s);
     }
 #if HAVE_LIBSYSTEMD
-    sd_notify (0, "READY=1");
+    if (s->ctx->sd_notify)
+        sd_notify (0, "READY=1");
 #endif
 }
 
@@ -392,6 +449,7 @@ static void cleanup_timer_cb (flux_reactor_t *r,
 
 static void action_cleanup (struct state_machine *s)
 {
+    sd_timeout_reset (s);
     /* Prevent new downstream clients from saying hello, but
      * let existing ones continue to communicate so they can
      * shut down and disconnect.
@@ -418,6 +476,7 @@ static void action_cleanup (struct state_machine *s)
 
 static void action_finalize (struct state_machine *s)
 {
+    sd_timeout_reset (s);
     /* Now that all clients have disconnected, finalize all
      * downstream communication.
      */
@@ -461,6 +520,8 @@ static void shutdown_warn_timer_cb (flux_reactor_t *r,
 
 static void action_shutdown (struct state_machine *s)
 {
+    sd_timeout_reset (s);
+
     if (overlay_get_child_peer_count (s->ctx->overlay) == 0) {
         state_machine_post (s, "children-none");
         return;
@@ -495,6 +556,7 @@ static void goodbye_continuation (flux_future_t *f, void *arg)
 
 static void action_goodbye (struct state_machine *s)
 {
+    sd_timeout_reset (s);
     /* On rank 0, "goodbye" is posted by shutdown.c.
      * On other ranks, send a goodbye message and wait for a response
      * (with timeout) before continuing on.
@@ -1271,6 +1333,17 @@ static void disconnect_cb (flux_t *h,
         flux_log_error (h, "error handling state-machine.disconnect");
 }
 
+static void state_machine_sd_notify_cb (flux_t *h,
+                                        flux_msg_handler_t *mh,
+                                        const flux_msg_t *msg,
+                                        void *arg)
+{
+    struct state_machine *s = arg;
+    const char *status = NULL;
+    (void)flux_request_unpack (msg, NULL, "{s?s}", "status", &status);
+    state_machine_sd_notify (s, status);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -1295,6 +1368,12 @@ static const struct flux_msg_handler_spec htab[] = {
         "state-machine.get",
         state_machine_get_cb,
         FLUX_ROLE_USER,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "state-machine.sd-notify",
+        state_machine_sd_notify_cb,
+        0,
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -1385,6 +1464,13 @@ struct state_machine *state_machine_create (struct broker *ctx)
                            &s->cleanup.timeout,
                            default_cleanup_timeout) < 0) {
         log_err ("error configuring cleanup timeout attribute");
+        goto error;
+    }
+    if (timeout_configure (s,
+                           "broker.sd-stop-timeout",
+                           &s->sd.stop_timeout,
+                           default_sd_stop_timeout) < 0) {
+        log_err ("error configuring systemd stop timeout attribute");
         goto error;
     }
     if (timeout_configure (s,

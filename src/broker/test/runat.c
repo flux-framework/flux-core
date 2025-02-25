@@ -68,7 +68,7 @@ void basic (flux_t *h)
 
     ctx.h = h;
 
-    r = runat_create (h, "local://notreally", "f1234", false);
+    r = runat_create (h, "local://notreally", "f1234", NULL, NULL);
     ok (r != NULL,
         "runat_create works");
 
@@ -268,7 +268,7 @@ void badinput (flux_t *h)
     struct runat *r;
     int rc;
 
-    if (!(r = runat_create (h, NULL, NULL, false)))
+    if (!(r = runat_create (h, NULL, NULL, NULL, NULL)))
         BAIL_OUT ("runat_create failed");
 
     ok (runat_is_defined (NULL, "foo") == false,
