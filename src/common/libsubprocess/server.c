@@ -405,10 +405,11 @@ static void server_exec_cb (flux_t *h,
         errmsg = "error overriding FLUX_URI";
         goto error;
     }
-    /* Never propagate FLUX_PROXY_REMOTE to processes started from
-     * a subprocess server.
+    /* Never propagate some variables to processes
+     * started from a subprocess server.
      */
     flux_cmd_unsetenv (cmd, "FLUX_PROXY_REMOTE");
+    flux_cmd_unsetenv (cmd, "NOTIFY_SOCKET"); // see sd_notify(3)
 
     if (!(p = flux_local_exec_ex (flux_get_reactor (s->h),
                                   0,
