@@ -396,8 +396,10 @@ static void server_exec_cb (flux_t *h,
      * environment.
      */
     if (env[0] == NULL) {
-        if (cmd_set_env (cmd, environ) < 0)
+        if (cmd_set_env (cmd, environ) < 0) {
             errmsg = "error setting up command environment";
+            goto error;
+        }
     }
     /* Ensure FLUX_URI points to the local broker (overwrite).
      */
