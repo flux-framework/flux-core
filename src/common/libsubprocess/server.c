@@ -388,14 +388,23 @@ static void server_exec_cb (flux_t *h,
         goto error;
     }
 
-    /* if no environment sent, use local server environment */
-    if (!(env = cmd_env_expand (cmd))
-        || (env[0] == NULL && cmd_set_env (cmd, environ))
-        || flux_cmd_setenvf (cmd, 1, "FLUX_URI", "%s", s->local_uri) < 0) {
-        errmsg = "error setting up command environment";
+    if (!(env = cmd_env_expand (cmd))) {
+        errmsg = "could not expand command environment";
         goto error;
     }
-
+    /* If no environment is set in the command object, use the local server
+     * environment.
+     */
+    if (env[0] == NULL) {
+        if (cmd_set_env (cmd, environ) < 0)
+            errmsg = "error setting up command environment";
+    }
+    /* Ensure FLUX_URI points to the local broker (overwrite).
+     */
+    if (flux_cmd_setenvf (cmd, 1, "FLUX_URI", "%s", s->local_uri) < 0) {
+        errmsg = "error overriding FLUX_URI";
+        goto error;
+    }
     /* Never propagate FLUX_PROXY_REMOTE to processes started from
      * a subprocess server.
      */
