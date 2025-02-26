@@ -18,12 +18,6 @@
 #include "jobspec.h"
 #include "rcalc.h"
 
-struct res_level {
-    const char *type;
-    int count;
-    json_t *with;
-};
-
 static void set_error (json_error_t *error, const char *fmt, ...)
 {
     va_list ap;
@@ -127,6 +121,7 @@ struct jobspec *jobspec_parse (const char *jobspec, rcalc_t *r, json_error_t *er
     json_t *resources;
     json_t *count;
     bool is_node_specified;
+    const char *type;
 
     if (!(job = calloc (1, sizeof (*job)))) {
         set_error (error, "Out of memory");
@@ -172,23 +167,41 @@ struct jobspec *jobspec_parse (const char *jobspec, rcalc_t *r, json_error_t *er
         goto error;
     }
 
-    if (recursive_get_slot_count (&job->slot_count,
-                                  resources,
-                                  error,
-                                  &is_node_specified,
-                                  0) < 0) {
-        // recursive_get_slot_count calls set_error
-        goto error;
-    }
-    if (is_node_specified) {
-        job->node_count = rcalc_total_nodes (r);
-        job->slots_per_node = job->slot_count;
-        job->slot_count *= job->node_count;
+    if (r != NULL && rcalc_total_slots (r) > 0) {
+        job->slot_count = rcalc_total_slots (r);
+        job->cores_per_slot = rcalc_total_cores (r) / job->slot_count;
+        /* Check whether nodes were explicitly specified in jobspec
+         */
+        if (json_unpack_ex (resources, error, 0, "[{s:s}]", "type", &type) < 0) {
+            goto error;
+        }
+        if (streq (type, "node")) {
+            job->node_count = rcalc_total_nodes (r);
+            job->slots_per_node = job->slot_count / job->node_count;
+        }
+        else {
+            job->node_count = -1;
+            job->slots_per_node = -1;
+        }
     } else {
-        job->node_count = -1;
-        job->slots_per_node = -1;
+        if (recursive_get_slot_count (&job->slot_count,
+                                      resources,
+                                      error,
+                                      &is_node_specified,
+                                      0) < 0) {
+            // recursive_get_slot_count calls set_error
+            goto error;
+        }
+        if (is_node_specified) {
+            job->node_count = rcalc_total_nodes (r);
+            job->slots_per_node = job->slot_count;
+            job->slot_count *= job->node_count;
+        } else {
+            job->node_count = -1;
+            job->slots_per_node = -1;
+        }
+        job->cores_per_slot = rcalc_total_cores (r) / job->slot_count;
     }
-    job->cores_per_slot = rcalc_total_cores (r) / job->slot_count;
 
     /* Set job->task_count
      */

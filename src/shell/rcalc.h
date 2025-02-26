@@ -44,6 +44,8 @@ int rcalc_total_ntasks (rcalc_t *r);
 int rcalc_total_cores (rcalc_t *r);
 /*  Return # of total gpus asssigned to rcalc object */
 int rcalc_total_gpus (rcalc_t *r);
+/*  Return total # of slots in rcalc object */
+int rcalc_total_slots (rcalc_t *r);
 /*  Return total # of nodes/ranks in rcalc object */
 int rcalc_total_nodes (rcalc_t *r);
 /*  Return the total # of nodes/ranks with at least 1 task assigned */
