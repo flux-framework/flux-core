@@ -249,56 +249,17 @@ test_expect_success 'checkpoint-put bad request fails with EPROTO' '
 	grep "Protocol error" badput.err
 '
 
-test_expect_success 'remove content-files module' '
-	flux module remove content-files
-'
-
-test_expect_success 'checkpoint-put foo w/ rootref spoon' '
-       checkpoint_put foo spoon
-'
-
-test_expect_success 'checkpoint-get foo returned rootref spoon' '
-       echo spoon >rootref7.exp &&
-       checkpoint_get foo | jq -r .value | jq -r .rootref >rootref7.out &&
-       test_cmp rootref7.exp rootref7.out
-'
-
-test_expect_success 'load content-files module on rank 0' '
-       flux module load content-files
-'
-
-# arg1 - expected reference
-wait_checkpoint_flush() {
-        local expected=$1
-        local i=0
-        while checkpoint_backing_get foo \
-                | jq -r .value \
-                | jq -r .rootref > checkpointflush.out \
-              && [ $i -lt 50 ]
-        do
-            checkpoint=$(cat checkpointflush.out)
-            if [ "${checkpoint}" = "${expected}" ]
-            then
-                return 0
-            fi
-            sleep 0.1
-            i=$((i + 1))
-        done
-        return 1
-}
-
-test_expect_success 'checkpoint-backing-get foo returns spoon' '
-       wait_checkpoint_flush spoon
-'
-
 test_expect_success 'flux module stats content-files is open to guests' '
 	FLUX_HANDLE_ROLEMASK=0x2 \
 	    flux module stats content-files >/dev/null
 '
 
-test_expect_success 'remove content-files module on rank 0' '
-       flux content flush &&
-       flux module remove content-files
+test_expect_success 'remove content-files module' '
+	flux module remove content-files
+'
+
+test_expect_success 'checkpoint-put foo w/ rootref spoon fails without backing' '
+       test_must_fail checkpoint_put foo spoon
 '
 
 test_expect_success 'remove content module' '
