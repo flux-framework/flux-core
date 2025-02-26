@@ -285,6 +285,21 @@ static int prop_add (json_t *prop, const char *name, const char *val)
         if (prop_add_bool (prop, name, value) < 0)
             return -1;
     }
+    else if (streq (name, "TimeoutStopUSec")) {
+        if (streq (val, "infinity")) {
+            if (prop_add_u64 (prop, name, UINT64_MAX) < 0)
+                return -1;
+        }
+        else {
+            errno = 0;
+            char *endptr;
+            uint64_t u = strtoull (val, &endptr, 10);
+            if (errno != 0 || *endptr != '\0')
+                return -1;
+            if (prop_add_u64 (prop, name, u) < 0)
+                return -1;
+        }
+    }
     else {
         if (prop_add_string (prop, name, val) < 0)
             return -1;
