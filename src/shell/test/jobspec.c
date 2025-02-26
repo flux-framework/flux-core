@@ -200,7 +200,7 @@ int main (int argc, char **argv)
     int i;
 
     for (i = 0; good_input[i].desc; i++) {
-        js = jobspec_parse (good_input[i].s, &error);
+        js = jobspec_parse (good_input[i].s, NULL, &error);
         ok (js != NULL, "good.%d (%s) works", i, good_input[i].desc);
         if (!js) {
             diag ("%s", error.text);
@@ -235,7 +235,7 @@ int main (int argc, char **argv)
     }
 
     for (i = 0; bad_input[i].desc; i++) {
-        js = jobspec_parse (bad_input[i].s, &error);
+        js = jobspec_parse (bad_input[i].s, NULL, &error);
         ok (js == NULL, "bad.%d (%s) fails", i, bad_input[i].desc);
         if (!js)
             diag ("%s", error.text);

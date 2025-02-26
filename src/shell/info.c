@@ -171,7 +171,16 @@ static int shell_init_jobinfo (flux_shell_t *shell, struct shell_info *info)
         shell_log_error ("error fetching jobspec");
         goto out;
     }
-    if (!(info->jobspec = jobspec_parse (jobspec, &error))) {
+
+    /*  Synchronously get initial version of R from first job-info
+     *  watch response:
+     */
+    if (resource_watch_update (info) < 0)
+        goto out;
+
+    /*  Parse jobspec after R so resource information can be read from R:
+     */
+    if (!(info->jobspec = jobspec_parse (jobspec, info->rcalc, &error))) {
         shell_log_error ("error parsing jobspec: %s", error.text);
         goto out;
     }
@@ -179,12 +188,6 @@ static int shell_init_jobinfo (flux_shell_t *shell, struct shell_info *info)
         shell_warn ("Unsupported jobspec version: expected 1 got %d",
                     info->jobspec->version);
     }
-
-    /*  Synchronously get initial version of R from first job-info
-     *  watch response:
-     */
-    if (resource_watch_update (info) < 0)
-        goto out;
 
     /*  Register callback for future R updates:
      */
