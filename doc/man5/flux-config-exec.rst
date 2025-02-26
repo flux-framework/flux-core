@@ -38,6 +38,21 @@ sdexec-properties
    (optional) A table of systemd properties to set for all jobs.  All values
    must be strings. See :ref:`sdexec_properties` below.
 
+sdexec-stop-timer-sec
+   (optional) Configure the length of time in seconds after a unit enters
+   deactivating state when it will be sent the sdexec-stop-timer-signal.
+   Deactivating state is entered by ``imp-shell`` units when the
+   :man1:`flux-shell` terminates.  The unit may remain there as long as
+   user processes remain in the unit's cgroup.
+
+   After the same length of time, if the unit hasn't terminated, for example
+   due to unkillable processes, the unit is abandoned and the node is drained.
+   Default 30.
+
+sdexec-stop-timer-signal
+   (optional) Configure the signal used by the stop timer.  By default,
+   10 (SIGUSR1, the IMP proxy for SIGKILL) is used.
+
 kill-timeout
    (optional) The amount of time in FSD to wait after ``SIGTERM`` is
    sent to a job before sending ``SIGKILL``. The default is "5s". See
