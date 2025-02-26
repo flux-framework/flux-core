@@ -16,6 +16,7 @@
 #include "ccan/str/str.h"
 
 #include "jobspec.h"
+#include "rcalc.h"
 
 struct res_level {
     const char *type;
@@ -211,7 +212,51 @@ static int recursive_parse_jobspec_resources (struct jobspec *job,
     return rc;
 }
 
-struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
+static int recursive_get_slot_count (json_t *curr_resource,
+                                     json_error_t *error,
+                                     bool *is_node_specified,
+                                     int level)
+{
+    const char *type;
+    json_t *count;
+    json_t *with = NULL;
+
+    if (json_array_size (curr_resource) == 0) {
+        set_error (error,
+                   "level %d: Malformed jobspec: resource entry missing or not a list",
+                   level);
+        return -1;
+    }
+
+    /* For jobspec version 1, expect exactly one array element per level.
+     */
+    if (json_unpack_ex (curr_resource, error, 0,
+                        "[{s:s s:o s?o}]",
+                        "type", &type,
+                        "count", &count,
+                        "with", &with) < 0) {
+        set_error (error, "level %d: %s", level, error->text);
+        return -1;
+    }
+
+    if (streq (type, "slot")) {
+        if (!json_is_integer (count)) {
+            set_error (error, "count must be integer for slot resource");
+            return -1;
+        }
+        return json_integer_value (count);
+    }
+    if (streq (type, "node")) {
+        *is_node_specified = true;
+    }
+    if (!with) {
+        set_error (error, "Missing slot resource");
+        return -1;
+    }
+    return recursive_get_slot_count (with, error, is_node_specified, level+1);
+}
+
+struct jobspec *jobspec_parse (const char *jobspec, rcalc_t *r, json_error_t *error)
 {
     struct jobspec *job;
     json_t *resources;
@@ -261,9 +306,29 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
         goto error;
     }
 
-    if (recursive_parse_jobspec_resources (job, resources, error) < 0) {
-        // recursive_parse_jobspec_resources calls set_error
-        goto error;
+    if (r) {
+        bool is_node_specified = false;
+        if ((job->slot_count = recursive_get_slot_count (resources,
+                                                         error,
+                                                         &is_node_specified,
+                                                         0)) < 0) {
+            // recursive_get_slot_count calls set_error
+            goto error;
+        }
+        if (is_node_specified) {
+            job->node_count = rcalc_total_nodes (r);
+            job->slots_per_node = job->slot_count;
+            job->slot_count *= job->node_count;
+        } else {
+            job->node_count = -1;
+            job->slots_per_node = -1;
+        }
+        job->cores_per_slot = rcalc_total_cores (r) / job->slot_count;
+    } else {
+        if (recursive_parse_jobspec_resources (job, resources, error) < 0) {
+            // recursive_parse_jobspec_resources calls set_error
+            goto error;
+        }
     }
 
     /* Set job->task_count
