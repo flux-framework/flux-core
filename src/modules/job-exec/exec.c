@@ -519,6 +519,7 @@ static int parse_service_option (json_t *jobspec,
     return 0;
 }
 
+
 static struct bulk_exec_ops exec_ops = {
     .on_start =     start_cb,
     .on_exit =      exit_cb,
@@ -604,14 +605,27 @@ static int exec_init (struct jobinfo *job)
             goto err;
         }
         /* The systemd user instance running as user flux is not privileged
-         * to signal guest processes, therefore only signal the IMP and
-         * never use SIGKILL.  See flux-framework/flux-core#6399
+         * to signal guest processes, therefore:
+         * - Set the KillMode=process so only the IMP is signaled
+         * - Use Type=notify in conjunction with IMP calling sd_notify(3) so
+         *   the unit transitions to deactivating when the shell exits.
+         * - Set TimeoutStopUsec=infinity to disable systemd's stop timeout.
+         * - Enable sdexec's stop timeout which is armed at deactivating,
+         *   delivers SIGUSR1 (proxy for SIGKILL) after 30s, then abandons
+         *   the unit and terminates the exec RPC after another 30s.
          */
         if (streq (service, "sdexec")) {
             if (flux_cmd_setopt (cmd, "SDEXEC_PROP_KillMode", "process") < 0
+                || flux_cmd_setopt (cmd, "SDEXEC_PROP_Type", "notify") < 0
                 || flux_cmd_setopt (cmd,
-                                    "SDEXEC_PROP_SendSIGKILL",
-                                    "off") < 0) {
+                                    "SDEXEC_PROP_TimeoutStopUSec",
+                                    "infinity") < 0
+                || flux_cmd_setopt (cmd,
+                                    "SDEXEC_STOP_TIMER_SIGNAL",
+                                    config_get_sdexec_stop_timer_signal ()) < 0
+                || flux_cmd_setopt (cmd,
+                                    "SDEXEC_STOP_TIMER_SEC",
+                                    config_get_sdexec_stop_timer_sec ()) < 0) {
                 flux_log_error (job->h,
                                 "Unable to set multiuser sdexec options");
                 return -1;
