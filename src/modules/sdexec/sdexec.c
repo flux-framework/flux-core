@@ -726,7 +726,6 @@ static void exec_cb (flux_t *h,
     if (!(proc->f_start = sdexec_start_transient_unit (h,
                                              ctx->rank,
                                              "fail", // mode
-                                             "exec", // type
                                              proc->cmd,
                                              sdexec_channel_get_fd (proc->in),
                                              sdexec_channel_get_fd (proc->out),

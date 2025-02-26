@@ -308,7 +308,6 @@ static int prop_add (json_t *prop, const char *name, const char *val)
 }
 
 static json_t *prop_create (json_t *cmd,
-                            const char *type,
                             int stdin_fd,
                             int stdout_fd,
                             int stderr_fd,
@@ -322,6 +321,7 @@ static json_t *prop_create (json_t *cmd,
     json_t *opts;
     const char *key;
     json_t *val;
+    bool type_is_set = false;
 
     // Not unpacked: channels
     if (json_unpack_ex (cmd,
@@ -343,7 +343,6 @@ static json_t *prop_create (json_t *cmd,
         return NULL;
     }
     if (prop_add_execstart (prop, "ExecStart", cmdline) < 0
-        || prop_add_string (prop, "Type", type) < 0
         || prop_add_string (prop, "WorkingDirectory", cwd) < 0
         || prop_add_bool (prop, "RemainAfterExit", true) < 0
         || prop_add_env (prop, "Environment", env) < 0
@@ -360,6 +359,14 @@ static json_t *prop_create (json_t *cmd,
                 errprintf (error, "%s: error setting property", key);
                 goto error;
             }
+            if (streq (key + 12, "Type"))
+                type_is_set = true;
+        }
+    }
+    if (!type_is_set) {
+        if (prop_add_string (prop, "Type", "exec") < 0) {
+            errprintf (error, "error setting property Type=simple");
+            goto error;
         }
     }
     return prop;
@@ -372,7 +379,6 @@ error:
 flux_future_t *sdexec_start_transient_unit (flux_t *h,
                                             uint32_t rank,
                                             const char *mode,
-                                            const char *type,
                                             json_t *cmd,
                                             int stdin_fd,
                                             int stdout_fd,
@@ -383,13 +389,12 @@ flux_future_t *sdexec_start_transient_unit (flux_t *h,
     json_t *prop = NULL;
     const char *name;
 
-    if (!h || !mode || !type || !cmd) {
+    if (!h || !mode || !cmd) {
         errprintf (error, "invalid argument");
         errno = EINVAL;
         return NULL;
     }
     if (!(prop = prop_create (cmd,
-                              type,
                               stdin_fd,
                               stdout_fd,
                               stderr_fd,
