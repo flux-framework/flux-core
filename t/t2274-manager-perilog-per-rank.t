@@ -426,6 +426,18 @@ test_expect_success 'perilog: job does not start when prolog cancel times out' '
 	test_must_fail grep "start$" prolog-cancel-eventlog.out &&
 	grep epilog-start prolog-cancel-eventlog.out
 '
+test_expect_success 'perilog: prolog has FLUX_JOB_RANKS environment variable' '
+	undrain_all &&
+	flux config load <<-EOF &&
+	[job-manager.prolog]
+	per-rank = true
+	command = [ "sh", "-c", "test \$FLUX_JOB_RANKS\" = \"0-3\"" ]
+	EOF
+	jobid=$(flux submit -N4 hostname) &&
+	flux job wait-event -vHt 30 $jobid prolog-start &&
+	flux job wait-event -vHt 30 $jobid clean
+'
+
 test_expect_success 'perilog: log-ignore works' '
 	undrain_all &&
 	flux config load <<-EOF &&
