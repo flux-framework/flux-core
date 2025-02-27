@@ -333,6 +333,17 @@ then the following are set to allow Flux commands to work from the script:
 - :envvar:`FLUX_EXEC_PATH`
 - :envvar:`FLUX_CONNECTOR_PATH`
 
+In addition, the following extra environment variables are set in the
+prolog and epilog for convenience:
+
+- :envvar:`FLUX_JOB_RANKS` - the broker ranks which were assigned to the
+  job for which the current prolog or epilog is running. This can be
+  used in conjunction with the ``hostlist`` attribute to construct the
+  job hostlist. For example:
+
+  .. code-block:: shell
+
+   FLUX_JOB_HOSTLIST=$(flux hostlist --nth=${FLUX_JOB_RANKS} instance)
 
 TESTING
 =======
