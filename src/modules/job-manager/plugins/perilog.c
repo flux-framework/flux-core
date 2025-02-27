@@ -933,7 +933,7 @@ static int run_command (flux_plugin_t *p,
     return 0;
 error:
     perilog_proc_destroy (proc);
-    return 01;
+    return -1;
 }
 
 static int run_cb (flux_plugin_t *p,
