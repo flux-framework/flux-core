@@ -401,6 +401,9 @@ test_expect_success 'perilog: epilog failure drains ranks' '
 	test "$(flux resource drain -no {reason})" = "epilog failed for job $jobid" &&
 	undrain_all
 '
+test_expect_success 'perilog: epilog failure raises non-fatal job exception' '
+	flux job wait-event -vHt 30 $jobid exception
+'
 test_expect_success 'perilog: job does not start when prolog cancel times out' '
 	undrain_all &&
 	flux config load <<-EOF &&
