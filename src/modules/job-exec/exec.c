@@ -347,7 +347,42 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
      *   create flux_cmd_t
      */
     if (cmd) {
-        if (errnum == EHOSTUNREACH) {
+        if (errnum == EDEADLK) {
+            /*  EDEADLK from sdexec means that unkillable processes were left
+             *   on the node and it must be drained.  A "finished" response
+             *   will not have been received, so after draining, treat this
+             *   like EHOSTUNREACH.
+             */
+            char ranks[16];
+            snprintf (ranks, sizeof (ranks), "%d", rank);
+            (void) jobinfo_drain_ranks (job,
+                                        ranks,
+                                        "unkillable processes from job %s",
+                                        idf58 (job->id));
+            bool critical = is_critical_rank (job, shell_rank);
+
+            /*  Always notify rank 0 shell of a lost shell.
+             */
+            lost_shell (job,
+                        critical,
+                        shell_rank,
+                        "shell exited with unkillable processes"
+                        " on %s (shell rank %d)",
+                        hostname,
+                        shell_rank);
+
+            /*  Raise a fatal error and terminate job immediately if
+             *  the lost shell was critical.
+             */
+            if (critical)
+                jobinfo_fatal_error (job,
+                                     0,
+                                     "shell exited with unkillable processes"
+                                     " on %s (rank %d)",
+                                     hostname,
+                                     rank);
+        }
+        else if (errnum == EHOSTUNREACH) {
             bool critical = is_critical_rank (job, shell_rank);
 
             /*  Always notify rank 0 shell of a lost shell.
