@@ -439,12 +439,27 @@ static void emit_finish_event (struct perilog_proc *proc,
     }
     else {
         /*
+         *  Raise a non-fatal job exception on failure so that the job
+         *   status reflects the status of the user job and not the status
+         *   of the epilog.
+         */
+        if ((status != 0 && !proc->canceled) || proc->cancel_timeout) {
+            char *errmsg = exception_errmsg (proc, status);
+            if (flux_jobtap_raise_exception (proc->p,
+                                             proc->id,
+                                             "epilog",
+                                             2,
+                                             "%s",
+                                             errmsg ?
+                                             errmsg :
+                                             "job epilog failed") < 0)
+                    flux_log_error (flux_jobtap_get_flux (proc->p),
+                                    "epilog-finish: jobtap_raise_exception");
+            free (errmsg);
+        }
+        /*
          *  Epilog complete: unsubscribe this plugin from the
          *   finished job and post an epilog-finish event.
-         *
-         *  No job exception is raised since the job is already exiting,
-         *   and it is expected that the actual epilog script will
-         *   drain nodes or take other action on failure if necessary.
          */
         flux_jobtap_job_unsubscribe (proc->p, proc->id);
         if (flux_jobtap_epilog_finish (proc->p,
