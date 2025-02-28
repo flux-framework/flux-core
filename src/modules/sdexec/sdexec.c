@@ -29,6 +29,9 @@
 #define UUID_STR_LEN 37     // defined in later libuuid headers
 #endif
 #include <flux/core.h>
+#if HAVE_FLUX_SECURITY
+#include <flux/security/version.h>
+#endif
 
 
 #include "src/common/libsubprocess/client.h"
@@ -1326,11 +1329,36 @@ static int sdbus_is_loaded (flux_t *h, uint32_t rank, flux_error_t *error)
     return 0;
 }
 
+static int check_security_version (void)
+{
+#if HAVE_FLUX_SECURITY
+    int major, minor;
+
+    if (flux_security_version (&major, &minor, NULL) < 0
+        || (major == 0 && minor < 14)) {
+        errno = EINVAL;
+        return -1;
+    }
+#endif /* HAVE_FLUX_SECURITY */
+    return 0;
+}
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
     struct sdexec_ctx *ctx;
     flux_error_t error;
     int rc = -1;
+
+    /* sdexec launches work in transient Type=notify containers, but
+     * this functionality requires flux-security v0.14.0 or greater.
+     * Check for correct flux-security version here and abort if the
+     * requirement is not met (check is skipped if flux-core is not
+     * built with flux-security):
+     */
+    if (check_security_version () < 0) {
+        flux_log (h, LOG_ERR, "sdexec requires flux-security >= v0.14.0 ");
+        return -1;
+    }
 
     if (!(ctx = sdexec_ctx_create (h)))
         goto error;
