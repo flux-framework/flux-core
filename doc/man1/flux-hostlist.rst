@@ -70,6 +70,12 @@ OPTIONS
   '0-1' will return the first and second, '-1' returns the last host).  The
   command will fail if any id in *IDS* is not a valid index.
 
+.. option:: -F, --find=HOSTS
+
+  Output a list of space-separated indices of *HOSTS* in the result hostlist,
+  where *HOSTS* should be one or more hosts in hostlist form. The command
+  will fail if any host in *HOSTS* is not found.
+
 .. option:: -L, --limit=N
 
   Output at most *N* hosts (*-N* to output the last *N* hosts).
