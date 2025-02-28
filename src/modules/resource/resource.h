@@ -20,6 +20,7 @@ struct resource_config {
     bool no_update_watch;
     bool monitor_force_up;
     int journal_max;
+    bool systemd_enable; // systemd.enable, not under [resource]
 };
 
 struct resource_ctx {

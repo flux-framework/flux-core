@@ -13,7 +13,7 @@
 
 struct monitor *monitor_create (struct resource_ctx *ctx,
                                 int inventory_size,
-                                bool monitor_force_up);
+                                struct resource_config *config);
 void monitor_destroy (struct monitor *monitor);
 
 const struct idset *monitor_get_down (struct monitor *monitor);
