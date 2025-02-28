@@ -21,8 +21,6 @@
  * and systemd.service(5) for more info on mode and type parameters.
  * mode may be one of:
      replace, fail, isolate, ignore-dependencies, ignore-requirements
- * type may be one of:
- *   simple, exec, forking, oneshot, dbus, notify, notify-reload, idle
  *
  * stdin_fd, stdout_fd, and stderr_fd are file descriptors to be duped and
  * passed to the new unit.  The dup should be complete on first fulfillment
@@ -50,7 +48,6 @@
 flux_future_t *sdexec_start_transient_unit (flux_t *h,
                                             uint32_t rank,
                                             const char *mode,
-                                            const char *type,
                                             json_t *cmd,
                                             int stdin_fd,
                                             int stdout_fd,

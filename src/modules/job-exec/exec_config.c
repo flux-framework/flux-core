@@ -36,6 +36,8 @@ struct exec_config {
     const char *exec_service;
     int exec_service_override;
     json_t *sdexec_properties;
+    int sdexec_stop_timer_sec;
+    int sdexec_stop_timer_signal;
     double default_barrier_timeout;
 };
 
@@ -107,6 +109,20 @@ json_t *config_get_sdexec_properties (void)
     return exec_conf.sdexec_properties;
 }
 
+const char *config_get_sdexec_stop_timer_sec (void)
+{
+    static char buf[32];
+    snprintf (buf, sizeof (buf), "%d", exec_conf.sdexec_stop_timer_sec);
+    return buf;
+}
+
+const char *config_get_sdexec_stop_timer_signal  (void)
+{
+    static char buf[32];
+    snprintf (buf, sizeof (buf), "%d", exec_conf.sdexec_stop_timer_signal);
+    return buf;
+}
+
 double config_get_default_barrier_timeout (void)
 {
     return exec_conf.default_barrier_timeout;
@@ -116,7 +132,7 @@ int config_get_stats (json_t **config_stats)
 {
     json_t *o = NULL;
 
-    if (!(o = json_pack ("{s:s? s:s? s:s? s:s? s:i s:f}",
+    if (!(o = json_pack ("{s:s? s:s? s:s? s:s? s:i s:f s:i s:i}",
                          "default_cwd", default_cwd,
                          "default_job_shell", exec_conf.default_job_shell,
                          "flux_imp_path", exec_conf.flux_imp_path,
@@ -124,7 +140,11 @@ int config_get_stats (json_t **config_stats)
                          "exec_service_override",
                          exec_conf.exec_service_override,
                          "default_barrier_timeout",
-                         exec_conf.default_barrier_timeout))) {
+                         exec_conf.default_barrier_timeout,
+                         "sdexec_stop_timer_sec",
+                         exec_conf.sdexec_stop_timer_sec,
+                         "sdexec_stop_timer_signal",
+                         exec_conf.sdexec_stop_timer_signal))) {
         errno = ENOMEM;
         return -1;
     }
@@ -153,6 +173,8 @@ static void exec_config_init (struct exec_config *ec)
     ec->exec_service = "rexec";
     ec->exec_service_override = 0;
     ec->sdexec_properties = NULL;
+    ec->sdexec_stop_timer_sec = 30;
+    ec->sdexec_stop_timer_signal = 10; // SIGUSR1
     ec->default_barrier_timeout = 1800.;
 }
 
@@ -247,6 +269,22 @@ int config_setup (flux_t *h,
                 return -1;
             }
         }
+    }
+
+    /*  Check configuration for exec.stop-timer-* */
+    if (flux_conf_unpack (conf,
+                          &err,
+                          "{s?{s?i s?i}}",
+                          "exec",
+                            "sdexec-stop-timer-sec",
+                              &tmpconf.sdexec_stop_timer_sec,
+                            "sdexec-stop-timer-signal",
+                              &tmpconf.sdexec_stop_timer_signal) < 0) {
+        errprintf (errp,
+                   "error reading config values exec.sdexec-stop-timer-sec: %s"
+                   " or exec.sdexec-stop-timer-signal",
+                   err.text);
+        return -1;
     }
 
     /*  Check configuration for exec.barrier-timeout */

@@ -57,6 +57,20 @@ struct sdexec_ctx {
     struct flux_msglist *kills;
 };
 
+enum stop_timer_state {
+    STOP_TIMER_OFF,
+    STOP_TIMER_SIGKILL,
+    STOP_TIMER_ABANDON,
+};
+
+struct stop_timer {
+    flux_watcher_t *timer;
+    enum stop_timer_state state;
+    int kill_signal;
+    int timeout_sec;
+    bool timed_out;
+};
+
 struct sdproc {
     const flux_msg_t *msg;
     json_t *cmd;
@@ -74,12 +88,16 @@ struct sdproc {
     uint8_t out_eof_sent:1;
     uint8_t err_eof_sent:1;
 
+    struct stop_timer stop;
+
     int errnum;
     const char *errstr;
     flux_error_t error;
 
     struct sdexec_ctx *ctx;
 };
+
+static const int default_stop_timeout_sec = -1; // disabled by default
 
 static bool sdexec_debug;
 
@@ -174,7 +192,13 @@ static void exec_respond_error (struct sdproc *proc,
  */
 static void finalize_exec_request_if_done (struct sdproc *proc)
 {
-    if (sdexec_unit_state (proc->unit) == STATE_INACTIVE
+    if (proc->stop.timed_out) {
+        exec_respond_error (proc,
+                            EDEADLK,
+                            "Processes did not respond to SIGKILL."
+                            " Abandoning unit as is.");
+    }
+    else if (sdexec_unit_state (proc->unit) == STATE_INACTIVE
         && sdexec_unit_substate (proc->unit) == SUBSTATE_DEAD
         && (!proc->out || proc->out_eof_sent)
         && (!proc->err || proc->err_eof_sent)) {
@@ -205,6 +229,51 @@ static void finalize_exec_request_if_done (struct sdproc *proc)
         }
         else
             exec_respond_error (proc, ENODATA, NULL);
+    }
+}
+
+static void stop_timer_start (struct stop_timer *stop,
+                              enum stop_timer_state state)
+{
+    if (stop->timeout_sec < 0)
+        return; // stop timer is disabled
+    stop->state = state;
+    flux_timer_watcher_reset (stop->timer, (double)stop->timeout_sec, 0.);
+    flux_watcher_start (stop->timer);
+}
+
+static void stop_timer_cb (flux_reactor_t *r,
+                           flux_watcher_t *w,
+                           int revents,
+                           void *arg)
+{
+    struct sdproc *proc = arg;
+
+    switch (proc->stop.state) {
+        case STOP_TIMER_SIGKILL:
+            sdexec_log_debug (proc->ctx->h,
+                              "%s: killing after %ds stop timeout",
+                              sdexec_unit_name (proc->unit),
+                              proc->stop.timeout_sec);
+            flux_future_t *f = NULL;
+            f = sdexec_kill_unit (proc->ctx->h,
+                                  proc->ctx->rank,
+                                  sdexec_unit_name (proc->unit),
+                                  "main",
+                                  proc->stop.kill_signal);
+            flux_future_destroy (f);
+            stop_timer_start (&proc->stop, STOP_TIMER_ABANDON);
+            break;
+        case STOP_TIMER_ABANDON:
+            sdexec_log_debug (proc->ctx->h,
+                              "%s: abandoning after %ds stop timeout",
+                              sdexec_unit_name (proc->unit),
+                              proc->stop.timeout_sec * 2);
+            proc->stop.timed_out = true;
+            finalize_exec_request_if_done (proc); // destroys proc
+            break;
+        case STOP_TIMER_OFF:
+            break;
     }
 }
 
@@ -313,6 +382,13 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
             }
             proc->f_stop = f2;
         }
+    }
+    /* If the unit reaches deactivating state, start the stop timer.
+     * The stop timer is necessary to help imp-shell make progress if the
+     * shell has exited but processes remain in the cgroup.
+     */
+    if (sdexec_unit_state (proc->unit) == STATE_DEACTIVATING) {
+        stop_timer_start (&proc->stop, STOP_TIMER_SIGKILL);
     }
     /* If the unit reaches failed.failed call ResetFailedUnit to cause stdout
      * and stderr to reach eof, and the unit to transition to inactive.dead.
@@ -460,6 +536,7 @@ static void sdproc_destroy (struct sdproc *proc)
         flux_future_destroy (proc->f_start);
         flux_future_destroy (proc->f_stop);
         sdexec_unit_destroy (proc->unit);
+        flux_watcher_destroy (proc->stop.timer);
         json_decref (proc->cmd);
         flux_msglist_destroy (proc->write_requests);
         free (proc);
@@ -519,6 +596,26 @@ static int get_dict (json_t *o,
         return -1;
     }
     *vp = v;
+    return 0;
+}
+
+static int get_dict_int (json_t *o,
+                         const char *name,
+                         const char *k,
+                         int *vp)
+{
+    const char *v;
+    if (get_dict (o, name, k, &v) < 0)
+        return -1;
+
+    char *endptr;
+    errno = 0;
+    int i = strtol (v, &endptr, 10);
+    if (errno != 0 || *endptr != '\0') {
+        errno = EINVAL;
+        return -1;
+    }
+    *vp = i;
     return 0;
 }
 
@@ -593,6 +690,7 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
         | SUBPROCESS_REXEC_CHANNEL;
     const char *name;
     char *tmp = NULL;
+    flux_reactor_t *reactor = flux_get_reactor (ctx->h);
 
     if ((flags & ~valid_flags) != 0) {
         errno = EINVAL;
@@ -602,10 +700,31 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
         return NULL;
     proc->ctx = ctx;
     proc->flags = flags;
+    if (!(proc->stop.timer = flux_timer_watcher_create (reactor,
+                                                        0,
+                                                        0,
+                                                        stop_timer_cb,
+                                                        proc)))
+        goto error;
     if (!(proc->cmd = json_deep_copy (cmd))) {
         errno = ENOMEM;
         goto error;
     }
+    /* Enable the stop timer by setting the SDEXEC_STOP_TIMER_SEC option to
+     * a value in seconds.  The stop timer is disabled by default.
+     * sOptionally set SDEXEC_STOP_TIMER_SIGNAL to a numerical signal
+     * value to use instead of SIGKILL.
+     */
+    if (get_dict_int (proc->cmd,
+                      "opts",
+                      "SDEXEC_STOP_TIMER_SEC",
+                      &proc->stop.timeout_sec) < 0)
+        proc->stop.timeout_sec = default_stop_timeout_sec;
+    if (get_dict_int (proc->cmd,
+                      "opts",
+                      "SDEXEC_STOP_TIMER_SIGNAL",
+                      &proc->stop.kill_signal) < 0)
+        proc->stop.kill_signal = SIGKILL;
     /* Set SDEXEC_NAME for sdexec_start_transient_unit().
      * If unset, use a truncated uuid as the name.
      */
@@ -726,7 +845,6 @@ static void exec_cb (flux_t *h,
     if (!(proc->f_start = sdexec_start_transient_unit (h,
                                              ctx->rank,
                                              "fail", // mode
-                                             "exec", // type
                                              proc->cmd,
                                              sdexec_channel_get_fd (proc->in),
                                              sdexec_channel_get_fd (proc->out),

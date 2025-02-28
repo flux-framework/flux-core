@@ -57,7 +57,6 @@ void test_inval (void)
     ok (sdexec_start_transient_unit (NULL,      // h
                                      0,         // rank
                                      "fail",    // mode
-                                     "simple",  // type
                                      cmd_o,     // cmd
                                      -1, -1, -1, // *_fd
                                      &error) == NULL
@@ -70,7 +69,6 @@ void test_inval (void)
     ok (sdexec_start_transient_unit (h,         // h
                                      0,         // rank
                                      NULL,      // mode
-                                     "simple",  // type
                                      cmd_o,     // cmd
                                      -1, -1, -1, // *_fd
                                      &error) == NULL
@@ -83,20 +81,6 @@ void test_inval (void)
     ok (sdexec_start_transient_unit (h,         // h
                                      0,         // rank
                                      "fail",    // mode
-                                     NULL,      // type
-                                     cmd_o,     // cmd
-                                     -1, -1, -1, // *_fd
-                                     &error) == NULL
-        && errno == EINVAL,
-        "sdexec_start_transient_unit type=NULL fails with EINVAL");
-    diag ("%s", error.text);
-
-    errno = 0;
-    error.text[0] = '\0';
-    ok (sdexec_start_transient_unit (h,         // h
-                                     0,         // rank
-                                     "fail",    // mode
-                                     "simple",  // type
                                      NULL,      // cmd
                                      -1, -1, -1, // *_fd
                                      &error) == NULL
@@ -109,7 +93,6 @@ void test_inval (void)
     ok (sdexec_start_transient_unit (h,         // h
                                      0,         // rank
                                      "fail",    // mode
-                                     "simple",  // type
                                      cmd_o_noname, // cmd
                                      -1, -1, -1, // *_fd
                                      &error) == NULL
@@ -122,7 +105,6 @@ void test_inval (void)
     ok (sdexec_start_transient_unit (h,         // h
                                      0,         // rank
                                      "fail",    // mode
-                                     "simple",  // type
                                      cmd_o_badprop, // cmd
                                      -1, -1, -1, // *_fd
                                      &error) == NULL

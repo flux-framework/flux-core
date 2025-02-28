@@ -191,6 +191,60 @@ test_expect_success 'sdexec can set unit KillMode property to process' '
 	        t2409-killmode.service >killmode.out &&
 	test_cmp killmode.exp killmode.out
 '
+test_expect_success 'sdexec can set unit TimeoutStopUSec property to infinity' '
+	cat >timeoutstop.exp <<-EOT &&
+	TimeoutStopUSec=infinity
+	EOT
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-timeoutstop.service" \
+	    --setopt=SDEXEC_PROP_TimeoutStopUSec=infinity \
+	    $systemctl --user show --property TimeoutStopUSec \
+	        t2409-timeoutstop.service >timeoutstop.out &&
+	test_cmp timeoutstop.exp timeoutstop.out
+'
+test_expect_success 'sdexec can set unit TimeoutStopUSec to a numerical value' '
+	cat >timeoutstop2.exp <<-EOT &&
+	TimeoutStopUSec=42us
+	EOT
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-timeoutstop2.service" \
+	    --setopt=SDEXEC_PROP_TimeoutStopUSec=42 \
+	    $systemctl --user show --property TimeoutStopUSec \
+	        t2409-timeoutstop2.service >timeoutstop2.out &&
+	test_cmp timeoutstop2.exp timeoutstop2.out
+'
+test_expect_success 'setting TimeoutStopUSec to an invalid value fails' '
+	test_must_fail $sdexec -r 0 --setopt=SDEXEC_PROP_TimeoutStopUSec=zzz \
+	    $true 2>timeoutstop_badval.err &&
+	grep "error setting property" timeoutstop_badval.err
+'
+test_expect_success 'sdexec Type defaults exec' '
+	cat >typedefault.exp <<-EOT &&
+	Type=exec
+	EOT
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-typedefault.service" \
+	    $systemctl --user show --property Type \
+	        t2409-typedefault.service >typedefault.out &&
+	test_cmp typedefault.exp typedefault.out
+'
+test_expect_success 'sdexec can set unit Type to simple' '
+	cat >typesimple.exp <<-EOT &&
+	Type=simple
+	EOT
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-typesimple.service" \
+	    --setopt=SDEXEC_PROP_Type=simple \
+	    $systemctl --user show --property Type \
+	        t2409-typesimple.service >typesimple.out &&
+	test_cmp typesimple.exp typesimple.out
+'
+test_expect_success 'setting Type to an invalid value fails' '
+	test_must_fail $sdexec -r 0 --setopt=SDEXEC_PROP_Type=zzz \
+	    $true 2>type_badval.err &&
+	grep "Invalid Type" type_badval.err
+'
+# Check that we can set resource control attributes on our transient units,
 # Check that we can set resource control attributes on our transient units,
 # but expect resource control testing to occur elsewhere.
 # See also:

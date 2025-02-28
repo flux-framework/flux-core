@@ -38,6 +38,10 @@ double config_get_default_barrier_timeout (void);
 
 int config_get_stats (json_t **config_stats);
 
+const char *config_get_sdexec_stop_timer_sec (void);
+
+const char *config_get_sdexec_stop_timer_signal (void);
+
 int config_setup (flux_t *h,
                   const flux_conf_t *conf,
                   int argc,
