@@ -352,63 +352,70 @@ static void perilog_proc_delete (struct perilog_proc *proc)
     }
 }
 
+static char *exception_errmsg (struct perilog_proc *proc, int status)
+{
+    int rc;
+    flux_t *h = flux_jobtap_get_flux (proc->p);
+    int code = WIFEXITED (status) ? WEXITSTATUS (status) : -1;
+    int sig;
+    const char *name = perilog_proc_name (proc);
+    char *errmsg;
+    char *hosts = NULL;
+
+    if (!(hosts = flux_hostmap_lookup (h, proc->failed_ranks, NULL)))
+        hosts = strdup ("unknown");
+
+    if (proc->cancel_timeout) {
+        rc = asprintf (&errmsg,
+                       "%s canceled then timed out on %s (rank %s)",
+                       name,
+                       hosts,
+                       proc->failed_ranks);
+    }
+    else if (proc->timedout) {
+        rc = asprintf (&errmsg,
+                       "%s timed out on %s (rank %s)",
+                       name,
+                       hosts,
+                       proc->failed_ranks);
+    }
+    /*  Report that proc was signaled if WIFSIGNALED() is true, or
+     *  exit code > 128 (where standard exit code is 127+signo from
+     *  most shells)
+     */
+    else if (WIFSIGNALED (status) || code > 128) {
+        sig = WIFSIGNALED (status) ? WTERMSIG (status) : code - 128;
+        rc = asprintf (&errmsg,
+                       "%s killed by signal %d on %s (rank %s)",
+                       name,
+                       sig,
+                       hosts ? hosts : "unknown",
+                       proc->failed_ranks);
+    }
+    else
+        rc = asprintf (&errmsg,
+                       "%s exited with code=%d on %s (rank %s)",
+                       name,
+                       code,
+                       hosts ? hosts : "unknown",
+                       proc->failed_ranks);
+
+    free (hosts);
+    return rc < 0 ? NULL : errmsg;
+}
+
 static void emit_finish_event (struct perilog_proc *proc,
                                struct bulk_exec *bulk_exec)
 {
     int status = bulk_exec_rc (bulk_exec);
     if (proc->prolog) {
-        int rc;
-
         /*
          *  If prolog failed, raise job exception before prolog-finish
          *   event is emitted to ensure job isn't halfway started before
          *   the exception is raised:
          */
         if ((status != 0 && !proc->canceled) || proc->cancel_timeout) {
-            flux_t *h = flux_jobtap_get_flux (proc->p);
-            int code = WIFEXITED (status) ? WEXITSTATUS (status) : -1;
-            int sig;
-            char *errmsg;
-            char *hosts = NULL;
-
-            if (!(hosts = flux_hostmap_lookup (h, proc->failed_ranks, NULL)))
-                hosts = strdup ("unknown");
-
-            if (proc->cancel_timeout) {
-                rc = asprintf (&errmsg,
-                               "prolog canceled then timed out on %s (rank %s)",
-                               hosts,
-                               proc->failed_ranks);
-                status = 1;
-            }
-            else if (proc->timedout) {
-                rc = asprintf (&errmsg,
-                               "prolog timed out on %s (rank %s)",
-                               hosts,
-                               proc->failed_ranks);
-            }
-            /*  Report that prolog was signaled if WIFSIGNALED() is true, or
-             *  exit code > 128 (where standard exit code is 127+signo from
-             *  most shells)
-             */
-            else if (WIFSIGNALED (status) || code > 128) {
-                sig = WIFSIGNALED (status) ? WTERMSIG (status) : code - 128;
-                rc = asprintf (&errmsg,
-                               "prolog killed by signal %d on %s (rank %s)",
-                               sig,
-                               hosts ? hosts : "unknown",
-                               proc->failed_ranks);
-            }
-            else
-                rc = asprintf (&errmsg,
-                               "prolog exited with code=%d on %s (rank %s)",
-                               code,
-                               hosts ? hosts : "unknown",
-                               proc->failed_ranks);
-
-            free (hosts);
-            if (rc < 0)
-                errmsg = NULL;
+            char *errmsg = exception_errmsg (proc, status);
             if (flux_jobtap_raise_exception (proc->p,
                                              proc->id,
                                              "prolog",
@@ -432,12 +439,27 @@ static void emit_finish_event (struct perilog_proc *proc,
     }
     else {
         /*
+         *  Raise a non-fatal job exception on failure so that the job
+         *   status reflects the status of the user job and not the status
+         *   of the epilog.
+         */
+        if ((status != 0 && !proc->canceled) || proc->cancel_timeout) {
+            char *errmsg = exception_errmsg (proc, status);
+            if (flux_jobtap_raise_exception (proc->p,
+                                             proc->id,
+                                             "epilog",
+                                             2,
+                                             "%s",
+                                             errmsg ?
+                                             errmsg :
+                                             "job epilog failed") < 0)
+                    flux_log_error (flux_jobtap_get_flux (proc->p),
+                                    "epilog-finish: jobtap_raise_exception");
+            free (errmsg);
+        }
+        /*
          *  Epilog complete: unsubscribe this plugin from the
          *   finished job and post an epilog-finish event.
-         *
-         *  No job exception is raised since the job is already exiting,
-         *   and it is expected that the actual epilog script will
-         *   drain nodes or take other action on failure if necessary.
          */
         flux_jobtap_job_unsubscribe (proc->p, proc->id);
         if (flux_jobtap_epilog_finish (proc->p,
