@@ -73,6 +73,14 @@ def parse_args():
         help="Output hosts at indices in idset IDS (-IDS to index from end)",
     )
     parser.add_argument(
+        "-F",
+        "--find",
+        type=str,
+        metavar="HOSTS",
+        help="Output indices of HOSTS in target in hostlist."
+        + " Fails if any host is not found.",
+    )
+    parser.add_argument(
         "-L",
         "--limit",
         metavar="N",
@@ -394,7 +402,9 @@ def main():
         else:
             hl = hl[IDset(args.nth)]
 
-    if args.count:
+    if args.find:
+        print(" ".join(map(str, hl.index(args.find))))
+    elif args.count:
         print(f"{hl.count()}")
     elif args.expand:
         # Convert '\n' specified on command line to actual newline char

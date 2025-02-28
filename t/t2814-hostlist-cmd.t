@@ -115,6 +115,15 @@ test_expect_success 'flux-hostlist -n errors with invalid index' '
 	test_must_fail flux hostlist -n 10 foo[1-10] &&
 	test_must_fail flux hostlist -n 1,10 foo[1-10]
 '
+test_expect_success 'flux-hostlist -F, --find=HOSTS works' '
+	test "$(flux hostlist -F foo1 foo[1-10])" = "0" &&
+	test "$(flux hostlist -F foo10 foo[1-10])" = "9" &&
+	test "$(flux hostlist -F foo[1-2] foo[1-10])" = "0 1"
+'
+test_expect_success 'flux-hostlist -F, --find=HOSTS fails if host not found' '
+	test_must_fail flux hostlist -F foo1 foo[2-10] &&
+	test_must_fail flux hostlist -F foo[1-10] foo[2-10]
+'
 test_expect_success 'flux-hostlist -x, --exclude works' '
 	test "$(flux hostlist -x foo1 foo[0-10])" = "foo[0,2-10]" &&
 	test "$(flux hostlist -x foo[0-9] foo[0-10])" = "foo10"
