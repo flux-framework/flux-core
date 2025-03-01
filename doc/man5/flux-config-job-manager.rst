@@ -110,28 +110,31 @@ prolog
    supported for the ``[job-manager.prolog]`` table:
 
    command
-      (optional) An array of strings specifying the command to run. If
+      (optional, string) An array of strings specifying the command to run. If
       ``exec.imp`` is set, the the default command is ``["flux-imp",
       "run", "prolog"]``, otherwise it is an error if command is not set.
    per-rank
-      (optional) By default the job-manager prolog only runs ``command``
+      (optional, bool) By default the job-manager prolog only runs ``command``
       on rank 0. With ``per-rank=true``, the command will be run on each
       rank assigned to the job.
    timeout
-      (optional) A string value in Flux Standard Duration specifying a
+      (optional, string) A string value in Flux Standard Duration specifying a
       timeout for the prolog, after which it is terminated (and a job
       exception raised). The default prolog timeout is 30m. To disable
       the timeout use ``0`` or ``infinity``.
    kill-timeout
-      (optional) If a job exception is raised during the job prolog and
-      ``cancel-on-exception`` is true,  the prolog will be canceled by
-      sending it a SIGTERM signal. ``kill-timeout`` is the number of
-      seconds to wait until any nodes with prolog tasks that are still
-      active will be drained. The drain reason will include the string
-      "canceled then timed out". The default is 60.
+      (optional, float) If the prolog times out, or a job exception is raised
+      during the job prolog and ``cancel-on-exception`` is true, the prolog
+      will be canceled by sending it a SIGTERM signal. ``kill-timeout``
+      is a floating point number of seconds to wait until any nodes with
+      prolog tasks that are still active will be drained. The drain reason
+      will include the string "timed out" if the prolog timeout was reached,
+      or "canceled then timed out" if the prolog was canceled after a job
+      exception then timed out. The default is 60.
    cancel-on-exception
-      (optional) A boolean indicating whether a fatal job exception raised
-      while the prolog is active terminates the prolog. The default is true.
+      (optional, bool) A boolean indicating if the prolog should be terminated
+      when a fatal job exception is raised while the prolog is active. The
+      default is true.
 
 epilog
    (optional) Table of configuration for a job-manager epilog. If
@@ -141,29 +144,32 @@ epilog
    The ``[job-manager.epilog]`` table supports the following keys:
 
    command
-      (optional) An array of strings specifying the command to run. If
+      (optional, string) An array of strings specifying the command to run. If
       ``exec.imp`` is set, the the default command is ``["flux-imp",
       "run", "prolog"]``, otherwise it is an error if command is not set.
    per-rank
-      (optional) By default the job-manager epilog only runs ``command``
+      (optional, bool) By default the job-manager epilog only runs ``command``
       on rank 0. With ``per-rank=true``, the command will be run on each
       rank assigned to the job.
    timeout
-      (optional) A string value in Flux Standard Duration specifying a
+      (optional, string) A string value in Flux Standard Duration specifying a
       timeout for the epilog, after which it is terminated (and a job
       exception raised). By default, the epilog timeout is disabled.
    kill-timeout
-      (optional) If a job exception is raised during the job epilog and
-      ``cancel-on-exception`` is ``true``, then the epilog will be canceled
-      by sending it a SIGTERM signal. ``kill-timeout`` is the number of
-      seconds to wait until any nodes with prolog tasks that are still
-      active will be drained. The drain reason will include the string
-      "canceled then timed out". The default is 10. (``kill-timeout`` with
-      the job epilog should only be used for testing purposes)
+      (optional, float) If the epilog times out, or a job exception is raised
+      during the job epilog and ``cancel-on-exception`` is true, the epilog
+      will be canceled by sending it a SIGTERM signal. ``kill-timeout``
+      is a floating point number of seconds to wait until any nodes with
+      epilog tasks that are still active will be drained. The drain reason
+      will include the string "timed out" if the epilog timeout was reached,
+      or "canceled then timed out" if the epilog was canceled after a job
+      exception then timed out. The default is 60.
    cancel-on-exception
-      (optional) A boolean indicating whether a fatal job exception raised
-      while the epilog is active terminates the epilog. The default is true.
-      (cancel-on-exception is only used with the epilog for testing purposes)
+      (optional, bool) A boolean indicating if the epilog should be terminated
+      when a fatal job exception is raised while the epilog is active. The
+      default is false. (``cancel-on-exception`` should only be used with
+      the epilog for testing purposes, since users can generate exceptions
+      on their jobs)
 
 perilog
   (optional) Common prolog/epilog configuration keys:
