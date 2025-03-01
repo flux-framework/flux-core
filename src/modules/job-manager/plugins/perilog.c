@@ -773,18 +773,8 @@ static void io_cb (struct bulk_exec *bulk_exec,
     }
 }
 
-
-static void start_cb (struct bulk_exec *exec, void *arg)
-{
-    struct perilog_proc *proc = bulk_exec_aux_get (exec, "perilog_proc");
-    /*  Start timeout timer when processes have started
-     */
-    if (proc && proc->timer)
-        flux_watcher_start (proc->timer);
-}
-
 static struct bulk_exec_ops ops = {
-        .on_start = start_cb,
+        .on_start = NULL,
         .on_exit = NULL,
         .on_complete = completion_cb,
         .on_error = error_cb,
@@ -889,8 +879,7 @@ static struct perilog_proc *procdesc_run (flux_t *h,
             goto error;
         }
         proc->timer = w;
-        /* Note: watcher will be started in bulk-exec start callback
-         */
+        flux_watcher_start (proc->timer);
     }
     proc->R = json_incref (R);
     proc->bulk_exec = bulk_exec;
