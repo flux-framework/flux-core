@@ -158,14 +158,10 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
                           &error,
                           "{s:{s:s, s:s, s:s, s?b !} }",
                           "content-s3",
-                          "credential-file",
-                          &cred_file,
-                          "bucket",
-                          &bucket,
-                          "uri",
-                          &uri,
-                          "virtual-host-style",
-                          &is_virtual_host) < 0) {
+                          "credential-file", &cred_file,
+                          "bucket", &bucket,
+                          "uri", &uri,
+                          "virtual-host-style", &is_virtual_host) < 0) {
         errprintf (errp, "%s", error.text);
         goto error;
     }
@@ -367,8 +363,7 @@ void checkpoint_get_cb (flux_t *h,
     if (flux_respond_pack (h,
                            msg,
                            "{s:O}",
-                           "value",
-                           o) < 0) {
+                           "value", o) < 0) {
         errno = EIO;
         flux_log_error (h, "error responding to checkpoint-get request (pack)");
     }
@@ -400,10 +395,8 @@ void checkpoint_put_cb (flux_t *h,
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:s s:o}",
-                             "key",
-                             &key,
-                             "value",
-                             &o) < 0)
+                             "key", &key,
+                             "value", &o) < 0)
         goto error;
     if (!(value = json_dumps (o, JSON_COMPACT))) {
         errstr = "failed to encode checkpoint value";
