@@ -316,6 +316,29 @@ test_columns_variable_preserved() {
 	test "$cols" = "12"
 }
 
+#  flux-security version check. If flux is built with flux-security,
+#  check that version >= x.y.z:
+#
+#  Usage: test_flux_security_version x.y.z
+#
+#  Sets FLUX_SECURITY_VERSION environment variable for use after return
+#  Note this function always succeeds if flux is not built with flux-security.
+#  If a test requires flux-security, that should be separately tested.
+#
+test_flux_security_version() {
+    req_major=$(echo $1 | cut -d. -f1)
+    req_minor=$(echo $1 | cut -d. -f2)
+    req_patch=$(echo $1 | cut -d. -f3)
+    FLUX_SECURITY_VERSION=$(flux version | awk '/security:/ {print $2}')
+    if test -z "$FLUX_SECURITY_VERSION"; then
+        return 0
+    fi
+    major=$(echo $FLUX_SECURITY_VERSION | cut -d. -f1)
+    minor=$(echo $FLUX_SECURITY_VERSION | cut -d. -f2)
+    patch=$(echo $FLUX_SECURITY_VERSION | cut -d. -f3)
+    test $major -ge $req_major -a $minor -ge $req_minor -a $patch -ge $req_patch
+}
+
 #  Export a shorter name for this test
 TEST_NAME=$SHARNESS_TEST_NAME
 export TEST_NAME

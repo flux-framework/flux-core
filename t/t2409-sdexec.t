@@ -17,6 +17,10 @@ if ! busctl --user status >/dev/null; then
 	skip_all="user dbus is not running"
 	test_done
 fi
+if ! test_flux_security_version 0.14.0; then
+	skip_all="requires flux-security >= v0.14, got ${FLUX_SECURITY_VERSION}"
+	test_done
+fi
 
 test_under_flux 2 minimal
 
