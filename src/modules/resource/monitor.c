@@ -202,11 +202,12 @@ static int post_join_leave (struct monitor *monitor,
         goto error;
 
     /* Update the set of lost ranks. These are only the ranks that have
-     * left the online group (not ranks that never joined).
+     * left the online group monitor->up (not ranks that never joined).
      */
-    if (idset_add (monitor->lost, leave) < 0
-        || idset_subtract (monitor->lost, join) < 0) {
-        goto error;
+    if (oldset == monitor->up) {
+        if (idset_add (monitor->lost, leave) < 0
+            || idset_subtract (monitor->lost, join) < 0)
+            goto error;
     }
 
     rc = 0;
