@@ -210,12 +210,6 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
         errprintf (errp, "command must be an array");
         return NULL;
     }
-    if (kill_timeout > 0.) {
-        if (!prolog) {
-            errprintf (errp, "kill-timeout not allowed for epilog");
-            return NULL;
-        }
-    }
     /*  If no command is set but exec.imp is non-NULL then set command to
      *  [ "$imp_path", "run", "$name" ]
      */
