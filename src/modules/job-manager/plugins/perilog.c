@@ -1115,8 +1115,10 @@ static int exception_cb (flux_plugin_t *p,
                          flux_plugin_arg_t *args,
                          void *arg)
 {
-    /*  On exception, kill any prolog running for this job:
-     *   Follow up with SIGKILL after 10s.
+    /* On exception, send SIGTERM to any remaining active tasks if
+     * cancel-on-exception is set (default=true for prolog, false for epilog)
+     * After kill-timeout, any remaining active tasks will have their nodes
+     * drained.
      */
     struct perilog_proc *proc;
     int severity;
