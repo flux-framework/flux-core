@@ -837,6 +837,7 @@ static void exec_cb (flux_t *h,
     proc->msg = msg;
     sdexec_log_debug (h, "watch %s", sdexec_unit_name (proc->unit));
     if (!(proc->f_watch = sdexec_property_changed (h,
+                                               "sdbus",
                                                ctx->rank,
                                                sdexec_unit_path (proc->unit)))
         || flux_future_then (proc->f_watch,
@@ -1146,7 +1147,7 @@ nomem:
  * units that were started by that UUID a SIGKILL to begin cleanup.  Leave
  * the request in ctx->requests so the unit can be "reaped".  Let normal
  * cleanup of the request (including generating a response which shouldn't
- * hurt) to occur when that happens.
+ * hurt) occur when that happens.
  */
 static void disconnect_cb (flux_t *h,
                            flux_msg_handler_t *mh,

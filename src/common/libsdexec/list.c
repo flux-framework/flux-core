@@ -66,14 +66,19 @@ bool sdexec_list_units_next (flux_future_t *f, struct unit_info *infop)
 
 /* N.B. Input params:  states=[], patterns=[pattern].
  */
-flux_future_t *sdexec_list_units (flux_t *h, uint32_t rank, const char *pattern)
+flux_future_t *sdexec_list_units (flux_t *h,
+                                  const char *service,
+                                  uint32_t rank,
+                                  const char *pattern)
 {
-    if (!h || !pattern) {
+    if (!h || !pattern || !service) {
         errno = EINVAL;
         return NULL;
     }
+    char topic[256];
+    snprintf (topic, sizeof (topic), "%s.call", service);
     return flux_rpc_pack (h,
-                          "sdbus.call",
+                          topic,
                           rank,
                           0,
                           "{s:s s:[[] [s]]}",

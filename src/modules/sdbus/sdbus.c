@@ -31,6 +31,7 @@
 #include "sdbus.h"
 
 struct sdbus_ctx {
+    bool system_bus; // connect to system bus instead of user bus
     flux_future_t *f_conn; // owns ctx->bus
     sd_bus *bus;
     flux_watcher_t *bus_w;
@@ -560,32 +561,32 @@ error:
 
 static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,
-      "sdbus.disconnect",
+      "disconnect",
       disconnect_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "sdbus.call",
+      "call",
       call_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "sdbus.subscribe",
+      "subscribe",
       subscribe_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "sdbus.subscribe-cancel",
+      "subscribe-cancel",
       subscribe_cancel_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "sdbus.reconnect",
+      "reconnect",
       reconnect_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "sdbus.config-reload",
+      "config-reload",
       reload_cb,
       0
     },
@@ -722,11 +723,31 @@ static void sdbus_recover (struct sdbus_ctx *ctx, const char *reason)
      * libsystemd complaining about unexpected internal states(?) and the
      * occasional segfault.
      */
-    if (!(ctx->f_conn = sdbus_connect (ctx->h, false, retry_min, retry_max))
+    if (!(ctx->f_conn = sdbus_connect (ctx->h,
+                                       false,
+                                       retry_min,
+                                       retry_max,
+                                       ctx->system_bus))
         || flux_future_then (ctx->f_conn, -1, connect_continuation, ctx) < 0) {
         flux_log_error (ctx->h, "error starting bus connect");
         flux_reactor_stop_error (flux_get_reactor (ctx->h));
     }
+}
+
+static int parse_module_args (struct sdbus_ctx *ctx,
+                              int argc,
+                              char **argv,
+                              flux_error_t *error)
+{
+    for (int i = 0; i < argc; i++) {
+        if (streq (argv[i], "system"))
+            ctx->system_bus = true;
+        else {
+            errprintf (error, "unknown module option: %s", argv[i]);
+            return -1;
+        }
+    }
+    return 0;
 }
 
 void sdbus_ctx_destroy (struct sdbus_ctx *ctx)
@@ -755,17 +776,27 @@ void sdbus_ctx_destroy (struct sdbus_ctx *ctx)
     }
 }
 
-struct sdbus_ctx *sdbus_ctx_create (flux_t *h, flux_error_t *error)
+struct sdbus_ctx *sdbus_ctx_create (flux_t *h,
+                                    int argc,
+                                    char **argv,
+                                    flux_error_t *error)
 {
     struct sdbus_ctx *ctx;
+    const char *name = flux_aux_get (h, "flux::name");
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         goto error_create;
+    if (parse_module_args (ctx, argc, argv, error) < 0)
+        goto error;
     if (sdbus_configure (ctx, flux_get_conf (h), error) < 0)
         goto error;
-    if (!(ctx->f_conn = sdbus_connect (h, true, retry_min, retry_max))
+    if (!(ctx->f_conn = sdbus_connect (h,
+                                       true,
+                                       retry_min,
+                                       retry_max,
+                                       ctx->system_bus))
         || flux_future_then (ctx->f_conn, -1, connect_continuation, ctx) < 0
-        || flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0
+        || flux_msg_handler_addvec_ex (h, name, htab, ctx, &ctx->handlers) < 0
         || !(ctx->requests = flux_msglist_create ())
         || !(ctx->subscribers = flux_msglist_create ())
         || flux_get_rank (h, &ctx->rank) < 0)

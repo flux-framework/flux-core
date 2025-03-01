@@ -20,7 +20,7 @@ fi
 
 test_under_flux 2 minimal
 
-flux setattr log-stderr-level 1
+flux setattr log-stderr-level 3
 
 #
 # N.B. ListUnitsByPatterns response payload is a 'params' array whose first
@@ -126,6 +126,12 @@ test_expect_success 'sdbus reconfig fails with bad sdbus-debug value' '
 	sdbus-debug = 42
 	EOT
 	grep "Expected true or false" config.err
+'
+test_expect_success 'restore correct config in case we reload later' '
+	flux config load <<-EOT
+	[systemd]
+	sdbus-debug = true
+	EOT
 '
 
 test_expect_success 'sdbus list-units works' '
@@ -305,19 +311,31 @@ test_expect_success 'create list script' '
 	cat >list.py <<-EOT &&
 	import sys
 	import flux
-	print(flux.Flux().rpc("sdbus.call",{"member":"ListUnitsByPatterns","params":[[],["*"]]}).get_str())
+	print(flux.Flux().rpc(sys.argv[1] + ".call",{"member":"ListUnitsByPatterns","params":[[],["*"]]}).get_str())
 	EOT
 	chmod +x list.py
 '
 test_expect_success 'list from rank 0 is allowed' '
-	flux python ./list.py >/dev/null
+	flux python ./list.py sdbus >/dev/null
 '
 test_expect_success 'list from rank 1 is restricted' '
-	test_must_fail flux exec -r 1 flux python ./list.py 2>list1.err &&
+	test_must_fail flux exec -r 1 \
+	    flux python ./list.py sdbus 2>list1.err &&
 	grep "not allowed" list1.err
 '
 
+test_expect_success 'load sdbus-sys module' '
+	flux module load --name sdbus-sys sdbus system
+'
+test_expect_success 'list system units works' '
+	flux python ./list.py sdbus-sys >/dev/null
+'
+test_expect_success 'remove sdbus-sys module' '
+	flux module remove sdbus-sys
+'
 test_expect_success 'remove sdbus module' '
 	flux module remove sdbus
 '
+
+
 test_done
