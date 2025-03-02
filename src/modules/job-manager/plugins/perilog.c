@@ -63,6 +63,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/str/str.h"
 #include "src/broker/state_machine.h" // for STATE_CLEANUP
 #include "src/common/libsubprocess/bulk-exec.h"
@@ -809,7 +810,9 @@ static struct perilog_proc *procdesc_run (flux_t *h,
                                           json_t *R)
 {
     struct perilog_proc *proc = NULL;
+    struct idset *job_ranks = NULL;
     struct idset *ranks = NULL;
+    char *rank_str = NULL;
     struct bulk_exec *bulk_exec = NULL;
     double timeout;
 
@@ -819,7 +822,16 @@ static struct perilog_proc *procdesc_run (flux_t *h,
                         pd->prolog ? "prolog" : "epilog");
         goto error;
     }
+    if (!(job_ranks = ranks_from_R (R))
+        || !(rank_str = idset_encode (job_ranks, IDSET_FLAG_RANGE))) {
+            flux_log (h,
+                      LOG_ERR,
+                      "%s: %s: failed to decode ranks from R",
+                      idf58 (id),
+                      perilog_proc_name (proc));
+    }
     if (flux_cmd_setenvf (pd->cmd, 1, "FLUX_JOB_ID", "%s", idf58 (id)) < 0
+        || flux_cmd_setenvf (pd->cmd, 1, "FLUX_JOB_RANKS", "%s", rank_str) < 0
         || flux_cmd_setenvf (pd->cmd, 1, "FLUX_JOB_USERID", "%u", userid) < 0) {
         flux_log_error (h,
                         "%s: flux_cmd_create",
@@ -827,10 +839,10 @@ static struct perilog_proc *procdesc_run (flux_t *h,
         goto error;
     }
     if (pd->per_rank) {
-        if (!(ranks = ranks_from_R (R))) {
+        if (!(ranks = idset_copy (job_ranks))) {
             flux_log (h,
                       LOG_ERR,
-                      "%s: %s: failed to decode ranks from R",
+                      "%s: %s: failed to copy job ranks",
                       idf58 (id),
                       perilog_proc_name (proc));
             goto error;
@@ -889,9 +901,13 @@ static struct perilog_proc *procdesc_run (flux_t *h,
 
     /* proc now has ownership of bulk_exec, ranks
      */
+    free (rank_str);
+    idset_destroy (job_ranks);
     return proc;
 error:
     idset_destroy (ranks);
+    idset_destroy (job_ranks);
+    ERRNO_SAFE_WRAP (free, rank_str);
     bulk_exec_destroy (bulk_exec);
     perilog_proc_destroy (proc);
     return NULL;
@@ -933,7 +949,7 @@ static int run_command (flux_plugin_t *p,
     return 0;
 error:
     perilog_proc_destroy (proc);
-    return 01;
+    return -1;
 }
 
 static int run_cb (flux_plugin_t *p,
