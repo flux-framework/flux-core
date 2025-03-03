@@ -8,19 +8,14 @@ SIZE=1
 test_under_flux ${SIZE} minimal
 
 
-get_heartbeat() {
-	flux python -c \
-	    "import flux; print(flux.Flux().rpc(\"heartbeat.get\").get_str())"
-}
-
 test_expect_success 'load heartbeat' '
 	flux module load heartbeat
 '
 
 test_expect_success 'reload heartbeat with period=10s and verify' '
-	period1=$(get_heartbeat | jq -r -e .period) &&
+	period1=$(flux module stats heartbeat | jq -r -e .period) &&
 	flux module reload heartbeat period=10s &&
-	period2=$(get_heartbeat | jq -r -e .period) &&
+	period2=$(flux module stats heartbeat | jq -r -e .period) &&
 	echo period changed from $period1 to $period2 &&
 	test "$period1" != "$period2"
 '
