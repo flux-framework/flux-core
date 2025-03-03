@@ -31,25 +31,18 @@ struct heartbeat {
     flux_future_t *f;
 };
 
-static void heartbeat_get_cb (flux_t *h,
-                              flux_msg_handler_t *mh,
-                              const flux_msg_t *msg,
-                              void *arg)
+static void heartbeat_stats_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
 {
     struct heartbeat *hb = arg;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
     if (flux_respond_pack (h,
                            msg,
                            "{s:f}",
-                           "period",
-                           hb->period) < 0)
-        flux_log_error (h, "error responding to heartbeat.get request");
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "error responding to heartbeat.get request");
+                           "period", hb->period) < 0)
+        flux_log_error (h, "error responding to stats-get request");
 }
 
 static void publish_continuation (flux_future_t *f, void *arg)
@@ -106,10 +99,11 @@ inval:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    {   FLUX_MSGTYPE_REQUEST,
-        "heartbeat.get",
-        heartbeat_get_cb,
-        FLUX_ROLE_USER
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "heartbeat.stats-get",
+        heartbeat_stats_cb,
+        0,
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
