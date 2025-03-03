@@ -17,7 +17,8 @@
 
 #include <flux/core.h>
 
-#include <src/common/libutil/fsd.h>
+#include "src/common/libutil/fsd.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 static const double default_period = 2.0;
@@ -76,19 +77,24 @@ static void timer_cb (flux_reactor_t *r,
     }
 }
 
-static int parse_args (int argc, char **argv, struct heartbeat *hb)
+static int heartbeat_parse_args (struct heartbeat *hb,
+                                 int argc,
+                                 char **argv,
+                                 flux_error_t *error)
 {
     int i;
 
     for (i = 0; i < argc; i++) {
         if (strstarts (argv[i], "period=")) {
             if (fsd_parse_duration (argv[i] + 7, &hb->period) < 0) {
-                flux_log_error (hb->h, "error parsing period value");
+                errprintf (error,
+                           "period: error parsing FSD: %s",
+                           strerror (errno));
                 return -1;
             }
         }
         else {
-            flux_log (hb->h, LOG_ERR, "unknown option: %s", argv[i]);
+            errprintf (error, "%s: unknown option", argv[i]);
             goto inval;
         }
     }
@@ -98,12 +104,86 @@ inval:
     return -1;
 }
 
+static int heartbeat_parse_config (struct heartbeat *hb,
+                                   const flux_conf_t *conf,
+                                   flux_error_t *error)
+{
+    flux_error_t conf_error;
+    const char *period_fsd = NULL;
+    double new_period = default_period;
+
+    if (flux_conf_unpack (conf,
+                          &conf_error,
+                          "{s?{s?s !}}",
+                          "heartbeat",
+                            "period", &period_fsd) < 0) {
+        errprintf (error,
+                   "error reading [heartbeat] config table: %s",
+                   conf_error.text);
+        return -1;
+    }
+    if (period_fsd) {
+        if (fsd_parse_duration (period_fsd, &new_period) < 0) {
+            errprintf (error, "error parsing heartbeat.period FSD value");
+            return -1;
+        }
+        if (new_period <= 0.) {
+            errprintf (error, "heartbeat.period must be a positive FSD value");
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    if (new_period != hb->period) {
+        hb->period = new_period;
+        if (hb->timer) {
+            flux_timer_watcher_reset (hb->timer, 0., hb->period);
+            flux_timer_watcher_again (hb->timer);
+        }
+    }
+    return 0;
+}
+
+static void heartbeat_config_reload_cb (flux_t *h,
+                                        flux_msg_handler_t *mh,
+                                        const flux_msg_t *msg,
+                                        void *arg)
+{
+    struct heartbeat *hb = arg;
+    const flux_conf_t *conf;
+    flux_error_t error;
+    const char *errstr = NULL;
+
+    if (flux_conf_reload_decode (msg, &conf) < 0)
+        goto error;
+    if (heartbeat_parse_config (hb, conf, &error) < 0) {
+        errstr = error.text;
+        goto error;
+    }
+    if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
+        errstr = "error updating cached configuration";
+        flux_conf_decref (conf);
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
         "heartbeat.stats-get",
         heartbeat_stats_cb,
         0,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "heartbeat.config-reload",
+        heartbeat_config_reload_cb,
+        0
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -141,11 +221,15 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     struct heartbeat *hb;
     flux_reactor_t *r = flux_get_reactor (h);
+    flux_error_t error;
 
     if (!(hb = heartbeat_create (h)))
         return -1;
-    if (parse_args (argc, argv, hb) < 0)
+    if (heartbeat_parse_config (hb, flux_get_conf (h), &error) < 0
+        || heartbeat_parse_args (hb, argc, argv, &error) < 0) {
+        flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
+    }
     if (hb->rank == 0) {
         if (!(hb->timer = flux_timer_watcher_create (r,
                                                      0.,
