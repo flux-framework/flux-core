@@ -24,6 +24,7 @@ static const double default_period = 2.0;
 
 struct heartbeat {
     flux_t *h;
+    uint32_t rank;
     double period;
     flux_watcher_t *timer;
     flux_msg_handler_t **handlers;
@@ -133,7 +134,8 @@ static struct heartbeat *heartbeat_create (flux_t *h)
         return NULL;
     hb->h = h;
     hb->period = default_period;
-    if (flux_msg_handler_addvec (hb->h, htab, hb, &hb->handlers) < 0)
+    if (flux_get_rank (h, &hb->rank) < 0
+        || flux_msg_handler_addvec (hb->h, htab, hb, &hb->handlers) < 0)
         goto error;
     return hb;
 error:
@@ -150,13 +152,15 @@ int mod_main (flux_t *h, int argc, char **argv)
         return -1;
     if (parse_args (argc, argv, hb) < 0)
         goto error;
-    if (!(hb->timer = flux_timer_watcher_create (r,
-                                                 0.,
-                                                 hb->period,
-                                                 timer_cb,
-                                                 hb)))
-        goto error;
-    flux_watcher_start (hb->timer);
+    if (hb->rank == 0) {
+        if (!(hb->timer = flux_timer_watcher_create (r,
+                                                     0.,
+                                                     hb->period,
+                                                     timer_cb,
+                                                     hb)))
+            goto error;
+        flux_watcher_start (hb->timer);
+    }
     if (flux_reactor_run (r, 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto error;
