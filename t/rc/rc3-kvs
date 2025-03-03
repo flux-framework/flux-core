@@ -11,7 +11,7 @@ modrm() {
 }
 
 
-modrm 0 heartbeat
+modrm all heartbeat
 modrm all kvs-watch
 modrm all kvs
 
