@@ -14,4 +14,4 @@ modload all content blob-size-limit=1048576
 modload 0 content-sqlite
 modload all kvs
 modload all kvs-watch
-modload 0 heartbeat
+modload all heartbeat
