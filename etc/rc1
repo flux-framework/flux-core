@@ -86,7 +86,7 @@ fi
 
 modload all job-ingest
 modload 0 job-exec
-modload 0 heartbeat
+modload all heartbeat
 
 core_dir=$(cd ${0%/*} && pwd -P)
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}

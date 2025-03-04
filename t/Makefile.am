@@ -261,6 +261,7 @@ TESTSCRIPTS = \
 	t3307-system-leafcrash.t \
 	t3308-system-torpid.t \
 	t3309-system-reconnect.t \
+	t3310-system-heartbeat.t \
 	t3400-overlay-trace.t \
 	t3401-module-trace.t \
 	lua/t0001-send-recv.t \
