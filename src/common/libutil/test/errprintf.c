@@ -58,7 +58,7 @@ int main(int argc, char** argv)
     ok (strlen (error.text) == sizeof (error.text) - 1,
         "errprintf with too long format properly truncates");
     ok (error.text[sizeof (error.text) - 2] == '+',
-        "errprintf notes trucation with a '+'");
+        "errprintf notes truncation with a '+'");
     longstring[sizeof (error.text) - 1] = '\0';
     longstring[sizeof (error.text) - 2] = '+';
     is (error.text, longstring,

@@ -234,7 +234,7 @@ so can *that* Flux start Flux?
     """
 flux-top(1) lets you navigate with arrow keys to your batch jobs or allocations
 and display the jobs running within them.  Since you can nest Flux as deep
-as you like, you can think of flux-top(1) as a browser for the job hieararchy.
+as you like, you can think of flux-top(1) as a browser for the job hierarchy.
 """,
     """
 Flux commands look for an environment variable FLUX_URI to determine which

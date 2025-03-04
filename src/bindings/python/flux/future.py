@@ -25,7 +25,7 @@ from flux.wrapper import Wrapper, WrapperPimpl
 # the counter hits 0, delete the reference to the future from the dictionary.
 _THEN_HANDLES: Dict["Future", int] = {}
 
-# Same as above, but for FutreExt init callbacks:
+# Same as above, but for FutureExt init callbacks:
 _INIT_HANDLES: Dict["Future", int] = {}
 
 

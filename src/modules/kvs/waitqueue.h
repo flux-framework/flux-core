@@ -90,7 +90,7 @@ int wait_aux_get_errnum (wait_t *w);
 typedef void (*wait_error_f)(wait_t *w, int errnum, void *arg);
 int wait_set_error_cb (wait_t *w, wait_error_f cb, void *arg);
 
-/* Destroy all wait_t's fitting message match critieria, tested with
+/* Destroy all wait_t's fitting message match criteria, tested with
  * wait_test_msg_f callback.
  * On error, the waitqueue is unaltered.
  */

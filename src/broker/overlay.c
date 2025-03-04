@@ -2404,7 +2404,7 @@ void overlay_destroy (struct overlay *ov)
         }
         rpc_track_destroy (ov->parent.tracker);
         if (ov->monitor_callbacks) {
-            struct montior *mon;
+            struct monitor *mon;
 
             while ((mon = zlist_pop (ov->monitor_callbacks)))
                 free (mon);

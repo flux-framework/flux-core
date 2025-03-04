@@ -251,7 +251,7 @@ int flux_job_result_get_unpack (flux_future_t *f, const char *fmt, ...);
 
 
 /*  Get remaining time in floating point seconds for the current job or
- *  enclosing instancce (i.e., if the current process is associated with
+ *  enclosing instance (i.e., if the current process is associated with
  *  a flux instance, but is not part of a parallel job).
  *
  *  Returns 0 on success with timeleft assigned to the remaining time.

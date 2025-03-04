@@ -382,7 +382,7 @@ static int event_sub (optparse_t *p, int argc, char **argv)
     if (!(r = flux_get_reactor (h)))
         log_err_exit ("failed to get reactor");
 
-    /* Since output is line-based with undeterministic amount of time
+    /* Since output is line-based with nondeterministic amount of time
      * between lines, force stdout to be line buffered so our output
      * is immediately available in stream, even if stdout is not a tty.
      */

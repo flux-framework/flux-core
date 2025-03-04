@@ -101,7 +101,7 @@ POSTCHECKCMDS=":"
 if test "$COVERAGE" = "t"; then
 	export PATH=~/.local/bin/:$PATH
 
-	# install coverage via pip if necessaary
+	# install coverage via pip if necessary
 	coverage -h >/dev/null 2>&1 || python3 -m pip install coverage
 
 	# usercustomize.py must go under USER_SITE, so determine that path:

@@ -131,7 +131,7 @@ test_mock_failure() {
             ;;
         after_barrier_entry)
             #
-            #  Similer to above, but try to ensure that rank 0 shell has
+            #  Similar to above, but try to ensure that rank 0 shell has
             #   entered the barrier before rank 1 unexpectedly exits.
             #   See caveats about best effort above.
             #

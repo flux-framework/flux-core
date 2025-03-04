@@ -109,7 +109,7 @@ const char *flux_cmd_getcwd (const flux_cmd_t *cmd);
 
 /*
  *  Request a channel for communication between process and caller.
- *   Callers can write to the subproces via flux_subprocess_write()
+ *   Callers can write to the subprocess via flux_subprocess_write()
  *   and read from it via flux_subprocess_read(), which is typically
  *   called from a callback set in 'on_channel_out'.
  *
