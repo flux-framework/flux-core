@@ -400,22 +400,15 @@ def disable(args):
         queue_status(handle, args.queue, args.verbose, print_enable_status)
 
 
-def check_legacy_all(handle, name, all, quiet):
-    if not name and not all and not quiet:
-        future = handle.rpc("job-manager.queue-list")
-        try:
-            qlist = future.get()
-        except Exception:
-            return all
+def check_all(handle, name, all_queues):
+    if not name and not all_queues:
+        qlist = handle.rpc("job-manager.queue-list").get()
         if len(qlist["queues"]) > 0:
-            print(
-                "warning: --queue/--all not specified, assuming --all", file=sys.stderr
-            )
-        return True
-    return all
+            raise ValueError("Named queues are defined. Specify queues or use --all.")
 
 
 def queue_start(handle, start, name, all, nocheckpoint=False, reason=None):
+    check_all(handle, name, all)
     payload = {"start": start, "all": all, "nocheckpoint": nocheckpoint}
     if name:
         payload["name"] = name
@@ -431,7 +424,6 @@ def queue_start(handle, start, name, all, nocheckpoint=False, reason=None):
 
 def start(args):
     handle = flux.Flux()
-    args.all = check_legacy_all(handle, args.queue, args.all, args.quiet)
     queue_start(handle, True, args.queue, args.all)
     if not args.quiet:
         queue_status(handle, args.queue, args.verbose, print_start_status)
@@ -442,7 +434,6 @@ def start(args):
 def stop(args):
     reason = " ".join(args.message) if args.message else None
     handle = flux.Flux()
-    args.all = check_legacy_all(handle, args.queue, args.all, args.quiet)
     queue_start(handle, False, args.queue, args.all, args.nocheckpoint, reason)
     if not args.quiet:
         queue_status(handle, args.queue, args.verbose, print_start_status)

@@ -448,12 +448,13 @@ test_expect_success 'flux-queue stop --all affects all queues' '
 	flux queue status >mqstatus_stop.out &&
 	test $(grep -c "Scheduling is stopped: test reasons" mqstatus_stop.out) -eq 2
 '
-test_expect_success 'flux-queue stop w/o --all affects all queues but outputs warning' '
+test_expect_success 'flux-queue stop with multiple queues fails with warning' '
 	flux queue start --all &&
-	flux queue stop test reasons 2>mqstatus_stop2.err &&
-	grep "warning" mqstatus_stop2.err &&
-	flux queue status >mqstatus_stop2.out &&
-	test $(grep -c "Scheduling is stopped: test reasons" mqstatus_stop2.out) -eq 2
+	test_must_fail flux queue stop test reasons 2>mqstatus_stop2.err &&
+	grep "Named queues" mqstatus_stop2.err
+'
+test_expect_success 'stop queues' '
+	flux queue stop --all
 '
 test_expect_success 'jobs may be submitted to either queue' '
 	flux submit --wait-event=priority -q batch true > job_batch1.id &&
@@ -495,14 +496,14 @@ test_expect_success 'submitted jobs ran and completed' '
 	wait_state $(cat job_debug1.id) INACTIVE &&
 	flux jobs -n -o "{state}" $(cat job_debug1.id) | grep INACTIVE
 '
-test_expect_success 'flux-queue start w/o --all affects all queues but outputs warning' '
+test_expect_success 'flux-queue start with multiple queues emits warning' '
 	flux queue stop --all &&
-	flux queue start 2>mqstatus_start2.err &&
-	grep "warning" mqstatus_start2.err &&
-	flux queue status >mqstatus_start2.out &&
-	test $(grep -c "Scheduling is started" mqstatus_start2.out) -eq 2
+	test_must_fail flux queue start 2>mqstatus_start2.err &&
+	grep "Named queues" mqstatus_start2.err
 '
-
+test_expect_success 'start all queues' '
+	flux queue start --all
+'
 test_expect_success 'flux-queue stop can do one queue' '
 	flux queue stop -q batch nobatch > mqstop_batch.out &&
 	test $(grep -c "Scheduling is" mqstop_batch.out) -eq 1 &&
