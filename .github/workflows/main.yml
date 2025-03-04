@@ -17,11 +17,11 @@ jobs:
     - uses: flux-framework/pr-validator@master
 
   spelling:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Check Spelling
-      uses: crate-ci/typos@bcafd462cb07ef7ba57e34abf458fe20767e808b # v1.19.0
+      uses: crate-ci/typos@v1.30.1
 
   python-lint:
     name: python linting
