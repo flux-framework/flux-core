@@ -717,7 +717,7 @@ int flux_future_fulfill_with (flux_future_t *f, flux_future_t *p)
                                    p->result.errnum,
                                    p->result.errnum_string);
     else {
-        /*  Nornal result, if result has a free_fn registered, then we have
+        /*  Normal result, if result has a free_fn registered, then we have
          *   to steal the reference for the result. We do this by copying
          *   the free_fn to 'f' and nullifying it in 'p'.
          */

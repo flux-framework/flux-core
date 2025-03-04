@@ -518,7 +518,7 @@ class Jobspec(object):
         Args:
             path (str): path or file name to encode ``data`` as in Jobspec
             data (dict, str): content of file or a local path to load
-            perms (int): file pemissions, default 0o0600 (octal). If ``data``
+            perms (int): file permissions, default 0o0600 (octal). If ``data``
                 is a file system path, then permissions of the local file
                 system object will be used.
             encoding (str): RFC 37 compatible encoding for ``data``. None

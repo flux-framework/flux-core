@@ -72,7 +72,7 @@ test_expect_success 'job-manager: query of plugin works' '
 	jq -e ".path == \"${PLUGINPATH}/test.so\"" <query.json &&
 	flux jobtap remove test.so
 '
-test_expect_success 'job-manager: query of invalid plugin fals' '
+test_expect_success 'job-manager: query of invalid plugin fails' '
 	test_must_fail flux jobtap query foo
 '
 test_expect_success 'job-manager: plugins can be loaded by configuration' '

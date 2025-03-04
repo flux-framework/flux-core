@@ -317,7 +317,7 @@ void test_basic (void)
     ok (decode_errors == 0,
         "fluid_decode type=DOTHEX worked 64K times");
 
-    /* Continue for another 4K with NMEMONIC encoding (slower).
+    /* Continue for another 4K with MNEMONIC encoding (slower).
      */
     generate_errors = 0;
     encode_errors = 0;

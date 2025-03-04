@@ -301,7 +301,7 @@ flux-core version 0.65.0 - 2024-08-06
  * job-manager: add final flag to sched.free (#6197)
  * add `-B, --bank=` option to submission commands (#6195)
  * add flux overlay trace (#6174)
- * enhance `flux queue list` with `-q, --queue=` option and abillity to
+ * enhance `flux queue list` with `-q, --queue=` option and ability to
    report queue enabled/started status (#6185)
  * support multiple queues in `flux jobs`, `pgrep`, and `pkill` `-q,
    --queue` option (#6149)
@@ -675,7 +675,7 @@ flux-core version 0.59.0 - 2024-02-06
  * add -x option to flux-alloc and flux-batch (#5665)
  * add flux filemap get --overwrite and change the default overwrite behavior
    (#5662)
- * shell: add shell.post-init plugin calllback topic between shell.init
+ * shell: add shell.post-init plugin callback topic between shell.init
    and first task.init (#5179)
  * pmi: prepend Flux PMI directory to `LD_LIBRARY_PATH` (#5715)
  * shell: write hwloc XML to a file with `HWLOC_XMLFILE` set with

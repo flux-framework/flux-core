@@ -11,7 +11,7 @@
 /* queue.c - job queues
  *
  * The job manager currently has only one actual queue in alloc.c,
- * a vestigal design from before named queues.  Therefore, 'struct queue'
+ * a vestigial design from before named queues.  Therefore, 'struct queue'
  * below is currently a container for queue state, not for jobs as one
  * might reasonably expect.
  *

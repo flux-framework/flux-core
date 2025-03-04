@@ -2341,7 +2341,7 @@ test_expect_success 'job-list parses flux-restart events' '
 # jobspec-update event testing
 #
 
-# N.B. "defaultqueue" will habe jobs "submitted" to it, but updates
+# N.B. "defaultqueue" will have jobs "submitted" to it, but updates
 # make it appear that jobs were not submitted to it.  "nosubmitqueue"
 # will never have jobs submitted to it.
 test_expect_success 'configure update queues' '

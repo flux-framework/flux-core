@@ -442,7 +442,7 @@ def status(args):
     #  Skip empty lines unless --states or --skip-empty
     skip_empty = args.skip_empty or not args.states
 
-    #  Skip empty offline lines unless offline explicily requested
+    #  Skip empty offline lines unless offline explicitly requested
     skip_empty_offline = "offline" not in states
 
     #  Include both online and offline lines by default, except if
