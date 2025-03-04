@@ -1059,6 +1059,16 @@ static void fail_parent_rpc (const flux_msg_t *msg, void *arg)
         log_tracker_error (ov->h, msg, errno);
 }
 
+static void parent_disconnect (struct overlay *ov)
+{
+    if (ov->parent.zsock) {
+        (void)zmq_disconnect (ov->parent.zsock, ov->parent.uri);
+        ov->parent.offline = true;
+        rpc_track_purge (ov->parent.tracker, fail_parent_rpc, ov);
+        overlay_monitor_notify (ov, FLUX_NODEID_ANY);
+    }
+}
+
 static void parent_cb (flux_reactor_t *r,
                        flux_watcher_t *w,
                        int revents,
@@ -1115,10 +1125,7 @@ static void parent_cb (flux_reactor_t *r,
                           "%s (rank %lu) sent disconnect control message",
                           flux_get_hostbyrank (ov->h, ov->parent.rank),
                           (unsigned long)ov->parent.rank);
-                (void)zmq_disconnect (ov->parent.zsock, ov->parent.uri);
-                ov->parent.offline = true;
-                rpc_track_purge (ov->parent.tracker, fail_parent_rpc, ov);
-                overlay_monitor_notify (ov, FLUX_NODEID_ANY);
+                parent_disconnect (ov);
             }
             else
                 logdrop (ov, OVERLAY_UPSTREAM, msg, "unknown control type");
@@ -1940,6 +1947,25 @@ error:
         flux_log_error (h, "error responding to overlay.disconnect-subtree");
 }
 
+/* Log a message then force the parent to disconnect.
+ */
+static void overlay_disconnect_parent_cb (flux_t *h,
+                                          flux_msg_handler_t *mh,
+                                          const flux_msg_t *msg,
+                                          void *arg)
+{
+    struct overlay *ov = arg;
+    const char *reason;
+
+    if (flux_request_unpack (msg, NULL, "{s:s}", "reason", &reason) < 0)
+        goto error;
+    flux_log (h, LOG_CRIT, "disconnecting: %s", reason);
+    parent_disconnect (ov);
+    return;
+error:
+    flux_log_error (h, "overlay.disconnect-parent error");
+}
+
 static void overlay_trace_cb (flux_t *h,
                               flux_msg_handler_t *mh,
                               const flux_msg_t *msg,
@@ -2455,6 +2481,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "overlay.disconnect-subtree",   // handle 'flux overlay disconnect'
         overlay_disconnect_subtree_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.disconnect-parent",
+        overlay_disconnect_parent_cb,
         0
     },
     {
