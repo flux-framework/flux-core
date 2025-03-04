@@ -210,12 +210,6 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
         errprintf (errp, "command must be an array");
         return NULL;
     }
-    if (kill_timeout > 0.) {
-        if (!prolog) {
-            errprintf (errp, "kill-timeout not allowed for epilog");
-            return NULL;
-        }
-    }
     /*  If no command is set but exec.imp is non-NULL then set command to
      *  [ "$imp_path", "run", "$name" ]
      */
@@ -773,18 +767,8 @@ static void io_cb (struct bulk_exec *bulk_exec,
     }
 }
 
-
-static void start_cb (struct bulk_exec *exec, void *arg)
-{
-    struct perilog_proc *proc = bulk_exec_aux_get (exec, "perilog_proc");
-    /*  Start timeout timer when processes have started
-     */
-    if (proc && proc->timer)
-        flux_watcher_start (proc->timer);
-}
-
 static struct bulk_exec_ops ops = {
-        .on_start = start_cb,
+        .on_start = NULL,
         .on_exit = NULL,
         .on_complete = completion_cb,
         .on_error = error_cb,
@@ -889,8 +873,7 @@ static struct perilog_proc *procdesc_run (flux_t *h,
             goto error;
         }
         proc->timer = w;
-        /* Note: watcher will be started in bulk-exec start callback
-         */
+        flux_watcher_start (proc->timer);
     }
     proc->R = json_incref (R);
     proc->bulk_exec = bulk_exec;
@@ -1115,8 +1098,10 @@ static int exception_cb (flux_plugin_t *p,
                          flux_plugin_arg_t *args,
                          void *arg)
 {
-    /*  On exception, kill any prolog running for this job:
-     *   Follow up with SIGKILL after 10s.
+    /* On exception, send SIGTERM to any remaining active tasks if
+     * cancel-on-exception is set (default=true for prolog, false for epilog)
+     * After kill-timeout, any remaining active tasks will have their nodes
+     * drained.
      */
     struct perilog_proc *proc;
     int severity;

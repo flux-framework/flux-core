@@ -112,13 +112,6 @@ test_expect_success 'perilog: invalid config is rejected' '
 	test_debug "cat config.err.$i" &&
 	grep "1 object.*left unpacked: foo" config.err.$i &&
 	test_must_fail flux config load <<-EOF 2>config.err.$((i+=1)) &&
-	[job-manager.epilog]
-	command = [ "foo" ]
-	kill-timeout = 5.5
-	EOF
-	test_debug "cat config.err.$i" &&
-	grep "kill-timeout not allowed for epilog" config.err.$i &&
-	test_must_fail flux config load <<-EOF 2>config.err.$((i+=1)) &&
 	[job-manager.perilog]
 	log-ignore = "foo"
 	EOF
