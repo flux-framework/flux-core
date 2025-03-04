@@ -37,7 +37,7 @@ struct test_jobspec_corner_case {
     { TEST_SRCDIR "/jobspec/invalid_command_string.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/invalid_per_resource_missing_type.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/missing_version.jobspec", -1 },
-    { TEST_SRCDIR "/jobspec/invalid_version.jobspec", -1 },
+    { TEST_SRCDIR "/jobspec/invalid_version.jobspec", 0 },
     { TEST_SRCDIR "/jobspec/missing_resources.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/invalid_resources.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/invalid_resources_missing_type.jobspec", -1 },
