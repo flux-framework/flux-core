@@ -125,6 +125,12 @@ test_expect_success 'flux alloc: mpi option can be overridden' '
 	flux alloc -o mpi=foo -N1 --dry-run hostname | \
 		jq -e ".attributes.system.shell.options.mpi = \"foo\""
 '
+test_expect_success 'flux alloc: -o foo.bar cannot override -o foo' '
+	test_must_fail flux alloc -o foo -N1 -o foo.bar=hi --dry-run hostname >shellopt.out 2>&1 &&
+	test_debug "cat shellopt.out" &&
+	grep "failed to set attributes.system.shell.options.foo.bar to hi" shellopt.out
+'
+
 test_expect_success 'flux alloc: MPI vars are not set in initial program' '
 	flux queue start &&
 	unset OMPI_MCA_pmix &&

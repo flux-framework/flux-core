@@ -564,7 +564,10 @@ class Jobspec(object):
             if not key.startswith(("user.", "system.")):
                 key = "system." + key
             key = "attributes." + key
-        set_treedict(self.jobspec, key, val)
+        try:
+            set_treedict(self.jobspec, key, val)
+        except TypeError as e:
+            raise TypeError(f"failed to set {key} to {val}: {e}")
 
     def setattr_shell_option(self, key, val):
         """

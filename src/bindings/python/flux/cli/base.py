@@ -422,7 +422,10 @@ class BatchConfig:
             value = json.loads(value)
         except json.decoder.JSONDecodeError:
             value = str(value)
-        set_treedict(self.config, key, value)
+        try:
+            set_treedict(self.config, key, value)
+        except TypeError as e:
+            raise TypeError(f"failed to set {key} to {value}: {e}")
         return self
 
     def update_file(self, path, extension=".toml"):
