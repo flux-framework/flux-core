@@ -27,7 +27,7 @@ for rcdir in $all_dirs; do
     done
 done
 
-modrm 0 heartbeat
+modrm all heartbeat
 modrm 0 sched-simple
 modrm all resource
 modrm 0 job-exec

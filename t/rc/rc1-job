@@ -39,7 +39,7 @@ modload all job-ingest
 modload all job-info
 modload 0 job-list
 modload all barrier
-modload 0 heartbeat
+modload all heartbeat
 
 if test $RANK -eq 0; then
     # Set fake resources for testing
