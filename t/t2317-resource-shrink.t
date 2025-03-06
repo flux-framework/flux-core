@@ -7,6 +7,9 @@ test_description='Test resource shrink when not using resource configuration'
 SIZE=4
 test_under_flux $SIZE full --test-exit-mode=leader
 export FLUX_URI_RESOLVE_LOCAL=t
+# set bourne-shell to protect against non-bourne shells being executed by
+# flux proxy in tests
+export SHELL=/bin/sh
 
 # Usage: waitup N
 #   where N is a count of online ranks
