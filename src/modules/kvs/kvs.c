@@ -260,7 +260,7 @@ static int event_unsubscribe (struct kvs_ctx *ctx, const char *ns)
             goto cleanup;
 
         if (flux_event_unsubscribe (ctx->h, topic) < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
+            flux_log_error (ctx->h, "flux_event_unsubscribe");
             goto cleanup;
         }
     }
