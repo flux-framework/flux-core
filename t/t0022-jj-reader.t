@@ -7,12 +7,12 @@ test_description='Test json-jobspec *cough* parser *cough*'
 jj=${FLUX_BUILD_DIR}/t/sched-simple/jj-reader
 y2j="flux python ${SHARNESS_TEST_SRCDIR}/jobspec/y2j.py"
 
-test_expect_success 'jj-reader: unexpected version throws error' '
+test_expect_success 'jj-reader: unexpected version continues without error' '
 	flux run --dry-run hostname \
 		| jq ".version = 2" >input.$test_count &&
-	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
+	test_expect_code 0 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
-	jj-reader: Invalid version: expected 1, got 2
+	nnodes=0 nslots=1 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
 	EOF
 	test_cmp expected.$test_count out.$test_count
 '

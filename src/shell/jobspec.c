@@ -248,11 +248,6 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
                                 "shell", "options", &job->options) < 0) {
         goto error;
     }
-    if (job->version != 1) {
-        set_error (error, "Invalid jobspec version: expected 1 got %d",
-                   job->version);
-        goto error;
-    }
     if (job->environment && !json_is_object (job->environment)) {
         set_error (error, "attributes.system.environment is not object type");
         goto error;
