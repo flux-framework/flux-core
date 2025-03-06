@@ -59,7 +59,7 @@ class CLIPlugin(ABC):  # pragma no cover
             e.g. "submit", "run", "alloc", "batch", "bulksubmit"
     """
 
-    def __init__(self, prog):
+    def __init__(self, prog, version=None, prefix="--ex-"):
         self.prog = prog
         if prog.startswith("flux "):
             self.prog = prog[5:]
