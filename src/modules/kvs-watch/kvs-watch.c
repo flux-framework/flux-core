@@ -1271,8 +1271,10 @@ struct ns_monitor *namespace_monitor (struct watch_ctx *ctx,
             zhashx_delete (ctx->namespaces, ns);
             return NULL;
         }
-        if (flux_future_then (nsm->getrootf, -1.,
-                              namespace_getroot_continuation, nsm) < 0) {
+        if (flux_future_then (nsm->getrootf,
+                              -1.,
+                              namespace_getroot_continuation,
+                              nsm) < 0) {
             zhashx_delete (ctx->namespaces, ns);
             return NULL;
         }
