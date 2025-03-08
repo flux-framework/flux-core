@@ -172,8 +172,14 @@ static void namespace_destroy (void **data)
         int saved_errno = errno;
         commit_destroy (nsm->commit);
         zlistx_destroy (&nsm->watchers);
-        if (nsm->subscribed)
-            (void)flux_event_unsubscribe (nsm->ctx->h, nsm->topic);
+        if (nsm->subscribed) {
+            flux_future_t *f;
+            if (!(f = flux_event_unsubscribe_ex (nsm->ctx->h,
+                                                 nsm->topic,
+                                                 FLUX_RPC_NORESPONSE)))
+                flux_log_error (nsm->ctx->h, "flux_event_unsubscribe_ex");
+            flux_future_destroy (f);
+        }
         free (nsm->topic);
         free (nsm->ns_name);
         flux_future_destroy (nsm->getrootf);
@@ -198,13 +204,13 @@ static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
     struct ns_monitor *nsm = calloc (1, sizeof (*nsm));
     if (!nsm)
         return NULL;
+    nsm->ctx = ctx;
     if (!(nsm->watchers = zlistx_new ()))
         goto error;
     zlistx_set_destructor (nsm->watchers, watcher_destructor);
     if (!(nsm->ns_name = strdup (ns)))
         goto error;
     nsm->owner = FLUX_USERID_UNKNOWN;
-    nsm->ctx = ctx;
     return nsm;
 error:
     namespace_destroy ((void **)&nsm);
