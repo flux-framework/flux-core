@@ -416,10 +416,11 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto error;
     if (flux_msg_handler_addvec_ex (h, modname, htab, ctx, &ctx->handlers) < 0)
         goto error;
-    if (sdmon_bus_init (&ctx->sys, ctx, "sdbus-sys", sys_glob, &error) < 0)
+    if (sdmon_bus_init (&ctx->sys, ctx, "sdbus-sys", sys_glob, &error) < 0
+        || sdmon_bus_init (&ctx->usr, ctx, "sdbus", usr_glob, &error) < 0) {
+        flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
-    if (sdmon_bus_init (&ctx->usr, ctx, "sdbus", usr_glob, &error) < 0)
-        goto error;
+    }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "reactor exited abnormally");
         goto error;
