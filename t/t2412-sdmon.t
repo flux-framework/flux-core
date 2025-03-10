@@ -57,6 +57,12 @@ wait_for_some() {
 	done
 }
 
+# Usage: bus_reconnect service
+bus_reconnect() {
+    local service=$1
+    flux python -c "import flux; flux.Flux().rpc(\"$1.reconnect\",{}).get()"
+}
+
 groups="flux python ${SHARNESS_TEST_SRCDIR}/scripts/groups.py"
 
 test_expect_success 'load sdbus,sdexec modules' '
@@ -112,6 +118,17 @@ test_expect_success 'stop the unit' '
 	stop_test_unit shell-t2412
 '
 test_expect_success 'wait for module stats stop showing test unit' '
+	wait_for_none 30
+'
+test_expect_success 'force sdbus to reconnect to d-bus' '
+	bus_reconnect sdbus
+'
+test_expect_success 'run a systemd unit and wait for it to appear' '
+	start_test_unit shell-t2412 &&
+	wait_for_some 30
+'
+test_expect_success 'stop the unit and wait for it to vanish' '
+	stop_test_unit shell-t2412 &&
 	wait_for_none 30
 '
 test_expect_success 'remove sdmon module' '
