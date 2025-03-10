@@ -352,6 +352,7 @@ static int sdmon_bus_init (struct sdmon_bus *bus,
         goto error;
     }
     bus->service = service;
+    bus->unit_glob = pattern;
     bus->fp = fp;
     bus->fl = fl;
     return 0;
