@@ -247,9 +247,11 @@ static void watcher_cleanup (struct ns_monitor *nsm, struct watcher *w)
     /* wait for all in flight lookups to complete before destroying watcher */
     if (zlist_size (w->lookups) == 0 && zlist_size (w->loads) == 0)
         zlistx_delete (nsm->watchers, w->handle);
-    /* if nsm->getrootf, destroy when getroot_continuation completes */
-    if (zlistx_size (nsm->watchers) == 0
-        && !nsm->getrootf)
+    /* under extremely racy scenarios, it is possible getroot in flight and
+     * not complete, but we will destroy namespace_monitor if there are no
+     * watchers.
+     */
+    if (zlistx_size (nsm->watchers) == 0)
         zhashx_delete (nsm->ctx->namespaces, nsm->ns_name);
 }
 
@@ -1218,11 +1220,6 @@ static void namespace_getroot_continuation (flux_future_t *f, void *arg)
     uint32_t owner;
     struct commit *commit;
 
-    /* small racy chance watcher canceled before getroot completes */
-    if (zlistx_size (nsm->watchers) == 0) {
-        zhashx_delete (nsm->ctx->namespaces, nsm->ns_name);
-        return;
-    }
     if (nsm->commit) {
         flux_future_destroy (f);
         nsm->getrootf = NULL;
@@ -1244,9 +1241,6 @@ static void namespace_getroot_continuation (flux_future_t *f, void *arg)
     nsm->commit = commit;
     nsm->owner = owner;
 done:
-    /* chance watch_respond_ns() will destroy namespace, so should
-     * destroy future first
-     */
     flux_future_destroy (f);
     nsm->getrootf = NULL;
     watcher_respond_ns (nsm);
