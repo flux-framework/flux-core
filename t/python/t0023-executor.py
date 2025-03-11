@@ -17,6 +17,7 @@ import os
 import threading
 import types
 import unittest
+import unittest.mock
 
 from flux.job import EventLogEvent, JobException, JobspecV1
 from flux.job.executor import (
@@ -407,6 +408,34 @@ class TestFluxExecutorThread(unittest.TestCase):
         for fut in list(futures):
             with self.assertRaisesRegex(RuntimeError, "reactor start failed"):
                 fut.result()
+
+    @unittest.mock.patch("flux.job.executor.submit_get_id")
+    def test_failing_submit_get_id(self, patched_submit_get_id):
+        """make `submit_get_id` raise an exception"""
+        patched_submit_get_id.side_effect = ArithmeticError("nonsense test failure")
+
+        deq = collections.deque()
+        broken_event = threading.Event()
+        event = threading.Event()
+        thread = _FluxExecutorThread(broken_event, event, deq, 0.01, (), {})
+        futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
+        jobspec = JobspecV1.from_command(["false"])
+        deq.extend(_SubmitPackage((jobspec,), {}, f) for f in futures)
+        event.set()
+        self.assertTrue(thread._FluxExecutorThread__exit_event.is_set())
+        self.assertTrue(thread._FluxExecutorThread__work_remains())
+        thread.run()
+        self.assertFalse(deq)
+        self.assertFalse(thread._FluxExecutorThread__running_user_futures)
+        self.assertFalse(broken_event.is_set())
+        self.assertFalse(thread._FluxExecutorThread__work_remains())
+        for fut in futures:
+            with self.assertRaisesRegex(ArithmeticError, "test failure"):
+                fut.result()
+            with self.assertRaisesRegex(
+                RuntimeError, r"job could not be submitted due to.*nonsense.*failure"
+            ):
+                fut.jobid()
 
 
 class TestFluxExecutorFuture(unittest.TestCase):
