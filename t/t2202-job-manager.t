@@ -322,7 +322,7 @@ test_expect_success 'job-manager: still no jobs in the queue' '
 '
 
 test_expect_success 'job-manager: flux queue disable works' '
-	flux queue disable system is fubar
+	flux queue disable --message="system is fubar"
 '
 
 test_expect_success 'job-manager: flux job submit receives custom error' '

@@ -393,7 +393,7 @@ def enable(args):
 def disable(args):
     reason = "disabled by administrator"
     if args.message:
-        reason = " ".join(args.message)
+        reason = args.message
     handle = flux.Flux()
     queue_enable(handle, False, args.queue, args.all, reason)
     if not args.quiet:
@@ -432,7 +432,7 @@ def start(args):
 
 
 def stop(args):
-    reason = " ".join(args.message) if args.message else None
+    reason = args.message
     handle = flux.Flux()
     queue_start(handle, False, args.queue, args.all, args.nocheckpoint, reason)
     if not args.quiet:
@@ -490,7 +490,12 @@ def common_parser_create(subparsers, command):
         command, formatter_class=flux.util.help_formatter()
     )
     command_parser.add_argument(
-        "-q", "--queue", type=str, metavar="NAME", help="Specify queue to {command}"
+        "-q",
+        "--queue",
+        dest="old_queue",
+        type=str,
+        metavar="NAME",
+        help=argparse.SUPPRESS,
     )
     if command in ("enable", "disable", "start", "stop"):
         command_parser.add_argument(
@@ -516,8 +521,15 @@ def common_parser_create(subparsers, command):
             help=f"Do not checkpoint that the queue has been {verb[command]}",
         )
         command_parser.add_argument(
-            "message", help=f"{command} reason", nargs=argparse.REMAINDER
+            "-m",
+            "--message",
+            type=str,
+            metavar="REASON",
+            help=f"Add reason that a queue is {verb[command]}",
         )
+    command_parser.add_argument(
+        "queue", metavar="QUEUE", nargs="?", help=f"Queue to {command}"
+    )
     command_parser.set_defaults(func=globals()[command])
     return command_parser
 
@@ -595,6 +607,17 @@ def main():
     idle_parser.set_defaults(func=idle)
 
     args = parser.parse_args()
+
+    # Handle use of old `-q, --queue` option for commands that now support
+    # the specification of queues in free arguments:
+    if "old_queue" in args and args.old_queue is not None:
+        if args.queue is not None:
+            raise ValueError(
+                "Conflicting queues specified as "
+                + f"--queue={args.old_queue} and {args.queue}"
+            )
+        args.queue = args.old_queue
+
     args.func(args)
 
 

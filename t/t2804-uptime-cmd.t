@@ -24,7 +24,7 @@ test_expect_success 'flux-uptime reports correct size' '
 	flux uptime | grep "size 4"
 '
 test_expect_success 'flux-uptime reports submit disabled' '
-	flux queue disable "testing" &&
+	flux queue disable -m "testing" &&
 	flux uptime | grep "submit disabled"
 '
 test_expect_success 'flux-uptime reports scheduler stopped' '

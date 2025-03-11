@@ -88,7 +88,7 @@ test_expect_success 'flux-queue: queue is enabled/stopped' '
 	test "$(flux queue list -no {started})" = "✗"
 '
 test_expect_success 'flux-queue: disable anonymous queue' '
-	flux queue disable testing
+	flux queue disable
 '
 test_expect_success 'flux-queue: queue is disabled/stopped' '
 	test_debug "flux queue list" &&
