@@ -63,6 +63,14 @@ test_expect_success 'flux batch --wrap option works on stdin' '
 	EOF
 	test_cmp stdin-wrap.expected stdin-wrap.out
 '
+test_expect_success 'flux batch disables exit-timeout by default' '
+	flux batch -n1 --wrap --dry-run true | \
+	    jq -e ".attributes.system.shell.options[\"exit-timeout\"] == \"none\""
+'
+test_expect_success 'flux batch allows exit-timeout to be overridden' '
+	flux batch -n1 -o exit-timeout=30s --wrap --dry-run true | \
+	    jq -e ".attributes.system.shell.options[\"exit-timeout\"] == \"30s\""
+'
 test_expect_success 'flux batch fails for binary file' '
 	test_expect_code 1 flux batch -n1 $(which hostname)
 '

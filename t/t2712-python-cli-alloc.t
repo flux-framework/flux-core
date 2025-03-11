@@ -39,6 +39,14 @@ test_expect_success 'flux alloc -N2 requests 2 nodes exclusively' '
 test_expect_success 'flux alloc --exclusive works' '
 	flux alloc -N1 -n1 --exclusive --dry-run hostname | jq -S ".resources[0]" | jq -e ".type == \"node\" and .exclusive"
 '
+test_expect_success 'flux alloc disables exit timeout by default' '
+	flux alloc -n1 --dry-run myapp | \
+	    jq -e ".attributes.system.shell.options[\"exit-timeout\"] == \"none\""
+'
+test_expect_success 'flux alloc allows exit-timeout to be overridden' '
+	flux alloc -n1 -o exit-timeout=20s --dry-run myapp | \
+	    jq -e ".attributes.system.shell.options[\"exit-timeout\"] == \"20s\""
+'
 test_expect_success 'flux alloc fails if N > n' '
 	test_expect_code 1 flux alloc -N2 -n1 --dry-run hostname
 '
