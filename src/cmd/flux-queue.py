@@ -481,6 +481,47 @@ class FSDAction(argparse.Action):
 LOGGER = logging.getLogger("flux-queue")
 
 
+def common_parser_create(subparsers, command):
+    """
+    Create an options parser for one of the flux-queue subcommands that
+    take a common set of arguments. (status, enable, disable, start, stop)
+    """
+    command_parser = subparsers.add_parser(
+        command, formatter_class=flux.util.help_formatter()
+    )
+    command_parser.add_argument(
+        "-q", "--queue", type=str, metavar="NAME", help="Specify queue to {command}"
+    )
+    if command in ("enable", "disable", "start", "stop"):
+        command_parser.add_argument(
+            "-a",
+            "--all",
+            action="store_true",
+            help="Force command to apply to all queues if none specified",
+        )
+        command_parser.add_argument(
+            "--quiet", action="store_true", help="Display only errors"
+        )
+    command_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Display more detail about internal job manager state",
+    )
+    if command in ("stop", "disable"):
+        verb = dict(stop="stopped", disable="disabled")
+        command_parser.add_argument(
+            "--nocheckpoint",
+            action="store_true",
+            help=f"Do not checkpoint that the queue has been {verb[command]}",
+        )
+        command_parser.add_argument(
+            "message", help=f"{command} reason", nargs=argparse.REMAINDER
+        )
+    command_parser.set_defaults(func=globals()[command])
+    return command_parser
+
+
 @flux.util.CLIMain(LOGGER)
 def main():
     sys.stdout = open(
@@ -492,24 +533,6 @@ def main():
         title="subcommands", description="", dest="subcommand"
     )
     subparsers.required = True
-
-    status_parser = subparsers.add_parser(
-        "status", formatter_class=flux.util.help_formatter()
-    )
-    status_parser.add_argument(
-        "-q",
-        "--queue",
-        type=str,
-        metavar="NAME",
-        help="Specify queue to show (default all)",
-    )
-    status_parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Display more detail about internal job manager state",
-    )
-    status_parser.set_defaults(func=status)
 
     list_parser = subparsers.add_parser(
         "list", formatter_class=flux.util.help_formatter()
@@ -537,135 +560,8 @@ def main():
     )
     list_parser.set_defaults(func=list)
 
-    enable_parser = subparsers.add_parser(
-        "enable", formatter_class=flux.util.help_formatter()
-    )
-    enable_parser.add_argument(
-        "-q",
-        "--queue",
-        type=str,
-        metavar="NAME",
-        help="Specify queue to enable",
-    )
-    enable_parser.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        help="Force command to apply to all queues if none specified",
-    )
-    enable_parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Display only errors",
-    )
-    enable_parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Display more detail about internal job manager state",
-    )
-    enable_parser.set_defaults(func=enable)
-
-    disable_parser = subparsers.add_parser(
-        "disable", formatter_class=flux.util.help_formatter()
-    )
-    disable_parser.add_argument(
-        "-q",
-        "--queue",
-        type=str,
-        metavar="NAME",
-        help="Specify queue to disable",
-    )
-    disable_parser.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        help="Force command to apply to all queues if none specified",
-    )
-    disable_parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Display only errors",
-    )
-    disable_parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Display details about all job manager queues",
-    )
-    disable_parser.add_argument(
-        "--nocheckpoint",
-        action="store_true",
-        help="Do not checkpoint that the queue has been disableped",
-    )
-    disable_parser.add_argument(
-        "message", help="disable reason", nargs=argparse.REMAINDER
-    )
-    disable_parser.set_defaults(func=disable)
-
-    start_parser = subparsers.add_parser(
-        "start", formatter_class=flux.util.help_formatter()
-    )
-    start_parser.add_argument(
-        "-q",
-        "--queue",
-        type=str,
-        metavar="NAME",
-        help="Specify queue to start",
-    )
-    start_parser.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        help="Force command to apply to all queues if none specified",
-    )
-    start_parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Display only errors",
-    )
-    start_parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Display more detail about internal job manager state",
-    )
-    start_parser.set_defaults(func=start)
-
-    stop_parser = subparsers.add_parser(
-        "stop", formatter_class=flux.util.help_formatter()
-    )
-    stop_parser.add_argument(
-        "-q",
-        "--queue",
-        type=str,
-        metavar="NAME",
-        help="Specify queue to stop",
-    )
-    stop_parser.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        help="Force command to apply to all queues if none specified",
-    )
-    stop_parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Display only errors",
-    )
-    stop_parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Display more detail about internal job manager state",
-    )
-    stop_parser.add_argument(
-        "--nocheckpoint",
-        action="store_true",
-        help="Do not checkpoint that the queue has been stopped",
-    )
-    stop_parser.add_argument("message", help="stop reason", nargs=argparse.REMAINDER)
-    stop_parser.set_defaults(func=stop)
+    for command in ("status", "enable", "disable", "start", "stop"):
+        common_parser_create(subparsers, command)
 
     drain_parser = subparsers.add_parser(
         "drain", formatter_class=flux.util.help_formatter()
