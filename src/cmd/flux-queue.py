@@ -391,7 +391,7 @@ def enable(args):
 
 
 def disable(args):
-    reason = None
+    reason = "disabled by administrator"
     if args.message:
         reason = " ".join(args.message)
     handle = flux.Flux()

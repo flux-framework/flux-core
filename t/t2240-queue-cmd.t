@@ -292,7 +292,7 @@ test_expect_success 'flux-queue: start queue and drain' '
 '
 
 test_expect_success 'flux-queue: quiet option works' '
-	flux queue disable --quiet foof > disable_quiet.out &&
+	flux queue disable --quiet > disable_quiet.out &&
 	test_must_fail grep submission disable_quiet.out &&
 	flux queue enable --quiet > enable_quiet.out &&
 	test_must_fail grep submission enable_quiet.out &&
@@ -303,7 +303,7 @@ test_expect_success 'flux-queue: quiet option works' '
 '
 
 test_expect_success 'flux-queue: verbose option works' '
-	flux queue disable --verbose foof > disable_verbose.out &&
+	flux queue disable --verbose > disable_verbose.out &&
 	test $(grep -c "submission is disabled" disable_verbose.out) -eq 1 &&
 	flux queue enable --verbose > enable_verbose.out &&
 	test $(grep -c "submission is enabled" enable_verbose.out) -eq 1 &&
@@ -563,7 +563,7 @@ test_expect_success 'flux-queue: stop with named queues and --nocheckpoint works
 '
 
 test_expect_success 'flux-queue: quiet option works with one queue' '
-	flux queue disable -q batch --quiet foof > mqdisable_quiet.out &&
+	flux queue disable -q batch --quiet > mqdisable_quiet.out &&
 	test_must_fail grep submission mqdisable_quiet.out &&
 	flux queue enable -q batch --quiet > mqenable_quiet.out &&
 	test_must_fail grep submission mqenable_quiet.out &&
@@ -574,7 +574,7 @@ test_expect_success 'flux-queue: quiet option works with one queue' '
 '
 
 test_expect_success 'flux-queue: verbose option works with one queue' '
-	flux queue disable -q batch --verbose foof > mqdisable_verbose.out &&
+	flux queue disable -q batch --verbose > mqdisable_verbose.out &&
 	test $(grep -c "submission is disabled" mqdisable_verbose.out) -eq 1 &&
 	test $(grep -c "submission is enabled" mqdisable_verbose.out) -eq 1 &&
 	flux queue enable -q batch --verbose > mqenable_verbose.out &&
