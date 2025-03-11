@@ -349,7 +349,7 @@ class FluxExecutorFuture(concurrent.futures.Future):
         except concurrent.futures.TimeoutError:
             # set jobid to something
             self._set_jobid(
-                None, RuntimeError(f"job could not be submitted due to {exception}")
+                None, RuntimeError(f"job could not be submitted due to {exception!r}")
             )
         return super().set_exception(exception)
 
