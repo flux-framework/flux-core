@@ -33,7 +33,7 @@ bus_get_manager_prop() {
     flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"path\":\"/org/freedesktop/systemd1\",\"interface\":\"org.freedesktop.DBus.Properties\",\"member\":\"Get\",\"params\":[\"org.freedesktop.systemd1.Manager\",\"$1\"]}).get_str())"
 }
 
-# Usage: bus_get_manager_prop property
+# Usage: bus_reconnect
 bus_reconnect() {
     flux python -c "import flux; flux.Flux().rpc(\"sdbus.reconnect\",{}).get()"
 }

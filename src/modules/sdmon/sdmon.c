@@ -45,6 +45,8 @@ struct sdmon_bus {
     bool unmute_property_updates; // set true after list response is received
     const char *service;    // sdbus or sdbus-sys
     const char *unit_glob;
+    struct sdmon_ctx *ctx;
+    zhashx_t *units; // unit name => (struct unit *)
 };
 
 struct sdmon_ctx {
@@ -53,11 +55,12 @@ struct sdmon_ctx {
     flux_msg_handler_t **handlers;
     struct sdmon_bus sys;
     struct sdmon_bus usr;
-    zhashx_t *units; // unit name => (struct unit *)
     bool group_joined;
     bool cleanup_needed;
     flux_future_t *fg;
 };
+
+static void sdmon_bus_restart (struct sdmon_bus *bus);
 
 static const char *path_prefix = "/org/freedesktop/systemd1/unit";
 
@@ -83,14 +86,15 @@ static void sdmon_join_continuation (flux_future_t *f, void *arg)
 /* Send a broker groups.join request IFF:
  * - we haven't joined yet
  * - both busses have their initial list responses (prop updates unmuted)
- * - the unit hash is empty
+ * - the unit hashes are empty
  */
 static void sdmon_group_join_if_ready (struct sdmon_ctx *ctx)
 {
     if (ctx->group_joined
         || !ctx->sys.unmute_property_updates
         || !ctx->usr.unmute_property_updates
-        || zhashx_size (ctx->units) > 0)
+        || zhashx_size (ctx->sys.units) > 0
+        || zhashx_size (ctx->usr.units) > 0)
         return;
 
     // unit(s) needing cleanup were logged, so indicate they are resolved now.
@@ -109,20 +113,11 @@ static void sdmon_group_join_if_ready (struct sdmon_ctx *ctx)
         flux_log_error (ctx->h, "error sending groups.join request");
 }
 
-/* List the units that sdmon thinks are running and their state.substate.
- */
-static void sdmon_stats_cb (flux_t *h,
-                            flux_msg_handler_t *mh,
-                            const flux_msg_t *msg,
-                            void *arg)
+static int add_units (json_t *units, struct sdmon_bus *bus)
 {
-    struct sdmon_ctx *ctx = arg;
-    json_t *units;
     struct unit *unit;
 
-    if (!(units = json_array ()))
-        goto error;
-    unit = zhashx_first (ctx->units);
+    unit = zhashx_first (bus->units);
     while (unit) {
         json_t *o;
         char state[64];
@@ -139,10 +134,27 @@ static void sdmon_stats_cb (flux_t *h,
             || json_array_append_new (units, o) < 0) {
             json_decref (o);
             errno = ENOMEM;
-            goto error;
+            return -1;
         }
-        unit = zhashx_next (ctx->units);
+        unit = zhashx_next (bus->units);
     }
+    return 0;
+}
+
+/* List the units that sdmon thinks are running and their state.substate.
+ */
+static void sdmon_stats_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
+{
+    struct sdmon_ctx *ctx = arg;
+    json_t *units;
+
+    if (!(units = json_array ())
+        || add_units (units, &ctx->usr) < 0
+        || add_units (units, &ctx->sys) < 0)
+        goto error;
     if (flux_respond_pack (h, msg, "{s:O}", "units", units) < 0)
         flux_log_error (h, "error responding to stats-get request");
     json_decref (units);
@@ -201,16 +213,18 @@ static void sdmon_property_continuation (flux_future_t *f, void *arg)
     if (!(path = sdexec_property_changed_path (f))
         || (!(dict = sdexec_property_changed_dict (f)))) {
         flux_log (ctx->h,
-                  LOG_ERR,
-                  "%s.subscribe: %s",
+                  errno == EAGAIN ? LOG_INFO : LOG_ERR,
+                  "%s: %s",
                   bus->service,
                   future_strerror (f, errno));
+        if (errno == EAGAIN)
+            goto restart;
         goto fatal;
     }
     if (!bus->unmute_property_updates)
         goto done;
     name = basename_simple (path);
-    if (!(unit = zhashx_lookup (ctx->units, name))) {
+    if (!(unit = zhashx_lookup (bus->units, name))) {
         if (!(unit = sdexec_unit_create (name))) {
             flux_log_error (ctx->h, "error creating unit %s", name);
             goto done;
@@ -222,7 +236,7 @@ static void sdmon_property_continuation (flux_future_t *f, void *arg)
 
     if (sdmon_unit_is_running (unit)) {
         if (unit_is_new) {
-            if (zhashx_insert (ctx->units, name, unit) < 0) {
+            if (zhashx_insert (bus->units, name, unit) < 0) {
                 flux_log (ctx->h, LOG_ERR, "error tracking unit %s", name);
                 sdexec_unit_destroy (unit);
                 goto done;
@@ -233,11 +247,14 @@ static void sdmon_property_continuation (flux_future_t *f, void *arg)
         if (unit_is_new)
             sdexec_unit_destroy (unit);
         else
-            zhashx_delete (ctx->units, name);
+            zhashx_delete (bus->units, name);
     }
     sdmon_group_join_if_ready (ctx);
 done:
     flux_future_reset (f);
+    return;
+restart:
+    sdmon_bus_restart (bus);
     return;
 fatal:
     flux_reactor_stop_error (flux_get_reactor (ctx->h));
@@ -255,13 +272,14 @@ static void sdmon_list_continuation (flux_future_t *f, void *arg)
 
     if (flux_future_get (f, NULL) < 0) {
         flux_log (ctx->h,
-                  LOG_ERR,
+                  errno == EAGAIN ? LOG_INFO : LOG_ERR,
                   "%s.call: %s",
                   bus->service,
                   future_strerror (f, errno));
+        if (errno == EAGAIN)
+            goto restart;
         goto fatal;
     }
-
     while (sdexec_list_units_next (f, &info)) {
         struct unit *unit;
 
@@ -276,7 +294,7 @@ static void sdmon_list_continuation (flux_future_t *f, void *arg)
                       "%s needs cleanup - resources are offline",
                       info.name);
             ctx->cleanup_needed = true;
-            if (zhashx_insert (ctx->units, info.name, unit) < 0) {
+            if (zhashx_insert (bus->units, info.name, unit) < 0) {
                 flux_log_error (ctx->h, "error tracking unit %s", info.name);
                 sdexec_unit_destroy (unit);
                 continue;
@@ -285,6 +303,9 @@ static void sdmon_list_continuation (flux_future_t *f, void *arg)
     }
     bus->unmute_property_updates = true;
     sdmon_group_join_if_ready (ctx);
+    return;
+restart:
+    sdmon_bus_restart (bus);
     return;
 fatal:
     flux_reactor_stop_error (flux_get_reactor (ctx->h));
@@ -320,6 +341,7 @@ static void sdmon_bus_finalize (struct sdmon_bus *bus)
 {
     flux_future_destroy (bus->fp);
     flux_future_destroy (bus->fl);
+    zhashx_destroy (&bus->units);
 }
 
 /* Send sdbus.subscribe and sdbus.call (ListUnitsByPatterns).
@@ -328,30 +350,28 @@ static void sdmon_bus_finalize (struct sdmon_bus *bus)
  * Set 'bus->unmute_property_updates' after the list response is received.
  * Any property updates received before that are ignored.
 */
-static int sdmon_bus_init (struct sdmon_bus *bus,
-                           struct sdmon_ctx *ctx,
-                           const char *service,
-                           const char *pattern,
-                           flux_error_t *error)
+static int sdmon_bus_start (struct sdmon_bus *bus, flux_error_t *error)
 {
+    struct sdmon_ctx *ctx = bus->ctx;
     flux_future_t *fp = NULL;
     flux_future_t *fl = NULL;
     char path[256];
 
-    if (sdbus_is_loaded (ctx->h, service, ctx->rank, error) < 0)
-        return -1;
-    snprintf (path, sizeof (path), "%s/%s", path_prefix, pattern);
-    if (!(fp = sdexec_property_changed (ctx->h, service, ctx->rank, path))
+
+    snprintf (path, sizeof (path), "%s/%s", path_prefix, bus->unit_glob);
+    if (!(fp = sdexec_property_changed (ctx->h, bus->service, ctx->rank, path))
         || flux_future_then (fp, -1, sdmon_property_continuation, ctx) < 0) {
-        errprintf (error, "%s.subscribe: %s", service, strerror (errno));
+        errprintf (error, "%s.subscribe: %s", bus->service, strerror (errno));
         goto error;
     }
-    if (!(fl = sdexec_list_units (ctx->h, service, ctx->rank, pattern))
+    if (!(fl = sdexec_list_units (ctx->h,
+                                  bus->service,
+                                  ctx->rank,
+                                  bus->unit_glob))
         || flux_future_then (fl, -1, sdmon_list_continuation, ctx) < 0) {
-        errprintf (error, "%s.call: %s", service, strerror (errno));
+        errprintf (error, "%s.call: %s", bus->service, strerror (errno));
         goto error;
     }
-    bus->service = service;
     bus->fp = fp;
     bus->fl = fl;
     return 0;
@@ -361,6 +381,48 @@ error:
     return -1;
 }
 
+/* This bus is Bantha poodoo.  sdbus blocks this request while it retries
+ * the connect to d-bus, so there is no need to backoff/retry here.
+ */
+static void sdmon_bus_restart (struct sdmon_bus *bus)
+{
+    flux_error_t error;
+
+    flux_log (bus->ctx->h,
+              LOG_INFO,
+              "%s: restarting bus monitor after non-fatal error",
+              bus->service);
+
+    flux_future_destroy (bus->fp);
+    flux_future_destroy (bus->fl);
+    bus->fp = bus->fl = NULL;
+
+    bus->unmute_property_updates = false;
+    zhashx_purge (bus->units);
+
+    if (sdmon_bus_start (bus, &error) < 0) {
+        flux_log (bus->ctx->h, LOG_ERR, "%s", error.text);
+        flux_reactor_stop_error (flux_get_reactor (bus->ctx->h));
+    }
+}
+
+static int sdmon_bus_initialize (struct sdmon_bus *bus,
+                                 struct sdmon_ctx *ctx,
+                                 const char *service,
+                                 const char *unit_glob)
+{
+    bus->service = service;
+    bus->unit_glob = unit_glob;
+    bus->ctx = ctx;
+    if (!(bus->units = zhashx_new ())) {
+        errno = ENOMEM;
+        return -1;
+    }
+    zhashx_set_destructor (bus->units, sdmon_unit_destructor);
+    return 0;
+}
+
+
 static void sdmon_ctx_destroy (struct sdmon_ctx *ctx)
 {
     if (ctx) {
@@ -369,7 +431,6 @@ static void sdmon_ctx_destroy (struct sdmon_ctx *ctx)
         sdmon_bus_finalize (&ctx->usr);
         flux_future_destroy (ctx->fg);
         flux_msg_handler_delvec (ctx->handlers);
-        zhashx_destroy (&ctx->units);
         free (ctx);
         errno = saved_errno;
     }
@@ -383,11 +444,6 @@ static struct sdmon_ctx *sdmon_ctx_create (flux_t *h)
         return NULL;
     if (flux_get_rank (h, &ctx->rank) < 0)
         goto error;
-    if (!(ctx->units = zhashx_new ())) {
-        errno = ENOMEM;
-        goto error;
-    }
-    zhashx_set_destructor (ctx->units, sdmon_unit_destructor);
     ctx->h = h;
     return ctx;
 error:
@@ -415,10 +471,21 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto error;
     if (flux_msg_handler_addvec_ex (h, modname, htab, ctx, &ctx->handlers) < 0)
         goto error;
-    if (sdmon_bus_init (&ctx->sys, ctx, "sdbus-sys", sys_glob, &error) < 0)
+    if (sdbus_is_loaded (h, "sdbus-sys", ctx->rank, &error) < 0
+        || sdbus_is_loaded (h, "sdbus-sys", ctx->rank, &error) < 0) {
+        flux_log_error (h, "%s", error.text);
         goto error;
-    if (sdmon_bus_init (&ctx->usr, ctx, "sdbus", usr_glob, &error) < 0)
+    }
+    if (sdmon_bus_initialize (&ctx->sys, ctx, "sdbus-sys", sys_glob) < 0
+        || sdmon_bus_initialize (&ctx->usr, ctx, "sdbus", usr_glob) < 0) {
+        flux_log_error (h, "failed to initialize bus objects");
         goto error;
+    }
+    if (sdmon_bus_start (&ctx->sys, &error) < 0
+        || sdmon_bus_start (&ctx->usr, &error) < 0) {
+        flux_log (h, LOG_ERR, "%s", error.text);
+        goto error;
+    }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "reactor exited abnormally");
         goto error;
