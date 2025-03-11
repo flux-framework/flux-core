@@ -241,13 +241,15 @@ class TestFluxExecutorThread(unittest.TestCase):
         """send bad arguments to ``flux.job.submit``"""
         deq = collections.deque()
         event = threading.Event()
-        thread = _FluxExecutorThread(threading.Event(), event, deq, 0.01, (), {})
+        broken_event = threading.Event()
+        thread = _FluxExecutorThread(broken_event, event, deq, 0.01, (), {})
         futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
         jobspec = JobspecV1.from_command(["false"])
         deq.extend(_SubmitPackage((jobspec,), {"not_an_arg": 42}, f) for f in futures)
         event.set()
         thread.run()
         self.assertFalse(deq)
+        self.assertFalse(broken_event.is_set())
         self.assertFalse(thread._FluxExecutorThread__running_user_futures)
         for fut in futures:
             self.assertIsInstance(fut.exception(), TypeError)
@@ -277,14 +279,16 @@ class TestFluxExecutorThread(unittest.TestCase):
     def test_cancel(self):
         deq = collections.deque()
         event = threading.Event()
+        broken_event = threading.Event()
         jobspec = JobspecV1.from_command(["false"])
-        thread = _FluxExecutorThread(threading.Event(), event, deq, 0.01, (), {})
+        thread = _FluxExecutorThread(broken_event, event, deq, 0.01, (), {})
         futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
         for fut in futures:
             deq.append(_SubmitPackage((jobspec,), {}, fut))
             fut.cancel()
         event.set()
         thread.run()
+        self.assertFalse(broken_event.is_set())
         for fut in futures:
             with self.assertRaises(cf.CancelledError):
                 fut.result()
@@ -381,6 +385,11 @@ class TestFluxExecutorThread(unittest.TestCase):
         for fut in list(futures) + list(running_futures) + list(attach_futures):
             with self.assertRaisesRegex(TypeError, "foobar"):
                 fut.result()
+        for fut in list(futures) + list(running_futures):
+            with self.assertRaisesRegex(
+                RuntimeError, r"job could not be submitted due to TypeError.*foobar"
+            ):
+                fut.jobid()
 
     def test_exception_catching_reactor_run(self):
         """Test that the thread exits cleanly when reactor_run returns < 0"""
@@ -408,6 +417,10 @@ class TestFluxExecutorThread(unittest.TestCase):
         for fut in list(futures):
             with self.assertRaisesRegex(RuntimeError, "reactor start failed"):
                 fut.result()
+            with self.assertRaisesRegex(
+                RuntimeError, "job could not be submitted due to RuntimeError"
+            ):
+                fut.jobid()
 
     @unittest.mock.patch("flux.job.executor.submit_get_id")
     def test_failing_submit_get_id(self, patched_submit_get_id):
@@ -473,7 +486,9 @@ class TestFluxExecutorFuture(unittest.TestCase):
         # test that jobid raises if an exception is set before jobid set
         fut = FluxExecutorFuture(threading.get_ident())
         fut.set_exception(ValueError("foobar"))
-        with self.assertRaisesRegex(RuntimeError, r"job could not be submitted.*"):
+        with self.assertRaisesRegex(
+            RuntimeError, "job could not be submitted due to ValueError"
+        ):
             fut.jobid()
 
     def test_jobid_callback(self):
