@@ -154,11 +154,16 @@ class _FluxExecutorThread(threading.Thread):
 
     def __submission_callback(self, submission_future, user_future):
         """Callback invoked when a jobid is ready for a submitted jobspec."""
-        jobid = submit_get_id(submission_future)
-        user_future._set_jobid(jobid)  # pylint: disable=protected-access
-        event_watch_async(self.__flux_handle, jobid).then(
-            self.__event_update, user_future
-        )
+        try:
+            jobid = submit_get_id(submission_future)
+        except Exception as submit_exc:  # pylint: disable=broad-except
+            user_future.set_exception(submit_exc)
+            self.__running_user_futures.discard(user_future)
+        else:
+            user_future._set_jobid(jobid)  # pylint: disable=protected-access
+            event_watch_async(self.__flux_handle, jobid).then(
+                self.__event_update, user_future
+            )
 
     def __event_update(self, event_future, user_future):
         """Callback invoked when a job has an event update."""
@@ -167,6 +172,8 @@ class _FluxExecutorThread(threading.Thread):
             event = event_future.get_event()
         except FileNotFoundError:  # job ID was not accepted
             user_future.set_exception(ValueError("job ID does not match any job"))
+        except Exception as unknown_exc:  # pylint: disable=broad-except
+            user_future.set_exception(unknown_exc)
         if event is not None:
             if event.name in user_future.EVENTS:
                 user_future._set_event(event)  # pylint: disable=protected-access
