@@ -1081,7 +1081,7 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
         zlistx_destroy (&l);
     }
     else
-        flux_log_error (ctx->h, "%s: zhash_keys", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: zhashx_keys", __FUNCTION__);
 }
 
 /* kvs.namespace-removed-* event
