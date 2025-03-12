@@ -349,10 +349,14 @@ plugins include:
 
 .. option:: exit-timeout=VALUE
 
-  A fatal exception is raised on the job 30s after the first task exits.
-  The timeout period may be altered by providing a different value in
-  Flux Standard Duration form.  A value of ``none`` disables generation of
-  the exception.
+  When the first task in a job exits, and exit-timeout is not set to
+  ``none``, a timer is initiated with a duration specified by *VALUE*. If the
+  timer expires, a fatal exception is raised on the job. The timeout
+  duration can be adjusted by specifying a new *VALUE* in Flux Standard
+  Duration format. Setting the value to "none" disables both the timer
+  and the exception. The default timeout is "30s" for normal parallel jobs
+  (:man1:`flux-submit` and :man1:`flux-run`) and "none" for jobs that are
+  instances of Flux (:man1:`flux-batch` and :man1:`flux-alloc`).
 
 .. option:: exit-on-error
 
