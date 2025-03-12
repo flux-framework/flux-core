@@ -36,7 +36,7 @@ fi
 
 #  Start a job with tbon.topo=kary:0
 log "Starting a child instance with flat topology\n"
-jobid=$(flux alloc -N4 -o exit-timeout=none --bg --broker-opts=-Stbon.topo=kary:0)
+jobid=$(flux alloc -N4 --bg --broker-opts=-Stbon.topo=kary:0)
 
 log "Started job $jobid\n"
 

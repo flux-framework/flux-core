@@ -22,7 +22,7 @@ force_down () {
 groups="flux python ${SHARNESS_TEST_SRCDIR}/scripts/groups.py"
 
 test_expect_success 'submit a resilient job using all ranks' '
-	jobid=$(flux alloc --bg -xN4 -o exit-timeout=none --conf=tbon.topo=kary:0) &&
+	jobid=$(flux alloc --bg -xN4 --conf=tbon.topo=kary:0) &&
 	flux proxy $jobid flux overlay status
 '
 # tbon.torpid_min should be >= sync_min (1s hardwired)
