@@ -19,7 +19,7 @@ import types
 import unittest
 import unittest.mock
 
-from flux.job import EventLogEvent, JobException, JobspecV1
+from flux.job import EventLogEvent, JobEventWatchFuture, JobException, JobspecV1
 from flux.job.executor import (
     FluxExecutor,
     FluxExecutorFuture,
@@ -330,6 +330,32 @@ class TestFluxExecutorThread(unittest.TestCase):
         )
         self.assertTrue(fut.done())
         self.assertIsInstance(fut.exception(), JobException)
+
+    def test_exception_completion_other_error(self):
+        thread = _FluxExecutorThread(
+            threading.Event(), threading.Event(), collections.deque(), 0.01, (), {}
+        )
+        fut = FluxExecutorFuture(threading.get_ident())
+        self.assertFalse(fut.done())
+        fut._set_event(EventLogEvent({"name": "start", "timestamp": 0}))
+        self.assertFalse(fut.done())
+        mock = unittest.mock.Mock(JobEventWatchFuture)
+        mock.get_event.side_effect = ArithmeticError("foobar")
+        thread._FluxExecutorThread__event_update(mock, fut)
+        self.assertTrue(fut.done())
+        with self.assertRaisesRegex(ArithmeticError, "foobar"):
+            fut.result()
+        # now try the same but with FileNotFound instead of ArithmeticError
+        fut = FluxExecutorFuture(threading.get_ident())
+        self.assertFalse(fut.done())
+        fut._set_event(EventLogEvent({"name": "start", "timestamp": 0}))
+        self.assertFalse(fut.done())
+        mock = unittest.mock.Mock(JobEventWatchFuture)
+        mock.get_event.side_effect = FileNotFoundError("foobar")
+        thread._FluxExecutorThread__event_update(mock, fut)
+        self.assertTrue(fut.done())
+        with self.assertRaisesRegex(ValueError, r".*does not match any job"):
+            fut.result()
 
     def test_finish_completion(self):
         thread = _FluxExecutorThread(
