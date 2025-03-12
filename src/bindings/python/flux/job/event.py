@@ -142,7 +142,7 @@ class JobException(Exception):
         self.type = event.context["type"]
         self.note = event.context["note"]
         self.severity = event.context["severity"]
-        super().__init__(self)
+        super().__init__()
 
     def __str__(self):
         return f"job.exception: type={self.type}: {self.note}"
