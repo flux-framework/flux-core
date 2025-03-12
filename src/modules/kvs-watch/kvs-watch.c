@@ -74,6 +74,7 @@ struct ns_monitor {
     char *topic;                // topic string for subscription
     bool subscribed;            // subscription active
     flux_future_t *getrootf;    // initial getroot future
+    flux_future_t *eventsubf;   // for event subscription
 };
 
 /* Module state.
@@ -171,11 +172,18 @@ static void namespace_destroy (void **data)
         int saved_errno = errno;
         commit_destroy (nsm->commit);
         zlistx_destroy (&nsm->watchers);
-        if (nsm->subscribed)
-            (void)flux_event_unsubscribe (nsm->ctx->h, nsm->topic);
+        if (nsm->subscribed) {
+            flux_future_t *f;
+            if (!(f = flux_event_unsubscribe_ex (nsm->ctx->h,
+                                                 nsm->topic,
+                                                 FLUX_RPC_NORESPONSE)))
+                flux_log_error (nsm->ctx->h, "flux_event_unsubscribe_ex");
+            flux_future_destroy (f);
+        }
         free (nsm->topic);
         free (nsm->ns_name);
         flux_future_destroy (nsm->getrootf);
+        flux_future_destroy (nsm->eventsubf);
         free (nsm);
         errno = saved_errno;
     }
@@ -196,36 +204,13 @@ static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
     struct ns_monitor *nsm = calloc (1, sizeof (*nsm));
     if (!nsm)
         return NULL;
+    nsm->ctx = ctx;
     if (!(nsm->watchers = zlistx_new ()))
         goto error;
     zlistx_set_destructor (nsm->watchers, watcher_destructor);
     if (!(nsm->ns_name = strdup (ns)))
         goto error;
-    /* We are subscribing to the kvs.namespace-<NS> substring.
-     *
-     * This substring encompasses four events at the moment.
-     *
-     * kvs.namespace-<NS>-setroot
-     * kvs.namespace-<NS>-error
-     * kvs.namespace-<NS>-removed
-     * kvs.namespace-<NS>-created
-     *
-     * This module only has callbacks for the "setroot", "removed", and
-     * "created" events. "error" events are dropped.
-     *
-     * While dropped events are "bad" performance wise, "error" events
-     * are presumably rare and it is a net win on performance to limit
-     * the number of calls to the flux_event_subscribe() function.
-     *
-     * See issue #2779 for more information.
-     */
-    if (asprintf (&nsm->topic, "kvs.namespace-%s", ns) < 0)
-        goto error;
     nsm->owner = FLUX_USERID_UNKNOWN;
-    nsm->ctx = ctx;
-    if (flux_event_subscribe (ctx->h, nsm->topic) < 0)
-        goto error;
-    nsm->subscribed = true;
     return nsm;
 error:
     namespace_destroy ((void **)&nsm);
@@ -247,9 +232,11 @@ static void watcher_cleanup (struct ns_monitor *nsm, struct watcher *w)
     /* wait for all in flight lookups to complete before destroying watcher */
     if (zlist_size (w->lookups) == 0 && zlist_size (w->loads) == 0)
         zlistx_delete (nsm->watchers, w->handle);
-    /* if nsm->getrootf, destroy when getroot_continuation completes */
-    if (zlistx_size (nsm->watchers) == 0
-        && !nsm->getrootf)
+    /* under extremely racy scenarios, it is possible getroot or
+     * event_subscribe is in flight and not complete, but we will destroy
+     * namespace_monitor if there are no watchers.
+     */
+    if (zlistx_size (nsm->watchers) == 0)
         zhashx_delete (nsm->ctx->namespaces, nsm->ns_name);
 }
 
@@ -1218,11 +1205,6 @@ static void namespace_getroot_continuation (flux_future_t *f, void *arg)
     uint32_t owner;
     struct commit *commit;
 
-    /* small racy chance watcher canceled before getroot completes */
-    if (zlistx_size (nsm->watchers) == 0) {
-        zhashx_delete (nsm->ctx->namespaces, nsm->ns_name);
-        return;
-    }
     if (nsm->commit) {
         flux_future_destroy (f);
         nsm->getrootf = NULL;
@@ -1244,11 +1226,29 @@ static void namespace_getroot_continuation (flux_future_t *f, void *arg)
     nsm->commit = commit;
     nsm->owner = owner;
 done:
-    /* chance watch_respond_ns() will destroy namespace, so should
-     * destroy future first
-     */
     flux_future_destroy (f);
     nsm->getrootf = NULL;
+    watcher_respond_ns (nsm);
+}
+
+/* event.subscribe response for initial namespace creation */
+static void namespace_event_subscribe_continuation (flux_future_t *f, void *arg)
+{
+    struct ns_monitor *nsm = arg;
+
+    if (flux_rpc_get (f, NULL) < 0) {
+        flux_log_error (nsm->ctx->h, "%s: event subscribe", __FUNCTION__);
+        nsm->errnum = errno;
+        goto cleanup;
+    }
+    flux_future_destroy (f);
+    nsm->eventsubf = NULL;
+    nsm->subscribed = true;
+    return;
+
+cleanup:
+    flux_future_destroy (f);
+    nsm->eventsubf = NULL;
     watcher_respond_ns (nsm);
 }
 
@@ -1265,19 +1265,49 @@ struct ns_monitor *namespace_monitor (struct watch_ctx *ctx,
         if (!(nsm = namespace_create (ctx, ns)))
             return NULL;
         (void)zhashx_insert (ctx->namespaces, ns, nsm);
-        /* store future in namespace, so namespace can be destroyed
+        /* store futures in namespace, so namespace can be destroyed
          * appropriately to avoid matchtag leak */
-        if (!(nsm->getrootf = flux_kvs_getroot (ctx->h, ns, 0))) {
-            zhashx_delete (ctx->namespaces, ns);
-            return NULL;
-        }
-        if (flux_future_then (nsm->getrootf, -1.,
-                              namespace_getroot_continuation, nsm) < 0) {
-            zhashx_delete (ctx->namespaces, ns);
-            return NULL;
-        }
+        if (!(nsm->getrootf = flux_kvs_getroot (ctx->h, ns, 0)))
+            goto cleanup;
+        if (flux_future_then (nsm->getrootf,
+                              -1.,
+                              namespace_getroot_continuation,
+                              nsm) < 0)
+            goto cleanup;
+        /* We are subscribing to the kvs.namespace-<NS> substring.
+         *
+         * This substring encompasses four events at the moment.
+         *
+         * kvs.namespace-<NS>-setroot
+         * kvs.namespace-<NS>-error
+         * kvs.namespace-<NS>-removed
+         * kvs.namespace-<NS>-created
+         *
+         * This module only has callbacks for the "setroot", "removed", and
+         * "created" events. "error" events are dropped.
+         *
+         * While dropped events are "bad" performance wise, "error" events
+         * are presumably rare and it is a net win on performance to limit
+         * the number of calls to subscribe to events.
+         *
+         * See issue #2779 for more information.
+         */
+        if (asprintf (&nsm->topic, "kvs.namespace-%s", ns) < 0)
+            goto cleanup;
+        if (!(nsm->eventsubf = flux_event_subscribe_ex (ctx->h,
+                                                        nsm->topic,
+                                                        0)))
+            goto cleanup;
+        if (flux_future_then (nsm->eventsubf,
+                              -1.,
+                              namespace_event_subscribe_continuation,
+                              nsm) < 0)
+            goto cleanup;
     }
     return nsm;
+cleanup:
+    zhashx_delete (ctx->namespaces, ns);
+    return NULL;
 }
 
 static void lookup_cb (flux_t *h,
