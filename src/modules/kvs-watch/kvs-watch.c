@@ -229,9 +229,9 @@ static bool key_match (json_t *o, const char *key)
 
 static void watcher_cleanup (struct ns_monitor *nsm, struct watcher *w)
 {
-    /* wait for all in flight lookups to complete before destroying watcher */
-    if (zlist_size (w->lookups) == 0 && zlist_size (w->loads) == 0)
-        zlistx_delete (nsm->watchers, w->handle);
+    /* it is possible lookups & loads are in flight, they will be
+     * cleaned in watcher_destroy() */
+    zlistx_delete (nsm->watchers, w->handle);
     /* under extremely racy scenarios, it is possible getroot or
      * event_subscribe is in flight and not complete, but we will destroy
      * namespace_monitor if there are no watchers.
