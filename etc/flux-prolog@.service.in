@@ -1,9 +1,0 @@
-[Unit]
-Description=Prolog for Flux job %I
-CollectMode=inactive-or-failed
-
-[Service]
-Type=oneshot
-EnvironmentFile=-@X_RUNSTATEDIR@/flux-prolog@%I.env
-ExecStart=@X_SYSCONFDIR@/flux/system/prolog
-ExecStopPost=-rm -f @X_RUNSTATEDIR@/flux-prolog@%I.env
