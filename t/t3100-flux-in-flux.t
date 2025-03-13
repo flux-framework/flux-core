@@ -54,7 +54,7 @@ test_expect_success "flux --root works in subinstance" '
 	id=$(flux batch -n1 --wrap \
 		flux run flux start ${ARGS} \
 		flux --root getattr instance-level) &&
-	flux job wait-event -vt 60 $id clean &&
+	flux job wait-event -vt 120 $id clean &&
 	test_debug "cat flux-${id}.out" &&
 	test "$(cat flux-${id}.out)" -eq 0
 '

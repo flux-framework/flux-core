@@ -9,14 +9,14 @@ flux-queue(1)
 SYNOPSIS
 ========
 
-| **flux** **queue** **list** [-n] [-o FORMAT]
-| **flux** **queue** **status** [*-q* *NAME* | *-a*] [*-v*]
+| **flux** **queue** **list** [*-q* *QUEUES,...*] [*-n*] [*-o* *FORMAT*]
+| **flux** **queue** **status** [*-a*] [*-v*] [*QUEUE*]
 
-| **flux** **queue** **disable** [*-q* *NAME* | *-a*] [*-v*] [*--quiet*] [*--nocheckpoint*] *reason*
-| **flux** **queue** **enable** [*-q* *NAME* | *-a*] [*-v*] [*--quiet*]
+| **flux** **queue** **disable** [*-a*] [*-v*] [*--quiet*] [*--nocheckpoint*] [*-m* *reason*] [*QUEUE*]
+| **flux** **queue** **enable** [*-a*] [*-v*] [*--quiet*] [*QUEUE*]
 
-| **flux** **queue** **stop** [*-q* *NAME* | *-a*] [*-v*] [*--quiet*] [*--nocheckpoint*] *reason*
-| **flux** **queue** **start** [*-q* *NAME* | *-a*] [*-v*] [*--quiet*]
+| **flux** **queue** **stop** [*-a*] [*-v*] [*--quiet*] [*--nocheckpoint*] [*-m* *reason*] [*QUEUE*]
+| **flux** **queue** **start** [*-a*] [*-v*] [*--quiet*] [*QUEUE*]
 
 | **flux** **queue** **drain** [*--timeout=DURATION*]
 | **flux** **queue** **idle** [*--timeout=DURATION*]
@@ -77,12 +77,8 @@ disable
 
 .. program:: flux queue disable
 
-Prevent jobs from being submitted to the queue, with a reason that is
+Prevent jobs from being submitted to the queue, with an optional reason that is
 shown to submitting users.
-
-.. option:: -q, --queue=NAME
-
-   Select a queue by name.
 
 .. option:: -a, --all
 
@@ -98,7 +94,12 @@ shown to submitting users.
 
 .. option:: --nocheckpoint
 
-   Do not preserve the new queue stop state across a Flux instance restart.
+   Do not preserve the new queue disabled state across a Flux instance restart.
+
+.. options:: -m, --message=REASON
+
+   Add a reason that the queue is disabled. This will be shown to users
+   who attempt to submit to the queue.
 
 enable
 ------
@@ -132,10 +133,6 @@ Stop allocating resources to jobs.  Pending jobs remain enqueued, and
 running jobs continue to run, but no new jobs are allocated
 resources.
 
-.. option:: -q, --queue=NAME
-
-   Select a queue by name.
-
 .. option:: -a, --all
 
    Select all queues.
@@ -152,16 +149,17 @@ resources.
 
    Do not preserve the new queue stop state across a Flux instance restart.
 
+.. options:: -m, --message=REASON
+
+   Add a reason that the queue is stopped. This message will be displayed
+   in the output of :command:`flux queue status`.
+
 start
 -----
 
 .. program:: flux queue start
 
 Start allocating resources to jobs.
-
-.. option:: -q, --queue=NAME
-
-   Select a queue by name.
 
 .. option:: -a, --all
 
