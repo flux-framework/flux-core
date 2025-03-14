@@ -1062,6 +1062,9 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
     char *name;
     struct ns_monitor *nsm;
 
+    /* namespaces can be destroyed, so cannot safely use
+     * zhashx_first/next().  Use zhashx_keys().
+     */
     if ((l = zhashx_keys (ctx->namespaces))) {
         name = zlistx_first (l);
         while (name) {
