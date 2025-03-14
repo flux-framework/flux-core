@@ -90,6 +90,7 @@ struct watch_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
     zhashx_t *namespaces;        // hash of monitored namespaces
+    zhashx_t *namespace_matchtags; // matchtags -> namespaces w/ requests
 };
 
 static void watcher_destroy (struct watcher *w)
@@ -251,6 +252,7 @@ static void watcher_cleanup (struct ns_monitor *nsm, struct watcher *w)
     /* it is possible lookups & loads are in flight, they will be
      * cleaned in watcher_destroy() */
     zhashx_delete (nsm->watcher_matchtags, w->matchtag_key);
+    zhashx_delete (nsm->ctx->namespace_matchtags, w->matchtag_key);
     zlistx_delete (nsm->watchers, w->handle);
     /* under extremely racy scenarios, it is possible getroot or
      * event_subscribe is in flight and not complete, but we will destroy
@@ -1118,6 +1120,20 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
     char *name;
     struct ns_monitor *nsm;
 
+    /* if canceling, do lookup to avoid iterating over all
+     * namespaces */
+    if (cancel) {
+        char buf[1024];
+        if (matchtag_key (ctx->h, msg, buf, sizeof (buf)) < 0)
+            goto fallthrough;
+        if ((nsm = zhashx_lookup (ctx->namespace_matchtags, buf))) {
+            watcher_cancel_ns (nsm, msg, cancel);
+            return;
+        }
+        /* else fallthrough to iterate over everything below */
+    }
+
+fallthrough:
     /* namespaces can be destroyed, so cannot safely use
      * zhashx_first/next().  Use zhashx_keys().
      */
@@ -1416,6 +1432,11 @@ static void lookup_cb (flux_t *h,
         errno = EINVAL;
         goto error;
     }
+    if (zhashx_insert (ctx->namespace_matchtags, w->matchtag_key, nsm) < 0) {
+        zlistx_delete (nsm->watchers, w->handle);
+        errno = EINVAL;
+        goto error;
+    }
     if (nsm->commit)
         watcher_respond (nsm, w);
     return;
@@ -1544,6 +1565,7 @@ static void watch_ctx_destroy (struct watch_ctx *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
+        zhashx_destroy (&ctx->namespace_matchtags);
         zhashx_destroy (&ctx->namespaces);
         flux_msg_handler_delvec (ctx->handlers);
         free (ctx);
@@ -1563,6 +1585,8 @@ static struct watch_ctx *watch_ctx_create (flux_t *h)
         goto error;
     zhashx_set_destructor (ctx->namespaces,
                            (zhashx_destructor_fn *)namespace_destroy);
+    if (!(ctx->namespace_matchtags = zhashx_new ()))
+        goto error;
     return ctx;
 error:
     watch_ctx_destroy (ctx);
