@@ -646,6 +646,19 @@ error:
     json_decref (keys);
 }
 
+int lookup_setup (struct info_ctx *ctx)
+{
+    if (!(ctx->lookups = zlist_new ()))
+        return -1;
+    return 0;
+}
+
+void lookup_cleanup (struct info_ctx *ctx)
+{
+    if (ctx->lookups)
+        zlist_destroy (&ctx->lookups);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

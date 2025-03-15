@@ -828,17 +828,28 @@ void guest_watchers_cancel (struct info_ctx *ctx,
     }
 }
 
+int guest_watch_setup (struct info_ctx *ctx)
+{
+    if (!(ctx->guest_watchers = zlist_new ()))
+        return -1;
+    return 0;
+}
+
 void guest_watch_cleanup (struct info_ctx *ctx)
 {
-    struct guest_watch_ctx *gw;
+    if (ctx->guest_watchers) {
+        struct guest_watch_ctx *gw;
 
-    while ((gw = zlist_pop (ctx->guest_watchers))) {
-        send_eventlog_watch_cancel (gw, NULL, false);
+        while ((gw = zlist_pop (ctx->guest_watchers))) {
+            send_eventlog_watch_cancel (gw, NULL, false);
 
-        if (flux_respond_error (ctx->h, gw->msg, ENOSYS, NULL) < 0)
-            flux_log_error (ctx->h, "%s: flux_respond_error",
-                            __FUNCTION__);
-        guest_watch_ctx_destroy (gw);
+            if (flux_respond_error (ctx->h, gw->msg, ENOSYS, NULL) < 0)
+                flux_log_error (ctx->h, "%s: flux_respond_error",
+                                __FUNCTION__);
+            guest_watch_ctx_destroy (gw);
+        }
+        zlist_destroy (&ctx->guest_watchers);
+        ctx->guest_watchers = NULL;
     }
 }
 

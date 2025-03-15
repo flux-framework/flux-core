@@ -24,6 +24,10 @@ void update_lookup_cb (flux_t *h,
                        const flux_msg_t *msg,
                        void *arg);
 
+int lookup_setup (struct info_ctx *ctx);
+
+void lookup_cleanup (struct info_ctx *ctx);
+
 #endif /* ! _FLUX_JOB_INFO_LOOKUP_H */
 
 /*

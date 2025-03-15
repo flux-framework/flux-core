@@ -29,6 +29,8 @@ void guest_watchers_cancel (struct info_ctx *ctx,
                             const flux_msg_t *msg,
                             bool cancel);
 
+int guest_watch_setup (struct info_ctx *ctx);
+
 void guest_watch_cleanup (struct info_ctx *ctx);
 
 #endif /* ! _FLUX_JOB_INFO_GUEST_WATCH_H */

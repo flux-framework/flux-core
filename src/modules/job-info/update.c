@@ -609,23 +609,42 @@ void update_watch_cancel_cb (flux_t *h,
     update_watchers_cancel (ctx, msg, true);
 }
 
+int update_watch_setup (struct info_ctx *ctx)
+{
+    /* N.B. no cleanup in this setup, caller will destroy info_ctx */
+    if (!(ctx->update_watchers = zlist_new ()))
+        return -1;
+    /* no destructor for index_uw, destruction handled on
+     * update_watchers list */
+    if (!(ctx->index_uw = zhashx_new ()))
+        return -1;
+    return 0;
+}
+
 void update_watch_cleanup (struct info_ctx *ctx)
 {
-    struct update_ctx *uc;
-
-    while ((uc = zlist_pop (ctx->update_watchers))) {
-        const flux_msg_t *msg;
-        eventlog_watch_cancel (uc);
-        msg = flux_msglist_first (uc->msglist);
-        while (msg) {
-            if (flux_respond_error (ctx->h, msg, ENOSYS, NULL) < 0) {
-                flux_log_error (ctx->h,
-                                "%s: flux_respond_error",
-                                __FUNCTION__);
+    if (ctx->update_watchers) {
+        struct update_ctx *uc;
+        while ((uc = zlist_pop (ctx->update_watchers))) {
+            const flux_msg_t *msg;
+            eventlog_watch_cancel (uc);
+            msg = flux_msglist_first (uc->msglist);
+            while (msg) {
+                if (flux_respond_error (ctx->h, msg, ENOSYS, NULL) < 0) {
+                    flux_log_error (ctx->h,
+                                    "%s: flux_respond_error",
+                                    __FUNCTION__);
+                }
+                msg = flux_msglist_next (uc->msglist);
             }
-            msg = flux_msglist_next (uc->msglist);
+            update_ctx_destroy (uc);
         }
-        update_ctx_destroy (uc);
+        zlist_destroy (&ctx->update_watchers);
+        ctx->update_watchers = NULL;
+    }
+    if (ctx->index_uw) {
+        zhashx_destroy (&ctx->index_uw);
+        ctx->index_uw = NULL;
     }
 }
 

@@ -503,21 +503,32 @@ void watch_cancel_cb (flux_t *h, flux_msg_handler_t *mh,
     guest_watchers_cancel (ctx, msg, true);
 }
 
+int watch_setup (struct info_ctx *ctx)
+{
+    if (!(ctx->watchers = zlist_new ()))
+        return -1;
+    return 0;
+}
+
 void watch_cleanup (struct info_ctx *ctx)
 {
-    struct watch_ctx *w;
+    if (ctx->watchers) {
+        struct watch_ctx *w;
 
-    while ((w = zlist_pop (ctx->watchers))) {
-        if (w->watch_f) {
-            if (flux_kvs_lookup_cancel (w->watch_f) < 0) {
-                flux_log_error (ctx->h,
-                                "%s: flux_kvs_lookup_cancel",
-                                __FUNCTION__);
+        while ((w = zlist_pop (ctx->watchers))) {
+            if (w->watch_f) {
+                if (flux_kvs_lookup_cancel (w->watch_f) < 0) {
+                    flux_log_error (ctx->h,
+                                    "%s: flux_kvs_lookup_cancel",
+                                    __FUNCTION__);
+                }
             }
+            if (flux_respond_error (ctx->h, w->msg, ENOSYS, NULL) < 0)
+                flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+            watch_ctx_destroy (w);
         }
-        if (flux_respond_error (ctx->h, w->msg, ENOSYS, NULL) < 0)
-            flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-        watch_ctx_destroy (w);
+        zlist_destroy (&ctx->watchers);
+        ctx->watchers = NULL;
     }
 }
 
