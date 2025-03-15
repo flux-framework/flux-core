@@ -39,9 +39,9 @@ static void stats_cb (flux_t *h,
                       void *arg)
 {
     struct info_ctx *ctx = arg;
-    int lookups = zlist_size (ctx->lookups);
-    int watchers = zlist_size (ctx->watchers);
-    int guest_watchers = zlist_size (ctx->guest_watchers);
+    int lookups = zlistx_size (ctx->lookups);
+    int watchers = zlistx_size (ctx->watchers);
+    int guest_watchers = zlistx_size (ctx->guest_watchers);
     int update_lookups = 0;     /* no longer supported */
     int update_watchers = update_watch_count (ctx);
     if (flux_respond_pack (h,

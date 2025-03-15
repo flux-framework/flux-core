@@ -13,6 +13,8 @@
 
 #include <flux/core.h>
 
+void lookup_ctx_destroy_wrapper (void **data);
+
 void lookup_cb (flux_t *h,
                 flux_msg_handler_t *mh,
                 const flux_msg_t *msg,

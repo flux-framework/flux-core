@@ -40,6 +40,7 @@ struct watch_ctx {
     bool allow;
     bool kvs_watch_canceled;
     bool cancel;
+    void *handle;               /* zlistx_t handle */
 };
 
 static void watch_continuation (flux_future_t *f, void *arg);
@@ -56,6 +57,15 @@ static void watch_ctx_destroy (void *data)
         flux_future_destroy (ctx->watch_f);
         free (ctx);
         errno = save_errno;
+    }
+}
+
+/* zlistx_destructor_fn */
+static void watch_ctx_destroy_wrapper (void **data)
+{
+    if (data) {
+        watch_ctx_destroy (*data);
+        *data = NULL;
     }
 }
 
@@ -203,8 +213,8 @@ error:
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
 done:
     /* flux future destroyed in watch_ctx_destroy, which is called
-     * via zlist_remove() */
-    zlist_remove (ctx->watchers, w);
+     * via zlistx_delete() */
+    zlistx_delete (ctx->watchers, w->handle);
 }
 
 static int check_eventlog_end (struct watch_ctx *w,
@@ -321,8 +331,8 @@ error:
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
 cleanup:
     /* flux future destroyed in watch_ctx_destroy, which is called
-     * via zlist_remove() */
-    zlist_remove (ctx->watchers, w);
+     * via zlistx_delete() */
+    zlistx_delete (ctx->watchers, w->handle);
 }
 
 static int watch (struct info_ctx *ctx,
@@ -381,11 +391,11 @@ static int watch (struct info_ctx *ctx,
             goto error;
     }
 
-    if (zlist_append (ctx->watchers, w) < 0) {
-        flux_log_error (ctx->h, "%s: zlist_append", __FUNCTION__);
+    if (!(w->handle = zlistx_add_end (ctx->watchers, w))) {
+        errno = ENOMEM;
+        flux_log_error (ctx->h, "%s: zlistx_add_end", __FUNCTION__);
         goto error;
     }
-    zlist_freefn (ctx->watchers, w, watch_ctx_destroy, true);
     w = NULL;
 
     return 0;
@@ -488,10 +498,10 @@ void watchers_cancel (struct info_ctx *ctx, const flux_msg_t *msg, bool cancel)
 {
     struct watch_ctx *w;
 
-    w = zlist_first (ctx->watchers);
+    w = zlistx_first (ctx->watchers);
     while (w) {
         send_kvs_watch_cancel (ctx, w, msg, cancel);
-        w = zlist_next (ctx->watchers);
+        w = zlistx_next (ctx->watchers);
     }
 }
 
@@ -505,8 +515,9 @@ void watch_cancel_cb (flux_t *h, flux_msg_handler_t *mh,
 
 int watch_setup (struct info_ctx *ctx)
 {
-    if (!(ctx->watchers = zlist_new ()))
+    if (!(ctx->watchers = zlistx_new ()))
         return -1;
+    zlistx_set_destructor (ctx->watchers, watch_ctx_destroy_wrapper);
     return 0;
 }
 
@@ -515,7 +526,8 @@ void watch_cleanup (struct info_ctx *ctx)
     if (ctx->watchers) {
         struct watch_ctx *w;
 
-        while ((w = zlist_pop (ctx->watchers))) {
+        while (zlistx_first (ctx->watchers)) {
+            w = zlistx_detach_cur (ctx->watchers);
             if (w->watch_f) {
                 if (flux_kvs_lookup_cancel (w->watch_f) < 0) {
                     flux_log_error (ctx->h,
@@ -527,7 +539,7 @@ void watch_cleanup (struct info_ctx *ctx)
                 flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
             watch_ctx_destroy (w);
         }
-        zlist_destroy (&ctx->watchers);
+        zlistx_destroy (&ctx->watchers);
         ctx->watchers = NULL;
     }
 }

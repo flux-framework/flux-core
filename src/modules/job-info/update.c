@@ -40,6 +40,7 @@ struct update_ctx {
     int initial_update_count;
     int watch_update_count;
     char *index_key;
+    void *handle;               /* zlistx_t handle */
 };
 
 static void update_ctx_destroy (void *data)
@@ -55,6 +56,15 @@ static void update_ctx_destroy (void *data)
         free (uc->index_key);
         free (uc);
         errno = save_errno;
+    }
+}
+
+/* zlistx_destructor_fn */
+static void update_ctx_destroy_wrapper (void **data)
+{
+    if (data) {
+        update_ctx_destroy (*data);
+        *data = NULL;
     }
 }
 
@@ -221,9 +231,9 @@ error:
 
 cleanup:
     /* flux future destroyed in update_ctx_destroy, which is
-     * called via zlist_remove() */
+     * called via zlistx_delete() */
     zhashx_delete (ctx->index_uw, uc->index_key);
-    zlist_remove (ctx->update_watchers, uc);
+    zlistx_delete (ctx->update_watchers, uc->handle);
 }
 
 static int eventlog_watch (struct update_ctx *uc)
@@ -396,9 +406,9 @@ error:
 
 cleanup:
     /* flux future destroyed in update_ctx_destroy, which is called
-     * via zlist_remove() */
+     * via zlistx_delete() */
     zhashx_delete (ctx->index_uw, uc->index_key);
-    zlist_remove (ctx->update_watchers, uc);
+    zlistx_delete (ctx->update_watchers, uc->handle);
     json_decref (eventlog);
 }
 
@@ -439,11 +449,11 @@ static int update_lookup (struct info_ctx *ctx,
         goto error;
     }
 
-    if (zlist_append (ctx->update_watchers, uc) < 0) {
-        flux_log_error (ctx->h, "%s: zlist_append", __FUNCTION__);
+    if (!(uc->handle = zlistx_add_end (ctx->update_watchers, uc))) {
+        errno = ENOMEM;
+        flux_log_error (ctx->h, "%s: zlistx_add_end", __FUNCTION__);
         goto error;
     }
-    zlist_freefn (ctx->update_watchers, uc, update_ctx_destroy, true);
 
     if (zhashx_insert (ctx->index_uw, uc->index_key, uc) < 0) {
         flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
@@ -453,7 +463,7 @@ static int update_lookup (struct info_ctx *ctx,
     return 0;
 
 error_list:
-    zlist_remove (ctx->update_watchers, uc);
+    zlistx_delete (ctx->update_watchers, uc->handle);
     return -1;
 
 error:
@@ -593,10 +603,10 @@ void update_watchers_cancel (struct info_ctx *ctx,
 {
     struct update_ctx *uc;
 
-    uc = zlist_first (ctx->update_watchers);
+    uc = zlistx_first (ctx->update_watchers);
     while (uc) {
         update_watch_cancel (uc, msg, cancel);
-        uc = zlist_next (ctx->update_watchers);
+        uc = zlistx_next (ctx->update_watchers);
     }
 }
 
@@ -612,8 +622,9 @@ void update_watch_cancel_cb (flux_t *h,
 int update_watch_setup (struct info_ctx *ctx)
 {
     /* N.B. no cleanup in this setup, caller will destroy info_ctx */
-    if (!(ctx->update_watchers = zlist_new ()))
+    if (!(ctx->update_watchers = zlistx_new ()))
         return -1;
+    zlistx_set_destructor (ctx->update_watchers, update_ctx_destroy_wrapper);
     /* no destructor for index_uw, destruction handled on
      * update_watchers list */
     if (!(ctx->index_uw = zhashx_new ()))
@@ -625,8 +636,9 @@ void update_watch_cleanup (struct info_ctx *ctx)
 {
     if (ctx->update_watchers) {
         struct update_ctx *uc;
-        while ((uc = zlist_pop (ctx->update_watchers))) {
+        while (zlistx_first (ctx->update_watchers)) {
             const flux_msg_t *msg;
+            uc = zlistx_detach_cur (ctx->update_watchers);
             eventlog_watch_cancel (uc);
             msg = flux_msglist_first (uc->msglist);
             while (msg) {
@@ -639,7 +651,7 @@ void update_watch_cleanup (struct info_ctx *ctx)
             }
             update_ctx_destroy (uc);
         }
-        zlist_destroy (&ctx->update_watchers);
+        zlistx_destroy (&ctx->update_watchers);
         ctx->update_watchers = NULL;
     }
     if (ctx->index_uw) {
@@ -653,10 +665,10 @@ int update_watch_count (struct info_ctx *ctx)
     struct update_ctx *uc;
     int count = 0;
 
-    uc = zlist_first (ctx->update_watchers);
+    uc = zlistx_first (ctx->update_watchers);
     while (uc) {
         count += flux_msglist_count (uc->msglist);
-        uc = zlist_next (ctx->update_watchers);
+        uc = zlistx_next (ctx->update_watchers);
     }
     return count;
 }

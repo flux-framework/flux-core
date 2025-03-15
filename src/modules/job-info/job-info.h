@@ -23,10 +23,10 @@ struct info_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
     lru_cache_t *owner_lru; /* jobid -> owner LRU */
-    zlist_t *lookups;
-    zlist_t *watchers;
-    zlist_t *guest_watchers;
-    zlist_t *update_watchers;
+    zlistx_t *lookups;
+    zlistx_t *watchers;
+    zlistx_t *guest_watchers;
+    zlistx_t *update_watchers;
     zhashx_t *index_uw;        /* jobid + key -> update_watcher lookup */
 };
 
