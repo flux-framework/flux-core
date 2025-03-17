@@ -152,6 +152,47 @@ void apply_updates_jobspec (flux_t *h,
     }
 }
 
+char *create_matchtag_key (flux_t *h, const flux_msg_t *msg)
+{
+    char *matchtag_key;
+    uint32_t matchtag;
+    const char *uuid;
+
+    if (flux_msg_get_matchtag (msg, &matchtag) < 0) {
+        flux_log_error (h, "failed to get matchtag");
+        return NULL;
+    }
+    if (!(uuid = flux_msg_route_first (msg))) {
+        flux_log_error (h, "failed to get uuid");
+        return NULL;
+    }
+    if (asprintf (&matchtag_key, "%s:%u", uuid, matchtag) < 0)
+        return NULL;
+    return matchtag_key;
+}
+
+int get_matchtag_key (flux_t *h,
+                      const flux_msg_t *msg,
+                      char *buf,
+                      size_t bufsize)
+{
+    uint32_t matchtag;
+    const char *uuid;
+    if (flux_msg_unpack (msg, "{s:i}", "matchtag", &matchtag) < 0) {
+        flux_log_error (h, "failed to get matchtag");
+        return -1;
+    }
+    if (!(uuid = flux_msg_route_first (msg))) {
+        flux_log_error (h, "failed to get uuid");
+        return -1;
+    }
+    if (snprintf (buf, bufsize, "%s:%u", uuid, matchtag) >= bufsize) {
+        flux_log_error (h, "failed to create matchtag key");
+        return -1;
+    }
+    return 0;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

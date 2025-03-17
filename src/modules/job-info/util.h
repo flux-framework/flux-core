@@ -50,6 +50,13 @@ void apply_updates_jobspec (flux_t *h,
                             json_t *jobspec,
                             json_t *context);
 
+char *create_matchtag_key (flux_t *h, const flux_msg_t *msg);
+
+int get_matchtag_key (flux_t *h,
+                      const flux_msg_t *msg,
+                      char *buf,
+                      size_t bufsize);
+
 #endif /* ! _FLUX_JOB_INFO_UTIL_H */
 
 /*
