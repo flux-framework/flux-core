@@ -68,7 +68,7 @@ test_expect_success 'purging all jobs triggers jobid checkpoint update' '
 
 test_expect_success 'verify that anon queue disable persists across restart' '
 	flux start -Scontent.dump=dump_dis.tar \
-	    flux queue disable disable-restart-test &&
+	    flux queue disable --message=disable-restart-test &&
 	flux start -Scontent.restore=dump_dis.tar \
 	    flux queue status >dump_dis.out &&
 	grep "disabled: disable-restart-test" dump_dis.out
@@ -76,7 +76,7 @@ test_expect_success 'verify that anon queue disable persists across restart' '
 
 test_expect_success 'verify that anon queue stopped persists across restart' '
 	flux start -Scontent.dump=dump_stopped.tar \
-	    flux queue stop stop-restart-test &&
+	    flux queue stop -m stop-restart-test &&
 	flux start -Scontent.restore=dump_stopped.tar \
 	    flux queue status >dump_stopped.out &&
 	grep "stopped: stop-restart-test" dump_stopped.out
@@ -94,7 +94,7 @@ test_expect_success 'verify that named queue enable/disable persists across rest
 	flux start --config-path=$(pwd)/conf.d \
 	    -Scontent.restore=dump_queue_enable1.tar \
 	    -Scontent.dump=dump_queue_enable2.tar \
-	    flux queue disable --queue=batch xyzzy &&
+	    flux queue disable batch &&
 	flux start --config-path=$(pwd)/conf.d \
 	    -Scontent.restore=dump_queue_enable2.tar \
 	    -Scontent.dump=dump_queue_enable3.tar \
@@ -110,7 +110,8 @@ test_expect_success 'verify that named queue enable/disable persists across rest
 	grep "^debug: Job submission is enabled" dump_queue_enable_1.out &&
 	grep "^batch: Job submission is enabled" dump_queue_enable_1.out &&
 	grep "^debug: Job submission is enabled" dump_queue_enable_2.out &&
-	grep "^batch: Job submission is disabled: xyzzy" dump_queue_enable_2.out &&
+	grep "^batch: Job submission is disabled: disabled by administrator" \
+		dump_queue_enable_2.out &&
 	grep "^debug: Job submission is enabled" dump_queue_enable_3.out &&
 	grep "^batch: Job submission is enabled" dump_queue_enable_3.out
 '
@@ -143,7 +144,7 @@ test_expect_success 'verify that named queue start/stop persists across restart'
 	flux start --config-path=$(pwd)/conf.d \
 	    -Scontent.restore=dump_queue_start3.tar \
 	    -Scontent.dump=dump_queue_start4.tar \
-	    flux queue stop --queue=batch xyzzy &&
+	    flux queue stop --queue=batch -m xyzzy &&
 	flux start --config-path=$(pwd)/conf.d \
 	    -Scontent.restore=dump_queue_start4.tar \
 	    -Scontent.dump=dump_queue_start5.tar \
@@ -164,7 +165,7 @@ test_expect_success 'checkpointed queue no longer configured on restart is ignor
 	EOT
 	flux start --config-path=$(pwd)/conf.d \
 	    -Scontent.dump=dump_queue_missing.tar \
-	    flux queue disable --queue batch xyzzy &&
+	    flux queue disable batch &&
 	cat >conf.d/queues.toml <<-EOT &&
 	[queues.debug]
 	EOT
@@ -184,7 +185,7 @@ test_expect_success 'new queue configured on restart uses defaults' '
 	EOT
 	flux start --config-path=$(pwd)/conf.d \
 	    -Scontent.dump=dump_queue_ignored.tar \
-	    flux queue disable --queue batch xyzzy &&
+	    flux queue disable batch &&
 	cat >conf.d/queues.toml <<-EOT &&
 	[queues.debug]
 	[queues.newqueue]
