@@ -27,7 +27,7 @@ struct info_ctx {
     zlist_t *watchers;
     zlist_t *guest_watchers;
     zlist_t *update_watchers;
-    zhashx_t *index_uw;        /* update_watchers lookup */
+    zhashx_t *index_uw;        /* jobid + key -> update_watcher lookup */
 };
 
 #endif /* _FLUX_JOB_INFO_H */
