@@ -83,6 +83,13 @@ class SchedResourceList:
         res.state = "free"
         return res
 
+    def copy_constraint(self, constraint):
+        """Create a copy of a ResourceSet object based on constraint"""
+        rsets = {}
+        for state in ("all", "down", "allocated"):
+            rsets[state] = self[state].copy_constraint(constraint)
+        return SchedResourceList(rsets)
+
 
 class ResourceListRPC(FutureExt):
     def __init__(self, flux_handle, topic, nodeid=0):
