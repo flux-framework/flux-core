@@ -27,6 +27,7 @@
 /* State for one watcher */
 struct watcher {
     const flux_msg_t *request;  // request message
+    char *matchtag_key;         // request UUID + matchtag, used for hashing
     struct flux_msg_cred cred;  // request cred
     int rootseq;                // last root sequence number sent
     bool canceled;              // true if watcher has been canceled
@@ -62,6 +63,11 @@ struct commit {
 
 
 /* State for monitoring a KVS namespace.
+ *
+ * N.B. Watchers are stored on a zlistx_t b/c we can iterate over it
+ * and survive entry removals.  That cannot be done with zhashx_t without
+ * retrieving a costly zhashx_keys() list.  Thus, we have watchers on a list
+ * and a separate hash for quick lookup access to watchers.
  */
 struct ns_monitor {
     char *ns_name;              // namespace name, hash key for ctx->namespaces
@@ -71,6 +77,7 @@ struct ns_monitor {
     int errnum;                 // if non-zero, error pending for all watchers
     struct watch_ctx *ctx;      // back-pointer to watch_ctx
     zlistx_t *watchers;         // list of watchers of this namespace
+    zhashx_t *watcher_matchtags;// matchtags -> watchers quick lookup
     char *topic;                // topic string for subscription
     bool subscribed;            // subscription active
     flux_future_t *getrootf;    // initial getroot future
@@ -83,6 +90,7 @@ struct watch_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
     zhashx_t *namespaces;        // hash of monitored namespaces
+    zhashx_t *namespace_matchtags; // matchtags -> namespaces w/ requests
 };
 
 static void watcher_destroy (struct watcher *w)
@@ -90,6 +98,7 @@ static void watcher_destroy (struct watcher *w)
     if (w) {
         int saved_errno = errno;
         flux_msg_decref (w->request);
+        free (w->matchtag_key);
         free (w->key);
         if (w->lookups) {
             flux_future_t *f;
@@ -114,10 +123,18 @@ static struct watcher *watcher_create (const flux_msg_t *msg,
                                        int flags)
 {
     struct watcher *w;
+    uint32_t matchtag;
+    const char *uuid;
 
     if (!(w = calloc (1, sizeof (*w))))
         return NULL;
     w->request = flux_msg_incref (msg);
+    if (flux_msg_get_matchtag (w->request, &matchtag) < 0)
+        goto error;
+    if (!(uuid = flux_msg_route_first (msg)))
+        goto error;
+    if (asprintf (&w->matchtag_key, "%s:%u", uuid, matchtag) < 0)
+        goto error;
     if (flux_msg_get_cred (msg, &w->cred) < 0)
         goto error;
     if (!(w->key = kvs_util_normalize_key (key, NULL)))
@@ -172,6 +189,7 @@ static void namespace_destroy (void **data)
         int saved_errno = errno;
         commit_destroy (nsm->commit);
         zlistx_destroy (&nsm->watchers);
+        zhashx_destroy (&nsm->watcher_matchtags);
         if (nsm->subscribed) {
             flux_future_t *f;
             if (!(f = flux_event_unsubscribe_ex (nsm->ctx->h,
@@ -208,6 +226,8 @@ static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
     if (!(nsm->watchers = zlistx_new ()))
         goto error;
     zlistx_set_destructor (nsm->watchers, watcher_destructor);
+    if (!(nsm->watcher_matchtags = zhashx_new ()))
+        goto error;
     if (!(nsm->ns_name = strdup (ns)))
         goto error;
     nsm->owner = FLUX_USERID_UNKNOWN;
@@ -229,9 +249,11 @@ static bool key_match (json_t *o, const char *key)
 
 static void watcher_cleanup (struct ns_monitor *nsm, struct watcher *w)
 {
-    /* wait for all in flight lookups to complete before destroying watcher */
-    if (zlist_size (w->lookups) == 0 && zlist_size (w->loads) == 0)
-        zlistx_delete (nsm->watchers, w->handle);
+    /* it is possible lookups & loads are in flight, they will be
+     * cleaned in watcher_destroy() */
+    zhashx_delete (nsm->watcher_matchtags, w->matchtag_key);
+    zhashx_delete (nsm->ctx->namespace_matchtags, w->matchtag_key);
+    zlistx_delete (nsm->watchers, w->handle);
     /* under extremely racy scenarios, it is possible getroot or
      * event_subscribe is in flight and not complete, but we will destroy
      * namespace_monitor if there are no watchers.
@@ -1008,20 +1030,41 @@ static void watcher_respond_ns (struct ns_monitor *nsm)
 static void watcher_cancel (struct ns_monitor *nsm,
                             struct watcher *w,
                             const flux_msg_t *msg,
-                            uint32_t matchtag,
                             bool cancel)
 {
-    if (!flux_disconnect_match (msg, w->request))
-        return;
     if (cancel) {
-        uint32_t tag;
-        if (flux_msg_get_matchtag (w->request, &tag) < 0
-            || tag != matchtag)
+        if (!flux_cancel_match (msg, w->request))
+            return;
+    }
+    else {
+        if (!flux_disconnect_match (msg, w->request))
             return;
     }
     w->canceled = true;
     w->mute = !cancel;
     watcher_respond (nsm, w);
+}
+
+static int matchtag_key (flux_t *h,
+                         const flux_msg_t *msg,
+                         char *buf,
+                         size_t bufsize)
+{
+    uint32_t matchtag;
+    const char *uuid;
+    if (flux_msg_unpack (msg, "{s:i}", "matchtag", &matchtag) < 0) {
+        flux_log_error (h, "failed to get matchtag from cancel request");
+        return -1;
+    }
+    if (!(uuid = flux_msg_route_first (msg))) {
+        flux_log_error (h, "failed to get uuid from cancel request");
+        return -1;
+    }
+    if (snprintf (buf, bufsize, "%s:%u", uuid, matchtag) >= bufsize) {
+        flux_log_error (h, "uuid & matchtag overflowed matchtag key buffer");
+        return -1;
+    }
+    return 0;
 }
 
 /* Cancel all namespace watchers that match:
@@ -1031,18 +1074,31 @@ static void watcher_cancel (struct ns_monitor *nsm,
  */
 static void watcher_cancel_ns (struct ns_monitor *nsm,
                                const flux_msg_t *msg,
-                               uint32_t matchtag,
                                bool cancel)
 {
     struct watcher *w;
 
+    /* if canceling, do a lookup to avoid iterating over all
+     * watchers */
+    if (cancel) {
+        char buf[1024];
+        if (matchtag_key (nsm->ctx->h, msg, buf, sizeof (buf)) < 0)
+            goto fallthrough;
+        if ((w = zhashx_lookup (nsm->watcher_matchtags, buf))) {
+            watcher_cancel (nsm, w, msg, cancel);
+            return;
+        }
+        /* else fallthrough to loop over everything */
+    }
+
+fallthrough:
     w = zlistx_first (nsm->watchers);
     while (w) {
         /* Note: get next watcher before calling watcher_respond() since
          * `nsm` may be destroyed when next == NULL:
          */
         struct watcher *next = zlistx_next (nsm->watchers);
-        watcher_cancel (nsm, w, msg, matchtag, cancel);
+        watcher_cancel (nsm, w, msg, cancel);
 
         /* Note: No use-after-free possible since `nsm` may only be destroyed
          * if nsm->watchers is empty and and thus next == NULL
@@ -1063,25 +1119,35 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
     zlistx_t *l;
     char *name;
     struct ns_monitor *nsm;
-    uint32_t matchtag = FLUX_MATCHTAG_NONE;
 
-    if (cancel
-        && flux_msg_unpack (msg, "{s:i}", "matchtag", &matchtag) < 0) {
-        flux_log_error (ctx->h, "failed to get matchtag from cancel request");
-        return;
+    /* if canceling, do lookup to avoid iterating over all
+     * namespaces */
+    if (cancel) {
+        char buf[1024];
+        if (matchtag_key (ctx->h, msg, buf, sizeof (buf)) < 0)
+            goto fallthrough;
+        if ((nsm = zhashx_lookup (ctx->namespace_matchtags, buf))) {
+            watcher_cancel_ns (nsm, msg, cancel);
+            return;
+        }
+        /* else fallthrough to iterate over everything below */
     }
 
+fallthrough:
+    /* namespaces can be destroyed, so cannot safely use
+     * zhashx_first/next().  Use zhashx_keys().
+     */
     if ((l = zhashx_keys (ctx->namespaces))) {
         name = zlistx_first (l);
         while (name) {
             nsm = zhashx_lookup (ctx->namespaces, name);
-            watcher_cancel_ns (nsm, msg, matchtag, cancel);
+            watcher_cancel_ns (nsm, msg, cancel);
             name = zlistx_next (l);
         }
         zlistx_destroy (&l);
     }
     else
-        flux_log_error (ctx->h, "%s: zhash_keys", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: zhashx_keys", __FUNCTION__);
 }
 
 /* kvs.namespace-removed-* event
@@ -1361,6 +1427,16 @@ static void lookup_cb (flux_t *h,
         errno = ENOMEM;
         goto error;
     }
+    if (zhashx_insert (nsm->watcher_matchtags, w->matchtag_key, w) < 0) {
+        zlistx_delete (nsm->watchers, w->handle);
+        errno = EINVAL;
+        goto error;
+    }
+    if (zhashx_insert (ctx->namespace_matchtags, w->matchtag_key, nsm) < 0) {
+        zlistx_delete (nsm->watchers, w->handle);
+        errno = EINVAL;
+        goto error;
+    }
     if (nsm->commit)
         watcher_respond (nsm, w);
     return;
@@ -1489,6 +1565,7 @@ static void watch_ctx_destroy (struct watch_ctx *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
+        zhashx_destroy (&ctx->namespace_matchtags);
         zhashx_destroy (&ctx->namespaces);
         flux_msg_handler_delvec (ctx->handlers);
         free (ctx);
@@ -1508,6 +1585,8 @@ static struct watch_ctx *watch_ctx_create (flux_t *h)
         goto error;
     zhashx_set_destructor (ctx->namespaces,
                            (zhashx_destructor_fn *)namespace_destroy);
+    if (!(ctx->namespace_matchtags = zhashx_new ()))
+        goto error;
     return ctx;
 error:
     watch_ctx_destroy (ctx);
