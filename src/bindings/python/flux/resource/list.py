@@ -36,7 +36,9 @@ class SchedResourceList:
 
     def __init__(self, resp):
         for state in ["all", "down", "allocated"]:
-            rset = ResourceSet(resp.get(state))
+            rset = resp.get(state)
+            if not isinstance(rset, ResourceSet):
+                rset = ResourceSet(rset)
             rset.state = state
             setattr(self, f"_{state}", rset)
 
