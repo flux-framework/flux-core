@@ -31,6 +31,8 @@ void watchers_cancel (struct info_ctx *ctx,
                       const flux_msg_t *msg,
                       bool cancel);
 
+int watch_setup (struct info_ctx *ctx);
+
 void watch_cleanup (struct info_ctx *ctx);
 
 #endif /* ! _FLUX_JOB_INFO_WATCH_H */
