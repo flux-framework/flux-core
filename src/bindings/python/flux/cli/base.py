@@ -36,6 +36,7 @@ except ModuleNotFoundError:
 
 import flux
 from flux import debugged, job, util
+from flux.cli.plugin import CLIPluginRegistry, CLIPluginValue
 from flux.constraint.parser import ConstraintParser, ConstraintSyntaxError
 from flux.idset import IDset
 from flux.job import JobspecV1, JobWatcher
@@ -751,7 +752,10 @@ class MiniCmd:
         self.exitcode = 0
         self.progress = None
         self.watcher = None
+        self.plugins = CLIPluginRegistry().load_plugins(prog)
         self.parser = self.create_parser(prog, usage, description, exclude_io)
+        self.group = self.parser.add_argument_group("Options provided by plugins")
+        self.plugins.add_plugin_option(self.group)
 
     @staticmethod
     def create_parser(
@@ -1010,6 +1014,20 @@ class MiniCmd:
         """
         Create a jobspec from args and return it to caller
         """
+        plugins = {}
+        if args.plugin:
+            for provided_arg in args.plugin:
+                key, val = provided_arg.get_value()
+                if key in self.plugins.get_plugin_options():
+                    plugins[key] = val
+                else:
+                    raise ValueError(
+                        f"Unsupported option provided to -P/--plugin: {key}"
+                    )
+
+        # plugins MAY raise IndexError if the plugin opt was not provided.
+        self.plugins.preinit(args, plugins)
+
         jobspec = self.init_jobspec(args)
 
         jobspec.environment, env_expand = get_filtered_environment(args.env)
@@ -1126,6 +1144,8 @@ class MiniCmd:
         if args.add_file is not None:
             for arg in args.add_file:
                 self.handle_add_file_arg(jobspec, arg)
+
+        self.plugins.modify_jobspec(args, jobspec, plugins)
 
         return jobspec
 
