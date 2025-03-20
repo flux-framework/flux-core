@@ -960,6 +960,23 @@ static flux_future_t *add_pending_signal (flux_subprocess_t *p, int signum)
     return f;
 }
 
+static bool subprocess_signal_allowed (flux_subprocess_t *p)
+{
+    /* Only allow a subprocess to be signaled if it is running or
+     * initializing if there is no process group, otherwise allow
+     * signaling any active subprocess.
+     *
+     * In the process group case, this ensures children of the original
+     * subprocess that remain in the process group with stdio open can be
+     * delivered a signal after the main pid exits (See issue #6712).
+     */
+    if ((p->flags & FLUX_SUBPROCESS_FLAGS_NO_SETPGRP)) {
+        return p->state == FLUX_SUBPROCESS_RUNNING
+                || p->state == FLUX_SUBPROCESS_INIT;
+    }
+    return flux_subprocess_active (p);
+}
+
 flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
 {
     flux_future_t *f = NULL;
@@ -970,8 +987,7 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
         return NULL;
     }
 
-    if (p->state != FLUX_SUBPROCESS_RUNNING
-        && p->state != FLUX_SUBPROCESS_INIT) {
+    if (!subprocess_signal_allowed (p)) {
         errno = ESRCH;
         return NULL;
     }
@@ -993,7 +1009,7 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
             flux_future_fulfill (f, NULL, NULL);
     }
     else {
-        if (p->state != FLUX_SUBPROCESS_RUNNING)
+        if (p->state == FLUX_SUBPROCESS_INIT)
             f = add_pending_signal (p, signum);
         else
             f = remote_kill (p, signum);

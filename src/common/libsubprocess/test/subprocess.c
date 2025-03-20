@@ -501,7 +501,8 @@ void output_processes_cb (flux_subprocess_t *p, const char *stream)
                 child_pid = atoi (buf);
         }
 
-        if (output_processes_cb_count == 1) {
+        if (output_processes_cb_count == 1
+            && !flux_subprocess_aux_get (p, "nokill")) {
             flux_future_t *f = NULL;
             f = flux_subprocess_kill (p, SIGTERM);
             ok (f != NULL, "flux_subprocess_kill returns future_t");
@@ -571,6 +572,88 @@ void test_kill_setpgrp (flux_reactor_t *r)
     ret = wait_kill (child_pid);
     ok (ret < 0
         && errno == ESRCH,
+        "kill fails with ESRCH, child pid killed %d", child_pid);
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void kill_on_exit (flux_subprocess_t *p, flux_subprocess_state_t state)
+{
+    if (state == FLUX_SUBPROCESS_EXITED) {
+        flux_future_t *f = flux_subprocess_kill (p, SIGTERM);
+        /* Note: in local subprocess case, future is returned from
+         * flux_subprocess_kill() fulfilled.
+         */
+        ok (f && flux_future_get (f, NULL) == 0,
+            "flux_subprocess_kill() works after parent exited: (%d) %s",
+            errno,
+            strerror (errno));
+        flux_future_destroy (f);
+    }
+}
+
+void completion_parent_normal_exit (flux_subprocess_t *p)
+{
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED,
+        "subprocess state == EXITED in completion handler");
+    ok (flux_subprocess_status (p) != -1,
+        "subprocess status is valid");
+    ok (flux_subprocess_exit_code (p) == 0,
+        "subprocess terminated normally");
+    flux_reactor_stop (flux_subprocess_get_reactor (p));
+    completion_sigterm_cb_count++;
+
+    errno = 0;
+    ok (flux_subprocess_kill (p, SIGTERM) == NULL && errno == ESRCH,
+        "flux_subprocess_kill fails with ESRCH");
+
+}
+void test_kill_setpgrp_parent_exited (flux_reactor_t *r)
+{
+    char *av[]  = { TEST_SUBPROCESS_DIR "test_fork_sleep", "100", NULL };
+    flux_cmd_t *cmd = NULL;
+    flux_subprocess_t *p = NULL;
+    int ret;
+
+    ok ((cmd = flux_cmd_create (2, av, environ)) != NULL,
+        "flux_cmd_create");
+    ok (flux_cmd_setenvf (cmd, 1, "TEST_FORK_SLEEP_NOWAIT", "t") == 0,
+        "setenv TEST_FORK_SLEEP_NOWAIT=t");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_parent_normal_exit,
+        .on_stdout = output_processes_cb,
+        .on_state_change = kill_on_exit,
+    };
+    completion_sigterm_cb_count = 0;
+    output_processes_cb_count = 0;
+    parent_pid = -1;
+    child_pid = -1;
+    p = flux_local_exec (r, 0, cmd, &ops);
+    ok (p != NULL, "flux_local_exec");
+
+    /* Don't kill subprocess in output handler:
+     */
+    ok (flux_subprocess_aux_set (p, "nokill", (void *) 0x1, NULL) == 0,
+        "flux_subprocess_aux_set (\"nokill\")");
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    ok (flux_reactor_run (r, 0) == 0, "reactor_run exits normally");
+
+    ok (completion_sigterm_cb_count == 1,
+        "completion sigterm callback called 1 time");
+    ok (output_processes_cb_count == 3,
+        "output processes callback called 3 times");
+
+    /* checking if a pid has been killed at this point is a tad racy,
+     * so if necessary loop a second to wait for the kill to happen
+     */
+    ret = wait_kill (parent_pid);
+    ok (ret < 0 && errno == ESRCH,
+        "kill fails with ESRCH, parent pid killed %d", parent_pid);
+    ret = wait_kill (child_pid);
+    ok (ret < 0 && errno == ESRCH,
         "kill fails with ESRCH, child pid killed %d", child_pid);
     flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
@@ -1175,6 +1258,8 @@ int main (int argc, char *argv[])
     test_kill (r);
     diag ("kill_setpgrp");
     test_kill_setpgrp (r);
+    diag ("kill_setpgrp_parent_exited");
+    test_kill_setpgrp_parent_exited (r);
     diag ("kill_eofs");
     test_kill_eofs (r);
     diag ("state_change");

@@ -686,18 +686,20 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec,
 
     p = zlist_first (exec->processes);
     while (p) {
-        if ((!ranks || idset_test (ranks, flux_subprocess_rank (p)))
-            && (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING
-            || flux_subprocess_state (p) == FLUX_SUBPROCESS_INIT)) {
+        if ((!ranks || idset_test (ranks, flux_subprocess_rank (p)))) {
             flux_future_t *f = NULL;
             char s[64];
             if (!(f = flux_subprocess_kill (p, signum))) {
-                int err = errno;
-                const char *errstr = flux_strerror (errno);
-                if ((f = flux_future_create (NULL, NULL)))
-                    flux_future_fulfill_error (f, err, errstr);
-                else
-                    flux_future_fulfill_error (cf, err, "Internal error");
+                /* ignore inactive subprocesses (denoted by errno == ESRCH)
+                 */
+                if (errno != ESRCH) {
+                    int err = errno;
+                    const char *errstr = flux_strerror (errno);
+                    if ((f = flux_future_create (NULL, NULL)))
+                        flux_future_fulfill_error (f, err, errstr);
+                    else
+                        flux_future_fulfill_error (cf, err, "Internal error");
+                }
             }
             (void) snprintf (s,
                              sizeof (s)-1,

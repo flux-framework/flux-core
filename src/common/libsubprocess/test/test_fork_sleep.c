@@ -20,6 +20,10 @@ main (int argc, char *argv[])
 {
     int len = 30;
     pid_t pid;
+    int nowait = 0;
+
+    if (getenv ("TEST_FORK_SLEEP_NOWAIT"))
+        nowait = 1;
 
     if (argv[1] != NULL) {
         len = atoi (argv[1]);
@@ -37,6 +41,8 @@ main (int argc, char *argv[])
         printf ("%d\n", getpid ());
         printf ("%d\n", pid);
         fflush (stdout);
+        if (nowait)
+            exit (0);
         wait (NULL);
     }
 
