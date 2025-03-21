@@ -132,6 +132,19 @@ class FluxQueueConfig(UtilConfig):
                 "{limits.range.ngpus:>10}"
             ),
         },
+        "nodes": {
+            "description": "Show queue status plus all/up/allocated/free nodes",
+            "format": (
+                "?:{queuem:<8.8} "
+                "{color_enabled}{enabled:>2}{color_off} "
+                "{color_started}{started:>2}{color_off} "
+                "{resources.all.nnodes:>6} "
+                "{resources.up.nnodes:>10} "
+                "{resources.down.nnodes:>10} "
+                "{resources.allocated.nnodes:>11} "
+                "{resources.free.nnodes:>10}"
+            ),
+        },
     }
 
     def __init__(self, subcommand):
@@ -262,6 +275,17 @@ class QueueInfoWrapper:
         return AltField("✔", "y") if self.is_started else AltField("✗", "n")
 
 
+def generate_resource_headings():
+    headings = {}
+    for item in ("nnodes", "ncores", "ngpus"):
+        for state in ("all", "free", "allocated", "up", "down"):
+            heading = item[1:].upper()
+            if state != "all":
+                heading += f":{state[:5].upper()}"
+            headings[f"resources.{state}.{item}"] = heading
+    return headings
+
+
 def list(args):
     headings = {
         "queue": "QUEUE",
@@ -290,6 +314,8 @@ def list(args):
         "limits.min.ngpus": "MINGPUS",
         "limits.max.ngpus": "MAXGPUS",
     }
+    headings.update(generate_resource_headings())
+
     fmt = FluxQueueConfig("list").load().get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
