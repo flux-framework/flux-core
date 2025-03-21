@@ -114,6 +114,19 @@ class FluxQueueConfig(UtilConfig):
                 "{color_started}{started:>2}{color_off} "
                 "{defaults.timelimit!F:>8} "
                 "{limits.timelimit!F:>8} "
+                "{limits.range.effective.nnodes:>10} "
+                "{limits.range.effective.ncores:>10} "
+                "{limits.range.effective.ngpus:>10}"
+            ),
+        },
+        "policy": {
+            "description": "flux-queue list with policy limits only",
+            "format": (
+                "?:{queuem:<8.8} "
+                "{color_enabled}{enabled:>2}{color_off} "
+                "{color_started}{started:>2}{color_off} "
+                "{defaults.timelimit!F:>8} "
+                "{limits.timelimit!F:>8} "
                 "{limits.range.nnodes:>10} "
                 "{limits.range.ncores:>10} "
                 "{limits.range.ngpus:>10}"
