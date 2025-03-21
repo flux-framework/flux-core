@@ -327,17 +327,13 @@ def list(args):
         "limits.max.ngpus": "MAXGPUS",
     }
     config = None
-    handle = None
+    handle = flux.Flux()
 
-    if args.from_stdin:
-        config = json.loads(sys.stdin.read())
-    else:
-        handle = flux.Flux()
-        future = handle.rpc("config.get")
-        try:
-            config = future.get()
-        except Exception as e:
-            LOGGER.warning("Could not get flux config: " + str(e))
+    future = handle.rpc("config.get")
+    try:
+        config = future.get()
+    except Exception as e:
+        LOGGER.warning("Could not get flux config: " + str(e))
 
     fmt = FluxQueueConfig("list").load().get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
@@ -566,9 +562,6 @@ def main():
     )
     list_parser.add_argument(
         "-n", "--no-header", action="store_true", help="Suppress header output"
-    )
-    list_parser.add_argument(
-        "--from-stdin", action="store_true", help=argparse.SUPPRESS
     )
     list_parser.set_defaults(func=list)
 
