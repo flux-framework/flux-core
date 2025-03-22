@@ -43,6 +43,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/types.h>
+#include <unistd.h>
+#include <pthread.h>
 #include <signal.h>
 #include <flux/core.h>
 #include <flux/shell.h>
@@ -70,11 +73,30 @@ static int trap_signal (flux_shell_t *shell, int signum)
     return 0;
 }
 
+static void atfork_child (void)
+{
+    sigset_t mask;
+
+    /* Unblock all signals
+     */
+    sigemptyset (&mask);
+    if (sigprocmask (SIG_SETMASK, &mask, NULL) < 0)
+        shell_log_errno ("atfork: failed to unblock all signals");
+
+    /* Restore default signal disposition of SIGINT/TERM/ALRM/PIPE
+     */
+    signal (SIGINT, SIG_DFL);
+    signal (SIGTERM, SIG_DFL);
+    signal (SIGALRM, SIG_DFL);
+    signal (SIGPIPE, SIG_DFL);
+}
+
 static int signals_init (flux_plugin_t *p,
                          const char *topic,
                          flux_plugin_arg_t *args,
                          void *data)
 {
+    int err;
     flux_shell_t *shell = flux_plugin_get_shell (p);
     if (!shell)
         return -1;
@@ -86,6 +108,14 @@ static int signals_init (flux_plugin_t *p,
 
     /* ignore SIGPIPE */
     signal (SIGPIPE, SIG_IGN);
+
+    /* Reset of signals disposition and mask is handled for tasks by
+     * libsubprocess, but install an atfork handler in case a shell plugin
+     * calls fork(2) directly.
+     */
+    if ((err = pthread_atfork (NULL, NULL, atfork_child)) != 0)
+        shell_log_error("pthread_atfork failed: %s", strerror (err));
+
     return 0;
 }
 

@@ -53,6 +53,8 @@ test_expect_success 'job-exec: job exception kills job shells' '
 	flux job eventlog $id | grep -E "status=(15|36608)"
 '
 test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
+	flux cancel --all &&
+	(flux watch --all || true) &&
 	flux module reload job-exec kill-timeout=0.2 &&
 	cat <<-EOF >trap-sigterm.sh &&
 	#!/bin/sh
