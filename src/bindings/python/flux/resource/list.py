@@ -36,7 +36,9 @@ class SchedResourceList:
 
     def __init__(self, resp):
         for state in ["all", "down", "allocated"]:
-            rset = ResourceSet(resp.get(state))
+            rset = resp.get(state)
+            if not isinstance(rset, ResourceSet):
+                rset = ResourceSet(rset)
             rset.state = state
             setattr(self, f"_{state}", rset)
 
@@ -80,6 +82,13 @@ class SchedResourceList:
         res = self.up - self.allocated
         res.state = "free"
         return res
+
+    def copy_constraint(self, constraint):
+        """Create a copy of a ResourceSet object based on constraint"""
+        rsets = {}
+        for state in ("all", "down", "allocated"):
+            rsets[state] = self[state].copy_constraint(constraint)
+        return SchedResourceList(rsets)
 
 
 class ResourceListRPC(FutureExt):

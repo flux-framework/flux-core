@@ -299,6 +299,7 @@ TESTSCRIPTS = \
 	python/t0031-conf-builtin.py \
 	python/t0032-resource-journal.py \
 	python/t0033-eventlog-formatter.py \
+	python/t0034-queuelist.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY

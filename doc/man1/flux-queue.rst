@@ -254,6 +254,21 @@ The following field names can be specified:
 **limits.range.ngpus**
    range of gpus that can be requested for this queue
 
+**limits.range.effective.nnodes**
+   effective range of nodes that can be requested for this queue.
+   The upper end of the range will display the smaller of the policy
+   limit and the total nodes currently assigned to the queue.
+
+**limits.range.effective.ncores**
+   effective range of cores that can be requested for this queue.
+   The upper end of the range will display the smaller of the policy
+   limit and the total cores currently assigned to the queue.
+
+**limits.range.effective.ngpus**
+   effective range of gpus that can be requested for this queue.
+   The upper end of the range will display the smaller of the policy
+   limit and the total gpus currently assigned to the queue.
+
 **limits.min.nnodes**
    minimum number of nodes that must be requested for this queue
 
@@ -272,6 +287,9 @@ The following field names can be specified:
 **limits.max.ngpus**
    maximum number of gpus that can be requested for this queue
 
+**resources.{all,free,allocated,up,down}.{nnodes,ncores,ngpus}**
+   Counts of resources in various states (all available, currently free,
+   currently allocated, up, and down) for this queue.
 
 RESOURCES
 =========
