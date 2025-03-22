@@ -57,11 +57,7 @@ static int jj_read_vertex (json_t *o, int level, struct jj_counts *jj)
         jj->slot_size = count;
     else if (streq (type, "gpu"))
         jj->slot_gpus = count;
-    else {
-        sprintf (jj->error, "Unsupported resource type '%s'", type);
-        errno = EINVAL;
-        return -1;
-    }
+    // ignore unknown resources
     if (with)
         return jj_read_level (with, level+1, jj);
     return 0;
