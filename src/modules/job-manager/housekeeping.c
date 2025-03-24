@@ -41,6 +41,7 @@
  * Script environment:
  *   FLUX_JOB_ID - the job whose resources are running housekeeping
  *   FLUX_JOB_USERID - the UID of the job's owner
+ *   FLUX_JOB_RANKS - idset of broker ranks which were assigned to FLUX_JOB_ID
  *   FLUX_URI - the URI of the local flux broker
  *   The IMP must be configured to explicitly allow FLUX_* to pass through.
  *
@@ -161,11 +162,28 @@ static void allocation_destructor (void **item)
 
 }
 
-static int update_cmd_env (flux_cmd_t *cmd, flux_jobid_t id, uint32_t userid)
+static char *get_rlist_ranks (struct rlist *rl)
 {
-    if (flux_cmd_setenvf (cmd, 1, "FLUX_JOB_ID", "%ju", (uintmax_t)id) < 0
-        || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_USERID", "%u", userid) < 0)
+    struct idset *ids;
+    if (!(ids = rlist_ranks (rl)))
+        return NULL;
+    return idset_encode (ids, IDSET_FLAG_RANGE);
+}
+
+static int update_cmd_env (flux_cmd_t *cmd,
+                           flux_jobid_t id,
+                           uint32_t userid,
+                           struct rlist *rl)
+{
+    char *ranks;
+
+    if (!(ranks = get_rlist_ranks (rl))
+        || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_ID", "%ju", (uintmax_t)id) < 0
+        || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_USERID", "%u", userid) < 0
+        || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_RANKS", "%s", ranks) < 0)
         return -1;
+
+    free (ranks);
     return 0;
 }
 
@@ -195,7 +213,7 @@ static struct allocation *allocation_create (struct housekeeping *hk,
                                               id,
                                               "housekeeping",
                                                a))
-        || update_cmd_env (hk->cmd, id, userid) < 0
+        || update_cmd_env (hk->cmd, id, userid, a->rl) < 0
         || bulk_exec_push_cmd (a->bulk_exec, a->pending, hk->cmd, 0) < 0) {
         allocation_destroy (a);
         return NULL;
