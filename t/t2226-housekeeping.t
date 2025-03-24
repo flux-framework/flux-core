@@ -277,7 +277,8 @@ test_expect_success 'run a job on rank 3, wait for hk, and check environment' '
 	wait_for_running 0 &&
 	grep "^FLUX_JOB_ID=$(flux job last | flux job id --to=dec)$" env.out &&
 	grep "^FLUX_JOB_USERID=$(id -u)$" env.out &&
-	grep "^FLUX_URI=$(flux exec -r 3 flux getattr local-uri)$" env.out
+	grep "^FLUX_URI=$(flux exec -r 3 flux getattr local-uri)$" env.out &&
+	grep "^FLUX_JOB_RANKS=$(flux jobs -no {ranks} $(flux job last))" env.out
 '
 test_expect_success 'configure housekeeping to sleep forever' '
 	flux config load <<-EOT
