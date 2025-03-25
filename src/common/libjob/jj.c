@@ -20,9 +20,9 @@
 
 #include "jj.h"
 
-static int jj_read_level (json_t *o, int level, struct jj_counts *jj);
+static int jj_read_level (json_t *o, int level, struct jj_counts *jj, int nodefactor);
 
-static int jj_read_vertex (json_t *o, int level, struct jj_counts *jj)
+static int jj_read_vertex (json_t *o, int level, struct jj_counts *jj, int nodefactor)
 {
     int count;
     const char *type = NULL;
@@ -46,8 +46,9 @@ static int jj_read_vertex (json_t *o, int level, struct jj_counts *jj)
         errno = EINVAL;
         return -1;
     }
+    nodefactor = nodefactor * count;
     if (streq (type, "node")) {
-        jj->nnodes = count;
+        jj->nnodes = nodefactor;
         if (exclusive)
             jj->exclusive = true;
     }
@@ -59,12 +60,12 @@ static int jj_read_vertex (json_t *o, int level, struct jj_counts *jj)
         jj->slot_gpus = count;
     // ignore unknown resources
     if (with)
-        return jj_read_level (with, level+1, jj);
+        return jj_read_level (with, level+1, jj, nodefactor);
     return 0;
 
 }
 
-static int jj_read_level (json_t *o, int level, struct jj_counts *jj)
+static int jj_read_level (json_t *o, int level, struct jj_counts *jj, int nodefactor)
 {
     int i;
     json_t *v = NULL;
@@ -76,7 +77,7 @@ static int jj_read_level (json_t *o, int level, struct jj_counts *jj)
         return -1;
     }
     json_array_foreach (o, i, v) {
-        if (jj_read_vertex (v, level, jj) < 0)
+        if (jj_read_vertex (v, level, jj, nodefactor) < 0)
             return -1;
     }
     return 0;
@@ -132,7 +133,7 @@ int jj_get_counts_json (json_t *jobspec, struct jj_counts *jj)
         errno = EINVAL;
         return -1;
     }
-    if (jj_read_level (resources, 0, jj) < 0)
+    if (jj_read_level (resources, 0, jj, 1) < 0)
         return -1;
 
     if (jj->nslots <= 0) {
