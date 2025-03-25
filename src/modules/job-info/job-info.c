@@ -39,9 +39,9 @@ static void stats_cb (flux_t *h,
                       void *arg)
 {
     struct info_ctx *ctx = arg;
-    int lookups = zlist_size (ctx->lookups);
-    int watchers = zlist_size (ctx->watchers);
-    int guest_watchers = zlist_size (ctx->guest_watchers);
+    int lookups = zlistx_size (ctx->lookups);
+    int watchers = zlistx_size (ctx->watchers);
+    int guest_watchers = zlistx_size (ctx->guest_watchers);
     int update_lookups = 0;     /* no longer supported */
     int update_watchers = update_watch_count (ctx);
     if (flux_respond_pack (h,
@@ -112,23 +112,10 @@ static void info_ctx_destroy (struct info_ctx *ctx)
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
         lru_cache_destroy (ctx->owner_lru);
-        /* freefn set on lookup entries will destroy list entries */
-        if (ctx->lookups)
-            zlist_destroy (&ctx->lookups);
-        if (ctx->watchers) {
-            watch_cleanup (ctx);
-            zlist_destroy (&ctx->watchers);
-        }
-        if (ctx->guest_watchers) {
-            guest_watch_cleanup (ctx);
-            zlist_destroy (&ctx->guest_watchers);
-        }
-        if (ctx->update_watchers) {
-            update_watch_cleanup (ctx);
-            zlist_destroy (&ctx->update_watchers);
-        }
-        if (ctx->index_uw)
-            zhashx_destroy (&ctx->index_uw);
+        lookup_cleanup (ctx);
+        watch_cleanup (ctx);
+        guest_watch_cleanup (ctx);
+        update_watch_cleanup (ctx);
         free (ctx);
         errno = saved_errno;
     }
@@ -145,17 +132,13 @@ static struct info_ctx *info_ctx_create (flux_t *h)
     if (!(ctx->owner_lru = lru_cache_create (OWNER_LRU_MAXSIZE)))
         goto error;
     lru_cache_set_free_f (ctx->owner_lru, (lru_cache_free_f)free);
-    if (!(ctx->lookups = zlist_new ()))
+    if (lookup_setup (ctx) < 0)
         goto error;
-    if (!(ctx->watchers = zlist_new ()))
+    if (watch_setup (ctx) < 0)
         goto error;
-    if (!(ctx->guest_watchers = zlist_new ()))
+    if (guest_watch_setup (ctx) < 0)
         goto error;
-    if (!(ctx->update_watchers = zlist_new ()))
-        goto error;
-    /* no destructor for index_uw, destruction handled on
-     * update_watchers list */
-    if (!(ctx->index_uw = zhashx_new ()))
+    if (update_watch_setup (ctx) < 0)
         goto error;
     return ctx;
 error:

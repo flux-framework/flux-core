@@ -38,6 +38,7 @@ struct lookup_ctx {
     int flags;
     flux_future_t *f;
     bool allow;
+    void *handle;               /* zlistx_t handle */
 };
 
 static void info_lookup_continuation (flux_future_t *fall, void *arg);
@@ -53,6 +54,15 @@ static void lookup_ctx_destroy (void *data)
         flux_future_destroy (ctx->f);
         free (ctx);
         errno = saved_errno;
+    }
+}
+
+/* zlistx_destructor_fn */
+void lookup_ctx_destroy_wrapper (void **data)
+{
+    if (data) {
+        lookup_ctx_destroy (*data);
+        *data = NULL;
     }
 }
 
@@ -343,10 +353,10 @@ error:
 
 done:
     /* flux future destroyed in lookup_ctx_destroy, which is called
-     * via zlist_remove() */
+     * via zlistx_delete() */
     json_decref (o);
     free (current_value);
-    zlist_remove (ctx->lookups, l);
+    zlistx_delete (ctx->lookups, l->handle);
 }
 
 /* If we need the eventlog for an allow check or for update-lookup
@@ -522,13 +532,12 @@ static int lookup (flux_t *h,
         goto error;
     }
 
-    if (zlist_append (ctx->lookups, l) < 0) {
+    if (!(l->handle = zlistx_add_end (ctx->lookups, l))) {
         errprintf (error,
                    "internal error saving lookup context: out of memory");
         errno = ENOMEM;
         goto error;
     }
-    zlist_freefn (ctx->lookups, l, lookup_ctx_destroy, true);
     return 0;
 
 error:
@@ -644,6 +653,20 @@ error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (keys);
+}
+
+int lookup_setup (struct info_ctx *ctx)
+{
+    if (!(ctx->lookups = zlistx_new ()))
+        return -1;
+    zlistx_set_destructor (ctx->lookups, lookup_ctx_destroy_wrapper);
+    return 0;
+}
+
+void lookup_cleanup (struct info_ctx *ctx)
+{
+    if (ctx->lookups)
+        zlistx_destroy (&ctx->lookups);
 }
 
 /*

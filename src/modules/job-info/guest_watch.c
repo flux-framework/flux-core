@@ -71,6 +71,7 @@
 struct guest_watch_ctx {
     struct info_ctx *ctx;
     const flux_msg_t *msg;
+    char *matchtag_key;
     struct flux_msg_cred cred;
     flux_jobid_t id;
     char *path;
@@ -120,6 +121,8 @@ struct guest_watch_ctx {
     int guest_offset;
     /* data from main namespace */
     int main_offset;
+
+    void *handle;               /* zlistx_t handle */
 };
 
 static int get_main_eventlog (struct guest_watch_ctx *gw);
@@ -137,6 +140,7 @@ static void guest_watch_ctx_destroy (void *data)
         struct guest_watch_ctx *gw = data;
         int save_errno = errno;
         flux_msg_decref (gw->msg);
+        free (gw->matchtag_key);
         free (gw->path);
         flux_future_destroy (gw->get_main_eventlog_f);
         flux_future_destroy (gw->wait_guest_namespace_f);
@@ -144,6 +148,15 @@ static void guest_watch_ctx_destroy (void *data)
         flux_future_destroy (gw->main_namespace_watch_f);
         free (gw);
         errno = save_errno;
+    }
+}
+
+/* zlistx_destructor_fn */
+static void guest_watch_ctx_destroy_wrapper (void **data)
+{
+    if (data) {
+        guest_watch_ctx_destroy (*data);
+        *data = NULL;
     }
 }
 
@@ -173,6 +186,9 @@ static struct guest_watch_ctx *guest_watch_ctx_create (struct info_ctx *ctx,
         flux_log_error (ctx->h, "%s: flux_msg_get_cred", __FUNCTION__);
         goto error;
     }
+
+    if (!(gw->matchtag_key = create_matchtag_key (ctx->h, msg)))
+        goto error;
 
     return gw;
 
@@ -307,6 +323,13 @@ error:
     return rv;
 }
 
+static void delete_guest_watcher (struct info_ctx *ctx,
+                                  struct guest_watch_ctx *gw)
+{
+    zhashx_delete (ctx->guest_watchers_matchtags, gw->matchtag_key);
+    zlistx_delete (ctx->guest_watchers, gw->handle);
+}
+
 static void get_main_eventlog_continuation (flux_future_t *f, void *arg)
 {
     struct guest_watch_ctx *gw = arg;
@@ -359,9 +382,9 @@ error:
     if (flux_respond_error (ctx->h, gw->msg, errno, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
 done:
-    /* flux future destroyed in guest_watch_ctx_destroy, which is
-     * called via zlist_remove() */
-    zlist_remove (ctx->guest_watchers, gw);
+    /* flux future destroyed in delete_guest_watcher() via
+     * zlistx_delete() destructor */
+    delete_guest_watcher (ctx, gw);
 }
 
 static int wait_guest_namespace (struct guest_watch_ctx *gw)
@@ -522,9 +545,9 @@ error:
     if (flux_respond_error (ctx->h, gw->msg, errno, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
 cleanup:
-    /* flux future destroyed in guest_watch_ctx_destroy, which is
-     * called via zlist_remove() */
-    zlist_remove (ctx->guest_watchers, gw);
+    /* flux future destroyed in delete_guest_watcher() via
+     * zlistx_delete() destructor */
+    delete_guest_watcher (ctx, gw);
 }
 
 static int guest_namespace_watch (struct guest_watch_ctx *gw)
@@ -645,9 +668,9 @@ error:
     if (flux_respond_error (ctx->h, gw->msg, errno, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
 cleanup:
-    /* flux future destroyed in guest_watch_ctx_destroy, which is called
-     * via zlist_remove() */
-    zlist_remove (ctx->guest_watchers, gw);
+    /* flux future destroyed in delete_guest_watcher() via
+     * zlistx_delete() destructor */
+    delete_guest_watcher (ctx, gw);
 }
 
 /* must prefix "guest." back to path when watching in main KVS
@@ -766,9 +789,9 @@ error:
     if (flux_respond_error (ctx->h, gw->msg, errno, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
 cleanup:
-    /* flux future destroyed in guest_watch_ctx_destroy, which is called
-     * via zlist_remove() */
-    zlist_remove (ctx->guest_watchers, gw);
+    /* flux future destroyed in delete_guest_watcher() via
+     * zlistx_delete() destructor */
+    delete_guest_watcher (ctx, gw);
 }
 
 int guest_watch (struct info_ctx *ctx,
@@ -785,12 +808,20 @@ int guest_watch (struct info_ctx *ctx,
     if (get_main_eventlog (gw) < 0)
         goto error;
 
-    if (zlist_append (ctx->guest_watchers, gw) < 0) {
-        flux_log_error (ctx->h, "%s: zlist_append", __FUNCTION__);
+    if (!(gw->handle = zlistx_add_end (ctx->guest_watchers, gw))) {
+        errno = ENOMEM;
+        flux_log_error (ctx->h, "%s: zlistx_add_end", __FUNCTION__);
         goto error;
     }
-    zlist_freefn (ctx->guest_watchers, gw, guest_watch_ctx_destroy, true);
-    gw = NULL;
+
+    if (zhashx_insert (ctx->guest_watchers_matchtags,
+                       gw->matchtag_key,
+                       gw) < 0) {
+        zlistx_delete (ctx->guest_watchers, gw->handle);
+        gw = NULL;
+        errno = EINVAL;
+        goto error;
+    }
 
     return 0;
 
@@ -821,25 +852,55 @@ void guest_watchers_cancel (struct info_ctx *ctx,
 {
     struct guest_watch_ctx *gw;
 
-    gw = zlist_first (ctx->guest_watchers);
+    if (cancel) {
+        char buf[1024];
+        if (get_matchtag_key (ctx->h, msg, buf, sizeof (buf)) < 0)
+            goto fallthrough;
+        if ((gw = zhashx_lookup (ctx->guest_watchers_matchtags, buf))) {
+            guest_watch_cancel (ctx, gw, msg, cancel);
+            return;
+        }
+        /* else fallthrough to loop over everything */
+    }
+
+ fallthrough:
+    gw = zlistx_first (ctx->guest_watchers);
     while (gw) {
         guest_watch_cancel (ctx, gw, msg, cancel);
-        gw = zlist_next (ctx->guest_watchers);
+        gw = zlistx_next (ctx->guest_watchers);
     }
+}
+
+int guest_watch_setup (struct info_ctx *ctx)
+{
+    /* N.B. no cleanup in this setup, caller will destroy info_ctx */
+    if (!(ctx->guest_watchers = zlistx_new ()))
+        return -1;
+    zlistx_set_destructor (ctx->guest_watchers, guest_watch_ctx_destroy_wrapper);
+    if (!(ctx->guest_watchers_matchtags = zhashx_new ()))
+        return -1;
+    return 0;
 }
 
 void guest_watch_cleanup (struct info_ctx *ctx)
 {
-    struct guest_watch_ctx *gw;
+    if (ctx->guest_watchers) {
+        struct guest_watch_ctx *gw;
 
-    while ((gw = zlist_pop (ctx->guest_watchers))) {
-        send_eventlog_watch_cancel (gw, NULL, false);
+        while (zlistx_first (ctx->guest_watchers)) {
+            gw = zlistx_detach_cur (ctx->guest_watchers);
+            send_eventlog_watch_cancel (gw, NULL, false);
 
-        if (flux_respond_error (ctx->h, gw->msg, ENOSYS, NULL) < 0)
-            flux_log_error (ctx->h, "%s: flux_respond_error",
-                            __FUNCTION__);
-        guest_watch_ctx_destroy (gw);
+            if (flux_respond_error (ctx->h, gw->msg, ENOSYS, NULL) < 0)
+                flux_log_error (ctx->h, "%s: flux_respond_error",
+                                __FUNCTION__);
+            guest_watch_ctx_destroy (gw);
+        }
+        zlistx_destroy (&ctx->guest_watchers);
+        ctx->guest_watchers = NULL;
     }
+    if (ctx->guest_watchers_matchtags)
+        zhashx_destroy (&ctx->guest_watchers_matchtags);
 }
 
 /*
