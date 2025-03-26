@@ -41,7 +41,7 @@ checks_die() {
     local MSG="$1"
     shift 1
     printf "::error::$MSG\n"
-    if $# -gt 0; then
+    if [ $# -gt 0 ]; then
         eval "$@"
     fi
     exit 1
