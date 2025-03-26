@@ -1300,6 +1300,22 @@ static void initialize_attach_statusline (struct attach_ctx *ctx,
     }
 }
 
+static void setup_signal_handlers (struct attach_ctx *ctx, flux_reactor_t *r)
+{
+    ctx->sigint_w = flux_signal_watcher_create (r,
+                                                SIGINT,
+                                                attach_signal_cb,
+                                                ctx);
+    ctx->sigtstp_w = flux_signal_watcher_create (r,
+                                                 SIGTSTP,
+                                                 attach_signal_cb,
+                                                 ctx);
+    if (!ctx->sigint_w || !ctx->sigtstp_w)
+        log_err_exit ("flux_signal_watcher_create");
+
+    flux_watcher_start (ctx->sigint_w);
+}
+
 int cmd_attach (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
@@ -1362,19 +1378,8 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
 
     ctx.eventlog_watch_count++;
 
-    if (!ctx.readonly) {
-        ctx.sigint_w = flux_signal_watcher_create (r,
-                                                   SIGINT,
-                                                   attach_signal_cb,
-                                                   &ctx);
-        ctx.sigtstp_w = flux_signal_watcher_create (r,
-                                                    SIGTSTP,
-                                                    attach_signal_cb,
-                                                    &ctx);
-        if (!ctx.sigint_w || !ctx.sigtstp_w)
-            log_err_exit ("flux_signal_watcher_create");
-        flux_watcher_start (ctx.sigint_w);
-    }
+    if (!ctx.readonly)
+        setup_signal_handlers (&ctx, r);
 
     initialize_attach_statusline (&ctx, r);
 
