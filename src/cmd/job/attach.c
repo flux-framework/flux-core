@@ -27,6 +27,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/sigutil.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libeventlog/formatter.h"
 #include "src/common/libioencode/ioencode.h"
@@ -89,6 +90,20 @@ struct optparse_option attach_opts[] = {
       .usage = "Set MPIR_being_debugged for testing",
     },
     OPTPARSE_TABLE_END
+};
+
+struct fwd_signal {
+    int signum;
+    flux_watcher_t *w;
+};
+
+struct fwd_signal attach_fwd_signals[] = {
+    { .signum = SIGTERM },
+    { .signum = SIGHUP },
+    { .signum = SIGALRM },
+    { .signum = SIGUSR1 },
+    { .signum = SIGUSR2 },
+    { 0 },
 };
 
 struct attach_ctx {
@@ -394,6 +409,27 @@ void attach_cancel_continuation (flux_future_t *f, void *arg)
     if (flux_future_get (f, NULL) < 0)
         log_msg ("cancel: %s", future_strerror (f, errno));
     flux_future_destroy (f);
+}
+
+static void attach_kill_continuation (flux_future_t *f, void *arg)
+{
+    if (flux_future_get (f, NULL) < 0)
+        log_msg ("kill: %s", future_strerror (f, errno));
+    flux_future_destroy (f);
+}
+
+static void attach_fwd_signal (flux_reactor_t *r,
+                               flux_watcher_t *w,
+                               int revents,
+                               void *arg)
+{
+    struct attach_ctx *ctx = arg;
+    int signum = flux_signal_watcher_get_signum (w);
+    flux_future_t *f;
+
+    if (!(f = flux_job_kill (ctx->h, ctx->id, signum))
+        || flux_future_then (f, -1, attach_kill_continuation, NULL) < 0)
+        log_err_exit ("failed to send %s to job", sigutil_signame (signum));
 }
 
 /* Handle the user typing ctrl-C (SIGINT) and ctrl-Z (SIGTSTP).
@@ -1302,6 +1338,8 @@ static void initialize_attach_statusline (struct attach_ctx *ctx,
 
 static void setup_signal_handlers (struct attach_ctx *ctx, flux_reactor_t *r)
 {
+    struct fwd_signal *sig;
+
     ctx->sigint_w = flux_signal_watcher_create (r,
                                                 SIGINT,
                                                 attach_signal_cb,
@@ -1314,6 +1352,27 @@ static void setup_signal_handlers (struct attach_ctx *ctx, flux_reactor_t *r)
         log_err_exit ("flux_signal_watcher_create");
 
     flux_watcher_start (ctx->sigint_w);
+
+    sig = attach_fwd_signals;
+    while (sig->signum) {
+        if (!(sig->w = flux_signal_watcher_create (r,
+                                                   sig->signum,
+                                                   attach_fwd_signal,
+                                                   ctx)))
+            log_err_exit ("failed to create signal watcher for %s",
+                          sigutil_signame (sig->signum));
+        flux_watcher_start (sig->w);
+        flux_watcher_unref (sig->w);
+        sig++;
+    }
+}
+
+static void fwd_signals_destroy (struct fwd_signal *sig)
+{
+    while (sig->w) {
+        flux_watcher_destroy (sig->w);
+        sig++;
+    }
 }
 
 int cmd_attach (optparse_t *p, int argc, char **argv)
@@ -1398,6 +1457,8 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     free (ctx.queue);
     free (ctx.stdin_ranks);
     free (ctx.status_msg);
+
+    fwd_signals_destroy (attach_fwd_signals);
 
     if (ctx.fatal_exception && ctx.exit_code == 0)
         ctx.exit_code = 1;
