@@ -185,6 +185,21 @@ test_expect_success 'attach: detached job was not canceled' '
 	flux cancel $(cat jobid4)
 '
 
+test_expect_success 'attach: SIGTERM is forwarded to job' '
+	run_attach 5 &&
+	pid=$(cat pid5) &&
+	kill -TERM $pid &&
+	test_must_fail_or_be_terminated wait $pid &&
+	grep Terminated attach5.err
+'
+test_expect_success 'attach: SIGUSR1 is forwarded to job' '
+	run_attach 6 &&
+	pid=$(cat pid6) &&
+	kill -USR1 $pid &&
+	! wait $pid &&
+	grep "User defined"  attach6.err
+'
+
 # Make sure live output occurs by seeing output "before" sleep, but no
 # data "after" a sleep.
 #
