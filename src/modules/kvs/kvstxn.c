@@ -307,8 +307,11 @@ static int kvstxn_add_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry
  * Returns -1 on error, 0 on success entry already there, 1 on success
  * entry needs to be flushed to content store
  */
-static int store_cache (kvstxn_t *kt, json_t *o,
-                        bool is_raw, char *ref, int ref_len,
+static int store_cache (kvstxn_t *kt,
+                        json_t *o,
+                        bool is_raw,
+                        char *ref,
+                        int ref_len,
                         struct cache_entry **entryp)
 {
     struct cache_entry *entry;
