@@ -2564,8 +2564,8 @@ void lookup_stall_ref (void) {
     blobref_hash ("sha1", "efgh", 4, valref2_ref, sizeof (valref2_ref));
     blobref_hash ("sha1", "ijkl", 4, valref3_ref, sizeof (valref3_ref));
     blobref_hash ("sha1", "mnop", 4, valref4_ref, sizeof (valref4_ref));
-    blobref_hash ("sha1", "foobar", 4, valrefmisc1_ref, sizeof (valrefmisc1_ref));
-    blobref_hash ("sha1", "foobaz", 4, valrefmisc2_ref, sizeof (valrefmisc2_ref));
+    blobref_hash ("sha1", "foobar", 6, valrefmisc1_ref, sizeof (valrefmisc1_ref));
+    blobref_hash ("sha1", "foobaz", 6, valrefmisc2_ref, sizeof (valrefmisc2_ref));
 
     dirref1 = treeobj_create_dir ();
     _treeobj_insert_entry_val (dirref1, "val", "foo", 3);
