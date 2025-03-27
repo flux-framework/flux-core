@@ -55,6 +55,14 @@ A job can be interactively attached to via :program:`flux job attach`.  This is
 typically used to watch stdout/stderr while a job is running or after it has
 completed.  It can also be used to feed stdin to a job.
 
+By default SIGTERM, SIGHUP, SIGALRM, SIGUSR1 and SIGUSR2 are forwarded to the
+job when received by :program:`flux job attach`. To disable this behavior,
+use the :option:`--read-only` option.
+
+When :program:`flux job attach` receives two SIGINT (Ctrl-C) signals within 2s
+it will cancel the job. A Ctrl-C followed by Ctrl-Z detaches from the job.
+This behavior is also disabled with :option:`--read-only`.
+
 When :program:`flux job attach` is run interactively -- that is all of
 ``stdout``, ``stderr`` and ``stdin`` are attached to a tty -- the command may
 display a status line while the job is pending, e.g
