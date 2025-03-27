@@ -10,6 +10,7 @@
 from os import getenv
 import glob
 from abc import ABC
+import textwrap
 
 from flux.conf_builtin import conf_builtin_get
 from flux.importer import import_path
@@ -22,7 +23,7 @@ class CLIPluginValue:
         try:
             self.value = temp[1]
         except IndexError:
-            self.value = ""
+            self.value = True
 
     def get_value(self):
         """Getter for returning the key and value"""
@@ -106,7 +107,7 @@ class CLIPlugin(ABC):  # pragma no cover
 
 class CLIPluginRegistry:
     """Flux CLI plugin registry class
-    
+
     Base class that contains the registry of all plugins loaded in the
     instance. By default, plugins are loaded from ``{confdir}/cli/plugins``
     but this can be overriden by setting an environment variable,
@@ -124,10 +125,11 @@ class CLIPluginRegistry:
             self.plugindir = f"{etc}/cli/plugins"
 
     def _add_plugins(self, module, program):
-        entries = [
-            getattr(module, attr) for attr in dir(module) if not attr.startswith("_")
-        ]
-        ## TODO: as we get each entry, make sure it is NOT speciifically the CLIPlugin base class
+        entries = []
+        for attr in dir(module):
+            if not attr.startswith("_"):
+                if not attr.startswith("CLIPlugin"):  ## ignore the base class
+                    entries.append(getattr(module, attr))
         for entry in entries:
             # only process entries that are an instance of type (i.e. a class)
             # and are a subclass of CLIPlugin:
@@ -140,26 +142,22 @@ class CLIPluginRegistry:
             self._add_plugins(import_path(path), program)
         return self
 
-    def add_plugin_option(self, parser):
-        """Add the -P option and list of available keys"""
-        pass
-
     def get_plugin_options(self):
         """Return all plugin option keys from self.plugins"""
-        opts = []
-        for plugin in self.plugins[1:]:
-            opts.append(str(plugin.get_plugin_name()))
+        opts = [plugin.opt for plugin in self.plugins]
         return opts
 
     def get_plugin_usages(self):
         """Return a string that has all self.plugin usage messages"""
         usage = None
-        if self.plugins != []:
+        if self.plugins:
             usage = "Options provided by plugins:\n"
         for plugin in self.plugins:
-            usage += f"    {plugin.name}\t"
-            usage += str(plugin.get_help_message())
-            usage += "\n"
+            p_usage = textwrap.fill(plugin.usage, width=60).splitlines()
+            usage += f"  {plugin.opt:<20}{p_usage[0]}\n"
+            if len(p_usage) > 1:
+                for line in p_usage[1:]:
+                    usage += f"{' ' * 22}{line}\n"
         return usage
 
     def preinit(self, args, values):

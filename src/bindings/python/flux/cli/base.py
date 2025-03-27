@@ -753,7 +753,13 @@ class MiniCmd:
         self.progress = None
         self.watcher = None
         self.plugins = CLIPluginRegistry().load_plugins(prog)
-        self.parser = self.create_parser(prog, usage, description, exclude_io, epilog=self.plugins.get_plugin_usages())
+        self.parser = self.create_parser(
+            prog,
+            usage,
+            description,
+            exclude_io,
+            epilog=self.plugins.get_plugin_usages(),
+        )
 
     @staticmethod
     def create_parser(
@@ -774,7 +780,7 @@ class MiniCmd:
             prog=prog,
             usage=usage,
             description=description,
-            formatter_class=flux.util.help_formatter(),
+            formatter_class=flux.util.help_formatter(raw_description=True),
             epilog=epilog,
         )
         parser.add_argument(

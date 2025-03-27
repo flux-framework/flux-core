@@ -6,9 +6,11 @@ class CustomFluxionPolicyPlugin(CLIPlugin):
     """Accept command-line option that updates fluxion policy in subinstance"""
 
     def __init__(self, prog):
-        super().__init__(prog)
-        self.opt = "match-policy"
-        self.help = "Set the sched-fluxion-resource.match-policy for a subinstance. See sched-fluxion-resource(5) for available policies."
+        super().__init__(
+            prog,
+            "match-policy",
+            "Set the sched-fluxion-resource.match-policy for a subinstance. See sched-fluxion-resource(5) for available policies.",
+        )
 
     def preinit(self, args, values):
         pol = None

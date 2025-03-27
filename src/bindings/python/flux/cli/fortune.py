@@ -46,7 +46,7 @@ class FortuneCmd(base.MiniCmd):
 
     @staticmethod
     def create_parser(
-        prog, usage=None, description=None, exclude_io=False, add_help=True
+        prog, usage=None, description=None, exclude_io=False, add_help=True, **kwargs
     ):
         """
         Create a largely empty parser for flux fortune (no arguments or exposed)
