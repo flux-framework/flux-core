@@ -138,4 +138,28 @@ while read line; do
 done < inputs.txt
 
 
+# Valid inputs:
+# <jobspec> == <expected result>
+#
+cat <<EOF >inputs2.txt
+use_case_1.4.json ==nnodes=4 nslots=16 slot_size=4 slot_gpus=0 exclusive=false duration=3600.0
+use_case_1.5.json ==nnodes=2 nslots=4 slot_size=2 slot_gpus=0 exclusive=false duration=14400.0
+use_case_1.8.json ==nnodes=2 nslots=2 slot_size=5 slot_gpus=7 exclusive=true duration=3600.0
+use_case_1.9.json ==nnodes=1 nslots=1 slot_size=1 slot_gpus=0 exclusive=false duration=3600.0
+use_case_1.10.json ==nnodes=10 nslots=10 slot_size=2 slot_gpus=0 exclusive=true duration=3600.0
+EOF
+
+while read line; do
+
+	args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
+	expected=$(echo $line | awk -F== '{print $2}')
+
+	test_expect_success "jj-reader: $args returns $expected" '
+		echo $expected >expected.$test_count &&
+		cat $SHARNESS_TEST_SRCDIR/jobspec/valid/$args | $jj > output.$test_count &&
+		test_cmp expected.$test_count output.$test_count
+	'
+done < inputs2.txt
+
+
 test_done
