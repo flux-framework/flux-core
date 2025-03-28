@@ -34,12 +34,12 @@ test_expect_success 'jj-reader: bad count throws error' '
 	EOF
 	test_cmp expected.$test_count out.$test_count
 '
-test_expect_success 'jj-reader: bad type throws error' '
+test_expect_success 'jj-reader: no slot throws error' '
 	flux run --dry-run hostname | \
 		jq --arg f beans ".resources[0].type = \$f" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
-	jj-reader: Unsupported resource type '\''beans'\''
+	jj-reader: Unable to determine slot count
 	EOF
 	test_cmp expected.$test_count out.$test_count
 '
@@ -61,6 +61,15 @@ test_expect_success 'jj-reader: wrong count type throws error' '
 	EOF
 	test_cmp expected.$test_count out.$test_count
 '
+test_expect_success 'jj-reader: unexpected type continues without error' '
+	flux run --dry-run -N1 -n1 hostname | \
+		jq --arg f beans ".resources[0].type = \$f" >input.$test_count &&
+	test_expect_code 0 $jj<input.$test_count >out.$test_count 2>&1 &&
+	cat >expected.$test_count <<-EOF &&
+	nnodes=0 nslots=1 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
+	EOF
+	test_cmp expected.$test_count out.$test_count
+'
 
 # Invalid inputs:
 # jobspec.yaml ==<expected error>
@@ -70,10 +79,8 @@ jobspec/valid/basic.yaml        ==jj-reader: at top level: getting duration: Obj
 jobspec/valid/example2.yaml     ==jj-reader: Unable to determine slot size
 jobspec/valid/use_case_1.2.yaml ==jj-reader: level 0: Expected integer, got object
 jobspec/valid/use_case_1.3.yaml ==jj-reader: level 2: Expected integer, got object
-jobspec/valid/use_case_1.4.yaml ==jj-reader: Unsupported resource type 'socket'
-jobspec/valid/use_case_1.5.yaml ==jj-reader: Unsupported resource type 'cluster'
-jobspec/valid/use_case_1.6.yaml ==jj-reader: Unsupported resource type 'cluster'
-jobspec/valid/use_case_1.7.yaml ==jj-reader: Unsupported resource type 'switch'
+jobspec/valid/use_case_1.6.yaml ==jj-reader: level 2: Expected integer, got object
+jobspec/valid/use_case_1.7.yaml ==jj-reader: level 2: Expected integer, got object
 jobspec/valid/use_case_2.1.yaml ==jj-reader: Unable to determine slot size
 jobspec/valid/use_case_2.2.yaml ==jj-reader: Unable to determine slot size
 jobspec/valid/use_case_2.5.yaml ==jj-reader: level 1: Expected integer, got object
@@ -129,6 +136,30 @@ while read line; do
 		test_cmp expected.$test_count output.$test_count
 	'
 done < inputs.txt
+
+
+# Valid inputs:
+# <jobspec> == <expected result>
+#
+cat <<EOF >inputs2.txt
+use_case_1.4.json ==nnodes=4 nslots=16 slot_size=4 slot_gpus=0 exclusive=false duration=3600.0
+use_case_1.5.json ==nnodes=2 nslots=4 slot_size=2 slot_gpus=0 exclusive=false duration=14400.0
+use_case_1.8.json ==nnodes=2 nslots=2 slot_size=5 slot_gpus=7 exclusive=true duration=3600.0
+use_case_1.9.json ==nnodes=1 nslots=1 slot_size=1 slot_gpus=0 exclusive=false duration=3600.0
+use_case_1.10.json ==nnodes=10 nslots=10 slot_size=2 slot_gpus=0 exclusive=true duration=3600.0
+EOF
+
+while read line; do
+
+	args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
+	expected=$(echo $line | awk -F== '{print $2}')
+
+	test_expect_success "jj-reader: $args returns $expected" '
+		echo $expected >expected.$test_count &&
+		cat $SHARNESS_TEST_SRCDIR/jobspec/valid/$args | $jj > output.$test_count &&
+		test_cmp expected.$test_count output.$test_count
+	'
+done < inputs2.txt
 
 
 test_done

@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "resources": [
+    {
+      "type": "ssd",
+      "count": 100000,
+      "exclusive": true
+    },
+    {
+      "type": "node",
+      "count": 1,
+      "exclusive": false,
+      "with": [
+        {
+          "type": "slot",
+          "label": "task",
+          "count": 1,
+          "with": [
+            {
+              "type": "core",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "attributes": {
+    "system": {
+      "duration": 3600
+    }
+  },
+  "tasks": [
+    {
+      "command": [
+        "true"
+      ],
+      "slot": "task",
+      "count": {
+        "per_slot": 1
+      }
+    }
+  ]
+}

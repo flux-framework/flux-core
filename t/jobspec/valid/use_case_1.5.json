@@ -1,0 +1,87 @@
+{
+  "version": 999,
+  "resources": [
+    {
+      "type": "cluster",
+      "count": 1,
+      "with": [
+        {
+          "type": "slot",
+          "count": 2,
+          "label": "ib",
+          "with": [
+            {
+              "type": "node",
+              "count": 1,
+              "with": [
+                {
+                  "type": "memory",
+                  "count": 4,
+                  "unit": "GB"
+                },
+                {
+                  "type": "ib10g",
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "switch",
+      "count": 1,
+      "with": [
+        {
+          "type": "slot",
+          "count": 2,
+          "label": "bicore",
+          "with": [
+            {
+              "type": "node",
+              "count": 1,
+              "with": [
+                {
+                  "type": "core",
+                  "count": 2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "command": [
+        "flux",
+        "start"
+      ],
+      "slot": "ib",
+      "count": {
+        "per_slot": 1
+      }
+    },
+    {
+      "command": [
+        "flux",
+        "start"
+      ],
+      "slot": "bicore",
+      "count": {
+        "per_slot": 1
+      }
+    }
+  ],
+  "attributes": {
+    "system": {
+      "duration": 14400,
+      "cwd": "/home/flux",
+      "environment": {
+        "HOME": "/home/flux"
+      }
+    }
+  }
+}

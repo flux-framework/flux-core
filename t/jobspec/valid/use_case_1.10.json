@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "resources": [
+    {
+      "type": "rack",
+      "count": 5,
+      "with": [
+        {
+          "type": "slot",
+          "count": 2,
+          "label": "rabbit",
+          "with": [
+            {
+              "type": "ssd",
+              "count": 1
+            },
+            {
+              "type": "node",
+              "exclusive": true,
+              "count": 1,
+              "with": [
+                {
+                  "type": "slot",
+                  "label": "task",
+                  "count": 1,
+                  "with": [
+                    {
+                      "type": "core",
+                      "count": 2
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "attributes": {
+    "system": {
+      "duration": 3600
+    }
+  },
+  "tasks": [
+    {
+      "command": [
+        "true"
+      ],
+      "slot": "task",
+      "count": {
+        "per_slot": 1
+      }
+    }
+  ]
+}
