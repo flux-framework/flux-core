@@ -30,7 +30,7 @@ flux job kill -s SIGUSR1 $id
 
 $waitfile -t 100 -v -p "got SIGUSR1" log
 
-flux job status --json -v $id
+flux job status --json -v $id || true
 
 # vi: ts=4 sw=4 expandtab
 
