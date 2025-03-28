@@ -114,9 +114,35 @@ class FluxQueueConfig(UtilConfig):
                 "{color_started}{started:>2}{color_off} "
                 "{defaults.timelimit!F:>8} "
                 "{limits.timelimit!F:>8} "
+                "{limits.range.effective.nnodes:>10} "
+                "{limits.range.effective.ncores:>10} "
+                "{limits.range.effective.ngpus:>10}"
+            ),
+        },
+        "policy": {
+            "description": "flux-queue list with policy limits only",
+            "format": (
+                "?:{queuem:<8.8} "
+                "{color_enabled}{enabled:>2}{color_off} "
+                "{color_started}{started:>2}{color_off} "
+                "{defaults.timelimit!F:>8} "
+                "{limits.timelimit!F:>8} "
                 "{limits.range.nnodes:>10} "
                 "{limits.range.ncores:>10} "
                 "{limits.range.ngpus:>10}"
+            ),
+        },
+        "nodes": {
+            "description": "Show queue status plus all/up/allocated/free nodes",
+            "format": (
+                "?:{queuem:<8.8} "
+                "{color_enabled}{enabled:>2}{color_off} "
+                "{color_started}{started:>2}{color_off} "
+                "{resources.all.nnodes:>6} "
+                "{resources.up.nnodes:>10} "
+                "{resources.down.nnodes:>10} "
+                "{resources.allocated.nnodes:>11} "
+                "{resources.free.nnodes:>10}"
             ),
         },
     }
@@ -143,12 +169,44 @@ class FluxQueueConfig(UtilConfig):
                 raise ValueError(f"{path}: invalid key {key}")
 
 
+class QueueLimitsEffectiveRange:
+    """
+    QueueLimits wrapper which supports a effective range (configured minimum
+    to effective maximum minimum of limit or all resources in queue).
+    """
+
+    def __init__(self, limits, resources):
+        self.__limits = limits
+        self.__resources = resources
+        self.__effective_max = {}
+        for item in ("nnodes", "ncores", "ngpus"):
+            self.__effective_max[item] = min(
+                getattr(limits.max, item), getattr(resources.all, item)
+            )
+
+    @property
+    def nnodes(self):
+        effective_max = self.__effective_max["nnodes"]
+        return f"{self.__limits.min.nnodes}-{effective_max}"
+
+    @property
+    def ncores(self):
+        effective_max = self.__effective_max["ncores"]
+        return f"{self.__limits.min.ncores}-{effective_max}"
+
+    @property
+    def ngpus(self):
+        effective_max = self.__effective_max["ngpus"]
+        return f"{self.__limits.min.ngpus}-{effective_max}"
+
+
 class QueueLimitsRange:
     """
     QueueLimits wrapper which supports a string range "{min}-{max}"
     """
 
-    def __init__(self, limits):
+    def __init__(self, limits, resources):
+        self.effective = QueueLimitsEffectiveRange(limits, resources)
         for item in ("nnodes", "ncores", "ngpus"):
             minimum = getattr(limits.min, item)
             maximum = getattr(limits.max, item)
@@ -158,7 +216,7 @@ class QueueLimitsRange:
 class QueueLimitsWrapper:
     def __init__(self, info):
         self.__limits = info.limits
-        self.range = QueueLimitsRange(info.limits)
+        self.range = QueueLimitsRange(info.limits, info.resources)
 
     def __getattr__(self, attr):
         # Forward most attribute lookups to underlying QueueLimits instance
@@ -217,6 +275,17 @@ class QueueInfoWrapper:
         return AltField("✔", "y") if self.is_started else AltField("✗", "n")
 
 
+def generate_resource_headings():
+    headings = {}
+    for item in ("nnodes", "ncores", "ngpus"):
+        for state in ("all", "free", "allocated", "up", "down"):
+            heading = item[1:].upper()
+            if state != "all":
+                heading += f":{state[:5].upper()}"
+            headings[f"resources.{state}.{item}"] = heading
+    return headings
+
+
 def list(args):
     headings = {
         "queue": "QUEUE",
@@ -235,6 +304,9 @@ def list(args):
         "limits.range.nnodes": "NNODES",
         "limits.range.ncores": "NCORES",
         "limits.range.ngpus": "NGPUS",
+        "limits.range.effective.nnodes": "NNODES",
+        "limits.range.effective.ncores": "NCORES",
+        "limits.range.effective.ngpus": "NGPUS",
         "limits.min.nnodes": "MINNODES",
         "limits.max.nnodes": "MAXNODES",
         "limits.min.ncores": "MINCORES",
@@ -242,6 +314,8 @@ def list(args):
         "limits.min.ngpus": "MINGPUS",
         "limits.max.ngpus": "MAXGPUS",
     }
+    headings.update(generate_resource_headings())
+
     fmt = FluxQueueConfig("list").load().get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
