@@ -19,6 +19,7 @@ enum {
                                  * combine w/ broker) */
     RUNAT_FLAG_FORK_EXEC = 2,  /* require use of fork/exec, not
                                 * posix_spawn */
+    RUNAT_FLAG_NO_SETPGRP = 4,  /* Do not run process in its own pgrp */
 };
 
 struct runat;

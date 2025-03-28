@@ -700,7 +700,10 @@ static bool is_interactive_shell (const char *argz, size_t argz_len)
     return result;
 }
 
-static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
+static int create_runat_rc2 (struct runat *r,
+                             int flags,
+                             const char *argz,
+                             size_t argz_len)
 {
     if (is_interactive_shell (argz, argz_len)) { // run interactive shell
         /*  Check if stdin is a tty and error out if not to avoid
@@ -708,15 +711,15 @@ static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
          */
         if (!isatty (STDIN_FILENO))
             log_msg_exit ("stdin is not a tty - can't run interactive shell");
-        if (runat_push_shell (r, "rc2", argz, 0) < 0)
+        if (runat_push_shell (r, "rc2", argz, flags) < 0)
             return -1;
     }
     else if (argz_count (argz, argz_len) == 1) { // run shell -c "command"
-        if (runat_push_shell_command (r, "rc2", argz, 0) < 0)
+        if (runat_push_shell_command (r, "rc2", argz, flags) < 0)
             return -1;
     }
     else { // direct exec
-        if (runat_push_command (r, "rc2", argz, argz_len, 0) < 0)
+        if (runat_push_command (r, "rc2", argz, argz_len, flags) < 0)
             return -1;
     }
     return 0;
@@ -727,6 +730,7 @@ static int create_runat_phases (broker_ctx_t *ctx)
     const char *jobid = NULL;
     const char *rc1, *rc3, *local_uri;
     bool rc2_none = false;
+    bool rc2_nopgrp = false;
 
     /* jobid may be NULL */
     (void) attr_get (ctx->attrs, "jobid", &jobid, NULL);
@@ -745,6 +749,18 @@ static int create_runat_phases (broker_ctx_t *ctx)
     }
     if (attr_get (ctx->attrs, "broker.rc2_none", NULL, NULL) == 0)
         rc2_none = true;
+
+   /* If the broker is a process group leader and broker.rc2_pgrp was
+    * not set, then do _not_ run rc2 in a separate process group by
+    * default. This is done to enable cleanup when the broker exits.
+    * It may then safely send a signal to its own process group at exit
+    * to terminate any background processes which may otherwise hold up
+    * job completion. This is not possible for interactive shells, which
+    * call setpgrp(2) themselves to enable job control.
+    */
+   if (getpgrp() == getpid ()
+       && attr_get (ctx->attrs, "broker.rc2_pgrp", NULL, NULL) != 0)
+       rc2_nopgrp = true;
 
     if (!(ctx->runat = runat_create (ctx->h,
                                      local_uri,
@@ -771,6 +787,7 @@ static int create_runat_phases (broker_ctx_t *ctx)
      */
     if (ctx->rank == 0 && !rc2_none) {
         if (create_runat_rc2 (ctx->runat,
+                              rc2_nopgrp ? RUNAT_FLAG_NO_SETPGRP: 0,
                               ctx->init_shell_cmd,
                               ctx->init_shell_cmd_len) < 0) {
             log_err ("create_runat_rc2");
