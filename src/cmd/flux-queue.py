@@ -171,8 +171,9 @@ class FluxQueueConfig(UtilConfig):
 
 class QueueLimitsEffectiveRange:
     """
-    QueueLimits wrapper which supports a effective range (configured minimum
-    to effective maximum minimum of limit or all resources in queue).
+    QueueLimits wrapper which supports an effective range (configured minimum
+    to effective maximum, which is the minimum of limit or all resources in
+    queue).
     """
 
     def __init__(self, limits, resources):
