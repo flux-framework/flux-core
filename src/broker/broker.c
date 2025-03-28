@@ -187,6 +187,15 @@ static int increase_rlimits (void)
     return 0;
 }
 
+/* SIGHUP handler that resets SIGHUP handling to default after
+ * the receipt of one signal. This is used just before exit so
+ * the broker can signal its own process group.
+ */
+static void sighup_handler (int signum)
+{
+    signal (SIGHUP, SIG_DFL);
+}
+
 int main (int argc, char *argv[])
 {
     broker_ctx_t ctx;
@@ -520,6 +529,18 @@ int main (int argc, char *argv[])
 cleanup:
     if (ctx.verbose > 1)
         log_msg ("cleaning up");
+
+    /* If the broker is the current process group leader, send SIGHUP
+     * to the current process group to attempt cleanup of any rc2
+     * background processes. The broker will be process group leader
+     * only if it was invoked as a child of the job shell, not when
+     * launched as a direct child of flux-start(1) in test mode.
+     */
+    if (getpgrp () == getpid ()) {
+        if (signal (SIGHUP, sighup_handler) < 0
+            || kill (0, SIGHUP) < 0)
+            log_err ("failed to raise SIGHUP on process group");
+    }
 
     /* Restore default sigmask and actions for SIGINT, SIGTERM
      */
