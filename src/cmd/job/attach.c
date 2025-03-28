@@ -27,6 +27,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/sigutil.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libeventlog/formatter.h"
 #include "src/common/libioencode/ioencode.h"
@@ -89,6 +90,20 @@ struct optparse_option attach_opts[] = {
       .usage = "Set MPIR_being_debugged for testing",
     },
     OPTPARSE_TABLE_END
+};
+
+struct fwd_signal {
+    int signum;
+    flux_watcher_t *w;
+};
+
+struct fwd_signal attach_fwd_signals[] = {
+    { .signum = SIGTERM },
+    { .signum = SIGHUP },
+    { .signum = SIGALRM },
+    { .signum = SIGUSR1 },
+    { .signum = SIGUSR2 },
+    { 0 },
 };
 
 struct attach_ctx {
@@ -204,7 +219,8 @@ void print_eventlog_entry (struct attach_ctx *ctx,
         if (!(context_s = json_dumps (event->context, JSON_COMPACT)))
             log_err_exit ("%s: error re-encoding context", __func__);
     }
-    fprintf (stderr, "%.3fs: %s%s%s%s%s\n",
+    fprintf (stderr,
+             "%.3fs: %s%s%s%s%s\n",
              event->timestamp - ctx->timestamp_zero,
              prefix ? prefix : "",
              prefix ? "." : "",
@@ -260,17 +276,19 @@ static void handle_output_redirect (struct attach_ctx *ctx, json_t *context)
     const char *path = NULL;
     if (!ctx->output_header_parsed)
         log_msg_exit ("stream redirect read before header");
-    if (json_unpack (context, "{ s:s s:s s?s }",
-                              "stream", &stream,
-                              "rank", &rank,
-                              "path", &path) < 0)
+    if (json_unpack (context,
+                     "{ s:s s:s s?s }",
+                     "stream", &stream,
+                     "rank", &rank,
+                     "path", &path) < 0)
         log_msg_exit ("malformed redirect context");
     if (!optparse_hasopt (ctx->p, "quiet"))
-        fprintf (stderr, "%s: %s redirected%s%s\n",
-                         rank,
-                         stream,
-                         path ? " to " : "",
-                         path ? path : "");
+        fprintf (stderr,
+                 "%s: %s redirected%s%s\n",
+                 rank,
+                 stream,
+                 path ? " to " : "",
+                 path ? path : "");
 }
 
 /*  Level prefix strings. Nominally, output log event 'level' integers
@@ -293,7 +311,9 @@ static void handle_output_log (struct attach_ctx *ctx,
     int level = -1;
     json_error_t err;
 
-    if (json_unpack_ex (context, &err, 0,
+    if (json_unpack_ex (context,
+                        &err,
+                        0,
                         "{ s?i s:i s:s s?s s?s s?i }",
                         "rank", &rank,
                         "level", &level,
@@ -391,12 +411,35 @@ void attach_cancel_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
+static void attach_kill_continuation (flux_future_t *f, void *arg)
+{
+    if (flux_future_get (f, NULL) < 0)
+        log_msg ("kill: %s", future_strerror (f, errno));
+    flux_future_destroy (f);
+}
+
+static void attach_fwd_signal (flux_reactor_t *r,
+                               flux_watcher_t *w,
+                               int revents,
+                               void *arg)
+{
+    struct attach_ctx *ctx = arg;
+    int signum = flux_signal_watcher_get_signum (w);
+    flux_future_t *f;
+
+    if (!(f = flux_job_kill (ctx->h, ctx->id, signum))
+        || flux_future_then (f, -1, attach_kill_continuation, NULL) < 0)
+        log_err_exit ("failed to send %s to job", sigutil_signame (signum));
+}
+
 /* Handle the user typing ctrl-C (SIGINT) and ctrl-Z (SIGTSTP).
  * If the user types ctrl-C twice within 2s, cancel the job.
  * If the user types ctrl-C then ctrl-Z within 2s, detach from the job.
  */
-void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
+void attach_signal_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     struct attach_ctx *ctx = arg;
     flux_future_t *f;
@@ -409,7 +452,8 @@ void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
             log_msg ("one more ctrl-C within 2s to cancel or ctrl-Z to detach");
         }
         else {
-            if (!(f = flux_job_cancel (ctx->h, ctx->id,
+            if (!(f = flux_job_cancel (ctx->h,
+                                       ctx->id,
                                        "interrupted by ctrl-C")))
                 log_err_exit ("flux_job_cancel");
             if (flux_future_then (f, -1, attach_cancel_continuation, NULL) < 0)
@@ -506,8 +550,10 @@ static int attach_send_shell (struct attach_ctx *ctx,
 }
 
 /* Handle std input from user */
-void attach_stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+void attach_stdin_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     struct attach_ctx *ctx = arg;
     const char *ptr;
@@ -541,7 +587,8 @@ void attach_output_start (struct attach_ctx *ctx)
                                                 0)))
         log_err_exit ("flux_job_event_watch");
 
-    if (flux_future_then (ctx->output_f, -1.,
+    if (flux_future_then (ctx->output_f,
+                          -1.,
                           attach_output_continuation,
                           ctx) < 0)
         log_err_exit ("flux_future_then");
@@ -714,7 +761,9 @@ void handle_exec_log_msg (struct attach_ctx *ctx, double ts, json_t *context)
     size_t len = 0;
     json_error_t err;
 
-    if (json_unpack_ex (context, &err, 0,
+    if (json_unpack_ex (context,
+                        &err,
+                        0,
                         "{s:s s:s s:s s:s%}",
                         "rank", &rank,
                         "component", &component,
@@ -1109,8 +1158,10 @@ static void attach_notify (struct attach_ctx *ctx,
     }
 }
 
-void attach_notify_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
+void attach_notify_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     struct attach_ctx *ctx = arg;
     ctx->statusline = true;
@@ -1156,7 +1207,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
         int severity;
         const char *note;
 
-        if (json_unpack (event->context, "{s:s s:i s:s}",
+        if (json_unpack (event->context,
+                         "{s:s s:i s:s}",
                          "type", &type,
                          "severity", &severity,
                          "note", &note) < 0)
@@ -1284,6 +1336,45 @@ static void initialize_attach_statusline (struct attach_ctx *ctx,
     }
 }
 
+static void setup_signal_handlers (struct attach_ctx *ctx, flux_reactor_t *r)
+{
+    struct fwd_signal *sig;
+
+    ctx->sigint_w = flux_signal_watcher_create (r,
+                                                SIGINT,
+                                                attach_signal_cb,
+                                                ctx);
+    ctx->sigtstp_w = flux_signal_watcher_create (r,
+                                                 SIGTSTP,
+                                                 attach_signal_cb,
+                                                 ctx);
+    if (!ctx->sigint_w || !ctx->sigtstp_w)
+        log_err_exit ("flux_signal_watcher_create");
+
+    flux_watcher_start (ctx->sigint_w);
+
+    sig = attach_fwd_signals;
+    while (sig->signum) {
+        if (!(sig->w = flux_signal_watcher_create (r,
+                                                   sig->signum,
+                                                   attach_fwd_signal,
+                                                   ctx)))
+            log_err_exit ("failed to create signal watcher for %s",
+                          sigutil_signame (sig->signum));
+        flux_watcher_start (sig->w);
+        flux_watcher_unref (sig->w);
+        sig++;
+    }
+}
+
+static void fwd_signals_destroy (struct fwd_signal *sig)
+{
+    while (sig->w) {
+        flux_watcher_destroy (sig->w);
+        sig++;
+    }
+}
+
 int cmd_attach (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
@@ -1346,19 +1437,8 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
 
     ctx.eventlog_watch_count++;
 
-    if (!ctx.readonly) {
-        ctx.sigint_w = flux_signal_watcher_create (r,
-                                                   SIGINT,
-                                                   attach_signal_cb,
-                                                   &ctx);
-        ctx.sigtstp_w = flux_signal_watcher_create (r,
-                                                    SIGTSTP,
-                                                    attach_signal_cb,
-                                                    &ctx);
-        if (!ctx.sigint_w || !ctx.sigtstp_w)
-            log_err_exit ("flux_signal_watcher_create");
-        flux_watcher_start (ctx.sigint_w);
-    }
+    if (!ctx.readonly)
+        setup_signal_handlers (&ctx, r);
 
     initialize_attach_statusline (&ctx, r);
 
@@ -1377,6 +1457,8 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     free (ctx.queue);
     free (ctx.stdin_ranks);
     free (ctx.status_msg);
+
+    fwd_signals_destroy (attach_fwd_signals);
 
     if (ctx.fatal_exception && ctx.exit_code == 0)
         ctx.exit_code = 1;
