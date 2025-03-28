@@ -227,6 +227,7 @@ TESTSCRIPTS = \
 	t2713-python-cli-bulksubmit.t \
 	t2715-python-cli-cancel.t \
 	t2716-python-cli-batch-conf.t \
+	t2717-python-cli-plugins.t \
 	t2800-jobs-cmd.t \
 	t2800-jobs-cmd-multiuser.t \
 	t2800-jobs-recursive.t \
