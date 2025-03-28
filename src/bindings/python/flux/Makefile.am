@@ -64,6 +64,7 @@ nobase_fluxpy_PYTHON = \
 	hostlist.py \
 	idset.py \
 	progress.py \
+	queue.py \
 	uri/uri.py \
 	uri/__init__.py \
 	uri/resolvers/jobid.py \
@@ -95,7 +96,16 @@ nobase_fluxpy_PYTHON = \
 	utils/tomli/__init__.py \
 	utils/tomli/py.typed \
 	utils/tomli/LICENSE \
-	utils/tomli/_types.py
+	utils/tomli/_types.py \
+	utils/dataclasses/__init__.py \
+	utils/dataclasses/data-classes.rst \
+	utils/dataclasses/setup.py \
+	utils/dataclasses/3.6-notes.txt \
+	utils/dataclasses/dataclass_tools.py \
+	utils/dataclasses/README.rst \
+	utils/dataclasses/dataclasses.py \
+	utils/dataclasses/LICENSE.txt \
+	utils/dataclasses/MANIFEST.in
 
 if HAVE_FLUX_SECURITY
 nobase_fluxpy_PYTHON += security.py

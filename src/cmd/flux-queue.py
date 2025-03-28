@@ -10,12 +10,11 @@
 
 import argparse
 import errno
-import json
 import logging
-import math
 import sys
 
 import flux
+from flux.queue import QueueList
 from flux.util import AltField, FilterActionSetUpdate, UtilConfig, parse_fsd
 
 
@@ -144,134 +143,62 @@ class FluxQueueConfig(UtilConfig):
                 raise ValueError(f"{path}: invalid key {key}")
 
 
-class QueueLimitsJobSizeInfo:
-    def __init__(self, name, config, minormax):
-        self.name = name
-        self.config = config
-        self.minormax = minormax
+class QueueLimitsRange:
+    """
+    QueueLimits wrapper which supports a string range "{min}-{max}"
+    """
 
-    def get_limit(self, key):
-        try:
-            val = self.config["queues"][self.name]["policy"]["limits"]["job-size"][
-                self.minormax
-            ][key]
-        except KeyError:
-            try:
-                val = self.config["policy"]["limits"]["job-size"][self.minormax][key]
-            except KeyError:
-                val = math.inf if self.minormax == "max" else 0
-        if val < 0:
-            val = math.inf
-        return val
-
-    @property
-    def nnodes(self):
-        return self.get_limit("nnodes")
-
-    @property
-    def ncores(self):
-        return self.get_limit("ncores")
-
-    @property
-    def ngpus(self):
-        return self.get_limit("ngpus")
+    def __init__(self, limits):
+        for item in ("nnodes", "ncores", "ngpus"):
+            minimum = getattr(limits.min, item)
+            maximum = getattr(limits.max, item)
+            setattr(self, item, f"{minimum}-{maximum}")
 
 
-class QueueLimitsRangeInfo:
-    def __init__(self, name, min, max):
-        self.name = name
-        self.min = min
-        self.max = max
+class QueueLimitsWrapper:
+    def __init__(self, info):
+        self.__limits = info.limits
+        self.range = QueueLimitsRange(info.limits)
 
-    @property
-    def nnodes(self):
-        return f"{self.min.nnodes}-{self.max.nnodes}"
-
-    @property
-    def ncores(self):
-        return f"{self.min.ncores}-{self.max.ncores}"
-
-    @property
-    def ngpus(self):
-        return f"{self.min.ngpus}-{self.max.ngpus}"
+    def __getattr__(self, attr):
+        # Forward most attribute lookups to underlying QueueLimits instance
+        return getattr(self.__limits, attr)
 
 
-class QueueLimitsInfo:
-    def __init__(self, name, config):
-        self.name = name
-        self.config = config
-        self.min = QueueLimitsJobSizeInfo(name, config, "min")
-        self.max = QueueLimitsJobSizeInfo(name, config, "max")
-        self.range = QueueLimitsRangeInfo(name, self.min, self.max)
-
-    @property
-    def timelimit(self):
-        try:
-            duration = self.config["queues"][self.name]["policy"]["limits"]["duration"]
-        except KeyError:
-            try:
-                duration = self.config["policy"]["limits"]["duration"]
-            except KeyError:
-                duration = "inf"
-        t = parse_fsd(duration)
-        return t
-
-
-class QueueDefaultsInfo:
-    def __init__(self, name, config):
-        self.name = name
-        self.config = config
-
-    @property
-    def timelimit(self):
-        try:
-            duration = self.config["queues"][self.name]["policy"]["jobspec"][
-                "defaults"
-            ]["system"]["duration"]
-        except KeyError:
-            try:
-                duration = self.config["policy"]["jobspec"]["defaults"]["system"][
-                    "duration"
-                ]
-            except KeyError:
-                duration = "inf"
-        t = parse_fsd(duration)
-        return t
-
-
-class QueueInfo:
-    def __init__(self, name, config, enabled, started):
-        self.name = name
-        self.config = config
-        self.limits = QueueLimitsInfo(name, config)
-        self.defaults = QueueDefaultsInfo(name, config)
-        self.scheduling = "started" if started else "stopped"
-        self.submission = "enabled" if enabled else "disabled"
-        self._enabled = enabled
-        self._started = started
+class QueueInfoWrapper:
+    def __init__(self, queue_info):
+        self.__qinfo = queue_info
+        self.is_started = queue_info.started
+        self.is_enabled = queue_info.enabled
+        self.limits = QueueLimitsWrapper(queue_info)
 
     def __getattr__(self, attr):
         try:
-            return getattr(self, attr)
+            return getattr(self.__qinfo, attr)
         except (KeyError, AttributeError):
             raise AttributeError("invalid QueueInfo attribute '{}'".format(attr))
 
     @property
+    def scheduling(self):
+        return "started" if self.is_started else "stopped"
+
+    @property
+    def submission(self):
+        return "enabled" if self.is_enabled else "disabled"
+
+    @property
     def queue(self):
-        return self.name if self.name else ""
+        return self.name
 
     @property
     def queuem(self):
-        try:
-            defaultq = self.config["policy"]["jobspec"]["defaults"]["system"]["queue"]
-        except KeyError:
-            defaultq = ""
-        q = self.queue + ("*" if defaultq and self.queue == defaultq else "")
-        return q
+        if self.name and self.is_default:
+            return f"{self.name}*"
+        return self.name
 
     @property
     def color_enabled(self):
-        return "\033[01;32m" if self._enabled else "\033[01;31m"
+        return "\033[01;32m" if self.is_enabled else "\033[01;31m"
 
     @property
     def color_off(self):
@@ -279,26 +206,15 @@ class QueueInfo:
 
     @property
     def enabled(self):
-        return AltField("✔", "y") if self._enabled else AltField("✗", "n")
+        return AltField("✔", "y") if self.is_enabled else AltField("✗", "n")
 
     @property
     def color_started(self):
-        return "\033[01;32m" if self._started else "\033[01;31m"
+        return "\033[01;32m" if self.is_started else "\033[01;31m"
 
     @property
     def started(self):
-        return AltField("✔", "y") if self._started else AltField("✗", "n")
-
-
-def fetch_all_queue_status(handle, queues=None):
-    if handle is None:
-        # Return fake payload if handle is not open (e.g. during testing)
-        return {"enable": True, "start": True}
-    topic = "job-manager.queue-status"
-    if queues is None:
-        return handle.rpc(topic, {}).get()
-    rpcs = {x: handle.rpc(topic, {"name": x}) for x in queues}
-    return {x: rpcs[x].get() for x in rpcs}
+        return AltField("✔", "y") if self.is_started else AltField("✗", "n")
 
 
 def list(args):
@@ -326,46 +242,10 @@ def list(args):
         "limits.min.ngpus": "MINGPUS",
         "limits.max.ngpus": "MAXGPUS",
     }
-    config = None
-    handle = None
-
-    if args.from_stdin:
-        config = json.loads(sys.stdin.read())
-    else:
-        handle = flux.Flux()
-        future = handle.rpc("config.get")
-        try:
-            config = future.get()
-        except Exception as e:
-            LOGGER.warning("Could not get flux config: " + str(e))
-
     fmt = FluxQueueConfig("list").load().get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
-    #  Build queue_config from args.queue, or config["queue"] if --queue
-    #  was unused:
-    queue_config = {}
-    if args.queue:
-        for queue in args.queue:
-            try:
-                queue_config[queue] = config["queues"][queue]
-            except KeyError:
-                raise ValueError(f"No such queue: {queue}")
-    elif config and "queues" in config:
-        queue_config = config["queues"]
-
-    queues = []
-    if config and "queues" in config:
-        status = fetch_all_queue_status(handle, queue_config.keys())
-        for key, value in queue_config.items():
-            queues.append(
-                QueueInfo(key, config, status[key]["enable"], status[key]["start"])
-            )
-    else:
-        # single anonymous queue
-        status = fetch_all_queue_status(handle)
-        queues.append(QueueInfo(None, config, status["enable"], status["start"]))
-
+    queues = [QueueInfoWrapper(x) for x in QueueList(flux.Flux(), queues=args.queue)]
     formatter.print_items(queues, no_header=args.no_header)
 
 
@@ -566,9 +446,6 @@ def main():
     )
     list_parser.add_argument(
         "-n", "--no-header", action="store_true", help="Suppress header output"
-    )
-    list_parser.add_argument(
-        "--from-stdin", action="store_true", help=argparse.SUPPRESS
     )
     list_parser.set_defaults(func=list)
 
