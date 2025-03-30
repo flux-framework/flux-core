@@ -131,6 +131,9 @@ broker.rc1_path [Updates: C]
 broker.rc3_path [Updates: C]
    The path to the broker's rc3 script.  Default: ``${prefix}/etc/flux/rc3``.
 
+broker.rc2_none [Updates: C]
+   If set, do not run an initial program.
+
 broker.exit-restart [Updates: C, R]
    A numeric exit code that the broker uses to indicate that it should not be
    restarted.  This is set by the systemd unit file.  Default: unset.
