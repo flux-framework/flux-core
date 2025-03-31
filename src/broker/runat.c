@@ -354,10 +354,12 @@ static struct runat_command *runat_command_create (char **env, int flags)
         cmd->flags |= FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH;
     if (flags & RUNAT_FLAG_FORK_EXEC)
         cmd->flags |= FLUX_SUBPROCESS_FLAGS_FORK_EXEC;
-    /*
-     * N.B. By default subprocesses call setpgrp() before exec(2).  So
-     * any processes spawned by command are also signaled by
-     * flux_subprocess_signal()
+    if (flags & RUNAT_FLAG_NO_SETPGRP)
+        cmd->flags |= FLUX_SUBPROCESS_FLAGS_NO_SETPGRP;
+
+    /* N.B. if !RUNAT_FLAG_NO_SETPGRP then cmd will be in its own
+     * process group and flux_subprocess_kill() will use killpg(2).
+     * Otherwise, cmd shares a process group with the broker.
      */
     if (!(cmd->cmd = flux_cmd_create (0, NULL, env)))
         goto error;
