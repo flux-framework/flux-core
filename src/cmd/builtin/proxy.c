@@ -352,6 +352,14 @@ static int comms_error (flux_t *h, void *arg)
     return 0;
 }
 
+static bool is_directory (const char *path)
+{
+    struct stat st;
+    if (stat (path, &st) < 0)
+        return 0;
+    return S_ISDIR (st.st_mode);
+}
+
 static int cmd_proxy (optparse_t *p, int ac, char *av[])
 {
     struct proxy_command ctx;
@@ -404,6 +412,11 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 
     /* Create socket directory.
      */
+    if (tmpdir && !is_directory (tmpdir)) {
+        log_msg ("TMPDIR (%s) is not a directory. Using /tmp instead",
+                 tmpdir);
+        tmpdir = "/tmp";
+    }
     if (snprintf (workpath,
                   sizeof (workpath),
                   "%s/flux-proxy-XXXXXX",
