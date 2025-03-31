@@ -178,4 +178,10 @@ test_expect_success NO_CHAIN_LINT 'flux-proxy sends SIGHUP to children without -
 	grep "\[\?25h" pty.out &&
 	grep "SIGHUP" pty.out
 '
+test_expect_success 'flux-proxy falls back to /tmp with invalid TMPDIR' '
+	id=$(flux batch -n1 --wrap sleep inf) &&
+	flux proxy ${id}?local flux uptime &&
+	flux cancel $id &&
+	flux job wait-event -Hvt 60 $id clean
+'
 test_done
