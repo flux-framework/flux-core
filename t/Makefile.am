@@ -108,6 +108,7 @@ TESTSCRIPTS = \
 	t1009-kvs-copy.t \
 	t1010-kvs-commit-sync.t \
 	t1011-kvs-checkpoint-period.t \
+	t1012-kvs-checkpoint.t \
 	t1101-barrier-basic.t \
 	t1102-cmddriver.t \
 	t1103-apidisconnect.t \
@@ -435,6 +436,7 @@ check_PROGRAMS = \
 	kvs/watch_disconnect \
 	kvs/watch_stream \
 	kvs/commit \
+	kvs/loop_append \
 	kvs/transactionmerge \
 	kvs/lookup_invalid \
 	kvs/commit_order \
@@ -637,6 +639,11 @@ kvs_commit_SOURCES = kvs/commit.c
 kvs_commit_CPPFLAGS = $(test_cppflags)
 kvs_commit_LDADD = $(test_ldadd)
 kvs_commit_LDFLAGS = $(test_ldflags)
+
+kvs_loop_append_SOURCES = kvs/loop_append.c
+kvs_loop_append_CPPFLAGS = $(test_cppflags)
+kvs_loop_append_LDADD = $(test_ldadd)
+kvs_loop_append_LDFLAGS = $(test_ldflags)
 
 kvs_transactionmerge_SOURCES = kvs/transactionmerge.c
 kvs_transactionmerge_CPPFLAGS = $(test_cppflags)
