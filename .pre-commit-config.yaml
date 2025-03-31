@@ -2,7 +2,7 @@ files: '^(src/bindings/python/flux|src/cmd|t/python/.*\.py|t/scripts/.*\.py)'
 exclude: "^(src/bindings/python/_flux/|src/bindings/python/flux/utils/|t/python/tap)"
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.0.1
+    rev: v5.0.0
     hooks:
       - id: check-added-large-files
       - id: check-case-conflict
@@ -38,7 +38,7 @@ repos:
         types: [python]
         entry: ./scripts/run_mypy.sh
   - repo: https://github.com/netromdk/vermin
-    rev: v1.5.1
+    rev: v1.6.0
     hooks:
       - id: vermin
         args: ['-t=3.6-', '--violations']
