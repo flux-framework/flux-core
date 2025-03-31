@@ -134,7 +134,7 @@ class FortuneCmd(base.MiniCmd):
         Check if we are within a few weeks of Valentine's Day
         """
         global fortunes
-        global valentines
+        global valentines  # noqa: F824
         now = datetime.now()
 
         # End of January or start of February
