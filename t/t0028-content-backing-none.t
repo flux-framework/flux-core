@@ -16,7 +16,7 @@ test_expect_success 'loaded content module' '
 '
 
 test_expect_success 'checkpoint-get fails, no checkpoints yet' '
-        checkpoint_put foo bar
+        test_must_fail checkpoint_get foo
 '
 
 test_expect_success 'checkpoint-put foo w/ rootref bar' '
@@ -88,7 +88,7 @@ test_expect_success 'content.backing-module input of none works' '
         flux start -Scontent.backing-module=none true
 '
 
-test_expect_success 'removedcontent module' '
+test_expect_success 'remove content module' '
 	flux exec flux module remove content
 '
 

@@ -25,7 +25,7 @@ test_expect_success 'configure checkpoint-period, place initial value' '
 	EOT
 '
 
-# N.B. if wish to hand test with more "stress", incrase threads,
+# N.B. if wish to hand test with more "stress", increase threads,
 # batchcount, and/or sleep.
 
 test_expect_success NO_CHAIN_LINT 'kvs: start instance that creates tons of appended data' '

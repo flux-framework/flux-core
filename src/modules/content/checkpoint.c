@@ -282,10 +282,8 @@ void content_checkpoint_put_request (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:s s:o}",
-                             "key",
-                             &key,
-                             "value",
-                             &value) < 0)
+                             "key", &key,
+                             "value", &value) < 0)
         goto error;
 
     if (checkpoint->rank == 0) {

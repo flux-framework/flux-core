@@ -71,7 +71,10 @@ static int treeobj_hash (const char *hash_name, json_t *obj,
     if (!(tmp = treeobj_encode (obj)))
         goto error;
 
-    if (blobref_hash (hash_name, (uint8_t *)tmp, strlen (tmp), blobref,
+    if (blobref_hash (hash_name,
+                      (uint8_t *)tmp,
+                      strlen (tmp),
+                      blobref,
                       blobref_len) < 0)
         goto error;
     rc = 0;
@@ -176,8 +179,10 @@ void setup_kvsroot (kvsroot_mgr_t *krm,
 /* wraps treeobj_create_val() and treeobj_insert_entry(),
  * so created val can be properly dereferenced
  */
-void _treeobj_insert_entry_val (json_t *obj, const char *name,
-                                const void *data, int len)
+void _treeobj_insert_entry_val (json_t *obj,
+                                const char *name,
+                                const void *data,
+                                int len)
 {
     json_t *val = treeobj_create_val (data, len);
     treeobj_insert_entry (obj, name, val);
@@ -187,8 +192,10 @@ void _treeobj_insert_entry_val (json_t *obj, const char *name,
 /* wraps treeobj_create_symlink() and treeobj_insert_entry(), so
  * created symlink can be properly dereferenced
  */
-void _treeobj_insert_entry_symlink (json_t *obj, const char *name,
-                                    const char *ns, const char *target)
+void _treeobj_insert_entry_symlink (json_t *obj,
+                                    const char *name,
+                                    const char *ns,
+                                    const char *target)
 {
     json_t *symlink = treeobj_create_symlink (ns, target);
     treeobj_insert_entry (obj, name, symlink);
@@ -198,7 +205,8 @@ void _treeobj_insert_entry_symlink (json_t *obj, const char *name,
 /* wraps treeobj_create_valref() and treeobj_insert_entry(), so
  * created valref can be properly dereferenced
  */
-void _treeobj_insert_entry_valref (json_t *obj, const char *name,
+void _treeobj_insert_entry_valref (json_t *obj,
+                                   const char *name,
                                    const char *blobref)
 {
     json_t *valref = treeobj_create_valref (blobref);
@@ -209,7 +217,8 @@ void _treeobj_insert_entry_valref (json_t *obj, const char *name,
 /* wraps treeobj_create_dirref() and treeobj_insert_entry(), so
  * created dirref can be properly dereferenced
  */
-void _treeobj_insert_entry_dirref (json_t *obj, const char *name,
+void _treeobj_insert_entry_dirref (json_t *obj,
+                                   const char *name,
                                    const char *blobref)
 {
     json_t *dirref = treeobj_create_dirref (blobref);
@@ -2555,8 +2564,8 @@ void lookup_stall_ref (void) {
     blobref_hash ("sha1", "efgh", 4, valref2_ref, sizeof (valref2_ref));
     blobref_hash ("sha1", "ijkl", 4, valref3_ref, sizeof (valref3_ref));
     blobref_hash ("sha1", "mnop", 4, valref4_ref, sizeof (valref4_ref));
-    blobref_hash ("sha1", "foobar", 4, valrefmisc1_ref, sizeof (valrefmisc1_ref));
-    blobref_hash ("sha1", "foobaz", 4, valrefmisc2_ref, sizeof (valrefmisc2_ref));
+    blobref_hash ("sha1", "foobar", 6, valrefmisc1_ref, sizeof (valrefmisc1_ref));
+    blobref_hash ("sha1", "foobaz", 6, valrefmisc2_ref, sizeof (valrefmisc2_ref));
 
     dirref1 = treeobj_create_dir ();
     _treeobj_insert_entry_val (dirref1, "val", "foo", 3);
