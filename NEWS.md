@@ -1,3 +1,46 @@
+flux-core version 0.73.0 - 2025-04-01
+-------------------------------------
+
+## New Features
+ * execute rc2 in same process group as broker and send `SIGHUP` before
+   broker exit (#6740)
+ * flux-job: forward some signals to jobs in `flux job attach` (#6734)
+ * support resource counts in `flux queue list` output, display effective
+   limits by default (#6726)
+ * python: add `QueueList` class for access to queue config, limits, status
+   and resource counts (#6723)
+ * export `FLUX_JOB_RANKS` to housekeeping scripts (#6728)
+ * set `exit-timeout=none` by default in `flux alloc` and `flux batch`
+   (#6702)
+ * accept target queue as non-option parameter in most `flux queue`
+   subcommands (#6706)
+
+## Fixes
+ * flux-proxy: fall back to `/tmp` if `TMPDIR` is invliad (#6741)
+ * libjob: fixes for rabbit jobspec (#6727)
+ * job-info: index watchers for quick cancels (#6720)
+ * kvs-watch: index watchers to avoid search iterations (#6719)
+ * kvs-watch: subscribe/unsubscribe to events asynchronously (#6701)
+ * shell: clear signal mask and handlers in shell for plugins that call
+   `fork(2)` (#6716)
+ * fix failure to signal a process group after the process group leader exits
+   (#6714)
+ * python: make FluxExecutor catch submission errors (#6700)
+ * sdmon: reconnect when bus is lost (#6697)
+ * Remove version check from libjob and change to pass with warning in shell
+   (#6682)
+
+## Cleanup
+ * flux-queue: correct some comment grammar (#6736)
+
+## Build/CI/Testsuite/Documentation
+ * ci: update pre-commit and fix spurious flake8 error (#6739)
+ * t: add checkpoint integrity test (#6733)
+ * test: fix checks-lib script (#6731)
+ * testsuite: fix non-bourne shell test failure (#6686)
+ * github: upgrade codecov-action to v5 (#6688)
+
+
 flux-core version 0.72.0 - 2025-03-04
 -------------------------------------
 
