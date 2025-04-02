@@ -210,7 +210,7 @@ test_expect_success NO_CHAIN_LINT 'flux kvs eventlog wait-event --waitcreate wor
 	test_cmp wait_event_f.exp wait_event_f.out
 '
 
-test_expect_success NO_CHAIN_LINT 'flux kvs eventlog wait-event --timeout works' '
+test_expect_success 'flux kvs eventlog wait-event --timeout works' '
 	flux kvs eventlog append --timestamp=42 test.wait_event.g foo &&
 	flux kvs eventlog append --timestamp=43 test.wait_event.g bar &&
 	test_must_fail flux kvs eventlog wait-event --timeout=0.1 test.wait_event.g baz

@@ -78,7 +78,7 @@ test_expect_success 'print logs' '
 test_expect_success 'force another bus reconnect' '
 	bus_reconnect
 '
-test_expect_success NO_CHAIN_LINT 'background subscription fails with EAGAIN' '
+test_expect_success 'background subscription fails with EAGAIN' '
 	pid=$(cat signals.pid) &&
 	test_must_fail wait $pid &&
 	grep "Errno 11" signals.err
@@ -94,7 +94,7 @@ test_expect_success 'get systemd version to ensure reconnect has occurred' '
 test_expect_success 'remove sdbus module' '
 	flux module remove sdbus
 '
-test_expect_success NO_CHAIN_LINT 'background subscription fails with ENOSYS' '
+test_expect_success 'background subscription fails with ENOSYS' '
 	pid=$(cat signals2.pid) &&
 	test_must_fail wait $pid &&
 	grep "Errno 38" signals2.err
