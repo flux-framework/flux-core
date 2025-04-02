@@ -27,7 +27,7 @@ def ping_cb(rpc, do_sync=False):
        print("ready.")
        sys.stdout.flush()
 
-do_sync = len(sys.argv) > 1 and sys.argv[1] == "sync" 
+do_sync = len(sys.argv) > 1 and sys.argv[1] == "sync"
 
 h = flux.Flux()
 

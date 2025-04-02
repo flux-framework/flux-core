@@ -165,7 +165,7 @@ test_expect_success 'perilog: stdout was copied to dmesg log' '
 	flux dmesg -H | grep "$jobid: prolog:.*rank 0.*stdout: 0" &&
 	flux dmesg -H | grep "$jobid: prolog:.*rank 1.*stdout: 1" &&
 	flux dmesg -H | grep "$jobid: prolog:.*rank 2.*stdout: 2" &&
-	flux dmesg -H | grep "$jobid: prolog:.*rank 3.*stdout: 3" 
+	flux dmesg -H | grep "$jobid: prolog:.*rank 3.*stdout: 3"
 '
 test_expect_success 'perilog: load a basic per-rank prolog config' '
 	flux config load <<-EOF &&
