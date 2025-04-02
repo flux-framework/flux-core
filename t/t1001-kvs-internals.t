@@ -519,7 +519,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: ENOSYS returned on unfinished requests o
 	WAITCOUNT=$(flux module stats --parse namespace.primary.#versionwaiters kvs) &&
 	WAITCOUNT=$(($WAITCOUNT+1))
 	VERS=$(flux kvs version) &&
-	VERSWAIT=$(($VERS+10)) &&
+	VERSWAIT=$(($VERS+10))
 	flux kvs wait ${VERSWAIT} 2> enosys.err &
 	pid=$! &&
 	wait_versionwaiters ${WAITCOUNT} &&

@@ -136,7 +136,7 @@ test_expect_success NO_CHAIN_LINT 'flux kvs eventlog get --watch returns append 
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs eventlog get --waitcreate works' '
-	test_must_fail flux kvs eventlog get --unformatted test.f &&
+	test_must_fail flux kvs eventlog get --unformatted test.f
 	flux kvs eventlog get --unformatted --waitcreate test.f >get_f.out &
 	pid=$! &&
 	wait_watcherscount_nonzero primary &&
@@ -200,7 +200,7 @@ test_expect_success 'flux kvs eventlog wait-event fails on non-existent eventlog
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs eventlog wait-event --waitcreate works' '
-	test_must_fail flux kvs eventlog get --unformatted test.wait_event.f &&
+	test_must_fail flux kvs eventlog get --unformatted test.wait_event.f
 	flux kvs eventlog wait-event --waitcreate --unformatted test.wait_event.f foo >wait_event_f.out &
 	pid=$! &&
 	wait_watcherscount_nonzero primary &&

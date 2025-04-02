@@ -116,7 +116,7 @@ test_expect_success NO_CHAIN_LINT 'flux alloc --bg can be interrupted' '
 '
 test_expect_success NO_CHAIN_LINT 'flux alloc --bg errors when job is canceled' '
 	flux queue stop &&
-	test_when_finished "flux queue start" &&
+	test_when_finished "flux queue start"
 	flux alloc --bg -n1 -v >canceled.log 2>&1 &
 	pid=$! &&
 	$waitfile -t 180 -v -p waiting canceled.log &&

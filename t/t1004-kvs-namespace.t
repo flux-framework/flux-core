@@ -410,7 +410,7 @@ test_expect_success 'kvs: wait fails on invalid namespace on rank 1' '
 test_expect_success NO_CHAIN_LINT 'kvs: wait recognizes removed namespace' '
         flux kvs namespace create $NAMESPACETMP-REMOVE-WAIT &&
         VERS=$(flux kvs version --namespace=$NAMESPACETMP-REMOVE-WAIT) &&
-        VERS=$((VERS + 1)) &&
+        VERS=$((VERS + 1))
         flux kvs wait --namespace=$NAMESPACETMP-REMOVE-WAIT $VERS > wait_out 2>&1 &
         waitpid=$! &&
         wait_versionwaiters_nonzero $NAMESPACETMP-REMOVE-WAIT &&
