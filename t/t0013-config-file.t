@@ -278,7 +278,7 @@ waitgrep() {
 # RFC 2606 reserves the .invalid domain for testing
 test_expect_success NO_CHAIN_LINT 'a warning is printed when upstream URI has unknown host' '
 	mkdir conf8b &&
-	cat <<-EOT >conf8b/bootstrap.toml &&
+	cat <<-EOT >conf8b/bootstrap.toml
 	[bootstrap]
 	curve_cert = "testcert"
 	[[bootstrap.hosts]]

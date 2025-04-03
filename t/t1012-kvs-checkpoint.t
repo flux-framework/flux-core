@@ -30,7 +30,7 @@ test_expect_success 'configure checkpoint-period, place initial value' '
 
 test_expect_success NO_CHAIN_LINT 'kvs: start instance that creates tons of appended data' '
 	statedir=$(mktemp -d --tmpdir=${TMPDIR:-/tmp}) &&
-	echo $statedir &&
+	echo $statedir
 	flux start --setattr=statedir=${statedir} ${LOOPAPPEND} --batch-count=50 --threads=${THREADS} mydata &
 	pid=$! &&
 	sleep 60 &&

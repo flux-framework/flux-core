@@ -52,7 +52,7 @@ test_expect_success 'flux dmesg -c prints and clears' '
 	! flux dmesg | grep -q hello_dmesg_pc
 '
 test_expect_success NO_CHAIN_LINT 'flux dmesg -f works' '
-	flux logger hello_last &&
+	flux logger hello_last
 	flux dmesg -f > dmesg.out &
 	pid=$! &&
 	$waitfile -t 20 -p hello_last dmesg.out &&
@@ -61,7 +61,7 @@ test_expect_success NO_CHAIN_LINT 'flux dmesg -f works' '
 	kill $pid
 '
 test_expect_success NO_CHAIN_LINT 'flux dmesg -f --new works' '
-	flux logger hello_old &&
+	flux logger hello_old
 	flux dmesg -f --new > dmesg2.out &
 	pid=$! &&
 	for i in $(seq 1 10); do flux logger hello_new; done &&

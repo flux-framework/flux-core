@@ -8,7 +8,7 @@ stats() {
     while :; do
        echo === $(flux jobs --stats-only) ===
        sleep 5
-    done 
+    done
 }
 
 stats &
@@ -31,7 +31,7 @@ for id in $(flux jobs -f failed -no {id}); do
     name=$(flux jobs -no {name} ${id})
     flux job attach $id > ${name/.t}.log 2>&1
 done
- 
+
 # print failed jobs listing to stdout
 flux jobs -f failed
 

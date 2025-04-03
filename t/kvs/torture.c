@@ -43,7 +43,7 @@ static void fill (char *s, int i, int len);
 
 void usage (void)
 {
-    fprintf (stderr, 
+    fprintf (stderr,
 "Usage: torture [--quiet|--verbose] [--prefix NAME] [--size BYTES] [--count N]\n"
 );
     exit (1);

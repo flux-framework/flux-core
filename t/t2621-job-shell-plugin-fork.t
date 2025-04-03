@@ -9,7 +9,7 @@ test_under_flux 2 job
 
 FORK_PLUGIN="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs/fork.so"
 test_expect_success 'create shell initrc to load fork.so plugin' '
-	cat <<-EOF >fork.lua 
+	cat <<-EOF >fork.lua
 	plugin.load { file = "$FORK_PLUGIN" }
 	EOF
 '

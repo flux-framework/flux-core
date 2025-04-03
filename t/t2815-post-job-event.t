@@ -20,12 +20,12 @@ test_expect_success 'flux-post-job-event can post a simple event' '
 '
 test_expect_success 'flux-post-job-event can post an event with context' '
 	flux post-job-event $JOBID test note=testing  &&
-	flux job wait-event -m note=testing -t15 $JOBID test 
+	flux job wait-event -m note=testing -t15 $JOBID test
 '
 test_expect_success 'flux-post-job-event can post multiple context keys' '
 	flux post-job-event $JOBID test note=test2 status=0  &&
 	flux job wait-event -m note=test2 -t15 $JOBID test  &&
-	flux job wait-event -m status=0 -t15 $JOBID test 
+	flux job wait-event -m status=0 -t15 $JOBID test
 '
 test_expect_success 'flux-post-job-event fails for invalid job' '
 	test_must_fail flux post-job-event f123 test note="test event"

@@ -40,7 +40,6 @@ test_expect_success 'flux-shell: initrc: plugin.searchpath set via broker attr' 
 	test_debug "cat print-searchpath.out" &&
 	grep "plugin.searchpath = /test/foo" print-searchpath.out &&
 	flux setattr conf.shell_pluginpath "${old_pluginpath}"
-	
 '
 test_expect_success 'flux-shell: default initrc obeys FLUX_SHELL_RC_PATH' '
 	mkdir test-dir.d &&
@@ -127,7 +126,7 @@ test_expect_success 'flux-shell: initrc: assignment to shell method fails' '
 test_expect_success 'flux-shell: initrc: return false from plugin aborts shell' '
 	name=failed-return &&
 	cat >${name}.lua <<-EOT &&
-	    plugin.register { 
+	    plugin.register {
               name = "$name",
               handlers = {
 		{ topic="*", fn = function () return false end }

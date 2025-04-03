@@ -17,7 +17,7 @@ runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast"
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
 shell_leader_rank() {
-    flux job wait-event -f json -p exec $1 shell.init | 
+    flux job wait-event -f json -p exec $1 shell.init |
         jq '.context["leader-rank"]'
 }
 shell_service() {

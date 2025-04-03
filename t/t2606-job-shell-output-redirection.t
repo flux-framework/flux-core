@@ -323,7 +323,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: job attach waits if no kvs output 
         id=$(flux submit -n1 \
              --output=out27 --error=err27 \
              sleep 60)
-        flux job wait-event $id start &&
+        flux job wait-event $id start
         flux job attach -E -X ${id} 2> attach27.err &
         pid=$! &&
         flux cancel $id &&
@@ -334,7 +334,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: job attach waits if no kvs output 
         id=$(flux submit -n2 \
              --output=out28 --error=err28 \
              sleep 60)
-        flux job wait-event $id start &&
+        flux job wait-event $id start
         flux job attach -E -X ${id} 2> attach28.err &
         pid=$! &&
         flux cancel $id &&

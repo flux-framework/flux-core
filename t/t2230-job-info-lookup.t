@@ -248,7 +248,7 @@ test_expect_success NO_CHAIN_LINT 'flux job eventlog -F, --follow works' '
 '
 #
 #  Color and human-readable output tests for flux job eventlog/wait-event
-#  
+#
 test_expect_success 'flux job eventlog -H, --human works' '
 	#
         #  Note: --human option should format first timestamp of eventlog
