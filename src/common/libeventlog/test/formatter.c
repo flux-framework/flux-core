@@ -180,9 +180,15 @@ static void test_basic ()
         ok ((result = eventlog_entry_dumps (evf, &error, entry)) != NULL,
             "eventlog_entry_dumps");
         diag (result);
-        is (result, test->input,
+
+        /* convert entry back to JSON string for comparison to avoid
+         * idiosyncrasies of current jansson library (e.g. float precision)
+         */
+        char *s = json_dumps (entry, JSON_COMPACT);
+        is (result, s,
             "json output is expected");
         free (result);
+        free (s);
         /*  Need to reset unformatted flag for other tests:
          */
         ok (eventlog_formatter_set_format (evf, "text") == 0,
