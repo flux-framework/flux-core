@@ -102,6 +102,7 @@ Table of Contents
    guide/start
    guide/interact
    guide/admin
+   guide/troubleshooting
    guide/glossary
    index_man
    python/index
