@@ -1014,20 +1014,6 @@ static void kvstxn_apply (kvstxn_t *kt)
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    else if (ret == KVSTXN_PROCESS_SYNC_CONTENT_FLUSH) {
-        /* N.B. future is managed by kvstxn, should not call
-         * flux_future_destroy() on it */
-        flux_future_t *f = kvstxn_sync_content_flush (kt);
-        if (!f) {
-            errnum = errno;
-            goto done;
-        }
-        if (flux_future_then (f, -1., kvstxn_apply_cb, kt) < 0) {
-            errnum = errno;
-            goto done;
-        }
-        goto stall;
-    }
     else if (ret == KVSTXN_PROCESS_SYNC_CHECKPOINT) {
         /* N.B. future is managed by kvstxn, should not call
          * flux_future_destroy() on it */
