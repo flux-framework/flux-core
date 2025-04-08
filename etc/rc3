@@ -44,17 +44,13 @@ modrm all sdbus
 modrm all barrier
 
 if test $RANK -eq 0; then
-    if test "$(backing_module)" != "none"; then
-        flux startlog --post-finish-event || exit_rc=1
-    fi
+    flux startlog --post-finish-event || exit_rc=1
 fi
 
 modrm all kvs-watch
 modrm all kvs
 
-if test "$(backing_module)" != "none"; then
-    flux content flush || exit_rc=1
-fi
+flux content flush || exit_rc=1
 
 if test $RANK -eq 0; then
     backingmod=$(backing_module)
@@ -74,9 +70,7 @@ if test $RANK -eq 0; then
             exit_rc=1
         fi
     fi
-    if test "${backingmod}" != "none"; then
-        flux module remove ${backingmod} || exit_rc=1
-    fi
+    flux module remove ${backingmod} || exit_rc=1
 fi
 modrm all content
 

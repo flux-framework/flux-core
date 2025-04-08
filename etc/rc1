@@ -47,16 +47,14 @@ if test $RANK -eq 0; then
         fi
     fi
     if test -n "${dumpfile}"; then
-        if test "${backingmod}" != "none"; then
-            flux module load ${backingmod} truncate
-        fi
+        flux module load ${backingmod} truncate
         echo "restoring content from ${dumpfile}"
         flux restore --sd-notify --quiet --checkpoint --size-limit=100M \
 	    ${dumpfile}
         if test -n "${dumplink}"; then
             rm -f ${dumplink}
         fi
-    elif test "${backingmod}" != "none"; then
+    else
         flux module load ${backingmod}
     fi
 fi
@@ -65,9 +63,7 @@ modload all kvs
 modload all kvs-watch
 
 if test $RANK -eq 0; then
-    if test "$(backing_module)" != "none"; then
-        flux startlog --post-start-event
-    fi
+    flux startlog --post-start-event
 fi
 
 modload all resource
@@ -77,10 +73,8 @@ modload all job-info
 modload 0 job-list
 
 if test $RANK -eq 0; then
-    if test "$(backing_module)" != "none"; then
-        if ! flux startlog --check --quiet; then
-	    echo "Flux was not shut down properly.  Data may have been lost."
-        fi
+    if ! flux startlog --check --quiet; then
+        echo "Flux was not shut down properly.  Data may have been lost."
     fi
 fi
 
