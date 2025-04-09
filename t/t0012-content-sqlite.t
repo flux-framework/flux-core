@@ -227,47 +227,8 @@ test_expect_success 'remove content-sqlite module on rank 0' '
 	flux module remove content-sqlite
 '
 
-test_expect_success 'checkpoint-put foo w/ rootref spoon' '
-	checkpoint_put foo spoon
-'
-
-test_expect_success 'checkpoint-get foo returned rootref spoon' '
-	echo spoon >rootref5.exp &&
-	checkpoint_get foo | jq -r .value | jq -r .rootref >rootref5.out &&
-	test_cmp rootref5.exp rootref5.out
-'
-
-test_expect_success 'load content-sqlite module on rank 0' '
-	flux module load content-sqlite
-'
-
-# arg1 - expected reference
-wait_checkpoint_flush() {
-	local expected=$1
-	local i=0
-	while checkpoint_backing_get foo \
-		| jq -r .value \
-		| jq -r .rootref > checkpointflush.out \
-	      && [ $i -lt 50 ]
-	do
-	    checkpoint=$(cat checkpointflush.out)
-	    if [ "${checkpoint}" = "${expected}" ]
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
-}
-
-test_expect_success 'checkpoint-backing-get foo returns spoon' '
-	wait_checkpoint_flush spoon
-'
-
-test_expect_success 'remove content-sqlite module on rank 0' '
-	flux content flush &&
-	flux module remove content-sqlite
+test_expect_success 'checkpoint-put foo w/ rootref spoon fails without backing' '
+	test_must_fail checkpoint_put foo spoon
 '
 
 test_expect_success 'remove heartbeat module' '
