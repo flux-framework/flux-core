@@ -136,6 +136,8 @@ static void eventlog_batch_error (struct eventlog_batch *batch, int errnum)
         (*ev->ops.err) (ev, ev->arg, errnum, entry);
         entry = zlist_next (batch->entries);
     }
+    /*  zlist_remove destroys batch */
+    zlist_remove (ev->pending, batch);
 }
 
 static void commit_cb (flux_future_t *f, void *arg)
