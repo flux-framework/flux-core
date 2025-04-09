@@ -179,12 +179,19 @@ static flux_future_t *eventlogger_commit_batch (struct eventlogger *ev,
     return f;
 }
 
-flux_future_t *eventlogger_commit (struct eventlogger *ev)
+static flux_future_t *commit_batch (struct eventlogger *ev,
+                                    struct eventlog_batch **batchp)
 {
     struct eventlog_batch *batch = ev->current;
-
+    if (batchp)
+        *batchp = batch;
     ev->current = NULL;
     return eventlogger_commit_batch (ev, batch);
+}
+
+flux_future_t *eventlogger_commit (struct eventlogger *ev)
+{
+    return commit_batch (ev, NULL);
 }
 
 static void timer_commit_cb (flux_future_t *f, void *arg)
@@ -382,14 +389,15 @@ int eventlogger_append_pack (struct eventlogger *ev,
 
 int eventlogger_flush (struct eventlogger *ev)
 {
+    struct eventlog_batch *batch;
     int rc = -1;
     flux_future_t *f;
 
-    if (!(f = eventlogger_commit (ev))
+    if (!(f = commit_batch (ev, &batch))
         || flux_future_wait_for (f, ev->commit_timeout) < 0)
         goto out;
     if ((rc = flux_future_get (f, NULL)) < 0)
-        eventlog_batch_error (eventlog_batch_get (ev), errno);
+        eventlog_batch_error (batch, errno);
 out:
     flux_future_destroy (f);
     return rc;
