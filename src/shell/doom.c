@@ -24,7 +24,7 @@
  *   Raise the fatal exception immediately if the first task fails,
  *   e.g. calls exit with a nonzero value or is terminated by signal.
  */
-#define FLUX_SHELL_PLUGIN_NAME "doom"
+#define FLUX_SHELL_PLUGIN_NAME "task-exit"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -126,9 +126,9 @@ static void doom_check (struct shell_doom *doom,
 
     if (doom->exit_on_error && doom->exit_rc != 0) {
         shell_die (doom->exit_rc,
-                   "%s: %srank %d on host %s failed and exit-on-error is set",
+                   "%s: %s rank %d on host %s failed and exit-on-error is set",
                    get_jobspec_command_arg0 (doom),
-                   doom->lost_shell ? "shell " : "",
+                   doom->lost_shell ? "shell" : "task",
                    doom->exit_rank,
                    doom_exit_host (doom));
     }
@@ -215,9 +215,9 @@ static void doom_timeout (flux_reactor_t *r,
 
     fsd_format_duration (fsd, sizeof (fsd), doom->timeout);
     shell_die (doom->exit_rc,
-               "%s: %srank %d on host %s exited and exit-timeout=%s has expired",
+               "%s: %s rank %d on host %s exited and exit-timeout=%s has expired",
                get_jobspec_command_arg0 (doom),
-               doom->lost_shell ? "shell " : "",
+               doom->lost_shell ? "shell" : "task",
                doom->exit_rank,
                doom_exit_host (doom),
                fsd);
