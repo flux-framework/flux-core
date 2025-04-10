@@ -36,6 +36,7 @@ except ModuleNotFoundError:
 
 import flux
 from flux import debugged, job, util
+from flux.cli.plugin import CLIPluginRegistry, CLIPluginValue
 from flux.constraint.parser import ConstraintParser, ConstraintSyntaxError
 from flux.idset import IDset
 from flux.job import JobspecV1, JobWatcher
@@ -751,11 +752,18 @@ class MiniCmd:
         self.exitcode = 0
         self.progress = None
         self.watcher = None
-        self.parser = self.create_parser(prog, usage, description, exclude_io)
+        self.plugins = CLIPluginRegistry().load_plugins(prog)
+        self.parser = self.create_parser(
+            prog,
+            usage,
+            description,
+            exclude_io,
+            epilog=self.plugins.get_plugin_usages(),
+        )
 
     @staticmethod
     def create_parser(
-        prog, usage=None, description=None, exclude_io=False, add_help=True
+        prog, usage=None, description=None, exclude_io=False, add_help=True, epilog=None
     ):
         """
         Create default parser with args for submission subcommands
@@ -772,7 +780,8 @@ class MiniCmd:
             prog=prog,
             usage=usage,
             description=description,
-            formatter_class=flux.util.help_formatter(),
+            formatter_class=flux.util.help_formatter(raw_description=True),
+            epilog=epilog,
         )
         parser.add_argument(
             "-B",
@@ -969,6 +978,14 @@ class MiniCmd:
         parser.add_argument(
             "--debug-emulate", action="store_true", help=argparse.SUPPRESS
         )
+        parser.add_argument(
+            "-P",
+            "--plugin",
+            type=CLIPluginValue,
+            action="append",
+            help=f"Activate functionality of external plugins with KEY[=VAL]. See "
+            + '"Options provided by plugins" for available plugin options.',
+        )
         return parser
 
     def init_jobspec(self, args):
@@ -1010,6 +1027,20 @@ class MiniCmd:
         """
         Create a jobspec from args and return it to caller
         """
+        plugins = {}
+        if args.plugin:
+            for provided_arg in args.plugin:
+                key, val = provided_arg.get_value()
+                if key in self.plugins.get_plugin_options():
+                    plugins[key] = val
+                else:
+                    raise ValueError(
+                        f"Unsupported option provided to -P/--plugin: {key}"
+                    )
+
+        # plugins MAY raise IndexError if the plugin opt was not provided.
+        self.plugins.preinit(args, plugins)
+
         jobspec = self.init_jobspec(args)
 
         jobspec.environment, env_expand = get_filtered_environment(args.env)
@@ -1126,6 +1157,8 @@ class MiniCmd:
         if args.add_file is not None:
             for arg in args.add_file:
                 self.handle_add_file_arg(jobspec, arg)
+
+        self.plugins.modify_jobspec(args, jobspec, plugins)
 
         return jobspec
 
