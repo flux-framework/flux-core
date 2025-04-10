@@ -7,10 +7,13 @@ systemdsystemunit_DATA = \
 #endif
 
 tmpfilesdir = $(prefix)/lib/tmpfiles.d
+crondir = $(fluxconfdir)/system/cron.d
 fluxrc1dir = $(fluxconfdir)/rc1.d
 
 tmpfiles_DATA = flux.conf
 
+dist_cron_DATA = \
+	kvs-backup.cron
 
 dist_fluxconf_SCRIPTS = \
         rc1 \
