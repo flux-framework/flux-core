@@ -46,14 +46,35 @@ const char *sql_store = "INSERT INTO objects (hash,size,object) "
                         "  values (?1, ?2, ?3)";
 const char *sql_objects_count = "SELECT count(1) FROM objects";
 
-const char *sql_create_table_checkpt = "CREATE TABLE if not exists checkpt("
-                                       "  key TEXT UNIQUE,"
-                                       "  value TEXT"
-                                       ");";
+/* N.B. the timestamp for checkpoints would preferably be
+ *
+ * ts REAL PRIMARY KEY DEFAULT (unixepoch('now', 'subsecond', 'localtime') NOT NULL
+ *
+ * however unixepoch() is only supported in sqlite 3.38, as of this writing
+ * most distros are at 3.26.
+ *
+ * We could go with non-subsecond epochs under the assumption no one would
+ * ever do checkpoints < 1s apart except in testing.  Other trickery could be
+ * done too, but we elect to just go with TEXT strftime() with subseconds, going
+ * with the assumption checkpointing is rare and the strftime() has virtually no
+ * impact on performance.
+ */
+const char *sql_create_table_checkpt =
+    "CREATE TABLE if not exists checkpt("
+    "  key TEXT,"
+    "  value TEXT,"
+    "  ts TIMESTAMP PRIMARY KEY DEFAULT "
+    "     (strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')) NOT NULL"
+    ");";
 const char *sql_checkpt_get = "SELECT value FROM checkpt"
-                              "  WHERE key = ?1";
-const char *sql_checkpt_put = "REPLACE INTO checkpt (key,value) "
+                              "  WHERE key = ?1 ORDER BY ts DESC LIMIT 1";
+const char *sql_checkpt_put = "INSERT INTO checkpt (key,value) "
                               "  values (?1, ?2)";
+const char *sql_checkpt_prune =
+    "DELETE FROM checkpt WHERE key = ?1 AND ts IN "
+    "  (SELECT ts FROM checkpt ORDER BY ts DESC LIMIT -1 OFFSET ?2);";
+
+#define MAX_CHECKPOINTS_DEFAULT 100
 
 struct content_stats {
     tstat_t load;
@@ -68,6 +89,7 @@ struct content_sqlite {
     sqlite3_stmt *store_stmt;
     sqlite3_stmt *checkpt_get_stmt;
     sqlite3_stmt *checkpt_put_stmt;
+    sqlite3_stmt *checkpt_prune_stmt;
     flux_t *h;
     char *hashfun;
     int hash_size;
@@ -76,6 +98,7 @@ struct content_sqlite {
     struct content_stats stats;
     char *journal_mode;
     char *synchronous;
+    int max_checkpoints;
     bool truncate;
 };
 
@@ -471,15 +494,36 @@ void checkpoint_put_cb (flux_t *h,
         set_errno_from_sqlite_error (ctx);
         goto error;
     }
+    if (sqlite3_bind_text (ctx->checkpt_prune_stmt,
+                           1,
+                           (char *)key,
+                           strlen (key),
+                           SQLITE_STATIC) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt_prune: binding key");
+        goto error;
+    }
+    if (sqlite3_bind_int (ctx->checkpt_prune_stmt,
+                          2,
+                          ctx->max_checkpoints) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt_prune: binding count");
+        goto error;
+    }
+    if (sqlite3_step (ctx->checkpt_prune_stmt) != SQLITE_DONE) {
+        log_sqlite_error (ctx, "checkpt_prune: executing stmt");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "flux_respond");
     (void )sqlite3_reset (ctx->checkpt_put_stmt);
+    (void )sqlite3_reset (ctx->checkpt_prune_stmt);
     free (value);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "flux_respond_error");
     (void )sqlite3_reset (ctx->checkpt_put_stmt);
+    (void )sqlite3_reset (ctx->checkpt_prune_stmt);
     free (value);
 }
 
@@ -502,6 +546,10 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
         if (ctx->checkpt_put_stmt) {
             if (sqlite3_finalize (ctx->checkpt_put_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize checkpt_put_stmt");
+        }
+        if (ctx->checkpt_prune_stmt) {
+            if (sqlite3_finalize (ctx->checkpt_prune_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize checkpt_prune_stmt");
         }
         if (ctx->db) {
             if (sqlite3_close (ctx->db) != SQLITE_OK)
@@ -707,6 +755,14 @@ static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
         log_sqlite_error (ctx, "preparing checkpt_put stmt");
         goto error;
     }
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_checkpt_prune,
+                            -1,
+                            &ctx->checkpt_prune_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing checkpt prune stmt");
+        goto error;
+    }
     if (sqlite3_exec (ctx->db,
                       sql_objects_count,
                       set_count,
@@ -771,6 +827,7 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
         goto error;
     if (set_config (&ctx->synchronous, "NORMAL") < 0)
         goto error;
+    ctx->max_checkpoints = MAX_CHECKPOINTS_DEFAULT;
 
     /* Some tunables:
      * - the hash function, e.g. sha1, sha256
@@ -851,13 +908,15 @@ static int process_config (struct content_sqlite *ctx,
     flux_error_t error;
     const char *journal_mode = NULL;
     const char *synchronous = NULL;
+    int tmp_max_checkpoints = ctx->max_checkpoints;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s}}",
+                          "{s?{s?s s?s s?i}}",
                           "content-sqlite",
                             "journal_mode", &journal_mode,
-                            "synchronous", &synchronous) < 0) {
+                            "synchronous", &synchronous,
+                            "max_checkpoints", &tmp_max_checkpoints) < 0) {
         flux_log_error (ctx->h, "%s", error.text);
         return -1;
     }
@@ -879,6 +938,12 @@ static int process_config (struct content_sqlite *ctx,
         if (set_config (&ctx->synchronous, synchronous) < 0)
             return -1;
     }
+    if (tmp_max_checkpoints <= 0) {
+        flux_log (ctx->h, LOG_ERR, "invalid max_checkpoints config");
+        errno = EINVAL;
+        return -1;
+    }
+    ctx->max_checkpoints = tmp_max_checkpoints;
     return 0;
 }
 
@@ -906,6 +971,20 @@ static int process_args (struct content_sqlite *ctx,
             }
             if (set_config (&ctx->synchronous, argv[i] + 12) < 0)
                 return -1;
+        }
+        else if (strstarts (argv[i], "max-checkpoints=")) {
+            char *endptr;
+            int tmp_max_checkpoints;
+            errno = 0;
+            tmp_max_checkpoints = strtoul (argv[i] + 16, &endptr, 10);
+            if (errno != 0
+                || *endptr != '\0'
+                || tmp_max_checkpoints <= 0) {
+                flux_log (ctx->h, LOG_ERR, "invalid max-checkpoints specified");
+                errno = EINVAL;
+                return -1;
+            }
+            ctx->max_checkpoints = tmp_max_checkpoints;
         }
         else if (streq ("truncate", argv[i])) {
             *truncate = true;
