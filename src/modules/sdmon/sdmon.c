@@ -30,6 +30,7 @@
 #include <jansson.h>
 #include <flux/core.h>
 #include "ccan/str/str.h"
+#include "ccan/array_size/array_size.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/basename.h"
@@ -67,7 +68,24 @@ static const char *path_prefix = "/org/freedesktop/systemd1/unit";
 static const char *sys_glob = "flux-*";
 static const char *usr_glob = "*shell-*"; // match with and without imp- prefix
 
+static const char *unit_allow[] = {
+    "flux-housekeeping",
+    "flux-prolog",
+    "flux-epilog",
+    "imp-shell-",
+    "shell-",
+};
+
 static const char *group_name = "sdmon.online";
+
+static bool match_unit_name (const char *name)
+{
+    for (int i = 0; i < ARRAY_SIZE (unit_allow); i++) {
+        if (strstarts (name, unit_allow[i]))
+            return true;
+    }
+    return false;
+}
 
 /* Process a group response.  This is very unlikely to fail but if it does,
  * make sure we get a log message.
@@ -224,6 +242,8 @@ static void sdmon_property_continuation (flux_future_t *f, void *arg)
     if (!bus->unmute_property_updates)
         goto done;
     name = basename_simple (path);
+    if (!match_unit_name (name))
+        goto done;
     if (!(unit = zhashx_lookup (bus->units, name))) {
         if (!(unit = sdexec_unit_create (name))) {
             flux_log_error (ctx->h, "error creating unit %s", name);
@@ -283,6 +303,8 @@ static void sdmon_list_continuation (flux_future_t *f, void *arg)
     while (sdexec_list_units_next (f, &info)) {
         struct unit *unit;
 
+        if (!match_unit_name (info.name))
+            continue;
         if (!(unit = sdexec_unit_create (info.name))) {
             flux_log_error (ctx->h, "error creating unit %s", info.name);
             continue;
