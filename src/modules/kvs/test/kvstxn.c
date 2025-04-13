@@ -711,9 +711,6 @@ void kvstxn_basic_tests (void)
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) < 0,
         "kvstxn_iter_dirty_cache_entries returns < 0 for call on invalid state");
 
-    ok (kvstxn_sync_content_flush (kt) == NULL,
-        "kvstxn_sync_content_flush returns NULL for call on invalid state");
-
     ok (kvstxn_sync_checkpoint (kt) == NULL,
         "kvstxn_sync_checkpoint returns NULL for call on invalid state");
 
