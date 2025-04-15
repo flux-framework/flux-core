@@ -41,6 +41,14 @@ make check
 
 If you use VSCode we have a dev container and [instructions](vscode.md).
 
+##### Container Images
+
+Pre-built container images are available for a variety of linux distributions and
+amd64/arm64 architectures on [Docker Hub](https://hub.docker.com/r/fluxrm/flux-core).
+Tags are of the form `distribution-architecture` for the latest development version,
+with `latest` mapping to `bookworm-amd64`. Specific releases are available via
+`distribution-v0.XX.Y-architecture`.
+
 #### Starting Flux
 
 A Flux instance is composed of a set of `flux-broker` processes running as
