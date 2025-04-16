@@ -69,6 +69,8 @@ const char *sql_checkpt_prune =
 
 const char *sql_table_list = "SELECT tbl_name FROM sqlite_master where type = 'table'";
 
+const char *sql_checkpt_get_all = "SELECT * FROM checkpt_v2 ORDER BY id DESC";
+
 #define MAX_CHECKPOINTS_DEFAULT 5
 
 struct content_stats {
@@ -85,6 +87,7 @@ struct content_sqlite {
     sqlite3_stmt *checkpt_get_stmt;
     sqlite3_stmt *checkpt_put_stmt;
     sqlite3_stmt *checkpt_prune_stmt;
+    sqlite3_stmt *checkpt_get_all_stmt;
     flux_t *h;
     char *hashfun;
     int hash_size;
@@ -479,6 +482,54 @@ error:
     free (value);
 }
 
+static json_t *stats_checkpoints (struct content_sqlite *ctx)
+{
+    sqlite3_stmt *stmt = ctx->checkpt_get_all_stmt;
+    json_t *checkpts = NULL;
+
+    if (!(checkpts = json_array ())) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    while (sqlite3_step (stmt) == SQLITE_ROW) {
+        int id;
+        const char *s;
+        json_t *o, *value;
+
+        if ((id = sqlite3_column_int (stmt, 0)) < 0
+            || !(s = (const char *)sqlite3_column_text (stmt, 1))) {
+            log_sqlite_error (ctx, "checkpt_get_all: getting values");
+            set_errno_from_sqlite_error (ctx);
+            goto error;
+        }
+        if (!(value = json_loads (s, 0, NULL))) {
+            flux_log (ctx->h,
+                      LOG_ERR,
+                      "invalid checkpoint value: %s",
+                      s);
+            continue;
+        }
+        if (!(o = json_pack ("{s:i s:o}",
+                             "id", id,
+                             "value", value))
+            || json_array_append_new (checkpts, o) < 0) {
+            json_decref (value);
+            json_decref (o);
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+
+    (void )sqlite3_reset (ctx->checkpt_get_all_stmt);
+    return checkpts;
+
+error:
+    ERRNO_SAFE_WRAP (json_decref, checkpts);
+    (void )sqlite3_reset (ctx->checkpt_get_all_stmt);
+    return NULL;
+}
+
 static void content_sqlite_closedb (struct content_sqlite *ctx)
 {
     if (ctx) {
@@ -502,6 +553,10 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
         if (ctx->checkpt_prune_stmt) {
             if (sqlite3_finalize (ctx->checkpt_prune_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize checkpt_prune_stmt");
+        }
+        if (ctx->checkpt_get_all_stmt) {
+            if (sqlite3_finalize (ctx->checkpt_get_all_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize checkpt_get_all_stmt");
         }
         if (ctx->db) {
             if (sqlite3_close (ctx->db) != SQLITE_OK)
@@ -575,6 +630,7 @@ void stats_get_cb (flux_t *h,
     const char *errmsg = NULL;
     json_t *load_time = NULL;
     json_t *store_time = NULL;
+    json_t *checkpoints = NULL;
 
     if (sqlite3_exec (ctx->db,
                       sql_objects_count,
@@ -588,9 +644,11 @@ void stats_get_cb (flux_t *h,
     if (!(load_time = pack_tstat (&ctx->stats.load))
         || !(store_time = pack_tstat (&ctx->stats.store)))
         goto error;
+    if (!(checkpoints = stats_checkpoints (ctx)))
+        goto error;
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:I s:I s:O s:O s:{s:s s:s}}",
+                           "{s:i s:I s:I s:O s:O s:{s:s s:s} s:O}",
                            "object_count", count,
                            "dbfile_size", get_file_size (ctx->dbfile),
                            "dbfile_free", get_fs_free (ctx->dbfile),
@@ -598,16 +656,19 @@ void stats_get_cb (flux_t *h,
                            "store_time", store_time,
                            "config",
                              "journal_mode", ctx->journal_mode,
-                             "synchronous", ctx->synchronous) < 0)
+                             "synchronous", ctx->synchronous,
+                           "checkpoints", checkpoints) < 0)
         flux_log_error (h, "error responding to stats-get request");
     json_decref (load_time);
     json_decref (store_time);
+    json_decref (checkpoints);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "error responding to stats-get request");
     json_decref (load_time);
     json_decref (store_time);
+    json_decref (checkpoints);
 }
 
 /* Open the database file ctx->dbfile and set up the database.
@@ -713,6 +774,14 @@ static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
                             &ctx->checkpt_prune_stmt,
                             NULL) != SQLITE_OK) {
         log_sqlite_error (ctx, "preparing checkpt prune stmt");
+        goto error;
+    }
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_checkpt_get_all,
+                            -1,
+                            &ctx->checkpt_get_all_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing checkpt get_all stmt");
         goto error;
     }
     if (sqlite3_exec (ctx->db,
