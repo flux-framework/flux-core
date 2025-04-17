@@ -380,6 +380,7 @@ unset FLUX_RC_EXTRA
 unset FLUX_CONF_DIR
 unset FLUX_JOB_CC
 unset FLUX_F58_FORCE_ASCII
+unset FLUX_MODPROBE_PATH
 
 # Individual tests that need to force local URI resolution should set
 #  this specifically. In general it breaks other URI tests:
