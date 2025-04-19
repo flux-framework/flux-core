@@ -98,6 +98,7 @@ TESTSCRIPTS = \
 	t0023-jobspec1-validate.t \
 	t0026-flux-R.t \
 	t0090-content-enospc.t \
+	t0100-modprobe.t \
 	t1000-kvs.t \
 	t1001-kvs-internals.t \
 	t1003-kvs-stress.t \
