@@ -2818,23 +2818,15 @@ int mod_main (flux_t *h, int argc, char **argv)
         if (checkpoint_get (h, rootref, sizeof (rootref), &seq) < 0)
             memcpy (rootref, empty_dir_rootref, sizeof (empty_dir_rootref));
 
-        /* primary namespace must always be there and not marked
-         * for removal
-         */
-        if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm,
-                                                   KVS_PRIMARY_NAMESPACE))) {
-
-            if (!(root = kvsroot_mgr_create_root (ctx->krm,
-                                                  ctx->cache,
-                                                  ctx->hash_name,
-                                                  KVS_PRIMARY_NAMESPACE,
-                                                  owner,
-                                                  0))) {
-                flux_log_error (h, "kvsroot_mgr_create_root");
-                goto done;
-            }
+        if (!(root = kvsroot_mgr_create_root (ctx->krm,
+                                              ctx->cache,
+                                              ctx->hash_name,
+                                              KVS_PRIMARY_NAMESPACE,
+                                              owner,
+                                              0))) {
+            flux_log_error (h, "kvsroot_mgr_create_root");
+            goto done;
         }
-
         setroot (ctx, root, rootref, seq);
 
         if (event_subscribe (ctx, KVS_PRIMARY_NAMESPACE) < 0) {
