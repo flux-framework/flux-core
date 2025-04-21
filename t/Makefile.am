@@ -108,6 +108,7 @@ TESTSCRIPTS = \
 	t1010-kvs-commit-sync.t \
 	t1011-kvs-checkpoint-period.t \
 	t1012-kvs-checkpoint.t \
+	t1013-kvs-initial-rootref.t \
 	t1101-barrier-basic.t \
 	t1102-cmddriver.t \
 	t1103-apidisconnect.t \
