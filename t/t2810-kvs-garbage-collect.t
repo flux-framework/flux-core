@@ -20,6 +20,7 @@ test_expect_success 'run instance that leaves an auto dump' '
 	mkdir -p state &&
 	flux start -Sstatedir=state \
 	    -Scontent.dump=auto \
+	    -Scontent.restore=auto \
 	    -Slog-filename=dmesg.log \
 	    ./runjobs.sh >object_count
 '
