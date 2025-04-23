@@ -681,6 +681,9 @@ class Jobspec(object):
             count_dict[resource["type"]] += count
         return count_dict
 
+    def __repr__(self):
+        return str(self.jobspec)
+
 
 class JobspecV1(Jobspec):
     def __init__(self, resources, tasks, **kwargs):
