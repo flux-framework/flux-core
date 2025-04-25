@@ -331,14 +331,9 @@ static struct exec_cmd *exec_cmd_create (const struct idset *ranks,
     struct exec_cmd *c = calloc (1, sizeof (*c));
     if (!c)
         return NULL;
-    if (!(c->ranks = idset_copy (ranks))) {
-        fprintf (stderr, "exec_cmd_create: idset_copy failed");
+    if (!(c->ranks = idset_copy (ranks))
+        || !(c->cmd = flux_cmd_copy (cmd)))
         goto err;
-    }
-    if (!(c->cmd = flux_cmd_copy (cmd))) {
-        fprintf (stderr, "exec_cmd_create: flux_cmd_copy failed");
-        goto err;
-    }
     /* bulk-exec always uses unbuffered reads for performance */
     c->flags = flags | FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF;
     return (c);
@@ -705,10 +700,8 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec,
                              sizeof (s)-1,
                              "%u",
                              flux_subprocess_rank (p));
-            if (flux_future_push (cf, s, f) < 0) {
-                fprintf (stderr, "flux_future_push: %s\n", strerror (errno));
+            if (flux_future_push (cf, s, f) < 0)
                 flux_future_destroy (f);
-            }
         }
         p = zlist_next (exec->processes);
     }
