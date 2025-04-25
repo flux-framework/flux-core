@@ -696,12 +696,14 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec,
                         flux_future_fulfill_error (cf, err, "Internal error");
                 }
             }
-            (void) snprintf (s,
-                             sizeof (s)-1,
-                             "%u",
-                             flux_subprocess_rank (p));
-            if (flux_future_push (cf, s, f) < 0)
-                flux_future_destroy (f);
+            if (f) {
+                (void) snprintf (s,
+                                 sizeof (s)-1,
+                                 "%u",
+                                flux_subprocess_rank (p));
+                if (flux_future_push (cf, s, f) < 0)
+                    flux_future_destroy (f);
+            }
         }
         p = zlist_next (exec->processes);
     }
