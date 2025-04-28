@@ -32,7 +32,7 @@ test_expect_success 'job-exec: ensure cancellation kills job' '
 	test_debug "echo Canceling $id" &&
 	flux cancel $id &&
 	test_debug "flux job attach -vEX $id || :" &&
-	test_expect_code 137 flux job status $id &&
+	test_expect_code 143 flux job status $id &&
 	test_must_fail ps -q $pid
 '
 # Note: increase max-kill-count here to ensure job doesn't disappear from

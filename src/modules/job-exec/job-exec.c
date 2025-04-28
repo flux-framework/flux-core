@@ -108,9 +108,10 @@
 #include "exec_config.h"
 
 static double kill_timeout;
-static int max_kill_count;
 static int term_signal;
+static int max_term_count;
 static int kill_signal;
+static int max_kill_count;
 
 #define DEBUG_FAIL_EXPIRATION 1
 
@@ -500,11 +501,25 @@ static void kill_timer_cb (flux_reactor_t *r,
 {
     struct jobinfo *job = arg;
     flux_future_t *f;
+
+    if (job->kill_count++ < max_term_count) {
+        flux_log (job->h,
+                  LOG_DEBUG,
+                  "Sending %s to job shell for %s",
+                  sigutil_signame (term_signal),
+                  idf58 (job->id));
+        (*job->impl->kill) (job, term_signal);
+        return;
+    }
     flux_log (job->h,
               LOG_DEBUG,
               "Sending %s to job %s",
               sigutil_signame (kill_signal),
               idf58 (job->id));
+
+    /* N.B.: Don't send SIGKILL directly to job shell yet. This notifies
+     * job shell to send SIGKILL to tasks.
+     */
     if (!(f = flux_job_kill (job->h, job->id, kill_signal))) {
         flux_log_error (job->h,
                         "flux_job_kill (%s, %s)",
@@ -512,7 +527,6 @@ static void kill_timer_cb (flux_reactor_t *r,
                         sigutil_signame (kill_signal));
         return;
     }
-    job->kill_count++;
     /* Open loop */
     flux_future_destroy (f);
 }
@@ -668,6 +682,7 @@ static void jobinfo_cancel (struct jobinfo *job)
         (*job->impl->cancel) (job);
 
     (*job->impl->kill) (job, term_signal);
+    job->kill_count++;
     jobinfo_killtimer_start (job, job->kill_timeout);
 }
 
@@ -1484,17 +1499,19 @@ static int job_exec_set_config_globals (flux_t *h,
      * So we must re-initialize globals everytime we reload the module.
      */
     kill_timeout = 5.0;
-    max_kill_count = 8;
     term_signal = SIGTERM;
+    max_term_count = 2;
     kill_signal = SIGKILL;
+    max_kill_count = 8;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s s?s s?i}}",
+                          "{s?{s?s s?s s?s s?i s?i}}",
                           "exec",
                             "kill-timeout", &kto,
                             "term-signal", &tsignal,
                             "kill-signal", &ksignal,
+                            "max-term-count", &max_term_count,
                             "max-kill-count", &max_kill_count) < 0)
         return errprintf (errp,
                           "Error reading [exec] table: %s",
@@ -1508,6 +1525,8 @@ static int job_exec_set_config_globals (flux_t *h,
             ksignal = argv[i] + 12;
         else if (strstarts (argv[i], "term-signal="))
             tsignal = argv[i] + 12;
+        else if (strstarts (argv[i], "max-term-count="))
+            max_term_count = atoi(argv[i] + 15);
         else if (strstarts (argv[i], "max-kill-count="))
             max_kill_count = atoi(argv[i] + 15);
     }
@@ -1680,10 +1699,11 @@ static void stats_cb (flux_t *h,
     json_t *jobs;
     int i = 0;
 
-    if (!(o = json_pack ("{s:f s:s s:s s:i}",
+    if (!(o = json_pack ("{s:f s:s s:s s:i s:i}",
                          "kill-timeout", kill_timeout,
                          "term-signal", sigutil_signame (term_signal),
                          "kill-signal", sigutil_signame (kill_signal),
+                         "max-term-count", max_term_count,
                          "max-kill-count", max_kill_count))) {
         errno = ENOMEM;
         goto error;
