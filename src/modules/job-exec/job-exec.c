@@ -108,6 +108,7 @@
 #include "exec_config.h"
 
 static double kill_timeout;
+static double kill_shell_delay;
 static int term_signal;
 static int max_term_count;
 static int kill_signal;
@@ -532,22 +533,24 @@ static void kill_timer_cb (flux_reactor_t *r,
 }
 
 
-static void jobinfo_killtimer_start (struct jobinfo *job, double after)
+static void jobinfo_killtimer_start (struct jobinfo *job,
+                                     double kill_after,
+                                     double kill_shell_after)
 {
     flux_reactor_t *r = flux_get_reactor (job->h);
 
     /* Only start kill timer if not already running */
     if (job->kill_timer == NULL) {
         job->kill_timer = flux_timer_watcher_create (r,
-                                                     after,
-                                                     after,
+                                                     kill_after,
+                                                     kill_after,
                                                      kill_timer_cb,
                                                      job);
         flux_watcher_start (job->kill_timer);
     }
     if (job->kill_shell_timer == NULL) {
         job->kill_shell_timer = flux_timer_watcher_create (r,
-                                                           after*5,
+                                                           kill_shell_after,
                                                            0.,
                                                            kill_shell_timer_cb,
                                                            job);
@@ -579,7 +582,7 @@ static void timelimit_cb (flux_reactor_t *r,
     (*job->impl->kill) (job, SIGALRM);
     flux_watcher_stop (w);
     job->exception_in_progress = 1;
-    jobinfo_killtimer_start (job, job->kill_timeout);
+    jobinfo_killtimer_start (job, job->kill_timeout, kill_shell_delay);
 }
 
 static int jobinfo_set_expiration (struct jobinfo *job)
@@ -683,7 +686,7 @@ static void jobinfo_cancel (struct jobinfo *job)
 
     (*job->impl->kill) (job, term_signal);
     job->kill_count++;
-    jobinfo_killtimer_start (job, job->kill_timeout);
+    jobinfo_killtimer_start (job, job->kill_timeout, kill_shell_delay);
 }
 
 static int jobinfo_finalize (struct jobinfo *job);
@@ -1486,6 +1489,7 @@ static int job_exec_set_config_globals (flux_t *h,
                                         flux_error_t *errp)
 {
     const char *kto = NULL;
+    const char *ksd = NULL;
     const char *tsignal = NULL;
     const char *ksignal = NULL;
     flux_error_t error;
@@ -1506,9 +1510,10 @@ static int job_exec_set_config_globals (flux_t *h,
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s s?s s?i s?i}}",
+                          "{s?{s?s s?s s?s s?s s?i s?i}}",
                           "exec",
                             "kill-timeout", &kto,
+                            "kill-shell-delay", &ksd,
                             "term-signal", &tsignal,
                             "kill-signal", &ksignal,
                             "max-term-count", &max_term_count,
@@ -1521,6 +1526,8 @@ static int job_exec_set_config_globals (flux_t *h,
     for (int i = 0; i < argc; i++) {
         if (strstarts (argv[i], "kill-timeout="))
             kto = argv[i] + 13;
+        else if (strstarts (argv[i], "kill-shell-delay="))
+            ksd = argv[i] + 17;
         else if (strstarts (argv[i], "kill-signal="))
             ksignal = argv[i] + 12;
         else if (strstarts (argv[i], "term-signal="))
@@ -1534,6 +1541,17 @@ static int job_exec_set_config_globals (flux_t *h,
     if (kto) {
         if (fsd_parse_duration (kto, &kill_timeout) < 0) {
             errprintf (errp, "invalid kill-timeout: %s", kto);
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    /* N.B.: Default kill_shell_delay must be set after configured kill_timeout
+     * is established
+     */
+    kill_shell_delay = 5*kill_timeout;
+    if (ksd) {
+        if (fsd_parse_duration (ksd, &kill_shell_delay) < 0) {
+            errprintf (errp, "invalid kill-shell-delay: %s", ksd);
             errno = EINVAL;
             return -1;
         }
@@ -1640,12 +1658,18 @@ static json_t *running_job_stats (struct job_exec_ctx *ctx)
         json_t *entry;
         char *critical_ranks;
         json_t *impl_stats = NULL;
+        int ksd = 0;
 
         if (!(critical_ranks = idset_encode (job->critical_ranks,
                                              IDSET_FLAG_RANGE)))
             goto error;
 
-        entry = json_pack ("{s:s s:s s:s s:i s:i s:i s:i s:i s:i s:f s:i s:i}",
+        if (flux_watcher_is_active (job->kill_shell_timer)) {
+            double wakeup = flux_watcher_next_wakeup (job->kill_shell_timer);
+            ksd = (int) wakeup - flux_reactor_time ();
+        }
+
+        entry = json_pack ("{s:s s:s s:s s:i s:i s:i s:i s:i s:i s:f s:i s:i s:i}",
                            "implementation",
                            job->impl ? job->impl->name : "none",
                            "ns", job->ns,
@@ -1658,6 +1682,7 @@ static json_t *running_job_stats (struct job_exec_ctx *ctx)
                            "finalizing", job->finalizing,
                            "kill_timeout", job->kill_timeout,
                            "kill_count", job->kill_count,
+                           "kill_shell_delay", ksd,
                            "kill_shell_count", job->kill_shell_count);
 
         free (critical_ranks);
@@ -1699,8 +1724,9 @@ static void stats_cb (flux_t *h,
     json_t *jobs;
     int i = 0;
 
-    if (!(o = json_pack ("{s:f s:s s:s s:i s:i}",
+    if (!(o = json_pack ("{s:f s:f s:s s:s s:i s:i}",
                          "kill-timeout", kill_timeout,
+                         "kill-shell-delay", kill_shell_delay,
                          "term-signal", sigutil_signame (term_signal),
                          "kill-signal", sigutil_signame (kill_signal),
                          "max-term-count", max_term_count,
