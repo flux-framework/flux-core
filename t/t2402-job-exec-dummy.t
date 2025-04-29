@@ -76,6 +76,9 @@ test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
 	test_debug "cat kill.output" &&
 	grep "trap-sigterm got SIGTERM" kill.output
 '
+test_expect_success 'job-exec: kill_shell_delay is multiple of kill_timeout' '
+	flux module stats job-exec | jq -e ".[\"kill-shell-delay\"] == 1.0"
+'
 test_expect_success 'job-exec: job shell eventually killed by SIGKILL' '
 	id=$(flux submit --wait-event=start -n1 \
 	     sh -c "trap \"\" SIGTERM;
