@@ -54,15 +54,27 @@ sdexec-stop-timer-signal
    10 (SIGUSR1, the IMP proxy for SIGKILL) is used.
 
 kill-timeout
-   (optional) The amount of time in FSD to wait after ``SIGTERM`` is
-   sent to a job before sending ``SIGKILL``. The default is "5s". See
-   :ref:`job_termination` below for details.
+   (optional) The amount of time in FSD between signals sent to
+   job tasks after a fatal job exception. The execution system will
+   send ``max-term-count`` ``SIGTERM`` (possibly starting with
+   ``SIGALRM`` for a timeout exception), then will transition to sending
+   ``SIGKILL`` at an interval of ``kill-timeout``. This occurs until
+   ``kill-shell-delay`` has elapsed, after which the job shell will
+   be signaled. The default is 5s.  See :ref:`job_termination` below
+   for details.
+
+kill-shell-delay
+   (optional) The amount of time in FSD to wait before sending ``SIGKILL``
+   to the job shell instead of job tasks.
+
+max-term-count
+   (optional) The number of times ``SIGTERM`` will be sent to job tasks
+   before switching to ``SIGKILL``. The default is 2.
 
 max-kill-count
-   (optional) The maximum number of times a job will be sent ``kill-signal``
+   (optional) The maximum number of times to attempt to kill the job shell
    before the execution system will consider the job unkillable and drains
    the node. The default is 8. See :ref:`job_termination` below for details.
-   for details.
 
 term-signal
    (optional) A string specifying an alternate signal to ``SIGTERM`` when
@@ -128,15 +140,24 @@ JOB TERMINATION
 When a job is canceled or gets a fatal exception it is terminated using
 the following sequence
 
- - The job shells are notified to send ``term-signal`` to job tasks, unless
-   the job is being terminated due to a time limit, in which case ``SIGALRM``
-   is sent instead.
- - After ``kill-timeout``, any remaining shells are sent ``kill-signal``
+ - The job shells are sent ``term-signal``, unless the job is being
+   terminated due to a time limit, in which case ``SIGALRM`` is sent instead.
+   The job shells forward this signal to tasks.
+ - This is repeated with ``term-signal`` at an interval of
+   ``kill-timeout`` until ``kill-shell-delay`` has elapsed.
+ - After ``kill-shell-delay``, any remaining shells are sent
+   ``kill-signal``.
  - This continues with an exponential backoff, with the timeout doubling
    after each attempt (capped at 300s)
- - After a total of ``max-kill-count`` attempts, any nodes still running
-   processes are drained with the message: "unkillable user processes for job
-   JOBID"
+ - After a total of ``max-kill-count`` attempts to kill the job shell,
+   any nodes still running processes are drained with the message:
+   "unkillable user processes for job JOBID"
+
+To view the progress of a job or jobs in the termination process,
+:command:`flux module stats job-exec` can be used. This command allows
+examination of the job-exec module current configuration, as well as
+the number of kill attempts, how long until ``kill-shell-delay`` will
+elapse, and the current ``kill-timeout`` for each active job.
 
 EXAMPLES
 ========
