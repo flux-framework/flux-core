@@ -67,7 +67,8 @@ const char *sql_create_table_checkpt =
     "     (strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')) NOT NULL"
     ");";
 const char *sql_checkpt_get = "SELECT value FROM checkpt"
-                              "  WHERE key = ?1 ORDER BY ts DESC LIMIT 1";
+                              "  WHERE key = ?1"
+                              "  ORDER BY ts DESC LIMIT 1 OFFSET ?2";
 const char *sql_checkpt_put = "INSERT INTO checkpt (key,value) "
                               "  values (?1, ?2)";
 const char *sql_checkpt_prune =
@@ -397,12 +398,20 @@ void checkpoint_get_cb (flux_t *h,
 {
     struct content_sqlite *ctx = arg;
     const char *key;
+    int offset = 0;
     char *s;
     json_t *o = NULL;
     const char *errstr = NULL;
     json_error_t error;
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
+    /* N.B. SQL OFFSET means "skip" this number of rows, which is
+     * basically identical to 0 index array logic
+     */
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s?i}",
+                             "key", &key,
+                             "index", &offset) < 0)
         goto error;
     if (sqlite3_bind_text (ctx->checkpt_get_stmt,
                            1,
@@ -410,6 +419,13 @@ void checkpoint_get_cb (flux_t *h,
                            strlen (key),
                            SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "checkpt_get: binding key");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+    if (sqlite3_bind_int (ctx->checkpt_get_stmt,
+                          2,
+                          offset) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt_get: binding offset");
         set_errno_from_sqlite_error (ctx);
         goto error;
     }

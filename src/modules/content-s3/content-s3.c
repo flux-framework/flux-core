@@ -342,13 +342,23 @@ void checkpoint_get_cb (flux_t *h,
     const char *errstr = NULL;
     struct content_s3 *ctx = arg;
     const char *key;
+    int offset = 0;
     void *data = NULL;
     size_t size;
     json_t *o = NULL;
     json_error_t error;
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s?i}",
+                             "key", &key,
+                             "index", &offset) < 0)
+         goto error;
+    /* content-s3 only supports a single checkpoint */
+    if (offset) {
+        errno = ENOENT;
         goto error;
+    }
 
     if (s3_get (ctx->cfg, key, &data, &size, &errstr) < 0)
         goto error;
