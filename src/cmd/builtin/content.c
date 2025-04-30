@@ -14,9 +14,12 @@
 #include "builtin.h"
 
 #include <unistd.h>
+#include <jansson.h>
 
+#include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/read_all.h"
+#include "src/common/libutil/timestamp.h"
 #include "src/common/libcontent/content.h"
 
 static void load_to_fd (flux_t *h, int fd, const char *blobref, int flags)
@@ -168,6 +171,85 @@ static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+static void checkpoints_output_header (void)
+{
+    printf ("%-10s %-10s %-20s %s\n",
+            "Index",
+            "Sequence",
+            "Time",
+            "Rootref");
+}
+
+static int checkpoints_output_human (json_t *checkpt, int index)
+{
+    struct tm tm;
+    const char *rootref;
+    double timestamp;
+    char timebuf[1024];
+    int seq;
+
+    if (kvs_checkpoint_parse_rootref (checkpt, &rootref) < 0
+        || kvs_checkpoint_parse_timestamp (checkpt, &timestamp) < 0
+        || kvs_checkpoint_parse_sequence (checkpt, &seq) < 0)
+        return -1;
+    if (timestamp_from_double (timestamp, &tm, NULL) < 0) {
+        log_msg ("cannot convert timestamp %f", timestamp);
+        return -1;
+    }
+    if (strftime (timebuf, sizeof (timebuf), "%Y-%m-%dT%TZ", &tm) == 0) {
+        log_msg ("cannot format timestamp");
+        return -1;
+    }
+    printf("%-10d %-10d %-20s %s\n", index, seq, timebuf, rootref);
+    return 0;
+}
+
+static int checkpoints_output_json (json_t *checkpt)
+{
+    char *s = json_dumps (checkpt, JSON_COMPACT);
+    printf ("%s\n", s);
+    free (s);
+    return 0;
+}
+
+static int internal_checkpoints (optparse_t *p, int ac, char *av[])
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    flux_future_t *f = NULL;
+    int ret;
+    const json_t *a;
+    size_t index;
+    json_t *value;
+
+    if (optindex != ac) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+
+    if (!(h = builtin_get_flux_handle (p)))
+        log_err_exit ("flux_open");
+
+    if (!optparse_hasopt (p, "no-header")
+        && !optparse_hasopt (p, "json"))
+        checkpoints_output_header ();
+
+    if (!(f = kvs_checkpoint_lookup (h, 0))
+        || kvs_checkpoint_lookup_get (f, &a) < 0)
+        log_err_exit ("kvs_checkpoint_lookup");
+    json_array_foreach (a, index, value) {
+        if (optparse_hasopt (p, "json"))
+            ret = checkpoints_output_json (value);
+        else
+            ret = checkpoints_output_human (value, index);
+        if (ret < 0)
+            log_err_exit ("error parsing checkpoint");
+    }
+    flux_future_destroy (f);
+    flux_close (h);
+    return (0);
+}
+
 int cmd_content (optparse_t *p, int ac, char *av[])
 {
     log_init ("flux-content");
@@ -188,6 +270,14 @@ static struct optparse_option store_opts[] = {
       .usage = "Store directly to rank 0 content service", },
     { .name = "chunksize", .has_arg = 1, .arginfo = "N",
       .usage = "Limit blob size to N bytes with 0=unlimited (default 0)", },
+      OPTPARSE_TABLE_END
+};
+
+static struct optparse_option checkpoints_opts[] = {
+    { .name = "no-header",  .key = 'n',  .has_arg = 0,
+      .usage = "Do not output column headers", },
+    { .name = "json",  .key = 'j',  .has_arg = 0,
+      .usage = "Output raw json output", },
       OPTPARSE_TABLE_END
 };
 
@@ -219,6 +309,13 @@ static struct optparse_subcommand content_subcmds[] = {
       internal_content_flush,
       0,
       NULL,
+    },
+    { "checkpoints",
+      "[OPTIONS]",
+      "List checkpoint(s)",
+      internal_checkpoints,
+      0,
+      checkpoints_opts,
     },
     OPTPARSE_SUBCMD_END
 };
