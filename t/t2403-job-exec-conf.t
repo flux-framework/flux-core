@@ -62,6 +62,110 @@ test_expect_success 'job-exec: cmdline kill-timeout takes priority' '
 test_expect_success 'job-exec: reset config' '
 	echo | flux config load
 '
+test_expect_success 'job-exec: can specify kill-shell-delay on cmdline' '
+	flux dmesg -C &&
+	flux module reload -f job-exec kill-shell-delay=1m &&
+	flux module stats job-exec | jq ".[\"kill-shell-delay\"] == 60"
+'
+test_expect_success 'job-exec: bad kill-shell-delay causes module failure' '
+	flux dmesg -C &&
+	test_expect_code 1 flux module reload -f job-exec kill-shell-delay=1f &&
+	flux dmesg | grep "invalid kill-shell-delay: 1f"
+'
+test_expect_success 'job-exec: kill-shell-delay can be set in exec conf' '
+	name=killshellconf &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	kill-shell-delay = "2m"
+	EOF
+	flux start --config-path=${name}.toml -s1 \
+		flux module stats job-exec > ${name}.json 2>&1 &&
+	test_debug "jq -S . < ${name}.json" &&
+	cat ${name}.json | jq ".[\"kill-shell-delay\"] == 120"
+'
+test_expect_success 'job-exec: kill-shell-delay can be set with a config reload' '
+	flux module reload -f job-exec &&
+	flux dmesg -C &&
+	echo exec.kill-shell-delay=\"2m\" | flux config load &&
+	flux module stats job-exec | jq ".[\"kill-shell-delay\"] == 120"
+'
+test_expect_success 'job-exec: bad kill-shell-delay config causes failure' '
+	name=bad-killshellconf &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	kill-shell-delay = "foo"
+	EOF
+	test_must_fail flux start --config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
+	grep "invalid kill-shell-delay: foo" ${name}.log
+'
+test_expect_success 'job-exec: bad kill-shell-delay causes config reload failure' '
+	echo exec.kill-shell-delay=\"foo\" | test_must_fail flux config load
+'
+test_expect_success 'job-exec: cmdline kill-shell-delay takes priority' '
+	flux module reload -f job-exec kill-shell-delay=1m &&
+	flux module stats job-exec | jq ".[\"kill-shell-delay\"] == 120" &&
+	cat <<-EOF > ${FLUX_CONF_DIR}/exec.toml &&
+	[exec]
+	kill-shell-delay = "1m"
+	EOF
+	flux config reload &&
+	flux module stats job-exec | jq ".[\"kill-timeout\"] == 120" &&
+	rm -f ${FLUX_CONF_DIR}/exec.toml
+'
+test_expect_success 'job-exec: reset config' '
+	echo | flux config load
+'
+test_expect_success 'job-exec: can specify max-term-count on cmdline' '
+	flux dmesg -C &&
+	flux module reload -f job-exec max-term-count=1 &&
+	flux module stats job-exec | jq ".[\"max-term-count\"] == 1"
+'
+test_expect_success 'job-exec: max-term-count can be set in exec conf' '
+	name=maxtermconf &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	max-term-count = 5
+	EOF
+	flux start --config-path=${name}.toml -s1 \
+		flux module stats job-exec > ${name}.json 2>&1 &&
+	test_debug "jq -S . < ${name}.json" &&
+	cat ${name}.json | jq ".[\"max-term-count\"] == 5"
+'
+test_expect_success 'job-exec: max-term-count can be set with a config reload' '
+	flux module reload -f job-exec &&
+	flux dmesg -C &&
+	echo exec.max-term-count=1 | flux config load &&
+	flux module stats job-exec | jq ".[\"max-term-count\"] == 1"
+'
+test_expect_success 'job-exec: bad max-term-count config causes failure' '
+	name=bad-maxtermconf &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	max-term-count = "foo"
+	EOF
+	test_must_fail flux start --config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
+	test_debug "cat ${name}.log"
+'
+test_expect_success 'job-exec: bad max-term-count causes config reload failure' '
+	echo exec.max-term-count=\"foo\" | test_must_fail flux config load &&
+	echo | flux config load
+'
+test_expect_success 'job-exec: cmdline max-term-count takes priority' '
+	flux module reload -f job-exec max-term-count=10 &&
+	flux module stats job-exec | jq ".[\"max-term-count\"] == 10" &&
+	cat <<-EOF > ${FLUX_CONF_DIR}/exec.toml &&
+	[exec]
+	max-term-count = 5
+	EOF
+	flux config reload &&
+	flux module stats job-exec | jq ".[\"max-term-count\"] == 10" &&
+	rm -f ${FLUX_CONF_DIR}/exec.toml
+'
+test_expect_success 'job-exec: reset config' '
+	echo | flux config load
+'
 test_expect_success 'job-exec: can specify term-signal on cmdline' '
 	flux dmesg -C &&
 	flux module reload job-exec term-signal=SIGUSR1 &&
