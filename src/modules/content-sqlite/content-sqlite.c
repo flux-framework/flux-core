@@ -58,7 +58,7 @@ const char *sql_create_table_checkpt_v2 =
     "  value TEXT"
     ");";
 const char *sql_checkpt_get_v2 = "SELECT value FROM checkpt_v2"
-                                 " ORDER BY id DESC LIMIT 1";
+                                 " ORDER BY id DESC LIMIT 1 OFFSET ?1";
 const char *sql_checkpt_put_v2 = "INSERT INTO checkpt_v2 (value)"
                                  " values (?1)";
 const char *sql_checkpt_prune =
@@ -391,11 +391,27 @@ void checkpoint_get_cb (flux_t *h,
                         void *arg)
 {
     struct content_sqlite *ctx = arg;
+    int offset = 0;
     const char *s;
     json_t *o = NULL;
     const char *errstr = NULL;
     json_error_t error;
 
+    /* N.B. SQL OFFSET means "skip" this number of rows, which is
+     * basically identical to 0 index array logic
+     */
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s?i}",
+                             "index", &offset) < 0)
+        goto error;
+    if (sqlite3_bind_int (ctx->checkpt_get_stmt,
+                          1,
+                          offset) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt_get: binding offset");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
     if (sqlite3_step (ctx->checkpt_get_stmt) != SQLITE_ROW) {
         errno = ENOENT;
         goto error;
