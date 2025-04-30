@@ -70,16 +70,9 @@ flux_future_t *kvs_checkpoint_lookup (flux_t *h, int flags)
     return flux_rpc (h, topic, NULL, 0, 0);
 }
 
-static void json_decref_wrapper (void *arg)
-{
-    json_t *o = arg;
-    json_decref (o);
-}
-
 int kvs_checkpoint_lookup_get (flux_future_t *f, const json_t **checkpoints)
 {
-    json_t *o;
-    json_t *a = NULL;
+    json_t *a;
 
     if (!f || !checkpoints) {
         errno = EINVAL;
@@ -88,27 +81,16 @@ int kvs_checkpoint_lookup_get (flux_future_t *f, const json_t **checkpoints)
 
     if (flux_rpc_get_unpack (f,
                              "{s:o}",
-                             "value", &o) < 0)
-        goto error;
+                             "value", &a) < 0)
+        return -1;
 
-    /* Temporarily create array and return it.  Will be changed once
-     * underlying RPCs are updated.
-     */
-
-    if (!(a = json_pack ("[o]", o))) {
-        errno = ENOMEM;
-        goto error;
+    if (!json_is_array (a)) {
+        errno = EPROTO;
+        return -1;
     }
-
-    if (flux_future_aux_set (f, "array", o, json_decref_wrapper) < 0)
-        goto error;
 
     *checkpoints = a;
     return 0;
-
-error:
-    ERRNO_SAFE_WRAP (json_decref, a);
-    return -1;
 }
 
 int kvs_checkpoint_parse_rootref (json_t *checkpoint, const char **rootref)
