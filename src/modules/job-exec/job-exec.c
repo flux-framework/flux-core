@@ -568,6 +568,28 @@ static void timelimit_cb (flux_reactor_t *r,
     jobinfo_killtimer_start (job, job->kill_timeout);
 }
 
+static double jobinfo_adjust_expiration (struct jobinfo *job,
+                                         double starttime,
+                                         double expiration)
+{
+    double duration = expiration - starttime;
+    double delta = job->t0 - starttime;
+
+    /* If the difference between the job's official starttime and the
+     * time of the start request is a large percentage of the job's total
+     * duration, then adjust the job's actual expiration to account for this
+     * difference. This prevents a short job from having its runtime
+     * significantly reduced, while avoiding creating a differential between
+     * the actual resource set expiration for longer jobs (the common case)
+     * where it doesn't matter.
+     *
+     * See also: https://github.com/flux-framework/flux-core/issues/6781
+     */
+    if ((delta / duration) > 0.25)
+        return expiration + delta;
+    return expiration;
+}
+
 static int jobinfo_set_expiration (struct jobinfo *job)
 {
     flux_watcher_t *w = NULL;
@@ -600,14 +622,8 @@ static int jobinfo_set_expiration (struct jobinfo *job)
     if (job->t0 == 0.)
        job->t0 = now;
 
-    /* Adjust expiration time based on delay between when scheduler
-     *  created R and when we received this job. O/w jobs may be
-     *  terminated due to timeouts prematurely when the system
-     *  is very busy, which can cause long delays between alloc and
-     *  start events.
-     */
     if (starttime > 0.)
-        expiration += job->t0 - starttime;
+        expiration = jobinfo_adjust_expiration (job, starttime, expiration);
 
     offset = expiration - now;
     if (offset < 0.) {
