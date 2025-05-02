@@ -76,10 +76,11 @@ test_expect_success 'verify that anon queue disable persists across restart' '
 
 test_expect_success 'verify that anon queue stopped persists across restart' '
 	flux start -Scontent.dump=dump_stopped.tar \
-	    flux queue stop -m stop-restart-test &&
+	    sh -c "flux queue stop -m stop-restart-test && flux submit sleep 0" &&
 	flux start -Scontent.restore=dump_stopped.tar \
-	    flux queue status >dump_stopped.out &&
-	grep "stopped: stop-restart-test" dump_stopped.out
+	    sh -c "flux queue status && flux jobs -no {state}" >dump_stopped.out &&
+	grep "stopped: stop-restart-test" dump_stopped.out &&
+	grep "SCHED" dump_stopped.out
 '
 
 test_expect_success 'verify that named queue enable/disable persists across restart' '
@@ -144,17 +145,19 @@ test_expect_success 'verify that named queue start/stop persists across restart'
 	flux start --config-path=$(pwd)/conf.d \
 	    -Scontent.restore=dump_queue_start3.tar \
 	    -Scontent.dump=dump_queue_start4.tar \
-	    flux queue stop --queue=batch -m xyzzy &&
+	    sh -c "flux queue stop -m xyzzy batch && flux submit -q batch true" &&
 	flux start --config-path=$(pwd)/conf.d \
 	    -Scontent.restore=dump_queue_start4.tar \
 	    -Scontent.dump=dump_queue_start5.tar \
-	    flux queue status >dump_queue_start_3.out &&
+	    sh -c "flux queue status && flux jobs -q batch -no {state}" \
+	        > dump_queue_start_3.out &&
 	grep "^debug: Scheduling is stopped" dump_queue_start_1.out &&
 	grep "^batch: Scheduling is stopped" dump_queue_start_1.out &&
 	grep "^debug: Scheduling is stopped" dump_queue_start_2.out &&
 	grep "^batch: Scheduling is started" dump_queue_start_2.out &&
 	grep "^debug: Scheduling is stopped" dump_queue_start_3.out &&
-	grep "^batch: Scheduling is stopped: xyzzy" dump_queue_start_3.out
+	grep "^batch: Scheduling is stopped: xyzzy" dump_queue_start_3.out &&
+	grep "^SCHED" dump_queue_start_3.out
 '
 
 test_expect_success 'checkpointed queue no longer configured on restart is ignored' '
