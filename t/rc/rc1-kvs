@@ -1,17 +1,2 @@
 #!/bin/bash -e
-
-RANK=$(flux getattr rank)
-
-# Usage: modload {all|<rank>} modname [args ...]
-modload() {
-    local where=$1; shift
-    if test "$where" = "all" || test $where -eq $RANK; then
-        flux module load $*
-    fi
-}
-
-modload all content blob-size-limit=1048576
-modload 0 content-sqlite
-modload all kvs
-modload all kvs-watch
-modload all heartbeat
+flux modprobe run $(dirname $0)/rc1-kvs.py
