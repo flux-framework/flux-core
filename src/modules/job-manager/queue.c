@@ -84,6 +84,8 @@ struct queue_ctx {
     bool have_named_queues;
 };
 
+static void dequeue_jobs (struct queue_ctx *qctx, const char *name);
+
 static void queue_destroy (struct queue *q)
 {
     if (q) {
@@ -172,6 +174,7 @@ static int queue_start (struct queue *q, bool nocheckpoint)
     q->stop_reason = NULL;
     return 0;
 }
+
 static int queue_stop (struct queue *q, const char *reason, bool nocheckpoint)
 {
     char *cpy = NULL;
@@ -230,6 +233,18 @@ static int queue_stop_all (struct queue_ctx *qctx,
             return -1;
         q = queue_next (qctx);
     }
+    dequeue_jobs (qctx, NULL);
+    return 0;
+}
+
+static int queue_stop_one (struct queue_ctx *qctx,
+                           struct queue *q,
+                           const char *reason,
+                           bool nocheckpoint)
+{
+    if (queue_stop (q, reason, nocheckpoint) < 0)
+        return -1;
+    dequeue_jobs (qctx, q->name);
     return 0;
 }
 
@@ -392,7 +407,7 @@ static int restore_state_v1 (struct queue_ctx *qctx, json_t *entry)
                 return -1;
         }
         else {
-            if (queue_stop (q, stop_reason, false) < 0)
+            if (queue_stop_one (qctx, q, stop_reason, false) < 0)
                 return -1;
         }
     }
@@ -766,7 +781,6 @@ static void queue_start_cb (flux_t *h,
         else {
             if (queue_stop_all (qctx, stop_reason, nocheckpoint))
                 goto error;
-            dequeue_jobs (qctx, NULL);
         }
     }
     else {
@@ -783,9 +797,8 @@ static void queue_start_cb (flux_t *h,
                 goto error;
         }
         else {
-            if (queue_stop (q, stop_reason, nocheckpoint) < 0)
+            if (queue_stop_one (qctx, q, stop_reason, nocheckpoint) < 0)
                 goto error;
-            dequeue_jobs (qctx, name);
         }
     }
     if (flux_respond (h, msg, NULL) < 0)
