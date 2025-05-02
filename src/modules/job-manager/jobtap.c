@@ -1918,6 +1918,10 @@ static int jobtap_emit_dependency_event (struct jobtap *jobtap,
         errno = EINVAL;
         return -1;
     }
+    /* Avoid duplicate dependency-add events on restart
+     */
+    if (add && grudgeset_contains (job->dependencies, description))
+        return 0;
     return event_job_post_pack (jobtap->ctx->event,
                                 job,
                                 event,

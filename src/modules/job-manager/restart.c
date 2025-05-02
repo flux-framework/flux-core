@@ -384,6 +384,7 @@ int restart_from_kvs (struct job_manager *ctx)
     int dirskip = strlen (dirname);
     int count;
     struct job *job;
+    zlistx_t *active_jobs;
     flux_error_t error;
 
     /* Load any active jobs present in the KVS at startup.
@@ -399,12 +400,20 @@ int restart_from_kvs (struct job_manager *ctx)
         return -1;
     }
     flux_log (ctx->h, LOG_INFO, "restart: %d jobs", count);
+
+    /* Get active jobs as list for safe iteration:
+     */
+    if (!(active_jobs = zhashx_values (ctx->active_jobs))) {
+        flux_log (ctx->h, LOG_ERR, "restart: failed to get active_jobs list");
+        return -1;
+    }
+
     /* Post flux-restart to any jobs in SCHED state, so they may
      * transition back to PRIORITY and re-obtain the priority.
      *
      * Initialize the count of "running" jobs
      */
-    job = zhashx_first (ctx->active_jobs);
+    job = zlistx_first (active_jobs);
     while (job) {
         if (job->state == FLUX_JOB_STATE_NEW
             || job->state == FLUX_JOB_STATE_DEPEND) {
@@ -469,8 +478,9 @@ int restart_from_kvs (struct job_manager *ctx)
                                     __FUNCTION__, idf58 (job->id));
             }
         }
-        job = zhashx_next (ctx->active_jobs);
+        job = zlistx_next (active_jobs);
     }
+    zlistx_destroy (&active_jobs);
     flux_log (ctx->h, LOG_INFO, "restart: %d running jobs", ctx->running_jobs);
 
     job = zhashx_first (ctx->inactive_jobs);
