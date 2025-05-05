@@ -1640,12 +1640,18 @@ static json_t *running_job_stats (struct job_exec_ctx *ctx)
         json_t *entry;
         char *critical_ranks;
         json_t *impl_stats = NULL;
+        double expiration = 0.;
 
         if (!(critical_ranks = idset_encode (job->critical_ranks,
                                              IDSET_FLAG_RANGE)))
             goto error;
 
-        entry = json_pack ("{s:s s:s s:s s:i s:i s:i s:i s:i s:i s:f s:i s:i}",
+        if (job->expiration_timer)
+            expiration = flux_watcher_next_wakeup (job->expiration_timer);
+
+
+        entry = json_pack ("{s:s s:s s:s s:i s:i s:i s:i s:i s:i"
+                           " s:f s:f s:i s:i}",
                            "implementation",
                            job->impl ? job->impl->name : "none",
                            "ns", job->ns,
@@ -1656,6 +1662,7 @@ static json_t *running_job_stats (struct job_exec_ctx *ctx)
                            "started", job->started,
                            "running", job->running,
                            "finalizing", job->finalizing,
+                           "expiration", expiration,
                            "kill_timeout", job->kill_timeout,
                            "kill_count", job->kill_count,
                            "kill_shell_count", job->kill_shell_count);
