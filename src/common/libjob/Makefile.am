@@ -39,6 +39,8 @@ libjob_la_SOURCES = \
 	strtab.h \
 	jj.c \
 	jj.h \
+	jjc.c \
+	jjc.h \
 	unwrap.c \
 	unwrap.h \
 	count.c \
