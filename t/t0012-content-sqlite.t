@@ -166,6 +166,14 @@ test_expect_success 'checkpoint-legacy-backing-get works with valid key' '
 	test_cmp legacybacking.exp legacybacking.out
 '
 
+test_expect_success 'flux content checkpoints lists correct checkpoints (1)' '
+        flux content checkpoints > checkpoints1.out &&
+        count=$(cat checkpoints1.out | wc -l) &&
+        test $count -eq 2 &&
+        grep donut checkpoints1.out &&
+        grep bagel checkpoints1.out
+'
+
 test_expect_success 'checkpoint-put w/ rootref bar' '
 	checkpoint_put bar
 '
@@ -174,6 +182,13 @@ test_expect_success 'checkpoint-get returned rootref bar' '
 	echo bar >rootref.exp &&
 	checkpoint_get | jq -r .value | jq -r .rootref >rootref.out &&
 	test_cmp rootref.exp rootref.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoints (2)' '
+        flux content checkpoints > checkpoints2.out &&
+        count=$(cat checkpoints2.out | wc -l) &&
+        test $count -eq 3 &&
+        head -n 1 checkpoints2.out | grep bar
 '
 
 test_expect_success 'checkpoint-put on rank 1 forwards to rank 0' '
@@ -194,6 +209,13 @@ test_expect_success 'checkpoint-get on rank 1 forwards to rank 0' '
 test_expect_success 'checkpoint-get returned correct timestamp' '
         checkpoint_get | jq -r .value | jq -r .timestamp >timestamp.out &&
         grep 2.2 timestamp.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoints (3)' '
+        flux content checkpoints > checkpoints3.out &&
+        count=$(cat checkpoints3.out | wc -l) &&
+        test $count -eq 4 &&
+        head -n 1 checkpoints3.out | grep rankref
 '
 
 test_expect_success 'checkpoint-put updates rootref to baz' '
@@ -225,6 +247,13 @@ test_expect_success 'checkpoint-backing-get returns rootref baz' '
 	test_cmp rootref_backing.exp rootref_backing.out
 '
 
+test_expect_success 'flux content checkpoints lists correct checkpoints (4)' '
+        flux content checkpoints > checkpoints4.out &&
+        count=$(cat checkpoints4.out | wc -l) &&
+        test $count -eq 5 &&
+        head -n 1 checkpoints4.out | grep baz
+'
+
 test_expect_success 'checkpoint-backing-put w/ rootref boof' '
 	checkpoint_backing_put boof
 '
@@ -233,6 +262,13 @@ test_expect_success 'checkpoint-get returned rootref boof' '
 	echo boof >rootref4.exp &&
 	checkpoint_get | jq -r .value | jq -r .rootref >rootref4.out &&
 	test_cmp rootref4.exp rootref4.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoints (5)' '
+        flux content checkpoints > checkpoints5.out &&
+        count=$(cat checkpoints5.out | wc -l) &&
+        test $count -eq 6 &&
+        head -n 1 checkpoints5.out | grep boof
 '
 
 test_expect_success 'content-backing.load wrong size hash fails with EPROTO' '
