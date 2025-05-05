@@ -59,10 +59,10 @@ kill-timeout
    :ref:`job_termination` below for details.
 
 max-kill-count
-   (optional) The maximum number of times a job will be sent ``kill-signal``
-   before the execution system will consider the job unkillable and drains
-   the node. The default is 8. See :ref:`job_termination` below for details.
-   for details.
+   (optional) The maximum number of times ``kill-signal`` will be sent to the
+   job shell before the execution system considers the job unkillable and
+   drains the node. The default is 8. See :ref:`job_termination` below for
+   details.
 
 term-signal
    (optional) A string specifying an alternate signal to ``SIGTERM`` when
@@ -131,12 +131,15 @@ the following sequence
  - The job shells are notified to send ``term-signal`` to job tasks, unless
    the job is being terminated due to a time limit, in which case ``SIGALRM``
    is sent instead.
- - After ``kill-timeout``, any remaining shells are sent ``kill-signal``
- - This continues with an exponential backoff, with the timeout doubling
-   after each attempt (capped at 300s)
- - After a total of ``max-kill-count`` attempts, any nodes still running
-   processes are drained with the message: "unkillable user processes for job
-   JOBID"
+ - After ``kill-timeout``, job shells are notified to send ``kill-signal`` to
+   tasks. This repeats every ``kill-timeout`` seconds.
+ - After a delay of ``5*kill-timeout``, the job execution system transitions
+   to sending ``kill-signal`` to the job shells directly.
+ - This continues with an exponential backoff starting at ``kill-timeout``,
+   with the timeout doubling after each attempt (capped at 300s).
+ - After a total of ``max-kill-count`` attempts to signal the job shell,
+   any nodes still running processes are drained with the message: "unkillable
+   user processes for job JOBID."
 
 EXAMPLES
 ========
