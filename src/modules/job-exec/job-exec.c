@@ -107,6 +107,7 @@
 #include "checkpoint.h"
 #include "exec_config.h"
 
+static double max_start_delay_percent;
 static double kill_timeout;
 static int max_kill_count;
 static int term_signal;
@@ -585,7 +586,7 @@ static double jobinfo_adjust_expiration (struct jobinfo *job,
      *
      * See also: https://github.com/flux-framework/flux-core/issues/6781
      */
-    if ((delta / duration) > 0.25)
+    if ((delta / duration) * 100 > max_start_delay_percent)
         return expiration + delta;
     return expiration;
 }
@@ -1499,6 +1500,7 @@ static int job_exec_set_config_globals (flux_t *h,
      *
      * So we must re-initialize globals everytime we reload the module.
      */
+    max_start_delay_percent = 25.0;
     kill_timeout = 5.0;
     max_kill_count = 8;
     term_signal = SIGTERM;
@@ -1506,8 +1508,9 @@ static int job_exec_set_config_globals (flux_t *h,
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s s?s s?i}}",
+                          "{s?{s?F s?s s?s s?s s?i}}",
                           "exec",
+                            "max-start-delay-percent", &max_start_delay_percent,
                             "kill-timeout", &kto,
                             "term-signal", &tsignal,
                             "kill-signal", &ksignal,
