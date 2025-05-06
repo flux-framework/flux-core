@@ -18,7 +18,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libjob/job.h"
-#include "src/common/libjob/jj.h"
+#include "src/common/libjob/jjc.h"
 #include "src/common/libjob/idf58.h"
 #include "src/common/librlist/rlist.h"
 #include "ccan/str/str.h"
@@ -38,7 +38,7 @@ struct jobreq {
     unsigned int priority;
     double t_submit;
     flux_jobid_t id;
-    struct jj_counts jj;
+    struct jjc_counts jj;
     json_t *constraints;
     int errnum;
 };
@@ -65,6 +65,7 @@ static void jobreq_destroy (struct jobreq *job)
     if (job) {
         flux_msg_decref (job->msg);
         json_decref (job->constraints);
+        jjc_destroy (&job->jj);
         ERRNO_SAFE_WRAP (free, job);
     }
 }
@@ -122,9 +123,9 @@ jobreq_create (const flux_msg_t *msg)
                          "jobspec", &jobspec) < 0)
         goto err;
     job->msg = flux_msg_incref (msg);
-    if (jj_get_counts_json (jobspec, &job->jj) < 0)
+    if (jjc_get_counts_json (jobspec, &job->jj) < 0)
         job->errnum = errno;
-    else if (job->jj.slot_gpus > 0) {
+    else if (job->jj.slot_gpus) {
         snprintf (job->jj.error,
                   sizeof (job->jj.error),
                   "sched-simple does not support resource type 'gpu'");
@@ -215,11 +216,12 @@ static struct rlist *sched_alloc (struct simple_sched *ss,
                                   struct jobreq *job,
                                   flux_error_t *errp)
 {
+    int nnodes = job->jj.nnodes ? job->jj.nodefactor * count_first (job->jj.nnodes) : 0;
     struct rlist_alloc_info ai = {
         .mode = ss->alloc_mode,
-        .nnodes = job->jj.nnodes,
-        .nslots = job->jj.nslots,
-        .slot_size = job->jj.slot_size,
+        .nnodes = nnodes,
+        .nslots = count_first (job->jj.nslots) * (nnodes ? nnodes : 1),
+        .slot_size = count_first (job->jj.slot_size),
         .exclusive = job->jj.exclusive,
         .constraints = job->constraints
     };
@@ -231,7 +233,7 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     int rc = -1;
     char *s = NULL;
     struct rlist *alloc = NULL;
-    struct jj_counts *jj = NULL;
+    struct jjc_counts *jj = NULL;
     char *R = NULL;
     struct jobreq *job = zlistx_first (ss->queue);
     double now = flux_reactor_now (flux_get_reactor (h));
@@ -416,6 +418,10 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg, void *arg)
     struct simple_sched *ss = arg;
     struct jobreq *job;
     bool search_dir;
+    char *nnodes;
+    char *nslots;
+    char *slot_size;
+    int flags = COUNT_FLAG_BRACKETS | COUNT_FLAG_SHORT;
 
     if (ss->alloc_limit
         && zlistx_size (ss->queue) >= ss->alloc_limit) {
@@ -439,14 +445,20 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg, void *arg)
         return;
     }
 
+    nnodes = count_encode (job->jj.nnodes, flags);
+    nslots = count_encode (job->jj.nslots, flags);
+    slot_size = count_encode (job->jj.slot_size, flags);
     flux_log (h,
               LOG_DEBUG,
-              "req: %s: spec={%d,%d,%d} duration=%.1f",
+              "req: %s: spec={%s,%s,%s} duration=%.1f",
               idf58 (job->id),
-              job->jj.nnodes,
-              job->jj.nslots,
-              job->jj.slot_size,
+              nnodes ? nnodes : "0",
+              nslots ? nslots : "0",
+              slot_size ? slot_size : "0",
               job->jj.duration);
+    free(nnodes);
+    free(nslots);
+    free(slot_size);
 
     search_dir = job->priority > FLUX_JOB_URGENCY_DEFAULT;
     job->handle = zlistx_insert (ss->queue, job, search_dir);
@@ -650,7 +662,7 @@ static void feasibility_cb (flux_t *h,
                             void *arg)
 {
     struct simple_sched *ss = arg;
-    struct jj_counts jj;
+    struct jjc_counts jj;
     json_t *jobspec;
     json_t *constraints = NULL;
     struct rlist *alloc = NULL;
@@ -669,21 +681,22 @@ static void feasibility_cb (flux_t *h,
                          "constraints", &constraints) < 0)
         goto err;
 
-    if (jj_get_counts_json (jobspec, &jj) < 0) {
+    if (jjc_get_counts_json (jobspec, &jj) < 0) {
         errmsg = jj.error;
         goto err;
     }
-    if (jj.slot_gpus > 0) {
+    if (jj.slot_gpus) {
         errno = EINVAL;
         errmsg = "Unsupported resource type 'gpu'";
         goto err;
     }
 
+    int nnodes = jj.nnodes ? jj.nodefactor * count_first (jj.nnodes) : 0;
     struct rlist_alloc_info ai = {
         .mode = ss->alloc_mode,
-        .nnodes = jj.nnodes,
-        .nslots = jj.nslots,
-        .slot_size = jj.slot_size,
+        .nnodes = nnodes,
+        .nslots = count_first (jj.nslots) * (nnodes ? nnodes : 1),
+        .slot_size = count_first (jj.slot_size),
         .constraints = constraints
     };
     if (!(alloc = rlist_alloc (ss->rlist, &ai, &error))) {
