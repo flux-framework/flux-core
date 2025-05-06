@@ -93,4 +93,22 @@ test_expect_success 'expired job can also be canceled' '
 	    expired_cancel_test $(perl -E "say $TIMEOUT*$scale") && break
 	done
 '
+test_expect_success 'expiration can be extended via max-start-delay-percent' '
+	flux config load <<-EOF &&
+	[exec]
+	max-start-delay-percent = 0
+	EOF
+	test_when_finished "echo | flux config load" &&
+	flux jobtap load \
+	    ${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs/perilog-test.so &&
+	test_when_finished "flux jobtap remove perilog-test.so" &&
+	jobid=$(flux submit -t 1m sleep 120) &&
+	flux job wait-event -Hvt 30 $jobid start &&
+	exp=$(flux job info $jobid R | jq .execution.expiration) &&
+	exec_exp=$(flux module stats job-exec | jq .jobs.${jobid}.expiration) &&
+	test_debug "echo expiration=${exp} exec_expiration=${exec_exp}" &&
+	flux module stats job-exec | jq -e ".jobs.${jobid}.expiration > $exp" &&
+	flux cancel $jobid &&
+	flux job wait-event -t 30 $jobid clean
+'
 test_done

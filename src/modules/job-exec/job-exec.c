@@ -107,6 +107,7 @@
 #include "checkpoint.h"
 #include "exec_config.h"
 
+static double max_start_delay_percent;
 static double kill_timeout;
 static int max_kill_count;
 static int term_signal;
@@ -568,6 +569,28 @@ static void timelimit_cb (flux_reactor_t *r,
     jobinfo_killtimer_start (job, job->kill_timeout);
 }
 
+static double jobinfo_adjust_expiration (struct jobinfo *job,
+                                         double starttime,
+                                         double expiration)
+{
+    double duration = expiration - starttime;
+    double delta = job->t0 - starttime;
+
+    /* If the difference between the job's official starttime and the
+     * time of the start request is a large percentage of the job's total
+     * duration, then adjust the job's actual expiration to account for this
+     * difference. This prevents a short job from having its runtime
+     * significantly reduced, while avoiding creating a differential between
+     * the actual resource set expiration for longer jobs (the common case)
+     * where it doesn't matter.
+     *
+     * See also: https://github.com/flux-framework/flux-core/issues/6781
+     */
+    if ((delta / duration) * 100 > max_start_delay_percent)
+        return expiration + delta;
+    return expiration;
+}
+
 static int jobinfo_set_expiration (struct jobinfo *job)
 {
     flux_watcher_t *w = NULL;
@@ -600,14 +623,8 @@ static int jobinfo_set_expiration (struct jobinfo *job)
     if (job->t0 == 0.)
        job->t0 = now;
 
-    /* Adjust expiration time based on delay between when scheduler
-     *  created R and when we received this job. O/w jobs may be
-     *  terminated due to timeouts prematurely when the system
-     *  is very busy, which can cause long delays between alloc and
-     *  start events.
-     */
     if (starttime > 0.)
-        expiration += job->t0 - starttime;
+        expiration = jobinfo_adjust_expiration (job, starttime, expiration);
 
     offset = expiration - now;
     if (offset < 0.) {
@@ -1483,6 +1500,7 @@ static int job_exec_set_config_globals (flux_t *h,
      *
      * So we must re-initialize globals everytime we reload the module.
      */
+    max_start_delay_percent = 25.0;
     kill_timeout = 5.0;
     max_kill_count = 8;
     term_signal = SIGTERM;
@@ -1490,8 +1508,9 @@ static int job_exec_set_config_globals (flux_t *h,
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s s?s s?i}}",
+                          "{s?{s?F s?s s?s s?s s?i}}",
                           "exec",
+                            "max-start-delay-percent", &max_start_delay_percent,
                             "kill-timeout", &kto,
                             "term-signal", &tsignal,
                             "kill-signal", &ksignal,
@@ -1621,12 +1640,18 @@ static json_t *running_job_stats (struct job_exec_ctx *ctx)
         json_t *entry;
         char *critical_ranks;
         json_t *impl_stats = NULL;
+        double expiration = 0.;
 
         if (!(critical_ranks = idset_encode (job->critical_ranks,
                                              IDSET_FLAG_RANGE)))
             goto error;
 
-        entry = json_pack ("{s:s s:s s:s s:i s:i s:i s:i s:i s:i s:f s:i s:i}",
+        if (job->expiration_timer)
+            expiration = flux_watcher_next_wakeup (job->expiration_timer);
+
+
+        entry = json_pack ("{s:s s:s s:s s:i s:i s:i s:i s:i s:i"
+                           " s:f s:f s:i s:i}",
                            "implementation",
                            job->impl ? job->impl->name : "none",
                            "ns", job->ns,
@@ -1637,6 +1662,7 @@ static json_t *running_job_stats (struct job_exec_ctx *ctx)
                            "started", job->started,
                            "running", job->running,
                            "finalizing", job->finalizing,
+                           "expiration", expiration,
                            "kill_timeout", job->kill_timeout,
                            "kill_count", job->kill_count,
                            "kill_shell_count", job->kill_shell_count);

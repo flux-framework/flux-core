@@ -82,6 +82,17 @@ barrier-timeout
    nodes on which the barrier is waiting.  To disable the barrier timeout,
    set this value to ``"0"``. (Default: ``30m``).
 
+max-start-delay-percent
+   (optional) Specify the maximum allowed delay, as a percentage of a job's
+   duration, between when a job is allocated (i.e. the starttime recorded
+   in _R_) and when the execution system receives the start request from
+   the job manager. If the delay exceeds this percentage, then extend the
+   job's effective expiration by the delay. This prevents short duration
+   jobs from having their runtime significantly reduced, while avoiding a
+   differential between the actual resource set expiration and the time
+   at which a ``timeout`` exception is raised for longer running jobs,
+   where any runtime impact will be negligible. The default is 25 percent.
+
 testexec
    (options) A table of keys (see :ref:`testexec`) for configuring the
    **job-exec** test execution implementation (used in mainly for testing).
