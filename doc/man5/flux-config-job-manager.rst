@@ -27,6 +27,17 @@ inactive-age-limit
 inactive-num-limit
    (optional) Integer maximum number of inactive jobs retained in the KVS.
 
+stop-queues-on-restart
+   (optional) Boolean value indicating if the job manager should automatically
+   stop any started queues during a restart. Queues stopped in this manner will
+   have their stop reason set to ::
+
+      Automatically stopped due to restart
+
+   while queues stopped before a shutdown will remain stopped with their
+   original stop reason. The default value is ``false``, which means that
+   started queues will remain started upon restart.
+
 plugins
    (optional) An array of objects defining a list of jobtap plugin directives.
    Each directive follows the format defined in the :ref:`plugin_directive`

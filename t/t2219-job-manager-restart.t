@@ -159,7 +159,28 @@ test_expect_success 'verify that named queue start/stop persists across restart'
 	grep "^batch: Scheduling is stopped: xyzzy" dump_queue_start_3.out &&
 	grep "^SCHED" dump_queue_start_3.out
 '
-
+test_expect_success 'verify that stop-queues-on-restart config works' '
+	mkdir -p conf.d &&
+	cat >conf.d/queues.toml <<-EOT &&
+	[job-manager]
+	stop-queues-on-restart = true
+	[queues.debug]
+	[queues.batch]
+	EOT
+	flux start --config-path=$(pwd)/conf.d \
+	    -Scontent.dump=dump_queue_stop.tar \
+	    sh -c "flux queue start --all; flux queue stop -m xxyyzz batch"  &&
+	flux start --config-path=$(pwd)/conf.d \
+	    -Scontent.restore=dump_queue_stop.tar \
+	    flux queue status -v > dump_stop.out &&
+	test_debug "cat dump_stop.out" &&
+	grep \
+	  "batch: Scheduling is stopped: xxyyzz" \
+	  dump_stop.out &&
+	grep \
+	  "debug: Scheduling is stopped: Automatically stopped due to restart" \
+	  dump_stop.out
+'
 test_expect_success 'checkpointed queue no longer configured on restart is ignored' '
 	mkdir -p conf.d &&
 	cat >conf.d/queues.toml <<-EOT &&

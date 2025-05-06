@@ -82,6 +82,7 @@ struct queue_ctx {
         zhashx_t *named;
     };
     bool have_named_queues;
+    bool stop_on_restart;   // stop started queues on restart
 };
 
 static void dequeue_jobs (struct queue_ctx *qctx, const char *name);
@@ -403,7 +404,18 @@ static int restore_state_v1 (struct queue_ctx *qctx, json_t *entry)
                 return -1;
         }
         if (start) {
-            if (queue_start (q, false) < 0)
+            /* If job-manager.stop-queues-on-restart is enabled, then
+             * stop this started queue with an automated message, otherwise
+             * leave the queue started.
+             */
+            if (qctx->stop_on_restart) {
+                if (queue_stop_one (qctx,
+                                    q,
+                                    "Automatically stopped due to restart",
+                                    false) < 0)
+                    return -1;
+            }
+            else if (queue_start (q, false) < 0)
                 return -1;
         }
         else {
@@ -493,7 +505,12 @@ static int queue_configure (const flux_conf_t *conf,
     struct queue_ctx *qctx = arg;
     json_t *queues;
 
-    if (flux_conf_unpack (conf, NULL, "{s:o}", "queues", &queues) == 0
+    if (flux_conf_unpack (conf,
+                          NULL,
+                          "{s?{s?b} s:o}",
+                          "job-manager",
+                            "stop-queues-on-restart", &qctx->stop_on_restart,
+                          "queues", &queues) == 0
         && json_object_size (queues) > 0) {
         const char *name;
         json_t *value;
@@ -1025,6 +1042,8 @@ struct queue_ctx *queue_ctx_create (struct job_manager *ctx)
     if (!(qctx = calloc (1, sizeof (*qctx))))
         return NULL;
     qctx->ctx = ctx;
+    qctx->stop_on_restart = false;
+
     if (!(qctx->anon = queue_create (NULL, NULL)))
         goto error;
     if (flux_msg_handler_addvec (ctx->h,
