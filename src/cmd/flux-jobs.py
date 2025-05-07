@@ -106,7 +106,7 @@ def fetch_jobs_stdin():
             LOGGER.error("JSON input error: line %d: %s", fileinput.lineno(), str(err))
             sys.exit(1)
         jobs.append(job)
-    return jobs
+    return (jobs, False)
 
 
 def need_instance_info(fields):
@@ -172,13 +172,14 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         if not args.filtereduser:
             args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
 
+    # max_entries set to args.count + 1 to detect truncation for a user warning
     jobs_rpc = JobList(
         flux_handle,
         ids=args.jobids,
         attrs=attrs,
         filters=args.filter,
         user=args.user,
-        max_entries=args.count,
+        max_entries=(args.count + 1 if args.count > 0 else args.count),
         since=since,
         name=args.name,
         queue=args.queue,
@@ -186,6 +187,12 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
     )
 
     jobs = jobs_rpc.jobs()
+
+    if args.count > 0 and len(jobs) > args.count:
+        jobs = jobs[0:-1]
+        truncated = True
+    else:
+        truncated = False
 
     if need_instance_info(fields):
         with concurrent.futures.ThreadPoolExecutor(args.threads) as executor:
@@ -200,19 +207,21 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
     except EnvironmentError:
         pass
 
-    return jobs
+    return (jobs, truncated)
 
 
 def fetch_jobs(args, fields):
     """
     Fetch jobs from flux or optionally stdin.
-    Returns a list of JobInfo objects
+
+    Returns tuple containing a list of JobInfo objects, and flag
+    indicating if result truncated
     """
     if args.from_stdin:
-        lst = fetch_jobs_stdin()
+        rv = fetch_jobs_stdin()
     else:
-        lst = fetch_jobs_flux(args, fields)
-    return lst
+        rv = fetch_jobs_flux(args, fields)
+    return rv
 
 
 def parse_args():
@@ -418,7 +427,7 @@ def get_jobs_recursive(job, args, fields):
         #   of the job. Either way, simply skip descending into the job
         #
         handle = flux.Flux(str(job.uri))
-        jobs = fetch_jobs_flux(args, fields, flux_handle=handle)
+        (jobs, truncated) = fetch_jobs_flux(args, fields, flux_handle=handle)
         stats = None
         if args.stats:
             stats = JobStats(handle).update_sync()
@@ -535,7 +544,7 @@ def main():
     if args.sort:
         formatter.set_sort_keys(args.sort)
 
-    jobs = fetch_jobs(args, formatter.fields)
+    (jobs, truncated) = fetch_jobs(args, formatter.fields)
     sformatter = JobInfoFormat(formatter.filter(jobs))
 
     if not args.no_header:
@@ -549,6 +558,14 @@ def main():
                 print(json.dumps(result[0]))
         else:
             print(json.dumps({"jobs": result}))
+
+    # "no_header" also applies to trailers :-)
+    if not args.no_header and truncated:
+        print(f"warning: output truncated at {args.count} jobs.", file=sys.stderr)
+        print(
+            "Use --count to increase returned results or use filters to alter results.",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":
