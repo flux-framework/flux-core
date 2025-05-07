@@ -36,7 +36,8 @@ OPTIONS
 
 .. option:: -n, --no-header
 
-   For default output, do not output column headers.
+   For default output, do not output column headers and other optional
+   help output.
 
 .. option:: -u, --user=[USERNAME|UID]
 
