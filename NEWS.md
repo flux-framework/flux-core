@@ -1,3 +1,42 @@
+flux-core version 0.74.0 - 2025-05-06
+-------------------------------------
+
+## New Features
+
+ * job-manager: add `stop-queues-on-restart` configuration parameter (#6801)
+ * job-exec: only adjust timelimit for jobs when start delay exceeds a
+   configurable percent of job duration (#6791)
+ * python: add jobspec `__repr__` method (#6778)
+ * enable daily backups of system KVS (#6763)
+ * drop content.backing-module=none support (#6764)
+ * content: require backing store for checkpoint (#6255)
+
+## Fixes
+
+ * job-manager: avoid starting jobs in a stopped anonymous queue on restart
+   (#6792)
+ * jobtap: fix issues at restart with dependent jobs (#6790)
+ * libsubprocess: remove confusing `flux_future_push: Invalid argument`
+   error message in bulk-exec (#6783)
+ * sdmon: only match job related systemd units (#6762)
+ * task-exit: improve clarity of log message (#6760)
+ * libeventlog: cleanup failed batch in eventlogger (#6756)
+ * libeventlog: fix uncalled error callback (#6755)
+
+## Cleanup
+
+ * Misc cleanups (#6744)
+
+## Build/CI/Testsuite/Documentation
+
+ * doc: correct description of job termination in flux-config-exec(5) (#6793)
+ * doc: add troubleshooting guide (#6747)
+ * Update README.md with pre-built container information (#6767)
+ * testsuite: fix flux-proxy TMPDIR test (#6752)
+ * libeventlog: fix flaky eventlog formatter tests (#6748)
+ * t: fix potential race in backgrounded processes (#6746)
+
+
 flux-core version 0.73.0 - 2025-04-01
 -------------------------------------
 
