@@ -433,6 +433,14 @@ test_expect_success 'flux-jobs --count works' '
 	test $count -eq 8
 '
 
+test_expect_success 'flux-jobs outputs message if results limit reached' '
+	count=`flux jobs --no-header -a --count=0 | wc -l` &&
+        flux jobs -a --count=${count} 2> limit1.out &&
+	test_must_fail grep -i "output truncated" limit1.out &&
+        flux jobs -a --count=8 2> limit2.out &&
+	grep -i "output truncated" limit2.out
+'
+
 #
 # -i, --include tests
 #
