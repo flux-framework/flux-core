@@ -79,7 +79,8 @@ flux_SOURCES = \
 	builtin/archive.c \
 	builtin/pmi.c \
 	builtin/shutdown.c \
-	builtin/lptest.c
+	builtin/lptest.c \
+	builtin/fsck.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
 dist_bin_SCRIPTS = flux-python

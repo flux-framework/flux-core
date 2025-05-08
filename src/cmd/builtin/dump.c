@@ -64,22 +64,20 @@ void read_error (const char *fmt, ...)
 
 static void progress_notify (flux_t *h)
 {
-    if (sd_notify_flag) {
-        flux_future_t *f;
-        char buf[64];
+    flux_future_t *f;
+    char buf[64];
 
-        snprintf (buf,
-                  sizeof (buf),
-                  "flux-dump(1) has archived %d keys",
-                  keycount);
-        f = flux_rpc_pack (h,
-                           "state-machine.sd-notify",
-                           FLUX_NODEID_ANY,
-                           FLUX_RPC_NORESPONSE,
-                           "{s:s}",
-                           "status", buf);
-        flux_future_destroy (f);
-    }
+    snprintf (buf,
+              sizeof (buf),
+              "flux-dump(1) has archived %d keys",
+              keycount);
+    f = flux_rpc_pack (h,
+                       "state-machine.sd-notify",
+                       FLUX_NODEID_ANY,
+                       FLUX_RPC_NORESPONSE,
+                       "{s:s}",
+                       "status", buf);
+    flux_future_destroy (f);
 }
 
 static void progress (flux_t *h, int delta_keys)
