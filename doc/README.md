@@ -62,3 +62,32 @@ The tuple entry in the `man_pages` list specifies:
 It is possible for multiple man pages to be generated from a single source file.
 Simply create an entry for each man page you want generated.
 These entries can have the same file path, but different man page names.
+
+### A Note on Sphinx Errors
+Sphinx writes helpful error logs to `TMPDIR`, so when debugging, if you're looking for a more useful error message than 
+```
+make: *** [Makefile:1731: html] Error 2
+```
+look inside your `TMPDIR` and you will see a useful log file.
+```
+$ ls /tmp/elvis/
+sphinx-err-syr84dmk.log
+$ 
+$ cat /tmp/elvis/sphinx-err-syr84dmk.log
+# Sphinx version: 5.3.0
+# Python version: 3.6.8 (CPython)
+# Docutils version: 0.17.1 release
+# Jinja2 version: 3.0.3
+# Last messages:
+
+# Loaded extensions:
+Traceback (most recent call last):
+  File "/g/g0/elvis/k8senv/lib64/python3.6/site-packages/sphinx/cmd/build.py", line 280, in build_main
+    args.pdb)
+  File "/g/g0/elvis/k8senv/lib64/python3.6/site-packages/sphinx/application.py", line 237, in __init__
+    self.config.setup(self)
+  File "/g/g0/elvis/flux-core/doc/conf.py", line 156, in setup
+    app.connect('builder-inited', run_apidoc)
+NameError: name 'run_apidoc' is not defined
+```
+
