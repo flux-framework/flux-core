@@ -101,6 +101,7 @@ Table of Contents
    guide/support
    guide/start
    guide/interact
+   guide/workflows
    guide/admin
    guide/troubleshooting
    guide/glossary

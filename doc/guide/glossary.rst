@@ -128,6 +128,14 @@ used in our documentation that may not be familiar to all readers.
     The range is 0 to 31, with a default value of 16.  Urgency is defined
     by :doc:`rfc:spec_30`.
 
+  workflow
+    A set of related jobs that are orchestrated to accomplish a goal.
+    In Flux, orchestration naturally maps to the :term:`initial program` of
+    a Flux instance.  An example of a simple workflow is a batch job whose
+    batch script submits a set of inter-dependent jobs then waits for them to
+    complete.
+
+
 Footnotes
 ---------
 

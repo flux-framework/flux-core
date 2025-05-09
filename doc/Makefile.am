@@ -478,6 +478,7 @@ EXTRA_DIST = \
 	guide/kvs.rst \
 	guide/broker.rst \
 	guide/troubleshooting.rst \
+	guide/workflows.rst \
 	$(RST_FILES) \
 	man1/index.rst \
 	man1/common/resources.rst \
