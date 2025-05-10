@@ -637,6 +637,60 @@ void test_binomial5 (void)
     topology_decref (topo);
 }
 
+void test_mincrit5 (void)
+{
+    struct topology *topo;
+    flux_error_t error;
+
+    topo = topology_create ("mincrit:zz", 5, &error);
+    if (!topo)
+        diag ("%s", error.text);
+    ok (topo == NULL,
+        "mincrit topology fails with unknown path");
+
+    topo = topology_create ("mincrit:2", 5, &error);
+    ok (topo != NULL,
+        "mincrit:2 topology of size=5 works");
+
+    ok (topology_set_rank (topo, 1) == 0,
+        "set rank to 1");
+    ok (topology_get_parent (topo) == 0,
+        "rank 1 parent is 0");
+    ok (topology_get_child_ranks (topo, NULL, 0) == 1,
+        "rank 1 has one child");
+    ok (topology_get_level (topo) == 1,
+        "rank 1 level is 1");
+
+    ok (topology_set_rank (topo, 2) == 0,
+        "set rank to 2");
+    ok (topology_get_parent (topo) == 0,
+        "rank 2 parent is 0");
+    ok (topology_get_child_ranks (topo, NULL, 0) == 1,
+        "rank 2 has one child");
+    ok (topology_get_level (topo) == 1,
+        "rank 2 level is 1");
+
+    ok (topology_set_rank (topo, 3) == 0,
+        "set rank to 3");
+    ok (topology_get_parent (topo) == 1,
+        "rank 3 parent is 1");
+    ok (topology_get_child_ranks (topo, NULL, 0) == 0,
+        "rank 3 has no children");
+    ok (topology_get_level (topo) == 2,
+        "rank 3 level is 2");
+
+    ok (topology_set_rank (topo, 4) == 0,
+        "set rank to 4");
+    ok (topology_get_parent (topo) == 2,
+        "rank 4 parent is 2");
+    ok (topology_get_child_ranks (topo, NULL, 0) == 0,
+        "rank 4 has no children");
+    ok (topology_get_level (topo) == 2,
+        "rank 4 level is 2");
+
+    topology_decref (topo);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -650,6 +704,7 @@ int main (int argc, char *argv[])
     test_custom ();
     test_rank_aux ();
     test_binomial5 ();
+    test_mincrit5 ();
 
     done_testing ();
 }
