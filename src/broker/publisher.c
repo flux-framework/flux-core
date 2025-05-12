@@ -8,7 +8,28 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* publisher.c - event publishing service on rank 0 */
+/* publisher.c - event publishing service on rank 0
+ *
+ * There are two methods for publishing an event:
+ *
+ * 1) Call one of the following API functions:
+ *    flux_event_publish(3)
+ *    flux_event_publish_pack(3)
+ *    flux_event_publish_raw(3)
+ * These send an RPC to rank 0 (handled below).  The RPC response contains
+ * the published event's sequence number.  The event message payload, if any,
+ * must be base64-encoded to be included in the RPC payload.
+ *
+ * 2) Call one of the following functions
+ *    flux_event_encode(3)
+ *    flux_event_pack(3)
+ *    flux_event_encode_raw(3)
+ * then
+ *    flux_send(3)
+ *    flux_send_new(3)
+ * This puts the RFC 3 event message right on the wire without base64 encoding.
+ * However, it is "fire and forget" from the sender's perspective.
+ */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -34,9 +55,11 @@ struct publisher {
     void *arg;
 };
 
-static flux_msg_t *encode_event (const char *topic, int flags,
+static flux_msg_t *encode_event (const char *topic,
+                                 int flags,
                                  struct flux_msg_cred cred,
-                                 uint32_t seq, const char *src)
+                                 uint32_t seq,
+                                 const char *src)
 {
     flux_msg_t *msg;
     char *dst = NULL;
@@ -81,7 +104,10 @@ error:
     return NULL;
 }
 
-/* Broadcast event using all senders.
+/* Call the callback registered with publisher_create() to publish 'msg',
+ * an RFC 3 event message.  The broker registers its handle_event() function
+ * here, which sends the message to downstream overlay peers, local modules,
+ * and in-broker subscribers.
  * Log failure, but don't abort the event at this point.
  */
 static void send_event (struct publisher *pub, const flux_msg_t *msg)
@@ -90,6 +116,8 @@ static void send_event (struct publisher *pub, const flux_msg_t *msg)
         flux_log_error (pub->ctx->h, "error publishing event message");
 }
 
+/* Publish a message from a "publish request" (method 1 above).
+ */
 static void publish_cb (flux_t *h,
                         flux_msg_handler_t *mh,
                         const flux_msg_t *msg,
@@ -103,10 +131,12 @@ static void publish_cb (flux_t *h,
     flux_msg_t *event = NULL;
     const char *errmsg = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i s?s}",
-                                        "topic", &topic,
-                                        "flags", &flags,
-                                        "payload", &payload) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:i s?s}",
+                             "topic", &topic,
+                             "flags", &flags,
+                             "payload", &payload) < 0)
         goto error;
     if (pub->ctx->rank > 0) {
         errno = EPROTO;
@@ -134,6 +164,15 @@ error:
     flux_msg_destroy (event);
 }
 
+/* Publish a raw RFC 3 event message (method 2 above).
+ * This is a bit confusing: this function is called from broker.c, then
+ * it calls a callback registered from broker.c.  In short:
+ *
+ *   broker_event_sendmsg_new() => publisher_send() =>
+ *       send_event() => handle_event()
+ *
+ * The goal was to assign event sequence numbers in one place only.
+ */
 int publisher_send (struct publisher *pub, const flux_msg_t *msg)
 {
     flux_msg_t *cpy;
@@ -152,8 +191,10 @@ error_restore_seq:
     return -1;
 }
 
-static void subscribe_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void subscribe_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     struct publisher *pub = arg;
     const char *uuid;
@@ -181,8 +222,10 @@ error:
         flux_log_error (h, "error responding to subscribe request");
 }
 
-static void unsubscribe_cb (flux_t *h, flux_msg_handler_t *mh,
-                            const flux_msg_t *msg, void *arg)
+static void unsubscribe_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     struct publisher *pub = arg;
     const char *uuid;
@@ -244,7 +287,6 @@ struct publisher *publisher_create (struct broker *ctx,
     }
     return pub;
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
