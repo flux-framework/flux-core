@@ -168,4 +168,23 @@ test_expect_success 'broker -Stbon.topo=binomial option works' '
 		flux getattr tbon.topo >topo_binomial.out &&
 	test_cmp topo_binomial.exp topo_binomial.out
 '
+test_expect_success 'broker -Stbon.topo=mincrit option works' '
+	echo mincrit >topo_mincrit.exp &&
+	flux start ${ARGS} -Stbon.topo=mincrit \
+		flux getattr tbon.topo >topo_mincrit.out &&
+	test_cmp topo_mincrit.exp topo_mincrit.out
+'
+test_expect_success 'broker -Stbon.topo=mincrit:2 option works' '
+	echo 2 >topo_crit2.exp &&
+	flux start -s5 ${ARGS} -Stbon.topo=mincrit:2 \
+		flux getattr tbon.maxlevel >topo_crit2.out &&
+	test_cmp topo_crit2.exp topo_crit2.out
+'
+test_expect_success 'broker -Stbon.topo=mincrit is flat for small size' '
+	echo 1 >topo_critsmall.exp &&
+	flux start -s5 ${ARGS} -Stbon.topo=mincrit \
+		flux getattr tbon.maxlevel >topo_critsmall.out &&
+	test_cmp topo_critsmall.exp topo_critsmall.out
+'
+
 test_done
