@@ -34,9 +34,11 @@ struct publisher {
     void *arg;
 };
 
-static flux_msg_t *encode_event (const char *topic, int flags,
+static flux_msg_t *encode_event (const char *topic,
+                                 int flags,
                                  struct flux_msg_cred cred,
-                                 uint32_t seq, const char *src)
+                                 uint32_t seq,
+                                 const char *src)
 {
     flux_msg_t *msg;
     char *dst = NULL;
@@ -103,10 +105,12 @@ static void publish_cb (flux_t *h,
     flux_msg_t *event = NULL;
     const char *errmsg = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i s?s}",
-                                        "topic", &topic,
-                                        "flags", &flags,
-                                        "payload", &payload) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:i s?s}",
+                             "topic", &topic,
+                             "flags", &flags,
+                             "payload", &payload) < 0)
         goto error;
     if (pub->ctx->rank > 0) {
         errno = EPROTO;
@@ -152,8 +156,10 @@ error_restore_seq:
     return -1;
 }
 
-static void subscribe_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void subscribe_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     struct publisher *pub = arg;
     const char *uuid;
@@ -181,8 +187,10 @@ error:
         flux_log_error (h, "error responding to subscribe request");
 }
 
-static void unsubscribe_cb (flux_t *h, flux_msg_handler_t *mh,
-                            const flux_msg_t *msg, void *arg)
+static void unsubscribe_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     struct publisher *pub = arg;
     const char *uuid;
@@ -244,7 +252,6 @@ struct publisher *publisher_create (struct broker *ctx,
     }
     return pub;
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

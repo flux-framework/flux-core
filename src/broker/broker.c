@@ -1575,7 +1575,7 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     const char *topic;
 
     if (flux_msg_get_seq (msg, &seq) < 0
-            || flux_msg_get_topic (msg, &topic) < 0) {
+        || flux_msg_get_topic (msg, &topic) < 0) {
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
         return -1;
     }
