@@ -250,6 +250,24 @@ struct internal_ranks_test internal_ranks_tests[] = {
     { 4,  "binomial","0,2" },
     { 8,  "binomial","0,2,4,6" },
     { 16, "binomial","0,2,4,6,8,10,12,14" },
+    { 4096, "mincrit:0", "0" },
+    { 1, "mincrit:2", "" },
+    { 2, "mincrit:2", "0" },
+    { 3, "mincrit:2", "0" },
+    { 4, "mincrit:2", "0-1" },
+    { 5, "mincrit:2", "0-2" },
+    { 6, "mincrit:2", "0-2" },
+    { 7, "mincrit:2", "0-2" },
+    { 1024, "mincrit:2", "0-2" },
+    { 512, "mincrit", "0" },
+    // leader has 1024 children at size=1024+1=1025
+    { 1025, "mincrit", "0" },
+    { 1026, "mincrit", "0-2" },
+    // 2 routers have 1024 children each at size=1024+1024+3=2051
+    { 2051, "mincrit", "0-2" },
+    { 2052, "mincrit", "0-3" },
+    // a large el capitan run
+    { 10800, "mincrit", "0-11" },
     { -1, NULL, NULL  }
 };
 
