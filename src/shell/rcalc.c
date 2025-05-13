@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <jansson.h>
+#include <flux/taskmap.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libidset/idset.h"
@@ -51,6 +52,22 @@ struct rcalc {
     struct rankinfo *ranks;
     struct allocinfo *alloc;
 };
+
+int rcalc_update_map (rcalc_t *r, struct taskmap *map)
+{
+    if (r == NULL || map == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    /* Update task counts for each rank in rcalc based on new taskmap.
+     * N.B.: ignores alloc[i]->ncores_avail since this variable is known
+     * to not be used after the initial distribution of tasks.
+     */
+    for (int i = 0; i < r->nranks; i++)
+        r->alloc[i].ntasks = taskmap_ntasks (map, i);
+
+    return 0;
+}
 
 void rcalc_destroy (rcalc_t *r)
 {

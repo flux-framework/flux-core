@@ -263,6 +263,18 @@ int shell_info_set_taskmap (struct shell_info *info,
     if (!(taskids = taskmap_taskids (map, info->shell_rank))
         || !(copy = idset_copy (taskids)))
         return -1;
+
+    /* Update rcalc using the new taskmap.
+     * Be sure to update the local rankinfo structure, which may have changed.
+     */
+    if (rcalc_update_map (info->rcalc, map) < 0
+        || rcalc_get_nth (info->rcalc,
+                          info->shell_rank,
+                          &info->rankinfo) < 0) {
+        shell_log_error ("unable to update task counts from new taskmap");
+        return -1;
+    }
+
     idset_destroy (info->taskids);
     info->taskids = copy;
     taskmap_destroy (info->taskmap);
