@@ -36,6 +36,7 @@ static struct route_id *route_id_create (const char *id, unsigned int id_len)
     struct route_id *r;
     if (!(r = calloc (1, sizeof (*r) + id_len + 1)))
         return NULL;
+    r->id = (char *)(r + 1);
     if (id && id_len) {
         memcpy (r->id, id, id_len);
         list_node_init (&(r->route_id_node));
@@ -91,6 +92,36 @@ int msg_route_delete_last (flux_msg_t *msg)
         msg->routes_len--;
     }
     return 0;
+}
+
+/* This function was added to streamline a critical path in the broker that
+ * iteratively sends the same message to multiple peers.  It is equivalent to
+ *   flux_msg_route_push (msg, id, strlen (id))
+ *   cb (msg, arg)
+ *   flux_msg_route_delete_last (msg)
+ * but borrows the copy of id rather than copying it each time.
+ */
+int msg_route_sendto (const flux_msg_t *cmsg,
+                      const char *id,
+                      msg_route_send_f cb,
+                      void *arg)
+{
+    flux_msg_t *msg = (flux_msg_t *)cmsg; // drop const since net effect is nil
+    struct route_id r;
+    int rc;
+
+    list_node_init (&r.route_id_node);
+    r.id = (char *)id;
+
+    list_add (&msg->routes, &r.route_id_node);
+    msg->routes_len++;
+
+    rc = cb (msg, arg);
+
+    list_pop (&msg->routes, struct route_id, route_id_node);
+    msg->routes_len--;
+
+    return rc;
 }
 
 /*
