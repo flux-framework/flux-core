@@ -973,16 +973,6 @@ int taskmap_check (const struct taskmap *old,
                           "got %d total tasks, expected %d",
                           ntasks_new,
                           ntasks_old);
-    for (int i = 0; i < nnodes_old; i++) {
-        ntasks_old = taskmap_ntasks (old, i);
-        ntasks_new = taskmap_ntasks (new, i);
-        if (ntasks_old != ntasks_new)
-            return errprintf (errp,
-                              "node %d has %d tasks, expected %d",
-                              i,
-                              ntasks_new,
-                              ntasks_old);
-    }
     return 0;
 }
 
