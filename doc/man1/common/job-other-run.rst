@@ -13,17 +13,15 @@
    manual:TASKMAP
     An explicit RFC 34 taskmap is provided and used to manually map
     task ids to nodes. The provided *TASKMAP* must match the total number
-    of tasks in the job and the number of tasks per node assigned by
-    the job shell, so this option is not useful unless the total number
-    of nodes and tasks per node are known at job submission time.
+    of nodes and tasks in the job, so this option is not useful unless
+    the total number of nodes are known at job submission time.
 
    hostfile:FILE
     Assign tasks in order to hosts as they appear in FILE. FILE should
     have one or more lines each of which contains a host name or RFC
     29 Hostlist string. Each host assigned to the job must appear in
-    the hostfile and be assigned the same number of tasks as the default
-    taskmap from the shell.  If there are less hosts in the hostfile than
-    tasks in the job, then the list of hosts will be reused.
+    the hostfile.  If there are less hosts in the hostfile than tasks
+    in the job, then the list of hosts will be reused.
 
    However, shell plugins may provide other task mapping schemes, so
    check the current job shell configuration for a full list of supported
