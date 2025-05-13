@@ -136,6 +136,15 @@ test_expect_success 'taskmap=manual works' '
 		| jq -e ".context.taskmap.map == [[1,3,4,1],[0,1,4,1]]" &&
 	test_check_taskmap $id
 '
+test_expect_success 'taskmap=manual can redistribute tasks amongst nodes' '
+	# put 2 extra tasks on rank 0
+	id=$(flux submit \
+	     --taskmap=manual:"[[0,1,3,1],[1,3,1,1]]" \
+	     -N4 -n6 ./map.sh) &&
+	flux job wait-event -p exec -f json $id shell.start \
+		| jq -e ".context.taskmap.map == [[0,1,3,1],[1,3,1,1]]" &&
+	test_check_taskmap $id
+'
 test_expect_success 'taskmap=manual with unknown taskmap fails' '
 	test_must_fail_or_be_terminated \
 		flux run --taskmap="manual:[]" true
@@ -149,8 +158,7 @@ test_expect_success 'invalid manual taskmaps fail predictably' '
 		-N4 --tasks-per-node=4 true ::: \
 		"{}" \
 		"[[1,3,4,1]]" \
-		"[[1,3,4,1],[0,1,3,1]]" \
-		"[[3,1,1,1],[0,3,5,1]]") &&
+		"[[1,3,4,1],[0,1,3,1]]") &&
 	for id in $ids; do
 		test_must_fail_or_be_terminated flux job attach $id
 	done
