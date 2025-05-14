@@ -76,9 +76,18 @@ test_expect_success 'tbon.interface-hint=default-route works' '
 	flux start -Stbon.interface-hint=default-route -Stbon.prefertcp=1 \
 		${ARGS} -s2 true
 '
+# Note: the following test may fail if for some reason bind() fails on the
+# interface associated with the hostname. This may occur, for example, under
+# docker with --network=host when the host does not allow processes to bind
+# to the shared interface. Therefore allow success or a specific error to
+# determine success of this test.
 test_expect_success 'tbon.interface-hint=hostname works' '
-	flux start -Stbon.interface-hint=hostname -Stbon.prefertcp=1 \
-		${ARGS} -s2 true
+	test_might_fail flux start \
+		-Stbon.interface-hint=hostname \
+		-Stbon.prefertcp=1 \
+		${ARGS} -s2 echo ok >interface-hostname.out 2>&1 &&
+	(grep ok interface-hostname.out ||
+	 grep "Cannot assign requested address" interface-hostname.out)
 '
 test_expect_success 'tbon.interface-hint defaults to default-router' '
 	flux start ${ARGS} flux getattr tbon.interface-hint >defhint.out &&
