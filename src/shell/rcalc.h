@@ -14,6 +14,7 @@
 #include <sched.h>
 #include <jansson.h>
 #include <flux/core.h>
+#include <flux/taskmap.h>
 
 typedef struct rcalc rcalc_t;
 
@@ -60,5 +61,9 @@ int rcalc_get_rankinfo (rcalc_t *r, int rank, struct rcalc_rankinfo *ri);
 
 /*  Fill in rcalc_rankinfo for the nth rank in the rcalc_t list */
 int rcalc_get_nth (rcalc_t *r, int id, struct rcalc_rankinfo *ri);
+
+/* Update rcalc with a new taskmap
+ */
+int rcalc_update_map (rcalc_t *r, struct taskmap *map);
 
 #endif /* !SHELL_RCALC_H */

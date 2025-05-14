@@ -90,8 +90,8 @@ int taskmap_nnodes (const struct taskmap *map);
 int taskmap_total_ntasks (const struct taskmap *map);
 
 /*  Check if 'a' and 'b' taskmaps are compatible, i.e. they
- *  have equivalent numbers of total tasks, total nodes, and tasks assigned
- *  to each node.
+ *  have equivalent numbers of total tasks and total nodes.
+ *
  *  Returns 0 on success, -1 with error message in 'errp' on failure.
  */
 int taskmap_check (const struct taskmap *a,
