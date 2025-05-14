@@ -21,6 +21,7 @@ SYNOPSIS
 | **flux** **kvs** **getroot**
 | **flux** **kvs** **version**
 | **flux** **kvs** **wait** *version*
+| **flux** **kvs** **sync**
 
 | **flux** **kvs** **namespace** **create** [*-o owner*] *name...*
 | **flux** **kvs** **namespace** **remove** *name...*
@@ -434,6 +435,16 @@ wait
 Block until the KVS version reaches *version* or greater. A simple form
 of synchronization between peers is: node A puts a value, commits it,
 reads version, sends version to node B. Node B waits for version, gets value.
+
+sync
+----
+
+.. program:: flux kvs sync
+
+Flush pending content and checkpoints to disk to ensure data persists
+across a Flux instance crash.  This command is identical to the
+:command:`flux kvs put` :option:`--sync` option, but does not require
+any data to be written.
 
 namespace create
 ----------------
