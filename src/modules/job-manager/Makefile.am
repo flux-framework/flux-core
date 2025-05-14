@@ -20,7 +20,8 @@ jobtap_plugin_LTLIBRARIES = \
 	plugins/submit-hold.la \
 	plugins/alloc-bypass.la \
 	plugins/alloc-check.la \
-	plugins/perilog.la
+	plugins/perilog.la \
+	plugins/killbot.la
 
 libjob_manager_la_SOURCES = \
 	job-manager.c \
@@ -117,6 +118,18 @@ plugins_perilog_la_LIBADD = \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libjob/libjob.la
 plugins_perilog_la_LDFLAGS = \
+	$(fluxplugin_ldflags) \
+	-module
+
+plugins_killbot_la_SOURCES = \
+	plugins/killbot.c
+plugins_killbot_la_LIBADD = \
+	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
+	$(top_builddir)/src/common/libjob/libjob.la
+plugins_killbot_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
 
