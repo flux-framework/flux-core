@@ -222,6 +222,7 @@ TESTSCRIPTS = \
 	t2618-job-shell-signal.t \
 	t2619-job-shell-hwloc.t \
 	t2620-job-shell-mustache.t \
+	t2621-job-shell-plugin-fork.t \
 	t2710-python-cli-submit.t \
 	t2711-python-cli-run.t \
 	t2713-python-cli-bulksubmit.t \
