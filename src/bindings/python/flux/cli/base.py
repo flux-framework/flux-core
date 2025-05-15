@@ -40,7 +40,7 @@ from flux.constraint.parser import ConstraintParser, ConstraintSyntaxError
 from flux.idset import IDset
 from flux.job import JobspecV1, JobWatcher
 from flux.progress import ProgressBar
-from flux.util import dict_merge, set_treedict
+from flux.util import dict_merge, get_treedict, set_treedict
 
 LOGGER = logging.getLogger("flux")
 
@@ -495,6 +495,12 @@ class BatchConfig:
         if extension in (".toml", ".json"):
             return self.update_file(value, extension)
         return self.update_named_config(value)
+
+    def get(self, key, default=None):
+        """
+        Get a value from the current config using dotted key form
+        """
+        return get_treedict(self.config or {}, key, default=default)
 
 
 class ConfAction(argparse.Action):
