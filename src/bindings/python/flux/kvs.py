@@ -61,13 +61,13 @@ def exists(flux_handle, key, namespace=None):
     Args:
         flux_handle: A Flux handle obtained from flux.Flux()
         key: key to check for existence
-
-    Returns:
-        bool: True if key exists, False if not
         namespace: namespace to read from, defaults to None.  If namespace
           is None, the namespace specified in the FLUX_KVS_NAMESPACE
           environment variable will be used.  If FLUX_KVS_NAMESPACE is not
           set, the primary namespace will be used.
+
+    Returns:
+        bool: True if key exists, False if not
     """
     try:
         get_key_direct(flux_handle, key, namespace=namespace)
@@ -86,13 +86,13 @@ def isdir(flux_handle, key, namespace=None):
     Args:
         flux_handle: A Flux handle obtained from flux.Flux()
         key: key to check if it is a directory
-
-    Returns:
-        bool: True if key is a directory, False if not
         namespace: namespace to read from, defaults to None.  If namespace
           is None, the namespace specified in the FLUX_KVS_NAMESPACE
           environment variable will be used.  If FLUX_KVS_NAMESPACE is not
           set, the primary namespace will be used.
+
+    Returns:
+        bool: True if key is a directory, False if not
     """
     try:
         get_key_direct(flux_handle, key, namespace=namespace)
@@ -374,8 +374,12 @@ class KVSTxn:
     Can be used as a context manager and commits will be handled at
     exit. e.g.
 
-    with KVSTxn(handle, "basedirectory") as kt:
-        kt.put("a", 1)
+    .. code-block:: python
+
+        >>> import flux
+        >>> flux_handle = flux.Flux()
+        >>> with KVSTxn(handle, "basedirectory") as kt:
+        >>>     kt.put("a", 1)
 
     Args:
         flux_handle: A Flux handle obtained from flux.Flux()
@@ -467,20 +471,27 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
 
     KVS values can be read or written through this class's item accessor.  e.g.
 
-    mydir = KVSDir(flux_handle)
-    print(mydir["mykey"])
+    .. code-block:: python
 
-    mydir["newkey"] = "foo"
-    mydir.commit()
+        >>> import flux
+        >>> flux_handle = flux.Flux()
+        >>> mydir = KVSDir(flux_handle)
+        >>> print(mydir["mykey"])
+        >>> mydir["newkey"] = "foo"
+        >>> mydir.commit()
 
     Any KVS directories accessed through the item accessor will share
     the same internal KVS transaction, so that only a single call to
     commit() is necessary.  e.g.
 
-    mydir = KVSDir(flux_handle)
-    subdir = mydir["subdir"]
-    subdir["anotherkey"] = "bar"
-    mydir.commit()
+    .. code-block:: python
+
+        >>> import flux
+        >>> flux_handle = flux.Flux()
+        >>> mydir = KVSDir(flux_handle)
+        >>> subdir = mydir["subdir"]
+        >>> subdir["anotherkey"] = "bar"
+        >>> mydir.commit()
 
     Args:
         flux_handle: A Flux handle obtained from flux.Flux()
@@ -495,7 +506,6 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
     # pylint: disable=too-many-ancestors, too-many-public-methods
 
     class InnerWrapper(Wrapper):
-
         # pylint: disable=no-value-for-parameter
         def __init__(self, flux_handle=None, path=".", handle=None, namespace=None):
             dest = RAW.flux_kvsdir_destroy
@@ -887,9 +897,9 @@ def kvs_watch_async(
           detect this as the exact key has not been changed.  Defaults to
           False.
 
-    Returns:
-        KVSWatchFuture: a KVSWatchFuture object.  Call .get() from the then
-         callback to get the currently returned value from the Future object.
+    :rtype: :py:obj:`flux.kvs.KVSWatchFuture`
+    :return: Call .get() from the then callback to
+      get the currently returned value from the Future object.
     """
 
     flags = flux.constants.FLUX_KVS_WATCH
