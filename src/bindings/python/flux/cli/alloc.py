@@ -19,11 +19,9 @@ from flux.cli import base
 from flux.uri import JobURI
 
 
-class AllocCmd(base.MiniCmd):
+class AllocCmd(base.BatchAllocCmd):
     def __init__(self, prog, usage=None, description=None):
-        self.t0 = None
         super().__init__(prog, usage, description, exclude_io=True)
-        base.add_batch_alloc_args(self.parser)
         self.parser.add_argument(
             "-v",
             "--verbose",
@@ -44,23 +42,13 @@ class AllocCmd(base.MiniCmd):
         )
 
     def init_jobspec(self, args):
-        #  If number of slots not specified, then set it to node count
-        #   if set, otherwise raise an error.
-        if not args.nslots:
-            if not args.nodes:
-                raise ValueError("Number of slots to allocate must be specified")
-            args.nslots = args.nodes
-            args.exclusive = True
+        self.init_common(args)
 
         #  For --bg, do not run an rc2 (initial program) unless
         #    the user explicitly specified COMMAND:
         if args.bg and not args.COMMAND:
             args.broker_opts = args.broker_opts or []
             args.broker_opts.append("-Sbroker.rc2_none=1")
-
-        if args.dump:
-            args.broker_opts = args.broker_opts or []
-            args.broker_opts.append("-Scontent.dump=" + args.dump)
 
         jobspec = flux.job.JobspecV1.from_nest_command(
             command=args.COMMAND,
@@ -72,6 +60,8 @@ class AllocCmd(base.MiniCmd):
             exclusive=args.exclusive,
             conf=args.conf.config,
         )
+
+        self.update_jobspec_common(args, jobspec)
 
         #  For --bg, always allocate a pty, but not interactive,
         #   since an interactive pty causes the job shell to hang around
