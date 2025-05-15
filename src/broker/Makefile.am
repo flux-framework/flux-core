@@ -36,6 +36,8 @@ libbroker_la_SOURCES = \
 	modservice.h \
 	overlay.h \
 	overlay.c \
+	bizcard.h \
+	bizcard.c \
 	service.h \
 	service.c \
 	attr.h \
