@@ -42,6 +42,7 @@
 #include "overlay.h"
 #include "attr.h"
 #include "trace.h"
+#include "bizcard.h"
 
 /* How long to wait (seconds) for a peer broker's TCP ACK before disconnecting.
  * This can be configured via TOML and on the broker command line.
@@ -172,7 +173,7 @@ struct overlay {
 
     bool shutdown_in_progress;  // no new downstream connections permitted
     void *bind_zsock;           // NULL if no downstream peers
-    char *bind_uri;
+    struct bizcard *bizcard;
     flux_watcher_t *bind_w;
     struct child *children;
     int child_count;
@@ -723,7 +724,12 @@ int overlay_control_start (struct overlay *ov)
 
 const char *overlay_get_bind_uri (struct overlay *ov)
 {
-    return ov->bind_uri;
+    return bizcard_uri_first (ov->bizcard);
+}
+
+const struct bizcard *overlay_get_bizcard (struct overlay *ov)
+{
+    return ov ? ov->bizcard : NULL;
 }
 
 /* Log a failure to send tracker EHOSTUNREACH response.  Suppress logging
@@ -1463,6 +1469,31 @@ static void zaplogger (int severity, const char *message, void *arg)
     flux_log (ov->h, severity, "%s", message);
 }
 
+static int bind_uri (struct overlay *ov, const char *uri)
+{
+    char *new_uri;
+    if (zmq_bind (ov->bind_zsock, uri) < 0)
+        return -1;
+    /* Capture URI after zmq_bind() processing, so it reflects expanded
+     * wildcards and normalized addresses.
+     */
+    if (zgetsockopt_str (ov->bind_zsock, ZMQ_LAST_ENDPOINT, &new_uri) < 0)
+        return -1;
+    /* Record the concretized URI in the business card for sharing with peers.
+     */
+    if (bizcard_uri_append (ov->bizcard, new_uri) < 0) {
+        ERRNO_SAFE_WRAP (free, new_uri);
+        return -1;
+    }
+    /* Ensure that any AF_UNIX sockets are unlinked when the broker exits,
+     * but only if they begin with '/'.  (Abstract sockets begin with '@')
+     */
+    if (strstarts (new_uri, "ipc:///"))
+        cleanup_push_string (cleanup_file, new_uri + 6);
+    free (new_uri);
+    return 0;
+}
+
 int overlay_bind (struct overlay *ov, const char *uri)
 {
     if (!ov->h || ov->rank == FLUX_NODEID_ANY || ov->bind_zsock) {
@@ -1519,17 +1550,8 @@ int overlay_bind (struct overlay *ov, const char *uri)
         log_err ("error setting curve socket options");
         return -1;
     }
-    if (zmq_bind (ov->bind_zsock, uri) < 0) {
+    if (bind_uri (ov, uri) < 0) {
         log_err ("error binding to %s", uri);
-        return -1;
-    }
-    /* Capture URI after zmq_bind() processing, so it reflects expanded
-     * wildcards and normalized addresses.
-     */
-    if (zgetsockopt_str (ov->bind_zsock,
-                         ZMQ_LAST_ENDPOINT,
-                         &ov->bind_uri) < 0) {
-        log_err ("error obtaining concretized bind URI");
         return -1;
     }
     if (!(ov->bind_w = zmqutil_watcher_create (ov->reactor,
@@ -1541,11 +1563,6 @@ int overlay_bind (struct overlay *ov, const char *uri)
         return -1;
     }
     flux_watcher_start (ov->bind_w);
-    /* Ensure that ipc files are removed when the broker exits.
-     */
-    char *ipc_path = strstr (ov->bind_uri, "ipc://");
-    if (ipc_path)
-        cleanup_push_string (cleanup_file, ipc_path + 6);
     return 0;
 }
 
@@ -1554,10 +1571,15 @@ int overlay_bind (struct overlay *ov, const char *uri)
 void overlay_shutdown (struct overlay *overlay, bool unbind)
 {
     overlay->shutdown_in_progress = true;
-    if (unbind) {
-        if (overlay->bind_zsock && overlay->bind_uri)
-            if (zmq_unbind (overlay->bind_zsock, overlay->bind_uri) < 0)
-                flux_log (overlay->h, LOG_ERR, "zmq_unbind failed");
+
+    if (unbind && overlay->bind_zsock) {
+        const char *uri;
+        uri = bizcard_uri_first (overlay->bizcard);
+        while (uri) {
+            if (zmq_unbind (overlay->bind_zsock, uri) < 0)
+                flux_log (overlay->h, LOG_ERR, "zmq_unbind %s failed", uri);
+            uri = bizcard_uri_next (overlay->bizcard);
+        }
     }
 }
 
@@ -2414,7 +2436,7 @@ void overlay_destroy (struct overlay *ov)
         free (ov->parent.pubkey);
         zmqutil_monitor_destroy (ov->parent.monitor);
 
-        free (ov->bind_uri);
+        bizcard_decref (ov->bizcard);
         zmq_close (ov->bind_zsock);
         flux_watcher_destroy (ov->bind_w);
         zmqutil_monitor_destroy (ov->bind_monitor);
@@ -2582,6 +2604,8 @@ struct overlay *overlay_create (flux_t *h,
         log_err ("could not create curve certificate");
         goto error;
     }
+    if (!(ov->bizcard = bizcard_create (hostname, cert_public_txt (ov->cert))))
+        goto error;
     if (!(ov->health_requests = flux_msglist_create ())
         || !(ov->trace_requests = flux_msglist_create ()))
         goto error;

@@ -16,6 +16,7 @@
 
 #include "attr.h"
 #include "topology.h"
+#include "bizcard.h"
 
 typedef enum {
     OVERLAY_ANY = 0,
@@ -98,6 +99,7 @@ int overlay_get_child_peer_count (struct overlay *ov);
 struct idset *overlay_get_child_peer_idset (struct overlay *ov);
 const char *overlay_get_bind_uri (struct overlay *ov);
 const char *overlay_get_parent_uri (struct overlay *ov);
+const struct bizcard *overlay_get_bizcard (struct overlay *ov);
 int overlay_set_parent_uri (struct overlay *ov, const char *uri);
 bool overlay_parent_error (struct overlay *ov);
 void overlay_set_version (struct overlay *ov, int version); // test only
