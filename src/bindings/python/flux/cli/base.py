@@ -547,7 +547,6 @@ class Xcmd:
         "flags": "--flags=",
         "begin_time": "--begin-time=",
         "signal": "--signal=",
-        "taskmap": "--taskmap=",
     }
 
     class Xinput:
