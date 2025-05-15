@@ -648,11 +648,11 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
     flux_future_t *f = NULL;
     flux_t *h;
 
-    if ((n = optparse_option_index (p)) < argc - 1) {
+    if ((n = optparse_option_index (p)) != (argc - 1)) {
         optparse_print_usage (p);
         exit (1);
     }
-    service = n < argc ? argv[n++] : "broker";
+    service = argv[n];
     nodeid = FLUX_NODEID_ANY;
 
     if (!(h = flux_open (NULL, 0)))
