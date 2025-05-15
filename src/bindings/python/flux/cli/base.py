@@ -1657,71 +1657,88 @@ class SubmitBulkCmd(SubmitBaseCmd):
         self.run_and_exit()
 
 
-def add_batch_alloc_args(parser):
-    """
-    Add "batch"-specific resource allocation arguments to parser object
-    which deal in slots instead of tasks.
-    """
-    parser.add_argument(
-        "--conf",
-        metavar="CONF",
-        default=BatchConfig(),
-        action=ConfAction,
-        help="Set configuration for a child Flux instance. CONF may be a "
-        + "multiline string in JSON or TOML, a configuration key=value, a "
-        + "path to a JSON or TOML file, or a configuration loaded by name "
-        + "from a standard search path. This option may specified multiple "
-        + "times, in which case the config is iteratively updated.",
-    )
-    parser.add_argument(
-        "--broker-opts",
-        metavar="OPTS",
-        default=None,
-        action="append",
-        help="Pass options to flux brokers",
-    )
-    parser.add_argument(
-        "--dump",
-        nargs="?",
-        const="flux-{{jobid}}-dump.tgz",
-        metavar="FILE",
-        help="Archive KVS on exit",
-    )
-    parser.add_argument(
-        "-n",
-        "--nslots",
-        type=int,
-        metavar="N",
-        help="Number of total resource slots requested."
-        + " The size of a resource slot may be specified via the"
-        + " -c, --cores-per-slot and -g, --gpus-per-slot options."
-        + " The default slot size is 1 core.",
-    )
-    parser.add_argument(
-        "-c",
-        "--cores-per-slot",
-        type=int,
-        metavar="N",
-        default=1,
-        help="Number of cores to allocate per slot",
-    )
-    parser.add_argument(
-        "-g",
-        "--gpus-per-slot",
-        type=int,
-        metavar="N",
-        help="Number of GPUs to allocate per slot",
-    )
-    parser.add_argument(
-        "-N",
-        "--nodes",
-        type=int,
-        metavar="N",
-        help="Distribute allocated resource slots across N individual nodes",
-    )
-    parser.add_argument(
-        "-x",
-        "--exclusive",
-        action="store_true",
-        help="With -N, --nodes, allocate nodes exclusively",
-    )
+class BatchAllocCmd(MiniCmd):
+    def __init__(self, prog, usage=None, description=None, exclude_io=True):
+        self.t0 = None
+        super().__init__(prog, usage, description, exclude_io)
+        self.parser.add_argument(
+            "--conf",
+            metavar="CONF",
+            default=BatchConfig(),
+            action=ConfAction,
+            help="Set configuration for a child Flux instance. CONF may be a "
+            + "multiline string in JSON or TOML, a configuration key=value, a "
+            + "path to a JSON or TOML file, or a configuration loaded by name "
+            + "from a standard search path. This option may specified multiple "
+            + "times, in which case the config is iteratively updated.",
+        )
+        self.parser.add_argument(
+            "--broker-opts",
+            metavar="OPTS",
+            default=None,
+            action="append",
+            help="Pass options to flux brokers",
+        )
+        self.parser.add_argument(
+            "--dump",
+            nargs="?",
+            const="flux-{{jobid}}-dump.tgz",
+            metavar="FILE",
+            help="Archive KVS on exit",
+        )
+        self.parser.add_argument(
+            "-n",
+            "--nslots",
+            type=int,
+            metavar="N",
+            help="Number of total resource slots requested."
+            + " The size of a resource slot may be specified via the"
+            + " -c, --cores-per-slot and -g, --gpus-per-slot options."
+            + " The default slot size is 1 core.",
+        )
+        self.parser.add_argument(
+            "-c",
+            "--cores-per-slot",
+            type=int,
+            metavar="N",
+            default=1,
+            help="Number of cores to allocate per slot",
+        )
+        self.parser.add_argument(
+            "-g",
+            "--gpus-per-slot",
+            type=int,
+            metavar="N",
+            help="Number of GPUs to allocate per slot",
+        )
+        self.parser.add_argument(
+            "-N",
+            "--nodes",
+            type=int,
+            metavar="N",
+            help="Distribute allocated resource slots across N individual nodes",
+        )
+        self.parser.add_argument(
+            "-x",
+            "--exclusive",
+            action="store_true",
+            help="With -N, --nodes, allocate nodes exclusively",
+        )
+
+    def init_common(self, args):
+        """Common initialization code for batch/alloc"""
+        #  If number of slots not specified, then set it to node count
+        #   if set, otherwise raise an error.
+        if not args.nslots:
+            if not args.nodes:
+                raise ValueError("Number of slots to allocate must be specified")
+            args.nslots = args.nodes
+            args.exclusive = True
+
+        if args.dump:
+            args.broker_opts = args.broker_opts or []
+            args.broker_opts.append("-Scontent.dump=" + args.dump)
+
+    def update_jobspec_common(self, args, jobspec):
+        """Common jobspec update code for batch/alloc"""
+        pass
