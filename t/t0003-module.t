@@ -206,6 +206,11 @@ test_expect_success 'flux module stats --rusage --parse maxrss works' '
 	test "$RSS" -gt 0
 '
 
+test_expect_success 'flux module stats with no args is an error' '
+	test_must_fail flux module stats 2> usage.out &&
+	grep -i "usage" usage.out
+'
+
 # try to hit some error cases
 
 test_expect_success 'flux module with no arguments prints usage and fails' '
