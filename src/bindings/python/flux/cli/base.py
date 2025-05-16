@@ -1662,6 +1662,9 @@ class BatchAllocCmd(MiniCmd):
         self.t0 = None
         super().__init__(prog, usage, description, exclude_io)
         self.parser.add_argument(
+            "--add-brokers", default=0, type=int, help=argparse.SUPPRESS
+        )
+        self.parser.add_argument(
             "--conf",
             metavar="CONF",
             default=BatchConfig(),
@@ -1739,6 +1742,35 @@ class BatchAllocCmd(MiniCmd):
             args.broker_opts = args.broker_opts or []
             args.broker_opts.append("-Scontent.dump=" + args.dump)
 
+        if args.add_brokers > 0:
+            if not args.nodes:
+                raise ValueError(
+                    "--add-brokers may only be specified with -N, --nnodes"
+                )
+            nbrokers = args.add_brokers
+            nnodes = args.nodes
+
+            # Force update taskmap with extra ranks on nodeid 0:
+            args.taskmap = f"manual:[[0,1,{1+nbrokers},1],[1,{nnodes-1},1,1]]"
+
+            # Exclude the additional brokers via configuration. However,
+            # don't throw away any ranks already excluded bythe user.
+            # Note: raises an exception if user excluded by hostname (unlikely)
+            exclude = IDset(args.conf.get("resource.exclude", default="")).set(
+                1, nbrokers
+            )
+            args.conf.update(f'resource.exclude="{exclude}"')
+
     def update_jobspec_common(self, args, jobspec):
         """Common jobspec update code for batch/alloc"""
-        pass
+        # If args.add_brokers is being used, update jobspec task count
+        # to accurately reflect the updated task count.
+        if args.add_brokers > 0:
+            # Note: args.nodes required with add_brokers already checked above
+            total_tasks = args.nodes + args.add_brokers
+
+            # Overwrite task count with new total_tasks:
+            jobspec.tasks[0]["count"] = {"total": total_tasks}
+
+            # remove per-resource shell option which is no longer necessary:
+            del jobspec.attributes["system"]["shell"]["options"]["per-resource"]
