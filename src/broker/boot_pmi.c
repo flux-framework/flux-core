@@ -464,7 +464,7 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
 
         if (format_bind_uri (buf, sizeof (buf), attrs, info.rank) < 0)
             goto error;
-        if (overlay_bind (overlay, buf) < 0)
+        if (overlay_bind (overlay, buf, NULL) < 0)
             goto error;
     }
     /* Each broker writes a business card consisting of hostname,

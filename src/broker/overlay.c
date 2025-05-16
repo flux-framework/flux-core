@@ -1494,7 +1494,7 @@ static int bind_uri (struct overlay *ov, const char *uri)
     return 0;
 }
 
-int overlay_bind (struct overlay *ov, const char *uri)
+int overlay_bind (struct overlay *ov, const char *uri, const char *uri2)
 {
     if (!ov->h || ov->rank == FLUX_NODEID_ANY || ov->bind_zsock) {
         errno = EINVAL;
@@ -1552,6 +1552,10 @@ int overlay_bind (struct overlay *ov, const char *uri)
     }
     if (bind_uri (ov, uri) < 0) {
         log_err ("error binding to %s", uri);
+        return -1;
+    }
+    if (uri2 && bind_uri (ov, uri2) < 0) {
+        log_err ("error binding to %s", uri2);
         return -1;
     }
     if (!(ov->bind_w = zmqutil_watcher_create (ov->reactor,
