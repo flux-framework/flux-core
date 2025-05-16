@@ -47,6 +47,7 @@ int cmd_move (optparse_t *p, int argc, char **argv);
 int cmd_dir (optparse_t *p, int argc, char **argv);
 int cmd_ls (optparse_t *p, int argc, char **argv);
 int cmd_getroot (optparse_t *p, int argc, char **argv);
+int cmd_sync (optparse_t *p, int argc, char **argv);
 int cmd_eventlog (optparse_t *p, int argc, char **argv);
 
 static int get_window_width (optparse_t *p, int fd);
@@ -372,6 +373,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_getroot,
       0,
       getroot_opts
+    },
+    { "sync",
+      NULL,
+      "sync content and checkpoint to disk",
+      cmd_sync,
+      0,
+      NULL
     },
     { "eventlog",
       NULL,
@@ -1824,6 +1832,37 @@ int cmd_getroot (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_future_then");
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
+    flux_close (h);
+    return (0);
+}
+
+/* We could call kvs_checkpoint_commit() for syncing, however we
+ * choose to go with FLUX_KVS_SYNC and an empty transaction.  That way
+ * this "transaction" goes into the same queue as other KVS
+ * transactions and syncs after all previously submitted KVS
+ * transactions.  In contrast, kvs_checkpoint_commit() operates
+ * outside of the KVS transaction queue.
+ */
+int cmd_sync (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
+
+    if (optindex != argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (!(f = flux_kvs_commit (h, NULL, FLUX_KVS_SYNC, txn))
+        || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
     flux_close (h);
     return (0);
 }

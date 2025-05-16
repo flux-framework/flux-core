@@ -29,8 +29,8 @@ test_expect_success 'create some kvs content' '
 '
 # N.B. startlog commands in rc scripts normally ensures a checkpoint
 # exists but we do this just to be extra sure
-test_expect_success 'call --sync to ensure we have checkpointed' '
-	flux kvs put --sync dir.sync=foo
+test_expect_success 'call sync to ensure we have checkpointed' '
+	flux kvs sync
 '
 test_expect_success 'save some treeobjs for later' '
 	flux kvs get --treeobj dir.b > dirb.out &&
