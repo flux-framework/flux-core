@@ -120,30 +120,43 @@ static int set_broker_mapping_attr (struct upmi *upmi,
     return rc;
 }
 
-/* Check if IPC can be used to communicate.
- * Currently this only goes so far as to check if the process mapping of
- * brokers has all brokers on the same node.  We could check if all peers
- * are on the same node, but given how the TBON maps to rank assignments,
- * it is fairly unlikely.
+/* Count the number of TBON children that could be reached by IPC.
  */
-static bool use_ipc (attr_t *attrs)
+static int count_local_children (attr_t *attrs,
+                                 int *child_ranks,
+                                 int child_count,
+                                 int rank)
 {
-    bool result = false;
-    struct taskmap *map = NULL;
     const char *val;
+    struct taskmap *map;
+    int nodeid;
+    int count = 0;
 
-    if (attr_get (attrs, "tbon.prefertcp", &val, NULL) == 0
-        && !streq (val, "0"))
-        goto done;
-    if (attr_get (attrs, "broker.mapping", &val, NULL) < 0 || !val)
-        goto done;
-    if (!(map = taskmap_decode (val, NULL)))
-        goto done;
-    if (taskmap_nnodes (map) == 1)
-        result = true;
-done:
+    if (attr_get (attrs, "broker.mapping", &val, NULL) < 0
+        || val == NULL
+        || !(map = taskmap_decode (val, NULL)))
+        return 0;
+    nodeid = taskmap_nodeid (map, rank); // this broker's nodeid
+    if (nodeid >= 0) {
+        for (int i = 0; i < child_count; i++) {
+            if (taskmap_nodeid (map, child_ranks[i]) == nodeid)
+                count++;
+        }
+    }
     taskmap_destroy (map);
-    return result;
+    return count;
+}
+
+/* Check if TCP should be used, even if IPC could work.
+ */
+static bool get_prefer_tcp (attr_t *attrs)
+{
+    const char *val;
+    if (attr_get (attrs, "tbon.prefertcp", &val, NULL) < 0
+        || val == NULL
+        || streq (val, "0"))
+        return false;
+    return true;
 }
 
 /* Build a tcp:// URI with a wildcard port, taking into account the value of
@@ -465,29 +478,40 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
             goto error;
     }
 
-    /* If there are to be downstream peers, then bind to socket.
+    /* If there are to be downstream peers, then bind to a socket.
+     * Depending on locality of children, use tcp://, ipc://, or both.
      */
     if (child_count > 0) {
-        char uri[1024];
+        bool prefer_tcp = get_prefer_tcp (attrs);
+        int nlocal;
+        char tcp[1024];
+        char ipc[1024];
 
-        if (use_ipc (attrs)) {
-            if (format_ipc_uri (uri,
-                                sizeof (uri),
-                                attrs,
-                                info.rank,
-                                &error) < 0) {
-                log_err ("%s", error.text);
+        nlocal = count_local_children (attrs,
+                                       child_ranks,
+                                       child_count,
+                                       info.rank);
+
+        if (format_tcp_uri (tcp, sizeof (tcp), attrs, &error) < 0) {
+            log_err ("%s", error.text);
+            goto error;
+        }
+        if (format_ipc_uri (ipc, sizeof (ipc), attrs, info.rank, &error) < 0) {
+            log_err ("%s", error.text);
+            goto error;
+        }
+        if (prefer_tcp || nlocal == 0) {
+            if (overlay_bind (overlay, tcp, NULL) < 0)
                 goto error;
-            }
+        }
+        else if (!prefer_tcp && nlocal == child_count) {
+            if (overlay_bind (overlay, ipc, NULL) < 0)
+                goto error;
         }
         else {
-            if (format_tcp_uri (uri, sizeof (uri), attrs, &error) < 0) {
-                log_err ("%s", error.text);
+            if (overlay_bind (overlay, tcp, ipc) < 0)
                 goto error;
-            }
         }
-        if (overlay_bind (overlay, uri, NULL) < 0)
-            goto error;
     }
 
     /* Each broker writes a business card consisting of hostname,
@@ -524,12 +548,17 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
      */
     if (info.rank > 0) {
         int parent_rank = topology_get_parent (topo);
+        const char *uri = NULL;
 
         if (get_bizcard (upmi, cache, parent_rank, &bc, &error) < 0) {
             log_msg ("%s", error.text);
             goto error;
         }
-        if (overlay_set_parent_uri (overlay, bizcard_uri_first (bc)) < 0) {
+        if (!get_prefer_tcp (attrs) && streq (bizcard_hostname (bc), hostname))
+            uri = bizcard_uri_find (bc, "ipc://");
+        if (!uri)
+            uri = bizcard_uri_find (bc, NULL);
+        if (overlay_set_parent_uri (overlay, uri) < 0) {
             log_err ("overlay_set_parent_uri");
             goto error;
         }
