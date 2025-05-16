@@ -146,58 +146,66 @@ done:
     return result;
 }
 
-/* Build URI for broker TBON to bind to.
- * If IPC, use '<rundir>/tbon-<rank>' which should be unique if there are
- * multiple brokers and/or multiple instances per node.
- * If using TCP, choose the address to be the one associated with the default
- * route (see src/common/libutil/ipaddr.h), and a randomly chosen port.
+/* Build a tcp:// URI with a wildcard port, taking into account the value of
+ * tbon.interface-hint ("hostname", "default-route", or iface name/wildcard).
  */
-static int format_bind_uri (char *buf, int bufsz, attr_t *attrs, int rank)
+static int format_tcp_uri (char *buf,
+                           size_t size,
+                           attr_t *attrs,
+                           flux_error_t *error)
 {
-    if (use_ipc (attrs)) {
-        const char *rundir;
+    const char *hint;
+    int flags = 0;
+    const char *interface = NULL;
+    char ipaddr[_POSIX_HOST_NAME_MAX + 1];
 
-        if (attr_get (attrs, "rundir", &rundir, NULL) < 0) {
-            log_err ("rundir attribute is not set");
-            return -1;
-        }
-        if (snprintf (buf, bufsz, "ipc://%s/tbon-%d", rundir, rank) >= bufsz)
-            goto overflow;
+    if (attr_get (attrs, "tbon.interface-hint", &hint, NULL) < 0) {
+        log_err ("tbon.interface-hint attribute is not set");
+        return -1;
     }
-    else {
-        char ipaddr[_POSIX_HOST_NAME_MAX + 1];
-        flux_error_t error;
-        int flags = 0;
-        const char *interface = NULL;
-        const char *hint;
-
-        if (attr_get (attrs, "tbon.interface-hint", &hint, NULL) < 0) {
-            log_err ("tbon.interface-hint attribute is not set");
-            return -1;
-        }
-        if (streq (hint, "hostname"))
-            flags |= IPADDR_HOSTNAME;
-        else if (streq (hint, "default-route"))
-            ; // default behavior
-        else
-            interface = hint;
-        if (getenv ("FLUX_IPADDR_V6"))
-            flags |= IPADDR_V6;
-        if (ipaddr_getprimary (ipaddr,
-                               sizeof (ipaddr),
-                               flags,
-                               interface,
-                               &error) < 0) {
-            log_msg ("%s", error.text);
-            return -1;
-        }
-        if (snprintf (buf, bufsz, "tcp://%s:*", ipaddr) >= bufsz)
-            goto overflow;
+    if (streq (hint, "hostname"))
+        flags |= IPADDR_HOSTNAME;
+    else if (streq (hint, "default-route"))
+        ; // default behavior
+    else
+        interface = hint;
+    if (getenv ("FLUX_IPADDR_V6"))
+        flags |= IPADDR_V6;
+    if (ipaddr_getprimary (ipaddr,
+                           sizeof (ipaddr),
+                           flags,
+                           interface,
+                           error) < 0) {
+        return -1;
+    }
+    if (snprintf (buf, size, "tcp://%s:*", ipaddr) >= size) {
+        errno = EOVERFLOW;
+        errprintf (error, "tcp:// uri buffer overflow");
+        return -1;
     }
     return 0;
-overflow:
-    log_msg ("buffer overflow while building bind URI");
-    return -1;
+}
+
+/* Build an ipc:// uri consisting of rundir + "tbon-<rank>"
+ */
+static int format_ipc_uri (char *buf,
+                           size_t size,
+                           attr_t *attrs,
+                           int rank,
+                           flux_error_t *error)
+{
+    const char *rundir;
+
+    if (attr_get (attrs, "rundir", &rundir, NULL) < 0) {
+        errprintf (error, "rundir attribute is not set");
+        return -1;
+    }
+    if (snprintf (buf, size, "ipc://%s/tbon-%d", rundir, rank) >= size) {
+        errno = EOVERFLOW;
+        errprintf (error, "ipc:// uri buffer overflow");
+        return -1;
+    }
+    return 0;
 }
 
 static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
@@ -460,13 +468,28 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
     /* If there are to be downstream peers, then bind to socket.
      */
     if (child_count > 0) {
-        char buf[1024];
+        char uri[1024];
 
-        if (format_bind_uri (buf, sizeof (buf), attrs, info.rank) < 0)
-            goto error;
-        if (overlay_bind (overlay, buf, NULL) < 0)
+        if (use_ipc (attrs)) {
+            if (format_ipc_uri (uri,
+                                sizeof (uri),
+                                attrs,
+                                info.rank,
+                                &error) < 0) {
+                log_err ("%s", error.text);
+                goto error;
+            }
+        }
+        else {
+            if (format_tcp_uri (uri, sizeof (uri), attrs, &error) < 0) {
+                log_err ("%s", error.text);
+                goto error;
+            }
+        }
+        if (overlay_bind (overlay, uri, NULL) < 0)
             goto error;
     }
+
     /* Each broker writes a business card consisting of hostname,
      * public key, and URIs (if any).
      */
