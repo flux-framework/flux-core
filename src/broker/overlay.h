@@ -136,9 +136,9 @@ bool overlay_peer_is_torpid (struct overlay *ov, uint32_t rank);
 
 /* Broker should call overlay_bind() if there are children.  This may happen
  * before any peers are authorized as long as they are authorized before they
- * try to connect.
+ * try to connect.  Note: uri2 (a secondary endpoint) MAY be NULL
  */
-int overlay_bind (struct overlay *ov, const char *uri);
+int overlay_bind (struct overlay *ov, const char *uri, const char *uri2);
 
 /* Broker should call overlay_connect(), after overlay_set_parent_uri()
  * and overlay_set_parent_pubkey(), if there is a parent.
