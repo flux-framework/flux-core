@@ -40,7 +40,7 @@ from flux.constraint.parser import ConstraintParser, ConstraintSyntaxError
 from flux.idset import IDset
 from flux.job import JobspecV1, JobWatcher
 from flux.progress import ProgressBar
-from flux.util import dict_merge, set_treedict
+from flux.util import dict_merge, get_treedict, set_treedict
 
 LOGGER = logging.getLogger("flux")
 
@@ -496,6 +496,12 @@ class BatchConfig:
             return self.update_file(value, extension)
         return self.update_named_config(value)
 
+    def get(self, key, default=None):
+        """
+        Get a value from the current config using dotted key form
+        """
+        return get_treedict(self.config or {}, key, default=default)
+
 
 class ConfAction(argparse.Action):
     """Handle batch/alloc --conf option"""
@@ -547,7 +553,6 @@ class Xcmd:
         "flags": "--flags=",
         "begin_time": "--begin-time=",
         "signal": "--signal=",
-        "taskmap": "--taskmap=",
     }
 
     class Xinput:
@@ -1652,71 +1657,120 @@ class SubmitBulkCmd(SubmitBaseCmd):
         self.run_and_exit()
 
 
-def add_batch_alloc_args(parser):
-    """
-    Add "batch"-specific resource allocation arguments to parser object
-    which deal in slots instead of tasks.
-    """
-    parser.add_argument(
-        "--conf",
-        metavar="CONF",
-        default=BatchConfig(),
-        action=ConfAction,
-        help="Set configuration for a child Flux instance. CONF may be a "
-        + "multiline string in JSON or TOML, a configuration key=value, a "
-        + "path to a JSON or TOML file, or a configuration loaded by name "
-        + "from a standard search path. This option may specified multiple "
-        + "times, in which case the config is iteratively updated.",
-    )
-    parser.add_argument(
-        "--broker-opts",
-        metavar="OPTS",
-        default=None,
-        action="append",
-        help="Pass options to flux brokers",
-    )
-    parser.add_argument(
-        "--dump",
-        nargs="?",
-        const="flux-{{jobid}}-dump.tgz",
-        metavar="FILE",
-        help="Archive KVS on exit",
-    )
-    parser.add_argument(
-        "-n",
-        "--nslots",
-        type=int,
-        metavar="N",
-        help="Number of total resource slots requested."
-        + " The size of a resource slot may be specified via the"
-        + " -c, --cores-per-slot and -g, --gpus-per-slot options."
-        + " The default slot size is 1 core.",
-    )
-    parser.add_argument(
-        "-c",
-        "--cores-per-slot",
-        type=int,
-        metavar="N",
-        default=1,
-        help="Number of cores to allocate per slot",
-    )
-    parser.add_argument(
-        "-g",
-        "--gpus-per-slot",
-        type=int,
-        metavar="N",
-        help="Number of GPUs to allocate per slot",
-    )
-    parser.add_argument(
-        "-N",
-        "--nodes",
-        type=int,
-        metavar="N",
-        help="Distribute allocated resource slots across N individual nodes",
-    )
-    parser.add_argument(
-        "-x",
-        "--exclusive",
-        action="store_true",
-        help="With -N, --nodes, allocate nodes exclusively",
-    )
+class BatchAllocCmd(MiniCmd):
+    def __init__(self, prog, usage=None, description=None, exclude_io=True):
+        self.t0 = None
+        super().__init__(prog, usage, description, exclude_io)
+        self.parser.add_argument(
+            "--add-brokers", default=0, type=int, help=argparse.SUPPRESS
+        )
+        self.parser.add_argument(
+            "--conf",
+            metavar="CONF",
+            default=BatchConfig(),
+            action=ConfAction,
+            help="Set configuration for a child Flux instance. CONF may be a "
+            + "multiline string in JSON or TOML, a configuration key=value, a "
+            + "path to a JSON or TOML file, or a configuration loaded by name "
+            + "from a standard search path. This option may specified multiple "
+            + "times, in which case the config is iteratively updated.",
+        )
+        self.parser.add_argument(
+            "--broker-opts",
+            metavar="OPTS",
+            default=None,
+            action="append",
+            help="Pass options to flux brokers",
+        )
+        self.parser.add_argument(
+            "--dump",
+            nargs="?",
+            const="flux-{{jobid}}-dump.tgz",
+            metavar="FILE",
+            help="Archive KVS on exit",
+        )
+        self.parser.add_argument(
+            "-n",
+            "--nslots",
+            type=int,
+            metavar="N",
+            help="Number of total resource slots requested."
+            + " The size of a resource slot may be specified via the"
+            + " -c, --cores-per-slot and -g, --gpus-per-slot options."
+            + " The default slot size is 1 core.",
+        )
+        self.parser.add_argument(
+            "-c",
+            "--cores-per-slot",
+            type=int,
+            metavar="N",
+            default=1,
+            help="Number of cores to allocate per slot",
+        )
+        self.parser.add_argument(
+            "-g",
+            "--gpus-per-slot",
+            type=int,
+            metavar="N",
+            help="Number of GPUs to allocate per slot",
+        )
+        self.parser.add_argument(
+            "-N",
+            "--nodes",
+            type=int,
+            metavar="N",
+            help="Distribute allocated resource slots across N individual nodes",
+        )
+        self.parser.add_argument(
+            "-x",
+            "--exclusive",
+            action="store_true",
+            help="With -N, --nodes, allocate nodes exclusively",
+        )
+
+    def init_common(self, args):
+        """Common initialization code for batch/alloc"""
+        #  If number of slots not specified, then set it to node count
+        #   if set, otherwise raise an error.
+        if not args.nslots:
+            if not args.nodes:
+                raise ValueError("Number of slots to allocate must be specified")
+            args.nslots = args.nodes
+            args.exclusive = True
+
+        if args.dump:
+            args.broker_opts = args.broker_opts or []
+            args.broker_opts.append("-Scontent.dump=" + args.dump)
+
+        if args.add_brokers > 0:
+            if not args.nodes:
+                raise ValueError(
+                    "--add-brokers may only be specified with -N, --nnodes"
+                )
+            nbrokers = args.add_brokers
+            nnodes = args.nodes
+
+            # Force update taskmap with extra ranks on nodeid 0:
+            args.taskmap = f"manual:[[0,1,{1+nbrokers},1],[1,{nnodes-1},1,1]]"
+
+            # Exclude the additional brokers via configuration. However,
+            # don't throw away any ranks already excluded bythe user.
+            # Note: raises an exception if user excluded by hostname (unlikely)
+            exclude = IDset(args.conf.get("resource.exclude", default="")).set(
+                1, nbrokers
+            )
+            args.conf.update(f'resource.exclude="{exclude}"')
+
+    def update_jobspec_common(self, args, jobspec):
+        """Common jobspec update code for batch/alloc"""
+        # If args.add_brokers is being used, update jobspec task count
+        # to accurately reflect the updated task count.
+        if args.add_brokers > 0:
+            # Note: args.nodes required with add_brokers already checked above
+            total_tasks = args.nodes + args.add_brokers
+
+            # Overwrite task count with new total_tasks:
+            jobspec.tasks[0]["count"] = {"total": total_tasks}
+
+            # remove per-resource shell option which is no longer necessary:
+            del jobspec.attributes["system"]["shell"]["options"]["per-resource"]
