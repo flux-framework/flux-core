@@ -36,6 +36,7 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/librouter/rpc_track.h"
+#include "src/common/libflux/message_route.h" // for msg_route_sendto()
 #include "ccan/str/str.h"
 
 #include "overlay.h"
@@ -851,17 +852,11 @@ done:
     return rc;
 }
 
-/* Push child->uuid onto the message, then pop it off again after sending.
- */
-static int overlay_mcast_child_one (struct overlay *ov,
-                                    flux_msg_t *msg,
-                                    struct child *child)
+// callback for msg_route_sendto()
+static int overlay_mcast_send (const flux_msg_t *msg, void *arg)
 {
-    if (flux_msg_route_push (msg, child->uuid) < 0)
-        return -1;
-    int rc = overlay_sendmsg_child (ov, msg);
-    (void)flux_msg_route_delete_last (msg);
-    return rc;
+    struct overlay *ov = arg;
+    return overlay_sendmsg_child (ov, msg);
 }
 
 static void overlay_mcast_child (struct overlay *ov, flux_msg_t *msg)
@@ -873,7 +868,10 @@ static void overlay_mcast_child (struct overlay *ov, flux_msg_t *msg)
 
     foreach_overlay_child (ov, child) {
         if (subtree_is_online (child->status)) {
-            if (overlay_mcast_child_one (ov, msg, child) < 0) {
+            if (msg_route_sendto (msg,
+                                  child->uuid,
+                                  overlay_mcast_send,
+                                  ov) < 0) {
                 if (errno != EHOSTUNREACH) {
                     flux_log_error (ov->h,
                                     "mcast error to child rank %lu",
