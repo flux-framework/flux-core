@@ -16,6 +16,7 @@
 
 #include "attr.h"
 #include "topology.h"
+#include "bizcard.h"
 
 typedef enum {
     OVERLAY_ANY = 0,
@@ -98,6 +99,7 @@ int overlay_get_child_peer_count (struct overlay *ov);
 struct idset *overlay_get_child_peer_idset (struct overlay *ov);
 const char *overlay_get_bind_uri (struct overlay *ov);
 const char *overlay_get_parent_uri (struct overlay *ov);
+const struct bizcard *overlay_get_bizcard (struct overlay *ov);
 int overlay_set_parent_uri (struct overlay *ov, const char *uri);
 bool overlay_parent_error (struct overlay *ov);
 void overlay_set_version (struct overlay *ov, int version); // test only
@@ -134,9 +136,9 @@ bool overlay_peer_is_torpid (struct overlay *ov, uint32_t rank);
 
 /* Broker should call overlay_bind() if there are children.  This may happen
  * before any peers are authorized as long as they are authorized before they
- * try to connect.
+ * try to connect.  Note: uri2 (a secondary endpoint) MAY be NULL
  */
-int overlay_bind (struct overlay *ov, const char *uri);
+int overlay_bind (struct overlay *ov, const char *uri, const char *uri2);
 
 /* Broker should call overlay_connect(), after overlay_set_parent_uri()
  * and overlay_set_parent_pubkey(), if there is a parent.
