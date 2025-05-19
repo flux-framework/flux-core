@@ -256,6 +256,47 @@ test_expect_success UTF8_LOCALE 'restore UTF-8 dump' '
 	    flux kvs get ƒuzzybunny)
 '
 
+# Cover value with a very large number of appends
+
+test_expect_success LONGTEST 'remove backing file and load content-sqlite' '
+	rm -f content.sqlite &&
+	flux module load content-sqlite
+'
+# N.B. from 1000 to 3000 instead of 0 to 2000, easier to debug errors
+# using fold(1) (i.e. all numbers same width)
+test_expect_success LONGTEST 'load kvs and create some kvs content' '
+	flux module load kvs &&
+	for i in `seq 1000 3000`; do
+	    flux kvs put --append bigval=${i}
+	done &&
+	flux kvs get bigval > bigval.exp
+'
+test_expect_success LONGTEST 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success LONGTEST 'dump default=kvs-primary checkpoint' '
+	flux dump --checkpoint bigval.tar
+'
+test_expect_success LONGTEST 'unload content-sqlite, remove backing, reload content-sqlite' '
+	flux module remove content-sqlite &&
+	rm -f content.sqlite &&
+	flux module load content-sqlite
+'
+test_expect_success LONGTEST 'restore content' '
+	flux restore --checkpoint bigval.tar
+'
+test_expect_success LONGTEST 'load kvs and check bigval value' '
+	flux module load kvs &&
+	flux kvs get bigval > bigval.out &&
+	test_cmp bigval.out bigval.exp
+'
+test_expect_success LONGTEST 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success LONGTEST 'unload content-sqlite' '
+	flux module remove content-sqlite
+'
+
 # Cover --size-limit
 
 test_expect_success 'create bigdump.tar with a 12M blob in it' '
