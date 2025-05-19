@@ -91,7 +91,8 @@ TESTS = test_attr.t \
 	test_boot_config.t \
 	test_runat.t \
 	test_overlay.t \
-	test_topology.t
+	test_topology.t \
+	test_bizcard.t
 
 test_ldadd = \
 	$(builddir)/libbroker.la \
@@ -148,5 +149,10 @@ test_topology_t_SOURCES = test/topology.c
 test_topology_t_CPPFLAGS = $(test_cppflags)
 test_topology_t_LDADD = $(test_ldadd)
 test_topology_t_LDFLAGS = $(test_ldflags)
+
+test_bizcard_t_SOURCES = test/bizcard.c
+test_bizcard_t_CPPFLAGS = $(test_cppflags)
+test_bizcard_t_LDADD = $(test_ldadd)
+test_bizcard_t_LDFLAGS = $(test_ldflags)
 
 EXTRA_DIST = README.md
