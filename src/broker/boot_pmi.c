@@ -78,73 +78,108 @@ error:
     return rc;
 }
 
-static char *pmi_mapping_to_taskmap (const char *s)
+static int create_singleton_taskmap (struct taskmap **mp,
+                                     flux_error_t *error)
 {
-    char *result;
-    flux_error_t error;
-    struct taskmap *map = taskmap_decode (s, &error);
-    if (!map) {
-        log_err ("failed to decode PMI_process_mapping: %s",
-                 error.text);
-        return NULL;
+    struct taskmap *map;
+    flux_error_t e;
+
+    if (!(map = taskmap_decode ("[[0,1,1,1]]", &e))) {
+        errprintf (error, "error creating singleton taskmap: %s", e.text);
+        return -1;
     }
-    result = taskmap_encode (map, 0);
-    taskmap_destroy (map);
-    return result;
+    *mp = map;
+    return 0;
+}
+
+/* Fetch key from the PMI server and decode it as a taskmap.
+ * Return -1 with error filled if a parse error occurs.
+ * Return 0 if map was properly parsed OR if it doesn't exist.
+ */
+static int fetch_taskmap_one (struct upmi *upmi,
+                              const char *key,
+                              struct taskmap **mp,
+                              flux_error_t *error)
+{
+    struct taskmap *map;
+    char *val;
+    flux_error_t e;
+
+    if (upmi_get (upmi, key, -1, &val, NULL) < 0) {
+        *mp = NULL;
+        return 0;
+    }
+    if (!(map = taskmap_decode (val, &e))) {
+        errprintf (error, "%s: error decoding %s", key, e.text);
+        free (val);
+        return -1;
+    }
+    free (val);
+    *mp = map;
+    return 0;
+}
+
+static int fetch_taskmap (struct upmi *upmi,
+                          struct taskmap **mp,
+                          flux_error_t *error)
+{
+    struct taskmap *map;
+    if (fetch_taskmap_one (upmi, "flux.taskmap", &map, error) < 0)
+        return -1;
+    if (map == NULL
+        && fetch_taskmap_one (upmi, "PMI_process_mapping", &map, error) < 0)
+        return -1;
+    *mp = map; // might be NULL - that is OK
+    return 0;
 }
 
 /* Set broker.mapping attribute from enclosing instance taskmap.
+ * It is not an error if the map is NULL.
  */
-static int set_broker_mapping_attr (struct upmi *upmi,
-                                    int size,
-                                    attr_t *attrs)
+static int set_broker_mapping_attr (attr_t *attrs, struct taskmap *map)
 {
     char *val = NULL;
-    int rc;
 
-    if (size == 1)
-        val = strdup ("[[0,1,1,1]]");
-    else {
-        /* First attempt to get flux.taskmap, falling back to
-         * PMI_process_mapping if this key is not available.
-         */
-        char *s;
-        if (upmi_get (upmi, "flux.taskmap", -1, &s, NULL) == 0
-            || upmi_get (upmi, "PMI_process_mapping", -1, &s, NULL) == 0) {
-            val = pmi_mapping_to_taskmap (s);
-            free (s);
-        }
+    if (map && !(val = taskmap_encode (map, 0)))
+        return -1;
+    if (attr_add (attrs, "broker.mapping", val, ATTR_IMMUTABLE) < 0) {
+        ERRNO_SAFE_WRAP (free, val);
+        return -1;
     }
-    rc = attr_add (attrs, "broker.mapping", val, ATTR_IMMUTABLE);
     free (val);
-    return rc;
+    return 0;
 }
 
 /* Count the number of TBON children that could be reached by IPC.
  */
-static int count_local_children (attr_t *attrs,
+static int count_local_children (struct taskmap *map,
                                  int *child_ranks,
                                  int child_count,
                                  int rank)
 {
-    const char *val;
-    struct taskmap *map;
-    int nodeid;
     int count = 0;
 
-    if (attr_get (attrs, "broker.mapping", &val, NULL) < 0
-        || val == NULL
-        || !(map = taskmap_decode (val, NULL)))
-        return 0;
-    nodeid = taskmap_nodeid (map, rank); // this broker's nodeid
-    if (nodeid >= 0) {
-        for (int i = 0; i < child_count; i++) {
-            if (taskmap_nodeid (map, child_ranks[i]) == nodeid)
-                count++;
+    if (map) {
+        int nodeid = taskmap_nodeid (map, rank); // this broker's nodeid
+        if (nodeid >= 0) {
+            for (int i = 0; i < child_count; i++) {
+                if (taskmap_nodeid (map, child_ranks[i]) == nodeid)
+                    count++;
+            }
         }
     }
-    taskmap_destroy (map);
     return count;
+}
+
+static bool ranks_are_peers (struct taskmap *map, int rank1, int rank2)
+{
+    int nid1;
+    int nid2;
+
+    if ((nid1 = taskmap_nodeid (map, rank1)) < 0
+        || (nid2 = taskmap_nodeid (map, rank2)) < 0)
+        return false;
+    return (nid1 == nid2 ? true : false);
 }
 
 /* Check if TCP should be used, even if IPC could work.
@@ -404,6 +439,7 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
     bool under_flux;
     const struct bizcard *bc;
     struct bizcache *cache = NULL;
+    struct taskmap *taskmap = NULL;
 
     // N.B. overlay_create() sets the tbon.topo attribute
     if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
@@ -441,10 +477,6 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
         log_err ("error setting tbon.interface-hint attribute");
         goto error;
     }
-    if (set_broker_mapping_attr (upmi, info.size, attrs) < 0) {
-        log_err ("error setting broker.mapping attribute");
-        goto error;
-    }
     if (!(topo = topology_create (topo_uri, info.size, &error))) {
         log_msg ("error creating '%s' topology: %s", topo_uri, error.text);
         goto error;
@@ -454,6 +486,19 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
         goto error;
     if (!(hl = hostlist_create ())) {
         log_err ("hostlist_create");
+        goto error;
+    }
+
+    if (info.size == 1) {
+        if (create_singleton_taskmap (&taskmap, &error) < 0)
+            goto error;
+    }
+    else {
+        if (fetch_taskmap (upmi, &taskmap, &error) < 0)
+            goto error;
+    }
+    if (set_broker_mapping_attr (attrs, taskmap) < 0) {
+        log_err ("error setting broker.mapping attribute");
         goto error;
     }
 
@@ -487,7 +532,7 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
         char tcp[1024];
         char ipc[1024];
 
-        nlocal = count_local_children (attrs,
+        nlocal = count_local_children (taskmap,
                                        child_ranks,
                                        child_count,
                                        info.rank);
@@ -554,7 +599,8 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
             log_msg ("%s", error.text);
             goto error;
         }
-        if (!get_prefer_tcp (attrs) && streq (bizcard_hostname (bc), hostname))
+        if (!get_prefer_tcp (attrs)
+            && ranks_are_peers (taskmap, info.rank, parent_rank))
             uri = bizcard_uri_find (bc, "ipc://");
         if (!uri)
             uri = bizcard_uri_find (bc, NULL);
@@ -621,6 +667,7 @@ done:
     upmi_destroy (upmi);
     hostlist_destroy (hl);
     free (child_ranks);
+    taskmap_destroy (taskmap);
     topology_decref (topo);
     bizcache_destroy (cache);
     return 0;
@@ -635,6 +682,7 @@ error:
     upmi_destroy (upmi);
     hostlist_destroy (hl);
     free (child_ranks);
+    taskmap_destroy (taskmap);
     topology_decref (topo);
     bizcache_destroy (cache);
     return -1;
