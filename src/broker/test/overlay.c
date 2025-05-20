@@ -294,7 +294,7 @@ void trio (flux_t *h)
         "%s: overlay_cert_pubkey works", ctx[0]->name);
 
     snprintf (parent_uri, sizeof (parent_uri), "ipc://@%s", ctx[0]->name);
-    ok (overlay_bind (ctx[0]->ov, parent_uri) == 0,
+    ok (overlay_bind (ctx[0]->ov, parent_uri, NULL) == 0,
         "%s: overlay_bind %s works", ctx[0]->name, parent_uri);
 
     ctx[1] = ctx_create (h, size, 1, "kary:2", recv_cb);
@@ -441,7 +441,8 @@ void trio (flux_t *h)
      * fails to initialize because its endpoint is already bound.
      */
     errno = 0;
-    ok (overlay_bind (ctx[1]->ov, "ipc://@foo") < 0 && errno == EADDRINUSE,
+    ok (overlay_bind (ctx[1]->ov, "ipc://@foo", NULL) < 0
+        && errno == EADDRINUSE,
         "%s: second overlay_bind in proc fails with EADDRINUSE", ctx[0]->name);
 
     /* Various tests of rank 2 without proper authorization.
@@ -523,7 +524,7 @@ void test_create (flux_t *h,
              * handler, and overlay_authorize() will fail if it doesn't
              * exist.
              */
-            if (overlay_bind (ctx[0]->ov, uri) < 0)
+            if (overlay_bind (ctx[0]->ov, uri, NULL) < 0)
                 BAIL_OUT ("%s: overlay_bind failed", ctx[0]->name);
         }
         else {
@@ -669,7 +670,7 @@ void wrongness (flux_t *h)
         BAIL_OUT ("overlay_create failed");
 
     errno = 0;
-    ok (overlay_bind (ov, "ipc://@foobar") < 0 && errno == EINVAL,
+    ok (overlay_bind (ov, "ipc://@foobar", NULL) < 0 && errno == EINVAL,
         "overlay_bind fails if called before rank is known");
 
     ok (!flux_msg_is_local (NULL),

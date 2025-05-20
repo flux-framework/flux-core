@@ -21,6 +21,7 @@
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libpmi/upmi.h"
 #include "ccan/str/str.h"
 
@@ -77,126 +78,182 @@ error:
     return rc;
 }
 
-static char *pmi_mapping_to_taskmap (const char *s)
+static int create_singleton_taskmap (struct taskmap **mp,
+                                     flux_error_t *error)
 {
-    char *result;
-    flux_error_t error;
-    struct taskmap *map = taskmap_decode (s, &error);
-    if (!map) {
-        log_err ("failed to decode PMI_process_mapping: %s",
-                 error.text);
-        return NULL;
+    struct taskmap *map;
+    flux_error_t e;
+
+    if (!(map = taskmap_decode ("[[0,1,1,1]]", &e))) {
+        errprintf (error, "error creating singleton taskmap: %s", e.text);
+        return -1;
     }
-    result = taskmap_encode (map, 0);
-    taskmap_destroy (map);
-    return result;
+    *mp = map;
+    return 0;
+}
+
+/* Fetch key from the PMI server and decode it as a taskmap.
+ * Return -1 with error filled if a parse error occurs.
+ * Return 0 if map was properly parsed OR if it doesn't exist.
+ */
+static int fetch_taskmap_one (struct upmi *upmi,
+                              const char *key,
+                              struct taskmap **mp,
+                              flux_error_t *error)
+{
+    struct taskmap *map;
+    char *val;
+    flux_error_t e;
+
+    if (upmi_get (upmi, key, -1, &val, NULL) < 0) {
+        *mp = NULL;
+        return 0;
+    }
+    if (!(map = taskmap_decode (val, &e))) {
+        errprintf (error, "%s: error decoding %s", key, e.text);
+        free (val);
+        return -1;
+    }
+    free (val);
+    *mp = map;
+    return 0;
+}
+
+static int fetch_taskmap (struct upmi *upmi,
+                          struct taskmap **mp,
+                          flux_error_t *error)
+{
+    struct taskmap *map;
+    if (fetch_taskmap_one (upmi, "flux.taskmap", &map, error) < 0)
+        return -1;
+    if (map == NULL
+        && fetch_taskmap_one (upmi, "PMI_process_mapping", &map, error) < 0)
+        return -1;
+    *mp = map; // might be NULL - that is OK
+    return 0;
 }
 
 /* Set broker.mapping attribute from enclosing instance taskmap.
+ * It is not an error if the map is NULL.
  */
-static int set_broker_mapping_attr (struct upmi *upmi,
-                                    int size,
-                                    attr_t *attrs)
+static int set_broker_mapping_attr (attr_t *attrs, struct taskmap *map)
 {
     char *val = NULL;
-    int rc;
 
-    if (size == 1)
-        val = strdup ("[[0,1,1,1]]");
-    else {
-        /* First attempt to get flux.taskmap, falling back to
-         * PMI_process_mapping if this key is not available.
-         */
-        char *s;
-        if (upmi_get (upmi, "flux.taskmap", -1, &s, NULL) == 0
-            || upmi_get (upmi, "PMI_process_mapping", -1, &s, NULL) == 0) {
-            val = pmi_mapping_to_taskmap (s);
-            free (s);
-        }
+    if (map && !(val = taskmap_encode (map, 0)))
+        return -1;
+    if (attr_add (attrs, "broker.mapping", val, ATTR_IMMUTABLE) < 0) {
+        ERRNO_SAFE_WRAP (free, val);
+        return -1;
     }
-    rc = attr_add (attrs, "broker.mapping", val, ATTR_IMMUTABLE);
     free (val);
-    return rc;
+    return 0;
 }
 
-/* Check if IPC can be used to communicate.
- * Currently this only goes so far as to check if the process mapping of
- * brokers has all brokers on the same node.  We could check if all peers
- * are on the same node, but given how the TBON maps to rank assignments,
- * it is fairly unlikely.
+/* Count the number of TBON children that could be reached by IPC.
  */
-static bool use_ipc (attr_t *attrs)
+static int count_local_children (struct taskmap *map,
+                                 int *child_ranks,
+                                 int child_count,
+                                 int rank)
 {
-    bool result = false;
-    struct taskmap *map = NULL;
-    const char *val;
+    int count = 0;
 
-    if (attr_get (attrs, "tbon.prefertcp", &val, NULL) == 0
-        && !streq (val, "0"))
-        goto done;
-    if (attr_get (attrs, "broker.mapping", &val, NULL) < 0 || !val)
-        goto done;
-    if (!(map = taskmap_decode (val, NULL)))
-        goto done;
-    if (taskmap_nnodes (map) == 1)
-        result = true;
-done:
-    taskmap_destroy (map);
-    return result;
-}
-
-/* Build URI for broker TBON to bind to.
- * If IPC, use '<rundir>/tbon-<rank>' which should be unique if there are
- * multiple brokers and/or multiple instances per node.
- * If using TCP, choose the address to be the one associated with the default
- * route (see src/common/libutil/ipaddr.h), and a randomly chosen port.
- */
-static int format_bind_uri (char *buf, int bufsz, attr_t *attrs, int rank)
-{
-    if (use_ipc (attrs)) {
-        const char *rundir;
-
-        if (attr_get (attrs, "rundir", &rundir, NULL) < 0) {
-            log_err ("rundir attribute is not set");
-            return -1;
+    if (map) {
+        int nodeid = taskmap_nodeid (map, rank); // this broker's nodeid
+        if (nodeid >= 0) {
+            for (int i = 0; i < child_count; i++) {
+                if (taskmap_nodeid (map, child_ranks[i]) == nodeid)
+                    count++;
+            }
         }
-        if (snprintf (buf, bufsz, "ipc://%s/tbon-%d", rundir, rank) >= bufsz)
-            goto overflow;
     }
-    else {
-        char ipaddr[_POSIX_HOST_NAME_MAX + 1];
-        flux_error_t error;
-        int flags = 0;
-        const char *interface = NULL;
-        const char *hint;
+    return count;
+}
 
-        if (attr_get (attrs, "tbon.interface-hint", &hint, NULL) < 0) {
-            log_err ("tbon.interface-hint attribute is not set");
-            return -1;
-        }
-        if (streq (hint, "hostname"))
-            flags |= IPADDR_HOSTNAME;
-        else if (streq (hint, "default-route"))
-            ; // default behavior
-        else
-            interface = hint;
-        if (getenv ("FLUX_IPADDR_V6"))
-            flags |= IPADDR_V6;
-        if (ipaddr_getprimary (ipaddr,
-                               sizeof (ipaddr),
-                               flags,
-                               interface,
-                               &error) < 0) {
-            log_msg ("%s", error.text);
-            return -1;
-        }
-        if (snprintf (buf, bufsz, "tcp://%s:*", ipaddr) >= bufsz)
-            goto overflow;
+static bool ranks_are_peers (struct taskmap *map, int rank1, int rank2)
+{
+    int nid1;
+    int nid2;
+
+    if ((nid1 = taskmap_nodeid (map, rank1)) < 0
+        || (nid2 = taskmap_nodeid (map, rank2)) < 0)
+        return false;
+    return (nid1 == nid2 ? true : false);
+}
+
+/* Check if TCP should be used, even if IPC could work.
+ */
+static bool get_prefer_tcp (attr_t *attrs)
+{
+    const char *val;
+    if (attr_get (attrs, "tbon.prefertcp", &val, NULL) < 0
+        || val == NULL
+        || streq (val, "0"))
+        return false;
+    return true;
+}
+
+/* Build a tcp:// URI with a wildcard port, taking into account the value of
+ * tbon.interface-hint ("hostname", "default-route", or iface name/wildcard).
+ */
+static int format_tcp_uri (char *buf,
+                           size_t size,
+                           attr_t *attrs,
+                           flux_error_t *error)
+{
+    const char *hint;
+    int flags = 0;
+    const char *interface = NULL;
+    char ipaddr[_POSIX_HOST_NAME_MAX + 1];
+
+    if (attr_get (attrs, "tbon.interface-hint", &hint, NULL) < 0) {
+        log_err ("tbon.interface-hint attribute is not set");
+        return -1;
+    }
+    if (streq (hint, "hostname"))
+        flags |= IPADDR_HOSTNAME;
+    else if (streq (hint, "default-route"))
+        ; // default behavior
+    else
+        interface = hint;
+    if (getenv ("FLUX_IPADDR_V6"))
+        flags |= IPADDR_V6;
+    if (ipaddr_getprimary (ipaddr,
+                           sizeof (ipaddr),
+                           flags,
+                           interface,
+                           error) < 0) {
+        return -1;
+    }
+    if (snprintf (buf, size, "tcp://%s:*", ipaddr) >= size) {
+        errno = EOVERFLOW;
+        errprintf (error, "tcp:// uri buffer overflow");
+        return -1;
     }
     return 0;
-overflow:
-    log_msg ("buffer overflow while building bind URI");
-    return -1;
+}
+
+/* Build an ipc:// uri consisting of rundir + "tbon-<rank>"
+ */
+static int format_ipc_uri (char *buf,
+                           size_t size,
+                           attr_t *attrs,
+                           int rank,
+                           flux_error_t *error)
+{
+    const char *rundir;
+
+    if (attr_get (attrs, "rundir", &rundir, NULL) < 0) {
+        errprintf (error, "rundir attribute is not set");
+        return -1;
+    }
+    if (snprintf (buf, size, "ipc://%s/tbon-%d", rundir, rank) >= size) {
+        errno = EOVERFLOW;
+        errprintf (error, "ipc:// uri buffer overflow");
+        return -1;
+    }
+    return 0;
 }
 
 static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
@@ -234,6 +291,133 @@ static int set_broker_boot_method_attr (attr_t *attrs, const char *value)
     return 0;
 }
 
+/* Small business card cache, by rank.
+ * Business cards are fetched one by one from the PMI server.  To avoid
+ * fetching the same ones more than once in different parts of the code,
+ * implement a simple cache.
+ */
+struct bizcache {
+    size_t size;
+    struct bizcard **cards; // indexed by rank, array storage follows struct
+};
+
+static struct bizcache *bizcache_create (size_t size)
+{
+    struct bizcache *cache;
+
+    cache = calloc (1, sizeof (*cache) + size * sizeof (struct bizcard *));
+    if (!cache)
+        return NULL;
+    cache->size = size;
+    cache->cards = (struct bizcard **)(cache + 1);
+    return cache;
+}
+
+static void bizcache_destroy (struct bizcache *cache)
+{
+    if (cache) {
+        int saved_errno = errno;
+        for (int i = 0; i < cache->size; i++)
+            bizcard_decref (cache->cards[i]);
+        free (cache);
+        errno = saved_errno;
+    }
+}
+
+static struct bizcard *bizcache_lookup (struct bizcache *cache, int rank)
+{
+    if (rank < 0 || rank >= cache->size)
+        return NULL;
+    return cache->cards[rank];
+}
+
+static int bizcache_insert (struct bizcache *cache,
+                            int rank,
+                            struct bizcard *bc)
+{
+    if (rank < 0 || rank >= cache->size) {
+        errno = EINVAL;
+        return -1;
+    }
+    cache->cards[rank] = bc;
+    return 0;
+}
+
+/* Put business card directly to PMI using rank as key.
+ */
+static int put_bizcard (struct upmi *upmi,
+                        int rank,
+                        const struct bizcard *bc,
+                        flux_error_t *error)
+{
+    char key[64];
+    const char *s;
+    flux_error_t e;
+
+    (void)snprintf (key, sizeof (key), "%d", rank);
+    if (!(s = bizcard_encode (bc))) {
+        errprintf (error, "error encoding business card: %s", strerror (errno));
+        return -1;
+    }
+    if (upmi_put (upmi, key, s, &e) < 0) {
+        errprintf (error,
+                   "%s: put %s: %s",
+                   upmi_describe (upmi),
+                   key,
+                   e.text);
+        return -1;
+    }
+    return 0;
+}
+
+/* Return business card from cache, filling the cache entry by fetching
+ * it from PMI if missing.  The caller must not free the business card.
+ */
+static int get_bizcard (struct upmi *upmi,
+                        struct bizcache *cache,
+                        int rank,
+                        const struct bizcard **bcp,
+                        flux_error_t *error)
+{
+    char key[64];
+    char *val;
+    flux_error_t e;
+    struct bizcard *bc;
+
+    if ((bc = bizcache_lookup (cache, rank))) {
+        *bcp = bc;
+        return 0;
+    }
+
+    (void)snprintf (key, sizeof (key), "%d", rank);
+    if (upmi_get (upmi, key, rank, &val, &e) < 0) {
+        errprintf (error,
+                   "%s: get %s: %s",
+                   upmi_describe (upmi),
+                   key,
+                   e.text);
+        return -1;
+    }
+    if (!(bc = bizcard_decode (val, &e))) {
+        errprintf (error,
+                   "error decoding rank %d business card: %s",
+                   rank,
+                   e.text);
+        goto error;
+    }
+    if (bizcache_insert (cache, rank, bc) < 0) {
+        errprintf (error, "error caching rank %d business card", rank);
+        bizcard_decref (bc);
+        goto error;
+    }
+    free (val);
+    *bcp = bc;
+    return 0;
+error:
+    ERRNO_SAFE_WRAP (free, val);
+    return -1;
+}
+
 static void trace_upmi (void *arg, const char *text)
 {
     fprintf (stderr, "boot_pmi: %s\n", text);
@@ -243,22 +427,19 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
 {
     const char *topo_uri;
     flux_error_t error;
-    json_error_t jerror;
-    char key[64];
-    char *val;
-    char *bizcard = NULL;
     struct hostlist *hl = NULL;
-    json_t *o;
     struct upmi *upmi;
     struct upmi_info info;
     struct topology *topo = NULL;
     int child_count;
     int *child_ranks = NULL;
-    const char *uri;
     int i;
     int upmi_flags = UPMI_LIBPMI_NOFLUX;
     const char *upmi_method;
     bool under_flux;
+    const struct bizcard *bc;
+    struct bizcache *cache = NULL;
+    struct taskmap *taskmap = NULL;
 
     // N.B. overlay_create() sets the tbon.topo attribute
     if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
@@ -296,10 +477,6 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
         log_err ("error setting tbon.interface-hint attribute");
         goto error;
     }
-    if (set_broker_mapping_attr (upmi, info.size, attrs) < 0) {
-        log_err ("error setting broker.mapping attribute");
-        goto error;
-    }
     if (!(topo = topology_create (topo_uri, info.size, &error))) {
         log_msg ("error creating '%s' topology: %s", topo_uri, error.text);
         goto error;
@@ -309,6 +486,19 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
         goto error;
     if (!(hl = hostlist_create ())) {
         log_err ("hostlist_create");
+        goto error;
+    }
+
+    if (info.size == 1) {
+        if (create_singleton_taskmap (&taskmap, &error) < 0)
+            goto error;
+    }
+    else {
+        if (fetch_taskmap (upmi, &taskmap, &error) < 0)
+            goto error;
+    }
+    if (set_broker_mapping_attr (attrs, taskmap) < 0) {
+        log_err ("error setting broker.mapping attribute");
         goto error;
     }
 
@@ -333,176 +523,126 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
             goto error;
     }
 
-    /* If there are to be downstream peers, then bind to socket and extract
-     * the concretized URI for sharing with other ranks.
+    /* If there are to be downstream peers, then bind to a socket.
+     * Depending on locality of children, use tcp://, ipc://, or both.
      */
     if (child_count > 0) {
-        char buf[1024];
+        bool prefer_tcp = get_prefer_tcp (attrs);
+        int nlocal;
+        char tcp[1024];
+        char ipc[1024];
 
-        if (format_bind_uri (buf, sizeof (buf), attrs, info.rank) < 0)
+        nlocal = count_local_children (taskmap,
+                                       child_ranks,
+                                       child_count,
+                                       info.rank);
+
+        if (format_tcp_uri (tcp, sizeof (tcp), attrs, &error) < 0) {
+            log_err ("%s", error.text);
             goto error;
-        if (overlay_bind (overlay, buf) < 0)
+        }
+        if (format_ipc_uri (ipc, sizeof (ipc), attrs, info.rank, &error) < 0) {
+            log_err ("%s", error.text);
             goto error;
-        uri = overlay_get_bind_uri (overlay);
+        }
+        if (prefer_tcp || nlocal == 0) {
+            if (overlay_bind (overlay, tcp, NULL) < 0)
+                goto error;
+        }
+        else if (!prefer_tcp && nlocal == child_count) {
+            if (overlay_bind (overlay, ipc, NULL) < 0)
+                goto error;
+        }
+        else {
+            if (overlay_bind (overlay, tcp, ipc) < 0)
+                goto error;
+        }
     }
-    else {
-        uri = NULL;
+
+    /* Each broker writes a business card consisting of hostname,
+     * public key, and URIs (if any).
+     */
+    if (!(bc = overlay_get_bizcard (overlay)))
+        goto error;
+    if (put_bizcard (upmi, info.rank, bc, &error) < 0) {
+        log_msg ("%s", error.text);
+        goto error;
     }
-    if (attr_add (attrs, "tbon.endpoint", uri, ATTR_IMMUTABLE) < 0) {
+
+    if (attr_add (attrs,
+                  "tbon.endpoint",
+                  bizcard_uri_first (bc), // OK if NULL
+                  ATTR_IMMUTABLE) < 0) {
         log_err ("setattr tbon.endpoint");
         goto error;
     }
 
-    /* Each broker writes a "business card" consisting of hostname,
-     * public key, and URI (empty string for leaf node).
-     */
-    if (snprintf (key, sizeof (key), "%d", info.rank) >= sizeof (key)) {
-        log_msg ("pmi key string overflow");
-        goto error;
-    }
-    if (!(o = json_pack ("{s:s s:s s:s}",
-                         "hostname", hostname,
-                         "pubkey", overlay_cert_pubkey (overlay),
-                         "uri", uri ? uri : ""))
-        || !(bizcard = json_dumps (o, JSON_COMPACT))) {
-        log_msg ("error encoding pmi business card object");
-        json_decref (o);
-        goto error;
-    }
-    json_decref (o);
-    if (upmi_put (upmi, key, bizcard, &error) < 0) {
-        log_msg ("%s: put %s: %s", upmi_describe (upmi), key, error.text);
-        goto error;
-    }
+    /* BARRIER */
     if (upmi_barrier (upmi, &error) < 0) {
         log_msg ("%s: barrier: %s", upmi_describe (upmi), error.text);
         goto error;
     }
 
+    /* Cache bizcard results by rank to avoid repeated PMI lookups.
+     */
+    if (!(cache = bizcache_create (info.size)))
+        goto error;
+
     /* Fetch the business card of parent and inform overlay of URI
      * and public key.
      */
     if (info.rank > 0) {
-        const char *peer_pubkey;
-        const char *peer_uri;
         int parent_rank = topology_get_parent (topo);
+        const char *uri = NULL;
 
-        if (snprintf (key, sizeof (key), "%d", parent_rank) >= sizeof (key)) {
-            log_msg ("pmi key string overflow");
+        if (get_bizcard (upmi, cache, parent_rank, &bc, &error) < 0) {
+            log_msg ("%s", error.text);
             goto error;
         }
-        if (upmi_get (upmi, key, parent_rank, &val, &error) < 0) {
-            log_msg ("%s: get %s: %s", upmi_describe (upmi), key, error.text);
-            goto error;
-        }
-        if (!(o = json_loads (val, 0, &jerror))
-            || json_unpack_ex (o,
-                               &jerror,
-                               0,
-                               "{s:s s:s}",
-                               "pubkey", &peer_pubkey,
-                               "uri", &peer_uri) < 0) {
-            log_msg ("error decoding rank %d business card: %s",
-                     parent_rank,
-                     jerror.text);
-            json_decref (o);
-            free (val);
-            goto error;
-        }
-        if (strlen (peer_uri) == 0) {
-            log_msg ("error decoding rank %d business card", parent_rank);
-            json_decref (o);
-            free (val);
-            goto error;
-        }
-        if (overlay_set_parent_uri (overlay, peer_uri) < 0) {
+        if (!get_prefer_tcp (attrs)
+            && ranks_are_peers (taskmap, info.rank, parent_rank))
+            uri = bizcard_uri_find (bc, "ipc://");
+        if (!uri)
+            uri = bizcard_uri_find (bc, NULL);
+        if (overlay_set_parent_uri (overlay, uri) < 0) {
             log_err ("overlay_set_parent_uri");
-            json_decref (o);
-            free (val);
             goto error;
         }
-        if (overlay_set_parent_pubkey (overlay, peer_pubkey) < 0) {
+        if (overlay_set_parent_pubkey (overlay, bizcard_pubkey (bc)) < 0) {
             log_err ("overlay_set_parent_pubkey");
-            json_decref (o);
-            free (val);
             goto error;
         }
-        json_decref (o);
-        free (val);
     }
 
     /* Fetch the business card of children and inform overlay of public keys.
      */
     for (i = 0; i < child_count; i++) {
-        const char *peer_pubkey;
         int child_rank = child_ranks[i];
+        char name[64];
 
-        if (snprintf (key, sizeof (key), "%d", child_rank) >= sizeof (key)) {
-            log_msg ("pmi key string overflow");
+        if (get_bizcard (upmi, cache, child_rank, &bc, &error) < 0) {
+            log_msg ("%s", error.text);
             goto error;
         }
-        if (upmi_get (upmi, key, child_rank, &val, &error) < 0) {
-            log_msg ("%s: get %s: %s", upmi_describe (upmi), key, error.text);
+        (void)snprintf (name, sizeof (name), "%d", i);
+        if (overlay_authorize (overlay, name, bizcard_pubkey (bc)) < 0) {
+            log_err ("overlay_authorize %s=%s", name, bizcard_pubkey (bc));
             goto error;
         }
-        if (!(o = json_loads (val, 0, &jerror))
-            || json_unpack_ex (o,
-                               &jerror,
-                               0,
-                               "{s:s}",
-                               "pubkey", &peer_pubkey) < 0) {
-            log_msg ("error decoding rank %d business card: %s",
-                     child_rank,
-                     jerror.text);
-            json_decref (o);
-            free (val);
-            goto error;
-        }
-        if (overlay_authorize (overlay, key, peer_pubkey) < 0) {
-            log_err ("overlay_authorize %s=%s", key, peer_pubkey);
-            json_decref (o);
-            free (val);
-            goto error;
-        }
-        json_decref (o);
-        free (val);
     }
 
     /* Fetch the business card of all ranks and build hostlist.
      * The hostlist is built independently (and in parallel) on all ranks.
      */
     for (i = 0; i < info.size; i++) {
-        const char *peer_hostname;
-
-        if (snprintf (key, sizeof (key), "%d", i) >= sizeof (key)) {
-            log_msg ("pmi key string overflow");
+        if (get_bizcard (upmi, cache, i, &bc, &error) < 0) {
+            log_msg ("%s", error.text);
             goto error;
         }
-        if (upmi_get (upmi, key, i, &val, &error) < 0) {
-            log_msg ("%s: get %s: %s", upmi_describe (upmi), key, error.text);
-            goto error;
-        }
-        if (!(o = json_loads (val, 0, &jerror))
-            || json_unpack_ex (o,
-                               &jerror,
-                               0,
-                               "{s:s}",
-                               "hostname", &peer_hostname) < 0) {
-            log_msg ("error decoding rank %d pmi business card: %s",
-                     i,
-                     error.text);
-            json_decref (o);
-            free (val);
-            goto error;
-        }
-        if (hostlist_append (hl, peer_hostname) < 0) {
+        if (hostlist_append (hl, bizcard_hostname (bc)) < 0) {
             log_err ("hostlist_append");
-            json_decref (o);
-            free (val);
             goto error;
         }
-        json_decref (o);
-        free (val);
     }
 
     /* One more barrier before allowing connects to commence.
@@ -524,11 +664,12 @@ done:
         log_msg ("%s: finalize: %s", upmi_describe (upmi), error.text);
         goto error;
     }
-    free (bizcard);
     upmi_destroy (upmi);
     hostlist_destroy (hl);
     free (child_ranks);
+    taskmap_destroy (taskmap);
     topology_decref (topo);
+    bizcache_destroy (cache);
     return 0;
 error:
     /* We've logged error to stderr before getting here so the fatal
@@ -538,11 +679,12 @@ error:
      */
     if (upmi_abort (upmi, "fatal bootstrap error", &error) < 0)
         log_msg ("upmi_abort: %s", error.text);
-    free (bizcard);
     upmi_destroy (upmi);
     hostlist_destroy (hl);
     free (child_ranks);
+    taskmap_destroy (taskmap);
     topology_decref (topo);
+    bizcache_destroy (cache);
     return -1;
 }
 

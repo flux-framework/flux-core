@@ -614,7 +614,7 @@ int boot_config (flux_t *h,
                                        bind_uri,
                                        sizeof (bind_uri)) < 0)
             goto error;
-        if (overlay_bind (overlay, bind_uri) < 0)
+        if (overlay_bind (overlay, bind_uri, NULL) < 0)
             goto error;
         if (overlay_authorize (overlay,
                                overlay_cert_name (overlay),
