@@ -41,8 +41,8 @@ test_expect_success 'unload kvs' '
 '
 test_expect_success 'flux-fsck works' '
 	flux fsck 2> simple.out &&
-        grep "Checking integrity" simple.out &&
-        grep "Total errors: 0" simple.out
+	grep "Checking integrity" simple.out &&
+	grep "Total errors: 0" simple.out
 '
 test_expect_success 'flux-fsck verbose works' '
 	flux fsck --verbose 2> verbose.out &&
@@ -68,7 +68,7 @@ test_expect_success 'flux-fsck detects errors' '
 	count=$(cat fsckerrors1.out | wc -l) &&
 	test $count -eq 3 &&
 	grep "dir\.b" fsckerrors1.out | grep "missing blobref" &&
-        grep "Total errors: 1" fsckerrors1.out
+	grep "Total errors: 1" fsckerrors1.out
 '
 test_expect_success 'flux-fsck no output with --quiet' '
 	test_must_fail flux fsck --quiet 2> fsckerrors2.out &&
@@ -92,7 +92,7 @@ test_expect_success 'flux-fsck detects errors' '
 	test $count -eq 4 &&
 	grep "dir\.b" fsckerrors3.out | grep "missing blobref" &&
 	grep "dir\.c" fsckerrors3.out | grep "missing blobref" &&
-        grep "Total errors: 2" fsckerrors3.out
+	grep "Total errors: 2" fsckerrors3.out
 '
 test_expect_success 'flux-fsck no output with --quiet' '
 	test_must_fail flux fsck --quiet 2> fsckerrors4.out &&
