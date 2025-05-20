@@ -293,8 +293,7 @@ test_expect_success 'flux-start --test-pmi-clique=none works' "
 test_expect_success 'flux-start --test-pmi-clique=badmode fails' "
 	test_must_fail flux start ${ARGS} --test-size=1 \
 		--test-pmi-clique=badmode \
-		true 2>badmode.err &&
-	grep unsupported badmode.err
+		true
 "
 test_expect_success 'flux-start embedded server works from initial program' "
 	flux start -v ${ARGS} -s1 flux python ${startctl} status \

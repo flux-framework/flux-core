@@ -150,7 +150,7 @@ static struct optparse_option opts[] = {
     { .group = 2,
       .name = "test-pmi-clique",
       .has_arg = 1,
-      .arginfo = "single|per-broker|none",
+      .arginfo = "single|per-broker|none|TASKMAP",
       .usage = "Set PMI_process_mapping mode (default=single)", },
     { .flags = OPTPARSE_OPT_HIDDEN,
       .name = "killer-timeout", .has_arg = 1, .arginfo = "FSD",
@@ -741,7 +741,7 @@ void pmi_server_initialize (int flags)
         .debug_trace = pmi_debug_trace,
     };
     int appnum = 0;
-
+    flux_error_t error;
 
     if (!(ctx.pmi.kvs = zhash_new ())
         || !(map = taskmap_create ()))
@@ -755,8 +755,14 @@ void pmi_server_initialize (int flags)
         if (taskmap_append (map, 0, ctx.test_size, 1) < 0)
             log_err_exit ("error encoding PMI_process_mapping");
     }
-    else if (!streq (mode, "none"))
-        log_msg_exit ("unsupported test-pmi-clique mode: %s", mode);
+    else if (streq (mode, "none")) {
+        ; // do nothing
+    }
+    else {
+        taskmap_destroy (map);
+        if (!(map = taskmap_decode (mode, &error)))
+            log_msg_exit ("test-pmi-clique: %s", error.text);
+    }
 
     if (taskmap_nnodes (map) > 0) {
         char *s;
