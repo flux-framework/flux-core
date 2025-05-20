@@ -55,6 +55,14 @@ afterexcept:JOBID
    and a fatal job exception caused the transition to CLEANUP (e.g.,
    node failure, timeout, cancel, etc.).
 
+singleton
+   This dependency is satisfied when there are no other active jobs
+   of the same userid and job name which are not already held with
+   a singleton dependency. That is, a singleton can be the only
+   job with the same userid and job name in the SCHED state or later.
+   The singleton scheme requires an explicit job name using the
+   ``--job-name`` option.
+
 begin-time:TIMESTAMP
    This dependency is satisfied after TIMESTAMP, which is specified in
    floating point seconds since the UNIX epoch. See the ``--begin-time``
