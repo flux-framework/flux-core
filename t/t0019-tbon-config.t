@@ -29,10 +29,32 @@ test_expect_success 'tbon.endpoint uses tcp:// if process mapping unavailable' '
 		flux getattr tbon.endpoint >endpoint2.out &&
 	grep "^tcp" endpoint2.out
 '
+test_expect_success 'tcp:// is used with per-broker mapping' '
+	flux start ${ARGS} -s2 --test-pmi-clique=per-broker \
+		flux exec -r 1 flux getattr tbon.parent-endpoint \
+		>endpoint2a.out &&
+	grep "^tcp" endpoint2a.out
+'
 test_expect_success 'tbon.endpoint uses tcp:// if tbon.prefertcp is set' '
 	flux start ${ARGS} -s2 -Stbon.prefertcp=1 \
 		flux getattr tbon.endpoint >endpoint2.out &&
 	grep "^tcp" endpoint2.out
+'
+test_expect_success 'tbon.endpoint uses ipc and tcp with custom taskmap' '
+	cat >endpoints.exp <<-EOT &&
+	1: ipc://
+	2: ipc://
+	3: ipc://
+	4: ipc://
+	5: tcp://
+	6: tcp://
+	7: tcp://
+	EOT
+	flux start ${ARGS} -s8 --test-pmi-clique="[[0,1,5,1],[1,3,1,1]]" \
+		flux exec -x 0 --label-io \
+		flux getattr tbon.parent-endpoint \
+		| sort | cut -c1-9 >endpoints.out &&
+		test_cmp endpoints.exp endpoints.out
 '
 test_expect_success 'FLUX_IPADDR_INTERFACE=lo works' '
 	FLUX_IPADDR_INTERFACE=lo flux start \
