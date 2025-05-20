@@ -56,7 +56,7 @@ test_expect_success 'load kvs' '
 # unfortunately we don't have a `flux content remove` command, so we'll corrupt
 # a valref by overwriting a treeobj with a bad reference
 test_expect_success 'make a reference invalid' '
-	cat dirb.out | jq -c .data[2]=\"sha1-1234567890123456789012345678901234567890\" > dirbbad.out &&
+	cat dirb.out | jq -c .data[1]=\"sha1-1234567890123456789012345678901234567890\" > dirbbad.out &&
 	flux kvs put --treeobj dir.b="$(cat dirbbad.out)"
 '
 test_expect_success 'unload kvs' '
@@ -67,7 +67,7 @@ test_expect_success 'flux-fsck detects errors' '
 	test_must_fail flux fsck 2> fsckerrors1.out &&
 	count=$(cat fsckerrors1.out | wc -l) &&
 	test $count -eq 3 &&
-	grep "dir\.b" fsckerrors1.out | grep "missing blobref" &&
+	grep "dir\.b" fsckerrors1.out | grep "missing blobref" | grep "index=1" &&
 	grep "Total errors: 1" fsckerrors1.out
 '
 test_expect_success 'flux-fsck no output with --quiet' '
@@ -90,8 +90,8 @@ test_expect_success 'flux-fsck detects errors' '
 	test_must_fail flux fsck 2> fsckerrors3.out &&
 	count=$(cat fsckerrors3.out | wc -l) &&
 	test $count -eq 4 &&
-	grep "dir\.b" fsckerrors3.out | grep "missing blobref" &&
-	grep "dir\.c" fsckerrors3.out | grep "missing blobref" &&
+	grep "dir\.b" fsckerrors3.out | grep "missing blobref" | grep "index=1" &&
+	grep "dir\.c" fsckerrors3.out | grep "missing blobref" | grep "index=2" &&
 	grep "Total errors: 2" fsckerrors3.out
 '
 test_expect_success 'flux-fsck no output with --quiet' '
