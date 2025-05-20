@@ -208,14 +208,24 @@ void checkpoint_get_cb (flux_t *h,
 {
     struct content_files *ctx = arg;
     const char *key;
+    int offset = 0;
     void *data = NULL;
     size_t size;
     json_t *o = NULL;
     const char *errstr = NULL;
     json_error_t error;
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s?i}",
+                             "key", &key,
+                             "index", &offset) < 0)
         goto error;
+    /* content-files only supports a single checkpoint */
+    if (offset) {
+        errno = ENOENT;
+        goto error;
+    }
     if (filedb_get (ctx->dbpath, key, &data, &size, &errstr) < 0)
         goto error;
     /* recovery from version 0 checkpoint blobref not supported */

@@ -14,6 +14,7 @@
 #include "builtin.h"
 
 #include <unistd.h>
+#include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/read_all.h"
@@ -168,6 +169,49 @@ static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+static int internal_checkpoints (optparse_t *p, int ac, char *av[])
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    char *key;
+    int index = 0;
+
+    if (optindex != (ac - 1)) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    key = av[optindex];
+
+    if (!(h = builtin_get_flux_handle (p)))
+        log_err_exit ("flux_open");
+
+    while (true) {
+        flux_future_t *f = NULL;
+        char *s;
+        json_t *o;
+        if (!(f = flux_rpc_pack (h,
+                                 "content.checkpoint-get",
+                                 0,
+                                 0,
+                                 "{s:s s:i}",
+                                 "key", key,
+                                 "index", index)))
+            log_err_exit ("content.checkpoint-get");
+        if (flux_rpc_get_unpack (f, "{s:o}", "value", &o) < 0) {
+            if (errno == ENOENT)
+                break;
+            log_err_exit ("content.checkpoint-get");
+        }
+        s = json_dumps (o, JSON_COMPACT);
+        printf ("%s\n", s);
+        free (s);
+        flux_future_destroy (f);
+        index++;
+    }
+    flux_close (h);
+    return (0);
+}
+
 int cmd_content (optparse_t *p, int ac, char *av[])
 {
     log_init ("flux-content");
@@ -217,6 +261,13 @@ static struct optparse_subcommand content_subcmds[] = {
       NULL,
       "Flush dirty entries from local content cache",
       internal_content_flush,
+      0,
+      NULL,
+    },
+    { "checkpoints",
+      "key",
+      "List checkpoint(s)",
+      internal_checkpoints,
       0,
       NULL,
     },

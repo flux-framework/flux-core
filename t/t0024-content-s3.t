@@ -137,6 +137,13 @@ test_expect_success 'checkpoint-get foo returned correct timestamp' '
         grep 2.2 timestamp.out
 '
 
+test_expect_success 'flux content checkpoints lists correct checkpoint' '
+        flux content checkpoints foo > checkpoints1.out &&
+        count=$(cat checkpoints1.out | wc -l) &&
+        test $count -eq 1 &&
+        grep bar checkpoints1.out
+'
+
 test_expect_success 'checkpoint-put updates foo rootref to baz' '
         checkpoint_put foo baz
 '
@@ -145,6 +152,13 @@ test_expect_success 'checkpoint-get foo returned rootref baz' '
         echo baz >rootref2.exp &&
         checkpoint_get foo | jq -r .value | jq -r .rootref >rootref2.out &&
         test_cmp rootref2.exp rootref2.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoint' '
+        flux content checkpoints foo > checkpoints2.out &&
+        count=$(cat checkpoints2.out | wc -l) &&
+        test $count -eq 1 &&
+        grep baz checkpoints2.out
 '
 
 test_expect_success 'reload content-s3 module' '
@@ -189,6 +203,13 @@ test_expect_success 'checkpoint-get foo returned rootref boof' '
 	echo boof >rootref4.exp &&
 	checkpoint_get foo | jq -r .value | jq -r .rootref >rootref4.out &&
 	test_cmp rootref4.exp rootref4.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoint' '
+        flux content checkpoints foo > checkpoints3.out &&
+        count=$(cat checkpoints3.out | wc -l) &&
+        test $count -eq 1 &&
+        grep boof checkpoints3.out
 '
 
 test_expect_success 'config: reload config does not take effect immediately' '

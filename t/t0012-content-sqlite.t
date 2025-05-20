@@ -158,6 +158,13 @@ test_expect_success 'checkpoint-get foo returned correct timestamp' '
         grep 2.2 timestamp.out
 '
 
+test_expect_success 'flux content checkpoints lists correct checkpoint' '
+        flux content checkpoints foo > checkpoints1.out &&
+        count=$(cat checkpoints1.out | wc -l) &&
+        test $count -eq 1 &&
+        grep bar checkpoints1.out
+'
+
 test_expect_success 'checkpoint-put updates foo rootref to baz' '
 	checkpoint_put foo baz
 '
@@ -187,6 +194,13 @@ test_expect_success 'checkpoint-backing-get foo returns rootref baz' '
 	test_cmp rootref_backing.exp rootref_backing.out
 '
 
+test_expect_success 'flux content checkpoints lists correct checkpoint' '
+        flux content checkpoints foo > checkpoints2.out &&
+        count=$(cat checkpoints2.out | wc -l) &&
+        test $count -eq 2 &&
+        head -n 1 checkpoints2.out | grep baz
+'
+
 test_expect_success 'checkpoint-backing-put foo w/ rootref boof' '
 	checkpoint_backing_put foo boof
 '
@@ -195,6 +209,13 @@ test_expect_success 'checkpoint-get foo returned rootref boof' '
 	echo boof >rootref4.exp &&
 	checkpoint_get foo | jq -r .value | jq -r .rootref >rootref4.out &&
 	test_cmp rootref4.exp rootref4.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoint' '
+        flux content checkpoints foo > checkpoints2.out &&
+        count=$(cat checkpoints2.out | wc -l) &&
+        test $count -eq 3 &&
+        head -n 1 checkpoints2.out | grep boof
 '
 
 test_expect_success 'checkpoint-get noexist fails with No such...' '
