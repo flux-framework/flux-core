@@ -73,6 +73,8 @@ struct kvs_ctx {
     flux_watcher_t *idle_w;
     flux_watcher_t *check_w;
     int transaction_merge;
+    char initial_rootref[BLOBREF_MAX_STRING_SIZE];
+    bool initial_rootref_set;
     bool events_init;            /* flag */
     char *hash_name;
     unsigned int seq;           /* for commit transactions */
@@ -2641,6 +2643,16 @@ static int process_args (struct kvs_ctx *ctx, int ac, char **av)
                 return -1;
             }
         }
+        else if (strstarts (av[i], "initial-rootref=")) {
+            char *ptr = av[i] + 16;
+            if (strlen (ptr) > BLOBREF_MAX_STRING_SIZE
+                || blobref_validate (ptr) < 0) {
+                errno = EINVAL;
+                return -1;
+            }
+            memcpy (ctx->initial_rootref, ptr, strlen (ptr));
+            ctx->initial_rootref_set = true;
+        }
         else {
             flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
             errno = EINVAL;
@@ -2811,30 +2823,29 @@ int mod_main (flux_t *h, int argc, char **argv)
             goto done;
         }
 
-        /* Look for a checkpoint and use it if found.
-         * Otherwise start the primary root namespace with an empty directory
-         * and seq = 0.
-         */
-        if (checkpoint_get (h, rootref, sizeof (rootref), &seq) < 0)
-            memcpy (rootref, empty_dir_rootref, sizeof (empty_dir_rootref));
-
-        /* primary namespace must always be there and not marked
-         * for removal
-         */
-        if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm,
-                                                   KVS_PRIMARY_NAMESPACE))) {
-
-            if (!(root = kvsroot_mgr_create_root (ctx->krm,
-                                                  ctx->cache,
-                                                  ctx->hash_name,
-                                                  KVS_PRIMARY_NAMESPACE,
-                                                  owner,
-                                                  0))) {
-                flux_log_error (h, "kvsroot_mgr_create_root");
-                goto done;
-            }
+        if (ctx->initial_rootref_set) {
+            memcpy (rootref,
+                    ctx->initial_rootref,
+                    sizeof (ctx->initial_rootref));
+        }
+        else {
+            /* Look for a checkpoint and use it if found.  Otherwise
+             * start the primary root namespace with an empty
+             * directory and seq = 0.
+             */
+            if (checkpoint_get (h, rootref, sizeof (rootref), &seq) < 0)
+                memcpy (rootref, empty_dir_rootref, sizeof (empty_dir_rootref));
         }
 
+        if (!(root = kvsroot_mgr_create_root (ctx->krm,
+                                              ctx->cache,
+                                              ctx->hash_name,
+                                              KVS_PRIMARY_NAMESPACE,
+                                              owner,
+                                              0))) {
+            flux_log_error (h, "kvsroot_mgr_create_root");
+            goto done;
+        }
         setroot (ctx, root, rootref, seq);
 
         if (event_subscribe (ctx, KVS_PRIMARY_NAMESPACE) < 0) {
