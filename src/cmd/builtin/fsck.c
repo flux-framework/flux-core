@@ -28,9 +28,16 @@
 
 #include "builtin.h"
 
+#define BLOBREF_ASYNC_MAX 1000
+
 static void fsck_treeobj (flux_t *h,
                           const char *path,
                           json_t *treeobj);
+
+static void valref_load (flux_t *h,
+                         json_t *treeobj,
+                         int index,
+                         void *arg);
 
 static bool verbose;
 static bool quiet;
@@ -54,36 +61,103 @@ void read_error (const char *fmt, ...)
     va_end (ap);
 }
 
-static void fsck_valref (flux_t *h,
-                         const char *path,
-                         json_t *treeobj)
+struct fsck_valref_data
 {
-    int count = treeobj_get_count (treeobj);
+    flux_t *h;
+    json_t *treeobj;
+    int index;
+    int count;
+    int in_flight;
+    const char *path;
+    int errorcount;
+    int errnum;
+};
+
+static void valref_load_continuation (flux_future_t *f, void *arg)
+{
+    struct fsck_valref_data *fvd = arg;
     const void *buf;
     size_t buflen;
 
-    for (int i = 0; i < count; i++) {
-        flux_future_t *f;
-        if (!(f = content_load_byblobref (h,
-                                          treeobj_get_blobref (treeobj, i),
-                                          CONTENT_FLAG_CACHE_BYPASS))
-            || content_load_get (f, &buf, &buflen) < 0) {
+    if (content_load_get (f, &buf, &buflen) < 0) {
+        if (verbose) {
+            int *index = flux_future_aux_get (f, "index");
             if (errno == ENOENT)
                 read_error ("%s: missing blobref index=%d",
-                            path,
-                            i);
+                            fvd->path,
+                            (*index));
             else
                 read_error ("%s: error retrieving blobref index=%d: %s",
-                            path,
-                            i,
+                            fvd->path,
+                            (*index),
                             future_strerror (f, errno));
-            errorcount++;
-            flux_future_destroy (f);
-            return;
         }
-        flux_future_destroy (f);
+        fvd->errorcount++;
+        fvd->errnum = errno;     /* we'll report the last errno */
+    }
+    fvd->in_flight--;
+
+    if (fvd->index < fvd->count) {
+        valref_load (fvd->h, fvd->treeobj, fvd->index, fvd);
+        fvd->in_flight++;
+        fvd->index++;
+    }
+
+    flux_future_destroy (f);
+}
+
+static void valref_load (flux_t *h, json_t *treeobj, int index, void *arg)
+{
+    flux_future_t *f;
+    int *indexp;
+    if (!(f = content_load_byblobref (h,
+                                      treeobj_get_blobref (treeobj, index),
+                                      CONTENT_FLAG_CACHE_BYPASS))
+        || flux_future_then (f, -1, valref_load_continuation, arg) < 0)
+        log_err_exit ("cannot retrieve valref blob");
+    if (!(indexp = (int *)malloc (sizeof (int))))
+        log_err_exit ("cannot allocate index memory");
+    (*indexp) = index;
+    if (flux_future_aux_set (f, "index", indexp, free) < 0)
+        log_err_exit ("could not save index value");
+}
+
+static void fsck_valref (flux_t *h, const char *path, json_t *treeobj)
+{
+    struct fsck_valref_data fvd = {0};
+
+    fvd.h = h;
+    fvd.treeobj = treeobj;
+    fvd.count = treeobj_get_count (treeobj);
+    fvd.path = path;
+
+    /* N.B. unlike flux-dump(1) out of order returns do not matter
+     * here since we only care about verification, not the data.
+     */
+    while (fvd.in_flight < BLOBREF_ASYNC_MAX
+           && fvd.index < fvd.count) {
+        valref_load (h, treeobj, fvd.index, &fvd);
+        fvd.in_flight++;
+        fvd.index++;
+    }
+
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
+
+    if (fvd.errorcount) {
+        /* each invalid blobref will be output in verbose mode */
+        if (!verbose) {
+            if (errno == ENOENT)
+                read_error ("%s: missing blobref(s)", path);
+            else
+                read_error ("%s: error retrieving blobref(s): %s",
+                            path,
+                            strerror (fvd.errnum));
+        }
+        errorcount++;
     }
 }
+
 
 static void fsck_val (flux_t *h,
                       const char *path,
