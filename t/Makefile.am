@@ -165,6 +165,7 @@ TESTSCRIPTS = \
 	t2274-manager-perilog-per-rank.t \
 	t2275-job-duration-validator.t \
 	t2276-job-requires.t \
+	t2277-dependency-singleton.t \
 	t2280-job-memo.t \
 	t2290-job-update.t \
 	t2291-job-update-queue.t \
