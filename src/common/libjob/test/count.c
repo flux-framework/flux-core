@@ -212,11 +212,78 @@ void test_codec (void)
     }
 }
 
+struct inout test_iteration_inputs[] = {
+    /* wrap the JSON in an array to also allow integer and string types */
+    { "[1]", 0, "1" },
+    { "[\"13\"]", 0, "13" },
+    { "[\"5,7,13\"]", 0, "5,7,13" },
+    { "[{\"min\": 4, \"max\": 6}]", 0, "4,5,6" },
+    { "[{\"min\": 4, \"max\": 6, \"operand\": 1, \"operator\": \"+\"}]", 0, "4,5,6" },
+    { "[{\"min\": 1, \"max\": 3, \"operand\": 2}]", 0, "1,3" },
+    { "[{\"min\": 1, \"max\": 3, \"operand\": 2, \"operator\": \"+\"}]", 0, "1,3" },
+    { "[{\"min\": 2, \"max\": 16, \"operand\": 2, \"operator\": \"*\"}]", 0, "2,4,8,16" },
+    { "[{\"min\": 2, \"max\": 16, \"operand\": 2, \"operator\": \"^\"}]", 0, "2,4,16" },
+
+    /* expected failures */
+    { "[-1]", 0, NULL },
+    { "[\"13-\"]", 0, NULL },
+    
+    { NULL, 0, NULL },
+};
+
+void test_iteration (void)
+{
+    struct inout *ip;
+    char s[256];
+
+    for (ip = &test_iteration_inputs[0]; ip->in != NULL; ip++) {
+        json_error_t error;
+        json_t *json_in;
+        struct count *count;
+        
+        if (!(json_in = json_loads (ip->in, 0, &error))) {
+            diag ("json_loads '%s' fails with error '%s'", ip->in, error.text);
+            continue;
+        }
+        /* extract first element of array to get actual JSON of interest */
+        count = count_create (json_array_get (json_in, 0), &error);
+        if (ip->out == NULL) { // expected fail
+            ok (count == NULL,
+                "count_create '%s' fails with error '%s'",
+                ip->in, error.text);
+        }
+        else {
+            ok (count != NULL,
+                "count_create '%s' works", ip->in);
+            if (!count)
+                diag ("error '%s'", error.text);
+            if (count != NULL) {
+                int i = 0;
+                int value = count_first (count);
+                while (value != COUNT_INVALID_VALUE) {
+                    i += sprintf (s+i, "%u,", value);
+                    value = count_next (count, value);
+                }
+                s[i-1] = '\0';
+                bool match = streq (s, ip->out);
+                ok (match == true,
+                    "count iteration '%s'->'%s' works",
+                    ip->in, ip->out);
+                if (!match)
+                    diag ("%s", s);
+            }
+        }
+        count_destroy (count);
+        json_decref (json_in);
+    }
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
     test_codec ();
+    test_iteration ();
 
     done_testing ();
 }
