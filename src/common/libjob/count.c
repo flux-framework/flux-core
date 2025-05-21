@@ -295,6 +295,51 @@ char *count_encode (const struct count *count, int flags)
     return str;
 }
 
+unsigned int count_first (const struct count *count)
+{
+    unsigned int first = COUNT_INVALID_VALUE;
+
+    if (count) {
+        if (count->integer) {
+            first = count->integer;
+        } else if (count->isrange) {
+            first = count->min;
+        } else if (count->idset) {
+            first = idset_first (count->idset);
+        }
+    }
+    return first;
+}
+
+unsigned int count_next (const struct count *count, unsigned int value)
+{
+    unsigned int next = COUNT_INVALID_VALUE;
+
+    if (count) {
+        if (count->isrange) {
+            switch (count->operator) {
+                case '+':
+                    next = value + count->operand;
+                    break;
+                case '*':
+                    next = value * count->operand;
+                    break;
+                case '^':
+                    next = value;
+                    for (unsigned int i = 1; i < count->operand; ++i) {
+                        next *= value;
+                    }
+            }
+            if (next > count->max) {
+                next = COUNT_INVALID_VALUE;
+            }
+        } else if (count->idset) {
+            next = idset_next (count->idset, value);
+        }
+    }
+    return next;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

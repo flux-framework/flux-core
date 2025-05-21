@@ -61,6 +61,20 @@ struct count *count_decode (const char *s);
  */
 char *count_encode (const struct count *count, int flags);
 
+/* Return the first value in the count.
+ * Returns COUNT_INVALID_VALUE if the count is NULL.
+ */
+unsigned int count_first (const struct count *count);
+
+/* Return the next value in the count.
+ * Returns COUNT_INVALID_VALUE if 'value' is the last valid value,
+ * or if the count is NULL or a simple integer (as there is no "next" value).
+ * N.B. if isrange, this does not check if 'value' is a valid value; it should
+ * be called using values produced by prior calls to count_first or count_next.
+ */
+unsigned int count_next (const struct count *count, unsigned int value);
+
+
 #endif /* !FLUX_COUNT_H */
 
 /*
