@@ -41,6 +41,8 @@ libjob_la_SOURCES = \
 	jj.h \
 	unwrap.c \
 	unwrap.h \
+	count.c \
+	count.h \
 	idf58.h
 
 TESTS = \
