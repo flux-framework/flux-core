@@ -272,4 +272,32 @@ test_expect_success 'flux batch: multiline --add-file requires name=' '
 	test_must_fail flux batch --dry-run directives6.sh >d6.out 2>&1 &&
 	grep "file name missing" d6.out
 '
+test_expect_success 'flux batch: hidden --add-brokers option requires -N' '
+	test_must_fail flux batch -n4 --add-brokers=1 --dry-run --wrap true
+'
+test_expect_success 'flux batch: hidden --add-brokers option works' '
+	cat <<-EOF >add-brokers.sh &&
+	#!/bin/sh
+	# flux: -N4 --output=add-brokers.out --error=add-brokers.err
+	# flux: --conf=tbon.topo=kary:2
+	# flux: --add-brokers=2
+	#
+	flux resource list -s free -no {nnodes}
+	flux resource status -s exclude -no {ranks}
+	flux exec -lr 1-2 flux getattr tbon.parent-endpoint \
+	    | sed s#://.*## | sort
+	flux run -N4 true
+	EOF
+	cat <<-EOF >add-brokers.expected &&
+	4
+	1-2
+	1: ipc
+	2: ipc
+	EOF
+	id=$(flux batch add-brokers.sh) &&
+	flux job wait-event $id clean &&
+	test_debug "cat add-brokers.err" &&
+	test_debug "cat add-brokers.out" &&
+	test_cmp add-brokers.expected add-brokers.out
+'
 test_done

@@ -20,7 +20,7 @@ from flux.job.directives import DirectiveParser
 LOGGER = logging.getLogger("flux-batch")
 
 
-class BatchCmd(base.MiniCmd):
+class BatchCmd(base.BatchAllocCmd):
     def __init__(self, prog, usage=None, description=None):
         super().__init__(prog, usage, description)
         self.parser.add_argument(
@@ -28,7 +28,6 @@ class BatchCmd(base.MiniCmd):
             action="store_true",
             help="Wrap arguments or stdin in a /bin/sh script",
         )
-        base.add_batch_alloc_args(self.parser)
         self.parser.add_argument(
             "SCRIPT",
             nargs=argparse.REMAINDER,
@@ -87,20 +86,10 @@ class BatchCmd(base.MiniCmd):
         return self.parse_directive_args(name, batchscript)
 
     def init_jobspec(self, args):
+        self.init_common(args)
+
         if args.wrap:
             self.script = f"#!/bin/sh\n{self.script}"
-
-        #  If number of slots not specified, then set it to node count
-        #   if set, otherwise raise an error.
-        if not args.nslots:
-            if not args.nodes:
-                raise ValueError("Number of slots to allocate must be specified")
-            args.nslots = args.nodes
-            args.exclusive = True
-
-        if args.dump:
-            args.broker_opts = args.broker_opts or []
-            args.broker_opts.append("-Scontent.dump=" + args.dump)
 
         #  If job name is not explicitly set in args, use the script name
         #   if a script was provided, else the string "batch" to
@@ -123,6 +112,8 @@ class BatchCmd(base.MiniCmd):
             exclusive=args.exclusive,
             conf=args.conf.config,
         )
+
+        self.update_jobspec_common(args, jobspec)
 
         # Default output is flux-{{jobid}}.out
         # overridden by either --output=none or --output=kvs
