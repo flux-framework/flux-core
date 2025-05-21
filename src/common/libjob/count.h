@@ -41,6 +41,11 @@ struct count {
     struct idset *idset;
 };
 
+/* Create a count from a json object.
+ * Returns count on success, or NULL on failure with error->text set.
+ */
+struct count *count_create (json_t *json_count, json_error_t *error);
+
 /* Destroy a count.
  */
 void count_destroy (struct count *count);
