@@ -133,7 +133,7 @@ static int fetch_taskmap (struct upmi *upmi,
     return 0;
 }
 
-/* Set broker.mapping attribute from enclosing instance taskmap.
+/* Set broker.mapping attribute.
  * It is not an error if the map is NULL.
  */
 static int set_broker_mapping_attr (attr_t *attrs, struct taskmap *map)
@@ -150,36 +150,22 @@ static int set_broker_mapping_attr (attr_t *attrs, struct taskmap *map)
     return 0;
 }
 
-/* Count the number of TBON children that could be reached by IPC.
+/* Return the number of ranks[] members that are in the same clique as rank.
  */
-static int count_local_children (struct taskmap *map,
-                                 int *child_ranks,
-                                 int child_count,
-                                 int rank)
+static int clique_ranks (struct taskmap *map, int rank, int *ranks, int nranks)
 {
     int count = 0;
 
     if (map) {
-        int nodeid = taskmap_nodeid (map, rank); // this broker's nodeid
-        if (nodeid >= 0) {
-            for (int i = 0; i < child_count; i++) {
-                if (taskmap_nodeid (map, child_ranks[i]) == nodeid)
+        int nid = taskmap_nodeid (map, rank);
+        if (nid >= 0) {
+            for (int i = 0; i < nranks; i++) {
+                if (taskmap_nodeid (map, ranks[i]) == nid)
                     count++;
             }
         }
     }
     return count;
-}
-
-static bool ranks_are_peers (struct taskmap *map, int rank1, int rank2)
-{
-    int nid1;
-    int nid2;
-
-    if ((nid1 = taskmap_nodeid (map, rank1)) < 0
-        || (nid2 = taskmap_nodeid (map, rank2)) < 0)
-        return false;
-    return (nid1 == nid2 ? true : false);
 }
 
 /* Check if TCP should be used, even if IPC could work.
@@ -532,10 +518,7 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
         char tcp[1024];
         char ipc[1024];
 
-        nlocal = count_local_children (taskmap,
-                                       child_ranks,
-                                       child_count,
-                                       info.rank);
+        nlocal = clique_ranks (taskmap, info.rank, child_ranks, child_count);
 
         if (format_tcp_uri (tcp, sizeof (tcp), attrs, &error) < 0) {
             log_err ("%s", error.text);
@@ -600,7 +583,7 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
             goto error;
         }
         if (!get_prefer_tcp (attrs)
-            && ranks_are_peers (taskmap, info.rank, parent_rank))
+            && clique_ranks (taskmap, info.rank, &parent_rank, 1) == 1)
             uri = bizcard_uri_find (bc, "ipc://");
         if (!uri)
             uri = bizcard_uri_find (bc, NULL);

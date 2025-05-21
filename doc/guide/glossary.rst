@@ -6,6 +6,11 @@ used in our documentation that may not be familiar to all readers.
 
 .. glossary::
 
+  clique
+    A group of :term:`tasks <task>` belonging to a :term:`parallel program`
+    that are co-located on a node.  Cliques may communicate with each other
+    more efficiently than tasks on different nodes.
+
   enclosing instance
     The Flux instance that a process naturally interacts with.  It is
     the instance referred to by the :envvar:`FLUX_URI` environment variable,
@@ -60,7 +65,9 @@ used in our documentation that may not be familiar to all readers.
 
   job
     The smallest unit of work that can be allocated resources and run by Flux.
-    A job can be a Flux instance which in turn can run more jobs.
+    A job is typically a :term:`parallel program`, but may consist of one
+    or more :term:`singletons <singleton>`.  A job can be a Flux instance
+    which in turn can run more jobs.
 
   jobspec
     The JSON or YAML object representing a Flux job request, defined by
@@ -76,6 +83,10 @@ used in our documentation that may not be familiar to all readers.
   moldable
     A moldable job requests a variable, bounded quantity of resources
     that, once allocated by the system, is fixed at runtime [#Feitelson96]_.
+
+  parallel program
+    A ranked group of :term:`tasks`, often the same executable, launched
+    in parallel and working together to solve a problem.
 
   priority
     The order in which the scheduler considers jobs.  By default, priority
@@ -102,8 +113,11 @@ used in our documentation that may not be familiar to all readers.
     and resource utilization when it decides upon a schedule for fulfilling
     competing requests.
 
+  singleton
+    A degenerate :term:`parallel program` with only one :term:`task`.
+
   slot
-    The abstract resource requirements of one task.
+    The abstract resource requirements of one :term:`task`.
 
   step
     In other workload managers, a job step is a unit of work within a job.
@@ -116,8 +130,12 @@ used in our documentation that may not be familiar to all readers.
     system user like ``flux``, is started by :linux:man1:`systemd`, and
     allows :term:`guest` users to run jobs.
 
+  task
+    A process at the operating system level.  A task may represent one
+    rank of a :term:`parallel program`.
+
   taskmap
-    A compact mapping between job task ranks and node IDs, defined by
+    A compact mapping between job :term:`task` ranks and node IDs, defined by
     :doc:`rfc:spec_34`.
 
   TBON
