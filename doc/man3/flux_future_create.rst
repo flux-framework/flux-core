@@ -38,7 +38,7 @@ SYNOPSIS
                             void *aux,
                             flux_free_f destroy);
 
-   void flux_future_set_reactor (flux_future_t *f, flux_t *h);
+   void flux_future_set_reactor (flux_future_t *f, flux_reactor_t *r);
 
    flux_reactor_t *flux_future_get_reactor (flux_future_t *f);
 
