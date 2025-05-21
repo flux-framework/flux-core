@@ -16,10 +16,105 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
+#include <jansson.h>
 #include <flux/idset.h>
 
 #include "count.h"
+
+void set_error (json_error_t *error, const char *fmt, ...)
+{
+    va_list ap;
+
+    if (error) {
+        va_start (ap, fmt);
+        vsnprintf (error->text, sizeof (error->text), fmt, ap);
+        va_end (ap);
+    }
+}
+
+struct count *count_create (json_t *json_count,
+                            json_error_t *error)
+{
+    struct count *count;
+    const char *operator = NULL;
+    json_int_t min;
+    json_int_t max = COUNT_MAX;
+    json_int_t operand = 1;
+
+    if (json_is_string (json_count)) {
+        if (!(count = count_decode (json_string_value (json_count)))) {
+            set_error (error,
+                       "create_count: Failed to decode '%s' as idset or range",
+                       json_string_value (json_count));
+            goto error;
+        }
+        return count;
+    }
+    if (!(count = calloc (1, sizeof (*count)))) {
+        set_error (error, "create_count: Out of memory");
+        goto error;
+    }
+    count->idset = NULL;
+    if (json_is_integer (json_count)) {
+        // have to check positivity first before assigning to unsigned int
+        if (json_integer_value (json_count) < 1) {
+            set_error (error, "create_count: integer count must be >= 1");
+            goto error;
+        }
+        count->integer = json_integer_value (json_count);
+        return count;
+    }
+    if (json_object_size (json_count) == 0) {
+        set_error (error, "create_count: Malformed jobspec resource count");
+        goto error;
+    }
+    if (json_unpack_ex(json_count, error, 0,
+                       "{s:I, s?I, s?I, s?s}",
+                       "min", &min,
+                       "max", &max,
+                       "operand", &operand,
+                       "operator", &operator) < 0) {
+        goto error;
+    }
+    // have to check positivity first before assigning to unsigned ints
+    if (min < 1 || max < 1 || operand < 1) {
+        set_error (error, "create_count: min, max, and operand must be >= 1");
+        goto error;
+    }
+    count->min = min;
+    count->max = max;
+    count->operand = operand;
+    count->operator = operator ? operator[0] : '+';
+    // check validity of operator/operand combination
+    switch (count->operator) {
+    case '^':
+        if (count->min < 2) {
+            set_error (error, "create_count: min must be >= 2 for '^' operator");
+            goto error;
+        }
+    case '*':
+        if (count->operand < 2) {
+            set_error (error, "create_count: operand must be >= 2 for '*' or '^' operators");
+            goto error;
+        }
+    case '+':
+        break;
+    default:
+        set_error (error, "create_count: unknown operator '%c'", count->operator);
+        goto error;
+    }
+    if (count->max < count->min) {
+        set_error (error, "create_count: max must be >= min");
+        goto error;
+    }
+    count->isrange = true;
+    return count;
+error:
+    free (count);
+    return NULL;
+}
 
 void count_destroy (struct count *count)
 {
@@ -53,7 +148,20 @@ struct count *count_decode (const char *s)
     char *cpy = NULL;
     char *ep;
     int len = strlen (s);
+    json_t *json_input;
 
+    // if it starts with a brace, decode as JSON
+    if (*s == '{') {
+        if (!(json_input = json_loads (s, 0, NULL))) {
+            goto error_inval;
+        }
+        count = count_create (json_input, NULL);
+        json_decref (json_input);
+        if (!count) {
+            goto error_inval;
+        }
+        return count;
+    }
     if (!(count = calloc (1, sizeof (*count)))
         || !(cpy = strdup (s))) {
         goto error;
