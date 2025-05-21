@@ -133,7 +133,7 @@ static int fetch_taskmap (struct upmi *upmi,
     return 0;
 }
 
-/* Set broker.mapping attribute from enclosing instance taskmap.
+/* Set broker.mapping attribute.
  * It is not an error if the map is NULL.
  */
 static int set_broker_mapping_attr (attr_t *attrs, struct taskmap *map)
