@@ -40,6 +40,9 @@ struct topology {
 static int kary_plugin_init (struct topology *topo,
                              const char *path,
                              flux_error_t *error);
+static int mincrit_plugin_init (struct topology *topo,
+                                const char *path,
+                                flux_error_t *error);
 static int binomial_plugin_init (struct topology *topo,
                                  const char *path,
                                  flux_error_t *error);
@@ -49,6 +52,7 @@ static int custom_plugin_init (struct topology *topo,
 
 static const struct topology_plugin builtin_plugins[] = {
     { .name = "kary",   .init = kary_plugin_init },
+    { .name = "mincrit", .init = mincrit_plugin_init },
     { .name = "binomial", .init = binomial_plugin_init },
     { .name = "custom", .init = custom_plugin_init },
 };
@@ -381,40 +385,103 @@ error:
     return NULL;
 }
 
-/* kary plugin
- */
-static int parse_k (const char *s, int *result, flux_error_t *error)
+static int parse_k (const char *s, int *result)
 {
     char *endptr;
     unsigned long val;
 
     if (!s || strlen (s) == 0)
-        goto error;
+        return -1;
     errno = 0;
     val = strtoul (s, &endptr, 10);
     if (errno != 0 || *endptr != '\0')
-        goto error;
+        return -1;
     *result = val;
     return 0;
-error:
-    errprintf (error, "kary k value must be an integer >= 0");
-    return -1;
 }
 
+/* kary plugin
+ */
 static int kary_plugin_init (struct topology *topo,
                              const char *path,
                              flux_error_t *error)
 {
     int k;
 
-    if (parse_k (path, &k, error) < 0)
+    if (parse_k (path, &k) < 0) {
+        errprintf (error, "kary k value must be an integer >= 0");
         return -1;
+    }
     if (k > 0) {
         for (int i = 0; i < topo->size; i++) {
             topo->node[i].parent = kary_parentof (k, i);
             if (topo->node[i].parent == KARY_NONE)
                 topo->node[i].parent = -1;
         }
+    }
+    return 0;
+}
+
+/* Given size and k (number of routers), determine fanout from
+ * routers to leaves.
+ */
+static int mincrit_router_fanout (int size, int k)
+{
+    int crit = 1 + k;
+    int leaves = size - crit;
+    int fanout = leaves / k;
+    if (leaves % k > 0)
+        fanout++;
+    return fanout;
+}
+
+/* Choose a value for k that balances minimizing critical nodes and
+ * keeping the fanout from routers to leaves at or below a threshold.
+ * The height is always capped at 3, so max_fanout might be exceeded
+ * from leader to routers for large size or small max_fanout.
+ * Do choose k=0 (flat tree) if max_fanount can be met by the leader node.
+ * Don't choose k=1, since that just pushes some router work off
+ * to rank 1, without tree benefits.
+ */
+static int mincrit_choose_k (int size, int max_fanout)
+{
+    int k = 0;
+    if (size > max_fanout + 1) {
+        k = 2;
+        while (mincrit_router_fanout (size, k) > max_fanout)
+            k++;
+    }
+    return k;
+}
+
+/* mincrit plugin
+ * A k-ary tree "squashed" down to at most three levels.
+ * The value of k determines the fanout from leader to routers.
+ * The number of nodes determines the fanout from routers to leaves.
+ * The value of k may be 0, or be unspecifed (letting the system choose).
+ */
+static int mincrit_plugin_init (struct topology *topo,
+                                const char *path,
+                                flux_error_t *error)
+{
+    int k;
+
+    if (path && strlen (path) > 0) {
+        if (parse_k (path, &k) < 0) {
+            errprintf (error, "mincrit k value must be an integer >= 0");
+            return -1;
+        }
+    }
+    else {
+        k = mincrit_choose_k (topo->size, 1024);
+    }
+    /* N.B. topo is initialized with rank 0 as the parent of all other ranks
+     * before plugin init is called, therefore only the leaves need to have
+     * their parent set here.
+     */
+    if (k > 0) {
+        for (int i = k + 1; i < topo->size; i++)
+            topo->node[i].parent = (i - k - 1) % k + 1;
     }
     return 0;
 }
