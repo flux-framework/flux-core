@@ -84,8 +84,9 @@ test_expect_success 'load kvs' '
 	flux module load kvs
 '
 test_expect_success 'make a reference invalid' '
-	cat dirc.out | jq -c .data[2]=\"sha1-1234567890123456789012345678901234567890\" > dircbad.out &&
-	flux kvs put --treeobj dir.c="$(cat dircbad.out)"
+	cat dirc.out | jq -c .data[1]=\"sha1-1234567890123456789012345678901234567890\" > dircbad1.out &&
+	cat dircbad1.out | jq -c .data[2]=\"sha1-1234567890123456789012345678901234567890\" > dircbad2.out &&
+	flux kvs put --treeobj dir.c="$(cat dircbad2.out)"
 '
 test_expect_success 'unload kvs' '
 	flux module remove kvs
@@ -102,6 +103,7 @@ test_expect_success 'flux-fsck detects errors' '
 test_expect_success 'flux-fsck --verbose outputs details' '
 	test_must_fail flux fsck --verbose 2> fsckerrors3V.out &&
 	grep "dir\.b" fsckerrors3V.out | grep "missing blobref" | grep "index=1" &&
+	grep "dir\.c" fsckerrors3V.out | grep "missing blobref" | grep "index=1" &&
 	grep "dir\.c" fsckerrors3V.out | grep "missing blobref" | grep "index=2" &&
 	grep "Total errors: 2" fsckerrors3V.out
 '
