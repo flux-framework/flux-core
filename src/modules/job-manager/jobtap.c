@@ -48,6 +48,7 @@ extern int priority_default_plugin_init (flux_plugin_t *p);
 extern int limit_job_size_plugin_init (flux_plugin_t *p);
 extern int limit_duration_plugin_init (flux_plugin_t *p);
 extern int after_plugin_init (flux_plugin_t *p);
+extern int singleton_plugin_init (flux_plugin_t *p);
 extern int begin_time_plugin_init (flux_plugin_t *p);
 extern int validate_duration_plugin_init (flux_plugin_t *p);
 extern int update_duration_plugin_init (flux_plugin_t *p);
@@ -70,6 +71,7 @@ static struct jobtap_builtin jobtap_builtins [] = {
     { ".limit-job-size", limit_job_size_plugin_init },
     { ".limit-duration", limit_duration_plugin_init },
     { ".dependency-after", after_plugin_init },
+    { ".dependency-singleton", singleton_plugin_init },
     { ".begin-time", &begin_time_plugin_init },
     { ".validate-duration", &validate_duration_plugin_init },
     { ".update-duration", &update_duration_plugin_init },

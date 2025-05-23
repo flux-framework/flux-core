@@ -74,6 +74,7 @@ libjob_manager_la_SOURCES = \
 	plugins/limit-job-size.c \
 	plugins/limit-duration.c \
 	plugins/dependency-after.c \
+	plugins/dependency-singleton.c \
 	plugins/begin-time.c \
 	plugins/update-duration.c \
 	plugins/validate-duration.c \
