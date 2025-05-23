@@ -28,6 +28,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libkvs/kvs_checkpoint.h"
 
 #include "src/common/libcontent/content-util.h"
 #include "ccan/str/str.h"
@@ -378,6 +379,10 @@ void checkpoint_get_cb (flux_t *h,
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
         goto error;
+    if (!streq (key, KVS_DEFAULT_CHECKPOINT)) {
+        errno = EINVAL;
+        goto error;
+    }
     if (sqlite3_bind_text (ctx->checkpt_get_stmt,
                            1,
                            (char *)key,
@@ -430,6 +435,10 @@ void checkpoint_put_cb (flux_t *h,
                              "key", &key,
                              "value", &o) < 0)
         goto error;
+    if (!streq (key, KVS_DEFAULT_CHECKPOINT)) {
+        errno = EINVAL;
+        goto error;
+    }
     if (!(value = json_dumps (o, JSON_COMPACT))) {
         errstr = "failed to encode checkpoint value";
         errno = EINVAL;
