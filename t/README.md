@@ -124,6 +124,10 @@ running the testsuite against an installed version of flux-core.
 The environment variable `FLUX_TEST_VALGRIND` may be set to `t`
 to run tests under valgrind.
 
+The environment variable `FLUX_TESTS_LOGFILE` may be set to `t` to force
+most tests to generate a verbose log as `$TEST_NAME.output` when debugging
+tests.
+
 
 Skipping Tests
 --------------
