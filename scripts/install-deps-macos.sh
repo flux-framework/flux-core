@@ -24,6 +24,7 @@ brew install \
   hwloc \
   sqlite \
   lua \
+  luarocks \
   python3 \
   cffi \
   libyaml \
@@ -34,5 +35,8 @@ source macos-venv/bin/activate
 
 pip3 install setuptools
 pip3 install -r scripts/requirements-dev.txt
+
+# luaposix now required for configure:
+luarocks install luaposix
 
 echo "Now run scripts/configure-macos.sh"
