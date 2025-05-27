@@ -390,6 +390,13 @@ AM_CONDITIONAL([ENABLE_PYLINT], [test "x$PYLINT" = "xpylint"])
 AX_PROG_LUA([5.1],[5.5])
 AX_LUA_HEADERS
 AX_LUA_LIBS
+AC_MSG_CHECKING([for luaposix])
+if $LUA -l posix -e ''; then
+  AC_MSG_RESULT([yes])
+else
+  AC_MSG_RESULT([no])
+  AC_MSG_FAILURE([Could not find required Lua posix module])
+fi
 X_AC_ZEROMQ
 X_AC_JANSSON
 PKG_CHECK_MODULES([LIBSYSTEMD], [libsystemd >= 0.23],
