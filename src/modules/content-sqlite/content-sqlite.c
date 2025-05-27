@@ -47,14 +47,29 @@ const char *sql_store = "INSERT INTO objects (hash,size,object) "
                         "  values (?1, ?2, ?3)";
 const char *sql_objects_count = "SELECT count(1) FROM objects";
 
-const char *sql_create_table_checkpt = "CREATE TABLE if not exists checkpt("
-                                       "  key TEXT UNIQUE,"
-                                       "  value TEXT"
-                                       ");";
-const char *sql_checkpt_get = "SELECT value FROM checkpt"
-                              "  WHERE key = ?1";
-const char *sql_checkpt_put = "REPLACE INTO checkpt (key,value) "
-                              "  values (?1, ?2)";
+const char *sql_checkpt_get_v1 = "SELECT value FROM checkpt"
+                                 "  WHERE key = ?1";
+
+const char *sql_drop_checkpt = "DROP TABLE IF EXISTS checkpt";
+
+const char *sql_create_table_checkpt_v2 =
+    "CREATE TABLE if not exists checkpt_v2("
+    "  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,"
+    "  value TEXT"
+    ");";
+const char *sql_checkpt_get_v2 = "SELECT value FROM checkpt_v2"
+                                 " ORDER BY id DESC LIMIT 1";
+const char *sql_checkpt_put_v2 = "INSERT INTO checkpt_v2 (value)"
+                                 " values (?1)";
+const char *sql_checkpt_prune =
+    "DELETE FROM checkpt_v2"
+    " WHERE id IN ("
+    "   SELECT id FROM checkpt_v2 ORDER BY id DESC LIMIT -1 OFFSET ?1"
+    " );";
+
+const char *sql_table_list = "SELECT tbl_name FROM sqlite_master where type = 'table'";
+
+#define MAX_CHECKPOINTS_DEFAULT 5
 
 struct content_stats {
     tstat_t load;
@@ -69,6 +84,7 @@ struct content_sqlite {
     sqlite3_stmt *store_stmt;
     sqlite3_stmt *checkpt_get_stmt;
     sqlite3_stmt *checkpt_put_stmt;
+    sqlite3_stmt *checkpt_prune_stmt;
     flux_t *h;
     char *hashfun;
     int hash_size;
@@ -77,6 +93,7 @@ struct content_sqlite {
     struct content_stats stats;
     char *journal_mode;
     char *synchronous;
+    int max_checkpoints;
     bool truncate;
 };
 
@@ -376,15 +393,6 @@ void checkpoint_get_cb (flux_t *h,
     const char *errstr = NULL;
     json_error_t error;
 
-    if (sqlite3_bind_text (ctx->checkpt_get_stmt,
-                           1,
-                           (char *)KVS_DEFAULT_CHECKPOINT,
-                           strlen (KVS_DEFAULT_CHECKPOINT),
-                           SQLITE_STATIC) != SQLITE_OK) {
-        log_sqlite_error (ctx, "checkpt_get: binding key");
-        set_errno_from_sqlite_error (ctx);
-        goto error;
-    }
     if (sqlite3_step (ctx->checkpt_get_stmt) != SQLITE_ROW) {
         errno = ENOENT;
         goto error;
@@ -433,15 +441,6 @@ void checkpoint_put_cb (flux_t *h,
     }
     if (sqlite3_bind_text (ctx->checkpt_put_stmt,
                            1,
-                           (char *)KVS_DEFAULT_CHECKPOINT,
-                           strlen (KVS_DEFAULT_CHECKPOINT),
-                           SQLITE_STATIC) != SQLITE_OK) {
-        log_sqlite_error (ctx, "checkpt_put: binding key");
-        set_errno_from_sqlite_error (ctx);
-        goto error;
-    }
-    if (sqlite3_bind_text (ctx->checkpt_put_stmt,
-                           2,
                            value,
                            strlen (value),
                            SQLITE_STATIC) != SQLITE_OK) {
@@ -455,15 +454,28 @@ void checkpoint_put_cb (flux_t *h,
         set_errno_from_sqlite_error (ctx);
         goto error;
     }
+    if (sqlite3_bind_int (ctx->checkpt_prune_stmt,
+                          1,
+                          ctx->max_checkpoints) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt_prune: binding count");
+        goto error;
+    }
+    if (sqlite3_step (ctx->checkpt_prune_stmt) != SQLITE_DONE) {
+        log_sqlite_error (ctx, "checkpt_prune: executing stmt");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "flux_respond");
     (void )sqlite3_reset (ctx->checkpt_put_stmt);
+    (void )sqlite3_reset (ctx->checkpt_prune_stmt);
     free (value);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "flux_respond_error");
     (void )sqlite3_reset (ctx->checkpt_put_stmt);
+    (void )sqlite3_reset (ctx->checkpt_prune_stmt);
     free (value);
 }
 
@@ -486,6 +498,10 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
         if (ctx->checkpt_put_stmt) {
             if (sqlite3_finalize (ctx->checkpt_put_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize checkpt_put_stmt");
+        }
+        if (ctx->checkpt_prune_stmt) {
+            if (sqlite3_finalize (ctx->checkpt_prune_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize checkpt_prune_stmt");
         }
         if (ctx->db) {
             if (sqlite3_close (ctx->db) != SQLITE_OK)
@@ -652,7 +668,7 @@ static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
         goto error;
     }
     if (sqlite3_exec (ctx->db,
-                      sql_create_table_checkpt,
+                      sql_create_table_checkpt_v2,
                       NULL,
                       NULL,
                       NULL) != SQLITE_OK) {
@@ -676,7 +692,7 @@ static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
         goto error;
     }
     if (sqlite3_prepare_v2 (ctx->db,
-                            sql_checkpt_get,
+                            sql_checkpt_get_v2,
                             -1,
                             &ctx->checkpt_get_stmt,
                             NULL) != SQLITE_OK) {
@@ -684,11 +700,19 @@ static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
         goto error;
     }
     if (sqlite3_prepare_v2 (ctx->db,
-                            sql_checkpt_put,
+                            sql_checkpt_put_v2,
                             -1,
                             &ctx->checkpt_put_stmt,
                             NULL) != SQLITE_OK) {
         log_sqlite_error (ctx, "preparing checkpt_put stmt");
+        goto error;
+    }
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_checkpt_prune,
+                            -1,
+                            &ctx->checkpt_prune_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing checkpt prune stmt");
         goto error;
     }
     if (sqlite3_exec (ctx->db,
@@ -710,6 +734,123 @@ static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
 error:
     set_errno_from_sqlite_error (ctx);
     return -1;
+}
+
+static int content_sqlite_checkpt_migrate (struct content_sqlite *ctx)
+{
+    sqlite3_stmt *checkpt_get_v1_stmt = NULL;
+    json_t *o = NULL;
+    const char *s;
+    int rv = -1;
+
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_checkpt_get_v1,
+                            -1,
+                            &checkpt_get_v1_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing checkpt_get migrate stmt");
+        goto error;
+    }
+
+    if (sqlite3_bind_text (checkpt_get_v1_stmt,
+                           1,
+                           (char *)KVS_DEFAULT_CHECKPOINT,
+                           strlen (KVS_DEFAULT_CHECKPOINT),
+                           SQLITE_STATIC) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt migrate: binding key");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    /* no checkpoint stored, just drop the table */
+    if (sqlite3_step (checkpt_get_v1_stmt) != SQLITE_ROW)
+        goto drop;
+
+    s = (const char *)sqlite3_column_text (checkpt_get_v1_stmt, 0);
+
+    if (!(o = json_loads (s, 0, NULL))) {
+        /* version 0 checkpoint blobref not supported */
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "invalid checkpoint format in legacy checkpt table");
+        goto error;
+    }
+
+    if (sqlite3_bind_text (ctx->checkpt_put_stmt,
+                           1,
+                           s,
+                           strlen (s),
+                           SQLITE_STATIC) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt_put: binding value");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+    if (sqlite3_step (ctx->checkpt_put_stmt) != SQLITE_DONE
+                    && sqlite3_errcode (ctx->db) != SQLITE_CONSTRAINT) {
+        log_sqlite_error (ctx, "checkpt_put: executing stmt");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    (void )sqlite3_reset (checkpt_get_v1_stmt);
+    (void )sqlite3_reset (ctx->checkpt_put_stmt);
+
+drop:
+    if (sqlite3_exec (ctx->db,
+                      sql_drop_checkpt,
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "drop checkpt");
+        goto error;
+    }
+    rv = 0;
+error:
+    if (checkpt_get_v1_stmt) {
+        if (sqlite3_finalize (checkpt_get_v1_stmt) != SQLITE_OK)
+            log_sqlite_error (ctx, "sqlite_finalize checkpt_get_v1_stmt");
+    }
+    json_decref (o);
+    return rv;
+}
+
+static int content_sqlite_table_exists (struct content_sqlite *ctx,
+                                        const char *table_name,
+                                        bool *exists)
+{
+    sqlite3_stmt *table_list_stmt = NULL;
+    int rv = 0;
+
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_table_list,
+                            -1,
+                            &table_list_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing sql_table_list stmt");
+        goto cleanup;
+    }
+
+    (*exists) = false;
+    while (sqlite3_step (table_list_stmt) == SQLITE_ROW) {
+        const char *s = (const char *)sqlite3_column_text (table_list_stmt, 0);
+        if (sqlite3_column_type (table_list_stmt, 0) != SQLITE_TEXT) {
+            flux_log (ctx->h, LOG_ERR, "table_list: tbl_name not a string");
+            errno = EINVAL;
+            goto cleanup;
+        }
+        if (streq (s, table_name)) {
+            (*exists) = true;
+            break;
+        }
+    }
+
+    rv = 0;
+cleanup:
+    if (table_list_stmt) {
+        if (sqlite3_finalize (table_list_stmt) != SQLITE_OK)
+            log_sqlite_error (ctx, "sqlite_finalize table_list_stmt");
+    }
+    return rv;
 }
 
 static void content_sqlite_destroy (struct content_sqlite *ctx)
@@ -755,6 +896,7 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
         goto error;
     if (set_config (&ctx->synchronous, "NORMAL") < 0)
         goto error;
+    ctx->max_checkpoints = MAX_CHECKPOINTS_DEFAULT;
 
     /* Some tunables:
      * - the hash function, e.g. sha1, sha256
@@ -835,13 +977,15 @@ static int process_config (struct content_sqlite *ctx,
     flux_error_t error;
     const char *journal_mode = NULL;
     const char *synchronous = NULL;
+    int tmp_max_checkpoints = ctx->max_checkpoints;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s}}",
+                          "{s?{s?s s?s s?i}}",
                           "content-sqlite",
                             "journal_mode", &journal_mode,
-                            "synchronous", &synchronous) < 0) {
+                            "synchronous", &synchronous,
+                            "max_checkpoints", &tmp_max_checkpoints) < 0) {
         flux_log_error (ctx->h, "%s", error.text);
         return -1;
     }
@@ -863,6 +1007,13 @@ static int process_config (struct content_sqlite *ctx,
         if (set_config (&ctx->synchronous, synchronous) < 0)
             return -1;
     }
+    if (tmp_max_checkpoints <= 0) {
+        flux_log (ctx->h, LOG_ERR, "invalid max_checkpoints config");
+        errno = EINVAL;
+        return -1;
+    }
+    ctx->max_checkpoints = tmp_max_checkpoints;
+
     return 0;
 }
 
@@ -891,6 +1042,20 @@ static int process_args (struct content_sqlite *ctx,
             if (set_config (&ctx->synchronous, argv[i] + 12) < 0)
                 return -1;
         }
+        else if (strstarts (argv[i], "max-checkpoints=")) {
+            char *endptr;
+            int tmp_max_checkpoints;
+            errno = 0;
+            tmp_max_checkpoints = strtoul (argv[i] + 16, &endptr, 10);
+            if (errno != 0
+                || *endptr != '\0'
+                || tmp_max_checkpoints <= 0) {
+                flux_log (ctx->h, LOG_ERR, "invalid max-checkpoints specified");
+                errno = EINVAL;
+                return -1;
+            }
+            ctx->max_checkpoints = tmp_max_checkpoints;
+        }
         else if (streq ("truncate", argv[i])) {
             *truncate = true;
         }
@@ -907,6 +1072,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     struct content_sqlite *ctx;
     bool truncate = false;
+    bool exists = false;
     int rc = -1;
 
     if (!(ctx = content_sqlite_create (h))) {
@@ -918,6 +1084,10 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (process_args (ctx, argc, argv, &truncate) < 0)
         goto done;
     if (content_sqlite_opendb (ctx, truncate) < 0)
+        goto done;
+    if (content_sqlite_table_exists (ctx, "checkpt", &exists) < 0
+        || (exists
+            && content_sqlite_checkpt_migrate (ctx) < 0))
         goto done;
     if (content_register_service (h, "content-backing") < 0)
         goto done;
