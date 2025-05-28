@@ -44,13 +44,13 @@ AS_IF([printf "%d.%d.%d" ${AX_MAJOR_VERSION} ${AX_MINOR_VERSION} ${AX_POINT_VERS
     version_err_msg="
     VERSION ${VERSION} is invalid.
     Try the following to remedy this:
-    
-      1. Run \`git fetch --tags\` before building. Versions in 
+
+      1. Run \`git fetch --tags\` before building. Versions in
          flux-core are derived from \`git describe\` which uses
 	 the most recent tag.
-      2. If you are running remote CI in a fork of the main repository, 
+      2. If you are running remote CI in a fork of the main repository,
          try pushing the upstream tags to your fork with
-	 \`git push --tags <your_remote>\` to make sure tags are 
+	 \`git push --tags <your_remote>\` to make sure tags are
 	 synchronized in your fork.
       3. Set the variable manually, with FLUX_VERSION=<version>
          in your environment.
