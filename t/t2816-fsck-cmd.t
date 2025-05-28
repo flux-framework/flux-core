@@ -81,6 +81,9 @@ test_expect_success 'make a reference invalid' '
 	cat dirb.out | jq -c .data[1]=\"sha1-1234567890123456789012345678901234567890\" > dirbbad.out &&
 	flux kvs put --treeobj dir.b="$(cat dirbbad.out)"
 '
+test_expect_success 'call sync to ensure we have checkpointed' '
+	flux kvs sync
+'
 test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
@@ -109,6 +112,9 @@ test_expect_success 'make a reference invalid' '
 	cat dirc.out | jq -c .data[1]=\"sha1-1234567890123456789012345678901234567890\" > dircbad1.out &&
 	cat dircbad1.out | jq -c .data[2]=\"sha1-1234567890123456789012345678901234567890\" > dircbad2.out &&
 	flux kvs put --treeobj dir.c="$(cat dircbad2.out)"
+'
+test_expect_success 'call sync to ensure we have checkpointed' '
+	flux kvs sync
 '
 test_expect_success 'unload kvs' '
 	flux module remove kvs
