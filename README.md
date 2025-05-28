@@ -33,9 +33,13 @@ are available for [redhat](scripts/install-deps-rpm.sh) and
 ```
 ./autogen.sh   # skip if building from a release tarball
 ./configure
-make
-make check
+make -jN
+make -jN check
 ```
+
+> [!TIP]
+> `make check` runs many tests. Use of `-jN` recommended.
+> For more details about the testsuite, see the [README](t/README.md).
 
 ##### VSCode Dev Containers
 
