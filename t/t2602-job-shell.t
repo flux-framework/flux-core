@@ -28,13 +28,13 @@ test_expect_success 'job-shell: reads J not jobspec' '
 	flux job urgency ${id} default &&
 	flux job attach -vEX ${id}
 '
-
+# Note: J.new sent on stdin to `flux kvs put` below to avoid overflowing
+# maximum argument length.
 test_expect_success 'job-shell: fails on modified J' '
 	id=$(flux submit --wait-event=priority \
 		-n1 --urgency=hold true) &&
 	flux job info ${id} J | sed s/./%/85 > J.new &&
-	flux kvs put \
-		$(flux job id --to=kvs ${id}).J="$(cat J.new)" &&
+	cat J.new | flux kvs put --raw $(flux job id --to=kvs ${id}).J=- &&
 	flux job urgency ${id} default &&
 	test_must_fail flux job attach -vEX ${id}
 '
