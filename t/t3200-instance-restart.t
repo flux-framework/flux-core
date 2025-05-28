@@ -7,11 +7,6 @@ test_description='Test instance restart'
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
-if test -n "$S3_ACCESS_KEY_ID"; then
-    test_set_prereq S3
-    export FLUX_CONF_DIR=$(pwd)
-fi
-
 test_expect_success 'run a job in persistent instance' '
 	flux start --setattr=statedir=$(pwd) \
 	           flux submit true >id1.out
@@ -86,40 +81,6 @@ test_expect_success 'restart instance and list inactive jobs' '
 
 test_expect_success 'inactive job list contains job from before restart' '
 	grep $(cat files_id1.out) files_list.out
-'
-
-test_expect_success S3 'create creds.toml from env' '
-	mkdir -p creds &&
-	cat >creds/creds.toml <<-CREDS
-	access-key-id = "$S3_ACCESS_KEY_ID"
-	secret-access-key = "$S3_SECRET_ACCESS_KEY"
-	CREDS
-'
-
-test_expect_success S3 'create content-s3.toml from env' '
-	cat >content-s3.toml <<-TOML
-	[content-s3]
-	credential-file = "$(pwd)/creds/creds.toml"
-	uri = "http://$S3_HOSTNAME"
-	bucket = "$S3_BUCKET"
-	virtual-host-style = false
-	TOML
-'
-
-test_expect_success S3 'run a job in persistent instance (content-s3)' '
-	flux start \
-	    -Scontent.backing-module=content-s3 \
-	    flux submit true >files_id2.out
-'
-test_expect_success S3 'restart instance and list inactive jobs' '
-	flux start \
-	    -Scontent.backing-module=content-s3 \
-	    flux jobs --no-header --format={id} \
-	        --filter=INACTIVE >files_list2.out
-'
-
-test_expect_success S3 'inactive job list contains job from before restart' '
-	grep $(cat files_id2.out) files_list2.out
 '
 
 test_done
