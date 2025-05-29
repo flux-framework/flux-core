@@ -22,6 +22,9 @@ if __name__ == "__main__":
         "-t", "--timeout", type=str, metavar="MS", help="Set busytimeout"
     )
     parser.add_argument(
+        "--nokey", action="store_true", help="don't output key, just value"
+    )
+    parser.add_argument(
         "dbpath", type=str, metavar="DBPATH", nargs=1, help="database path"
     )
     parser.add_argument("query", type=str, metavar="QUERY", nargs=1, help="query")
@@ -58,7 +61,10 @@ if __name__ == "__main__":
     for row in rows:
         for key in row.keys():
             val = row[key]
-            print(f"{key} = {val}", file=utf8out)
+            if args.nokey:
+                print(f"{val}", file=utf8out)
+            else:
+                print(f"{key} = {val}", file=utf8out)
 
     con.close()
     sys.exit(0)
