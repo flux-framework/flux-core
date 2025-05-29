@@ -10,7 +10,7 @@
 
 # Query a sqlite db for testing purposes
 
-# Usage: flux python query.py [OPTIONS] dbpath query
+# Usage: flux python sqlite-query.py [OPTIONS] dbpath query
 
 import argparse
 import sqlite3
