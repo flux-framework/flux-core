@@ -127,7 +127,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-run-housekeeping \
 	flux-housekeeping.py \
 	flux-run-prolog \
-	flux-run-epilog
+	flux-run-epilog \
+	flux-modprobe.py
 
 fluxcmd_PROGRAMS = \
 	flux-terminus \
