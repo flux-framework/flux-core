@@ -60,7 +60,6 @@ RUN yum -y update \
 	hwloc-devel \
 	lua-devel \
 	valgrind-devel \
-	libs3-devel \
 	systemd-devel \
 	libarchive-devel \
 	pam-devel \

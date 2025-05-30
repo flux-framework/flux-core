@@ -89,7 +89,6 @@ RUN apt-get update \
         uuid-dev \
         libhwloc-dev \
         libopenmpi-dev \
-        libs3-dev \
         libarchive-dev \
         libpam-dev \
  && rm -rf /var/lib/apt/lists/*

@@ -67,19 +67,6 @@ class BuildMatrix:
 
         return False, command
 
-    def env_add_s3(self, args, env):
-        """Add necessary environment and args to test content-s3 module"""
-        env.update(
-            dict(
-                S3_ACCESS_KEY_ID="minioadmin",
-                S3_SECRET_ACCESS_KEY="minioadmin",
-                S3_HOSTNAME="127.0.0.1:9000",
-                S3_BUCKET="flux-minio",
-            )
-        )
-        args += " --enable-content-s3"
-        return args
-
     def add_build(
         self,
         name=None,
@@ -88,7 +75,6 @@ class BuildMatrix:
         jobs=6,
         env=None,
         docker_tag=False,
-        test_s3=False,
         coverage=False,
         coverage_flags=None,
         recheck=True,
@@ -128,9 +114,6 @@ class BuildMatrix:
             #  Only export docker_tag if this is main branch or a tag:
             docker_tag, command = self.create_docker_tag(image, env, command, platform)
 
-        if test_s3:
-            args = self.env_add_s3(args, env)
-
         if coverage:
             env["COVERAGE"] = "t"
 
@@ -151,7 +134,6 @@ class BuildMatrix:
                 "branch": self.branch,
                 "coverage": coverage,
                 "coverage_flags": coverage_flags,
-                "test_s3": test_s3,
                 "docker_tag": docker_tag,
                 "needs_buildx": needs_buildx,
                 "create_release": create_release,
@@ -268,9 +250,9 @@ matrix.add_build(
 )
 
 
-# Debian: gcc-12, content-s3, distcheck
+# Debian: gcc-12, distcheck
 matrix.add_build(
-    name="bookworm - gcc-12,content-s3,distcheck",
+    name="bookworm - gcc-12,distcheck",
     image="bookworm",
     env=dict(
         CC="gcc-12",
@@ -278,7 +260,6 @@ matrix.add_build(
         DISTCHECK="t",
     ),
     args="--with-flux-security",
-    test_s3=True,
 )
 
 # fedora40: clang-18
