@@ -410,7 +410,6 @@ dist_check_SCRIPTS = \
 	valgrind/workload.d/resource \
 	content/content-helper.sh \
 	kvs/kvs-helper.sh \
-	kvs/change-checkpoint.py \
 	job-manager/exec-service.lua \
 	job-manager/drain-cancel.py \
 	job-manager/bulk-state.py \

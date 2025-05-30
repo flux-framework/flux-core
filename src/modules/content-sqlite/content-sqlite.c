@@ -393,22 +393,10 @@ void checkpoint_get_cb (flux_t *h,
     }
     s = (char *)sqlite3_column_text (ctx->checkpt_get_stmt, 0);
     if (!(o = json_loads (s, 0, &error))) {
-        if (blobref_validate (s) < 0) {
-            errstr = error.text;
-            errno = EINVAL;
-            goto error;
-        }
-        /* assume "version 0" if value is a bare blobref and return it
-         * in a json envelope */
-        if (!(o = json_pack ("{s:i s:s s:i s:f}",
-                             "version", 0,
-                             "rootref", s,
-                             "sequence", 0,
-                             "timestamp", 0.))) {
-            errstr = "failed to encode blobref in json envelope";
-            errno = EINVAL;
-            goto error;
-        }
+        /* recovery from version 0 checkpoint blobref not supported */
+        errstr = error.text;
+        errno = EINVAL;
+        goto error;
     }
     if (flux_respond_pack (h,
                            msg,

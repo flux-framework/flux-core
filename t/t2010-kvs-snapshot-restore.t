@@ -9,8 +9,6 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 
 test_under_flux 1
 
-CHANGECHECKPOINT=${FLUX_SOURCE_DIR}/t/kvs/change-checkpoint.py
-
 #
 # test content-sqlite backing
 #
@@ -76,20 +74,6 @@ test_expect_success 'verify date in flux logs (sqlite)' '
 test_expect_success 're-run instance, get rootref (sqlite)' '
 	flux start --setattr=statedir=$(pwd) \
 		   flux kvs getroot -b > getrootsqlite.out
-'
-
-test_expect_success 'write rootref to checkpoint path, emulating checkpoint version=0 (sqlite)' '
-	rootref=$(cat getrootsqlite.out) &&
-	${CHANGECHECKPOINT} $(pwd)/content.sqlite "kvs-primary" ${rootref}
-'
-
-test_expect_success 're-run instance, verify checkpoint correctly loaded (sqlite)' '
-	flux start --setattr=statedir=$(pwd) \
-		   flux dmesg >dmesgsqlite2.out
-'
-
-test_expect_success 'verify checkpoint loaded with no date (sqlite)' '
-	grep checkpoint dmesgsqlite2.out | grep "N\/A"
 '
 
 #
