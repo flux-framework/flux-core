@@ -61,7 +61,6 @@ RUN yum -y update \
       devtoolset-7-make \
       lz4-devel \
       jq \
-      libs3-devel \
       libarchive-devel \
       pam-devel \
  && yum clean all
