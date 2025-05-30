@@ -193,12 +193,6 @@ jobs:
         pip3 install --upgrade pip ;
         pip3 install --upgrade --force-reinstall coverage ;
 
-    - name: s3 setup
-      env: ${{matrix.env}}
-      if: matrix.test_s3
-      run: |
-        docker run -d -p 9000:9000 minio/minio server /data; \
-
     - name: generate dumpfile from most recent flux-core tag
       if: (matrix.create_release != true)
       run: |
