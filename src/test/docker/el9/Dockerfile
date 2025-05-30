@@ -58,7 +58,6 @@ RUN dnf -y install 'dnf-command(config-manager)' \
 	hwloc-devel \
 	lua-devel \
 	valgrind-devel \
-	libs3-devel \
 	systemd-devel \
 	libarchive-devel \
 	pam-devel \
