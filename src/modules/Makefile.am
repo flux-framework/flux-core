@@ -23,10 +23,6 @@ SUBDIRS = \
 	resource \
 	sdbus
 
-if ENABLE_CONTENT_S3
-SUBDIRS += content-s3
-endif
-
 fluxmod_LTLIBRARIES = \
 	barrier.la \
 	connector-local.la \
@@ -47,10 +43,6 @@ fluxmod_LTLIBRARIES = \
 	sdmon.la \
 	sdexec.la \
 	sdbus.la
-
-if ENABLE_CONTENT_S3
-fluxmod_LTLIBRARIES += content-s3.la
-endif
 
 # N.B. SOURCES should be empty when module subdir is listed in
 # SUBDIRS above.  This avoids distcheck problems with older automake.
@@ -91,16 +83,6 @@ content_files_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
 content_files_la_LDFLAGS = $(fluxmod_ldflags) -module
-
-if ENABLE_CONTENT_S3
-content_s3_la_SOURCES =
-content_s3_la_LIBADD = \
-	$(builddir)/content-s3/libcontent-s3.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(LIBS3)
-content_s3_la_LDFLAGS = $(fluxmod_ldflags) -module
-endif
 
 content_sqlite_la_SOURCES = \
         content-sqlite/content-sqlite.c
