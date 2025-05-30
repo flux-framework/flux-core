@@ -54,7 +54,6 @@ RUN yum -y update \
 	mpich-devel \
 	lua-devel \
 	valgrind-devel \
-	libs3-devel \
 	libarchive-devel \
 	pam-devel \
 #  Other deps
