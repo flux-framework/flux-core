@@ -44,13 +44,13 @@ AS_IF([printf "%d.%d.%d" ${AX_MAJOR_VERSION} ${AX_MINOR_VERSION} ${AX_POINT_VERS
     version_err_msg="
     VERSION ${VERSION} is invalid.
     Try the following to remedy this:
-    
-      1. Run \`git fetch --tags\` before building. Versions in 
+
+      1. Run \`git fetch --tags\` before building. Versions in
          flux-core are derived from \`git describe\` which uses
 	 the most recent tag.
-      2. If you are running remote CI in a fork of the main repository, 
+      2. If you are running remote CI in a fork of the main repository,
          try pushing the upstream tags to your fork with
-	 \`git push --tags <your_remote>\` to make sure tags are 
+	 \`git push --tags <your_remote>\` to make sure tags are
 	 synchronized in your fork.
       3. Set the variable manually, with FLUX_VERSION=<version>
          in your environment.
@@ -450,29 +450,6 @@ AS_IF([test "x$with_flux_security" = "xyes"], [
 ])
 AM_CONDITIONAL([HAVE_FLUX_SECURITY], [test "x$with_flux_security" = "xyes"])
 
-AC_ARG_ENABLE([content-s3],
-    AS_HELP_STRING([--enable-content-s3], [Enable S3 storage backend]))
-
-AS_IF([test "x$enable_content_s3" = "xyes"], [
-    X_AC_CHECK_COND_LIB(s3, S3_initialize)
-    AS_IF([test "x$ac_cv_lib_s3_S3_initialize" != "xyes"], [
-      AC_MSG_ERROR([configured with --enable-content-s3, but libs3 not found])
-    ])
-
-    AC_COMPILE_IFELSE(
-        [AC_LANG_PROGRAM([#include <libs3.h>],
-                         [S3_create_bucket (0,0,0,0,0,0,0,0,0,0,0);])],
-        AC_DEFINE([HAVE_S3_AUTH_REGION], [1], [S3_create_bucket has 11 args]),
-        AC_COMPILE_IFELSE(
-            [AC_LANG_PROGRAM([#include <libs3.h>],
-                             [S3_create_bucket (0,0,0,0,0,0,0,0,0,0,0,0,0);])],
-            AC_DEFINE([HAVE_S3_TIMEOUT_ARG], [1], [S3_create_bucket has 13 args])
-        )
-    )
-])
-
-AM_CONDITIONAL([ENABLE_CONTENT_S3], [test "x$enable_content_s3" = "xyes"])
-
 AC_ARG_ENABLE(
     [broken-locale-mode],
     AS_HELP_STRING([--enable-broken-locale-mode],
@@ -641,7 +618,6 @@ AC_CONFIG_FILES( \
   src/modules/Makefile \
   src/modules/kvs/Makefile \
   src/modules/content-files/Makefile \
-  src/modules/content-s3/Makefile \
   src/modules/job-ingest/Makefile \
   src/modules/job-manager/Makefile \
   src/modules/job-list/Makefile \

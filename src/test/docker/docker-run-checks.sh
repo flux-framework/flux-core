@@ -238,16 +238,11 @@ else
         -e INCEPTION \
         -e ASAN_OPTIONS \
         -e BUILD_DIR \
-        -e S3_ACCESS_KEY_ID \
-        -e S3_SECRET_ACCESS_KEY \
-        -e S3_HOSTNAME \
-        -e S3_BUCKET \
 	-e PSM3_HAL \
 	-e PSM3_DEVICES \
         --cap-add SYS_PTRACE \
         --tty \
         ${INTERACTIVE:+--interactive} \
-        --network=host \
         ${BUILD_IMAGE} \
         ${INTERACTIVE:-./src/test/checks_run.sh ${CONFIGURE_ARGS}} \
     || die "docker run failed"
