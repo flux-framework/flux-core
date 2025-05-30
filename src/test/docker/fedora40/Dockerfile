@@ -56,7 +56,6 @@ RUN dnf -y install \
 	mpich-devel \
 	lua-devel \
 	valgrind-devel \
-	libs3-devel \
 	libarchive-devel \
 	pam-devel \
 	pmix-devel \
