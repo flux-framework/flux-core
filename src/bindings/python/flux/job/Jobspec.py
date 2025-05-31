@@ -822,6 +822,57 @@ class JobspecV1(Jobspec):
             if task["count"].keys().isdisjoint({"per_slot", "total"}):
                 raise ValueError("count per_slot or total must be set")
 
+    def _set_extra_options(
+        self,
+        duration=None,
+        environment=None,
+        env_expand=None,
+        cwd=None,
+        rlimits=None,
+        name=None,
+        input=None,
+        output=None,
+        error=None,
+        label_io=False,
+        unbuffered=False,
+        queue=None,
+        bank=None,
+    ):
+        """Process common jobspec factory args and return amended jobspec"""
+        if duration is not None:
+            self.duration = duration
+        if environment is not None:
+            self.environment = environment
+        if env_expand is not None:
+            if not isinstance(env_expand, abc.Mapping):
+                raise ValueError("env_expand must be a mapping")
+            self.setattr_shell_option("env-expand", env_expand)
+        if cwd is not None:
+            self.cwd = cwd
+        if rlimits is not None:
+            if not isinstance(rlimits, abc.Mapping):
+                raise ValueError("rlimits must be a mapping")
+            self.setattr_shell_option("rlimit", rlimits)
+        if name is not None:
+            self.setattr("job.name", name)
+        if input is not None:
+            self.input = input
+        if output is not None and output not in ("none", "kvs"):
+            self.output = output
+            if label_io:
+                self.setattr_shell_option("output.stdout.label", True)
+        if error is not None and error not in ("none", "kvs"):
+            self.error = error
+            if label_io:
+                self.setattr_shell_option("output.stderr.label", True)
+        if unbuffered:
+            self.unbuffered = True
+        if queue is not None:
+            self.setattr("queue", queue)
+        if bank is not None:
+            self.setattr("bank", bank)
+        return self
+
     @classmethod
     # pylint: disable=too-many-branches,too-many-locals,too-many-statements
     def per_resource(
@@ -833,6 +884,7 @@ class JobspecV1(Jobspec):
         per_resource_count=None,
         gpus_per_node=None,
         exclusive=False,
+        **kwargs,
     ):
         """
         Factory function that builds a v1 jobspec from an explicit count
@@ -850,6 +902,8 @@ class JobspecV1(Jobspec):
                                 `per_resource_type`
             gpus_per_node: With nnodes, request a number of gpus per node
             exclusive: with nnodes, request whole nodes exclusively
+            **kwargs: Extra named arguments as accepted in
+                :func:`~JobspecV1.from_command`
         """
 
         #  Handle per-resource specification:
@@ -940,7 +994,7 @@ class JobspecV1(Jobspec):
         attributes = {"system": {"duration": 0}}
         if per_resource:
             set_treedict(attributes, "system.shell.options.per-resource", per_resource)
-        return cls(resources, tasks, attributes=attributes)
+        return cls(resources, tasks, attributes=attributes)._set_extra_options(**kwargs)
 
     @classmethod
     # pylint: disable=too-many-branches
@@ -952,18 +1006,62 @@ class JobspecV1(Jobspec):
         gpus_per_task=None,
         num_nodes=None,
         exclusive=False,
+        duration=None,
+        environment=None,
+        env_expand=None,
+        cwd=None,
+        rlimits=None,
+        name=None,
+        input=None,
+        output=None,
+        error=None,
+        label_io=False,
+        unbuffered=False,
+        queue=None,
+        bank=None,
     ):
         """
         Factory function that builds the minimum legal v1 jobspec.
 
-        Use setters to assign additional properties.
-
-        :param command: command to execute
-        :type command: iterable of str
-        :param num_tasks: number of MPI tasks to create
-        :param cores_per_task: number of cores to allocate per task
-        :param gpus_per_task: number of GPUs to allocate per task
-        :param num_nodes: distribute allocated tasks across N individual nodes
+        Args:
+            command (iterable of str): command to execute
+            num_tasks (int): number of tasks to create
+            cores_per_task (int): number of cores to allocate per task
+            gpus_per_task (int): number of GPUs to allocate per task
+            num_nodes (int): distribute allocated tasks across N individual
+                nodes.
+            exclusive (bool): always allocate nodes exclusively
+            duration (Number, str): assign a time limit to the job in Flux
+                Standard Duration (if str), :obj:`datetime.timedelta` or
+                Number in seconds. If not provided then the duration will
+                unlimited unless set via the :py:attr:`~JobspecV1.duration`
+                setter.
+            environment (Mapping): Set the environment for the job via a
+                mapping of environment variable name to value. If not
+                provided then the environment will be empty and must be
+                assigned via the :attr:`~JobspecV1.environment` setter.
+            env_expand (Mapping): A  mapping of environment variables that
+                contain mustache templates to be expanded by the job shell
+                at runtime. (See the :manpage:`flux-run(1)` MUSTACHE
+                TEMPLATES section for more info)
+            rlimits (Mapping): Set process resource limits for the job via
+                a mapping of limit name to value, where a value of -1 is
+                taken as unlimited. E.g. ``{"nofile": 12000}``.
+            cwd (str): Set the current working directory for the job. If
+                unset, then a working directory may be set using the
+                :attr:`~JobspecV1.cwd` setter.
+            name (str): Set a job name.
+            input (str, :obj:`os.PathLike`): Set job input to a file path.
+            output (str, :obj:`os.PathLike`): Set job output to a file path.
+                ``stderr`` will be copied to the same path as ``stdout``
+                by default unless it is set separately.
+            error: (str, :obj:`os.PathLike`): Set job stderr to a file path.
+            label_io (bool): For file output, label output with the source
+                task ids. Default is False.
+            unbuffered (bool): Disable output buffering as much as
+                practical.
+            queue (str): Set the queue for the job.
+            bank (str): Set the bank for the job.
         """
         if not isinstance(num_tasks, int) or num_tasks < 1:
             raise ValueError("task count must be a integer >= 1")
@@ -1001,7 +1099,21 @@ class JobspecV1(Jobspec):
         resources = [resource_section]
         tasks = [{"command": command, "slot": "task", "count": task_count_dict}]
         attributes = {"system": {"duration": 0}}
-        return cls(resources, tasks, attributes=attributes)
+        return cls(resources, tasks, attributes=attributes)._set_extra_options(
+            duration=duration,
+            environment=environment,
+            env_expand=env_expand,
+            cwd=cwd,
+            rlimits=rlimits,
+            name=name,
+            input=input,
+            output=output,
+            error=error,
+            label_io=label_io,
+            unbuffered=unbuffered,
+            queue=queue,
+            bank=bank,
+        )
 
     @classmethod
     def from_batch_command(
@@ -1016,6 +1128,7 @@ class JobspecV1(Jobspec):
         broker_opts=None,
         exclusive=False,
         conf=None,
+        **kwargs,
     ):
         """
         Create a Jobspec describing a nested Flux instance controlled by
@@ -1052,6 +1165,8 @@ class JobspecV1(Jobspec):
                 jobspec 'files' (RFC 37 File Archive) attribute as `conf.json`,
                 and broker_opts will be extended to add
                 `-c{{tmpdir}}/conf.json`
+            **kwargs: Extra named arguments as accepted in
+                :func:`~JobspecV1.from_command`
         """
         if not script.startswith("#!"):
             raise ValueError(f"{jobname} does not appear to start with '#!'")
@@ -1065,10 +1180,11 @@ class JobspecV1(Jobspec):
             broker_opts=broker_opts,
             exclusive=exclusive,
             conf=conf,
+            name=jobname,
+            **kwargs,
         )
         #  Copy script contents into jobspec
         jobspec.add_file("script", script, perms=0o700, encoding="utf-8")
-        jobspec.setattr("system.job.name", jobname)
         return jobspec
 
     @classmethod
@@ -1082,6 +1198,7 @@ class JobspecV1(Jobspec):
         broker_opts=None,
         exclusive=False,
         conf=None,
+        **kwargs,
     ):
         """
         Create a Jobspec describing a nested Flux instance controlled by
@@ -1112,6 +1229,8 @@ class JobspecV1(Jobspec):
                 jobspec 'files' (RFC 37 File Archive) attribute as `conf.json`,
                 and broker_opts will be extended to add
                 `-c{{tmpdir}}/conf.json`
+            **kwargs: Extra named arguments as accepted in
+                :func:`~JobspecV1.from_command`
         """
         broker_opts = [] if broker_opts is None else broker_opts
         if conf is not None:
@@ -1123,6 +1242,7 @@ class JobspecV1(Jobspec):
             gpus_per_task=gpus_per_slot,
             num_nodes=num_nodes,
             exclusive=exclusive,
+            **kwargs,
         )
         jobspec.setattr_shell_option("per-resource.type", "node")
         jobspec.setattr_shell_option("mpi", "none")
