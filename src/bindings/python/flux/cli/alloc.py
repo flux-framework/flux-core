@@ -59,6 +59,12 @@ class AllocCmd(base.BatchAllocCmd):
             broker_opts=base.list_split(args.broker_opts),
             exclusive=args.exclusive,
             conf=args.conf.config,
+            duration=args.time_limit,
+            name=args.job_name,
+            cwd=args.cwd if args.cwd is not None else os.getcwd(),
+            unbuffered=args.unbuffered,
+            queue=args.queue,
+            bank=args.bank,
         )
 
         self.update_jobspec_common(args, jobspec)
