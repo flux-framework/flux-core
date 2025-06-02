@@ -436,11 +436,81 @@ class TestJob(unittest.TestCase):
                 self.fh,
                 JobspecV1.from_batch_command("sleep 0", "nested sleep with no shebang"),
             )
+        # extra parameters are accepted:
+        environment = {"TEST": 1, "FOO": "BAR"}
+        env_expand = {"EXPAND": "{{tmpdir}}"}
+        rlimits = {"nofile": 12000}
+
+        jobspec = JobspecV1.from_batch_command(
+            "#!/bin/sh\0sleep0",
+            "testjob",
+            environment=environment,
+            env_expand=env_expand,
+            rlimits=rlimits,
+            duration=60.0,
+            cwd="/my/cwd",
+            output="output-file",
+            error="error-file",
+            label_io=True,
+            unbuffered=True,
+            queue="testq",
+            bank="testbank",
+        )
+        self.assertDictEqual(jobspec.environment, environment)
+        self.assertDictEqual(
+            jobspec.getattr("system.shell.options.env-expand"), env_expand
+        )
+        self.assertDictEqual(jobspec.getattr("system.shell.options.rlimit"), rlimits)
+        self.assertEqual(jobspec.duration, 60)
+        self.assertEqual(jobspec.cwd, "/my/cwd")
+        self.assertEqual(jobspec.output, "output-file")
+        self.assertEqual(jobspec.error, "error-file")
+        self.assertTrue(jobspec.getattr("system.shell.options.output.stdout.label"))
+        self.assertTrue(jobspec.getattr("system.shell.options.output.stderr.label"))
+        self.assertEqual(
+            jobspec.getattr("system.shell.options.output.stdout.buffer.type"),
+            "none",
+        )
+        self.assertEqual(jobspec.getattr("system.queue"), "testq")
+        self.assertEqual(jobspec.getattr("system.bank"), "testbank")
 
     def test_23_from_nest_command(self):
         """Test that `from_batch_command` produces a valid jobspec"""
         jobid = job.submit(self.fh, JobspecV1.from_nest_command(["sleep", "0"]))
         self.assertGreater(jobid, 0)
+
+        # check that extra parameters are accepted:
+        jobspec = JobspecV1.from_nest_command(
+            ["sleep", "0"],
+            name="test",
+            duration="10m",
+            cwd="/my/cwd",
+            output="output-file",
+            error="error-file",
+            label_io=True,
+            unbuffered=True,
+            queue="testq",
+            bank="testbank",
+        )
+        self.assertEqual(jobspec.duration, 600)
+        self.assertEqual(jobspec.cwd, "/my/cwd")
+        self.assertEqual(jobspec.output, "output-file")
+        self.assertEqual(jobspec.error, "error-file")
+        self.assertTrue(
+            jobspec.getattr("attributes.system.shell.options.output.stdout.label")
+        )
+        self.assertTrue(
+            jobspec.getattr("attributes.system.shell.options.output.stderr.label")
+        )
+        self.assertEqual(
+            jobspec.getattr(
+                "attributes.system.shell.options.output.stdout.buffer.type"
+            ),
+            "none",
+        )
+        self.assertEqual(jobspec.getattr("system.queue"), "testq")
+        self.assertEqual(jobspec.getattr("system.bank"), "testbank")
+        self.assertEqual(jobspec.getattr("system.job.name"), "test")
 
     def test_24_jobid(self):
         """Test JobID class"""
@@ -813,9 +883,9 @@ class TestJob(unittest.TestCase):
 
     def test_34_timeleft(self):
         spec = JobspecV1.from_command(
-            ["python3", "-c", "import flux; print(flux.job.timeleft())"]
+            ["python3", "-c", "import flux; print(flux.job.timeleft())"],
+            duration="1m",
         )
-        spec.duration = "1m"
         jobid = job.submit(self.fh, spec, waitable=True)
         job.wait(self.fh, jobid=jobid)
         try:
@@ -875,6 +945,17 @@ class TestJob(unittest.TestCase):
         jobspec.stdout = "/bar/baz"
         jobspec.duration = 1000.3133
         self.assertEqual(eval(repr(jobspec)).jobspec, jobspec.jobspec)
+
+    def test_37_test_bad_extra_args(self):
+        """Test extra Jobspec constructor args with bad values"""
+        with self.assertRaises(ValueError):
+            JobspecV1.from_command(["sleep", "0"], duration="1f")
+        with self.assertRaises(ValueError):
+            JobspecV1.from_command(["sleep", "0"], environment="foo")
+        with self.assertRaises(ValueError):
+            JobspecV1.from_command(["sleep", "0"], env_expand=1)
+        with self.assertRaises(ValueError):
+            JobspecV1.from_command(["sleep", "0"], rlimits=True)
 
 
 if __name__ == "__main__":
