@@ -176,8 +176,8 @@ int uint64_basemoji_encode (uint64_t id, char *buf, int buflen)
     /* Copy 4-byte emojis back in order so that most significant bits are
      * on the left:
      */
-    for (int i = count - 4; i >= 0; i-=4) {
-        memcpy (buf+n, reverse+i, 4);
+    for (int i = 0; i < count; i+=4) {
+        memcpy (buf+n, reverse+(count-4-i), 4);
         n+=4;
     }
     return 0;
