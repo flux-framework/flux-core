@@ -1,9 +1,6 @@
 #if HAVE_SYSTEMD
 systemdsystemunit_DATA = \
-	flux.service \
-	flux-housekeeping@.service \
-	flux-prolog@.service \
-	flux-epilog@.service
+	flux.service
 #endif
 
 tmpfilesdir = $(prefix)/lib/tmpfiles.d
