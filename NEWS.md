@@ -1,3 +1,42 @@
+flux-core version 0.75.0 - 2025-06-02
+-------------------------------------
+
+## New Features
+ * support `singleton` dependency scheme in job submission (#6827)
+ * broker: add 'mincrit' topology (#6808)
+ * add method to request extra brokers on node 0 (#6822)
+ * use local ipc for TBON when brokers are co-located (#6823)
+ * Support new flux-fsck tool to check integrity of content store (#6787, #6828)
+ * kvs: support initial-rootref option (#6775)
+ * flux-kvs: support sync command (#6818)
+ * flux-jobs: output message if results truncated (#6802)
+
+## Fixes
+ * fix compile issue with GCC13.2.0 on Zen4 (#6855)
+ * content-s3: remove module (#6840)
+ * content-sqlite: deprecate version 0 checkpoint (#6839)
+ * require Lua `posix` in `configure` and document some tips for running
+   the testsuite (#6836)
+ * broker: avoid malloc in event distribution critical path (#6811)
+ * flux-module: require argument for flux module stats (#6821)
+ * remove restriction that taskmaps cannot assign differing counts of tasks
+   to nodes in a job (#6815)
+
+## Cleanup
+ * broker: document/clean up event publishing code (#6809)
+
+## Build/CI/Testsuite/Documentation
+ * doc: remove `jinja2<3.1`, `sphinx<6.0.0` requirements (#6844)
+ * testsuite: fix potential failure in `t2602-job-shell.t` (#6841)
+ * doc: correct `flux_future_set_reactor()` prototype (#6830)
+ * doc: update glossary with parallel program terms + trivial broker cleanup
+   (#6829)
+ * kvs: add rst format to inline docs (#6503)
+ * testsuite: add one missing test and fix failing test in ci (#6817)
+ * doc: add workflows page (#6803)
+ * doc: add note to README about Sphinx debugging (#6805)
+
+
 flux-core version 0.74.0 - 2025-05-06
 -------------------------------------
 
