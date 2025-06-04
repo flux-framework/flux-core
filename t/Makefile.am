@@ -76,6 +76,7 @@ TESTSCRIPTS = \
 	t0010-generic-utils.t \
 	t0011-content-cache.t \
 	t0012-content-sqlite.t \
+	t0012-content-sqlite-checkpoints.t \
 	t0029-archive-mmap.t \
 	t0030-marshall.t \
 	t0031-constraint-parser.t \
