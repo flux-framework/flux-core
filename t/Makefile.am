@@ -400,6 +400,7 @@ dist_check_SCRIPTS = \
 	scripts/dmesg-grep.py \
 	scripts/stats-listen.py \
 	scripts/sqlite-query.py \
+	scripts/sqlite-write.py \
 	scripts/pipe.py \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
