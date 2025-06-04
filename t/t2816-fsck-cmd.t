@@ -90,6 +90,7 @@ test_expect_success 'unload kvs' '
 # line count includes extra diagnostic messages
 test_expect_success 'flux-fsck detects errors' '
 	test_must_fail flux fsck 2> fsckerrors1.out &&
+	test_debug "cat fsckerrors1.out" &&
 	count=$(cat fsckerrors1.out | wc -l) &&
 	test $count -eq 3 &&
 	grep "dir\.b" fsckerrors1.out | grep "missing blobref(s)" &&
@@ -97,11 +98,13 @@ test_expect_success 'flux-fsck detects errors' '
 '
 test_expect_success 'flux-fsck --verbose outputs details' '
 	test_must_fail flux fsck --verbose 2> fsckerrors1V.out &&
+	test_debug "cat fsckerrors1V.out" &&
 	grep "dir\.b" fsckerrors1V.out | grep "missing blobref" | grep "index=1" &&
 	grep "Total errors: 1" fsckerrors1V.out
 '
 test_expect_success 'flux-fsck no output with --quiet' '
 	test_must_fail flux fsck --quiet 2> fsckerrors2.out &&
+	test_debug "cat fsckerrors2.out" &&
 	count=$(cat fsckerrors2.out | wc -l) &&
 	test $count -eq 0
 '
@@ -122,6 +125,7 @@ test_expect_success 'unload kvs' '
 # line count includes extra diagnostic messages
 test_expect_success 'flux-fsck detects errors' '
 	test_must_fail flux fsck 2> fsckerrors3.out &&
+	test_debug "cat fsckerrors3.out" &&
 	count=$(cat fsckerrors3.out | wc -l) &&
 	test $count -eq 4 &&
 	grep "dir\.b" fsckerrors3.out | grep "missing blobref(s)" &&
@@ -130,6 +134,7 @@ test_expect_success 'flux-fsck detects errors' '
 '
 test_expect_success 'flux-fsck --verbose outputs details' '
 	test_must_fail flux fsck --verbose 2> fsckerrors3V.out &&
+	test_debug "cat fsckerrors3V.out" &&
 	grep "dir\.b" fsckerrors3V.out | grep "missing blobref" | grep "index=1" &&
 	grep "dir\.c" fsckerrors3V.out | grep "missing blobref" | grep "index=1" &&
 	grep "dir\.c" fsckerrors3V.out | grep "missing blobref" | grep "index=2" &&
@@ -137,6 +142,7 @@ test_expect_success 'flux-fsck --verbose outputs details' '
 '
 test_expect_success 'flux-fsck no output with --quiet' '
 	test_must_fail flux fsck --quiet 2> fsckerrors4.out &&
+	test_debug "cat fsckerrors4.out" &&
 	count=$(cat fsckerrors4.out | wc -l) &&
 	test $count -eq 0
 '
