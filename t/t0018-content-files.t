@@ -162,6 +162,22 @@ test_expect_success 'flux module stats reports zero object count' '
 	    --type int --parse object_count content-files) -eq 0
 '
 
+test_expect_success 'checkpoint-put fails with invalid key' '
+	test_must_fail checkpoint_put foo bar
+'
+
+test_expect_success 'checkpoint-get fails with invalid key' '
+	test_must_fail checkpoint_get foo
+'
+
+test_expect_success 'checkpoint-backing-put fails with invalid key' '
+	test_must_fail checkpoint_backing_put foo bar
+'
+
+test_expect_success 'checkpoint-backing-get fails with invalid key' '
+	test_must_fail checkpoint_backing_get foo
+'
+
 test_expect_success 'checkpoint-put kvs-primary w/ rootref bar' '
 	checkpoint_put kvs-primary bar
 '
