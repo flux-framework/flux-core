@@ -162,29 +162,29 @@ test_expect_success 'flux module stats reports zero object count' '
 	    --type int --parse object_count content-files) -eq 0
 '
 
-test_expect_success 'checkpoint-put foo w/ rootref bar' '
-	checkpoint_put foo bar
+test_expect_success 'checkpoint-put w/ rootref bar' '
+	checkpoint_put bar
 '
 
-test_expect_success 'checkpoint-get foo returned rootref bar' '
+test_expect_success 'checkpoint-get returned rootref bar' '
         echo bar >rootref.exp &&
-        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref.out &&
+        checkpoint_get | jq -r .value | jq -r .rootref >rootref.out &&
         test_cmp rootref.exp rootref.out
 '
 
 # use grep instead of compare, incase of floating point rounding
-test_expect_success 'checkpoint-get foo returned correct timestamp' '
-        checkpoint_get foo | jq -r .value | jq -r .timestamp >timestamp.out &&
+test_expect_success 'checkpoint-get returned correct timestamp' '
+        checkpoint_get | jq -r .value | jq -r .timestamp >timestamp.out &&
         grep 2.2 timestamp.out
 '
 
-test_expect_success 'checkpoint-put updates foo rootref to baz' '
-        checkpoint_put foo baz
+test_expect_success 'checkpoint-put updates rootref to baz' '
+        checkpoint_put baz
 '
 
-test_expect_success 'checkpoint-get foo returned rootref baz' '
+test_expect_success 'checkpoint-get returned rootref baz' '
         echo baz >rootref2.exp &&
-        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref2.out &&
+        checkpoint_get | jq -r .value | jq -r .rootref >rootref2.out &&
         test_cmp rootref2.exp rootref2.out
 '
 
@@ -192,58 +192,54 @@ test_expect_success 'reload content-files module' '
 	flux module reload content-files
 '
 
-test_expect_success 'checkpoint-get foo still returns rootref baz' '
+test_expect_success 'checkpoint-get still returns rootref baz' '
         echo baz >rootref3.exp &&
-        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref3.out &&
+        checkpoint_get | jq -r .value | jq -r .rootref >rootref3.out &&
         test_cmp rootref3.exp rootref3.out
 '
 
-test_expect_success 'checkpoint-put updates foo rootref with longer rootref' '
-        checkpoint_put foo abcdefghijklmnopqrstuvwxyz
+test_expect_success 'checkpoint-put updates rootref with longer rootref' '
+        checkpoint_put abcdefghijklmnopqrstuvwxyz
 '
 
-test_expect_success 'checkpoint-get foo returned rootref with longer rootref' '
+test_expect_success 'checkpoint-get returned rootref with longer rootref' '
         echo abcdefghijklmnopqrstuvwxyz >rootref4.exp &&
-        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref4.out &&
+        checkpoint_get | jq -r .value | jq -r .rootref >rootref4.out &&
         test_cmp rootref4.exp rootref4.out
 '
 
-test_expect_success 'checkpoint-put updates foo rootref to shorter rootref' '
-        checkpoint_put foo foobar
+test_expect_success 'checkpoint-put updates rootref to shorter rootref' '
+        checkpoint_put foobar
 '
 
-test_expect_success 'checkpoint-get foo returned rootref with shorter rootref' '
+test_expect_success 'checkpoint-get returned rootref with shorter rootref' '
         echo foobar >rootref5.exp &&
-        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref5.out &&
+        checkpoint_get | jq -r .value | jq -r .rootref >rootref5.out &&
         test_cmp rootref5.exp rootref5.out
 '
 
-test_expect_success 'checkpoint-put updates foo rootref to boof' '
-        checkpoint_put foo boof
+test_expect_success 'checkpoint-put updates rootref to boof' '
+        checkpoint_put boof
 '
 
-test_expect_success 'checkpoint-backing-get foo returns rootref boof' '
+test_expect_success 'checkpoint-backing-get returns rootref boof' '
         echo boof >rootref_backing.exp &&
-        checkpoint_backing_get foo \
+        checkpoint_backing_get \
             | jq -r .value \
             | jq -r .rootref >rootref_backing.out &&
         test_cmp rootref_backing.exp rootref_backing.out
 '
 
-test_expect_success 'checkpoint-backing-put foo w/ rootref poof' '
-        checkpoint_backing_put foo poof
+test_expect_success 'checkpoint-backing-put w/ rootref poof' '
+        checkpoint_backing_put poof
 '
 
-test_expect_success 'checkpoint-get foo returned rootref boof' '
+test_expect_success 'checkpoint-get returned rootref boof' '
         echo poof >rootref6.exp &&
-        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref6.out &&
+        checkpoint_get | jq -r .value | jq -r .rootref >rootref6.out &&
         test_cmp rootref6.exp rootref6.out
 '
 
-test_expect_success 'checkpoint-get bad request fails with EPROTO' '
-	test_must_fail $RPC content.checkpoint-get </dev/null 2>badget.err &&
-	grep "Protocol error" badget.err
-'
 test_expect_success 'checkpoint-put bad request fails with EPROTO' '
 	test_must_fail $RPC content.checkpoint-put </dev/null 2>badput.err &&
 	grep "Protocol error" badput.err
@@ -258,8 +254,8 @@ test_expect_success 'remove content-files module' '
 	flux module remove content-files
 '
 
-test_expect_success 'checkpoint-put foo w/ rootref spoon fails without backing' '
-       test_must_fail checkpoint_put foo spoon
+test_expect_success 'checkpoint-put w/ rootref spoon fails without backing' '
+       test_must_fail checkpoint_put spoon
 '
 
 test_expect_success 'remove content module' '
