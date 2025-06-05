@@ -144,6 +144,28 @@ test_expect_success 'checkpoint-legacy-backing-get fails with invalid key' '
 	test_must_fail checkpoint_legacy_backing_get foo
 '
 
+test_expect_success 'checkpoint-legacy-put works with valid key' '
+	checkpoint_legacy_put kvs-primary bagel
+'
+
+test_expect_success 'checkpoint-legacy-get works with valid key' '
+	echo bagel >legacy.exp &&
+	checkpoint_legacy_get kvs-primary \
+		| jq -r .value | jq -r .rootref > legacy.out &&
+	test_cmp legacy.exp legacy.out
+'
+
+test_expect_success 'checkpoint-legacy-backing-put works with valid key' '
+	checkpoint_legacy_backing_put kvs-primary donut
+'
+
+test_expect_success 'checkpoint-legacy-backing-get works with valid key' '
+	echo donut >legacybacking.exp &&
+	checkpoint_legacy_backing_get kvs-primary \
+		| jq -r .value | jq -r .rootref > legacybacking.out &&
+	test_cmp legacybacking.exp legacybacking.out
+'
+
 test_expect_success 'checkpoint-put w/ rootref bar' '
 	checkpoint_put bar
 '
