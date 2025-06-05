@@ -96,8 +96,10 @@ error:
     return -1;
 }
 
-void content_checkpoint_get_request (flux_t *h, flux_msg_handler_t *mh,
-                                     const flux_msg_t *msg, void *arg)
+void content_checkpoint_get_request (flux_t *h,
+                                     flux_msg_handler_t *mh,
+                                     const flux_msg_t *msg,
+                                     void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
     const char *key;
@@ -164,7 +166,10 @@ static int checkpoint_put_forward (struct content_checkpoint *checkpoint,
         rank = 0;
     }
 
-    if (!(f = flux_rpc_pack (checkpoint->h, topic, rank, 0,
+    if (!(f = flux_rpc_pack (checkpoint->h,
+                             topic,
+                             rank,
+                             0,
                              "{s:s s:O}",
                              "key", key,
                              "value", value))
@@ -190,8 +195,10 @@ error:
     return -1;
 }
 
-void content_checkpoint_put_request (flux_t *h, flux_msg_handler_t *mh,
-                                     const flux_msg_t *msg, void *arg)
+void content_checkpoint_put_request (flux_t *h,
+                                     flux_msg_handler_t *mh,
+                                     const flux_msg_t *msg,
+                                     void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
     const char *key;
