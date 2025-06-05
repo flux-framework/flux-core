@@ -128,40 +128,40 @@ test_expect_success 'fill the cache with more data for later purging' '
 	${SPAMUTIL} 10000 200 >/dev/null
 '
 
-test_expect_success 'checkpoint-put fails with invalid key' '
-	test_must_fail checkpoint_put foo bar
+test_expect_success 'checkpoint-legacy-put fails with invalid key' '
+	test_must_fail checkpoint_legacy_put foo bar
 '
 
-test_expect_success 'checkpoint-get fails with invalid key' '
-	test_must_fail checkpoint_get foo
+test_expect_success 'checkpoint-legacy-get fails with invalid key' '
+	test_must_fail checkpoint_legacy_get foo
 '
 
-test_expect_success 'checkpoint-backing-put fails with invalid key' '
-	test_must_fail checkpoint_backing_put foo bar
+test_expect_success 'checkpoint-legacy-backing-put fails with invalid key' '
+	test_must_fail checkpoint_legacy_backing_put foo bar
 '
 
-test_expect_success 'checkpoint-backing-get fails with invalid key' '
-	test_must_fail checkpoint_backing_get foo
+test_expect_success 'checkpoint-legacy-backing-get fails with invalid key' '
+	test_must_fail checkpoint_legacy_backing_get foo
 '
 
-test_expect_success 'checkpoint-put kvs-primary w/ rootref bar' '
-	checkpoint_put kvs-primary bar
+test_expect_success 'checkpoint-put w/ rootref bar' '
+	checkpoint_put bar
 '
 
-test_expect_success 'checkpoint-get kvs-primary returned rootref bar' '
+test_expect_success 'checkpoint-get returned rootref bar' '
 	echo bar >rootref.exp &&
-	checkpoint_get kvs-primary | jq -r .value | jq -r .rootref >rootref.out &&
+	checkpoint_get | jq -r .value | jq -r .rootref >rootref.out &&
 	test_cmp rootref.exp rootref.out
 '
 
 test_expect_success 'checkpoint-put on rank 1 forwards to rank 0' '
-       o=$(checkpoint_put_msg kvs-primary rankref) &&
+       o=$(checkpoint_put_msg rankref) &&
        jq -j -c -n ${o} | flux exec -r 1 ${RPC} content.checkpoint-put
 '
 
 test_expect_success 'checkpoint-get on rank 1 forwards to rank 0' '
        echo rankref >rankref.exp &&
-       o=$(checkpoint_get_msg kvs-primary) &&
+       o=$(checkpoint_get_msg) &&
        jq -j -c -n ${o} \
 	   | flux exec -r 1 ${RPC} content.checkpoint-get \
 	   | jq -r .value | jq -r .rootref > rankref.out &&
@@ -169,18 +169,18 @@ test_expect_success 'checkpoint-get on rank 1 forwards to rank 0' '
 '
 
 # use grep instead of compare, incase of floating point rounding
-test_expect_success 'checkpoint-get kvs-primary returned correct timestamp' '
-        checkpoint_get kvs-primary | jq -r .value | jq -r .timestamp >timestamp.out &&
+test_expect_success 'checkpoint-get returned correct timestamp' '
+        checkpoint_get | jq -r .value | jq -r .timestamp >timestamp.out &&
         grep 2.2 timestamp.out
 '
 
-test_expect_success 'checkpoint-put updates kvs-primary rootref to baz' '
-	checkpoint_put kvs-primary baz
+test_expect_success 'checkpoint-put updates rootref to baz' '
+	checkpoint_put baz
 '
 
-test_expect_success 'checkpoint-get kvs-primary returned rootref baz' '
+test_expect_success 'checkpoint-get returned rootref baz' '
 	echo baz >rootref2.exp &&
-	checkpoint_get kvs-primary | jq -r .value | jq -r .rootref >rootref2.out &&
+	checkpoint_get | jq -r .value | jq -r .rootref >rootref2.out &&
 	test_cmp rootref2.exp rootref2.out
 '
 
@@ -189,33 +189,28 @@ test_expect_success 'flush + reload content-sqlite module on rank 0' '
 	flux module reload content-sqlite
 '
 
-test_expect_success 'checkpoint-get kvs-primary still returns rootref baz' '
+test_expect_success 'checkpoint-get still returns rootref baz' '
 	echo baz >rootref3.exp &&
-	checkpoint_get kvs-primary | jq -r .value | jq -r .rootref >rootref3.out &&
+	checkpoint_get | jq -r .value | jq -r .rootref >rootref3.out &&
 	test_cmp rootref3.exp rootref3.out
 '
 
-test_expect_success 'checkpoint-backing-get kvs-primary returns rootref baz' '
+test_expect_success 'checkpoint-backing-get returns rootref baz' '
 	echo baz >rootref_backing.exp &&
-	checkpoint_backing_get kvs-primary \
+	checkpoint_backing_get \
             | jq -r .value \
             | jq -r .rootref >rootref_backing.out &&
 	test_cmp rootref_backing.exp rootref_backing.out
 '
 
-test_expect_success 'checkpoint-backing-put kvs-primary w/ rootref boof' '
-	checkpoint_backing_put kvs-primary boof
+test_expect_success 'checkpoint-backing-put w/ rootref boof' '
+	checkpoint_backing_put boof
 '
 
-test_expect_success 'checkpoint-get kvs-primary returned rootref boof' '
+test_expect_success 'checkpoint-get returned rootref boof' '
 	echo boof >rootref4.exp &&
-	checkpoint_get kvs-primary | jq -r .value | jq -r .rootref >rootref4.out &&
+	checkpoint_get | jq -r .value | jq -r .rootref >rootref4.out &&
 	test_cmp rootref4.exp rootref4.out
-'
-
-test_expect_success 'checkpoint-get noexist fails with Invalid ...' '
-	test_must_fail checkpoint_get noexist 2>badkey.err &&
-	grep "Invalid argument" badkey.err
 '
 
 test_expect_success 'content-backing.load wrong size hash fails with EPROTO' '
@@ -243,8 +238,8 @@ test_expect_success 'remove content-sqlite module on rank 0' '
 	flux module remove content-sqlite
 '
 
-test_expect_success 'checkpoint-put kvs-primary w/ rootref spoon fails without backing' '
-	test_must_fail checkpoint_put kvs-primary spoon
+test_expect_success 'checkpoint-put w/ rootref spoon fails without backing' '
+	test_must_fail checkpoint_put spoon
 '
 
 test_expect_success 'remove heartbeat module' '
