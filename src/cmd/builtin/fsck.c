@@ -147,7 +147,7 @@ static void fsck_valref (flux_t *h, const char *path, json_t *treeobj)
     if (fvd.errorcount) {
         /* each invalid blobref will be output in verbose mode */
         if (!verbose) {
-            if (errno == ENOENT)
+            if (fvd.errnum == ENOENT)
                 read_error ("%s: missing blobref(s)", path);
             else
                 read_error ("%s: error retrieving blobref(s): %s",
