@@ -807,7 +807,7 @@ class TestJob(unittest.TestCase):
         self.assertEqual(jobspec.getattr("attributes.user.duck"), 5)
         self.assertEqual(jobspec.getattr("attributes.goat"), 6)
 
-    def test_36_repr(self):
+    def test_36_str(self):
         """Test string representation of a basic jobspec"""
         jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
         jobspec.setattr("cow", 1)
@@ -820,6 +820,15 @@ class TestJob(unittest.TestCase):
             str(jobspec),
             "{'resources': [{'type': 'slot', 'count': 1, 'label': 'task', 'with': [{'type': 'core', 'count': 1}]}], 'tasks': [{'command': ['app'], 'slot': 'foo', 'count': {'per_slot': 1}}], 'attributes': {'system': {'duration': 0, 'cow': 1, 'cat': 2, 'chicken': 4}, 'user': {'dog': 3, 'duck': 5}, 'goat': 6}, 'version': 1}",
         )
+
+    def test_37_repr(self):
+        """Test __repr__ method of Jobspec"""
+        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
+        self.assertEqual(eval(repr(jobspec)).jobspec, jobspec.jobspec)
+        jobspec.cwd = "/foo/bar"
+        jobspec.stdout = "/bar/baz"
+        jobspec.duration = 1000.3133
+        self.assertEqual(eval(repr(jobspec)).jobspec, jobspec.jobspec)
 
 
 if __name__ == "__main__":
