@@ -208,14 +208,14 @@ void checkpoint_get_cb (flux_t *h,
                         void *arg)
 {
     struct content_files *ctx = arg;
-    const char *key;
+    const char *key = KVS_DEFAULT_CHECKPOINT;
     void *data = NULL;
     size_t size;
     json_t *o = NULL;
     const char *errstr = NULL;
     json_error_t error;
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
+    if (flux_request_unpack (msg, NULL, "{s?s}", "key", &key) < 0)
         goto error;
     if (!streq (key, KVS_DEFAULT_CHECKPOINT)) {
         errno = EINVAL;
@@ -253,14 +253,14 @@ void checkpoint_put_cb (flux_t *h,
                         void *arg)
 {
     struct content_files *ctx = arg;
-    const char *key;
+    const char *key = KVS_DEFAULT_CHECKPOINT;
     json_t *o;
     char *value = NULL;
     const char *errstr = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:o}",
+                             "{s?s s:o}",
                              "key", &key,
                              "value", &o) < 0)
         goto error;

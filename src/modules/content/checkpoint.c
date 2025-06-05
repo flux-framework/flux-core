@@ -19,6 +19,7 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libkvs/kvs_checkpoint.h"
 
 #include "checkpoint.h"
 #include "cache.h"
@@ -102,7 +103,7 @@ void content_checkpoint_get_request (flux_t *h,
                                      void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
-    const char *key;
+    const char *key = KVS_DEFAULT_CHECKPOINT;
     const char *errstr = NULL;
 
     if (checkpoint->rank == 0
@@ -112,7 +113,7 @@ void content_checkpoint_get_request (flux_t *h,
         goto error;
     }
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
+    if (flux_request_unpack (msg, NULL, "{s?s}", "key", &key) < 0)
         goto error;
 
     if (checkpoint_get_forward (checkpoint,
@@ -198,7 +199,7 @@ void content_checkpoint_put_request (flux_t *h,
                                      void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
-    const char *key;
+    const char *key = KVS_DEFAULT_CHECKPOINT;
     json_t *value;
     const char *errstr = NULL;
 
@@ -211,7 +212,7 @@ void content_checkpoint_put_request (flux_t *h,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:o}",
+                             "{s?s s:o}",
                              "key", &key,
                              "value", &value) < 0)
         goto error;
