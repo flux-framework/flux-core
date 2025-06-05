@@ -10,8 +10,13 @@ if test_have_prereq ASAN; then
     test_done
 fi
 
+# Note: use test_under_flux "job" personality so that only 2 cores per fake
+# node are configured in the test instance. This ensures a maximum of 4
+# issues test scripts (invoked as jobs below) run simultaneously, instead
+# of 1 per real core, which could cause test failures on overloaded systems.
+#
 SIZE=2
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} job
 echo "# $0: flux session size will be ${SIZE}"
 
 if test -z "$T4000_ISSUES_GLOB"; then
