@@ -277,7 +277,7 @@ static struct optparse_option checkpoints_opts[] = {
     { .name = "no-header",  .key = 'n',  .has_arg = 0,
       .usage = "Do not output column headers", },
     { .name = "json",  .key = 'j',  .has_arg = 0,
-      .usage = "Output raw json output", },
+      .usage = "Output raw json checkpoint data", },
       OPTPARSE_TABLE_END
 };
 
