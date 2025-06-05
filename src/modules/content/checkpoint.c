@@ -96,8 +96,10 @@ error:
     return -1;
 }
 
-void content_checkpoint_get_request (flux_t *h, flux_msg_handler_t *mh,
-                                     const flux_msg_t *msg, void *arg)
+void content_checkpoint_get_request (flux_t *h,
+                                     flux_msg_handler_t *mh,
+                                     const flux_msg_t *msg,
+                                     void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
     const char *key;
@@ -190,8 +192,10 @@ error:
     return -1;
 }
 
-void content_checkpoint_put_request (flux_t *h, flux_msg_handler_t *mh,
-                                     const flux_msg_t *msg, void *arg)
+void content_checkpoint_put_request (flux_t *h,
+                                     flux_msg_handler_t *mh,
+                                     const flux_msg_t *msg,
+                                     void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
     const char *key;
