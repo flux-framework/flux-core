@@ -10,6 +10,7 @@ SYNOPSIS
 | **flux** **content** **store** [*--bypass-cache*] [*--chunksize=N*]
 | **flux** **content** **flush**
 | **flux** **content** **dropcache**
+| **flux** **content** **checkpoints**
 
 
 DESCRIPTION
@@ -86,6 +87,14 @@ dropcache
 
 The :program:`flux content dropcache` command drops all non-essential entries
 in the local cache; that is, entries which can be removed without data loss.
+
+checkpoints
+-----------
+
+.. program:: flux content checkpoints
+
+The :program:`flux content checkpoints` command lists all checkpoints current
+stored.
 
 
 CAVEATS
