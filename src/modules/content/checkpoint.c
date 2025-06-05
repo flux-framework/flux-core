@@ -34,13 +34,9 @@ static void checkpoint_get_continuation (flux_future_t *f, void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
     const flux_msg_t *msg = flux_future_aux_get (f, "msg");
-    const char *key;
     json_t *value = NULL;
 
     assert (msg);
-
-    if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
-        goto error;
 
     if (flux_rpc_get_unpack (f, "{s:o}", "value", &value) < 0)
         goto error;
