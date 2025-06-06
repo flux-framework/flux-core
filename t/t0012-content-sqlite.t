@@ -128,24 +128,77 @@ test_expect_success 'fill the cache with more data for later purging' '
 	${SPAMUTIL} 10000 200 >/dev/null
 '
 
-test_expect_success 'checkpoint-put foo w/ rootref bar' '
-	checkpoint_put foo bar
+test_expect_success 'checkpoint-legacy-put fails with invalid key' '
+	test_must_fail checkpoint_legacy_put foo bar
 '
 
-test_expect_success 'checkpoint-get foo returned rootref bar' '
+test_expect_success 'checkpoint-legacy-get fails with invalid key' '
+	test_must_fail checkpoint_legacy_get foo
+'
+
+test_expect_success 'checkpoint-legacy-backing-put fails with invalid key' '
+	test_must_fail checkpoint_legacy_backing_put foo bar
+'
+
+test_expect_success 'checkpoint-legacy-backing-get fails with invalid key' '
+	test_must_fail checkpoint_legacy_backing_get foo
+'
+
+test_expect_success 'checkpoint-legacy-put works with valid key' '
+	checkpoint_legacy_put kvs-primary bagel
+'
+
+test_expect_success 'checkpoint-legacy-get works with valid key' '
+	echo bagel >legacy.exp &&
+	checkpoint_legacy_get kvs-primary \
+		| jq -r .value | jq -r .rootref > legacy.out &&
+	test_cmp legacy.exp legacy.out
+'
+
+test_expect_success 'checkpoint-legacy-backing-put works with valid key' '
+	checkpoint_legacy_backing_put kvs-primary donut
+'
+
+test_expect_success 'checkpoint-legacy-backing-get works with valid key' '
+	echo donut >legacybacking.exp &&
+	checkpoint_legacy_backing_get kvs-primary \
+		| jq -r .value | jq -r .rootref > legacybacking.out &&
+	test_cmp legacybacking.exp legacybacking.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoints (1)' '
+        flux content checkpoints > checkpoints1.out &&
+        count=$(cat checkpoints1.out | wc -l) &&
+        test $count -eq 2 &&
+        grep donut checkpoints1.out &&
+        grep bagel checkpoints1.out
+'
+
+test_expect_success 'checkpoint-put w/ rootref bar' '
+	checkpoint_put bar
+'
+
+test_expect_success 'checkpoint-get returned rootref bar' '
 	echo bar >rootref.exp &&
-	checkpoint_get foo | jq -r .value | jq -r .rootref >rootref.out &&
+	checkpoint_get | jq -r .value | jq -r .rootref >rootref.out &&
 	test_cmp rootref.exp rootref.out
 '
 
+test_expect_success 'flux content checkpoints lists correct checkpoints (2)' '
+        flux content checkpoints > checkpoints2.out &&
+        count=$(cat checkpoints2.out | wc -l) &&
+        test $count -eq 3 &&
+        head -n 1 checkpoints2.out | grep bar
+'
+
 test_expect_success 'checkpoint-put on rank 1 forwards to rank 0' '
-       o=$(checkpoint_put_msg rankone rankref) &&
+       o=$(checkpoint_put_msg rankref) &&
        jq -j -c -n ${o} | flux exec -r 1 ${RPC} content.checkpoint-put
 '
 
 test_expect_success 'checkpoint-get on rank 1 forwards to rank 0' '
        echo rankref >rankref.exp &&
-       o=$(checkpoint_get_msg rankone) &&
+       o=$(checkpoint_get_msg) &&
        jq -j -c -n ${o} \
 	   | flux exec -r 1 ${RPC} content.checkpoint-get \
 	   | jq -r .value | jq -r .rootref > rankref.out &&
@@ -153,18 +206,25 @@ test_expect_success 'checkpoint-get on rank 1 forwards to rank 0' '
 '
 
 # use grep instead of compare, incase of floating point rounding
-test_expect_success 'checkpoint-get foo returned correct timestamp' '
-        checkpoint_get foo | jq -r .value | jq -r .timestamp >timestamp.out &&
+test_expect_success 'checkpoint-get returned correct timestamp' '
+        checkpoint_get | jq -r .value | jq -r .timestamp >timestamp.out &&
         grep 2.2 timestamp.out
 '
 
-test_expect_success 'checkpoint-put updates foo rootref to baz' '
-	checkpoint_put foo baz
+test_expect_success 'flux content checkpoints lists correct checkpoints (3)' '
+        flux content checkpoints > checkpoints3.out &&
+        count=$(cat checkpoints3.out | wc -l) &&
+        test $count -eq 4 &&
+        head -n 1 checkpoints3.out | grep rankref
 '
 
-test_expect_success 'checkpoint-get foo returned rootref baz' '
+test_expect_success 'checkpoint-put updates rootref to baz' '
+	checkpoint_put baz
+'
+
+test_expect_success 'checkpoint-get returned rootref baz' '
 	echo baz >rootref2.exp &&
-	checkpoint_get foo | jq -r .value | jq -r .rootref >rootref2.out &&
+	checkpoint_get | jq -r .value | jq -r .rootref >rootref2.out &&
 	test_cmp rootref2.exp rootref2.out
 '
 
@@ -173,33 +233,42 @@ test_expect_success 'flush + reload content-sqlite module on rank 0' '
 	flux module reload content-sqlite
 '
 
-test_expect_success 'checkpoint-get foo still returns rootref baz' '
+test_expect_success 'checkpoint-get still returns rootref baz' '
 	echo baz >rootref3.exp &&
-	checkpoint_get foo | jq -r .value | jq -r .rootref >rootref3.out &&
+	checkpoint_get | jq -r .value | jq -r .rootref >rootref3.out &&
 	test_cmp rootref3.exp rootref3.out
 '
 
-test_expect_success 'checkpoint-backing-get foo returns rootref baz' '
+test_expect_success 'checkpoint-backing-get returns rootref baz' '
 	echo baz >rootref_backing.exp &&
-	checkpoint_backing_get foo \
+	checkpoint_backing_get \
             | jq -r .value \
             | jq -r .rootref >rootref_backing.out &&
 	test_cmp rootref_backing.exp rootref_backing.out
 '
 
-test_expect_success 'checkpoint-backing-put foo w/ rootref boof' '
-	checkpoint_backing_put foo boof
+test_expect_success 'flux content checkpoints lists correct checkpoints (4)' '
+        flux content checkpoints > checkpoints4.out &&
+        count=$(cat checkpoints4.out | wc -l) &&
+        test $count -eq 5 &&
+        head -n 1 checkpoints4.out | grep baz
 '
 
-test_expect_success 'checkpoint-get foo returned rootref boof' '
+test_expect_success 'checkpoint-backing-put w/ rootref boof' '
+	checkpoint_backing_put boof
+'
+
+test_expect_success 'checkpoint-get returned rootref boof' '
 	echo boof >rootref4.exp &&
-	checkpoint_get foo | jq -r .value | jq -r .rootref >rootref4.out &&
+	checkpoint_get | jq -r .value | jq -r .rootref >rootref4.out &&
 	test_cmp rootref4.exp rootref4.out
 '
 
-test_expect_success 'checkpoint-get noexist fails with No such...' '
-	test_must_fail checkpoint_get noexist 2>badkey.err &&
-	grep "No such file or directory" badkey.err
+test_expect_success 'flux content checkpoints lists correct checkpoints (5)' '
+        flux content checkpoints > checkpoints5.out &&
+        count=$(cat checkpoints5.out | wc -l) &&
+        test $count -eq 6 &&
+        head -n 1 checkpoints5.out | grep boof
 '
 
 test_expect_success 'content-backing.load wrong size hash fails with EPROTO' '
@@ -227,8 +296,8 @@ test_expect_success 'remove content-sqlite module on rank 0' '
 	flux module remove content-sqlite
 '
 
-test_expect_success 'checkpoint-put foo w/ rootref spoon fails without backing' '
-	test_must_fail checkpoint_put foo spoon
+test_expect_success 'checkpoint-put w/ rootref spoon fails without backing' '
+	test_must_fail checkpoint_put spoon
 '
 
 test_expect_success 'remove heartbeat module' '
