@@ -425,7 +425,7 @@ class TestJob(unittest.TestCase):
         self.assertEqual(jobspec.getattr("shell.options.output.batch-timeout"), 1.0)
 
     def test_22_from_batch_command(self):
-        """Test that `from_batch_command` produces a valid jobspec"""
+        """Test that `from_nest_command` produces a valid jobspec"""
         jobid = job.submit(
             self.fh, JobspecV1.from_batch_command("#!/bin/sh\nsleep 0", "nested sleep")
         )
