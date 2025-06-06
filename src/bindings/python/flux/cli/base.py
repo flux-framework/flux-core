@@ -63,7 +63,7 @@ def decode_signal(val):
     try:
         return getattr(signal, f"SIG{val}")
     except AttributeError:
-        pass
+        pass  # Fall through to raise ValueError
     raise ValueError(f"signal '{val}' is invalid")
 
 
@@ -742,6 +742,7 @@ def parse_jobspec_keyval(label, keyval):
         try:
             val = json.loads(val)
         except (json.JSONDecodeError, TypeError):
+            # val was not a JSON string, keep as is
             pass
     return key, val
 
@@ -1244,6 +1245,7 @@ class SubmitBaseCmd(MiniCmd):
                 limit = float(args.time_limit)
                 args.time_limit = limit * 60
             except ValueError:
+                # no conversion necessary
                 pass
 
         #  Check if --input specified an IDset. If not, then assume a file,
@@ -1759,6 +1761,7 @@ class BatchAllocCmd(MiniCmd):
                 limit = float(args.time_limit)
                 args.time_limit = limit * 60
             except ValueError:
+                # no conversion necessary
                 pass
 
     def update_jobspec_common(self, args, jobspec):
