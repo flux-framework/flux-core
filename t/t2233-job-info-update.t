@@ -284,7 +284,7 @@ test_expect_success NO_CHAIN_LINT 'job-info: update watch can be canceled (multi
 	test $(cat watch10A.out | wc -l) -eq 2 &&
 	test $(cat watch10B.out | wc -l) -eq 1 &&
 	head -n1 watch10A.out | jq -e ".execution.expiration == 0.0" &&
-	tail -n1 watch10B.out | jq -e ".execution.expiration == ${update1}" &&
+	tail -n1 watch10A.out | jq -e ".execution.expiration == ${update1}" &&
 	cat watch10B.out | jq -e ".execution.expiration == ${update1}"
 '
 
