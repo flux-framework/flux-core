@@ -76,6 +76,7 @@ TESTSCRIPTS = \
 	t0010-generic-utils.t \
 	t0011-content-cache.t \
 	t0012-content-sqlite.t \
+	t0012-content-sqlite-checkpoints.t \
 	t0029-archive-mmap.t \
 	t0030-marshall.t \
 	t0031-constraint-parser.t \
@@ -397,6 +398,7 @@ dist_check_SCRIPTS = \
 	scripts/dmesg-grep.py \
 	scripts/stats-listen.py \
 	scripts/sqlite-query.py \
+	scripts/sqlite-write.py \
 	scripts/pipe.py \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
