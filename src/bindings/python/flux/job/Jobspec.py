@@ -132,6 +132,19 @@ def validate_jobspec(jobspec, require_version=None):
     return True
 
 
+def _attr_key_prepend(key):
+    """
+    Amend a key provided to setattr, getattr, etc. to prepend ``attributes.``
+    or ``attributes.system.`` if the key does not already start with one of
+    those key prefixes.
+    """
+    if not key.startswith("attributes."):
+        if not key.startswith(("user.", "system.")):
+            key = "system." + key
+        key = "attributes." + key
+    return key
+
+
 class Jobspec(object):
     top_level_keys = set(["resources", "tasks", "version", "attributes"])
 
@@ -558,8 +571,7 @@ class Jobspec(object):
 
         Raises KeyError if a component of key does not exist.
         """
-        if not key.startswith("attributes."):
-            key = "attributes." + key
+        key = _attr_key_prepend(key)
         value = self.jobspec
         for attr in key.split("."):
             value = value.get(attr)
@@ -571,11 +583,8 @@ class Jobspec(object):
         """
         set job attribute
         """
-        if not key.startswith("attributes."):
-            if not key.startswith(("user.", "system.")):
-                key = "system." + key
-            key = "attributes." + key
         try:
+            key = _attr_key_prepend(key)
             set_treedict(self.jobspec, key, val)
         except TypeError as e:
             raise TypeError(f"failed to set {key} to {val}: {e}")
