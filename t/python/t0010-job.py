@@ -401,6 +401,29 @@ class TestJob(unittest.TestCase):
             with self.assertRaises(TypeError):
                 setattr(jobspec, stream, None)
 
+        with self.assertRaises(TypeError):
+            jobspec.unbuffered = 1
+
+        jobspec.unbuffered = True
+        self.assertTrue(jobspec.unbuffered)
+        self.assertEqual(
+            jobspec.getattr("shell.options.output.stderr.buffer.type"), "none"
+        )
+        self.assertEqual(
+            jobspec.getattr("shell.options.output.stdout.buffer.type"), "none"
+        )
+        self.assertEqual(jobspec.getattr("shell.options.output.batch-timeout"), 0.05)
+
+        jobspec.unbuffered = False
+        self.assertFalse(jobspec.unbuffered)
+
+        # jobspec.unbuffered = True keeps modified batch-timeout
+        jobspec.unbuffered = True
+        jobspec.setattr_shell_option("output.batch-timeout", 1.0)
+        jobspec.unbuffered = False
+        self.assertFalse(jobspec.unbuffered)
+        self.assertEqual(jobspec.getattr("shell.options.output.batch-timeout"), 1.0)
+
     def test_22_from_batch_command(self):
         """Test that `from_batch_command` produces a valid jobspec"""
         jobid = job.submit(
