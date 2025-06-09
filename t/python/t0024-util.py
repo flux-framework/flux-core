@@ -17,7 +17,13 @@ from collections import namedtuple
 from datetime import datetime
 
 import subflux  # noqa: F401 - To set up PYTHONPATH
-from flux.util import OutputFormat, UtilDatetime, parse_datetime
+from flux.util import (
+    OutputFormat,
+    UtilDatetime,
+    del_treedict,
+    parse_datetime,
+    set_treedict,
+)
 from pycotap import TAPTestRunner
 
 
@@ -280,6 +286,27 @@ class TestOutputFormat(unittest.TestCase):
             fmt.copy(nullify_expansion=True).get_format_prepended(""),
             "{s} {i:4d} {f:.2f}",
         )
+
+    def test_del_treedict(self):
+        d = {}
+        set_treedict(d, "a.b.c", 42)
+        self.assertEqual(d, {"a": {"b": {"c": 42}}})
+
+        del_treedict(d, "a.b.c")
+        self.assertEqual(d, {"a": {"b": {}}})
+
+        set_treedict(d, "a.b.c", 42)
+        del_treedict(d, "a.b.c", remove_empty=True)
+        self.assertEqual(d, {})
+
+        set_treedict(d, "a.b.c", 42)
+        del_treedict(d, "a.b")
+        self.assertEqual(d, {"a": {}})
+
+        # missing key raises KeyError
+        set_treedict(d, "a.b.c", 42)
+        with self.assertRaises(KeyError):
+            del_treedict(d, "a.b.d")
 
 
 if __name__ == "__main__":
