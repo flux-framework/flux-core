@@ -1222,7 +1222,7 @@ static int execute_parental_notifications (struct broker *ctx)
         goto out;
 
     /*  Note: not an error if rpc to set critical ranks fails, but
-     *  issue an error notifying user that no criitcal ranks are set.
+     *  issue an error notifying user that no critical ranks are set.
      */
     if (!(f2 = set_critical_ranks (h, id, ctx->attrs)))
         log_msg ("Unable to get critical ranks, all ranks will be critical");
