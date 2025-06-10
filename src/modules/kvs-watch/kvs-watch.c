@@ -23,6 +23,7 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libcontent/content.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/ptrint/ptrint.h"
 
 /* State for one watcher */
 struct watcher {
@@ -35,6 +36,7 @@ struct watcher {
     bool responded;             // true if watcher has responded atleast once
     bool initial_rpc_sent;      // flag is initial watch rpc sent
     bool initial_rpc_received;  // flag is initial watch rpc received
+    bool initial_sentinel_sent; // flag that initial data sent
     bool finished;              // flag indicates if watcher is finished
     int initial_rootseq;        // initial rootseq returned by initial rpc
     char *key;                  // lookup key
@@ -262,6 +264,17 @@ static void watcher_cleanup (struct ns_monitor *nsm, struct watcher *w)
         zhashx_delete (nsm->ctx->namespaces, nsm->ns_name);
 }
 
+static void send_initial_sentinel (flux_t *h, struct watcher *w)
+{
+    if (w->flags & FLUX_KVS_WATCH_INITIAL_SENTINEL
+        && w->initial_sentinel_sent == false) {
+        /* N.B. empty message for sentinel */
+        if (flux_respond (h, w->request, NULL) < 0)
+            flux_log_error (h, "failed to send initial_sentinel");
+        w->initial_sentinel_sent = true;
+    }
+}
+
 static void handle_load_response (flux_future_t *f, struct watcher *w)
 {
     flux_t *h = flux_future_get_flux (f);
@@ -289,6 +302,9 @@ static void handle_load_response (flux_future_t *f, struct watcher *w)
         }
         w->loaded_blob_count++;
         w->responded = true;
+
+        if (flux_future_aux_get (f, "initial_sentinel"))
+            send_initial_sentinel (h, w);
     }
 
     return;
@@ -442,6 +458,24 @@ static int handle_initial_response (flux_t *h,
         }
 
         w->initial_rootseq = root_seq;
+
+        if (w->flags & FLUX_KVS_WATCH_INITIAL_SENTINEL
+            && w->initial_sentinel_sent == false) {
+            /* We want to send sentinel on the last load from
+             * load_range() call above.  We set an aux "flag" to send
+             * the sentinel after this future is completed.
+             */
+            flux_future_t *f = zlist_tail (w->loads);
+            if (flux_future_aux_set (f,
+                                     "initial_sentinel",
+                                     int2ptr (1),
+                                     NULL) < 0) {
+                flux_log_error (h,
+                                "%s: failed to set initial_sentinel flag",
+                                __FUNCTION__);
+                goto error_respond;
+            }
+        }
         return 0;
     }
 
@@ -452,6 +486,8 @@ out:
                         __FUNCTION__);
         return -1;
     }
+
+    send_initial_sentinel (h, w);
 
     w->initial_rootseq = root_seq;
     w->responded = true;
@@ -693,6 +729,7 @@ static void handle_lookup_response (flux_future_t *f,
             if ((w->flags & FLUX_KVS_WAITCREATE)
                 && w->responded == false) {
                 w->initial_rootseq = root_seq;
+                send_initial_sentinel (h, w);
                 return;
             }
             errno = errnum;
@@ -1390,7 +1427,8 @@ static void lookup_cb (flux_t *h,
     const char *errmsg = NULL;
     int valid_watch_flags = (FLUX_KVS_WATCH_FULL
                              | FLUX_KVS_WATCH_UNIQ
-                             | FLUX_KVS_WATCH_APPEND);
+                             | FLUX_KVS_WATCH_APPEND
+                             | FLUX_KVS_WATCH_INITIAL_SENTINEL);
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -1416,6 +1454,12 @@ static void lookup_cb (flux_t *h,
     }
     if (!(flags & FLUX_KVS_WATCH) && (flags & valid_watch_flags)) {
         errmsg = "Must set KVS watch flag with other watch flags";
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(flags & FLUX_KVS_WATCH_APPEND)
+        && (flags & FLUX_KVS_WATCH_INITIAL_SENTINEL)) {
+        errmsg = "Must set KVS watch append flag with initial sentinel flag";
         errno = EINVAL;
         goto error;
     }

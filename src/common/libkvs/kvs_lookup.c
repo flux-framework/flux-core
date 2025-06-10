@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <jansson.h>
 #include <flux/core.h>
 
@@ -44,7 +45,8 @@ static const char *auxkey = "flux::lookup_ctx";
 
 #define FLUX_KVS_WATCH_FLAGS (FLUX_KVS_WATCH_FULL \
                               | FLUX_KVS_WATCH_UNIQ \
-                              | FLUX_KVS_WATCH_APPEND)
+                              | FLUX_KVS_WATCH_APPEND \
+                              | FLUX_KVS_WATCH_INITIAL_SENTINEL)
 
 static void free_ctx (struct lookup_ctx *ctx)
 {
@@ -259,8 +261,23 @@ static int parse_response (flux_future_t *f, struct lookup_ctx *ctx)
 {
     json_t *treeobj2;
 
-    if (decode_treeobj (f, &treeobj2) < 0)
+    if (decode_treeobj (f, &treeobj2) < 0) {
+        int save_errno = errno;
+        if (ctx->flags & FLUX_KVS_WATCH_INITIAL_SENTINEL
+            && errno == EPROTO) {
+            const char *s;
+            if (flux_rpc_get (f, &s) < 0) {
+                errno = save_errno;
+                return -1;
+            }
+            if (!s) {
+                cleanup_ctx_data (&ctx->data);
+                return 0;
+            }
+            errno = save_errno;
+        }
         return -1;
+    }
     if (!ctx->data.treeobj || !json_equal (ctx->data.treeobj, treeobj2)) {
         cleanup_ctx_data (&ctx->data);
         ctx->data.treeobj = json_incref (treeobj2);
@@ -277,10 +294,13 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **value)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->data.val_valid) {
-        if (treeobj_decode_val (ctx->data.treeobj,
-                                &ctx->data.val_data,
-                                &ctx->data.val_len) < 0)
-            return -1;
+        /* ctx->data.treeobj may be NULL if sentinel received */
+        if (ctx->data.treeobj) {
+            if (treeobj_decode_val (ctx->data.treeobj,
+                                    &ctx->data.val_data,
+                                    &ctx->data.val_len) < 0)
+                return -1;
+        }
         ctx->data.val_valid = true;
         // N.B. val_data includes xtra 0 byte term not reflected in val_len
     }
@@ -349,10 +369,13 @@ int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, size_t *len)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->data.val_valid) {
-        if (treeobj_decode_val (ctx->data.treeobj,
-                                &ctx->data.val_data,
-                                &ctx->data.val_len) < 0)
-            return -1;
+        /* ctx->data.treeobj may be NULL if sentinel received */
+        if (ctx->data.treeobj) {
+            if (treeobj_decode_val (ctx->data.treeobj,
+                                    &ctx->data.val_data,
+                                    &ctx->data.val_len) < 0)
+                return -1;
+        }
         ctx->data.val_valid = true;
     }
     if (data)
