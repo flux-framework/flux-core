@@ -448,34 +448,45 @@ class Jobspec(object):
         self.setattr("system.environment", environ)
 
     @property
-    def stdin(self):
+    def input(self):
         """Path to use for stdin."""
         return self._get_io_path("input", "stdin")
 
-    @stdin.setter
-    def stdin(self, path):
-        """Redirect stdin to a file given by `path`, a string or pathlib object."""
+    @input.setter
+    def input(self, path):
+        """
+        Redirect stdin to a file given by `path`, a string or pathlib object.
+        """
         self._set_io_path("input", "stdin", path)
 
     @property
-    def stdout(self):
+    def output(self):
         """Path to use for stdout."""
         return self._get_io_path("output", "stdout")
 
-    @stdout.setter
-    def stdout(self, path):
-        """Redirect stdout to a file given by `path`, a string or pathlib object."""
+    @output.setter
+    def output(self, path):
+        """
+        Redirect output to a file given by `path`, a string or pathlib object.
+        """
         self._set_io_path("output", "stdout", path)
 
     @property
-    def stderr(self):
+    def error(self):
         """Path to use for stderr."""
         return self._get_io_path("output", "stderr")
 
-    @stderr.setter
-    def stderr(self, path):
-        """Redirect stderr to a file given by `path`, a string or pathlib object."""
+    @error.setter
+    def error(self, path):
+        """
+        Redirect stderr to a file given by `path`, a string or pathlib object.
+        """
         self._set_io_path("output", "stderr", path)
+
+    # stdin, stdout, and stderr are aliases for input, output, and error:
+    stdin = input
+    stdout = output
+    stderr = error
 
     def _get_io_path(self, iotype, stream_name):
         """Get the path of a stdio stream, if set.

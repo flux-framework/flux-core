@@ -373,6 +373,23 @@ class TestJob(unittest.TestCase):
             self.assertEqual(err.errno, errno.ENODATA)
         self.assertIs(event, None)
 
+    def test_21_stdio_new_methods(self):
+        """Test official getter/setter methods for stdio properties
+        Ensure for now that output sets the alias "stdout", error sets "stderr"
+        and input sets "stdin".
+        """
+        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
+        streams = {"error": "stderr", "output": "stdout", "input": "stdin"}
+        for name in ("error", "output", "input"):
+            stream = streams[name]
+            self.assertEqual(getattr(jobspec, name), None)
+            for path in ("foo.txt", "bar.md", "foo.json"):
+                setattr(jobspec, name, path)
+                self.assertEqual(getattr(jobspec, name), path)
+                self.assertEqual(getattr(jobspec, stream), path)
+            with self.assertRaises(TypeError):
+                setattr(jobspec, name, None)
+
     def test_21_stdio(self):
         """Test getter/setter methods for stdio properties"""
         jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
