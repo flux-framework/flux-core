@@ -1085,11 +1085,7 @@ class MiniCmd:
                 jobspec.setattr_shell_option("output.stderr.label", True)
 
         if args.unbuffered:
-            #  For output, set the buffer.type to none and reduce the configured
-            #  event batch-timeout to something very small.
-            jobspec.setattr_shell_option("output.stdout.buffer.type", "none")
-            jobspec.setattr_shell_option("output.stderr.buffer.type", "none")
-            jobspec.setattr_shell_option("output.batch-timeout", 0.05)
+            jobspec.unbuffered = True
 
         if args.setopt is not None:
             for keyval in args.setopt:

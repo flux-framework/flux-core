@@ -19,7 +19,7 @@ import os
 import yaml
 from _flux._core import ffi
 from flux import hostlist, idset
-from flux.util import Fileref, parse_fsd, set_treedict
+from flux.util import Fileref, del_treedict, parse_fsd, set_treedict
 
 
 def _convert_jobspec_arg_to_string(jobspec):
@@ -530,6 +530,61 @@ class Jobspec(object):
             )
         self.setattr_shell_option("{}.{}.type".format(iotype, stream_name), "file")
         self.setattr_shell_option("{}.{}.path".format(iotype, stream_name), path)
+
+    @property
+    def unbuffered(self):
+        """True if std output and error are unbuffered"""
+        try:
+            return (
+                self.getattr("shell.options.output.stdout.buffer.type") == "none"
+                and self.getattr("shell.options.output.stderr.buffer.type") == "none"
+            )
+        except KeyError:
+            pass  # fall through to return False
+        return False
+
+    @unbuffered.setter
+    def unbuffered(self, value):
+        """
+        Set unbuffered mode for output in jobspec.
+
+        If True, buffer type for stdout and stderr will be set to "none" and
+        ``batch-timeout`` shell option will be set to 50ms.
+
+        If False, the buffering options for stdout and stderr will be cleared
+        from jobspec. The batch-timeout option will additionally be cleared
+        if it matches the reduced value used by the unbuffered setter.
+
+        Raises:
+            TypeError: if ``value`` is not True or False.
+        """
+        if not isinstance(value, bool):
+            raise TypeError("unbuffered must be True or False")
+
+        if value:
+            self.setattr_shell_option("output.stdout.buffer.type", "none")
+            self.setattr_shell_option("output.stderr.buffer.type", "none")
+            self.setattr_shell_option("output.batch-timeout", 0.05)
+        else:
+            try:
+                del_treedict(
+                    self.attributes,
+                    "system.shell.options.output.stdout.buffer",
+                    remove_empty=True,
+                )
+                del_treedict(
+                    self.attributes,
+                    "system.shell.options.output.stderr.buffer",
+                    remove_empty=True,
+                )
+                if self.getattr("shell.options.output.batch-timeout") == 0.05:
+                    del_treedict(
+                        self.attributes,
+                        "system.shell.options.output.batch-timeout",
+                        remove_empty=True,
+                    )
+            except KeyError:
+                pass  # Ignore keys already missing or deleted
 
     def add_file(self, path, data, perms=None, encoding=None):
         """

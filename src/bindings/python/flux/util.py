@@ -24,7 +24,7 @@ import stat
 import sys
 import threading
 import traceback
-from collections import namedtuple
+from collections import abc, namedtuple
 from datetime import datetime, timedelta
 from operator import attrgetter
 from pathlib import Path, PurePosixPath
@@ -203,6 +203,32 @@ def set_treedict(in_dict, key, val):
         set_treedict(in_dict.setdefault(path[0], {}), path[1], val)
     else:
         in_dict[key] = val
+
+
+def del_treedict(in_dict, key, remove_empty=False):
+    """
+    ``del_treedict(d, "a.b.c")`` is like ``del d[a][b][c]``
+
+    Args:
+        in_dict (Mapping): dict in which to remove ``key``
+        key (str): dotted key to remove
+        remove_empty (bool): If True, remove empty dictionaries that result
+            from deletion of ``key``.
+
+    Raises:
+        KeyError: a path component of ``key`` does not exist.
+    """
+    path = key.split(".", 1)
+    if len(path) == 2:
+        del_treedict(in_dict[path[0]], path[1], remove_empty=remove_empty)
+        if (
+            remove_empty
+            and isinstance(in_dict[path[0]], abc.Mapping)
+            and len(in_dict[path[0]]) == 0
+        ):
+            del in_dict[path[0]]
+    else:
+        del in_dict[key]
 
 
 class TreedictAction(argparse.Action):
