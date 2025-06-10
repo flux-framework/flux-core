@@ -229,7 +229,8 @@ static struct eventlog_batch * eventlog_batch_create (struct eventlogger *ev)
     batch->entries = zlist_new ();
     batch->txn = flux_kvs_txn_create ();
     batch->timer = flux_timer_watcher_create (r,
-                                              ev->batch_timeout, 0.,
+                                              ev->batch_timeout,
+                                              0.,
                                               timer_cb,
                                               batch);
     if (!batch->entries || !batch->txn || !batch->timer) {
