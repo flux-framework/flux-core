@@ -810,18 +810,24 @@ class TestJob(unittest.TestCase):
         jobspec.setattr("attributes.system.chicken", 4)
         jobspec.setattr("attributes.user.duck", 5)
         jobspec.setattr("attributes.goat", 6)
-        # N.B. setattr defaults "key" to "attributes.system.key"
-        # but getattr defaults "key" to "attributes.key"
+        self.assertEqual(jobspec.getattr("cow"), 1)
         self.assertEqual(jobspec.getattr("system.cow"), 1)
         self.assertEqual(jobspec.getattr("attributes.system.cow"), 1)
+
+        self.assertEqual(jobspec.getattr("cat"), 2)
         self.assertEqual(jobspec.getattr("system.cat"), 2)
         self.assertEqual(jobspec.getattr("attributes.system.cat"), 2)
+
         self.assertEqual(jobspec.getattr("user.dog"), 3)
         self.assertEqual(jobspec.getattr("attributes.user.dog"), 3)
+
+        self.assertEqual(jobspec.getattr("chicken"), 4)
         self.assertEqual(jobspec.getattr("system.chicken"), 4)
         self.assertEqual(jobspec.getattr("attributes.system.chicken"), 4)
+
         self.assertEqual(jobspec.getattr("user.duck"), 5)
         self.assertEqual(jobspec.getattr("attributes.user.duck"), 5)
+
         self.assertEqual(jobspec.getattr("attributes.goat"), 6)
 
     def test_36_str(self):
