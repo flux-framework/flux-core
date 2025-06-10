@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <jansson.h>
 #include <flux/core.h>
 
@@ -41,7 +42,8 @@ static const char *auxkey = "flux::lookup_ctx";
 
 #define FLUX_KVS_WATCH_FLAGS (FLUX_KVS_WATCH_FULL \
                               | FLUX_KVS_WATCH_UNIQ \
-                              | FLUX_KVS_WATCH_APPEND)
+                              | FLUX_KVS_WATCH_APPEND \
+                              | FLUX_KVS_WATCH_APPEND_INITIAL_SENTINEL)
 
 static void free_ctx (struct lookup_ctx *ctx)
 {
@@ -237,12 +239,30 @@ static struct lookup_ctx *get_lookup_ctx (flux_future_t *f)
  * changed (e.g. future has been reset and another response has arrived),
  * invalidate the cached results.
  */
-static int parse_response (flux_future_t *f, struct lookup_ctx *ctx)
+static int parse_response (flux_future_t *f,
+                           struct lookup_ctx *ctx,
+                           bool *sentinel)
 {
     json_t *treeobj2;
 
-    if (decode_treeobj (f, &treeobj2) < 0)
+    if (decode_treeobj (f, &treeobj2) < 0) {
+        int save_errno = errno;
+        if (ctx->flags & FLUX_KVS_WATCH_APPEND_INITIAL_SENTINEL
+            && errno == EPROTO
+            && sentinel) {
+            const char *s;
+            if (flux_rpc_get (f, &s) < 0) {
+                errno = save_errno;
+                return -1;
+            }
+            if (!s) {
+                (*sentinel) = true;
+                return 0;
+            }
+            errno = save_errno;
+        }
         return -1;
+    }
     if (!ctx->treeobj || !json_equal (ctx->treeobj, treeobj2)) {
         json_decref (ctx->treeobj);
         ctx->treeobj = json_incref (treeobj2);
@@ -270,11 +290,17 @@ static int parse_response (flux_future_t *f, struct lookup_ctx *ctx)
 int flux_kvs_lookup_get (flux_future_t *f, const char **value)
 {
     struct lookup_ctx *ctx;
+    bool sentinel = false;
 
     if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    if (parse_response (f, ctx) < 0)
+    if (parse_response (f, ctx, &sentinel) < 0)
         return -1;
+    if (sentinel) {
+        if (value)
+            *value = NULL;
+        return 0;
+    }
     if (!ctx->val_valid) {
         if (treeobj_decode_val (ctx->treeobj,
                                 &ctx->val_data,
@@ -294,7 +320,7 @@ int flux_kvs_lookup_get_treeobj (flux_future_t *f, const char **treeobj)
 
     if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    if (parse_response (f, ctx) < 0)
+    if (parse_response (f, ctx, NULL) < 0)
         return -1;
     if (!ctx->treeobj_str) {
         if (!(ctx->treeobj_str = treeobj_encode (ctx->treeobj)))
@@ -313,7 +339,7 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
 
     if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    if (parse_response (f, ctx) < 0)
+    if (parse_response (f, ctx, NULL) < 0)
         return -1;
     if (!ctx->val_valid) {
         if (treeobj_decode_val (ctx->treeobj,
@@ -342,11 +368,19 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
 int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, size_t *len)
 {
     struct lookup_ctx *ctx;
+    bool sentinel = false;
 
     if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    if (parse_response (f, ctx) < 0)
+    if (parse_response (f, ctx, &sentinel) < 0)
         return -1;
+    if (sentinel) {
+        if (data)
+            *data = NULL;
+        if (len)
+            *len = 0;
+        return 0;
+    }
     if (!ctx->val_valid) {
         if (treeobj_decode_val (ctx->treeobj,
                                 &ctx->val_data,
@@ -367,7 +401,7 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
 
     if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    if (parse_response (f, ctx) < 0)
+    if (parse_response (f, ctx, NULL) < 0)
         return -1;
     if (!ctx->dir) {
         if (!(ctx->dir = kvsdir_create_fromobj (ctx->h,
@@ -390,7 +424,7 @@ int flux_kvs_lookup_get_symlink (flux_future_t *f,
 
     if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    if (parse_response (f, ctx) < 0)
+    if (parse_response (f, ctx, NULL) < 0)
         return -1;
     if (!treeobj_is_symlink (ctx->treeobj)) {
         errno = EINVAL;
