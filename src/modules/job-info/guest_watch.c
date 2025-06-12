@@ -76,6 +76,7 @@ struct guest_watch_ctx {
     flux_jobid_t id;
     char *path;
     int flags;
+    bool initial_sentinel_sent;
     bool eventlog_watch_canceled;
     bool cancel;                /* cancel or disconnect */
 
@@ -394,6 +395,12 @@ static int wait_guest_namespace (struct guest_watch_ctx *gw)
     flux_msg_t *msg = NULL;
     int save_errno, rv = -1;
 
+    /* N.B. For INITIAL_SENTINEL, we do not consider "no guest
+     * namespace exists" to mean that the entry is "empty".  A
+     * sentinel will be sent when the namespace is created and the
+     * actual initial value is read.
+     */
+
     if (!(msg = cred_msg_pack (topic,
                                gw->cred,
                                "{s:I s:s s:i}",
@@ -593,6 +600,18 @@ error:
     return rv;
 }
 
+static void send_initial_sentinel (struct guest_watch_ctx *gw)
+{
+    if (!gw->initial_sentinel_sent) {
+        int save_errno = errno;
+        /* N.B. empty message for sentinel */
+        if (flux_respond (gw->ctx->h, gw->msg, NULL) < 0)
+            flux_log_error (gw->ctx->h, "failed to send initial_sentinel");
+        gw->initial_sentinel_sent = true;
+        errno = save_errno;
+    }
+}
+
 static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
 {
     struct guest_watch_ctx *gw = arg;
@@ -647,6 +666,12 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
         goto cleanup;
     }
 
+    if (gw->flags & FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL
+        && !event) {
+        send_initial_sentinel (gw);
+        goto out;
+    }
+
     if (flux_respond_pack (ctx->h, gw->msg, "{s:s}", "event", event) < 0) {
         flux_log_error (ctx->h, "%s: flux_respond_pack",
                         __FUNCTION__);
@@ -661,6 +686,7 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
     }
 
     gw->guest_offset += strlen (event);
+out:
     flux_future_reset (f);
     return;
 
@@ -707,6 +733,12 @@ static int main_namespace_watch (struct guest_watch_ctx *gw)
      */
     if (flags & FLUX_JOB_EVENT_WATCH_WAITCREATE)
         flags &= ~FLUX_JOB_EVENT_WATCH_WAITCREATE;
+
+    /* if initial sentinel sent, do not accidentally send another
+     * one */
+    if (flags & FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL
+        && gw->initial_sentinel_sent)
+        flags &= ~FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL;
 
     if (!(msg = cred_msg_pack (topic,
                                gw->cred,
@@ -765,6 +797,12 @@ static void main_namespace_watch_continuation (flux_future_t *f, void *arg)
         goto cleanup;
     }
 
+    if (gw->flags & FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL
+        && !event) {
+        send_initial_sentinel (gw);
+        goto out;
+    }
+
     gw->main_offset += strlen (event);
 
     if (gw->main_offset > gw->guest_offset) {
@@ -782,6 +820,7 @@ static void main_namespace_watch_continuation (flux_future_t *f, void *arg)
         }
     }
 
+out:
     flux_future_reset (f);
     return;
 

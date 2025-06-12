@@ -36,6 +36,7 @@ struct watch_ctx {
     bool guest_in_main;         /* read guest in main namespace */
     char *path;
     int flags;
+    bool initial_sentinel_sent;
     flux_future_t *check_f;
     flux_future_t *watch_f;
     bool allow;
@@ -139,6 +140,9 @@ static int watch_key (struct watch_ctx *w)
 
     if (w->flags & FLUX_JOB_EVENT_WATCH_WAITCREATE)
         flags |= FLUX_KVS_WAITCREATE;
+
+    if (w->flags & FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL)
+        flags |= FLUX_KVS_WATCH_INITIAL_SENTINEL;
 
     /* guest_in_main means the job is inactive, we do not want to
      * "watch" this, just stream the data that is there right now.
@@ -245,6 +249,18 @@ static int check_eventlog_end (struct watch_ctx *w,
     return rc;
 }
 
+static void send_initial_sentinel (struct watch_ctx *w)
+{
+    if (!w->initial_sentinel_sent) {
+        int save_errno = errno;
+        /* N.B. empty message for sentinel */
+        if (flux_respond (w->ctx->h, w->msg, NULL) < 0)
+            flux_log_error (w->ctx->h, "failed to send initial_sentinel");
+        w->initial_sentinel_sent = true;
+        errno = save_errno;
+    }
+}
+
 static void watch_continuation (flux_future_t *f, void *arg)
 {
     struct watch_ctx *w = arg;
@@ -258,16 +274,28 @@ static void watch_continuation (flux_future_t *f, void *arg)
     if (flux_kvs_lookup_get (f, &s) < 0) {
         if (errno != ENOENT && errno != ENODATA && errno != ENOTSUP)
             flux_log_error (ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
-        if (errno == ENODATA && w->kvs_watch_canceled && !w->cancel)
-            goto cleanup;
+        if (errno == ENODATA) {
+            if (w->kvs_watch_canceled && !w->cancel)
+                goto cleanup;
+            /* N.B. if guest in main, we just read / streamed the
+             * entire contents from KVS and that's it.  So add
+             * sentinel before ENODATA at the end.
+             */
+            if (w->flags & FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL
+                && w->guest_in_main)
+                send_initial_sentinel (w);
+        }
         goto error;
     }
 
     /* Issue #4612 - zero length append illegal for an eventlog.  This
      * most likely occurred through an illegal overwrite of the whole
      * eventlog.
+     *
+     * N.B. if expecting sentinel and sentinel reached, then empty
+     * response is ok.
      */
-    if (!s) {
+    if (!s && !(w->flags & FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL)) {
         errmsg = "illegal append of zero bytes";
         errno = EINVAL;
         goto error;
@@ -292,6 +320,12 @@ static void watch_continuation (flux_future_t *f, void *arg)
             goto cleanup;
         }
         w->allow = true;
+    }
+
+    if (w->flags & FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL
+        && !s) {
+        send_initial_sentinel (w);
+        goto out;
     }
 
     input = s;
@@ -326,6 +360,12 @@ static void watch_continuation (flux_future_t *f, void *arg)
                                     __FUNCTION__);
                     goto error;
                 }
+                /* Special corner case, we aren't going to wait for
+                 * sentinel from kvs-watch, so send sentinel now if we
+                 * need to.
+                 */
+                if (w->flags & FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL)
+                    send_initial_sentinel (w);
                 /* If by small chance there is an event after "clean"
                  * (e.g. user appended), we won't send it */
                 errno = ENODATA;
@@ -334,6 +374,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
         }
     }
 
+out:
     flux_future_reset (f);
     return;
 
@@ -434,7 +475,8 @@ void watch_cb (flux_t *h,
     int guest_in_main = 0;
     const char *path = NULL;
     int flags;
-    int valid_flags = FLUX_JOB_EVENT_WATCH_WAITCREATE;
+    int valid_flags = (FLUX_JOB_EVENT_WATCH_WAITCREATE
+                       | FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL);
     const char *errmsg = NULL;
 
     if (flux_request_unpack (msg,
