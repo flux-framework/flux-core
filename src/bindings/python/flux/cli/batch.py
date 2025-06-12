@@ -10,6 +10,7 @@
 
 import argparse
 import logging
+import os
 import sys
 
 import flux
@@ -100,6 +101,8 @@ class BatchCmd(base.BatchAllocCmd):
             else:
                 args.job_name = "batch"
 
+        output = args.output if args.output is not None else "flux-{{id}}.out"
+
         jobspec = flux.job.JobspecV1.from_batch_command(
             script=self.script,
             jobname=args.job_name,
@@ -111,14 +114,18 @@ class BatchCmd(base.BatchAllocCmd):
             broker_opts=base.list_split(args.broker_opts),
             exclusive=args.exclusive,
             conf=args.conf.config,
+            duration=args.time_limit,
+            cwd=args.cwd if args.cwd is not None else os.getcwd(),
+            input=args.input,
+            output=output,
+            error=args.error,
+            label_io=args.label_io,
+            unbuffered=args.unbuffered,
+            queue=args.queue,
+            bank=args.bank,
         )
 
         self.update_jobspec_common(args, jobspec)
-
-        # Default output is flux-{{jobid}}.out
-        # overridden by either --output=none or --output=kvs
-        if not args.output:
-            jobspec.stdout = "flux-{{id}}.out"
         return jobspec
 
     def main(self, args):

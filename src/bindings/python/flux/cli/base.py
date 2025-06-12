@@ -63,7 +63,7 @@ def decode_signal(val):
     try:
         return getattr(signal, f"SIG{val}")
     except AttributeError:
-        pass
+        pass  # Fall through to raise ValueError
     raise ValueError(f"signal '{val}' is invalid")
 
 
@@ -742,6 +742,7 @@ def parse_jobspec_keyval(label, keyval):
         try:
             val = json.loads(val)
         except (json.JSONDecodeError, TypeError):
+            # val was not a JSON string, keep as is
             pass
     return key, val
 
@@ -1023,7 +1024,6 @@ class MiniCmd:
             # shell options dict and will be processed by the shell.
             jobspec.setattr_shell_option("env-expand", env_expand)
 
-        jobspec.cwd = args.cwd if args.cwd is not None else os.getcwd()
         rlimits = get_filtered_rlimits(args.rlimit)
         if rlimits:
             jobspec.setattr_shell_option("rlimit", rlimits)
@@ -1050,42 +1050,6 @@ class MiniCmd:
                 )
             except ConstraintSyntaxError as exc:
                 raise ValueError(f"--requires='{constraint}': {exc}")
-        if args.time_limit is not None:
-            #  With no units, time_limit is in minutes, but jobspec.duration
-            #  takes seconds or FSD by default, so convert here if necessary.
-            try:
-                limit = float(args.time_limit)
-                args.time_limit = limit * 60
-            except ValueError:
-                pass
-            jobspec.duration = args.time_limit
-
-        if args.job_name is not None:
-            jobspec.setattr("system.job.name", args.job_name)
-
-        if args.input is not None:
-            #  Note: temporary stopgap until per-task input is supported
-            #  by the job shell:
-            #  Check if --input specified an IDset. If not, then assume
-            #  a file, otherwise, do not modify jobspec, input will be
-            #  handled by `flux job attach`.
-            try:
-                IDset(args.input)
-            except (ValueError, OSError):
-                jobspec.stdin = args.input
-
-        if args.output is not None and args.output not in ["none", "kvs"]:
-            jobspec.stdout = args.output
-            if args.label_io:
-                jobspec.setattr_shell_option("output.stdout.label", True)
-
-        if args.error is not None:
-            jobspec.stderr = args.error
-            if args.label_io:
-                jobspec.setattr_shell_option("output.stderr.label", True)
-
-        if args.unbuffered:
-            jobspec.unbuffered = True
 
         if args.setopt is not None:
             for keyval in args.setopt:
@@ -1098,12 +1062,6 @@ class MiniCmd:
         if debugged.get_mpir_being_debugged() == 1:
             # if stop-tasks-in-exec is present, overwrite
             jobspec.setattr_shell_option("stop-tasks-in-exec", json.loads("1"))
-
-        if args.queue is not None:
-            jobspec.setattr("system.queue", args.queue)
-
-        if args.bank is not None:
-            jobspec.setattr("system.bank", args.bank)
 
         if args.setattr is not None:
             for keyval in args.setattr:
@@ -1279,6 +1237,27 @@ class SubmitBaseCmd(MiniCmd):
         if args.command[0] == "--":
             args.command.pop(0)
 
+        #  Time limit in cli submission commands defaults to minutes if
+        #  no units are given, but JobspecV1 duration is in seconds or FSD,
+        #  so convert if necessary:
+        if args.time_limit is not None:
+            try:
+                limit = float(args.time_limit)
+                args.time_limit = limit * 60
+            except ValueError:
+                # no conversion necessary
+                pass
+
+        #  Check if --input specified an IDset. If not, then assume a file,
+        #  otherwise do not modify jobspec, input will be handled by
+        #  `flux job attach`:
+        stdin = None
+        if args.input is not None:
+            try:
+                IDset(args.input)
+            except (ValueError, OSError):
+                stdin = args.input
+
         #  Ensure integer args are converted to int() here.
         #  This is done because we do not use type=int in argparse in order
         #   to allow these options to be mutable for bulksubmit:
@@ -1361,6 +1340,16 @@ class SubmitBaseCmd(MiniCmd):
                 per_resource_count=per_resource_count,
                 gpus_per_node=args.gpus_per_node,
                 exclusive=args.exclusive,
+                duration=args.time_limit,
+                cwd=args.cwd if args.cwd is not None else os.getcwd(),
+                name=args.job_name,
+                input=stdin,
+                output=args.output,
+                error=args.error,
+                label_io=args.label_io,
+                unbuffered=args.unbuffered,
+                queue=args.queue,
+                bank=args.bank,
             )
 
         #  If ntasks not set, then set it to node count, with
@@ -1384,6 +1373,16 @@ class SubmitBaseCmd(MiniCmd):
             gpus_per_task=args.gpus_per_task,
             num_nodes=args.nodes,
             exclusive=args.exclusive,
+            duration=args.time_limit,
+            cwd=args.cwd if args.cwd is not None else os.getcwd(),
+            name=args.job_name,
+            input=stdin,
+            output=args.output,
+            error=args.error,
+            label_io=args.label_io,
+            unbuffered=args.unbuffered,
+            queue=args.queue,
+            bank=args.bank,
         )
 
     def run_and_exit(self):
@@ -1756,6 +1755,14 @@ class BatchAllocCmd(MiniCmd):
                 1, nbrokers
             )
             args.conf.update(f'resource.exclude="{exclude}"')
+
+        if args.time_limit is not None:
+            try:
+                limit = float(args.time_limit)
+                args.time_limit = limit * 60
+            except ValueError:
+                # no conversion necessary
+                pass
 
     def update_jobspec_common(self, args, jobspec):
         """Common jobspec update code for batch/alloc"""
