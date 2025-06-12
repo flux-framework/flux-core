@@ -21,7 +21,8 @@ flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id,
     flux_future_t *f;
     const char *topic = "job-info.eventlog-watch";
     int rpc_flags = FLUX_RPC_STREAMING;
-    int valid_flags = FLUX_JOB_EVENT_WATCH_WAITCREATE;
+    int valid_flags = (FLUX_JOB_EVENT_WATCH_WAITCREATE
+                       | FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL);
 
     if (!h || !path || (flags & ~valid_flags)) {
         errno = EINVAL;
@@ -43,8 +44,22 @@ int flux_job_event_watch_get (flux_future_t *f, const char **event)
 {
     const char *s;
 
-    if (flux_rpc_get_unpack (f, "{s:s}", "event", &s) < 0)
+    if (flux_rpc_get_unpack (f, "{s:s}", "event", &s) < 0) {
+        int save_errno = errno;
+        if (errno == EPROTO) {
+            if (flux_rpc_get (f, &s) < 0) {
+                errno = save_errno;
+                return -1;
+            }
+            if (!s) {
+                if (event)
+                    (*event) = NULL;
+                return 0;
+            }
+        }
+        errno = save_errno;
         return -1;
+    }
     if (event)
         *event = s;
     return 0;
