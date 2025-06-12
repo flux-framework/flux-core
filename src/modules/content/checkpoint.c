@@ -34,13 +34,9 @@ static void checkpoint_get_continuation (flux_future_t *f, void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
     const flux_msg_t *msg = flux_future_aux_get (f, "msg");
-    const char *key;
     json_t *value = NULL;
 
     assert (msg);
-
-    if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
-        goto error;
 
     if (flux_rpc_get_unpack (f, "{s:o}", "value", &value) < 0)
         goto error;
@@ -59,7 +55,7 @@ error:
 
 static int checkpoint_get_forward (struct content_checkpoint *checkpoint,
                                    const flux_msg_t *msg,
-                                   const char *key,
+                                   int index,
                                    const char **errstr)
 {
     const char *topic = "content.checkpoint-get";
@@ -76,8 +72,8 @@ static int checkpoint_get_forward (struct content_checkpoint *checkpoint,
                              topic,
                              rank,
                              0,
-                             "{s:s}",
-                             "key", key))
+                             "{s:i}",
+                             "index", index))
         || flux_future_then (f,
                              -1,
                              checkpoint_get_continuation,
@@ -100,11 +96,13 @@ error:
     return -1;
 }
 
-void content_checkpoint_get_request (flux_t *h, flux_msg_handler_t *mh,
-                                     const flux_msg_t *msg, void *arg)
+void content_checkpoint_get_request (flux_t *h,
+                                     flux_msg_handler_t *mh,
+                                     const flux_msg_t *msg,
+                                     void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
-    const char *key;
+    int index = 0;
     const char *errstr = NULL;
 
     if (checkpoint->rank == 0
@@ -114,12 +112,15 @@ void content_checkpoint_get_request (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s?i}",
+                             "index", &index) < 0)
         goto error;
 
     if (checkpoint_get_forward (checkpoint,
                                 msg,
-                                key,
+                                index,
                                 &errstr) < 0)
         goto error;
 
@@ -154,7 +155,6 @@ error:
 
 static int checkpoint_put_forward (struct content_checkpoint *checkpoint,
                                    const flux_msg_t *msg,
-                                   const char *key,
                                    json_t *value,
                                    const char **errstr)
 {
@@ -168,9 +168,11 @@ static int checkpoint_put_forward (struct content_checkpoint *checkpoint,
         rank = 0;
     }
 
-    if (!(f = flux_rpc_pack (checkpoint->h, topic, rank, 0,
-                             "{s:s s:O}",
-                             "key", key,
+    if (!(f = flux_rpc_pack (checkpoint->h,
+                             topic,
+                             rank,
+                             0,
+                             "{s:O}",
                              "value", value))
         || flux_future_then (f,
                              -1,
@@ -194,11 +196,12 @@ error:
     return -1;
 }
 
-void content_checkpoint_put_request (flux_t *h, flux_msg_handler_t *mh,
-                                     const flux_msg_t *msg, void *arg)
+void content_checkpoint_put_request (flux_t *h,
+                                     flux_msg_handler_t *mh,
+                                     const flux_msg_t *msg,
+                                     void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
-    const char *key;
     json_t *value;
     const char *errstr = NULL;
 
@@ -211,14 +214,12 @@ void content_checkpoint_put_request (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:o}",
-                             "key", &key,
+                             "{s:o}",
                              "value", &value) < 0)
         goto error;
 
     if (checkpoint_put_forward (checkpoint,
                                 msg,
-                                key,
                                 value,
                                 &errstr) < 0)
         goto error;
