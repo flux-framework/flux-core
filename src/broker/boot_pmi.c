@@ -426,6 +426,8 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
     const struct bizcard *bc;
     struct bizcache *cache = NULL;
     struct taskmap *taskmap = NULL;
+    const char *dkey;
+    json_t *value;
 
     // N.B. overlay_create() sets the tbon.topo attribute
     if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
@@ -448,6 +450,18 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
         log_msg ("%s: initialize: %s", upmi_describe (upmi), error.text);
         upmi_destroy (upmi);
         return -1;
+    }
+    if (info.dict != NULL) {
+        json_object_foreach(info.dict, dkey, value) {
+            if (!json_is_string(value)) {
+                log_err ("%s: initialize: value associated to key %s is not a string", upmi_describe (upmi), dkey);
+                goto error;
+            }
+            if (attr_add (attrs, dkey, json_string_value(value), ATTR_IMMUTABLE) < 0) {
+                log_err("%s: initialize: could not put attribute for key %s", upmi_describe (upmi), dkey);
+                goto error;
+            }
+        }
     }
     if (set_instance_level_attr (upmi, attrs, &under_flux) < 0) {
         log_err ("set_instance_level_attr");

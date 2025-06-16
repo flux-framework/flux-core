@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <jansson.h>
 
 #include "src/common/libflux/types.h"
 
@@ -27,6 +28,7 @@ struct upmi_info {
     int rank;
     int size;
     const char *name;
+    json_t *dict; // may be NULL and is invalidated by the next upmi API call
 };
 
 typedef void (*upmi_trace_f)(void *arg, const char *text);

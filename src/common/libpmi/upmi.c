@@ -428,12 +428,14 @@ int upmi_initialize (struct upmi *upmi,
         upmi_trace (upmi, "initialize: %s", error.text);
         return -1;
     }
+    info.dict = NULL;
     if (flux_plugin_arg_unpack (upmi->args,
                                 FLUX_PLUGIN_ARG_OUT,
-                                "{s:i s:s s:i}",
+                                "{s:i s:s s:i s?o}",
                                 "rank", &info.rank,
                                 "name", &name,
-                                "size", &info.size) < 0) {
+                                "size", &info.size,
+                                "dict", &info.dict) < 0) {
         errprintf (errp, "%s", flux_plugin_arg_strerror (upmi->args));
         return -1;
     }
