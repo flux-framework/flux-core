@@ -59,6 +59,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/dirwalk.h"
 #include "src/common/libutil/unlink_recursive.h"
+#include "src/common/libkvs/kvs_checkpoint.h"
 #include "ccan/str/str.h"
 
 #include "src/common/libcontent/content-util.h"
@@ -207,16 +208,17 @@ void checkpoint_get_cb (flux_t *h,
                         void *arg)
 {
     struct content_files *ctx = arg;
-    const char *key;
     void *data = NULL;
     size_t size;
     json_t *o = NULL;
     const char *errstr = NULL;
     json_error_t error;
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
-        goto error;
-    if (filedb_get (ctx->dbpath, key, &data, &size, &errstr) < 0)
+    if (filedb_get (ctx->dbpath,
+                    KVS_DEFAULT_CHECKPOINT,
+                    &data,
+                    &size,
+                    &errstr) < 0)
         goto error;
     /* recovery from version 0 checkpoint blobref not supported */
     if (!(o = json_loadb (data, size, 0, &error))) {
@@ -248,15 +250,13 @@ void checkpoint_put_cb (flux_t *h,
                         void *arg)
 {
     struct content_files *ctx = arg;
-    const char *key;
     json_t *o;
     char *value = NULL;
     const char *errstr = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:o}",
-                             "key", &key,
+                             "{s:o}",
                              "value", &o) < 0)
         goto error;
     if (!(value = json_dumps (o, JSON_COMPACT))) {
@@ -264,7 +264,11 @@ void checkpoint_put_cb (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (filedb_put (ctx->dbpath, key, value, strlen (value), &errstr) < 0)
+    if (filedb_put (ctx->dbpath,
+                    KVS_DEFAULT_CHECKPOINT,
+                    value,
+                    strlen (value),
+                    &errstr) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to checkpoint-put request");

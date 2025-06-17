@@ -28,6 +28,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libkvs/kvs_checkpoint.h"
 
 #include "src/common/libcontent/content-util.h"
 #include "ccan/str/str.h"
@@ -370,18 +371,15 @@ void checkpoint_get_cb (flux_t *h,
                         void *arg)
 {
     struct content_sqlite *ctx = arg;
-    const char *key;
     char *s;
     json_t *o = NULL;
     const char *errstr = NULL;
     json_error_t error;
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
-        goto error;
     if (sqlite3_bind_text (ctx->checkpt_get_stmt,
                            1,
-                           (char *)key,
-                           strlen (key),
+                           (char *)KVS_DEFAULT_CHECKPOINT,
+                           strlen (KVS_DEFAULT_CHECKPOINT),
                            SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "checkpt_get: binding key");
         set_errno_from_sqlite_error (ctx);
@@ -419,15 +417,13 @@ void checkpoint_put_cb (flux_t *h,
                         void *arg)
 {
     struct content_sqlite *ctx = arg;
-    const char *key;
     json_t *o;
     char *value = NULL;
     const char *errstr = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:o}",
-                             "key", &key,
+                             "{s:o}",
                              "value", &o) < 0)
         goto error;
     if (!(value = json_dumps (o, JSON_COMPACT))) {
@@ -437,8 +433,8 @@ void checkpoint_put_cb (flux_t *h,
     }
     if (sqlite3_bind_text (ctx->checkpt_put_stmt,
                            1,
-                           (char *)key,
-                           strlen (key),
+                           (char *)KVS_DEFAULT_CHECKPOINT,
+                           strlen (KVS_DEFAULT_CHECKPOINT),
                            SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "checkpt_put: binding key");
         set_errno_from_sqlite_error (ctx);
