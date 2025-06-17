@@ -59,6 +59,7 @@ man_pages = [
     ('man1/flux-bulksubmit', 'flux-bulksubmit', 'submit jobs in bulk to a Flux instance', [author], 1),
     ('man1/flux-alloc', 'flux-alloc', 'allocate a new Flux instance for interactive use', [author], 1),
     ('man1/flux-batch', 'flux-batch', 'submit a batch script to Flux', [author], 1),
+    ('man1/flux-multi-prog', 'flux-multi-prog', 'run a parallel program with a different executable and arguments for each task', [author], 1),
     ('man1/flux-job', 'flux-job', 'Job Housekeeping Tool', [author], 1),
     ('man1/flux-module', 'flux-module', 'manage Flux extension modules', [author], 1),
     ('man1/flux-overlay', 'flux-overlay', 'Show flux overlay network status', [author], 1),
