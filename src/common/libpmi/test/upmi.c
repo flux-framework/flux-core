@@ -13,6 +13,7 @@
 #endif
 #include <stdlib.h>
 #include <string.h>
+#include <jansson.h>
 
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"
@@ -39,8 +40,11 @@ void test_single (void)
     ok (upmi != NULL,
         "upmi_create spec=single works");
 
+    info.dict = json_true ();
     ok (upmi_initialize (upmi, &info, &error) == 0,
         "upmi_initialize works");
+    ok (info.dict == NULL,
+        "upmi_initialize sets info.dict to NULL by default");
     ok (info.size == 1 && info.rank == 0,
         "info rank==0, size==1");
     is (info.name, "single",
