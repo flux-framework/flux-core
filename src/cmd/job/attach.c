@@ -83,6 +83,9 @@ struct optparse_option attach_opts[] = {
     { .name = "stdin-ranks", .key = 'i', .has_arg = 1, .arginfo = "RANKS",
       .usage = "Send standard input to only RANKS (default: all)"
     },
+    { .name = "tail", .has_arg = 1, .arginfo = "NUM",
+      .usage = "Output only the last NUM lines of job output",
+    },
     { .name = "debug", .has_arg = 0,
       .usage = "Enable parallel debugger to attach to a running job",
     },
@@ -141,6 +144,9 @@ struct attach_ctx {
     int last_queue_update;
     char *queue;
     bool queue_stopped;
+    zlist_t *tail_output;
+    int tail_output_len;
+    bool sentinel_reached;
 };
 
 struct attach_event {
@@ -347,6 +353,46 @@ static void handle_output_log (struct attach_ctx *ctx,
     }
 }
 
+void json_decref_wrapper (void *data)
+{
+    json_t *o = data;
+    json_decref (o);
+}
+
+void store_tail_output (struct attach_ctx *ctx, json_t *entry)
+{
+    json_incref (entry);
+    if (zlist_append (ctx->tail_output, entry) < 0)
+        log_err_exit ("zlist_append");
+    zlist_freefn (ctx->tail_output,
+                  entry,
+                  json_decref_wrapper,
+                  true);
+    while (zlist_size (ctx->tail_output) > ctx->tail_output_len) {
+        json_t *tmp = zlist_pop (ctx->tail_output);
+        json_decref (tmp);
+    }
+}
+
+void flush_tail_output (struct attach_ctx *ctx)
+{
+    json_t *entry;
+    while ((entry = zlist_pop (ctx->tail_output))) {
+        const char *name;
+        double ts;
+        json_t *context;
+        if (eventlog_entry_parse (entry, &ts, &name, &context) < 0)
+            log_err_exit ("eventlog_entry_parse");
+        if (streq (name, "data"))
+            handle_output_data (ctx, context);
+        else if (streq (name, "log"))
+            handle_output_log (ctx, ts, context);
+        else
+            log_msg ("stored invalid entry type %s", name);
+        json_decref (entry);
+    }
+}
+
 /* Handle an event in the guest.output eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
@@ -375,6 +421,12 @@ void attach_output_continuation (flux_future_t *f, void *arg)
         log_msg_exit ("flux_job_event_watch_get: %s",
                       future_strerror (f, errno));
     }
+    if (optparse_hasopt (ctx->p, "tail") && !entry) {
+        ctx->sentinel_reached = true;
+        flush_tail_output (ctx);
+        goto out;
+    }
+
     if (!(o = eventlog_entry_decode (entry)))
         log_err_exit ("eventlog_entry_decode");
     if (eventlog_entry_parse (o, &ts, &name, &context) < 0)
@@ -385,16 +437,31 @@ void attach_output_continuation (flux_future_t *f, void *arg)
         ctx->output_header_parsed = true;
     }
     else if (streq (name, "data")) {
-        handle_output_data (ctx, context);
+        if (optparse_hasopt (ctx->p, "tail")) {
+            if (ctx->sentinel_reached)
+                handle_output_data (ctx, context);
+            else
+                store_tail_output (ctx, o);
+        }
+        else
+            handle_output_data (ctx, context);
     }
     else if (streq (name, "redirect")) {
         handle_output_redirect (ctx, context);
     }
     else if (streq (name, "log")) {
-        handle_output_log (ctx, ts, context);
+        if (optparse_hasopt (ctx->p, "tail")) {
+            if (ctx->sentinel_reached)
+                handle_output_log (ctx, ts, context);
+            else
+                store_tail_output (ctx, o);
+        }
+        else
+            handle_output_log (ctx, ts, context);
     }
 
     json_decref (o);
+out:
     flux_future_reset (f);
     return;
 done:
@@ -578,13 +645,18 @@ void attach_stdin_cb (flux_reactor_t *r,
  */
 void attach_output_start (struct attach_ctx *ctx)
 {
+    int flags = 0;
+
     if (ctx->output_started)
         return;
+
+    if (optparse_hasopt (ctx->p, "tail"))
+        flags |= FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL;
 
     if (!(ctx->output_f = flux_job_event_watch (ctx->h,
                                                 ctx->id,
                                                 "guest.output",
-                                                0)))
+                                                flags)))
         log_err_exit ("flux_job_event_watch");
 
     if (flux_future_then (ctx->output_f,
@@ -1398,6 +1470,15 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
         log_msg_exit ("Do not use --stdin-ranks with --read-only");
     ctx.stdin_ranks = get_stdin_ranks (p);
 
+    if (optparse_hasopt (p, "tail")) {
+        if (!(ctx.tail_output = zlist_new ()))
+            log_err_exit ("zlist_new");
+        ctx.tail_output_len = optparse_get_int (p, "tail", 10);
+        /* N.B. 0 means only output new stuff */
+        if (ctx.tail_output_len < 0)
+            log_msg_exit ("invalid tail argument");
+    }
+
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     if (!(r = flux_get_reactor (ctx.h)))
@@ -1445,6 +1526,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     if (flux_reactor_run (r, 0) < 0)
         log_err_exit ("flux_reactor_run");
 
+    zlist_destroy (&(ctx.tail_output));
     zlist_destroy (&(ctx.stdin_rpcs));
     flux_watcher_destroy (ctx.sigint_w);
     flux_watcher_destroy (ctx.sigtstp_w);
