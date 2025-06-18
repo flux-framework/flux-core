@@ -301,7 +301,7 @@ int flux_kvs_lookup_get_treeobj (flux_future_t *f, const char **treeobj)
             return -1;
     }
     if (treeobj)
-        *treeobj= ctx->treeobj_str;
+        *treeobj = ctx->treeobj_str;
     return 0;
 }
 
