@@ -27,7 +27,10 @@ flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id,
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, rpc_flags,
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             FLUX_NODEID_ANY,
+                             rpc_flags,
                              "{s:I s:s s:i}",
                              "id", id,
                              "path", path,
