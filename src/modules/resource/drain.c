@@ -367,6 +367,15 @@ static void drain_cb (flux_t *h,
                                "overwrite", overwrite);
     if (rc < 0)
         goto error;
+
+    flux_log (h,
+              LOG_INFO,
+              "drain idset=%s nodelist=%s overwrite=%d reason=%s",
+              idstr,
+              nodelist,
+              overwrite,
+              reason ? reason : "");
+
     free (nodelist);
     free (idstr);
     idset_destroy (idset);
@@ -408,6 +417,14 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
                           "reason", reason) < 0
         || reslog_sync (drain->ctx->reslog) < 0)
         goto done;
+
+    flux_log (drain->ctx->h,
+              LOG_INFO,
+              "drain idset=%s nodelist=%s overwrite=0 reason=%s",
+              rankstr,
+              nodelist,
+              reason ? reason : "");
+
     rc = 0;
 done:
     ERRNO_SAFE_WRAP (free, nodelist);
@@ -449,6 +466,14 @@ static int undrain_rank_idset (struct drain *drain,
                                "{s:s s:s}",
                                "idset", idstr,
                                "nodelist", nodelist);
+
+    flux_log (drain->ctx->h,
+              LOG_INFO,
+              "undrain idset=%s nodelist=%s reason=%s",
+              idstr,
+              nodelist,
+              reason ? reason : "");
+
 done:
     ERRNO_SAFE_WRAP (free, nodelist);
     ERRNO_SAFE_WRAP (free, idstr);
