@@ -106,6 +106,18 @@ test_expect_success 'flux can launch multiple brokers per node (R lookup fallbac
 		--conf=resource.no-update-watch=true \
 		flux resource info
 '
+test_expect_success 'broker flux jobid-path=/' '
+	val=$(flux getattr jobid-path) &&
+	test $val = /
+'
+test_expect_success 'child broker jobid-path=/id' '
+	val=$(flux run flux start ${ARGS} flux getattr jobid-path) &&
+	test $val = /$(flux job last)
+'
+test_expect_success 'job FLUX_JOB_ID_PATH=/id' '
+	val=$(flux run printenv FLUX_JOB_ID_PATH) &&
+	test $val = /$(flux job last)
+'
 test_expect_success 'flux_open("/") works at top-level' '
 	flux python -c "import flux; print(flux.Flux(\"/\").attr_get(\"instance-level\"));"
 '

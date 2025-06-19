@@ -153,6 +153,7 @@ test_expect_success 'FLUX_URI is set in rc scripts' '
 
 test_expect_success 'job environment is not set in rc scripts' '
 	var_is_unset FLUX_JOB_ID *.env &&
+	var_is_unset FLUX_JOB_ID_PATH *.env &&
 	var_is_unset FLUX_JOB_SIZE *.env &&
 	var_is_unset FLUX_JOB_NNODES *.env &&
 	var_is_unset FLUX_JOB_TMPDIR *.env &&
@@ -175,6 +176,7 @@ test_expect_success 'capture the environment for instance run as a job' '
 
 test_expect_success 'job environment is not set in rcs of subinstance' '
 	var_is_unset FLUX_JOB_ID *.env2 &&
+	var_is_unset FLUX_JOB_ID_PATH *.env2 &&
 	var_is_unset FLUX_JOB_SIZE *.env2 &&
 	var_is_unset FLUX_JOB_NNODES *.env2 &&
 	var_is_unset FLUX_JOB_TMPDIR *.env2 &&
