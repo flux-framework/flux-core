@@ -30,6 +30,7 @@ enum idset_flags {
     IDSET_FLAG_INITFULL = 8, // initilize/grow idset with all ids set
     IDSET_FLAG_COUNT_LAZY = 16, // disable running count, which speeds up
                              //  idset_set/clear, but slows down idset_count()
+    IDSET_FLAG_ALLOC_RR = 32, // idset_alloc() allocates using round-robin
 };
 
 typedef struct {

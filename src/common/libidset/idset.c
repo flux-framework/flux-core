@@ -36,7 +36,8 @@ struct idset *idset_create (size_t size, int flags)
     struct idset *idset;
     int valid_flags = IDSET_FLAG_AUTOGROW
                     | IDSET_FLAG_INITFULL
-                    | IDSET_FLAG_COUNT_LAZY;
+                    | IDSET_FLAG_COUNT_LAZY
+                    | IDSET_FLAG_ALLOC_RR;
 
     if (validate_idset_flags (flags, valid_flags) < 0)
         return NULL;
@@ -58,6 +59,8 @@ struct idset *idset_create (size_t size, int flags)
         idset->count = size;
     else
         idset->count = 0;
+    if ((flags & IDSET_FLAG_ALLOC_RR))
+        idset->alloc_rr_last = IDSET_INVALID_ID;
     return idset;
 }
 
@@ -584,13 +587,18 @@ struct idset *idset_intersect (const struct idset *a, const struct idset *b)
  */
 int idset_alloc (struct idset *idset, unsigned int *val)
 {
-    unsigned int id;
+    unsigned int id = IDSET_INVALID_ID;
 
     if (!idset || !(idset->flags & IDSET_FLAG_INITFULL) || !val) {
         errno = EINVAL;
         return -1;
     }
-    id = idset_first (idset);
+    if ((idset->flags & IDSET_FLAG_ALLOC_RR)
+        && idset->alloc_rr_last != IDSET_INVALID_ID) {
+        id = idset_next (idset, idset->alloc_rr_last);
+    }
+    if (id == IDSET_INVALID_ID)
+        id = idset_first (idset);
     if (id == IDSET_INVALID_ID) {
         id = idset_universe_size (idset);
         if (idset_grow (idset, id + 1) < 0)
@@ -598,6 +606,8 @@ int idset_alloc (struct idset *idset, unsigned int *val)
     }
     // code above ensures that id is a member of idset
     idset_del_nocheck (idset, id);
+    if ((idset->flags & IDSET_FLAG_ALLOC_RR))
+        idset->alloc_rr_last = id;
     *val = id;
     return 0;
 }

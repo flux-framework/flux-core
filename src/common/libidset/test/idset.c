@@ -941,6 +941,37 @@ void test_alloc (int flags)
     idset_destroy (idset);
 }
 
+void test_alloc_rr (void)
+{
+    unsigned int id;
+    struct idset *idset;
+
+    idset = idset_create (2, IDSET_FLAG_INITFULL | IDSET_FLAG_ALLOC_RR);
+    if (!idset)
+        BAIL_OUT ("could not create idset");
+    diag ("alloc_rr: created set size=2");
+    ok (idset_alloc (idset, &id) == 0 && id == 0,
+        "alloc_rr: allocated 0");
+    idset_free (idset, 0);
+    diag ("alloc_rr: freed 0");
+    ok (idset_alloc (idset, &id) == 0 && id == 1,
+        "alloc_rr: allocated 1");
+    idset_free (idset, 1);
+    diag ("alloc_rr: freed 1");
+    ok (idset_alloc (idset, &id) == 0 && id == 0,
+        "alloc_rr: allocated 0");
+    ok (idset_alloc (idset, &id) == 0 && id == 1,
+        "alloc_rr: allocated 1");
+    ok (idset_alloc (idset, &id) < 0,
+        "alloc_rr: failed");
+    idset_free (idset, 0);
+    diag ("alloc_rr: freed 0");
+    ok (idset_alloc (idset, &id) == 0 && id == 0,
+        "alloc_rr: allocated 0");
+
+    idset_destroy (idset);
+}
+
 void test_alloc_badparam (void)
 {
     unsigned int id;
@@ -1209,8 +1240,13 @@ int main (int argc, char *argv[])
     issue_2336 ();
     test_ops ();
     test_initfull();
+    diag ("idset_alloc test flags=0");
     test_alloc (0);
+    diag ("idset_alloc test flags=COUNT_LAZY");
     test_alloc (IDSET_FLAG_COUNT_LAZY);
+    diag ("idset_alloc test flags=ALLOC_RR");
+    test_alloc (IDSET_FLAG_ALLOC_RR);
+    test_alloc_rr ();
     test_alloc_badparam();
     test_decode_ex ();
     test_decode_empty ();

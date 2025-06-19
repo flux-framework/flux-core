@@ -23,6 +23,7 @@ struct idset {
     size_t count;
     Veb T;
     int flags;
+    unsigned int alloc_rr_last;
 };
 
 #define IDSET_ENCODE_CHUNK 1024
