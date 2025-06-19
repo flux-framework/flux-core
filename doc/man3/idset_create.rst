@@ -106,6 +106,10 @@ IDSET_FLAG_INITFULL
    The idset is created full instead of empty.  If specified with
    IDSET_FLAG_AUTOGROW, new portions that are added are also filled.
 
+IDSET_FLAG_ALLOC_RR
+   Change :func:`idset_alloc` to begin searching for an id after the
+   most recently allocated one, rather than taking the first available.
+
 IDSET_FLAG_COUNT_LAZY
    The running count is not maintained and :func:`idset_count` uses a slower
    iteration method.  Not maintaining the count makes set/clear operations

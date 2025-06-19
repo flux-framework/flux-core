@@ -30,12 +30,15 @@ The idset must have been created with IDSET_FLAG_INITFULL.
 
 .. note::
   Unallocated is defined as "in the set" so that allocation can use the
-  constant-time *first* operation to find the next available id.  Defining
+  constant-time *first* operation to find the first available id.  Defining
   unallocated as "not in the set" would mean that iteration would
-  be required to find the next available id.
+  be required to find the next available id.  This advantage is lost when
+  the set is created with IDSET_FLAG_ALLOC_RR.
 
-:func:`idset_alloc` takes the next available id out of the set.
+:func:`idset_alloc` takes the first available id out of the set.
 This is implemented as :func:`idset_first` and :func:`idset_clear` internally.
+If the set was created with IDSET_FLAG_ALLOC_RR, it takes the *next*
+available id after the most recently allocated one, using :func:`idset_next`.
 If there are no more ids available and the set was created with
 IDSET_FLAG_AUTOGROW, the set is expanded in order to fulfill the request.
 
