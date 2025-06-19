@@ -970,3 +970,6 @@ composable
 orchestrator
 fsck
 mincrit
+MPMD
+prog
+shlex

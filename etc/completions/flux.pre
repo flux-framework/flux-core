@@ -2141,6 +2141,27 @@ _flux_uri()
     return 0
 }
 
+# flux-multi-prog(1) completions
+_flux_multi_prog()
+{
+    local cmd=$1
+    local split=false
+    local OPTS="\
+        -n --dry-run= \
+    "
+    if [[ $cur != -* ]]; then
+        compopt -o filenames
+        COMPREPLY=( $(compgen -f -- "$cur") $(compgen -d -- "$cur") )
+        return
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
 _flux_core()
 {
     FLUX_OPTS="-v --verbose -V --version -p --parent -r --root"
@@ -2269,6 +2290,9 @@ _flux_core()
         ;;
     uri)
         _flux_uri $subcmd
+        ;;
+    multi-prog)
+        _flux_multi_prog $subcmd
         ;;
     help)
         COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
