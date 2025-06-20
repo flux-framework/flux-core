@@ -668,6 +668,13 @@ static void init_attrs_post_boot (attr_t *attrs)
             log_err_exit ("setattr parent-kvs-namespace");
     }
     unsetenv ("FLUX_KVS_NAMESPACE");
+
+    val = getenv ("FLUX_JOB_ID_PATH");
+    if (!val || !instance_is_job)
+        val = "/";
+    if (attr_add (attrs, "jobid-path", val, ATTR_IMMUTABLE) < 0)
+        log_err_exit ("setattr jobid-path");
+    unsetenv ("FLUX_JOB_ID_PATH");
 }
 
 static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
@@ -1222,7 +1229,7 @@ static int execute_parental_notifications (struct broker *ctx)
         goto out;
 
     /*  Note: not an error if rpc to set critical ranks fails, but
-     *  issue an error notifying user that no criitcal ranks are set.
+     *  issue an error notifying user that no critical ranks are set.
      */
     if (!(f2 = set_critical_ranks (h, id, ctx->attrs)))
         log_msg ("Unable to get critical ranks, all ranks will be critical");

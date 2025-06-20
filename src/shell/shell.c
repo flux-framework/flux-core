@@ -1755,17 +1755,25 @@ static int shell_setup_environment (flux_shell_t *shell)
 {
     const char *uri;
     const char *namespace;
+    const char *jobid_path;
 
     (void) flux_shell_unsetenv (shell, "FLUX_PROXY_REMOTE");
 
     if (!(uri = getenv ("FLUX_URI"))
         || !(namespace = getenv ("FLUX_KVS_NAMESPACE"))
+        || !(jobid_path = flux_attr_get (shell->h, "jobid-path"))
         || flux_shell_setenvf (shell, 1, "FLUX_URI", "%s", uri) < 0
         || flux_shell_setenvf (shell,
                                1,
                                "FLUX_KVS_NAMESPACE",
                                "%s",
                                namespace) < 0
+        || flux_shell_setenvf (shell,
+                               1,
+                               "FLUX_JOB_ID_PATH",
+                               "%s/%s",
+                               streq (jobid_path, "/") ? "" : jobid_path,
+                               idf58 (shell->info->jobid)) < 0
         || flux_shell_setenvf (shell,
                                1,
                                "FLUX_JOB_SIZE",
