@@ -708,6 +708,95 @@ test_expect_success NO_CHAIN_LINT 'flux kvs eventlog get --stream and --waitcrea
 	wait $pid
 '
 
+#
+# initial sentinel flag
+#
+
+# N.B. watch-initial-sentinel outputs "sentinel" when the sentinel
+# is received
+# N.B. SIGUSR1 informs watch-initial-sentinel to cancel watch
+test_expect_success NO_CHAIN_LINT 'watch-initial-sentinel works' '
+	flux kvs put test.sentinel.test1=1
+	flux kvs put --append test.sentinel.test1=2
+	${FLUX_BUILD_DIR}/t/kvs/watch_initial_sentinel \
+		test.sentinel.test1 > sentinel1.out &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put --append test.sentinel.test1=42 &&
+	flux kvs put --append test.sentinel.test1=43 &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="43" sentinel1.out >/dev/null &&
+	kill -s USR1 $pid &&
+        wait $pid &&
+	test_debug "cat sentinel1.out" &&
+	echo 1 > sentinel1.exp &&
+	echo 2 >> sentinel1.exp &&
+	echo sentinel >> sentinel1.exp &&
+	echo 42 >> sentinel1.exp &&
+	echo 43 >> sentinel1.exp &&
+	test_cmp sentinel1.exp sentinel1.out
+'
+
+test_expect_success NO_CHAIN_LINT 'watch-initial-sentinel fails on non-existent key' '
+	test_must_fail ${FLUX_BUILD_DIR}/t/kvs/watch_initial_sentinel \
+		test.sentinel.test2
+'
+
+test_expect_success NO_CHAIN_LINT 'watch-initial-sentinel works w/ WAITCREATE' '
+	${FLUX_BUILD_DIR}/t/kvs/watch_initial_sentinel \
+		--waitcreate test.sentinel.test2 > sentinel2.out &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.sentinel.test2=1
+	flux kvs put --append test.sentinel.test2=42 &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="42" sentinel2.out >/dev/null &&
+	kill -s USR1 $pid &&
+        wait $pid &&
+	test_debug "cat sentinel2.out" &&
+	echo sentinel > sentinel2.exp &&
+	echo 1 >> sentinel2.exp &&
+	echo 42 >> sentinel2.exp &&
+	test_cmp sentinel2.exp sentinel2.out
+'
+
+test_expect_success NO_CHAIN_LINT 'watch-initial-sentinel basic works (get_raw)' '
+	flux kvs put test.sentinel.test3=1
+	${FLUX_BUILD_DIR}/t/kvs/watch_initial_sentinel -r \
+		test.sentinel.test3 > sentinel3.out &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put --append test.sentinel.test3=42 &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="42" sentinel3.out >/dev/null &&
+	kill -s USR1 $pid &&
+        wait $pid &&
+	test_debug "cat sentinel3.out" &&
+	echo 1 > sentinel3.exp &&
+	echo sentinel >> sentinel3.exp &&
+	echo 42 >> sentinel3.exp &&
+	test_cmp sentinel3.exp sentinel3.out
+'
+
+# N.B. treeobj's have data in base64, "MQ==" is "1" in base64 and
+# "NDI==" is "42" in base64
+test_expect_success NO_CHAIN_LINT 'watch-initial-sentinel basic works (get_treeobj)' '
+	flux kvs put test.sentinel.test4=1
+	${FLUX_BUILD_DIR}/t/kvs/watch_initial_sentinel -t \
+		test.sentinel.test4 > sentinel4.out &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put --append test.sentinel.test4=42 &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="NDI" sentinel4.out >/dev/null &&
+	kill -s USR1 $pid &&
+        wait $pid &&
+	test_debug "cat sentinel4.out" &&
+	head -n 1 sentinel4.out | grep "MQ" &&
+        tail -n 2 sentinel4.out | head -n 1 | grep sentinel &&
+	tail -n 1 sentinel4.out | grep "NDI"
+'
+
 # Security checks
 
 test_expect_success 'flux kvs get --watch denies guest access to primary namespace' '
