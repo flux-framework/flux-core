@@ -208,12 +208,23 @@ void checkpoint_get_cb (flux_t *h,
                         void *arg)
 {
     struct content_files *ctx = arg;
+    int offset = 0;
     void *data = NULL;
     size_t size;
     json_t *o = NULL;
     const char *errstr = NULL;
     json_error_t error;
 
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s?i}",
+                             "index", &offset) < 0)
+        goto error;
+    /* content-files only supports a single checkpoint */
+    if (offset) {
+        errno = ENOENT;
+        goto error;
+    }
     if (filedb_get (ctx->dbpath,
                     KVS_DEFAULT_CHECKPOINT,
                     &data,
