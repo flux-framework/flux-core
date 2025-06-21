@@ -7,6 +7,7 @@ test_description='Test resource drain/undrain'
 SIZE=4
 test_under_flux $SIZE full --test-hosts=fake[0-3]
 
+dmesg_grep=${SHARNESS_TEST_SRCDIR}/scripts/dmesg-grep.py
 
 # Usage: waitup N
 #   where N is a count of online ranks
@@ -74,10 +75,18 @@ test_expect_success 'resource.eventlog has one drain event' '
 	test $(flux resource status -s drain -no {ranks}) = "1"
 '
 
+test_expect_success 'drain event was logged' '
+	$dmesg_grep -t 10 "drain idset=1"
+'
+
 test_expect_success 'reason can be added after node is drained' '
 	flux resource drain 1 test_reason_01 &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 1 &&
 	test $(flux resource status -s drain -no {nnodes}) -eq 1
+'
+
+test_expect_success 'drain event was logged' '
+	$dmesg_grep -t 10 "drain .* reason=test_reason_01"
 '
 
 test_expect_success 'resource.eventlog has two drain events' '
@@ -155,6 +164,10 @@ test_expect_success 'undrain one node' '
 	test $(flux resource list -n -s down -o {nnodes}) -eq 2
 '
 
+test_expect_success 'udrain event was logged' '
+	$dmesg_grep -t 10 "undrain idset=3"
+'
+
 test_expect_success 'two nodes are still drained' '
 	test $(flux resource list -n -s down -o {nnodes}) -eq 2
 '
@@ -162,6 +175,10 @@ test_expect_success 'two nodes are still drained' '
 test_expect_success 'undrain remaining nodes with a reason' '
 	flux resource undrain 1-2 "reason for undrain" &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 0
+'
+
+test_expect_success 'udrain event with reason was logged' '
+	$dmesg_grep -t 10 "undrain idset=1-2 .*reason=reason for undrain"
 '
 
 test_expect_success 'resource.eventlog has three undrain events' '
