@@ -1,5 +1,5 @@
 ###############################################################
-# Copyright 2019 Lawrence Livermore National Security, LLC
+# Copyright 2025 Lawrence Livermore National Security, LLC
 # (c.f. AUTHORS, NOTICE.LLNS, COPYING)
 #
 # This file is part of the Flux resource manager framework.
@@ -8,9 +8,9 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-# Query a sqlite db for testing purposes
+# write to a sqlite db for testing purposes
 
-# Usage: flux python sqlite-query.py [OPTIONS] dbpath query
+# Usage: flux python sqlite-write.py [OPTIONS] dbpath query
 
 import argparse
 import sqlite3
@@ -20,9 +20,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-t", "--timeout", type=str, metavar="MS", help="Set busytimeout"
-    )
-    parser.add_argument(
-        "--nokey", action="store_true", help="don't output key, just value"
     )
     parser.add_argument(
         "dbpath", type=str, metavar="DBPATH", nargs=1, help="database path"
@@ -35,7 +32,7 @@ if __name__ == "__main__":
         #   characters. Prevents Python from whining about surrogates
         #   not allowed. Really there must be a better way, but this works:
         dbpath = args.dbpath[0].encode("utf-8", errors="surrogateescape").decode()
-        dburi = "file:" + dbpath + "?mode=ro"
+        dburi = "file:" + dbpath + "?mode=rw"
         con = sqlite3.connect(dburi, uri=True)
     except sqlite3.Error as e:
         print(e)
@@ -53,19 +50,7 @@ if __name__ == "__main__":
         print(e)
         sys.exit(1)
 
-    rows = cursor.fetchall()
-
-    #  make print below safe to handle utf-8
-    utf8out = open(1, "w", encoding="utf-8", closefd=False)
-
-    for row in rows:
-        for key in row.keys():
-            val = row[key]
-            if args.nokey:
-                print(f"{val}", file=utf8out)
-            else:
-                print(f"{key} = {val}", file=utf8out)
-
+    con.commit()
     con.close()
     sys.exit(0)
 
