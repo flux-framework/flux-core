@@ -425,7 +425,7 @@ static int tm_advance (struct tm *tm, tm_unit_t item, int val)
         if (tm->tm_wday > val) // into next week
             tm->tm_mday += (7 - tm->tm_wday) + val;
         else
-            tm->tm_mday = val - tm->tm_wday;
+            tm->tm_mday += val - tm->tm_wday;
         tm_reset (tm, TM_MDAY);
         break;
     default:
