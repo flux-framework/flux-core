@@ -76,7 +76,7 @@ int tm_unit_min (tm_unit_t item)
     default:
         break;
     }
-    return (-1);
+    return -1;
 }
 
 int tm_unit_max (tm_unit_t item)
@@ -99,7 +99,7 @@ int tm_unit_max (tm_unit_t item)
     default:
         break;
     }
-    return (-1);
+    return -1;
 }
 
 const char *tm_unit_string (tm_unit_t item)
@@ -187,11 +187,11 @@ cronodate_t * cronodate_create ()
                                         IDSET_FLAG_AUTOGROW);
         if (n == NULL) {
             cronodate_destroy (d);
-            return (NULL);
+            return NULL;
         }
         d->item [i].set = n;
     }
-    return (d);
+    return d;
 }
 
 static int string2int (const char *s)
@@ -199,10 +199,10 @@ static int string2int (const char *s)
     char *endptr;
     unsigned long n = strtoul (s, &endptr, 0);
     if (n == ULONG_MAX) /* ERANGE set by strtol */
-        return (-1);
+        return -1;
     if (endptr == s || *endptr != '\0') {
         errno = EINVAL;
-        return (-1);
+        return -1;
     }
     return ((int) n);
 }
@@ -232,14 +232,14 @@ static int get_range (const char *r, tm_unit_t u, int *lo, int *hi)
         // r = lo, p = hi
         if (((*lo = tm_string2int (r, u)) < 0)
            || ((*hi = tm_string2int (p, u)) < 0))
-            return (-1);
+            return -1;
     }
     else {
         *lo = *hi = tm_string2int (r, u);
         if (*lo < 0)
             return -1;
     }
-    return (0);
+    return 0;
 }
 
 static int range_parse (struct idset *n, tm_unit_t u, const char *range)
@@ -249,7 +249,7 @@ static int range_parse (struct idset *n, tm_unit_t u, const char *range)
     int rc = -1;
 
     if (!(cpy = strdup (range)))
-        return (-1);
+        return -1;
     a1 = cpy;
     while ((s = strtok_r (a1, ",", &saveptr))) {
         int stride = 1;
@@ -285,7 +285,7 @@ static int range_parse (struct idset *n, tm_unit_t u, const char *range)
     rc = 0;
 out:
     free (cpy);
-    return (rc);
+    return rc;
 }
 
 int cronodate_set (cronodate_t *d, tm_unit_t item, const char *range)
@@ -327,16 +327,18 @@ void cronodate_fillset (cronodate_t *d)
 {
     int i;
     for (i = 0; i < TM_MAX_ITEM; i++)
-        (void)idset_range_set (d->item [i].set, tm_unit_min (i),
-                                                tm_unit_max (i));
+        (void)idset_range_set (d->item [i].set,
+                               tm_unit_min (i),
+                               tm_unit_max (i));
 }
 
 void cronodate_emptyset (cronodate_t *d)
 {
     int i;
     for (i = 0; i < TM_MAX_ITEM; i++)
-        (void)idset_range_clear (d->item [i].set, tm_unit_min (i),
-                                                  tm_unit_max (i));
+        (void)idset_range_clear (d->item [i].set,
+                                 tm_unit_min (i),
+                                 tm_unit_max (i));
 }
 
 /* Return pointer to item in struct tm that corresponds to tm_unit_t type.
@@ -361,7 +363,7 @@ static int *tm_item (struct tm *t, tm_unit_t item)
         default:
             break;
     }
-    return (NULL);
+    return NULL;
 }
 
 static void tm_incr (struct tm *tm, tm_unit_t item)
@@ -418,8 +420,8 @@ static int tm_advance (struct tm *tm, tm_unit_t item, int val)
     case TM_YEAR:
         tm->tm_year = val;
         tm_reset (tm, TM_YEAR);
-        break; 
-        
+        break;
+
     /* day of week is special */
     case TM_WDAY:
         if (tm->tm_wday > val) // into next week
@@ -429,9 +431,9 @@ static int tm_advance (struct tm *tm, tm_unit_t item, int val)
         tm_reset (tm, TM_MDAY);
         break;
     default:
-        return (-1);
+        return -1;
     }
-    return (0);
+    return 0;
 }
 
 bool cronodate_match (cronodate_t *d, struct tm *tm)
@@ -453,7 +455,7 @@ int cronodate_next (cronodate_t *d, struct tm *tm)
     time_t t, now;
     if (tm == NULL || d == NULL) {
         errno = EINVAL;
-        return (-1);
+        return -1;
     }
 
     /* Advance 1s into future so we get next future time
@@ -498,9 +500,9 @@ double cronodate_remaining (cronodate_t *d, double now)
     struct tm tm;
     time_t t = (time_t) now;
     if (localtime_r (&t, &tm) == NULL)
-        return (-1.);
+        return -1.;
     if (cronodate_next (d, &tm) < 0)
-        return (-1.);
+        return -1.;
     t = mktime (&tm);
     return ((double) t - now);
 }
