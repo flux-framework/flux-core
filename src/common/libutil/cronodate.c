@@ -462,7 +462,8 @@ int cronodate_next (cronodate_t *d, struct tm *tm)
      *  and do not match "now".
      */
     tm->tm_sec++;
-    now = mktime (tm);
+    if ((now = mktime (tm)) == (time_t) -1)
+        return -1;
 
 again:
     /* Loop through configured date-time units to see if
@@ -485,7 +486,9 @@ again:
             tm_advance (tm, i, next);
             // Call mktime to fix up any overflow, and check that
             //  don't iterate more than 2 years in the future
-            if (((t = mktime (tm)) - now) > 2*60*60*24*365) {
+            if ((t = mktime (tm)) == (time_t) -1)
+                return -1;
+            if ((t - now) > 2*60*60*24*365) {
                 errno = EOVERFLOW;
                 return -1;
             }
@@ -503,7 +506,8 @@ double cronodate_remaining (cronodate_t *d, double now)
         return -1.;
     if (cronodate_next (d, &tm) < 0)
         return -1.;
-    t = mktime (&tm);
+    if ((t = mktime (&tm)) == (time_t) -1)
+        return -1.;
     return ((double) t - now);
 }
  /* vi:tabstop=4 shiftwidth=4 expandtab
