@@ -371,7 +371,7 @@ void checkpoint_get_cb (flux_t *h,
                         void *arg)
 {
     struct content_sqlite *ctx = arg;
-    char *s;
+    const char *s;
     json_t *o = NULL;
     const char *errstr = NULL;
     json_error_t error;
@@ -389,7 +389,7 @@ void checkpoint_get_cb (flux_t *h,
         errno = ENOENT;
         goto error;
     }
-    s = (char *)sqlite3_column_text (ctx->checkpt_get_stmt, 0);
+    s = (const char *)sqlite3_column_text (ctx->checkpt_get_stmt, 0);
     if (!(o = json_loads (s, 0, &error))) {
         /* recovery from version 0 checkpoint blobref not supported */
         errstr = error.text;
