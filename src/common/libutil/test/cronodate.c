@@ -291,6 +291,35 @@ int main (int argc, char *argv[])
     x = cronodate_remaining (d, tv_to_double (&tv));
     ok (almost_is (x, 24*60*60), "cronodate_remaining works: got %.6fs", x);
 
+    cronodate_fillset (d);
+    // This combination of cronodate and 'now' value is known to hang
+    // due to issue #6886:
+    ok (cronodate_set (d, TM_SEC, "0") >= 0, "date glob set, sec = 0");
+    ok (cronodate_set (d, TM_MIN, "0") >= 0, "date glob set, min = 0");
+    ok (cronodate_set (d, TM_HOUR, "20") >= 0, "date glob set, hour = 20");
+    ok (cronodate_set (d, TM_WDAY, "1-5") >= 0,
+        "date glob set, wday = 1-5 (Mon-Fri)");
+
+    struct tm now = {
+        .tm_sec = 0,
+        .tm_min = 0,
+        .tm_hour = 0,
+        .tm_mday = 1,
+        .tm_mon = 5,
+        .tm_year = 125,
+        .tm_wday = 0,
+        .tm_yday = 151,
+    };
+
+    ok (cronodate_next (d, &now) >= 0,
+        "cronodate_next works (issue#6886)");
+
+    // Similar test with observed now timestamp:
+    x = cronodate_remaining (d, 1750639125.0000329);
+    ok (x != 0.,
+        "cronodate_remaining() works (issue#6886)",
+        x);
+
     cronodate_destroy (d);
 
     done_testing ();
