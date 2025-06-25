@@ -81,6 +81,7 @@ TESTSCRIPTS = \
 	t0031-constraint-parser.t \
 	t0032-directives-parser.t \
 	t0033-filemap-cmd.t \
+	t0034-broker-getenv.t \
 	t0025-broker-state-machine.t \
 	t0027-broker-groups.t \
 	t0013-config-file.t \
