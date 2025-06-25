@@ -55,6 +55,7 @@ error:
 
 static int checkpoint_get_forward (struct content_checkpoint *checkpoint,
                                    const flux_msg_t *msg,
+                                   int index,
                                    const char **errstr)
 {
     const char *topic = "content.checkpoint-get";
@@ -67,11 +68,12 @@ static int checkpoint_get_forward (struct content_checkpoint *checkpoint,
         rank = 0;
     }
 
-    if (!(f = flux_rpc (checkpoint->h,
-                        topic,
-                        NULL,
-                        rank,
-                        0))
+    if (!(f = flux_rpc_pack (checkpoint->h,
+                             topic,
+                             rank,
+                             0,
+                             "{s:i}",
+                             "index", index))
         || flux_future_then (f,
                              -1,
                              checkpoint_get_continuation,
@@ -100,6 +102,7 @@ void content_checkpoint_get_request (flux_t *h,
                                      void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
+    int index = 0;
     const char *errstr = NULL;
 
     if (checkpoint->rank == 0
@@ -109,7 +112,16 @@ void content_checkpoint_get_request (flux_t *h,
         goto error;
     }
 
-    if (checkpoint_get_forward (checkpoint, msg, &errstr) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s?i}",
+                             "index", &index) < 0)
+        goto error;
+
+    if (checkpoint_get_forward (checkpoint,
+                                msg,
+                                index,
+                                &errstr) < 0)
         goto error;
 
     return;
