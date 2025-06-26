@@ -393,4 +393,6 @@ unset FLUX_URI_RESOLVE_LOCAL
 export XDG_CONFIG_DIRS=/noexist
 export XDG_CONFIG_HOME=/noexist
 
+export FLUX_RC_USE_MODPROBE=t
+
 # vi: ts=4 sw=4 expandtab
