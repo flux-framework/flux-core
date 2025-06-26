@@ -66,6 +66,10 @@ static struct optparse_option remove_opts[] =  {
     { .name = "force", .key = 'f', .has_arg = 0,
       .usage = "Ignore nonexistent modules",
     },
+    { .name = "cancel", .has_arg = 0,
+      .usage = "Forcibly stop an unresponsive module thread when it"
+               " reaches the next pthread(7) cancellation point",
+    },
     OPTPARSE_TABLE_END,
 };
 
@@ -75,6 +79,10 @@ static struct optparse_option reload_opts[] =  {
     },
     { .name = "name", .has_arg = 1, .arginfo = "NAME",
       .usage = "Override default module name",
+    },
+    { .name = "cancel", .has_arg = 0,
+      .usage = "Forcibly stop an unresponsive module thread when it"
+               " reaches the next pthread(7) cancellation point",
     },
     OPTPARSE_TABLE_END,
 };
@@ -372,8 +380,9 @@ static void module_remove (flux_t *h, optparse_t *p, const char *path)
                              "module.remove",
                              FLUX_NODEID_ANY,
                              0,
-                             "{s:s}",
-                             "name", fullpath ? fullpath : path))
+                             "{s:s s:b}",
+                             "name", fullpath ? fullpath : path,
+                             "cancel", optparse_hasopt (p, "cancel") ? 1 : 0))
         || flux_rpc_get (f, NULL) < 0) {
         if (!(optparse_hasopt (p, "force") && errno == ENOENT))
             log_msg_exit ("remove %s: %s", path, future_strerror (f, errno));
