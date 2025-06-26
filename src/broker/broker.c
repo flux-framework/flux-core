@@ -1321,6 +1321,46 @@ static void broker_disconnect_cb (flux_t *h,
 {
 }
 
+static void broker_getenv_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
+{
+    json_t *names;
+    json_t *env = NULL;
+    size_t index;
+    json_t *entry;
+
+    if (flux_request_unpack (msg, NULL, "{s:o}", "names", &names) < 0)
+        goto error;
+    if (!(env = json_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    json_array_foreach (names, index, entry) {
+        const char *name = json_string_value (entry);
+        const char *val;
+
+        if (name && (val = getenv (name))) {
+            json_t *o;
+            if (!(o = json_string (val))
+                || json_object_set_new (env, name, o) < 0) {
+                json_decref (o);
+                errno = ENOMEM;
+                goto error;
+            }
+        }
+    }
+    if (flux_respond_pack (h, msg, "{s:O}", "env", env) < 0)
+        flux_log_error (h, "error responding to broker.getenv");
+    json_decref (env);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to broker.getenv");
+    json_decref (env);
+}
+
 static int route_to_handle (flux_msg_t **msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
@@ -1435,6 +1475,12 @@ static const struct flux_msg_handler_spec htab[] = {
         "broker.ping",
         method_ping_cb,
         FLUX_ROLE_USER
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "broker.getenv",
+        broker_getenv_cb,
+        0
     },
     {
         FLUX_MSGTYPE_REQUEST,
