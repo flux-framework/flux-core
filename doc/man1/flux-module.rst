@@ -71,6 +71,15 @@ Remove module *name*.
 
   Suppress failure if module *name* is not loaded.
 
+.. option:: --cancel
+
+  Use :linux:man3:`pthread_cancel` to remove an unresponsive module.
+  This may be useful if the module is not able to respond to the module
+  shutdown request because it has not returned control to its reactor loop.
+  However, broker module threads are created with *deferred* cancellability,
+  so this is only effective if the module thread calls one of the functions
+  listed as a cancellation point in :linux:man7:`pthreads`.
+
 list
 ----
 
