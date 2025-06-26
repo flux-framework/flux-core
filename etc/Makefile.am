@@ -17,7 +17,9 @@ dist_cron_DATA = \
 
 dist_fluxconf_SCRIPTS = \
 	rc1 \
+	rc1.old \
 	rc3 \
+	rc3.old \
 	rc1.py \
 	rc3.py
 
