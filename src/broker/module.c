@@ -148,7 +148,7 @@ static int attr_cache_from_json (flux_t *h, json_t *cache)
 /*  Synchronize the FINALIZING state with the broker, so the broker
  *   can stop messages to this module until we're fully shutdown.
  */
-static int module_finalizing (module_t *p)
+static int module_finalizing (module_t *p, double timeout)
 {
     flux_future_t *f;
 
@@ -158,6 +158,7 @@ static int module_finalizing (module_t *p)
                              0,
                              "{s:i}",
                              "status", FLUX_MODSTATE_FINALIZING))
+        || flux_future_wait_for (f, timeout) < 0
         || flux_rpc_get (f, NULL)) {
         flux_log_error (p->h_module_end, "module.status FINALIZING error");
         flux_future_destroy (f);
@@ -225,7 +226,7 @@ static void *module_thread (void *arg)
      * feed a message to this module after we've closed the handle,
      * which could cause the broker to block.
      */
-    if (module_finalizing (p) < 0)
+    if (module_finalizing (p, 1.0) < 0)
         flux_log_error (p->h_module_end,
                         "failed to set module state to finalizing");
 
