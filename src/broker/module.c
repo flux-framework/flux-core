@@ -59,6 +59,8 @@ struct broker_module {
     flux_conf_t *conf;
     pthread_t t;            /* module thread */
     mod_main_f *main;       /* dlopened mod_main() */
+    bool mod_main_failed;
+    int mod_main_errno;
     char *name;
     char *path;             /* retain the full path as a key for lookup */
     void *dso;              /* reference on dlopened module */
@@ -171,7 +173,6 @@ static void *module_thread (void *arg)
     sigset_t signal_set;
     int errnum;
     char uri[128];
-    int mod_main_errno = 0;
     flux_msg_t *msg;
     flux_future_t *f;
 
@@ -212,9 +213,10 @@ static void *module_thread (void *arg)
     /* Run the module's main().
      */
     if (p->main (p->h_module_end, p->argc, p->argv) < 0) {
-        mod_main_errno = errno;
-        if (mod_main_errno == 0)
-            mod_main_errno = ECONNRESET;
+        p->mod_main_failed = true;
+        p->mod_main_errno = errno;
+        if (p->mod_main_errno == 0)
+            p->mod_main_errno = ECONNRESET;
         flux_log (p->h_module_end, LOG_CRIT, "module exiting abnormally");
     }
 
@@ -251,7 +253,7 @@ static void *module_thread (void *arg)
                              FLUX_RPC_NORESPONSE,
                              "{s:i s:i}",
                              "status", FLUX_MODSTATE_EXITED,
-                             "errnum", mod_main_errno))) {
+                             "errnum", p->mod_main_errno))) {
         flux_log_error (p->h_module_end, "module.status EXITED error");
         goto done;
     }
