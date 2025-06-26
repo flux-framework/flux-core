@@ -3,6 +3,11 @@
 exit_rc=0
 
 core_dir=$(cd ${0%/*} && pwd -P)
+
+if test -z "$FLUX_RC_USE_MODPROBE"; then
+    exec ${core_dir}/rc3.old
+fi
+
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
 IFS=:
 for rcdir in $all_dirs; do
