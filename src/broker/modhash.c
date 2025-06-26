@@ -357,6 +357,7 @@ error:
 
 static int unload_module (broker_ctx_t *ctx,
                           const char *name,
+                          bool cancel,
                           const flux_msg_t *request)
 {
     module_t *p;
@@ -365,8 +366,17 @@ static int unload_module (broker_ctx_t *ctx,
         errno = ENOENT;
         return -1;
     }
-    if (module_stop (p, ctx->h) < 0)
-        return -1;
+    if (cancel) {
+        flux_error_t error;
+        if (module_cancel (p, &error) < 0) {
+            log_msg ("%s: %s", name, error.text);
+            return -1;
+        }
+    }
+    else {
+        if (module_stop (p, ctx->h) < 0)
+            return -1;
+    }
     if (module_push_rmmod (p, request) < 0)
         return -1;
     flux_log (ctx->h, LOG_DEBUG, "rmmod %s", name);
@@ -384,10 +394,15 @@ static void remove_cb (flux_t *h,
 {
     broker_ctx_t *ctx = arg;
     const char *name;
+    int cancel = 0;
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s?b}",
+                             "name", &name,
+                             "cancel", &cancel) < 0)
         goto error;
-    if (unload_module (ctx, name, msg) < 0)
+    if (unload_module (ctx, name, cancel, msg) < 0)
         goto error;
     return;
 error:
