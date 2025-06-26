@@ -62,6 +62,8 @@ struct broker_module {
     char *name;
     char *path;             /* retain the full path as a key for lookup */
     void *dso;              /* reference on dlopened module */
+    int argc;
+    char **argv;
     size_t argz_len;
     char *argz;
     int status;
@@ -169,8 +171,6 @@ static void *module_thread (void *arg)
     sigset_t signal_set;
     int errnum;
     char uri[128];
-    char **av = NULL;
-    int ac;
     int mod_main_errno = 0;
     flux_msg_t *msg;
     flux_future_t *f;
@@ -211,13 +211,7 @@ static void *module_thread (void *arg)
 
     /* Run the module's main().
      */
-    ac = argz_count (p->argz, p->argz_len);
-    if (!(av = calloc (1, sizeof (av[0]) * (ac + 1)))) {
-        log_err ("calloc");
-        goto done;
-    }
-    argz_extract (p->argz, p->argz_len, av);
-    if (p->main (p->h_module_end, ac, av) < 0) {
+    if (p->main (p->h_module_end, p->argc, p->argv) < 0) {
         mod_main_errno = errno;
         if (mod_main_errno == 0)
             mod_main_errno = ECONNRESET;
@@ -263,7 +257,6 @@ static void *module_thread (void *arg)
     }
     flux_future_destroy (f);
 done:
-    free (av);
     flux_close (p->h_module_end);
     p->h_module_end = NULL;
     return NULL;
@@ -339,6 +332,11 @@ module_t *module_create (flux_t *h,
                 goto nomem;
         }
     }
+    p->argc = argz_count (p->argz, p->argz_len);
+    if (!(p->argv = calloc (1, sizeof (p->argv[0]) * (p->argc + 1)))) {
+        goto nomem;
+    }
+    argz_extract (p->argz, p->argz_len, p->argv);
     if (!(p->path = strdup (path))
         || !(p->rmmod_requests = flux_msglist_create ())
         || !(p->insmod_requests = flux_msglist_create ())
@@ -516,6 +514,7 @@ void module_destroy (module_t *p)
 #ifndef __SANITIZE_ADDRESS__
     dlclose (p->dso);
 #endif
+    free (p->argv);
     free (p->argz);
     free (p->name);
     free (p->path);
