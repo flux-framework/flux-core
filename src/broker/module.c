@@ -493,7 +493,7 @@ void module_destroy (module_t *p)
 
     if (p->t) {
         if ((e = pthread_join (p->t, &res)) != 0)
-            log_errn_exit (e, "pthread_cancel");
+            log_errn_exit (e, "pthread_join");
         if (p->status != FLUX_MODSTATE_EXITED) {
             /* Calls broker.c module_status_cb() => service_remove_byuuid()
              * and releases a reference on 'p'.  Without this, disconnect
