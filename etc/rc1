@@ -1,8 +1,13 @@
 #!/bin/sh -e
 
+core_dir=$(cd ${0%/*} && pwd -P)
+
+if test -z "$FLUX_RC_USE_MODPROBE"; then
+    exec ${core_dir}/rc1.old
+fi
+
 flux modprobe rc1 --timing
 
-core_dir=$(cd ${0%/*} && pwd -P)
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
 IFS=:
 
