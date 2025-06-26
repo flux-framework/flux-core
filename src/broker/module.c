@@ -88,6 +88,8 @@ struct broker_module {
     struct subhash *sub;
 };
 
+static void module_thread_cleanup (void *arg);
+
 static int setup_module_profiling (module_t *p)
 {
     size_t len = strlen (p->name);
@@ -174,8 +176,8 @@ static void *module_thread (void *arg)
     sigset_t signal_set;
     int errnum;
     char uri[128];
-    flux_msg_t *msg;
-    flux_future_t *f;
+
+    pthread_cleanup_push (module_thread_cleanup, p);
 
     setup_module_profiling (p);
 
@@ -216,6 +218,29 @@ static void *module_thread (void *arg)
     if (p->main (p->h_module_end, p->argc, p->argv) < 0) {
         p->mod_main_failed = true;
         p->mod_main_errno = errno;
+    }
+done:
+    pthread_cleanup_pop (1);
+
+    return NULL;
+}
+
+/* This function is invoked in the module thread context in one of two ways:
+ * - module_thread() calls pthread_cleanup_pop(3) upon return of mod_main()
+ * - pthread_cancel(3) terminates the module thread at a cancellation point
+ * pthread_cancel(3) can be called in two situations:
+ * - flux module remove --cancel
+ * - when modhash_destroy() is called with lingering modules
+ * Since modhash_destroy() is called after exiting the broker reactor loop,
+ * the broker won't be responsive to any RPCs from this module thread.
+ */
+static void module_thread_cleanup (void *arg)
+{
+    module_t *p = arg;
+    flux_msg_t *msg;
+    flux_future_t *f;
+
+    if (p->mod_main_failed) {
         if (p->mod_main_errno == 0)
             p->mod_main_errno = ECONNRESET;
         flux_log (p->h_module_end, LOG_CRIT, "module exiting abnormally");
@@ -262,7 +287,6 @@ static void *module_thread (void *arg)
 done:
     flux_close (p->h_module_end);
     p->h_module_end = NULL;
-    return NULL;
 }
 
 static void module_cb (flux_reactor_t *r,
@@ -336,9 +360,8 @@ module_t *module_create (flux_t *h,
         }
     }
     p->argc = argz_count (p->argz, p->argz_len);
-    if (!(p->argv = calloc (1, sizeof (p->argv[0]) * (p->argc + 1)))) {
+    if (!(p->argv = calloc (1, sizeof (p->argv[0]) * (p->argc + 1))))
         goto nomem;
-    }
     argz_extract (p->argz, p->argz_len, p->argv);
     if (!(p->path = strdup (path))
         || !(p->rmmod_requests = flux_msglist_create ())
@@ -504,6 +527,8 @@ void module_destroy (module_t *p)
              */
             module_set_status (p, FLUX_MODSTATE_EXITED);
         }
+        if (res == PTHREAD_CANCELED)
+            flux_log (p->h, LOG_DEBUG, "%s thread was canceled", p->name);
     }
 
     /* Send disconnect messages to services used by this module.
