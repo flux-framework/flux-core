@@ -10,6 +10,8 @@ test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 RPC_STREAM=${FLUX_BUILD_DIR}/t/request/rpc_stream
+WATCHSENTINEL=${FLUX_BUILD_DIR}/t/job-info/eventlog_watch_initial_sentinel
+waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
 fj_wait_event() {
 	flux job wait-event --timeout=20 "$@"
@@ -423,6 +425,92 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p invalid and --waitcrea
 	! wait $waitpid &&
 	grep "never received" wait_event_path10.err &&
 	flux cancel ${jobidall}
+'
+
+#
+# initial sentinel flag
+#
+
+# N.B. eventlog-watch-initial-sentinel outputs "sentinel" when the initial one
+# is received
+test_expect_success NO_CHAIN_LINT 'eventlog-watch-initial-sentinel works (main)' '
+	jobid=$(submit_job_live sleeplong.json) &&
+	flux job wait-event --timeout=20 $jobid start
+	${WATCHSENTINEL} ${jobid} eventlog > sentinel1.out &
+	pid=$! &&
+	wait_watchers_nonzero "watchers" &&
+	wait_watcherscount_nonzero primary &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="start" sentinel1.out >/dev/null &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="sentinel" sentinel1.out >/dev/null &&
+	test_debug "cat sentinel1.out" &&
+	tail -n 2 sentinel1.out | head -n 1 | grep start &&
+	tail -n 1 sentinel1.out | grep sentinel &&
+	flux cancel ${jobid} &&
+	wait ${pid} &&
+	tail -n 1 sentinel1.out | grep clean
+'
+
+test_expect_success NO_CHAIN_LINT 'eventlog-watch-initial-sentinel works (guestns)' '
+	jobid=$(submit_job_live sleeplong.json) &&
+	flux job wait-event --timeout=20 -p exec $jobid "shell.start"
+	${WATCHSENTINEL} ${jobid} guest.exec.eventlog > sentinel2.out &
+	pid=$! &&
+	wait_watchers_nonzero "watchers" &&
+	wait_watchers_nonzero "guest_watchers" &&
+	guestns=$(flux job namespace $jobid) &&
+	wait_watcherscount_nonzero $guestns &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="shell.start" sentinel2.out >/dev/null &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="sentinel" sentinel2.out >/dev/null &&
+	test_debug "cat sentinel2.out" &&
+	tail -n 2 sentinel2.out | head -n 1 | grep "shell.start" &&
+	tail -n 1 sentinel2.out | grep sentinel &&
+	flux cancel ${jobid} &&
+	wait ${pid} &&
+	tail -n 1 sentinel2.out | grep done
+'
+
+test_expect_success 'eventlog-watch-initial-sentinel works (completed main)' '
+	jobid=$(submit_job sleeplong.json) &&
+	${WATCHSENTINEL} ${jobid} eventlog > sentinel3.out &&
+	test_debug "cat sentinel3.out" &&
+	tail -n 2 sentinel3.out | head -n 1 | grep clean &&
+	tail -n 1 sentinel3.out | grep sentinel
+'
+
+test_expect_success NO_CHAIN_LINT 'eventlog-watch-initial-sentinel works (completed guestns)' '
+	jobid=$(submit_job sleeplong.json)
+	${WATCHSENTINEL} ${jobid} guest.exec.eventlog > sentinel4.out
+	test_debug "cat sentinel4.out" &&
+	tail -n 2 sentinel4.out | head -n 1 | grep "done" &&
+	tail -n 1 sentinel4.out | grep sentinel
+'
+
+test_expect_success NO_CHAIN_LINT 'eventlog-watch-initial-sentinel fails on bad job id' '
+	test_must_fail ${WATCHSENTINEL} 123456789 eventlog
+'
+
+test_expect_success NO_CHAIN_LINT 'eventlog-watch-initial-sentinel works w/ WAITCREATE' '
+	jobid=$(submit_job_live sleeplong.json)
+	${WATCHSENTINEL} --waitcreate ${jobid} guest.foobar > sentinel5.out &
+	pid=$! &&
+	wait_watchers_nonzero "watchers" &&
+	wait_watchers_nonzero "guest_watchers" &&
+	guestns=$(flux job namespace $jobid) &&
+	wait_watcherscount_nonzero $guestns &&
+        flux kvs eventlog append --namespace=${guestns} foobar hello &&
+        flux kvs eventlog append --namespace=${guestns} foobar goodbye &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="goodbye" sentinel5.out >/dev/null &&
+	test_debug "cat sentinel5.out" &&
+	head -n 1 sentinel5.out | grep sentinel &&
+	tail -n 2 sentinel5.out | head -n 1 | grep hello &&
+	tail -n 1 sentinel5.out | grep goodbye &&
+	flux cancel ${jobid} &&
+	wait ${pid}
 '
 
 #
