@@ -46,42 +46,60 @@ static void usage (void)
 
 void cancel_cb (int sig)
 {
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
     flux_kvs_lookup_cancel (fwatch);
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
 }
 
 void lookup_get (flux_future_t *f)
 {
     const char *value;
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
+    fflush (stderr);
     if (flux_kvs_lookup_get (f, &value) < 0) {
+        fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
+        fflush (stderr);
         if (errno != ENODATA)
             log_err_exit ("flux_kvs_lookup_get");
+        fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
+        fflush (stderr);
         flux_future_destroy (f);
+        fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
+        fflush (stderr);
         return;
     }
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
+    fflush (stderr);
     if (!value)
         printf ("sentinel\n");
     else
         printf ("%s\n", value);
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
+    fflush (stderr);
 }
 
 void lookup_get_raw (flux_future_t *f)
 {
     const void *data;
     size_t len;
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
     if (flux_kvs_lookup_get_raw (f, &data, &len) < 0) {
         if (errno != ENODATA)
             log_err_exit ("flux_kvs_lookup_get_raw");
         flux_future_destroy (f);
         return;
     }
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
     if (!data && !len)
         printf ("sentinel\n");
     else
         printf ("%s\n", (char *)data);
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
 }
 
 void lookup_continuation (flux_future_t *f, void *arg)
 {
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
     switch (func) {
     case LOOKUP_GET:
         lookup_get (f);
@@ -94,6 +112,7 @@ void lookup_continuation (flux_future_t *f, void *arg)
     }
     fflush (stdout);
     flux_future_reset (f);
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
 }
 
 int main (int argc, char **argv)
@@ -119,32 +138,40 @@ int main (int argc, char **argv)
         }
     }
 
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
     if ((argc - optind) != 1)
         usage();
 
     key = argv[optind];
 
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
     flags = FLUX_KVS_WATCH;
     flags |= FLUX_KVS_WATCH_APPEND;
     flags |= FLUX_KVS_WATCH_APPEND_INITIAL_SENTINEL;
     if (Wopt)
         flags |= FLUX_KVS_WAITCREATE;
 
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
     if (!(fwatch = flux_kvs_lookup (h, NULL, flags, key)))
         log_err_exit ("flux_kvs_lookup");
 
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
     if (flux_future_then (fwatch, -1., lookup_continuation, NULL) < 0)
         log_err_exit ("flux_future_then");
 
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
     if (signal (SIGUSR1, cancel_cb) == SIG_ERR)
         log_err_exit ("signal");
 
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
 
+    fprintf (stderr, "%s:%d\n", __FUNCTION__, __LINE__);
     flux_close (h);
     return (0);
 }
