@@ -275,6 +275,21 @@ int flux_jobtap_epilog_finish (flux_plugin_t *p,
                                flux_jobid_t id,
                                const char *description,
                                int status);
+
+/*  Call jobtap plugin stack for `topic` from another plugin using jobid `id`.
+ *   Note that plugins will only have access to arguments in `args` passed
+ *   here, i.e. the implementation does not automatically add job data as
+ *   documented in other jobtap callbacks. A job id is required here since
+ *   much of the jobtap API assumes it is operating on a current job.
+ *   The `id` argument may be set to FLUX_JOBTAP_CURRENT_JOB to keep the same
+ *   current job as in the context of the caller.
+ *
+ *   The `topic` string may not begin with the prefix `job.`.
+ */
+int flux_jobtap_call (flux_plugin_t *p,
+                      flux_jobid_t id,
+                      const char *topic,
+                      flux_plugin_arg_t *args);
 #ifdef __cplusplus
 }
 #endif
