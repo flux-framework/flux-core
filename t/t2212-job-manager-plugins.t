@@ -585,5 +585,9 @@ test_expect_success 'job-manager: job.inactive-add was called' '
 test_expect_success 'job-manager: job.inactive-remove was called' '
 	grep -q job.inactive-remove argsok.out
 '
-
+test_expect_success 'job-manager: test flux_jobtap_call()' '
+	flux jobtap load --remove=all ${PLUGINPATH}/callee.so &&
+	flux jobtap load ${PLUGINPATH}/call.so &&
+	flux run hostname
+'
 test_done
