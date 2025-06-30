@@ -16,6 +16,7 @@ invalid_rank() {
 
 testmod=${FLUX_BUILD_DIR}/t/module/.libs/testmod.so
 legacy=${FLUX_BUILD_DIR}/t/module/.libs/legacy.so
+hangmod=${FLUX_BUILD_DIR}/t/module/.libs/hang.so
 
 module_status_bad_proto() {
 	flux python -c "import flux; print(flux.Flux().rpc(\"module.status\").get())"
@@ -318,6 +319,15 @@ test_expect_success 'testmod does respond to ping' '
 '
 test_expect_success 'module: remove testmod' '
         flux module remove -f testmod
+'
+test_expect_success 'module: load hanging module' '
+        flux module load $hangmod
+'
+test_expect_success 'module: hanging module cannot be removed' '
+        test_expect_code 137 run_timeout 2 flux module remove $hangmod
+'
+test_expect_success 'module: but --cancel works' '
+        flux module remove --cancel $hangmod
 '
 
 test_done

@@ -59,9 +59,13 @@ struct broker_module {
     flux_conf_t *conf;
     pthread_t t;            /* module thread */
     mod_main_f *main;       /* dlopened mod_main() */
+    bool mod_main_failed;
+    int mod_main_errno;
     char *name;
     char *path;             /* retain the full path as a key for lookup */
     void *dso;              /* reference on dlopened module */
+    int argc;
+    char **argv;
     size_t argz_len;
     char *argz;
     int status;
@@ -83,6 +87,8 @@ struct broker_module {
     flux_t *h_module_end;   /* module end of interthread_channel */
     struct subhash *sub;
 };
+
+static void module_thread_cleanup (void *arg);
 
 static int setup_module_profiling (module_t *p)
 {
@@ -144,7 +150,7 @@ static int attr_cache_from_json (flux_t *h, json_t *cache)
 /*  Synchronize the FINALIZING state with the broker, so the broker
  *   can stop messages to this module until we're fully shutdown.
  */
-static int module_finalizing (module_t *p)
+static int module_finalizing (module_t *p, double timeout)
 {
     flux_future_t *f;
 
@@ -154,6 +160,7 @@ static int module_finalizing (module_t *p)
                              0,
                              "{s:i}",
                              "status", FLUX_MODSTATE_FINALIZING))
+        || flux_future_wait_for (f, timeout) < 0
         || flux_rpc_get (f, NULL)) {
         flux_log_error (p->h_module_end, "module.status FINALIZING error");
         flux_future_destroy (f);
@@ -169,11 +176,8 @@ static void *module_thread (void *arg)
     sigset_t signal_set;
     int errnum;
     char uri[128];
-    char **av = NULL;
-    int ac;
-    int mod_main_errno = 0;
-    flux_msg_t *msg;
-    flux_future_t *f;
+
+    pthread_cleanup_push (module_thread_cleanup, p);
 
     setup_module_profiling (p);
 
@@ -211,16 +215,34 @@ static void *module_thread (void *arg)
 
     /* Run the module's main().
      */
-    ac = argz_count (p->argz, p->argz_len);
-    if (!(av = calloc (1, sizeof (av[0]) * (ac + 1)))) {
-        log_err ("calloc");
-        goto done;
+    if (p->main (p->h_module_end, p->argc, p->argv) < 0) {
+        p->mod_main_failed = true;
+        p->mod_main_errno = errno;
     }
-    argz_extract (p->argz, p->argz_len, av);
-    if (p->main (p->h_module_end, ac, av) < 0) {
-        mod_main_errno = errno;
-        if (mod_main_errno == 0)
-            mod_main_errno = ECONNRESET;
+done:
+    pthread_cleanup_pop (1);
+
+    return NULL;
+}
+
+/* This function is invoked in the module thread context in one of two ways:
+ * - module_thread() calls pthread_cleanup_pop(3) upon return of mod_main()
+ * - pthread_cancel(3) terminates the module thread at a cancellation point
+ * pthread_cancel(3) can be called in two situations:
+ * - flux module remove --cancel
+ * - when modhash_destroy() is called with lingering modules
+ * Since modhash_destroy() is called after exiting the broker reactor loop,
+ * the broker won't be responsive to any RPCs from this module thread.
+ */
+static void module_thread_cleanup (void *arg)
+{
+    module_t *p = arg;
+    flux_msg_t *msg;
+    flux_future_t *f;
+
+    if (p->mod_main_failed) {
+        if (p->mod_main_errno == 0)
+            p->mod_main_errno = ECONNRESET;
         flux_log (p->h_module_end, LOG_CRIT, "module exiting abnormally");
     }
 
@@ -229,7 +251,7 @@ static void *module_thread (void *arg)
      * feed a message to this module after we've closed the handle,
      * which could cause the broker to block.
      */
-    if (module_finalizing (p) < 0)
+    if (module_finalizing (p, 1.0) < 0)
         flux_log_error (p->h_module_end,
                         "failed to set module state to finalizing");
 
@@ -257,16 +279,14 @@ static void *module_thread (void *arg)
                              FLUX_RPC_NORESPONSE,
                              "{s:i s:i}",
                              "status", FLUX_MODSTATE_EXITED,
-                             "errnum", mod_main_errno))) {
+                             "errnum", p->mod_main_errno))) {
         flux_log_error (p->h_module_end, "module.status EXITED error");
         goto done;
     }
     flux_future_destroy (f);
 done:
-    free (av);
     flux_close (p->h_module_end);
     p->h_module_end = NULL;
-    return NULL;
 }
 
 static void module_cb (flux_reactor_t *r,
@@ -339,6 +359,10 @@ module_t *module_create (flux_t *h,
                 goto nomem;
         }
     }
+    p->argc = argz_count (p->argz, p->argz_len);
+    if (!(p->argv = calloc (1, sizeof (p->argv[0]) * (p->argc + 1))))
+        goto nomem;
+    argz_extract (p->argz, p->argz_len, p->argv);
     if (!(p->path = strdup (path))
         || !(p->rmmod_requests = flux_msglist_create ())
         || !(p->insmod_requests = flux_msglist_create ())
@@ -493,7 +517,7 @@ void module_destroy (module_t *p)
 
     if (p->t) {
         if ((e = pthread_join (p->t, &res)) != 0)
-            log_errn_exit (e, "pthread_cancel");
+            log_errn_exit (e, "pthread_join");
         if (p->status != FLUX_MODSTATE_EXITED) {
             /* Calls broker.c module_status_cb() => service_remove_byuuid()
              * and releases a reference on 'p'.  Without this, disconnect
@@ -503,6 +527,8 @@ void module_destroy (module_t *p)
              */
             module_set_status (p, FLUX_MODSTATE_EXITED);
         }
+        if (res == PTHREAD_CANCELED)
+            flux_log (p->h, LOG_DEBUG, "%s thread was canceled", p->name);
     }
 
     /* Send disconnect messages to services used by this module.
@@ -516,6 +542,7 @@ void module_destroy (module_t *p)
 #ifndef __SANITIZE_ADDRESS__
     dlclose (p->dso);
 #endif
+    free (p->argv);
     free (p->argz);
     free (p->name);
     free (p->path);

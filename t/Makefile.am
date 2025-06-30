@@ -490,6 +490,7 @@ check_LTLIBRARIES = \
 	module/testmod.la \
 	module/running.la \
 	module/legacy.la \
+	module/hang.la \
 	request/req.la \
 	ingest/job-manager.la \
 	disconnect/watcher.la \
@@ -724,6 +725,11 @@ module_legacy_la_SOURCES = module/legacy.c
 module_legacy_la_CPPFLAGS = $(test_cppflags)
 module_legacy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 module_legacy_la_LIBADD = $(test_ldadd) $(LIBDL)
+
+module_hang_la_SOURCES = module/hang.c
+module_hang_la_CPPFLAGS = $(test_cppflags)
+module_hang_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+module_hang_la_LIBADD = $(test_ldadd) $(LIBDL)
 
 barrier_tbarrier_SOURCES = barrier/tbarrier.c
 barrier_tbarrier_CPPFLAGS = $(test_cppflags)
