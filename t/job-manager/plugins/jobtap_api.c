@@ -466,6 +466,56 @@ static int test_job_result (flux_plugin_t *p,
     return 0;
 }
 
+static int test_jobtap_call_einval (flux_plugin_t *p, flux_plugin_arg_t *args)
+{
+    int rc;
+
+    errno = 0;
+    rc = flux_jobtap_call (p, 0, "foo", args);
+    if (rc > 0 || errno != ENOENT)
+        return flux_jobtap_raise_exception (p,
+                                            FLUX_JOBTAP_CURRENT_JOB,
+                                            "test",
+                                            0,
+                                            "flux_jobtap_call() %s: %s %d",
+                                            "invalid id",
+                                            "expected ENOENT got",
+                                            errno);
+    errno = 0;
+    rc = flux_jobtap_call (NULL, FLUX_JOBTAP_CURRENT_JOB, "foo", args);
+    if (rc > 0 || errno != EINVAL)
+        return flux_jobtap_raise_exception (p,
+                                            FLUX_JOBTAP_CURRENT_JOB,
+                                            "test",
+                                            0,
+                                            "flux_jobtap_call() %s: %s %d",
+                                            "p=NULL",
+                                            "expected EINVAL got",
+                                            errno);
+    errno = 0;
+    rc = flux_jobtap_call (p, FLUX_JOBTAP_CURRENT_JOB, "foo", NULL);
+    if (rc > 0 || errno != EINVAL)
+        return flux_jobtap_raise_exception (p,
+                                            FLUX_JOBTAP_CURRENT_JOB,
+                                            "test",
+                                            0,
+                                            "flux_jobtap_call() %s: %s %d",
+                                            "args=NULL",
+                                            "expected EINVAL got",
+                                            errno);
+    rc = flux_jobtap_call (p, FLUX_JOBTAP_CURRENT_JOB, "job.foo", args);
+    if (rc > 0 || errno != EINVAL)
+        return flux_jobtap_raise_exception (p,
+                                            FLUX_JOBTAP_CURRENT_JOB,
+                                            "test",
+                                            0,
+                                            "flux_jobtap_call() %s: %s %d",
+                                            "topic=job.foo",
+                                            "expected EINVAL got",
+                                            errno);
+    return 0;
+}
+
 static int inactive_cb (flux_plugin_t *p,
                         const char *topic,
                         flux_plugin_arg_t *args,
@@ -529,6 +579,7 @@ static int priority_cb (flux_plugin_t *p,
 {
     test_job_flags (p, topic, args);
     test_event_post_pack (p, topic, args);
+    test_jobtap_call_einval (p, args);
     return 0;
 }
 
@@ -539,6 +590,7 @@ static int depend_cb (flux_plugin_t *p,
 {
     test_job_flags (p, topic, args);
     test_event_post_pack (p, topic, args);
+    test_jobtap_call_einval (p, args);
     return test_job_lookup (p, topic, args);
 }
 

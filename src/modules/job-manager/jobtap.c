@@ -2683,6 +2683,27 @@ error:
     return rc;
 }
 
+int flux_jobtap_call (flux_plugin_t *p,
+                      flux_jobid_t id,
+                      const char *topic,
+                      flux_plugin_arg_t *args)
+{
+    struct jobtap *jobtap;
+    struct job *job;
+
+    if (p == NULL
+        || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))
+        || !jobtap->ctx
+        || !args
+        || strstarts (topic, "job.")) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job = jobtap_lookup_jobid (p, id)))
+        return -1;
+    return jobtap_stack_call (jobtap, jobtap->plugins, job, topic, args);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

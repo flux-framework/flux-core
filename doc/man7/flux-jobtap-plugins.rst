@@ -60,6 +60,8 @@ name will be ``job-manager.<name>.<method>``. If a plugin does not
 set a name with ``flux_plugin_set_name(3)``, then the basename of the
 plugin file will be used with the trailing ``.so`` removed.
 
+.. _arguments:
+
 JOBTAP PLUGIN ARGUMENTS
 =======================
 
@@ -433,6 +435,42 @@ called for a job in an invalid state, these function will return -1 with
 
 Multiple prolog or epilog actions can be active at the same time.
 
+CALLING OTHER PLUGINS
+=====================
+
+Plugins may invoke custom callbacks in other plugins using
+``flux_jobtap_call()``. Note that topic strings starting with ``job.``
+are reserved for use by the job-manager and will cause this function
+to fail immediately with ``errno`` set to ``EINVAL``::
+
+ int flux_jobtap_call (flux_plugin_t *p,
+                       flux_jobid_t id,
+                       const char *topic,
+                       flux_plugin_arg_t *args)
+
+
+Much of the jobtap API assumes a current job, so a job ``id`` argument
+is required. Note, that ``args`` is passed unmodified when invoking
+callbacks for ``topic``, so expected data listed in :ref:`arguments` for
+job ``id`` may not be present in newly created ``args`` unless manually
+added by the caller. However, when invoked from another jobtap callback,
+the existing ``args`` object along with ``FLUX_JOBTAP_CURRENT_JOB`` may be
+used in ``flux_jobtap_call()``, in which case ``args`` will still contain
+the expected job arguments.  For example, the following will call all
+plugins registered for the topic ``custom.topic`` when the ``callback``
+is called ::
+
+ int callback (flux_plugin_t *p,
+               const char *topic,
+               flux_plugin_arg_t *args,
+               void *arg)
+ {
+      return flux_jobtap_call (p,
+                               FLUX_JOBTAP_CURRENT_JOB,
+                               "custom.topic",
+                               args);
+ }
+ 
 
 RESOURCES
 =========

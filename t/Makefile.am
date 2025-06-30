@@ -523,6 +523,8 @@ check_LTLIBRARIES = \
 	job-manager/plugins/update-test.la \
 	job-manager/plugins/project-bank-validate.la \
 	job-manager/plugins/offline.la \
+	job-manager/plugins/call.la \
+	job-manager/plugins/callee.la \
 	stats/stats-basic.la \
 	stats/stats-immediate.la
 
@@ -1088,6 +1090,26 @@ job_manager_plugins_offline_la_CPPFLAGS = \
 job_manager_plugins_offline_la_LDFLAGS = \
         $(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_offline_la_LIBADD = \
+        $(top_builddir)/src/common/libflux-internal.la \
+        $(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_call_la_SOURCES = \
+	job-manager/plugins/call.c
+job_manager_plugins_call_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_call_la_LDFLAGS = \
+        $(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_call_la_LIBADD = \
+        $(top_builddir)/src/common/libflux-internal.la \
+        $(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_callee_la_SOURCES = \
+	job-manager/plugins/callee.c
+job_manager_plugins_callee_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_callee_la_LDFLAGS = \
+        $(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_callee_la_LIBADD = \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la
 
