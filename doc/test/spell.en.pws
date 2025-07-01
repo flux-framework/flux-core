@@ -974,3 +974,6 @@ DCB
 cancellability
 pthreads
 pthread
+MPMD
+prog
+shlex

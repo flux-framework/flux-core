@@ -105,6 +105,7 @@ dist_fluxcmd_SCRIPTS = \
 	flux-run.py \
 	flux-submit.py \
 	flux-bulksubmit.py \
+	flux-multi-prog.py \
 	flux-jobs.py \
 	flux-fortune.py \
 	flux-resource.py \
