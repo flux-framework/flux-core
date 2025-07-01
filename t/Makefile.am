@@ -440,6 +440,7 @@ check_PROGRAMS = \
 	kvs/dtree \
 	kvs/blobref \
 	kvs/watch_disconnect \
+	kvs/watch_initial_sentinel \
 	kvs/watch_stream \
 	kvs/commit \
 	kvs/loop_append \
@@ -464,6 +465,7 @@ check_PROGRAMS = \
 	job-info/info_lookup \
 	job-info/update_lookup \
 	job-info/update_watch_stream \
+	job-info/eventlog_watch_initial_sentinel \
 	ingest/submitbench \
 	sched-simple/jj-reader \
 	shell/rcalc \
@@ -674,6 +676,11 @@ kvs_watch_disconnect_CPPFLAGS = $(test_cppflags)
 kvs_watch_disconnect_LDADD = $(test_ldadd)
 kvs_watch_disconnect_LDFLAGS = $(test_ldflags)
 
+kvs_watch_initial_sentinel_SOURCES = kvs/watch_initial_sentinel.c
+kvs_watch_initial_sentinel_CPPFLAGS = $(test_cppflags)
+kvs_watch_initial_sentinel_LDADD = $(test_ldadd)
+kvs_watch_initial_sentinel_LDFLAGS = $(test_ldflags)
+
 kvs_watch_stream_SOURCES = kvs/watch_stream.c
 kvs_watch_stream_CPPFLAGS = $(test_cppflags)
 kvs_watch_stream_LDADD = $(test_ldadd)
@@ -830,6 +837,11 @@ job_info_update_watch_stream_SOURCES = job-info/update_watch_stream.c
 job_info_update_watch_stream_CPPFLAGS = $(test_cppflags)
 job_info_update_watch_stream_LDADD = $(test_ldadd)
 job_info_update_watch_stream_LDFLAGS = $(test_ldflags)
+
+job_info_eventlog_watch_initial_sentinel_SOURCES = job-info/eventlog_watch_initial_sentinel.c
+job_info_eventlog_watch_initial_sentinel_CPPFLAGS = $(test_cppflags)
+job_info_eventlog_watch_initial_sentinel_LDADD = $(test_ldadd)
+job_info_eventlog_watch_initial_sentinel_LDFLAGS = $(test_ldflags)
 
 disconnect_watcher_la_SOURCES = disconnect/watcher.c
 disconnect_watcher_la_CPPFLAGS = $(test_cppflags)
