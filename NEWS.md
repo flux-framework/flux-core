@@ -1,3 +1,32 @@
+flux-core version 0.76.0 - 2025-07-01
+-------------------------------------
+
+## New Features
+ * add `flux multi-prog` for MPMD support (#6881)
+ * add flux module remove --cancel option (#6894)
+ * jobtap: add `flux_jobtap_call()` (#6897)
+ * broker: add broker.getenv RPC (#6891)
+ * resource: log drain/undrain events (#6882)
+ * add `FLUX_JOB_ID_PATH` to the job environment (#6885)
+ * idset: add round-robin allocation flag (#6884)
+ * content: remove checkpoint key (#6863)
+ * broker: let a upmi client relay extra bootstrap info (#6879)
+ * add more arguments to Python `JobspecV1` factory methods (#6858)
+ * python: add `unbuffered` getter and setter to `Jobspec` class (#6875)
+
+## Fixes
+ * cron: fix potential module hang in `cronodate_next()` (#6889)
+ * python: unify behavior of `Jobspec` `getattr` and `setattr` methods
+   (#6874)
+ * python: rename `Jobspec` stdio properties to match CLI options (#6877)
+ * Python: Jobspec repr change (#6870)
+ * flux-fsck: fix error message output (#6867)
+
+## Build/CI/Testsuite/Documentation
+ * t: fix race in job info update watch test (#6871)
+ * testsuite: reduce parallelism in `t4000-issues-test-driver.t` for test
+   reliability (#6868)
+
 flux-core version 0.75.0 - 2025-06-02
 -------------------------------------
 
