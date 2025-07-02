@@ -70,7 +70,10 @@ int main (int argc, char *argv[])
     else
         topic = "kvs.setroot-unpause";
 
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             FLUX_NODEID_ANY,
+                             0,
                              "{ s:s }",
                              "namespace", ns)))
         log_err_exit ("flux_rpc_pack");
