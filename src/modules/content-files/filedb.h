@@ -15,7 +15,7 @@
  * On success, 'datap' and 'sizep' are assigned the contents and size
  * and 0 is returned (*datap must be freed).
  * On failure, -1 is returned with errno set.
- * Pass '*errstr' in pre-set to NULL and if a human readable error message
+ * Pass '*errstr' (pre-set to NULL) and if a human readable error message
  * is appropriate, it is assigned on error (do not free).
  */
 int filedb_get (const char *dbpath,
@@ -28,7 +28,7 @@ int filedb_get (const char *dbpath,
 /* Put file named 'key' with content 'data' and length 'size' to the
  * dbpath directory.  On success, 0 is returned.
  * On failure, -1 is returned with errno set.
- * Pass '*errstr' in pre-set to NULL and if a human readable error message
+ * Pass '*errstr' (pre-set to NULL) and if a human readable error message
  * is appropriate, it is assigned on error (do not free).
  */
 int filedb_put (const char *dbpath,
