@@ -99,6 +99,35 @@ int filedb_put (const char *dbpath,
     return 0;
 }
 
+int filedb_validate (const char *dbpath,
+                     const char *key,
+                     const char **errstr)
+{
+    char path[1024];
+    struct stat statbuf;
+
+    if (strlen (key) == 0 || strchr (key, '/') || streq (key, "..")
+                          || streq (key, ".")) {
+        errno = EINVAL;
+        if (errstr)
+            *errstr = "invalid key name";
+        return -1;
+    }
+    if (snprintf (path, sizeof (path), "%s/%s", dbpath, key) >= sizeof (path)) {
+        errno = EOVERFLOW;
+        if (errstr)
+            *errstr = "key name too long for internal buffer";
+        return -1;
+    }
+    if (stat (path, &statbuf) < 0) {
+        if (errno == ENOENT)
+            return 0;
+        else
+            return -1;
+    }
+    return 1;
+}
+
 /*
  * vi:ts=4 sw=4 expandtab
  */
