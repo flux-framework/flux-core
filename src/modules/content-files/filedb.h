@@ -37,6 +37,16 @@ int filedb_put (const char *dbpath,
                 size_t size,
                 const char **errstr);
 
+/* Validate file named 'key' from the dbpath directory exists.
+ * Return 0 if file exists.
+ * On failure, -1 is returned with errno set.
+ * Pass '*errstr' (pre-set to NULL) and if a human readable error message
+ * is appropriate, it is assigned on error (do not free).
+ */
+int filedb_validate (const char *dbpath,
+                     const char *key,
+                     const char **errstr);
+
 #endif /* !_CONTENT_FILES_FILEDB_H */
 
 /*
