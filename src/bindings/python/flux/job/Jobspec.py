@@ -441,7 +441,7 @@ class Jobspec(object):
     @property
     def environment(self):
         """
-        Environment of job. Defaults to ``None``.
+        Environment of job.
         """
         try:
             return self.jobspec["attributes"]["system"]["environment"]
@@ -843,6 +843,8 @@ class JobspecV1(Jobspec):
             self.duration = duration
         if environment is not None:
             self.environment = environment
+        else:
+            self.environment = dict(os.environ)
         if env_expand is not None:
             if not isinstance(env_expand, abc.Mapping):
                 raise ValueError("env_expand must be a mapping")
@@ -1038,8 +1040,8 @@ class JobspecV1(Jobspec):
                 setter.
             environment (Mapping): Set the environment for the job via a
                 mapping of environment variable name to value. If not
-                provided then the environment will be empty and must be
-                assigned via the :attr:`~JobspecV1.environment` setter.
+                provided then the environment will be initialized using
+                :obj:`os.environ`.
             env_expand (Mapping): A  mapping of environment variables that
                 contain mustache templates to be expanded by the job shell
                 at runtime. (See the :manpage:`flux-run(1)` MUSTACHE

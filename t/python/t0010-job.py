@@ -957,6 +957,13 @@ class TestJob(unittest.TestCase):
         with self.assertRaises(ValueError):
             JobspecV1.from_command(["sleep", "0"], rlimits=True)
 
+    def test_38_environment_default(self):
+        jobspec = JobspecV1.from_command(["sleep", "0"])
+        self.assertEqual(jobspec.environment, dict(os.environ))
+
+        jobspec = JobspecV1.from_command(["sleep", "0"], environment={})
+        self.assertEqual(jobspec.environment, {})
+
 
 if __name__ == "__main__":
     from subflux import rerun_under_flux
