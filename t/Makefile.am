@@ -432,6 +432,7 @@ dist_check_SCRIPTS = \
 	ingest/bad-validate.py
 
 check_PROGRAMS = \
+	content/content_validate \
 	loop/logstderr \
 	loop/issue2337 \
 	loop/issue2711 \
@@ -558,6 +559,11 @@ test_ldflags = \
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
 	$(AM_CPPFLAGS)
+
+content_content_validate_SOURCES = content/content_validate.c
+content_content_validate_CPPFLAGS = $(test_cppflags)
+content_content_validate_LDADD = $(test_ldadd)
+content_content_validate_LDFLAGS = $(test_ldflags)
 
 loop_logstderr_SOURCES = loop/logstderr.c
 loop_logstderr_CPPFLAGS = $(test_cppflags)
