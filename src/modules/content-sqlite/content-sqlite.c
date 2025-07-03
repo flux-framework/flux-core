@@ -237,6 +237,8 @@ static int content_sqlite_load (struct content_sqlite *ctx,
     }
     *datap = data;
     *sizep = size;
+    /* call sqlite3_reset() on ctx->load_stmt in caller, after it has
+     * used returned data pointer */
     return 0;
 error:
     ERRNO_SAFE_WRAP (sqlite3_reset, ctx->load_stmt);
