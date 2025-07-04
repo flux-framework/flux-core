@@ -39,4 +39,21 @@ test_expect_success 'resource: resource.rediscover works with multiple nodes' '
 	test $NCORES3 -gt $NCORES &&
 	test $NCORES3 -eq $(($NCORES2*2))
 '
+test_expect_success 'resource: resource.rediscover saves expiration' '
+	flux alloc -t 5m -n1 -o cpu-affinity=off \
+	        --conf=resource.rediscover=true \
+		flux run flux job timeleft > timeleft.out &&
+	test_debug "cat timeleft.out" &&
+	test $(cat timeleft.out) -lt 800
+'
+# Note: 4294967295 is 32bit UINT_MAX. `flux job timeleft` should report
+# this value (or larger) for an unlimited expiration.
+test_expect_success 'resource: resource.rediscover works with unlimited expiration' '
+	flux alloc -n1 -o cpu-affinity=off \
+	        --conf=resource.rediscover=true \
+		flux run flux job timeleft > timeleft2.out &&
+	test_debug "cat timeleft2.out" &&
+	test $(cat timeleft2.out) -ge 4294967295
+'
+
 test_done
