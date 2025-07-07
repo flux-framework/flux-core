@@ -54,17 +54,17 @@ test_expect_success 'flux-fsck verbose works (simple)' '
 # N.B. from 1000 to 3000 instead of 0 to 2000, easier to debug errors
 # using fold(1) (i.e. all numbers same width)
 test_expect_success LONGTEST 'load kvs and create some kvs content' '
-       flux module load kvs &&
-       for i in `seq 1000 3000`; do
+	flux module load kvs &&
+	for i in `seq 1000 3000`; do
 	   flux kvs put --append bigval=${i}
-       done &&
-       flux kvs get bigval > bigval.exp
+	done &&
+	flux kvs get bigval > bigval.exp
 '
 test_expect_success LONGTEST 'call sync to ensure we have checkpointed' '
 	flux kvs sync
 '
 test_expect_success LONGTEST 'unload kvs' '
-       flux module remove kvs
+	flux module remove kvs
 '
 test_expect_success LONGTEST 'flux-fsck works (big)' '
 	flux fsck --verbose 2> bigval.out &&
