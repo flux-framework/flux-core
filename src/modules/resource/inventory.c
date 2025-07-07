@@ -108,6 +108,7 @@ struct inventory {
 
     json_t *R;
     char *method;
+    double saved_expiration;       /* expiration for use with rediscover */
 
     flux_future_t *put_f;          /* inventory put future */
 
@@ -167,6 +168,24 @@ error:
     return f;
 }
 
+static int inventory_update_expiration (struct inventory *inv,
+                                        double expiration)
+{
+    flux_t *h = inv->ctx->h;
+    json_t *o = NULL;
+    int rc = -1;
+
+    if (!(o = json_real (expiration))
+        || jpath_set (inv->R, "execution.expiration", o) < 0) {
+        flux_log (h, LOG_ERR, "failed to update expiration in inventory R");
+        goto out;
+    }
+    rc = 0;
+out:
+    json_decref (o);
+    return rc;
+}
+
 /* (rank 0) Commit resource.R to the KVS, then upon completion,
  * post resource-define event to resource.eventlog.
  */
@@ -184,6 +203,9 @@ int inventory_put (struct inventory *inv, json_t *R, const char *method)
         return -1;
     }
     inv->R = json_incref (R);
+    if (inv->saved_expiration != 0.
+        && inventory_update_expiration (inv, inv->saved_expiration))
+        goto error;
     if (!(inv->put_f = inventory_put_R (inv)))
         goto error;
     if (flux_future_then (inv->put_f, -1, inventory_put_continuation, inv) < 0)
@@ -441,7 +463,6 @@ static void R_update_cb (flux_future_t *f, void *arg)
     struct inventory *inv = arg;
     flux_t *h = inv->ctx->h;
     double expiration = -1.;
-    json_t *o = NULL;
 
     if (flux_rpc_get_unpack (f,
                              "{s:{s:{s:F}}}",
@@ -453,11 +474,9 @@ static void R_update_cb (flux_future_t *f, void *arg)
     }
     /*  Update local inventory and send expiration update to scheduler
      */
-    if (!(o = json_real (expiration))
-        || jpath_set (inv->R, "execution.expiration", o) < 0) {
-        flux_log (h, LOG_ERR, "failed to update expiration in inventory R");
+    if (inventory_update_expiration (inv, expiration) < 0)
         goto out;
-    }
+
     /*  Update R in KVS, post resource-update event when commit is complete.
      */
     if (!(inv->put_f = inventory_put_R (inv))
@@ -470,7 +489,6 @@ static void R_update_cb (flux_future_t *f, void *arg)
         goto out;
     }
 out:
-    json_decref (o);
     flux_future_reset (f);
 }
 
@@ -595,6 +613,18 @@ static int start_resource_watch (struct inventory *inv,
     }
     flux_future_reset (f);
     inv->R_watch_f = f;
+
+    if (R && config->rediscover) {
+        /* Rediscover will discard R and replace with R discovered by hwloc.
+         * Avoid losing any expiration by setting saving it for later use in
+         * inventory_put().
+         */
+        if (json_unpack (R,
+                         "{s:{s?F}}",
+                         "execution",
+                          "expiration", &inv->saved_expiration) < 0)
+            flux_log (h, LOG_ERR, "failed to save expiration from R");
+    }
 
     /* If R == NULL (no conversion possible) or rediscover == true, then
      * we will fall through to dynamic discovery.
