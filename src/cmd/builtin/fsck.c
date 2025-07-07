@@ -316,11 +316,8 @@ static void fsck_blobref (flux_t *h, const char *blobref)
 static int cmd_fsck (optparse_t *p, int ac, char *av[])
 {
     int optindex = optparse_option_index (p);
-    flux_future_t *f;
-    const json_t *checkpoints;
-    json_t *checkpt;
+    flux_future_t *f = NULL;
     const char *blobref;
-    double timestamp;
     flux_t *h;
 
     log_init ("flux-fsck");
@@ -337,23 +334,33 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
     h = builtin_get_flux_handle (p);
 
-    /* index 0 is most recent checkpoint */
-    if (!(f = kvs_checkpoint_lookup (h, KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
-        || kvs_checkpoint_lookup_get (f, &checkpoints) < 0
-        || !(checkpt = json_array_get (checkpoints, 0))
-        || kvs_checkpoint_parse_rootref (checkpt, &blobref) < 0
-        || kvs_checkpoint_parse_timestamp (checkpt, &timestamp) < 0)
-        log_msg_exit ("error fetching checkpoints: %s",
-                      future_strerror (f, errno));
+    if ((blobref = optparse_get_str (p, "rootref", NULL))) {
+        if (blobref_validate (blobref) < 0)
+            log_msg_exit ("invalid blobref specified");
+    }
+    else {
+        const json_t *checkpoints;
+        json_t *checkpt;
+        double timestamp;
 
-    if (!quiet) {
-        char buf[64] = "";
-        struct tm tm;
-        if (!timestamp_from_double (timestamp, &tm, NULL))
-            strftime (buf, sizeof (buf), "%Y-%m-%dT%T", &tm);
-        fprintf (stderr,
-                 "Checking integrity of checkpoint from %s\n",
-                 buf);
+        /* index 0 is most recent checkpoint */
+        if (!(f = kvs_checkpoint_lookup (h, KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
+            || kvs_checkpoint_lookup_get (f, &checkpoints) < 0
+            || !(checkpt = json_array_get (checkpoints, 0))
+            || kvs_checkpoint_parse_rootref (checkpt, &blobref) < 0
+            || kvs_checkpoint_parse_timestamp (checkpt, &timestamp) < 0)
+            log_msg_exit ("error fetching checkpoints: %s",
+                          future_strerror (f, errno));
+
+        if (!quiet) {
+            char buf[64] = "";
+            struct tm tm;
+            if (!timestamp_from_double (timestamp, &tm, NULL))
+                strftime (buf, sizeof (buf), "%Y-%m-%dT%T", &tm);
+            fprintf (stderr,
+                     "Checking integrity of checkpoint from %s\n",
+                     buf);
+        }
     }
 
     fsck_blobref (h, blobref);
@@ -373,6 +380,9 @@ static struct optparse_option fsck_opts[] = {
     },
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Don't output diagnostic messages and discovered errors",
+    },
+    { .name = "rootref", .key = 'r', .has_arg = 1, .arginfo = "BLOBREF",
+      .usage = "Check integrity starting with BLOBREF",
     },
     OPTPARSE_TABLE_END
 };
