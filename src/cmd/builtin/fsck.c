@@ -316,7 +316,7 @@ static void fsck_blobref (flux_t *h, const char *blobref)
 static int cmd_fsck (optparse_t *p, int ac, char *av[])
 {
     int optindex = optparse_option_index (p);
-    flux_future_t *f;
+    flux_future_t *f = NULL;
     const char *blobref;
     double timestamp;
     flux_t *h;
@@ -335,21 +335,27 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
     h = builtin_get_flux_handle (p);
 
-    if (!(f = kvs_checkpoint_lookup (h,
-                                     NULL,
-                                     KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
-        || kvs_checkpoint_lookup_get_timestamp (f, &timestamp) < 0
-        || kvs_checkpoint_lookup_get_rootref (f, &blobref) < 0)
-        log_msg_exit ("error fetching checkpoint: %s",
-                      future_strerror (f, errno));
-    if (!quiet) {
-        char buf[64] = "";
-        struct tm tm;
-        if (!timestamp_from_double (timestamp, &tm, NULL))
-            strftime (buf, sizeof (buf), "%Y-%m-%dT%T", &tm);
-        fprintf (stderr,
-                 "Checking integrity of checkpoint from %s\n",
-                 buf);
+    if ((blobref = optparse_get_str (p, "rootref", NULL))) {
+        if (blobref_validate (blobref) < 0)
+            log_msg_exit ("invalid blobref specified");
+    }
+    else {
+        if (!(f = kvs_checkpoint_lookup (h,
+                                         NULL,
+                                         KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
+            || kvs_checkpoint_lookup_get_timestamp (f, &timestamp) < 0
+            || kvs_checkpoint_lookup_get_rootref (f, &blobref) < 0)
+            log_msg_exit ("error fetching checkpoint: %s",
+                          future_strerror (f, errno));
+        if (!quiet) {
+            char buf[64] = "";
+            struct tm tm;
+            if (!timestamp_from_double (timestamp, &tm, NULL))
+                strftime (buf, sizeof (buf), "%Y-%m-%dT%T", &tm);
+            fprintf (stderr,
+                     "Checking integrity of checkpoint from %s\n",
+                     buf);
+        }
     }
 
     fsck_blobref (h, blobref);
@@ -369,6 +375,9 @@ static struct optparse_option fsck_opts[] = {
     },
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Don't output diagnostic messages and discovered errors",
+    },
+    { .name = "rootref", .key = 'r', .has_arg = 1,
+      .usage = "check integrity based on a specific root reference",
     },
     OPTPARSE_TABLE_END
 };
