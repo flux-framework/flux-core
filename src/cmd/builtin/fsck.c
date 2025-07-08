@@ -315,7 +315,7 @@ static void fsck_blobref (flux_t *h, const char *blobref)
 
 static int cmd_fsck (optparse_t *p, int ac, char *av[])
 {
-    int optindex =  optparse_option_index (p);
+    int optindex = optparse_option_index (p);
     flux_future_t *f;
     const json_t *checkpoints;
     json_t *checkpt;
