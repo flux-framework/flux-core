@@ -642,11 +642,11 @@ static void attach_setup_stdin (struct attach_ctx *ctx)
         log_err_exit ("atexit");
 
     w = fbuf_read_watcher_create (flux_get_reactor (ctx->h),
-                                         STDIN_FILENO,
-                                         1 << 20,
-                                         attach_stdin_cb,
-                                         flags,
-                                         ctx);
+                                  STDIN_FILENO,
+                                  1 << 20,
+                                  attach_stdin_cb,
+                                  flags,
+                                  ctx);
     if (!w) {
         /* Users have reported rare occurrences of an EINVAL error
          * from fbuf_read_watcher_create(), the cause of which
