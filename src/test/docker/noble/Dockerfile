@@ -39,14 +39,17 @@ RUN apt-get update \
         make \
         cmake \
         ninja-build \
+        gfortran \
         clang-18 \
         clang-tools-18 \
 # default version
         gcc-13 \
         g++-13 \
+        gfortran-13 \
 # newest
         gcc-14 \
         g++-14 \
+        gfortran-14 \
 # Python
         libffi-dev \
 ## python 3.12
@@ -65,7 +68,6 @@ RUN apt-get update \
         libsqlite3-dev \
         uuid-dev \
         libhwloc-dev \
-        libmpich-dev \
         libevent-dev \
         libarchive-dev \
         libpam-dev \
