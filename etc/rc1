@@ -13,7 +13,7 @@ IFS=:
 
 for rcdir in $all_dirs; do
     for rcfile in $rcdir/rc1.d/*; do
-	[ -e $rcfile ] || continue
+	[ -f $rcfile -a -x $rcfile ] || continue
 	echo running $rcfile
         $rcfile
     done
