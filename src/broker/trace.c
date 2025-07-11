@@ -16,6 +16,8 @@
 #include "overlay.h"
 #include "trace.h"
 
+#include "ccan/str/str.h"
+
 static const char *fake_control_topic (char *buf,
                                        size_t size,
                                        const flux_msg_t *msg)
@@ -85,6 +87,8 @@ static void trace_msg (flux_t *h,
                 flux_msg_get_payload (msg, NULL, &payload_size);
             break;
     }
+    if (topic && streq (topic, "module.trace")) // avoid getting in a loop!
+        return;
 
     req = flux_msglist_first (trace_requests);
     while (req) {
