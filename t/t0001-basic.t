@@ -416,6 +416,7 @@ test_expect_success NO_ASAN 'test_under_flux fails if loaded modules are not unl
 	cd test-under-flux &&
 	SHARNESS_TEST_DIRECTORY=`pwd` &&
 	export SHARNESS_TEST_SRCDIR SHARNESS_TEST_DIRECTORY FLUX_BUILD_DIR debug &&
+	unset verbose &&
 	test_expect_code 1 "$SHARNESS_TEST_SRCDIR"/test-under-flux/t_modcheck.t 2>err.modcheck \
 			| grep -v sharness: >out.modcheck
 	) &&
