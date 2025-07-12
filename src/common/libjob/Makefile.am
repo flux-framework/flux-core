@@ -41,9 +41,12 @@ libjob_la_SOURCES = \
 	jj.h \
 	unwrap.c \
 	unwrap.h \
+	count.c \
+	count.h \
 	idf58.h
 
 TESTS = \
+	test_count.t \
 	test_job.t \
 	test_sign_none.t \
 	test_unwrap.t \
@@ -85,3 +88,8 @@ test_unwrap_t_LDADD = $(test_ldadd)
 test_jobspec1_t_SOURCES = test/jobspec1.c
 test_jobspec1_t_CPPFLAGS = $(test_cppflags)
 test_jobspec1_t_LDADD = $(test_ldadd)
+
+test_count_t_SOURCES = test/count.c
+test_count_t_CPPFLAGS = $(test_cppflags)
+test_count_t_LDADD = $(test_ldadd) \
+	$(top_builddir)/src/common/libidset/libidset.la
