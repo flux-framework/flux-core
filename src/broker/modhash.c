@@ -789,6 +789,52 @@ module_t *modhash_next (modhash_t *mh)
     return zhash_next (mh->zh_byuuid);
 }
 
+int modhash_service_add (modhash_t *mh,
+                         const char *sender,
+                         const char *name,
+                         flux_error_t *error)
+{
+    struct broker *ctx = mh->ctx;
+    module_t *p;
+
+    if (!(p = modhash_lookup (mh, sender))) {
+        errprintf (error, "requestor is not local");
+        errno = ENOENT;
+        return -1;
+    }
+    if (service_add (ctx->services, name, sender, mod_svc_cb, p) < 0) {
+        errprintf (error,
+                   "could not register service %s for module %s: %s",
+                   name,
+                   module_get_name (p),
+                   strerror (errno));
+        return -1;
+    }
+    return 0;
+}
+
+int modhash_service_remove (modhash_t *mh,
+                            const char *sender,
+                            const char *name,
+                            flux_error_t *error)
+{
+    struct broker *ctx = mh->ctx;
+    const char *uuid;
+
+    if (!(uuid = service_get_uuid (ctx->services, name))) {
+        errprintf (error, "%s is not registered", name);
+        errno = ENOENT;
+        return -1;
+    }
+    if (!streq (uuid, sender)) {
+        errprintf (error, "requestor did not register %s", name);
+        errno = EINVAL;
+        return -1;
+    }
+    service_remove (ctx->services, name);
+    return 0;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

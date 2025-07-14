@@ -1265,12 +1265,6 @@ static bool nodeset_member (const char *s, uint32_t rank)
     return member;
 }
 
-static int mod_svc_cb (flux_msg_t **msg, void *arg)
-{
-    module_t *p = arg;
-    return module_sendmsg_new (p, msg);
-}
-
 static void broker_destroy_sigwatcher (void *data)
 {
     flux_watcher_t *w = data;
@@ -1388,8 +1382,11 @@ static int service_allow (struct flux_msg_cred cred, const char *name)
 }
 
 /* Dynamic service registration.
- * These handlers need to appear in broker.c so that they have
- *  access to broker internals like modhash
+ * The 'sender' below always refers to a broker module, even if the original
+ * requestor request is a client of connector-local, since connector-local
+ * intercepts client service add/remove requests from its clients and
+ * sends add/remove requests to the broker on their behalf.
+ * N.B. the requestor must be local.
  */
 static void service_add_cb (flux_t *h,
                             flux_msg_handler_t *w,
@@ -1397,10 +1394,11 @@ static void service_add_cb (flux_t *h,
                             void *arg)
 {
     broker_ctx_t *ctx = arg;
-    const char *name = NULL;
+    const char *name;
     const char *sender;
-    module_t *p;
     struct flux_msg_cred cred;
+    flux_error_t error;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0
         || flux_msg_get_cred (msg, &cred) < 0)
@@ -1411,17 +1409,15 @@ static void service_add_cb (flux_t *h,
         errno = EPROTO;
         goto error;
     }
-    if (!(p = modhash_lookup (ctx->modhash, sender))) {
-        errno = ENOENT;
+    if (modhash_service_add (ctx->modhash, sender, name, &error) < 0) {
+        errmsg = error.text;
         goto error;
     }
-    if (service_add (ctx->services, name, sender, mod_svc_cb, p) < 0)
-        goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "service_add: flux_respond");
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "service_add: flux_respond_error");
 }
 
@@ -1431,10 +1427,11 @@ static void service_remove_cb (flux_t *h,
                                void *arg)
 {
     broker_ctx_t *ctx = arg;
-    const char *name;
-    const char *uuid;
-    const char *sender;
     struct flux_msg_cred cred;
+    const char *name;
+    const char *sender;
+    flux_error_t error;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0
         || flux_msg_get_cred (msg, &cred) < 0)
@@ -1445,20 +1442,15 @@ static void service_remove_cb (flux_t *h,
         errno = EPROTO;
         goto error;
     }
-    if (!(uuid = service_get_uuid (ctx->services, name))) {
-        errno = ENOENT;
+    if (modhash_service_remove (ctx->modhash, sender, name, &error) < 0) {
+        errmsg = error.text;
         goto error;
     }
-    if (!streq (uuid, sender)) {
-        errno = EINVAL;
-        goto error;
-    }
-    service_remove (ctx->services, name);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "service_remove: flux_respond");
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "service_remove: flux_respond_error");
 }
 

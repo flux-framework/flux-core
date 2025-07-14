@@ -59,6 +59,19 @@ int modhash_load (modhash_t *mh,
                   const flux_msg_t *request,
                   flux_error_t *error);
 
+/* Add/remove an auxiliary service name that will be routed
+ * to the module with the specified uuid.
+ */
+int modhash_service_add (modhash_t *mh,
+                         const char *uuid,
+                         const char *service,
+                         flux_error_t *error);
+
+int modhash_service_remove (modhash_t *mh,
+                            const char *uuid,
+                            const char *service,
+                            flux_error_t *error);
+
 #endif /* !_BROKER_MODHASH_H */
 
 /*
