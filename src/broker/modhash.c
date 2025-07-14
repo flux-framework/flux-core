@@ -56,13 +56,16 @@ int modhash_response_sendmsg_new (modhash_t *mh, flux_msg_t **msg)
     return module_sendmsg_new (p, msg);
 }
 
-static void modhash_add (modhash_t *mh, module_t *p)
+static int modhash_add (modhash_t *mh, module_t *p)
 {
+    if (module_aux_set (p, "modhash", mh, NULL) < 0)
+        return -1;
     /* always succeeds - uuids are by definition unique */
     (void)zhash_insert (mh->zh_byuuid, module_get_uuid (p), p);
     zhash_freefn (mh->zh_byuuid,
                   module_get_uuid (p),
                   (zhash_free_fn *)module_destroy);
+    return 0;
 }
 
 static void modhash_remove (modhash_t *mh, module_t *p)
@@ -289,7 +292,10 @@ int modhash_load (modhash_t *mh,
                              args,
                              error)))
         goto error;
-    modhash_add (mh, p);
+    if (modhash_add (mh, p) < 0) {
+        module_destroy (p);
+        goto error;
+    }
     if (service_add (mh->ctx->services,
                      module_get_name (p),
                      module_get_uuid (p),
