@@ -96,4 +96,18 @@ test_expect_success NO_CHAIN_LINT 'barrier.ping request/response was captured' '
 test_expect_success NO_CHAIN_LINT 'stop background trace' '
 	kill -15 $(cat trace2.pid); wait || true
 '
+
+test_expect_success NO_CHAIN_LINT 'start background trace on resource module' '
+	flux module trace --human --color=never --delta --type=request resource >trace3.out &
+	echo $! >trace3.pid
+'
+test_expect_success NO_CHAIN_LINT 'reload resource module' '
+	flux module reload resource
+'
+test_expect_success NO_CHAIN_LINT 'kvs.lookup request was captured' '
+	$waitfile -t 60 -p kvs.lookup trace3.out
+'
+test_expect_success NO_CHAIN_LINT 'stop background trace' '
+	kill -15 $(cat trace3.pid); wait || true
+'
 test_done
