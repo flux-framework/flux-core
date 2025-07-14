@@ -40,7 +40,6 @@
 
 #include "module.h"
 #include "modservice.h"
-#include "trace.h"
 
 struct broker_module {
     flux_t *h;              /* ref to broker's internal flux_t handle */
@@ -83,7 +82,6 @@ struct broker_module {
 
     struct flux_msglist *rmmod_requests;
     struct flux_msglist *insmod_requests;
-    struct flux_msglist *trace_requests;
     struct flux_msglist *deferred_messages;
 
     flux_t *h_module_end;   /* module end of interthread_channel */
@@ -367,8 +365,7 @@ module_t *module_create (flux_t *h,
     argz_extract (p->argz, p->argz_len, p->argv);
     if (!(p->path = strdup (path))
         || !(p->rmmod_requests = flux_msglist_create ())
-        || !(p->insmod_requests = flux_msglist_create ())
-        || !(p->trace_requests = flux_msglist_create ()))
+        || !(p->insmod_requests = flux_msglist_create ()))
         goto nomem;
     if (name) {
         if (!(p->name = strdup (name)))
@@ -481,7 +478,6 @@ flux_msg_t *module_recvmsg (module_t *p)
 {
     flux_msg_t *msg;
     msg = flux_recv (p->h_broker_end, FLUX_MATCH_ANY, FLUX_O_NONBLOCK);
-    trace_module_msg (p->h, "tx", p->name, p->trace_requests, msg);
     return msg;
 }
 
@@ -511,7 +507,6 @@ int module_sendmsg_new (module_t *p, flux_msg_t **msg)
         *msg = NULL;
         return 0;
     }
-    trace_module_msg (p->h, "rx", p->name, p->trace_requests, *msg);
     return flux_send_new (p->h_broker_end, msg, 0);
 }
 
@@ -575,7 +570,6 @@ void module_destroy (module_t *p)
     flux_msglist_destroy (p->rmmod_requests);
     flux_msglist_destroy (p->insmod_requests);
     flux_msglist_destroy (p->deferred_messages);
-    flux_msglist_destroy (p->trace_requests);
     subhash_destroy (p->sub);
     aux_destroy (&p->aux);
     free (p);
@@ -762,18 +756,6 @@ ssize_t module_get_recv_queue_count (module_t *p)
                       sizeof (count)) < 0)
         return -1;
     return count;
-}
-
-int module_trace (module_t *p, const flux_msg_t *msg)
-{
-    if (flux_msglist_append (p->trace_requests, msg) < 0)
-        return -1;
-    return 0;
-}
-
-void module_trace_disconnect (module_t *p, const flux_msg_t *msg)
-{
-    (void)flux_msglist_disconnect (p->trace_requests, msg);
 }
 
 /*

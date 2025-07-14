@@ -107,9 +107,6 @@ int module_event_cast (module_t *p, const flux_msg_t *msg);
 ssize_t module_get_send_queue_count (module_t *p);
 ssize_t module_get_recv_queue_count (module_t *p);
 
-int module_trace (module_t *p, const flux_msg_t *msg);
-void module_trace_disconnect (module_t *p, const flux_msg_t *msg);
-
 #endif /* !_BROKER_MODULE_H */
 
 /*
