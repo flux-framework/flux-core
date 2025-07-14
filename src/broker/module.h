@@ -36,6 +36,14 @@ const char *module_get_path (module_t *p);
 const char *module_get_uuid (module_t *p);
 double module_get_lastseen (module_t *p);
 
+/* Associate aux data with a module.
+ */
+void *module_aux_get (module_t *p, const char *name);
+int module_aux_set (module_t *p,
+                    const char *name,
+                    void *val,
+                    flux_free_f destroy);
+
 /* The poller callback is called when module socket is ready for
  * reading with module_recvmsg().
  */
