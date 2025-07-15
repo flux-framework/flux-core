@@ -15,6 +15,7 @@
 #include <string.h>
 #include <errno.h>
 #include <flux/core.h>
+#include <jansson.h>
 
 #ifndef EDEADLOCK
 #define EDEADLOCK EDEADLK
@@ -27,7 +28,7 @@
 void errors (void)
 {
     flux_future_t *f;
-    const char *rootref;
+    const json_t *checkpoints;
 
     errno = 0;
     ok (kvs_checkpoint_commit (NULL, NULL, 0, 0, -1) == NULL
@@ -40,39 +41,32 @@ void errors (void)
         "kvs_checkpoint_lookup fails on bad input");
 
     errno = 0;
-    ok (kvs_checkpoint_lookup_get_rootref (NULL, NULL) < 0
+    ok (kvs_checkpoint_lookup_get (NULL, NULL) < 0
         && errno == EINVAL,
-        "kvs_checkpoint_lookup_get_rootref fails on bad input");
+        "kvs_checkpoint_lookup_get fails on bad input");
 
     errno = 0;
-    ok (kvs_checkpoint_lookup_get_timestamp (NULL, NULL) < 0
+    ok (kvs_checkpoint_parse_rootref (NULL, NULL) < 0
         && errno == EINVAL,
-        "kvs_checkpoint_lookup_get_timestamp fails on bad input");
+        "kvs_checkpoint_parse_rootref fails on bad input");
 
     errno = 0;
-    ok (kvs_checkpoint_lookup_get_sequence (NULL, NULL) < 0
+    ok (kvs_checkpoint_parse_timestamp (NULL, NULL) < 0
         && errno == EINVAL,
-        "kvs_checkpoint_lookup_get_sequence fails on bad input");
+        "kvs_checkpoint_parse_timestamp fails on bad input");
+
+    errno = 0;
+    ok (kvs_checkpoint_parse_sequence (NULL, NULL) < 0
+        && errno == EINVAL,
+        "kvs_checkpoint_parse_sequence fails on bad input");
 
     if (!(f = flux_future_create (NULL, NULL)))
         BAIL_OUT ("flux_future_create failed");
 
     errno = 0;
-    ok (kvs_checkpoint_lookup_get_rootref (f, &rootref) < 0
+    ok (kvs_checkpoint_lookup_get (f, &checkpoints) < 0
         && errno == EDEADLOCK,
-        "kvs_checkpoint_lookup_get_rootref fails on unfulfilled future");
-
-    errno = 0;
-    double timestamp;
-    ok (kvs_checkpoint_lookup_get_timestamp (f, &timestamp) < 0
-        && errno == EDEADLOCK,
-        "kvs_checkpoint_lookup_get_timestamp fails on unfulfilled future");
-
-    errno = 0;
-    int sequence;
-    ok (kvs_checkpoint_lookup_get_sequence (f, &sequence) < 0
-        && errno == EDEADLOCK,
-        "kvs_checkpoint_lookup_get_sequence fails on unfulfilled future");
+        "kvs_checkpoint_lookup_get fails on unfulfilled future");
 
     flux_future_destroy (f);
 }

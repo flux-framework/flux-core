@@ -317,6 +317,8 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 {
     int optindex =  optparse_option_index (p);
     flux_future_t *f;
+    const json_t *checkpoints;
+    json_t *checkpt;
     const char *blobref;
     double timestamp;
     flux_t *h;
@@ -335,11 +337,15 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
     h = builtin_get_flux_handle (p);
 
+    /* index 0 is most recent checkpoint */
     if (!(f = kvs_checkpoint_lookup (h, KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
-        || kvs_checkpoint_lookup_get_timestamp (f, &timestamp) < 0
-        || kvs_checkpoint_lookup_get_rootref (f, &blobref) < 0)
-        log_msg_exit ("error fetching checkpoint: %s",
+        || kvs_checkpoint_lookup_get (f, &checkpoints) < 0
+        || !(checkpt = json_array_get (checkpoints, 0))
+        || kvs_checkpoint_parse_rootref (checkpt, &blobref) < 0
+        || kvs_checkpoint_parse_timestamp (checkpt, &timestamp) < 0)
+        log_msg_exit ("error fetching checkpoints: %s",
                       future_strerror (f, errno));
+
     if (!quiet) {
         char buf[64] = "";
         struct tm tm;
