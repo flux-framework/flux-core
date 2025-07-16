@@ -602,6 +602,65 @@ error:
     }
 }
 
+static json_t *obj_from_idset (const struct idset *ids)
+{
+    char *s;
+    json_t *o = NULL;
+
+    if ((s = idset_encode (ids, IDSET_FLAG_RANGE)))
+        o = json_string (s);
+    free (s);
+    return o;
+}
+
+static json_t *make_groups_object (struct groups *g)
+{
+    json_t *obj;
+    struct group *group;
+
+    if (!(obj = json_object ()))
+        return NULL;
+    group = zhashx_first (g->groups);
+    while (group) {
+        json_t *o;
+        if (!(o = obj_from_idset (group->members))
+            || json_object_set_new (obj, group->name, o) < 0) {
+            json_decref (o);
+            goto error;
+        }
+        group = zhashx_next (g->groups);
+    }
+    return obj;
+error:
+    json_decref (obj);
+    return NULL;
+}
+
+static void stats_get_request_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
+{
+    struct groups *g = arg;
+    const char *errmsg = NULL;
+    json_t *obj;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (!(obj = make_groups_object (g))) {
+        errno = EINVAL;
+        errmsg = "error building groups object";
+        goto error;
+    }
+    if (flux_respond_pack (h, msg, "{s:o}", "subtree", obj) < 0)
+        flux_log_error (h, "error responding to groups.stats-get");
+    json_decref (obj);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to groups.stats-get");
+}
+
 /* A client has disconnected.  Find any groups with a cached JOIN request
  * that matches the identity of the disconnecting client, and LEAVE those
  * groups.  Also, drop streaming get requests that match the disconnecting
@@ -777,6 +836,11 @@ static const struct flux_msg_handler_spec htab[] = {
     {   FLUX_MSGTYPE_REQUEST,
         "groups.get",
         get_request_cb,
+        FLUX_ROLE_USER,
+    },
+    {   FLUX_MSGTYPE_REQUEST,
+        "groups.stats-get",
+        stats_get_request_cb,
         FLUX_ROLE_USER,
     },
     {   FLUX_MSGTYPE_REQUEST,
