@@ -6,6 +6,9 @@ test_description='Test flux-shell initrc.lua implementation'
 
 test_under_flux 4
 
+NCORES=$(flux kvs get resource.R | flux R decode --count=core)
+test ${NCORES} -gt 4 && test_set_prereq MULTICORE
+
 FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
 INITRC_TESTDIR="${SHARNESS_TEST_SRCDIR}/shell/initrc"
