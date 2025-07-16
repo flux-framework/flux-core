@@ -12,7 +12,7 @@ SYNOPSIS
 | **flux** **module** **list** [*-l*]
 | **flux** **module** **stats** [*-R*] [*--clear*] *name*
 | **flux** **module** **debug** [*--setbit=VAL*] [*--clearbit=VAL*] [*--set=MASK*] [*--clear=MASK*] *name*
-| **flux** **module** **trace** [-f] [*-t TYPE,...*] [-T *topic-glob*] *name...*
+| **flux** **module** **trace** [-f] [*-t TYPE,...*] [-T *topic-glob*] [*name...*]
 
 
 
@@ -159,7 +159,13 @@ trace
 .. program:: flux module trace
 
 Display message summaries for messages transmitted and received by the
-named modules.
+named modules, or all modules if none are named.
+
+.. note::
+
+   Trace requests are accepted for modules before they are loaded.
+   As a consequence, a trace request for a misspelled module name may be
+   accepted, but produce no output.
 
 .. option:: -f, --full
 

@@ -16,6 +16,8 @@
 #include "overlay.h"
 #include "trace.h"
 
+#include "ccan/str/str.h"
+
 static const char *fake_control_topic (char *buf,
                                        size_t size,
                                        const flux_msg_t *msg)
@@ -35,9 +37,24 @@ static const char *fake_control_topic (char *buf,
     return buf;
 }
 
+static bool match_module (const char *module_name, json_t *names)
+{
+    size_t index;
+    json_t *entry;
+
+    if (json_array_size (names) == 0)
+        return true;
+    json_array_foreach (names, index, entry) {
+        const char *name = json_string_value (entry);
+        if (name && streq (name, module_name))
+            return true;
+    }
+    return false;
+}
+
 static bool match_nodeid (uint32_t overlay_peer, int nodeid)
 {
-    if (nodeid == -1 || overlay_peer == FLUX_NODEID_ANY)
+    if (overlay_peer == FLUX_NODEID_ANY)
         return true;
     return nodeid == overlay_peer;
 }
@@ -85,20 +102,25 @@ static void trace_msg (flux_t *h,
                 flux_msg_get_payload (msg, NULL, &payload_size);
             break;
     }
+    if (topic && streq (topic, "module.trace")) // avoid getting in a loop!
+        return;
 
     req = flux_msglist_first (trace_requests);
     while (req) {
         struct flux_match match = FLUX_MATCH_ANY;
         int nodeid = -1;
+        json_t *names = NULL;
         int full = 0;
         if (flux_request_unpack (req,
                                  NULL,
-                                 "{s:i s:s s?i s?b}",
+                                 "{s:i s:s s?i s?o s?b}",
                                  "typemask", &match.typemask,
                                  "topic_glob", &match.topic_glob,
                                  "nodeid", &nodeid,
+                                 "names", &names,
                                  "full", &full) < 0
-            || !match_nodeid (overlay_peer, nodeid)
+            || (nodeid != -1 && !match_nodeid (overlay_peer, nodeid))
+            || (names != NULL && !match_module (module_name, names))
             || !flux_msg_cmp (msg, match))
             goto next;
 

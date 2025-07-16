@@ -205,7 +205,7 @@ static struct optparse_subcommand subcommands[] = {
       debug_opts,
     },
     { "trace",
-      "[OPTIONS] module [module...]",
+      "[OPTIONS] [module module...]",
       "Trace module messages",
       cmd_trace,
       0,
@@ -978,10 +978,6 @@ static void trace_ctx_init (struct trace_ctx *ctx,
 
     memset (ctx, 0, sizeof (*ctx));
 
-    if (n == ac) {
-        optparse_print_usage (p);
-        exit (1);
-    }
     ctx->max_name_len = parse_name_list (&ctx->names, ac - n, av + n);
     if (ctx->max_name_len < 0)
         log_err_exit ("could not parse module name list");
