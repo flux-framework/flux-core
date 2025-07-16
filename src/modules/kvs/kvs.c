@@ -2674,7 +2674,7 @@ static int checkpoint_get (flux_t *h, char *buf, size_t len, int *seq)
     char datestr[128] = "N/A";
     int rv = -1;
 
-    if (!(f = kvs_checkpoint_lookup (h, NULL, 0)))
+    if (!(f = kvs_checkpoint_lookup (h, 0)))
         return -1;
 
     if (kvs_checkpoint_lookup_get_rootref (f, &rootref) < 0)
@@ -2709,7 +2709,7 @@ static int checkpoint_put (flux_t *h, const char *rootref, int rootseq)
     flux_future_t *f = NULL;
     int rv = -1;
 
-    if (!(f = kvs_checkpoint_commit (h, NULL, rootref, rootseq, 0, 0))
+    if (!(f = kvs_checkpoint_commit (h, rootref, rootseq, 0, 0))
         || flux_rpc_get (f, NULL) < 0)
         goto error;
     rv = 0;

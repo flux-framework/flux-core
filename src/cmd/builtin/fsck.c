@@ -335,9 +335,7 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
     h = builtin_get_flux_handle (p);
 
-    if (!(f = kvs_checkpoint_lookup (h,
-                                     NULL,
-                                     KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
+    if (!(f = kvs_checkpoint_lookup (h, KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
         || kvs_checkpoint_lookup_get_timestamp (f, &timestamp) < 0
         || kvs_checkpoint_lookup_get_rootref (f, &blobref) < 0)
         log_msg_exit ("error fetching checkpoint: %s",

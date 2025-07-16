@@ -30,12 +30,12 @@ void errors (void)
     const char *rootref;
 
     errno = 0;
-    ok (kvs_checkpoint_commit (NULL, NULL, NULL, 0, 0, -1) == NULL
+    ok (kvs_checkpoint_commit (NULL, NULL, 0, 0, -1) == NULL
         && errno == EINVAL,
         "kvs_checkpoint_commit fails on bad input");
 
     errno = 0;
-    ok (kvs_checkpoint_lookup (NULL, NULL, -1) == NULL
+    ok (kvs_checkpoint_lookup (NULL, -1) == NULL
         && errno == EINVAL,
         "kvs_checkpoint_lookup fails on bad input");
 
