@@ -45,11 +45,9 @@ RUN apt-get update \
 # default version
         gcc-13 \
         g++-13 \
-        gfortran-13 \
 # newest
         gcc-14 \
         g++-14 \
-        gfortran-14 \
 # Python
         libffi-dev \
 ## python 3.12
