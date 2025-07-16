@@ -252,6 +252,7 @@ test_expect_success 'flux-pmi --libpmi-noflux fails w/ flux libpmi.so' '
 	    flux pmi --method=libpmi:$(cat libpmi) --libpmi-noflux barrier"
 '
 test_expect_success 'flux broker refuses the Flux libpmi.so and goes single' '
+	test_when_finished "cat debug.err" &&
 	FLUX_PMI_DEBUG=1 FLUX_PMI_CLIENT_METHODS="libpmi single" \
 	    LD_LIBRARY_PATH=$(dirname $(cat libpmi)) \
             flux start true 2>debug.err &&
@@ -299,6 +300,7 @@ test_expect_success 'flux-pmi --libpmi-noflux fails w/ flux libpmi2.so' '
 	    flux pmi --method=libpmi2:$(cat libpmi2) --libpmi-noflux barrier"
 '
 test_expect_success 'flux broker refuses the Flux pmi lib and goes single' '
+	test_when_finished "cat debug.err" &&
 	FLUX_PMI_DEBUG=1 FLUX_PMI_CLIENT_METHODS="libpmi2 single" \
 	    LD_LIBRARY_PATH=$(dirname $(cat libpmi2)) \
             flux start true 2>debug.err &&

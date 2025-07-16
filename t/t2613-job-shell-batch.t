@@ -57,6 +57,7 @@ test_expect_success 'flux-shell: historical batch jobspec still work' '
 		    >$input &&
 		flux job submit --flags=waitable $input
 	done &&
+	test_when_finished "flux dmesg -H" &&
 	flux job attach -vEX $(flux job last) &&
 	flux job wait --all --verbose
 '
