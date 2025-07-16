@@ -17,6 +17,11 @@ test_expect_success 'broker.online contains full instance' '
 	test_cmp broker.online.exp broker.online.out
 '
 
+test_expect_success 'flux module stats groups agrees' '
+	flux module stats groups >stats.out &&
+	jq -e -r .subtree.\"broker.online\" <stats.out >broker.online.stats &&
+	test_cmp broker.online.exp broker.online.stats
+'
 test_expect_success 'groups.get of nonexistent group returns empty set' '
 	cat >newgroup.exp <<-EOT &&
 
@@ -28,6 +33,9 @@ test_expect_success 'groups.get of nonexistent group returns empty set' '
 test_expect_success 'groups.get on rank > 0 fails with reasonable error' '
 	test_must_fail ${GROUPSCMD} get --rank 1 broker.online 2>test0.err &&
 	grep "only available on rank 0" test0.err
+'
+test_expect_success 'but flux module stats groups does work' '
+	flux exec -r 1 flux module stats groups
 '
 
 test_expect_success 'nonlocal groups.join fails with appropriate error' '

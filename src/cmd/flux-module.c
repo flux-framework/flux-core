@@ -707,7 +707,7 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
         if (!(f = flux_rpc (h, topic, NULL, nodeid, 0)))
             log_err_exit ("%s", topic);
         if (flux_rpc_get (f, &json_str) < 0)
-            log_err_exit ("%s", topic);
+            log_msg_exit ("%s: %s", topic, future_strerror (f, errno));
         if (!json_str)
             log_errn_exit (EPROTO, "%s", topic);
         parse_json (p, json_str);
