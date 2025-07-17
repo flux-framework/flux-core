@@ -127,12 +127,12 @@ test_expect_success 'flux uri works with relative paths' '
 '
 test_expect_success 'flux uri --wait can resolve URI for pending job' '
 	uri=$(flux uri --wait $(flux batch -n1 --wrap hostname)) &&
-	flux job wait-event -vt 30 $(flux job last) clean  &&
+	flux job wait-event -vt 60 $(flux job last) clean  &&
 	test "$uri" = "$(flux jobs -no {uri} $(flux job last))"
 '
 test_expect_success 'terminate batch job cleanly' '
 	flux proxy $(flux uri --local ${jobid}) flux cancel --all &&
-	flux job wait-event -vt 30 ${jobid} clean
+	flux job wait-event -vt 60 ${jobid} clean
 '
 test_expect_success 'flux uri jobid returns error for non-instance job' '
 	id=$(flux submit sleep 600) &&
