@@ -18,12 +18,12 @@
 #endif
 #include <inttypes.h>
 
-#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"
 #include "src/common/libutil/timestamp.h"
 #include "ccan/str/str.h"
+#include "ccan/list/list.h"
 
 #include "log.h"
 
@@ -49,8 +49,9 @@ typedef struct {
     int stderr_level;
     stderr_mode_t stderr_mode;
     int level;
-    zlist_t *buf;
-    int ring_size;
+    struct list_head ring;
+    size_t ring_count;
+    size_t ring_size;
     int seq;
     struct flux_msglist *followers;
 } logbuf_t;
@@ -58,6 +59,7 @@ typedef struct {
 struct logbuf_entry {
     char *buf;
     int seq;
+    struct list_node list;
 };
 
 void logbuf_destroy (logbuf_t *logbuf);
@@ -85,9 +87,10 @@ static struct logbuf_entry *logbuf_entry_create (const char *buf, int len)
 static void logbuf_trim (logbuf_t *logbuf, int size)
 {
     struct logbuf_entry *e;
-    while (zlist_size (logbuf->buf) > size) {
-        e = zlist_pop (logbuf->buf);
+    while (logbuf->ring_count > size) {
+        e = list_pop (&logbuf->ring, struct logbuf_entry, list);
         logbuf_entry_destroy (e);
+        logbuf->ring_count--;
     }
 }
 
@@ -97,17 +100,15 @@ static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
     const flux_msg_t *msg;
 
     if (logbuf->ring_size > 0) {
-        logbuf_trim (logbuf, logbuf->ring_size - 1);
         if (!(e = logbuf_entry_create (buf, len))) {
             errno = ENOMEM;
             return -1;
         }
         e->seq = logbuf->seq++;
-        if (zlist_append (logbuf->buf, e) < 0) {
-            logbuf_entry_destroy (e);
-            errno = ENOMEM;
-            return -1;
-        }
+        list_add_tail (&logbuf->ring, &e->list);
+        logbuf->ring_count++;
+        logbuf_trim (logbuf, logbuf->ring_size);
+
         msg = flux_msglist_first (logbuf->followers);
         while (msg) {
             if (flux_respond (logbuf->h, msg, e->buf) < 0)
@@ -131,10 +132,7 @@ static logbuf_t *logbuf_create (void)
     logbuf->stderr_mode = default_stderr_mode;
     logbuf->level = default_level;
     logbuf->ring_size = default_ring_size;
-    if (!(logbuf->buf = zlist_new ())) {
-        errno = ENOMEM;
-        goto cleanup;
-    }
+    list_head_init (&logbuf->ring);
     if (!(logbuf->followers = flux_msglist_create ()))
         goto cleanup;
     return logbuf;
@@ -146,10 +144,7 @@ cleanup:
 void logbuf_destroy (logbuf_t *logbuf)
 {
     if (logbuf) {
-        if (logbuf->buf) {
-            logbuf_trim (logbuf, 0);
-            zlist_destroy (&logbuf->buf);
-        }
+        logbuf_trim (logbuf, 0);
         /* logbuf_destroy() would be called after local connector
          * unloaded, so no need to send ENODATA to followers */
         flux_msglist_destroy (logbuf->followers);
@@ -563,7 +558,6 @@ static void dmesg_request_cb (flux_t *h,
                               void *arg)
 {
     logbuf_t *logbuf = arg;
-    struct logbuf_entry *e;
     int follow;
     int nobacklog = 0;
 
@@ -580,13 +574,12 @@ static void dmesg_request_cb (flux_t *h,
     }
 
     if (!nobacklog) {
-        e = zlist_first (logbuf->buf);
-        while (e) {
+        struct logbuf_entry *e = NULL;
+        list_for_each (&logbuf->ring, e, list) {
             if (flux_respond (h, msg, e->buf) < 0) {
                 log_err ("error responding to log.dmesg request");
                 goto error;
             }
-            e = zlist_next (logbuf->buf);
         }
     }
 
@@ -636,7 +629,7 @@ static void stats_request_cb (flux_t *h,
     if (flux_respond_pack (h,
                            msg,
                            "{s:i s:i}",
-                           "ring-used", (int)zlist_size (logbuf->buf),
+                           "ring-used", (int)logbuf->ring_count,
                            "count", logbuf->seq) < 0)
         flux_log_error (h, "error responding to log.stats-get");
 }
