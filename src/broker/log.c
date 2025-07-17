@@ -17,6 +17,10 @@
 #include "config.h"
 #endif
 #include <inttypes.h>
+#include <unistd.h>
+#include <syslog.h>
+#include <sys/types.h>
+#include <pwd.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/wallclock.h"
@@ -35,15 +39,21 @@ static const int default_ring_size = 1024;
 static const int default_forward_level = LOG_DEBUG;
 static const int default_critical_level = LOG_CRIT;
 static const int default_stderr_level = LOG_ERR;
+static const int default_syslog_level = LOG_ERR;
 static const stderr_mode_t default_stderr_mode = MODE_LEADER;
 static const int default_level = LOG_DEBUG;
 
 typedef struct {
     flux_t *h;
+    attr_t *attrs;
     flux_msg_handler_t **handlers;
     uint32_t rank;
     char *filename;
     FILE *f;
+    int syslog_enable;
+    int syslog_level;
+    char *jobid_path;
+    char *username;
     int forward_level;
     int critical_level;
     int stderr_level;
@@ -128,6 +138,7 @@ static logbuf_t *logbuf_create (void)
     }
     logbuf->forward_level = default_forward_level;
     logbuf->critical_level = default_critical_level;
+    logbuf->syslog_level = default_syslog_level;
     logbuf->stderr_level = default_stderr_level;
     logbuf->stderr_mode = default_stderr_mode;
     logbuf->level = default_level;
@@ -150,51 +161,34 @@ void logbuf_destroy (logbuf_t *logbuf)
         flux_msglist_destroy (logbuf->followers);
         if (logbuf->f)
             (void)fclose (logbuf->f);
+        if (logbuf->syslog_enable)
+            closelog ();
         free (logbuf->filename);
+        free (logbuf->jobid_path);
+        free (logbuf->username);
         free (logbuf);
     }
 }
 
-static int logbuf_set_forward_level (logbuf_t *logbuf, int level)
+static int set_level (int *value, const char *val)
 {
+    int level;
+    if (!val)
+        goto error;
+    errno = 0;
+    level = strtol (val, NULL, 10);
+    if (errno != 0)
+        goto error;
     if (level < LOG_EMERG || level > LOG_DEBUG) {
         errno = EINVAL;
         return -1;
     }
-    logbuf->forward_level = level;
+    *value = level;
     return 0;
+error:
+    errno = EINVAL;
+    return -1;
 }
-
-static int logbuf_set_critical_level (logbuf_t *logbuf, int level)
-{
-    if (level < LOG_EMERG || level > LOG_DEBUG) {
-        errno = EINVAL;
-        return -1;
-    }
-    logbuf->critical_level = level;
-    return 0;
-}
-
-static int logbuf_set_stderr_level (logbuf_t *logbuf, int level)
-{
-    if (level < LOG_EMERG || level > LOG_DEBUG) {
-        errno = EINVAL;
-        return -1;
-    }
-    logbuf->stderr_level = level;
-    return 0;
-}
-
-static int logbuf_set_level (logbuf_t *logbuf, int level)
-{
-    if (level < LOG_EMERG || level > LOG_DEBUG) {
-        errno = EINVAL;
-        return -1;
-    }
-    logbuf->level = level;
-    return 0;
-}
-
 
 static int logbuf_set_ring_size (logbuf_t *logbuf, int size)
 {
@@ -231,6 +225,24 @@ static int logbuf_set_filename (logbuf_t *logbuf, const char *destination)
     return 0;
 }
 
+static void logbuf_set_syslog (logbuf_t *logbuf, const char *val)
+{
+    int enable;
+
+    if (val && streq (val, "0"))
+        enable = 0;
+    else
+        enable = 1;
+    if (logbuf->syslog_enable && !enable) {
+        closelog ();
+        logbuf->syslog_enable = 0;
+    }
+    else if (!logbuf->syslog_enable && enable) {
+        openlog ("flux", LOG_NDELAY | LOG_PID, LOG_USER);
+        logbuf->syslog_enable = 1;
+    }
+}
+
 static const char *int_to_string (int n)
 {
     static char s[32]; // ample room to avoid overflow
@@ -254,6 +266,10 @@ static int attr_get_log (const char *name, const char **val, void *arg)
         *val = int_to_string (logbuf->ring_size);
     else if (streq (name, "log-filename"))
         *val = logbuf->filename;
+    else if (streq (name, "log-syslog-enable"))
+        *val = int_to_string (logbuf->syslog_enable);
+    else if (streq (name, "log-syslog-level"))
+        *val = int_to_string (logbuf->syslog_level);
     else if (streq (name, "log-level"))
         *val = int_to_string (logbuf->level);
     else {
@@ -269,18 +285,15 @@ static int attr_set_log (const char *name, const char *val, void *arg)
     int rc = -1;
 
     if (streq (name, "log-forward-level")) {
-        int level = strtol (val, NULL, 10);
-        if (logbuf_set_forward_level (logbuf, level) < 0)
+        if (set_level (&logbuf->forward_level, val) < 0)
             goto done;
     }
     else if (streq (name, "log-critical-level")) {
-        int level = strtol (val, NULL, 10);
-        if (logbuf_set_critical_level (logbuf, level) < 0)
+        if (set_level (&logbuf->critical_level, val) < 0)
             goto done;
     }
     else if (streq (name, "log-stderr-level")) {
-        int level = strtol (val, NULL, 10);
-        if (logbuf_set_stderr_level (logbuf, level) < 0)
+        if (set_level (&logbuf->stderr_level, val) < 0)
             goto done;
     }
     else if (streq (name, "log-stderr-mode")) {
@@ -302,9 +315,15 @@ static int attr_set_log (const char *name, const char *val, void *arg)
         if (logbuf_set_filename (logbuf, val) < 0)
             goto done;
     }
+    else if (streq (name, "log-syslog-enable")) {
+        logbuf_set_syslog (logbuf, val);
+    }
+    else if (streq (name, "log-syslog-level")) {
+        if (set_level (&logbuf->syslog_level, val) < 0)
+            goto done;
+    }
     else if (streq (name, "log-level")) {
-        int level = strtol (val, NULL, 10);
-        if (logbuf_set_level (logbuf, level) < 0)
+        if (set_level (&logbuf->level, val) < 0)
             goto done;
     }
     else {
@@ -380,6 +399,20 @@ static int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
                          attr_set_log,
                          logbuf) < 0)
         goto done;
+    if (attr_add_active (attrs,
+                         "log-syslog-enable",
+                         0,
+                         attr_get_log,
+                         attr_set_log,
+                         logbuf) < 0)
+        goto done;
+    if (attr_add_active (attrs,
+                         "log-syslog-level",
+                         0,
+                         attr_get_log,
+                         attr_set_log,
+                         logbuf) < 0)
+        goto done;
     rc = 0;
 done:
     return rc;
@@ -413,6 +446,56 @@ static void log_timestamp (FILE *fp, struct stdlog_header *hdr)
         || strftime (year, sizeof (year), "%Y", &tm) == 0)
         fprintf (fp, "%s ", hdr->timestamp);
     fprintf (fp, "%s.%06ld %s %s ", datetime, (long)tv.tv_usec, timezone, year);
+}
+
+static void make_syslog_prefix (logbuf_t *logbuf, char *buf, size_t size)
+{
+    if (!logbuf->jobid_path) {
+        const char *val = NULL;
+        if (attr_get (logbuf->attrs, "jobid-path", &val, NULL) == 0)
+            logbuf->jobid_path = strdup (val);
+    }
+    if (!logbuf->username) {
+        struct passwd pwd;
+        struct passwd *result;
+        char pbuf[4096];
+        (void)getpwuid_r(geteuid (), &pwd, pbuf, sizeof (pbuf), &result);
+        if (result)
+            logbuf->username = strdup (result->pw_name);
+    }
+    if (snprintf (buf,
+                  size,
+                  "%s@%s",
+                  logbuf->username ? logbuf->username : "unknown",
+                  logbuf->jobid_path ? logbuf->jobid_path : "unknown") >= size)
+        (void)snprintf (buf + size - 4, 4, "...");
+}
+
+/* Log a message to syslog.
+ */
+static void log_syslog (logbuf_t *logbuf, const char *buf, int len)
+{
+    struct stdlog_header hdr;
+    const char *msg;
+    size_t msglen;
+    char prefix[32];
+
+    make_syslog_prefix (logbuf, prefix, sizeof (prefix));
+    if (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) < 0) {
+        syslog (LOG_INFO, "%s %.*s\n", prefix, len, buf);
+    }
+    else {
+        uint32_t nodeid = strtoul (hdr.hostname, NULL, 10);
+        int severity = STDLOG_SEVERITY (hdr.pri);
+        syslog (severity,
+                "%s %s.%s[%" PRIu32 "]: %.*s\n",
+                prefix,
+                hdr.appname,
+                stdlog_severity_to_string (severity),
+                nodeid,
+                (int)msglen,
+                msg);
+    }
 }
 
 /* Log a message to 'fp', if non-NULL.
@@ -501,6 +584,9 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
         && logbuf->stderr_mode == MODE_LEADER
         && logbuf->rank == 0) {
         log_fp (stderr, 0, buf, len);
+    }
+    if (logbuf->syslog_enable && severity <= logbuf->syslog_level) {
+        log_syslog (logbuf, buf, len);
     }
     return rc;
 }
@@ -667,6 +753,7 @@ int logbuf_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
         goto error;
     logbuf->h = h;
     logbuf->rank = rank;
+    logbuf->attrs = attrs;
     if (logbuf_register_attrs (logbuf, attrs) < 0)
         goto error;
     if (flux_msg_handler_addvec (h, htab, logbuf, &logbuf->handlers) < 0)
