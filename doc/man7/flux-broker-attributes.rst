@@ -311,6 +311,13 @@ log-filename [Updates: C, R]
    (rank zero only) If set, session log entries, as filtered by
    ``log-forward-level``, are directed to this file.  Default: none.
 
+log-syslog-enable [Updates: C, R]
+   If set to 1, each broker emits logs to syslog.  Default: none.
+
+log-syslog-level [Updates: C, R]
+   Log entries of numerical severity level less than or equal to this value
+   are emitted to syslog.  Default: ``2``.
+
 log-stderr-mode [Updates: C, R]
    If set to "leader" (default), broker rank 0 emits forwarded logs from
    other ranks to stderr, subject to the constraints of log-forward-level
