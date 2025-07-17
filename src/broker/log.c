@@ -150,8 +150,7 @@ void logbuf_destroy (logbuf_t *logbuf)
         flux_msglist_destroy (logbuf->followers);
         if (logbuf->f)
             (void)fclose (logbuf->f);
-        if (logbuf->filename)
-            free (logbuf->filename);
+        free (logbuf->filename);
         free (logbuf);
     }
 }
@@ -224,8 +223,7 @@ static int logbuf_set_filename (logbuf_t *logbuf, const char *destination)
         fclose (f);
         return -1;
     }
-    if (logbuf->filename)
-        free (logbuf->filename);
+    free (logbuf->filename);
     if (logbuf->f)
         fclose (logbuf->f);
     logbuf->f = f;

@@ -146,8 +146,7 @@ int attr_get (attr_t *attrs, const char *name, const char **val, int *flags)
             const char *tmp;
             if (e->get (name, &tmp, e->arg) < 0)
                 goto done;
-            if (e->val)
-                free (e->val);
+            free (e->val);
             if (tmp) {
                 if (!(e->val = strdup (tmp)))
                     goto done;
@@ -182,8 +181,7 @@ int attr_set (attr_t *attrs, const char *name, const char *val)
         if (e->set (name, val, e->arg) < 0)
             goto done;
     }
-    if (e->val)
-        free (e->val);
+    free (e->val);
     if (val) {
         if (!(e->val = strdup (val)))
             goto done;
