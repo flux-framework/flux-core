@@ -28,7 +28,7 @@
 #include "log.h"
 
 typedef enum { MODE_LEADER, MODE_LOCAL } stderr_mode_t;
-typedef enum { LOG_NO_TIMESTAMP=1 } log_flags_t;
+typedef enum { LOG_FOR_SYSTEMD=1 } log_flags_t;
 
 /* See descriptions in flux-broker-attributes(7) */
 static const int default_ring_size = 1024;
@@ -401,9 +401,7 @@ static int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
     return 0;
 }
 
-static void log_timestamp (FILE *fp,
-                           struct stdlog_header *hdr,
-                           int flags)
+static void log_timestamp (FILE *fp, struct stdlog_header *hdr)
 {
     struct tm tm;
     struct timeval tv;
@@ -411,8 +409,6 @@ static void log_timestamp (FILE *fp,
     char timezone[16]; /* TZ abbrev should be short, give 15 chars max */
     char year[5];      /* 4 digit year */
 
-    if (flags & LOG_NO_TIMESTAMP)
-        return;
     if (timestamp_parse (hdr->timestamp, &tm, &tv) < 0
         || strftime (datetime, sizeof (datetime), "%b %d %T", &tm) == 0
         || strftime (timezone, sizeof (timezone), "%Z", &tm) == 0
@@ -422,7 +418,7 @@ static void log_timestamp (FILE *fp,
 }
 
 /* Log a message to 'fp', if non-NULL.
- * Set flags to LOG_NO_TIMESTAMP to suppress timestamp.
+ * Set flags to LOG_FOR_SYSTEMD to suppress timestamp and add <level> prefix.
  */
 static void log_fp (FILE *fp, int flags, const char *buf, int len)
 {
@@ -433,22 +429,35 @@ static void log_fp (FILE *fp, int flags, const char *buf, int len)
     uint32_t nodeid;
 
     if (fp) {
-        if (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) < 0)
+        if (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) < 0) {
             fprintf (fp, "%.*s\n", len, buf);
+        }
         else {
             nodeid = strtoul (hdr.hostname, NULL, 10);
             severity = STDLOG_SEVERITY (hdr.pri);
-            log_timestamp (fp, &hdr, flags);
-            fprintf (fp,
-                     "%s.%s[%" PRIu32 "]: %.*s\n",
-                     hdr.appname,
-                     stdlog_severity_to_string (severity),
-                     nodeid,
-                     (int)msglen,
-                     msg);
+            if ((flags & LOG_FOR_SYSTEMD)) {
+                fprintf (fp,
+                         "<%d>%s.%s[%" PRIu32 "]: %.*s\n",
+                         severity,
+                         hdr.appname,
+                         stdlog_severity_to_string (severity),
+                         nodeid,
+                         (int)msglen,
+                         msg);
+            }
+            else {
+                log_timestamp (fp, &hdr);
+                fprintf (fp,
+                         "%s.%s[%" PRIu32 "]: %.*s\n",
+                         hdr.appname,
+                         stdlog_severity_to_string (severity),
+                         nodeid,
+                         (int)msglen,
+                         msg);
+            }
         }
+        fflush (fp);
     }
-    fflush (fp);
 }
 
 static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
@@ -475,7 +484,7 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
             && logbuf->stderr_mode == MODE_LOCAL)) {
             int flags = 0;
             if (logbuf->stderr_mode == MODE_LOCAL)
-                flags |= LOG_NO_TIMESTAMP; // avoid dup in syslog journal
+                flags |= LOG_FOR_SYSTEMD;
             log_fp (stderr, flags, buf, len);
             logged_stderr = true;
         }
