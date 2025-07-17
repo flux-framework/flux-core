@@ -64,11 +64,7 @@ void logbuf_destroy (logbuf_t *logbuf);
 
 static void logbuf_entry_destroy (struct logbuf_entry *e)
 {
-    if (e) {
-        if (e->buf)
-            free (e->buf);
-        free (e);
-    }
+    free (e);
 }
 
 /* Create a logbuf entry from RFC 5424 formatted buf.
@@ -77,15 +73,12 @@ static void logbuf_entry_destroy (struct logbuf_entry *e)
  */
 static struct logbuf_entry *logbuf_entry_create (const char *buf, int len)
 {
-    struct logbuf_entry *e = calloc (1, sizeof (*e));
-    if (!e)
+    struct logbuf_entry *e;
+
+    if (!(e = calloc (1, sizeof (*e) + len + 1)))
         return NULL;
-    if (!(e->buf = malloc (len + 1))) {
-        free (e);
-        return NULL;
-    }
+    e->buf = (char *)(e + 1);
     memcpy (e->buf, buf, len);
-    e->buf[len] = '\0';
     return e;
 }
 
