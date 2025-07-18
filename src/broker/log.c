@@ -190,15 +190,21 @@ error:
     return -1;
 }
 
-static int logbuf_set_ring_size (logbuf_t *logbuf, int size)
+static int logbuf_set_ring_size (logbuf_t *logbuf, const char *val)
 {
-    if (size < 0) {
-        errno = EINVAL;
-        return -1;
-    }
+    int size;
+    if (!val)
+        goto error;
+    errno = 0;
+    size = strtol (val, NULL, 10);
+    if (errno != 0 || size < 0)
+        goto error;
     logbuf_trim (logbuf, size);
     logbuf->ring_size = size;
     return 0;
+error:
+    errno = EINVAL;
+    return -1;
 }
 
 /* Set the log filename (rank 0 only).
@@ -209,6 +215,10 @@ static int logbuf_set_filename (logbuf_t *logbuf, const char *destination)
 {
     char *filename;
     FILE *f;
+    if (!destination) {
+        errno = EINVAL;
+        return -1;
+    }
     if (logbuf->rank > 0)
         return 0;
     if (!(f = fopen (destination, "a")))
@@ -297,6 +307,10 @@ static int attr_set_log (const char *name, const char *val, void *arg)
             goto done;
     }
     else if (streq (name, "log-stderr-mode")) {
+        if (!val) {
+            errno = EINVAL;
+            goto done;
+        }
         if (streq (val, "leader"))
             logbuf->stderr_mode = MODE_LEADER;
         else if (streq (val, "local"))
@@ -307,8 +321,7 @@ static int attr_set_log (const char *name, const char *val, void *arg)
         }
     }
     else if (streq (name, "log-ring-size")) {
-        int size = strtol (val, NULL, 10);
-        if (logbuf_set_ring_size (logbuf, size) < 0)
+        if (logbuf_set_ring_size (logbuf, val) < 0)
             goto done;
     }
     else if (streq (name, "log-filename")) {
