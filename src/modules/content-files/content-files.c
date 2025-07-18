@@ -195,6 +195,44 @@ error:
         flux_log_error (h, "error responding to store request");
 }
 
+/* Handle a content-backing.validate request from the rank 0 broker's
+ * content-cache service.  The raw request payload is a hash digest.
+ * The raw response payload is the blob content.
+ * These payloads are specified in RFC 10.
+ */
+static void validate_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
+{
+    struct content_files *ctx = arg;
+    const void *hash;
+    size_t hash_size;
+    char blobref[BLOBREF_MAX_STRING_SIZE];
+    const char *errstr = NULL;
+
+    if (flux_request_decode_raw (msg, NULL, &hash, &hash_size) < 0)
+        goto error;
+    if (hash_size != ctx->hash_size) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (blobref_hashtostr (ctx->hashfun,
+                           hash,
+                           hash_size,
+                           blobref,
+                           sizeof (blobref)) < 0)
+        goto error;
+    if (filedb_validate (ctx->dbpath, blobref, &errstr) < 0)
+        goto error;
+    if (flux_respond_raw (h, msg, NULL, 0) < 0)
+        flux_log_error (h, "error responding to validate request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to validate request");
+}
+
 /* Handle a content-backing.checkpoint-get request from the rank 0 kvs module.
  * The KVS stores its last root reference here for restart purposes.
  *
@@ -298,12 +336,42 @@ static void content_files_destroy (struct content_files *ctx)
  * The topic strings in the table consist of <service name>.<method>.
  */
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "content-backing.load",    load_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-get", checkpoint_get_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-put", checkpoint_put_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-files.stats-get",
-      stats_get_cb, FLUX_ROLE_USER },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.load",
+        load_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.store",
+        store_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.validate",
+        validate_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.checkpoint-get",
+        checkpoint_get_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.checkpoint-put",
+        checkpoint_put_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-files.stats-get",
+        stats_get_cb,
+        FLUX_ROLE_USER
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

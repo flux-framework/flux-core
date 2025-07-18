@@ -45,6 +45,8 @@ const char *sql_load = "SELECT object,size FROM objects"
                        "  WHERE hash = ?1 LIMIT 1";
 const char *sql_store = "INSERT INTO objects (hash,size,object) "
                         "  values (?1, ?2, ?3)";
+const char *sql_validate = "SELECT EXISTS("
+                           "  SELECT 1 FROM objects WHERE hash = ?1)";
 const char *sql_objects_count = "SELECT count(1) FROM objects";
 
 const char *sql_checkpt_get_v1 = "SELECT value FROM checkpt"
@@ -84,6 +86,7 @@ struct content_sqlite {
     sqlite3 *db;
     sqlite3_stmt *load_stmt;
     sqlite3_stmt *store_stmt;
+    sqlite3_stmt *validate_stmt;
     sqlite3_stmt *checkpt_get_stmt;
     sqlite3_stmt *checkpt_put_stmt;
     sqlite3_stmt *checkpt_prune_stmt;
@@ -237,6 +240,8 @@ static int content_sqlite_load (struct content_sqlite *ctx,
     }
     *datap = data;
     *sizep = size;
+    /* call sqlite3_reset() on ctx->load_stmt in caller, after it has
+     * used returned data pointer */
     return 0;
 error:
     ERRNO_SAFE_WRAP (sqlite3_reset, ctx->load_stmt);
@@ -319,6 +324,43 @@ error:
     return -1;
 }
 
+/* Validate blob in objects table.
+ * Returns 0 if valid, -1 on error (ENOENT if  not found)
+ */
+static int content_sqlite_validate (struct content_sqlite *ctx,
+                                    const void *hash,
+                                    int hash_size)
+{
+    if (sqlite3_bind_text (ctx->validate_stmt,
+                           1,
+                           (char *)hash,
+                           hash_size,
+                           SQLITE_STATIC) != SQLITE_OK) {
+        log_sqlite_error (ctx, "validate: binding key");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+    if (sqlite3_step (ctx->validate_stmt) != SQLITE_ROW) {
+        //log_sqlite_error (ctx, "validate: executing stmt");
+        errno = ENOENT;
+        goto error;
+    }
+    if (sqlite3_column_type (ctx->validate_stmt, 0) != SQLITE_INTEGER) {
+        flux_log (ctx->h, LOG_ERR, "validate: result is not an integer");
+        errno = EINVAL;
+        goto error;
+    }
+    if (!sqlite3_column_int (ctx->validate_stmt, 0)) {
+        errno = ENOENT;
+        goto error;
+    }
+    (void )sqlite3_reset (ctx->validate_stmt);
+    return 0;
+error:
+    ERRNO_SAFE_WRAP (sqlite3_reset, ctx->validate_stmt);
+    return -1;
+}
+
 static void load_cb (flux_t *h,
                      flux_msg_handler_t *mh,
                      const flux_msg_t *msg,
@@ -383,6 +425,34 @@ void store_cb (flux_t *h,
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "store: flux_respond_error");
+}
+
+static void validate_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    const void *hash;
+    size_t hash_size;
+
+    if (flux_request_decode_raw (msg,
+                                 NULL,
+                                 &hash,
+                                 &hash_size) < 0)
+        goto error;
+    if (hash_size != ctx->hash_size) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (content_sqlite_validate (ctx, hash, hash_size) < 0)
+        goto error;
+    if (flux_respond_raw (h, msg, NULL, 0) < 0)
+        flux_log_error (h, "validate: flux_respond_raw");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "validate: flux_respond_error");
 }
 
 void checkpoint_get_cb (flux_t *h,
@@ -534,6 +604,10 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
+        if (ctx->validate_stmt) {
+            if (sqlite3_finalize (ctx->validate_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize validate_stmt");
+        }
         if (ctx->store_stmt) {
             if (sqlite3_finalize (ctx->store_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize store_stmt");
@@ -753,6 +827,14 @@ static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
         goto error;
     }
     if (sqlite3_prepare_v2 (ctx->db,
+                            sql_validate,
+                            -1,
+                            &ctx->validate_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing validate stmt");
+        goto error;
+    }
+    if (sqlite3_prepare_v2 (ctx->db,
                             sql_checkpt_get_v2,
                             -1,
                             &ctx->checkpt_get_stmt,
@@ -938,14 +1020,42 @@ static void content_sqlite_destroy (struct content_sqlite *ctx)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "content-backing.load",    load_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-get",
-                            checkpoint_get_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-put",
-                            checkpoint_put_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-sqlite.stats-get",
-                            stats_get_cb, FLUX_ROLE_USER },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.load",
+        load_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.store",
+        store_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.validate",
+        validate_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.checkpoint-get",
+        checkpoint_get_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.checkpoint-put",
+        checkpoint_put_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-sqlite.stats-get",
+        stats_get_cb,
+        FLUX_ROLE_USER
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

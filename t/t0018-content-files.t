@@ -12,6 +12,7 @@ BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 TEST_LOAD=${FLUX_BUILD_DIR}/src/modules/content-files/test_load
 TEST_STORE=${FLUX_BUILD_DIR}/src/modules/content-files/test_store
+VALIDATE=${FLUX_BUILD_DIR}/t/content/content_validate
 
 SIZES="0 1 64 100 1000 1024 1025 8192 65536 262144 1048576 4194304"
 LARGE_SIZES="8388608 10000000 16777216 33554432 67108864"
@@ -120,6 +121,22 @@ test_expect_success LONGTEST 'reload/verify various size large blobs' '
 test_expect_success 'load with invalid hash size fails with EPROTO' '
 	test_must_fail backing_load </dev/null 2>badhash.err &&
 	grep "Protocol error" badhash.err
+'
+
+# validate
+
+test_expect_success 'content validate works on valid hash' '
+	make_blob 4096 >validateblob.out &&
+        flux content store --bypass-cache <validateblob.out >validate.hash &&
+	HASHSTR=`cat validate.hash` &&
+	${VALIDATE} ${HASHSTR} > validate1.out &&
+	grep "valid" validate1.out
+'
+
+test_expect_success 'content validate works on invalid hash' '
+	HASHSTR="sha1-abcdef01234567890abcdef01234567890abcdef" &&
+	test_must_fail ${VALIDATE} ${HASHSTR} 2> validate2.err &&
+	grep "No such file" validate2.err
 '
 
 ##

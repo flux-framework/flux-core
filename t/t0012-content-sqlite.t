@@ -20,6 +20,7 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SPAMUTIL="${FLUX_BUILD_DIR}/t/kvs/content-spam"
 rc1_kvs=$SHARNESS_TEST_SRCDIR/rc/rc1-kvs
 rc3_kvs=$SHARNESS_TEST_SRCDIR/rc/rc3-kvs
+VALIDATE=${FLUX_BUILD_DIR}/t/content/content_validate
 
 test_expect_success 'load content module with lower purge/age thresholds' '
 	flux exec flux module load content \
@@ -84,6 +85,20 @@ test_expect_success 'load 1m blob bypassing cache' '
 	HASHSTR=`cat 1m.0.hash` &&
 	flux content load --bypass-cache ${HASHSTR} >1m.0.load &&
 	test_cmp 1m.0.store 1m.0.load
+'
+
+# validate
+
+test_expect_success 'content validate works on valid hash' '
+	HASHSTR=`cat 4k.0.hash` &&
+	${VALIDATE} ${HASHSTR} > validate1.out &&
+	grep "valid" validate1.out
+'
+
+test_expect_success 'content validate works on invalid hash' '
+	HASHSTR="sha1-abcdef01234567890abcdef01234567890abcdef" &&
+	test_must_fail ${VALIDATE} ${HASHSTR} 2> validate2.err &&
+	grep "No such file" validate2.err
 '
 
 # Verify same blobs on all ranks
