@@ -432,7 +432,6 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
         }
         /* restoring, therefore we restart sequence number at 0 */
         if (!(f = kvs_checkpoint_commit (h,
-                                         NULL,
                                          blobref,
                                          0,
                                          restore_timestamp,

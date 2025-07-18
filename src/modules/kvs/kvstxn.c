@@ -1105,7 +1105,6 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                     newseq++;
 
                 kt->f_sync_checkpoint = kvs_checkpoint_commit (kt->ktm->h,
-                                                               NULL,
                                                                kt->newroot,
                                                                newseq,
                                                                0,

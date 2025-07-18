@@ -16,7 +16,7 @@ test_under_flux ${SIZE} minimal
 checkpoint_get() {
 	jq -j -c -n  "{key:\"$1\"}" \
 	    | $RPC content.checkpoint-get \
-	    | jq -r .value.rootref
+	    | jq -r .value[0].rootref
 }
 
 # arg1 - old ref
