@@ -1388,6 +1388,9 @@ static void lookup_cb (flux_t *h,
     struct ns_monitor *nsm;
     struct watcher *w;
     const char *errmsg = NULL;
+    int valid_watch_flags = (FLUX_KVS_WATCH_FULL
+                             | FLUX_KVS_WATCH_UNIQ
+                             | FLUX_KVS_WATCH_APPEND);
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -1408,6 +1411,11 @@ static void lookup_cb (flux_t *h,
     }
     if ((flags & FLUX_KVS_WATCH) && (flags & FLUX_KVS_STREAM)) {
         errmsg = "Cannot KVS watch and stream at the same time";
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(flags & FLUX_KVS_WATCH) && (flags & valid_watch_flags)) {
+        errmsg = "Must set KVS watch flag with other watch flags";
         errno = EINVAL;
         goto error;
     }
