@@ -155,7 +155,7 @@ FLUX_KVS_WATCH_APPEND
    response will only contain the additional appended data.  If the
    value is overwritten, the lookup fails with EINVAL.
 
-FLUX_KVS_WATCH_APPEND_INITIAL_SENTINEL
+FLUX_KVS_WATCH_INITIAL_SENTINEL
    Specified along with FLUX_KVS_WATCH_APPEND, this flag will result
    in an empty RPC message to be sent when all "initial" or "current"
    KVS data has been sent.  This empty RPC message serves as a
