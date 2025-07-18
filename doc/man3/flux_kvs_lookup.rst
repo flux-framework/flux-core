@@ -155,6 +155,17 @@ FLUX_KVS_WATCH_APPEND
    response will only contain the additional appended data.  If the
    value is overwritten, the lookup fails with EINVAL.
 
+FLUX_KVS_WATCH_INITIAL_SENTINEL
+   Specified along with FLUX_KVS_WATCH_APPEND, this flag will result
+   in an empty RPC message to be sent when all "initial" or "current"
+   KVS data has been sent.  This empty RPC message serves as a
+   sentinel and is useful for identifying what KVS data is "new" vs
+   "old" at the point in time a :var:`key` starts to be watched.
+   Normally an empty RPC message will result in EPROTO errors, but
+   :func:`flux_kvs_lookup_get` and :func:`flux_kvs_lookup_get_raw`
+   will recognize the sentinel RPC and return NULL / zero for its
+   results.
+
 FLUX_KVS_WATCH_FULL
    Specified along with FLUX_KVS_WATCH, this flag will alter watch
    behavior to respond when the value of the key being watched has
