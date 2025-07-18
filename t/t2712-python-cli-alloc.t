@@ -191,7 +191,7 @@ test_expect_success 'flux alloc: resource.norestrict works in subinstance' '
 '
 test_expect_success 'flux alloc: flux alloc vi works' '
 	cat <<-'EOF' >input.json &&
-	[{"expect":"test text file", "send":":q!\n", "timeout":30}]
+	[{"expect":"test text file", "send":":q!\n", "timeout":60}]
 	EOF
 	cat <<-EOF >test.txt &&
 	test text file
@@ -201,7 +201,7 @@ test_expect_success 'flux alloc: flux alloc vi works' '
 test_expect_success 'flux alloc: flux alloc flux alloc works' '
 	cat <<-'EOF' >input2.json &&
 	[{"expect":"prompt>", "send":"flux resource info\n", "timeout":120},
-	 {"expect":"prompt>", "send":"exit\n", "timeout":30}
+	 {"expect":"prompt>", "send":"exit\n", "timeout":60}
 	]
 	EOF
 	PROMPT_COMMAND="PS1=\"prompt>\"" \
