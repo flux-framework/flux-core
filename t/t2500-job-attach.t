@@ -9,6 +9,7 @@ test_under_flux 4
 flux setattr log-stderr-level 1
 
 runpty=$SHARNESS_TEST_SRCDIR/scripts/runpty.py
+waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
 test_expect_success 'attach: submit one job' '
 	flux submit echo foo >jobid1
@@ -273,6 +274,142 @@ test_expect_success 'attach: --stdin-ranks cannot be used with --read-only' '
 	id=$(flux submit -n2 -t60s cat) &&
 	test_must_fail flux job attach -i all --read-only $id &&
 	flux cancel $id
+'
+#
+# --tail tests
+#
+test_expect_success 'attach: --tail fails with invalid arg' '
+	id=`flux submit --wait hostname` &&
+	test_must_fail flux job attach --tail=-1 ${id}
+'
+test_expect_success 'create big output test script' '
+	cat <<-EOF >bigoutput.sh &&
+	#!/bin/sh
+	echo "START"
+	s="$(seq -s " " 1 50)"
+	for i in \$s
+	do
+		echo "FOO"
+	done
+	EOF
+	chmod +x bigoutput.sh
+'
+test_expect_success 'attach: --tail works without arg (finished job)' '
+	id=`flux submit --wait ./bigoutput.sh` &&
+	flux job attach ${id} > tail1A.out &&
+	head -n 1 tail1A.out | grep "START" &&
+	count=`cat tail1A.out | wc -l` &&
+	test $count -eq 51 &&
+	flux job attach --tail ${id} > tail1B.out &&
+	head -n 1 tail1B.out | grep "FOO" &&
+	count=`cat tail1B.out | wc -l` &&
+	test $count -eq 10
+'
+test_expect_success 'attach: --tail works with arg > 0 (finished job)' '
+	id=`flux submit --wait ./bigoutput.sh` &&
+	flux job attach ${id} > tail2A.out &&
+	head -n 1 tail2A.out | grep "START" &&
+	count=`cat tail2A.out | wc -l` &&
+	test $count -eq 51 &&
+	flux job attach --tail=20 ${id} > tail2B.out &&
+	head -n 1 tail2B.out | grep "FOO" &&
+	count=`cat tail2B.out | wc -l` &&
+	test $count -eq 20
+'
+test_expect_success 'attach: --tail works with arg == 0 (finished job)' '
+	id=`flux submit --wait ./bigoutput.sh` &&
+	flux job attach ${id} > tail3A.out &&
+	head -n 1 tail3A.out | grep "START" &&
+	count=`cat tail3A.out | wc -l` &&
+	test $count -eq 51 &&
+	flux job attach --tail=0 ${id} > tail3B.out &&
+	count=`cat tail3B.out | wc -l` &&
+	test $count -eq 0
+'
+# N.B. output large amount of data immediately so we have something,
+# then slowly output more to keep script going for awhile
+test_expect_success 'create big output test script that stays alive' '
+	cat <<-EOF >bigaliveoutput.sh &&
+	#!/bin/sh
+	echo "START"
+	s="$(seq -s " " 1 100)"
+	for i in \$s
+	do
+		echo "FOO"
+	done
+	s="$(seq -s " " 1 500)"
+	for i in \$s
+	do
+		echo "BAR"
+		sleep 0.2
+	done
+	EOF
+	chmod +x bigaliveoutput.sh
+'
+# live job test notes
+# - To avoid a race, must make sure output from "bigaliveoutput.sh" is
+#   in the KVS and ready to be read before testing `--tail`.  Due to
+#   issue #6896 we watch the output via "flux job eventlog", rather
+#   than using "flux job attach".
+# - recall two INT signals will detach "flux job attach" and cancel job
+test_expect_success NO_CHAIN_LINT 'attach: --tail works without arg (live job)' '
+	id=`flux submit -t100s ./bigaliveoutput.sh`
+
+	flux job eventlog -p guest.output --follow ${id} > tail4A.out &
+	pidA=$!
+	$waitfile -t 30 -p BAR tail4A.out
+
+	flux job attach --tail ${id} > tail4B.out &
+	pidB=$! &&
+	$waitfile -t 30 -p BAR tail4B.out &&
+	kill -INT ${pidB} &&
+	sleep 0.2 &&
+	kill -INT ${pidB} &&
+	! wait ${pidA} &&
+	! wait ${pidB} &&
+	test_must_fail grep "START" tail4B.out &&
+	tail -n 1 tail4B.out | grep "BAR" &&
+	count=`grep FOO tail4B.out | wc -l` &&
+	test $count -lt 10
+'
+test_expect_success NO_CHAIN_LINT 'attach: --tail works with arg > 0 (live job)' '
+	id=`flux submit -t100s ./bigaliveoutput.sh`
+
+	flux job eventlog -p guest.output --follow ${id} > tail5A.out &
+	pidA=$!
+	$waitfile -t 30 -p BAR tail5A.out
+
+	flux job attach --tail=20 ${id} > tail5B.out &
+	pidB=$! &&
+	$waitfile -t 30 -p BAR tail5B.out &&
+	kill -INT ${pidB} &&
+	sleep 0.2 &&
+	kill -INT ${pidB} &&
+	! wait ${pidA} &&
+	! wait ${pidB} &&
+	test_must_fail grep "START" tail5B.out &&
+	tail -n 1 tail5B.out | grep "BAR" &&
+	count=`grep FOO tail4B.out | wc -l` &&
+	test $count -lt 20
+'
+test_expect_success NO_CHAIN_LINT 'attach: --tail works with arg == 0 (live job)' '
+	id=`flux submit -t100s ./bigaliveoutput.sh`
+
+	flux job eventlog -p guest.output --follow ${id} > tail6A.out &
+	pidA=$!
+	$waitfile -t 30 -p BAR tail6A.out
+
+	flux job attach --tail=0 ${id} > tail6B.out &
+	pidB=$! &&
+	$waitfile -t 30 -p BAR tail6B.out &&
+	kill -INT ${pidB} &&
+	sleep 0.2 &&
+	kill -INT ${pidB} &&
+	! wait ${pidA} &&
+	! wait ${pidB} &&
+	test_must_fail grep "START" tail6B.out &&
+	tail -n 1 tail6B.out | grep "BAR" &&
+	test_must_fail grep "FOO" tail6B.out
 '
 jobpipe=$SHARNESS_TEST_SRCDIR/scripts/pipe.py
 test_expect_success 'attach: writing to stdin of closed tasks returns EPIPE' '

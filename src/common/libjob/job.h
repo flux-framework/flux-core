@@ -28,6 +28,8 @@ enum job_submit_flags {
 
 enum job_event_watch_flags {
     FLUX_JOB_EVENT_WATCH_WAITCREATE = 1, // wait for path to exist
+    // return NULL event after initial data end reached
+    FLUX_JOB_EVENT_WATCH_INITIAL_SENTINEL = 2,
 };
 
 enum job_lookup_flags {
