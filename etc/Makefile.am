@@ -16,11 +16,15 @@ dist_cron_DATA = \
 	kvs-backup.cron
 
 dist_fluxconf_SCRIPTS = \
-        rc1 \
-        rc3
+	rc1 \
+	rc1.old \
+	rc3 \
+	rc3.old \
+	rc1.py \
+	rc3.py
 
-dist_fluxrc1_SCRIPTS = \
-        rc1.d/02-cron
+dist_fluxconf_DATA = \
+	modprobe.toml
 
 fluxhelpdir = $(datadir)/flux/help.d
 fluxhelp_DATA = flux/help.d/core.json
