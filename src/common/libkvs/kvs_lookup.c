@@ -232,6 +232,32 @@ static struct lookup_ctx *get_lookup_ctx (flux_future_t *f)
     return ctx;
 }
 
+static void cleanup_ctx_treeobj (struct lookup_ctx *ctx)
+{
+    if (ctx->treeobj) {
+        json_decref (ctx->treeobj);
+        ctx->treeobj = NULL;
+    }
+    if (ctx->treeobj_str) {
+        free (ctx->treeobj_str);
+        ctx->treeobj_str = NULL;
+    }
+    if (ctx->val_valid) {
+        free (ctx->val_data);
+        ctx->val_data = NULL;
+        ctx->val_len = 0;
+        ctx->val_valid = false;
+    }
+    if (ctx->val_obj) {
+        json_decref (ctx->val_obj);
+        ctx->val_obj = NULL;
+    }
+    if (ctx->dir) {
+        flux_kvsdir_destroy (ctx->dir);
+        ctx->dir = NULL;
+    }
+}
+
 /* Parse the lookup response message, extracting the 'val' treeobj.
  * If decoded results were previously cached and the response has
  * changed (e.g. future has been reset and another response has arrived),
@@ -244,26 +270,8 @@ static int parse_response (flux_future_t *f, struct lookup_ctx *ctx)
     if (decode_treeobj (f, &treeobj2) < 0)
         return -1;
     if (!ctx->treeobj || !json_equal (ctx->treeobj, treeobj2)) {
-        json_decref (ctx->treeobj);
+        cleanup_ctx_treeobj (ctx);
         ctx->treeobj = json_incref (treeobj2);
-        if (ctx->treeobj_str) {
-            free (ctx->treeobj_str);
-            ctx->treeobj_str = NULL;
-        }
-        if (ctx->val_valid) {
-            free (ctx->val_data);
-            ctx->val_data = NULL;
-            ctx->val_len = 0;
-            ctx->val_valid = false;
-        }
-        if (ctx->val_obj) {
-            json_decref (ctx->val_obj);
-            ctx->val_obj = NULL;
-        }
-        if (ctx->dir) {
-            flux_kvsdir_destroy (ctx->dir);
-            ctx->dir = NULL;
-        }
     }
     return 0;
 }
