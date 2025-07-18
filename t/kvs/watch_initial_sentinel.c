@@ -131,7 +131,7 @@ int main (int argc, char **argv)
 
     flags = FLUX_KVS_WATCH;
     flags |= FLUX_KVS_WATCH_APPEND;
-    flags |= FLUX_KVS_WATCH_APPEND_INITIAL_SENTINEL;
+    flags |= FLUX_KVS_WATCH_INITIAL_SENTINEL;
     if (Wopt)
         flags |= FLUX_KVS_WAITCREATE;
 
