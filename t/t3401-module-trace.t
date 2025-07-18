@@ -98,8 +98,11 @@ test_expect_success NO_CHAIN_LINT 'stop background trace' '
 '
 
 test_expect_success NO_CHAIN_LINT 'start background trace on resource module' '
-	flux module trace --human --color=never --delta --type=request resource >trace3.out &
+	flux module trace --human --color=never --delta --type=request,response,event resource >trace3.out &
 	echo $! >trace3.pid
+'
+test_expect_success NO_CHAIN_LINT 'heartbeat.pulse event was captured' '
+	$waitfile -t 60 -p heartbeat.pulse trace3.out
 '
 test_expect_success NO_CHAIN_LINT 'reload resource module' '
 	flux module reload resource
