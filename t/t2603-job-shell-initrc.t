@@ -6,6 +6,9 @@ test_description='Test flux-shell initrc.lua implementation'
 
 test_under_flux 4
 
+NCORES=$(flux kvs get resource.R | flux R decode --count=core)
+test ${NCORES} -gt 4 && test_set_prereq MULTICORE
+
 FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
 INITRC_TESTDIR="${SHARNESS_TEST_SRCDIR}/shell/initrc"
@@ -23,7 +26,10 @@ test_expect_success 'flux-shell: initrc: conf.shell_initrc can be set' '
 	shell.log("loaded test-initrc")
 	EOF
 	initrc_old=$(flux getattr conf.shell_initrc) &&
+	test_debug "echo initrc_old=$initrc_old" &&
 	flux setattr conf.shell_initrc $(pwd)/test-initrc.lua &&
+	test_debug "echo initrc_new=$(flux getattr conf.shell_initrc)" &&
+	test_debug "flux run true" &&
 	flux run true > test-initrc.output 2>&1 &&
 	test_debug "cat test-initrc.output" &&
 	grep "loaded test-initrc" test-initrc.output &&
@@ -35,6 +41,8 @@ test_expect_success 'flux-shell: initrc: plugin.searchpath set via broker attr' 
 	EOF
 	old_pluginpath=$(flux getattr conf.shell_pluginpath) &&
 	flux setattr conf.shell_pluginpath /test/foo &&
+	test_debug "echo old_pluginpath=$old_pluginpath pluginpath=$(flux getattr conf.shell_pluginpath)" &&
+	test_debug "flux run -o initrc=$(pwd)/print-searchpath.lua true" &&
 	flux run -o initrc=$(pwd)/print-searchpath.lua true \
 		>print-searchpath.out 2>&1 &&
 	test_debug "cat print-searchpath.out" &&
@@ -46,6 +54,9 @@ test_expect_success 'flux-shell: default initrc obeys FLUX_SHELL_RC_PATH' '
 	cat >test-dir.d/test.lua <<-EOF &&
 	shell.log ("plugin loaded from test-dir.d")
 	EOF
+	test_debug "\
+	FLUX_SHELL_RC_PATH=$(pwd)/test-dir.d \
+	  flux run hostname >rcpath.log 2>&1 " &&
 	FLUX_SHELL_RC_PATH=$(pwd)/test-dir.d \
 	  flux run hostname >rcpath.log 2>&1 &&
 	grep "plugin loaded from test-dir.d" rcpath.log
