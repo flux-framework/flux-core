@@ -839,6 +839,11 @@ test_expect_success 'kvs-watch.lookup request extra WATCH flag w/o WATCH fails w
 	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":64}" \
 		${RPC_STREAM} kvs-watch.lookup 71
 '
+# N.B. FLUX_KVS_WATCH_APPEND_INITIAL_SENTINEL = 1024
+test_expect_success 'kvs-watch.lookup request INITIAL_SENTINEL w/o APPEND fails with EPROTO(71)' '
+	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":1028}" \
+		${RPC_STREAM} kvs-watch.lookup 71
+'
 
 #
 # ensure no lingering pending requests
