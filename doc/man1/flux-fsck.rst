@@ -15,8 +15,8 @@ DESCRIPTION
 .. program flux fsck
 
 The :program:`flux fsck` checks the integrity of the KVS backing
-store, starting with the most recent checkpoint (root version) written
-to the backing store.
+store.  By default, it start with the most recent checkpoint (root version)
+written to the backing store.
 
 
 OPTIONS
@@ -33,6 +33,10 @@ OPTIONS
 .. option:: -q, --quiet
 
    Don't output diagnostic messages and discovered errors.
+
+.. option:: -r, --rootref
+
+   Use a specific root reference as the starting root version.
 
 
 EXIT STATUS
