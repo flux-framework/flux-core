@@ -299,18 +299,24 @@ log-ring-size [Updates: C, R]
    Default: ``1024``.
 
 log-forward-level [Updates: C, R]
-   Log entries at :linux:man3:`syslog` level at or below this value
-   are forwarded to rank zero for permanent capture.  Default ``7``
-   (LOG_DEBUG).
+   Log entries of numerical severity level less than or equal to this value
+   are forwarded to rank zero for permanent capture.  Default: ``7``.
 
 log-critical-level [Updates: C, R]
-   Log entries at :linux:man3:`syslog` level at or below this value
+   Log entries of numerical severity level less than or equal to this value
    are copied to stderr on the logging rank, for capture by the
-   enclosing instance.  Default ``2`` (LOG_CRIT).
+   enclosing instance.  Default: ``2``.
 
 log-filename [Updates: C, R]
    (rank zero only) If set, session log entries, as filtered by
    ``log-forward-level``, are directed to this file.  Default: none.
+
+log-syslog-enable [Updates: C, R]
+   If set to 1, each broker emits logs to syslog.  Default: none.
+
+log-syslog-level [Updates: C, R]
+   Log entries of numerical severity level less than or equal to this value
+   are emitted to syslog.  Default: ``2``.
 
 log-stderr-mode [Updates: C, R]
    If set to "leader" (default), broker rank 0 emits forwarded logs from
@@ -320,13 +326,41 @@ log-stderr-mode [Updates: C, R]
    Default: ``leader``.
 
 log-stderr-level (Updates: C, R)
-   Log entries at :linux:man3:`syslog` level at or below this value to
-   stderr, subject to log-stderr-mode.  Default: ``3`` (LOG_ERR).
+   Log entries of numerical severity level less than or equal to this value to
+   stderr, subject to log-stderr-mode.  Default: ``3``.
 
 log-level (Updates: C, R)
-   Log entries at :linux:man3:`syslog` level at or below this value
-   are stored in the ring buffer.  Default: ``7`` (LOG_DEBUG).
+   Log entries of numerical severity level less than or equal to this value
+   are stored in the ring buffer.  Default: ``7``.
 
+The numerical severity levels are defined as per :linux:man3:`syslog`:
+
+.. list-table::
+   :header-rows: 1
+
+   * - 0
+     - :const:`LOG_EMERG`
+
+   * - 1
+     - :const:`LOG_ALERT`
+
+   * - 2
+     - :const:`LOG_CRIT`
+
+   * - 3
+     - :const:`LOG_ERR`
+
+   * - 4
+     - :const:`LOG_WARNING`
+
+   * - 5
+     - :const:`LOG_NOTICE`
+
+   * - 6
+     - :const:`LOG_INFO`
+
+   * - 7
+     - :const:`LOG_DEBUG`
 
 CONTENT
 =======

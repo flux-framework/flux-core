@@ -98,8 +98,12 @@ int attr_add (attr_t *attrs, const char *name, const char *val, int flags)
     return 0;
 }
 
-int attr_add_active (attr_t *attrs, const char *name, int flags,
-                        attr_get_f get, attr_set_f set, void *arg)
+int attr_add_active (attr_t *attrs,
+                     const char *name,
+                     int flags,
+                     attr_get_f get,
+                     attr_set_f set,
+                     void *arg)
 {
     struct entry *e;
     int rc = -1;
@@ -146,8 +150,7 @@ int attr_get (attr_t *attrs, const char *name, const char **val, int *flags)
             const char *tmp;
             if (e->get (name, &tmp, e->arg) < 0)
                 goto done;
-            if (e->val)
-                free (e->val);
+            free (e->val);
             if (tmp) {
                 if (!(e->val = strdup (tmp)))
                     goto done;
@@ -182,8 +185,7 @@ int attr_set (attr_t *attrs, const char *name, const char *val)
         if (e->set (name, val, e->arg) < 0)
             goto done;
     }
-    if (e->val)
-        free (e->val);
+    free (e->val);
     if (val) {
         if (!(e->val = strdup (val)))
             goto done;
@@ -301,7 +303,9 @@ int attr_add_uint32 (attr_t *attrs, const char *name, uint32_t val, int flags)
     return attr_add (attrs, name, val_string, flags);
 }
 
-int attr_add_active_uint32 (attr_t *attrs, const char *name, uint32_t *val,
+int attr_add_active_uint32 (attr_t *attrs,
+                            const char *name,
+                            uint32_t *val,
                             int flags)
 {
     return attr_add_active (attrs, name, flags, get_uint32, set_uint32, val);
@@ -357,8 +361,10 @@ int attr_cache_immutables (attr_t *attrs, flux_t *h)
  ** Service
  **/
 
-void getattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                         const flux_msg_t *msg, void *arg)
+void getattr_request_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
 {
     attr_t *attrs = arg;
     const char *name;
@@ -373,9 +379,11 @@ void getattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = ENOENT;
         goto error;
     }
-    if (flux_respond_pack (h, msg, "{s:s s:i}",
-                                   "value", val,
-                                   "flags", flags) < 0)
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:s s:i}",
+                           "value", val,
+                           "flags", flags) < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
@@ -383,15 +391,20 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-void setattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                         const flux_msg_t *msg, void *arg)
+void setattr_request_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
 {
     attr_t *attrs = arg;
     const char *name;
     const char *val;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:s}", "name", &name,
-                                                     "value", &val) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:s}",
+                             "name", &name,
+                             "value", &val) < 0)
         goto error;
     if (attr_set (attrs, name, val) < 0) {
         if (errno != ENOENT)
@@ -407,8 +420,10 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-void lsattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                        const flux_msg_t *msg, void *arg)
+void lsattr_request_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
 {
     attr_t *attrs = arg;
     const char *name;
