@@ -6,7 +6,7 @@ pushd catch2
 wget -O - https://www.mpich.org/static/downloads/4.2.2/mpich-4.2.2.tar.gz | tar xvz --strip-components 1
 mkdir -p build
 pushd build
-../configure --prefix=/usr --without-pmix
+../configure --prefix=/usr --without-pmix --disable-fortran
 make -j 4 install
 popd
 popd
