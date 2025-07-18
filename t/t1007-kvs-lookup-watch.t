@@ -9,6 +9,7 @@ test_description='Test KVS get --watch && --waitcreate && --stream'
 test_under_flux 4 kvs
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+RPC_STREAM=${FLUX_BUILD_DIR}/t/request/rpc_stream
 
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 
@@ -750,9 +751,23 @@ test_expect_success 'kvs-watch.lookup request with empty payload fails with EPRO
 	${RPC} kvs-watch.lookup 71 </dev/null
 '
 # N.B. FLUX_KVS_WATCH = 4
-test_expect_success 'kvs-watch.lookup request non-streaming fails with EPROTO(71)' '
+test_expect_success 'kvs-watch.lookup request non-streaming w/ WATCH fails with EPROTO(71)' '
 	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":4}" \
 		${RPC} kvs-watch.lookup 71
+'
+# N.B. FLUX_KVS_STREAM = 512
+test_expect_success 'kvs-watch.lookup request non-streaming w/ STREAM fails with EPROTO(71)' '
+	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":512}" \
+		${RPC} kvs-watch.lookup 71
+'
+test_expect_success 'kvs-watch.lookup request w/ WATCH and STREAM fails with EPROTO(71)' '
+	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":516}" \
+		${RPC_STREAM} kvs-watch.lookup 71
+'
+# N.B. FLUX_KVS_WATCH_FULL = 64
+test_expect_success 'kvs-watch.lookup request extra WATCH flag w/o WATCH fails with EPROTO(71)' '
+	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":64}" \
+		${RPC_STREAM} kvs-watch.lookup 71
 '
 
 #
