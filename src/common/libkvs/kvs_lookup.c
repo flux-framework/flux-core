@@ -253,6 +253,7 @@ static int parse_response (flux_future_t *f, struct lookup_ctx *ctx)
         if (ctx->val_valid) {
             free (ctx->val_data);
             ctx->val_data = NULL;
+            ctx->val_len = 0;
             ctx->val_valid = false;
         }
         if (ctx->val_obj) {
