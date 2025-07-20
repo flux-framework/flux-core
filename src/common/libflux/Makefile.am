@@ -64,6 +64,7 @@ libflux_la_SOURCES = \
 	connector_loop.c \
 	connector_interthread.c \
 	connector_local.c \
+	connector_fd.c \
 	reactor.c \
 	reactor_private.h \
 	watcher.c \
