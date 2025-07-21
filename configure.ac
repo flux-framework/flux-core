@@ -166,6 +166,19 @@ AC_PATH_PROGS(SSH, [rsh ssh], [/usr/bin/rsh])
 AC_DEFINE_UNQUOTED([PATH_SSH], "$SSH",
           [Define remote shell program to be used by the ssh:// connector])
 
+AC_MSG_CHECKING([whether Apple frameworks can be used])
+AS_IF([test $(uname) = "Darwin"],[
+  AC_MSG_RESULT([yes])
+  apple_coreservices_framework="-framework CoreServices"
+  AS_VAR_SET(APPLE_CORESERVICES_FRAMEWORK, $apple_coreservices_framework)
+  AC_SUBST(APPLE_CORESERVICES_FRAMEWORK)
+  apple_systemconfiguration_framework="-framework SystemConfiguration"
+  AS_VAR_SET(APPLE_SYSTEMCONFIGURATION_FRAMEWORK, $apple_systemconfiguration_framework)
+  AC_SUBST(APPLE_SYSTEMCONFIGURATION_FRAMEWORK)
+],[
+  AC_MSG_RESULT([no])
+])
+
 # macos linker doesn't support --gc-sections
 saved_LDFLAGS="$LDFLAGS"
 LDFLAGS="-Wl,--gc-sections $LDFLAGS"
