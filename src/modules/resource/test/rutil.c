@@ -157,7 +157,7 @@ static char *create_tmp_file (const char *content)
         tmpdir = "/tmp";
     if (asprintf (&path, "%s/rutil-test.XXXXXX", tmpdir) < 0)
         BAIL_OUT ("error allocating buffer");
-    if ((fd = mkostemp (path, O_WRONLY)) < 0)
+    if ((fd = mkostemp (path, 0)) < 0)
         BAIL_OUT ("error creating temp file");
 
     cleanup_push_string (cleanup_file, path);
