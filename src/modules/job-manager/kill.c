@@ -37,10 +37,6 @@
 #include "kill.h"
 #include "job-manager.h"
 
-#ifndef SIGRTMAX
-#  define SIGRTMAX 64
-#endif
-
 struct kill {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
@@ -48,7 +44,7 @@ struct kill {
 
 int kill_check_signal (int signum)
 {
-    if (signum <= 0 || signum > SIGRTMAX)
+    if (signum <= 0 || signum >= NSIG)
         return -1;
     return 0;
 }
