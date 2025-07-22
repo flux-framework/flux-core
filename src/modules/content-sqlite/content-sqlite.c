@@ -60,7 +60,7 @@ const char *sql_create_table_checkpt_v2 =
     "  value TEXT"
     ");";
 const char *sql_checkpt_get_v2 = "SELECT value FROM checkpt_v2"
-                                 " ORDER BY id DESC LIMIT 1";
+                                 " ORDER BY id DESC";
 const char *sql_checkpt_put_v2 = "INSERT INTO checkpt_v2 (value)"
                                  " values (?1)";
 const char *sql_checkpt_prune =
@@ -461,35 +461,56 @@ void checkpoint_get_cb (flux_t *h,
                         void *arg)
 {
     struct content_sqlite *ctx = arg;
-    const char *s;
-    json_t *o = NULL;
     const char *errstr = NULL;
-    json_error_t error;
+    json_t *a = NULL;
 
-    if (sqlite3_step (ctx->checkpt_get_stmt) != SQLITE_ROW) {
+    if (!(a = json_array ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+
+    while (sqlite3_step (ctx->checkpt_get_stmt) == SQLITE_ROW) {
+        const char *s;
+        json_t *o = NULL;
+        json_error_t error;
+
+        s = (const char *)sqlite3_column_text (ctx->checkpt_get_stmt, 0);
+
+        if (!(o = json_loads (s, 0, &error))) {
+            /* recovery from version 0 checkpoint blobref not supported */
+            errstr = error.text;
+            errno = EINVAL;
+            goto error;
+        }
+
+        if (json_array_append_new (a, o) < 0) {
+            json_decref (o);
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+
+    /* if no checkpoint entries, we return ENOENT */
+    if (json_array_size (a) > 0) {
+        if (flux_respond_pack (h,
+                               msg,
+                               "{s:O}",
+                               "value", a) < 0)
+            flux_log_error (h, "flux_respond_pack");
+    }
+    else {
         errno = ENOENT;
         goto error;
     }
-    s = (const char *)sqlite3_column_text (ctx->checkpt_get_stmt, 0);
-    if (!(o = json_loads (s, 0, &error))) {
-        /* recovery from version 0 checkpoint blobref not supported */
-        errstr = error.text;
-        errno = EINVAL;
-        goto error;
-    }
-    if (flux_respond_pack (h,
-                           msg,
-                           "{s:O}",
-                           "value", o) < 0)
-        flux_log_error (h, "flux_respond_pack");
+
     (void )sqlite3_reset (ctx->checkpt_get_stmt);
-    json_decref (o);
+    json_decref (a);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "flux_respond_error");
     (void )sqlite3_reset (ctx->checkpt_get_stmt);
-    json_decref (o);
+    json_decref (a);
 }
 
 void checkpoint_put_cb (flux_t *h,

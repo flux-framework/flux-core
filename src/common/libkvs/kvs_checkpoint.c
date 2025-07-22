@@ -19,9 +19,9 @@
 #include <time.h>
 
 #include "kvs_checkpoint.h"
+#include "src/common/libutil/errno_safe.h"
 
 flux_future_t *kvs_checkpoint_commit (flux_t *h,
-                                      const char *key,
                                       const char *rootref,
                                       int sequence,
                                       double timestamp,
@@ -35,8 +35,6 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
         errno = EINVAL;
         return NULL;
     }
-    if (!key)
-        key = KVS_DEFAULT_CHECKPOINT;
     if (timestamp == 0)
         timestamp = flux_reactor_now (flux_get_reactor (h));
     if (flags & KVS_CHECKPOINT_FLAG_CACHE_BYPASS)
@@ -46,9 +44,7 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
                              topic,
                              0,
                              0,
-                             "{s:s s:{s:i s:s s:i s:f}}",
-                             "key",
-                             key,
+                             "{s:{s:i s:s s:i s:f}}",
                              "value",
                              "version", 1,
                              "rootref", rootref,
@@ -59,7 +55,7 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
     return f;
 }
 
-flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key, int flags)
+flux_future_t *kvs_checkpoint_lookup (flux_t *h, int flags)
 {
     const char *topic = "content.checkpoint-get";
     int valid_flags = KVS_CHECKPOINT_FLAG_CACHE_BYPASS;
@@ -68,36 +64,52 @@ flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key, int flags)
         errno = EINVAL;
         return NULL;
     }
-    if (!key)
-        key = KVS_DEFAULT_CHECKPOINT;
     if (flags & KVS_CHECKPOINT_FLAG_CACHE_BYPASS)
         topic = "content-backing.checkpoint-get";
 
-    return flux_rpc_pack (h,
-                          topic,
-                          0,
-                          0,
-                          "{s:s}",
-                          "key",
-                          key);
+    return flux_rpc (h, topic, NULL, 0, 0);
 }
 
-int kvs_checkpoint_lookup_get_rootref (flux_future_t *f, const char **rootref)
+int kvs_checkpoint_lookup_get (flux_future_t *f, const json_t **checkpoints)
 {
-    const char *tmp_rootref;
-    int version;
+    json_t *a;
 
-    if (!f || !rootref) {
+    if (!f || !checkpoints) {
         errno = EINVAL;
         return -1;
     }
 
     if (flux_rpc_get_unpack (f,
-                             "{s:{s:i s:s}}",
-                             "value",
-                               "version", &version,
-                               "rootref", &tmp_rootref) < 0)
+                             "{s:o}",
+                             "value", &a) < 0)
         return -1;
+
+    if (!json_is_array (a)) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    *checkpoints = a;
+    return 0;
+}
+
+int kvs_checkpoint_parse_rootref (json_t *checkpoint, const char **rootref)
+{
+    const char *tmp_rootref;
+    int version;
+
+    if (!checkpoint || !rootref) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (json_unpack (checkpoint,
+                     "{s:i s:s}",
+                     "version", &version,
+                     "rootref", &tmp_rootref) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
 
     if (version != 0 && version != 1) {
         errno = EINVAL;
@@ -108,21 +120,22 @@ int kvs_checkpoint_lookup_get_rootref (flux_future_t *f, const char **rootref)
     return 0;
 }
 
-int kvs_checkpoint_lookup_get_timestamp (flux_future_t *f, double *timestamp)
+int kvs_checkpoint_parse_timestamp (json_t *checkpoint, double *timestamp)
 {
     int version;
     double ts = 0.;
 
-    if (!f || !timestamp) {
+    if (!checkpoint || !timestamp) {
         errno = EINVAL;
         return -1;
     }
-    if (flux_rpc_get_unpack (f,
-                             "{s:{s:i s?f}}",
-                             "value",
-                               "version", &version,
-                               "timestamp", &ts) < 0)
+    if (json_unpack (checkpoint,
+                     "{s:i s?f}",
+                     "version", &version,
+                     "timestamp", &ts) < 0) {
+        errno = EPROTO;
         return -1;
+    }
     if (version != 0 && version != 1) {
         errno = EINVAL;
         return -1;
@@ -131,21 +144,22 @@ int kvs_checkpoint_lookup_get_timestamp (flux_future_t *f, double *timestamp)
     return 0;
 }
 
-int kvs_checkpoint_lookup_get_sequence (flux_future_t *f, int *sequence)
+int kvs_checkpoint_parse_sequence (json_t *checkpoint, int *sequence)
 {
     int version;
     int seq = 0;
 
-    if (!f || !sequence) {
+    if (!checkpoint || !sequence) {
         errno = EINVAL;
         return -1;
     }
-    if (flux_rpc_get_unpack (f,
-                             "{s:{s:i s?i}}",
-                             "value",
-                               "version", &version,
-                               "sequence", &seq) < 0)
+    if (json_unpack (checkpoint,
+                     "{s:i s?i}",
+                     "version", &version,
+                     "sequence", &seq) < 0) {
+        errno = EPROTO;
         return -1;
+    }
     if (version != 0 && version != 1) {
         errno = EINVAL;
         return -1;

@@ -264,9 +264,10 @@ void checkpoint_get_cb (flux_t *h,
         errno = EINVAL;
         goto error;
     }
+    /* content-files only supports a single checkpoint */
     if (flux_respond_pack (h,
                            msg,
-                           "{s:O}",
+                           "{s:[O]}",
                            "value", o) < 0)
         flux_log_error (h, "error responding to checkpoint-get request");
     free (data);

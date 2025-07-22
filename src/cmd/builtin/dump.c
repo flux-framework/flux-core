@@ -439,14 +439,20 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
     ar = dump_create (outfile);
     if (optparse_hasopt (p, "checkpoint")) {
         flux_future_t *f;
+        const json_t *checkpoints;
+        json_t *checkpt;
         const char *blobref;
         double timestamp;
 
-        if (!(f = kvs_checkpoint_lookup (h, NULL, kvs_checkpoint_flags))
-            || kvs_checkpoint_lookup_get_rootref (f, &blobref) < 0
-            || kvs_checkpoint_lookup_get_timestamp (f, &timestamp) < 0)
-            log_msg_exit ("error fetching checkpoint: %s",
+        /* index 0 is most recent checkpoint */
+        if (!(f = kvs_checkpoint_lookup (h, kvs_checkpoint_flags))
+            || kvs_checkpoint_lookup_get (f, &checkpoints) < 0
+            || !(checkpt = json_array_get (checkpoints, 0))
+            || kvs_checkpoint_parse_rootref (checkpt, &blobref) < 0
+            || kvs_checkpoint_parse_timestamp (checkpt, &timestamp) < 0)
+            log_msg_exit ("error fetching checkpoints: %s",
                           future_strerror (f, errno));
+
         dump_time = timestamp;
         dump_blobref (ar, h, blobref);
         flux_future_destroy (f);

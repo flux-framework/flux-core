@@ -185,13 +185,34 @@ test_expect_success 'checkpoint-put w/ rootref bar' '
 
 test_expect_success 'checkpoint-get returned rootref bar' '
         echo bar >rootref.exp &&
-        checkpoint_get | jq -r .value | jq -r .rootref >rootref.out &&
+        checkpoint_get | jq -r .value[0] | jq -r .rootref >rootref.out &&
         test_cmp rootref.exp rootref.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoints (1 default)' '
+        flux content checkpoints > checkpoints1.out &&
+        count=$(cat checkpoints1.out | wc -l) &&
+        test $count -eq 2 &&
+        tail -n 1 checkpoints1.out | grep bar
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoints (1 no-header)' '
+        flux content checkpoints --no-header > checkpoints1n.out &&
+        count=$(cat checkpoints1n.out | wc -l) &&
+        test $count -eq 1 &&
+        head -n 1 checkpoints1n.out | grep bar
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoints (1 json)' '
+        flux content checkpoints --json > checkpoints1j.out &&
+        count=$(cat checkpoints1j.out | wc -l) &&
+        test $count -eq 1 &&
+        head -n 1 checkpoints1j.out | jq -e ".rootref == \"bar\""
 '
 
 # use grep instead of compare, incase of floating point rounding
 test_expect_success 'checkpoint-get returned correct timestamp' '
-        checkpoint_get | jq -r .value | jq -r .timestamp >timestamp.out &&
+        checkpoint_get | jq -r .value[0] | jq -r .timestamp >timestamp.out &&
         grep 2.2 timestamp.out
 '
 
@@ -201,8 +222,15 @@ test_expect_success 'checkpoint-put updates rootref to baz' '
 
 test_expect_success 'checkpoint-get returned rootref baz' '
         echo baz >rootref2.exp &&
-        checkpoint_get | jq -r .value | jq -r .rootref >rootref2.out &&
+        checkpoint_get | jq -r .value[0] | jq -r .rootref >rootref2.out &&
         test_cmp rootref2.exp rootref2.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoints (2)' '
+        flux content checkpoints --no-header > checkpoints2.out &&
+        count=$(cat checkpoints2.out | wc -l) &&
+        test $count -eq 1 &&
+        grep baz checkpoints2.out
 '
 
 test_expect_success 'reload content-files module' '
@@ -211,7 +239,7 @@ test_expect_success 'reload content-files module' '
 
 test_expect_success 'checkpoint-get still returns rootref baz' '
         echo baz >rootref3.exp &&
-        checkpoint_get | jq -r .value | jq -r .rootref >rootref3.out &&
+        checkpoint_get | jq -r .value[0] | jq -r .rootref >rootref3.out &&
         test_cmp rootref3.exp rootref3.out
 '
 
@@ -221,8 +249,15 @@ test_expect_success 'checkpoint-put updates rootref with longer rootref' '
 
 test_expect_success 'checkpoint-get returned rootref with longer rootref' '
         echo abcdefghijklmnopqrstuvwxyz >rootref4.exp &&
-        checkpoint_get | jq -r .value | jq -r .rootref >rootref4.out &&
+        checkpoint_get | jq -r .value[0] | jq -r .rootref >rootref4.out &&
         test_cmp rootref4.exp rootref4.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoints (3)' '
+        flux content checkpoints --no-header > checkpoints3.out &&
+        count=$(cat checkpoints3.out | wc -l) &&
+        test $count -eq 1 &&
+        grep abcdefghijklmnopqrstuvwxyz checkpoints3.out
 '
 
 test_expect_success 'checkpoint-put updates rootref to shorter rootref' '
@@ -231,8 +266,15 @@ test_expect_success 'checkpoint-put updates rootref to shorter rootref' '
 
 test_expect_success 'checkpoint-get returned rootref with shorter rootref' '
         echo foobar >rootref5.exp &&
-        checkpoint_get | jq -r .value | jq -r .rootref >rootref5.out &&
+        checkpoint_get | jq -r .value[0] | jq -r .rootref >rootref5.out &&
         test_cmp rootref5.exp rootref5.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoints (4)' '
+        flux content checkpoints --no-header > checkpoints4.out &&
+        count=$(cat checkpoints4.out | wc -l) &&
+        test $count -eq 1 &&
+        grep foobar checkpoints4.out
 '
 
 test_expect_success 'checkpoint-put updates rootref to boof' '
@@ -242,9 +284,16 @@ test_expect_success 'checkpoint-put updates rootref to boof' '
 test_expect_success 'checkpoint-backing-get returns rootref boof' '
         echo boof >rootref_backing.exp &&
         checkpoint_backing_get \
-            | jq -r .value \
+            | jq -r .value[0] \
             | jq -r .rootref >rootref_backing.out &&
         test_cmp rootref_backing.exp rootref_backing.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoints (5)' '
+        flux content checkpoints --no-header > checkpoints5.out &&
+        count=$(cat checkpoints5.out | wc -l) &&
+        test $count -eq 1 &&
+        grep boof checkpoints5.out
 '
 
 test_expect_success 'checkpoint-backing-put w/ rootref poof' '
@@ -253,8 +302,15 @@ test_expect_success 'checkpoint-backing-put w/ rootref poof' '
 
 test_expect_success 'checkpoint-get returned rootref boof' '
         echo poof >rootref6.exp &&
-        checkpoint_get | jq -r .value | jq -r .rootref >rootref6.out &&
+        checkpoint_get | jq -r .value[0] | jq -r .rootref >rootref6.out &&
         test_cmp rootref6.exp rootref6.out
+'
+
+test_expect_success 'flux content checkpoints lists correct checkpoints (6)' '
+        flux content checkpoints --no-header > checkpoints6.out &&
+        count=$(cat checkpoints6.out | wc -l) &&
+        test $count -eq 1 &&
+        grep poof checkpoints6.out
 '
 
 test_expect_success 'checkpoint-put bad request fails with EPROTO' '

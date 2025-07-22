@@ -29,23 +29,25 @@ enum {
  */
 
 flux_future_t *kvs_checkpoint_commit (flux_t *h,
-                                      const char *key,
                                       const char *rootref,
                                       int sequence,
                                       double timestamp,
                                       int flags);
 
-flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key, int flags);
+flux_future_t *kvs_checkpoint_lookup (flux_t *h, int flags);
 
-int kvs_checkpoint_lookup_get_rootref (flux_future_t *f, const char **rootref);
+/* return array of checkpoints */
+int kvs_checkpoint_lookup_get (flux_future_t *f, const json_t **checkpoints);
+
+int kvs_checkpoint_parse_rootref (json_t *checkpoint, const char **rootref);
 
 /* sets timestamp to 0 if unavailable
  */
-int kvs_checkpoint_lookup_get_timestamp (flux_future_t *f, double *timestamp);
+int kvs_checkpoint_parse_timestamp (json_t *checkpoint, double *timestamp);
 
 /* sets sequence to 0 if unavailable
  */
-int kvs_checkpoint_lookup_get_sequence (flux_future_t *f, int *sequence);
+int kvs_checkpoint_parse_sequence (json_t *checkpoint, int *sequence);
 
 #endif /* !_KVS_CHECKPOINT_H */
 

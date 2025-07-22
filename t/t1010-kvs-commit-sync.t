@@ -42,7 +42,7 @@ test_expect_success 'kvs: checkpoint of kvs-primary should exist now' '
 '
 
 test_expect_success 'kvs: checkpoint of kvs-primary should match rootref' '
-        checkpoint_get kvs-primary | jq -r .value.rootref > checkpoint.out &&
+        checkpoint_get kvs-primary | jq -r .value[0].rootref > checkpoint.out &&
         test_cmp syncblob.out checkpoint.out
 '
 
@@ -52,7 +52,7 @@ test_expect_success 'kvs: put some data to kvs and sync it (flux kvs sync)' '
 '
 
 test_expect_success 'kvs: checkpoint of kvs-primary should match rootref' '
-        checkpoint_get kvs-primary | jq -r .value.rootref > checkpoint2.out &&
+        checkpoint_get kvs-primary | jq -r .value[0].rootref > checkpoint2.out &&
         test_cmp syncblob2.out checkpoint2.out
 '
 
