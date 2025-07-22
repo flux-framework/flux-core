@@ -51,6 +51,7 @@ test_expect_success 'flux-shell: historical batch jobspec still work' '
 		input=$(basename $spec) &&
 		cat $spec |
 		    jq -S ".attributes.system.environment.PATH=\"$PATH\"" |
+		    jq -S ".attributes.system.environment.LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH\"" |
 		    jq -S ".attributes.system.environment.PYTHONPATH=\"$PYTHONPATH\"" |
 		    jq -S ".attributes.system.environment.HOME=\"$HOME\"" |
 		    jq -S ".attributes.system.cwd=\"$(pwd)\"" \
