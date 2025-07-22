@@ -14,7 +14,7 @@ invalid_rank() {
 	echo $((${SIZE} + 1))
 }
 
-testmod=${FLUX_BUILD_DIR}/t/module/.libs/testmod.so
+testmod=$(realpath ${FLUX_BUILD_DIR}/t/module/.libs/testmod.so)
 legacy=${FLUX_BUILD_DIR}/t/module/.libs/legacy.so
 hangmod=${FLUX_BUILD_DIR}/t/module/.libs/hang.so
 
