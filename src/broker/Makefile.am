@@ -28,6 +28,8 @@ flux_broker_SOURCES = \
 libbroker_la_SOURCES = \
 	brokercfg.c \
 	brokercfg.h \
+	module_dso.c \
+	module_dso.h \
 	module.c \
 	module.h \
 	modhash.c \

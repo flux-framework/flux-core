@@ -32,8 +32,8 @@ typedef int (*mod_main_f)(flux_t *h, int argc, char *argv[]);
 
 module_t *module_create (flux_t *h,
                          const char *parent_uuid,
-                         const char *name, // may be NULL
-                         const char *path,
+                         const char *name,
+                         mod_main_f mod_main,
                          json_t *args,
                          flux_error_t *error);
 void module_destroy (module_t *p);

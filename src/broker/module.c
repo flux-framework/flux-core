@@ -11,7 +11,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <dlfcn.h>
 #ifdef HAVE_ARGZ_ADD
 #include <argz.h>
 #else
@@ -60,7 +59,6 @@ struct broker_module {
     bool mod_main_failed;
     int mod_main_errno;
     char *name;
-    void *dso;              /* reference on dlopened module */
     int argc;
     char **argv;
     size_t argz_len;
@@ -295,47 +293,19 @@ static void module_cb (flux_reactor_t *r,
         p->poller_cb (p, p->poller_arg);
 }
 
-static char *module_name_from_path (const char *path)
-{
-    char *name;
-    char *cp;
-
-    name = basename_simple (path);
-    // if path ends in .so or .so.VERSION, strip it off
-    if ((cp = strstr (name, ".so")))
-        return strndup (name, cp - name);
-    return strdup (name);
-}
-
 module_t *module_create (flux_t *h,
                          const char *parent_uuid,
-                         const char *name, // may be NULL
-                         const char *path,
+                         const char *name,
+                         mod_main_f mod_main,
                          json_t *args,
                          flux_error_t *error)
 {
     flux_reactor_t *r = flux_get_reactor (h);
     module_t *p;
-    void *dso;
-    const char **mod_namep;
-    mod_main_f mod_main;
 
-    dlerror ();
-    if (!(dso = dlopen (path, RTLD_NOW | RTLD_GLOBAL | plugin_deepbind ()))) {
-        errprintf (error, "%s", dlerror ());
-        errno = ENOENT;
-        return NULL;
-    }
-    if (!(mod_main = dlsym (dso, "mod_main"))) {
-        errprintf (error, "module does not define mod_main()");
-        dlclose (dso);
-        errno = EINVAL;
-        return NULL;
-    }
     if (!(p = calloc (1, sizeof (*p))))
         goto nomem;
     p->main = mod_main;
-    p->dso = dso;
     p->h = h;
     if (!(p->conf = flux_conf_copy (flux_get_conf (h))))
         goto cleanup;
@@ -353,27 +323,11 @@ module_t *module_create (flux_t *h,
     if (!(p->argv = calloc (1, sizeof (p->argv[0]) * (p->argc + 1))))
         goto nomem;
     argz_extract (p->argz, p->argz_len, p->argv);
-    if (name) {
-        if (!(p->name = strdup (name)))
-            goto nomem;
-    }
-    else {
-        if (!(p->name = module_name_from_path (path)))
-            goto nomem;
-    }
+    if (!(p->name = strdup (name)))
+        goto nomem;
     if (!(p->sub = subhash_create ())) {
         errprintf (error, "error creating subscription hash");
         goto cleanup;
-    }
-    /* Handle legacy 'mod_name' symbol - not recommended for new modules
-     * but double check that it's sane if present.
-     */
-    if ((mod_namep = dlsym (p->dso, "mod_name")) && *mod_namep != NULL) {
-        if (!streq (*mod_namep, p->name)) {
-            errprintf (error, "mod_name %s != name %s", *mod_namep, name);
-            errno = EINVAL;
-            goto cleanup;
-        }
     }
     uuid_generate (p->uuid);
     uuid_unparse (p->uuid, p->uuid_str);
@@ -538,9 +492,6 @@ void module_destroy (module_t *p)
     flux_watcher_destroy (p->broker_w);
     flux_close (p->h_broker_end);
 
-#ifndef __SANITIZE_ADDRESS__
-    dlclose (p->dso);
-#endif
     free (p->argv);
     free (p->argz);
     free (p->name);
