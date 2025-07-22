@@ -495,20 +495,13 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* Load the local connector module.
+    /* Load the builtin modules, including the local connector module.
      * Other modules will be loaded in rc1 using flux module,
      * which uses the local connector.
-     * The shutdown protocol unloads it.
+     * The shutdown protocol unloads the builtin modules.
      */
-    if (ctx.verbose > 1)
-        log_msg ("loading connector-local");
-    if (modhash_load (ctx.modhash,
-                      NULL,
-                      "connector-local",
-                      NULL,
-                      NULL,
-                      &error) < 0) {
-        log_err ("load_module connector-local: %s", error.text);
+    if (modhash_load_builtins (ctx.modhash, &error) < 0) {
+        log_err ("error loading builtins: %s", error.text);
         goto cleanup;
     }
 

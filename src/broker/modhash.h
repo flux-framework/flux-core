@@ -52,12 +52,15 @@ module_t *modhash_lookup_byname (modhash_t *mh, const char *name);
 module_t *modhash_first (modhash_t *mh);
 module_t *modhash_next (modhash_t *mh);
 
-int modhash_load (modhash_t *mh,
-                  const char *name,
-                  const char *path,
-                  json_t *args,
-                  const flux_msg_t *request,
-                  flux_error_t *error);
+/* Initiate load of all builtin modules.
+ * Plumbing works immedediately upon success, but startup is asynchronous.
+ */
+int modhash_load_builtins (modhash_t *mh, flux_error_t *error);
+
+/* Initiate unload of all builtin modules.  Fulfill the returned future
+ * upon completion. The future is owned by modhash and should not be destroyed.
+ */
+flux_future_t *modhash_unload_builtins (modhash_t *mh);
 
 /* Add/remove an auxiliary service name that will be routed
  * to the module with the specified uuid.

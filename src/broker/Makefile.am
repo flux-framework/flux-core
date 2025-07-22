@@ -72,6 +72,7 @@ libbroker_la_SOURCES = \
 
 flux_broker_LDADD = \
 	$(builddir)/libbroker.la \
+	$(top_builddir)/src/modules/connector-local/libconnector-local.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \
 	$(top_builddir)/src/common/libflux/libflux.la \

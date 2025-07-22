@@ -36,6 +36,11 @@ struct module_args {
     mod_main_f main;
 };
 
+struct module_builtin {
+    const char *name;
+    mod_main_f main;
+};
+
 module_t *module_create (flux_t *h,
                          const char *parent_uuid,
                          const char *name,

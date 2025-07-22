@@ -33,6 +33,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/librouter/usock.h"
 #include "src/common/librouter/router.h"
+#include "src/broker/module.h"
 
 enum {
     DEBUG_AUTHFAIL_ONESHOT = 1, /* force auth to fail one time */
@@ -208,9 +209,9 @@ error:
  * Missing [access] keys are interpreted as false.
  * [access] keys other than the above are not allowed.
  */
-int parse_config (struct connector_local *ctx,
-                  const flux_conf_t *conf,
-                  flux_error_t *errp)
+static int parse_config (struct connector_local *ctx,
+                         const flux_conf_t *conf,
+                         flux_error_t *errp)
 {
     flux_error_t error;
     int allow_guest_user = 0;
@@ -275,7 +276,7 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-int mod_main (flux_t *h, int argc, char **argv)
+static int mod_main (flux_t *h, int argc, char **argv)
 {
     struct connector_local ctx;
     const char *local_uri = NULL;
@@ -342,6 +343,11 @@ done:
     router_destroy (ctx.router);
     return rc;
 }
+
+struct module_builtin builtin_connector_local = {
+    .name = "connector-local",
+    .main = mod_main,
+};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

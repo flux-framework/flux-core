@@ -14,6 +14,7 @@ AM_CPPFLAGS = \
 	$(JANSSON_CFLAGS)
 
 SUBDIRS = \
+	connector-local \
 	kvs \
 	content-files \
 	job-ingest \
@@ -25,7 +26,6 @@ SUBDIRS = \
 
 fluxmod_LTLIBRARIES = \
 	barrier.la \
-	connector-local.la \
 	content.la \
 	content-files.la \
 	content-sqlite.la \
@@ -54,13 +54,6 @@ barrier_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
 barrier_la_LDFLAGS = $(fluxmod_ldflags) -module
-
-connector_local_la_SOURCES = \
-	connector-local/local.c
-connector_local_la_LIBADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la
-connector_local_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 content_la_SOURCES = \
 	content/main.c \
