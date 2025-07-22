@@ -350,7 +350,6 @@ fi
 if ! run_timeout 10.0 lua -e 'require "posix"'; then
     error "failed to find lua posix module in path"
 fi
-jq=$(command -v jq)
 
 #  Some tests in flux don't work with --chain-lint, add a prereq for
 #   --no-chain-lint:

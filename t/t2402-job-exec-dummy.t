@@ -92,7 +92,7 @@ test_expect_success 'job-exec: job shell eventually killed by SIGKILL' '
 '
 test_expect_success 'job-exec: invalid job shell generates exception' '
 	id=$(flux run --dry-run true \
-		| $jq ".attributes.system.exec.job_shell = \"/notthere\"" \
+		| jq ".attributes.system.exec.job_shell = \"/notthere\"" \
 		| flux job submit) &&
 	flux job wait-event -vt 5 $id clean
 '
@@ -103,13 +103,13 @@ test_expect_success 'job-exec: invalid bulkexec key in jobspec raises error' '
 '
 test_expect_success 'job-exec: exception during init terminates job' '
 	id=$(flux run --dry-run -n2 -N2 sleep 30 \
-		| $jq ".attributes.system.exec.bulkexec.mock_exception = \"init\"" \
+		| jq ".attributes.system.exec.bulkexec.mock_exception = \"init\"" \
 		| flux job submit) &&
 	flux job wait-event -vt 5 $id clean
 '
 test_expect_success 'job-exec: exception while starting terminates job' '
 	id=$(flux run --dry-run -n2 -N2 sleep 30 \
-		| $jq ".attributes.system.exec.bulkexec.mock_exception = \"starting\"" \
+		| jq ".attributes.system.exec.bulkexec.mock_exception = \"starting\"" \
 		| flux job submit) &&
 	flux job wait-event -vt 5 $id clean
 '

@@ -32,7 +32,7 @@ fj_wait_event() {
 
 listjobs() {
 	${FLUX_BUILD_DIR}/t/job-manager/list-jobs \
-	    | $jq .id \
+	    | jq .id \
 	    | flux job id --to=f58
 }
 
@@ -1443,7 +1443,7 @@ test_expect_success 'flux-jobs reverts username to userid for invalid ids' '
 	id=$(find_invalid_userid) &&
 	test_debug "echo first invalid userid is ${id}" &&
 	printf "%s\n" $id > invalid_userid.expected &&
-	flux job list -a -c 1 | $jq -c ".userid = ${id}" |
+	flux job list -a -c 1 | jq -c ".userid = ${id}" |
 	  flux jobs --from-stdin --no-header --format="{username}" \
 		> invalid_userid.output  &&
 	test_cmp invalid_userid.expected invalid_userid.output

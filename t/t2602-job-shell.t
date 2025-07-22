@@ -160,7 +160,7 @@ test_expect_success 'job-shell: verify output of 1-task lptest job' '
 
 test_expect_success 'job-shell: verify output of 1-task lptest job on stderr' '
 	flux run --dry-run bash -c "${LPTEST} >&2" \
-		| $jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
+		| jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
 		> 1task_lptest.json &&
 	id=$(cat 1task_lptest.json | flux job submit) &&
 	flux job attach -l $id 2>lptest.err &&
@@ -175,7 +175,7 @@ test_expect_success 'job-shell: verify output of 4-task lptest job' '
 '
 test_expect_success 'job-shell: verify output of 4-task lptest job on stderr' '
 	flux run --dry-run -n4 -N4 bash -c "${LPTEST} 1>&2" \
-		| $jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
+		| jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
 		> 4task_lptest.json &&
 	id=$(cat 4task_lptest.json | flux job submit) &&
 	flux job attach -l $id 2>lptest4_raw.err &&

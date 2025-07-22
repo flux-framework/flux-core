@@ -23,7 +23,7 @@ check_event() {
 	value=$3
 	filename=$4
 	if cat $filename \
-		| $jq -e ".id == ${jobid} and ${key} == ${value}" \
+		| jq -e ".id == ${jobid} and ${key} == ${value}" \
 		| grep -q "true"
 	then
 		return 0
@@ -55,7 +55,7 @@ wait_event() {
 	while [ $i -lt 50 ]
 	do
 		if cat $filename \
-			| $jq -e ".id == ${jobid} and ${key} == ${value}" \
+			| jq -e ".id == ${jobid} and ${key} == ${value}" \
 			| grep -q "true"
 		then
 			return 0
@@ -82,7 +82,7 @@ wait_event_annotation() {
 }
 
 test_expect_success NO_CHAIN_LINT 'job-manager: events-journal w/ no filters shows all events' '
-	$jq -j -c -n "{}" \
+	jq -j -c -n "{}" \
 		| $EVENTS_JOURNAL_STREAM > events1.out &
 	pid=$! &&
 	jobid=`flux job submit basic.json | flux job id` &&
@@ -100,7 +100,7 @@ test_expect_success NO_CHAIN_LINT 'job-manager: events-journal w/ no filters sho
 '
 
 test_expect_success NO_CHAIN_LINT 'job-manager: events-journal allow works' '
-	$jq -j -c -n "{allow:{clean:1}}" \
+	jq -j -c -n "{allow:{clean:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events2.out &
 	pid=$! &&
 	jobid=`flux job submit basic.json | flux job id` &&
@@ -118,7 +118,7 @@ test_expect_success NO_CHAIN_LINT 'job-manager: events-journal allow works' '
 '
 
 test_expect_success NO_CHAIN_LINT 'job-manager: events-journal allow works (multiple)' '
-	$jq -j -c -n "{allow:{depend:1, finish:1, clean:1}}" \
+	jq -j -c -n "{allow:{depend:1, finish:1, clean:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events3.out &
 	pid=$! &&
 	jobid=`flux job submit basic.json | flux job id` &&
@@ -136,7 +136,7 @@ test_expect_success NO_CHAIN_LINT 'job-manager: events-journal allow works (mult
 '
 
 test_expect_success NO_CHAIN_LINT 'job-manager: events-journal deny works' '
-	$jq -j -c -n "{deny:{finish:1}}" \
+	jq -j -c -n "{deny:{finish:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events4.out &
 	pid=$! &&
 	jobid=`flux job submit basic.json | flux job id` &&
@@ -154,7 +154,7 @@ test_expect_success NO_CHAIN_LINT 'job-manager: events-journal deny works' '
 '
 
 test_expect_success NO_CHAIN_LINT 'job-manager: events-journal deny works (multiple)' '
-	$jq -j -c -n "{deny:{depend:1, finish:1, release:1}}" \
+	jq -j -c -n "{deny:{depend:1, finish:1, release:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events5.out &
 	pid=$! &&
 	jobid=`flux job submit basic.json | flux job id` &&
@@ -172,7 +172,7 @@ test_expect_success NO_CHAIN_LINT 'job-manager: events-journal deny works (multi
 '
 
 test_expect_success NO_CHAIN_LINT 'job-manager: events-journal allow & deny works' '
-	$jq -j -c -n "{allow:{depend:1, finish:1, clean:1}, deny:{depend:1}}" \
+	jq -j -c -n "{allow:{depend:1, finish:1, clean:1}, deny:{depend:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events6.out &
 	pid=$! &&
 	jobid=`flux job submit basic.json | flux job id` &&
@@ -194,7 +194,7 @@ test_expect_success NO_CHAIN_LINT 'job-manager: events-journal contains older jo
 	jobid2=`flux job submit basic.json | flux job id`
 	flux job wait-event ${jobid1} clean
 	flux job wait-event ${jobid2} clean
-	$jq -j -c -n "{full:true, allow:{depend:1, clean:1}}" \
+	jq -j -c -n "{full:true, allow:{depend:1, clean:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events7.out &
 	pid=$! &&
 	jobid3=`flux job submit basic.json | flux job id` &&
@@ -232,18 +232,18 @@ test_expect_success 'job-manager: events-journal request fails with EPROTO on em
 '
 
 test_expect_success 'job-manager: events-journal request fails if not streaming RPC' '
-	$jq -j -c -n "{}" > cc1.in &&
+	jq -j -c -n "{}" > cc1.in &&
 	test_must_fail $RPC job-manager.events-journal < cc1.in
 '
 
 test_expect_success 'job-manager: events-journal request fails if allow not an object' '
-	$jq -j -c -n "{allow:5}" > cc2.in &&
+	jq -j -c -n "{allow:5}" > cc2.in &&
 	test_must_fail $EVENTS_JOURNAL_STREAM < cc2.in 2> cc2.err &&
 	grep "allow should be an object" cc2.err
 '
 
 test_expect_success 'job-manager: events-journal request fails if deny not an object' '
-	$jq -j -c -n "{deny:5}" > cc3.in &&
+	jq -j -c -n "{deny:5}" > cc3.in &&
 	test_must_fail $EVENTS_JOURNAL_STREAM < cc3.in 2> cc3.err &&
 	grep "deny should be an object" cc3.err
 '

@@ -106,14 +106,14 @@ test_expect_success 'request: rpc test client works with no request payload' '
 		test -s attr.list.out
 '
 test_expect_success 'request: rpc test client works with request payload' '
-	$jq -j -c -n  "{name:\"rank\"}" | $RPC attr.get >attr.get.out &&
+	jq -j -c -n  "{name:\"rank\"}" | $RPC attr.get >attr.get.out &&
 		test -s attr.get.out
 '
 test_expect_success 'request: rpc test client handles expected failure' '
 	$RPC attr.get 71 </dev/null
 '
 test_expect_success 'request: rpc test client handles expected failure other than EPROTO' '
-	$jq -j -c -n  "{name:\"noexist\"}" | $RPC attr.get 2
+	jq -j -c -n  "{name:\"noexist\"}" | $RPC attr.get 2
 '
 test_expect_success 'request: rpc test client handles unexpected failure' '
 	test_must_fail $RPC attr.get 2 </dev/null

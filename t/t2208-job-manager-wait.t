@@ -53,7 +53,7 @@ test_expect_success "waitable inactive jobs are listed as zombies" '
 	flux job wait-event ${JOBID} clean &&
 	${list_jobs} >list1.out &&
 	test $(wc -l <list1.out) -eq 1 &&
-	test "$($jq .state <list1.out | ${JOB_CONV} statetostr)" = "INACTIVE"
+	test "$(jq .state <list1.out | ${JOB_CONV} statetostr)" = "INACTIVE"
 '
 
 test_expect_success "zombies go away after they are waited for" '

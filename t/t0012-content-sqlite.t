@@ -358,14 +358,14 @@ test_expect_success 'run flux with statedir and verify modes' '
 test_expect_success 'run flux without statedir and verify config' '
 	flux start -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
 	    flux module stats content-sqlite >stats1 &&
-	$jq -e ".config.journal_mode == \"OFF\"" < stats1 &&
-	$jq -e ".config.synchronous == \"OFF\"" < stats1
+	jq -e ".config.journal_mode == \"OFF\"" < stats1 &&
+	jq -e ".config.synchronous == \"OFF\"" < stats1
 '
 test_expect_success 'run flux with statedir and verify config' '
 	flux start -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
 	    -Sstatedir=$(pwd) flux module stats content-sqlite >stats2  &&
-	$jq -e ".config.journal_mode == \"WAL\"" < stats2 &&
-	$jq -e ".config.synchronous == \"NORMAL\"" < stats2
+	jq -e ".config.journal_mode == \"WAL\"" < stats2 &&
+	jq -e ".config.synchronous == \"NORMAL\"" < stats2
 '
 test_expect_success 'flux fails with invalid journal_mode config' '
 	flux start -Sbroker.rc1_path= -Sbroker.rc3_path= \
@@ -390,8 +390,8 @@ test_expect_success 'test config via config file works' '
 	flux start --config-path=$(pwd) \
 	   -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
 	   flux module stats content-sqlite > configstats.out &&
-	$jq -e ".config.journal_mode == \"PERSIST\"" < configstats.out &&
-	$jq -e ".config.synchronous == \"EXTRA\"" < configstats.out &&
+	jq -e ".config.journal_mode == \"PERSIST\"" < configstats.out &&
+	jq -e ".config.synchronous == \"EXTRA\"" < configstats.out &&
 	rm content-sqlite.toml
 '
 test_expect_success 'invalid config fails (journal_mode)' '
