@@ -736,30 +736,16 @@ module_t *modhash_lookup (modhash_t *mh, const char *uuid)
 
 module_t *modhash_lookup_byname (modhash_t *mh, const char *name)
 {
-    zlist_t *uuids;
-    char *uuid;
-    module_t *result = NULL;
-
-    if (!name)
-        return NULL;
-    if (!(uuids = zhash_keys (mh->zh_byuuid))) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    uuid = zlist_first (uuids);
-    while (uuid) {
-        module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
-        if (p) {
+    if (name) {
+        module_t *p = zhash_first (mh->zh_byuuid);
+        while (p) {
             if (streq (module_get_name (p), name)
-                || streq (module_get_path (p), name)) {
-                result = p;
-                break;
-            }
+                || streq (module_get_path (p), name))
+                return p;
+            p = zhash_next (mh->zh_byuuid);
         }
-        uuid = zlist_next (uuids);
     }
-    zlist_destroy (&uuids);
-    return result;
+    return NULL;
 }
 
 int modhash_event_mcast (modhash_t *mh, const flux_msg_t *msg)
