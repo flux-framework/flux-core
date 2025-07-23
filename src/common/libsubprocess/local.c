@@ -480,6 +480,13 @@ static void sigchld_cb (pid_t pid, int status, void *arg)
 
 static int create_process (flux_subprocess_t *p)
 {
+    // This should not be necessary, but posix_spawn on macos emits an error if
+    // you ask it to close a file descriptor that is already closed.  It will
+    // take some work and refactoring to fix.  Likely also worth working in
+    // the new addchdir_np command rather than skipping it for getcwd.
+    #if __APPLE__
+        p->flags |= FLUX_SUBPROCESS_FLAGS_FORK_EXEC;
+    #endif
     if (!(p->flags & FLUX_SUBPROCESS_FLAGS_FORK_EXEC)
         && !p->hooks.pre_exec
         && !flux_cmd_getcwd (p->cmd))
