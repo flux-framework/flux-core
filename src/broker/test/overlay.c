@@ -293,7 +293,7 @@ void trio (flux_t *h)
     ok ((server_pubkey = overlay_cert_pubkey (ctx[0]->ov)) != NULL,
         "%s: overlay_cert_pubkey works", ctx[0]->name);
 
-    snprintf (parent_uri, sizeof (parent_uri), "ipc://@%s", ctx[0]->name);
+    snprintf (parent_uri, sizeof (parent_uri), "ipc:///tmp/flux_ipc_%s", ctx[0]->name);
     ok (overlay_bind (ctx[0]->ov, parent_uri, NULL) == 0,
         "%s: overlay_bind %s works", ctx[0]->name, parent_uri);
 
@@ -441,7 +441,7 @@ void trio (flux_t *h)
      * fails to initialize because its endpoint is already bound.
      */
     errno = 0;
-    ok (overlay_bind (ctx[1]->ov, "ipc://@foo", NULL) < 0
+    ok (overlay_bind (ctx[1]->ov, "ipc:///tmp/flux_ipc_foo", NULL) < 0
         && errno == EADDRINUSE,
         "%s: second overlay_bind in proc fails with EADDRINUSE", ctx[0]->name);
 
@@ -518,7 +518,7 @@ void test_create (flux_t *h,
         if (overlay_set_topology (ctx[rank]->ov, ctx[rank]->topo) < 0)
             BAIL_OUT ("%s: overlay_set_topology failed", ctx[rank]->name);
         if (rank == 0) {
-            snprintf (uri, sizeof (uri), "ipc://@%s", ctx[0]->name);
+            snprintf (uri, sizeof (uri), "ipc:///tmp/flux_ipc_%s", ctx[0]->name);
             /* Call overlay_bind() before overlay_authorize() is called
              * for the other ranks, since overlay_bind() creates the ZAP
              * handler, and overlay_authorize() will fail if it doesn't
@@ -670,7 +670,7 @@ void wrongness (flux_t *h)
         BAIL_OUT ("overlay_create failed");
 
     errno = 0;
-    ok (overlay_bind (ov, "ipc://@foobar", NULL) < 0 && errno == EINVAL,
+    ok (overlay_bind (ov, "ipc:///tmp/flux_ipc_foobar", NULL) < 0 && errno == EINVAL,
         "overlay_bind fails if called before rank is known");
 
     ok (!flux_msg_is_local (NULL),
