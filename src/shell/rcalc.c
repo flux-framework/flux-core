@@ -304,13 +304,16 @@ int rcalc_total_nodes (rcalc_t *r)
     return r->nranks;
 }
 
+static void allocinfo_reset_avail (rcalc_t *r)
+{
+    for (int i = 0; i < r->nranks; i++)
+        r->alloc[i].ncores_avail = r->ranks[i].ncores;
+}
 
 static void allocinfo_clear (rcalc_t *r)
 {
-    int i;
     memset (r->alloc, 0, sizeof (struct allocinfo) * r->nranks);
-    for (i = 0; i < r->nranks; i++)
-        r->alloc[i].ncores_avail = r->ranks[i].ncores;
+    allocinfo_reset_avail (r);
 }
 
 static int cmp_alloc_cores (struct allocinfo *x, struct allocinfo *y)
@@ -377,9 +380,14 @@ int rcalc_distribute (rcalc_t *r, int ntasks, int cores_per_task)
      */
     while (assigned < ntasks) {
         if (!(ai = zlist_pop (l))) {
+            /* Uh oh, we ran out of cores. Allow oversubscription by refilling
+             * the allocinfo array and continue
+             */
             zlist_destroy (&l);
-            errno = ENOSPC;
-            return -1;
+            allocinfo_reset_avail (r);
+            if (!(l = alloc_list_sorted (r)))
+                return (-1);
+            continue;
         }
         if (allocinfo_add_task (ai, cores_per_task)) {
             zlist_append (l, ai);
