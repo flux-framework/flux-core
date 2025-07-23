@@ -22,6 +22,7 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <errno.h>
 
 int     vok_at_loc      (const char *file, int line, int test, const char *fmt,
                          va_list args);
@@ -97,7 +98,9 @@ int tap_test_died (int status);
             tap_test_died(0);                               \
             exit(0);                                        \
         }                                                   \
-        if (waitpid(cpid, NULL, 0) < 0) {                   \
+        int status=0;                                       \
+        while ((status = waitpid (cpid, NULL, 0)) < 0 && errno == EINTR) {} \
+        if (status < 0) {                   \
             perror("waitpid error");                        \
             exit(1);                                        \
         }                                                   \
