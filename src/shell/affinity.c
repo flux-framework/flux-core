@@ -32,6 +32,15 @@ struct shell_affinity {
     hwloc_cpuset_t *pertask;
 };
 
+int wrap_hwloc_set_cpubind(hwloc_topology_t topo, hwloc_cpuset_t set, int i)
+{
+    int ret = 0;
+#if !defined (__APPLE__)
+    ret = hwloc_set_cpubind (topo, set, i);
+#endif
+    return ret;
+}
+
 void cpuset_array_destroy (hwloc_cpuset_t *set, int size)
 {
     if (set) {
@@ -361,7 +370,7 @@ static int task_affinity (flux_plugin_t *p,
     struct shell_affinity *sa = data;
     int i = get_taskid (p);
     if (sa->pertask)
-        hwloc_set_cpubind (sa->topo, sa->pertask[i], 0);
+        wrap_hwloc_set_cpubind (sa->topo, sa->pertask[i], 0);
     shell_affinity_destroy (sa);
     return 0;
 }
@@ -398,7 +407,7 @@ static int affinity_init (flux_plugin_t *p,
         shell_affinity_destroy (sa);
         return -1;
     }
-    if (hwloc_set_cpubind (sa->topo, sa->cpuset, 0) < 0)
+    if (wrap_hwloc_set_cpubind (sa->topo, sa->cpuset, 0) < 0)
         return shell_log_errno ("hwloc_set_cpubind");
 
     /*  If cpu-affinity=per-task, then distribute ntasks over whatever
