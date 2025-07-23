@@ -1183,7 +1183,7 @@ void test_fdcleanup (flux_reactor_t *r,
     char *av[] = {
         "sh",
         "-c",
-        "ls -1 /proc/$$/fd | wc -w",
+        "ls -1 /dev/fd/ | wc -w",
         NULL
     };
     flux_cmd_t *cmd;
