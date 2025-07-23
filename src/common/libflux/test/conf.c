@@ -437,6 +437,24 @@ void test_globerr (void)
         "conf_globerr pat=oops rc=666 sets errno and error as expected");
 }
 
+void test_pack (void)
+{
+    flux_conf_t *conf;
+
+    errno = 0;
+    ok (flux_conf_pack (NULL) == NULL && errno == EINVAL,
+        "flux_conf_pack fmt=NULL fails with EINVAL");
+
+    conf = flux_conf_pack ("{s:i}", "foo", 42);
+    ok (conf != NULL,
+        "flux_conf_pack works");
+    int i;
+    ok (flux_conf_unpack (conf, NULL, "{s:i}", "foo", &i) == 0 && i == 42,
+        "flux_conf_unpack has expected result");
+
+    flux_conf_decref (conf);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -447,6 +465,7 @@ int main (int argc, char *argv[])
     test_basic (); // flux_conf_parse(), flux_conf_decref(), flux_conf_unpack()
     test_in_handle ();
     test_globerr ();
+    test_pack();
 
     done_testing ();
 }
