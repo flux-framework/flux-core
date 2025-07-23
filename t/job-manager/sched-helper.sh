@@ -50,7 +50,7 @@ jmgr_check_state() {
 _jmgr_get_annotation() {
         local id=$(flux job id $1)
         local key=$2
-        local note="$(${JMGR_JOB_LIST} | grep ${id} | jq .annotations | jq ."${key}")"
+        local note="$(${JMGR_JOB_LIST} | grep ${id} | jq ".annotations.${key}")"
         echo $note
 }
 
@@ -97,7 +97,7 @@ jmgr_check_memo() {
 jmgr_check_annotation_exists() {
         local id=$(flux job id $1)
         local key=$2
-        ${JMGR_JOB_LIST} | grep ${id} | jq .annotations | jq -e ."${key}" > /dev/null
+        ${JMGR_JOB_LIST} | grep ${id} | jq -e ".annotations.${key}" > /dev/null
 }
 
 #  like jmgr_check_annotation_exists() but for job memo
@@ -125,7 +125,7 @@ jmgr_check_no_annotations() {
 _jlist_get_annotation() {
         local id=$(flux job id $1)
         local key=$2
-        local note="$(flux job list -A | grep ${id} | jq .annotations | jq ."${key}")"
+        local note="$(flux job list -A | grep ${id} | jq ".annotations.${key}")"
         echo $note
 }
 
@@ -172,7 +172,7 @@ jlist_check_no_annotations() {
 jlist_check_annotation_exists() {
         local id=$(flux job id $1)
         local key=$2
-        flux job list -A | grep ${id} | jq .annotations | jq -e ."${key}" > /dev/null
+        flux job list -A | grep ${id} | jq -e ".annotations.${key}" > /dev/null
 }
 
 # verify if annotation seen via flux-jobs

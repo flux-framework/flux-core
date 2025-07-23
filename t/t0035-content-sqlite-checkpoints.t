@@ -65,7 +65,7 @@ test_expect_success 'checkpoint-put w/ different rootrefs' '
 
 test_expect_success 'checkpoint-get returns most recent checkpoint' '
 	echo ref6 >rootref.exp &&
-	checkpoint_get | jq -r .value[0] | jq -r .rootref >rootref.out &&
+	checkpoint_get | jq -r .value[0].rootref >rootref.out &&
 	test_cmp rootref.exp rootref.out
 '
 

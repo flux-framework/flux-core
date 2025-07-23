@@ -38,7 +38,7 @@ bus_list_units() {
 # Usage: bus_list_units_parsed PATTERN FIELDNUM
 bus_list_units_parsed() {
     bus_list_units "$1" >tmp.json || return 1
-    $jq -r ".params[0][][$2]" <tmp.json
+    jq -r ".params[0][][$2]" <tmp.json
 }
 
 # Usage: bus_count_units PATTERN
@@ -230,7 +230,7 @@ test_expect_success 'GetAll shows properties of transient unit 3' '
 	    flux-t2406-3.service >prop3_all.out
 '
 test_expect_success 'GetAll returned MainPID property and it is valid' '
-	$jq <prop3_all.out .params[0].MainPID[1] >pid3.out &&
+	jq <prop3_all.out .params[0].MainPID[1] >pid3.out &&
 	kill -0 $(cat pid3.out)
 '
 test_expect_success 'Get MainPID also works' '
@@ -238,7 +238,7 @@ test_expect_success 'Get MainPID also works' '
 	    flux-t2406-3.service MainPID >prop3.out
 '
 test_expect_success 'Get returned the same MainPID value' '
-	$jq <prop3.out .params[0][1] >pid3.out2 &&
+	jq <prop3.out .params[0][1] >pid3.out2 &&
 	test_cmp pid3.out pid3.out2
 '
 test_expect_success 'KillUnit sends SIGTERM (15) to that unit' '

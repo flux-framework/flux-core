@@ -149,7 +149,7 @@ test_expect_success 'checkpoint-put w/ rootref bar' '
 
 test_expect_success 'checkpoint-get returned rootref bar' '
 	echo bar >rootref.exp &&
-	checkpoint_get | jq -r .value[0] | jq -r .rootref >rootref.out &&
+	checkpoint_get | jq -r .value[0].rootref >rootref.out &&
 	test_cmp rootref.exp rootref.out
 '
 
@@ -184,13 +184,13 @@ test_expect_success 'checkpoint-get on rank 1 forwards to rank 0' '
        o=$(checkpoint_get_msg kvs-primary) &&
        jq -j -c -n ${o} \
 	   | flux exec -r 1 ${RPC} content.checkpoint-get \
-	   | jq -r .value[0] | jq -r .rootref > rankref.out &&
+	   | jq -r .value[0].rootref > rankref.out &&
        test_cmp rankref.exp rankref.out
 '
 
 # use grep instead of compare, incase of floating point rounding
 test_expect_success 'checkpoint-get returned correct timestamp' '
-        checkpoint_get | jq -r .value[0] | jq -r .timestamp >timestamp.out &&
+        checkpoint_get | jq -r .value[0].timestamp >timestamp.out &&
         grep 2.2 timestamp.out
 '
 
@@ -207,7 +207,7 @@ test_expect_success 'checkpoint-put updates rootref to baz' '
 
 test_expect_success 'checkpoint-get returned rootref baz' '
 	echo baz >rootref2.exp &&
-	checkpoint_get | jq -r .value[0] | jq -r .rootref >rootref2.out &&
+	checkpoint_get | jq -r .value[0].rootref >rootref2.out &&
 	test_cmp rootref2.exp rootref2.out
 '
 
@@ -218,15 +218,14 @@ test_expect_success 'flush + reload content-sqlite module on rank 0' '
 
 test_expect_success 'checkpoint-get still returns rootref baz' '
 	echo baz >rootref3.exp &&
-	checkpoint_get | jq -r .value[0] | jq -r .rootref >rootref3.out &&
+	checkpoint_get | jq -r .value[0].rootref >rootref3.out &&
 	test_cmp rootref3.exp rootref3.out
 '
 
 test_expect_success 'checkpoint-backing-get returns rootref baz' '
 	echo baz >rootref_backing.exp &&
 	checkpoint_backing_get \
-            | jq -r .value[0] \
-            | jq -r .rootref >rootref_backing.out &&
+            | jq -r .value[0].rootref >rootref_backing.out &&
 	test_cmp rootref_backing.exp rootref_backing.out
 '
 
@@ -243,7 +242,7 @@ test_expect_success 'checkpoint-backing-put w/ rootref boof' '
 
 test_expect_success 'checkpoint-get returned rootref boof' '
 	echo boof >rootref4.exp &&
-	checkpoint_get | jq -r .value[0] | jq -r .rootref >rootref4.out &&
+	checkpoint_get | jq -r .value[0].rootref >rootref4.out &&
 	test_cmp rootref4.exp rootref4.out
 '
 
@@ -358,14 +357,14 @@ test_expect_success 'run flux with statedir and verify modes' '
 test_expect_success 'run flux without statedir and verify config' '
 	flux start -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
 	    flux module stats content-sqlite >stats1 &&
-	$jq -e ".config.journal_mode == \"OFF\"" < stats1 &&
-	$jq -e ".config.synchronous == \"OFF\"" < stats1
+	jq -e ".config.journal_mode == \"OFF\"" < stats1 &&
+	jq -e ".config.synchronous == \"OFF\"" < stats1
 '
 test_expect_success 'run flux with statedir and verify config' '
 	flux start -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
 	    -Sstatedir=$(pwd) flux module stats content-sqlite >stats2  &&
-	$jq -e ".config.journal_mode == \"WAL\"" < stats2 &&
-	$jq -e ".config.synchronous == \"NORMAL\"" < stats2
+	jq -e ".config.journal_mode == \"WAL\"" < stats2 &&
+	jq -e ".config.synchronous == \"NORMAL\"" < stats2
 '
 test_expect_success 'flux fails with invalid journal_mode config' '
 	flux start -Sbroker.rc1_path= -Sbroker.rc3_path= \
@@ -390,8 +389,8 @@ test_expect_success 'test config via config file works' '
 	flux start --config-path=$(pwd) \
 	   -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
 	   flux module stats content-sqlite > configstats.out &&
-	$jq -e ".config.journal_mode == \"PERSIST\"" < configstats.out &&
-	$jq -e ".config.synchronous == \"EXTRA\"" < configstats.out &&
+	jq -e ".config.journal_mode == \"PERSIST\"" < configstats.out &&
+	jq -e ".config.synchronous == \"EXTRA\"" < configstats.out &&
 	rm content-sqlite.toml
 '
 test_expect_success 'invalid config fails (journal_mode)' '

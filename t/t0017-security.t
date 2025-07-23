@@ -256,13 +256,13 @@ test_expect_success 'dispatcher suppresses guest event to same guest connection'
 
 test_expect_success 'guests may add userid-prefixed services' '
 	USERID=$(id -u) &&
-	${jq} -n "{service: \"${USERID}-sectest\"}" >user_service.json &&
+	jq -n "{service: \"${USERID}-sectest\"}" >user_service.json &&
 	FLUX_HANDLE_ROLEMASK=0x2 ${RPC} service.add <user_service.json
 '
 
 test_expect_success 'guests may not add other-userid-prefixed services' '
 	USERID=$(($(id -u)+1)) &&
-	${jq} -n "{service: \"${USERID}-sectest\"}" >user2_service.json &&
+	jq -n "{service: \"${USERID}-sectest\"}" >user2_service.json &&
 	(export FLUX_HANDLE_ROLEMASK=0x2 &&
 		test_expect_code 1 ${RPC} service.add \
 			<user2_service.json 2>uservice_add.err
@@ -271,7 +271,7 @@ test_expect_success 'guests may not add other-userid-prefixed services' '
 '
 
 test_expect_success 'guests may not add non-userid-prefixed services' '
-	${jq} -n "{service: \"sectest\"}" >service.json &&
+	jq -n "{service: \"sectest\"}" >service.json &&
 	(export FLUX_HANDLE_ROLEMASK=0x2 &&
 		test_expect_code 1 ${RPC} service.add \
 			<service.json 2>service_add.err

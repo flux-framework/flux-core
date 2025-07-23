@@ -37,9 +37,9 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
 test_expect_success 'job-info.lookup returns jobid in response' '
 	jobid=$(submit_job) &&
 	id=$(flux job id --to=dec ${jobid}) &&
-        $jq -j -c -n  "{id:${id}, keys:[\"jobspec\"], flags:0}" \
+        jq -j -c -n  "{id:${id}, keys:[\"jobspec\"], flags:0}" \
           | $RPC job-info.lookup > job_info_lookup.out &&
-        cat job_info_lookup.out | $jq -e ".id == ${id}"
+        cat job_info_lookup.out | jq -e ".id == ${id}"
 '
 
 #
@@ -380,17 +380,17 @@ test_expect_success 'lookup request with empty payload fails with EPROTO(71)' '
 '
 
 test_expect_success 'lookup request with keys not and array fails with EPROTO(71)' '
-	$jq -j -c -n  "{id:12345, keys:1, flags:0}" \
+	jq -j -c -n  "{id:12345, keys:1, flags:0}" \
 	  | ${RPC} job-info.lookup 71
 '
 
 test_expect_success 'lookup request with invalid keys fails with EPROTO(71)' '
-	$jq -j -c -n  "{id:12345, keys:[1], flags:0}" \
+	jq -j -c -n  "{id:12345, keys:[1], flags:0}" \
 	  | ${RPC} job-info.lookup 71
 '
 
 test_expect_success 'lookup request with invalid flags fails with EPROTO(71)' '
-	$jq -j -c -n  "{id:12345, keys:[\"jobspec\"], flags:8191}" \
+	jq -j -c -n  "{id:12345, keys:[\"jobspec\"], flags:8191}" \
 	  | ${RPC} job-info.lookup 71
 '
 
