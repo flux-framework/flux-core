@@ -372,7 +372,7 @@ static int start_service_daemon (flux_t *orig_h, optparse_t *p)
     }
 
     /*  Wait for child, wait for grandchild to close pipe */
-    waitpid (pid, NULL, 0);
+    while (waitpid (pid, NULL, 0) < 0 && errno == EINTR) {}
     close (pfds[1]);
 
     /*  Read status from grandchild */

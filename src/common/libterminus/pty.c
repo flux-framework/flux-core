@@ -710,9 +710,16 @@ static int pty_write (struct flux_pty *pty, const flux_msg_t *msg)
         llog_error (pty, "%s", error.text);
         return -1;
     }
-    if (write (pty->leader, data, len) < 0) {
-        llog_error (pty, "write: %s", strerror (errno));
-        return -1;
+    for (int n = 0; n < len; ) {
+        int ret = write (pty->leader, data + n, len - n);
+        if (ret < 0) {
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK )
+                continue; // try again
+            llog_error (pty, "write %zu bytes: %s", len, strerror (errno));
+            return -1;
+        } else {
+            n += ret;
+        }
     }
     return 0;
 }
