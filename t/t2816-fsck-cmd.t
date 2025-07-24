@@ -2,6 +2,8 @@
 
 test_description='Test flux fsck command'
 
+. `dirname $0`/content/content-helper.sh
+
 . $(dirname $0)/sharness.sh
 
 test_under_flux 1 minimal
@@ -202,6 +204,24 @@ test_expect_success 'flux-fsck --rootref fails on non-existent ref' '
 '
 test_expect_success 'flux-fsck --rootref fails on invalid ref' '
 	test_must_fail flux fsck --rootref=lalalal
+'
+#
+# --checkpoint tests
+#
+test_expect_success 'checkpoint-get returned final expected rootref' '
+	checkpoint_get | jq -r .value[0].rootref >checkpoint1.out &&
+	test_cmp checkpoint1.out cbad.rootref
+'
+test_expect_success 'flux-fsck --checkpoint updates checkpoint if fsck passes' '
+	flux fsck --rootref=$(cat a.rootref) --checkpoint &&
+	checkpoint_get | jq -r .value[0].rootref >checkpoint2.out &&
+	test_cmp checkpoint2.out a.rootref
+'
+# check that checkpoint is still the same as previous successful test
+test_expect_success 'flux-fsck --checkpoint does not update checkpoint if fsck fails' '
+	test_must_fail flux fsck --rootref=$(cat bbad.rootref) --checkpoint &&
+	checkpoint_get | jq -r .value[0].rootref >checkpoint3.out &&
+	test_cmp checkpoint3.out a.rootref
 '
 test_expect_success 'remove content & content-sqlite modules' '
 	flux module remove content-sqlite &&
