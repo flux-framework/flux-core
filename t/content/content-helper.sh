@@ -1,6 +1,8 @@
 #!/bin/sh
 #
 
+CONTENT_RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 # content module test helper functions
 
 # Get RPC message contents for checkpoint put
@@ -14,7 +16,7 @@ checkpoint_put_msg() {
 # Usage: checkpoint_put rootref
 checkpoint_put() {
 	o=$(checkpoint_put_msg $1)
-	jq -j -c -n ${o} | $RPC content.checkpoint-put
+	jq -j -c -n ${o} | ${CONTENT_RPC} content.checkpoint-put
 }
 
 # Get RPC message contents for checkpoint get
@@ -28,19 +30,19 @@ checkpoint_get_msg() {
 # Usage: checkpoint_get
 checkpoint_get() {
 	o=$(checkpoint_get_msg)
-	jq -j -c -n ${o} | $RPC content.checkpoint-get
+	jq -j -c -n ${o} | ${CONTENT_RPC} content.checkpoint-get
 }
 
 # Identical to checkpoint_put(), but go directly to backing store
 # Usage: checkpoint_put rootref
 checkpoint_backing_put() {
 	o=$(checkpoint_put_msg $1)
-	jq -j -c -n ${o} | $RPC content-backing.checkpoint-put
+	jq -j -c -n ${o} | ${CONTENT_RPC} content-backing.checkpoint-put
 }
 
 # Identical to checkpoint_get(), but go directly to backing store
 # Usage: checkpoint_get
 checkpoint_backing_get() {
 	o=$(checkpoint_get_msg)
-	jq -j -c -n ${o} | $RPC content-backing.checkpoint-get
+	jq -j -c -n ${o} | ${CONTENT_RPC} content-backing.checkpoint-get
 }
