@@ -39,6 +39,7 @@ RUN apt-get update \
         make \
         cmake \
         ninja-build \
+        gfortran \
         clang-18 \
         clang-tools-18 \
 # default version
@@ -65,7 +66,6 @@ RUN apt-get update \
         libsqlite3-dev \
         uuid-dev \
         libhwloc-dev \
-        libmpich-dev \
         libevent-dev \
         libarchive-dev \
         libpam-dev \
