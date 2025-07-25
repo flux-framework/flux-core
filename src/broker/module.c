@@ -60,7 +60,6 @@ struct broker_module {
     bool mod_main_failed;
     int mod_main_errno;
     char *name;
-    char *path;             /* retain the full path as a key for lookup */
     void *dso;              /* reference on dlopened module */
     int argc;
     char **argv;
@@ -356,8 +355,7 @@ module_t *module_create (flux_t *h,
     if (!(p->argv = calloc (1, sizeof (p->argv[0]) * (p->argc + 1))))
         goto nomem;
     argz_extract (p->argz, p->argz_len, p->argv);
-    if (!(p->path = strdup (path))
-        || !(p->rmmod_requests = flux_msglist_create ())
+    if (!(p->rmmod_requests = flux_msglist_create ())
         || !(p->insmod_requests = flux_msglist_create ()))
         goto nomem;
     if (name) {
@@ -419,11 +417,6 @@ nomem:
 cleanup:
     module_destroy (p);
     return NULL;
-}
-
-const char *module_get_path (module_t *p)
-{
-    return p && p->path ? p->path : "unknown";
 }
 
 const char *module_get_name (module_t *p)
@@ -556,7 +549,6 @@ void module_destroy (module_t *p)
     free (p->argv);
     free (p->argz);
     free (p->name);
-    free (p->path);
     flux_conf_decref (p->conf);
     json_decref (p->attr_cache);
     flux_msglist_destroy (p->rmmod_requests);

@@ -31,7 +31,6 @@ void module_destroy (module_t *p);
 /* accessors
  */
 const char *module_get_name (module_t *p);
-const char *module_get_path (module_t *p);
 const char *module_get_uuid (module_t *p);
 double module_get_lastseen (module_t *p);
 

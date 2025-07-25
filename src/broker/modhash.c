@@ -312,6 +312,13 @@ int modhash_load (modhash_t *mh,
                              args,
                              error)))
         goto error;
+    char *cpy;
+    if (!(cpy = strdup (path))
+        || module_aux_set (p, "path", cpy, (flux_free_f)free) < 0) {
+        ERRNO_SAFE_WRAP (free, cpy);
+        module_destroy (p);
+        goto error;
+    }
     if (modhash_add (mh, p) < 0) {
         module_destroy (p);
         goto error;
@@ -683,7 +690,7 @@ static json_t *modhash_entry_tojson (module_t *p,
         return NULL;
     entry = json_pack ("{s:s s:s s:i s:i s:O s:i s:i}",
                        "name", module_get_name (p),
-                       "path", module_get_path (p),
+                       "path", module_aux_get (p, "path"),
                        "idle", (int)(now - module_get_lastseen (p)),
                        "status", module_get_status (p),
                        "services", svcs,
@@ -739,7 +746,7 @@ module_t *modhash_lookup_byname (modhash_t *mh, const char *name)
         module_t *p = zhash_first (mh->zh_byuuid);
         while (p) {
             if (streq (module_get_name (p), name)
-                || streq (module_get_path (p), name))
+                || streq (module_aux_get (p, "path"), name))
                 return p;
             p = zhash_next (mh->zh_byuuid);
         }
