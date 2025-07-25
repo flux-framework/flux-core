@@ -16,9 +16,19 @@
 
 #include "src/common/librouter/disconnect.h"
 
+/* Module states, for embedding in keepalive messages (rfc 5)
+ */
+enum {
+    FLUX_MODSTATE_INIT           = 0,
+    FLUX_MODSTATE_RUNNING        = 1,
+    FLUX_MODSTATE_FINALIZING     = 2,
+    FLUX_MODSTATE_EXITED         = 3,
+};
+
 typedef struct broker_module module_t;
 typedef void (*modpoller_cb_f)(module_t *p, void *arg);
 typedef void (*module_status_cb_f)(module_t *p, int prev_status, void *arg);
+typedef int (mod_main_f)(flux_t *h, int argc, char *argv[]);
 
 module_t *module_create (flux_t *h,
                          const char *parent_uuid,

@@ -18,19 +18,7 @@
 extern "C" {
 #endif
 
-/* Module states, for embedding in keepalive messages (rfc 5)
- */
-enum {
-    FLUX_MODSTATE_INIT           = 0,
-    FLUX_MODSTATE_RUNNING        = 1,
-    FLUX_MODSTATE_FINALIZING     = 2,
-    FLUX_MODSTATE_EXITED         = 3,
-};
-
-/* Mandatory symbols for modules
- */
 #define MOD_NAME(x) const char *mod_name = x
-typedef int (mod_main_f)(flux_t *h, int argc, char *argv[]);
 
 /* Test and optionally clear module debug bit from within a module, as
  * described in RFC 5.  Return true if 'flag' bit is set.  If clear=true,
