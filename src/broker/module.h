@@ -61,11 +61,6 @@ int module_disconnect_arm (module_t *p,
                            disconnect_send_f cb,
                            void *arg);
 
-int module_push_rmmod (module_t *p, const flux_msg_t *msg);
-const flux_msg_t *module_pop_rmmod (module_t *p);
-int module_push_insmod (module_t *p, const flux_msg_t *msg);
-const flux_msg_t *module_pop_insmod (module_t *p);
-
 /* Get/set module status.
  */
 void module_set_status (module_t *p, int status);

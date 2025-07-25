@@ -85,7 +85,7 @@ static int module_insmod_respond (flux_t *h, module_t *p)
     int rc;
     int errnum = 0;
     int status = module_get_status (p);
-    const flux_msg_t *msg = module_pop_insmod (p);
+    const flux_msg_t *msg = module_aux_get (p, "insmod");
 
     if (msg == NULL)
         return 0;
@@ -99,18 +99,22 @@ static int module_insmod_respond (flux_t *h, module_t *p)
     else
         rc = flux_respond_error (h, msg, errnum, NULL);
 
-    flux_msg_decref (msg);
+    module_aux_set (p, "insmod", NULL, NULL);
     return rc;
 }
 
 static int module_rmmod_respond (flux_t *h, module_t *p)
 {
+    struct flux_msglist *requests = module_aux_get (p, "rmmod");
     const flux_msg_t *msg;
     int rc = 0;
-    while ((msg = module_pop_rmmod (p))) {
-        if (flux_respond (h, msg, NULL) < 0)
-            rc = -1;
-        flux_msg_decref (msg);
+
+    if (requests) {
+        while ((msg = flux_msglist_pop (requests))) {
+            if (flux_respond (h, msg, NULL) < 0)
+                rc = -1;
+            flux_msg_decref (msg);
+        }
     }
     return rc;
 }
@@ -333,9 +337,15 @@ int modhash_load (modhash_t *mh,
     }
     module_set_poller_cb (p, module_cb, mh->ctx);
     module_set_status_cb (p, module_status_cb, mh->ctx);
-    if (request && module_push_insmod (p, request) < 0) { // response deferred
-        errprintf (error, "error saving %s request", module_get_name (p));
-        goto service_remove;
+    if (request) { // response deferred
+        if (module_aux_set (p,
+                            "insmod",
+                            (flux_msg_t *)request,
+                            (flux_free_f)flux_msg_decref) < 0) {
+            errprintf (error, "error saving %s request", module_get_name (p));
+            goto service_remove;
+        }
+        flux_msg_incref (request);
     }
     if (module_start (p) < 0) {
         errprintf (error, "error starting %s module", module_get_name (p));
@@ -410,7 +420,18 @@ static int unload_module (broker_ctx_t *ctx,
         if (module_stop (p, ctx->h) < 0)
             return -1;
     }
-    if (module_push_rmmod (p, request) < 0)
+    struct flux_msglist *requests;
+    if (!(requests = module_aux_get (p, "rmmod"))) {
+        if (!(requests = flux_msglist_create ())
+            || module_aux_set (p,
+                               "rmmod",
+                               requests,
+                               (flux_free_f)flux_msglist_destroy) < 0) {
+            flux_msglist_destroy (requests);
+            return -1;
+        }
+    }
+    if (flux_msglist_push (requests, request) < 0)
         return -1;
     flux_log (ctx->h, LOG_DEBUG, "rmmod %s", name);
     return 0;

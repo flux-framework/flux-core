@@ -77,8 +77,6 @@ struct broker_module {
 
     struct disconnect *disconnect;
 
-    struct flux_msglist *rmmod_requests;
-    struct flux_msglist *insmod_requests;
     struct flux_msglist *deferred_messages;
 
     flux_t *h_module_end;   /* module end of interthread_channel */
@@ -355,9 +353,6 @@ module_t *module_create (flux_t *h,
     if (!(p->argv = calloc (1, sizeof (p->argv[0]) * (p->argc + 1))))
         goto nomem;
     argz_extract (p->argz, p->argz_len, p->argv);
-    if (!(p->rmmod_requests = flux_msglist_create ())
-        || !(p->insmod_requests = flux_msglist_create ()))
-        goto nomem;
     if (name) {
         if (!(p->name = strdup (name)))
             goto nomem;
@@ -551,8 +546,6 @@ void module_destroy (module_t *p)
     free (p->name);
     flux_conf_decref (p->conf);
     json_decref (p->attr_cache);
-    flux_msglist_destroy (p->rmmod_requests);
-    flux_msglist_destroy (p->insmod_requests);
     flux_msglist_destroy (p->deferred_messages);
     subhash_destroy (p->sub);
     aux_destroy (&p->aux);
@@ -665,32 +658,6 @@ void module_set_errnum (module_t *p, int errnum)
 int module_get_errnum (module_t *p)
 {
     return p->errnum;
-}
-
-int module_push_rmmod (module_t *p, const flux_msg_t *msg)
-{
-    return flux_msglist_push (p->rmmod_requests, msg);
-}
-
-const flux_msg_t *module_pop_rmmod (module_t *p)
-{
-    return flux_msglist_pop (p->rmmod_requests);
-}
-
-/* There can be only one insmod request.
- */
-int module_push_insmod (module_t *p, const flux_msg_t *msg)
-{
-    if (flux_msglist_count (p->insmod_requests) > 0) {
-        errno = EEXIST;
-        return -1;
-    }
-    return flux_msglist_push (p->insmod_requests, msg);
-}
-
-const flux_msg_t *module_pop_insmod (module_t *p)
-{
-    return flux_msglist_pop (p->insmod_requests);
 }
 
 int module_subscribe (module_t *p, const char *topic)
