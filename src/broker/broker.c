@@ -718,7 +718,12 @@ static bool is_interactive_shell (const char *argz, size_t argz_len)
         char *shell;
         char *cmd = argz_next (argz, argz_len, NULL);
         while ((shell = getusershell ())) {
-            if (streq (cmd, shell) || streq (cmd, basename_simple (shell))) {
+            const char *basename = basename_simple (shell);
+            if (streq (basename, "true"))
+                continue;
+            if (streq (basename, "false"))
+                continue;
+            if (streq (cmd, shell) || streq (cmd, basename)) {
                 result = true;
                 break;
             }
