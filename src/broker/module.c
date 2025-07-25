@@ -184,6 +184,13 @@ static void *module_thread (void *arg)
         log_err ("flux_open %s", uri);
         goto done;
     }
+    /* Set flux::uuid and flux::name per RFC 5
+     */
+    if (flux_aux_set (ctx.h, "flux::uuid", p->uuid_str, NULL) < 0
+        || flux_aux_set (ctx.h, "flux::name", p->name, NULL) < 0) {
+        log_err ("%s: error setting flux:: attributes", p->name);
+        goto done;
+    }
     if (attr_cache_from_json (ctx.h, p->attr_cache) < 0) {
         log_err ("%s: error priming broker attribute cache", p->name);
         goto done;
@@ -194,7 +201,7 @@ static void *module_thread (void *arg)
         goto done;
     }
     p->conf = NULL; // flux_set_conf() transfers ownership to p->h_module_end
-    if (modservice_register (ctx.h, p) < 0) {
+    if (modservice_register (ctx.h) < 0) {
         log_err ("%s: modservice_register", p->name);
         goto done;
     }
