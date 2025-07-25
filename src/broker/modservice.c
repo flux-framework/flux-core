@@ -51,21 +51,28 @@ static modservice_ctx_t *getctx (flux_t *h, module_t *p)
     return ctx;
 }
 
-static void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
-                         const flux_msg_t *msg, void *arg)
+static void shutdown_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
 {
     flux_reactor_stop (flux_get_reactor (h));
 }
 
-static void debug_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void debug_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     int flags;
     int *debug_flags;
     const char *op;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i}", "op", &op,
-                                                     "flags", &flags) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:i}",
+                             "op", &op,
+                             "flags", &flags) < 0)
         goto error;
     if (!(debug_flags = flux_aux_get (h, "flux::debug_flags"))) {
         if (!(debug_flags = calloc (1, sizeof (*debug_flags)))) {
@@ -97,8 +104,10 @@ error:
 /* Reactor loop is about to block.
  * Notify broker that module is running, then disable the prepare watcher.
  */
-static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg)
+static void prepare_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
     modservice_ctx_t *ctx = arg;
 
