@@ -309,7 +309,6 @@ int modhash_load (modhash_t *mh,
                              overlay_get_uuid (mh->ctx->overlay),
                              name,
                              path,
-                             mh->ctx->rank,
                              args,
                              error)))
         goto error;

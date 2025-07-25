@@ -24,7 +24,6 @@ module_t *module_create (flux_t *h,
                          const char *parent_uuid,
                          const char *name, // may be NULL
                          const char *path,
-                         int rank,
                          json_t *args,
                          flux_error_t *error);
 void module_destroy (module_t *p);

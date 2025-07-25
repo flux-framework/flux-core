@@ -53,7 +53,6 @@ struct broker_module {
 
     uuid_t uuid;            /* uuid for unique request sender identity */
     char uuid_str[UUID_STR_LEN];
-    int rank;
     json_t *attr_cache;     /* attrs to be cached in module flux_t */
     flux_conf_t *conf;
     pthread_t t;            /* module thread */
@@ -315,7 +314,6 @@ module_t *module_create (flux_t *h,
                          const char *parent_uuid,
                          const char *name, // may be NULL
                          const char *path,
-                         int rank,
                          json_t *args,
                          flux_error_t *error)
 {
@@ -341,7 +339,6 @@ module_t *module_create (flux_t *h,
         goto nomem;
     p->main = mod_main;
     p->dso = dso;
-    p->rank = rank;
     p->h = h;
     if (!(p->conf = flux_conf_copy (flux_get_conf (h))))
         goto cleanup;
