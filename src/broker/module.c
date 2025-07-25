@@ -56,7 +56,7 @@ struct broker_module {
     json_t *attr_cache;     /* attrs to be cached in module flux_t */
     flux_conf_t *conf;
     pthread_t t;            /* module thread */
-    mod_main_f *main;       /* dlopened mod_main() */
+    mod_main_f main;        /* dlopened mod_main() */
     bool mod_main_failed;
     int mod_main_errno;
     char *name;
@@ -318,7 +318,7 @@ module_t *module_create (flux_t *h,
     module_t *p;
     void *dso;
     const char **mod_namep;
-    mod_main_f *mod_main;
+    mod_main_f mod_main;
 
     dlerror ();
     if (!(dso = dlopen (path, RTLD_NOW | RTLD_GLOBAL | plugin_deepbind ()))) {

@@ -28,7 +28,7 @@ enum {
 typedef struct broker_module module_t;
 typedef void (*modpoller_cb_f)(module_t *p, void *arg);
 typedef void (*module_status_cb_f)(module_t *p, int prev_status, void *arg);
-typedef int (mod_main_f)(flux_t *h, int argc, char *argv[]);
+typedef int (*mod_main_f)(flux_t *h, int argc, char *argv[]);
 
 module_t *module_create (flux_t *h,
                          const char *parent_uuid,
