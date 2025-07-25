@@ -56,13 +56,8 @@ struct broker_module {
     flux_conf_t *conf;
     pthread_t t;            /* module thread */
     mod_main_f main;        /* dlopened mod_main() */
-    bool mod_main_failed;
-    int mod_main_errno;
     char *name;
-    int argc;
-    char **argv;
-    size_t argz_len;
-    char *argz;
+    json_t *args;
     int status;
     int errnum;
     bool muted;             /* module is under directive 42, no new messages */
@@ -74,11 +69,18 @@ struct broker_module {
     void *status_arg;
 
     struct disconnect *disconnect;
-
     struct flux_msglist *deferred_messages;
-
-    flux_t *h_module_end;   /* module end of interthread_channel */
     struct subhash *sub;
+};
+
+struct module_ctx {
+    flux_t *h;
+    bool mod_main_failed;
+    int mod_main_errno;
+    int argc;
+    char **argv;
+    size_t argz_len;
+    char *argz;
 };
 
 static void module_thread_cleanup (void *arg);
@@ -143,11 +145,11 @@ static int attr_cache_from_json (flux_t *h, json_t *cache)
 /*  Synchronize the FINALIZING state with the broker, so the broker
  *   can stop messages to this module until we're fully shutdown.
  */
-static int module_finalizing (module_t *p, double timeout)
+static int module_finalizing (flux_t *h, double timeout)
 {
     flux_future_t *f;
 
-    if (!(f = flux_rpc_pack (p->h_module_end,
+    if (!(f = flux_rpc_pack (h,
                              "module.status",
                              FLUX_NODEID_ANY,
                              0,
@@ -155,7 +157,7 @@ static int module_finalizing (module_t *p, double timeout)
                              "status", FLUX_MODSTATE_FINALIZING))
         || flux_future_wait_for (f, timeout) < 0
         || flux_rpc_get (f, NULL)) {
-        flux_log_error (p->h_module_end, "module.status FINALIZING error");
+        flux_log_error (h, "module.status FINALIZING error");
         flux_future_destroy (f);
         return -1;
     }
@@ -169,28 +171,30 @@ static void *module_thread (void *arg)
     sigset_t signal_set;
     int errnum;
     char uri[128];
+    struct module_ctx ctx;
 
-    pthread_cleanup_push (module_thread_cleanup, p);
+    memset (&ctx, 0, sizeof (ctx));
+    pthread_cleanup_push (module_thread_cleanup, &ctx);
 
     setup_module_profiling (p);
 
     /* Connect to broker socket, enable logging, register built-in services
      */
-    if (!(p->h_module_end = flux_open (p->uri, 0))) {
+    if (!(ctx.h = flux_open (p->uri, 0))) {
         log_err ("flux_open %s", uri);
         goto done;
     }
-    if (attr_cache_from_json (p->h_module_end, p->attr_cache) < 0) {
+    if (attr_cache_from_json (ctx.h, p->attr_cache) < 0) {
         log_err ("%s: error priming broker attribute cache", p->name);
         goto done;
     }
-    flux_log_set_appname (p->h_module_end, p->name);
-    if (flux_set_conf (p->h_module_end, p->conf) < 0) {
+    flux_log_set_appname (ctx.h, p->name);
+    if (flux_set_conf (ctx.h, p->conf) < 0) {
         log_err ("%s: error setting config object", p->name);
         goto done;
     }
     p->conf = NULL; // flux_set_conf() transfers ownership to p->h_module_end
-    if (modservice_register (p->h_module_end, p) < 0) {
+    if (modservice_register (ctx.h, p) < 0) {
         log_err ("%s: modservice_register", p->name);
         goto done;
     }
@@ -206,11 +210,32 @@ static void *module_thread (void *arg)
         goto done;
     }
 
+    /* Process mod_main arguments
+     */
+    if (p->args) {
+        size_t index;
+        json_t *entry;
+
+        json_array_foreach (p->args, index, entry) {
+            const char *s = json_string_value (entry);
+            if (s && (argz_add (&ctx.argz, &ctx.argz_len, s) != 0)) {
+                errno = ENOMEM;
+                goto done;
+            }
+        }
+    }
+    ctx.argc = argz_count (ctx.argz, ctx.argz_len);
+    if (!(ctx.argv = calloc (1, sizeof (ctx.argv[0]) * (ctx.argc + 1)))) {
+        errno = ENOMEM;
+        goto done;
+    }
+    argz_extract (ctx.argz, ctx.argz_len, ctx.argv);
+
     /* Run the module's main().
      */
-    if (p->main (p->h_module_end, p->argc, p->argv) < 0) {
-        p->mod_main_failed = true;
-        p->mod_main_errno = errno;
+    if (p->main (ctx.h, ctx.argc, ctx.argv) < 0) {
+        ctx.mod_main_failed = true;
+        ctx.mod_main_errno = errno;
     }
 done:
     pthread_cleanup_pop (1);
@@ -229,14 +254,14 @@ done:
  */
 static void module_thread_cleanup (void *arg)
 {
-    module_t *p = arg;
+    struct module_ctx *ctx = arg;
     flux_msg_t *msg;
     flux_future_t *f;
 
-    if (p->mod_main_failed) {
-        if (p->mod_main_errno == 0)
-            p->mod_main_errno = ECONNRESET;
-        flux_log (p->h_module_end, LOG_CRIT, "module exiting abnormally");
+    if (ctx->mod_main_failed) {
+        if (ctx->mod_main_errno == 0)
+            ctx->mod_main_errno = ECONNRESET;
+        flux_log (ctx->h, LOG_CRIT, "module exiting abnormally");
     }
 
     /* Before processing unhandled requests, ensure that this module
@@ -244,42 +269,35 @@ static void module_thread_cleanup (void *arg)
      * feed a message to this module after we've closed the handle,
      * which could cause the broker to block.
      */
-    if (module_finalizing (p, 1.0) < 0)
-        flux_log_error (p->h_module_end,
-                        "failed to set module state to finalizing");
+    if (module_finalizing (ctx->h, 1.0) < 0)
+        flux_log_error (ctx->h, "failed to set module state to finalizing");
 
     /* If any unhandled requests were received during shutdown,
      * respond to them now with ENOSYS.
      */
-    while ((msg = flux_recv (p->h_module_end,
-                             FLUX_MATCH_REQUEST,
-                             FLUX_O_NONBLOCK))) {
+    while ((msg = flux_recv (ctx->h, FLUX_MATCH_REQUEST, FLUX_O_NONBLOCK))) {
         const char *topic = "unknown";
         (void)flux_msg_get_topic (msg, &topic);
-        flux_log (p->h_module_end,
-                  LOG_DEBUG,
-                  "responding to post-shutdown %s",
-                  topic);
-        if (flux_respond_error (p->h_module_end, msg, ENOSYS, NULL) < 0)
-            flux_log_error (p->h_module_end,
-                            "responding to post-shutdown %s",
-                            topic);
+        flux_log (ctx->h, LOG_DEBUG, "responding to post-shutdown %s", topic);
+        if (flux_respond_error (ctx->h, msg, ENOSYS, NULL) < 0)
+            flux_log_error (ctx->h, "responding to post-shutdown %s", topic);
         flux_msg_destroy (msg);
     }
-    if (!(f = flux_rpc_pack (p->h_module_end,
+    if (!(f = flux_rpc_pack (ctx->h,
                              "module.status",
                              FLUX_NODEID_ANY,
                              FLUX_RPC_NORESPONSE,
                              "{s:i s:i}",
                              "status", FLUX_MODSTATE_EXITED,
-                             "errnum", p->mod_main_errno))) {
-        flux_log_error (p->h_module_end, "module.status EXITED error");
+                             "errnum", ctx->mod_main_errno))) {
+        flux_log_error (ctx->h, "module.status EXITED error");
         goto done;
     }
     flux_future_destroy (f);
 done:
-    flux_close (p->h_module_end);
-    p->h_module_end = NULL;
+    flux_close (ctx->h);
+    free (ctx->argz);
+    free (ctx->argv);
 }
 
 static void module_cb (flux_reactor_t *r,
@@ -309,20 +327,7 @@ module_t *module_create (flux_t *h,
     p->h = h;
     if (!(p->conf = flux_conf_copy (flux_get_conf (h))))
         goto cleanup;
-    if (args) {
-        size_t index;
-        json_t *entry;
-
-        json_array_foreach (args, index, entry) {
-            const char *s = json_string_value (entry);
-            if (s && (argz_add (&p->argz, &p->argz_len, s) != 0))
-                goto nomem;
-        }
-    }
-    p->argc = argz_count (p->argz, p->argz_len);
-    if (!(p->argv = calloc (1, sizeof (p->argv[0]) * (p->argc + 1))))
-        goto nomem;
-    argz_extract (p->argz, p->argz_len, p->argv);
+    p->args = json_incref (args);
     if (!(p->name = strdup (name)))
         goto nomem;
     if (!(p->sub = subhash_create ())) {
@@ -492,8 +497,7 @@ void module_destroy (module_t *p)
     flux_watcher_destroy (p->broker_w);
     flux_close (p->h_broker_end);
 
-    free (p->argv);
-    free (p->argz);
+    json_decref (p->args);
     free (p->name);
     flux_conf_decref (p->conf);
     json_decref (p->attr_cache);
