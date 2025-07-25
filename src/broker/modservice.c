@@ -40,10 +40,8 @@ static modservice_ctx_t *getctx (flux_t *h, module_t *p)
     modservice_ctx_t *ctx = flux_aux_get (h, "flux::modservice");
 
     if (!ctx) {
-        if (!(ctx = calloc (1, sizeof (*ctx)))) {
-            errno = ENOMEM;
+        if (!(ctx = calloc (1, sizeof (*ctx))))
             return NULL;
-        }
         ctx->h = h;
         ctx->p = p;
         flux_aux_set (h, "flux::modservice", ctx, freectx);
@@ -75,10 +73,8 @@ static void debug_cb (flux_t *h,
                              "flags", &flags) < 0)
         goto error;
     if (!(debug_flags = flux_aux_get (h, "flux::debug_flags"))) {
-        if (!(debug_flags = calloc (1, sizeof (*debug_flags)))) {
-            errno = ENOMEM;
+        if (!(debug_flags = calloc (1, sizeof (*debug_flags))))
             goto error;
-        }
         flux_aux_set (h, "flux::debug_flags", debug_flags, free);
     }
     if (streq (op, "setbit"))
