@@ -977,3 +977,10 @@ pthread
 MPMD
 prog
 shlex
+modprobe
+attrs
+confdir
+getopts
+kwargs
+subdirectory
+py
