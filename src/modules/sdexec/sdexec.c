@@ -1387,6 +1387,4 @@ error:
     return rc;
 }
 
-MOD_NAME (MODULE_NAME);
-
 // vi:ts=4 sw=4 expandtab

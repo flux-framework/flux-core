@@ -18,6 +18,9 @@
 extern "C" {
 #endif
 
+/* The mod_name symbol in broker modules is deprecated.
+ * This is not for use in new code.
+ */
 #define MOD_NAME(x) const char *mod_name = x
 
 /* Test and optionally clear module debug bit from within a module, as
