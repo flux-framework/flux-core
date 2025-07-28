@@ -55,5 +55,15 @@ test_expect_success 'rcalc: distribute 5 slots of size 5 across 6 allocated' '
 	EOF
 	test_cmp 55.expected 55.out
 '
-
+test_expect_success 'rcalc: distribute can oversubscribe (e.g. for --add-brokers)' '
+	flux R encode -r 0-1 -c 0-7 | \
+	    ${rcalc} --cores-per-slot=8 3 > 83.out &&
+	cat >83.expected <<-EOF &&
+	Distributing 3 tasks across 2 nodes with 16 cores
+	Used 2 nodes
+	0: rank=0 ntasks=2 cores=0-7
+	1: rank=1 ntasks=1 cores=0-7
+	EOF
+	test_cmp 83.expected 83.out
+'
 test_done
