@@ -34,11 +34,14 @@ OPTIONS
 
    Don't output diagnostic messages and discovered errors.
 
-.. option:: -r, --rootref=BLOBREF
+.. option:: -r, --rootref=<BLOBREF|index>
 
    Normally the check starts with the blobref in the most recent KVS
-   checkpoint.  This option directs flux-fsck to start at an arbitrary
-   point.  BLOBREF must refer to an RFC 11 tree object of type "dir".
+   checkpoint.  This option can direct flux-fsck to start at an
+   arbitrary point by specifying a BLOBREF that points to an RFC 11
+   tree object of type "dir".  An numerical index can be direct
+   flux-fsck to start at an older checkpoint (i.e. 0 = use current checkpoint,
+   1 = checkpoint before current checkpoint, ...).
 
 .. option:: -c, --checkpoint
 
