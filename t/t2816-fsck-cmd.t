@@ -192,8 +192,20 @@ test_expect_success 'flux-fsck --rootref fails on non-existent ref' '
 	test_must_fail flux fsck --rootref=sha1-1234567890123456789012345678901234567890 2> rootref6.out &&
 	grep "Total errors: 1" rootref6.out
 '
+test_expect_success 'flux-fsck --rootref fails on bad checkpoints (c bad and b bad checkpoints)' '
+	test_must_fail flux fsck --verbose --rootref=0 &&
+	test_must_fail flux fsck --verbose --rootref=1 &&
+	test_must_fail flux fsck --verbose --rootref=-1
+'
+test_expect_success 'flux-fsck --rootref succeeds on good checkpoint' '
+	flux fsck --verbose --rootref=2 &&
+	flux fsck --verbose --rootref=-2
+'
 test_expect_success 'flux-fsck --rootref fails on invalid ref' '
 	test_must_fail flux fsck --rootref=lalalal
+'
+test_expect_success 'flux-fsck --rootref fails on invalid checkpoint index' '
+	test_must_fail flux fsck --rootref=999
 '
 #
 # --checkpoint tests
