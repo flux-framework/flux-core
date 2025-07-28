@@ -36,12 +36,14 @@ EXAMPLE
 ::
 
    [[resource.config]]
-   hosts = test[0-7]
+   hosts = "test[0-7]"
    properties = ["debug"]
+   cores = "0-1"
 
    [[resource.config]]
-   hosts = test[8-127]
+   hosts = "test[8-127]"
    properties = ["batch"]
+   cores = "0-1"
 
    [queues.debug]
    policy.limits.duration = "30m"
@@ -55,7 +57,6 @@ EXAMPLE
    queue = "batch"
 
    [sched-fluxion-qmanager]
-   queues = "batch debug"
    queue-policy-per-queue="batch:easy debug:fcfs"
 
    [sched-fluxion-resource]
