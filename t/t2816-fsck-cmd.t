@@ -32,15 +32,11 @@ test_expect_success 'create some kvs content' '
 	flux kvs namespace create testns &&
 	flux kvs put --namespace=testns dir.a=testns
 '
-# N.B. startlog commands in rc scripts normally ensures a checkpoint
-# exists but we do this just to be extra sure
-test_expect_success 'call sync to ensure we have checkpointed' '
-	flux kvs sync
-'
 test_expect_success 'save some treeobjs for later' '
 	flux kvs get --treeobj dir.b > dirb.out &&
 	flux kvs get --treeobj dir.c > dirc.out
 '
+# N.B. kvs is checkpointed on unload of kvs
 test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
@@ -65,9 +61,7 @@ test_expect_success LONGTEST 'load kvs and create some kvs content' '
 	done &&
 	flux kvs get bigval > bigval.exp
 '
-test_expect_success LONGTEST 'call sync to ensure we have checkpointed' '
-	flux kvs sync
-'
+# N.B. kvs is checkpointed on unload of kvs
 test_expect_success LONGTEST 'unload kvs' '
 	flux module remove kvs
 '
@@ -87,9 +81,7 @@ test_expect_success 'make a reference invalid (dir.b)' '
 	flux kvs put --treeobj dir.b="$(cat dirbbad.out)" &&
 	flux kvs getroot -b > bbad.rootref
 '
-test_expect_success 'call sync to ensure we have checkpointed' '
-	flux kvs sync
-'
+# N.B. kvs is checkpointed on unload of kvs
 test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
@@ -123,9 +115,7 @@ test_expect_success 'make a reference invalid (dir.c)' '
 	flux kvs put --treeobj dir.c="$(cat dircbad2.out)" &&
 	flux kvs getroot -b > cbad.rootref
 '
-test_expect_success 'call sync to ensure we have checkpointed' '
-	flux kvs sync
-'
+# N.B. kvs is checkpointed on unload of kvs
 test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
