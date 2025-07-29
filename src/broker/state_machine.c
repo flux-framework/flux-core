@@ -36,6 +36,7 @@
 #include "overlay.h"
 #include "attr.h"
 #include "groups.h"
+#include "modhash.h"
 #include "shutdown.h"
 
 struct quorum {
@@ -575,14 +576,17 @@ static void action_goodbye (struct state_machine *s)
     }
 }
 
-static void rmmod_continuation (flux_future_t *f, void *arg)
+static void unload_builtins_continuation (flux_future_t *f, void *arg)
 {
     struct state_machine *s = arg;
 
-    if (flux_rpc_get (f, NULL) < 0)
-        flux_log_error (s->ctx->h, "module.remove connector-local");
+    if (flux_future_get (f, NULL) < 0) {
+        flux_log (s->ctx->h,
+                  LOG_ERR,
+                  "unload builtins: %s",
+                  future_strerror (f, errno));
+    }
     flux_reactor_stop (flux_get_reactor (s->ctx->h));
-    flux_future_destroy (f);
 }
 
 static void subproc_continuation (flux_future_t *f, void *arg)
@@ -602,19 +606,13 @@ static void subproc_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
     flux_aux_set (h, "flux::exec", NULL, NULL);
 
-    /* Next task is to remove the connector-local module.
+    /* Next task is to remove the builtin modules, including connector-local.
+     * N.B. the future is modhash property.
      */
-    if (!(f = flux_rpc_pack (h,
-                             "module.remove",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:s}",
-                             "name",
-                             "connector-local"))
-        || flux_future_then (f, -1, rmmod_continuation, s) < 0) {
-        flux_log_error (h, "error sending module.remove connector-local");
+    if (!(f = modhash_unload_builtins (s->ctx->modhash))
+        || flux_future_then (f, -1, unload_builtins_continuation, s) < 0) {
+        flux_log_error (h, "unload builtins initiation");
         flux_reactor_stop (flux_get_reactor (h));
-        flux_future_destroy (f);
     }
 }
 

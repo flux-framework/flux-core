@@ -16,15 +16,35 @@
 
 #include "src/common/librouter/disconnect.h"
 
+/* Module states, for embedding in keepalive messages (rfc 5)
+ */
+enum {
+    FLUX_MODSTATE_INIT           = 0,
+    FLUX_MODSTATE_RUNNING        = 1,
+    FLUX_MODSTATE_FINALIZING     = 2,
+    FLUX_MODSTATE_EXITED         = 3,
+};
+
 typedef struct broker_module module_t;
 typedef void (*modpoller_cb_f)(module_t *p, void *arg);
 typedef void (*module_status_cb_f)(module_t *p, int prev_status, void *arg);
+typedef int (*mod_main_f)(flux_t *h, int argc, char *argv[]);
+
+struct module_args {
+    char *uuid;
+    char *name;
+    mod_main_f main;
+};
+
+struct module_builtin {
+    const char *name;
+    mod_main_f main;
+};
 
 module_t *module_create (flux_t *h,
                          const char *parent_uuid,
-                         const char *name, // may be NULL
-                         const char *path,
-                         int rank,
+                         const char *name,
+                         mod_main_f mod_main,
                          json_t *args,
                          flux_error_t *error);
 void module_destroy (module_t *p);
@@ -32,7 +52,6 @@ void module_destroy (module_t *p);
 /* accessors
  */
 const char *module_get_name (module_t *p);
-const char *module_get_path (module_t *p);
 const char *module_get_uuid (module_t *p);
 double module_get_lastseen (module_t *p);
 
@@ -62,11 +81,6 @@ int module_disconnect_arm (module_t *p,
                            const flux_msg_t *msg,
                            disconnect_send_f cb,
                            void *arg);
-
-int module_push_rmmod (module_t *p, const flux_msg_t *msg);
-const flux_msg_t *module_pop_rmmod (module_t *p);
-int module_push_insmod (module_t *p, const flux_msg_t *msg);
-const flux_msg_t *module_pop_insmod (module_t *p);
 
 /* Get/set module status.
  */

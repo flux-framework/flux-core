@@ -22,7 +22,6 @@
 
 typedef struct {
     flux_t *h;
-    module_t *p;
     flux_watcher_t *w_prepare;
     flux_msg_handler_t **handlers;
 } modservice_ctx_t;
@@ -35,43 +34,45 @@ static void freectx (void *arg)
     free (ctx);
 }
 
-static modservice_ctx_t *getctx (flux_t *h, module_t *p)
+static modservice_ctx_t *getctx (flux_t *h)
 {
     modservice_ctx_t *ctx = flux_aux_get (h, "flux::modservice");
 
     if (!ctx) {
-        if (!(ctx = calloc (1, sizeof (*ctx)))) {
-            errno = ENOMEM;
+        if (!(ctx = calloc (1, sizeof (*ctx))))
             return NULL;
-        }
         ctx->h = h;
-        ctx->p = p;
         flux_aux_set (h, "flux::modservice", ctx, freectx);
     }
     return ctx;
 }
 
-static void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
-                         const flux_msg_t *msg, void *arg)
+static void shutdown_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
 {
     flux_reactor_stop (flux_get_reactor (h));
 }
 
-static void debug_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void debug_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     int flags;
     int *debug_flags;
     const char *op;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i}", "op", &op,
-                                                     "flags", &flags) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:i}",
+                             "op", &op,
+                             "flags", &flags) < 0)
         goto error;
     if (!(debug_flags = flux_aux_get (h, "flux::debug_flags"))) {
-        if (!(debug_flags = calloc (1, sizeof (*debug_flags)))) {
-            errno = ENOMEM;
+        if (!(debug_flags = calloc (1, sizeof (*debug_flags))))
             goto error;
-        }
         flux_aux_set (h, "flux::debug_flags", debug_flags, free);
     }
     if (streq (op, "setbit"))
@@ -97,8 +98,10 @@ error:
 /* Reactor loop is about to block.
  * Notify broker that module is running, then disable the prepare watcher.
  */
-static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg)
+static void prepare_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
     modservice_ctx_t *ctx = arg;
 
@@ -147,11 +150,11 @@ static struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-static int mod_subscribe (flux_t *h, module_t *p, const char *method)
+static int mod_subscribe (flux_t *h, const char *name, const char *method)
 {
     char *topic;
 
-    if (asprintf (&topic, "%s.%s", module_get_name (p), method) < 0
+    if (asprintf (&topic, "%s.%s", name, method) < 0
         || flux_event_subscribe (h, topic) < 0) {
         ERRNO_SAFE_WRAP (free, topic);
         return -1;
@@ -160,33 +163,19 @@ static int mod_subscribe (flux_t *h, module_t *p, const char *method)
     return 0;
 }
 
-int modservice_register (flux_t *h, module_t *p)
+int modservice_register (flux_t *h)
 {
-    modservice_ctx_t *ctx = getctx (h, p);
+    modservice_ctx_t *ctx = getctx (h);
     flux_reactor_t *r = flux_get_reactor (h);
+    const char *name = flux_aux_get (h, "flux::name");
 
     if (!ctx || !r)
         return -1;
 
-    if (flux_aux_set (h,
-                      "flux::uuid",
-                      (char *)module_get_uuid (ctx->p),
-                      NULL) < 0)
-        return -1;
-    if (flux_aux_set (h,
-                      "flux::name",
-                      (char *)module_get_name (ctx->p),
-                      NULL) < 0)
+    if (flux_msg_handler_addvec_ex (h, name, htab, ctx, &ctx->handlers) < 0)
         return -1;
 
-    if (flux_msg_handler_addvec_ex (h,
-                                    module_get_name (ctx->p),
-                                    htab,
-                                    ctx->p,
-                                    &ctx->handlers) < 0)
-        return -1;
-
-    if (mod_subscribe (h, ctx->p, "stats-clear") < 0)
+    if (mod_subscribe (h, name, "stats-clear") < 0)
         return -1;
 
     if (!(ctx->w_prepare = flux_prepare_watcher_create (r, prepare_cb, ctx)))

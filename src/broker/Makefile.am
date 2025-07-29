@@ -28,8 +28,11 @@ flux_broker_SOURCES = \
 libbroker_la_SOURCES = \
 	brokercfg.c \
 	brokercfg.h \
+	module_dso.c \
+	module_dso.h \
 	module.c \
 	module.h \
+	module_thread.c \
 	modhash.c \
 	modhash.h \
 	modservice.c \
@@ -69,6 +72,7 @@ libbroker_la_SOURCES = \
 
 flux_broker_LDADD = \
 	$(builddir)/libbroker.la \
+	$(top_builddir)/src/modules/connector-local/libconnector-local.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \
 	$(top_builddir)/src/common/libflux/libflux.la \

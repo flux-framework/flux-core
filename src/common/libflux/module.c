@@ -19,6 +19,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/dirwalk.h"
+#include "src/broker/module.h"
 
 bool flux_module_debug_test (flux_t *h, int flag, bool clear)
 {

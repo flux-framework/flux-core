@@ -126,17 +126,19 @@ test_expect_success 'cmddriver adds its own path to PATH' '
 	true
 	EOF
 	chmod +x bin/flux &&
-	fluxcmd=$(command -v flux) &&
-	result=$(PATH=$(pwd)/bin:/bin:/usr/bin \
+	fluxcmd=$(realpath $(command -v flux)) &&
+	testbin=$(realpath ./bin) &&
+	result=$(PATH=$testbin:/bin:/usr/bin \
 	         $fluxcmd env sh -c "command -v flux") &&
 	test_debug "echo result=$result" &&
 	test "$result" = "$fluxcmd"
 '
+
 # Use bogus flux in PATH and ensure flux cmddriver inserts its own path
 # just before this path, not at front of PATH.
 test_expect_success 'cmddriver inserts its path at end of PATH' '
 	fluxdir=$(dirname $fluxcmd) &&
-	result=$(PATH=/foo:$(pwd)/bin:/bin:/usr/bin \
+	result=$(PATH=/foo:$testbin:/bin:/usr/bin \
 	         $fluxcmd env printenv PATH) &&
 	test_debug "echo result=$result" &&
 	test "$result" = "/foo:$fluxdir:$(pwd)/bin:/bin:/usr/bin"

@@ -616,6 +616,7 @@ AC_CONFIG_FILES( \
   src/shell/Makefile \
   src/connectors/Makefile \
   src/modules/Makefile \
+  src/modules/connector-local/Makefile \
   src/modules/kvs/Makefile \
   src/modules/content-files/Makefile \
   src/modules/job-ingest/Makefile \

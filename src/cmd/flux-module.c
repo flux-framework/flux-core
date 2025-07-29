@@ -37,6 +37,7 @@
 
 #include <assert.h>
 
+#include "src/broker/module.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"

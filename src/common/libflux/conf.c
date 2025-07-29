@@ -483,6 +483,42 @@ int flux_conf_unpack (const flux_conf_t *conf,
     return rc;
 }
 
+flux_conf_t *flux_conf_vpack (const char *fmt, va_list ap)
+{
+    flux_conf_t *conf;
+
+    if (!fmt) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(conf = flux_conf_create ()))
+        return NULL;
+    json_decref (conf->obj);
+    if (!(conf->obj = json_vpack_ex (NULL, 0, fmt, ap))) {
+        flux_conf_decref (conf);
+        errno = EINVAL;
+        return NULL;
+    }
+
+    return conf;
+}
+
+flux_conf_t *flux_conf_pack (const char *fmt, ...)
+{
+    va_list ap;
+    flux_conf_t *conf;
+
+    if (!fmt) {
+        errno = EINVAL;
+        return NULL;
+    }
+    va_start (ap, fmt);
+    conf = flux_conf_vpack (fmt, ap);
+    va_end (ap);
+
+    return conf;
+}
+
 int flux_conf_reload_decode (const flux_msg_t *msg, const flux_conf_t **confp)
 {
     const char *auxkey = "flux::conf";

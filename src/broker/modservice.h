@@ -13,7 +13,7 @@
 
 #include "module.h"
 
-int modservice_register (flux_t *h, module_t *p);
+int modservice_register (flux_t *h);
 
 #endif /* !_BROKER_MODSERVICE_H */
 

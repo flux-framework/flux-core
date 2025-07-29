@@ -71,6 +71,9 @@ int flux_conf_unpack (const flux_conf_t *conf,
                       const char *fmt,
                       ...);
 
+flux_conf_t *flux_conf_vpack (const char *fmt, va_list ap);
+flux_conf_t *flux_conf_pack (const char *fmt, ...);
+
 #ifdef __cplusplus
 }
 #endif
