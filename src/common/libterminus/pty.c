@@ -314,7 +314,7 @@ struct flux_pty * flux_pty_open ()
     /*  Set a default winsize, so it isn't 0,0 */
     ws.ws_row = 25;
     ws.ws_col = 80;
-    if (ioctl (pty->leader, TIOCSWINSZ, &ws) < 0)
+    if (ioctl (pty->leader, TIOCSWINSZ, &ws) < 0 && errno != ENOTTY)
         goto err;
 
     pty->complete = flux_pty_destroy;
@@ -535,7 +535,7 @@ static int pty_resize (struct flux_pty *pty, const flux_msg_t *msg)
         llog_error (pty, "bad resize: row=%d, col=%d", ws.ws_row, ws.ws_col);
         return -1;
     }
-    if (ioctl (pty->leader, TIOCSWINSZ, &ws) < 0) {
+    if (ioctl (pty->leader, TIOCSWINSZ, &ws) < 0 && errno != ENOTTY) {
         llog_error (pty, "ioctl: TIOCSWINSZ: %s", strerror (errno));
         return -1;
     }
