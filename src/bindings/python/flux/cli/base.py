@@ -231,6 +231,8 @@ def list_split(opts):
     """
     Return a list by splitting each member of opts on ','
     """
+    if isinstance(opts, str):
+        return list_split([opts])
     if opts:
         x = chain.from_iterable([x.split(",") for x in opts])
         return list(x)

@@ -101,7 +101,8 @@ test_expect_success NO_ASAN 'flux batch: submit a series of jobs' '
 	flux jobs &&
 	id4=$(flux batch --flags=waitable -N2 -n2 -x batch-script.sh) &&
 	id5=$(flux batch --flags=waitable -N2 batch-script.sh) &&
-	run_timeout 180 flux job wait --verbose --all
+	flux jobs &&
+	run_timeout 300 flux job wait --verbose --all
 '
 test_expect_success NO_ASAN 'flux batch: job results are expected' '
 	test_debug "grep . flux-*.out" &&

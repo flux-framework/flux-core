@@ -2141,6 +2141,65 @@ _flux_uri()
     return 0
 }
 
+# flux-modprobe(1) completions
+_flux_modprobe()
+{
+    local cmd=$1
+    local subcmds="load remove run rc1 rc3 list-dependencies show"
+    local split=false
+    load_OPTS=""
+    remove_OPTS=""
+    run_OPTS="\
+        -v --verbose \
+        --show-deps \
+        --dry-run \
+        --confdir= \
+    "
+    rc1_OPTS="\
+        -v --verbose \
+        --show-deps \
+        --dry-run \
+        --confdir= \
+        --timing \
+    "
+    rc3_OPTS="\
+        -v --verbose \
+        --show-deps \
+        --dry-run \
+        --confdir= \
+    "
+    list_dependencies_OPTS="\
+        -S, --set-alternative= \
+        -D, --disable= \
+        -f, --full \
+    "
+    show_OPTS="\
+        --path= \
+        -S, --set-alternative= \
+        -D, --disable= \
+    "
+
+    _flux_split_longopt && split=true
+    if [[ $cmd != "modprobe" ]]; then
+        if [[ $cur != -* ]]; then
+            if _flux_contains_word ${cmd} "remove"; then
+                modules=$(flux module list | grep -v Module | awk '{print $1}')
+                COMPREPLY=( $(compgen -W "all ${modules}" -- "$cur") )
+                return 0
+            fi
+        fi
+        var="${cmd//-/_}_OPTS"
+        COMPREPLY=( $(compgen -W "${!var}" -- "$cur") )
+        if [[ "${COMPREPLY[@]}" == *= ]]; then
+            # no space if suggestions ends with '='
+            compopt -o nospace
+        fi
+    else
+        COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
+    fi
+}
+
+
 _flux_core()
 {
     FLUX_OPTS="-v --verbose -V --version -p --parent -r --root"
@@ -2269,6 +2328,9 @@ _flux_core()
         ;;
     uri)
         _flux_uri $subcmd
+        ;;
+    modprobe)
+        _flux_modprobe $subcmd
         ;;
     help)
         COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )

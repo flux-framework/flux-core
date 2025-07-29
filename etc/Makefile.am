@@ -15,12 +15,29 @@ tmpfiles_DATA = flux.conf
 dist_cron_DATA = \
 	kvs-backup.cron
 
-dist_fluxconf_SCRIPTS = \
-        rc1 \
-        rc3
+nobase_dist_fluxconf_SCRIPTS = \
+	rc1 \
+	rc1.old \
+	rc3 \
+	rc3.old \
+	modprobe/rc1.py \
+	modprobe/rc3.py
 
-dist_fluxrc1_SCRIPTS = \
-        rc1.d/02-cron
+nobase_dist_fluxconf_DATA = \
+	modprobe/modprobe.toml
+
+# Install empty modprobe/*.d directories after rc1.py and rc3.py are installed
+install-data-hook:
+	$(MKDIR_P) $(DESTDIR)$(fluxconfdir)/modprobe/modprobe.d
+	$(MKDIR_P) $(DESTDIR)$(fluxconfdir)/modprobe/rc1.d
+	$(MKDIR_P) $(DESTDIR)$(fluxconfdir)/modprobe/rc3.d
+
+# Remove empty modprobe directories on uninstall
+uninstall-hook:
+	rmdir $(DESTDIR)$(fluxconfdir)/modprobe/modprobe.d 2>/dev/null || :
+	rmdir $(DESTDIR)$(fluxconfdir)/modprobe/rc1.d 2>/dev/null || :
+	rmdir $(DESTDIR)$(fluxconfdir)/modprobe/rc3.d 2>/dev/null || :
+	rmdir $(DESTDIR)$(fluxconfdir)/modprobe 2>/dev/null || :
 
 fluxhelpdir = $(datadir)/flux/help.d
 fluxhelp_DATA = flux/help.d/core.json
