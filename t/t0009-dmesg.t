@@ -178,4 +178,65 @@ test_expect_success 'dmesg: long lines are not truncated' '
 	test $result -eq 3001
 '
 
+test_expect_success 'setting log-stderr-mode to empty value fails' '
+	test_must_fail flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-stderr-mode= true
+'
+test_expect_success 'setting log-stderr-mode=wrong fails' '
+	test_must_fail flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-stderr-mode=wrong \
+	    true
+'
+test_expect_success 'setting log-ring-size to empty value fails' '
+	test_must_fail flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-ring-size= true
+'
+test_expect_success 'setting log-ring-size to negative value fails' '
+	test_must_fail flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-ring-size=-1 true
+'
+test_expect_success 'setting log-ring-size to value with extra text fails' '
+	test_must_fail flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-ring-size=4xx true
+'
+test_expect_success 'setting log-filename to empty value fails' '
+	test_must_fail flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-filename= true
+'
+test_expect_success 'setting log-syslog-enable=1 works' '
+	test $(flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-enable=1 \
+	    flux getattr log-syslog-enable) -eq 1
+'
+test_expect_success 'setting log-syslog-enable=0 works' '
+	test $(flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-enable=0 \
+	    flux getattr log-syslog-enable) -eq 0
+'
+test_expect_success 'setting log-syslog-enable=foo is true' '
+	test $(flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-enable=foo \
+	    flux getattr log-syslog-enable) -eq 1
+'
+test_expect_success 'setting log-syslog-level=7 works' '
+	test $(flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-level=7 \
+	    flux getattr log-syslog-level) -eq 7
+'
+test_expect_success 'setting log-syslog-level=0 works' '
+	test $(flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-level=0 \
+	    flux getattr log-syslog-level) -eq 0
+'
+test_expect_success 'setting log-syslog-level=8 fails' '
+	test_must_fail flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-level=8 \
+	    true
+'
+test_expect_success 'setting log-syslog-level to value with extra text fails' '
+	test_must_fail flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-level=5xx \
+	    true
+'
+
 test_done

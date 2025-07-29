@@ -401,7 +401,8 @@ int main (int argc, char *argv[])
     /* Initialize logging.
      * OK to call flux_log*() after this.
      */
-    logbuf_initialize (ctx.h, ctx.rank, ctx.attrs);
+    if (logbuf_initialize (ctx.h, ctx.rank, ctx.attrs) < 0)
+        goto cleanup;
 
     /* Allow flux_get_rank(), flux_get_size(), flux_get_hostybyrank(), etc.
      * to work in the broker without causing a synchronous RPC to self that
