@@ -173,11 +173,12 @@ void logbuf_destroy (logbuf_t *logbuf)
 static int set_level (int *value, const char *val)
 {
     int level;
+    char *endptr;
     if (!val)
         goto error;
     errno = 0;
-    level = strtol (val, NULL, 10);
-    if (errno != 0)
+    level = strtol (val, &endptr, 10);
+    if (errno != 0 || *endptr != '\0')
         goto error;
     if (level < LOG_EMERG || level > LOG_DEBUG) {
         errno = EINVAL;
@@ -193,11 +194,12 @@ error:
 static int logbuf_set_ring_size (logbuf_t *logbuf, const char *val)
 {
     int size;
-    if (!val)
+    char *endptr;
+    if (!val || strlen (val) == 0)
         goto error;
     errno = 0;
-    size = strtol (val, NULL, 10);
-    if (errno != 0 || size < 0)
+    size = strtol (val, &endptr, 10);
+    if (errno != 0 || *endptr != '\0' || size < 0)
         goto error;
     logbuf_trim (logbuf, size);
     logbuf->ring_size = size;
@@ -215,7 +217,7 @@ static int logbuf_set_filename (logbuf_t *logbuf, const char *destination)
 {
     char *filename;
     FILE *f;
-    if (!destination) {
+    if (!destination || strlen (destination) == 0) {
         errno = EINVAL;
         return -1;
     }
