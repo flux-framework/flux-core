@@ -79,7 +79,7 @@ rm $logfile
 export -f catfile_error
 export -f catfile
 export -f error
-find . -name *.asan.* | xargs -i bash -c 'catfile_error {}'
+find . -name *.asan.* | xargs '-I{}' bash -c 'catfile_error {}'
 
 
 #

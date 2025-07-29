@@ -109,6 +109,11 @@ libutil_la_SOURCES = \
 	basename.c \
 	ansi_color.h
 
+libutil_la_LDFLAGS = \
+        $(AM_LDFLAGS) \
+        $(APPLE_CORESERVICES_FRAMEWORK) \
+        $(APPLE_SYSTEMCONFIGURATION_FRAMEWORK)
+
 TESTS = test_sha1.t \
 	test_sha256.t \
 	test_popen2.t \

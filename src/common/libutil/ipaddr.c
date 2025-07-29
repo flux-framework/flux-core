@@ -30,6 +30,10 @@
 #include "cidr.h"
 #include "ipaddr.h"
 
+#ifdef __APPLE__
+#include <SystemConfiguration/SystemConfiguration.h>
+#endif
+
 /* Identify an IPv6 link-local address so it can be skipped.
  * The leftmost 10 bits of the 128 bit address will be 0xfe80.
  * At present, Flux cannot use link-local addresses for PMI bootstrap,
@@ -43,6 +47,44 @@ static bool is_linklocal6 (struct sockaddr_in6 *sin)
         return true;
     return false;
 }
+
+#ifdef __APPLE__
+static int getprimary_iface4 (char *buf, size_t size, flux_error_t *error)
+{
+    int ret = -1;
+    SCDynamicStoreRef store = SCDynamicStoreCreate (NULL, CFSTR ("GetDefaultInterface"), NULL, NULL);
+    if (!store) {
+        errprintf (error, "Failed to create SCDynamicStore");
+        goto err;
+    }
+
+    CFDictionaryRef ipv4_dict = SCDynamicStoreCopyValue (store, CFSTR ("State:/Network/Global/IPv4"));
+    if (!ipv4_dict || CFGetTypeID (ipv4_dict) != CFDictionaryGetTypeID ()) {
+        errprintf (error, "Failed to get IPv4 global state");
+        goto err;
+    }
+
+    CFStringRef primary_if = CFDictionaryGetValue (ipv4_dict, CFSTR ("PrimaryInterface"));
+    if (!primary_if || CFGetTypeID (primary_if) != CFStringGetTypeID ()) {
+        errprintf (error, "PrimaryInterface not found");
+        goto err;
+    }
+
+    if (!CFStringGetCString (primary_if, buf, size-1, kCFStringEncodingUTF8)) {
+        errprintf (error, "Failed to convert interface name");
+        goto err;
+    }
+
+    ret = 0;
+
+err:
+    CFRelease (ipv4_dict);
+    CFRelease (store);
+
+    return ret;
+}
+
+#else
 
 static int getprimary_iface4 (char *buf, size_t size, flux_error_t *error)
 {
@@ -71,6 +113,7 @@ static int getprimary_iface4 (char *buf, size_t size, flux_error_t *error)
     errprintf (error, "%s: no default route", path);
     return -1;
 }
+#endif // __APPLE__
 
 static struct ifaddrs *find_ifaddr (struct ifaddrs *ifaddr,
                                     const char *name,
@@ -234,6 +277,10 @@ int ipaddr_getprimary (char *buf,
         rc = getnamed_ifaddr (buf, len, interface, prefer_family, error);
     }
     else {
+        #ifdef __APPLE__
+            // macos doesn't reliably resolve its own hostname
+            flags &= ~IPADDR_HOSTNAME;
+        #endif
         if (!(flags & IPADDR_HOSTNAME))
             rc = getprimary_ifaddr (buf, len, prefer_family, error);
         if (rc < 0) {
