@@ -60,3 +60,30 @@ Example: trace messages sent/received by this broker on the overlay network
 .. code-block::
 
   $ flux overlay trace --full
+
+***********
+CI failures
+***********
+
+Failures that occur only in a github CI workflow can be directly examined
+with `tmate access <https://mxschmitt.github.io/action-tmate/>`_.
+
+Example: temporarily patch a failing macos workflow:
+
+.. code-block::
+
+   diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+   index c65ea7f08..fba80d919 100644
+   --- a/.github/workflows/main.yml
+   +++ b/.github/workflows/main.yml
+   @@ -130,6 +130,9 @@ jobs:
+          run: make check -j4 TESTS=
+        - name: check what works so far
+          run: scripts/check-macos.sh
+   +    - name: tmate
+   +      if: failure()
+   +      uses: mxschmitt/action-tmate@v3
+
+
+Push that temporary change to a personal fork, then find the ssh address by
+examining the action output.
