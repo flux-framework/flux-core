@@ -298,10 +298,9 @@ static void fsck_blobref (flux_t *h, const char *blobref)
         flux_future_destroy (f);
         return;
     }
-    if (!(treeobj = treeobj_decodeb (buf, buflen)))
-        log_err_exit ("cannot decode root tree object");
-    if (treeobj_validate (treeobj) < 0)
-        log_msg_exit ("invalid root tree object");
+    if (!(treeobj = treeobj_decodeb (buf, buflen))
+        || treeobj_validate (treeobj) < 0)
+        log_msg_exit ("blobref does not refer to a valid RFC 11 tree object");
     if (!treeobj_is_dir (treeobj))
         log_msg_exit ("root tree object is not a directory");
 
