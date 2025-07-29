@@ -295,7 +295,7 @@ bool check_fileref (json_t *fileref, const char *name, int blobcount)
         goto error;
     }
     if (S_ISLNK (mode)) {
-        char buf[1024];
+        char buf[1024] = {0};
         if (!data || !json_is_string (data)) {
             diag ("symlink data is missing");
             goto error;
