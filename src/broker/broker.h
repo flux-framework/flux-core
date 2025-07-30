@@ -47,7 +47,6 @@ struct broker {
     struct subhash *sub;        /* subscriptions for internal services */
     struct content_cache *cache;
     struct publisher *publisher;
-    struct groups *groups;
 
     struct runat *runat;
     struct state_machine *state_machine;
