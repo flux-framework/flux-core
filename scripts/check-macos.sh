@@ -12,7 +12,7 @@ CONF_SCRIPT=scripts/configure-macos.sh
 test -f $CONF_SCRIPT || die "please run from the top level of the source tree"
 test -f configure || die "please run $CONF_SCRIPT first"
 
-if make -j4 -C src check ; then
+if make -j4 -C src all install check ; then
     cat >&2 <<-EOT
 =============================================
 * Well the unit tests that worked before on macos still work!
