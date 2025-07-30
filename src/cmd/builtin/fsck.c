@@ -361,26 +361,28 @@ static void get_checkpoint_blobref (flux_t *h, int index, char **blobref)
     flux_future_destroy (f);
 }
 
-static int cmd_fsck (optparse_t *p, int ac, char *av[])
+static void update_checkpoint (flux_t *h, const char *blobref)
 {
-    int optindex = optparse_option_index (p);
+    flux_future_t *f;
+    if (!(f = kvs_checkpoint_commit (h,
+                                     blobref,
+                                     0, /* restart sequence at 0 */
+                                     (double)time (NULL),
+                                     KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
+        || flux_rpc_get (f, NULL) < 0)
+        log_err_exit ("error updating checkpoint: %s",
+                      future_strerror (f, errno));
+
+    if (!quiet)
+        fprintf (stderr, "Update checkpoint to new rootref %s\n", blobref);
+
+    flux_future_destroy (f);
+}
+
+static void fsck_one (flux_t *h, optparse_t *p)
+{
     const char *blobref;
     char *tmpref = NULL;
-    flux_t *h;
-
-    log_init ("flux-fsck");
-
-    if (optindex != ac) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-
-    if (optparse_hasopt (p, "verbose"))
-        verbose = true;
-    if (optparse_hasopt (p, "quiet"))
-        quiet = true;
-
-    h = builtin_get_flux_handle (p);
 
     if ((blobref = optparse_get_str (p, "rootref", NULL))) {
         int index;
@@ -406,23 +408,33 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
     if (optparse_hasopt (p, "checkpoint")
         && optparse_hasopt (p, "rootref")
-        && errorcount == 0) {
-        flux_future_t *f;
-        if (!(f = kvs_checkpoint_commit (h,
-                                         blobref,
-                                         0, /* restart sequence at 0 */
-                                         (double)time (NULL),
-                                         KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
-            || flux_rpc_get (f, NULL) < 0)
-            log_err_exit ("error updating checkpoint: %s",
-                          future_strerror (f, errno));
-        if (!quiet)
-            fprintf (stderr, "Update checkpoint to new rootref %s\n", blobref);
-
-        flux_future_destroy (f);
-    }
+        && errorcount == 0)
+        update_checkpoint (h, blobref);
 
     free (tmpref);
+}
+
+static int cmd_fsck (optparse_t *p, int ac, char *av[])
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h;
+
+    log_init ("flux-fsck");
+
+    if (optindex != ac) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+
+    if (optparse_hasopt (p, "verbose"))
+        verbose = true;
+    if (optparse_hasopt (p, "quiet"))
+        quiet = true;
+
+    h = builtin_get_flux_handle (p);
+
+    fsck_one (h, p);
+
     flux_close (h);
 
     return (errorcount ? -1 : 0);
