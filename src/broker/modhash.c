@@ -51,6 +51,11 @@ static json_t *modhash_get_modlist (modhash_t *mh,
                                     struct service_switch *sw);
 static void modhash_unload_builtins_cond_fulfill (modhash_t *mh,
                                                   flux_future_t *f);
+static module_t *modhash_load_builtin (modhash_t *mh,
+                                      struct module_builtin *bb,
+                                      const char *name,
+                                      json_t *args,
+                                      flux_error_t *error);
 
 int modhash_response_sendmsg_new (modhash_t *mh, flux_msg_t **msg)
 {
@@ -406,6 +411,15 @@ error:
     return NULL;
 }
 
+struct module_builtin *builtins_find (modhash_t *mh, const char *name)
+{
+    for (int i = 0; i < ARRAY_SIZE (builtins); i++) {
+        if (streq (name, builtins[i]->name))
+            return builtins[i];
+    }
+    return NULL;
+}
+
 /* Load a module, asynchronously.
  * N.B. modhash_load () handles response, unless it returns -1.
  */
@@ -421,6 +435,7 @@ static void load_cb (flux_t *h,
     flux_error_t error;
     const char *errmsg = NULL;
     module_t *p;
+    struct module_builtin *builtin;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -429,9 +444,18 @@ static void load_cb (flux_t *h,
                              "path", &path,
                              "args", &args) < 0)
         goto error;
-    if (!(p = modhash_load_dso (ctx->modhash, name, path, args, &error))) {
-        errmsg = error.text;
-        goto error;
+    if ((builtin = builtins_find (ctx->modhash, path))) {
+        p = modhash_load_builtin (ctx->modhash, builtin, name, args, &error);
+        if (!p) {
+            errmsg = error.text;
+            goto error;
+        }
+    }
+    else {
+        if (!(p = modhash_load_dso (ctx->modhash, name, path, args, &error))) {
+            errmsg = error.text;
+            goto error;
+        }
     }
     /* Push the insmod request onto the module.  A response will be generated
      * from the module status callback, after the module is active.
@@ -905,9 +929,11 @@ int modhash_service_remove (modhash_t *mh,
     return 0;
 }
 
-static int modhash_load_builtin (modhash_t *mh,
-                                 struct module_builtin *bb,
-                                 flux_error_t *error)
+static module_t *modhash_load_builtin (modhash_t *mh,
+                                       struct module_builtin *bb,
+                                       const char *name,
+                                       json_t *args,
+                                       flux_error_t *error)
 {
     const char *broker_uuid = overlay_get_uuid (mh->ctx->overlay);
     module_t *p;
@@ -915,11 +941,11 @@ static int modhash_load_builtin (modhash_t *mh,
 
     if (!(p = module_create (mh->ctx->h,
                              broker_uuid,
-                             bb->name,
+                             name ? name : bb->name,
                              bb->main,
-                             NULL,
+                             args,
                              error)))
-        return -1;
+        return NULL;
     if (!(cpy = strdup ("builtin"))
         || module_aux_set (p, "path", cpy, (flux_free_f)free) < 0) {
         errprintf (error,
@@ -930,10 +956,10 @@ static int modhash_load_builtin (modhash_t *mh,
     }
     if (modhash_load_finalize (mh, p, error) < 0)
         goto error;
-    return 0;
+    return p;
 error:
     module_destroy (p);
-    return -1;
+    return NULL;
 }
 
 int modhash_load_builtins (modhash_t *mh, flux_error_t *error)
@@ -942,7 +968,7 @@ int modhash_load_builtins (modhash_t *mh, flux_error_t *error)
         if (builtins[i]->autoload) {
             if (mh->ctx->verbose > 1)
                 log_msg ("loading %s", builtins[i]->name);
-            if (modhash_load_builtin (mh, builtins[i], error) < 0)
+            if (!modhash_load_builtin (mh, builtins[i], NULL, NULL, error))
                 return -1;
         }
     }
