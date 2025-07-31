@@ -35,7 +35,6 @@
 #include "runat.h"
 #include "overlay.h"
 #include "attr.h"
-#include "groups.h"
 #include "modhash.h"
 #include "shutdown.h"
 
@@ -122,6 +121,7 @@ static void action_finalize (struct state_machine *s);
 static void action_goodbye (struct state_machine *s);
 static void action_exit (struct state_machine *s);
 
+static void broker_online_cb (flux_future_t *f, void *arg);
 static void runat_completion_cb (struct runat *r, const char *name, void *arg);
 static void monitor_update (flux_t *h,
                             struct flux_msglist *requests,
@@ -418,11 +418,23 @@ static void action_quorum (struct state_machine *s)
     }
     if (s->ctx->rank > 0)
         quorum_check_parent (s);
-    else if (s->quorum.warn_period > 0.) {
-        flux_timer_watcher_reset (s->quorum.warn_timer,
-                                  s->quorum.warn_period,
-                                  0.);
-        flux_watcher_start (s->quorum.warn_timer);
+    else {
+        if (!(s->quorum.f = flux_rpc_pack (s->ctx->h,
+                                           "groups.get",
+                                           FLUX_NODEID_ANY,
+                                           FLUX_RPC_STREAMING,
+                                           "{s:s}",
+                                           "name", "broker.online"))
+            || flux_future_then (s->quorum.f, -1, broker_online_cb, s) < 0) {
+            flux_log_error (s->ctx->h, "error sending groups.get request");
+            state_machine_post (s, "quorum-fail");
+        }
+        if (s->quorum.warn_period > 0.) {
+            flux_timer_watcher_reset (s->quorum.warn_timer,
+                                      s->quorum.warn_period,
+                                      0.);
+            flux_watcher_start (s->quorum.warn_timer);
+        }
     }
 }
 
@@ -1546,16 +1558,6 @@ struct state_machine *state_machine_create (struct broker *ctx)
     }
     norestart_configure (s);
     overlay_set_monitor_cb (ctx->overlay, overlay_monitor_cb, s);
-    if (s->ctx->rank == 0) {
-        if (!(s->quorum.f = flux_rpc_pack (ctx->h,
-                                           "groups.get",
-                                           FLUX_NODEID_ANY,
-                                           FLUX_RPC_STREAMING,
-                                           "{s:s}",
-                                           "name", "broker.online"))
-            || flux_future_then (s->quorum.f, -1, broker_online_cb, s) < 0)
-            goto error;
-    }
     return s;
 nomem:
     errno = ENOMEM;
