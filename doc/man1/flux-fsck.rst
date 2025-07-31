@@ -49,6 +49,13 @@ OPTIONS
    contain any errors, checkpoint that root reference to the be new
    checkpointed root reference.
 
+.. option:: -S, --scan
+
+   Iterate through all checkpoints to find the most recent checkpoint that
+   passes fsck integrity checks.  The index and root reference of the
+   checkpoint will be output at the end.  If used in conjunction with
+   :option:`--checkpoint`, the discovered checkpoint will be updated.
+
 
 EXIT STATUS
 ===========
