@@ -347,6 +347,7 @@ done:
 struct module_builtin builtin_connector_local = {
     .name = "connector-local",
     .main = mod_main,
+    .autoload = true,
 };
 
 /*

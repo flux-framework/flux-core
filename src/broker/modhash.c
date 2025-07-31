@@ -39,7 +39,7 @@ struct modhash {
 
 extern struct module_builtin builtin_connector_local;
 
-/* Builtin modules are loaded in this order and
+/* Builtin modules with autoload=true are loaded in this order and
  * unloaded in the reverse order.
  */
 static struct module_builtin *builtins[] = {
@@ -940,10 +940,12 @@ error:
 int modhash_load_builtins (modhash_t *mh, flux_error_t *error)
 {
     for (int i = 0; i < ARRAY_SIZE (builtins); i++) {
-        if (mh->ctx->verbose > 1)
-            log_msg ("loading %s", builtins[i]->name);
-        if (modhash_load_builtin (mh, builtins[i], error) < 0)
-            return -1;
+        if (builtins[i]->autoload) {
+            if (mh->ctx->verbose > 1)
+                log_msg ("loading %s", builtins[i]->name);
+            if (modhash_load_builtin (mh, builtins[i], error) < 0)
+                return -1;
+        }
     }
     return 0;
 }
@@ -956,8 +958,10 @@ static void modhash_unload_builtins_cond_fulfill (modhash_t *mh,
     if (!f || flux_future_is_ready (f))
         return;
     for (int i = 0; i < ARRAY_SIZE (builtins); i++) {
-        if (modhash_lookup_byname (mh, builtins[i]->name) != NULL)
-            return;
+        if (builtins[i]->autoload) {
+            if (modhash_lookup_byname (mh, builtins[i]->name) != NULL)
+                return;
+        }
     }
     flux_future_fulfill (f, NULL, NULL);
 }
@@ -975,13 +979,15 @@ flux_future_t *modhash_unload_builtins (modhash_t *mh)
     for (int i = ARRAY_SIZE (builtins); i > 0; i--) {
         struct module_builtin *mod = builtins[i - 1];
 
-        if (mh->ctx->verbose > 1)
-            log_msg ("unloading %s", mod->name);
-        if (unload_module (mh->ctx, mod->name, false, NULL) < 0) {
-            if (errno != ENOENT) {
-                flux_log_error (mh->ctx->h,
-                                "Warning: error unloading %s",
-                                mod->name);
+        if (mod->autoload) {
+            if (mh->ctx->verbose > 1)
+                log_msg ("unloading %s", mod->name);
+            if (unload_module (mh->ctx, mod->name, false, NULL) < 0) {
+                if (errno != ENOENT) {
+                    flux_log_error (mh->ctx->h,
+                                    "Warning: error unloading %s",
+                                    mod->name);
+                }
             }
         }
     }
