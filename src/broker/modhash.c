@@ -318,12 +318,11 @@ static int modhash_load_finalize (struct modhash *mh,
     return 0;
 }
 
-static int modhash_load_dso (modhash_t *mh,
-                             const char *name_or_null,
-                             const char *path_or_name,
-                             json_t *args,
-                             const flux_msg_t *request,
-                             flux_error_t *error)
+static module_t *modhash_load_dso (modhash_t *mh,
+                                   const char *name_or_null,
+                                   const char *path_or_name,
+                                   json_t *args,
+                                   flux_error_t *error)
 {
     broker_ctx_t *ctx = mh->ctx;
     const char *broker_uuid = overlay_get_uuid (ctx->overlay);
@@ -339,7 +338,7 @@ static int modhash_load_dso (modhash_t *mh,
     if (strchr (path_or_name, '/')) {
         if (!(path = strdup (path_or_name))) {
             errprintf (error, "error duplicating module path");
-            return -1;
+            return NULL;
         }
     }
     else {
@@ -347,10 +346,10 @@ static int modhash_load_dso (modhash_t *mh,
         if (!searchpath) {
             errprintf (error, "FLUX_MODULE_PATH is not set in the environment");
             errno = EINVAL;
-            return -1;
+            return NULL;
         }
         if (!(path = module_dso_search (path_or_name, searchpath, error)))
-            return -1;
+            return NULL;
     }
     /* If the name is not specified, derive it from the module path.
      * E.g. the path '/path/to/foo.dso' suggests a module name of 'foo'.
@@ -393,31 +392,18 @@ static int modhash_load_dso (modhash_t *mh,
         ERRNO_SAFE_WRAP (free, path);
         goto error_module;
     }
-    /* Push the insmod request onto the module.  A response will be generated
-     * from the module status callback, after the module is active.
-     */
-    if (request) {
-        if (module_aux_set (p,
-                            "insmod",
-                            (flux_msg_t *)request,
-                            (flux_free_f)flux_msg_decref) < 0) {
-            errprintf (error, "error saving %s request", module_get_name (p));
-            goto error_module;
-        }
-        flux_msg_incref (request);
-    }
     /*  Register service, start module thread, and insert into modhash.
      */
     if (modhash_load_finalize (ctx->modhash, p, error) < 0)
         goto error_module;
     flux_log (ctx->h, LOG_DEBUG, "insmod %s", module_get_name (p));
     free (name);
-    return 0;
+    return p;
 error_module:
     module_destroy (p);
 error:
     ERRNO_SAFE_WRAP (free, name);
-    return -1;
+    return NULL;
 }
 
 /* Load a module, asynchronously.
@@ -434,6 +420,7 @@ static void load_cb (flux_t *h,
     json_t *args;
     flux_error_t error;
     const char *errmsg = NULL;
+    module_t *p;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -442,55 +429,53 @@ static void load_cb (flux_t *h,
                              "path", &path,
                              "args", &args) < 0)
         goto error;
-    if (modhash_load_dso (ctx->modhash, name, path, args, msg, &error) < 0) {
+    if (!(p = modhash_load_dso (ctx->modhash, name, path, args, &error))) {
         errmsg = error.text;
         goto error;
     }
+    /* Push the insmod request onto the module.  A response will be generated
+     * from the module status callback, after the module is active.
+     */
+    if (module_aux_set (p,
+                        "insmod",
+                        (flux_msg_t *)msg,
+                        (flux_free_f)flux_msg_decref) < 0) {
+        errprintf (&error, "error saving %s request", module_get_name (p));
+        errmsg = error.text;
+        goto error_module;
+    }
+    flux_msg_incref (msg);
     return;
+error_module:
+    module_destroy (p);
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static int unload_module (broker_ctx_t *ctx,
-                          const char *name,
-                          bool cancel,
-                          const flux_msg_t *request)
+static module_t *unload_module (broker_ctx_t *ctx,
+                                const char *name,
+                                bool cancel)
 {
     module_t *p;
 
     if (!(p = modhash_lookup_byname (ctx->modhash, name))) {
         errno = ENOENT;
-        return -1;
+        return NULL;
     }
     if (cancel) {
         flux_error_t error;
         if (module_cancel (p, &error) < 0) {
             log_msg ("%s: %s", name, error.text);
-            return -1;
+            return NULL;
         }
     }
     else {
         if (module_stop (p, ctx->h) < 0)
-            return -1;
-    }
-    if (request) {
-        struct flux_msglist *requests = module_aux_get (p, "rmmod");
-        if (!requests) {
-            if (!(requests = flux_msglist_create ())
-                || module_aux_set (p,
-                                   "rmmod",
-                                   requests,
-                                   (flux_free_f)flux_msglist_destroy) < 0) {
-                flux_msglist_destroy (requests);
-                return -1;
-            }
-        }
-        if (flux_msglist_push (requests, request) < 0)
-            return -1;
+            return NULL;
     }
     flux_log (ctx->h, LOG_DEBUG, "rmmod %s", name);
-    return 0;
+    return p;
 }
 
 /* Unload a module, asynchronously.
@@ -505,6 +490,7 @@ static void remove_cb (flux_t *h,
     broker_ctx_t *ctx = arg;
     const char *name;
     int cancel = 0;
+    module_t *p;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -512,7 +498,20 @@ static void remove_cb (flux_t *h,
                              "name", &name,
                              "cancel", &cancel) < 0)
         goto error;
-    if (unload_module (ctx, name, cancel, msg) < 0)
+    if (!(p = unload_module (ctx, name, cancel)))
+        goto error;
+    struct flux_msglist *requests = module_aux_get (p, "rmmod");
+    if (!requests) {
+        if (!(requests = flux_msglist_create ())
+            || module_aux_set (p,
+                               "rmmod",
+                               requests,
+                               (flux_free_f)flux_msglist_destroy) < 0) {
+            flux_msglist_destroy (requests);
+            goto error;
+        }
+    }
+    if (flux_msglist_push (requests, msg) < 0)
         goto error;
     return;
 error:
@@ -982,7 +981,7 @@ flux_future_t *modhash_unload_builtins (modhash_t *mh)
         if (mod->autoload) {
             if (mh->ctx->verbose > 1)
                 log_msg ("unloading %s", mod->name);
-            if (unload_module (mh->ctx, mod->name, false, NULL) < 0) {
+            if (!unload_module (mh->ctx, mod->name, false)) {
                 if (errno != ENOENT) {
                     flux_log_error (mh->ctx->h,
                                     "Warning: error unloading %s",
