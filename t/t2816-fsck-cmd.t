@@ -225,6 +225,42 @@ test_expect_success 'flux-fsck --checkpoint does not update checkpoint if fsck f
 	checkpoint_get | jq -r .value[0].rootref >checkpoint3.out &&
 	test_cmp checkpoint3.out a.rootref
 '
+#
+# --scan tests
+#
+# N.B. current checkpoint should be valid from --checkpoint tests above
+test_expect_success 'flux-fsck --scan works' '
+	flux fsck --scan 2> scan1.out &&
+	grep "Checkpoint 0" scan1.out | grep passed
+'
+test_expect_success 'write some bad checkpoints' '
+	checkpoint_put $(cat bbad.rootref) &&
+	checkpoint_put $(cat cbad.rootref)
+'
+test_expect_success 'flux-fsck --scan works but first two checkpoints fail' '
+	flux fsck --scan 2> scan2.out &&
+	grep "Checkpoint 0" scan2.out | grep "2 errors" &&
+	grep "Checkpoint 1" scan2.out | grep "1 errors" &&
+	grep "Checkpoint 2" scan2.out | grep passed
+'
+test_expect_success 'flux-fsck --scan w/ --checkpoint updates checkpoint' '
+	flux fsck --scan --checkpoint 2> scan3.out &&
+	grep "Checkpoint 2" scan3.out | grep passed &&
+	checkpoint_get | jq -r .value[0].rootref >scancheckpoint3.out &&
+	test_cmp scancheckpoint3.out a.rootref
+'
+test_expect_success 'write a ton of bad checkpoints so no good ones exist' '
+	checkpoint_put $(cat bbad.rootref) &&
+	checkpoint_put $(cat cbad.rootref) &&
+	checkpoint_put $(cat bbad.rootref) &&
+	checkpoint_put $(cat cbad.rootref) &&
+	checkpoint_put $(cat bbad.rootref) &&
+	checkpoint_put $(cat cbad.rootref)
+'
+test_expect_success 'flux-fsck --scan fails with no good checkpoints' '
+	test_must_fail flux fsck --scan --checkpoint
+'
+
 test_expect_success 'remove content & content-sqlite modules' '
 	flux module remove content-sqlite &&
 	flux module remove content
