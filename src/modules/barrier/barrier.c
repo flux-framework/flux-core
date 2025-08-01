@@ -47,12 +47,13 @@
 #include <stdbool.h>
 #include <flux/core.h>
 
+#include "src/broker/module.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 
-const double reduction_timeout = 0.001; // sec
+static const double reduction_timeout = 0.001; // sec
 
 struct barrier_ctx {
     zhash_t *barriers;
@@ -480,7 +481,7 @@ static struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-int mod_main (flux_t *h, int argc, char **argv)
+static int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
     struct barrier_ctx *ctx;
@@ -509,6 +510,12 @@ done:
     barrier_ctx_destroy (ctx);
     return rc;
 }
+
+struct module_builtin builtin_barrier = {
+    .name = "barrier",
+    .main = mod_main,
+    .autoload = false,
+};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
