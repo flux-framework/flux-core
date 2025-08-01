@@ -424,6 +424,14 @@ static void test_client (void)
     ok (flux_pty_client_attached (c),
         "flux_pty_client_attached is true after synchronous attach");
 
+    bool on_apple = false;
+    #ifdef __APPLE__
+    on_apple = true;
+    #endif
+    // MacOS does not allow writes to the leader end of a PTY pair that doesn't
+    // have an _open_ follower FD. I've tried to figure out how to make that
+    // happen here, but failed.
+    skip(on_apple, 4)
     f = flux_pty_client_write (c, "foo\r", 4);
     ok (f != NULL,
         "flux_pty_client_write");
@@ -440,6 +448,7 @@ static void test_client (void)
         "flux_pty_client_write: %s",
         rc == 0 ? "Success" : strerror (errno));
     flux_future_destroy (f);
+    end_skip;
 
     ok (flux_pty_client_detach (c) == 0,
         "flux_pty_client_detach");
