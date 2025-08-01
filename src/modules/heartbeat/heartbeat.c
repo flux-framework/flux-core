@@ -25,6 +25,7 @@
 #include <jansson.h>
 #include <math.h>
 
+#include "src/broker/module.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
@@ -350,7 +351,7 @@ error:
     return NULL;
 }
 
-int mod_main (flux_t *h, int argc, char **argv)
+static int mod_main (flux_t *h, int argc, char **argv)
 {
     struct heartbeat *hb;
     flux_reactor_t *r = flux_get_reactor (h);
@@ -385,6 +386,12 @@ error:
     heartbeat_destroy (hb);
     return -1;
 }
+
+struct module_builtin builtin_heartbeat = {
+    .name = "heartbeat",
+    .main = mod_main,
+    .autoload = false,
+};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
