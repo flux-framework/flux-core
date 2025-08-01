@@ -312,11 +312,179 @@ static void fsck_blobref (flux_t *h, const char *blobref)
     flux_future_destroy (f);
 }
 
+static int is_index (const char *arg)
+{
+    char *endptr;
+    long n;
+
+    errno = 0;
+    n = strtol (arg, &endptr, 0);
+    if (errno != 0 || *endptr != '\0')
+        return -1;
+    /* user can input positive or negative for index */
+    return labs (n);
+}
+
+static void get_checkpoint_blobref (flux_t *h, int index, char **blobref)
+{
+    flux_future_t *f = NULL;
+    const json_t *checkpoints;
+    json_t *checkpt;
+    const char *ref;
+    double timestamp;
+
+    if (!(f = kvs_checkpoint_lookup (h, KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
+        || kvs_checkpoint_lookup_get (f, &checkpoints) < 0)
+        log_msg_exit ("error fetching checkpoints: %s",
+                      future_strerror (f, errno));
+
+    if (!(checkpt = json_array_get (checkpoints, index)))
+        log_msg_exit ("invalid checkpoint index specified");
+
+    if (kvs_checkpoint_parse_rootref (checkpt, &ref) < 0
+        || kvs_checkpoint_parse_timestamp (checkpt, &timestamp) < 0)
+        log_err_exit ("error reading checkpoint");
+
+    if (!quiet) {
+        char buf[64] = "";
+        struct tm tm;
+        if (!timestamp_from_double (timestamp, &tm, NULL))
+            strftime (buf, sizeof (buf), "%Y-%m-%dT%T", &tm);
+        fprintf (stderr,
+                 "Checking integrity of checkpoint from %s\n",
+                 buf);
+    }
+
+    if (!((*blobref) = strdup (ref)))
+        log_err_exit ("out of memory");
+
+    flux_future_destroy (f);
+}
+
+static void update_checkpoint (flux_t *h, const char *blobref)
+{
+    flux_future_t *f;
+    if (!(f = kvs_checkpoint_commit (h,
+                                     blobref,
+                                     0, /* restart sequence at 0 */
+                                     (double)time (NULL),
+                                     KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
+        || flux_rpc_get (f, NULL) < 0)
+        log_err_exit ("error updating checkpoint: %s",
+                      future_strerror (f, errno));
+
+    if (!quiet)
+        fprintf (stderr, "Update checkpoint to new rootref %s\n", blobref);
+
+    flux_future_destroy (f);
+}
+
+static void fsck_one (flux_t *h, optparse_t *p)
+{
+    const char *blobref;
+    char *tmpref = NULL;
+
+    if ((blobref = optparse_get_str (p, "rootref", NULL))) {
+        int index;
+        if ((index = is_index (blobref)) < 0) {
+            if (blobref_validate (blobref) < 0)
+                log_msg_exit ("invalid blobref specified");
+        }
+        else {
+            get_checkpoint_blobref (h, index, &tmpref);
+            blobref = tmpref;
+        }
+    }
+    else {
+        /* index 0 is most recent checkpoint */
+        get_checkpoint_blobref (h, 0, &tmpref);
+        blobref = tmpref;
+    }
+
+    fsck_blobref (h, blobref);
+
+    if (!quiet)
+        fprintf (stderr, "Total errors: %d\n", errorcount);
+
+    if (optparse_hasopt (p, "checkpoint")
+        && optparse_hasopt (p, "rootref")
+        && errorcount == 0)
+        update_checkpoint (h, blobref);
+
+    free (tmpref);
+}
+
+static void fsck_scan (flux_t *h, optparse_t *p)
+{
+    flux_future_t *f = NULL;
+    const json_t *checkpoints;
+    int max;
+    int i;
+
+    if (!(f = kvs_checkpoint_lookup (h, KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
+        || kvs_checkpoint_lookup_get (f, &checkpoints) < 0)
+        log_msg_exit ("error fetching checkpoints: %s",
+                      future_strerror (f, errno));
+
+    max = json_array_size (checkpoints);
+
+    for (i = 0; i < max; i++) {
+        json_t *checkpt;
+        const char *blobref;
+        double timestamp;
+
+        if (!(checkpt = json_array_get (checkpoints, i)))
+            log_msg_exit ("invalid checkpoint index specified");
+
+        if (kvs_checkpoint_parse_rootref (checkpt, &blobref) < 0
+            || kvs_checkpoint_parse_timestamp (checkpt, &timestamp) < 0)
+            log_err_exit ("error reading checkpoint");
+
+        if (!quiet) {
+            char buf[64] = "";
+            struct tm tm;
+            if (!timestamp_from_double (timestamp, &tm, NULL))
+                strftime (buf, sizeof (buf), "%Y-%m-%dT%T", &tm);
+            fprintf (stderr,
+                     "Checking integrity of checkpoint %d from %s\n",
+                     i,
+                     buf);
+        }
+
+        errorcount = 0;
+        fsck_blobref (h, blobref);
+
+        if (!quiet)
+            fprintf (stderr,
+                     "Checkpoint %d failed with %d errors\n",
+                     i,
+                     errorcount);
+
+        if (errorcount == 0) {
+            if (!quiet)
+                fprintf (stderr, "Checkpoint %d with rootref %s passed\n",
+                         i,
+                         blobref);
+
+            /* if i == 0, that's the current checkpoint and we
+             * don't need to update it */
+            if (optparse_hasopt (p, "checkpoint")
+                && i > 0)
+                update_checkpoint (h, blobref);
+
+            break;
+        }
+    }
+
+    if (i == max && !quiet)
+        fprintf (stderr, "No checkpoints passed checks\n");
+
+    flux_future_destroy (f);
+}
+
 static int cmd_fsck (optparse_t *p, int ac, char *av[])
 {
     int optindex = optparse_option_index (p);
-    flux_future_t *f = NULL;
-    const char *blobref;
     flux_t *h;
 
     log_init ("flux-fsck");
@@ -333,43 +501,13 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
     h = builtin_get_flux_handle (p);
 
-    if ((blobref = optparse_get_str (p, "rootref", NULL))) {
-        if (blobref_validate (blobref) < 0)
-            log_msg_exit ("invalid blobref specified");
-    }
-    else {
-        const json_t *checkpoints;
-        json_t *checkpt;
-        double timestamp;
-
-        /* index 0 is most recent checkpoint */
-        if (!(f = kvs_checkpoint_lookup (h, KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
-            || kvs_checkpoint_lookup_get (f, &checkpoints) < 0
-            || !(checkpt = json_array_get (checkpoints, 0))
-            || kvs_checkpoint_parse_rootref (checkpt, &blobref) < 0
-            || kvs_checkpoint_parse_timestamp (checkpt, &timestamp) < 0)
-            log_msg_exit ("error fetching checkpoints: %s",
-                          future_strerror (f, errno));
-
-        if (!quiet) {
-            char buf[64] = "";
-            struct tm tm;
-            if (!timestamp_from_double (timestamp, &tm, NULL))
-                strftime (buf, sizeof (buf), "%Y-%m-%dT%T", &tm);
-            fprintf (stderr,
-                     "Checking integrity of checkpoint from %s\n",
-                     buf);
-        }
-    }
-
-    fsck_blobref (h, blobref);
-
-    flux_future_destroy (f);
+    if (optparse_hasopt (p, "scan"))
+        fsck_scan (h, p);
+    else
+        fsck_one (h, p);
 
     flux_close (h);
 
-    if (!quiet)
-        fprintf (stderr, "Total errors: %d\n", errorcount);
     return (errorcount ? -1 : 0);
 }
 
@@ -380,8 +518,15 @@ static struct optparse_option fsck_opts[] = {
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Don't output diagnostic messages and discovered errors",
     },
-    { .name = "rootref", .key = 'r', .has_arg = 1, .arginfo = "BLOBREF",
-      .usage = "Check integrity starting with BLOBREF",
+    { .name = "rootref", .key = 'r', .has_arg = 1,
+      .arginfo = "<BLOBREF|index>",
+      .usage = "Check integrity starting with alternate starting point",
+    },
+    { .name = "scan", .key = 'S', .has_arg = 0,
+      .usage = "Scan checkpoint history to find first good checkpoint",
+    },
+    { .name = "checkpoint", .key = 'c', .has_arg = 0,
+      .usage = "checkpoint rootref if there are no errors",
     },
     OPTPARSE_TABLE_END
 };

@@ -2,6 +2,8 @@
 
 test_description='Test flux fsck command'
 
+. `dirname $0`/content/content-helper.sh
+
 . $(dirname $0)/sharness.sh
 
 test_under_flux 1 minimal
@@ -30,15 +32,11 @@ test_expect_success 'create some kvs content' '
 	flux kvs namespace create testns &&
 	flux kvs put --namespace=testns dir.a=testns
 '
-# N.B. startlog commands in rc scripts normally ensures a checkpoint
-# exists but we do this just to be extra sure
-test_expect_success 'call sync to ensure we have checkpointed' '
-	flux kvs sync
-'
 test_expect_success 'save some treeobjs for later' '
 	flux kvs get --treeobj dir.b > dirb.out &&
 	flux kvs get --treeobj dir.c > dirc.out
 '
+# N.B. kvs is checkpointed on unload of kvs
 test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
@@ -63,9 +61,7 @@ test_expect_success LONGTEST 'load kvs and create some kvs content' '
 	done &&
 	flux kvs get bigval > bigval.exp
 '
-test_expect_success LONGTEST 'call sync to ensure we have checkpointed' '
-	flux kvs sync
-'
+# N.B. kvs is checkpointed on unload of kvs
 test_expect_success LONGTEST 'unload kvs' '
 	flux module remove kvs
 '
@@ -85,9 +81,7 @@ test_expect_success 'make a reference invalid (dir.b)' '
 	flux kvs put --treeobj dir.b="$(cat dirbbad.out)" &&
 	flux kvs getroot -b > bbad.rootref
 '
-test_expect_success 'call sync to ensure we have checkpointed' '
-	flux kvs sync
-'
+# N.B. kvs is checkpointed on unload of kvs
 test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
@@ -121,9 +115,7 @@ test_expect_success 'make a reference invalid (dir.c)' '
 	flux kvs put --treeobj dir.c="$(cat dircbad2.out)" &&
 	flux kvs getroot -b > cbad.rootref
 '
-test_expect_success 'call sync to ensure we have checkpointed' '
-	flux kvs sync
-'
+# N.B. kvs is checkpointed on unload of kvs
 test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
@@ -200,9 +192,75 @@ test_expect_success 'flux-fsck --rootref fails on non-existent ref' '
 	test_must_fail flux fsck --rootref=sha1-1234567890123456789012345678901234567890 2> rootref6.out &&
 	grep "Total errors: 1" rootref6.out
 '
+test_expect_success 'flux-fsck --rootref fails on bad checkpoints (c bad and b bad checkpoints)' '
+	test_must_fail flux fsck --verbose --rootref=0 &&
+	test_must_fail flux fsck --verbose --rootref=1 &&
+	test_must_fail flux fsck --verbose --rootref=-1
+'
+test_expect_success 'flux-fsck --rootref succeeds on good checkpoint' '
+	flux fsck --verbose --rootref=2 &&
+	flux fsck --verbose --rootref=-2
+'
 test_expect_success 'flux-fsck --rootref fails on invalid ref' '
 	test_must_fail flux fsck --rootref=lalalal
 '
+test_expect_success 'flux-fsck --rootref fails on invalid checkpoint index' '
+	test_must_fail flux fsck --rootref=999
+'
+#
+# --checkpoint tests
+#
+test_expect_success 'checkpoint-get returned final expected rootref' '
+	checkpoint_get | jq -r .value[0].rootref >checkpoint1.out &&
+	test_cmp checkpoint1.out cbad.rootref
+'
+test_expect_success 'flux-fsck --checkpoint updates checkpoint if fsck passes' '
+	flux fsck --rootref=$(cat a.rootref) --checkpoint &&
+	checkpoint_get | jq -r .value[0].rootref >checkpoint2.out &&
+	test_cmp checkpoint2.out a.rootref
+'
+# check that checkpoint is still the same as previous successful test
+test_expect_success 'flux-fsck --checkpoint does not update checkpoint if fsck fails' '
+	test_must_fail flux fsck --rootref=$(cat bbad.rootref) --checkpoint &&
+	checkpoint_get | jq -r .value[0].rootref >checkpoint3.out &&
+	test_cmp checkpoint3.out a.rootref
+'
+#
+# --scan tests
+#
+# N.B. current checkpoint should be valid from --checkpoint tests above
+test_expect_success 'flux-fsck --scan works' '
+	flux fsck --scan 2> scan1.out &&
+	grep "Checkpoint 0" scan1.out | grep passed
+'
+test_expect_success 'write some bad checkpoints' '
+	checkpoint_put $(cat bbad.rootref) &&
+	checkpoint_put $(cat cbad.rootref)
+'
+test_expect_success 'flux-fsck --scan works but first two checkpoints fail' '
+	flux fsck --scan 2> scan2.out &&
+	grep "Checkpoint 0" scan2.out | grep "2 errors" &&
+	grep "Checkpoint 1" scan2.out | grep "1 errors" &&
+	grep "Checkpoint 2" scan2.out | grep passed
+'
+test_expect_success 'flux-fsck --scan w/ --checkpoint updates checkpoint' '
+	flux fsck --scan --checkpoint 2> scan3.out &&
+	grep "Checkpoint 2" scan3.out | grep passed &&
+	checkpoint_get | jq -r .value[0].rootref >scancheckpoint3.out &&
+	test_cmp scancheckpoint3.out a.rootref
+'
+test_expect_success 'write a ton of bad checkpoints so no good ones exist' '
+	checkpoint_put $(cat bbad.rootref) &&
+	checkpoint_put $(cat cbad.rootref) &&
+	checkpoint_put $(cat bbad.rootref) &&
+	checkpoint_put $(cat cbad.rootref) &&
+	checkpoint_put $(cat bbad.rootref) &&
+	checkpoint_put $(cat cbad.rootref)
+'
+test_expect_success 'flux-fsck --scan fails with no good checkpoints' '
+	test_must_fail flux fsck --scan --checkpoint
+'
+
 test_expect_success 'remove content & content-sqlite modules' '
 	flux module remove content-sqlite &&
 	flux module remove content
