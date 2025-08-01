@@ -14,7 +14,6 @@ AM_CPPFLAGS = \
 	$(JANSSON_CFLAGS)
 
 SUBDIRS = \
-	connector-local \
 	kvs \
 	content-files \
 	job-ingest \
@@ -23,6 +22,13 @@ SUBDIRS = \
 	job-exec \
 	resource \
 	sdbus
+
+noinst_LTLIBRARIES = libmodule_builtins.la
+
+libmodule_builtins_la_SOURCES = \
+	connector-local/local.c
+libmodule_builtins_la_LIBADD =
+libmodule_builtins_la_LDFLAGS = $(san_ld_zdef_flag)
 
 fluxmod_LTLIBRARIES = \
 	barrier.la \
