@@ -1,6 +1,6 @@
 .. option:: --conf=FILE|KEY=VAL|STRING|NAME
 
-   The :option:`--conf`` option allows configuration for a Flux instance
+   The :option:`--conf` option allows configuration for a Flux instance
    started via ``flux-batch(1)`` or ``flux-alloc(1)`` to be iteratively built
    on the command line. On first use, a ``conf.json`` entry is added to the
    internal jobspec file archive, and ``-c{{tmpdir}}/conf.json`` is added

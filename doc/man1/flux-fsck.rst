@@ -40,6 +40,12 @@ OPTIONS
    checkpoint.  This option directs flux-fsck to start at an arbitrary
    point.  BLOBREF must refer to an RFC 11 tree object of type "dir".
 
+.. option:: -c, --checkpoint
+
+   If a root reference specified by :option:`--rootref` does not
+   contain any errors, checkpoint that root reference to the be new
+   checkpointed root reference.
+
 
 EXIT STATUS
 ===========
