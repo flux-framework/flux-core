@@ -155,6 +155,13 @@ FLUX_KVS_WATCH_APPEND
    response will only contain the additional appended data.  If the
    value is overwritten, the lookup fails with EINVAL.
 
+FLUX_KVS_WATCH_INITIAL_SENTINEL
+   Modifies the behavior of the FLUX_KVS_WATCH_APPEND flag to notify
+   the caller once all the data that has been appended to the key thus
+   far has been received.  :func:`flux_kvs_lookup_get` and
+   :func:`flux_kvs_lookup_get_raw` indicates this by returning success
+   with a NULL value parameter.
+
 FLUX_KVS_WATCH_FULL
    Specified along with FLUX_KVS_WATCH, this flag will alter watch
    behavior to respond when the value of the key being watched has
