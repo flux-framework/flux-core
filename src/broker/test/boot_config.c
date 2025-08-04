@@ -17,42 +17,10 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libtestutil/test_file.h"
 #include "src/broker/boot_config.h"
 #include "ccan/str/str.h"
 
-
-static void
-create_test_file (const char *dir, char *prefix, char *path, size_t pathlen,
-                  const char *contents)
-{
-    int fd;
-    if (snprintf (path,
-                  pathlen,
-                  "%s/%s.XXXXXX.toml",
-                  dir ? dir : "/tmp",
-                  prefix) >= pathlen)
-        BAIL_OUT ("snprintf overflow");
-    fd = mkstemps (path, 5);
-    if (fd < 0)
-        BAIL_OUT ("mkstemp %s: %s", path, strerror (errno));
-    if (write (fd, contents, strlen (contents)) != strlen (contents))
-        BAIL_OUT ("write %s: %s", path, strerror (errno));
-    if (close (fd) < 0)
-        BAIL_OUT ("close %s: %s", path, strerror (errno));
-}
-
-static void
-create_test_dir (char *dir, int dirlen)
-{
-    const char *tmpdir = getenv ("TMPDIR");
-    if (snprintf (dir,
-                  dirlen,
-                  "%s/cf.XXXXXXX",
-                  tmpdir ? tmpdir : "/tmp") >= dirlen)
-        BAIL_OUT ("snprintf overflow");
-    if (!mkdtemp (dir))
-        BAIL_OUT ("mkdtemp %s: %s", dir, strerror (errno));
-}
 
 void test_parse (const char *dir)
 {
@@ -75,7 +43,7 @@ void test_parse (const char *dir)
 "  { host = \"foo63\" },\n" \
 "]\n";
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
     rc = boot_config_parse (cf, &conf, &hosts);
@@ -149,7 +117,7 @@ void test_overflow_bind (const char *dir)
                   "[bootstrap]\ndefault_bind=\"%*s\"\nhosts=[\"foo\"]\n",
                   MAX_URI+2, "foo") >= sizeof (t))
         BAIL_OUT ("snprintf overflow");
-    create_test_file (dir, "boot", path, sizeof (path), t);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), t);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
     ok (boot_config_parse (cf, &conf, &hosts) == -1,
@@ -174,7 +142,7 @@ void test_overflow_connect (const char *dir)
                   "[bootstrap]\ndefault_connect=\"%*s\"\nhosts=[\"foo\"]\n",
                   MAX_URI+2, "foo") >= sizeof (t))
         BAIL_OUT ("snprintf overflow");
-    create_test_file (dir, "boot", path, sizeof (path), t);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), t);
 
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
@@ -199,7 +167,7 @@ void test_bad_hosts_entry (const char *dir)
 "  42,\n" \
 "]\n";
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
 
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
@@ -226,7 +194,7 @@ void test_missing_info (const char *dir)
 "  { host = \"foo\" },\n" \
 "]\n";
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
@@ -262,7 +230,7 @@ void test_bad_host_hostlist (const char *dir)
 "  { host=\"foo[1-\" },\n" \
 "]\n";
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
@@ -287,7 +255,7 @@ void test_bad_host_bind (const char *dir)
 "  { host=\"foo\", bind=42 },\n" \
 "]\n";
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
@@ -312,7 +280,7 @@ void test_bad_host_key (const char *dir)
 "  { host=\"foo\", wrongkey=42 },\n" \
 "]\n";
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
@@ -340,7 +308,7 @@ void test_toml_mixed_array (const char *dir)
 "  { host = \"foo\" },\n" \
 "]\n";
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
 
     cf = flux_conf_parse (dir, &error);
     ok (cf == NULL && (strstr (error.text, "array type mismatch")
@@ -363,7 +331,7 @@ void test_empty (const char *dir)
     const char *input = \
 "[bootstrap]\n";
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
@@ -389,7 +357,7 @@ void test_empty_hosts (const char *dir)
 "]\n" \
 ;
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
@@ -472,7 +440,7 @@ void test_attr (const char *dir)
     const char *val;
     int flags;
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
@@ -538,7 +506,7 @@ void test_curve_cert (const char *dir)
 "[bootstrap]\n" \
 "curve_cert = \"meep\"\n";
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
@@ -563,7 +531,7 @@ void test_ipv6 (const char *dir)
 "[bootstrap]\n" \
 "enable_ipv6 = true\n";
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
@@ -600,7 +568,7 @@ void test_dup_hosts (const char *dir)
 "host = \"test[65-127]\"\n" \
 "parent = \"test64\"\n";
 
-    create_test_file (dir, "boot", path, sizeof (path), input);
+    create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
