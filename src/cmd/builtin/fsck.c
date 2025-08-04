@@ -24,6 +24,7 @@
 #include "src/common/libutil/timestamp.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libcontent/content.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
 #include "builtin.h"
@@ -41,6 +42,8 @@ static void valref_validate (flux_t *h,
 
 static bool verbose;
 static bool quiet;
+static bool lost_and_found;
+static int lost_and_found_count;
 static int errorcount;
 
 static void read_verror (const char *fmt, va_list ap)
@@ -71,15 +74,34 @@ struct fsck_valref_data
     const char *path;
     int errorcount;
     int errnum;
+    zlist_t *missing_indexes;
 };
+
+static void save_missing_ref_index (struct fsck_valref_data *fvd, int index)
+{
+    int *cpy;
+
+    if (!fvd->missing_indexes) {
+        if (!(fvd->missing_indexes = zlist_new ()))
+            log_err_exit ("cannot create missing indexes list");
+    }
+
+    if (!(cpy = malloc (sizeof (index))))
+        log_err_exit ("cannot allocate memory for index");
+    *cpy = index;
+
+    if (zlist_append (fvd->missing_indexes, cpy) < 0)
+        log_err_exit ("cannot append index to list");
+    zlist_freefn (fvd->missing_indexes, cpy, (zlist_free_fn *) free, true);
+}
 
 static void valref_validate_continuation (flux_future_t *f, void *arg)
 {
     struct fsck_valref_data *fvd = arg;
 
     if (flux_rpc_get (f, NULL) < 0) {
+        int *index = flux_future_aux_get (f, "index");
         if (verbose) {
-            int *index = flux_future_aux_get (f, "index");
             if (errno == ENOENT)
                 read_error ("%s: missing blobref index=%d",
                             fvd->path,
@@ -92,6 +114,8 @@ static void valref_validate_continuation (flux_future_t *f, void *arg)
         }
         fvd->errorcount++;
         fvd->errnum = errno;     /* we'll report the last errno */
+        if (errno == ENOENT && lost_and_found)
+            save_missing_ref_index (fvd, *index);
     }
     fvd->in_flight--;
 
@@ -132,6 +156,76 @@ static void valref_validate (flux_t *h, json_t *treeobj, int index, void *arg)
         log_err_exit ("could not save index value");
 }
 
+static void move_valref_lost_and_found (flux_t *h,
+                                        const char *path,
+                                        json_t *treeobj,
+                                        struct fsck_valref_data *fvd)
+{
+    flux_future_t *f;
+    flux_kvs_txn_t *txn;
+    json_t *new = NULL;
+    char *new_str = NULL;
+    char *new_path;
+    int *missing;
+    int missing_count;
+    int count = treeobj_get_count (treeobj);
+    int i;
+
+    if (!(new = treeobj_create_valref (NULL)))
+        log_err_exit ("cannot create treeobj valref");
+
+    missing_count = zlist_size (fvd->missing_indexes);
+    missing = zlist_pop (fvd->missing_indexes);
+    for (i = 0; i < count; i++) {
+        const char *blobref = treeobj_get_blobref (treeobj, i);
+        if (!missing || i != (*missing)) {
+            if (treeobj_append_blobref (new, blobref) < 0)
+                log_err_exit ("cannot append blobref to valref");
+        }
+        else {
+            free (missing);
+            missing = zlist_pop (fvd->missing_indexes);
+        }
+    }
+
+    /* if no blobrefs in valref, all blobs were bad, gotta convert to
+     * empty val treeobj
+     */
+    if (treeobj_get_count (new) == 0) {
+        json_decref (new);
+        if (!(new = treeobj_create_val (NULL, 0)))
+            log_err_exit ("cannot create treeobj val");
+    }
+
+    if (!(new_str = treeobj_encode (new)))
+        log_err_exit ("cannot dump new treeobj valref");
+
+    if (asprintf (&new_path, "lost+found.%s", path) < 0)
+        log_err_exit ("cannot create lost+found path");
+
+    if (!(txn = flux_kvs_txn_create ())
+        || flux_kvs_txn_put_treeobj (txn, 0, new_path, new_str) < 0)
+        log_err_exit ("cannot create treeobj transaction");
+
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
+        log_err_exit ("failed to commit treeobj to lost+found");
+
+    if (!quiet)
+        fprintf (stderr,
+                 "%s recovered to %s, %d bad references dropped\n",
+                 path,
+                 new_path,
+                 missing_count);
+
+    lost_and_found_count++;
+
+    json_decref (new);
+    free (new_str);
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
+}
+
 static void fsck_valref (flux_t *h, const char *path, json_t *treeobj)
 {
     struct fsck_valref_data fvd = {0};
@@ -162,7 +256,14 @@ static void fsck_valref (flux_t *h, const char *path, json_t *treeobj)
                             strerror (fvd.errnum));
         }
         errorcount++;
+
+        /* can only recover if errors were all bad references */
+        if (lost_and_found
+            && fvd.errorcount == zlist_size (fvd.missing_indexes))
+            move_valref_lost_and_found (h, path, treeobj, &fvd);
     }
+
+    zlist_destroy (&fvd.missing_indexes);
 }
 
 
@@ -309,6 +410,40 @@ static void fsck_blobref (flux_t *h, const char *blobref)
     flux_future_destroy (f);
 }
 
+static bool kvs_is_running (flux_t *h)
+{
+    flux_future_t *f;
+    bool running = true;
+
+    if ((f = flux_kvs_getroot (h, NULL, 0)) != NULL
+        && flux_rpc_get (f, NULL) < 0
+        && errno == ENOSYS)
+        running = false;
+    flux_future_destroy (f);
+    return running;
+}
+
+static void sync_checkpoint (flux_t *h)
+{
+    flux_future_t *f;
+    flux_kvs_txn_t *txn;
+
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("failed to create sync txn");
+
+    if (!(f = flux_kvs_commit (h, NULL, FLUX_KVS_SYNC, txn))
+        || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
+
+    if (!quiet)
+        fprintf (stderr, "Updated primary checkpoint to include lost+found\n");
+
+    flux_future_destroy (f);
+}
+
 static int cmd_fsck (optparse_t *p, int ac, char *av[])
 {
     int optindex = optparse_option_index (p);
@@ -327,8 +462,15 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
         verbose = true;
     if (optparse_hasopt (p, "quiet"))
         quiet = true;
+    if (optparse_hasopt (p, "lost-and-found"))
+        lost_and_found = true;
 
     h = builtin_get_flux_handle (p);
+
+    if (lost_and_found) {
+        if (!kvs_is_running (h))
+            log_msg_exit ("please load kvs module to use --lost-and-found");
+    }
 
     if ((blobref = optparse_get_str (p, "rootref", NULL))) {
         if (blobref_validate (blobref) < 0)
@@ -363,10 +505,14 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
     flux_future_destroy (f);
 
-    flux_close (h);
-
     if (!quiet)
         fprintf (stderr, "Total errors: %d\n", errorcount);
+
+    if (lost_and_found_count)
+        sync_checkpoint (h);
+
+    flux_close (h);
+
     return (errorcount ? -1 : 0);
 }
 
@@ -379,6 +525,10 @@ static struct optparse_option fsck_opts[] = {
     },
     { .name = "rootref", .key = 'r', .has_arg = 1, .arginfo = "BLOBREF",
       .usage = "Check integrity starting with BLOBREF",
+    },
+    {
+      .name = "lost-and-found", .key = 'l', .has_arg = 0,
+      .usage = "Correct recoverable keys and move to lost-and-found",
     },
     OPTPARSE_TABLE_END
 };
