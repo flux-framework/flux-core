@@ -68,7 +68,11 @@ CI failures
 Failures that occur only in a github CI workflow can be directly examined
 with `tmate access <https://mxschmitt.github.io/action-tmate/>`_.
 
-Example: temporarily patch a failing macos workflow:
+In flux-core, the tmate action can be enabled by restarting the workflow
+and selecting the "Enable debug logging" checkbox.
+
+For other framework projects, the tmate action can be temporarily patched
+into the workflows config as in the diff below for the macos workflow:
 
 .. code-block::
 
