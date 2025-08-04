@@ -117,7 +117,7 @@ int module_cancel (module_t *p, flux_error_t *error);
  */
 int module_subscribe (module_t *p, const char *topic);
 int module_unsubscribe (module_t *p, const char *topic);
-int module_event_cast (module_t *p, const flux_msg_t *msg);
+bool module_is_subscribed (module_t *p, const char *topic);
 
 ssize_t module_get_send_queue_count (module_t *p);
 ssize_t module_get_recv_queue_count (module_t *p);

@@ -861,17 +861,26 @@ module_t *modhash_lookup_byname (modhash_t *mh, const char *name)
 
 int modhash_event_mcast (modhash_t *mh, const flux_msg_t *msg)
 {
+    const char *topic;
     module_t *p;
 
+    if (flux_msg_get_topic (msg, &topic) < 0)
+        return -1;
     p = zhash_first (mh->zh_byuuid);
     while (p) {
-        trace_module_msg (mh->ctx->h,
-                          "rx",
-                          module_get_name (p),
-                          mh->trace_requests,
-                          msg);
-        if (module_event_cast (p, msg) < 0)
-            return -1;
+        if (module_is_subscribed (p, topic)) {
+            trace_module_msg (mh->ctx->h,
+                              "rx",
+                              module_get_name (p),
+                              mh->trace_requests,
+                              msg);
+            flux_msg_t *cpy;
+            if (!(cpy = flux_msg_copy (msg, true))
+                || module_sendmsg_new (p, &cpy) < 0) {
+                flux_msg_decref (cpy);
+                return -1;
+            }
+        }
         p = zhash_next (mh->zh_byuuid);
     }
     return 0;
