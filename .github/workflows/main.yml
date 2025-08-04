@@ -130,6 +130,9 @@ jobs:
       run: make check -j4 TESTS=
     - name: check what works so far
       run: scripts/check-macos.sh
+    - name: tmate debug
+      if: ${{ !cancelled() && runner.debug }}
+      uses: mxschmitt/action-tmate@v3
 
   generate-matrix:
     # https://stackoverflow.com/questions/59977364
@@ -209,6 +212,10 @@ jobs:
       timeout-minutes: ${{matrix.timeout_minutes}}
       env: ${{matrix.env}}
       run: ${{matrix.command}}
+
+    - name: tmate debug
+      if: ${{ !cancelled() && runner.debug }}
+      uses: mxschmitt/action-tmate@v3
 
     - name: annotate errors
       if: failure() || cancelled()
