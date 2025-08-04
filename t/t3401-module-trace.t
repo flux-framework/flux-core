@@ -122,4 +122,8 @@ test_expect_success NO_CHAIN_LINT 'kvs.lookup request was captured' '
 test_expect_success NO_CHAIN_LINT 'stop background trace' '
 	kill -15 $(cat trace3.pid); wait || true
 '
+# Issue #6944
+test_expect_success NO_CHAIN_LINT 'resource module trace excludes heartbeat' '
+	test_must_fail grep heartbeat.pulse trace3.out
+'
 test_done
