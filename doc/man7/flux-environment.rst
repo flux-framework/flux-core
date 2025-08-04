@@ -484,6 +484,12 @@ MISCELLANEOUS
    :option:`flux run -o pty.interactive`, or when a Flux instance is started
    with :man1:`flux-alloc`.
 
+.. envvar:: FLUX_MODPROBE_PATH
+
+   If set to a colon-separated list of directories, :man1:`flux-modprobe` will
+   append these directories to the default search path for ``modprobe.toml``,
+   ``modprobe.d/*.toml``, ``rc1.d/*.py``, and ``rc3.d/*.py``.
+
 .. envvar:: FLUX_RC_EXTRA
 
    If set to a colon-separated list of directories, the installed
