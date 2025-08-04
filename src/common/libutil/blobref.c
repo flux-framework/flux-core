@@ -27,7 +27,7 @@
 
 #define SHA1_PREFIX_STRING  "sha1-"
 #define SHA1_PREFIX_LENGTH  5
-#define SHA1_STRING_SIZE    (SHA1_DIGEST_SIZE*2 + SHA1_PREFIX_LENGTH + 1)
+#define SHA1_STRING_SIZE    (SHA1_BLOCK_SIZE*2 + SHA1_PREFIX_LENGTH + 1)
 
 #define SHA256_PREFIX_STRING  "sha256-"
 #define SHA256_PREFIX_LENGTH  7
@@ -36,7 +36,7 @@
 #if BLOBREF_MAX_STRING_SIZE < SHA1_STRING_SIZE
 #error BLOBREF_MAX_STRING_SIZE is too small
 #endif
-#if BLOBREF_MAX_DIGEST_SIZE < SHA1_DIGEST_SIZE
+#if BLOBREF_MAX_DIGEST_SIZE < SHA1_BLOCK_SIZE
 #error BLOBREF_MAX_DIGEST_SIZE is too small
 #endif
 #if BLOBREF_MAX_STRING_SIZE < SHA256_STRING_SIZE
@@ -66,7 +66,7 @@ struct blobhash {
 
 static struct blobhash blobtab[] = {
     { .name = "sha1",
-      .hashlen = SHA1_DIGEST_SIZE,
+      .hashlen = SHA1_BLOCK_SIZE,
       .hashfun = sha1_hash,
     },
     { .name = "sha256",
@@ -83,10 +83,10 @@ static void sha1_hash (const void *data,
 {
     SHA1_CTX ctx;
 
-    assert (hash_len == SHA1_DIGEST_SIZE);
-    SHA1_Init (&ctx);
-    SHA1_Update (&ctx, data, data_len);
-    SHA1_Final (&ctx, hash);
+    assert (hash_len == SHA1_BLOCK_SIZE);
+    sha1_init (&ctx);
+    sha1_update (&ctx, data, data_len);
+    sha1_final (&ctx, hash);
 }
 
 static void sha256_hash (const void *data,
