@@ -14,7 +14,6 @@ AM_CPPFLAGS = \
 	$(JANSSON_CFLAGS)
 
 SUBDIRS = \
-	connector-local \
 	kvs \
 	content-files \
 	job-ingest \
@@ -24,13 +23,20 @@ SUBDIRS = \
 	resource \
 	sdbus
 
+noinst_LTLIBRARIES = libmodule_builtins.la
+
+libmodule_builtins_la_SOURCES = \
+	connector-local/local.c \
+	barrier/barrier.c \
+	heartbeat/heartbeat.c
+libmodule_builtins_la_LIBADD =
+libmodule_builtins_la_LDFLAGS = $(san_ld_zdef_flag)
+
 fluxmod_LTLIBRARIES = \
-	barrier.la \
 	content.la \
 	content-files.la \
 	content-sqlite.la \
 	cron.la \
-	heartbeat.la \
 	job-exec.la \
 	job-info.la \
 	job-list.la \
@@ -47,13 +53,6 @@ fluxmod_LTLIBRARIES = \
 # N.B. SOURCES should be empty when module subdir is listed in
 # SUBDIRS above.  This avoids distcheck problems with older automake.
 # Hint: build convenience library in subdir and reference that in LIBADD.
-
-barrier_la_SOURCES = \
-	barrier/barrier.c
-barrier_la_LIBADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la
-barrier_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 content_la_SOURCES = \
 	content/main.c \
@@ -105,13 +104,6 @@ cron_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(JANSSON_LIBS)
 cron_la_LDFLAGS = $(fluxmod_ldflags) -module
-
-heartbeat_la_SOURCES = \
-	heartbeat/heartbeat.c
-heartbeat_la_LIBADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la
-heartbeat_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 job_exec_la_SOURCES =
 job_exec_la_LIBADD = \
