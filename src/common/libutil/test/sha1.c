@@ -1,85 +1,64 @@
-/* adapted for TAP from src/common/libutil/sha1.c */
+/* adapted for TAP from: */
+/*********************************************************************
+* Filename:   sha1_test.c
+* Author:     Brad Conte (brad AT bradconte.com)
+* Copyright:
+* Disclaimer: This code is presented "as is" without any guarantees.
+* Details:    Performs known-answer tests on the corresponding SHA1
+	          implementation. These tests do not encompass the full
+	          range of available test vectors, however, if the tests
+	          pass it is very, very likely that the code is correct
+	          and was compiled properly. This code also serves as
+	          example usage of the functions.
+*********************************************************************/
+
+/*************************** HEADER FILES ***************************/
+#include <stdio.h>
+#include <memory.h>
 #include <string.h>
 #include "src/common/libtap/tap.h"
-#include "src/common/libutil/sha1.h"
+#include "sha1.h"
 
-/*
- * Test Vectors (from FIPS PUB 180-1)
- * "abc"
- * A9993E36 4706816A BA3E2571 7850C26C 9CD0D89D
- * "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
- * 84983E44 1C3BD26E BAAE4AA1 F95129E5 E54670F1
- * A million repetitions of "a"
- * 34AA973C D4C4DAA4 F61EEB2B DBAD2731 6534016F
- */
-
-static char *test_data[] = {
-    "abc",
-    "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
-    "A million repetitions of 'a'"};
-static char *test_results[] = {
-    "A9993E36 4706816A BA3E2571 7850C26C 9CD0D89D",
-    "84983E44 1C3BD26E BAAE4AA1 F95129E5 E54670F1",
-    "34AA973C D4C4DAA4 F61EEB2B DBAD2731 6534016F"};
-
-void digest_to_hex(const uint8_t digest[SHA1_DIGEST_SIZE], char *output)
+/*********************** FUNCTION DEFINITIONS ***********************/
+int sha1_test()
 {
-    int i,j;
-    char *c = output;
+	BYTE text1[] = {"abc"};
+	BYTE text2[] = {"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"};
+	BYTE text3[] = {"aaaaaaaaaa"};
+	BYTE hash1[SHA1_BLOCK_SIZE] = {0xa9,0x99,0x3e,0x36,0x47,0x06,0x81,0x6a,0xba,0x3e,0x25,0x71,0x78,0x50,0xc2,0x6c,0x9c,0xd0,0xd8,0x9d};
+	BYTE hash2[SHA1_BLOCK_SIZE] = {0x84,0x98,0x3e,0x44,0x1c,0x3b,0xd2,0x6e,0xba,0xae,0x4a,0xa1,0xf9,0x51,0x29,0xe5,0xe5,0x46,0x70,0xf1};
+	BYTE hash3[SHA1_BLOCK_SIZE] = {0x34,0xaa,0x97,0x3c,0xd4,0xc4,0xda,0xa4,0xf6,0x1e,0xeb,0x2b,0xdb,0xad,0x27,0x31,0x65,0x34,0x01,0x6f};
+	BYTE buf[SHA1_BLOCK_SIZE];
+	int idx;
+	SHA1_CTX ctx;
+	int pass = 1;
 
-    for (i = 0; i < SHA1_DIGEST_SIZE/4; i++) {
-        for (j = 0; j < 4; j++) {
-            sprintf(c,"%02X", digest[i*4+j]);
-            c += 2;
-        }
-        sprintf(c, " ");
-        c += 1;
-    }
-    *(c - 1) = '\0';
+	sha1_init(&ctx);
+	sha1_update(&ctx, text1, strlen((char *)text1));
+	sha1_final(&ctx, buf);
+	ok (!memcmp(hash1, buf, SHA1_BLOCK_SIZE),
+	    "text1 OK");
+
+	sha1_init(&ctx);
+	sha1_update(&ctx, text2, strlen((char *)text2));
+	sha1_final(&ctx, buf);
+	ok (!memcmp(hash2, buf, SHA1_BLOCK_SIZE),
+	    "text2 OK");
+
+	sha1_init(&ctx);
+	for (idx = 0; idx < 100000; ++idx)
+	   sha1_update(&ctx, text3, strlen((char *)text3));
+	sha1_final(&ctx, buf);
+	ok (!memcmp(hash3, buf, SHA1_BLOCK_SIZE),
+	    "text3 OK");
+
+	return(pass);
 }
 
-int main(int argc, char** argv)
+int main()
 {
-    int k;
-    SHA1_CTX context;
-    uint8_t digest[20];
-    char output[80];
-
-    plan (NO_PLAN);
-
-    for (k = 0; k < 2; k++){
-        SHA1_Init(&context);
-        SHA1_Update(&context, (uint8_t*)test_data[k], strlen(test_data[k]));
-        SHA1_Final(&context, digest);
-	digest_to_hex(digest, output);
-
-        ok (strcmp(output, test_results[k]) == 0,
-	    "FIPS test vector %s", test_data[k]);
-    }
-
-    /* million 'a' vector we feed separately */
-    SHA1_Init(&context);
-    for (k = 0; k < 1000000; k++)
-        SHA1_Update(&context, (uint8_t*)"a", 1);
-    SHA1_Final(&context, digest);
-    digest_to_hex(digest, output);
-    ok (strcmp(output, test_results[2]) == 0,
-        "FIPS test vector %s", test_data[2]);
-
-    /* verify that (>200 byte) data buffer isn't scribbled upon
-     * N.B. if sha1.c is built without SHA1HANDSOFF, this fails.
-     */
-    const int blobsize = 1024;
-    uint8_t refblob[blobsize];
-    uint8_t blob[blobsize];
-    memset (refblob, 1, sizeof (blob));
-    memcpy (blob, refblob, sizeof (blob));
-    SHA1_Init(&context);
-    SHA1_Update(&context, blob, blobsize);
-    SHA1_Final(&context, digest);
-    ok (memcmp (blob, refblob, blobsize) == 0,
-        "%d byte buffer was not scribbled upon during SHA1 computation",
-        blobsize);
-
-    done_testing();
+	plan (NO_PLAN);
+	sha1_test();
+	done_testing ();
+	return(0);
 }

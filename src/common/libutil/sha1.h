@@ -1,30 +1,35 @@
-/* public api for steve reid's public domain SHA-1 implementation */
-/* this file is in the public domain */
+/*********************************************************************
+* Filename:   sha1.h
+* Author:     Brad Conte (brad AT bradconte.com)
+* Copyright:
+* Disclaimer: This code is presented "as is" without any guarantees.
+* Details:    Defines the API for the corresponding SHA1 implementation.
+*********************************************************************/
 
-#ifndef __SHA1_H
-#define __SHA1_H
+#ifndef SHA1_H
+#define SHA1_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+/*************************** HEADER FILES ***************************/
+#include <stddef.h>
 
-#include <stdint.h>
-#include <sys/param.h>
+/****************************** MACROS ******************************/
+#define SHA1_BLOCK_SIZE 20              // SHA1 outputs a 20 byte digest
+
+/**************************** DATA TYPES ****************************/
+typedef unsigned char BYTE;             // 8-bit byte
+typedef unsigned int  WORD;             // 32-bit word, change to "long" for 16-bit machines
 
 typedef struct {
-    uint32_t state[5];
-    uint32_t count[2];
-    uint8_t  buffer[64];
+	BYTE data[64];
+	WORD datalen;
+	unsigned long long bitlen;
+	WORD state[5];
+	WORD k[4];
 } SHA1_CTX;
 
-#define SHA1_DIGEST_SIZE 20
+/*********************** FUNCTION DECLARATIONS **********************/
+void sha1_init(SHA1_CTX *ctx);
+void sha1_update(SHA1_CTX *ctx, const BYTE data[], size_t len);
+void sha1_final(SHA1_CTX *ctx, BYTE hash[]);
 
-void SHA1_Init(SHA1_CTX* context);
-void SHA1_Update(SHA1_CTX* context, const uint8_t* data, const size_t len);
-void SHA1_Final(SHA1_CTX* context, uint8_t digest[SHA1_DIGEST_SIZE]);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* __SHA1_H */
+#endif   // SHA1_H
