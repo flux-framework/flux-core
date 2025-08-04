@@ -16,6 +16,7 @@ test_expect_success 'create test script' '
 	chmod +x runjobs.sh
 '
 test_expect_success 'run instance that leaves an auto dump' '
+	rm -rf state &&
 	mkdir -p state &&
 	flux start -Sstatedir=state \
 	    -Scontent.dump=auto \
