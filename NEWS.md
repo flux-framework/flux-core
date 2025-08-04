@@ -1,3 +1,62 @@
+flux-core version 0.77.0 - 2025-08-05
+-------------------------------------
+
+## New Features
+
+ * broker: let built-in modules be reloaded (#6942)
+ * flux-job: support attach --tail (#6899)
+ * kvs-watch/job-info: support initial sentinel (#6880)
+ * cli: add support for `CLIPlugin` interface to extend command line through
+   plugins (#6906)
+ * flux-fsck: support --rootref option (#6905)
+ * broker: add syslog capability (#6922)
+ * broker: refactor broker module loader and add builtin modules (#6934)
+ * shell: determine node & core resource counts from R during init (#6705)
+ * libjob: add infrastructure for non-integer counts (#6832)
+ * flux-content: support new checkpoints list command (#6798)
+ * content-sqlite/files: support validate target (#6904)
+ * content-sqlite: store history of checkpoints (#6772)
+ * modprobe: efficient and extensible flux startup and shutdown (#6774)
+
+## Fixes
+
+ * job-list: handle per-resource "nodes" special case (#6949)
+ * content: flush before checkpointing (#6260)
+ * kvs: call content.flush before checkpoint (#6240)
+ * Macos fixes (not yet fully functional) (#6926)
+ * macos port: use native interfaces to find default network interface
+   (#6925)
+ * shell: do not abort early when tasks are oversubscribed to resources
+   (#6930)
+ * broker: don't trust /etc/shells completely to determine if rc2 is
+   interactive shell (#6932)
+ * broker: preserve log levels in system instance (#6918)
+ * flux-module trace: capture early messages (#6911)
+ * make broker groups easier to look at when debugging (#6914)
+ * set default jobspec environment using `os.environ` in `JobspecV1` factory
+   functions (#6898)
+ * resource: avoid losing R expiration on resource.rediscover (#6903)
+ * ensure flux module trace only shows subscribed events (#6945)
+ * libutil: update sha1 implementation (#6948)
+
+## Cleanup
+
+ * misc cleanups (#6943)
+ * broker: reduce the number of mallocs in logging path (#6917)
+
+## Build/CI/Testsuite/Documentation
+
+ * doc: add tmate action to debug notes (#6937)
+ * doc: update flux-config-queues(5) with working examples (#6933)
+ * ci: add tmate action which can be enabled via debug flag when re-running
+   jobs (#6946)
+ * Fix for Ubuntu Noble Docker Image to Prevent PMIx+MPICH Issues (#6907)
+ * t: clean up use of jq (#6928)
+ * testsuite: preserve `LD_LIBRARY_PATH` in some tests (#6927)
+ * testsuite: add debugging and fix a test failure if `verbose` set in
+   environment (#6915)
+ * t: increase test timeouts (#6919)
+
 flux-core version 0.76.0 - 2025-07-01
 -------------------------------------
 
