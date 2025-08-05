@@ -186,6 +186,10 @@ be taken down for maintenance.
 
    Limit the time that the command` will block.
 
+.. note::
+   :program:`flux queue drain` can be used as a simple mechanism to wait for
+   all submitted jobs to complete in :command:`flux-batch` scripts.
+
 idle
 ----
 
@@ -307,4 +311,4 @@ FLUX RFC
 SEE ALSO
 ========
 
-:man1:`flux-jobs`, :man1:`flux-submit`
+:man1:`flux-jobs`, :man1:`flux-submit`, :man1:`flux-batch`
