@@ -50,6 +50,7 @@ struct job {
     const char *project;
     const char *bank;
     int ntasks;
+    int ntasks_per_node_on_node_count;  /* flag for ntasks calculation */
     int ntasks_per_core_on_node_count;  /* flag for ntasks calculation */
     int ncores;
     double duration;
