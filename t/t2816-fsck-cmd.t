@@ -2,6 +2,8 @@
 
 test_description='Test flux fsck command'
 
+. `dirname $0`/content/content-helper.sh
+
 . $(dirname $0)/sharness.sh
 
 test_under_flux 1 minimal
@@ -271,6 +273,46 @@ test_expect_success 'flux-fsck --rootref fails on non-existent ref' '
 '
 test_expect_success 'flux-fsck --rootref fails on invalid ref' '
 	test_must_fail flux fsck --rootref=lalalal
+'
+#
+# --lost-and-found
+#
+test_expect_success 'checkpoint-get returned final expected rootref' '
+	checkpoint_get | jq -r .value[0].rootref >checkpointbad.out &&
+	test_cmp checkpointbad.out dbad.rootref
+'
+test_expect_success 'flux-fsck --lost-and-found fails if KVS not loaded' '
+	test_must_fail flux fsck --lost-and-found
+'
+test_expect_success 'load kvs' '
+	flux module load kvs
+'
+test_expect_success 'flux-fsck --lost-and-found works' '
+	test_must_fail flux fsck --lost-and-found 2> lostandfound.err &&
+	grep "dir\.b" lostandfound.err | grep "recovered to" &&
+	grep "dir\.c" lostandfound.err | grep "recovered to" &&
+	grep "dir\.d" lostandfound.err | grep "recovered to" &&
+	grep "Total errors: 3" lostandfound.err
+'
+test_expect_success 'flux-fsck --lost-and-found recovers data to lost+found' '
+	flux kvs get lost+found.dir.b > lostdirb.out &&
+	echo "test1test3test4" > lostdirb.exp &&
+	test_cmp lostdirb.exp lostdirb.out &&
+	flux kvs get lost+found.dir.c > lostdirc.out &&
+	echo "testAtestD" > lostdirc.exp &&
+	flux kvs get lost+found.dir.d > lostdird.out &&
+	! test -s lostdird.out
+'
+test_expect_success 'flux-fsck --lost-and-found converted dir.d to a val treeobj' '
+	flux kvs get --treeobj lost+found.dir.d | jq -e ".type == \"val\""
+'
+test_expect_success 'checkpoint-get returns expected updated rootref' '
+	flux kvs getroot -b > afterlostandfound.rootref &&
+	checkpoint_get | jq -r .value[0].rootref > afterlostandfound.out &&
+	test_cmp afterlostandfound.out afterlostandfound.rootref
+'
+test_expect_success 'unload kvs' '
+	flux module remove kvs
 '
 test_expect_success 'remove content & content-sqlite modules' '
 	flux module remove content-sqlite &&
