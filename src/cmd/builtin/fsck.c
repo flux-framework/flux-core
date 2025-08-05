@@ -141,9 +141,6 @@ static void fsck_valref (flux_t *h, const char *path, json_t *treeobj)
     fvd.count = treeobj_get_count (treeobj);
     fvd.path = path;
 
-    /* N.B. unlike flux-dump(1) out of order returns do not matter
-     * here since we only care about verification, not the data.
-     */
     while (fvd.in_flight < BLOBREF_ASYNC_MAX
            && fvd.index < fvd.count) {
         valref_validate (h, treeobj, fvd.index, &fvd);
