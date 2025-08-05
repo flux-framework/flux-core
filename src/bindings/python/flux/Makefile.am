@@ -66,6 +66,7 @@ nobase_fluxpy_PYTHON = \
 	idset.py \
 	progress.py \
 	queue.py \
+	modprobe.py \
 	uri/uri.py \
 	uri/__init__.py \
 	uri/resolvers/jobid.py \
@@ -106,7 +107,9 @@ nobase_fluxpy_PYTHON = \
 	utils/dataclasses/README.rst \
 	utils/dataclasses/dataclasses.py \
 	utils/dataclasses/LICENSE.txt \
-	utils/dataclasses/MANIFEST.in
+	utils/dataclasses/MANIFEST.in \
+	utils/graphlib/__init__.py \
+	utils/graphlib/graphlib.py
 
 if HAVE_FLUX_SECURITY
 nobase_fluxpy_PYTHON += security.py

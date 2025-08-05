@@ -1,0 +1,158 @@
+# modprobe.toml - flux-modprobe module configuration
+#
+# Supported keys:
+#
+# modules: Array of modules config entries, supporting the following keys:
+#
+#   name     (required) The module name. This will be the target of module load
+#            and remove requests. If there is a name collision between entries,
+#            then the last one loaded will be used.
+#
+#   module   (optional) The module to load if different from name.
+#
+#   provides (optional) List of services this module provides, e.g. "sched".
+#             If multiple modules provide the same service name, the last one
+#             sorted by priority then load order takes precedence by default,
+#             though this can be influenced by configuration or broker
+#             attributes.
+#
+#   priority  (optional) The relative priority of this module and its provides.
+#              Since alternatives are sorted by priority then load order, a
+#              module may be given a high priority to ensure it overrides any
+#	       alternatives for a given service name.
+#              The default priority is 100.
+#
+#   args     (optional) An array of module arguments.
+#
+#   ranks    (optional) The set of ranks on this module should be loaded.
+#            May either be an RFC 22 idset string, or a string beginning with
+#            `>` or `<` followed by a single integer. (e.g. ">0" to load a
+#            module on all ranks but rank 0.
+#
+#   requires  (optional) An array of services this module requires, i.e. if
+#             this module is loaded then services/modules in requires will also
+#             be loaded. If this module also has to be loaded after any
+#             required modules, add them to the after array as well.
+#
+#   after     (optional) An array of modules for which this module must be
+#             loaded after. If this module also requires the service or module
+#             it is loaded after, then the module must also be added to
+#             `requires`.
+#
+#   needs     (optional) An array of modules which are required for this module
+#             to be loaded.
+#
+#   needs-config (optional) An array of configuration keys in dotted key
+#                form which are required for this module to be loaded.
+#                If the key is not set, then the module is skipped.
+#
+#   needs-attrs  (optional) Same as with needs-config, but for broker
+#                attributes.
+#
+# alternatives: (optional) Table of keys that force module alternatives
+#               e.g. `alternatives.sched = "sched-simple"`
+#
+# <name>: (optional) Table of updates for an individual modules
+#         (which must be previously defined)
+#         e.g. `feasibility.ranks = "0,1"`
+#
+
+[[modules]]
+name = "barrier"
+
+[[modules]]
+name = "heartbeat"
+
+[[modules]]
+name = "content"
+requires = ["heartbeat", "content-backing"]
+
+[[modules]]
+name = "cron"
+ranks = "0"
+requires = ["heartbeat"]
+args = ["sync=heartbeat.pulse"]
+
+[[modules]]
+name = "content-files"
+ranks = "0"
+after = [ "content" ]
+provides = [ "content-backing" ]
+
+[[modules]]
+name = "content-sqlite"
+ranks = "0"
+after = [ "content" ]
+provides = [ "content-backing" ]
+
+[[modules]]
+name = "kvs"
+after = ["content-backing", "content"]
+requires = ["content", "heartbeat"]
+
+[[modules]]
+name = "kvs-watch"
+after = ["kvs"]
+requires = ["kvs"]
+
+[[modules]]
+name = "sdbus"
+needs-config = ["systemd.enable"]
+
+[[modules]]
+name = "sdbus-sys"
+module = "sdbus"
+args = ["system"]
+needs-config = ["systemd.enable"]
+
+[[modules]]
+name = "sdmon"
+after = ["sdbus", "sdbus-sys"]
+requires = ["sdbus", "sdbus-sys"]
+needs-config = ["systemd.enable"]
+
+[[modules]]
+name = "sdexec"
+after = ["sdbus"]
+requires = ["sdbus"]
+needs-config = ["systemd.enable"]
+
+[[modules]]
+name = "resource"
+after = ["kvs-watch"]
+requires = ["kvs-watch"]
+
+[[modules]]
+name = "job-manager"
+ranks = "0"
+requires = ["resource", "kvs"]
+after = ["resource", "kvs"]
+
+[[modules]]
+name = "job-info"
+requires = ["kvs-watch", "kvs"]
+
+[[modules]]
+name = "job-list"
+ranks = "0"
+requires = ["job-manager"]
+after = ["job-manager"]
+
+[[modules]]
+name = "job-ingest"
+after = ["job-manager"]
+requires = ["kvs", "job-manager"]
+
+[[modules]]
+name = "job-exec"
+after = ["job-manager"]
+requires = ["kvs", "job-manager"]
+ranks = "0"
+
+[[modules]]
+name = "sched-simple"
+provides = ["sched", "feasibility"]
+after = ["job-manager", "resource"]
+requires = ["job-manager", "resource"]
+ranks = "0"
+priority = 50

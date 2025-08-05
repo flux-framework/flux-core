@@ -60,6 +60,7 @@ function fluxTest:start_session (t)
     -- If fluxometer session is already active just return:
     if self.flux_active then return end
     posix.setenv ("FLUXOMETER_ACTIVE", "t")
+    posix.setenv ("FLUX_RC_USE_MODPROBE", "t")
 
     local size = t.size or 1
     local extra_args = t.args or {}

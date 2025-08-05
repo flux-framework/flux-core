@@ -15,10 +15,10 @@
 # their command names/descriptions
 #
 
-import os
-import sys
 import json
-from os import path
+import os
+import os.path
+import sys
 
 
 class HelpEntries:
@@ -55,16 +55,18 @@ if len(sys.argv) < 2:
     print(f"Usage: {sys.argv[0]} sphinxconf.py", file=sys.stderr)
 
 sphinxconf = sys.argv[1]
-docsdir = os.path.abspath(path.dirname(sphinxconf))
+docsdir = os.path.abspath(os.path.dirname(sphinxconf))
 
 # Don't exec the sphinxconf, instead import what we need
 sys.path.insert(0, docsdir)
-from manpages import man_pages
+
+# Now that sys.path contains path to manpages, import them:
+from manpages import man_pages  # noqa: E402
 
 visited = dict()
 
 entries = HelpEntries()
-for (path, cmd, descr, author, sec) in man_pages:
+for path, cmd, descr, author, sec in man_pages:
     if sec != 1 or path in visited:
         continue
     visited[path] = True

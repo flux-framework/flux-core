@@ -980,3 +980,10 @@ shlex
 fba
 macos
 tmate
+modprobe
+attrs
+confdir
+getopts
+kwargs
+subdirectory
+py
