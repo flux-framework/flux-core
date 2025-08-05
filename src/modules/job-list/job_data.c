@@ -211,7 +211,7 @@ static int parse_jobspec_nnodes (struct job *job, struct jj_counts *jj)
     /* Set job->nnodes if it is available, otherwise it will be set
      * later when R is available.
      */
-    if (jj->nnodes > 0)
+    if (jj->nnodes)
         job->nnodes = jj->nnodes;
     else
         job->nnodes = -1;
@@ -244,7 +244,7 @@ static int parse_per_resource (struct job *job,
         if (json_unpack_ex (o, &error, 0,
                             "{s:s s?i}",
                             "type", type,
-                            "count", count) < 0) {
+                            "count", count) < 0 || (*count) < 1) {
             flux_log (job->h, LOG_ERR,
                       "%s: job %s invalid per-resource spec: %s",
                       __FUNCTION__, idf58 (job->id), error.text);
@@ -268,16 +268,24 @@ static int parse_jobspec_ntasks (struct job *job, struct jj_counts *jj)
     if (parse_per_resource (job, &type, &count) < 0)
         return -1;
 
-    if (type && count > 0) {
+    if (type) {
         /* if per-resource type == nodes and nodes specified
          * (node->slot->core), this is a special case of ntasks.
          */
-        if (streq (type, "node") && jj->nnodes > 0) {
-            job->ntasks = jj->nnodes * count;
+        if (streq (type, "node")) {
+            if (jj->nnodes) {
+                job->ntasks = jj->nnodes * count;
+            } else {
+                /* if nnodes == 0, can't determine until nodes allocated.
+                 * Set a flag / count to retrieve data later when
+                 * R has been retrieved.
+                 */
+                job->ntasks_per_node_on_node_count = count;
+                job->ntasks = -1;
+            }
             return 0;
-        }
-        if (streq (type, "core")) {
-            if (jj->nnodes == 0)
+        } else if (streq (type, "core")) {
+            if (!jj->nnodes)
                 job->ntasks = jj->nslots * jj->slot_size * count;
             else {
                 /* if nnodes > 0, can't determine until nodes
@@ -305,7 +313,7 @@ static int parse_jobspec_ncores (struct job *job, struct jj_counts *jj)
 {
     /* number of cores can't be determined yet, calculate later when R
      * is parsed */
-    if (jj->nnodes > 0 && jj->exclusive) {
+    if (jj->nnodes && jj->exclusive) {
         job->ncores = -1;
         return 0;
     }
@@ -422,6 +430,8 @@ static int parse_R (struct job *job, bool allow_nonfatal)
         goto nonfatal_error;
 
     job->nnodes = idset_count (idset);
+    if (job->ntasks_per_node_on_node_count)
+        job->ntasks = job->nnodes * job->ntasks_per_node_on_node_count;
     if (!(tmp = idset_encode (idset, flags)))
         goto nonfatal_error;
     free (job->ranks);
@@ -447,7 +457,7 @@ static int parse_R (struct job *job, bool allow_nonfatal)
     }
     job->ncores = core_count;
 
-    if (job->ntasks_per_core_on_node_count > 0)
+    if (job->ntasks_per_core_on_node_count)
         job->ntasks = core_count * job->ntasks_per_core_on_node_count;
 
     rc = 0;
