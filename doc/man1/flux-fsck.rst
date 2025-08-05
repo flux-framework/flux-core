@@ -40,6 +40,16 @@ OPTIONS
    checkpoint.  This option directs flux-fsck to start at an arbitrary
    point.  BLOBREF must refer to an RFC 11 tree object of type "dir".
 
+.. option:: -r, --repair
+
+   Remove any dangling references found in KVS value metadata.  If a
+   KVS value changes as a result of this repair, the repaired key is
+   placed in the lost+found directory.  All damaged keys and their
+   disposition are listed on stderr.  This process creates a new root
+   reference for these changes, and commits it as the current KVS
+   checkpoint at the end of the scan.  The KVS is required to be
+   unloaded during repair.
+
 
 EXIT STATUS
 ===========
