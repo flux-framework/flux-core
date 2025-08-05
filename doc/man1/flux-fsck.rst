@@ -40,6 +40,12 @@ OPTIONS
    checkpoint.  This option directs flux-fsck to start at an arbitrary
    point.  BLOBREF must refer to an RFC 11 tree object of type "dir".
 
+.. option:: -l, --lost-and-found
+
+   Recover as much data is possible in corrupted invalid KVS entries
+   and copy them into the `lost+found` directory.  Will update the primary
+   KVS checkpoint after `fsck` is complete.
+
 
 EXIT STATUS
 ===========
