@@ -8,6 +8,15 @@ test_under_flux 1
 
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
+# Usage: sync_trace modname tracefile retries
+sync_trace() {
+	for i in $(seq 0 $3); do
+	    flux module stats $1 >/dev/null
+	    $waitfile -t 0.2 $2 && return 0
+	done
+	return 1
+}
+
 test_expect_success 'flux module trace fails with unknown argument' '
 	test_must_fail flux module trace --not-an-arg
 '
@@ -101,8 +110,8 @@ test_expect_success NO_CHAIN_LINT 'start background trace on resource module' '
 	flux module trace --human --color=never --delta --type=request,response,event resource >trace3.out &
 	echo $! >trace3.pid
 '
-test_expect_success NO_CHAIN_LINT 'heartbeat.pulse event was captured' '
-	$waitfile -t 60 -p heartbeat.pulse trace3.out
+test_expect_success NO_CHAIN_LINT 'synchronize tracing' '
+	sync_trace resource trace3.out 5
 '
 test_expect_success NO_CHAIN_LINT 'reload resource module' '
 	flux module reload resource
@@ -112,5 +121,9 @@ test_expect_success NO_CHAIN_LINT 'kvs.lookup request was captured' '
 '
 test_expect_success NO_CHAIN_LINT 'stop background trace' '
 	kill -15 $(cat trace3.pid); wait || true
+'
+# Issue #6944
+test_expect_success NO_CHAIN_LINT 'resource module trace excludes heartbeat' '
+	test_must_fail grep heartbeat.pulse trace3.out
 '
 test_done

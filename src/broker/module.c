@@ -455,21 +455,9 @@ int module_unsubscribe (module_t *p, const char *topic)
     return subhash_unsubscribe (p->sub, topic);
 }
 
-int module_event_cast (module_t *p, const flux_msg_t *msg)
+bool module_is_subscribed (module_t *p, const char *topic)
 {
-    const char *topic;
-
-    if (flux_msg_get_topic (msg, &topic) < 0)
-        return -1;
-    if (subhash_topic_match (p->sub, topic)) {
-        flux_msg_t *cpy;
-        if (!(cpy = flux_msg_copy (msg, true))
-            || module_sendmsg_new (p, &cpy) < 0) {
-            flux_msg_decref (cpy);
-            return -1;
-        }
-    }
-    return 0;
+    return subhash_topic_match (p->sub, topic);
 }
 
 ssize_t module_get_send_queue_count (module_t *p)
