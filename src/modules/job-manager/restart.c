@@ -134,14 +134,14 @@ done:
 }
 
 /* A job could not be reloaded due to some problem like a truncated eventlog.
- * Move job data to lost+found for manual cleanup.
+ * Move job data to job-lost+found for manual cleanup.
  */
 static void move_to_lost_found (flux_t *h, const char *key, flux_jobid_t id)
 {
     char nkey[128];
     flux_future_t *f;
 
-    snprintf (nkey, sizeof (nkey), "lost+found.job.%s", idf58 (id));
+    snprintf (nkey, sizeof (nkey), "job-lost+found.job.%s", idf58 (id));
     if (!(f = flux_kvs_move (h, NULL, key, NULL, nkey, 0))
         || flux_future_get (f, NULL) < 0) {
         flux_log (h,
