@@ -26,6 +26,9 @@ test_expect_success 'create some kvs content' '
 	flux kvs put --append dir.c=testC &&
 	flux kvs put --append dir.c=testD &&
 	flux kvs getroot -b > c.rootref &&
+	flux kvs put dir.d=testE &&
+	flux kvs put --append dir.d=testF &&
+	flux kvs getroot -b > d.rootref &&
 	flux kvs link dir alink &&
 	flux kvs namespace create testns &&
 	flux kvs put --namespace=testns dir.a=testns
@@ -37,7 +40,8 @@ test_expect_success 'call sync to ensure we have checkpointed' '
 '
 test_expect_success 'save some treeobjs for later' '
 	flux kvs get --treeobj dir.b > dirb.out &&
-	flux kvs get --treeobj dir.c > dirc.out
+	flux kvs get --treeobj dir.c > dirc.out &&
+	flux kvs get --treeobj dir.d > dird.out
 '
 test_expect_success 'unload kvs' '
 	flux module remove kvs
@@ -52,6 +56,7 @@ test_expect_success 'flux-fsck verbose works (simple)' '
 	grep "dir\.a" verbose.out &&
 	grep "dir\.b" verbose.out &&
 	grep "dir\.c" verbose.out &&
+	grep "dir\.d" verbose.out &&
 	grep "alink" verbose.out
 '
 # Cover value with a very large number of appends
@@ -152,6 +157,48 @@ test_expect_success 'flux-fsck no output with --quiet (dir.b & c)' '
 	count=$(cat fsckerrors4.out | wc -l) &&
 	test $count -eq 0
 '
+test_expect_success 'load kvs' '
+	flux module load kvs
+'
+test_expect_success 'make a reference invalid (dir.d)' '
+	cat dird.out | jq -c .data[0]=\"sha1-1234567890123456789012345678901234567890\" > dirdbad1.out &&
+	cat dirdbad1.out | jq -c .data[1]=\"sha1-1234567890123456789012345678901234567890\" > dirdbad2.out &&
+	flux kvs put --treeobj dir.d="$(cat dirdbad2.out)" &&
+	flux kvs getroot -b > dbad.rootref
+'
+test_expect_success 'call sync to ensure we have checkpointed' '
+	flux kvs sync
+'
+test_expect_success 'unload kvs' '
+	flux module remove kvs
+'
+# line count includes extra diagnostic messages
+test_expect_success 'flux-fsck detects errors (dir.b & c & d)' '
+	test_must_fail flux fsck 2> fsckerrors5.out &&
+	test_debug "cat fsckerrors5.out" &&
+	count=$(cat fsckerrors5.out | wc -l) &&
+	test $count -eq 5 &&
+	grep "dir\.b" fsckerrors5.out | grep "missing blobref(s)" &&
+	grep "dir\.c" fsckerrors5.out | grep "missing blobref(s)" &&
+	grep "dir\.d" fsckerrors5.out | grep "missing blobref(s)" &&
+	grep "Total errors: 3" fsckerrors5.out
+'
+test_expect_success 'flux-fsck --verbose outputs details (dir.b & c & d)' '
+	test_must_fail flux fsck --verbose 2> fsckerrors5V.out &&
+	test_debug "cat fsckerrors5V.out" &&
+	grep "dir\.b" fsckerrors5V.out | grep "missing blobref" | grep "index=1" &&
+	grep "dir\.c" fsckerrors5V.out | grep "missing blobref" | grep "index=1" &&
+	grep "dir\.c" fsckerrors5V.out | grep "missing blobref" | grep "index=2" &&
+	grep "dir\.d" fsckerrors5V.out | grep "missing blobref" | grep "index=0" &&
+	grep "dir\.d" fsckerrors5V.out | grep "missing blobref" | grep "index=1" &&
+	grep "Total errors: 3" fsckerrors5V.out
+'
+test_expect_success 'flux-fsck no output with --quiet (dir.b & c & d)' '
+	test_must_fail flux fsck --quiet 2> fsckerrors6.out &&
+	test_debug "cat fsckerrors6.out" &&
+	count=$(cat fsckerrors6.out | wc -l) &&
+	test $count -eq 0
+'
 #
 # --rootref tests
 #
@@ -183,23 +230,44 @@ test_expect_success 'flux-fsck works on rootref c' '
 	grep "dir\.c" rootref3.out &&
 	grep "Total errors: 0" rootref3.out
 '
-test_expect_success 'flux-fsck works on rootref w/ bad b' '
-	test_must_fail flux fsck --verbose --rootref=$(cat bbad.rootref) 2> rootref4.out &&
+test_expect_success 'flux-fsck works on rootref d' '
+	flux fsck --verbose --rootref=$(cat d.rootref) 2> rootref4.out &&
 	test_debug "cat rootref4.out" &&
-	grep "dir\.b" rootref4.out | grep "missing blobref" | grep "index=1" &&
-	grep "Total errors: 1" rootref4.out
+	count=$(cat rootref4.out | wc -l) &&
+	test $count -eq 5 &&
+	grep "dir\.a" rootref4.out &&
+	grep "dir\.b" rootref4.out &&
+	grep "dir\.c" rootref4.out &&
+	grep "dir\.d" rootref4.out &&
+	grep "Total errors: 0" rootref4.out
 '
-test_expect_success 'flux-fsck works on rootref c w/ bad b and c' '
-	test_must_fail flux fsck --verbose --rootref=$(cat cbad.rootref) 2> rootref5.out &&
+test_expect_success 'flux-fsck works on rootref w/ bad b' '
+	test_must_fail flux fsck --verbose --rootref=$(cat bbad.rootref) 2> rootref5.out &&
 	test_debug "cat rootref5.out" &&
 	grep "dir\.b" rootref5.out | grep "missing blobref" | grep "index=1" &&
-	grep "dir\.c" rootref5.out | grep "missing blobref" | grep "index=1" &&
-	grep "dir\.c" rootref5.out | grep "missing blobref" | grep "index=2" &&
-	grep "Total errors: 2" rootref5.out
+	grep "Total errors: 1" rootref5.out
+'
+test_expect_success 'flux-fsck works on rootref c w/ bad b and c' '
+	test_must_fail flux fsck --verbose --rootref=$(cat cbad.rootref) 2> rootref6.out &&
+	test_debug "cat rootref6.out" &&
+	grep "dir\.b" rootref6.out | grep "missing blobref" | grep "index=1" &&
+	grep "dir\.c" rootref6.out | grep "missing blobref" | grep "index=1" &&
+	grep "dir\.c" rootref6.out | grep "missing blobref" | grep "index=2" &&
+	grep "Total errors: 2" rootref6.out
+'
+test_expect_success 'flux-fsck works on rootref d w/ bad b and c and d' '
+	test_must_fail flux fsck --verbose --rootref=$(cat dbad.rootref) 2> rootref7.out &&
+	test_debug "cat rootref7.out" &&
+	grep "dir\.b" rootref7.out | grep "missing blobref" | grep "index=1" &&
+	grep "dir\.c" rootref7.out | grep "missing blobref" | grep "index=1" &&
+	grep "dir\.c" rootref7.out | grep "missing blobref" | grep "index=2" &&
+	grep "dir\.d" rootref7.out | grep "missing blobref" | grep "index=0" &&
+	grep "dir\.d" rootref7.out | grep "missing blobref" | grep "index=1" &&
+	grep "Total errors: 3" rootref7.out
 '
 test_expect_success 'flux-fsck --rootref fails on non-existent ref' '
-	test_must_fail flux fsck --rootref=sha1-1234567890123456789012345678901234567890 2> rootref6.out &&
-	grep "Total errors: 1" rootref6.out
+	test_must_fail flux fsck --rootref=sha1-1234567890123456789012345678901234567890 2> rootref8.out &&
+	grep "Total errors: 1" rootref8.out
 '
 test_expect_success 'flux-fsck --rootref fails on invalid ref' '
 	test_must_fail flux fsck --rootref=lalalal
