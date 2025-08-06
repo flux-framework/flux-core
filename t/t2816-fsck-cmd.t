@@ -51,6 +51,7 @@ test_expect_success 'flux-fsck verbose works (simple)' '
 	flux fsck --verbose 2> verbose.out &&
 	grep "dir\.a" verbose.out &&
 	grep "dir\.b" verbose.out &&
+	grep "dir\.c" verbose.out &&
 	grep "alink" verbose.out
 '
 # Cover value with a very large number of appends
