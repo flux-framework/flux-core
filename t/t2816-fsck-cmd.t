@@ -13,6 +13,9 @@ test_expect_success 'load content and content-sqlite module' '
 test_expect_success 'load kvs' '
 	flux module load kvs
 '
+test_expect_success 'flux-fsck fails if kvs loaded' '
+	test_must_fail flux fsck
+'
 test_expect_success 'create some kvs content' '
 	flux kvs put dir.a=test &&
 	flux kvs getroot -b > a.rootref &&
