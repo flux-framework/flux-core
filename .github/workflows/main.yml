@@ -256,15 +256,15 @@ jobs:
     name: Generate docker manifest
     runs-on: ubuntu-latest
     needs: [ci-checks]
+    if: (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master')
     env:
       DOCKER_REPO: fluxrm/flux-core
       DOCKER_USERNAME: travisflux
       DOCKER_PASSWORD: ${{ secrets.DOCKER_HUB_TRAVISFLUX_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+    - uses: actions/checkout@v4
     - name: make and push manifest as fluxrm/flux-core
-      if: >
-        (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master')
       run: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         src/test/docker-manifest.py
