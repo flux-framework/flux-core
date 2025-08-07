@@ -478,22 +478,36 @@ fi
 ##
 RRA_WITH_SYSTEMD_UNITDIR
 
-
-##
-# libev
-##
-AC_ARG_WITH([external-libev],
-  AS_HELP_STRING([--with-external-libev], [Use external libev]))
-AS_IF([test "x$with_external_libev" = "xyes"], [
-  AC_SEARCH_LIBS([ev_run], [ev], [], [
-    AC_MSG_ERROR([--with-external-libev requested but external libev not found])
-  ])
-],[
-  m4_include([src/common/libev/libev.m4])
-])
-AM_CONDITIONAL([INTERNAL_LIBEV],[test "x$with_external_libev" != "xyes"])
-
 AC_PKGCONFIG
+
+##
+# Which event loop implementation?
+##
+AC_ARG_WITH([libuv],
+  AS_HELP_STRING([--with-libuv], [Use libuv for event loop (experimental)]))
+AC_ARG_WITH([libev],
+  AS_HELP_STRING([--with-libev], [Use non-vendored libev for event loop]))
+AS_IF([test "x$with_libuv" = "xyes" -a "x$with_libev" = "xyes"], [
+  AC_MSG_ERROR([--with-libuv conflicts with --with-libev])
+])
+AS_IF([test "x$with_libuv" = "xyes"], [
+  PKG_CHECK_MODULES([LIBUV], [libuv], [], [])
+  AC_DEFINE([HAVE_LIBUV],[1],[Event loop is libuv])
+])
+AS_IF([test "x$with_libev" = "xyes"], [
+  AC_SEARCH_LIBS([ev_run], [ev], [], [
+    AC_MSG_ERROR([--with-libev requested but external libev not found])
+  ])
+  AC_DEFINE([HAVE_LIBEV],[1],[Event loop is libev])
+])
+AS_IF([test "x$with_libev" != "xyes" -a "x$with_libuv" != "xyes"], [
+  with_internal_libev=yes
+  m4_include([src/common/libev/libev.m4])
+  AC_DEFINE([HAVE_LIBEV],[1],[Event loop is libev])
+  AC_DEFINE([HAVE_LIBEV_INTERNAL],[1],[Use vendored libev])
+])
+AM_CONDITIONAL([INTERNAL_LIBEV],[test "x$with_internal_libev" = "xyes"])
+AM_CONDITIONAL([LIBUV], [test "x$with_libuv" = "xyes"])
 
 ##
 # Project directories
