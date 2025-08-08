@@ -477,6 +477,31 @@ plugins include:
   the resources assigned to the current job. By default the XML is not
   restricted.
 
+.. option:: sysmon
+
+  Monitor for significant changes in CPU and memory utilization and log them
+  to the shell output.
+
+.. option:: sysmon.full
+
+  Break down CPU utilization by CPU.  The default is to monitor combined CPU
+  utilization as one value.
+
+.. option:: sysmon.settle=FSD
+
+  Suppress logging for the specified period after local tasks are started
+  to avoid alerts during startup.  Default 10s.
+
+.. option:: sysmon.mem-alert=PCT
+
+  Suppress memory alerts for changes less than the specified percentage.
+  Setting it to 100 disables memory alerts.  Default 20.
+
+.. options:: sysmon.cpu-alert=PCT
+
+  Suppress cpu alerts for changes less than the specified percentage.
+  Setting it to 100 disables cpu alerts.  Default 20.
+
 .. _flux_shell_initrc:
 
 SHELL INITRC
