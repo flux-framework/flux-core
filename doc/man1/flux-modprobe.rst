@@ -58,6 +58,11 @@ service name instead of module name e.g.::
 
 loads the currently configured scheduler module.
 
+This command will only load modules that are not already loaded, so it
+may be used to ensure a given set of modules are loaded. If all target
+modules and their dependencies are loaded, then an informational message
+is printed that there was nothing to do and the program exits with success.
+
 
 remove
 ------
