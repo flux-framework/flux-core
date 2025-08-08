@@ -941,8 +941,24 @@ class Modprobe:
             self._active_tasks.append(module)
 
     def load(self, modules):
-        """Load modules and their dependencies"""
-        self.run(self.get_deps(self.solve(modules)))
+        """
+        Load modules and their dependencies (if not already loaded)
+
+        Args:
+            modules (list): List of modules to load.
+
+        Raises:
+            FileExistsError: Target modules (and all their dependencies)
+                are already loaded, so there is nothing to do.
+        """
+        mlist = ModuleList(self.handle)
+        needed_modules = [x for x in self.solve(modules) if x not in mlist]
+        if needed_modules:
+            self.run(self.get_deps(needed_modules))
+        else:
+            raise FileExistsError(
+                "All modules and their dependencies are already loaded."
+            )
 
     def _solve_modules_remove(self, modules=None):
         """Solve for a set of currently loaded modules to remove"""
