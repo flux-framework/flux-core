@@ -141,9 +141,6 @@ static void fsck_valref (flux_t *h, const char *path, json_t *treeobj)
     fvd.count = treeobj_get_count (treeobj);
     fvd.path = path;
 
-    /* N.B. unlike flux-dump(1) out of order returns do not matter
-     * here since we only care about verification, not the data.
-     */
     while (fvd.in_flight < BLOBREF_ASYNC_MAX
            && fvd.index < fvd.count) {
         valref_validate (h, treeobj, fvd.index, &fvd);
@@ -312,6 +309,19 @@ static void fsck_blobref (flux_t *h, const char *blobref)
     flux_future_destroy (f);
 }
 
+static bool kvs_is_running (flux_t *h)
+{
+	flux_future_t *f;
+	bool running = true;
+
+	if ((f = flux_kvs_getroot (h, NULL, 0)) != NULL
+		&& flux_rpc_get (f, NULL) < 0
+		&& errno == ENOSYS)
+		running = false;
+	flux_future_destroy (f);
+	return running;
+}
+
 static int cmd_fsck (optparse_t *p, int ac, char *av[])
 {
     int optindex = optparse_option_index (p);
@@ -332,6 +342,9 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
         quiet = true;
 
     h = builtin_get_flux_handle (p);
+
+    if (kvs_is_running (h))
+        log_msg_exit ("please unload kvs module before using flux-fsck");
 
     if ((blobref = optparse_get_str (p, "rootref", NULL))) {
         if (blobref_validate (blobref) < 0)
