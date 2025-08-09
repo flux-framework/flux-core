@@ -84,7 +84,11 @@ def rc3(args):
 
 def load(args):
     M = Modprobe().configure_modules()
-    M.load(args.modules)
+    try:
+        M.load(args.modules)
+    except FileExistsError:
+        LOGGER.info("All modules and dependencies are already loaded")
+
     sys.exit(M.exitcode)
 
 

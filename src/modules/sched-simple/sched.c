@@ -982,7 +982,7 @@ static int process_args (flux_t *h, struct simple_sched *ss,
             ss->schedutil_flags &= ~SCHEDUTIL_HELLO_PARTIAL_OK;
         }
         else {
-            flux_log_error (h, "Unknown module option: '%s'", argv[i]);
+            flux_log (h, LOG_ERR, "Unknown module option: '%s'", argv[i]);
             errno = EINVAL;
             return -1;
         }

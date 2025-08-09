@@ -13,13 +13,13 @@ import concurrent
 import copy
 import glob
 import os
+import subprocess
 import sys
 import threading
 import time
 from collections import defaultdict, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from subprocess import Popen
 
 import flux
 import flux.importer
@@ -535,7 +535,14 @@ class Context:
 
     def bash(self, command):
         """Execute command under ``bash -c``"""
-        Popen(["bash", "-c", command]).wait()
+        process = subprocess.run(["bash", "-c", command])
+        if process.returncode != 0:
+            if process.returncode > 0:
+                raise RuntimeError(
+                    f"bash: exited with exit status {process.returncode}"
+                )
+            else:
+                raise RuntimeError(f"bash: died by signal {process.returncode}")
 
     def load_modules(self, modules):
         """Set a list of modules to load by name"""
@@ -934,8 +941,24 @@ class Modprobe:
             self._active_tasks.append(module)
 
     def load(self, modules):
-        """Load modules and their dependencies"""
-        self.run(self.get_deps(self.solve(modules)))
+        """
+        Load modules and their dependencies (if not already loaded)
+
+        Args:
+            modules (list): List of modules to load.
+
+        Raises:
+            FileExistsError: Target modules (and all their dependencies)
+                are already loaded, so there is nothing to do.
+        """
+        mlist = ModuleList(self.handle)
+        needed_modules = [x for x in self.solve(modules) if x not in mlist]
+        if needed_modules:
+            self.run(self.get_deps(needed_modules))
+        else:
+            raise FileExistsError(
+                "All modules and their dependencies are already loaded."
+            )
 
     def _solve_modules_remove(self, modules=None):
         """Solve for a set of currently loaded modules to remove"""

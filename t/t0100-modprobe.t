@@ -486,6 +486,38 @@ test_expect_success 'modprobe needs works recursively (all tasks enabled)' '
 	EOF
 	test_cmp test${seq}.expected output${seq}
 '
+seq=$((seq=seq+1))
+test_expect_success 'modprobe fails if bash() task fails' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first", before=["*"])
+	def first(context):
+	    print("first")
+
+	@task("next")
+	def needed(context):
+	    context.bash("false")
+	EOF
+	test_must_fail flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}"
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe fails if task raises exception' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first", before=["*"])
+	def first(context):
+	    print("first")
+
+	@task("next")
+	def needed(context):
+	   raise RuntimeException("test exception")
+	EOF
+	test_must_fail flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}"
+'
 test_expect_success 'modprobe: detects missing required modprobe.toml keys' '
 	cat <<-EOF >missing.toml &&
 	[[modules]]
@@ -594,6 +626,11 @@ test_expect_success 'modprobe loads config from modprobe.d/*.toml' '
 '
 test_expect_success 'modprobe load: fails with nonexistent module' '
 	test_expect_code 1 flux modprobe load foo
+'
+test_expect_success 'modprobe load: succeeds if module is already loaded' '
+	flux modprobe load sched 2>already-loaded.err &&
+	test_debug "cat already-loaded.err" &&
+	grep "All modules.*already loaded" already-loaded.err
 '
 test_expect_success 'modprobe load: fails with not loaded module' '
 	test_expect_code 1 flux modprobe remove foo
@@ -817,5 +854,21 @@ test_expect_success 'modprobe: context.enable() can force-enable module' '
 	    flux modprobe rc1 --dry-run >enable.out &&
 	test_debug "cat enable.out" &&
 	grep sched-simple enable.out
+'
+test_expect_success 'modprobe: fails if module load fails' '
+	flux python <<-EOF >all_modules &&
+	import flux
+	from flux.modprobe import ModuleList
+	modules = [x for x in ModuleList(flux.Flux()) if x != "connector-local"]
+	print(" ".join(modules))
+	EOF
+	flux modprobe remove all &&
+	test_when_finished "flux modprobe load $(cat all_modules)" &&
+	cat <<-EOF >sched-badarg.py &&
+	def setup(context):
+	    context.load_modules(["sched-simple"])
+	    context.setopt("sched-simple", "badarg")
+	EOF
+	test_must_fail flux modprobe run sched-badarg.py
 '
 test_done
