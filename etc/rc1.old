@@ -88,7 +88,6 @@ modload all heartbeat
 if test $RANK -eq 0 \
 	&& cron_dir=$(flux getattr cron.directory 2>/dev/null) \
 	&& test -d "$cron_dir"; then
-	shopt -s nullglob
 	for file in $cron_dir/*; do
 		if test -f $file; then
 			if ! flux cron tab <$file; then
@@ -97,7 +96,6 @@ if test $RANK -eq 0 \
 			fi
 		fi
 	done
-	shopt -u nullglob
 fi
 
 
