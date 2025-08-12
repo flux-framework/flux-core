@@ -33,6 +33,7 @@
 
 struct fsck_ctx {
     flux_t *h;
+    json_t *root;
     bool verbose;
     bool quiet;
     int errorcount;
@@ -308,7 +309,6 @@ static void fsck_blobref (struct fsck_ctx *ctx, const char *blobref)
     flux_future_t *f;
     const void *buf;
     size_t buflen;
-    json_t *treeobj;
     json_t *dict;
     const char *key;
     json_t *entry;
@@ -324,17 +324,16 @@ static void fsck_blobref (struct fsck_ctx *ctx, const char *blobref)
         flux_future_destroy (f);
         return;
     }
-    if (!(treeobj = treeobj_decodeb (buf, buflen))
-        || treeobj_validate (treeobj) < 0)
+    if (!(ctx->root = treeobj_decodeb (buf, buflen))
+        || treeobj_validate (ctx->root) < 0)
         log_msg_exit ("blobref does not refer to a valid RFC 11 tree object");
-    if (!treeobj_is_dir (treeobj))
+    if (!treeobj_is_dir (ctx->root))
         log_msg_exit ("root tree object is not a directory");
 
-    dict = treeobj_get_data (treeobj);
+    dict = treeobj_get_data (ctx->root);
     json_object_foreach (dict, key, entry) {
         fsck_treeobj (ctx, key, entry);
     }
-    json_decref (treeobj);
     flux_future_destroy (f);
 }
 
@@ -411,6 +410,7 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
     if (!ctx.quiet)
         fprintf (stderr, "Total errors: %d\n", ctx.errorcount);
 
+    json_decref (ctx.root);
     flux_close (ctx.h);
 
     return (ctx.errorcount ? -1 : 0);
