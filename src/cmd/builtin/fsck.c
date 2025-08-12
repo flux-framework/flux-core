@@ -24,6 +24,7 @@
 #include "src/common/libutil/timestamp.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libcontent/content.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
 #include "builtin.h"
@@ -47,6 +48,7 @@ struct fsck_valref_data
     const char *path;
     int errorcount;
     int errnum;
+    zlist_t *missing_indexes;
 };
 
 static void fsck_treeobj (struct fsck_ctx *ctx,
@@ -75,13 +77,31 @@ void read_error (struct fsck_ctx *ctx, const char *fmt, ...)
     va_end (ap);
 }
 
+static void save_missing_ref_index (struct fsck_valref_data *fvd, int index)
+{
+    int *cpy;
+
+    if (!fvd->missing_indexes) {
+        if (!(fvd->missing_indexes = zlist_new ()))
+            log_err_exit ("cannot create missing indexes list");
+    }
+
+    if (!(cpy = malloc (sizeof (index))))
+        log_err_exit ("cannot allocate memory for index");
+    *cpy = index;
+
+    if (zlist_append (fvd->missing_indexes, cpy) < 0)
+        log_err_exit ("cannot append index to list");
+    zlist_freefn (fvd->missing_indexes, cpy, (zlist_free_fn *) free, true);
+}
+
 static void valref_validate_continuation (flux_future_t *f, void *arg)
 {
     struct fsck_valref_data *fvd = arg;
 
     if (flux_rpc_get (f, NULL) < 0) {
+        int *index = flux_future_aux_get (f, "index");
         if (fvd->ctx->verbose) {
-            int *index = flux_future_aux_get (f, "index");
             if (errno == ENOENT)
                 read_error (fvd->ctx,
                             "%s: missing blobref index=%d",
@@ -96,6 +116,8 @@ static void valref_validate_continuation (flux_future_t *f, void *arg)
         }
         fvd->errorcount++;
         fvd->errnum = errno;     /* we'll report the last errno */
+        if (errno == ENOENT)
+            save_missing_ref_index (fvd, *index);
     }
     fvd->in_flight--;
 
@@ -172,6 +194,8 @@ static void fsck_valref (struct fsck_ctx *ctx,
         }
         ctx->errorcount++;
     }
+
+    zlist_destroy (&fvd.missing_indexes);
 }
 
 
