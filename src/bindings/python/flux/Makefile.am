@@ -77,6 +77,9 @@ nobase_fluxpy_PYTHON = \
 	constraint/parser.py \
 	constraint/parsetab.py \
 	constraint/__init__.py \
+	shape/parser.py \
+	shape/parsetab.py \
+	shape/__init__.py \
 	abc/journal.py \
 	abc/__init__.py \
 	utils/parsedatetime/__init__.py \
@@ -118,10 +121,12 @@ endif
 
 
 BUILT_SOURCES = \
-	constraint/parsetab.py
+	constraint/parsetab.py \
+	shape/parsetab.py
 
 CLEANFILES = \
 	constraint/parser.out \
+	shape/parser.out \
 	$(BUILT_SOURCES)
 
 STDERR_DEVNULL = $(stderr_devnull_$(V))
@@ -139,8 +144,13 @@ constraint/parsetab.py: constraint/parser.py
 	  $(PYTHON) $< --outputdir $(builddir)/constraint $(STDERR_DEVNULL) && \
 	  touch $@
 
+shape/parsetab.py: shape/parser.py
+	$(AM_V_GEN)$(MKDIR_P) shape && \
+	  $(PYTHON) $< --outputdir $(builddir)/shape $(STDERR_DEVNULL) && \
+	  touch $@
+
 clean-local:
-	-rmdir constraint 2>/dev/null || :
+	-rmdir shape 2>/dev/null || :
 	-rm -f *.pyc */*.pyc *.pyo */*.pyo
 	-rm -rf __pycache__ */__pycache__
 
