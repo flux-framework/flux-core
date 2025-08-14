@@ -306,10 +306,6 @@ static int modhash_load_finalize (struct modhash *mh,
 {
     module_set_poller_cb (p, module_cb, mh->ctx);
     module_set_status_cb (p, module_status_cb, mh->ctx);
-    if (module_aux_set (p, "modhash", mh, NULL) < 0) {
-        errprintf (error, "error setting up %s module", module_get_name (p));
-        return -1;
-    }
     if (service_add (mh->ctx->services,
                      module_get_name (p),
                      module_get_uuid (p),
