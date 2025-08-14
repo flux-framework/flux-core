@@ -266,6 +266,21 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
         flux_log (ctx->h, LOG_DEBUG, "module %s exited", name);
         service_remove_byuuid (ctx->services, module_get_uuid (p));
 
+        if (!module_unload_requested (p)
+            && !module_aux_get (p, "insmod")
+            && module_get_errnum (p) != 0) {
+            bool nopanic = false;
+            const char *val = NULL;
+            (void)attr_get (ctx->attrs, "broker.module-nopanic", &val, NULL);
+            if (val && !streq (val, "0"))
+                nopanic = true;
+
+            if (nopanic)
+                flux_log (ctx->h, LOG_CRIT, "%s module runtime failure", name);
+            else
+                broker_panic (ctx, "%s module runtime failure", name);
+        }
+
         if (module_insmod_respond (ctx->h, p) < 0)
             flux_log_error (ctx->h, "flux_respond to insmod %s", name);
 
