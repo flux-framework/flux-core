@@ -53,6 +53,7 @@ struct broker_module {
     int status;
     int errnum;
     bool muted;             /* module is under directive 42, no new messages */
+    bool module_unload_requested;
     struct aux_item *aux;
 
     modpoller_cb_f poller_cb;
@@ -354,6 +355,7 @@ int module_stop (module_t *p, flux_t *h)
                         FLUX_NODEID_ANY,
                         FLUX_RPC_NORESPONSE)))
         goto done;
+    p->module_unload_requested = true;
     rc = 0;
 done:
     free (topic);
@@ -409,6 +411,7 @@ int module_cancel (module_t *p, flux_error_t *error)
             errprintf (error, "pthread_cancel: %s", strerror (e));
             return -1;
         }
+        p->module_unload_requested = true;
     }
     return 0;
 }
@@ -433,6 +436,11 @@ void module_set_status (module_t *p, int new_status)
     p->status = new_status;
     if (p->status_cb)
         p->status_cb (p, prev_status, p->status_arg);
+}
+
+bool module_unload_requested (module_t *p)
+{
+    return p->module_unload_requested;
 }
 
 void module_set_errnum (module_t *p, int errnum)
