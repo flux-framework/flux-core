@@ -113,6 +113,10 @@ void module_mute (module_t *p);
  */
 int module_cancel (module_t *p, flux_error_t *error);
 
+/* Returns true if module_cancel() or module_stop() was called on the module.
+ */
+bool module_unload_requested (module_t *p);
+
 /* Manage module subscriptions.
  */
 int module_subscribe (module_t *p, const char *topic);

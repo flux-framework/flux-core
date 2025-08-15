@@ -1885,6 +1885,19 @@ error:
     flux_msg_destroy (msg);
 }
 
+void broker_panic (broker_ctx_t *ctx, const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start (ap, fmt);
+    flux_vlog (ctx->h, LOG_CRIT, fmt, ap);
+    va_end (ap);
+    if (ctx->state_machine)
+        state_machine_panic (ctx->state_machine);
+    else
+        exit (1);
+}
+
 #if HAVE_VALGRIND
 /* Disable dlclose() during valgrind operation
  */
