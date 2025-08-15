@@ -105,6 +105,13 @@
    greater than the remaining time of a job as it starts, the job will
    be signaled immediately.
 
+   .. note::
+      A signal sent to a batch job is delivered to both the batch script and
+      any running jobs. If the script does not handle the signal it may exit
+      first, terminating the batch job early. It is recommended to use a
+      ``trap`` in the script to allow running jobs to handle the signal and
+      exit cleanly.
+
    The default behavior is to not send any warning signal to jobs.
 
 .. option:: --dry-run
