@@ -144,6 +144,11 @@ broker.exit-restart [Updates: C, R]
    A numeric exit code that the broker uses to indicate that it should not be
    restarted.  This is set by the systemd unit file.  Default: unset.
 
+broker.module-nopanic [Updates: C, R]
+   By default, when a broker module spuriously exits with error, the broker
+   shuts down its subtree and fails.  If this attribute is set, this event
+   is merely logged.
+
 broker.starttime
    Timestamp of broker startup from :man3:`flux_reactor_now`.
 
