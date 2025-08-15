@@ -18,5 +18,7 @@ check_LTLIBRARIES = libtestutil.la
 libtestutil_la_SOURCES = \
 	util.c \
 	util.h \
+	test_file.c \
+	test_file.h \
 	util_rpc.c \
 	util_rpc.h

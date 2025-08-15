@@ -269,7 +269,10 @@ static int local_exec (flux_subprocess_t *p)
          */
         int status;
         pid_t pid;
-        if ((pid = waitpid (p->pid, &status, 0)) <= 0)
+        int saved_err = errno;
+        while ((pid = waitpid (p->pid, &status, 0)) < 0 && errno == EINTR) {}
+        errno = saved_err;
+        if (pid <= 0)
             return -1;
         p->status = status;
 
