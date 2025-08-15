@@ -329,5 +329,22 @@ test_expect_success 'module: hanging module cannot be removed' '
 test_expect_success 'module: but --cancel works' '
         flux module remove --cancel $hangmod
 '
+test_expect_success 'module runtime failure triggers broker panic' '
+	test_must_fail flux start \
+	    -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    sh -c "flux module load $testmod \
+	        && flux event pub testmod.panic && sleep inf" \
+	    2>panic.err &&
+	grep "module runtime failure" panic.err
+'
+test_expect_success 'but only logging with broker.module-nopanic=1' '
+	flux start \
+	    -Sbroker.rc1_path= -Sbroker.rc3_path= -Sbroker.module-nopanic=1 \
+	    sh -c "flux module load $testmod \
+	        && flux event pub testmod.panic \
+		&& while flux module stats testmod; do true; done" \
+	    2>nopanic.err &&
+	grep "module runtime failure" nopanic.err
+'
 
 test_done

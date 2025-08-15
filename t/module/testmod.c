@@ -23,8 +23,20 @@ static void info (flux_t *h,
         flux_log_error (h, "error responding to info request");
 }
 
+static void panic (flux_t *h,
+                  flux_msg_handler_t *mh,
+                  const flux_msg_t *msg,
+                  void *arg)
+{
+    flux_log (h, LOG_CRIT, "panic event received: simulating fatal I/O error");
+    errno = EIO;
+    flux_reactor_stop_error (flux_get_reactor (h));
+}
+
+
 static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "info", info, 0 },
+    { FLUX_MSGTYPE_EVENT, "panic", panic, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -74,11 +86,14 @@ int mod_main (flux_t *h, int argc, char **argv)
             }
         }
     }
-    if (flux_msg_handler_addvec_ex (h,
-                                    flux_aux_get (h, "flux::name"),
-                                    htab,
-                                    NULL,
-                                    &handlers) < 0)
+
+    const char *module_name = flux_aux_get (h, "flux::name");
+    char panic_topic[256];
+
+    snprintf (panic_topic, sizeof (panic_topic), "%s.panic", module_name);
+    if (flux_event_subscribe (h, panic_topic) < 0)
+        flux_log_error (h, "error subscribing to %s", panic_topic);
+    if (flux_msg_handler_addvec_ex (h, module_name, htab, NULL, &handlers) < 0)
         return -1;
     if ((rc = flux_reactor_run (flux_get_reactor (h), 0)) < 0)
         flux_log_error (h, "flux_reactor_run");
