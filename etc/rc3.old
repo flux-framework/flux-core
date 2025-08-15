@@ -41,6 +41,7 @@ modrm all sdmon
 modrm all sdexec
 modrm all sdbus-sys
 modrm all sdbus
+modrm all sysmon
 modrm all barrier
 
 if test $RANK -eq 0; then

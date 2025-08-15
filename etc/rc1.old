@@ -24,6 +24,7 @@ fi
 
 modload all content
 modload all barrier
+modload all sysmon
 if test "$(flux config get --default=false systemd.enable)" = "true"; then
     modload all sdbus
     modload all --name sdbus-sys sdbus system
