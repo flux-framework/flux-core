@@ -12,6 +12,7 @@
 #define _BROKER_H
 
 #include <limits.h>
+#include <stdarg.h>
 #include <flux/optparse.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -65,6 +66,7 @@ typedef struct broker broker_ctx_t;
 int broker_event_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
 int broker_response_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
 void broker_request_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
+void broker_panic (broker_ctx_t *ctx, const char *fmt, ...);
 
 #endif /* !_BROKER_H */
 

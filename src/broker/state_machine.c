@@ -155,10 +155,13 @@ static struct state_next nexttab[] = {
     { "rc1-none",           STATE_INIT,         STATE_QUORUM },
     { "rc1-ignorefail",     STATE_INIT,         STATE_QUORUM },
     { "rc1-fail",           STATE_INIT,         STATE_SHUTDOWN},
+    { "panic",              STATE_INIT,         STATE_SHUTDOWN },
     { "quorum-full",        STATE_QUORUM,       STATE_RUN },
     { "quorum-fail",        STATE_QUORUM,       STATE_SHUTDOWN},
+    { "panic",              STATE_QUORUM,       STATE_SHUTDOWN },
     { "rc2-success",        STATE_RUN,          STATE_CLEANUP },
     { "rc2-fail",           STATE_RUN,          STATE_CLEANUP },
+    { "panic",              STATE_RUN,          STATE_SHUTDOWN },
     { "shutdown",           STATE_RUN,          STATE_CLEANUP },
     { "rc2-none",           STATE_RUN,          STATE_RUN },
     { "cleanup-success",    STATE_CLEANUP,      STATE_SHUTDOWN },
@@ -750,6 +753,25 @@ int state_machine_shutdown (struct state_machine *s, flux_error_t *error)
     else
         state_machine_post (s, "shutdown");
     return 0;
+}
+
+void state_machine_panic (struct state_machine *s)
+{
+    if (s->exit_norestart != 0)
+        s->ctx->exit_rc = s->exit_norestart;
+    else
+        s->ctx->exit_rc = 1;
+
+    if (s->state == STATE_INIT && runat_is_defined (s->ctx->runat, "rc1")) {
+        if (runat_abort (s->ctx->runat, "rc1") < 0)
+            flux_log_error (s->ctx->h, "runat_abort rc1 (panic)");
+    }
+    else if (s->state == STATE_RUN && runat_is_defined (s->ctx->runat, "rc2")) {
+        if (runat_abort (s->ctx->runat, "rc2") < 0)
+            flux_log_error (s->ctx->h, "runat_abort rc2 (panic)");
+    }
+    else
+        state_machine_post (s, "panic");
 }
 
 static void runat_completion_cb (struct runat *r, const char *name, void *arg)

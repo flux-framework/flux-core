@@ -987,3 +987,4 @@ getopts
 kwargs
 subdirectory
 py
+nopanic
