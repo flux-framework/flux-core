@@ -205,7 +205,6 @@ int main (int argc, char *argv[])
     flux_msg_handler_t **handlers = NULL;
     const flux_conf_t *conf;
     const char *method;
-    flux_error_t error;
 
     setlocale (LC_ALL, "");
 
@@ -487,22 +486,12 @@ int main (int argc, char *argv[])
     if (create_runat_phases (&ctx) < 0)
         goto cleanup;
 
-    state_machine_post (ctx.state_machine, "start");
+    state_machine_kickoff (ctx.state_machine);
 
     /* Create shutdown mechanism
      */
     if (!(ctx.shutdown = shutdown_create (&ctx))) {
         log_err ("error creating shutdown mechanism");
-        goto cleanup;
-    }
-
-    /* Load the builtin modules, including the local connector module.
-     * Other modules will be loaded in rc1 using flux module,
-     * which uses the local connector.
-     * The shutdown protocol unloads the builtin modules.
-     */
-    if (modhash_load_builtins (ctx.modhash, &error) < 0) {
-        log_err ("error loading builtins: %s", error.text);
         goto cleanup;
     }
 

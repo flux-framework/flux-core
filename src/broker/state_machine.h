@@ -30,6 +30,8 @@ typedef enum {
 struct state_machine *state_machine_create (struct broker *ctx);
 void state_machine_destroy (struct state_machine *s);
 
+void state_machine_kickoff (struct state_machine *s);
+
 void state_machine_post (struct state_machine *s, const char *event);
 
 void state_machine_kill (struct state_machine *s, int signum);

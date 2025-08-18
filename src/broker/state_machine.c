@@ -147,7 +147,8 @@ static struct state statetab[] = {
 };
 
 static struct state_next nexttab[] = {
-    { "start",              STATE_NONE,         STATE_JOIN },
+    { "builtins-success",   STATE_NONE,         STATE_JOIN },
+    { "builtins-fail",      STATE_NONE,         STATE_EXIT },
     { "parent-ready",       STATE_JOIN,         STATE_INIT },
     { "parent-none",        STATE_JOIN,         STATE_INIT },
     { "parent-fail",        STATE_JOIN,         STATE_SHUTDOWN },
@@ -293,6 +294,49 @@ static void action_join (struct state_machine *s)
     if (s->ctx->sd_notify)
         sd_notify (0, "READY=1");
 #endif
+}
+
+static void kickoff_continuation (flux_future_t *f, void *arg)
+{
+    struct state_machine *s = arg;
+
+    if (flux_future_get (f, NULL) < 0) {
+        flux_log (s->ctx->h,
+                  LOG_ERR,
+                  "error loading builtins: %s",
+                  future_strerror (f, errno));
+        goto error;
+    }
+    state_machine_post (s, "builtins-success");
+    return;
+error:
+    if (s->exit_norestart != 0)
+        s->ctx->exit_rc = s->exit_norestart;
+    else
+        s->ctx->exit_rc = 1;
+    state_machine_post (s, "builtins-fail");
+}
+
+void state_machine_kickoff (struct state_machine *s)
+{
+    flux_future_t *f;
+    flux_error_t error;
+
+    if (!(f = modhash_load_builtins (s->ctx->modhash, &error))) {
+        flux_log (s->ctx->h, LOG_ERR, "error loading builtins: %s", error.text);
+        goto error;
+    }
+    if (flux_future_then (f, -1., kickoff_continuation, s) < 0) {
+        flux_log_error (s->ctx->h, "error registering builtins continuation");
+        goto error;
+    }
+    return;
+error:
+    if (s->exit_norestart != 0)
+        s->ctx->exit_rc = s->exit_norestart;
+    else
+        s->ctx->exit_rc = 1;
+    state_machine_post (s, "builtins-fail");
 }
 
 static void quorum_warn_timer_cb (flux_reactor_t *r,
