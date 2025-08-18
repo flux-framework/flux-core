@@ -55,6 +55,17 @@ test_expect_success 'broker.quorum can be 0-1 (size=2) for compatibility' '
 	flux start -s2 ${ARGS} -Sbroker.quorum=0-1 true 2>compat2.err &&
 	grep assuming compat2.err
 '
+test_expect_success 'simulate builtins-fail with a bad connector-local config' '
+	cat >badconfig.toml <<-EOT &&
+	[access]
+	allow_root-owner = 42
+	EOT
+	test_must_fail flux start \
+		--config-path=badconfig.toml \
+		-Slog-stderr-level=6 \
+		true 2>builtins.err &&
+	grep "builtins-fail: none->exit" builtins.err
+'
 test_expect_success 'create rc1 that blocks on FIFO for rank != 0' '
 	cat <<-EOT >rc1_block &&
 	#!/bin/bash
