@@ -72,34 +72,28 @@ test_expect_success 'jj-reader: unexpected type continues without error' '
 '
 
 # Invalid inputs:
-# jobspec.yaml ==<expected error>
+# <jobspec.yaml filename> ==<expected error>
 #
 cat <<EOF>invalid.txt
-jobspec/valid/basic.yaml        ==jj-reader: at top level: getting duration: Object item not found: system
-jobspec/valid/example2.yaml     ==jj-reader: Unable to determine slot size
-jobspec/valid/use_case_1.2.yaml ==jj-reader: level 0: Expected integer, got object
-jobspec/valid/use_case_1.3.yaml ==jj-reader: level 2: Expected integer, got object
-jobspec/valid/use_case_1.6.yaml ==jj-reader: level 2: Expected integer, got object
-jobspec/valid/use_case_1.7.yaml ==jj-reader: level 2: Expected integer, got object
-jobspec/valid/use_case_2.1.yaml ==jj-reader: Unable to determine slot size
-jobspec/valid/use_case_2.2.yaml ==jj-reader: Unable to determine slot size
-jobspec/valid/use_case_2.5.yaml ==jj-reader: level 1: Expected integer, got object
-jobspec/valid/use_case_2.6.yaml ==jj-reader: level 2: Expected integer, got object
+basic        ==jj-reader: at top level: getting duration: Object item not found: system
+example2     ==jj-reader: Unable to determine slot size
+use_case_1.2 ==jj-reader: level 0: Expected integer, got object
+use_case_1.3 ==jj-reader: level 2: Expected integer, got object
+use_case_1.6 ==jj-reader: level 2: Expected integer, got object
+use_case_1.7 ==jj-reader: level 2: Expected integer, got object
+use_case_2.1 ==jj-reader: Unable to determine slot size
+use_case_2.2 ==jj-reader: Unable to determine slot size
+use_case_2.5 ==jj-reader: level 1: Expected integer, got object
+use_case_2.6 ==jj-reader: level 2: Expected integer, got object
 EOF
 
-#
-# N.B. RFC 14 examples recently bumped the version from 1 to 999.  Since
-# the tests below check that certain constructs in those examples trigger
-# appropriate libjj errors, we change version back to 1 just for this block
-# of tests to retain that coverage.  --Jim G.
-#
 while read line; do
-	yaml=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
+	yaml=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//').yaml
 	expected=$(echo $line | awk -F== '{print $2}')
 
-	test_expect_success "jj-reader: $(basename $yaml) gets expected error" '
+	test_expect_success "jj-reader: $yaml gets expected error" '
 		echo $expected >expected.$test_count &&
-		sed -e 's/999/1/' $SHARNESS_TEST_SRCDIR/$yaml |$y2j >$test_count.json &&
+		cat $SHARNESS_TEST_SRCDIR/jobspec/valid/$yaml | $y2j >$test_count.json &&
 		test_expect_code 1 $jj<$test_count.json > out.$test_count 2>&1 &&
 		test_cmp expected.$test_count out.$test_count
 	'
@@ -107,22 +101,22 @@ done <invalid.txt
 
 
 # Valid inputs:
-# <jobspec command args> == <expected result>
+# <flux run args> ==<expected result>
 #
 cat <<EOF >inputs.txt
-run              ==nnodes=0 nslots=1 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
-run -N1 -n1      ==nnodes=1 nslots=1 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
-run -N1 -n4      ==nnodes=1 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
-run -N1 -n4 -c4  ==nnodes=1 nslots=4 slot_size=4 slot_gpus=0 exclusive=false duration=0.0
-run -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 slot_gpus=0 exclusive=false duration=0.0
-run -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 slot_gpus=0 exclusive=false duration=0.0
-run -n4 -c1      ==nnodes=0 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
-run -N4 -n4 -c4  ==nnodes=4 nslots=4 slot_size=4 slot_gpus=0 exclusive=false duration=0.0
-run -t 1m -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=60.0
-run -t 5s -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=5.0
-run -t 1h -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=3600.0
-run -g1           ==nnodes=0 nslots=1 slot_size=1 slot_gpus=1 exclusive=false duration=0.0
-run -N1 -n2 -c2 -g1 ==nnodes=1 nslots=2 slot_size=2 slot_gpus=1 exclusive=false duration=0.0
+             ==nnodes=0 nslots=1 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
+-N1 -n1      ==nnodes=1 nslots=1 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
+-N1 -n4      ==nnodes=1 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
+-N1 -n4 -c4  ==nnodes=1 nslots=4 slot_size=4 slot_gpus=0 exclusive=false duration=0.0
+-n4 -c4      ==nnodes=0 nslots=4 slot_size=4 slot_gpus=0 exclusive=false duration=0.0
+-n4 -c4      ==nnodes=0 nslots=4 slot_size=4 slot_gpus=0 exclusive=false duration=0.0
+-n4 -c1      ==nnodes=0 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
+-N4 -n4 -c4  ==nnodes=4 nslots=4 slot_size=4 slot_gpus=0 exclusive=false duration=0.0
+-t 1m -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=60.0
+-t 5s -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=5.0
+-t 1h -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=3600.0
+-g1           ==nnodes=0 nslots=1 slot_size=1 slot_gpus=1 exclusive=false duration=0.0
+-N1 -n2 -c2 -g1 ==nnodes=1 nslots=2 slot_size=2 slot_gpus=1 exclusive=false duration=0.0
 EOF
 
 while read line; do
@@ -130,33 +124,34 @@ while read line; do
 	args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
 	expected=$(echo $line | awk -F== '{print $2}')
 
-	test_expect_success "jj-reader: $args returns $expected" '
+	test_expect_success "jj-reader: run $args returns $expected" '
 		echo $expected >expected.$test_count &&
-		flux $args --dry-run hostname | $jj > output.$test_count &&
+		flux run $args --dry-run hostname | $jj > output.$test_count &&
 		test_cmp expected.$test_count output.$test_count
 	'
 done < inputs.txt
 
 
 # Valid inputs:
-# <jobspec> == <expected result>
+# <jobspec use_case #> ==<expected result>
 #
 cat <<EOF >inputs2.txt
-use_case_1.4.json ==nnodes=4 nslots=16 slot_size=4 slot_gpus=0 exclusive=false duration=3600.0
-use_case_1.5.json ==nnodes=2 nslots=4 slot_size=2 slot_gpus=0 exclusive=false duration=14400.0
-use_case_1.8.json ==nnodes=2 nslots=2 slot_size=5 slot_gpus=7 exclusive=true duration=3600.0
-use_case_1.9.json ==nnodes=1 nslots=1 slot_size=1 slot_gpus=0 exclusive=false duration=3600.0
-use_case_1.10.json ==nnodes=10 nslots=10 slot_size=2 slot_gpus=0 exclusive=true duration=3600.0
+1.4  ==nnodes=4 nslots=16 slot_size=4 slot_gpus=0 exclusive=false duration=3600.0
+1.5  ==nnodes=2 nslots=4 slot_size=2 slot_gpus=0 exclusive=false duration=14400.0
+1.9  ==nnodes=1 nslots=1 slot_size=1 slot_gpus=0 exclusive=false duration=3600.0
+1.10 ==nnodes=10 nslots=10 slot_size=2 slot_gpus=0 exclusive=true duration=3600.0
+1.11 ==nnodes=2 nslots=2 slot_size=5 slot_gpus=7 exclusive=true duration=3600.0
 EOF
 
 while read line; do
 
-	args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
+	yaml=use_case_$(echo $line | awk -F== '{print $1}' | sed 's/  *$//').yaml
 	expected=$(echo $line | awk -F== '{print $2}')
 
-	test_expect_success "jj-reader: $args returns $expected" '
+	test_expect_success "jj-reader: $yaml returns $expected" '
 		echo $expected >expected.$test_count &&
-		cat $SHARNESS_TEST_SRCDIR/jobspec/valid/$args | $jj > output.$test_count &&
+		cat $SHARNESS_TEST_SRCDIR/jobspec/valid/$yaml | $y2j | \
+            $jj > output.$test_count &&
 		test_cmp expected.$test_count output.$test_count
 	'
 done < inputs2.txt
