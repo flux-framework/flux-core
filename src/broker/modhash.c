@@ -339,6 +339,7 @@ static int modhash_load_finalize (struct modhash *mh,
     }
     modhash_add (mh, p);
 
+    flux_log (mh->ctx->h, LOG_DEBUG, "insmod %s", module_get_name (p));
     return 0;
 }
 
@@ -420,7 +421,6 @@ static module_t *modhash_load_dso (modhash_t *mh,
      */
     if (modhash_load_finalize (ctx->modhash, p, error) < 0)
         goto error_module;
-    flux_log (ctx->h, LOG_DEBUG, "insmod %s", module_get_name (p));
     free (name);
     return p;
 error_module:
