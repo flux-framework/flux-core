@@ -96,6 +96,7 @@ TESTSCRIPTS = \
 	t0021-archive-cmd.t \
 	t0022-jj-reader.t \
 	t0023-jobspec1-validate.t \
+	t0024-jjc-reader.t \
 	t0026-flux-R.t \
 	t0090-content-enospc.t \
 	t0100-modprobe.t \
@@ -475,6 +476,7 @@ check_PROGRAMS = \
 	job-info/eventlog_watch_initial_sentinel \
 	ingest/submitbench \
 	sched-simple/jj-reader \
+	sched-simple/jjc-reader \
 	shell/rcalc \
 	shell/mpir \
 	debug/stall \
@@ -866,6 +868,13 @@ sched_simple_jj_reader_LDADD = \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(test_ldadd)
 sched_simple_jj_reader_LDFLAGS = $(test_ldflags)
+
+sched_simple_jjc_reader_SOURCES = sched-simple/jjc-reader.c
+sched_simple_jjc_reader_CPPFLAGS = $(test_cppflags)
+sched_simple_jjc_reader_LDADD = \
+	$(top_builddir)/src/common/libjob/libjob.la \
+	$(test_ldadd)
+sched_simple_jjc_reader_LDFLAGS = $(test_ldflags)
 
 shell_plugins_dummy_la_SOURCES = shell/plugins/dummy.c
 shell_plugins_dummy_la_CPPFLAGS = $(test_cppflags)
