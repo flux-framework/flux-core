@@ -81,9 +81,6 @@
 #include "broker.h"
 
 
-static int broker_request_sendmsg_new_internal (broker_ctx_t *ctx,
-                                                flux_msg_t **msg);
-
 static void h_internal_watcher (flux_reactor_t *r,
                                 flux_watcher_t *w,
                                 int revents,
@@ -1847,8 +1844,7 @@ static void h_internal_watcher (flux_reactor_t *r,
         goto error;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            if (broker_request_sendmsg_new_internal (ctx, &msg) < 0)
-                goto error;
+            broker_request_sendmsg_new (ctx, &msg);
             break;
         case FLUX_MSGTYPE_RESPONSE:
             if (broker_response_sendmsg_new (ctx, &msg) < 0)
