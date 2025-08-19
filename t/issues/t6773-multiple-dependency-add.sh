@@ -41,7 +41,7 @@ flux start -Sstatedir=statedir.t6773 flux python t6773.py
 # - walks all jobs ensuring they ran and had only one dependency-add and
 #   one flux-restart event each.
 cat <<-'EOF' >t6773.sh
-#!/bin/sh
+#!/bin/bash
 RC=0
 flux queue start
 flux watch --all || RC=1
