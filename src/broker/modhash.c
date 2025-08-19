@@ -34,6 +34,7 @@ struct modhash {
     flux_msg_handler_t **handlers;
     struct broker *ctx;
     struct flux_msglist *trace_requests;
+    flux_future_t *f_builtins_load;
     flux_future_t *f_builtins_unload;
 };
 
@@ -53,6 +54,8 @@ static struct module_builtin *builtins[] = {
 static json_t *modhash_get_modlist (modhash_t *mh,
                                     double now,
                                     struct service_switch *sw);
+static void modhash_load_builtins_cond_fulfill (modhash_t *mh,
+                                                flux_future_t *f);
 static void modhash_unload_builtins_cond_fulfill (modhash_t *mh,
                                                   flux_future_t *f);
 static module_t *modhash_load_builtin (modhash_t *mh,
@@ -246,6 +249,9 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
     broker_ctx_t *ctx = arg;
     int status = module_get_status (p);
     const char *name = module_get_name (p);
+
+    modhash_load_builtins_cond_fulfill (ctx->modhash,
+                                        ctx->modhash->f_builtins_load);
 
     /* Transition from INIT
      * If module started normally, i.e. INIT->RUNNING, then
@@ -788,6 +794,7 @@ int modhash_destroy (modhash_t *mh)
         }
         flux_msg_handler_delvec (mh->handlers);
         flux_msglist_destroy (mh->trace_requests);
+        flux_future_destroy (mh->f_builtins_load);
         flux_future_destroy (mh->f_builtins_unload);
         free (mh);
     }
@@ -986,17 +993,72 @@ error:
     return NULL;
 }
 
-int modhash_load_builtins (modhash_t *mh, flux_error_t *error)
+static void modhash_load_builtins_cond_fulfill (modhash_t *mh,
+                                                flux_future_t *f)
 {
+    int waiting = 0;
+    flux_error_t error;
+
+    if (!f || flux_future_is_ready (f))
+        return;
+    for (int i = 0; i < ARRAY_SIZE (builtins); i++) {
+        if (builtins[i]->autoload) {
+            module_t *p;
+
+            if (!(p = modhash_lookup_byname (mh, builtins[i]->name))) {
+                errprintf (&error,
+                           "%s is unexpectedly missing from the module hash",
+                           builtins[i]->name);
+                goto error;
+            }
+            switch (module_get_status (p)) {
+                case FLUX_MODSTATE_INIT:
+                    waiting++;
+                    break;
+                case FLUX_MODSTATE_RUNNING:
+                    break;
+                case FLUX_MODSTATE_FINALIZING:
+                    errprintf (&error,
+                               "%s is unexpectedly finalizing",
+                               module_get_name (p));
+                    goto error;
+                case FLUX_MODSTATE_EXITED:
+                    errprintf (&error,
+                               "%s has unexpectedly exited: %s",
+                               module_get_name (p),
+                               strerror (module_get_errnum (p)));
+                    goto error;
+            }
+        }
+    }
+    if (waiting == 0)
+        flux_future_fulfill (f, NULL, NULL);
+    return;
+error:
+     flux_future_fatal_error (f, EINVAL, error.text);
+}
+
+flux_future_t *modhash_load_builtins (modhash_t *mh, flux_error_t *error)
+{
+    if (!mh->f_builtins_load) {
+        flux_future_t *f;
+        if (!(f = flux_future_create (NULL, NULL))) {
+            errprintf (error, "could not create future");
+            return NULL;
+        }
+        flux_future_set_reactor (f, flux_get_reactor (mh->ctx->h));
+        mh->f_builtins_load = f;
+    }
     for (int i = 0; i < ARRAY_SIZE (builtins); i++) {
         if (builtins[i]->autoload) {
             if (mh->ctx->verbose > 1)
                 log_msg ("loading %s", builtins[i]->name);
             if (!modhash_load_builtin (mh, builtins[i], NULL, NULL, error))
-                return -1;
+                return NULL;
         }
     }
-    return 0;
+    modhash_load_builtins_cond_fulfill (mh, mh->f_builtins_load);
+    return mh->f_builtins_load;
 }
 
 /* Fulfill the future if it is pending and no builtin modules are loaded.

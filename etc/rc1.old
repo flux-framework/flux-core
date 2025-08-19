@@ -1,7 +1,6 @@
 #!/bin/sh -e
 
-# Allow connector-local more time to start listening on socket
-RANK=$(FLUX_LOCAL_CONNECTOR_RETRY_COUNT=30 flux getattr rank)
+RANK=$(flux getattr rank)
 
 # Usage: modload {all|<rank>} modname [args ...]
 modload() {
