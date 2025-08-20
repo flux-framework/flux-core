@@ -11,10 +11,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <poll.h>
-#include <unistd.h>
-#include <errno.h>
-#include <sys/eventfd.h>
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -23,9 +19,6 @@
 
 struct flux_msglist {
     zlistx_t *zl;
-    int pollevents;
-    int pollfd;
-    uint64_t event;
 };
 
 static void *msg_duplicator (const void *item)
@@ -47,8 +40,6 @@ struct flux_msglist *flux_msglist_create (void)
 
     if (!(l = calloc (1, sizeof (*l))))
         return NULL;
-    l->pollfd = -1;
-    l->pollevents = POLLOUT;
     if (!(l->zl = zlistx_new ())) {
         free (l);
         errno = ENOMEM;
@@ -64,46 +55,14 @@ void flux_msglist_destroy (struct flux_msglist *l)
     if (l) {
         int saved_errno = errno;
         zlistx_destroy (&l->zl);
-        if (l->pollfd >= 0)
-            close (l->pollfd);
         free (l);
         errno = saved_errno;
     }
 }
 
-static int msglist_raise_event (struct flux_msglist *l)
-{
-    if (l->pollfd >= 0 && l->event == 0) {
-        l->event = 1;
-    if (write (l->pollfd, &l->event, sizeof (l->event)) < 0)
-        return -1;
-    }
-    return 0;
-}
-
-static int msglist_clear_event (struct flux_msglist *l)
-{
-    if (l->pollfd >= 0 && l->event == 1) {
-        if (read (l->pollfd, &l->event, sizeof (l->event)) < 0) {
-            if (errno != EAGAIN  && errno != EWOULDBLOCK)
-                return -1;
-            errno = 0;
-        }
-        l->event = 0;
-    }
-    return 0;
-}
-
 int flux_msglist_append (struct flux_msglist *l, const flux_msg_t *msg)
 {
-    if (!(l->pollevents & POLLIN)) {
-        l->pollevents |= POLLIN;
-        if (msglist_raise_event (l) < 0)
-            return -1;
-    }
     if (!zlistx_add_end (l->zl, (flux_msg_t *)msg)) {
-        l->pollevents |= POLLERR;
-        msglist_raise_event (l);
         errno = ENOMEM;
         return -1;
     }
@@ -112,14 +71,7 @@ int flux_msglist_append (struct flux_msglist *l, const flux_msg_t *msg)
 
 int flux_msglist_push (struct flux_msglist *l, const flux_msg_t *msg)
 {
-    if (!(l->pollevents & POLLIN)) {
-        l->pollevents |= POLLIN;
-        if (msglist_raise_event (l) < 0)
-            return -1;
-    }
     if (!zlistx_add_start (l->zl, (flux_msg_t *)msg)) {
-        l->pollevents |= POLLERR;
-        msglist_raise_event (l);
         errno = ENOMEM;
         return -1;
     }
@@ -144,42 +96,18 @@ const flux_msg_t *flux_msglist_last (struct flux_msglist *l)
 void flux_msglist_delete (struct flux_msglist *l)
 {
     void *handle = zlistx_cursor (l->zl);
-    if (handle) {
+    if (handle)
         zlistx_delete (l->zl, handle);
-        if ((l->pollevents & POLLIN) && zlistx_size (l->zl) == 0)
-            l->pollevents &= ~POLLIN;
-    }
 }
 
 const flux_msg_t *flux_msglist_pop (struct flux_msglist *l)
 {
-    void *item = zlistx_detach_cur (l->zl);
-    if (item) {
-        if ((l->pollevents & POLLIN) && zlistx_size (l->zl) == 0)
-            l->pollevents &= ~POLLIN;
-    }
-    return item;
+    return zlistx_detach_cur (l->zl);
 }
 
 int flux_msglist_count (struct flux_msglist *l)
 {
     return l ? zlistx_size (l->zl) : 0;
-}
-
-int flux_msglist_pollfd (struct flux_msglist *l)
-{
-    if (l->pollfd < 0) {
-        l->event = l->pollevents ? 1 : 0;
-        l->pollfd = eventfd (l->pollevents, EFD_NONBLOCK);
-    }
-    return l->pollfd;
-}
-
-int flux_msglist_pollevents (struct flux_msglist *l)
-{
-    if (msglist_clear_event (l) < 0)
-        return -1;
-    return l->pollevents;
 }
 
 /*
