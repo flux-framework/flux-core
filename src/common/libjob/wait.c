@@ -63,8 +63,9 @@ int flux_job_wait_get_id (flux_future_t *f, flux_jobid_t *jobid)
         errno = EINVAL;
         return -1;
     }
-    if (flux_rpc_get_unpack (f, "{s:I}",
-                                "id", &id) < 0)
+    if (flux_rpc_get_unpack (f,
+                             "{s:I}",
+                             "id", &id) < 0)
         return -1;
     if (jobid)
         *jobid = id;

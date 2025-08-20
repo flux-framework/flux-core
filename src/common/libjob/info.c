@@ -15,8 +15,10 @@
 
 #include "job.h"
 
-flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id,
-                                     const char *path, int flags)
+flux_future_t *flux_job_event_watch (flux_t *h,
+                                     flux_jobid_t id,
+                                     const char *path,
+                                     int flags)
 {
     flux_future_t *f;
     const char *topic = "job-info.eventlog-watch";

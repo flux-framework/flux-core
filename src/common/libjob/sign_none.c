@@ -57,12 +57,14 @@ int header_decode (const char *src, int srclen, uint32_t *useridp)
         else
             goto error_inval;
     }
-    if (!val_version || !val_mech || !streq (val_version, "i1")
-                                  || !streq (val_mech, "snone"))
-        goto error_inval;
-    if (!val_userid || *val_userid != 'i')
-        goto error_inval;
-    if (val_userid[1] < '0' || val_userid[1] > '9') // no sign or wspace allowed
+    if (!val_version
+        || !val_mech
+        || !streq (val_version, "i1")
+        || !streq (val_mech, "snone")
+        || !val_userid
+        || *val_userid != 'i'
+        || val_userid[1] < '0'
+        || val_userid[1] > '9') // no sign or wspace allowed
         goto error_inval;
     errno = 0;
     userid = strtoul (val_userid + 1, &endptr, 10);
@@ -85,7 +87,9 @@ static char *header_encode (uint32_t userid)
     size_t dstbuflen;
     int i;
 
-    srclen = snprintf (src, sizeof (src), "version:i1:userid:i%lu:mechanism:snone:",
+    srclen = snprintf (src,
+                       sizeof (src),
+                       "version:i1:userid:i%lu:mechanism:snone:",
                        (unsigned long)userid);
     assert (srclen < sizeof (src));
     for (i = 0; i < srclen; i++) {
@@ -115,8 +119,10 @@ static char *payload_encode (const char *src, int srclen)
     return dst;
 }
 
-static int payload_decode (const void *src, int srclen,
-                           void **payload, int *payloadsz)
+static int payload_decode (const void *src,
+                           int srclen,
+                           void **payload,
+                           int *payloadsz)
 {
     size_t dstbuflen = base64_decoded_length (srclen) + 1; /* +1 for NUL */
     ssize_t dstlen;
@@ -135,7 +141,8 @@ error_inval:
     return -1;
 }
 
-char *sign_none_wrap (const void *payload, int payloadsz,
+char *sign_none_wrap (const void *payload,
+                      int payloadsz,
                       uint32_t userid)
 {
     char *h = NULL;
@@ -163,7 +170,8 @@ error_nomem:
 }
 
 int sign_none_unwrap (const char *input,
-                      void **payload, int *payloadsz,
+                      void **payload,
+                      int *payloadsz,
                       uint32_t *userid)
 {
     char *p;

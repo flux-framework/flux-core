@@ -54,7 +54,9 @@ static flux_job_result_t job_result_calc (json_t *res)
     const char *exception_type = NULL;
     json_error_t error;
 
-    if (json_unpack_ex (res, &error, 0,
+    if (json_unpack_ex (res,
+                        &error,
+                        0,
                         "{s?f s:b s?i s?s}",
                         "t_run", &t_run,
                         "exception_occurred", &exception_occurred,
