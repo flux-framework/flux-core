@@ -75,7 +75,7 @@ struct event_batch {
     flux_kvs_txn_t *txn;
     flux_future_t *f;
     json_t *state_trans;
-    zlist_t *responses; // responses deferred until batch complete
+    struct flux_msglist *responses; // responses deferred until batch complete
     zlist_t *jobs;      // jobs held until batch complete
 };
 
@@ -162,14 +162,14 @@ static void event_batch_destroy (struct event_batch *batch)
             zlist_destroy (&batch->jobs);
         }
         if (batch->responses) {
-            flux_msg_t *msg;
+            const flux_msg_t *msg;
             flux_t *h = batch->event->ctx->h;
-            while ((msg = zlist_pop (batch->responses))) {
+            while ((msg = flux_msglist_pop (batch->responses))) {
                 if (flux_send (h, msg, 0) < 0)
                     flux_log_error (h, "error sending batch response");
                 flux_msg_decref (msg);
             }
-            zlist_destroy (&batch->responses);
+            flux_msglist_destroy (batch->responses);
         }
         flux_future_destroy (batch->f);
         free (batch);
@@ -249,18 +249,14 @@ int event_batch_respond (struct event *event, const flux_msg_t *msg)
     if (event_batch_start (event) < 0)
         return -1;
     if (!event->batch->responses) {
-        if (!(event->batch->responses = zlist_new ()))
-            goto nomem;
+        if (!(event->batch->responses = flux_msglist_create ()))
+            return -1;
     }
-    if (zlist_append (event->batch->responses,
-                      (void *)flux_msg_incref (msg)) < 0) {
+    if (flux_msglist_append (event->batch->responses, msg) < 0) {
         flux_msg_decref (msg);
-        goto nomem;
+        return -1;
     }
     return 0;
-nomem:
-    errno = ENOMEM;
-    return -1;
 }
 
 int event_job_action (struct event *event, struct job *job)

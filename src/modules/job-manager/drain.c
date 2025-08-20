@@ -28,8 +28,8 @@
 struct drain {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
-    zlist_t *drain_requests;
-    zlist_t *idle_requests;
+    struct flux_msglist *drain_requests;
+    struct flux_msglist *idle_requests;
 };
 
 /* Drain and/or idle conditions MAY have been met.
@@ -48,7 +48,7 @@ void drain_check (struct drain *drain)
     /* Drained - no active jobs
      */
     if (zhashx_size (drain->ctx->active_jobs) == 0) {
-        while ((msg = zlist_pop (drain->drain_requests))) {
+        while ((msg = flux_msglist_pop (drain->drain_requests))) {
             if (!(rsp = flux_response_derive (msg, 0))
                 || event_batch_respond (drain->ctx->event, rsp) < 0)
                 flux_log_error (drain->ctx->h,
@@ -64,7 +64,7 @@ void drain_check (struct drain *drain)
         && drain->ctx->running_jobs == 0) {
         int pending = zhashx_size (drain->ctx->active_jobs)
                                  - drain->ctx->running_jobs;
-        while ((msg = zlist_pop (drain->idle_requests))) {
+        while ((msg = flux_msglist_pop (drain->idle_requests))) {
             if (!(rsp = flux_response_derive (msg, 0))
                 || flux_msg_pack (rsp, "{s:i}", "pending", pending) < 0
                 || event_batch_respond (drain->ctx->event, rsp) < 0)
@@ -84,12 +84,8 @@ static void drain_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (zlist_append (ctx->drain->drain_requests,
-                     (void *)flux_msg_incref (msg)) < 0) {
-        flux_msg_decref (msg);
-        errno = ENOMEM;
+    if (flux_msglist_append (ctx->drain->drain_requests, msg) < 0)
         goto error;
-    }
     drain_check (ctx->drain);
     return;
 error:
@@ -104,12 +100,8 @@ static void idle_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (zlist_append (ctx->drain->idle_requests,
-                     (void *)flux_msg_incref (msg)) < 0) {
-        flux_msg_decref (msg);
-        errno = ENOMEM;
+    if (flux_msglist_append (ctx->drain->idle_requests, msg) < 0)
         goto error;
-    }
     drain_check (ctx->drain);
     return;
 error:
@@ -117,11 +109,11 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void destroy_requests (flux_t *h, zlist_t *msglist)
+static void destroy_requests (flux_t *h, struct flux_msglist *msglist)
 {
     if (msglist) {
         const flux_msg_t *msg;
-        while ((msg = zlist_pop (msglist))) {
+        while ((msg = flux_msglist_pop (msglist))) {
             if (flux_respond_error (h,
                                     msg,
                                     ENOSYS,
@@ -138,9 +130,9 @@ void drain_ctx_destroy (struct drain *drain)
         int saved_errno = errno;
         flux_msg_handler_delvec (drain->handlers);
         destroy_requests (drain->ctx->h, drain->drain_requests);
-        zlist_destroy (&drain->drain_requests);
+        flux_msglist_destroy (drain->drain_requests);
         destroy_requests (drain->ctx->h, drain->idle_requests);
-        zlist_destroy (&drain->idle_requests);
+        flux_msglist_destroy (drain->idle_requests);
         free (drain);
         errno = saved_errno;
     }
@@ -159,11 +151,9 @@ struct drain *drain_ctx_create (struct job_manager *ctx)
     if (!(drain = calloc (1, sizeof (*drain))))
         return NULL;
     drain->ctx = ctx;
-    if (!(drain->drain_requests = zlist_new ())
-        || !(drain->idle_requests = zlist_new ())) {
-        errno = ENOMEM;
+    if (!(drain->drain_requests = flux_msglist_create ())
+        || !(drain->idle_requests = flux_msglist_create ()))
         goto error;
-    }
     if (flux_msg_handler_addvec (ctx->h, htab, ctx, &drain->handlers) < 0)
         goto error;
     return drain;
