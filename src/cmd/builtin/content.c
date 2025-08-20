@@ -250,6 +250,53 @@ static int checkpoint_list (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+static bool kvs_is_running (flux_t *h)
+{
+    flux_future_t *f;
+    bool running = true;
+
+    if ((f = flux_kvs_getroot (h, NULL, 0)) != NULL
+        && flux_rpc_get (f, NULL) < 0
+        && errno == ENOSYS)
+        running = false;
+    flux_future_destroy (f);
+    return running;
+}
+
+static int checkpoint_update (optparse_t *p, int ac, char *av[])
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    const char *blobref;
+    flux_future_t *f = NULL;
+
+    if (optindex != (ac - 1)) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    blobref = av[optindex++];
+
+    if (!(h = builtin_get_flux_handle (p)))
+        log_err_exit ("flux_open");
+
+    if (kvs_is_running (h))
+        log_msg_exit ("please unload kvs module before updating checkpoint");
+
+    if (blobref_validate (blobref) < 0)
+        log_err_exit ("invalid blobref specified");
+
+    if (!(f = kvs_checkpoint_commit (h,
+                                     blobref,
+                                     0,
+                                     0.,
+                                     KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
+        || flux_rpc_get (f, NULL))
+        log_err_exit ("checkpoint update failed");
+    flux_future_destroy (f);
+    flux_close (h);
+    return (0);
+}
+
 static struct optparse_option checkpoint_list_opts[] = {
     { .name = "no-header",  .key = 'n',  .has_arg = 0,
       .usage = "Do not output column headers", },
@@ -265,6 +312,13 @@ static struct optparse_subcommand checkpoint_subcommands[] = {
       checkpoint_list,
       0,
       checkpoint_list_opts,
+    },
+    { "update",
+      "[OPTIONS] blobref",
+      "Update checkpoint to specified blobref",
+      checkpoint_update,
+      0,
+      NULL,
     },
     OPTPARSE_SUBCMD_END
 };
