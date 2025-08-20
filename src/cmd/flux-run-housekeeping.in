@@ -1,21 +1,7 @@
 #!/bin/sh
 
-if test $FLUX_JOB_ID; then
-    FLUX_JOB_ID=$(flux job id --to=f58plain $FLUX_JOB_ID)
-fi
-unitname=flux-housekeeping@${FLUX_JOB_ID:-unknown}
+# This script exists for transition purposes and will be removed.
+# Please reconfigure the IMP [run.housekeeping] table to use
+# path = "@X_SYSCONFDIR@/flux/system/housekeeping".
 
-terminate() {
-    systemctl stop $unitname
-    exit 1
-}
-
-trap terminate INT TERM
-
-umask 022
-printenv >@X_RUNSTATEDIR@/${unitname}.env
-
-# Run systemctl start in background and `wait` for it so that the trap
-# will run immediately when signal is received:
-systemctl start $unitname --quiet &
-wait $!
+exec @X_SYSCONFDIR@/flux/system/housekeeping
