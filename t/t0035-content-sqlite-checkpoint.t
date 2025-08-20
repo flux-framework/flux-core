@@ -83,6 +83,30 @@ test_expect_success 'content-sqlite the oldest checkpoint is not listed' '
 	test_must_fail grep ref1 checkpoints.out
 '
 
+test_expect_success 'flux content checkpoint update works' '
+	echo sha1-1234567890123456789012345678901234567890 > updatedcheckpt.exp &&
+	flux content checkpoint update $(cat updatedcheckpt.exp) &&
+	checkpoint_get | jq -r .value[0].rootref > updatedcheckpt.out &&
+	test_cmp updatedcheckpt.exp updatedcheckpt.out
+'
+
+test_expect_success 'flux content checkpoint update fails on invalid ref' '
+	test_must_fail flux content checkpoint update foo1-1234
+'
+
+test_expect_success 'load kvs' '
+	flux module load kvs
+'
+
+test_expect_success 'flux content checkpoint update fails if KVS loaded' '
+	test_must_fail flux content checkpoint update \
+		sha1-1234567890123456789012345678901234567890
+'
+
+test_expect_success 'remove kvs' '
+	flux module remove kvs
+'
+
 test_expect_success 'remove content-sqlite module' '
 	flux module remove content-sqlite
 '
