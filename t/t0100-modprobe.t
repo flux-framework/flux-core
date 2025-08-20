@@ -859,7 +859,7 @@ test_expect_success 'modprobe: fails if module load fails' '
 	flux python <<-EOF >all_modules &&
 	import flux
 	from flux.modprobe import ModuleList
-	modules = [x for x in ModuleList(flux.Flux()) if x != "connector-local"]
+	modules = [x for x in ModuleList(flux.Flux())]
 	print(" ".join(modules))
 	EOF
 	flux modprobe remove all &&
