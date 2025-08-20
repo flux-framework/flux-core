@@ -52,13 +52,13 @@ module_t *modhash_lookup_byname (modhash_t *mh, const char *name);
 module_t *modhash_first (modhash_t *mh);
 module_t *modhash_next (modhash_t *mh);
 
-/* Initiate load of builtin modules that have autoload=true.
+/* Initiate load of built-in modules
  * Plumbing works immedediately upon success, but startup is asynchronous.
  * Fulfill the returned future upon completion of startup (do not destroy).
  */
 flux_future_t *modhash_load_builtins (modhash_t *mh, flux_error_t *error);
 
-/* Initiate unload of all builtin modules that have autoload=true.
+/* Initiate unload of all built-in modules
  * Fulfill the returned future upon completion (do not destroy).
  */
 flux_future_t *modhash_unload_builtins (modhash_t *mh);
