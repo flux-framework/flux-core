@@ -29,7 +29,6 @@
 #include "flog.h"
 #include "conf.h"
 #include "future.h"
-#include "barrier.h"
 #include "service.h"
 #include "version.h"
 #include "plugin.h"
