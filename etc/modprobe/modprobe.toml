@@ -58,9 +58,6 @@
 #
 
 [[modules]]
-name = "barrier"
-
-[[modules]]
 name = "heartbeat"
 
 [[modules]]
