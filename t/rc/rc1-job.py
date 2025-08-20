@@ -28,7 +28,6 @@ def setup(context):
         "job-ingest",
         "job-info",
         "job-list",
-        "barrier",
         "heartbeat",
         "resource",
         "sched-simple",

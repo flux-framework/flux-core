@@ -43,7 +43,6 @@ fluxcoreinclude_HEADERS = \
 	flog.h \
 	conf.h \
 	future.h \
-	barrier.h \
 	service.h \
 	plugin.h \
 	sync.h \
@@ -91,7 +90,6 @@ libflux_la_SOURCES = \
 	control.c \
 	future.c \
 	composite_future.c \
-	barrier.c \
 	service.c \
 	version.c \
 	plugin.c \

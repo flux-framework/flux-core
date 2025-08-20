@@ -19,6 +19,7 @@ import os
 import sys
 import time
 import flux
+import subprocess
 
 try:
     h = flux.Flux()
@@ -30,7 +31,7 @@ try:
     taskid = int(os.environ["FLUX_TASK_RANK"])
     if taskid == 0:
         print(f"waiting on barrier for {size} tasks", flush=True)
-    h.barrier("test", size).get()
+    subprocess.run(["flux", "pmi", "barrier"])
     if taskid == 0:
         print(f"exited barrier", flush=True)
 

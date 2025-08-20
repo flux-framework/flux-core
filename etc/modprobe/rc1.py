@@ -24,7 +24,6 @@ def setup(context):
     context.load_modules(
         [
             "content",
-            "barrier",
             "heartbeat",
             "cron",
             "content-backing",

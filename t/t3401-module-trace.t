@@ -90,17 +90,17 @@ test_expect_success NO_CHAIN_LINT 'stop third background trace' '
 '
 
 test_expect_success NO_CHAIN_LINT 'start background trace on multiple modules' '
-	flux module trace kvs barrier >trace2.out &
+	flux module trace kvs content >trace2.out &
 	echo $! >trace2.pid
 '
 test_expect_success NO_CHAIN_LINT 'heartbeat.pulse event was captured' '
 	$waitfile -t 60 -p heartbeat.pulse trace2.out
 '
-test_expect_success NO_CHAIN_LINT 'send one barrier.ping' '
-	flux ping -c 1 barrier
+test_expect_success NO_CHAIN_LINT 'send one content.ping' '
+	flux ping -c 1 content
 '
-test_expect_success NO_CHAIN_LINT 'barrier.ping request/response was captured' '
-	$waitfile -t 60 -c 2 -p barrier.ping trace2.out
+test_expect_success NO_CHAIN_LINT 'content.ping request/response was captured' '
+	$waitfile -t 60 -c 2 -p content.ping trace2.out
 '
 test_expect_success NO_CHAIN_LINT 'stop background trace' '
 	kill -15 $(cat trace2.pid); wait || true

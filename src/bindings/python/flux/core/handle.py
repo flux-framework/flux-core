@@ -276,9 +276,6 @@ class Flux(Wrapper):
             events = FLUX_POLLIN | FLUX_POLLOUT | FLUX_POLLERR  # novm
         return FDWatcher(self, fd_int, events, callback, args=args)
 
-    def barrier(self, name, nprocs):
-        return Future(self.flux_barrier(name, nprocs))
-
     def get_rank(self):
         rank = ffi.new("uint32_t [1]")
         self.flux_get_rank(rank)

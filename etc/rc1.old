@@ -22,7 +22,6 @@ if test $RANK -gt 0; then
 fi
 
 modload all content
-modload all barrier
 if test "$(flux config get --default=false systemd.enable)" = "true"; then
     modload all sdbus
     modload all --name sdbus-sys sdbus system

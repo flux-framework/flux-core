@@ -39,7 +39,6 @@ struct modhash {
 };
 
 extern struct module_builtin builtin_connector_local;
-extern struct module_builtin builtin_barrier;
 extern struct module_builtin builtin_heartbeat;
 
 /* Builtin modules with autoload=true are loaded in this order and
@@ -47,7 +46,6 @@ extern struct module_builtin builtin_heartbeat;
  */
 static struct module_builtin *builtins[] = {
     &builtin_connector_local,
-    &builtin_barrier,
     &builtin_heartbeat,
 };
 
