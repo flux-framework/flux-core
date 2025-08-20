@@ -577,9 +577,10 @@ class ModuleList:
         self.loaded_modules = []
         self.servicemap = {}
         for entry in resp["mods"]:
-            self.loaded_modules.append(entry["name"])
-            for name in entry["services"]:
-                self.servicemap[name] = entry["name"]
+            if entry["path"] != "builtin":
+                self.loaded_modules.append(entry["name"])
+                for name in entry["services"]:
+                    self.servicemap[name] = entry["name"]
 
     def __iter__(self):
         for name in self.loaded_modules:

@@ -39,7 +39,6 @@ struct module_args {
 struct module_builtin {
     const char *name;
     mod_main_f main;
-    bool autoload;
 };
 
 module_t *module_create (flux_t *h,
