@@ -112,7 +112,6 @@ TESTSCRIPTS = \
 	t1011-kvs-checkpoint-period.t \
 	t1012-kvs-checkpoint.t \
 	t1013-kvs-initial-rootref.t \
-	t1101-barrier-basic.t \
 	t1102-cmddriver.t \
 	t1103-apidisconnect.t \
 	t1105-proxy.t \
@@ -283,7 +282,6 @@ TESTSCRIPTS = \
 	lua/t1004-statwatcher.t \
 	python/t0001-handle.py \
 	python/t0002-wrapper.py \
-	python/t0003-barrier.py \
 	python/t0004-event.py \
 	python/t0005-kvs.py \
 	python/t0006-request.py \
@@ -462,7 +460,6 @@ check_PROGRAMS = \
 	request/treq \
 	request/rpc \
 	request/rpc_stream \
-	barrier/tbarrier \
 	reactor/reactorcat \
 	rexec/rexec \
 	rexec/rexec_count_stdout \
@@ -754,11 +751,6 @@ module_hang_la_SOURCES = module/hang.c
 module_hang_la_CPPFLAGS = $(test_cppflags)
 module_hang_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 module_hang_la_LIBADD = $(test_ldadd) $(LIBDL)
-
-barrier_tbarrier_SOURCES = barrier/tbarrier.c
-barrier_tbarrier_CPPFLAGS = $(test_cppflags)
-barrier_tbarrier_LDADD = $(test_ldadd)
-barrier_tbarrier_LDFLAGS = $(test_ldflags)
 
 request_req_la_SOURCES = request/req.c
 request_req_la_CPPFLAGS = $(test_cppflags)
