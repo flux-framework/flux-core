@@ -17,11 +17,8 @@ AM_CPPFLAGS = \
 	-DLUADIR=\"$(luadir)\" \
 	-DLUAEXECDIR=\"$(luaexecdir)\" \
 	$(JANSSON_CFLAGS) \
-	$(LIBUUID_CFLAGS)
-
-if INTERNAL_LIBEV
-AM_CPPFLAGS += -I$(top_srcdir)/src/common/libev
-endif
+	$(LIBUUID_CFLAGS) \
+	$(LIBUV_CFLAGS)
 
 fluxcoreinclude_HEADERS = \
 	flux.h \
@@ -69,7 +66,6 @@ libflux_la_SOURCES = \
 	reactor_private.h \
 	watcher.c \
 	watcher_private.h \
-	watcher_wrap.c \
 	hwatcher.c \
 	msg_handler.c \
 	message.c \
@@ -101,6 +97,12 @@ libflux_la_SOURCES = \
 	stats.c \
 	fripp.h \
 	fripp.c
+
+if LIBUV
+libflux_la_SOURCES += watcher_uv.c
+else
+libflux_la_SOURCES += watcher_ev.c
+endif
 
 libflux_la_LDFLAGS = \
 	$(AM_LDFLAGS)
@@ -141,6 +143,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(LIBUUID_LIBS) \
 	$(JANSSON_LIBS) \
+	$(LIBUV_LIBS) \
 	$(LIBPTHREAD) \
 	$(LIBDL)
 

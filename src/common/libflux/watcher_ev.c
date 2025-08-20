@@ -8,12 +8,16 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* watcher_wrap.c - wrapped libev watchers */
+/* watcher_ev.c - wrapped libev watchers */
 
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <ev.h>
+#if HAVE_LIBEV_INTERNAL
+# include "src/common/libev/ev.h"
+#else
+# include <ev.h>
+#endif
 #include <flux/core.h>
 
 #include "reactor_private.h"
