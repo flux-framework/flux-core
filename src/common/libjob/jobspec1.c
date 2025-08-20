@@ -586,12 +586,12 @@ static int flux_jobspec1_set_stdio (flux_jobspec1_t *jobspec,
 {
     char key[256];
 
-    if (!jobspec || !path || (!streq (stdio_name, "input.stdin")
+    if (!jobspec || !path)
+        goto inval;
+    if (!streq (stdio_name, "input.stdin")
         && !streq (stdio_name, "output.stdout")
-        && !streq (stdio_name, "output.stderr"))) {
-        errno = EINVAL;
-        return -1;
-    }
+        && !streq (stdio_name, "output.stderr"))
+        goto inval;
     if (snprintf (key, sizeof (key), "system.shell.options.%s", stdio_name)
         >= sizeof (key)) {
         errno = EOVERFLOW;
@@ -604,6 +604,9 @@ static int flux_jobspec1_set_stdio (flux_jobspec1_t *jobspec,
                                     "file",
                                     "path",
                                     path);
+inval:
+    errno = EINVAL;
+    return -1;
 }
 
 int flux_jobspec1_set_stdin (flux_jobspec1_t *jobspec, const char *path)

@@ -19,8 +19,11 @@
 
 #include "job.h"
 
-flux_future_t *flux_job_raise (flux_t *h, flux_jobid_t id,
-                               const char *type, int severity, const char *note)
+flux_future_t *flux_job_raise (flux_t *h,
+                               flux_jobid_t id,
+                               const char *type,
+                               int severity,
+                               const char *note)
 {
     flux_future_t *f;
     json_t *o;
@@ -42,8 +45,12 @@ flux_future_t *flux_job_raise (flux_t *h, flux_jobid_t id,
             goto nomem;
         }
     }
-    if (!(f = flux_rpc_pack (h, "job-manager.raise", FLUX_NODEID_ANY, 0,
-                                                                    "o", o)))
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.raise",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "o",
+                             o)))
         goto error;
     return f;
 nomem:
@@ -66,10 +73,13 @@ flux_future_t *flux_job_kill (flux_t *h, flux_jobid_t id, int signum)
         errno = EINVAL;
         return NULL;
     }
-    return flux_rpc_pack (h, "job-manager.kill", FLUX_NODEID_ANY, 0,
-                             "{s:I s:i}",
-                             "id", id,
-                             "signum", signum);
+    return flux_rpc_pack (h,
+                          "job-manager.kill",
+                          FLUX_NODEID_ANY,
+                          0,
+                          "{s:I s:i}",
+                          "id", id,
+                          "signum", signum);
 }
 
 flux_future_t *flux_job_set_urgency (flux_t *h, flux_jobid_t id, int urgency)
@@ -80,7 +90,10 @@ flux_future_t *flux_job_set_urgency (flux_t *h, flux_jobid_t id, int urgency)
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-manager.urgency", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.urgency",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:I s:i}",
                              "id", id,
                              "urgency", urgency)))

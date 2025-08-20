@@ -36,7 +36,9 @@ int flux_job_kvs_key (char *buf, int bufsz, flux_jobid_t id, const char *key)
 
     if (fluid_encode (idstr, sizeof (idstr), id, FLUID_STRING_DOTHEX) < 0)
         return -1;
-    len = snprintf (buf, bufsz, "job.%s%s%s",
+    len = snprintf (buf,
+                    bufsz,
+                    "job.%s%s%s",
                     idstr,
                     key ? "." : "",
                     key ? key : "");
@@ -62,7 +64,9 @@ int flux_job_kvs_guest_key (char *buf,
     else {
         if (fluid_encode (idstr, sizeof (idstr), id, FLUID_STRING_DOTHEX) < 0)
             return -1;
-        len = snprintf (buf, bufsz, "job.%s.guest%s%s",
+        len = snprintf (buf,
+                        bufsz,
+                        "job.%s.guest%s%s",
                         idstr,
                         key ? "." : "",
                         key ? key : "");

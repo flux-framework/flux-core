@@ -58,7 +58,9 @@ static flux_security_t *get_security_ctx (flux_t *h, flux_future_t **f_error)
             goto error;
         if (flux_security_configure (sec, NULL) < 0)
             goto error;
-        if (flux_aux_set (h, auxkey, sec,
+        if (flux_aux_set (h,
+                          auxkey,
+                          sec,
                           (flux_free_f)flux_security_destroy) < 0)
             goto error;
     }
@@ -70,7 +72,9 @@ error:
 }
 #endif
 
-flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int urgency,
+flux_future_t *flux_job_submit (flux_t *h,
+                                const char *jobspec,
+                                int urgency,
                                 int flags)
 {
     flux_future_t *f = NULL;
@@ -123,7 +127,10 @@ flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int urgency,
         J = jobspec;
         flags &= ~FLUX_JOB_PRE_SIGNED; // client only flag
     }
-    if (!(f = flux_rpc_pack (h, "job-ingest.submit", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-ingest.submit",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:s s:i s:i}",
                              "J", J,
                              "urgency", urgency,
@@ -145,8 +152,7 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *jobid)
         errno = EINVAL;
         return -1;
     }
-    if (flux_rpc_get_unpack (f, "{s:I}",
-                                "id", &id) < 0)
+    if (flux_rpc_get_unpack (f, "{s:I}", "id", &id) < 0)
         return -1;
     if (jobid)
         *jobid = id;

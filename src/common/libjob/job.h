@@ -135,8 +135,10 @@ int flux_job_strtoresult (const char *s, flux_job_result_t *result);
  * 'flags' should be 0 for now.
  * The system assigns a jobid and returns it in the response.
  */
-flux_future_t *flux_job_submit (flux_t *h, const char *jobspec,
-                                int urgency, int flags);
+flux_future_t *flux_job_submit (flux_t *h,
+                                const char *jobspec,
+                                int urgency,
+                                int flags);
 
 /* Parse jobid from response to flux_job_submit() request.
  * Returns 0 on success, -1 on failure with errno set - and an extended
@@ -175,8 +177,10 @@ flux_future_t *flux_job_list_id (flux_t *h,
  * Severity is 0-7, with severity=0 causing the job to abort.
  * Note may be NULL or a human readable message.
  */
-flux_future_t *flux_job_raise (flux_t *h, flux_jobid_t id,
-                               const char *type, int severity,
+flux_future_t *flux_job_raise (flux_t *h,
+                               flux_jobid_t id,
+                               const char *type,
+                               int severity,
                                const char *note);
 
 /* Cancel a job.
@@ -217,8 +221,10 @@ int flux_job_kvs_namespace (char *buf,
 /* Job eventlog watch functions
  * - path specifies optional alternate eventlog path
  */
-flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id,
-                                     const char *path, int flags);
+flux_future_t *flux_job_event_watch (flux_t *h,
+                                     flux_jobid_t id,
+                                     const char *path,
+                                     int flags);
 int flux_job_event_watch_get (flux_future_t *f, const char **event);
 int flux_job_event_watch_cancel (flux_future_t *f);
 

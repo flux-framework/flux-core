@@ -31,9 +31,11 @@ flux_future_t *flux_job_list (flux_t *h,
                         | FLUX_JOB_STATE_INACTIVE);
     int saved_errno;
 
-    if (!h || max_entries < 0 || !attrs_json_str
-           || !(o = json_loads (attrs_json_str, 0, NULL))
-           || states & ~valid_states) {
+    if (!h
+        || max_entries < 0
+        || !attrs_json_str
+        || !(o = json_loads (attrs_json_str, 0, NULL))
+        || (states & ~valid_states)) {
         json_decref (o);
         errno = EINVAL;
         return NULL;
@@ -46,7 +48,10 @@ flux_future_t *flux_job_list (flux_t *h,
         errno = ENOMEM;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-list.list", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-list.list",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:i s:o s:o}",
                              "max_entries", max_entries,
                              "attrs", o,
@@ -70,8 +75,11 @@ flux_future_t *flux_job_list_inactive (flux_t *h,
     json_t *c = NULL;
     int saved_errno;
 
-    if (!h || max_entries < 0 || since < 0. || !attrs_json_str
-           || !(o = json_loads (attrs_json_str, 0, NULL))) {
+    if (!h
+        || max_entries < 0
+        || since < 0.
+        || !attrs_json_str
+        || !(o = json_loads (attrs_json_str, 0, NULL))) {
         errno = EINVAL;
         return NULL;
     }
@@ -80,7 +88,10 @@ flux_future_t *flux_job_list_inactive (flux_t *h,
         errno = ENOMEM;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-list.list", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-list.list",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:i s:f s:o s:o}",
                              "max_entries", max_entries,
                              "since", since,
@@ -103,12 +114,16 @@ flux_future_t *flux_job_list_id (flux_t *h,
     json_t *o = NULL;
     int saved_errno;
 
-    if (!h || !attrs_json_str
-           || !(o = json_loads (attrs_json_str, 0, NULL))) {
+    if (!h
+        || !attrs_json_str
+        || !(o = json_loads (attrs_json_str, 0, NULL))) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-list.list-id", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-list.list-id",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:I s:O}",
                              "id", id,
                              "attrs", o)))
