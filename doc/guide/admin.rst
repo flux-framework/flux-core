@@ -721,48 +721,67 @@ housekeeping
   housekeeping fails on any nodes, those nodes are drained.  Housekeeping
   releases resources to the scheduler as they complete.
 
-The configuration of prolog, epilog, and housekeeping requires the following
-steps:
+Script Installation Locations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
- 1. Create executable scripts named ``prolog``, ``epilog``, and
-    ``housekeeping`` in ``/etc/flux/system``.  A suggested approach is to have
-    these scripts run all executables found in ``prolog.d``, ``epilog.d``,
-    and ``housekeeping.d`` respectively.  For example:
+.. note::
+   New in v0.78.0
 
-    .. code-block:: sh
+When configured as recommended below, Flux runs prolog, epilog and
+housekeeping scripts from the following locations (in order):
 
-       #!/bin/sh
+ - Package provided scripts in ``$libexecdir/flux/{name}.d``, where `{name}`
+   is `prolog`, `epilog`, or `housekeeping`.
 
-       exit_rc=0
-       periname=prolog
-       peridir=/etc/flux/system/${periname}.d
+ - If ``/etc/flux/system/{name}`` exists and is executable, then this
+   site provided script is run next. This provides backward compatible support
+   for existing installations or allows sites to override default behavior
+   for execution of site-provided scripts.
 
-       # This script may be run in test with 'sudo flux run-prolog'
-       test $FLUX_JOB_USERID && userid=$(id -n -u $FLUX_JOB_USERID 2>/dev/null)
-       echo Running $periname for ${FLUX_JOB_ID:-unknown}/${userid:-unknown}
+ - If ``/etc/flux/system/{name}`` does not exist or is not executable, then
+   all scripts in ``/etc/flux/system/{name}.d`` are executed.
 
-       for file in ${peridir}/*; do
-           test -e $file || continue
-           name=$(basename $file)
-           echo running $name >&2
-           $file
-           rc=$?
-           test $rc -ne 0 && echo "$name exit $rc" >&2
-           test $rc -gt $exit_rc && exit_rc=$rc
-       done
+.. note::
+   The location of ``$libexecdir`` is system dependent, but can be determined
+   from :command:`pkg-config --variable=fluxlibexecdir flux-core`.
 
-       exit $exit_rc
+Script Environment
+~~~~~~~~~~~~~~~~~~
 
-    Scripts may use :envvar:`FLUX_JOB_ID` and :envvar:`FLUX_JOB_USERID`
-    to take job or user specific actions.  Flux commands can be run from
-    the scripts with instance owner credentials if the system is configured
-    for root access as suggested in :ref:`config-flux`.
+Scripts may use :envvar:`FLUX_JOB_ID` and :envvar:`FLUX_JOB_USERID` to
+take job or user specific actions.  Flux commands can be run from the
+scripts with instance owner credentials if the system is configured for
+root access as suggested in :ref:`config-flux`.
 
-    The IMP sets :envvar:`PATH` to a safe ``/usr/sbin:/usr/bin:/sbin:/bin``.
+The IMP sets :envvar:`PATH` to a safe ``/usr/sbin:/usr/bin:/sbin:/bin``.
 
- 2. Flux provides systemd *oneshot* units ``flux-prolog@``, ``flux-epilog@``,
-    and ``flux-housekeeping@`` templated by jobid, which run the user-provided
-    scripts installed in the previous step.  Configure the IMP to allow the
+Error Handling
+~~~~~~~~~~~~~~
+
+By default, the Flux prolog, epilog, and housekeeping collect exit codes from
+all scripts and will exit with the highest exit code encountered. This allows
+all scripts to run even if some fail.
+
+To change this behavior and exit immediately on the first script failure,
+one or more of the following entries can be added to the broker configuration:
+
+.. code-block:: toml
+
+   [job-manager.prolog]
+   exit-on-first-error = true
+
+   [job-manager.epilog]
+   exit-on-first-error = true
+
+   [job-manager.housekeeping]
+   exit-on-first-error = true
+
+Configuration
+~~~~~~~~~~~~~
+
+ 1. Flux provides systemd *oneshot* units ``flux-prolog@``, ``flux-epilog@``,
+    and ``flux-housekeeping@`` templated by jobid, which run the actual
+    workflow described in the sections above.  Configure the IMP to allow the
     system instance user to start these units as root via the provided
     provided wrapper scripts:
 
@@ -784,7 +803,7 @@ steps:
        path = "/usr/libexec/flux/cmd/flux-run-housekeeping"
 
 
- 3. Configure the Flux system instance to run prolog, epilog, and housekeeping:
+ 2. Configure the Flux system instance to run prolog, epilog, and housekeeping:
 
     .. code-block:: toml
 
