@@ -477,6 +477,19 @@ plugins include:
   the resources assigned to the current job. By default the XML is not
   restricted.
 
+.. option:: sysmon
+
+  Log peak memory usage and the cpu load average on each shell at the
+  end of the job.  Periodic tracing of memory and cpu load while
+  the job is running may be viewed by increasing shell verbosity to
+  :option:`verbose=2`.
+
+.. option:: sysmon.period=FSD
+
+  Sysmon tracing is driven by the Flux heartbeat event (normally every
+  two seconds).  The polling period may be changed to a different value
+  in RFC 23 Flux Standard Duration format.
+
 .. _flux_shell_initrc:
 
 SHELL INITRC
