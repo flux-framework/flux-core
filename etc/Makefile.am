@@ -28,17 +28,24 @@ fluxlibexec_SCRIPTS = \
 	flux-run-system-scripts
 
 # Install empty modprobe/*.d directories after rc1.py and rc3.py are installed
+# Install empty fluxlibexecdir/{prolog,epilog,housekeeping}.d directories
 install-data-hook:
 	$(MKDIR_P) $(DESTDIR)$(fluxconfdir)/modprobe/modprobe.d
 	$(MKDIR_P) $(DESTDIR)$(fluxconfdir)/modprobe/rc1.d
 	$(MKDIR_P) $(DESTDIR)$(fluxconfdir)/modprobe/rc3.d
+	for dir in prolog.d epilog.d housekeeping.d; do \
+	  $(MKDIR_P) $(DESTDIR)$(fluxlibexecdir)/$$dir; \
+	done
 
-# Remove empty modprobe directories on uninstall
+# Remove empty modprobe/{prolog,epilog,housekeeping}.d directories on uninstall
 uninstall-hook:
 	rmdir $(DESTDIR)$(fluxconfdir)/modprobe/modprobe.d 2>/dev/null || :
 	rmdir $(DESTDIR)$(fluxconfdir)/modprobe/rc1.d 2>/dev/null || :
 	rmdir $(DESTDIR)$(fluxconfdir)/modprobe/rc3.d 2>/dev/null || :
 	rmdir $(DESTDIR)$(fluxconfdir)/modprobe 2>/dev/null || :
+	for dir in prolog.d epilog.d housekeeping.d; do \
+	  rmdir $(DESTDIR)$(fluxlibexecdir)/$$dir 2>/dev/null || :; \
+	done
 
 fluxhelpdir = $(datadir)/flux/help.d
 fluxhelp_DATA = flux/help.d/core.json
