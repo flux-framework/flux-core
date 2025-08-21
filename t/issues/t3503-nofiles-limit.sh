@@ -9,8 +9,8 @@
 #   definitely cause the broker to run over the artificially lowered
 #   fd limit.
 #
-ulimit -n 115
-ulimit -Hn 115
+ulimit -n 117
+ulimit -Hn 117
 flux start \
     sh -c '
 flux submit --cc=1-12 hostname &&

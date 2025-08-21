@@ -65,7 +65,6 @@
 #include "module.h"
 #include "modhash.h"
 #include "brokercfg.h"
-#include "groups.h"
 #include "overlay.h"
 #include "service.h"
 #include "attr.h"
@@ -81,9 +80,6 @@
 
 #include "broker.h"
 
-
-static int broker_request_sendmsg_new_internal (broker_ctx_t *ctx,
-                                                flux_msg_t **msg);
 
 static void h_internal_watcher (flux_reactor_t *r,
                                 flux_watcher_t *w,
@@ -412,11 +408,6 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (!(ctx.groups = groups_create (&ctx))) {
-        log_err ("groups_create");
-        goto cleanup;
-    }
-
     if (ctx.verbose) {
         const char *parent = overlay_get_parent_uri (ctx.overlay);
         const char *child = overlay_get_bind_uri (ctx.overlay);
@@ -544,7 +535,6 @@ cleanup:
     shutdown_destroy (ctx.shutdown);
     state_machine_destroy (ctx.state_machine);
     overlay_destroy (ctx.overlay);
-    groups_destroy (ctx.groups);
     service_switch_destroy (ctx.services);
     broker_remove_services (handlers);
     publisher_destroy (ctx.publisher);
@@ -1500,7 +1490,6 @@ static struct internal_service services[] = {
     { "config",             NULL },
     { "runat",              NULL },
     { "state-machine",      NULL },
-    { "groups",             NULL },
     { "shutdown",           NULL },
     { "rexec",              NULL },
     { NULL, NULL, },
@@ -1855,8 +1844,7 @@ static void h_internal_watcher (flux_reactor_t *r,
         goto error;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            if (broker_request_sendmsg_new_internal (ctx, &msg) < 0)
-                goto error;
+            broker_request_sendmsg_new (ctx, &msg);
             break;
         case FLUX_MSGTYPE_RESPONSE:
             if (broker_response_sendmsg_new (ctx, &msg) < 0)

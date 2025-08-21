@@ -61,8 +61,6 @@ libbroker_la_SOURCES = \
 	boot_pmi.c \
 	publisher.h \
 	publisher.c \
-	groups.h \
-	groups.c \
 	shutdown.h \
 	shutdown.c \
 	topology.h \

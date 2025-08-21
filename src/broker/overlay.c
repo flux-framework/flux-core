@@ -183,6 +183,7 @@ struct overlay {
     struct zmqutil_monitor *bind_monitor;
 
     zlist_t *monitor_callbacks;
+    struct flux_msglist *monitor_requests;
 
     overlay_recv_f recv_cb;
     void *recv_arg;
@@ -264,14 +265,41 @@ static void subtree_status_update (struct overlay *ov)
     }
 }
 
+static void overlay_monitor_respond_one (flux_t *h,
+                                         const flux_msg_t *msg,
+                                         struct child *child)
+{
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:s s:b}",
+                           "rank", child->rank,
+                           "status", subtree_status_str (child->status),
+                           "torpid", child->torpid ? 1 : 0) < 0)
+        flux_log_error (h, "error responding to overlay.monitor");
+}
+
 static void overlay_monitor_notify (struct overlay *ov, uint32_t rank)
 {
     struct overlay_monitor *mon;
+    const flux_msg_t *msg;
 
+    /* Notify monitor callbacks that peer may have updates.
+     * The callback owner uses overlay accessors to probe what changed.
+     */
     mon = zlist_first (ov->monitor_callbacks);
     while (mon) {
         mon->cb (ov, rank, mon->arg);
         mon = zlist_next (ov->monitor_callbacks);
+    }
+
+    /* Notify monitor requests of possible new peer status or torpidity.
+     */
+    msg = flux_msglist_first (ov->monitor_requests);
+    while (msg) {
+        struct child *child;
+        if ((child = child_lookup_byrank (ov, rank)))
+            overlay_monitor_respond_one (ov->h, msg, child);
+        msg = flux_msglist_next (ov->monitor_requests);
     }
 }
 
@@ -1838,8 +1866,39 @@ error:
         flux_log_error (h, "error responding to overlay.health");
 }
 
-/* If a disconnect is received for waiting health request,
- * drop the request.
+/* The initial overlay.monitor batch of responses omits peers that
+ * are offline and not torpid.  Therefore, the caller should assume
+ * that state for all peers initially.  It can determine the full set
+ * of downstream peers (and their children) by querying overlay.topology
+ * for the current rank.
+ */
+static void overlay_monitor_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    struct overlay *ov = arg;
+    struct child *child;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (!flux_msg_is_streaming (msg))
+        goto eproto;
+    foreach_overlay_child (ov, child) {
+        if (child->status != SUBTREE_STATUS_OFFLINE || child->torpid)
+            overlay_monitor_respond_one (ov->h, msg, child);
+    }
+    if (flux_msglist_append (ov->monitor_requests, msg) < 0)
+        goto error;
+    return;
+eproto:
+    errno = EPROTO;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to overlay.monitor");
+}
+
+/* If a disconnect is received for waiting request, drop the request.
  */
 static void disconnect_cb (flux_t *h,
                            flux_msg_handler_t *mh,
@@ -1857,6 +1916,14 @@ static void disconnect_cb (flux_t *h,
         flux_log_error (h, "error handling overlay.disconnect");
     if (count > 0)
         flux_log (h, LOG_DEBUG, "overlay: goodbye to %d trace clients", count);
+    if ((count = flux_msglist_disconnect (ov->monitor_requests, msg)) < 0)
+        flux_log_error (h, "error handling overlay.disconnect");
+    if (count > 0) {
+        flux_log (h,
+                  LOG_DEBUG,
+                  "overlay: goodbye to %d monitor clients",
+                  count);
+    }
 }
 
 const char *overlay_get_subtree_status (struct overlay *ov, int rank)
@@ -2466,6 +2533,7 @@ void overlay_destroy (struct overlay *ov)
                 free (mon);
             zlist_destroy (&ov->monitor_callbacks);
         }
+        flux_msglist_destroy (ov->monitor_requests);
         flux_msglist_destroy (ov->trace_requests);
         topology_decref (ov->topo);
         if (!ov->zctx_external)
@@ -2494,6 +2562,12 @@ static const struct flux_msg_handler_spec htab[] = {
         "overlay.health",
         overlay_health_cb,
         FLUX_ROLE_USER,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.monitor",
+        overlay_monitor_cb,
+        0,
     },
     {
         FLUX_MSGTYPE_REQUEST,
@@ -2564,6 +2638,8 @@ struct overlay *overlay_create (flux_t *h,
     }
     if (!(ov->monitor_callbacks = zlist_new ()))
         goto nomem;
+    if (!(ov->monitor_requests = flux_msglist_create ()))
+        goto error;
     if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
         goto error;
     if (overlay_configure_interface_hint (ov, "tbon", "interface-hint") < 0)

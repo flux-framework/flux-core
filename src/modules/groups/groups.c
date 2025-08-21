@@ -56,8 +56,8 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
-#include "overlay.h"
-#include "groups.h"
+#include "src/broker/module.h"
+#include "src/broker/state_machine.h"
 
 static const double batch_timeout = 0.1;
 
@@ -73,7 +73,7 @@ struct group {
 };
 
 struct groups {
-    struct broker *ctx;
+    flux_t *h;
     flux_msg_handler_t **handlers;
     zhashx_t *groups;
     json_t *batch; // dict of arrays, keyed by group name
@@ -81,6 +81,9 @@ struct groups {
     uint32_t rank;
     struct idset *self;
     struct idset *torpid; // current list of torpid peers at this broker rank
+    flux_future_t *f_topo; // future for overlay.topology RPC
+    flux_future_t *f_ovmon; // future for overlay.monitor RPC
+    json_t *topology; // (owned by f_topo)
 };
 
 static void get_respond_all (struct groups *g, struct group *group);
@@ -190,7 +193,7 @@ static void batch_apply_one (struct groups *g,
     int rc;
 
     if (update_decode (entry, &ranks, &set_flag) < 0) {
-        flux_log_error (g->ctx->h,
+        flux_log_error (g->h,
                         "groups: error decoding batch update for group=%s",
                         group->name);
         return;
@@ -200,7 +203,7 @@ static void batch_apply_one (struct groups *g,
     else
         rc = idset_subtract (group->members, ranks);
     if (rc < 0) {
-        flux_log_error (g->ctx->h,
+        flux_log_error (g->h,
                         "groups: error applying batch update for group=%s",
                         group->name);
     }
@@ -220,7 +223,7 @@ static void batch_apply (struct groups *g)
 
     json_object_foreach (g->batch, name, a) {
         if (!(group = group_lookup (g, name, true))) {
-            flux_log_error (g->ctx->h,
+            flux_log_error (g->h,
                 "groups: error creating group during batch update for group=%s",
                 name);
             continue;
@@ -287,7 +290,7 @@ static json_t *batch_reduce_one (struct groups *g, json_t *a)
         bool new_set_flag;
 
         if (update_decode (update, &new_ids, &new_set_flag) < 0) {
-            flux_log_error (g->ctx->h, "groups: reduce decode update failed");
+            flux_log_error (g->h, "groups: reduce decode update failed");
             goto error;
         }
         if (index == 0) {
@@ -300,14 +303,14 @@ static json_t *batch_reduce_one (struct groups *g, json_t *a)
             goto error;
         }
         if (idset_add (ids, new_ids) < 0) {
-            flux_log_error (g->ctx->h, "groups: reduce idset update failed");
+            flux_log_error (g->h, "groups: reduce idset update failed");
             idset_destroy (new_ids);
             goto error;
         }
         idset_destroy (new_ids);
     }
     if (!(new_update = update_encode (ids, set_flag)))
-        flux_log_error (g->ctx->h, "groups: reduce encode update failed");
+        flux_log_error (g->h, "groups: reduce encode update failed");
 error:
     idset_destroy (ids);
     return new_update;
@@ -346,15 +349,15 @@ next:
 static void batch_flush (struct groups *g)
 {
     batch_reduce (g);
-    if (g->ctx->rank > 0) {
+    if (g->rank > 0) {
         flux_future_t *f;
-        if (!(f = flux_rpc_pack (g->ctx->h,
+        if (!(f = flux_rpc_pack (g->h,
                                  "groups.update",
                                  FLUX_NODEID_UPSTREAM,
                                  FLUX_RPC_NORESPONSE,
                                  "{s:O}",
                                  "update", g->batch)))
-            flux_log_error (g->ctx->h, "error sending groups.update request");
+            flux_log_error (g->h, "error sending groups.update request");
         flux_future_destroy (f);
     }
     batch_apply (g);
@@ -457,7 +460,7 @@ static void join_request_cb (flux_t *h,
         snprintf (errbuf,
                   sizeof (errbuf),
                   "rank %lu is already a member of %s",
-                  (unsigned long)g->ctx->rank,
+                  (unsigned long)g->rank,
                   name);
         errmsg = errbuf;
         errno = EEXIST;
@@ -505,7 +508,7 @@ static void leave_request_cb (flux_t *h,
         snprintf (errbuf,
                   sizeof (errbuf),
                   "rank %lu is not a member of %s",
-                  (unsigned long)g->ctx->rank,
+                  (unsigned long)g->rank,
                   name);
         errmsg = errbuf;
         errno = ENOENT;
@@ -535,10 +538,9 @@ static int get_respond_one (struct groups *g,
 
     if (!(s = idset_encode (group->members, IDSET_FLAG_RANGE)))
         return -1;
-    if (flux_respond_pack (g->ctx->h, msg, "{s:s}", "members", s) < 0) {
+    if (flux_respond_pack (g->h, msg, "{s:s}", "members", s) < 0) {
         if (errno != ENOSYS) {
-            flux_log_error (g->ctx->h,
-                            "error responding to groups.get request");
+            flux_log_error (g->h, "error responding to groups.get request");
         }
     }
     free (s);
@@ -555,8 +557,7 @@ static void get_respond_all (struct groups *g, struct group *group)
     request = flux_msglist_first (group->watchers);
     while (request) {
         if (get_respond_one (g, group, request) < 0) {
-            flux_log_error (g->ctx->h,
-                            "error constructing groups.get response");
+            flux_log_error (g->h, "error constructing groups.get response");
         }
         request = flux_msglist_next (group->watchers);
     }
@@ -581,7 +582,7 @@ static void get_request_cb (flux_t *h,
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
-    if (g->ctx->rank != 0) {
+    if (g->rank != 0) {
         errmsg = "this RPC is only available on rank 0";
         errno = EPROTO;
         goto error;
@@ -717,6 +718,27 @@ static int add_subtree_ids (struct idset *ids, json_t *topology)
     return 0;
 }
 
+/* Recursive function to walk 'topology' to the subtree rooted at 'rank'.
+ * Returns the subtree topology on success, -1 on failure (errno is not set).
+ */
+static json_t *find_subtree_topology (json_t *topology, int rank)
+{
+    int r;
+    json_t *a;
+    size_t index;
+
+    if (json_unpack (topology, "{s:i s:o}", "rank", &r, "children", &a) == 0) {
+        if (r == rank)
+            return topology;
+        json_array_foreach (a, index, topology) {
+            json_t *result;
+            if ((result = find_subtree_topology (topology, rank)))
+                return result;
+        }
+    }
+    return NULL; // no match
+}
+
 /* Generate JOIN/LEAVE for 'rank' in 'broker.torpid' group if rank becomes
  * torpid/non-torpid.  N.B. For now, just operate on the single rank, not
  * its entire subtree.  Although it would be straightforward to add the subtree
@@ -746,7 +768,7 @@ static void torpid_update (struct groups *g,
         || batch_append (g, "broker.torpid", update) < 0
         || (set_flag ? idset_set (g->torpid, rank)
                      : idset_clear (g->torpid, rank)) < 0) {
-        flux_log_error (g->ctx->h, "error updating broker.torpid");
+        flux_log_error (g->h, "error updating broker.torpid");
     }
     idset_destroy (ids);
     json_decref (update);
@@ -768,9 +790,9 @@ static void auto_leave (struct groups *g,
             && idset_count (x) > 0) {
             if (!(update = update_encode (x, false))
                 || batch_append (g, group->name, update) < 0) {
-                flux_log_error (g->ctx->h,
-                        "groups: error auto-updating %s on subtree loss",
-                        group->name);
+                flux_log_error (g->h,
+                                "groups: error auto-updating %s on subtree loss",
+                                group->name);
             }
             json_decref (update);
         }
@@ -779,21 +801,39 @@ static void auto_leave (struct groups *g,
     }
 }
 
-static void overlay_monitor_cb (struct overlay *ov, uint32_t rank, void *arg)
+static void overlay_monitor_continuation (flux_future_t *f, void *arg)
 {
     struct groups *g = arg;
-    const char *status = overlay_get_subtree_status (ov, rank);
+    int rank;
+    const char *status;
+    int torpid;
     json_t *topology;
     struct idset *ids = NULL;
 
     batch_flush (g); // handle any pending ops first
+    if (flux_rpc_get_unpack (f,
+                             "{s:i s:s s:b}",
+                             "rank", &rank,
+                             "status", &status,
+                             "torpid", &torpid) < 0) {
+        flux_log (g->h,
+                  LOG_CRIT,
+                  "overlay.monitor: %s",
+                  future_strerror (f, errno));
+        return;
+    }
 
     /* Prepare a list of ranks that are members of subtree rooted at rank.
      */
-    if (!(topology = overlay_get_subtree_topo (ov, rank))
+    if (!(topology = find_subtree_topology (g->topology, rank))
         || !(ids = idset_create (0, IDSET_FLAG_AUTOGROW))
-        || add_subtree_ids (ids, topology) < 0)
+        || add_subtree_ids (ids, topology) < 0) {
+        flux_log (g->h,
+                  LOG_ERR,
+                  "overlay.monitor: failed to create subtree roster for rank %d",
+                  rank);
         goto done;
+    }
 
     /* Generate LEAVEs for any groups 'rank' (and subtree) may be a member
      * of if transitioning to lost (crashed) or offline (shutdown).
@@ -808,13 +848,29 @@ static void overlay_monitor_cb (struct overlay *ov, uint32_t rank, void *arg)
     else if (streq (status, "full")
         || streq (status, "partial")
         || streq (status, "degraded")) {
-        torpid_update (g, rank, ids, overlay_peer_is_torpid (ov, rank));
+        torpid_update (g, rank, ids, torpid);
     }
 
 done:
     idset_destroy (ids);
-    json_decref (topology);
-    return;
+    flux_future_reset (f);
+}
+
+/* N.B. g->topology is used in overlay_monitor_continuation().  Since the topo
+ * request is sent before the overlay monitor request, we can presume that
+ * the topo response will always arrive before the first overlay monitor
+ * response.
+ */
+static void overlay_topology_continuation (flux_future_t *f, void *arg)
+{
+    struct groups *g = arg;
+
+    if (flux_rpc_get_unpack (f, "o", &g->topology) < 0) {
+        flux_log (g->h,
+                  LOG_ERR,
+                  "overlay.topology: %s",
+                  future_strerror (f, errno));
+    }
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -851,7 +907,7 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-void groups_destroy (struct groups *g)
+static void groups_destroy (struct groups *g)
 {
     if (g) {
         int saved_errno = errno;
@@ -859,6 +915,8 @@ void groups_destroy (struct groups *g)
         json_decref (g->batch);
         idset_destroy (g->self);
         idset_destroy (g->torpid);
+        flux_future_destroy (g->f_topo);
+        flux_future_destroy (g->f_ovmon);
         flux_msg_handler_delvec (g->handlers);
         flux_watcher_destroy (g->batch_timer);
         free (g);
@@ -866,39 +924,83 @@ void groups_destroy (struct groups *g)
     }
 }
 
-struct groups *groups_create (struct broker *ctx)
+static struct groups *groups_create (flux_t *h)
 {
     struct groups *g;
 
     if (!(g = calloc (1, sizeof (*g))))
         return NULL;
-    g->ctx = ctx;
+    if (flux_get_rank (h, &g->rank) < 0)
+        goto error;
+    g->h = h;
     if (!(g->batch = json_object ())
         || !(g->groups = zhashx_new ())) {
         errno = ENOMEM;
         goto error;
     }
     if (!(g->self = idset_create (0, IDSET_FLAG_AUTOGROW))
-        || idset_set (g->self, g->ctx->rank) < 0
+        || idset_set (g->self, g->rank) < 0
         || !(g->torpid = idset_create (0, IDSET_FLAG_AUTOGROW)))
         goto error;
     zhashx_set_destructor (g->groups, group_destructor);
     zhashx_set_key_duplicator (g->groups, NULL);
     zhashx_set_key_destructor (g->groups, NULL);
-    if (flux_msg_handler_addvec (ctx->h, htab, g, &g->handlers) < 0)
+    if (flux_msg_handler_addvec (g->h, htab, g, &g->handlers) < 0)
         goto error;
-    if (!(g->batch_timer = flux_timer_watcher_create (flux_get_reactor (ctx->h),
+    if (!(g->batch_timer = flux_timer_watcher_create (flux_get_reactor (g->h),
                                                       0.,
                                                       0.,
                                                       batch_timeout_cb,
                                                       g)))
         goto error;
-    overlay_set_monitor_cb (ctx->overlay, overlay_monitor_cb, g);
+    if (!(g->f_topo = flux_rpc_pack (g->h,
+                                     "overlay.topology",
+                                     FLUX_NODEID_ANY,
+                                     0,
+                                     "{s:i}",
+                                     "rank", g->rank))
+        || flux_future_then (g->f_topo,
+                             -1,
+                             overlay_topology_continuation,
+                             g) < 0)
+        goto error;
+    if (!(g->f_ovmon = flux_rpc (g->h,
+                                 "overlay.monitor",
+                                 NULL,
+                                 FLUX_NODEID_ANY,
+                                 FLUX_RPC_STREAMING))
+        || flux_future_then (g->f_ovmon,
+                             -1,
+                             overlay_monitor_continuation,
+                             g) < 0)
+        goto error;
     return g;
 error:
     groups_destroy (g);
     return NULL;
 }
+
+static int mod_main (flux_t *h, int argc, char *argv[])
+{
+    struct groups *g;
+    int rc = -1;
+
+    if (!(g = groups_create (h)))
+        goto done;
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        flux_log_error (h, "flux_reactor_run");
+        goto done;
+    }
+    rc = 0;
+done:
+    groups_destroy (g);
+    return rc;
+}
+
+struct module_builtin builtin_groups = {
+    .name = "groups",
+    .main = mod_main,
+};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -26,7 +26,8 @@ SUBDIRS = \
 noinst_LTLIBRARIES = libmodule_builtins.la
 
 libmodule_builtins_la_SOURCES = \
-	connector-local/local.c
+	connector-local/local.c \
+	groups/groups.c
 libmodule_builtins_la_LIBADD =
 libmodule_builtins_la_LDFLAGS = $(san_ld_zdef_flag)
 

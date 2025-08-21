@@ -119,4 +119,14 @@ test_expect_success 'dump groups logs on rank 0' '
 	flux dmesg|grep groups
 '
 
+# The overlay.monitor RPC was added so that groups could be a module
+# instead of getting callbacks from overlay.c.
+badmonitor() {
+	flux python -c "import flux; print(flux.Flux().rpc(\"overlay.monitor\").get())"
+}
+test_expect_success 'a non-streaming overlay.monitor request fails' '
+	test_must_fail badmonitor 2>badmonitor.err &&
+	grep "Protocol error" badmonitor.err
+'
+
 test_done
