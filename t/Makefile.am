@@ -478,7 +478,6 @@ check_PROGRAMS = \
 	shell/mpir \
 	debug/stall \
 	util/jobspec1-validate \
-	util/handle \
 	util/marshall
 
 if HAVE_MPI
@@ -1141,11 +1140,6 @@ util_jobspec1_validate_SOURCES = util/jobspec1-validate.c
 util_jobspec1_validate_CPPFLAGS = $(test_cppflags)
 util_jobspec1_validate_LDADD = $(test_ldadd)
 util_jobspec1_validate_LDFLAGS = $(test_ldflags)
-
-util_handle_SOURCES = util/handle.c
-util_handle_CPPFLAGS = $(test_cppflags)
-util_handle_LDADD = $(test_ldadd)
-util_handle_LDFLAGS = $(test_ldflags)
 
 util_marshall_SOURCES = util/marshall.c
 util_marshall_CPPFLAGS = $(test_cppflags)
