@@ -24,6 +24,9 @@ nobase_dist_fluxconf_SCRIPTS = \
 nobase_dist_fluxconf_DATA = \
 	modprobe/modprobe.toml
 
+fluxlibexec_SCRIPTS = \
+	flux-run-system-scripts
+
 # Install empty modprobe/*.d directories after rc1.py and rc3.py are installed
 install-data-hook:
 	$(MKDIR_P) $(DESTDIR)$(fluxconfdir)/modprobe/modprobe.d
