@@ -98,6 +98,13 @@ release-after
   have completed housekeeping when the timer fires are released. Following
   that, resources are released as each execution target completes.
 
+exit-on-first-error
+  (optional, bool) Controls error handling behavior when housekeeping
+  is managed by the ``flux-housekeeping@JOBID`` systemd service. If ``false``
+  (default), all discovered scripts are executed and housekeeping exits with
+  the highest recorded exit code. If ``true``, housekeeping exits immediately
+  on encountering the first error.
+
 .. _plugin_specific_keys:
 
 PLUGIN SPECIFIC KEYS
@@ -146,6 +153,12 @@ prolog
       (optional, bool) A boolean indicating if the prolog should be terminated
       when a fatal job exception is raised while the prolog is active. The
       default is true.
+   exit-on-first-error
+      (optional, bool) Controls error handling behavior when prolog execution
+      is managed by the ``flux-prolog@JOBID`` systemd service. If ``false``
+      (default), all discovered scripts are executed and the prolog exits with
+      the highest recorded exit code. If ``true``, the prolog exits immediately
+      on encountering the first error.
 
 epilog
    (optional) Table of configuration for a job-manager epilog. If
@@ -181,6 +194,12 @@ epilog
       default is false. (``cancel-on-exception`` should only be used with
       the epilog for testing purposes, since users can generate exceptions
       on their jobs)
+   exit-on-first-error
+      (optional, bool) Controls error handling behavior when epilog execution
+      is managed by the ``flux-epilog@JOBID`` systemd service. If ``false``
+      (default), all discovered scripts are executed and the epilog exits with
+      the highest recorded exit code. If ``true``, the epilog exits immediately
+      on encountering the first error.
 
 perilog
   (optional) Common prolog/epilog configuration keys:
