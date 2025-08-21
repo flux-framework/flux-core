@@ -69,14 +69,14 @@ test_expect_success 'flux R encode --property fails with invalid rank' '
 	grep "ranks 4-5 not found" property-fail.out
 '
 test_expect_success 'flux R encode --xml works' '
-	flux R encode --xml=$SHARNESS_TEST_SRCDIR/hwloc-data/sierra2/0.xml \
-	    > R.sierra2 &&
-	result=$(flux R decode --short < R.sierra2) &&
+	flux R encode --xml=$SHARNESS_TEST_SRCDIR/hwloc-data/sierra.xml \
+	    > R.sierra &&
+	result=$(flux R decode --short < R.sierra) &&
 	test_debug "echo encode XML = $result" &&
 	test "$result" = "rank0/core[0-43],gpu[0-3]"
 '
 test_expect_success 'flux R encode --xml works with AMD RSMI gpus' '
-	flux R encode --xml=$SHARNESS_TEST_SRCDIR/hwloc-data/corona/0.xml \
+	flux R encode --xml=$SHARNESS_TEST_SRCDIR/hwloc-data/corona.xml \
 	    > R.corona &&
 	result=$(flux R decode --short < R.corona) &&
 	test_debug "echo encode XML = $result" &&

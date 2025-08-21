@@ -539,8 +539,8 @@ check_LTLIBRARIES = \
 	stats/stats-immediate.la
 
 dist_check_DATA = \
-	hwloc-data/sierra2/0.xml \
-	hwloc-data/corona/0.xml \
+	hwloc-data/sierra.xml \
+	hwloc-data/corona.xml \
 	valgrind/valgrind.supp
 
 test_ldadd = \
