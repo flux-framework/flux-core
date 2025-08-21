@@ -5,7 +5,7 @@ CollectMode=inactive-or-failed
 [Service]
 Type=oneshot
 EnvironmentFile=-@X_RUNSTATEDIR@/flux-housekeeping@%I.env
-ExecStart=@X_SYSCONFDIR@/flux/system/housekeeping
+ExecStart=@X_LIBEXECDIR@/flux/flux-run-system-scripts housekeeping
 ExecStopPost=-rm -f @X_RUNSTATEDIR@/flux-housekeeping@%I.env
 ExecStopPost=-sh -c '\
     if test "$SERVICE_RESULT" != "success"; then \

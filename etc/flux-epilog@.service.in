@@ -5,5 +5,5 @@ CollectMode=inactive-or-failed
 [Service]
 Type=oneshot
 EnvironmentFile=-@X_RUNSTATEDIR@/flux-epilog@%I.env
-ExecStart=@X_SYSCONFDIR@/flux/system/epilog
+ExecStart=@X_LIBEXECDIR@/flux/flux-run-system-scripts epilog
 ExecStopPost=-rm -f @X_RUNSTATEDIR@/flux-epilog@%I.env
