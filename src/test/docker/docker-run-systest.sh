@@ -85,8 +85,12 @@ fi
 #  Saving to a file (avoiding a colon in the name) seems to work around
 #  these issues.
 #
+# N.B: docker save -o option doesn't seem to work and we can't use redirection
+# under checks_group() below. Therefore, use docker_save() shell function here:
+docker_save() { docker save $1> $2; }
+
 checks_group "Moving $IMAGE from docker to podman" \
-  docker save -o /tmp/systest-$$.tar $IMAGE \
+  docker_save $IMAGE /tmp/systest-$$.tar \
   && ls -lh /tmp/systest-$$.tar \
   && (podman load -i /tmp/systest-$$.tar || die "podman load failed") \
   && rm -f /tmp/systest-$$.tar
