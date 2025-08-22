@@ -206,8 +206,10 @@ static void timer_commit_cb (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-static void
-timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void timer_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     struct eventlog_batch *batch = arg;
     double timeout = batch->ev->commit_timeout;
@@ -294,7 +296,8 @@ static int append_wait (struct eventlogger *ev,
 
     if (flux_kvs_txn_put (ev->current->txn,
                           FLUX_KVS_APPEND,
-                          path, entrystr) < 0)
+                          path,
+                          entrystr) < 0)
         return -1;
 
     return eventlogger_flush (ev);
