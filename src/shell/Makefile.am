@@ -107,6 +107,7 @@ flux_shell_SOURCES = \
 	mustache.h \
 	mustache.c \
 	doom.c \
+	sysmon.c \
 	exception.c \
 	rlimit.c \
 	taskmap/cyclic.c \
