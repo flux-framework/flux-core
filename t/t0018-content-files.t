@@ -189,22 +189,22 @@ test_expect_success 'checkpoint-get returned rootref bar' '
         test_cmp rootref.exp rootref.out
 '
 
-test_expect_success 'flux content checkpoints lists correct checkpoints (1 default)' '
-        flux content checkpoints > checkpoints1.out &&
+test_expect_success 'flux content checkpoint list shows correct checkpoints (1 default)' '
+        flux content checkpoint list > checkpoints1.out &&
         count=$(cat checkpoints1.out | wc -l) &&
         test $count -eq 2 &&
         tail -n 1 checkpoints1.out | grep bar
 '
 
-test_expect_success 'flux content checkpoints lists correct checkpoints (1 no-header)' '
-        flux content checkpoints --no-header > checkpoints1n.out &&
+test_expect_success 'flux content checkpoint list shows correct checkpoints (1 no-header)' '
+        flux content checkpoint list --no-header > checkpoints1n.out &&
         count=$(cat checkpoints1n.out | wc -l) &&
         test $count -eq 1 &&
         head -n 1 checkpoints1n.out | grep bar
 '
 
-test_expect_success 'flux content checkpoints lists correct checkpoints (1 json)' '
-        flux content checkpoints --json > checkpoints1j.out &&
+test_expect_success 'flux content checkpoint list shows correct checkpoints (1 json)' '
+        flux content checkpoint list --json > checkpoints1j.out &&
         count=$(cat checkpoints1j.out | wc -l) &&
         test $count -eq 1 &&
         head -n 1 checkpoints1j.out | jq -e ".rootref == \"bar\""
@@ -226,8 +226,8 @@ test_expect_success 'checkpoint-get returned rootref baz' '
         test_cmp rootref2.exp rootref2.out
 '
 
-test_expect_success 'flux content checkpoints lists correct checkpoints (2)' '
-        flux content checkpoints --no-header > checkpoints2.out &&
+test_expect_success 'flux content checkpoint list shows correct checkpoints (2)' '
+        flux content checkpoint list --no-header > checkpoints2.out &&
         count=$(cat checkpoints2.out | wc -l) &&
         test $count -eq 1 &&
         grep baz checkpoints2.out
@@ -253,8 +253,8 @@ test_expect_success 'checkpoint-get returned rootref with longer rootref' '
         test_cmp rootref4.exp rootref4.out
 '
 
-test_expect_success 'flux content checkpoints lists correct checkpoints (3)' '
-        flux content checkpoints --no-header > checkpoints3.out &&
+test_expect_success 'flux content checkpoint list shows correct checkpoints (3)' '
+        flux content checkpoint list --no-header > checkpoints3.out &&
         count=$(cat checkpoints3.out | wc -l) &&
         test $count -eq 1 &&
         grep abcdefghijklmnopqrstuvwxyz checkpoints3.out
@@ -270,8 +270,8 @@ test_expect_success 'checkpoint-get returned rootref with shorter rootref' '
         test_cmp rootref5.exp rootref5.out
 '
 
-test_expect_success 'flux content checkpoints lists correct checkpoints (4)' '
-        flux content checkpoints --no-header > checkpoints4.out &&
+test_expect_success 'flux content checkpoint list shows correct checkpoints (4)' '
+        flux content checkpoint list --no-header > checkpoints4.out &&
         count=$(cat checkpoints4.out | wc -l) &&
         test $count -eq 1 &&
         grep foobar checkpoints4.out
@@ -288,8 +288,8 @@ test_expect_success 'checkpoint-backing-get returns rootref boof' '
         test_cmp rootref_backing.exp rootref_backing.out
 '
 
-test_expect_success 'flux content checkpoints lists correct checkpoints (5)' '
-        flux content checkpoints --no-header > checkpoints5.out &&
+test_expect_success 'flux content checkpoint list shows correct checkpoints (5)' '
+        flux content checkpoint list --no-header > checkpoints5.out &&
         count=$(cat checkpoints5.out | wc -l) &&
         test $count -eq 1 &&
         grep boof checkpoints5.out
@@ -305,8 +305,8 @@ test_expect_success 'checkpoint-get returned rootref boof' '
         test_cmp rootref6.exp rootref6.out
 '
 
-test_expect_success 'flux content checkpoints lists correct checkpoints (6)' '
-        flux content checkpoints --no-header > checkpoints6.out &&
+test_expect_success 'flux content checkpoint list shows correct checkpoints (6)' '
+        flux content checkpoint list --no-header > checkpoints6.out &&
         count=$(cat checkpoints6.out | wc -l) &&
         test $count -eq 1 &&
         grep poof checkpoints6.out

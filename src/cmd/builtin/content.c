@@ -171,7 +171,7 @@ static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
-static void checkpoints_output_header (void)
+static void checkpoint_list_output_header (void)
 {
     printf ("%-10s %-10s %-20s %s\n",
             "Index",
@@ -180,7 +180,7 @@ static void checkpoints_output_header (void)
             "Rootref");
 }
 
-static int checkpoints_output_human (json_t *checkpt, int index)
+static int checkpoint_list_output_human (json_t *checkpt, int index)
 {
     struct tm tm;
     const char *rootref;
@@ -204,7 +204,7 @@ static int checkpoints_output_human (json_t *checkpt, int index)
     return 0;
 }
 
-static int checkpoints_output_json (json_t *checkpt)
+static int checkpoint_list_output_json (json_t *checkpt)
 {
     char *s = json_dumps (checkpt, JSON_COMPACT);
     printf ("%s\n", s);
@@ -212,7 +212,7 @@ static int checkpoints_output_json (json_t *checkpt)
     return 0;
 }
 
-static int internal_checkpoints (optparse_t *p, int ac, char *av[])
+static int checkpoint_list (optparse_t *p, int ac, char *av[])
 {
     flux_t *h;
     int optindex = optparse_option_index (p);
@@ -232,22 +232,58 @@ static int internal_checkpoints (optparse_t *p, int ac, char *av[])
 
     if (!optparse_hasopt (p, "no-header")
         && !optparse_hasopt (p, "json"))
-        checkpoints_output_header ();
+        checkpoint_list_output_header ();
 
     if (!(f = kvs_checkpoint_lookup (h, 0))
         || kvs_checkpoint_lookup_get (f, &a) < 0)
         log_err_exit ("kvs_checkpoint_lookup");
     json_array_foreach (a, index, value) {
         if (optparse_hasopt (p, "json"))
-            ret = checkpoints_output_json (value);
+            ret = checkpoint_list_output_json (value);
         else
-            ret = checkpoints_output_human (value, index);
+            ret = checkpoint_list_output_human (value, index);
         if (ret < 0)
             log_err_exit ("error parsing checkpoint");
     }
     flux_future_destroy (f);
     flux_close (h);
     return (0);
+}
+
+static struct optparse_option checkpoint_list_opts[] = {
+    { .name = "no-header",  .key = 'n',  .has_arg = 0,
+      .usage = "Do not output column headers", },
+    { .name = "json",  .key = 'j',  .has_arg = 0,
+      .usage = "Output raw json checkpoint data", },
+      OPTPARSE_TABLE_END
+};
+
+static struct optparse_subcommand checkpoint_subcommands[] = {
+    { "list",
+      "[OPTIONS]",
+      "List checkpoint(s)",
+      checkpoint_list,
+      0,
+      checkpoint_list_opts,
+    },
+    OPTPARSE_SUBCMD_END
+};
+
+static int internal_checkpoint (optparse_t *p, int ac, char *av[])
+{
+    int optindex;
+
+    if (optparse_reg_subcommands (p, checkpoint_subcommands) != OPTPARSE_SUCCESS)
+        log_msg_exit ("checkpoint: optparse_reg_subcommands failed");
+
+    optindex = optparse_parse_args (p, ac, av);
+    if (optindex < 0)
+        log_msg_exit ("checkpoint: optparse_parse_args failed");
+
+    if (optparse_run_subcommand (p, ac, av) != OPTPARSE_SUCCESS)
+        log_msg_exit ("checkpoint: optparse_run_subcommand failed");
+
+    return 0;
 }
 
 int cmd_content (optparse_t *p, int ac, char *av[])
@@ -270,14 +306,6 @@ static struct optparse_option store_opts[] = {
       .usage = "Store directly to rank 0 content service", },
     { .name = "chunksize", .has_arg = 1, .arginfo = "N",
       .usage = "Limit blob size to N bytes with 0=unlimited (default 0)", },
-      OPTPARSE_TABLE_END
-};
-
-static struct optparse_option checkpoints_opts[] = {
-    { .name = "no-header",  .key = 'n',  .has_arg = 0,
-      .usage = "Do not output column headers", },
-    { .name = "json",  .key = 'j',  .has_arg = 0,
-      .usage = "Output raw json checkpoint data", },
       OPTPARSE_TABLE_END
 };
 
@@ -310,12 +338,12 @@ static struct optparse_subcommand content_subcmds[] = {
       0,
       NULL,
     },
-    { "checkpoints",
-      "[OPTIONS]",
-      "List checkpoint(s)",
-      internal_checkpoints,
-      0,
-      checkpoints_opts,
+    { "checkpoint",
+      NULL,
+      "Perform checkpoint operations",
+      internal_checkpoint,
+      OPTPARSE_SUBCMD_SKIP_OPTS,
+      NULL,
     },
     OPTPARSE_SUBCMD_END
 };
