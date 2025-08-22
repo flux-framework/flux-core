@@ -2,6 +2,8 @@
 
 test_description='Test flux fsck command'
 
+. `dirname $0`/content/content-helper.sh
+
 . $(dirname $0)/sharness.sh
 
 test_under_flux 1 minimal
@@ -274,6 +276,96 @@ test_expect_success 'flux-fsck --rootref fails on non-existent ref' '
 '
 test_expect_success 'flux-fsck --rootref fails on invalid ref' '
 	test_must_fail flux fsck --rootref=lalalal
+'
+#
+# --repair
+#
+test_expect_success 'checkpoint-get returned final expected rootref' '
+	checkpoint_get | jq -r .value[0].rootref >checkpointbad.out &&
+	test_cmp checkpointbad.out dbad.rootref
+'
+test_expect_success 'flux-fsck --repair works (1)' '
+	test_must_fail flux fsck --repair 2> lostandfound1.err &&
+	grep "dir\.b" lostandfound1.err | grep "repaired" &&
+	grep "dir\.c" lostandfound1.err | grep "repaired" &&
+	grep "dir\.d" lostandfound1.err | grep "repaired" &&
+	grep "Total errors: 3" lostandfound1.err
+'
+test_expect_success 'load kvs' '
+	flux module load kvs
+'
+test_expect_success 'flux-fsck --repair recovers data to lost+found' '
+	flux kvs get lost+found.dir.b > lostdirb1.out &&
+	echo "test1test3test4" > lostdirb1.exp &&
+	test_cmp lostdirb1.exp lostdirb1.out &&
+	flux kvs get lost+found.dir.c > lostdirc1.out &&
+	echo "testAtestD" > lostdirc1.exp &&
+	test_cmp lostdirc1.exp lostdirc1.out &&
+	flux kvs get lost+found.dir.d > lostdird1.out &&
+	! test -s lostdird1.out
+'
+test_expect_success 'flux-fsck --repair converted dir.d to a val treeobj' '
+	flux kvs get --treeobj lost+found.dir.d | jq -e ".type == \"val\""
+'
+test_expect_success 'checkpoint-get returns expected updated rootref' '
+	flux kvs getroot -b > afterlostandfound.rootref &&
+	checkpoint_get | jq -r .value[0].rootref > afterlostandfound.out &&
+	test_cmp afterlostandfound.out afterlostandfound.rootref
+'
+test_expect_success 'fix dir.c' '
+	flux kvs copy lost+found.dir.c dir.c
+'
+test_expect_success 'overwrite dir.d' '
+	flux kvs put dir.d.e=test1 &&
+	flux kvs put --append dir.d.e=test2 &&
+	flux kvs put --append dir.d.e=test3 &&
+	flux kvs put --append dir.d.e=test4 &&
+	flux kvs get --treeobj dir.d.e > dire.out &&
+	flux kvs getroot -b > e.rootref
+'
+test_expect_success 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success 'flux-fsck --repair works (2)' '
+	test_must_fail flux fsck --repair 2> lostandfound2.err &&
+	grep "dir\.b" lostandfound2.err | grep "repaired" &&
+	grep "Total errors: 1" lostandfound2.err
+'
+test_expect_success 'load kvs' '
+	flux module load kvs
+'
+test_expect_success 'flux-fsck --repair leaves prior recoveries' '
+	flux kvs get lost+found.dir.c > lostdirc2.out &&
+	echo "testAtestD" > lostdirc2.exp &&
+	test_cmp lostdirc2.exp lostdirc2.out &&
+	flux kvs get lost+found.dir.d > lostdird2.out &&
+	! test -s lostdird2.out
+'
+test_expect_success 'make a reference invalid (dir.d.e)' '
+	cat dire.out | jq -c .data[1]=\"sha1-1234567890123456789012345678901234567890\" > direbad1.out &&
+	cat direbad1.out | jq -c .data[2]=\"sha1-1234567890123456789012345678901234567890\" > direbad2.out &&
+	flux kvs put --treeobj dir.d.e="$(cat direbad2.out)" &&
+	flux kvs getroot -b > ebad.rootref
+'
+test_expect_success 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success 'flux-fsck --repair works (3)' '
+	test_must_fail flux fsck --repair 2> lostandfound3.err &&
+	grep "dir\.b" lostandfound3.err | grep "repaired" &&
+	grep "dir\.d\.e" lostandfound3.err | grep "repaired" &&
+	grep "Total errors: 2" lostandfound3.err
+'
+test_expect_success 'load kvs' '
+	flux module load kvs
+'
+test_expect_success 'flux-fsck --repair overwrites older recoveries' '
+	flux kvs get lost+found.dir.d.e > lostdire3.out &&
+	echo "test1test4" > lostdire3.exp &&
+	test_cmp lostdire3.exp lostdire3.out
+'
+test_expect_success 'unload kvs' '
+	flux module remove kvs
 '
 test_expect_success 'remove content & content-sqlite modules' '
 	flux module remove content-sqlite &&
