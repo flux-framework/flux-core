@@ -477,10 +477,7 @@ check_PROGRAMS = \
 	shell/rcalc \
 	shell/mpir \
 	debug/stall \
-	hwloc/hwloc-convert \
-	hwloc/hwloc-version \
 	util/jobspec1-validate \
-	util/handle \
 	util/marshall
 
 if HAVE_MPI
@@ -541,16 +538,8 @@ check_LTLIBRARIES = \
 	stats/stats-immediate.la
 
 dist_check_DATA = \
-	hwloc-data/sierra2/0.xml \
-	hwloc-data/sierra2/1.xml \
-	hwloc-data/corona/0.xml \
-	hwloc-data/1N/shared/02-brokers/0.xml \
-	hwloc-data/1N/shared/02-brokers/1.xml \
-	hwloc-data/1N/nonoverlapping/02-brokers/0.xml \
-	hwloc-data/1N/nonoverlapping/02-brokers/1.xml \
-	hwloc-data/1N/hwloc-versions/v1.11.11/0.xml \
-	hwloc-data/1N/hwloc-versions/v2.1.0/0.xml \
-	hwloc-data/1N/hwloc-versions/v2to1/0.xml \
+	hwloc-data/sierra.xml \
+	hwloc-data/corona.xml \
 	valgrind/valgrind.supp
 
 test_ldadd = \
@@ -1147,27 +1136,10 @@ job_manager_plugins_callee_la_LIBADD = \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la
 
-hwloc_hwloc_convert_SOURCES = hwloc/hwloc-convert.c
-hwloc_hwloc_convert_CPPFLAGS = $(HWLOC_CFLAGS) $(test_cppflags)
-hwloc_hwloc_convert_LDADD = $(HWLOC_LIBS) \
-	$(test_ldadd)
-hwloc_hwloc_convert_LDFLAGS = $(test_ldadd)
-
-hwloc_hwloc_version_SOURCES = hwloc/hwloc-version.c
-hwloc_hwloc_version_CPPFLAGS = $(HWLOC_CFLAGS) $(test_cppflags)
-hwloc_hwloc_version_LDADD = $(HWLOC_LIBS) \
-	$(test_ldadd)
-hwloc_hwloc_version_LDFLAGS = $(test_ldadd)
-
 util_jobspec1_validate_SOURCES = util/jobspec1-validate.c
 util_jobspec1_validate_CPPFLAGS = $(test_cppflags)
 util_jobspec1_validate_LDADD = $(test_ldadd)
 util_jobspec1_validate_LDFLAGS = $(test_ldflags)
-
-util_handle_SOURCES = util/handle.c
-util_handle_CPPFLAGS = $(test_cppflags)
-util_handle_LDADD = $(test_ldadd)
-util_handle_LDFLAGS = $(test_ldflags)
 
 util_marshall_SOURCES = util/marshall.c
 util_marshall_CPPFLAGS = $(test_cppflags)
