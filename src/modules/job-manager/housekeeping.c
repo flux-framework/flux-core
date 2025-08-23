@@ -21,6 +21,7 @@
  *   [job-manager.housekeeping]
  *   #command = ["command", "arg1", "arg2", ...]
  *   release-after = "FSD"
+ *   exit-on-first-error = [true|false] # For flux-run-system-scripts
  *
  * Partial release:
  *   The 'release-after' config key enables partial release of resources.
@@ -775,6 +776,7 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
     const char *imp_path = NULL;
     char *imp_path_cpy = NULL;
     int use_systemd_unit = 0;
+    int exit_on_first_error = -1; /* Note: only for flux-run-system-scripts */
 
     if (flux_conf_unpack (conf,
                           &e,
@@ -790,10 +792,11 @@ static int housekeeping_parse_config (const flux_conf_t *conf,
     if (json_unpack_ex (housekeeping,
                         &jerror,
                         0,
-                        "{s?o s?s s?b !}",
+                        "{s?o s?s s?b s?b !}",
                         "command", &cmdline,
                         "release-after", &release_after_fsd,
-                        "use-systemd-unit", &use_systemd_unit) < 0)
+                        "use-systemd-unit", &use_systemd_unit,
+                        "exit-on-first-error", &exit_on_first_error) < 0)
         return errprintf (error, "job-manager.housekeeping: %s", jerror.text);
 
     if (use_systemd_unit) {
