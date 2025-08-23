@@ -1,7 +1,14 @@
 #ifndef TEST_FILE_H
 #define TEST_FILE_H
 
-#include "src/common/libtap/tap.h"
+#include <stddef.h>
+
+
+/** 
+ * @brief Get a single statically managed test directory for this process
+ */
+const char *
+get_test_dir ();
 
 void
 create_test_file (const char *dir,
