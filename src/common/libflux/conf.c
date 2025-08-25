@@ -98,13 +98,13 @@ static struct builtin builtin_tab[] = {
     },
     {
         .key = "rc1_path",
-        .val_installed = FLUXCONFDIR "/rc1",
-        .val_intree = ABS_TOP_SRCDIR "/etc/rc1",
+        .val_installed = "flux modprobe rc1",
+        .val_intree = "flux modprobe rc1",
     },
     {
         .key = "rc3_path",
-        .val_installed = FLUXCONFDIR "/rc3",
-        .val_intree = ABS_TOP_SRCDIR "/etc/rc3",
+        .val_installed = "flux modprobe rc3",
+        .val_intree = "flux modprobe rc3",
     },
     {
         .key = "cmdhelp_pattern",
