@@ -8,16 +8,6 @@ if test -z "$FLUX_RC_USE_MODPROBE"; then
     exec ${core_dir}/rc3.old
 fi
 
-all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
-IFS=:
-for rcdir in $all_dirs; do
-    for rcfile in $rcdir/rc3.d/*; do
-	[ -e $rcfile ] || continue
-        echo running $rcfile
-        $rcfile || exit_rc=1
-    done
-done
-
 flux modprobe rc3 || exit_rc=1
 
 exit $exit_rc

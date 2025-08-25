@@ -7,14 +7,3 @@ if test -z "$FLUX_RC_USE_MODPROBE"; then
 fi
 
 flux modprobe rc1 --timing
-
-all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
-IFS=:
-
-for rcdir in $all_dirs; do
-    for rcfile in $rcdir/rc1.d/*; do
-	[ -e $rcfile ] || continue
-	echo running $rcfile
-        $rcfile
-    done
-done
