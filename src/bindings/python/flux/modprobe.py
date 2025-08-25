@@ -29,6 +29,72 @@ from flux.utils import tomli as tomllib
 from flux.utils.graphlib import TopologicalSorter
 
 
+def run_all_rc_scripts(runlevel):
+    """
+    Helper script for flux-modprobe(1) rc1 and rc3 scripts that replaces
+    the following shell code from rc1/rc3:
+    ```
+    core_dir=$(cd ${0%/*} && pwd -P)
+    all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
+    IFS=:
+    for rcdir in $all_dirs; do
+        for rcfile in $rcdir/rc{runlevel}.d/*; do
+        [ -e $rcfile ] || continue
+            echo running $rcfile
+            $rcfile || exit_rc=1
+        done
+    done
+    ```
+
+    Args:
+        runlevel (int): runlevel (1 or 3) in which function is running
+    Raises:
+        OSError: one or more rc scripts failed
+    """
+    success = True
+    core_dir = Path(conf_builtin_get("confdir")).resolve()
+    all_dirs = [core_dir]
+    rc_extra = os.environ.get("FLUX_RC_EXTRA")
+    if rc_extra:
+        all_dirs.extend(Path(d) for d in rc_extra.split(":") if d.strip())
+
+    for entry in all_dirs:
+        rcdir = entry / f"rc{runlevel}.d"
+        if not rcdir.exists() or not rcdir.is_dir():
+            continue
+        try:
+            # Get all files in rcX.d directory, sorted by name
+            rc_files = sorted(
+                [
+                    file
+                    for file in rcdir.iterdir()
+                    if file.is_file() and os.access(file, os.X_OK)
+                ]
+            )
+
+            # for rcfile in $rcdir/rc1.d/*; do
+            for rcfile in rc_files:
+                try:
+                    print(f"running {rcfile}")
+                    subprocess.run([str(rcfile)], check=True)
+                except subprocess.CalledProcessError as e:
+                    success = False
+                    print(
+                        f"{rcfile} failed with exit code {e.returncode}",
+                        file=sys.stderr,
+                    )
+                except (FileNotFoundError, PermissionError, OSError) as e:
+                    success = False
+                    print(f"Cannot execute {rcfile}: {e}", file=sys.stderr)
+
+        except (PermissionError, OSError) as e:
+            success = False
+            print(f"Cannot access directory {rcdir}: {e}", file=sys.stderr)
+
+    if not success:
+        raise OSError(f"one or more rc{runlevel}.d scripts failed")
+
+
 def default_flux_confdir():
     """
     Return the builtin Flux confdir
