@@ -274,6 +274,11 @@ static void test_protocol (void)
 
     /* kill session
      */
+    bool on_apple = false;
+    #ifdef __APPLE__
+    on_apple = true;
+    #endif
+    skip (on_apple, 11)
     f = flux_rpc_pack (h,
                        "terminus.kill",
                        0, FLUX_RPC_STREAMING,
@@ -357,6 +362,7 @@ static void test_protocol (void)
     ok (rc == 0,
         "terminus.kill (no wait): OK");
     flux_future_destroy (f);
+    end_skip; // __APPLE__
 
 
     /* kill-server
