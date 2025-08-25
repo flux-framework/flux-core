@@ -4,7 +4,7 @@ test_description='Test flux config get'
 
 . $(dirname $0)/sharness.sh
 
-FLUXCONFDIR=$(dirname $(flux config builtin --installed rc1_path))
+FLUXCONFDIR=$(flux config builtin --installed confdir)
 test -d $FLUXCONFDIR/system/conf.d || test_set_prereq NO_SYSTEM_CONF
 test -d $FLUXCONFDIR/security/conf.d || test_set_prereq NO_SECURITY_CONF
 test -d $FLUXCONFDIR/imp/conf.d || test_set_prereq NO_IMP_CONF
@@ -185,16 +185,16 @@ test_expect_success 'flux-config builtin fails on unknown key' '
 	grep "unknown is invalid" bi_unknown.err
 '
 test_expect_success 'flux-config builtin works on known key' '
-	flux config builtin rc1_path
+	flux config builtin confdir
 '
 test_expect_success 'flux-config builtin --intree works' '
-	flux config builtin --intree rc1_path >rc1_path_intree
+	flux config builtin --intree confdir >confdir_path_intree
 '
 test_expect_success 'flux-config builtin --installed works' '
-	flux config builtin --installed rc1_path >rc1_path_installed
+	flux config builtin --installed confdir >confdir_installed
 '
 test_expect_success 'flux-config builtin intree and installed return different values' '
-	test_must_fail test_cmp rc1_path_intree rc1_path_installed
+	test_must_fail test_cmp confdir_intree confdir_installed
 '
 test_expect_success 'flux-config get works as guest' '
 	runas_guest flux config get >obj
@@ -206,7 +206,7 @@ test_expect_success 'flux-config reload fails as guest' '
 	test_must_fail runas_guest flux config reload
 '
 test_expect_success 'flux-config builtin works as guest' '
-	runas_guest flux config builtin rc1_path
+	runas_guest flux config builtin confdir
 '
 test_expect_success 'flux-config get works when --config-path points to dir' '
 	mkdir -p altconfig &&
