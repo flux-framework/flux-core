@@ -14,7 +14,6 @@ from pathlib import Path
 from flux.core.inner import raw
 
 tls = threading.local()
-tls.FLUX_CONF_AUTO_FLAG = None
 
 
 def _conf_builtin_get_flag():
@@ -26,7 +25,7 @@ def _conf_builtin_get_flag():
     correct FLUX_CONF_FLAG based on whether this module is under the
     in tree PYTHONPATH or not.
     """
-    if tls.FLUX_CONF_AUTO_FLAG is None:
+    if not hasattr(tls, "FLUX_CONF_AUTO_FLAG"):
         # Resolve builtin installed python path:
         pythonpath = conf_builtin_get("python_path", which="intree").split(":")
         for path in pythonpath:
