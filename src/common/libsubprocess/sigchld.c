@@ -102,7 +102,7 @@ static void sigchld_cb (flux_reactor_t *r,
             if ((p = zhashx_lookup (sigchld_ctx->procs, &pid)))
                 p->cb (pid, status, p->arg);
         }
-    } while (pid > 0);
+    } while (pid > 0 || (pid == -1 && errno == EINTR));
     sigchld_finalize (); // decref ctx
 }
 

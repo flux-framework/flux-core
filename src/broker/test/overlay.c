@@ -30,6 +30,8 @@
 #include "src/broker/attr.h"
 #include "src/broker/topology.h"
 
+#include "src/common/libtestutil/test_file.h"
+
 static zlist_t *logs;
 void *zctx;
 
@@ -93,9 +95,6 @@ struct context *ctx_create (flux_t *h,
 {
     struct context *ctx;
     flux_error_t error;
-    const char *temp = getenv ("TMPDIR");
-    if (!temp)
-        temp = "/tmp";
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         BAIL_OUT ("calloc failed");
@@ -273,7 +272,7 @@ void trio (flux_t *h)
 {
     struct context *ctx[2];
     int size = 3;
-    char parent_uri[64];
+    char parent_uri[PATH_MAX + 64], uri[PATH_MAX + 64];
     const char *server_pubkey;
     const char *client_pubkey;
     const char *tmp;
@@ -293,7 +292,7 @@ void trio (flux_t *h)
     ok ((server_pubkey = overlay_cert_pubkey (ctx[0]->ov)) != NULL,
         "%s: overlay_cert_pubkey works", ctx[0]->name);
 
-    snprintf (parent_uri, sizeof (parent_uri), "ipc://@%s", ctx[0]->name);
+    snprintf (parent_uri, sizeof (parent_uri), "ipc://%s/flux_ipc_%s", get_test_dir (), ctx[0]->name);
     ok (overlay_bind (ctx[0]->ov, parent_uri, NULL) == 0,
         "%s: overlay_bind %s works", ctx[0]->name, parent_uri);
 
@@ -441,7 +440,9 @@ void trio (flux_t *h)
      * fails to initialize because its endpoint is already bound.
      */
     errno = 0;
-    ok (overlay_bind (ctx[1]->ov, "ipc://@foo", NULL) < 0
+    if (snprintf (uri, sizeof uri, "ipc://%s/flux_ipc_foo", get_test_dir ()) < 0)
+        BAIL_OUT("asprintf failed");
+    ok (overlay_bind (ctx[1]->ov, uri, NULL) < 0
         && errno == EADDRINUSE,
         "%s: second overlay_bind in proc fails with EADDRINUSE", ctx[0]->name);
 
@@ -502,6 +503,13 @@ void trio (flux_t *h)
     zmq_close (zsock_none);
     zmq_close (zsock_curve);
 
+    // ENOENT is acceptable because in some cases the ipc node is already
+    // cleaned up here
+    if (unlink (parent_uri) < 0 && errno != ENOENT)
+        BAIL_OUT ("could not remove %s", parent_uri);
+    if (unlink (uri) < 0 && errno != ENOENT)
+        BAIL_OUT ("could not remove %s", uri);
+
     ctx_destroy (ctx[1]);
     ctx_destroy (ctx[0]);
 }
@@ -510,7 +518,7 @@ void test_create (flux_t *h,
                   int size,
                   struct context *ctx[])
 {
-    char uri[64] = { 0 };
+    char uri[PATH_MAX + 200] = { 0 };
     int rank;
 
     for (rank = 0; rank < size; rank++) {
@@ -518,7 +526,7 @@ void test_create (flux_t *h,
         if (overlay_set_topology (ctx[rank]->ov, ctx[rank]->topo) < 0)
             BAIL_OUT ("%s: overlay_set_topology failed", ctx[rank]->name);
         if (rank == 0) {
-            snprintf (uri, sizeof (uri), "ipc://@%s", ctx[0]->name);
+            snprintf (uri, sizeof (uri), "ipc://%s/flux_ipc_%s", get_test_dir (), ctx[0]->name);
             /* Call overlay_bind() before overlay_authorize() is called
              * for the other ranks, since overlay_bind() creates the ZAP
              * handler, and overlay_authorize() will fail if it doesn't
@@ -544,7 +552,12 @@ void test_create (flux_t *h,
 
 void test_destroy (int size, struct context *ctx[])
 {
+    char uri[PATH_MAX + 200] = { 0 };
     int rank;
+
+    snprintf (uri, sizeof (uri), "ipc://%s/flux_ipc_%s", get_test_dir (), ctx[0]->name);
+    if (unlink (uri) < 0 && errno != ENOENT)
+        BAIL_OUT ("could not remove %s", uri);
 
     for (rank = 0; rank < size; rank++)
         ctx_destroy (ctx[rank]);
@@ -670,8 +683,16 @@ void wrongness (flux_t *h)
         BAIL_OUT ("overlay_create failed");
 
     errno = 0;
-    ok (overlay_bind (ov, "ipc://@foobar", NULL) < 0 && errno == EINVAL,
+    struct context *ctx = ctx_create (h, 1, 0, "kary:2", NULL);
+    char * uri = NULL;
+    if (asprintf (&uri, "ipc://%s/flux_ipc_foobar", get_test_dir ()) < 0)
+        BAIL_OUT ("asprintf failed");
+    ok (overlay_bind (ov, uri, NULL) < 0 && errno == EINVAL,
         "overlay_bind fails if called before rank is known");
+    ctx_destroy(ctx);
+    if (unlink (uri) < 0 && errno != ENOENT)
+        BAIL_OUT ("could not remove %s", uri);
+    free (uri);
 
     ok (!flux_msg_is_local (NULL),
         "flux_msg_is_local (NULL) returns false");
