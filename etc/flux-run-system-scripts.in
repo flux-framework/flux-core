@@ -1,0 +1,77 @@
+#!/bin/sh
+###############################################################
+# Copyright 2025 Lawrence Livermore National Security, LLC
+# (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+#
+# This file is part of the Flux resource manager framework.
+# For details, see https://github.com/flux-framework.
+#
+# SPDX-License-Identifier: LGPL-3.0
+###############################################################
+#
+# Run a set of package and system installed administrative scripts,
+# e.g. prolog, epilog, or housekeeping.
+#
+# Intended to be executed by the flux-* oneshot systemd units.
+#
+# Exits with the largest exit code of all scripts unless
+#
+#   job-manager.[prolog|epilog|housekeeping].exit-on-first-error=true
+#
+# in which case the script exits on the first encountered error.
+#
+
+log() { echo "$@" >&2; }
+die() { echo "${prog:-$0}: $@" >&2; exit 1; }
+
+prog=$1
+test -n "$prog" || die "required prolog|epilog|housekeeping argument missing"
+
+exit_on_first_error=$(flux config get -q --type=boolean --default=false \
+                      job-manager.${prog}.exit-on-first-error)
+system_path="@X_LIBEXECDIR@/flux/${prog}.d"
+flux_sysconfdir="@X_SYSCONFDIR@/flux/system"
+legacy_path="${flux_sysconfdir}/${prog}"
+sysconf_path="${flux_sysconfdir}/${prog}.d"
+
+test $FLUX_JOB_USERID && user=$(id -n -u $FLUX_JOB_USERID 2>/dev/null)
+
+log "Running ${prog} for ${FLUX_JOB_ID:-unknown}/${user:-unknown}"
+
+run_all() {
+    log "Running all in ${1}"
+    for file in "${1}"/*; do
+        test -f "$file" -a -x "$file" || continue
+        name=$(basename "$file")
+        log "running $name"
+        $file
+        rc=$?
+        if test $rc -ne 0; then
+            log "$name: exit $rc"
+            if test "$exit_on_first_error" = "true"; then
+                exit $rc
+            fi
+            test $rc -gt $exit_rc && exit_rc=$rc
+        fi
+    done
+}
+
+exit_rc=0
+
+# Run all files in system install path. These scripts are provided by
+# system packages:
+run_all "${system_path}"
+
+# Backwards compat: If ${sysconfdir}/flux/system/${prog} exists, then run it.
+# Otherwise, just run all files in sysconf_path
+#
+if test -f "${legacy_path}" -a -x "${legacy_path}"; then
+    log "Running ${prog} found at ${legacy_path} (skipping ${sysconf_path})"
+    if ! exec "${legacy_path}"; then
+        die "Failed to execute ${legacy_path}"
+    fi
+else
+    run_all "${sysconf_path}"
+fi
+
+exit $exit_rc

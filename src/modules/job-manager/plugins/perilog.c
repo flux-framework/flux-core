@@ -180,6 +180,7 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     struct perilog_procdesc *pd = NULL;
     int per_rank = 0;
     int cancel_on_exception = -1;
+    int exit_on_first_error = -1; /* Note: only for flux-run-system-scripts */
     const char *timeout;
     double kill_timeout = -1.;
     flux_cmd_t *cmd = NULL;
@@ -195,12 +196,13 @@ static struct perilog_procdesc *perilog_procdesc_create (json_t *o,
     if (json_unpack_ex (o,
                         &error,
                         0,
-                        "{s?o s?s s?F s?b s?b !}",
+                        "{s?o s?s s?F s?b s?b s?b !}",
                         "command", &command,
                         "timeout", &timeout,
                         "kill-timeout", &kill_timeout,
                         "per-rank", &per_rank,
-                        "cancel-on-exception", &cancel_on_exception) < 0) {
+                        "cancel-on-exception", &cancel_on_exception,
+                        "exit-on-first-error", &exit_on_first_error) < 0) {
         errprintf (errp, "%s", error.text);
         return NULL;
     }
