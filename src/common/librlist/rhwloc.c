@@ -82,6 +82,10 @@ error:
 
 static int topo_restrict (hwloc_topology_t topo)
 {
+    // this is not supported on macos, and actually flat fails
+#ifdef __APPLE__
+    return 0;
+#else
     hwloc_bitmap_t set = NULL;
     int rc = -1;
     if (!(set = hwloc_bitmap_alloc ())
@@ -92,6 +96,7 @@ static int topo_restrict (hwloc_topology_t topo)
 err:
     hwloc_bitmap_free (set);
     return rc;
+#endif
 }
 
 hwloc_topology_t rhwloc_xml_topology_load (const char *xml,

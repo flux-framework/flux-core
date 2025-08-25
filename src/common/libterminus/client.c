@@ -271,9 +271,16 @@ static void pty_client_data (struct flux_pty_client *c, flux_future_t *f)
         llog_error (c, "unpack: %s", error.text);
         return;
     }
-    if (write (STDOUT_FILENO, data, len) < 0) {
-        llog_error (c, "write %zu bytes: %s", len, strerror (errno));
-        return;
+    for (int n = 0; n < len; ) {
+        int ret = write (STDOUT_FILENO, data + n, len - n);
+        if (ret < 0) {
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK )
+                continue; // try again
+            llog_error (c, "write %zu bytes: %s", len, strerror (errno));
+            return;
+        } else {
+            n += ret;
+        }
     }
 }
 

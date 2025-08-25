@@ -201,15 +201,15 @@ test_plugstack_t_LDFLAGS = \
 
 test_a_plugin_la_SOURCES = test/plugin_test.c
 test_a_plugin_la_CPPFLAGS = $(test_cppflags) -DTEST_PLUGIN_RESULT=\"A\"
-test_a_plugin_la_LDFLAGS = -module -rpath /nowhere $(test_ldflags)
+test_a_plugin_la_LDFLAGS = -avoid-version -module -rpath /nowhere $(test_ldflags)
 
 test_b_plugin_la_SOURCES = test/plugin_test.c
 test_b_plugin_la_CPPFLAGS = $(test_cppflags) -DTEST_PLUGIN_RESULT=\"B\"
-test_b_plugin_la_LDFLAGS = -module -rpath /nowhere $(test_ldflags)
+test_b_plugin_la_LDFLAGS = -avoid-version -module -rpath /nowhere $(test_ldflags)
 
 test_c_plugin_la_SOURCES = test/plugin_test.c
 test_c_plugin_la_CPPFLAGS = $(test_cppflags) -DTEST_PLUGIN_RESULT=\"C\"
-test_c_plugin_la_LDFLAGS = -module -rpath /nowhere $(test_ldflags)
+test_c_plugin_la_LDFLAGS = -avoid-version -module -rpath /nowhere $(test_ldflags)
 
 mpir_test_rangelist_t_SOURCES = mpir/test/rangelist.c
 mpir_test_rangelist_t_CPPFLAGS = $(test_cppflags)

@@ -27,4 +27,4 @@ source macos-venv/bin/activate
 ./autogen.sh
 
 CPPFLAGS="$CPPFLAGS" LDFLAGS=$LDFLAGS PKG_CONFIG_PATH=$PKG_CONFIG_PATH \
-  ./configure --with-external-libev
+  ./configure --with-external-libev "--prefix=$(pwd)/install-macos"

@@ -314,7 +314,7 @@ struct flux_pty * flux_pty_open ()
     /*  Set a default winsize, so it isn't 0,0 */
     ws.ws_row = 25;
     ws.ws_col = 80;
-    if (ioctl (pty->leader, TIOCSWINSZ, &ws) < 0)
+    if (ioctl (pty->leader, TIOCSWINSZ, &ws) < 0 && errno != ENOTTY)
         goto err;
 
     pty->complete = flux_pty_destroy;
@@ -535,7 +535,7 @@ static int pty_resize (struct flux_pty *pty, const flux_msg_t *msg)
         llog_error (pty, "bad resize: row=%d, col=%d", ws.ws_row, ws.ws_col);
         return -1;
     }
-    if (ioctl (pty->leader, TIOCSWINSZ, &ws) < 0) {
+    if (ioctl (pty->leader, TIOCSWINSZ, &ws) < 0 && errno != ENOTTY) {
         llog_error (pty, "ioctl: TIOCSWINSZ: %s", strerror (errno));
         return -1;
     }
@@ -710,9 +710,16 @@ static int pty_write (struct flux_pty *pty, const flux_msg_t *msg)
         llog_error (pty, "%s", error.text);
         return -1;
     }
-    if (write (pty->leader, data, len) < 0) {
-        llog_error (pty, "write: %s", strerror (errno));
-        return -1;
+    for (int n = 0; n < len; ) {
+        int ret = write (pty->leader, data + n, len - n);
+        if (ret < 0) {
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK )
+                continue; // try again
+            llog_error (pty, "write %zu bytes: %s", len, strerror (errno));
+            return -1;
+        } else {
+            n += ret;
+        }
     }
     return 0;
 }
