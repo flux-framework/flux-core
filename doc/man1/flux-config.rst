@@ -149,6 +149,12 @@ The following configuration keys may be printed with
 **rundir**
    The configured ``${runstatedir}/flux`` directory.
 
+**confdir**
+  The configured ``${sysconfdir}/flux`` directory.
+
+**libexecdir**
+   The configured ``${libexecdir}/flux`` directory.
+
 **lua_cpath_add**
    Consulted by :man1:`flux` when setting the :envvar:`LUA_CPATH` environment
    variable.
