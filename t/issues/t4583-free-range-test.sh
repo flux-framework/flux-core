@@ -57,22 +57,22 @@ log "Killing rank 3 (pid %d) and all children\n" $broker_pid
 kill -9 $(list_descendants $broker_pid) $broker_pid
 
 log "Wait for exception event in $jobid\n"
-flux job wait-event -t 100 $jobid exception
+flux job wait-event -vt 100 $jobid exception
 
 log "But running a 3 node job in $jobid still works:\n"
-flux proxy $jobid flux run -t 100s -N3 hostname
+flux proxy $jobid flux run -vvv -t 100s -N3 hostname
 
 log "Overlay status of $jobid should show rank lost:\n"
 flux proxy $jobid flux overlay status
 
 log "Call flux shutdown on $jobid\n"
-flux shutdown --quiet $jobid
+flux shutdown $jobid
 
 log "job $jobid should exit cleanly (no hang) and a zero exit code:\n"
-flux job wait-event -t 100 $jobid finish
+flux job wait-event -vt 100 $jobid finish
 
 log "dump output from job:\n\n"
-flux job attach $jobid
+flux job attach -vEX $jobid
 rc=$?
 printf "\n"
 log "flux-job attach exited with code=$rc\n"
