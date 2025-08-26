@@ -49,7 +49,7 @@ bool treeobj_is_dirref (const json_t *obj);
 /* get type-specific value.
  * For dirref/valref, this is an array of blobrefs.
  * For directory, this is dictionary of treeobjs
- * For symlink, this is an object with optinoal namespace and target.
+ * For symlink, this is an object with optional namespace and target.
  * For val this is string containing base64-encoded data.
  * Return JSON object on success, NULL on error with errno = EINVAL.
  * The returned object is owned by 'obj' and must not be destroyed.

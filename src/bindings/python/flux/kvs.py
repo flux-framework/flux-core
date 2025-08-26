@@ -136,7 +136,7 @@ def get(flux_handle, key, namespace=None, _kvstxn=None):
           set, the primary namespace will be used.
 
     Returns:
-        If value is decodeable by json.loads(), the decoded
+        If value is decodable by json.loads(), the decoded
         result is returned.  If the value is a legal utf-8 decodable
         string, it is returned as a string.  Otherwise, the value is
         returned as a bytes array.
