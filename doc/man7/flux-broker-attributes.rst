@@ -126,10 +126,12 @@ broker.cleanup-timeout [Updates: C]
    received a terminating signal.  Default: ``none``.
 
 broker.rc1_path [Updates: C]
-   The path to the broker's rc1 script.  Default: ``${prefix}/etc/flux/rc1``.
+   The command line executed by the broker for rc1.
+   Default: ``flux modprobe rc1``.
 
 broker.rc3_path [Updates: C]
-   The path to the broker's rc3 script.  Default: ``${prefix}/etc/flux/rc3``.
+   The command line executed by the broker for rc3.
+   Default: ``flux modprobe rc3``.
 
 broker.rc2_none [Updates: C]
    If set, do not run an initial program.
