@@ -89,8 +89,12 @@ test_expect_success 'TOML tbon.interface-hint=wrong type fails' '
 	EOT
 	test_must_fail flux start --config-path=badhint.toml ${ARGS} true
 '
+# Note: the following test has been observed to fail (as expected) in more
+# ways than just nonzero exit or terminated by SIGKILL/SIGTERM (in CI the
+# test sometimes fails with SIGPIPE). Therefore, use the blanket `!` here
+# since we just want to test failure, we don't care how it fails.
 test_expect_success 'tbon.interface-hint=badiface fails' '
-	test_must_fail_or_be_terminated flux start \
+	! flux start \
 		-Stbon.interface-hint=badiface \
 		${ARGS} -s2 -Stbon.prefertcp=1 true
 '
