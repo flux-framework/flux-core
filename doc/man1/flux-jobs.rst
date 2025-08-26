@@ -534,7 +534,7 @@ the state of the job or other context:
    returned (if supported by the scheduler). In other states, the assigned
    nodelist is returned (if resources were assigned).
 
-**contextual_info**
+**contextual_time**
    Returns the job runtime for jobs in RUN state or later, otherwise the
    job duration (if set) is returned.
 
