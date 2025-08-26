@@ -56,6 +56,7 @@ test_expect_success 'flux-fsck works (simple)' '
 '
 test_expect_success 'flux-fsck verbose works (simple)' '
 	flux fsck --verbose 2> verbose.out &&
+	grep "dir$" verbose.out &&
 	grep "dir\.a" verbose.out &&
 	grep "dir\.b" verbose.out &&
 	grep "dir\.c" verbose.out &&
@@ -210,7 +211,7 @@ test_expect_success 'flux-fsck works on rootref a' '
 	flux fsck --verbose --rootref=$(cat a.rootref) 2> rootref1.out &&
 	test_debug "cat rootref1.out" &&
 	count=$(cat rootref1.out | wc -l) &&
-	test $count -eq 2 &&
+	test $count -eq 3 &&
 	grep "dir\.a" rootref1.out &&
 	grep "Total errors: 0" rootref1.out
 '
@@ -218,7 +219,7 @@ test_expect_success 'flux-fsck works on rootref b' '
 	flux fsck --verbose --rootref=$(cat b.rootref) 2> rootref2.out &&
 	test_debug "cat rootref2.out" &&
 	count=$(cat rootref2.out | wc -l) &&
-	test $count -eq 3 &&
+	test $count -eq 4 &&
 	grep "dir\.a" rootref2.out &&
 	grep "dir\.b" rootref2.out &&
 	grep "Total errors: 0" rootref2.out
@@ -227,7 +228,7 @@ test_expect_success 'flux-fsck works on rootref c' '
 	flux fsck --verbose --rootref=$(cat c.rootref) 2> rootref3.out &&
 	test_debug "cat rootref3.out" &&
 	count=$(cat rootref3.out | wc -l) &&
-	test $count -eq 4 &&
+	test $count -eq 5 &&
 	grep "dir\.a" rootref3.out &&
 	grep "dir\.b" rootref3.out &&
 	grep "dir\.c" rootref3.out &&
@@ -237,7 +238,7 @@ test_expect_success 'flux-fsck works on rootref d' '
 	flux fsck --verbose --rootref=$(cat d.rootref) 2> rootref4.out &&
 	test_debug "cat rootref4.out" &&
 	count=$(cat rootref4.out | wc -l) &&
-	test $count -eq 5 &&
+	test $count -eq 6 &&
 	grep "dir\.a" rootref4.out &&
 	grep "dir\.b" rootref4.out &&
 	grep "dir\.c" rootref4.out &&

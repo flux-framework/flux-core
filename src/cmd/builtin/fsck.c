@@ -254,27 +254,18 @@ static void fsck_treeobj (flux_t *h,
         errorcount++;
         return;
     }
-    if (treeobj_is_symlink (treeobj)) {
-        if (verbose)
-            fprintf (stderr, "%s\n", path);
+    if (verbose)
+        fprintf (stderr, "%s\n", path);
+    if (treeobj_is_symlink (treeobj))
         fsck_symlink (h, path, treeobj);
-    }
-    else if (treeobj_is_val (treeobj)) {
-        if (verbose)
-            fprintf (stderr, "%s\n", path);
+    else if (treeobj_is_val (treeobj))
         fsck_val (h, path, treeobj);
-    }
-    else if (treeobj_is_valref (treeobj)) {
-        if (verbose)
-            fprintf (stderr, "%s\n", path);
+    else if (treeobj_is_valref (treeobj))
         fsck_valref (h, path, treeobj);
-    }
-    else if (treeobj_is_dirref (treeobj)) {
+    else if (treeobj_is_dirref (treeobj))
         fsck_dirref (h, path, treeobj); // recurse
-    }
-    else if (treeobj_is_dir (treeobj)) {
+    else if (treeobj_is_dir (treeobj))
         fsck_dir (h, path, treeobj); // recurse
-    }
 }
 
 static void fsck_blobref (flux_t *h, const char *blobref)
