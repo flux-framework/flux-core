@@ -18,6 +18,7 @@ from collections import deque
 import flux
 import flux.kvs
 from flux.cli.base import list_split
+from flux.conf_builtin import conf_builtin_get
 from flux.modprobe import Modprobe
 from flux.util import CLIMain, Tree, help_formatter
 
@@ -68,10 +69,22 @@ def run(args):
 
 
 def rc1(args):
+    if os.environ.get("FLUX_RC_USE_MODPROBE") is None:
+        # Backwards compat: run rc1.old unless FLUX_RC_USE_MODPROBE is set
+        confdir = conf_builtin_get("confdir")
+        os.execv(f"{confdir}/rc1.old", ["rc1"])
+        sys.exit(1)
+
     runtasks(args, rcfile="rc1", timing=args.timing)
 
 
 def rc3(args):
+    if os.environ.get("FLUX_RC_USE_MODPROBE") is None:
+        # Backwards compat: run rc3.old unless FLUX_RC_USE_MODPROBE is set
+        confdir = conf_builtin_get("confdir")
+        os.execv(f"{confdir}/rc3.old", ["rc3"])
+        sys.exit(1)
+
     M = Modprobe(confdir=args.confdir, verbose=args.verbose, dry_run=args.dry_run)
     M.configure_modules()
     # rc3 always removes all modules

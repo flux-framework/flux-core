@@ -343,8 +343,8 @@ test_expect_success 'flux-start works with non-errexit clean BASH_ENV' '
 
 test_expect_success 'flux-start works with multiple files in rc1.d' '
 	mkdir -p rc1.d &&
-	printf "echo rc-one\n" >rc1.d/one &&
-	printf "echo rc-two\n" >rc1.d/two &&
+	printf "#!/bin/sh\necho rc-one\n" >rc1.d/one &&
+	printf "#!/bin/sh\necho rc-two\n" >rc1.d/two &&
 	chmod +x rc1.d/* &&
 	FLUX_RC_EXTRA=$(pwd) flux start -Slog-stderr-level=6 \
 		echo rc-three >rc-multi.out 2>&1 &&

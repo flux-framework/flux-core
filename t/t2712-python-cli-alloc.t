@@ -83,8 +83,10 @@ test_expect_success 'flux alloc --bg fails if broker fails' '
 test_expect_success 'flux alloc --bg fails if rc1 fails' '
 	mkdir -p rc1.d/ &&
 	cat <<-EOF >rc1.d/rc1-fail &&
+	#!/bin/sh
 	exit 1
 	EOF
+	chmod +x rc1.d/rc1-fail &&
 	( export FLUX_RC_EXTRA=$(pwd) &&
 	  test_must_fail flux alloc -n1 -v --broker-opts= --bg \
 		>rc1-fail.log 2>&1

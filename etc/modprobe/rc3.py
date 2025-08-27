@@ -12,7 +12,12 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from flux.modprobe import task
+from flux.modprobe import run_all_rc_scripts, task
+
+
+@task("run-all-rc3", before=["*"])
+def run_all_rc3(context):
+    run_all_rc_scripts(3)
 
 
 @task("post-finish-event", ranks="0", before=["kvs"])

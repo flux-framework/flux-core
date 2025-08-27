@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from subprocess import Popen
 
-from flux.modprobe import task
+from flux.modprobe import run_all_rc_scripts, task
 
 
 def setup(context):
@@ -168,3 +168,8 @@ def push_cleanup(context):
             ],
         },
     ).get()
+
+
+@task("run-all-rc1", after=["*"])
+def run_all_rc1(context):
+    run_all_rc_scripts(1)

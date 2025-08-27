@@ -124,11 +124,11 @@ The following configuration keys may be printed with
 :program:`flux config builtin`:
 
 **rc1_path**
-   The rc1 script path used by :man1:`flux-broker`, unless overridden by
+   The rc1 command used by :man1:`flux-broker`, unless overridden by
    the ``broker.rc1_path`` broker attribute.
 
 **rc3_path**
-   The rc3 script path used by :man1:`flux-broker`, unless overridden by
+   The rc3 command used by :man1:`flux-broker`, unless overridden by
    the ``broker.rc1_path`` broker attribute.
 
 **shell_path**

@@ -16,9 +16,7 @@ dist_cron_DATA = \
 	kvs-backup.cron
 
 nobase_dist_fluxconf_SCRIPTS = \
-	rc1 \
 	rc1.old \
-	rc3 \
 	rc3.old \
 	modprobe/rc1.py \
 	modprobe/rc3.py
