@@ -24,7 +24,7 @@ job_list_wait_state() {
 # lead to racy output with tests below.  Remove the heartbeat module to
 # remove this possibility.
 test_expect_success 'set high heartbeat period' '
-	flux module remove heartbeat
+	flux exec flux module remove heartbeat
 '
 test_expect_success 'flux-top -h prints custom usage' '
 	flux top -h 2>usage &&
