@@ -58,7 +58,7 @@ for rank in 3 1; do
          --add-file=critical.py="${CRITICAL_RANKS}" \
          flux python {{tmpdir}}/critical.py $rank)
 
-    log "Sumbmitted job $id. Waiting for shell rank $rank to be lost"
+    log "Submitted job $id. Waiting for shell rank $rank to be lost"
 
     value="shell rank $rank (on $(hostname -s)): Killed"
     flux job wait-event -Wt 15 -Hvp output -m message="$value" $id log

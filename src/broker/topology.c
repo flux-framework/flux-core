@@ -458,7 +458,7 @@ static int mincrit_choose_k (int size, int max_fanout)
  * A k-ary tree "squashed" down to at most three levels.
  * The value of k determines the fanout from leader to routers.
  * The number of nodes determines the fanout from routers to leaves.
- * The value of k may be 0, or be unspecifed (letting the system choose).
+ * The value of k may be 0, or be unspecified (letting the system choose).
  */
 static int mincrit_plugin_init (struct topology *topo,
                                 const char *path,
