@@ -626,23 +626,26 @@ static int start_resource_watch (struct inventory *inv,
             flux_log (h, LOG_ERR, "failed to save expiration from R");
     }
 
+    /* Always watch for R updates even with rediscover=true in order to
+     * support instance expiration updates
+     */
+    if (flux_future_then (f, -1., R_update_cb, inv) < 0)
+            flux_log (h, LOG_ERR, "Failed to register callback for R updates");
+
     /* If R == NULL (no conversion possible) or rediscover == true, then
      * we will fall through to dynamic discovery.
      */
     if (R && !config->rediscover) {
         if (inventory_put (inv, R, "job-info") < 0)
             goto done;
-        if (flux_future_then (f,
-                              -1.,
-                              R_update_cb,
-                              inv) < 0)
-            flux_log (h, LOG_ERR, "Failed to register callback for R updates");
     }
     rc = 0;
 done:
     /* Cancel and destroy R watch future if no R obtained through this means
+     * _except_ if config->rediscover, in which case we're forcing local
+     * discovery, but we _do_ want expiration updates!
      */
-    if (!R) {
+    if (!R && !config->rediscover) {
         R_watch_destroy (inv);
         resource_parent_handle_close (inv->ctx);
         inv->parent_h = NULL;

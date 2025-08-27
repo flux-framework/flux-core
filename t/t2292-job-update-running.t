@@ -156,6 +156,14 @@ subinstance_get_job_expiration() {
 	flux proxy $1 job_manager_get_R $2 | jq '.R.execution.expiration'
 }
 
+# Run the following tests with and without `--conf=resource.rediscover=true`
+# N.B.: to keep indent sane, the contents of this for loop are not indented:
+for conf_arg in "" "--conf=resource.rediscover=true"; do
+
+if test -n "$conf_arg"; then
+    label="rediscover: "
+fi
+
 #
 #  The following tests ensure that an expiration modification of a job
 #  is propagated to child jobs when appropriate. The tests may be somewhat
@@ -173,8 +181,8 @@ subinstance_get_job_expiration() {
 # 7. Ensure subinstance now reflects updated expiration in resource.R.
 # 8. Ensure new expiration is 300s greater than old expiration
 #
-test_expect_success 'expiration update is detected by subinstance' '
-	id=$(flux alloc --bg -t5m -n4) &&
+test_expect_success "${label}expiration update is detected by subinstance" '
+	id=$(flux alloc --bg -t5m -n4 $conf_arg) &&
 	exp1=$(subinstance_get_expiration $id) &&
 	test_debug "echo instance expiration is $exp1" &&
 	id1=$(flux proxy $id flux submit sleep 300) &&
@@ -206,7 +214,7 @@ test_expect_success 'expiration update is detected by subinstance' '
 # 11. Wait for expected resource-update event to be propagated to the first job
 # 12. Ensure the timeleft of the first job is now > 5m
 #
-test_expect_success 'instance expiration update propagates to jobs' '
+test_expect_success "${label}instance expiration update propagates to jobs" '
 	id3=$(flux proxy $id flux submit --wait-event=start sleep 300) &&
 	tleft3=$(flux proxy $id flux job timeleft $id3) &&
 	duration3=$(subinstance_get_job_duration $id $id3) &&
@@ -224,7 +232,7 @@ test_expect_success 'instance expiration update propagates to jobs' '
 #
 # 13. Check that expiration of job submitted with a duration is untouched.
 #
-test_expect_success 'instance expiration is not propagated to jobs with duration' '
+test_expect_success "${label}instance expiration is not propagated to jobs with duration" '
 	tleft2=$(flux proxy $id flux job timeleft $id2) &&
 	duration2=$(subinstance_get_job_duration $id $id2) &&
 	test_debug "echo timeleft of job with duration is now $tleft2" &&
@@ -235,7 +243,7 @@ test_expect_success 'instance expiration is not propagated to jobs with duration
 # 14. Now update job expiration to unlimited and ensure jobs have unlimited
 #     duration as well:
 #
-test_expect_success 'instance expiration can be updated to unlimited' '
+test_expect_success "${label}instance expiration can be updated to unlimited" '
 	test_debug "echo updating instance duration to inf" &&
 	flux update $id duration=inf &&
 	test_debug "echo waiting for second job resource-update event" &&
@@ -250,7 +258,7 @@ test_expect_success 'instance expiration can be updated to unlimited' '
 #
 # 15. Now update job expiration to 1h and ensure job expiration is reduced
 #
-test_expect_success 'instance expiration can be decreased from unlimited' '
+test_expect_success "${label}instance expiration can be decreased from unlimited" '
 	test_debug "echo updating instance duration to 1h" &&
 	flux update $id duration=1h &&
 	test_debug "echo waiting for third job resource-update event" &&
@@ -265,7 +273,7 @@ test_expect_success 'instance expiration can be decreased from unlimited' '
 #
 # 16. Now update job expiration to 30m. Job expiration should be reduced again.
 #
-test_expect_success 'instance expiration can be decreased again' '
+test_expect_success "${label}instance expiration can be decreased again" '
 	test_debug "echo updating instance duration to 30m" &&
 	flux update $id duration=-.5h &&
 	test_debug "echo waiting for fourth job resource-update event" &&
@@ -277,9 +285,10 @@ test_expect_success 'instance expiration can be decreased again' '
 	flux proxy $id $SHARNESS_TEST_SRCDIR/scripts/dmesg-grep.py \
 		-vt 30 \"job-manager.*expiration of $id1.*-1800\"
 '
-test_expect_success 'shutdown test instance' '
+test_expect_success "${label}shutdown test instance" '
 	flux proxy $id flux cancel --all &&
 	flux shutdown --quiet $id &&
 	flux job wait-event $id clean
 '
+done # END for conf_arg in ...
 test_done
