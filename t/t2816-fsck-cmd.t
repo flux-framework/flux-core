@@ -93,7 +93,8 @@ test_expect_success 'load kvs' '
 	flux module load kvs
 '
 # unfortunately we don't have a `flux content remove` command, so we'll corrupt
-# a valref by overwriting a treeobj with a bad reference
+# a treeobj of type "valref" by overwriting one of the references within it with
+# a bad reference
 test_expect_success 'make a reference invalid (dir.b)' '
 	cat dirb.out | jq -c .data[1]=\"sha1-1234567890123456789012345678901234567890\" > dirbbad.out &&
 	flux kvs put --treeobj dir.b="$(cat dirbbad.out)" &&
@@ -210,6 +211,14 @@ test_expect_success 'flux-fsck no output with --quiet (dir.b & c & d)' '
 test_expect_success 'load kvs' '
 	flux module load kvs
 '
+# N.B. this can be a bit confusing how to corrupt a dirref
+# 1) get treeobj of `dir`, this treeobj should be of type "dirref"
+# 2) get the dirref reference from the `dir` treeobj.
+# 3) get the content of this reference from content store, it should be a treeobj of type "dir"
+# 4) within this treeobj is the key "bdir", it is a treeobj of type "dirref"
+# 5) corrupt the "dirref" for "bdir"
+# 6) write this corrupted treeobj back to the content store, saving this new reference
+# 7) update the original treeobj of `dir` (it's a "dirref") to point to the bad "dir" treeobj
 test_expect_success 'make a dirref reference invalid (dir.bdir)' '
 	flux kvs get --treeobj dir > dir.out &&
 	cat dir.out | jq -r .data[0] > dir.ref &&
