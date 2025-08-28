@@ -381,7 +381,7 @@ static const struct flux_msg_handler_spec htab[] = {
 static struct content_files *content_files_create (flux_t *h, bool truncate)
 {
     struct content_files *ctx;
-    const char *dbdir;
+    const char *statedir;
     const char *s;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
@@ -399,17 +399,11 @@ static struct content_files *content_files_create (flux_t *h, bool truncate)
         goto error;
     }
 
-    /* Prefer 'statedir' as the location for the content.files directory,
-     * if set.  Otherwise use 'rundir'.  If the directory exists, the
-     * instance is restarting.
-     */
-    if (!(dbdir = flux_attr_get (h, "statedir")))
-        dbdir = flux_attr_get (h, "rundir");
-    if (!dbdir) {
-        flux_log_error (h, "neither statedir nor rundir are set");
+    if (!(statedir = flux_attr_get (h, "statedir"))) {
+        flux_log_error (h, "statedir is not set");
         goto error;
     }
-    if (asprintf (&ctx->dbpath, "%s/content.files", dbdir) < 0)
+    if (asprintf (&ctx->dbpath, "%s/content.files", statedir) < 0)
         goto error;
     if (truncate)
         (void)unlink_recursive (ctx->dbpath);
