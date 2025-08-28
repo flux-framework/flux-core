@@ -174,6 +174,31 @@ test_expect_success 'modprobe needs works' '
 	test_cmp test${seq}.expected output${seq}
 '
 seq=$((seq=seq+1))
+test_expect_success 'FLUX_MODPROBE_DISABLE + needs works' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first", before=["*"])
+	def first(context):
+	    print("first")
+
+	@task("2nd", after=["first"])
+	def second(context):
+	    print("second")
+
+	@task("last", needs=["first"])
+	def last(context):
+	    print("last")
+	EOF
+	FLUX_MODPROBE_DISABLE=first \
+	    flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	second
+	EOF
+	test_cmp test${seq}.expected output${seq}
+'
+seq=$((seq=seq+1))
 test_expect_success 'modprobe needs_attrs prevents task from running' '
 	cat <<-EOF >test${seq}.py &&
 	from flux.modprobe import task
@@ -870,5 +895,27 @@ test_expect_success 'modprobe: fails if module load fails' '
 	    context.setopt("sched-simple", "badarg")
 	EOF
 	test_must_fail flux modprobe run sched-badarg.py
+'
+# Configure a module providing the "sched" service that also "requires"
+# and "needs" another module. Ensure this module and its requirements
+# are loaded if the module is the selected alternative for sched.
+#
+test_expect_success 'modprobe: module requires works with needs' '
+	mkdir modprobe.d &&
+	test_when_finished "rm -rf modprobe.d" &&
+	cat <<-EOF >modprobe.d/test.toml &&
+	[[modules]]
+	name = "required-module"
+
+	[[modules]]
+	name = "alternate-scheduler"
+	provides = ["feasibility", "sched"]
+	requires = ["required-module"]
+	needs = ["required-module"]
+	EOF
+	FLUX_MODPROBE_PATH=$(pwd) flux modprobe rc1 --dry-run \
+	    >alternative-needs.out &&
+	grep alternate-scheduler alternative-needs.out &&
+	grep required-module alternative-needs.out
 '
 test_done
