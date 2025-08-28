@@ -65,11 +65,13 @@ def config_reload(context):
     needs_attrs=["content.restore"],
 )
 def check_restore(context):
-    statedir = context.attr_get("statedir", ".")
     dumpfile = context.attr_get("content.restore")
     dumplink = None
 
     if dumpfile == "auto":
+        statedir = "."
+        if context.attr_get("statedir-cleanup") == "0":
+            statedir = context.attr_get("statedir")
         dumplink = Path(f"{statedir}/dump/RESTORE")
         if dumplink.is_symlink():
             dumpfile = dumplink.resolve()
