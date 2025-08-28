@@ -358,6 +358,10 @@ static int append_async (struct eventlogger *ev,
                   entry,
                   (zlist_free_fn *) json_decref,
                   true);
+
+    if (zlist_size (batch->entries) >= EVENTLOGGER_MAX_APPEND)
+        async_commit (batch);
+
     return 0;
 }
 

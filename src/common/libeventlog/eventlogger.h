@@ -38,6 +38,8 @@ enum {
     EVENTLOGGER_FLAG_WAIT =  1,  /* Append entry to eventlog synchronously  */
 };
 
+#define EVENTLOGGER_MAX_APPEND 16384
+
 /*  Create an eventlogger with batched eventlog appends at interval
  *   `timeout`. Eventlogger will process user callbacks in `ops` as
  *   defined above.
