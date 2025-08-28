@@ -99,6 +99,7 @@ struct output good_output[] = {
 };
 struct input bad_input[] = {
     { "empty object", "{}",  "{}" },
+    { "invalid JSON", "{]",  "{}" },
     {
         "missing version",
         "{\"tasks\": [{\"slot\": \"task\", \"count\": {\"per_slot\": 1}, \"command\": [\"hostname\"], \"attributes\": {}}], \"attributes\": {\"system\": {\"cwd\": \"/home/garlick/proj/flux-core/src/cmd\"}}, \"resources\": [{\"count\": 1, \"with\": [{\"count\": 1, \"type\": \"core\"}], \"type\": \"slot\", \"label\": \"task\"}]}",
@@ -178,6 +179,11 @@ struct input bad_input[] = {
         "missing resource type",
         "{\"tasks\": [{\"slot\": \"task\", \"count\": {\"per_slot\": 1}, \"command\": \"hostname\", \"attributes\": {}}], \"attributes\": {\"system\": {\"cwd\": \"/home/garlick/proj/flux-core/src/cmd\"}}, \"version\": 1, \"resources\": [{\"label\": \"task\", \"count\": 1, \"with\": [{\"count\": 1, \"type\": \"core\"}]}]}",
         "{\"version\": 1, \"execution\": {\"R_lite\": [{\"rank\": \"1\", \"children\": {\"core\": \"1\"}}]}}",
+    },
+    {
+        "invalid resource type",
+        "{\"tasks\": [{\"slot\": \"task\", \"count\": {\"per_slot\": 1}, \"command\": [\"hostname\"], \"attributes\": {}}], \"attributes\": {\"system\": {\"cwd\": \"/home/garlick/proj/flux-core/src/cmd\"}}, \"version\": 1, \"resources\": [{\"count\": 1, \"with\": [{\"count\": 1, \"type\": \"core\"}], \"type\": 1, \"label\": \"task\"}]}",
+        "{\"version\": 1, \"execution\": {\"R_lite\": [{\"rank\": \"1\", \"children\": {\"core\": \"1\"}}], \"nslots\": 1}}",
     },
     {
         "(node->slot->core,slot->core)",

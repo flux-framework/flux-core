@@ -26,6 +26,8 @@
 struct rlist {
     int total;
     int avail;
+    int nslots;
+
     zlistx_t *nodes;
 
     zhashx_t *rank_index;

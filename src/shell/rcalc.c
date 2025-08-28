@@ -49,6 +49,7 @@ struct rcalc {
     int ncores;
     int ngpus;
     int ntasks;
+    int nslots;
     struct rankinfo *ranks;
     struct allocinfo *alloc;
 };
@@ -223,10 +224,11 @@ rcalc_t * rcalc_create_json (json_t *o)
         return (NULL);
     r->json = json_incref (o);
     if (json_unpack_ex (o, NULL, 0,
-                        "{s:i s:{s:o}}",
+                        "{s:i s:{s:o s?i}}",
                         "version", &version,
                         "execution",
-                        "R_lite", &r->R_lite) < 0)
+                            "R_lite", &r->R_lite,
+                            "nslots", &r->nslots) < 0)
         goto fail;
     if (version != 1) {
         errno = EINVAL;
@@ -287,6 +289,11 @@ int rcalc_total_gpus (rcalc_t *r)
 int rcalc_total_ntasks (rcalc_t *r)
 {
     return r->ntasks;
+}
+
+int rcalc_total_slots (rcalc_t *r)
+{
+    return r->nslots;
 }
 
 int rcalc_total_nodes_used (rcalc_t *r)
