@@ -449,11 +449,13 @@ static void action_run (struct state_machine *s)
             const char *rc1_path = "unknown";
             const char *rc3_path = "unknown";
             const char *statedir = "unknown";
+            const char *statedir_cleanup = "unknown";
 
             (void)attr_get (attrs, "config.path", &confdir, NULL);
             (void)attr_get (attrs, "broker.rc1_path", &rc1_path, NULL);
             (void)attr_get (attrs, "broker.rc3_path", &rc3_path, NULL);
             (void)attr_get (attrs, "statedir", &statedir, NULL);
+            (void)attr_get (attrs, "statedir-cleanup", &statedir_cleanup, NULL);
 
             printf ("+-----------------------------------------------------\n"
                     "| Entering Flux recovery mode.\n"
@@ -471,7 +473,7 @@ static void action_run (struct state_machine *s)
                     rc1_path ? rc1_path : "-",
                     rc3_path ? rc3_path : "-",
                     confdir ? confdir : "-",
-                    statedir ? statedir
+                    streq (statedir_cleanup, "0") ? statedir
                         : "changes will not be preserved");
         }
         if (runat_start (s->ctx->runat, "rc2", runat_completion_cb, s) < 0) {
