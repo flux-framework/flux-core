@@ -56,7 +56,10 @@ if test $RANK -eq 0; then
     dumpfile=$(flux getattr content.dump 2>/dev/null)
     if test $exit_rc -eq 0 -a -n "${dumpfile}"; then
         if test "${dumpfile}" = "auto"; then
-            statedir=$(flux getattr statedir 2>/dev/null)
+            statedir=
+            if test "$(flux getattr statedir-cleanup)" = "0"; then
+                statedir=$(flux getattr statedir)
+            fi
             mkdir -p "${statedir:-.}/dump"
             dumpfile="${statedir:-.}/dump/$(date +%Y%m%d_%H%M%S).tgz"
             dumplink="${statedir:-.}/dump/RESTORE"
