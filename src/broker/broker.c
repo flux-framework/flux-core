@@ -335,12 +335,15 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (rundir_create (ctx.attrs, "rundir", &error) < 0) {
+    /* Create rundir now as it may be needed for overlay sockets during
+     * bootstrap.  N.B. tmpdir is used later when statedir is created.
+     */
+    const char *tmpdir = getenv ("TMPDIR");
+    if (rundir_create (ctx.attrs,
+                       "rundir",
+                       tmpdir ? tmpdir : "/tmp",
+                       &error) < 0) {
         log_msg ("rundir %s", error.text);
-        goto cleanup;
-    }
-    if (rundir_create (ctx.attrs, "statedir", &error) < 0) {
-        log_msg ("statedir %s", error.text);
         goto cleanup;
     }
 
@@ -381,6 +384,31 @@ int main (int argc, char *argv[])
 
     if (ctx.size == 0)
         log_err_exit ("internal error: instance size is zero!");
+
+    /* Now that rank is known, create or check the statedir.
+     * The statedir is only used on the leader broker, so unset the
+     * attribute elsewhere.
+     *
+     * N.B. the system instance sets statedir to /var/lib/flux and supports
+     * restarts, while other instances default to a temporary directory that
+     * is removed on broker exit.  If TMPDIR is not set, use /var/tmp for
+     * the temporary directory as opposed to /tmp which is more likely to
+     * be a ram-backed tmpfs.
+     *
+     * See also: file-hierarchy(7)
+     */
+    if (ctx.rank == 0) {
+        if (rundir_create (ctx.attrs,
+                           "statedir",
+                           tmpdir ? tmpdir : "/var/tmp",
+                           &error) < 0) {
+            log_msg ("statedir %s", error.text);
+            goto cleanup;
+        }
+    }
+    else {
+        (void)attr_delete (ctx.attrs, "statedir", true);
+    }
 
     /* Must be called after overlay setup */
     if (overlay_register_attrs (ctx.overlay) < 0) {

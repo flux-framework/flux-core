@@ -15,6 +15,9 @@ int rundir_checkdir (const char *path, flux_error_t *error);
 
 /* Create/check rundir or statedir (depending on the value of attr_name).
  */
-int rundir_create (attr_t *attrs, const char *attr_name, flux_error_t *error);
+int rundir_create (attr_t *attrs,
+                   const char *attr_name,
+                   const char *tmpdir,
+                   flux_error_t *error);
 
 // vi:ts=4 sw=4 expandtab
