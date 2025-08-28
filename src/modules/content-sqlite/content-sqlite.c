@@ -1083,7 +1083,7 @@ static const struct flux_msg_handler_spec htab[] = {
 static struct content_sqlite *content_sqlite_create (flux_t *h)
 {
     struct content_sqlite *ctx;
-    const char *dbdir;
+    const char *statedir;
     const char *s;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
@@ -1110,23 +1110,24 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
         goto error;
     }
 
-    /* Prefer 'statedir' as the location for content.sqlite file, if set.
-     * Otherwise use 'rundir', and enable pragmas that increase performance
-     * but risk database corruption on a crash (since rundir is temporary
-     * and the database is not being preserved after a crash anyway).
+    /* Use 'statedir' as the location for content.sqlite file.
      */
-    if (!(dbdir = flux_attr_get (h, "statedir"))) {
-        dbdir = flux_attr_get (h, "rundir");
+    if (!(statedir = flux_attr_get (h, "statedir"))) {
+        flux_log_error (h, "statedir is not set");
+        goto error;
+    }
+    /* If 'statedir-cleanup' is set to 1, enable pragmas that increase
+     * performance but risk database corruption on a crash since the
+     * directory is temporary and the database is not being preserved
+     * after a crash anyway.
+     */
+    if ((s = flux_attr_get (h, "statedir-cleanup")) && streq (s, "1")) {
         if (set_config (&ctx->journal_mode, "OFF") < 0)
             goto error;
         if (set_config (&ctx->synchronous, "OFF") < 0)
             goto error;
     }
-    if (!dbdir) {
-        flux_log_error (h, "neither statedir nor rundir are set");
-        goto error;
-    }
-    if (asprintf (&ctx->dbfile, "%s/content.sqlite", dbdir) < 0)
+    if (asprintf (&ctx->dbfile, "%s/content.sqlite", statedir) < 0)
         goto error;
 
     /* If dbfile exists, we are restarting.
