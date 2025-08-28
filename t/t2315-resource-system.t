@@ -23,7 +23,7 @@ test_expect_success 'create config file pointing to test R' '
 '
 
 test_expect_success 'start instance with config file and dump R' '
-	flux start -s2 \
+	flux start -s 2 \
 		--config-path=$(pwd) -Slog-filename=logfile \
 		flux kvs get resource.R >R.out
 '
@@ -46,7 +46,7 @@ test_expect_success 'invalid R causes instance to fail with error' '
 	[resource]
 	path = "$(pwd)/bad/R"
 	EOF
-	test_must_fail flux start -s2 \
+	test_must_fail flux start -s 2 \
 		--config-path=$(pwd)/bad -Slog-filename=bad/logfile \
 		flux kvs get resource.R >bad/R.out &&
 	grep "error parsing R: invalid version=42" bad/logfile
@@ -59,7 +59,7 @@ test_expect_success 'missing scheduling key causes instance to fail with error' 
 	path = "$(pwd)/sched.enoent/R"
 	scheduling = "missing"
 	EOF
-	test_must_fail flux start -s2 \
+	test_must_fail flux start -s 2 \
 	       --config-path=$(pwd)/sched.enoent \
 	       -Slog-filename=sched.enoent/logfile \
 	       flux kvs get resource.R >sched.enoent/R.out &&
@@ -77,7 +77,7 @@ test_expect_success 'resource.scheduling key amends resource.path' '
 	path = "$(pwd)/sched.good/R"
 	scheduling = "$(pwd)/sched.good/sched.json"
 	EOF
-	flux start -s2 \
+	flux start -s 2 \
 	       --config-path=$(pwd)/sched.good \
 	       -Slog-filename=sched.good/logfile \
 	       flux kvs get resource.R >sched.good/R.out &&
@@ -96,7 +96,7 @@ test_expect_success 'invalid scheduling key causes instance to fail with error' 
 	path = "$(pwd)/sched.bad/R"
 	scheduling = "$(pwd)/sched.bad/sched.json"
 	EOF
-	test_must_fail flux start -s2 \
+	test_must_fail flux start -s 2 \
 	       --config-path=$(pwd)/sched.bad \
 	       -Slog-filename=sched.bad/logfile \
 	       flux kvs get resource.R >sched.bad/R.out &&
@@ -110,7 +110,7 @@ test_expect_success 'missing ranks in R are drained' '
 	[resource]
 	path = "$(pwd)/missing/R"
 	EOF
-	flux start -s3 \
+	flux start -s 3 \
 		--config-path=$(pwd)/missing -Slog-filename=missing/logfile \
 		flux kvs get resource.R >missing/R.out &&
 	grep "draining: rank 2 not found in expected ranks" missing/logfile
@@ -172,7 +172,7 @@ test_expect_success 'gpu resources in configured R are not verified' '
 	[resource]
 	path = "$(pwd)/${name}/R"
 	EOF
-	flux start -s 1\
+	flux start -s 1 \
 		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
 		flux run flux resource list -s up -no {rlist} > ${name}/rlist &&
 	test_debug "cat ${name}/rlist" &&
@@ -188,7 +188,7 @@ test_expect_success MULTICORE 'resource norestrict option works' '
 	path = "$(pwd)/${name}/R"
 	norestrict = true
 	EOF
-	hwloc-bind core:0 flux start -s1 \
+	hwloc-bind core:0 flux start -s 1 \
 		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
 		flux run -N1 --exclusive \
 		  sh -c "hwloc-bind --get | hwloc-calc --number-of core | tail -n1" \
