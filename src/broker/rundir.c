@@ -116,6 +116,14 @@ static int rundir_special (const char *dirpath, flux_error_t *error)
     return 0;
 }
 
+static bool path_exists (const char *path)
+{
+    struct stat sb;
+    if (stat (path, &sb) < 0)
+        return false;
+    return true;
+}
+
 int rundir_create (attr_t *attrs,
                    const char *attr_name,
                    const char *tmpdir,
@@ -128,9 +136,6 @@ int rundir_create (attr_t *attrs,
     int rc = -1;
 
     /*  If attribute isn't set, then create a temp directory and use that.
-     *   If directory was set, try to create it if it doesn't exist.
-     *   If directory was pre-existing, do not schedule
-     *   the dir for auto-cleanup at broker exit.
      */
     if (attr_get (attrs, attr_name, &dirpath, NULL) < 0) {
         len = snprintf (path, sizeof (path), "%s/flux-XXXXXX", tmpdir);
@@ -148,16 +153,22 @@ int rundir_create (attr_t *attrs,
         if (attr_add (attrs, attr_name, dirpath, 0) < 0)
             goto error_setattr;
     }
-    else if (mkdir (dirpath, 0700) < 0) {
-        if (errno != EEXIST) {
+    /*  If attribute is set, but the directory doesn't exist,
+     * try to create the named directory.
+     */
+    else if (!path_exists (dirpath)) {
+        if (mkdir (dirpath, 0700) < 0) {
             errprintf (error,
                        "error creating %s: %s",
                        dirpath,
                        strerror (errno));
-            goto done;
+                goto done;
         }
-        /* Do not cleanup directory if we did not create it here
-         */
+    }
+    /*  If directory was pre-existing, do not schedule it for
+     * auto-cleanup at broker exit.
+     */
+    else {
         do_cleanup = false;
     }
 
