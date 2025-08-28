@@ -145,12 +145,8 @@ int rundir_create (attr_t *attrs,
                        strerror (errno));
             goto done;
         }
-        if (attr_add (attrs, attr_name, dirpath, 0) < 0) {
-            errprintf (error,
-                       "error setting broker attribute: %s",
-                       strerror (errno));
-            goto done;
-        }
+        if (attr_add (attrs, attr_name, dirpath, 0) < 0)
+            goto error_setattr;
     }
     else if (mkdir (dirpath, 0700) < 0) {
         if (errno != EEXIST) {
@@ -178,20 +174,33 @@ int rundir_create (attr_t *attrs,
     }
 
     /*  dirpath is now fixed, so make the attribute immutable, and
-     *   schedule the dir for cleanup at exit if we created it here.
+     * schedule the dir for cleanup at exit if we created it here.
      */
-    if (attr_set_flags (attrs, attr_name, ATTR_IMMUTABLE) < 0) {
-        errprintf (error,
-                   "error setting broker attribute: %s",
-                   strerror (errno));
-        goto done;
-    }
+    if (attr_set_flags (attrs, attr_name, ATTR_IMMUTABLE) < 0)
+        goto error_setattr;
+
+    /*  If attr-cleanup is set on the command line, it overrides default
+     * do_cleanup behavior set above.
+     */
+    char key[64];
+    const char *val = NULL;
+
+    (void)snprintf (key, sizeof (key), "%s-cleanup", attr_name);
+    if (attr_get (attrs, key, &val, NULL) == 0 && val)
+        do_cleanup = streq (val, "0") ? false : true;
+    (void)attr_delete (attrs, key, true);
+    if (attr_add_int (attrs, key, do_cleanup ? 1 : 0, ATTR_IMMUTABLE) < 0)
+        goto error_setattr;
 
     rc = 0;
 done:
-    if (do_cleanup && dirpath != NULL)
+    if (do_cleanup && dirpath)
         cleanup_push_string (cleanup_directory_recursive, dirpath);
     return rc;
+
+error_setattr:
+    errprintf (error, "error setting broker attribute: %s", strerror (errno));
+    return -1;
 }
 
 // vi:ts=4 sw=4 expandtab
