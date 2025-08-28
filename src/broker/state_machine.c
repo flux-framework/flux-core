@@ -418,7 +418,7 @@ static void action_quorum (struct state_machine *s)
     }
     if (s->ctx->rank > 0)
         quorum_check_parent (s);
-    else if (s->quorum.size > 1) {
+    else {
         if (!(s->quorum.f = flux_rpc_pack (s->ctx->h,
                                            "groups.get",
                                            FLUX_NODEID_ANY,
@@ -436,8 +436,6 @@ static void action_quorum (struct state_machine *s)
             flux_watcher_start (s->quorum.warn_timer);
         }
     }
-    else
-        state_machine_post (s, "quorum-full");
 }
 
 static void action_run (struct state_machine *s)
