@@ -77,6 +77,7 @@
 #include "publisher.h"
 #include "state_machine.h"
 #include "shutdown.h"
+#include "rundir.h"
 
 #include "broker.h"
 
@@ -98,9 +99,6 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
 static void broker_remove_services (flux_msg_handler_t *handlers[]);
 
 static void set_proctitle (uint32_t rank);
-
-static int create_rundir (attr_t *attrs);
-static int check_statedir (attr_t *attrs);
 
 static int create_runat_phases (broker_ctx_t *ctx);
 
@@ -195,6 +193,7 @@ static void sighup_handler (int signum)
 int main (int argc, char *argv[])
 {
     broker_ctx_t ctx;
+    flux_error_t error;
     sigset_t old_sigmask;
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
@@ -336,10 +335,14 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (create_rundir (ctx.attrs) < 0)
+    if (rundir_create (ctx.attrs, "rundir", &error) < 0) {
+        log_msg ("rundir %s", error.text);
         goto cleanup;
-    if (check_statedir (ctx.attrs) < 0)
+    }
+    if (rundir_create (ctx.attrs, "statedir", &error) < 0) {
+        log_msg ("statedir %s", error.text);
         goto cleanup;
+    }
 
     /* Record the broker start time.  This time will also be used to
      * capture how long network bootstrap takes.
@@ -815,172 +818,6 @@ static int create_runat_phases (broker_ctx_t *ctx)
     return 0;
 }
 
-static int checkdir (const char *name, const char *path)
-{
-    struct stat sb;
-
-    if (stat (path, &sb) < 0) {
-        log_err ("cannot stat %s %s", name, path);
-        return -1;
-    }
-    if (sb.st_uid != getuid ()) {
-        errno = EPERM;
-        log_err ("%s %s is not owned by instance owner", name, path);
-        return -1;
-    }
-    if (!S_ISDIR (sb.st_mode)) {
-        errno = ENOTDIR;
-        log_err ("%s %s", name, path);
-        return -1;
-    }
-    if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
-        log_msg ("%s %s does not have owner=rwx permissions", name, path);
-        errno = EPERM;
-        return -1;
-    }
-    return 0;
-}
-
-/* Validate statedir, if set.
- * Ensure that the attribute cannot change from this point forward.
- */
-static int check_statedir (attr_t *attrs)
-{
-    const char *statedir;
-
-    if (attr_get (attrs, "statedir", &statedir, NULL) < 0) {
-        if (attr_add (attrs, "statedir", NULL, ATTR_IMMUTABLE) < 0) {
-            log_err ("error creating statedir broker attribute");
-            return -1;
-        }
-    }
-    else {
-        if (checkdir ("statedir", statedir) < 0)
-            return -1;
-        if (attr_set_flags (attrs, "statedir", ATTR_IMMUTABLE) < 0) {
-            log_err ("error setting statedir broker attribute flags");
-            return -1;
-        }
-    }
-    return 0;
-}
-
-static int create_rundir_symlinks (const char *run_dir, flux_error_t *error)
-{
-    char path[1024];
-    size_t size = sizeof (path);
-    const char *target;
-
-    if (strlcpy (path, run_dir, size) >= size
-        || strlcat (path, "/bin", size) >= size)
-        goto overflow;
-    if (mkdir (path, 0755) < 0) {
-        errprintf (error, "mkdir %s: %s", path, strerror (errno));
-        return -1;
-    }
-    cleanup_push_string (cleanup_directory_recursive, path);
-    if (strlcat (path, "/flux", size) >= size)
-        goto overflow;
-    if (executable_is_intree () == 1)
-        target = ABS_TOP_BUILDDIR "/src/cmd/flux";
-    else
-        target = X_BINDIR "/flux";
-    if (symlink (target, path) < 0) {
-        errprintf (error, "symlink %s: %s", path, strerror (errno));
-        return -1;
-    }
-    return 0;
-overflow:
-    errprintf (error, "buffer overflow");
-    errno = EOVERFLOW;
-    return -1;
-}
-
-/*  Handle global rundir attribute.
- */
-static int create_rundir (attr_t *attrs)
-{
-    const char *tmpdir;
-    const char *run_dir = NULL;
-    char path[1024];
-    int len;
-    bool do_cleanup = true;
-    int rc = -1;
-
-    /*  If rundir attribute isn't set, then create a temp directory
-     *   and use that as rundir. If directory was set, try to create it if
-     *   it doesn't exist. If directory was pre-existing, do not schedule
-     *   the dir for auto-cleanup at broker exit.
-     */
-    if (attr_get (attrs, "rundir", &run_dir, NULL) < 0) {
-        if (!(tmpdir = getenv ("TMPDIR")))
-            tmpdir = "/tmp";
-        len = snprintf (path, sizeof (path), "%s/flux-XXXXXX", tmpdir);
-        if (len >= sizeof (path)) {
-            log_msg ("rundir buffer overflow");
-            goto done;
-        }
-        if (!(run_dir = mkdtemp (path))) {
-            log_err ("cannot create directory in %s", tmpdir);
-            goto done;
-        }
-        if (attr_add (attrs, "rundir", run_dir, 0) < 0) {
-            log_err ("error setting rundir broker attribute");
-            goto done;
-        }
-    }
-    else if (mkdir (run_dir, 0700) < 0) {
-        if (errno != EEXIST) {
-            log_err ("error creating rundir %s ", run_dir);
-            goto done;
-        }
-        /* Do not cleanup directory if we did not create it here
-         */
-        do_cleanup = false;
-    }
-
-    /*  Ensure created or existing directory is writeable:
-     */
-    if (checkdir ("rundir", run_dir) < 0)
-        goto done;
-
-    /*  Ensure that AF_UNIX sockets can be created in rundir - see #3925.
-     */
-    struct sockaddr_un sa;
-    size_t path_limit = sizeof (sa.sun_path) - sizeof ("/local-9999");
-    size_t path_length = strlen (run_dir);
-    if (path_length > path_limit) {
-        log_msg ("rundir length of %zu bytes exceeds max %zu"
-                 " to allow for AF_UNIX socket creation.",
-                 path_length,
-                 path_limit);
-        goto done;
-    }
-
-    /*  rundir is now fixed, so make the attribute immutable, and
-     *   schedule the dir for cleanup at exit if we created it here.
-     */
-    if (attr_set_flags (attrs, "rundir", ATTR_IMMUTABLE) < 0) {
-        log_err ("error setting rundir broker attribute flags");
-        goto done;
-    }
-
-    /*  Create $rundir/bin/flux so flux-relay can be found - see #5583.
-     */
-    flux_error_t error;
-    if (create_rundir_symlinks (run_dir, &error) < 0) {
-        if (errno != EEXIST)
-            log_err ("error creating rundir symlinks: %s", error.text);
-        // if this fails, soldier on
-    }
-
-    rc = 0;
-done:
-    if (do_cleanup && run_dir != NULL)
-        cleanup_push_string (cleanup_directory_recursive, run_dir);
-    return rc;
-}
-
 static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
 {
     const char *uri;
@@ -1006,6 +843,7 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
     }
     else {
         char path[1024];
+        flux_error_t error;
 
         if (!strstarts (uri, "local://")) {
             log_msg ("local-uri is malformed");
@@ -1015,8 +853,10 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
             log_msg ("buffer overflow while checking local-uri");
             return -1;
         }
-        if (checkdir ("local-uri directory", dirname (path)) < 0)
+        if (rundir_checkdir (dirname (path), &error) < 0) {
+            log_msg ("local-uri directory %s", error.text);
             return -1;
+        }
 
         /* see #3925 */
         struct sockaddr_un sa;
