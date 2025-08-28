@@ -127,7 +127,7 @@ test_expect_success 'ranks can be excluded by configuration' '
 	EOF
 	flux start -s 2 \
 		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
-		flux resource list -s up -no {nnodes} > ${name}/nnodes &&
+		flux run flux resource list -s up -no {nnodes} > ${name}/nnodes &&
 	test "$(cat ${name}/nnodes)" = "1"
 '
 
@@ -142,7 +142,8 @@ test_expect_success 'invalid exclude ranks cause instance failure' '
 	EOF
 	test_must_fail flux start -s 2 \
 		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
-		flux resource list -s up -no {nnodes} > ${name}/nnodes &&
+		flux resource list -s all > ${name}/output 2>&1 &&
+	test_debug "cat ${name}/output" &&
     grep "out of range" ${name}/logfile
 '
 
@@ -157,7 +158,8 @@ test_expect_success 'invalid exclude hosts cause instance failure' '
 	EOF
 	test_must_fail flux start -s 2 \
 		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
-		flux resource list -s up -no {nnodes} > ${name}/nnodes &&
+		flux resource list -s all > ${name}/output 2>&1 &&
+	test_debug "cat ${name}/output" &&
     grep "invalid hosts: nosuchhost" ${name}/logfile
 '
 
@@ -172,7 +174,7 @@ test_expect_success 'gpu resources in configured R are not verified' '
 	EOF
 	flux start -s 1\
 		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
-		flux resource list -s up -no {rlist} > ${name}/rlist &&
+		flux run flux resource list -s up -no {rlist} > ${name}/rlist &&
 	test_debug "cat ${name}/rlist" &&
 	grep "gpu\[42-43\]" ${name}/rlist
 '
@@ -236,7 +238,7 @@ test_expect_success 'bad resource.config causes instance failure' '
 	EOF
 	test_must_fail flux start -s 1 \
 		--config-path=$(pwd)/${name} -Slog-filename=${name}/logfile \
-		flux resource list -s up > ${name}/output 2>&1 &&
+		flux resource list -s all > ${name}/output 2>&1 &&
 	test_debug "cat ${name}/output" &&
 	grep "no hosts configured" ${name}/output
 '
