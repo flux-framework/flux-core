@@ -68,6 +68,9 @@ alias test_expect_success='expect_success_wrap'
 for testscript in ${FLUX_SOURCE_DIR}/t/system/${T9000_SYSTEM_GLOB}; do
 	TEST_LABEL="$(basename $testscript)"
 	. $testscript
+        # Do final_cleanup between tests
+	test_eval_ "$final_cleanup"
+	final_cleanup=
 done
 
 test_done

@@ -53,6 +53,11 @@ static struct builtin builtin_tab[] = {
         .val_intree = ABS_TOP_SRCDIR "/etc",
     },
     {
+        .key = "libexecdir",
+        .val_installed = FLUXLIBEXECDIR,
+        .val_intree = ABS_TOP_SRCDIR "/etc",
+    },
+    {
         .key = "lua_cpath_add",
         .val_installed = LUAEXECDIR "/?.so",
         .val_intree = ABS_TOP_BUILDDIR "/src/bindings/lua/?.so",

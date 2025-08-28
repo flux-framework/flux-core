@@ -648,6 +648,7 @@ AC_CONFIG_FILES( \
   etc/flux-taskmap.pc \
   etc/flux.service \
   etc/flux-housekeeping@.service \
+  etc/flux-run-system-scripts \
   src/cmd/flux-run-housekeeping \
   etc/flux-prolog@.service \
   etc/flux-epilog@.service \
