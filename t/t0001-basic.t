@@ -545,11 +545,10 @@ test_expect_success 'broker statedir cannot be set at runtime' '
 		flux setattr statedir $(pwd)/statedir 2>rostatedir2.err &&
 	grep "Operation not permitted" rostatedir2.err
 '
-test_expect_success 'broker fails when statedir does not exist' '
+test_expect_success 'broker creates statedir when it does not exist' '
 	rm -rf statedir &&
-	test_must_fail flux start ${ARGS} -Sstatedir=$(pwd)/statedir \
-		true 2>nostatedir.err &&
-	grep "cannot stat" nostatedir.err
+	flux start ${ARGS} -Sstatedir=$(pwd)/statedir \
+		sh -c "test -d \$(flux getattr statedir)"
 '
 # Use -eq hack to test that BROKERPID is a number
 test_expect_success 'broker broker.pid attribute is readable' '
