@@ -1006,6 +1006,9 @@ class Modprobe:
             if not isinstance(task, Module):
                 raise ValueError(f"{module} is not a module")
             self._active_tasks.append(module)
+            # append any requires from this module
+            for other in task.requires:
+                self._active_tasks.append(other)
 
     def load(self, modules):
         """
