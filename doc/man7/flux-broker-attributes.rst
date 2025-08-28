@@ -34,9 +34,8 @@ version
 
 rundir [Updates: C]
    A temporary directory where the broker's UNIX domain sockets are located.
-   In addition, if ``statedir`` is not set, this directory is used by the
-   content backing store (if applicable).  By default, each broker rank creates
-   a unique ``rundir`` in ``$TMPDIR`` and removes it on exit.  If ``rundir`` is
+   By default, each broker rank creates
+   a unique temporary directory and removes it on exit.  If ``rundir`` is
    set on the command line, beware exceeding the UNIX domain socket path limit
    described in :linux:man7:`unix`, as low as 92 bytes on some systems.  To
    support the :man1:`flux-start` ``--test-size`` option where multiple brokers
@@ -44,12 +43,24 @@ rundir [Updates: C]
    directory is not removed by the broker on exit.  In most cases this
    attribute should not be set by users.
 
+rundir-cleanup [Updates: C]
+   This attribute overrides the default ``rundir`` cleanup described above.
+   If set to ``1`` the directory is removed on broker exit.
+   If set to ``0`` the directory is not removed.
+
 statedir [Updates: C]
-   A directory in which persistent state is stored by the Flux broker.  For
-   example, content backing store data is stored here to facilitate restarts.
-   If unset, this data goes to ``rundir`` where it is cleaned up on instance
-   shutdown.  If set, this directory must exist and be owned by the instance
-   owner.  Default: unset.
+   A directory in which persistent state is stored by the Flux leader broker.
+   For example, content backing store data is stored here to facilitate
+   restarts.  If unset, a unique temporary directory is created.
+   If set, and the directory exists, it must be owned by the instance owner.
+   If set, and the directory does not exist, it is created.  If the broker
+   created the directory, then the directory is removed by the broker on exit.
+   The state directory is only used on the leader (rank 0) broker.
+
+statedir-cleanup [Updates: C]
+   This attribute overrides the default ``statedir`` cleanup described above.
+   If set to ``1`` the directory is removed on broker exit.
+   If set to ``0`` the directory is not removed.
 
 security.owner
    The numeric userid of the owner of this Flux instance.
