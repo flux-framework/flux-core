@@ -32,29 +32,46 @@
 #include "attr.h"
 #include "rundir.h"
 
+/* Make path fit in half a flux_error_t text buffer,
+ * replacing the last character with '+'.
+ */
+const char *xpath (const char *path)
+{
+    static __thread flux_error_t error;
+    size_t size = sizeof (error.text) / 2;
+
+    if (strlcpy (error.text, path, size) > size) {
+        error.text[size - 2] = '+';
+        error.text[size - 1] = '\0';
+    }
+    return error.text;
+}
+
 int rundir_checkdir (const char *path, flux_error_t *error)
 {
     struct stat sb;
 
     if (stat (path, &sb) < 0) {
-        errprintf (error, "cannot stat %s: %s", path, strerror (errno));
+        errprintf (error, "cannot stat %s: %s", xpath (path), strerror (errno));
         return -1;
     }
     if (sb.st_uid != getuid ()) {
         errno = EPERM;
         errprintf (error,
                    "%s is not owned by instance owner: %s",
-                   path,
+                   xpath (path),
                    strerror (errno));
         return -1;
     }
     if (!S_ISDIR (sb.st_mode)) {
         errno = ENOTDIR;
-        errprintf (error, "%s: %s", path, strerror (errno));
+        errprintf (error, "%s: %s", xpath (path), strerror (errno));
         return -1;
     }
     if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
-        errprintf (error, "%s does not have owner=rwx permissions", path);
+        errprintf (error,
+                   "%s does not have owner=rwx permissions",
+                   xpath (path));
         errno = EPERM;
         return -1;
     }
@@ -71,7 +88,7 @@ static int create_rundir_symlinks (const char *run_dir, flux_error_t *error)
         || strlcat (path, "/bin", size) >= size)
         goto overflow;
     if (mkdir (path, 0755) < 0) {
-        errprintf (error, "mkdir %s: %s", path, strerror (errno));
+        errprintf (error, "mkdir %s: %s", xpath (path), strerror (errno));
         return -1;
     }
     cleanup_push_string (cleanup_directory_recursive, path);
@@ -82,7 +99,7 @@ static int create_rundir_symlinks (const char *run_dir, flux_error_t *error)
     else
         target = X_BINDIR "/flux";
     if (symlink (target, path) < 0) {
-        errprintf (error, "symlink %s: %s", path, strerror (errno));
+        errprintf (error, "symlink %s: %s", xpath (path), strerror (errno));
         return -1;
     }
     return 0;
