@@ -85,8 +85,30 @@ int kvs_checkpoint_lookup_get (flux_future_t *f, const json_t **checkpoints)
         return -1;
 
     if (!json_is_array (a)) {
-        errno = EPROTO;
-        return -1;
+        if (json_is_object (a)) {
+            json_t *o;
+            /* support backwards compatibility to when single
+             * checkpoint returned
+             */
+            if (!(o = json_pack ("[O]", a))) {
+                errno = ENOMEM;
+                return -1;
+            }
+            if (flux_future_aux_set (f,
+                                     "checkpoint_array",
+                                     o,
+                                     (flux_free_f) json_decref) < 0) {
+                int save_errno = errno;
+                json_decref (o);
+                errno = save_errno;
+                return -1;
+            }
+            a = o;
+        }
+        else {
+            errno = EPROTO;
+            return -1;
+        }
     }
 
     *checkpoints = a;
