@@ -62,6 +62,12 @@ statedir-cleanup [Updates: C]
    If set to ``1`` the directory is removed on broker exit.
    If set to ``0`` the directory is not removed.
 
+.. note::
+   If ``statedir`` or ``rundir`` is set on the command line, and the
+   specified directory has the sticky bit set, it is assumed to be a ``/tmp``
+   like directory, and the broker creates a unique temporary directory within
+   that directory.
+
 security.owner
    The numeric userid of the owner of this Flux instance.
 
