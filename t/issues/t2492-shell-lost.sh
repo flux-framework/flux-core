@@ -31,7 +31,7 @@ try:
     taskid = int(os.environ["FLUX_TASK_RANK"])
     if taskid == 0:
         print(f"waiting on barrier for {size} tasks", flush=True)
-    subprocess.run(["flux", "pmi", "barrier"])
+    subprocess.run(["flux", "pmi", "barrier"], close_fds=False)
     if taskid == 0:
         print(f"exited barrier", flush=True)
 
