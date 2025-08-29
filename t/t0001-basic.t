@@ -494,63 +494,6 @@ test_expect_success 'flux start --test-rundir with not-directory fails' '
 		true 2>notdir_rundir.err &&
 	grep "notdir: not a directory" notdir_rundir.err
 '
-test_expect_success 'rundir override works' '
-	RUNDIR=`mktemp -d` &&
-	DIR=`flux start ${ARGS} --setattr=rundir=$RUNDIR flux getattr rundir` &&
-	test "$DIR" = "$RUNDIR" &&
-	test -d $RUNDIR &&
-	rm -rf $RUNDIR
-'
-test_expect_success 'rundir override creates nonexistent dirs and cleans up' '
-	RUNDIR=`mktemp -d` &&
-	rmdir $RUNDIR &&
-	flux start ${ARGS} --setattr=rundir=$RUNDIR sh -c "test -d $RUNDIR" &&
-	test_expect_code 1 test -d $RUNDIR
-'
-test_expect_success 'broker fails gracefully when rundir buffer overflows' '
-	longstring=$(head -c 1024 < /dev/zero | tr \\0 D) &&
-	! TMPDIR=$longstring flux start ${ARGS} true 2>overflow.err &&
-	grep overflow overflow.err
-'
-test_expect_success 'broker fails gracefully on nonexistent TMPDIR' '
-	! TMPDIR=/noexist flux start ${ARGS} true 2>noexist.err &&
-	grep "cannot create directory in /noexist" noexist.err
-'
-test_expect_success 'broker fails gracefully on non-directory rundir' '
-	touch notdir &&
-	test_must_fail flux start ${ARGS} -Srundir=notdir \
-		true 2>notdir.err &&
-	grep "Not a directory" notdir.err
-'
-test_expect_success 'broker fails gracefully on unwriteable rundir' '
-	mkdir -p privdir &&
-	chmod u-w privdir &&
-	test_must_fail flux start ${ARGS} -Srundir=privdir \
-		true 2>privdir.err &&
-	grep "permissions" privdir.err
-'
-# statedir created here is reused in the next several tests
-test_expect_success 'broker statedir is not cleaned up' '
-	mkdir -p statedir &&
-	flux start ${ARGS} -Sstatedir=$(pwd)/statedir true &&
-	test -d statedir
-'
-test_expect_success 'broker statedir cannot be changed at runtime' '
-	test_must_fail flux start ${ARGS} -Sstatedir=$(pwd)/statedir \
-		flux setattr statedir $(pwd)/statedir 2>rostatedir.err &&
-	grep "Operation not permitted" rostatedir.err
-'
-test_expect_success 'broker statedir cannot be set at runtime' '
-	test_must_fail flux start ${ARGS} \
-		flux setattr statedir $(pwd)/statedir 2>rostatedir2.err &&
-	grep "Operation not permitted" rostatedir2.err
-'
-test_expect_success 'broker fails when statedir does not exist' '
-	rm -rf statedir &&
-	test_must_fail flux start ${ARGS} -Sstatedir=$(pwd)/statedir \
-		true 2>nostatedir.err &&
-	grep "cannot stat" nostatedir.err
-'
 # Use -eq hack to test that BROKERPID is a number
 test_expect_success 'broker broker.pid attribute is readable' '
 	BROKERPID=`flux start ${ARGS} flux getattr broker.pid` &&

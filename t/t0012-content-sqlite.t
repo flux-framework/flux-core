@@ -288,11 +288,11 @@ test_expect_success 'remove heartbeat module' '
 
 # test for issue #4210
 test_expect_success 'remove read permission from content.sqlite file' '
-	chmod u-w $(flux getattr rundir)/content.sqlite &&
+	chmod u-w $(flux getattr statedir)/content.sqlite &&
 	test_must_fail flux module load content-sqlite
 '
 test_expect_success 'restore read permission on content.sqlite file' '
-	chmod u+w $(flux getattr rundir)/content.sqlite
+	chmod u+w $(flux getattr statedir)/content.sqlite
 '
 
 # Clean slate for a few more tests

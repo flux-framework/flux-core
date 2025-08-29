@@ -66,7 +66,9 @@ libbroker_la_SOURCES = \
 	topology.h \
 	topology.c \
 	trace.h \
-	trace.c
+	trace.c \
+	rundir.h \
+	rundir.c
 
 flux_broker_LDADD = \
 	$(builddir)/libbroker.la \

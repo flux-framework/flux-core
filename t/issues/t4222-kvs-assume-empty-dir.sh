@@ -9,7 +9,7 @@ flux content flush
 flux content dropcache
 flux module remove content-sqlite
 
-sqlitepath=$(flux getattr rundir)/content.sqlite
+sqlitepath=$(flux getattr statedir)/content.sqlite
 mv $sqlitepath $sqlitepath.bak
 
 flux module load content-sqlite

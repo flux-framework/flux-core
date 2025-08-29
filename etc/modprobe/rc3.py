@@ -36,7 +36,10 @@ def content_dump(context):
     dumpfile = context.attr_get("content.dump")
     dumplink = None
     if dumpfile == "auto":
-        path = Path(context.attr_get("statedir", ".") + "/dump")
+        statedir = "."
+        if context.attr_get("statedir-cleanup") == "0":
+            statedir = context.attr_get("statedir")
+        path = Path(statedir + "/dump")
         path.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         dumpfile = path / f"{timestamp}.tgz"
