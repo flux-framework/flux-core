@@ -1,2 +1,0 @@
-#!/bin/bash -e
-flux modprobe run $(dirname $0)/rc1-kvs.py
