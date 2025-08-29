@@ -133,12 +133,27 @@ static int rundir_special (const char *dirpath, flux_error_t *error)
     return 0;
 }
 
-static bool path_exists (const char *path)
+static const char *rundir_mktemp (char *buf,
+                                  size_t size,
+                                  const char *tmpdir,
+                                  flux_error_t *error)
 {
-    struct stat sb;
-    if (stat (path, &sb) < 0)
-        return false;
-    return true;
+    int len;
+    const char *s;
+
+    len = snprintf (buf, size, "%s/flux-XXXXXX", tmpdir);
+    if (len >= size) {
+        errprintf (error, "buffer overflow");
+        return NULL;
+    }
+    if (!(s = mkdtemp (buf))) {
+        errprintf (error,
+                   "cannot create directory in %s: %s",
+                   tmpdir,
+                   strerror (errno));
+        return NULL;
+    }
+    return s;
 }
 
 int rundir_create (attr_t *attrs,
@@ -148,32 +163,22 @@ int rundir_create (attr_t *attrs,
 {
     const char *dirpath = NULL;
     char path[1024];
-    int len;
+    struct stat sb;
     bool do_cleanup = true;
     int rc = -1;
 
     /*  If attribute isn't set, then create a temp directory and use that.
      */
     if (attr_get (attrs, attr_name, &dirpath, NULL) < 0) {
-        len = snprintf (path, sizeof (path), "%s/flux-XXXXXX", tmpdir);
-        if (len >= sizeof (path)) {
-            errprintf (error, "buffer overflow");
+        if (!(dirpath = rundir_mktemp (path, sizeof (path), tmpdir, error)))
             goto done;
-        }
-        if (!(dirpath = mkdtemp (path))) {
-            errprintf (error,
-                       "cannot create directory in %s: %s",
-                       tmpdir,
-                       strerror (errno));
-            goto done;
-        }
         if (attr_add (attrs, attr_name, dirpath, 0) < 0)
             goto error_setattr;
     }
     /*  If attribute is set, but the directory doesn't exist,
      * try to create the named directory.
      */
-    else if (!path_exists (dirpath)) {
+    else if (stat (dirpath, &sb) < 0) {
         if (mkdir (dirpath, 0700) < 0) {
             errprintf (error,
                        "error creating %s: %s",
@@ -181,6 +186,15 @@ int rundir_create (attr_t *attrs,
                        strerror (errno));
                 goto done;
         }
+    }
+    /*  If attribute is set, exists, and has the sticky bit set,
+     * try to create a temp directory within the specified directory.
+     */
+    else if ((sb.st_mode & S_ISVTX)) {
+        if (!(dirpath = rundir_mktemp (path, sizeof (path), dirpath, error)))
+            goto done;
+        if (attr_set (attrs, attr_name, dirpath) < 0)
+            goto error_setattr;
     }
     /*  If directory was pre-existing, do not schedule it for
      * auto-cleanup at broker exit.
