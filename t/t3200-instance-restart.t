@@ -52,8 +52,8 @@ test_expect_success 'most recent period is still running' '
 
 test_expect_success 'doctor startlog to look like a crash' '
 	flux start --setattr=statedir=$(pwd) \
-		-Sbroker.rc1_path=$SHARNESS_TEST_SRCDIR/rc/rc1-kvs \
-		-Sbroker.rc3_path=$SHARNESS_TEST_SRCDIR/rc/rc3-kvs \
+		-Sbroker.rc1_path="flux modprobe run $SHARNESS_TEST_SRCDIR/rc/rc1-kvs.py" \
+		-Sbroker.rc3_path="flux modprobe run $SHARNESS_TEST_SRCDIR/rc/rc3.py" \
 		flux startlog --post-start-event
 '
 test_expect_success 'run flux and capture logs on stderr' '

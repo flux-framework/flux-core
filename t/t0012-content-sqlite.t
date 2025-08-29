@@ -18,8 +18,8 @@ FLUSH_BATCH_LIMIT=5
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SPAMUTIL="${FLUX_BUILD_DIR}/t/kvs/content-spam"
-rc1_kvs=$SHARNESS_TEST_SRCDIR/rc/rc1-kvs
-rc3_kvs=$SHARNESS_TEST_SRCDIR/rc/rc3-kvs
+rc1_kvs="flux modprobe run $SHARNESS_TEST_SRCDIR/rc/rc1-kvs.py"
+rc3_kvs="flux modprobe run $SHARNESS_TEST_SRCDIR/rc/rc3.py"
 VALIDATE=${FLUX_BUILD_DIR}/t/content/content_validate
 
 test_expect_success 'load content module with lower purge/age thresholds' '
@@ -345,23 +345,23 @@ test_expect_success 'reload module with no options and verify modes' '
 
 
 test_expect_success 'run flux without statedir and verify modes' '
-	flux start -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
+	flux start -Sbroker.rc1_path="$rc1_kvs" -Sbroker.rc3_path="$rc3_kvs" \
 	    flux dmesg >logs3 &&
 	grep "journal_mode=OFF synchronous=OFF" logs3
 '
 test_expect_success 'run flux with statedir and verify modes' '
-	flux start -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
+	flux start -Sbroker.rc1_path="$rc1_kvs" -Sbroker.rc3_path="$rc3_kvs" \
 	    -Sstatedir=$(pwd) flux dmesg >logs4  &&
 	grep "journal_mode=WAL synchronous=NORMAL" logs4
 '
 test_expect_success 'run flux without statedir and verify config' '
-	flux start -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
+	flux start -Sbroker.rc1_path="$rc1_kvs" -Sbroker.rc3_path="$rc3_kvs" \
 	    flux module stats content-sqlite >stats1 &&
 	jq -e ".config.journal_mode == \"OFF\"" < stats1 &&
 	jq -e ".config.synchronous == \"OFF\"" < stats1
 '
 test_expect_success 'run flux with statedir and verify config' '
-	flux start -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
+	flux start -Sbroker.rc1_path="$rc1_kvs" -Sbroker.rc3_path="$rc3_kvs" \
 	    -Sstatedir=$(pwd) flux module stats content-sqlite >stats2  &&
 	jq -e ".config.journal_mode == \"WAL\"" < stats2 &&
 	jq -e ".config.synchronous == \"NORMAL\"" < stats2
@@ -387,7 +387,7 @@ test_expect_success 'test config via config file works' '
 	synchronous = "EXTRA"
 	EOT
 	flux start --config-path=$(pwd) \
-	   -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
+	   -Sbroker.rc1_path="$rc1_kvs" -Sbroker.rc3_path="$rc3_kvs" \
 	   flux module stats content-sqlite > configstats.out &&
 	jq -e ".config.journal_mode == \"PERSIST\"" < configstats.out &&
 	jq -e ".config.synchronous == \"EXTRA\"" < configstats.out &&
@@ -400,7 +400,7 @@ test_expect_success 'invalid config fails (journal_mode)' '
 	synchronous = "EXTRA"
 	EOT
 	test_must_fail flux start --config-path=$(pwd) \
-	   -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
+	   -Sbroker.rc1_path="$rc1_kvs" -Sbroker.rc3_path="$rc3_kvs" \
 	   flux module stats content-sqlite &&
 	rm content-sqlite.toml
 '
@@ -411,7 +411,7 @@ test_expect_success 'invalid config fails (synchronous)' '
 	synchronous = "BAR"
 	EOT
 	test_must_fail flux start --config-path=$(pwd) \
-	   -Sbroker.rc1_path=$rc1_kvs -Sbroker.rc3_path=$rc3_kvs \
+	   -Sbroker.rc1_path="$rc1_kvs" -Sbroker.rc3_path="$rc3_kvs" \
 	   flux module stats content-sqlite &&
 	rm content-sqlite.toml
 '
