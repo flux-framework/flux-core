@@ -8,6 +8,7 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
 runpty="flux ${SHARNESS_TEST_SRCDIR}/scripts/runpty.py"
+testmod=$(realpath ${FLUX_BUILD_DIR}/t/module/.libs/testmod.so)
 
 # N.B. Increase test-exit-timeout from default of 20s, on slower / busy
 # systems timeout can trigger and kill broker.
@@ -54,6 +55,15 @@ test_expect_success 'rc1 failure is ignored in recovery mode' '
 	    -Sbroker.rc3_path= \
 	    echo "hello world" >hello.out &&
 	grep hello hello.out
+'
+test_expect_success 'module panic is ignored in recovery mode' '
+	flux start --recovery=$(pwd)/test1 \
+	    -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    sh -c "flux module load $testmod \
+		&& flux event pub testmod.panic \
+		&& while flux module stats testmod; do true; done" \
+		2>nopanic.err &&
+	grep "module runtime failure" nopanic.err
 '
 test_expect_success 'resources are offline in recovery mode' '
 	echo 4 >down.exp &&
