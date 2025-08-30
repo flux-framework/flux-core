@@ -112,6 +112,20 @@ for attr in rundir statedir; do
 	test_must_fail flux start ${ARGS_NORC} flux setattr $attr x &&
 	test_must_fail flux start ${ARGS_NORC} flux setattr $attr-cleanup x
     '
+    test_expect_success "-S$attr=DIR interprets DIR sticky bit" '
+	dirname=`mktemp -d` &&
+	chmod 1777 $dirname &&
+	flux start ${ARGS_NORC} -S$attr=$dirname \
+		./checkattrs.sh >$attr-sticky.out
+    '
+    test_expect_success "$attr/DIR was used" '
+	grep "^$attr=$dirname/" $attr-sticky.out
+    '
+    test_expect_success "$attr/DIR was cleaned up but not $attr" '
+	subdirname=$(kv_lookup $attr $attr-sticky.out) &&
+	test -d $(dirname $subdirname) &&
+	test ! -e $subdirname
+    '
 
 done # for loop
 
