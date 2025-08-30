@@ -540,6 +540,7 @@ void process_recovery_option (char **argz,
 
     add_argzf (argz, argz_len, "-Sbroker.recovery-mode=1");
     add_argzf (argz, argz_len, "-Sbroker.quorum=1");
+    add_argzf (argz, argz_len, "-Sbroker.module-nopanic=1");
     add_argzf (argz, argz_len, "-Slog-stderr-level=5");
 
     // if --recovery has no optional argument, assume this is the system
