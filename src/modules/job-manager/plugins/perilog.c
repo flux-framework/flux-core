@@ -526,6 +526,14 @@ static flux_future_t *proc_drain_ranks (struct perilog_proc *proc,
                      msg,
                      idf58 (proc->id));
 
+    if (idset_empty (failed)) {
+        /* Do not send a resource.drain RPC with an empty idset. Just
+         * issue a warning and return immediately.
+         */
+        flux_log (h, LOG_ERR, "%s but no failed ranks identified", reason);
+        goto out;
+    }
+
     if (!(f = flux_rpc_pack (h,
                              "resource.drain",
                              0,
