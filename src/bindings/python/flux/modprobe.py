@@ -920,7 +920,20 @@ class Modprobe:
     def get_deps(self, tasks):
         """Return dependencies for tasks as dict of names to predecessor list"""
         t0 = self.timestamp
+        if not isinstance(tasks, set):
+            tasks = set(tasks)
         deps = {}
+
+        # Ensure tasks set contains all provides and the actual task name
+        # (since presence in the set determines if a task is included in
+        #  the predecessor list below)
+        provides = set()
+        for task in tasks:
+            task = self.get_task(task)
+            provides.add(task.name)
+            provides.update(task.provides)
+        tasks.update(provides)
+
         for name in tasks:
             task = self.get_task(name)
             if "*" in task.after:
