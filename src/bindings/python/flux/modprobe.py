@@ -10,7 +10,6 @@
 
 import bisect
 import concurrent
-import copy
 import glob
 import os
 import subprocess
@@ -948,6 +947,22 @@ class Modprobe:
 
         return deps
 
+    def get_requires(self, tasks, reverse=False):
+        """Return dependencies for tasks as dicts of names to dependencies"""
+        deps = {}
+        for name in tasks:
+            task = self.get_task(name)
+            deps[task.name] = list(task.requires)
+        if reverse:
+            rdeps = {}
+            for dependent, reqs in deps.items():
+                for req in reqs:
+                    if req not in rdeps:
+                        rdeps[req] = set()
+                    rdeps[req].add(dependent)
+            return rdeps
+        return deps
+
     def run(self, deps):
         """Run all tasks in deps in precedence order"""
         t0 = self.timestamp
@@ -1043,6 +1058,79 @@ class Modprobe:
                 "All modules and their dependencies are already loaded."
             )
 
+    def _find_removable(self, dependencies, modules_to_remove):
+        """
+        Given a set of modules and dependency list of all modules, find modules
+        that can be removed because they no longer have any dependents.
+
+        Args:
+            dependencies (dict): Dictionary of modules to dependency list
+            modules_to_remove (list): List of modules to remove
+
+        Returns:
+            list: modules that can be safely removed (including original list)
+        """
+        dependents = {}
+        for dependent, reqs in dependencies.items():
+            for req in reqs:
+                if req not in dependents:
+                    dependents[req] = set()
+                dependents[req].add(dependent)
+
+        # Start with the items we're told to remove
+        removed_items = set(modules_to_remove)
+        newly_removable = []
+
+        # Keep track of items to check in this iteration
+        modules_to_check = set(modules_to_remove)
+
+        while modules_to_check:
+            next_modules_to_check = set()
+
+            for removed_item in modules_to_check:
+                # Find all dependencies of the removed item
+                # (items it depended on)
+                if removed_item in dependencies:
+                    for dependency in dependencies[removed_item]:
+                        # Skip if this dependency is already being removed
+                        if dependency in removed_items:
+                            continue
+
+                        # Check if this dependency still has other items
+                        # depending on it
+                        remaining_dependents = (
+                            dependents.get(dependency, set()) - removed_items
+                        )
+
+                        # If no remaining dependents, it can be removed
+                        if not remaining_dependents:
+                            removed_items.add(dependency)
+                            newly_removable.append(dependency)
+                            next_modules_to_check.add(dependency)
+
+            modules_to_check = next_modules_to_check
+
+        # Add newly removed items to list of items to remove
+        modules_to_remove.extend(newly_removable)
+
+        # Discard elements from dependents if they are being removed
+        for name in modules_to_remove:
+            for deps in dependents.values():
+                # discard both the name to remove and the real name
+                # of the task in case they are different
+                # (e.g. sched vs sched-simple):
+                deps.discard(name)
+                deps.discard(self.get_task(name).name)
+
+        # Raise an error if any removed modules still have dependents
+        for name in modules_to_remove:
+            if dependents.get(name):
+                raise ValueError(
+                    f"{name} still in use by " + ", ".join(dependents[name])
+                )
+
+        return modules_to_remove
+
     def _solve_modules_remove(self, modules=None):
         """Solve for a set of currently loaded modules to remove"""
         mlist = ModuleList(self.handle)
@@ -1057,44 +1145,25 @@ class Modprobe:
                 if not mlist.lookup(module):
                     raise ValueError(f"module {module} is not loaded")
 
-        # Calculate reverse deps for all loaded modules
-        deps = self.get_deps(all_modules)
-        rdeps = defaultdict(set)
+        modules = self._find_removable(self.get_requires(all_modules), modules)
 
+        # Compute reverse precedence graph of modules to remove so that
+        # they can be removed in reverse order of load:
+        deps = self.get_deps(modules)
+        rdeps = defaultdict(set)
         for name, deplist in deps.items():
             for mod in deplist:
-                rdeps[mlist.lookup(mod)].add(name)
+                mod = mlist.lookup(mod)
+                rdeps[mod].add(name)
 
-        # Determine if removal of modules will cause any other modules
-        # to become "unused", i.e. not needed by other modules
-        rdeps_copy = copy.deepcopy(rdeps)
-
-        def remove_dep(name):
-            for modname, dep_set in rdeps_copy.items():
-                if not dep_set:
-                    continue
-                dep_set.discard(name)
-                if not dep_set:
-                    remove_dep(modname)
-                    if modname in mlist:
-                        modules.append(modname)
-
-        for name in modules:
-            remove_dep(mlist.lookup(name))
-
-        # Raise an error if any module in modules has rdeps remaining
-        for name in modules:
-            if rdeps_copy[name]:
-                raise ValueError(
-                    f"{name} still in use by " + ", ".join(rdeps_copy[name])
-                )
-
+        # Convert module names to ModuleRemove tasks:
         tasks = set()
         for service in modules:
             name = mlist.lookup(service)
             if name is not None:
                 tasks.add(name)
 
+        # filter out tasks from rdeps that are not slated for removal
         deps = {}
         for name in tasks:
             deps[name] = {x for x in rdeps[name] if x in tasks}
