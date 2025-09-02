@@ -917,7 +917,7 @@ class Modprobe:
                     if successor in deps:
                         deps[successor].append(task.name)
 
-    def get_deps(self, tasks, reverse=False):
+    def get_deps(self, tasks):
         """Return dependencies for tasks as dict of names to predecessor list"""
         t0 = self.timestamp
         deps = {}
