@@ -33,6 +33,7 @@
 
 struct fsck_ctx {
     flux_t *h;
+    bool validate_available;
     json_t *root;
     int sequence;
     int repair_count;
@@ -136,6 +137,8 @@ static void valref_validate_continuation (flux_future_t *f, void *arg)
 
 static void valref_validate (struct fsck_valref_data *fvd)
 {
+    const char *topic = fvd->ctx->validate_available ?
+        "content-backing.validate" : "content-backing.load";
     uint32_t hash[BLOBREF_MAX_DIGEST_SIZE];
     ssize_t hash_size;
     const char *blobref;
@@ -147,13 +150,9 @@ static void valref_validate (struct fsck_valref_data *fvd)
     if ((hash_size = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
         log_err_exit ("cannot get hash from ref string");
 
-    if (!(f = flux_rpc_raw (fvd->ctx->h,
-                            "content-backing.validate",
-                            hash,
-                            hash_size,
-                            0,
-                            0))
-        || flux_future_then (f, -1, valref_validate_continuation, fvd) < 0)
+    if (!(f = flux_rpc_raw (fvd->ctx->h, topic, hash, hash_size, 0, 0)))
+        log_err_exit ("failed to validate valref blob");
+    if (flux_future_then (f, -1, valref_validate_continuation, fvd) < 0)
         log_err_exit ("cannot validate valref blob");
     if (!(indexp = (int *)malloc (sizeof (int))))
         log_err_exit ("cannot allocate index memory");
@@ -636,6 +635,32 @@ static void sync_checkpoint (struct fsck_ctx *ctx)
         fprintf (stderr, "Updated primary checkpoint to include lost+found\n");
 }
 
+/* "validate" support added in v0.77.0.  Use "load" for backwards
+ * compatibility if "validate" is not available.
+ */
+static void check_validate_available (struct fsck_ctx *ctx, const char *blobref)
+{
+    uint32_t hash[BLOBREF_MAX_DIGEST_SIZE];
+    ssize_t hash_size;
+    flux_future_t *f;
+
+    if ((hash_size = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
+        log_err_exit ("cannot get hash from ref string");
+
+    ctx->validate_available = true;
+    // doesn't matter if the request is correct, we are looking for ENOSYS
+    if ((f = flux_rpc_raw (ctx->h,
+                           "content-backing.validate",
+                           hash,
+                           hash_size,
+                           0,
+                           0))
+        && flux_rpc_get (f, NULL) < 0
+        && errno == ENOSYS)
+        ctx->validate_available = false;
+    flux_future_destroy (f);
+}
+
 static int cmd_fsck (optparse_t *p, int ac, char *av[])
 {
     struct fsck_ctx ctx = {0};
@@ -694,6 +719,8 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
         ctx.sequence = sequence;
     }
+
+    check_validate_available (&ctx, blobref);
 
     fsck_blobref (&ctx, blobref);
 
