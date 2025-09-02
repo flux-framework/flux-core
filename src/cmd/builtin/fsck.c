@@ -61,9 +61,7 @@ static void fsck_treeobj (struct fsck_ctx *ctx,
                           const char *path,
                           json_t *treeobj);
 
-static void valref_validate (struct fsck_valref_data *fvd,
-                             json_t *treeobj,
-                             int index);
+static void valref_validate (struct fsck_valref_data *fvd);
 
 static void read_verror (const char *fmt, va_list ap)
 {
@@ -128,7 +126,7 @@ static void valref_validate_continuation (flux_future_t *f, void *arg)
     fvd->in_flight--;
 
     if (fvd->index < fvd->count) {
-        valref_validate (fvd, fvd->treeobj, fvd->index);
+        valref_validate (fvd);
         fvd->in_flight++;
         fvd->index++;
     }
@@ -136,9 +134,7 @@ static void valref_validate_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-static void valref_validate (struct fsck_valref_data *fvd,
-                             json_t *treeobj,
-                             int index)
+static void valref_validate (struct fsck_valref_data *fvd)
 {
     uint32_t hash[BLOBREF_MAX_DIGEST_SIZE];
     ssize_t hash_size;
@@ -146,7 +142,7 @@ static void valref_validate (struct fsck_valref_data *fvd,
     flux_future_t *f;
     int *indexp;
 
-    blobref = treeobj_get_blobref (treeobj, index);
+    blobref = treeobj_get_blobref (fvd->treeobj, fvd->index);
 
     if ((hash_size = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
         log_err_exit ("cannot get hash from ref string");
@@ -161,7 +157,7 @@ static void valref_validate (struct fsck_valref_data *fvd,
         log_err_exit ("cannot validate valref blob");
     if (!(indexp = (int *)malloc (sizeof (int))))
         log_err_exit ("cannot allocate index memory");
-    (*indexp) = index;
+    (*indexp) = fvd->index;
     if (flux_future_aux_set (f, "index", indexp, free) < 0)
         log_err_exit ("could not save index value");
 }
@@ -334,7 +330,7 @@ static void fsck_valref (struct fsck_ctx *ctx,
 
     while (fvd.in_flight < BLOBREF_ASYNC_MAX
            && fvd.index < fvd.count) {
-        valref_validate (&fvd, treeobj, fvd.index);
+        valref_validate (&fvd);
         fvd.in_flight++;
         fvd.index++;
     }
