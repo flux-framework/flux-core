@@ -356,7 +356,7 @@ class Module(Task):
             module_args = context.getopts(
                 self.name, default=self.args, also=self.provides
             )
-            print(f"load {self.name}", " ".join(module_args))
+            print(" ".join([f"load {self.name}", *module_args]))
         else:
             print(f"remove {self.name}")
 
