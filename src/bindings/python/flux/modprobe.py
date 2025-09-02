@@ -1038,6 +1038,13 @@ class Modprobe:
             for other in task.requires:
                 self._active_tasks.append(other)
 
+    def _set_all_alternatives(self, modules):
+        # Set all modules as the current selected alternatives:
+        for module in modules:
+            task = self.get_task(module)
+            for service in task.provides:
+                self.set_alternative(service, task.name)
+
     def load(self, modules):
         """
         Load modules and their dependencies (if not already loaded)
@@ -1051,6 +1058,10 @@ class Modprobe:
         """
         mlist = ModuleList(self.handle)
         needed_modules = [x for x in self.solve(modules) if x not in mlist]
+
+        # Ensure explicitly requested modules are the current alternatives
+        self._set_all_alternatives(needed_modules)
+
         if needed_modules:
             self.run(self.get_deps(needed_modules))
         else:
@@ -1175,6 +1186,12 @@ class Modprobe:
         if modules is None:
             mlist = ModuleList(self.handle)
             modules = [x for x in mlist if self.has_task(x)]
+
+        # When removing modules, always set available alternatives to
+        # the specific modules being requested to remove. This prevents
+        # non-loaded but default alternatives from appearing in get_deps()
+        # later:
+        self._set_all_alternatives(modules)
 
         for module in modules:
             task = self.get_task(module)
