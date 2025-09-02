@@ -82,7 +82,7 @@ TESTSCRIPTS = \
 	t0032-directives-parser.t \
 	t0033-filemap-cmd.t \
 	t0034-broker-getenv.t \
-	t0035-content-sqlite-checkpoints.t \
+	t0035-content-sqlite-checkpoint.t \
 	t0036-broker-rundir.t \
 	t0025-broker-state-machine.t \
 	t0027-broker-groups.t \
