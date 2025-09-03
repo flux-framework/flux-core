@@ -2147,8 +2147,12 @@ _flux_modprobe()
     local cmd=$1
     local subcmds="load remove run rc1 rc3 list-dependencies show"
     local split=false
-    load_OPTS=""
-    remove_OPTS=""
+    load_OPTS="\
+        --dry-run \
+    "
+    remove_OPTS="\
+        --dry-run \
+    "
     run_OPTS="\
         -v --verbose \
         --show-deps \
