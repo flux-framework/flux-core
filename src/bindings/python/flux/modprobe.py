@@ -10,7 +10,6 @@
 
 import bisect
 import concurrent
-import copy
 import glob
 import os
 import subprocess
@@ -357,7 +356,7 @@ class Module(Task):
             module_args = context.getopts(
                 self.name, default=self.args, also=self.provides
             )
-            print(f"load {self.name}", " ".join(module_args))
+            print(" ".join([f"load {self.name}", *module_args]))
         else:
             print(f"remove {self.name}")
 
@@ -743,10 +742,14 @@ class Modprobe:
         except ValueError:
             return False
 
-    def update_task(self, name, entry):
+    def update_module(self, name, entry, new_module=None):
         task = self.get_task(name)
-        for key, value in entry.items():
-            setattr(task, key, value)
+        if new_module is None:
+            if "name" not in entry:
+                entry["name"] = name
+            new_module = Module(entry)
+        for key in entry.keys():
+            setattr(task, key, getattr(new_module, key))
         self.taskdb.update(task)
 
     def add_modules(self, file):
@@ -757,14 +760,20 @@ class Modprobe:
             if name == "modules":
                 for table in entry:
                     try:
-                        self.add_task(Module(table))
+                        task = Module(table)
                     except ValueError as exc:
                         raise ValueError(
                             f"{file}: invalid modules entry: {exc}"
                         ) from None
+
+                    # Update tasks that already exist:
+                    if self.has_task(task.name):
+                        self.update_module(task.name, table, task)
+                    else:
+                        self.add_task(task)
             else:
                 # Allow <module>.key to update an existing configured module:
-                self.update_task(name, entry)
+                self.update_module(name, entry)
 
     def _modprobe_path_expand(self, path=None, name="modprobe", ext="toml"):
         if path is None:
@@ -801,7 +810,7 @@ class Modprobe:
                 for service, name in entry.items():
                     self.taskdb.set_alternative(service, name)
             else:
-                self.update_task(key, entry)
+                self.update_module(key, entry)
 
     def configure_modules(self, path=None):
         """Load all configured modules in searchpath
@@ -917,10 +926,23 @@ class Modprobe:
                     if successor in deps:
                         deps[successor].append(task.name)
 
-    def get_deps(self, tasks, reverse=False):
+    def get_deps(self, tasks):
         """Return dependencies for tasks as dict of names to predecessor list"""
         t0 = self.timestamp
+        if not isinstance(tasks, set):
+            tasks = set(tasks)
         deps = {}
+
+        # Ensure tasks set contains all provides and the actual task name
+        # (since presence in the set determines if a task is included in
+        #  the predecessor list below)
+        provides = set()
+        for task in tasks:
+            task = self.get_task(task)
+            provides.add(task.name)
+            provides.update(task.provides)
+        tasks.update(provides)
+
         for name in tasks:
             task = self.get_task(name)
             if "*" in task.after:
@@ -933,6 +955,22 @@ class Modprobe:
         self._process_before(tasks, deps)
         self.add_timing("deps", t0)
 
+        return deps
+
+    def get_requires(self, tasks, reverse=False):
+        """Return dependencies for tasks as dicts of names to dependencies"""
+        deps = {}
+        for name in tasks:
+            task = self.get_task(name)
+            deps[task.name] = list(task.requires)
+        if reverse:
+            rdeps = {}
+            for dependent, reqs in deps.items():
+                for req in reqs:
+                    if req not in rdeps:
+                        rdeps[req] = set()
+                    rdeps[req].add(dependent)
+            return rdeps
         return deps
 
     def run(self, deps):
@@ -1010,6 +1048,13 @@ class Modprobe:
             for other in task.requires:
                 self._active_tasks.append(other)
 
+    def _set_all_alternatives(self, modules):
+        # Set all modules as the current selected alternatives:
+        for module in modules:
+            task = self.get_task(module)
+            for service in task.provides:
+                self.set_alternative(service, task.name)
+
     def load(self, modules):
         """
         Load modules and their dependencies (if not already loaded)
@@ -1023,12 +1068,89 @@ class Modprobe:
         """
         mlist = ModuleList(self.handle)
         needed_modules = [x for x in self.solve(modules) if x not in mlist]
+
+        # Ensure explicitly requested modules are the current alternatives
+        self._set_all_alternatives(needed_modules)
+
         if needed_modules:
             self.run(self.get_deps(needed_modules))
         else:
             raise FileExistsError(
                 "All modules and their dependencies are already loaded."
             )
+
+    def _find_removable(self, dependencies, modules_to_remove):
+        """
+        Given a set of modules and dependency list of all modules, find modules
+        that can be removed because they no longer have any dependents.
+
+        Args:
+            dependencies (dict): Dictionary of modules to dependency list
+            modules_to_remove (list): List of modules to remove
+
+        Returns:
+            list: modules that can be safely removed (including original list)
+        """
+        dependents = {}
+        for dependent, reqs in dependencies.items():
+            for req in reqs:
+                if req not in dependents:
+                    dependents[req] = set()
+                dependents[req].add(dependent)
+
+        # Start with the items we're told to remove
+        removed_items = set(modules_to_remove)
+        newly_removable = []
+
+        # Keep track of items to check in this iteration
+        modules_to_check = set(modules_to_remove)
+
+        while modules_to_check:
+            next_modules_to_check = set()
+
+            for removed_item in modules_to_check:
+                # Find all dependencies of the removed item
+                # (items it depended on)
+                if removed_item in dependencies:
+                    for dependency in dependencies[removed_item]:
+                        # Skip if this dependency is already being removed
+                        if dependency in removed_items:
+                            continue
+
+                        # Check if this dependency still has other items
+                        # depending on it
+                        remaining_dependents = (
+                            dependents.get(dependency, set()) - removed_items
+                        )
+
+                        # If no remaining dependents, it can be removed
+                        if not remaining_dependents:
+                            removed_items.add(dependency)
+                            newly_removable.append(dependency)
+                            next_modules_to_check.add(dependency)
+
+            modules_to_check = next_modules_to_check
+
+        # Add newly removed items to list of items to remove
+        modules_to_remove.extend(newly_removable)
+
+        # Discard elements from dependents if they are being removed
+        for name in modules_to_remove:
+            for deps in dependents.values():
+                # discard both the name to remove and the real name
+                # of the task in case they are different
+                # (e.g. sched vs sched-simple):
+                deps.discard(name)
+                deps.discard(self.get_task(name).name)
+
+        # Raise an error if any removed modules still have dependents
+        for name in modules_to_remove:
+            if dependents.get(name):
+                raise ValueError(
+                    f"{name} still in use by " + ", ".join(dependents[name])
+                )
+
+        return modules_to_remove
 
     def _solve_modules_remove(self, modules=None):
         """Solve for a set of currently loaded modules to remove"""
@@ -1044,44 +1166,25 @@ class Modprobe:
                 if not mlist.lookup(module):
                     raise ValueError(f"module {module} is not loaded")
 
-        # Calculate reverse deps for all loaded modules
-        deps = self.get_deps(all_modules)
-        rdeps = defaultdict(set)
+        modules = self._find_removable(self.get_requires(all_modules), modules)
 
+        # Compute reverse precedence graph of modules to remove so that
+        # they can be removed in reverse order of load:
+        deps = self.get_deps(modules)
+        rdeps = defaultdict(set)
         for name, deplist in deps.items():
             for mod in deplist:
-                rdeps[mlist.lookup(mod)].add(name)
+                mod = mlist.lookup(mod)
+                rdeps[mod].add(name)
 
-        # Determine if removal of modules will cause any other modules
-        # to become "unused", i.e. not needed by other modules
-        rdeps_copy = copy.deepcopy(rdeps)
-
-        def remove_dep(name):
-            for modname, dep_set in rdeps_copy.items():
-                if not dep_set:
-                    continue
-                dep_set.discard(name)
-                if not dep_set:
-                    remove_dep(modname)
-                    if modname in mlist:
-                        modules.append(modname)
-
-        for name in modules:
-            remove_dep(mlist.lookup(name))
-
-        # Raise an error if any module in modules has rdeps remaining
-        for name in modules:
-            if rdeps_copy[name]:
-                raise ValueError(
-                    f"{name} still in use by " + ", ".join(rdeps_copy[name])
-                )
-
+        # Convert module names to ModuleRemove tasks:
         tasks = set()
         for service in modules:
             name = mlist.lookup(service)
             if name is not None:
                 tasks.add(name)
 
+        # filter out tasks from rdeps that are not slated for removal
         deps = {}
         for name in tasks:
             deps[name] = {x for x in rdeps[name] if x in tasks}
@@ -1093,6 +1196,12 @@ class Modprobe:
         if modules is None:
             mlist = ModuleList(self.handle)
             modules = [x for x in mlist if self.has_task(x)]
+
+        # When removing modules, always set available alternatives to
+        # the specific modules being requested to remove. This prevents
+        # non-loaded but default alternatives from appearing in get_deps()
+        # later:
+        self._set_all_alternatives(modules)
 
         for module in modules:
             task = self.get_task(module)

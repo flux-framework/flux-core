@@ -96,7 +96,7 @@ def rc3(args):
 
 
 def load(args):
-    M = Modprobe().configure_modules()
+    M = Modprobe(dry_run=args.dry_run).configure_modules()
     try:
         M.load(args.modules)
     except FileExistsError:
@@ -113,7 +113,7 @@ def show(args):
 
 
 def remove(args):
-    M = Modprobe().configure_modules()
+    M = Modprobe(dry_run=args.dry_run).configure_modules()
     M.remove(args.modules)
     sys.exit(M.exitcode)
 
@@ -162,6 +162,11 @@ def parse_args():
 
     load_parser = subparsers.add_parser("load", formatter_class=help_formatter())
     load_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Don't do anything. Print what would be run",
+    )
+    load_parser.add_argument(
         "modules",
         metavar="MODULE",
         nargs="+",
@@ -175,6 +180,11 @@ def parse_args():
         metavar="MODULE",
         nargs="+",
         help="Module to remove",
+    )
+    remove_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Don't do anything. Print what would be run",
     )
     remove_parser.set_defaults(func=remove)
 

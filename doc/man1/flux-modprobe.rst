@@ -6,8 +6,8 @@ flux-modprobe(1)
 SYNOPSIS
 ========
 
-| **flux** **modprobe** **load** *MODULE* [*MODULE* ...]
-| **flux** **modprobe** **remove** *MODULE* [*MODULE* ...]
+| **flux** **modprobe** **load** [*--dry-run*] *MODULE* [*MODULE* ...]
+| **flux** **modprobe** **remove** [*--dry-run*] *MODULE* [*MODULE* ...]
 | **flux** **modprobe** **list-dependencies** [*-f*] *MODULE*
 | **flux** **modprobe** **run** [*-v*] [*--show-deps*] [*--dry-run*] [*--confdir=DIR*] *FILE*
 | **flux** **modprobe** **rc1** [*-v*] [*--timing*] [*--show-deps*] [*--dry-run*] [*--confdir=DIR*] *FILE*
@@ -50,6 +50,10 @@ load
 
 .. program:: flux modprobe load
 
+.. option:: --dry-run
+
+  Do not actually run anything, but print the tasks that would be run.
+
 :program:`flux modprobe load` loads one or more broker modules and
 all their dependencies. Note that broker modules can be loaded by
 service name instead of module name e.g.::
@@ -69,7 +73,13 @@ remove
 
 .. program:: flux modprobe remove
 
-:program:`flux modprobe remove` unloads one more broker modules.
+.. option:: --dry-run
+
+  Do not actually run anything, but print the tasks that would be run.
+
+:program:`flux modprobe remove` unloads one or more broker modules, including
+any modules that are unused after the target modules are removed.
+
 The special name ``all`` may be used to unload all modules.
 :program:`flux modprobe remove` will refuse to remove a module if the
 module is still in use by other modules.

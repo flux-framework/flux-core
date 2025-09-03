@@ -670,6 +670,29 @@ test_expect_success 'modprobe remove all works' '
 	test_must_fail grep sched remove-all.out &&
 	test_must_fail grep kvs remove-all.out
 '
+test_expect_success 'modprobe load/remove loads/removes same set of modules' '
+	flux start -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    sh -c "flux modprobe load resource && flux modprobe remove resource && flux module list" > load-remove.out &&
+	test_must_fail grep resource load-remove.out &&
+	test_must_fail grep kvs load-remove.out &&
+	test_must_fail grep heartbeat load-remove.out
+'
+# Note in the test below: resource, heartbeat may be removed in any order
+# so only the last 4 lines of output are compared, which should include
+# kvs-watch, kvs, content-sqlite, and content
+test_expect_success 'modprobe load/remove loads/removes same set of modules' '
+	flux start -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    sh -c "flux modprobe load resource && flux modprobe remove --dry-run resource && flux modprobe remove all" >remove-dry-run.out 2>&1 &&
+	test_debug "cat remove-dry-run.out" &&
+	cat remove-dry-run.out | tail -4 > remove-dry-run-truncated.out &&
+	cat <<-EOF >remove-dry-run.expected &&
+	remove kvs-watch
+	remove kvs
+	remove content-sqlite
+	remove content
+	EOF
+	test_cmp remove-dry-run.expected remove-dry-run-truncated.out
+'
 test_expect_success 'modprobe show works' '
 	flux modprobe show sched | jq  &&
 	flux modprobe show sched | jq -e ".name == \"sched-simple\""
@@ -678,11 +701,11 @@ test_expect_success 'modprobe.toml can update modules' '
 	mkdir modprobe.d &&
 	test_when_finished "rm -rf modprobe.d" &&
 	cat <<-EOF >modprobe.d/test.toml &&
-	feasibility.ranks = "0,1"
+	feasibility.ranks = "0-1"
 	EOF
 	FLUX_MODPROBE_PATH=$(pwd) flux modprobe show feasibility > show1.json &&
 	test_debug "cat show1.json | jq" &&
-	cat show1.json | jq -e ".ranks == \"0,1\""
+	cat show1.json | jq -e ".ranks == \"0-1\""
 '
 test_expect_success 'modprobe applies updates from [modules] table' '
 	flux config load <<-EOF &&
@@ -762,6 +785,15 @@ test_expect_success 'modprobe: FLUX_MODPROBE_DISABLE works in rc1' '
 	    FLUX_MODPROBE_DISABLE=advanced-scheduler,basic-scheduler \
 		FLUX_RC_USE_MODPROBE=t \
 		    flux start flux module list | grep sched-simple
+'
+test_expect_success 'modprobe: explicit load can load non-default module' '
+	FLUX_MODPROBE_PATH=$(pwd) \
+	    flux modprobe load --dry-run basic-scheduler >basic-load.out &&
+	test_debug cat basic-load.out &&
+	cat <<-EOF >basic-load.expected &&
+	load basic-scheduler
+	EOF
+	test_cmp basic-load.expected basic-load.out
 '
 test_expect_success 'modprobe: --set-alternative detects bad input' '
 	FLUX_MODPROBE_PATH=$(pwd) \
