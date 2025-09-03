@@ -10,7 +10,8 @@ SYNOPSIS
 | **flux** **content** **store** [*--bypass-cache*] [*--chunksize=N*]
 | **flux** **content** **flush**
 | **flux** **content** **dropcache**
-| **flux** **content** **checkpoints** [*--json*]
+| **flux** **content** **checkpoint** **list** [*-n*] [*--json*]
+| **flux** **content** **checkpoint** **update** *blobref*
 
 
 DESCRIPTION
@@ -88,12 +89,12 @@ dropcache
 The :program:`flux content dropcache` command drops all non-essential entries
 in the local cache; that is, entries which can be removed without data loss.
 
-checkpoints
------------
+checkpoint list
+---------------
 
-.. program:: flux content checkpoints
+.. program:: flux content checkpoint list
 
-The :program:`flux content checkpoints` command lists all checkpoints
+The :program:`flux content checkpoint list` lists all checkpoints
 currently stored.
 
 .. option:: -n, --no-header
@@ -103,6 +104,14 @@ currently stored.
 .. option:: -j, --json
 
    Output raw json checkpoint data.
+
+checkpoint update
+-----------------
+
+.. program:: flux content checkpoint update
+
+The :program:`flux content checkpoint update` updates the current checkpoint
+to the specified *blobref*.
 
 
 CAVEATS
