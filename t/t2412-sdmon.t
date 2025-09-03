@@ -38,6 +38,10 @@ start_test_unit() {
 stop_test_unit() {
 	systemctl --user stop $1
 }
+reset_test_unit() {
+	systemctl --user reset-failed $1
+}
+
 # Usage: wait_for_none MAXSEC
 wait_for_none() {
 	local retry=$(($1*10))
@@ -75,7 +79,9 @@ test_expect_success 'load sdmon module' '
 '
 test_expect_success 'make sure residual test units are not running' '
 	stop_test_unit shell-t2412 || true &&
-	stop_test_unit imp-shell-t2412 || true
+	stop_test_unit imp-shell-t2412 || true &&
+	reset_test_unit shell-t2412 || true &&
+	reset_test_unit imp-shell-t2412 || true
 '
 test_expect_success 'wait for it to join the sdmon.online group' '
 	run_timeout 30 $groups waitfor --count=1 sdmon.online
