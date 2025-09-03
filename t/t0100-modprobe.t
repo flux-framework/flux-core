@@ -678,11 +678,11 @@ test_expect_success 'modprobe.toml can update modules' '
 	mkdir modprobe.d &&
 	test_when_finished "rm -rf modprobe.d" &&
 	cat <<-EOF >modprobe.d/test.toml &&
-	feasibility.ranks = "0,1"
+	feasibility.ranks = "0-1"
 	EOF
 	FLUX_MODPROBE_PATH=$(pwd) flux modprobe show feasibility > show1.json &&
 	test_debug "cat show1.json | jq" &&
-	cat show1.json | jq -e ".ranks == \"0,1\""
+	cat show1.json | jq -e ".ranks == \"0-1\""
 '
 test_expect_success 'modprobe applies updates from [modules] table' '
 	flux config load <<-EOF &&
