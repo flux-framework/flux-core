@@ -84,6 +84,7 @@ TESTSCRIPTS = \
 	t0034-broker-getenv.t \
 	t0035-content-sqlite-checkpoint.t \
 	t0036-broker-rundir.t \
+	t0037-content-files-checkpoint.t \
 	t0025-broker-state-machine.t \
 	t0027-broker-groups.t \
 	t0013-config-file.t \
