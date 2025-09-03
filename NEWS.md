@@ -1,3 +1,60 @@
+flux-core version 0.78.0 - 2025-09-03
+-------------------------------------
+
+## New Features
+ * flux-fsck: add --repair option (#6953)
+ * flux-content: support checkpoint update command (#6982)
+ * add simple shell plugin for monitoring memory and cpu usage (#6958)
+ * broker: interpret sticky bit in -Sstatedir=DIR (#7009)
+ * broker: relocate temporary statedir to /var/tmp unless overridden (#7002)
+ * support drop-in scripts in
+   `$libexecdir/flux/{prolog,epilog,housekeeping}.d` (#6983)
+ * rlist and shell: record nslots in allocated Rv1 for use in shell init
+   (#6632)
+ * broker: convert groups to a module (#6959)
+ * broker: auto-load all builtin-in broker modules (#6978)
+ * drop `rc1` and `rc3` scripts (#6988)
+ * drop the barrier module (#6976)
+ * sched-simple: allow non-integer counts (#6973)
+ * broker: panic on spurious module exit with error (#6969)
+
+## Fixes
+ * perilog: avoid draining empty idset (#7018)
+ * flux-module: expand module name column in list output (#7016)
+ * flux-start: suppress module panic in recovery mode (#7010)
+ * etc: restore dropped support for `cron.directory` in rc1 (#6950)
+ * resource: fix expiration updates with `resource.rediscover=true` (#6985)
+ * More macos fixes (#6929)
+ * broker: wait for built-in plugins to be RUNNING before loading other
+   modules (#6971)
+ * flux-fsck: check that KVS is not loaded (#6956)
+ * etc: remove shopt usage from rc1.old (#6961)
+ * modprobe: various fixes and improvements (#7015)
+ * modprobe: ensure required modules of activated alternatives are also
+   active (#7004)
+ * modprobe: fix handling of `modprobe.Context.bash()` errors and expand
+   testing (#6957)
+
+## Cleanup
+ * flux-content: refactor checkpoints list command (#6981)
+ * job-manager: use `flux_msglist` where helpful (#6975)
+ * libflux: drop msglist polling methods (#6974)
+
+## Build/CI/Testsuite/Documentation
+ * testsuite: improve cleanup in t2412-sdmon.t (#7017)
+ * testsuite: fix barrier in shell-lost issues test (#7008)
+ * t: rename test dirs for fsck tests (#6999)
+ * testsuite: various fixes and extra debug (#6992)
+ * t: add tests for fsck of invalid dirref entry (#6991)
+ * github: update spelling action (#6994)
+ * doc: fix flux-jobs(1) docs on `contextual_time` (#6993)
+ * test/terminus: skip kill tests due to race (#6986)
+ * testsuite: remove unused hwloc data, etc. (#6979)
+ * fix minor issues/clean up (#6977)
+ * doc: add note about `--signal=SIG@TIME` behavior in batch jobs (#6968)
+ * ci: add missing checkout step to generate-manifest (#6955)
+ * ci: fix docker manifest generation (#6954)
+
 flux-core version 0.77.0 - 2025-08-05
 -------------------------------------
 
