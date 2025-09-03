@@ -493,12 +493,12 @@ void lsmod_print_header (FILE *f, bool longopt)
 {
     if (longopt) {
         fprintf (f,
-                 "%-24.24s %4s  %c %s %s %-8s %s\n",
+                 "%-25.25s %4s  %c %s %s %-8s %s\n",
                  "Module", "Idle", 'S', "Sendq", "Recvq", "Service", "Path");
     }
     else {
         fprintf (f,
-                 "%-24s %4s  %c %s %s %s\n",
+                 "%-25s %4s  %c %s %s %s\n",
                  "Module", "Idle", 'S', "Sendq", "Recvq", "Service");
     }
 }
