@@ -742,10 +742,14 @@ class Modprobe:
         except ValueError:
             return False
 
-    def update_task(self, name, entry):
+    def update_module(self, name, entry, new_module=None):
         task = self.get_task(name)
-        for key, value in entry.items():
-            setattr(task, key, value)
+        if new_module is None:
+            if "name" not in entry:
+                entry["name"] = name
+            new_module = Module(entry)
+        for key in entry.keys():
+            setattr(task, key, getattr(new_module, key))
         self.taskdb.update(task)
 
     def add_modules(self, file):
@@ -763,7 +767,7 @@ class Modprobe:
                         ) from None
             else:
                 # Allow <module>.key to update an existing configured module:
-                self.update_task(name, entry)
+                self.update_module(name, entry)
 
     def _modprobe_path_expand(self, path=None, name="modprobe", ext="toml"):
         if path is None:
@@ -800,7 +804,7 @@ class Modprobe:
                 for service, name in entry.items():
                     self.taskdb.set_alternative(service, name)
             else:
-                self.update_task(key, entry)
+                self.update_module(key, entry)
 
     def configure_modules(self, path=None):
         """Load all configured modules in searchpath
