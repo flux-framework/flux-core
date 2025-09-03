@@ -760,11 +760,17 @@ class Modprobe:
             if name == "modules":
                 for table in entry:
                     try:
-                        self.add_task(Module(table))
+                        task = Module(table)
                     except ValueError as exc:
                         raise ValueError(
                             f"{file}: invalid modules entry: {exc}"
                         ) from None
+
+                    # Update tasks that already exist:
+                    if self.has_task(task.name):
+                        self.update_module(task.name, table, task)
+                    else:
+                        self.add_task(task)
             else:
                 # Allow <module>.key to update an existing configured module:
                 self.update_module(name, entry)
