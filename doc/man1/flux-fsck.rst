@@ -40,6 +40,20 @@ OPTIONS
    checkpoint.  This option directs flux-fsck to start at an arbitrary
    point.  BLOBREF must refer to an RFC 11 tree object of type "dir".
 
+.. option:: -r, --repair
+
+   Remove any dangling references found in KVS metadata. If a KVS
+   value changes as a result of this repair, the key is moved to the
+   lost+found directory.  The original key is unlinked.  If a key
+   points to a KVS directory that is no longer valid, it is
+   unlinked. All damaged keys and their disposition are listed on
+   stderr. This process creates a new root reference for these
+   changes, and commits it as the current KVS checkpoint at the end of
+   the scan. The KVS is required to be unloaded during repair.
+
+   This option should be considered :ref:`EXPERIMENTAL <fsck_experimental>`
+   at this time.
+
 
 EXIT STATUS
 ===========
@@ -63,6 +77,13 @@ FLUX RFC
 :doc:`rfc:spec_10`
 
 :doc:`rfc:spec_11`
+
+
+.. _fsck_experimental:
+EXPERIMENTAL
+============
+
+.. include:: common/experimental.rst
 
 
 SEE ALSO
