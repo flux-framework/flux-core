@@ -2,7 +2,9 @@
 #
 test_description='Test flux-shell sysmon plugin'
 
-cgdir=/sys/fs/cgroup/$(cat /proc/$$/cgroup | cut -d: -f3)
+. `dirname $0`/sharness.sh
+
+cgdir=/sys/fs/cgroup/$(cat /proc/$$/cgroup | grep ^0: | cut -d: -f3)
 if test $? -ne 0; then
         skip_all="cgroups is unavailable"
         test_done
@@ -16,7 +18,6 @@ if ! test -e $cgdir/cpu.stat; then
 	test_done
 fi
 
-. `dirname $0`/sharness.sh
 
 test_under_flux 1
 
