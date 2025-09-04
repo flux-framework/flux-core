@@ -60,7 +60,7 @@ for rank in 3 1; do
 
     log "Submitted job $id. Waiting for shell rank $rank to be lost"
 
-    value="shell rank $rank (on $(hostname -s)): Killed"
+    value="shell rank $rank (on $(hostname)): Killed"
     flux job wait-event -Wt 120 -Hvp output -m message="$value" $id log \
 	|| die "failed to get shell lost message"
 
