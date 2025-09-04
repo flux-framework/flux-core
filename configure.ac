@@ -217,6 +217,8 @@ AC_CHECK_HEADERS( \
   link.h \
   [sys/ucred.h] \
   [sys/prctl.h] \
+  [sys/vfs.h] \
+  [linux/magic.h] \
 )
 
 ##

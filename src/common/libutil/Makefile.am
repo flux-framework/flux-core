@@ -107,7 +107,9 @@ libutil_la_SOURCES = \
 	parse_size.c \
 	basename.h \
 	basename.c \
-	ansi_color.h
+	ansi_color.h \
+	cgroup.h \
+	cgroup.c
 
 libutil_la_LDFLAGS = \
         $(AM_LDFLAGS) \
