@@ -716,6 +716,7 @@ _flux_job()
         -i --stdin-ranks= \
         -u --unbuffered \
         --debug \
+        --tail= \
     "
     local status_OPTS="\
         -v --verbose \
