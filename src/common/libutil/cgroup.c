@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <string.h>
 #ifndef HAVE_STRLCPY
 #include "src/common/libmissing/strlcpy.h"
@@ -45,8 +46,106 @@
 #include <signal.h>
 
 #include "basename.h"
+#include "errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "cgroup.h"
+
+static int mkpath (char *buf, size_t size, const char *dir, const char *name)
+{
+    if (snprintf (buf, size, "%s/%s", dir, name) >= size) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    return 0;
+}
+
+int cgroup_access (struct cgroup_info *cgroup, const char *name, int mode)
+{
+    char path[PATH_MAX + 1];
+    if (mkpath (path, sizeof (path), cgroup->path, name) < 0)
+        return -1;
+    return access (path, mode);
+}
+
+static int cgroup_vscanf (struct cgroup_info *cgroup,
+                          const char *name,
+                          const char *fmt,
+                          va_list ap)
+{
+    char path[PATH_MAX + 1];
+    FILE *fp;
+    int rc;
+
+    if (mkpath (path, sizeof (path), cgroup->path, name) < 0
+        || !(fp = fopen (path, "r")))
+        return -1;
+    rc = vfscanf (fp, fmt, ap);
+    fclose (fp);
+
+    return rc;
+}
+
+int cgroup_scanf (struct cgroup_info *cgroup,
+                  const char *name,
+                  const char *fmt,
+                  ...)
+{
+    va_list ap;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = cgroup_vscanf (cgroup, name, fmt, ap);
+    va_end (ap);
+
+    return rc;
+}
+
+static int cgroup_key_vscanf (struct cgroup_info *cgroup,
+                              const char *name,
+                              const char *key,
+                              const char *fmt,
+                              va_list ap)
+{
+    char path[PATH_MAX + 1];
+    FILE *fp;
+    char *line = NULL;
+    size_t size = 0;
+    int n;
+    int rc = -1;
+
+    if (mkpath (path, sizeof (path), cgroup->path, name) < 0
+        || !(fp = fopen (path, "r")))
+        return -1;
+    while ((n = getline (&line, &size, fp)) >= 0) {
+        int keylen = strlen (key);
+        if (strstarts (line, key) && isblank (line[keylen])) {
+            rc = vsscanf (line + keylen + 1, fmt, ap);
+            goto done;
+        }
+    }
+    errno = ENOENT;
+done:
+    ERRNO_SAFE_WRAP (free, line);
+    ERRNO_SAFE_WRAP (fclose, fp);
+    return rc;
+}
+
+int cgroup_key_scanf (struct cgroup_info *cgroup,
+                      const char *name,
+                      const char *key,
+                      const char *fmt,
+                      ...)
+{
+    va_list ap;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = cgroup_key_vscanf (cgroup, name, key, fmt, ap);
+    va_end (ap);
+
+    return rc;
+}
 
 static char *remove_leading_dotdot (char *relpath)
 {
