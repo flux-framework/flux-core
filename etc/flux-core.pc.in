@@ -8,6 +8,7 @@ fluxconfdir=@fluxconfdir@
 fluxcmddir=@fluxcmddir@
 fluxlibdir=@fluxlibdir@
 fluxlibexecdir=@fluxlibexecdir@
+fluxdatadir=@fluxdatadir@
 fluxmoddir=@fluxmoddir@
 fluxcmdhelpdir=@datadir@/flux/help.d
 fluxshellrcdir=@fluxconfdir@/shell
