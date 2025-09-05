@@ -9,9 +9,9 @@ SYNOPSIS
 | **flux** **modprobe** **load** [*--dry-run*] *MODULE* [*MODULE* ...]
 | **flux** **modprobe** **remove** [*--dry-run*] *MODULE* [*MODULE* ...]
 | **flux** **modprobe** **list-dependencies** [*-f*] *MODULE*
-| **flux** **modprobe** **run** [*-v*] [*--show-deps*] [*--dry-run*] [*--confdir=DIR*] *FILE*
-| **flux** **modprobe** **rc1** [*-v*] [*--timing*] [*--show-deps*] [*--dry-run*] [*--confdir=DIR*] *FILE*
-| **flux** **modprobe** **rc3** [*-v*] [*--show-deps*] [*--dry-run*] [*--confdir=DIR*] *FILE*
+| **flux** **modprobe** **run** [*-v*] [*--show-deps*] [*--dry-run*] *FILE*
+| **flux** **modprobe** **rc1** [*-v*] [*--timing*] [*--show-deps*] [*--dry-run*] *FILE*
+| **flux** **modprobe** **rc3** [*-v*] [*--show-deps*] [*--dry-run*] *FILE*
 
 
 DESCRIPTION
@@ -92,10 +92,6 @@ run
 :program:`flux modprobe run` takes the path to a modprobe rc file on
 the command line and runs it. This is mainly useful for testing.
 
-.. option:: --confdir=DIR
-
-  Use DIR for the modprobe configuration directory instead of the default.
-
 .. option:: --dry-run
 
   Do not actually run anything, but print the tasks that would be run.
@@ -159,10 +155,6 @@ located at ``/etc/flux/modprobe/rc1.py`` plus any extra Python rc files
 found in ``/etc/flux/modprobe/rc1.d/*.py``. This command is typically called
 from Flux's rc1 script.
 
-.. option:: --confdir=DIR
-
-Override the default modprobe config directory.
-
 .. option:: --timing
 
 Dump task timing information to the KVS.
@@ -189,10 +181,6 @@ rc3
 :program:`flux modprobe rc3` unloads all broker modules and executes
 defined shutdown tasks from ``/etc/flux/modprobe/rc3.py`` and
 ``etc/flux/modprobe/rc3.d/*.py``.
-
-.. option:: --confdir=DIR
-
-Override the default modprobe config directory.
 
 .. option:: -v, --verbose
 
