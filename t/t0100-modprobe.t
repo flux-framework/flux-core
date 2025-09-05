@@ -544,23 +544,29 @@ test_expect_success 'modprobe fails if task raises exception' '
 	test_debug "cat output${seq}"
 '
 test_expect_success 'modprobe: detects missing required modprobe.toml keys' '
-	cat <<-EOF >missing.toml &&
+	mkdir modprobe.d &&
+	test_when_finished "rm -rf modprobe.d" &&
+	cat <<-EOF >modprobe.d/missing.toml &&
 	[[modules]]
 	name = "a"
 	[[modules]]
 	ranks = "0"
 	EOF
-	test_must_fail flux modprobe show --path=missing.toml a 2>missing.err &&
+	FLUX_MODPROBE_PATH=$(pwd) \
+	  test_must_fail flux modprobe show a 2>missing.err &&
 	test_debug "cat missing.err" &&
 	grep -i "missing required config key" missing.err
 '
 test_expect_success 'modprobe: detects invalid modprobe.toml entries' '
-	cat <<-EOF >invalid.toml &&
+	mkdir modprobe.d &&
+	test_when_finished "rm -rf modprobe.d" &&
+	cat <<-EOF >modprobe.d/invalid.toml &&
 	[[modules]]
 	name = "a"
 	badkey = ""
 	EOF
-	test_must_fail flux modprobe show --path=invalid.toml a 2>invalid.err &&
+	FLUX_MODPROBE_PATH=$(pwd) \
+	  test_must_fail flux modprobe show a 2>invalid.err &&
 	test_debug "cat invalid.err" &&
 	grep -i "invalid config key" invalid.err
 '
