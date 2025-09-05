@@ -104,7 +104,7 @@ def load(args):
 
 
 def show(args):
-    M = Modprobe().configure_modules(args.path)
+    M = Modprobe().configure_modules()
     set_alternatives(M, args.set_alternative)
     disable_modules(M, args.disable)
     print(json.dumps(M.get_task(args.module).to_dict(), default=str))
@@ -274,12 +274,6 @@ def parse_args():
     list_deps_parser.set_defaults(func=list_dependencies)
 
     show_parser = subparsers.add_parser("show", formatter_class=help_formatter())
-    show_parser.add_argument(
-        "--path",
-        metavar="PATH",
-        type=str,
-        help="Set path to module configuration TOML file",
-    )
     show_parser.add_argument(
         "-S",
         "--set-alternative",

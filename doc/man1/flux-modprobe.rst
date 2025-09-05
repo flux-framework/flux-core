@@ -112,10 +112,6 @@ show
 :program:`flux modprobe show` dumps the configuration information for a
 module or service.
 
-.. option:: --path=PATH
-
-Set the path to the module configuration TOML file.
-
 .. option:: -S, --set-alternative=NAME=MODULE
 
 Set the alternative for service NAME to module MODULE.
