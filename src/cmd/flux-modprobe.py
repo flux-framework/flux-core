@@ -45,9 +45,7 @@ def set_alternatives(M, alternatives):
 
 
 def runtasks(args, rcfile, timing=False):
-    M = Modprobe(
-        confdir=args.confdir, timing=timing, verbose=args.verbose, dry_run=args.dry_run
-    )
+    M = Modprobe(timing=timing, verbose=args.verbose, dry_run=args.dry_run)
     t0 = M.timestamp
     M.configure_modules()
     M.read_rcfile(rcfile)
@@ -85,7 +83,7 @@ def rc3(args):
         os.execv(f"{confdir}/rc3.old", ["rc3"])
         sys.exit(1)
 
-    M = Modprobe(confdir=args.confdir, verbose=args.verbose, dry_run=args.dry_run)
+    M = Modprobe(verbose=args.verbose, dry_run=args.dry_run)
     M.configure_modules()
     # rc3 always removes all modules
     M.set_remove()
@@ -206,23 +204,11 @@ def parse_args():
         help="Don't do anything. Print what would be run",
     )
     run_parser.add_argument(
-        "--confdir",
-        metavar="DIR",
-        default=None,
-        help="Set default config directory",
-    )
-    run_parser.add_argument(
         "file", metavar="FILE", help="Run commands defined in Python rc file FILE"
     )
     run_parser.set_defaults(func=run)
 
     rc1_parser = subparsers.add_parser("rc1", formatter_class=help_formatter())
-    rc1_parser.add_argument(
-        "--confdir",
-        metavar="DIR",
-        default=None,
-        help="Set default config directory",
-    )
     rc1_parser.add_argument(
         "--timing",
         action="store_true",
@@ -244,12 +230,6 @@ def parse_args():
     rc1_parser.set_defaults(func=rc1)
 
     rc3_parser = subparsers.add_parser("rc3", formatter_class=help_formatter())
-    rc3_parser.add_argument(
-        "--confdir",
-        metavar="DIR",
-        default=None,
-        help="Set default config directory",
-    )
     rc3_parser.add_argument(
         "-v", "--verbose", action="store_true", help="Print tasks as they are executed"
     )
