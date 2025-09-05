@@ -809,7 +809,7 @@ class Modprobe:
             else:
                 self.update_module(key, entry)
 
-    def configure_modules(self, path=None):
+    def configure_modules(self):
         """Load all configured modules in searchpath
 
         Loads all modules TOML files in the following order:
@@ -818,7 +818,7 @@ class Modprobe:
             2. From ``dirname(path)/modprobe.d/*.toml``
             3. for dir in FLUX_MODPROBE_PATH: ``{dir}/modprobe.d/*.toml``
         """
-        for file in self._modprobe_path_expand(path):
+        for file in self._modprobe_path_expand():
             self.add_modules(file)
 
         self._update_modules_from_config()
