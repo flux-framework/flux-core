@@ -660,7 +660,7 @@ class Modprobe:
     The modprobe main class. Intended for use by flux-modprobe(1).
     """
 
-    def __init__(self, confdir=None, timing=False, verbose=False, dry_run=False):
+    def __init__(self, timing=False, verbose=False, dry_run=False):
         self.exitcode = 0
         self.timing = None
         self.t0 = None
@@ -671,10 +671,7 @@ class Modprobe:
         self.handle = self.context.handle
         self.rank = self.handle.get_rank()
 
-        if confdir is None:
-            self.confdir = default_flux_confdir() / "modprobe"
-        else:
-            self.confdir = Path(confdir)
+        self.confdir = default_flux_confdir() / "modprobe"
 
         # Active tasks are those added via the @task decorator, and
         # which will be active by default when running "all" tasks:
