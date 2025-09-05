@@ -15,6 +15,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/param.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -32,6 +33,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/parse_size.h"
+#include "src/common/libutil/cgroup.h"
 #include "ccan/str/str.h"
 
 #include "builtins.h"
@@ -48,130 +50,32 @@ struct shell_sysmon {
     flux_future_t *f_sync;
     flux_watcher_t *timer;
     double period; // -1 = unset (use heartbeat)
-    char *path_memory_current;
-    char *path_memory_peak;
-    char *path_cpu_stat;
+    struct cgroup_info cgroup;
     struct sample first_cpu;
     struct sample prev_cpu;
+    bool periodic_enable;
+    bool memory_disable;
+    bool cpu_disable;
 };
 
-/* Read the contents of 'path' into NULL terminated buffer.
- * Caller must free.
- */
-static char *read_file (const char *path)
+static const char *get_memory_size (struct shell_sysmon *ctx,
+                                    const char *name)
 {
-    int fd;
-    char *buf;
-    if ((fd = open (path, O_RDONLY)) < 0)
-        return NULL;
-    if (read_all (fd, (void **)&buf) < 0) {
-        ERRNO_SAFE_WRAP (close, fd);
-        return NULL;
-    }
-    close (fd);
-    return buf;
-}
+    unsigned long long val;
 
-/* Determine the cgroup v2 path to 'name' for for pid.
- * Check access(2) to the file according to 'mode' mask.
- * Caller must free.
- */
-static char *get_cgroup_path (pid_t pid, const char *name, int mode)
-{
-    char tmp[1024];
-    char *cg;
-    char *path;
-
-    snprintf (tmp, sizeof (tmp), "/proc/%d/cgroup", (int)pid);
-    if (!(cg = read_file (tmp)))
-        return NULL;
-    if (!strstarts (cg, "0::")) // v2 always begins with 0::
-        goto eproto;
-    snprintf (tmp,
-              sizeof (tmp),
-              "/sys/fs/cgroup/%s/%s",
-              strstrip (cg + 3),
-              name);
-    if (!(path = realpath (tmp, NULL)))
-        goto error;
-    if (access (path, mode) < 0) {
-        ERRNO_SAFE_WRAP (free, path);
-        goto error;
-    }
-    free (cg);
-    return path;
-eproto:
-    errno = EPROTO;
-error:
-    ERRNO_SAFE_WRAP (free, cg);
-    return NULL;
-}
-
-static int get_cgroup_value (const char *path, char *buf, size_t len)
-{
-    char *s;
-    int rc = -1;
-
-    if (!(s = read_file (path)))
-        return -1;
-    if (snprintf (buf, len, "%s", strstrip (s)) >= len)
-        goto out;
-    rc = 0;
-out:
-    free (s);
-    return rc;
-}
-
-static const char *get_cgroup_size (const char *path)
-{
-    uint64_t size;
-    char rawbuf[32];
-
-    if (get_cgroup_value (path, rawbuf, sizeof (rawbuf)) < 0
-        || parse_size (rawbuf, &size) < 0)
+    if (cgroup_scanf (&ctx->cgroup, name, "%llu", &val) != 1)
         return "unknown";
-    return encode_size (size);
-}
-
-static int parse_cpu_stat (const char *s,
-                           const char *key,
-                           unsigned long long *valp)
-{
-    char *argz = NULL;
-    size_t argz_len = 0;
-    int e;
-
-    if ((e = argz_create_sep (s, '\n', &argz, &argz_len)) != 0) {
-        errno = e;
-        return -1;
-    }
-    char *entry = NULL;
-    while ((entry = argz_next (argz, argz_len, entry))) {
-        if (strstarts (entry, key) && isblank (entry[strlen (key)])) {
-            unsigned long long val;
-            char *endptr;
-            errno = 0;
-            val = strtoull (&entry[strlen (key) + 1], &endptr, 10);
-            if (errno == 0 && *endptr == '\0') {
-                *valp = val;
-                free (argz);
-                return 0;
-            }
-        }
-    }
-    free (argz);
-    errno = EPROTO;
-    return -1;
+    return encode_size (val);
 }
 
 static int get_cpu_stat (struct shell_sysmon *ctx,
-                         const char *key,
                          struct sample *sample)
 {
-    char rawbuf[1024];
-
-    if (get_cgroup_value (ctx->path_cpu_stat, rawbuf, sizeof (rawbuf)) < 0
-        || parse_cpu_stat (rawbuf, key, &sample->val) < 0)
+    if (cgroup_key_scanf (&ctx->cgroup,
+                          "cpu.stat",
+                          "usage_usec",
+                          "%llu",
+                          &sample->val) != 1)
         return -1;
     sample->t = flux_reactor_now (ctx->shell->r);
     return 0;
@@ -190,13 +94,17 @@ static double cpu_load_avg (struct sample *s1, struct sample *s2)
 
 static void sysmon_poll (struct shell_sysmon *ctx)
 {
-    shell_trace ("memory.current=%s",
-                 get_cgroup_size (ctx->path_memory_current));
+    if (!ctx->memory_disable) {
+        shell_trace ("memory.current=%s",
+                     get_memory_size (ctx, "memory.current"));
+    }
 
-    struct sample cur_cpu;
-    if (get_cpu_stat (ctx, "usage_usec", &cur_cpu) == 0) {
-        shell_trace ("loadavg=%.2f", cpu_load_avg (&ctx->prev_cpu, &cur_cpu));
-        ctx->prev_cpu = cur_cpu;
+    if (!ctx->cpu_disable) {
+        struct sample cur_cpu;
+        if (get_cpu_stat (ctx, &cur_cpu) == 0) {
+            shell_trace ("loadavg=%.2f", cpu_load_avg (&ctx->prev_cpu, &cur_cpu));
+            ctx->prev_cpu = cur_cpu;
+        }
     }
 }
 
@@ -229,12 +137,17 @@ static int sysmon_exit (flux_plugin_t *p,
 {
     struct shell_sysmon *ctx = data;
 
-    shell_log ("memory.peak=%s", get_cgroup_size (ctx->path_memory_peak));
+    if (!ctx->memory_disable) {
+        shell_log ("memory.peak=%s",
+                   get_memory_size (ctx, "memory.peak"));
+    }
 
-    struct sample cur_cpu;
-    if (get_cpu_stat (ctx, "usage_usec", &cur_cpu) == 0) {
-        shell_log ("loadavg-overall=%.2f",
-                   cpu_load_avg (&ctx->first_cpu, &cur_cpu));
+    if (!ctx->cpu_disable) {
+        struct sample cur_cpu;
+        if (get_cpu_stat (ctx, &cur_cpu) == 0) {
+            shell_log ("loadavg-overall=%.2f",
+                       cpu_load_avg (&ctx->first_cpu, &cur_cpu));
+        }
     }
     return 0;
 }
@@ -248,13 +161,15 @@ static int sysmon_start (flux_plugin_t *p,
 {
     struct shell_sysmon *ctx = data;
 
-    if (get_cpu_stat (ctx, "usage_usec", &ctx->first_cpu) < 0) {
-        shell_log_error ("error sampling cpu.stat.usage_usec");
-        return -1;
+    if (!ctx->cpu_disable) {
+        if (get_cpu_stat (ctx, &ctx->first_cpu) < 0) {
+            shell_log_error ("error sampling cpu.stat");
+            return -1;
+        }
+        ctx->prev_cpu = ctx->first_cpu;
     }
-    ctx->prev_cpu = ctx->first_cpu;
 
-    if (ctx->shell->verbose >= 2) {
+    if (ctx->periodic_enable) {
         if (ctx->period < 0) {
             if (!(ctx->f_sync = flux_sync_create (ctx->shell->h, 0))
                 || flux_future_then (ctx->f_sync, -1, sync_cb, ctx) < 0) {
@@ -284,9 +199,6 @@ static void sysmon_destroy (struct shell_sysmon *ctx)
         int saved_errno = errno;
         flux_future_destroy (ctx->f_sync);
         flux_watcher_destroy (ctx->timer);
-        free (ctx->path_memory_current);
-        free (ctx->path_memory_peak);
-        free (ctx->path_cpu_stat);
         free (ctx);
         errno = saved_errno;
     }
@@ -333,7 +245,6 @@ error_period:
 static struct shell_sysmon *sysmon_create (flux_shell_t *shell, json_t *config)
 {
     struct shell_sysmon *ctx;
-    pid_t mypid = getpid ();
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
@@ -341,28 +252,28 @@ static struct shell_sysmon *sysmon_create (flux_shell_t *shell, json_t *config)
     ctx->period = -1;
     if (sysmon_parse_args (ctx, config) < 0)
         goto error;
-    ctx->path_memory_current = get_cgroup_path (mypid, "memory.current", R_OK);
-    ctx->path_memory_peak = get_cgroup_path (mypid, "memory.peak", R_OK);
-    ctx->path_cpu_stat = get_cgroup_path (mypid, "cpu.stat", R_OK);
-    if (!ctx->path_memory_current
-        || !ctx->path_memory_peak
-        || !ctx->path_cpu_stat) {
-        shell_log_error ("error caching cgroup paths");
-        goto error;
+    if (ctx->shell->verbose >= 2)
+        ctx->periodic_enable = true;
+    if (cgroup_info_init (&ctx->cgroup) < 0) {
+        shell_warn ("incompatible cgroup configuration (disabled)");
+        ctx->memory_disable = true;
+        ctx->cpu_disable = true;
+        goto done;
     }
+    if (cgroup_access (&ctx->cgroup, "cpu.stat", R_OK) < 0) {
+        shell_warn ("no cpu.stat (disabled)");
+        ctx->cpu_disable = true;
+    }
+    if (cgroup_access (&ctx->cgroup, "memory.peak", R_OK) < 0
+        || cgroup_access (&ctx->cgroup, "memory.current", R_OK) < 0) {
+        shell_warn ("no memory.peak/memory.current (disabled)");
+        ctx->memory_disable = true;
+    }
+done:
     return ctx;
 error:
     sysmon_destroy (ctx);
     return NULL;
-}
-
-static bool cgroup_check (void)
-{
-    char *path;
-    if (!(path = get_cgroup_path (getpid (), "memory.current", R_OK)))
-        return false;
-    free (path);
-    return true;
 }
 
 static int sysmon_init (flux_plugin_t *p,
@@ -376,10 +287,12 @@ static int sysmon_init (flux_plugin_t *p,
 
     if (flux_shell_getopt_unpack (shell, "sysmon", "o", &config) < 0)
         return -1;
-    if (!config || !cgroup_check())
+    if (!config)
         return 0;
     if (!(ctx = sysmon_create (shell, config)))
         return -1;
+    if (ctx->memory_disable && ctx->cpu_disable)
+        return 0;
     if (flux_plugin_aux_set (p,
                              "sysmon",
                              ctx,
