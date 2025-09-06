@@ -20,7 +20,7 @@ void test_cpu (struct cgroup_info *cgroup)
 {
     const char *keys[] = {"usage_usec", "user_usec", "system_usec"};
 
-    skip (cgroup_access (cgroup, "cpu.stat", R_OK) < 0,
+    skip (access (cgroup_path_to (cgroup, "cpu.stat"), R_OK) < 0,
           ARRAY_SIZE (keys),
           "cpu.stat (unavailable)");
 
@@ -44,7 +44,7 @@ void test_memory (struct cgroup_info *cgroup)
         int rc;
         unsigned long long u64 = 0;
 
-        skip (cgroup_access (cgroup, names[i], R_OK) < 0,
+        skip (access (cgroup_path_to (cgroup, names[i]), R_OK) < 0,
               1,
               "%s (unavailable)",
               names[i]);

@@ -23,7 +23,7 @@ struct cgroup_info {
 
 int cgroup_info_init (struct cgroup_info *cgroup);
 
-int cgroup_access (struct cgroup_info *cgroup, const char *name, int mode);
+const char *cgroup_path_to (struct cgroup_info *cgroup, const char *name);
 
 /* Parse value from cgroup file
  */

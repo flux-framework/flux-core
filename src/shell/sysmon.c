@@ -260,12 +260,12 @@ static struct shell_sysmon *sysmon_create (flux_shell_t *shell, json_t *config)
         ctx->cpu_disable = true;
         goto done;
     }
-    if (cgroup_access (&ctx->cgroup, "cpu.stat", R_OK) < 0) {
+    if (access (cgroup_path_to (&ctx->cgroup, "cpu.stat"), R_OK) < 0) {
         shell_warn ("no cpu.stat (disabled)");
         ctx->cpu_disable = true;
     }
-    if (cgroup_access (&ctx->cgroup, "memory.peak", R_OK) < 0
-        || cgroup_access (&ctx->cgroup, "memory.current", R_OK) < 0) {
+    if (access (cgroup_path_to (&ctx->cgroup, "memory.peak"), R_OK) < 0
+        || access (cgroup_path_to (&ctx->cgroup, "memory.current"), R_OK) < 0) {
         shell_warn ("no memory.peak/memory.current (disabled)");
         ctx->memory_disable = true;
     }
