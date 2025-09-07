@@ -47,6 +47,7 @@ service = "sdexec"
 [exec.sdexec-properties]
 MemoryHigh = "200M"
 MemoryMax = "100M"
+MemorySwapMax = "0"
 EOT
 
 cat >getcg.sh <<EOT2
@@ -134,6 +135,7 @@ test_expect_success 'memory.max can be set to 100M' '
 	EOT
 	$sdexec \
 	    --setopt=SDEXEC_PROP_MemoryMax=100M \
+	    --setopt=SDEXEC_PROP_MemorySwapMax=0 \
 	    $getcg memory.max >max.out &&
 	test_cmp 100M.exp max.out
 '
@@ -153,6 +155,7 @@ test_expect_success 'memory.max can be configured for jobs' '
 test_expect_success STRESS 'remaining within memory.max works' '
 	$sdexec \
 	    --setopt=SDEXEC_PROP_MemoryMax=200M \
+	    --setopt=SDEXEC_PROP_MemorySwapMax=0 \
 	    $stress --timeout 3 --vm-keep --vm 1 --vm-bytes 100M
 '
 
@@ -172,6 +175,7 @@ test_expect_code_or_killed() {
 test_expect_success STRESS 'exceeding memory.max causes exec failure' '
 	test_expect_code_or_killed 1 $sdexec \
 	    --setopt=SDEXEC_PROP_MemoryMax=100M \
+	    --setopt=SDEXEC_PROP_MemorySwapMax=0 \
 	    $stress --timeout 60 --vm-keep --vm 1 --vm-bytes 200M
 '
 test_expect_success STRESS 'exceeding memory.max causes job failure' '
