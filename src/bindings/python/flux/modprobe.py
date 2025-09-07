@@ -783,17 +783,27 @@ class Modprobe:
             builtindir (str): base path for builtin/package path. Should
                 be either "datadir" or "libexecdir".
         """
+        searchpath = []
         if "FLUX_MODPROBE_PATH" in os.environ:
             searchpath = filter(
                 lambda s: s and not s.isspace(),
                 os.environ["FLUX_MODPROBE_PATH"].split(":"),
             )
-            # return searchpath without duplicates
-            return list(OrderedDict.fromkeys(searchpath))
+        else:
+            pkgdir = conf_builtin_get(builtindir)
+            confdir = conf_builtin_get("confdir")
+            searchpath = [f"{pkgdir}/modprobe", f"{confdir}/modprobe"]
 
-        pkgdir = conf_builtin_get(builtindir)
-        confdir = conf_builtin_get("confdir")
-        return [f"{pkgdir}/modprobe", f"{confdir}/modprobe"]
+        if "FLUX_MODPROBE_PATH_APPEND" in os.environ:
+            searchpath.extend(
+                filter(
+                    lambda s: s and not s.isspace(),
+                    os.environ["FLUX_MODPROBE_PATH_APPEND"].split(":"),
+                )
+            )
+
+        # return searchpath without duplicates
+        return list(OrderedDict.fromkeys(searchpath))
 
     def _searchpath_expand(self, name="modprobe", ext="toml"):
         """
