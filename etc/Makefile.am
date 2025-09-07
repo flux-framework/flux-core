@@ -17,11 +17,13 @@ dist_cron_DATA = \
 
 nobase_dist_fluxconf_SCRIPTS = \
 	rc1.old \
-	rc3.old \
+	rc3.old
+
+nobase_dist_fluxlibexec_SCRIPTS = \
 	modprobe/rc1.py \
 	modprobe/rc3.py
 
-nobase_dist_fluxconf_DATA = \
+nobase_dist_fluxdata_DATA = \
 	modprobe/modprobe.toml
 
 fluxlibexec_SCRIPTS = \
@@ -30,19 +32,29 @@ fluxlibexec_SCRIPTS = \
 # Install empty modprobe/*.d directories after rc1.py and rc3.py are installed
 # Install empty fluxlibexecdir/{prolog,epilog,housekeeping}.d directories
 install-data-hook:
-	$(MKDIR_P) $(DESTDIR)$(fluxconfdir)/modprobe/modprobe.d
-	$(MKDIR_P) $(DESTDIR)$(fluxconfdir)/modprobe/rc1.d
-	$(MKDIR_P) $(DESTDIR)$(fluxconfdir)/modprobe/rc3.d
+	for dir in $(fluxconfdir) $(fluxdatadir); do \
+	  $(MKDIR_P) $(DESTDIR)$$dir/modprobe/modprobe.d; \
+	done
+	for dir in $(fluxconfdir) $(fluxlibexecdir); do \
+	  $(MKDIR_P) $(DESTDIR)$$dir/modprobe/rc1.d; \
+	  $(MKDIR_P) $(DESTDIR)$$dir/modprobe/rc3.d; \
+	done
 	for dir in prolog.d epilog.d housekeeping.d; do \
 	  $(MKDIR_P) $(DESTDIR)$(fluxlibexecdir)/$$dir; \
 	done
 
 # Remove empty modprobe/{prolog,epilog,housekeeping}.d directories on uninstall
 uninstall-hook:
-	rmdir $(DESTDIR)$(fluxconfdir)/modprobe/modprobe.d 2>/dev/null || :
-	rmdir $(DESTDIR)$(fluxconfdir)/modprobe/rc1.d 2>/dev/null || :
-	rmdir $(DESTDIR)$(fluxconfdir)/modprobe/rc3.d 2>/dev/null || :
-	rmdir $(DESTDIR)$(fluxconfdir)/modprobe 2>/dev/null || :
+	for dir in $(fluxconfdir) $(fluxdatadir); do \
+	  rmdir $(DESTDIR)$$dir/modprobe/modprobe.d 2>/dev/null || :; \
+	done
+	for dir in $(fluxconfdir) $(fluxlibexecdir); do \
+	  rmdir $(DESTDIR)$$dir/modprobe/rc1.d 2>/dev/null || :; \
+	  rmdir $(DESTDIR)$$dir/modprobe/rc3.d 2>/dev/null || :; \
+	done
+	for dir in $(fluxconfdir) $(fluxlibexecdir) $(fluxdatadir); do \
+	  rmdir $(DESTDIR)$$dir/modprobe 2>/dev/null || :; \
+	done
 	for dir in prolog.d epilog.d housekeeping.d; do \
 	  rmdir $(DESTDIR)$(fluxlibexecdir)/$$dir 2>/dev/null || :; \
 	done
