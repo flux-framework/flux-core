@@ -241,7 +241,8 @@ static int prop_add (json_t *prop, const char *name, const char *val)
     if (streq (name, "MemoryHigh")
         || streq (name, "MemoryMax")
         || streq (name, "MemoryMin")
-        || streq (name, "MemoryLow")) {
+        || streq (name, "MemoryLow")
+        || streq (name, "MemorySwapMax")) {
         double d;
         uint64_t u;
 
