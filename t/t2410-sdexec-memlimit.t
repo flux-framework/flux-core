@@ -74,24 +74,44 @@ if ! $sdexec $getcg memory.high; then
 fi
 
 #
+# memory.swap.max: the absolute limit on swap
+#
+test_expect_success 'memory.swap.max exists' '
+	$sdexec $getcg memory.swap.max
+'
+test_expect_success 'memory.swap.max can be set to 200M' '
+	echo 209715200 >200M.exp &&
+	$sdexec \
+	    --setopt=SDEXEC_PROP_MemorySwapMax=200M \
+	    $getcg memory.swap.max >swap.out &&
+	test_cmp 200M.exp swap.out
+'
+test_expect_success 'memory.swap.max can be set to infinity' '
+	echo max >inf.exp &&
+	$sdexec \
+	    --setopt=SDEXEC_PROP_MemorySwapMax=infinity \
+	    $getcg memory.swap.max >swap2.out &&
+	test_cmp inf.exp swap2.out
+'
+test_expect_success 'memory.swap.max can be configured for jobs' '
+	echo 0 >zero.exp &&
+	flux run $getcg memory.swap.max >swap3.out &&
+	test_cmp zero.exp swap3.out
+'
+
+#
 # memory.high: the throttling limit on memory usage
 #
 test_expect_success 'memory.high exists' '
 	$sdexec $getcg memory.high
 '
 test_expect_success 'memory.high can be set to 200M' '
-	cat >200M.exp <<-EOT &&
-	209715200
-	EOT
 	$sdexec \
 	    --setopt=SDEXEC_PROP_MemoryHigh=200M \
 	    $getcg memory.high >high.out &&
 	test_cmp 200M.exp high.out
 '
 test_expect_success 'memory.high can be set to infinity' '
-	cat >inf.exp <<-EOT &&
-	max
-	EOT
 	$sdexec \
 	    --setopt=SDEXEC_PROP_MemoryHigh=infinity \
 	    $getcg memory.high >high2.out &&
