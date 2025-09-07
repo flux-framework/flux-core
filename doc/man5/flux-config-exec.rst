@@ -121,6 +121,9 @@ MemoryMin, MemoryLow
    Specify the memory usage protection of the job.  Values are formatted as
    described above.
 
+MemorySwapMax
+   Specify the absolute limit on swap used by the job.  Values are formatted as
+   described above.
 
 .. _testexec:
 
