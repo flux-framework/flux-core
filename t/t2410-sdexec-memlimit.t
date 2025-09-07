@@ -64,7 +64,7 @@ fi
 
 test_under_flux 1 full --config-path=$(pwd)/config
 
-flux setattr log-stderr-level 7
+flux setattr log-stderr-level 6
 
 sdexec="flux exec --service sdexec"
 getcg=$(pwd)/getcg.sh
