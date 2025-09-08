@@ -63,5 +63,14 @@ test_expect_success '-o sysmon.badopt fails' '
 	test_must_fail flux run -o sysmon.badopt true 2>badopt.err &&
 	grep badopt badopt.err
 '
+test_expect_success 'flux cgroup badcmd fails' '
+	test_must_fail flux cgroup badcmd
+'
+test_expect_success 'flux cgroup path --badopt fails' '
+	test_must_fail flux cgroup path --badopt
+'
+test_expect_success 'flux cgroup path badfreearg fails' '
+	test_must_fail flux cgroup path badfreearg
+'
 
 test_done
