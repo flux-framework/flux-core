@@ -538,10 +538,11 @@ test_expect_success 'modprobe fails if task raises exception' '
 
 	@task("next")
 	def needed(context):
-	   raise RuntimeException("test exception")
+	   raise RuntimeError("test exception")
 	EOF
-	test_must_fail flux modprobe run test${seq}.py >output${seq} &&
-	test_debug "cat output${seq}"
+	test_must_fail flux modprobe run test${seq}.py >output${seq} 2>&1 &&
+	test_debug "cat output${seq}" &&
+	grep "next:.*test exception" output${seq}
 '
 test_expect_success 'modprobe: detects missing required modprobe.toml keys' '
 	mkdir modprobe.d &&
