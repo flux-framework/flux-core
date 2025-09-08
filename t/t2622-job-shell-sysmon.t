@@ -4,7 +4,7 @@ test_description='Test flux-shell sysmon plugin'
 
 . `dirname $0`/sharness.sh
 
-cgdir=/sys/fs/cgroup/$(cat /proc/$$/cgroup | grep ^0: | cut -d: -f3)
+cgdir=$(flux cgroup path)
 if test $? -ne 0; then
         skip_all="incompatible cgroup configuration"
         test_done
