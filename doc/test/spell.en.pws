@@ -716,6 +716,7 @@ hwlocality
 snprintf
 MemoryHigh
 MemoryMax
+MemorySwapMax
 MemoryLow
 MemoryMin
 myattr

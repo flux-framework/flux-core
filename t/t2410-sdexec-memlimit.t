@@ -47,6 +47,7 @@ service = "sdexec"
 [exec.sdexec-properties]
 MemoryHigh = "200M"
 MemoryMax = "100M"
+MemorySwapMax = "0"
 EOT
 
 cat >getcg.sh <<EOT2
@@ -63,7 +64,7 @@ fi
 
 test_under_flux 1 full --config-path=$(pwd)/config
 
-flux setattr log-stderr-level 7
+flux setattr log-stderr-level 6
 
 sdexec="flux exec --service sdexec"
 getcg=$(pwd)/getcg.sh
@@ -74,24 +75,44 @@ if ! $sdexec $getcg memory.high; then
 fi
 
 #
+# memory.swap.max: the absolute limit on swap
+#
+test_expect_success 'memory.swap.max exists' '
+	$sdexec $getcg memory.swap.max
+'
+test_expect_success 'memory.swap.max can be set to 200M' '
+	echo 209715200 >200M.exp &&
+	$sdexec \
+	    --setopt=SDEXEC_PROP_MemorySwapMax=200M \
+	    $getcg memory.swap.max >swap.out &&
+	test_cmp 200M.exp swap.out
+'
+test_expect_success 'memory.swap.max can be set to infinity' '
+	echo max >inf.exp &&
+	$sdexec \
+	    --setopt=SDEXEC_PROP_MemorySwapMax=infinity \
+	    $getcg memory.swap.max >swap2.out &&
+	test_cmp inf.exp swap2.out
+'
+test_expect_success 'memory.swap.max can be configured for jobs' '
+	echo 0 >zero.exp &&
+	flux run $getcg memory.swap.max >swap3.out &&
+	test_cmp zero.exp swap3.out
+'
+
+#
 # memory.high: the throttling limit on memory usage
 #
 test_expect_success 'memory.high exists' '
 	$sdexec $getcg memory.high
 '
 test_expect_success 'memory.high can be set to 200M' '
-	cat >200M.exp <<-EOT &&
-	209715200
-	EOT
 	$sdexec \
 	    --setopt=SDEXEC_PROP_MemoryHigh=200M \
 	    $getcg memory.high >high.out &&
 	test_cmp 200M.exp high.out
 '
 test_expect_success 'memory.high can be set to infinity' '
-	cat >inf.exp <<-EOT &&
-	max
-	EOT
 	$sdexec \
 	    --setopt=SDEXEC_PROP_MemoryHigh=infinity \
 	    $getcg memory.high >high2.out &&
@@ -114,6 +135,7 @@ test_expect_success 'memory.max can be set to 100M' '
 	EOT
 	$sdexec \
 	    --setopt=SDEXEC_PROP_MemoryMax=100M \
+	    --setopt=SDEXEC_PROP_MemorySwapMax=0 \
 	    $getcg memory.max >max.out &&
 	test_cmp 100M.exp max.out
 '
@@ -133,6 +155,7 @@ test_expect_success 'memory.max can be configured for jobs' '
 test_expect_success STRESS 'remaining within memory.max works' '
 	$sdexec \
 	    --setopt=SDEXEC_PROP_MemoryMax=200M \
+	    --setopt=SDEXEC_PROP_MemorySwapMax=0 \
 	    $stress --timeout 3 --vm-keep --vm 1 --vm-bytes 100M
 '
 
@@ -152,6 +175,7 @@ test_expect_code_or_killed() {
 test_expect_success STRESS 'exceeding memory.max causes exec failure' '
 	test_expect_code_or_killed 1 $sdexec \
 	    --setopt=SDEXEC_PROP_MemoryMax=100M \
+	    --setopt=SDEXEC_PROP_MemorySwapMax=0 \
 	    $stress --timeout 60 --vm-keep --vm 1 --vm-bytes 200M
 '
 test_expect_success STRESS 'exceeding memory.max causes job failure' '
