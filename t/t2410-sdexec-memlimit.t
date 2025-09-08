@@ -52,8 +52,7 @@ EOT
 
 cat >getcg.sh <<EOT2
 #!/bin/sh
-CGDIR=/sys/fs/cgroup/\$(cat /proc/\$\$/cgroup | cut -d: -f3)
-cat \$CGDIR/\$1
+cat \$(flux cgroup path)/\$1
 EOT2
 chmod +x getcg.sh
 

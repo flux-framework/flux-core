@@ -80,7 +80,9 @@ flux_SOURCES = \
 	builtin/pmi.c \
 	builtin/shutdown.c \
 	builtin/lptest.c \
-	builtin/fsck.c
+	builtin/fsck.c \
+	builtin/cgroup.c
+
 nodist_flux_SOURCES = \
 	builtin-cmds.c
 dist_bin_SCRIPTS = flux-python

@@ -51,21 +51,16 @@
 
 #include "cgroup.h"
 
-static int mkpath (char *buf, size_t size, const char *dir, const char *name)
+const char *cgroup_path_to (struct cgroup_info *cgroup, const char *name)
 {
-    if (snprintf (buf, size, "%s/%s", dir, name) >= size) {
-        errno = EOVERFLOW;
-        return -1;
-    }
-    return 0;
-}
+    static __thread char buf[PATH_MAX + 1];
+    size_t size = sizeof (buf);
 
-int cgroup_access (struct cgroup_info *cgroup, const char *name, int mode)
-{
-    char path[PATH_MAX + 1];
-    if (mkpath (path, sizeof (path), cgroup->path, name) < 0)
-        return -1;
-    return access (path, mode);
+    if (snprintf (buf, size, "%s/%s", cgroup->path, name) >= size) {
+        errno = EOVERFLOW;
+        return NULL;
+    }
+    return buf;
 }
 
 static int cgroup_vscanf (struct cgroup_info *cgroup,
@@ -73,12 +68,11 @@ static int cgroup_vscanf (struct cgroup_info *cgroup,
                           const char *fmt,
                           va_list ap)
 {
-    char path[PATH_MAX + 1];
+    const char *path;
     FILE *fp;
     int rc;
 
-    if (mkpath (path, sizeof (path), cgroup->path, name) < 0
-        || !(fp = fopen (path, "r")))
+    if (!(path = cgroup_path_to (cgroup, name)) || !(fp = fopen (path, "r")))
         return -1;
     rc = vfscanf (fp, fmt, ap);
     fclose (fp);
@@ -107,15 +101,14 @@ static int cgroup_key_vscanf (struct cgroup_info *cgroup,
                               const char *fmt,
                               va_list ap)
 {
-    char path[PATH_MAX + 1];
+    const char *path;
     FILE *fp;
     char *line = NULL;
     size_t size = 0;
     int n;
     int rc = -1;
 
-    if (mkpath (path, sizeof (path), cgroup->path, name) < 0
-        || !(fp = fopen (path, "r")))
+    if (!(path = cgroup_path_to (cgroup, name)) || !(fp = fopen (path, "r")))
         return -1;
     while ((n = getline (&line, &size, fp)) >= 0) {
         int keylen = strlen (key);
