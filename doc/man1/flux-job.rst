@@ -89,6 +89,10 @@ This status line may be suppressed by setting
    for tasks not in **RANKS** will be closed. The default is to broadcast
    stdin to all ranks.
 
+.. option:: --tail[=NUM]
+
+   Output only the last **NUM** lines of job output (default 10).
+
 .. option:: --read-only
 
    Operate in read-only mode. Disable reading of stdin and capturing of
