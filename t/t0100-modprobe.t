@@ -553,8 +553,9 @@ test_expect_success 'modprobe: detects missing required modprobe.toml keys' '
 	[[modules]]
 	ranks = "0"
 	EOF
-	FLUX_MODPROBE_PATH=$(pwd) \
-	  test_must_fail flux modprobe show a 2>missing.err &&
+	( export FLUX_MODPROBE_PATH=$(pwd) &&
+	  test_must_fail flux modprobe show a 2>missing.err
+	) &&
 	test_debug "cat missing.err" &&
 	grep -i "missing required config key" missing.err
 '
@@ -566,8 +567,9 @@ test_expect_success 'modprobe: detects invalid modprobe.toml entries' '
 	name = "a"
 	badkey = ""
 	EOF
-	FLUX_MODPROBE_PATH=$(pwd) \
-	  test_must_fail flux modprobe show a 2>invalid.err &&
+	( export FLUX_MODPROBE_PATH=$(pwd) &&
+	  test_must_fail flux modprobe show a 2>invalid.err
+	) &&
 	test_debug "cat invalid.err" &&
 	grep -i "invalid config key" invalid.err
 '
@@ -748,8 +750,9 @@ test_expect_success 'modprobe module priority works' '
 	cat feas1.json | jq -e ".name == \"advanced-scheduler\""
 '
 test_expect_success 'modprobe: disable detects invalid module' '
-	FLUX_MODPROBE_PATH=$(pwd) \
-		test_must_fail flux modprobe show --disable=foo sched
+	( export FLUX_MODPROBE_PATH=$(pwd) &&
+	  test_must_fail flux modprobe show --disable=foo sched
+	)
 '
 test_expect_success 'modprobe: disabling module results in other alternative' '
 	FLUX_MODPROBE_PATH=$(pwd) \
@@ -803,9 +806,9 @@ test_expect_success 'modprobe: explicit load can load non-default module' '
 	test_cmp basic-load.expected basic-load.out
 '
 test_expect_success 'modprobe: --set-alternative detects bad input' '
-	FLUX_MODPROBE_PATH=$(pwd) \
-		test_must_fail \
-			flux modprobe show --set-alternative=sched sched
+	( export FLUX_MODPROBE_PATH=$(pwd) &&
+	  test_must_fail flux modprobe show --set-alternative=sched sched
+	)
 '
 test_expect_success 'modprobe: set_alternative() works' '
 	FLUX_MODPROBE_PATH=$(pwd) \
@@ -843,10 +846,11 @@ test_expect_success 'modprobe: priority can be updated via TOML file' '
 	cat sched4.json | jq -e ".name == \"basic-scheduler\""
 '
 test_expect_success 'modprobe: set_alternative() detects invalid module' '
-	FLUX_MODPROBE_PATH=$(pwd) \
-	    test_must_fail \
+	( export FLUX_MODPROBE_PATH=$(pwd) &&
+	  test_must_fail \
 	        flux modprobe show --set-alternative=sched=foo sched \
-		    > badalt.out 2>&1 &&
+		    > badalt.out 2>&1
+	) &&
 	test_debug "cat badalt.out" &&
 	grep "no module foo provides sched" badalt.out
 '
