@@ -520,7 +520,7 @@ void lsmod_print_entry (FILE *f,
 
     if (longopt) {
         char *s = lsmod_services_string (services, name, 8);
-        fprintf (f, "%-24.24s %4s  %c %5d %5d %-8s %s\n",
+        fprintf (f, "%-25.25s %4s  %c %5d %5d %-8s %s\n",
                  name,
                  idle_s,
                  state,
@@ -532,7 +532,7 @@ void lsmod_print_entry (FILE *f,
     }
     else {
         char *s = lsmod_services_string (services, name, 0);
-        fprintf (f, "%-24.24s %4s  %c %5d %5d %s\n",
+        fprintf (f, "%-25.25s %4s  %c %5d %5d %s\n",
                  name,
                  idle_s,
                  state,
