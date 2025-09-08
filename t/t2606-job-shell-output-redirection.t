@@ -381,7 +381,7 @@ test_expect_success 'job-shell: invalid output.limit string is rejected (big num
 	test_must_fail flux run -o output.limit=4G hostname
 '
 test_expect_success 'job-shell: output.mode=append works' '
-	flux bulksubmit --watch --output=append.out \
+	flux bulksubmit --watch --output=append.out --error=/dev/null \
 		-o output.mode=append echo {} \
 		::: one two three &&
 	test_debug "cat append.out" &&
@@ -394,7 +394,7 @@ test_expect_success 'job-shell: output.mode=truncate works' '
 	cat <<-EOF >trunc.out &&
 	test text
 	EOF
-	flux run --output=trunc.out hostname &&
+	flux run --output=trunc.out --error=/dev/null hostname &&
 	test $(wc -l <trunc.out) -eq 1 &&
 	test_must_fail grep "test text" trunc.out
 '
@@ -404,7 +404,7 @@ test_expect_success 'job-shell: invalid output.mode emits warning' '
 	grep "ignoring invalid output.mode=foo" inval.err
 '
 test_expect_success 'job-shell: per-node output works' '
-	flux run -N4 -n4 --output=per-node.{{node.id}} \
+	flux run -N4 -n4 --output=per-node.{{node.id}} --error=/dev/null \
 		sh -c "flux getattr rank" &&
 	ls -l per-node.* &&
 	for rank in $(seq 0 3); do test $(cat per-node.${rank}) -eq $rank; done

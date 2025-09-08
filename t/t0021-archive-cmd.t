@@ -155,14 +155,11 @@ test_expect_success 'copy private archive from rank 0 to 1 of a job' '
 	fi
 	EOT
 	chmod +x job.sh &&
-	flux run --label-io -N2 ./job.sh >job.out 2>&1
+	flux run --label-io -N2 ./job.sh 2>job.err
 '
 # Note: the current primary ns archive contains testfile not testfile2
 test_expect_success 'output references the private archive not primary ns' '
-	cat >job.exp <<-EOT &&
-	1: testfile2
-	EOT
-	test_cmp job.exp job.out
+	grep "1: testfile2" job.err
 '
 test_expect_success 'jobdir/testfile2 was extracted faithfully' '
 	test_cmp testfile2 jobdir/testfile2

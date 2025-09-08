@@ -384,9 +384,10 @@ test_expect_success 'job-manager: plugin can reject some jobs in a batch' '
 	test_expect_code 1 \
 	    flux bulksubmit --watch \
 	        --setattr=system.jobtap.validate-test-id={} \
-	        echo foo ::: 1 1 1 4 4 1 >validate-plugin.out 2>&1 &&
-	test_debug "cat validate-plugin.out" &&
-	grep "Job had reject_id" validate-plugin.out &&
+	        echo foo ::: 1 1 1 4 4 1 >validate-plugin.out \
+	        2>validate-plugin.err &&
+	test_debug "cat validate-plugin.err" &&
+	grep "Job had reject_id" validate-plugin.err &&
 	test 4 -eq $(grep -c foo validate-plugin.out)
 '
 
@@ -398,7 +399,7 @@ test_expect_success 'job-manager: plugin can reject some jobs in a batch' '
 # received, the job-list query for the invalid jobs will hang.
 
 test_expect_success 'job-manager: get job IDs of invalid jobs' '
-	grep reject_id validate-plugin.out \
+	grep reject_id validate-plugin.err \
 	    | sed -e "s/.*jobid=//" >invalid_ids &&
 	test_debug "cat invalid_ids" &&
 	test 2 -eq $(wc -l <invalid_ids)
