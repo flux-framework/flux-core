@@ -82,7 +82,7 @@ test_expect_success 'start a test unit that looks like a job shell' '
 test_expect_success 'wait for module stats to show test unit' '
         wait_for_some 30
 '
-test_expect_success 'clear dmesg, then reload sdmin, resource, sched-simple' '
+test_expect_success 'clear dmesg, then reload sdmon, resource, sched-simple' '
 	flux dmesg -C &&
 	flux module remove sched-simple &&
 	flux module remove resource &&
