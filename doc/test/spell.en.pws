@@ -991,3 +991,5 @@ py
 nopanic
 fluxlibexecdir
 sysmon
+datadir
+rcX

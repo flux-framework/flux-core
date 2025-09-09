@@ -195,9 +195,23 @@ MODULE CONFIG
 =============
 
 :program:`flux modprobe` loads information about Flux modules from the
-``modules`` array in ``modprobe.toml``. Module configuration may be
-extended by dropping new TOML files into ``modprobe.d`` in the modprobe
-configuration directory, typically ``/etc/flux/modprobe``.
+``modules`` array in ``modprobe.toml``.
+
+Module configuration may be extended by dropping new TOML files into a
+``modprobe.d`` directory in the modprobe search path. The default search
+path is::
+
+  $datadir/flux/modprobe:$sysconfdir/flux/modprobe
+
+which is typically::
+
+  /usr/share/flux/modprobe:/etc/flux/modprobe
+
+Packages should install files under ``/usr/libexec/flux/modprobe`` while
+site updates and modifications go under ``/etc/flux/modprobe``.
+
+The default search path can be overridden using :envvar:`FLUX_MODPROBE_PATH`
+or extended using :envvar:`FLUX_MODPROBE_PATH_APPEND`
 
 Each entry in the ``modules`` array supports the following keys:
 
@@ -287,6 +301,23 @@ using the *task* decorator imported from :py:func:`flux.modprobe.task`, e.g.:
   @task("test")
   def test_task(context):
     print("running test task")
+
+Similar to module configuration, tasks and setup may be added to the default
+:command:`rc1` and :command:`rc3` by dropping new Python files into a
+``rcX.d`` directory in the modprobe rc search path. The default search
+path is::
+
+  $libexecdir/flux/modprobe:$sysconfdir/flux/modprobe
+
+which, e.g. for ``rc1`` would typically be:
+
+  /usr/libexec/flux/modprobe/rc1.d:/etc/flux/modprobe/rc1.d
+
+Packages should install files under ``/usr/libexec/flux/modprobe`` while
+site updates and modifications go under ``/etc/flux/modprobe``.
+
+The default search path can be overridden using :envvar:`FLUX_MODPROBE_PATH`
+or extended using :envvar:`FLUX_MODPROBE_PATH_APPEND`
 
 The *task* decorator requires a task *name*, and in addition supports the
 following optional arguments:
