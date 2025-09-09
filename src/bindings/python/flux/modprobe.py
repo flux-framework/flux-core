@@ -702,6 +702,10 @@ class Modprobe:
             )
         )
 
+    def print(self, *args):
+        """Wrapper for context.print()"""
+        self.context.print(*args)
+
     def add_timing(self, name, starttime, end=None):
         if self.timing is None:
             return
@@ -811,6 +815,7 @@ class Modprobe:
         """
         files = []
         for directory in self.searchpath[ext]:
+            self.print(f"checking {directory}/{name}.d/*.{ext}")
             if Path(directory).exists():
                 files.extend(sorted(glob.glob(f"{directory}/{name}.d/*.{ext}")))
         return files
@@ -825,6 +830,7 @@ class Modprobe:
         builtin_toml_config = (
             Path(conf_builtin_get("datadir")) / "modprobe" / "modprobe.toml"
         )
+        self.print(f"checking {builtin_toml_config}")
         if builtin_toml_config.exists():
             files.append(str(builtin_toml_config))
         files.extend(self._searchpath_expand())
@@ -840,6 +846,7 @@ class Modprobe:
         builtin_rc_file = (
             Path(conf_builtin_get("libexecdir")) / "modprobe" / f"{name}.py"
         )
+        self.print(f"checking {builtin_rc_file}")
         if builtin_rc_file.exists():
             files.append(str(builtin_rc_file))
         files.extend(self._searchpath_expand(name=name, ext="py"))
@@ -867,6 +874,7 @@ class Modprobe:
         Load module configuration from TOML config.
         """
         for file in self._get_toml_files():
+            self.print(f"loading {file}")
             self.add_modules(file)
 
         self._update_modules_from_config()
@@ -1075,11 +1083,13 @@ class Modprobe:
     def read_rcfile(self, name):
         # For absolute file path, just add tasks from single file:
         if name.endswith(".py"):
+            self.print(f"loading {name}")
             self._load_file(name)
             return
 
         # O/w, load all rc files in configured search path:
         for file in self._get_rc_files(name):
+            self.print(f"loading {file}")
             self._load_file(file)
 
     def activate_modules(self, modules):
