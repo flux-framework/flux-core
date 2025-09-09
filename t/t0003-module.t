@@ -246,11 +246,10 @@ test_expect_success 'flux_module_set_running - remove test module' '
 '
 test_expect_success 'module.status rejects malformed request' '
 	test_must_fail module_status_bad_proto 2>proto.err &&
-	grep "error decoding/finding module.status" proto.err
+	grep "error decoding module.status request" proto.err
 '
-test_expect_success 'module.status rejects request from unknown sender' '
-	test_must_fail module_status 2>sender.err &&
-	grep "error decoding/finding module.status" sender.err
+test_expect_success 'module.status allows request from unknown sender' '
+	module_status 2>sender.err
 '
 # issue #5255
 test_expect_success 'module with version ext can be loaded by name' '
