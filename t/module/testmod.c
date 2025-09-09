@@ -77,6 +77,8 @@ int mod_main (flux_t *h, int argc, char **argv)
                 errno = ENOENT;
                 return -1;
             }
+            flux_log (h, LOG_INFO, "attr %s is cached", attr);
+            return 0;
         }
         else if (streq (argv[i], "--config-is-cached")) {
             if (!flux_get_conf (h)) {
@@ -84,6 +86,8 @@ int mod_main (flux_t *h, int argc, char **argv)
                 errno = ENOENT;
                 return -1;
             }
+            flux_log (h, LOG_INFO, "config object is cached");
+            return 0;
         }
     }
 

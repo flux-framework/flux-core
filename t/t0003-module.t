@@ -270,13 +270,13 @@ test_expect_success 'module: rank attribute is cached' '
         flux module load $testmod --attr-is-cached=rank
 '
 test_expect_success 'module: size attribute is cached' '
-        flux module reload $testmod --attr-is-cached=size
+        flux module reload -f $testmod --attr-is-cached=size
 '
 test_expect_success 'module: security.owner attribute is cached' '
-        flux module reload $testmod --attr-is-cached=security.owner
+        flux module reload -f $testmod --attr-is-cached=security.owner
 '
 test_expect_success 'module: log-stderr-level attribute is NOT cached' '
-        test_must_fail flux module reload $testmod \
+        test_must_fail flux module reload -f $testmod \
             --attr-is-cached=log-stderr-level
 '
 test_expect_success 'module: configuration object is cached' '
