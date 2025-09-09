@@ -357,6 +357,7 @@ static void fsck_valref (struct fsck_ctx *ctx,
 
         /* can only recover if errors were all bad references */
         if (ctx->repair
+            && fvd.missing_indexes
             && fvd.errorcount == zlist_size (fvd.missing_indexes)) {
             json_t *repaired = repair_valref (ctx, treeobj, &fvd);
 
