@@ -510,6 +510,11 @@ AC_DEFINE_UNQUOTED([FLUXLIBEXECDIR], ["$fluxlibexecdir"],
   [The expansion of "$libexecdir/flux"])
 AC_SUBST(fluxlibexecdir)
 
+adl_RECURSIVE_EVAL(["$datadir/flux"], [fluxdatadir])
+AC_DEFINE_UNQUOTED([FLUXDATADIR], ["$fluxdatadir"],
+  [The expansion of "$datadir/flux"])
+AC_SUBST(fluxdatadir)
+
 adl_RECURSIVE_EVAL(["$libexecdir/flux/cmd"], [fluxcmddir])
 AC_DEFINE_UNQUOTED([FLUXCMDDIR], ["$fluxcmddir"],
   [The expansion of "$libexecdir/flux/cmd"])

@@ -2179,7 +2179,6 @@ _flux_modprobe()
         -f, --full \
     "
     show_OPTS="\
-        --path= \
         -S, --set-alternative= \
         -D, --disable= \
     "

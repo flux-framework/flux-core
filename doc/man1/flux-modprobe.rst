@@ -9,9 +9,9 @@ SYNOPSIS
 | **flux** **modprobe** **load** [*--dry-run*] *MODULE* [*MODULE* ...]
 | **flux** **modprobe** **remove** [*--dry-run*] *MODULE* [*MODULE* ...]
 | **flux** **modprobe** **list-dependencies** [*-f*] *MODULE*
-| **flux** **modprobe** **run** [*-v*] [*--show-deps*] [*--dry-run*] [*--confdir=DIR*] *FILE*
-| **flux** **modprobe** **rc1** [*-v*] [*--timing*] [*--show-deps*] [*--dry-run*] [*--confdir=DIR*] *FILE*
-| **flux** **modprobe** **rc3** [*-v*] [*--show-deps*] [*--dry-run*] [*--confdir=DIR*] *FILE*
+| **flux** **modprobe** **run** [*-v*] [*--show-deps*] [*--dry-run*] *FILE*
+| **flux** **modprobe** **rc1** [*-v*] [*--timing*] [*--show-deps*] [*--dry-run*] *FILE*
+| **flux** **modprobe** **rc3** [*-v*] [*--show-deps*] [*--dry-run*] *FILE*
 
 
 DESCRIPTION
@@ -92,10 +92,6 @@ run
 :program:`flux modprobe run` takes the path to a modprobe rc file on
 the command line and runs it. This is mainly useful for testing.
 
-.. option:: --confdir=DIR
-
-  Use DIR for the modprobe configuration directory instead of the default.
-
 .. option:: --dry-run
 
   Do not actually run anything, but print the tasks that would be run.
@@ -115,10 +111,6 @@ show
 
 :program:`flux modprobe show` dumps the configuration information for a
 module or service.
-
-.. option:: --path=PATH
-
-Set the path to the module configuration TOML file.
 
 .. option:: -S, --set-alternative=NAME=MODULE
 
@@ -159,10 +151,6 @@ located at ``/etc/flux/modprobe/rc1.py`` plus any extra Python rc files
 found in ``/etc/flux/modprobe/rc1.d/*.py``. This command is typically called
 from Flux's rc1 script.
 
-.. option:: --confdir=DIR
-
-Override the default modprobe config directory.
-
 .. option:: --timing
 
 Dump task timing information to the KVS.
@@ -190,10 +178,6 @@ rc3
 defined shutdown tasks from ``/etc/flux/modprobe/rc3.py`` and
 ``etc/flux/modprobe/rc3.d/*.py``.
 
-.. option:: --confdir=DIR
-
-Override the default modprobe config directory.
-
 .. option:: -v, --verbose
 
 Be more verbose.
@@ -211,9 +195,23 @@ MODULE CONFIG
 =============
 
 :program:`flux modprobe` loads information about Flux modules from the
-``modules`` array in ``modprobe.toml``. Module configuration may be
-extended by dropping new TOML files into ``modprobe.d`` in the modprobe
-configuration directory, typically ``/etc/flux/modprobe``.
+``modules`` array in ``modprobe.toml``.
+
+Module configuration may be extended by dropping new TOML files into a
+``modprobe.d`` directory in the modprobe search path. The default search
+path is::
+
+  $datadir/flux/modprobe:$sysconfdir/flux/modprobe
+
+which is typically::
+
+  /usr/share/flux/modprobe:/etc/flux/modprobe
+
+Packages should install files under ``/usr/libexec/flux/modprobe`` while
+site updates and modifications go under ``/etc/flux/modprobe``.
+
+The default search path can be overridden using :envvar:`FLUX_MODPROBE_PATH`
+or extended using :envvar:`FLUX_MODPROBE_PATH_APPEND`
 
 Each entry in the ``modules`` array supports the following keys:
 
@@ -303,6 +301,23 @@ using the *task* decorator imported from :py:func:`flux.modprobe.task`, e.g.:
   @task("test")
   def test_task(context):
     print("running test task")
+
+Similar to module configuration, tasks and setup may be added to the default
+:command:`rc1` and :command:`rc3` by dropping new Python files into a
+``rcX.d`` directory in the modprobe rc search path. The default search
+path is::
+
+  $libexecdir/flux/modprobe:$sysconfdir/flux/modprobe
+
+which, e.g. for ``rc1`` would typically be:
+
+  /usr/libexec/flux/modprobe/rc1.d:/etc/flux/modprobe/rc1.d
+
+Packages should install files under ``/usr/libexec/flux/modprobe`` while
+site updates and modifications go under ``/etc/flux/modprobe``.
+
+The default search path can be overridden using :envvar:`FLUX_MODPROBE_PATH`
+or extended using :envvar:`FLUX_MODPROBE_PATH_APPEND`
 
 The *task* decorator requires a task *name*, and in addition supports the
 following optional arguments:

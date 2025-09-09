@@ -16,7 +16,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections import defaultdict, namedtuple
+from collections import OrderedDict, defaultdict, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -660,7 +660,7 @@ class Modprobe:
     The modprobe main class. Intended for use by flux-modprobe(1).
     """
 
-    def __init__(self, confdir=None, timing=False, verbose=False, dry_run=False):
+    def __init__(self, timing=False, verbose=False, dry_run=False):
         self.exitcode = 0
         self.timing = None
         self.t0 = None
@@ -671,10 +671,10 @@ class Modprobe:
         self.handle = self.context.handle
         self.rank = self.handle.get_rank()
 
-        if confdir is None:
-            self.confdir = default_flux_confdir() / "modprobe"
-        else:
-            self.confdir = Path(confdir)
+        self.searchpath = {
+            "toml": self._get_searchpath(),
+            "py": self._get_searchpath(builtindir="libexecdir"),
+        }
 
         # Active tasks are those added via the @task decorator, and
         # which will be active by default when running "all" tasks:
@@ -701,6 +701,10 @@ class Modprobe:
                 )
             )
         )
+
+    def print(self, *args):
+        """Wrapper for context.print()"""
+        self.context.print(*args)
 
     def add_timing(self, name, starttime, end=None):
         if self.timing is None:
@@ -775,24 +779,77 @@ class Modprobe:
                 # Allow <module>.key to update an existing configured module:
                 self.update_module(name, entry)
 
-    def _modprobe_path_expand(self, path=None, name="modprobe", ext="toml"):
-        if path is None:
-            etc = Path(self.confdir)
-            path = etc / f"{name}.{ext}"
-        else:
-            etc = Path(path).parent
-
-        files = [path]
-        dirs = [etc]
-        dirs.extend(
-            filter(
+    def _get_searchpath(self, builtindir="datadir"):
+        """
+        Return list of dirs in ``FLUX_MODPROBE_PATH`` if set, o/w returns the
+        default modprobe search path.
+        Args:
+            builtindir (str): base path for builtin/package path. Should
+                be either "datadir" or "libexecdir".
+        """
+        searchpath = []
+        if "FLUX_MODPROBE_PATH" in os.environ:
+            searchpath = filter(
                 lambda s: s and not s.isspace(),
-                os.environ.get("FLUX_MODPROBE_PATH", "").split(":"),
+                os.environ["FLUX_MODPROBE_PATH"].split(":"),
             )
-        )
-        for directory in dirs:
+        else:
+            pkgdir = conf_builtin_get(builtindir)
+            confdir = conf_builtin_get("confdir")
+            searchpath = [f"{pkgdir}/modprobe", f"{confdir}/modprobe"]
+
+        if "FLUX_MODPROBE_PATH_APPEND" in os.environ:
+            searchpath.extend(
+                filter(
+                    lambda s: s and not s.isspace(),
+                    os.environ["FLUX_MODPROBE_PATH_APPEND"].split(":"),
+                )
+            )
+
+        # return searchpath without duplicates
+        return list(OrderedDict.fromkeys(searchpath))
+
+    def _searchpath_expand(self, name="modprobe", ext="toml"):
+        """
+        Expand searchpath for extension ``ext`` based on configured paths.
+        """
+        files = []
+        for directory in self.searchpath[ext]:
+            self.print(f"checking {directory}/{name}.d/*.{ext}")
             if Path(directory).exists():
                 files.extend(sorted(glob.glob(f"{directory}/{name}.d/*.{ext}")))
+        return files
+
+    def _get_toml_files(self):
+        """
+        Return all modprobe config toml files found in the following order
+         - Always read ``{fluxdatadir}/modprobe/modprobe.toml``
+         - for dir in self.searchpath: read ``{dir}/modprobe.d/*.toml``
+        """
+        files = []
+        builtin_toml_config = (
+            Path(conf_builtin_get("datadir")) / "modprobe" / "modprobe.toml"
+        )
+        self.print(f"checking {builtin_toml_config}")
+        if builtin_toml_config.exists():
+            files.append(str(builtin_toml_config))
+        files.extend(self._searchpath_expand())
+        return files
+
+    def _get_rc_files(self, name="rc1"):
+        """
+        Return all modprobe rc *.py files found in the following order
+         - Always read ``{fluxdatadir}/modprobe/{name}.py`` (e.g. ``rc1.py``)
+         - for dir in self.searchpath: read ``{dir}/{name}.d/*.py``
+        """
+        files = []
+        builtin_rc_file = (
+            Path(conf_builtin_get("libexecdir")) / "modprobe" / f"{name}.py"
+        )
+        self.print(f"checking {builtin_rc_file}")
+        if builtin_rc_file.exists():
+            files.append(str(builtin_rc_file))
+        files.extend(self._searchpath_expand(name=name, ext="py"))
         return files
 
     def _update_modules_from_config(self):
@@ -812,16 +869,12 @@ class Modprobe:
             else:
                 self.update_module(key, entry)
 
-    def configure_modules(self, path=None):
-        """Load all configured modules in searchpath
-
-        Loads all modules TOML files in the following order:
-            1. From ``path`` if provided.
-               default path=``{sysconfdir}/modprobe/modprobe.toml``
-            2. From ``dirname(path)/modprobe.d/*.toml``
-            3. for dir in FLUX_MODPROBE_PATH: ``{dir}/modprobe.d/*.toml``
+    def configure_modules(self):
         """
-        for file in self._modprobe_path_expand(path):
+        Load module configuration from TOML config.
+        """
+        for file in self._get_toml_files():
+            self.print(f"loading {file}")
             self.add_modules(file)
 
         self._update_modules_from_config()
@@ -1030,12 +1083,13 @@ class Modprobe:
     def read_rcfile(self, name):
         # For absolute file path, just add tasks from single file:
         if name.endswith(".py"):
+            self.print(f"loading {name}")
             self._load_file(name)
             return
 
-        # O/w, add tasks from "named" file in confdir, plus all tasks
-        # in {confdir}/{name}.d/*.py and FLUX_MODPROBE_PAtH
-        for file in self._modprobe_path_expand(name=name, ext="py"):
+        # O/w, load all rc files in configured search path:
+        for file in self._get_rc_files(name):
+            self.print(f"loading {file}")
             self._load_file(file)
 
     def activate_modules(self, modules):

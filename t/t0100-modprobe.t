@@ -538,29 +538,55 @@ test_expect_success 'modprobe fails if task raises exception' '
 
 	@task("next")
 	def needed(context):
-	   raise RuntimeException("test exception")
+	   raise RuntimeError("test exception")
 	EOF
-	test_must_fail flux modprobe run test${seq}.py >output${seq} &&
-	test_debug "cat output${seq}"
+	test_must_fail flux modprobe run test${seq}.py >output${seq} 2>&1 &&
+	test_debug "cat output${seq}" &&
+	grep "next:.*test exception" output${seq}
+'
+test_expect_success 'modprobe: FLUX_MODPROBE_PATH works' '
+	FLUX_MODPROBE_PATH=$(pwd) \
+	  flux modprobe rc1 --dry-run --verbose >path.out 2>&1 &&
+	grep "checking $(pwd)" path.out &&
+	test_must_fail \
+	  grep $(flux config builtin libexecdir)/modprobe/modprobe.d path.out &&
+	test_must_fail \
+	  grep $(flux config builtin libexecdir)/modprobe/rc1.d path.out
+'
+test_expect_success 'modprobe: FLUX_MODPROBE_PATH_APPEND works' '
+	FLUX_MODPROBE_PATH_APPEND=$(pwd) \
+	  flux modprobe rc1 --dry-run --verbose >path-append.out 2>&1 &&
+	test_debug "cat path-append.out" &&
+	grep "checking $(pwd)" path-append.out &&
+	grep $(flux config builtin libexecdir)/modprobe/modprobe.d path-append.out &&
+	grep $(flux config builtin libexecdir)/modprobe/rc1.d path-append.out
 '
 test_expect_success 'modprobe: detects missing required modprobe.toml keys' '
-	cat <<-EOF >missing.toml &&
+	mkdir modprobe.d &&
+	test_when_finished "rm -rf modprobe.d" &&
+	cat <<-EOF >modprobe.d/missing.toml &&
 	[[modules]]
 	name = "a"
 	[[modules]]
 	ranks = "0"
 	EOF
-	test_must_fail flux modprobe show --path=missing.toml a 2>missing.err &&
+	( export FLUX_MODPROBE_PATH=$(pwd) &&
+	  test_must_fail flux modprobe show a 2>missing.err
+	) &&
 	test_debug "cat missing.err" &&
 	grep -i "missing required config key" missing.err
 '
 test_expect_success 'modprobe: detects invalid modprobe.toml entries' '
-	cat <<-EOF >invalid.toml &&
+	mkdir modprobe.d &&
+	test_when_finished "rm -rf modprobe.d" &&
+	cat <<-EOF >modprobe.d/invalid.toml &&
 	[[modules]]
 	name = "a"
 	badkey = ""
 	EOF
-	test_must_fail flux modprobe show --path=invalid.toml a 2>invalid.err &&
+	( export FLUX_MODPROBE_PATH=$(pwd) &&
+	  test_must_fail flux modprobe show a 2>invalid.err
+	) &&
 	test_debug "cat invalid.err" &&
 	grep -i "invalid config key" invalid.err
 '
@@ -741,8 +767,9 @@ test_expect_success 'modprobe module priority works' '
 	cat feas1.json | jq -e ".name == \"advanced-scheduler\""
 '
 test_expect_success 'modprobe: disable detects invalid module' '
-	FLUX_MODPROBE_PATH=$(pwd) \
-		test_must_fail flux modprobe show --disable=foo sched
+	( export FLUX_MODPROBE_PATH=$(pwd) &&
+	  test_must_fail flux modprobe show --disable=foo sched
+	)
 '
 test_expect_success 'modprobe: disabling module results in other alternative' '
 	FLUX_MODPROBE_PATH=$(pwd) \
@@ -796,9 +823,9 @@ test_expect_success 'modprobe: explicit load can load non-default module' '
 	test_cmp basic-load.expected basic-load.out
 '
 test_expect_success 'modprobe: --set-alternative detects bad input' '
-	FLUX_MODPROBE_PATH=$(pwd) \
-		test_must_fail \
-			flux modprobe show --set-alternative=sched sched
+	( export FLUX_MODPROBE_PATH=$(pwd) &&
+	  test_must_fail flux modprobe show --set-alternative=sched sched
+	)
 '
 test_expect_success 'modprobe: set_alternative() works' '
 	FLUX_MODPROBE_PATH=$(pwd) \
@@ -836,10 +863,11 @@ test_expect_success 'modprobe: priority can be updated via TOML file' '
 	cat sched4.json | jq -e ".name == \"basic-scheduler\""
 '
 test_expect_success 'modprobe: set_alternative() detects invalid module' '
-	FLUX_MODPROBE_PATH=$(pwd) \
-	    test_must_fail \
+	( export FLUX_MODPROBE_PATH=$(pwd) &&
+	  test_must_fail \
 	        flux modprobe show --set-alternative=sched=foo sched \
-		    > badalt.out 2>&1 &&
+		    > badalt.out 2>&1
+	) &&
 	test_debug "cat badalt.out" &&
 	grep "no module foo provides sched" badalt.out
 '
