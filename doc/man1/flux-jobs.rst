@@ -233,7 +233,7 @@ following is the format used for the default format:
 
 ::
 
-   {id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10+} \
+   {id.f58:>12} ?:{queue:<8.8} +:{username:<8.8} {name:<10.10+} \
    {status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} \
    {contextual_time!F:>8h} {contextual_info}
 
