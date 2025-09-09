@@ -486,9 +486,25 @@ MISCELLANEOUS
 
 .. envvar:: FLUX_MODPROBE_PATH
 
-   If set to a colon-separated list of directories, :man1:`flux-modprobe` will
-   append these directories to the default search path for ``modprobe.toml``,
-   ``modprobe.d/*.toml``, ``rc1.d/*.py``, and ``rc3.d/*.py``.
+   Override the default search path in :man1:`flux-modprobe`. Normally,
+   after loading the built-in default ``modprobe.toml`` and ``rcX.py``,
+   :command:`flux modprobe` loads all extra module configuration from
+   ``modprobe.d/*.toml`` using the search path::
+
+     $datadir/flux/modprobe:$sysconfdir/flux/modprobe
+
+   and all rc Python files from ``rcX.d/*.py`` using the search path::
+
+     $libexecdir/flux/modprobe:$sysconfdir/flux/modprobe
+
+   :envvar:`FLUX_MODPROBE_PATH` overrides these internal paths. If set to
+   an empty string, then the internal default search paths are disabled.
+
+.. envvar:: FLUX_MODPROBE_PATH_APPEND
+
+   If set to a colon-separated list of directories, :man1:`flux-modprobe`
+   will append these directories to its default search path instead of
+   overriding as with :envvar:`FLUX_MODPROBE_PATH`.
 
 .. envvar:: FLUX_RC_EXTRA
 
