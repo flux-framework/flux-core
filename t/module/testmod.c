@@ -11,8 +11,14 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <signal.h>
+#include <unistd.h>
 #include <flux/core.h>
 #include "ccan/str/str.h"
+#include "ccan/array_size/array_size.h"
+
+static const flux_msg_t *info_request = NULL;
+
 
 static void info (flux_t *h,
                   flux_msg_handler_t *mh,
@@ -21,6 +27,8 @@ static void info (flux_t *h,
 {
     if (flux_respond (h, msg, flux_aux_get (h, "flux::name")) < 0)
         flux_log_error (h, "error responding to info request");
+    if (flux_msg_is_streaming (msg))
+        info_request = flux_msg_incref (msg);
 }
 
 static void panic (flux_t *h,
@@ -33,10 +41,19 @@ static void panic (flux_t *h,
     flux_reactor_stop_error (flux_get_reactor (h));
 }
 
+static void segfault (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
+{
+    flux_log (h, LOG_CRIT, "segfault event received: raising SIGSEGV");
+    kill (getpid (), SIGSEGV);
+}
 
 static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "info", info, 0 },
     { FLUX_MSGTYPE_EVENT, "panic", panic, 0 },
+    { FLUX_MSGTYPE_EVENT, "segfault", segfault, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -92,15 +109,23 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
 
     const char *module_name = flux_aux_get (h, "flux::name");
-    char panic_topic[256];
+    const char *topics[] = { "panic", "segfault" };
 
-    snprintf (panic_topic, sizeof (panic_topic), "%s.panic", module_name);
-    if (flux_event_subscribe (h, panic_topic) < 0)
-        flux_log_error (h, "error subscribing to %s", panic_topic);
+    for (int i = 0; i < ARRAY_SIZE (topics); i++) {
+        char topic[256];
+        snprintf (topic, sizeof (topic), "%s.%s", module_name, topics[i]);
+        if (flux_event_subscribe (h, topic) < 0)
+            flux_log_error (h, "error subscribing to %s", topic);
+    }
     if (flux_msg_handler_addvec_ex (h, module_name, htab, NULL, &handlers) < 0)
         return -1;
     if ((rc = flux_reactor_run (flux_get_reactor (h), 0)) < 0)
         flux_log_error (h, "flux_reactor_run");
+    if (info_request) {
+        if (flux_respond_error (h, info_request, ENODATA, NULL) < 0)
+            flux_log_error (h, "flux_respond_error");
+        flux_msg_decref (info_request);
+    }
     flux_msg_handler_delvec (handlers);
     return rc;
 }
