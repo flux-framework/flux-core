@@ -43,7 +43,9 @@ libsubprocess_la_SOURCES = \
 	fbuf_watcher.h \
 	fbuf_watcher.c \
 	bulk-exec.h \
-	bulk-exec.c
+	bulk-exec.c \
+	msgchan.h \
+	msgchan.c
 
 fluxcoreinclude_HEADERS = \
 	command.h \
