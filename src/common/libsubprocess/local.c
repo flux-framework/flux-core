@@ -34,6 +34,7 @@
 #include "posix_spawn.h"
 #include "util.h"
 #include "sigchld.h"
+#include "msgchan.h"
 
 static void local_channel_flush (struct subprocess_channel *c)
 {
@@ -437,6 +438,44 @@ static int local_setup_channels (flux_subprocess_t *p)
     return 0;
 }
 
+static int local_setup_msgchans (flux_subprocess_t *p)
+{
+    struct cmd_msgchan *info;
+    zlist_t *msgchans = cmd_msgchan_list (p->cmd);
+
+    info = zlist_first (msgchans);
+    while (info) {
+        flux_error_t error;
+        struct msgchan *mch;
+        if (!(mch = msgchan_create (p->reactor, info->uri, &error))) {
+            llog_error (p,
+                        "message channel %s: %s",
+                        info->name,
+                        error.text);
+            return -1;
+        }
+        if (zhash_insert (p->msgchans, info->name, mch) < 0
+            || !zhash_freefn (p->msgchans,
+                              info->name,
+                              (zhash_free_fn *)msgchan_destroy)) {
+            msgchan_destroy (mch);
+            llog_error (p, "message channel %s: duplicate name", info->name);
+            errno = EEXIST;
+            return -1;
+        }
+        if (flux_cmd_setenvf (p->cmd,
+                              1,
+                              info->name,
+                              "%s",
+                              msgchan_get_uri (mch)) < 0) {
+            llog_error (p, "message channel %s: setenv error", info->name);
+            return -1;
+        }
+        info = zlist_next (msgchans);
+    }
+    return 0;
+}
+
 static void close_child_fds (flux_subprocess_t *p)
 {
     struct subprocess_channel *c;
@@ -519,6 +558,8 @@ int subprocess_local_setup (flux_subprocess_t *p)
     if (local_setup_stdio (p) < 0)
         return -1;
     if (local_setup_channels (p) < 0)
+        return -1;
+    if (local_setup_msgchans (p) < 0)
         return -1;
     if (create_process (p) < 0)
         return -1;

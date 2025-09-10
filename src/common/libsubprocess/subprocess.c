@@ -38,6 +38,7 @@
 #include "client.h"
 #include "util.h"
 #include "sigchld.h"
+#include "msgchan.h"
 
 /*
  * Primary Structures
@@ -96,6 +97,7 @@ error:
 struct idset *subprocess_childfds (flux_subprocess_t *p)
 {
     struct subprocess_channel *c;
+    struct msgchan *mch;
     struct idset *ids;
     const char *stdchan[] = { "stdin", "stdout", "stderr" };
 
@@ -118,6 +120,14 @@ struct idset *subprocess_childfds (flux_subprocess_t *p)
 next:
         c = zhash_next (p->channels);
     }
+
+    // protect any message channel file descriptors to be passed to subproc
+    mch = zhash_first (p->msgchans);
+    while (mch) {
+        idset_set (ids, msgchan_get_fd (mch));
+        mch = zhash_next (p->msgchans);
+    }
+
     return ids;
 }
 
@@ -130,6 +140,7 @@ static void subprocess_free (flux_subprocess_t *p)
         aux_destroy (&p->aux);
         if (p->channels)
             zhash_destroy (&p->channels);
+        zhash_destroy (&p->msgchans);
 
         close_pair_fds (p->sync_fds);
 
@@ -198,7 +209,8 @@ static flux_subprocess_t *subprocess_create (
         goto error;
 #endif
 
-    if (!(p->channels = zhash_new ()))
+    if (!(p->channels = zhash_new ())
+        || !(p->msgchans = zhash_new ()))
         goto error;
 
     p->state = FLUX_SUBPROCESS_INIT;
