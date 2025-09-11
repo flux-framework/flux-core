@@ -12,7 +12,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux \
 	-DLLOG_ENABLE_DEBUG=1 \
-	$(JANSSON_CFLAGS)
+	$(JANSSON_CFLAGS) \
+	$(LIBUUID_CFLAGS)
 
 noinst_LTLIBRARIES = \
 	libsubprocess.la
@@ -62,7 +63,8 @@ TESTS = \
 	test_iochan.t \
 	test_fbuf.t \
 	test_fbuf_watcher.t \
-	test_bulk-exec-einval.t
+	test_bulk-exec-einval.t \
+	test_msgchan.t
 
 check_PROGRAMS = \
 	$(TESTS) \
@@ -171,6 +173,14 @@ test_bulk_exec_einval_t_SOURCES = test/bulk-exec-einval.c
 test_bulk_exec_einval_t_CPPFLAGS = $(test_cppflags)
 test_bulk_exec_einval_t_LDADD = $(test_ldadd)
 test_bulk_exec_einval_t_LDFLAGS = $(test_ldflags)
+
+test_msgchan_t_SOURCES = test/msgchan.c
+test_msgchan_t_CPPFLAGS = $(test_cppflags)
+test_msgchan_t_LDADD = \
+	$(test_ldadd) \
+	$(UUID_LIBS)
+
+test_msgchan_t_LDFLAGS = $(test_ldflags)
 
 test_echo_SOURCES = test/test_echo.c
 
