@@ -64,11 +64,13 @@ TESTS = \
 	test_fbuf.t \
 	test_fbuf_watcher.t \
 	test_bulk-exec-einval.t \
-	test_msgchan.t
+	test_msgchan.t \
+	test_message_channel.t
 
 check_PROGRAMS = \
 	$(TESTS) \
 	test_echo \
+	test_echomsg \
 	test_multi_echo \
 	test_fork_sleep \
 	test_fdcopy \
@@ -182,6 +184,13 @@ test_msgchan_t_LDADD = \
 
 test_msgchan_t_LDFLAGS = $(test_ldflags)
 
+test_message_channel_t_SOURCES = test/message_channel.c
+test_message_channel_t_CPPFLAGS = \
+	-DTEST_SUBPROCESS_DIR=\"$(top_builddir)/src/common/libsubprocess/\" \
+	$(test_cppflags)
+test_message_channel_t_LDADD = $(test_ldadd)
+test_message_channel_t_LDFLAGS = $(test_ldflags)
+
 test_echo_SOURCES = test/test_echo.c
 
 test_fdcopy_SOURCES = test/fdcopy.c
@@ -189,3 +198,7 @@ test_fdcopy_SOURCES = test/fdcopy.c
 test_multi_echo_SOURCES = test/test_multi_echo.c
 
 test_fork_sleep_SOURCES = test/test_fork_sleep.c
+
+test_echomsg_SOURCES = test/echomsg.c
+test_echomsg_CPPFLAGS = $(test_cppflags)
+test_echomsg_LDADD = $(test_ldadd)
