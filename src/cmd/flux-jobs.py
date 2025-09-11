@@ -279,7 +279,7 @@ def parse_args():
         metavar="[USERNAME|UID]",
         default=str(os.getuid()),
         help="Limit output to specific username or userid "
-        '(Specify "all" for all users)',
+        + '(Specify "all" for all users)',
     )
     parser.add_argument(
         "--name",
