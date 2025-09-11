@@ -239,7 +239,7 @@ def parse_args():
         type=int,
         metavar="N",
         default=1000,
-        help="Limit output to N jobs(default 1000)",
+        help="Limit output to N jobs (default 1000)",
     )
     parser.add_argument(
         "-f",
