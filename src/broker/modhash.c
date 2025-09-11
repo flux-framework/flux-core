@@ -656,44 +656,50 @@ static void status_cb (flux_t *h,
     int errnum = 0;
     const char *sender;
     module_t *p;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:i s?i}",
                              "status", &status,
                              "errnum", &errnum) < 0
-        || !(sender = flux_msg_route_first (msg))
-        || !(p = modhash_lookup (ctx->modhash, sender))) {
-        const char *errmsg = "error decoding/finding module.status";
-        if (flux_msg_is_noresponse (msg))
-            flux_log_error (h, "%s", errmsg);
-        else if (flux_respond_error (h, msg, errno, errmsg) < 0)
-            flux_log_error (h, "error responding to module.status");
-        return;
+        || !(sender = flux_msg_route_first (msg))) {
+        errmsg = "error decoding module.status request";
+        goto error;
     }
-    switch (status) {
-        case FLUX_MODSTATE_FINALIZING:
-            module_mute (p);
-            break;
-        case FLUX_MODSTATE_EXITED:
-            module_set_errnum (p, errnum);
-            break;
-        default:
-            break;
+    /* Treat not finding the sender as a no-op rather than an error
+     * so modules can be tested outside of the broker.
+     */
+    if ((p = modhash_lookup (ctx->modhash, sender))) {
+        switch (status) {
+            case FLUX_MODSTATE_FINALIZING:
+                module_mute (p);
+                break;
+            case FLUX_MODSTATE_EXITED:
+                module_set_errnum (p, errnum);
+                break;
+            default:
+                break;
+        }
     }
     /* Send a response if required.
      * Hint: module waits for response in FINALIZING state.
      */
     if (!flux_msg_is_noresponse (msg)) {
         if (flux_respond (h, msg, NULL) < 0) {
-            flux_log_error (h,
-                            "%s: error responding to module.status",
-                            module_get_name (p));
+            flux_log_error (h, "error responding to module.status request");
         }
     }
     /* N.B. this will cause module_status_cb() to be called.
      */
-    module_set_status (p, status);
+    if (p)
+        module_set_status (p, status);
+    return;
+error:
+    if (flux_msg_is_noresponse (msg))
+        flux_log (h, LOG_ERR, "%s", errmsg ? errmsg : strerror (errno));
+    else if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to module.status");
 }
 
 static void disconnect_cb (flux_t *h,

@@ -17,13 +17,11 @@ AM_CPPFLAGS = \
 	$(LIBSYSTEMD_CFLAGS) \
 	$(VALGRIND_CFLAGS)
 
-fluxcmd_PROGRAMS = flux-broker
+fluxcmd_PROGRAMS = \
+	flux-broker \
+	flux-module-exec
 
 noinst_LTLIBRARIES = libbroker.la
-
-flux_broker_SOURCES = \
-	broker.c \
-	broker.h
 
 libbroker_la_SOURCES = \
 	brokercfg.c \
@@ -70,6 +68,9 @@ libbroker_la_SOURCES = \
 	rundir.h \
 	rundir.c
 
+flux_broker_SOURCES = \
+	broker.c \
+	broker.h
 flux_broker_LDADD = \
 	$(builddir)/libbroker.la \
 	$(top_builddir)/src/modules/libmodule_builtins.la \
@@ -87,8 +88,21 @@ flux_broker_LDADD = \
 	$(JANSSON_LIBS) \
 	$(LIBSYSTEMD_LIBS) \
 	$(LIBDL)
-
 flux_broker_LDFLAGS =
+
+flux_module_exec_SOURCES = \
+	module_exec.c
+flux_module_exec_LDADD = \
+	$(builddir)/libbroker.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-optparse.la \
+	$(LIBUUID_LIBS) \
+	$(JANSSON_LIBS) \
+	$(LIBDL)
+flux_module_exec_LDFLAGS =
+
 
 TESTS = test_attr.t \
 	test_service.t \

@@ -27,6 +27,12 @@ Example: run an external sub-command under GDB
 
   $ src/cmd/flux /usr/bin/libtool e gdb --ex run --args src/cmd/flux-keygen
 
+Example: run a broker module separately from the broker under GDB
+
+.. code-block::
+
+  $ src/cmd/flux /usr/bin/libtool e gdb --ex run --args src/broker/flux-module-exec heartbeat
+
 Example: run the broker under GDB
 
 .. code-block::

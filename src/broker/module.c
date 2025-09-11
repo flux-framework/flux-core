@@ -48,6 +48,7 @@ struct broker_module {
 
     uuid_t uuid;            /* uuid for unique request sender identity */
     char uuid_str[UUID_STR_LEN];
+    char uri[128];
     pthread_t t;            /* module thread */
     char *name;
     int status;
@@ -103,13 +104,17 @@ static void module_cb (flux_reactor_t *r,
 }
 
 /* Create a welcome message for the new module thread containing
+ * - module name
  * - module uuid
  * - arguments to mod_main()
  * - cacheable broker attributes and their values
  * - current config object
  * This is called from the broker thread.
  */
-static flux_msg_t *welcome_encode (flux_t *h, json_t *args)
+static flux_msg_t *welcome_encode (flux_t *h,
+                                   const char *name,
+                                   const char *uuid,
+                                   json_t *args)
 {
     flux_msg_t *msg = NULL;
     json_t *attrs;
@@ -127,10 +132,12 @@ static flux_msg_t *welcome_encode (flux_t *h, json_t *args)
         goto error;
     if (!(msg = flux_request_encode ("welcome", NULL))
         || flux_msg_pack (msg,
-                          "{s:O? s:O s:O}",
+                          "{s:O? s:O s:O s:s s:s}",
                           "args", args,
                           "attrs", attrs,
-                          "conf", conf) < 0)
+                          "conf", conf,
+                          "name", name,
+                          "uuid", uuid) < 0)
         goto error;
     json_decref (attrs);
     return msg;
@@ -166,15 +173,14 @@ module_t *module_create (flux_t *h,
     /* Broker end of interthread pair is opened here.
      */
     // copying 13 + 37 + 1 = 51 bytes into 128 byte buffer cannot fail
-    char uri[128];
-    (void)snprintf (uri, sizeof (uri), "interthread://%s", p->uuid_str);
-    if (!(p->h_broker_end = flux_open (uri, FLUX_O_NOREQUEUE))
+    (void)snprintf (p->uri, sizeof (p->uri), "interthread://%s", p->uuid_str);
+    if (!(p->h_broker_end = flux_open (p->uri, FLUX_O_NOREQUEUE))
         || flux_opt_set (p->h_broker_end,
                          FLUX_OPT_ROUTER_NAME,
                          parent_uuid,
                          strlen (parent_uuid) + 1) < 0
         || flux_set_reactor (p->h_broker_end, r) < 0) {
-        errprintf (error, "could not create broker end of %s", uri);
+        errprintf (error, "could not create broker end of %s", p->uri);
         goto cleanup;
     }
     if (!(p->broker_w = flux_handle_watcher_create (r,
@@ -186,7 +192,7 @@ module_t *module_create (flux_t *h,
         goto cleanup;
     }
     flux_msg_t *msg;
-    if (!(msg = welcome_encode (h, mod_args))
+    if (!(msg = welcome_encode (h, p->name, p->uuid_str, mod_args))
         || flux_send_new (p->h_broker_end, &msg, 0) < 0) {
         errprintf (error, "error sending %s welcome message", p->name);
         flux_msg_decref (msg);
@@ -195,8 +201,7 @@ module_t *module_create (flux_t *h,
     /* Prepare (void *) argument to module thread.
      * Take care not to change these while the thread is executing.
      */
-    p->args.uuid = p->uuid_str;
-    p->args.name = p->name;
+    p->args.uri = p->uri;
     p->args.main = mod_main;
     return p;
 nomem:

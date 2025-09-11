@@ -246,11 +246,10 @@ test_expect_success 'flux_module_set_running - remove test module' '
 '
 test_expect_success 'module.status rejects malformed request' '
 	test_must_fail module_status_bad_proto 2>proto.err &&
-	grep "error decoding/finding module.status" proto.err
+	grep "error decoding module.status request" proto.err
 '
-test_expect_success 'module.status rejects request from unknown sender' '
-	test_must_fail module_status 2>sender.err &&
-	grep "error decoding/finding module.status" sender.err
+test_expect_success 'module.status allows request from unknown sender' '
+	module_status 2>sender.err
 '
 # issue #5255
 test_expect_success 'module with version ext can be loaded by name' '
@@ -271,13 +270,13 @@ test_expect_success 'module: rank attribute is cached' '
         flux module load $testmod --attr-is-cached=rank
 '
 test_expect_success 'module: size attribute is cached' '
-        flux module reload $testmod --attr-is-cached=size
+        flux module reload -f $testmod --attr-is-cached=size
 '
 test_expect_success 'module: security.owner attribute is cached' '
-        flux module reload $testmod --attr-is-cached=security.owner
+        flux module reload -f $testmod --attr-is-cached=security.owner
 '
 test_expect_success 'module: log-stderr-level attribute is NOT cached' '
-        test_must_fail flux module reload $testmod \
+        test_must_fail flux module reload -f $testmod \
             --attr-is-cached=log-stderr-level
 '
 test_expect_success 'module: configuration object is cached' '

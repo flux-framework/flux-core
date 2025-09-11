@@ -38,6 +38,8 @@ struct module_ctx {
     char **argv;
     size_t argz_len;
     char *argz;
+    char *name;
+    char *uuid;
 };
 
 static void module_thread_cleanup (void *arg);
@@ -77,23 +79,31 @@ static int attr_cache_from_json (flux_t *h, json_t *cache)
 }
 
 /* Decode welcome message and
+ * - set ctx->name, ctx->uuid
  * - set ctx->argc, ctx->argv
  * - populate the broker attr cache in ctx->h
- * This is called from the module thread.
  */
 static int welcome_decode_new (struct module_ctx *ctx, flux_msg_t **msg)
 {
     json_t *args;
     json_t *attrs;
     json_t *conf;
+    const char *name;
+    const char *uuid;
 
     if (flux_request_unpack (*msg,
                              NULL,
-                             "{s:o s:o s:o}",
+                             "{s:o s:o s:o s:s s:s}",
                              "args", &args,
                              "attrs", &attrs,
-                             "conf", &conf) < 0)
+                             "conf", &conf,
+                             "name", &name,
+                             "uuid", &uuid) < 0)
         return -1;
+
+    if (!(ctx->name = strdup (name))
+        || !(ctx->uuid = strdup (uuid)))
+        goto error;
 
     if (attr_cache_from_json (ctx->h, attrs) < 0)
         goto error;
@@ -167,52 +177,52 @@ void *module_thread (void *arg)
     memset (&ctx, 0, sizeof (ctx));
     pthread_cleanup_push (module_thread_cleanup, &ctx);
 
-    setup_module_profiling (args->name);
-
     /* Connect to broker socket, enable logging, register built-in services
      */
-    char uri[128];
-    (void)snprintf (uri, sizeof (uri), "interthread://%s", args->uuid);
-    if (!(ctx.h = flux_open (uri, 0))) {
-        log_err ("%s: flux_open %s", args->name, uri);
+    if (!(ctx.h = flux_open (args->uri, 0))) {
+        log_err ("flux_open %s", args->uri);
         goto done;
     }
-    flux_log_set_appname (ctx.h, args->name);
 
-    /* Set flux::uuid and flux::name per RFC 5
-     */
-    if (flux_aux_set (ctx.h, "flux::uuid", (char *)args->uuid, NULL) < 0
-        || flux_aux_set (ctx.h, "flux::name", args->name, NULL) < 0) {
-        log_err ("%s: error setting flux:: attributes", args->name);
-        goto done;
-    }
     /* Receive welcome message
+     * ctx.name and ctx.uuid may be used after this.
      */
     flux_msg_t *msg;
     if (!(msg = flux_recv (ctx.h, match, 0))
         || welcome_decode_new (&ctx, (flux_msg_t **)&msg) < 0) {
         flux_msg_decref (msg);
-        log_err ("%s: welcome failure", args->name);
+        log_err ("welcome failure");
         goto done;
     }
+
+    flux_log_set_appname (ctx.h, ctx.name);
+    setup_module_profiling (ctx.name);
+
+    /* Set flux::uuid and flux::name per RFC 5
+     */
+    if (flux_aux_set (ctx.h, "flux::uuid", (char *)ctx.uuid, NULL) < 0
+        || flux_aux_set (ctx.h, "flux::name", ctx.name, NULL) < 0) {
+        log_err ("error setting flux:: attributes");
+        goto done;
+    }
+
     /* Register services
      */
     if (modservice_register (ctx.h) < 0) {
-        log_err ("%s: modservice_register", args->name);
+        log_err ("error registering internal services");
         goto done;
     }
 
     /* Block all signals
      */
     if (sigfillset (&signal_set) < 0) {
-        log_err ("%s: sigfillset", args->name);
+        log_err ("sigfillset");
         goto done;
     }
     if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0) {
         log_errn (errnum, "pthread_sigmask");
         goto done;
     }
-
 
     /* Run the module's main().
      */
@@ -281,6 +291,8 @@ done:
     flux_close (ctx->h);
     free (ctx->argz);
     free (ctx->argv);
+    free (ctx->name);
+    free (ctx->uuid);
 }
 
 // vi:ts=4 sw=4 expandtab
