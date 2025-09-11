@@ -1000,12 +1000,20 @@ class OutputFormat:
 
                 #  Save the modified format, index, type, maximum width,
                 #  observed width, and broken-down spec in lst:
+                initialmaxwidth = spec.width or 0
+                if (
+                    sentinels[end] in ("maxwidth", "both")
+                    and self.headings
+                    and self.headings[field]
+                    and len(self.headings[field]) > initialmaxwidth
+                ):
+                    initialmaxwidth = len(self.headings[field])
                 lst.append(
                     dict(
                         fmt=fmt,
                         index=index,
                         type=sentinels[end],
-                        maxwidth=spec.width or 0,
+                        maxwidth=initialmaxwidth,
                         width=0,
                         spec=spec,
                     )
