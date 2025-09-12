@@ -33,6 +33,7 @@
 
 struct fsck_ctx {
     flux_t *h;
+    bool validate_available;
     json_t *root;
     int sequence;
     int repair_count;
@@ -61,9 +62,7 @@ static void fsck_treeobj (struct fsck_ctx *ctx,
                           const char *path,
                           json_t *treeobj);
 
-static void valref_validate (struct fsck_valref_data *fvd,
-                             json_t *treeobj,
-                             int index);
+static void valref_validate (struct fsck_valref_data *fvd);
 
 static void read_verror (const char *fmt, va_list ap)
 {
@@ -128,7 +127,7 @@ static void valref_validate_continuation (flux_future_t *f, void *arg)
     fvd->in_flight--;
 
     if (fvd->index < fvd->count) {
-        valref_validate (fvd, fvd->treeobj, fvd->index);
+        valref_validate (fvd);
         fvd->in_flight++;
         fvd->index++;
     }
@@ -136,32 +135,39 @@ static void valref_validate_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-static void valref_validate (struct fsck_valref_data *fvd,
-                             json_t *treeobj,
-                             int index)
+static void valref_validate (struct fsck_valref_data *fvd)
 {
-    uint32_t hash[BLOBREF_MAX_DIGEST_SIZE];
-    ssize_t hash_size;
     const char *blobref;
     flux_future_t *f;
     int *indexp;
 
-    blobref = treeobj_get_blobref (treeobj, index);
+    blobref = treeobj_get_blobref (fvd->treeobj, fvd->index);
 
-    if ((hash_size = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
-        log_err_exit ("cannot get hash from ref string");
+    if (fvd->ctx->validate_available) {
+        uint32_t hash[BLOBREF_MAX_DIGEST_SIZE];
+        ssize_t hash_size;
+        if ((hash_size = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
+            log_err_exit ("cannot get hash from ref string");
 
-    if (!(f = flux_rpc_raw (fvd->ctx->h,
-                            "content-backing.validate",
-                            hash,
-                            hash_size,
-                            0,
-                            0))
-        || flux_future_then (f, -1, valref_validate_continuation, fvd) < 0)
+        if (!(f = flux_rpc_raw (fvd->ctx->h,
+                                "content-backing.validate",
+                                hash,
+                                hash_size,
+                                0,
+                                0)))
+            log_err_exit ("failed to validate valref blob");
+    }
+    else {
+        if (!(f = content_load_byblobref (fvd->ctx->h,
+                                          blobref,
+                                          CONTENT_FLAG_CACHE_BYPASS)))
+            log_err_exit ("failed to load valref blob");
+    }
+    if (flux_future_then (f, -1, valref_validate_continuation, fvd) < 0)
         log_err_exit ("cannot validate valref blob");
     if (!(indexp = (int *)malloc (sizeof (int))))
         log_err_exit ("cannot allocate index memory");
-    (*indexp) = index;
+    (*indexp) = fvd->index;
     if (flux_future_aux_set (f, "index", indexp, free) < 0)
         log_err_exit ("could not save index value");
 }
@@ -334,7 +340,7 @@ static void fsck_valref (struct fsck_ctx *ctx,
 
     while (fvd.in_flight < BLOBREF_ASYNC_MAX
            && fvd.index < fvd.count) {
-        valref_validate (&fvd, treeobj, fvd.index);
+        valref_validate (&fvd);
         fvd.in_flight++;
         fvd.index++;
     }
@@ -357,6 +363,7 @@ static void fsck_valref (struct fsck_ctx *ctx,
 
         /* can only recover if errors were all bad references */
         if (ctx->repair
+            && fvd.missing_indexes
             && fvd.errorcount == zlist_size (fvd.missing_indexes)) {
             json_t *repaired = repair_valref (ctx, treeobj, &fvd);
 
@@ -639,6 +646,43 @@ static void sync_checkpoint (struct fsck_ctx *ctx)
         fprintf (stderr, "Updated primary checkpoint to include lost+found\n");
 }
 
+/* "validate" support added in v0.77.0.  Use "load" for backwards
+ * compatibility if "validate" is not available.
+ */
+static void check_validate_available (struct fsck_ctx *ctx, const char *blobref)
+{
+    uint32_t hash[BLOBREF_MAX_DIGEST_SIZE];
+    ssize_t hash_size;
+    flux_future_t *f;
+
+    if ((hash_size = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
+        log_err_exit ("cannot get hash from ref string");
+
+    if (!(f = flux_rpc_raw (ctx->h,
+                            "content-backing.validate",
+                            hash,
+                            hash_size,
+                            0,
+                            0)))
+        log_err_exit ("failed to check if validate available");
+
+    if (flux_rpc_get (f, NULL) < 0) {
+        /* ENOSYS means not available, just fallthrough and don't set
+         * validate_available */
+        if (errno != ENOSYS) {
+            /* ENOENT is ok, it means validate is available.  We elect to
+             * error out on any other error
+             */
+            if (errno == ENOENT)
+                ctx->validate_available = true;
+            else
+                log_err_exit ("cannot determine if validate available");
+        }
+    }
+    else
+        ctx->validate_available = true;
+}
+
 static int cmd_fsck (optparse_t *p, int ac, char *av[])
 {
     struct fsck_ctx ctx = {0};
@@ -697,6 +741,8 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
         ctx.sequence = sequence;
     }
+
+    check_validate_available (&ctx, blobref);
 
     fsck_blobref (&ctx, blobref);
 
