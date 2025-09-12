@@ -329,10 +329,6 @@ EXTRA_DIST= \
 	test-under-flux/expected.modcheck \
 	test-under-flux/t_modcheck.t \
 	test-under-flux/test.t \
-	rc/rc1-kvs \
-	rc/rc1-job \
-	rc/rc3-kvs \
-	rc/rc3-job \
 	rc/rc1-kvs.py \
 	rc/rc1-job.py \
 	rc/rc3.py \
