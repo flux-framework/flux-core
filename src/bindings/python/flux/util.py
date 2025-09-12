@@ -708,7 +708,7 @@ class OutputFormat:
         for field in self._fields:
             #  Remove any "0." prefix:
             field = field[2:] if field.startswith("0.") else field
-            if field and field not in self.headings:
+            if field and self.headings and field not in self.headings:
                 raise ValueError("Unknown format field: " + field)
 
         #  Prepend arbitrary string to format fields if requested
@@ -1000,12 +1000,20 @@ class OutputFormat:
 
                 #  Save the modified format, index, type, maximum width,
                 #  observed width, and broken-down spec in lst:
+                initialmaxwidth = spec.width or 0
+                if (
+                    sentinels[end] in ("maxwidth", "both")
+                    and self.headings
+                    and self.headings[field]
+                    and len(self.headings[field]) > initialmaxwidth
+                ):
+                    initialmaxwidth = len(self.headings[field])
                 lst.append(
                     dict(
                         fmt=fmt,
                         index=index,
                         type=sentinels[end],
-                        maxwidth=spec.width or 0,
+                        maxwidth=initialmaxwidth,
                         width=0,
                         spec=spec,
                     )
