@@ -1066,6 +1066,7 @@ class Modprobe:
                 del futures[future]
 
         self.save_task_timing(started.values())
+        executor.shutdown(wait=True)
 
         return self.exitcode
 
