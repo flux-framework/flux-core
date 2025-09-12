@@ -163,8 +163,10 @@ static flux_future_t *eventlogger_commit_batch (struct eventlogger *ev,
          *   failure occurred. Likely other parts of the system are
          *   in big trouble anyway...
          */
-        if ((f = flux_future_create (NULL, NULL)))
+        if ((f = flux_future_create (NULL, NULL))) {
+            flux_future_set_reactor (f, flux_get_reactor (ev->h));
             flux_future_fulfill (f, NULL, NULL);
+        }
     }
     else {
         /*  Otherwise, stop any pending timer watcher and start a
