@@ -15,6 +15,7 @@ import json
 import math
 import numbers
 import os
+import re
 
 import yaml
 from _flux._core import ffi
@@ -148,6 +149,11 @@ def _attr_key_prepend(key):
 class Jobspec(object):
     top_level_keys = set(["resources", "tasks", "version", "attributes"])
 
+    idset_regex = re.compile(r"(?=^\[.*]$|^[^][]*$)((^\[?|,)[1-9]\d*(-[1-9]\d*)?)*]?$")
+    range_regex = re.compile(
+        r"^(?=\[.*]$|[^][]*$)\[?[1-9]\d*(\+|-[1-9]\d*)(:[1-9]\d*(:[+*^])?)?]?$"
+    )
+
     def __init__(self, resources, tasks, **kwargs):
         """
         Constructor for Canonical Jobspec, as described in RFC 14
@@ -240,6 +246,18 @@ class Jobspec(object):
             raise ValueError("operator must be one of {}".format(valid_operator_values))
 
     @classmethod
+    def _validate_count_string(cls, count):
+        if cls.range_regex.match(count):
+            if "-" in count:
+                rmin, _, rmax = count.partition(":")[0].partition("-")
+                if rmax < rmin:
+                    raise ValueError("count range max must be >= min")
+        elif cls.idset_regex.match(count):
+            idset.decode(count)
+        else:
+            raise ValueError("count string must be a valid idset or range")
+
+    @classmethod
     # pylint: disable=too-many-branches
     def _validate_resource(cls, res):
         if not isinstance(res, abc.Mapping):
@@ -257,8 +275,10 @@ class Jobspec(object):
         count = res["count"]
         if isinstance(count, abc.Mapping):
             cls._validate_complex_range(count)
+        elif isinstance(count, str):
+            cls._validate_count_string(count)
         elif not isinstance(count, int):
-            raise TypeError("count must be an int or mapping")
+            raise TypeError("count must be an int, str, or mapping")
         else:
             # node, slot, and core must have count > 0, but allow 0 for
             # any other resource type.
