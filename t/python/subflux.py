@@ -42,6 +42,22 @@ def is_exe(fpath):
     return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
 
+def sanitize_env(env):
+    """Sanitize environment variables in subflux env that may affect tests"""
+    sanitize = (
+        "FLUX_SHELL_RC_PATH",
+        "FLUX_RC_EXTRA",
+        "FLUX_CONF_DIR",
+        "FLUX_JOB_CC",
+        "FLUX_F58_FORCE_ASCII",
+        "FLUX_MODPROBE_PATH",
+        "FLUX_URI_RESOLVE_LOCAL",
+    )
+    for var in list(env.keys()):
+        if var.startswith(("PMI", "SLURM")) or var in sanitize:
+            del env[var]
+
+
 def rerun_under_flux(size=1, personality="full"):
     try:
         if os.environ["IN_SUBFLUX"] == "1":
@@ -56,6 +72,9 @@ def rerun_under_flux(size=1, personality="full"):
     child_env["FLUX_BUILD_DIR"] = builddir
     child_env["FLUX_SOURCE_DIR"] = srcdir
     child_env["FLUX_RC_USE_MODPROBE"] = "t"
+
+    sanitize_env(child_env)
+
     command = [flux_exe, "start", "--test-size", str(size)]
     if personality != "full":
         for rc_num in [1, 3]:
