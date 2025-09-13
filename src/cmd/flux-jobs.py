@@ -40,7 +40,7 @@ class FluxJobsConfig(UtilConfig):
         "default": {
             "description": "Default flux-jobs format string",
             "format": (
-                "{id.f58:>12} ?:{queue:<8.8} +:{username:<8.8} {name:<10.10+} "
+                "{id.f58:>12} ?:{queue:<8.8} +:{username:<8} {name:<10.10+} "
                 "{status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} "
                 "{contextual_time!F:>8h} {contextual_info}"
             ),
@@ -48,7 +48,7 @@ class FluxJobsConfig(UtilConfig):
         "cute": {
             "description": "Cute flux-jobs format string (default with emojis)",
             "format": (
-                "{id.f58:>12} ?:{queue:<8.8} +:{username:<8.8} {name:<10.10+} "
+                "{id.f58:>12} ?:{queue:<8.8} +:{username:<8} {name:<10.10+} "
                 "{status_emoji:>5.5} {ntasks:>6} {nnodes:>6h} "
                 "{contextual_time!F:>8h} {contextual_info}"
             ),
@@ -56,7 +56,7 @@ class FluxJobsConfig(UtilConfig):
         "long": {
             "description": "Extended flux-jobs format string",
             "format": (
-                "{id.f58:>12} ?:{queue:<8.8} +:{username:<8.8} {name:<10.10+} "
+                "{id.f58:>12} ?:{queue:<8.8} +:{username:<8} {name:<10.10+} "
                 "{status:>9.9} {ntasks:>6} {nnodes:>6h} "
                 "{t_submit!d:%b%d %R::>12} {t_remaining!F:>12h} "
                 "{contextual_time!F:>8h} {contextual_info}"
@@ -72,7 +72,7 @@ class FluxJobsConfig(UtilConfig):
         "endreason": {
             "description": "Show why each job ended",
             "format": (
-                "{id.f58:>12} ?:{queue:<8.8} +:{username:<8.8} {name:<10.10+} "
+                "{id.f58:>12} ?:{queue:<8.8} +:{username:<8} {name:<10.10+} "
                 "{status_abbrev:>2.2} {t_inactive!d:%b%d %R::>12h} {inactive_reason}"
             ),
         },
