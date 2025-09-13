@@ -46,12 +46,6 @@ extern int cmd_namespace (optparse_t *p, int argc, char **argv);
 extern int cmd_urgency (optparse_t *p, int argc, char **argv);
 extern struct optparse_option urgency_opts[];
 
-extern int cmd_cancel (optparse_t *p, int argc, char **argv);
-extern struct optparse_option cancel_opts[];
-
-extern int cmd_cancelall (optparse_t *p, int argc, char **argv);
-extern struct optparse_option cancelall_opts[];
-
 extern int cmd_raise (optparse_t *p, int argc, char **argv);
 extern struct optparse_option raise_opts[];
 
@@ -127,20 +121,6 @@ static struct optparse_subcommand subcommands[] = {
       cmd_urgency,
       0,
       urgency_opts,
-    },
-    { "cancel",
-      "[OPTIONS] ids... [--] [message ...]",
-      "Cancel one or more jobs",
-      cmd_cancel,
-      OPTPARSE_SUBCMD_HIDDEN,
-      cancel_opts,
-    },
-    { "cancelall",
-      "[OPTIONS] [message ...]",
-      "Cancel multiple jobs",
-      cmd_cancelall,
-      OPTPARSE_SUBCMD_HIDDEN,
-      cancelall_opts,
     },
     { "raise",
       "[OPTIONS] ids... [--] [message ...]",
