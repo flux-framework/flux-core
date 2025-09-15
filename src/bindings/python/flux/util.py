@@ -948,7 +948,7 @@ class OutputFormat:
             raise KeyError(f"Invalid format field {exc} for {typestr}")
         return retval
 
-    def filter(self, items):
+    def filter(self, items, no_header=False):
         """
         Check for format fields that are prefixed with `?:` (e.g. "?:{name}"),
         and filter them out of the current format string if they result in an
@@ -963,6 +963,7 @@ class OutputFormat:
 
         Args:
             items (iterable): list of items to consider for output
+            no_header (boolean): do not use header in calculations (default: False)
         """
 
         #  Build a list of all format strings that have one of the width
@@ -1132,7 +1133,7 @@ class OutputFormat:
             post (callable): Function to call after printing each item
         """
         #  Preprocess original format by processing with filter():
-        newfmt = self.filter(items)
+        newfmt = self.filter(items, no_header=no_header)
         #  Get the current class for creating a new formatter instance:
         cls = self.__class__
         #  Create new instance of the current class from filtered format:

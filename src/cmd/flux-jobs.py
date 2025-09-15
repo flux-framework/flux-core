@@ -545,7 +545,7 @@ def main():
         formatter.set_sort_keys(args.sort)
 
     (jobs, truncated) = fetch_jobs(args, formatter.fields)
-    sformatter = JobInfoFormat(formatter.filter(jobs))
+    sformatter = JobInfoFormat(formatter.filter(jobs, no_header=args.no_header))
 
     if not args.no_header:
         print(sformatter.header())
