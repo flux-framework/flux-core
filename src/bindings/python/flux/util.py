@@ -960,6 +960,9 @@ class OutputFormat:
 
         (`?+:` requests both actions: filter out field if it is empty for all
         items, if not expand to maximum width)
+
+        Args:
+            items (iterable): list of items to consider for output
         """
 
         #  Build a list of all format strings that have one of the width
