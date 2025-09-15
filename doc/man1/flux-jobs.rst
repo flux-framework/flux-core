@@ -233,7 +233,7 @@ following is the format used for the default format:
 
 ::
 
-   {id.f58:>12} ?:{queue:<8.8} +:{username:<8.8} {name:<10.10+} \
+   {id.f58:>12} ?:{queue:<8.8} +:{username:<8} {name:<10.10+} \
    {status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} \
    {contextual_time!F:>8h} {contextual_info}
 
@@ -256,7 +256,8 @@ has a queue assigned in the default format shown above).
 If a format field is preceded by the special string ``+:`` this will
 cause the field width to be set to the maximum width such that no entry
 will be truncated. If the field already has a width, then this will be
-the minimum width of that field. For example::
+the minimum width of that field. If the field has a precision, it will be
+updated to the maximum width. For example::
 
   {id.f58:>12} +:{queue:>5}
 
