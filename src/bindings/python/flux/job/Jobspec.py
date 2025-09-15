@@ -297,7 +297,7 @@ class Jobspec(object):
             # node, slot, and core must have count > 0, but allow 0 for
             # any other resource type.
             if res["type"] in ["node", "slot", "core"] and count < 1:
-                raise ValueError("node or slot count must be > 0")
+                raise ValueError("node, slot, or core count must be > 0")
             if count < 0:
                 raise ValueError("count must be >= 0")
 
@@ -345,7 +345,7 @@ class Jobspec(object):
             raise TypeError("slot must be a string")
 
         if "attributes" in task and not isinstance(task["attributes"], abc.Mapping):
-            raise TypeError("count must be a mapping")
+            raise TypeError("attributes must be a mapping")
 
         command = task["command"]
         if len(command) == 0:
