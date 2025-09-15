@@ -223,21 +223,31 @@ class Jobspec(object):
     def _validate_complex_range(range_dict):
         if "min" not in range_dict:
             raise ValueError("min must be in range")
-        if len(range_dict) > 1:
-            _validate_keys(["min", "max", "operator", "operand"], range_dict.keys())
+        _validate_keys(
+            ["min", "max", "operand", "operator"], range_dict.keys(), keys_optional=True
+        )
         for key in ["min", "max", "operand"]:
             if key not in range_dict:
                 continue
             if not isinstance(range_dict[key], int):
-                raise TypeError("{} must be an int".format(key))
+                raise TypeError(f"{key} must be an int")
             if range_dict[key] < 1:
-                raise ValueError("{} must be > 0".format(key))
-        valid_operator_values = ["+", "*", "^"]
-        if (
-            "operator" in range_dict
-            and range_dict["operator"] not in valid_operator_values
-        ):
-            raise ValueError("operator must be one of {}".format(valid_operator_values))
+                raise ValueError(f"{key} must be > 0")
+        if "max" in range_dict and range_dict["max"] < range_dict["min"]:
+            raise ValueError("max must be >= min")
+        if ("operand" in range_dict) != ("operator" in range_dict):
+            raise ValueError("operand and operator must both be in range if either is")
+        if "operator" in range_dict:
+            operator = range_dict["operator"]
+            if not isinstance(operator, str) or len(operator) != 1:
+                raise TypeError("operator must be a single character str")
+            valid_operator_values = ["+", "*", "^"]
+            if operator not in valid_operator_values:
+                raise ValueError(f"operator must be one of {valid_operator_values}")
+            if operator in ["*", "^"] and range_dict["operand"] < 2:
+                raise ValueError("operand must be > 1 for '*' or '^' operator")
+            if operator == "^" and range_dict["min"] < 2:
+                raise ValueError("min must be > 1 for '^' operator")
 
     @classmethod
     def _validate_count_string(cls, count):
