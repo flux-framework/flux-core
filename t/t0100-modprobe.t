@@ -545,20 +545,27 @@ test_expect_success 'modprobe fails if task raises exception' '
 	grep "next:.*test exception" output${seq}
 '
 test_expect_success 'modprobe: FLUX_MODPROBE_PATH works' '
-	FLUX_MODPROBE_PATH=$(pwd) \
+	FLUX_MODPROBE_PATH=/test/path \
 	  flux modprobe rc1 --dry-run --verbose >path.out 2>&1 &&
-	grep "checking $(pwd)" path.out &&
+	test_debug "echo libexecdir=$(flux config builtin libexecdir)" &&
+	test_debug "echo datadir=$(flux config builtin datadir)" &&
+	test_debug "grep checking path.out" &&
+	test_debug "echo =-=-=" &&
+	grep "checking /test/path/modprobe" path.out &&
 	test_must_fail \
-	  grep $(flux config builtin libexecdir)/modprobe/modprobe.d path.out &&
+	  grep $(flux config builtin datadir)/modprobe/modprobe.d path.out &&
 	test_must_fail \
 	  grep $(flux config builtin libexecdir)/modprobe/rc1.d path.out
 '
 test_expect_success 'modprobe: FLUX_MODPROBE_PATH_APPEND works' '
-	FLUX_MODPROBE_PATH_APPEND=$(pwd) \
+	FLUX_MODPROBE_PATH_APPEND=/test/path \
 	  flux modprobe rc1 --dry-run --verbose >path-append.out 2>&1 &&
-	test_debug "cat path-append.out" &&
-	grep "checking $(pwd)" path-append.out &&
-	grep $(flux config builtin libexecdir)/modprobe/modprobe.d path-append.out &&
+	test_debug "echo libexecdir=$(flux config builtin libexecdir)" &&
+	test_debug "echo datadir=$(flux config builtin datadir)" &&
+	test_debug "grep checking path-append.out" &&
+	test_debug "echo =-=-=" &&
+	grep "checking /test/path/modprobe" path-append.out &&
+	grep $(flux config builtin datadir)/modprobe/modprobe.d path-append.out &&
 	grep $(flux config builtin libexecdir)/modprobe/rc1.d path-append.out
 '
 test_expect_success 'modprobe: detects missing required modprobe.toml keys' '
