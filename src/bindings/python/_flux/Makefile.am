@@ -31,6 +31,7 @@ fluxpyso_LTLIBRARIES = \
 	_core.la \
 	_hostlist.la \
 	_idset.la \
+	_count.la \
 	_rlist.la
 
 fluxpyso_PYTHON = \
@@ -40,6 +41,7 @@ nodist_fluxbindinginclude_HEADERS = \
 	_core_preproc.h \
 	_hostlist_preproc.h \
 	_idset_preproc.h \
+	_count_preproc.h \
 	_rlist_preproc.h
 
 EXTRA_DIST = \
@@ -47,6 +49,7 @@ EXTRA_DIST = \
 	_security_build.py \
 	_hostlist_build.py \
 	_idset_build.py \
+	_count_build.py \
 	_rlist_build.py \
 	make_clean_header.py
 
@@ -97,6 +100,19 @@ _idset_preproc.h: _idset_clean.h
 	$(AM_V_GEN)$(CC) $(PREPROC_FLAGS) $< \
 	  | sed -e '/^# [0-9]*.*/d' > $@
 
+_count.c: $(srcdir)/_count_build.py _count_preproc.h
+	$(AM_V_GEN)$(PYTHON) $^ $(STDERR_DEVNULL)
+
+_count_clean.h: Makefile
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/make_clean_header.py \
+	  --path $(top_srcdir)/src/common/libjob \
+	  --output $@ \
+	  count.h
+
+_count_preproc.h: _count_clean.h
+	$(AM_V_GEN)$(CC) $(PREPROC_FLAGS) $< \
+	  | sed -e '/^# [0-9]*.*/d' > $@
+
 
 _rlist.c: $(srcdir)/_rlist_build.py _rlist_preproc.h
 	$(AM_V_GEN)$(PYTHON) $^ $(STDERR_DEVNULL)
@@ -125,6 +141,11 @@ _hostlist_la_LIBADD = $(common_libs)
 
 nodist__idset_la_SOURCES = _idset.c
 _idset_la_LIBADD = $(common_libs)
+
+nodist__count_la_SOURCES = _count.c
+_count_la_LIBADD = \
+	$(top_builddir)/src/common/libjob/libjob.la \
+	$(common_libs)
 
 nodist__rlist_la_SOURCES = _rlist.c
 _rlist_la_LIBADD = \
