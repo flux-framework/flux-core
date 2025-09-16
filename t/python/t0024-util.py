@@ -212,9 +212,15 @@ class TestOutputFormat(unittest.TestCase):
         ).filter(items)
         self.assertEqual(fmt, "{i:>8} {f:8.2}")
 
+        # N.B. float has a width of 5 due to "FLOAT" header
         fmt = OutputFormat(
             "?+:{i:>7} ?:{s:>6} ?+:{f:.2f}", headings=self.headings
         ).filter(items)
+        self.assertEqual(fmt, "{i:>8} {f:5.2f}")
+
+        fmt = OutputFormat(
+            "?+:{i:>7} ?:{s:>6} ?+:{f:.2f}", headings=self.headings
+        ).filter(items, no_header=True)
         self.assertEqual(fmt, "{i:>8} {f:3.2f}")
 
     def test_sort(self):
@@ -261,10 +267,17 @@ class TestOutputFormat(unittest.TestCase):
         b = Item("abcdefghijklmnop", 2, 13)
         c = Item("c", 4, 5.0)
 
+        # N.B. iinteger has a width of 7 due to "INTEGER" header
+        # N.B. float has a width of 5 due to "FLOAT" header
         items = [a, b, c]
         fmt = OutputFormat(
             "+:{s:5.5} +:{i:4d} +:{f:.2f}", headings=self.headings
         ).filter(items)
+        self.assertEqual(fmt, "{s:16.16} {i:7d} {f:5.2f}")
+
+        fmt = OutputFormat(
+            "+:{s:5.5} +:{i:4d} +:{f:.2f}", headings=self.headings
+        ).filter(items, no_header=True)
         self.assertEqual(fmt, "{s:16.16} {i:4d} {f:3.2f}")
 
     def test_copy(self):

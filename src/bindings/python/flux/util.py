@@ -948,7 +948,7 @@ class OutputFormat:
             raise KeyError(f"Invalid format field {exc} for {typestr}")
         return retval
 
-    def filter(self, items):
+    def filter(self, items, no_header=False):
         """
         Check for format fields that are prefixed with `?:` (e.g. "?:{name}"),
         and filter them out of the current format string if they result in an
@@ -960,6 +960,10 @@ class OutputFormat:
 
         (`?+:` requests both actions: filter out field if it is empty for all
         items, if not expand to maximum width)
+
+        Args:
+            items (iterable): list of items to consider for output
+            no_header (boolean): do not use header in calculations (default: False)
         """
 
         #  Build a list of all format strings that have one of the width
@@ -1000,12 +1004,18 @@ class OutputFormat:
 
                 #  Save the modified format, index, type, maximum width,
                 #  observed width, and broken-down spec in lst:
+                initialmaxwidth = spec.width or 0
+                if sentinels[end] in ("maxwidth", "both"):
+                    initialmaxwidth = max(
+                        initialmaxwidth,
+                        0 if no_header else len(self.headings.get(field, "")),
+                    )
                 lst.append(
                     dict(
                         fmt=fmt,
                         index=index,
                         type=sentinels[end],
-                        maxwidth=spec.width or 0,
+                        maxwidth=initialmaxwidth,
                         width=0,
                         spec=spec,
                     )
@@ -1129,7 +1139,7 @@ class OutputFormat:
             post (callable): Function to call after printing each item
         """
         #  Preprocess original format by processing with filter():
-        newfmt = self.filter(items)
+        newfmt = self.filter(items, no_header=no_header)
         #  Get the current class for creating a new formatter instance:
         cls = self.__class__
         #  Create new instance of the current class from filtered format:

@@ -209,6 +209,18 @@ test_expect_success 'flux-jobs: specified width overrides expandable field' '
 	test_debug "cat expanded2.out" &&
 	grep "^   nosuchcommand" expanded2.out
 '
+# N.B. if header was not accounted for, the job name "a" would not be
+# right aligned by three spaces (header is "NAME")
+test_expect_success 'flux-jobs: header accounted for in expandable field' '
+	echo "{\"id\":195823665152,\"state\":8,\"name\":\"a\"}" \
+		| flux jobs --from-stdin -o "+:{name:>1}" > expanded3.out &&
+	grep "^   a" expanded3.out
+'
+test_expect_success 'flux-jobs: header not accounted for in expandable field if no header output' '
+	echo "{\"id\":195823665152,\"state\":8,\"name\":\"a\"}" \
+		| flux jobs --from-stdin -no "+:{name:>1}" > expanded3.out &&
+	grep "^a" expanded3.out
+'
 test_expect_success 'flux-jobs: collapsible+expandable fields work' '
 	flux jobs -ao "{id.f58:<12} ?+:{exception.type:>1}" >both.out &&
 	flux jobs -f running,completed \
