@@ -30,6 +30,7 @@ from operator import attrgetter
 from pathlib import Path, PurePosixPath
 from string import Formatter
 from typing import Mapping
+from wcwidth import wcswidth
 
 import yaml
 
@@ -1037,7 +1038,7 @@ class OutputFormat:
         for item in items:
             for entry in lst:
                 result = formatter.format(entry["fmt"], item)
-                width = 0 if result in empty else len(result)
+                width = 0 if result in empty else wcswidth(result)
                 if width > entry["maxwidth"]:
                     entry["maxwidth"] = width
                 if width > entry["width"]:
