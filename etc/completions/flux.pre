@@ -1427,7 +1427,7 @@ _flux_jobs()
         -c --count=N \
         -f --filter= \
         -i --include= \
-        --since=WHEN \
+        --since= \
         -n --no-header \
         -u --user= \
         --name= \
