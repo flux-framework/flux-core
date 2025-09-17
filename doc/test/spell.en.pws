@@ -993,3 +993,4 @@ fluxlibexecdir
 sysmon
 datadir
 rcX
+epoll
