@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* flux-job raise/cancel/kill */
+/* flux-job raise/kill */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -25,30 +25,6 @@
 #include "src/common/libutil/sigutil.h"
 #include "ccan/str/str.h"
 #include "common.h"
-
-struct optparse_option cancel_opts[] =  {
-    { .name = "message", .key = 'm', .has_arg = 1, .arginfo = "NOTE",
-      .usage = "Set cancel exception note",
-    },
-    OPTPARSE_TABLE_END
-};
-
-struct optparse_option cancelall_opts[] =  {
-    { .name = "user", .key = 'u', .has_arg = 1, .arginfo = "USER",
-      .usage = "Set target user or 'all' (instance owner only)",
-    },
-    { .name = "states", .key = 'S', .has_arg = 1, .arginfo = "STATES",
-      .flags = OPTPARSE_OPT_AUTOSPLIT,
-      .usage = "Set target job states (default=ACTIVE)",
-    },
-    { .name = "force", .key = 'f', .has_arg = 0,
-      .usage = "Confirm the command",
-    },
-    { .name = "quiet", .key = 'q', .has_arg = 0,
-      .usage = "Suppress output if no jobs match",
-    },
-    OPTPARSE_TABLE_END
-};
 
 struct optparse_option raise_opts[] =  {
     { .name = "severity", .key = 's', .has_arg = 1, .arginfo = "N",
@@ -448,99 +424,6 @@ int cmd_killall (optparse_t *p, int argc, char **argv)
     flux_close (h);
     return 0;
 }
-
-int cmd_cancel (optparse_t *p, int argc, char **argv)
-{
-    int optindex = optparse_option_index (p);
-    flux_t *h;
-    char *note = NULL;
-    zlistx_t *args;
-    struct jobid_arg *arg;
-    flux_future_t *f;
-    int rc = 0;
-
-    if (argc - optindex < 1) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-
-    parse_jobids_and_note (p, argv + optindex, &args, &note);
-
-    fprintf (stderr,
-             "WARNING: this command is deprecated.  Use flux-cancel(1).\n");
-
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
-
-    if (!(f = flux_future_wait_all_create ()))
-        log_err_exit ("flux_future_wait_all_create");
-    flux_future_set_flux (f, h);
-
-    arg = zlistx_first (args);
-    while (arg) {
-        flux_future_t *rf = flux_job_cancel (h, arg->id, note);
-        if (!rf || flux_future_push (f, arg->arg, rf) < 0)
-            log_err_exit ("flux_job_cancel");
-        arg = zlistx_next (args);
-    }
-    rc = wait_all_check (f, "cancel");
-
-    zlistx_destroy (&args);
-    flux_future_destroy (f);
-    flux_close (h);
-    free (note);
-    return rc;
-}
-
-int cmd_cancelall (optparse_t *p, int argc, char **argv)
-{
-    int optindex = optparse_option_index (p);
-    uint32_t userid;
-    int state_mask;
-    flux_t *h;
-    char *note = NULL;
-    int dry_run = 1;
-    int count;
-    int errors;
-
-    if (optindex < argc)
-        note = parse_arg_message (argv + optindex, "message");
-    if (optparse_hasopt (p, "states")) {
-        state_mask = parse_arg_states (p, "states");
-        if ((state_mask & FLUX_JOB_STATE_INACTIVE))
-            log_msg_exit ("Inactive jobs cannot be canceled");
-    }
-    else
-        state_mask = FLUX_JOB_STATE_ACTIVE;
-    if (optparse_hasopt (p, "user"))
-        userid = parse_arg_userid (p, "user");
-    else
-        userid = getuid ();
-    if (optparse_hasopt (p, "force"))
-        dry_run = 0;
-    fprintf (stderr,
-             "WARNING: this command is deprecated.  Use flux-cancel(1).\n");
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
-    count = raiseall (h,
-                      dry_run,
-                      userid,
-                      state_mask,
-                      0,
-                      "cancel",
-                      note,
-                      &errors);
-    if (count > 0 && dry_run)
-        log_msg ("Command matched %d jobs (-f to confirm)", count);
-    else if (count > 0 && !dry_run)
-        log_msg ("Canceled %d jobs (%d errors)", count, errors);
-    else if (!optparse_hasopt (p, "quiet"))
-        log_msg ("Command matched 0 jobs");
-    flux_close (h);
-    free (note);
-    return 0;
-}
-
 
 /* vi: ts=4 sw=4 expandtab
  */

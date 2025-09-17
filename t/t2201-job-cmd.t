@@ -286,7 +286,7 @@ test_expect_success 'flux-job: raise --severity works' '
 	flux job raise --severity=5 ${id} &&
 	flux job wait-event -t 30 ${id} exception >raise3.out &&
 	grep "severity\=5" raise3.out &&
-	flux job cancel ${id}
+	flux cancel ${id}
 '
 
 test_expect_success 'flux-job: raise --message works' '
@@ -301,56 +301,6 @@ test_expect_success ' flux-job: raise message works (cmdline)' '
 	flux job raise ${id} -- eep ork ook &&
 	flux job wait-event -t 30 ${id} exception >raise5.out &&
 	grep "eep ork ook" raise5.out
-'
-
-test_expect_success 'flux-job: cancel fails with bad FLUX_URI' '
-	(FLUX_URI=/wrong test_must_fail flux job cancel ${validjob})
-'
-
-test_expect_success 'flux-job: cancel fails with unknown job id' '
-	test_must_fail flux job cancel 0
-'
-
-test_expect_success 'flux-job: cancel fails with unknown job ids' '
-	test_must_fail flux job cancel 0 f123
-'
-
-test_expect_success 'flux-job: cancel fails if note set twice' '
-	test_must_fail flux job cancel --message=hi ${validjob} -- hello
-'
-
-test_expect_success 'flux-job: cancel fails with no args' '
-	test_must_fail flux job cancel
-'
-
-test_expect_success 'flux-job: cancel fails with invalid jobid' '
-	test_must_fail flux job cancel foo
-'
-
-test_expect_success 'flux-job: cancel fails with invalid option' '
-	test_must_fail flux job cancel --meep foo
-'
-
-test_expect_success 'flux-job: cancel basic works' '
-	id=$(flux submit sleep 100) &&
-	flux job cancel ${id} &&
-	flux job wait-event -t 30 ${id} exception >cancel1.out &&
-	grep "cancel" cancel1.out &&
-	grep "severity\=0" cancel1.out
-'
-
-test_expect_success 'flux-job: cancel --message works' '
-	id=$(flux submit sleep 100) &&
-	flux job cancel --message=meepmessage ${id} &&
-	flux job wait-event -t 30 ${id} exception >cancel2.out &&
-	grep "meepmessage" cancel2.out
-'
-
-test_expect_success ' flux-job: cancel message works (cmdline)' '
-	id=$(flux submit sleep 100) &&
-	flux job cancel ${id} -- foo loo moo &&
-	flux job wait-event -t 30 ${id} exception >cancel3.out &&
-	grep "foo loo moo" cancel3.out
 '
 
 test_expect_success 'flux-job: list fails with bad FLUX_URI' '
@@ -499,63 +449,9 @@ test_expect_success 'flux job: the queue contains active jobs' '
 	test ${count} -gt 0
 '
 
-test_expect_success 'flux job: cancelall with no args works' '
-	count=$(flux job list | wc -l) &&
-	flux job cancelall 2>cancelall.tmp &&
-	grep -v WARNING cancelall.tmp >cancelall.err &&
-	cat <<-EOT >cancelall.exp &&
-	flux-job: Command matched ${count} jobs (-f to confirm)
-	EOT
-	test_cmp cancelall.exp cancelall.err
-'
-
-test_expect_success 'flux-job: cancelall with bad broker connection fails' '
-	(FLUX_URI=/wrong test_must_fail flux job cancelall)
-'
-
-test_expect_success 'flux job: cancelall with reason works' '
-	flux job cancelall this is a reason 2>cancelall_reason.tmp &&
-	grep -v WARNING cancelall_reason.tmp >cancelall_reason.err &&
-	test_cmp cancelall.exp cancelall_reason.err
-'
-
-test_expect_success 'flux job: cancelall --force works' '
-	count=$(flux job list | wc -l) &&
-	flux job cancelall --force 2>cancelall_f.tmp &&
-	grep -v WARNING cancelall_f.tmp >cancelall_f.err &&
-	cat <<-EOT >cancelall_f.exp &&
-	flux-job: Canceled ${count} jobs (0 errors)
-	EOT
-	test_cmp cancelall_f.exp cancelall_f.err
-'
-
-test_expect_success 'flux job: the queue is empty' '
+test_expect_success 'clear out the queue' '
+	flux cancel --all &&
 	run_timeout 60 flux queue drain
-'
-
-test_expect_success 'flux-job: cancelall --user all fails for guest' '
-	id=$(($(id -u)+1)) &&
-	test_must_fail runas ${id} \
-		flux job cancelall --user all 2> cancelall_all_guest.tmp &&
-	grep -v WARNING cancelall_all_guest.tmp >cancelall_all_guest.err &&
-	cat <<-EOF >cancelall_all_guest.exp &&
-	flux-job: raiseall: guests can only raise exceptions on their own jobs
-	EOF
-	test_cmp cancelall_all_guest.exp cancelall_all_guest.err
-'
-
-test_expect_success 'flux-job: cancelall --user <guest uid> works for guest' '
-	id=$(($(id -u)+1)) &&
-	runas ${id} \
-		flux job cancelall --user ${id} 2> cancelall_guest.err
-'
-
-test_expect_success 'flux job: cancelall with unknown state fails' '
-	test_must_fail flux job cancelall --states=FOO 2>cancelall_bs.err &&
-	cat <<-EOT >cancelall_bs.exp &&
-	flux-job: error parsing --states: FOO is unknown
-	EOT
-	test_cmp cancelall_bs.exp cancelall_bs.err
 '
 
 test_expect_success 'flux job: raiseall with no args prints Usage' '
@@ -667,16 +563,8 @@ test_expect_success 'flux-job: raiseall -f returns correct count' '
 	test_cmp raiseall_testf.exp raiseall_testf.err
 '
 
-test_expect_success 'flux-job: cancelall -f returns correct count' '
-	flux job cancelall -f 2>cancelall_testf.tmp &&
-	grep -v WARNING cancelall_testf.tmp >cancelall_testf.err &&
-	cat <<-EOT >cancelall_testf.exp &&
-	flux-job: Canceled 3 jobs (0 errors)
-	EOT
-	test_cmp cancelall_testf.exp cancelall_testf.err
-'
-
-test_expect_success 'flux job: the queue is empty' '
+test_expect_success 'empty the queue' '
+	flux cancel --all &&
 	run_timeout 60 flux queue drain
 '
 test_expect_success 'flux job: retrieve eventlogs' '
@@ -725,19 +613,6 @@ test_expect_success 'flux job: killall -f kills one job' '
 	flux job wait-event -vt 30 -p exec $id shell.init &&
 	flux job killall -f &&
 	run_timeout 60 flux queue drain
-'
-
-test_expect_success 'flux job: cancel can operate on multiple jobs' '
-	ids=$(flux submit --bcc=1-3 sleep 600) &&
-	for id in ${ids}; do
-		flux job wait-event \
-			-vt 30 -p exec $id shell.init
-	done &&
-	flux job cancel ${ids} cancel multiple jobs &&
-	for id in ${ids}; do
-		flux job wait-event -t 30 ${id} exception >exception.out &&
-		grep multiple exception.out
-	done
 '
 
 test_expect_success 'flux job: raise can operate on multiple jobs' '

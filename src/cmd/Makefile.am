@@ -160,7 +160,7 @@ flux_job_SOURCES = \
 	job/id.c \
 	job/namespace.c \
 	job/urgency.c \
-	job/cancel.c \
+	job/kill.c \
 	job/eventlog.c \
 	job/info.c \
 	job/stats.c \
