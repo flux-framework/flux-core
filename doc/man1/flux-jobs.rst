@@ -103,6 +103,13 @@ OPTIONS
    configuration snippet for an existing named format may be generated with
    :option:`--format=get-config=NAME`.
 
+.. option:: -w, --width[=N]
+
+   Truncate output at width *N*. If *N* is 0 (the default if no argument
+   is supplied) and output is connected to a terminal, then use the current
+   terminal width. If *N* is less than zero, then truncation is disabled.
+   (This is the default behavior).
+
 .. option:: --sort=[-]KEY,..
 
    Sort jobs based on a list of comma separated keys. If a KEY is preceded
