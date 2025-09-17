@@ -11,12 +11,25 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"
+
+static int fdcount (void)
+{
+    int fd, fdlimit = sysconf (_SC_OPEN_MAX);
+    int count = 0;
+    for (fd = 0; fd < fdlimit; fd++) {
+        if (fcntl (fd, F_GETFD) != -1)
+            count++;
+    }
+    return count;
+}
 
 /* Destructor for malloc'ed string.
  * Set flag so we know this was called when aux was destroyed.
@@ -369,6 +382,7 @@ void test_basic (void)
 
 int main (int argc, char *argv[])
 {
+    int fd_before = fdcount ();
     plan (NO_PLAN);
 
     test_basic ();
@@ -376,6 +390,11 @@ int main (int argc, char *argv[])
     test_flux_open_ex ();
     test_send_new ();
 
+    int fd_after = fdcount ();
+    ok (fd_after == fd_before,
+        "no file descriptors were leaked");
+    if (fd_after != fd_before)
+        diag ("leaked %d file descriptors", fd_after - fd_before);
 
     done_testing ();
     return 0;
