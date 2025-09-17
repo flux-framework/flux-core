@@ -1111,6 +1111,28 @@ test_expect_success 'flux-jobs --format={expiration!D:h},{t_remaining!H:h} works
 	test "${expiration}" = "-" &&
 	test "${t_remaining}" = "-"
 '
+# -w, --width tests
+test_expect_success 'flux-jobs -w, --width=N works' '
+	flux jobs -a -w 10 > width10.output &&
+	test_debug "cat width10.output" &&
+	test_must_fail grep -E "^.{11}" width10.output &&
+	grep "+$" width10.output
+'
+# Note: extra character in terminal test below (.{12} vs .{11}) needed because
+# terminal output adds line feed (^M) character to each line in addition to
+# newline. Similarly, do not use color to avoid extra non-printing characters:
+test_expect_success 'flux-jobs -w, --width no argument works' '
+	runpty.py -w 10x40 -o width-terminal.output \
+		flux jobs -aw --color=never &&
+	test_debug "cat width-terminal.output" &&
+	test_must_fail grep -E "^.{12}"  width-terminal.output
+'
+# Note: extra character in terminal test below needed to match line feed
+test_expect_success 'flux-jobs -w, --width (no arg) does nothing no terminal' '
+	flux jobs -no long -aw --color=never >width-notruncate.output &&
+	test_debug "cat width-notruncate.output" &&
+	test_must_fail grep "+$" width-notruncate.output
+'
 # note that a significant amount of annotation format tests occur in
 # job-manager tests such as t2206-job-manager-annotate.t
 
