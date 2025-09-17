@@ -380,6 +380,19 @@ void test_basic (void)
     flux_close (h);
 }
 
+void test_pollfd (void)
+{
+    flux_t *h;
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("can't continue without loop handle");
+    flux_comms_error_set (h, comms_err, NULL);
+
+    ok (flux_pollfd (h) >= 0,
+        "flux_pollfd works");
+
+    flux_close (h);
+}
+
 int main (int argc, char *argv[])
 {
     int fd_before = fdcount ();
@@ -389,6 +402,7 @@ int main (int argc, char *argv[])
     test_handle_invalid_args ();
     test_flux_open_ex ();
     test_send_new ();
+    test_pollfd ();
 
     int fd_after = fdcount ();
     ok (fd_after == fd_before,
