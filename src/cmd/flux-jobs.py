@@ -321,6 +321,17 @@ def parse_args():
         help="Specify sort order",
     )
     parser.add_argument(
+        "-w",
+        "--width",
+        type=int,
+        default=-1,
+        const=0,
+        metavar="N",
+        nargs="?",
+        help="Truncate output at width N. If N=0 (default if N omitted) and "
+        + "stdout is connected to a terminal, use terminal width",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Output jobs in JSON instead of formatted output",
@@ -463,7 +474,9 @@ def print_jobs(jobs, args, formatter, path="", level=0):
             if args.recursive and is_user_instance(job, args):
                 children.append(job)
     else:
-        formatter.print_items(jobs, no_header=True, pre=pre, post=post)
+        formatter.print_items(
+            jobs, no_header=True, width=args.width, pre=pre, post=post
+        )
 
     if not args.recursive or args.level == level:
         return result
@@ -548,7 +561,7 @@ def main():
     sformatter = JobInfoFormat(formatter.filter(jobs, no_header=args.no_header))
 
     if not args.no_header:
-        print(sformatter.header())
+        print(sformatter.header(width=args.width))
 
     result = print_jobs(jobs, args, sformatter)
     if args.json:
