@@ -78,21 +78,21 @@ int flux_response_decode_raw (const flux_msg_t *msg,
     size_t l = 0;
     int rc = -1;
 
-    if (!data || !len) {
-        errno = EINVAL;
-        goto done;
-    }
     if (response_decode (msg, &ts) < 0)
         goto done;
-    if (flux_msg_get_payload (msg, &d, &l) < 0) {
-        if (errno != EPROTO)
-            goto done;
-        errno = 0;
+    if (data || len) {
+        if (flux_msg_get_payload (msg, &d, &l) < 0) {
+            if (errno != EPROTO)
+                goto done;
+            errno = 0;
+        }
     }
     if (topic)
         *topic = ts;
-    *data = d;
-    *len = l;
+    if (data)
+        *data = d;
+    if (len)
+        *len = l;
     rc = 0;
 done:
     return rc;

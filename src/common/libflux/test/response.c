@@ -68,8 +68,8 @@ int main (int argc, char *argv[])
     ok (flux_response_decode_raw (msg, &topic, &d, &l) == 0
         && topic != NULL && streq (topic, "foo.bar"),
         "flux_response_decode_raw returns encoded topic");
-    ok (flux_response_decode_raw (msg, NULL, &d, &l) == 0,
-        "flux_response_decode_raw topic is optional");
+    ok (flux_response_decode_raw (msg, NULL, NULL, NULL) == 0,
+        "flux_response_decode_raw out parameters are optional");
     l = 1;
     d = (char *)&d;
     ok (flux_response_decode_raw (msg, NULL, &d, &l) == 0 && l==0 && d==NULL,
