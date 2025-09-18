@@ -23,7 +23,7 @@ enum {
 struct msg_deque *msg_deque_create (int flags);
 void msg_deque_destroy (struct msg_deque *q);
 
-/* By default, there are no limts on msg_deques.
+/* By default, there are no limits on msg_deques.
  * If one is added, then upon reaching full, push fails with EWOULDBLOCK
  * and upon reaching non-full, POLLOUT is raised.
  * A limit of zero means unlimited.
