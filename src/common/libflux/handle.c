@@ -1161,10 +1161,9 @@ int flux_pollevents (flux_t *h)
             return -1;
         if ((e & POLLIN))
             events |= FLUX_POLLIN;
-        if ((e & POLLOUT))
-            events |= FLUX_POLLOUT;
         if ((e & POLLERR))
             events |= FLUX_POLLERR;
+        /* POLLOUT is purposefully ignored */
     }
     return events;
 }
