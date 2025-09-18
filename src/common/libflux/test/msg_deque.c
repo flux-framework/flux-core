@@ -217,6 +217,16 @@ void check_inval (void)
     ok (msg_deque_count (NULL) == 0,
         "msg_deque_count q=NULL is 0");
 
+    errno = 0;
+    ok (msg_deque_get_limit (NULL) < 0 && errno == EINVAL,
+        "msg_deque_get_limit q=NULL fails with EINVAL");
+    errno = 0;
+    ok (msg_deque_set_limit (NULL, 0) < 0 && errno == EINVAL,
+        "msg_deque_set_limit q=NULL fails with EINVAL");
+    errno = 0;
+    ok (msg_deque_set_limit (q, -1) < 0 && errno == EINVAL,
+        "msg_deque_set_limit limit=-1 fails with EINVAL");
+
     // msg_deque_push_back
     errno = 0;
     ok (msg_deque_push_back (NULL, msg1) < 0 && errno == EINVAL,
@@ -269,6 +279,55 @@ void check_inval (void)
     msg_deque_destroy (q);
 }
 
+void check_limit (void)
+{
+    struct msg_deque *q;
+    flux_msg_t *msg;
+    flux_msg_t *msg1;
+    struct pollfd pfd;
+
+    if (!(q = msg_deque_create (0)))
+        BAIL_OUT ("could not create msg_deque");
+    if (!(msg = flux_request_encode ("foo", NULL)))
+        BAIL_OUT ("flux_request_encode failed");
+    if (!(msg1 = flux_request_encode ("foo", NULL)))
+        BAIL_OUT ("flux_request_encode failed");
+    ok (msg_deque_set_limit (q, 1) == 0,
+        "msg_deque_set_limit 1 works");
+    ok (msg_deque_get_limit (q) == 1,
+        "msg_deque_get_limit returns 1");
+    ok (msg_deque_pollevents (q) == POLLOUT,
+        "msg_deque_pollevents = POLLOUT");
+
+    ok (msg_deque_push_front (q, msg) == 0,
+        "pushed one message");
+    ok ((pfd.fd = msg_deque_pollfd (q)) >= 0,
+        "msg_deque_pollfd works");
+    pfd.events = POLLIN,
+    pfd.revents = 0,
+    ok (poll (&pfd, 1, 0) == 1 && pfd.revents == POLLIN,
+        "msg_deque_pollfd suggests we read pollevents");
+    ok (msg_deque_pollevents (q) == POLLIN,
+        "msg_deque_pollevents = POLLIN");
+
+    errno = 0;
+    ok (msg_deque_push_front (q, msg1) < 0 && errno == EWOULDBLOCK,
+        "pushing a second fails with EWOULDBLOCK");
+
+    ok ((msg = msg_deque_pop_front (q)) != NULL,
+        "popped one message");
+    pfd.events = POLLIN,
+    pfd.revents = 0,
+    ok (poll (&pfd, 1, 0) == 1 && pfd.revents == POLLIN,
+        "msg_deque_pollfd suggests we read pollevents");
+    ok (msg_deque_pollevents (q) == POLLOUT,
+        "msg_deque_pollevents = POLLOUT");
+
+    flux_msg_decref (msg1);
+    flux_msg_decref (msg);
+    msg_deque_destroy (q);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -277,6 +336,7 @@ int main (int argc, char *argv[])
     check_poll ();
     check_inval ();
     check_single_thread ();
+    check_limit ();
 
     done_testing ();
     return (0);
