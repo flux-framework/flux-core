@@ -33,6 +33,7 @@ struct msg_deque {
     uint64_t event;
     pthread_mutex_t lock;
     int flags;
+    int count;
 };
 
 void msg_deque_destroy (struct msg_deque *q)
@@ -142,6 +143,7 @@ int msg_deque_push_back (struct msg_deque *q, flux_msg_t *msg)
         }
     }
     list_add (&q->messages, &msg->list);
+    q->count++;
     msg_deque_unlock (q);
     return 0;
 }
@@ -161,6 +163,7 @@ int msg_deque_push_front (struct msg_deque *q, flux_msg_t *msg)
         }
     }
     list_add_tail (&q->messages, &msg->list);
+    q->count++;
     msg_deque_unlock (q);
     return 0;
 }
@@ -175,6 +178,7 @@ flux_msg_t *msg_deque_pop_front (struct msg_deque *q)
         list_del_init (&msg->list);
         if ((q->pollevents & POLLIN) && list_empty (&q->messages))
             q->pollevents &= ~POLLIN;
+        q->count--;
     }
     msg_deque_unlock (q);
     return msg;
@@ -185,9 +189,9 @@ bool msg_deque_empty (struct msg_deque *q)
     if (!q)
         return true;
     msg_deque_lock (q);
-    bool res = list_empty (&q->messages);
+    size_t count = q->count;
     msg_deque_unlock (q);
-    return res;
+    return count == 0 ? true : false;
 }
 
 size_t msg_deque_count (struct msg_deque *q)
@@ -195,10 +199,7 @@ size_t msg_deque_count (struct msg_deque *q)
     if (!q)
         return 0;
     msg_deque_lock (q);
-    size_t count = 0;
-    flux_msg_t *msg = NULL;
-    list_for_each (&q->messages, msg, list)
-        count++;
+    size_t count = q->count;
     msg_deque_unlock (q);
     return count;
 }
