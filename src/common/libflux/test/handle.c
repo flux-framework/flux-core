@@ -11,12 +11,25 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"
+
+static int fdcount (void)
+{
+    int fd, fdlimit = sysconf (_SC_OPEN_MAX);
+    int count = 0;
+    for (fd = 0; fd < fdlimit; fd++) {
+        if (fcntl (fd, F_GETFD) != -1)
+            count++;
+    }
+    return count;
+}
 
 /* Destructor for malloc'ed string.
  * Set flag so we know this was called when aux was destroyed.
@@ -34,9 +47,14 @@ static int comms_err (flux_t *h, void *arg)
     return -1;
 }
 
-void test_handle_invalid_args (flux_t *h)
+void test_handle_invalid_args (void)
 {
+    flux_t *h;
     flux_msg_t *msg;
+
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("can't continue without loop handle");
+    flux_comms_error_set (h, comms_err, NULL);
 
     errno = 0;
     ok (flux_aux_set (NULL, "foo", "bar", NULL) < 0 && errno == EINVAL,
@@ -80,9 +98,11 @@ void test_handle_invalid_args (flux_t *h)
     ok (flux_recv (h, FLUX_MATCH_ANY, 0x1000000) == NULL && errno == EINVAL,
        "flux_recv flags=BOGUS fails with EINVAL");
     flux_msg_destroy (msg);
+
+    flux_close (h);
 }
 
-static void test_flux_open_ex ()
+static void test_flux_open_ex (void)
 {
     flux_error_t error;
 
@@ -145,7 +165,7 @@ static void test_send_new (void)
     flux_close (h2);
 }
 
-int main (int argc, char *argv[])
+void test_basic (void)
 {
     flux_t *h;
     char *s;
@@ -154,12 +174,8 @@ int main (int argc, char *argv[])
     const char *topic;
     uint32_t matchtag;
 
-    plan (NO_PLAN);
-
     if (!(h = flux_open ("loop://", 0)))
         BAIL_OUT ("can't continue without loop handle");
-
-    test_handle_invalid_args (h);
 
     flux_comms_error_set (h, comms_err, NULL);
 
@@ -362,14 +378,40 @@ int main (int argc, char *argv[])
         "flux_reconnect with null reconnect method fails with ENOSYS");
 
     flux_close (h);
+}
 
-    /* flux_open_ex() */
+void test_pollfd (void)
+{
+    flux_t *h;
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("can't continue without loop handle");
+    flux_comms_error_set (h, comms_err, NULL);
+
+    ok (flux_pollfd (h) >= 0,
+        "flux_pollfd works");
+
+    flux_close (h);
+}
+
+int main (int argc, char *argv[])
+{
+    int fd_before = fdcount ();
+    plan (NO_PLAN);
+
+    test_basic ();
+    test_handle_invalid_args ();
     test_flux_open_ex ();
-
     test_send_new ();
+    test_pollfd ();
 
-    done_testing();
-    return (0);
+    int fd_after = fdcount ();
+    ok (fd_after == fd_before,
+        "no file descriptors were leaked");
+    if (fd_after != fd_before)
+        diag ("leaked %d file descriptors", fd_after - fd_before);
+
+    done_testing ();
+    return 0;
 }
 
 /*

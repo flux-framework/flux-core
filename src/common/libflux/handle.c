@@ -529,6 +529,7 @@ flux_t *flux_handle_create (void *impl,
     h->flags = flags;
     h->ops = ops;
     h->impl = impl;
+    h->pollfd = -1;
     if (!(h->tagpool = tagpool_create ()))
         goto error;
     if (!(flags & FLUX_O_NOREQUEUE)) {
@@ -542,7 +543,6 @@ flux_t *flux_handle_create (void *impl,
         if (!(h->tracker = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG)))
             goto error;
     }
-    h->pollfd = -1;
     return h;
 error:
     flux_handle_destroy (h);
@@ -640,6 +640,8 @@ void flux_handle_destroy (flux_t *h)
             flux_handle_destroy (h->parent); // decr usecount
         }
         else {
+            if (h->pollfd >= 0)
+                (void)close (h->pollfd);
             if (h->ops->impl_destroy)
                 h->ops->impl_destroy (h->impl);
             tagpool_destroy (h->tagpool,

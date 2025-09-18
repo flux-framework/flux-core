@@ -177,11 +177,11 @@ int flux_pollevents (flux_t *h);
 /* Obtain a file descriptor that can be used to integrate a flux_t handle
  * into an external event loop.  When one of FLUX_POLLIN, FLUX_POLLOUT, or
  * FLUX_POLLERR is raised in flux_pollevents(), this file descriptor will
- * become readable in an edge triggered fashion.  The external event loop
- * should then call flux_pollevents().  See src/common/libflux/ev_flux.[ch]
- * for an example of a libev "composite watcher" based on these interfaces,
- * that is used internally by the flux reactor.
- * Returns fd on success, -1 on failure with errno set.
+ * become readable in an edge triggered fashion.  An external event loop
+ * could watch this file descriptor for POLLIN, then call flux_pollevents()
+ * to determine what event bits are pending for the handle.
+ * The file descriptor is owned by the flux_t handle and becomes invalid
+ * upon flux_close().  Returns fd on success, -1 on failure with errno set.
  */
 int flux_pollfd (flux_t *h);
 
