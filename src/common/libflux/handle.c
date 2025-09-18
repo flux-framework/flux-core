@@ -1104,26 +1104,20 @@ int flux_pollfd (flux_t *h)
 {
     h = lookup_clone_ancestor (h);
 
-    if ((h->flags & FLUX_O_NOREQUEUE)) {
-        if (!h->ops->pollfd) {
-            errno = ENOTSUP;
-            return -1;
-        }
-        return h->ops->pollfd (h->impl);
-    }
-
     if (h->pollfd < 0) {
         struct epoll_event ev = {
             .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
         };
         if ((h->pollfd = epoll_create1 (EPOLL_CLOEXEC)) < 0)
             goto error;
-        /* add queue pollfd */
-        ev.data.fd = msg_deque_pollfd (h->queue);
-        if (ev.data.fd < 0)
-            goto error;
-        if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
-            goto error;
+        /* add re-queue pollfd (if defined) */
+        if (!(h->flags & FLUX_O_NOREQUEUE)) {
+            ev.data.fd = msg_deque_pollfd (h->queue);
+            if (ev.data.fd < 0)
+                goto error;
+            if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
+                goto error;
+        }
         /* add connector pollfd (if defined) */
         if (h->ops->pollfd) {
             ev.data.fd = h->ops->pollfd (h->impl);
@@ -1147,12 +1141,10 @@ int flux_pollevents (flux_t *h)
     h = lookup_clone_ancestor (h);
     int e, events = 0;
 
-    if (!(h->flags & FLUX_O_NOREQUEUE)) {
-        /* wait for handle event */
-        if (h->pollfd >= 0) {
-            struct epoll_event ev;
-            (void)epoll_wait (h->pollfd, &ev, 1, 0);
-        }
+    /* wait for handle event */
+    if (h->pollfd >= 0) {
+        struct epoll_event ev;
+        (void)epoll_wait (h->pollfd, &ev, 1, 0);
     }
     /* get connector events (if applicable) */
     if (h->ops->pollevents) {
@@ -1163,8 +1155,8 @@ int flux_pollevents (flux_t *h)
                 events &= ~FLUX_POLLERR;
         }
     }
+    /* get re-queue events */
     if (!(h->flags & FLUX_O_NOREQUEUE)) {
-        /* get queue events */
         if ((e = msg_deque_pollevents (h->queue)) < 0)
             return -1;
         if ((e & POLLIN))

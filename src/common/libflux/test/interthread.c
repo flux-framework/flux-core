@@ -353,68 +353,60 @@ void test_poll (void)
     flux_msg_t *msg;
     flux_msg_t *msg2;
     struct pollfd pfd;
+    int rc;
 
-    // with NOREQUEUE, pollfd/pollevents come directly from connector
-    if (!(h1 = flux_open (uri, FLUX_O_NOREQUEUE)))
+    if (!(h1 = flux_open (uri, 0)))
         BAIL_OUT ("%s: flux_open: %s", uri, strerror (errno));
-    if (!(h2 = flux_open (uri, FLUX_O_NOREQUEUE)))
+    if (!(h2 = flux_open (uri, 0)))
         BAIL_OUT ("%s: flux_open: %s", uri, strerror (errno));
     diag ("poll: opened h1 and h2");
 
+    ok ((flux_pollfd (h2)) >= 0,
+        "flux_pollfd works");
+    ok (flux_pollevents (h2) == FLUX_POLLOUT,
+        "flux_pollevents h2 initially returns POLLOUT");
+    recv_count_is (h2, 0, "RECV_QUEUE_COUNT h2 = 0");
+
+    /* POLLIN must not be pending for the test that follows.
+     * The flux_pollevents() call above should clear it, if set initially.
+     * However, due to flux-framework/flux-core#7067, one try may not be
+     * sufficient (seems like 3 is the magic number but let's do 10).
+     */
+    for (int i = 0; i < 10; i++) {
+        pfd.fd = flux_pollfd (h2);
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        rc = poll (&pfd, 1, 0);
+        if (rc < 0)
+            diag ("poll: %s", strerror (errno));
+        if (rc == 1) {
+            int revents = flux_pollevents (h2);
+            diag ("pollfd is ready, pollevents = 0x%x", revents);
+        }
+        if (rc == 0)
+            break;
+    }
+    ok (rc == 0,
+        "pollfd is not ready");
+
     if (!(msg = flux_request_encode ("foo", NULL)))
         BAIL_OUT ("flux_request_encode failed");
-
-    // enqueue 2 messages
-    ok (flux_pollevents (h2) == FLUX_POLLOUT,
-        "flux_pollevents h2 returns POLLOUT");
     ok (flux_send (h1, msg, 0) == 0,
         "flux_send h1 works");
-    ok (flux_send (h1, msg, 0) == 0,
-        "flux_send h1 works");
-    ok (flux_pollevents (h2) == (FLUX_POLLOUT | FLUX_POLLIN),
-        "flux_pollevents h2 returns POLLOUT|POLLIN");
+    recv_count_is (h2, 1, "RECV_QUEUE_COUNT h2 = 1");
 
-    // read 1 message
-    ok ((msg2 = flux_recv (h2, FLUX_MATCH_ANY, 0)) != NULL,
-        "flux_recv h2 works");
-    ok (flux_pollevents (h2) == (FLUX_POLLOUT | FLUX_POLLIN),
-        "flux_pollevents h2 returns POLLOUT|POLLIN");
-    flux_msg_decref (msg2);
-
-    // read 2nd message
-    ok ((msg2 = flux_recv (h2, FLUX_MATCH_ANY, 0)) != NULL,
-        "flux_recv h2 works");
-    ok (flux_pollevents (h2) == FLUX_POLLOUT,
-        "flux_pollevents h2 returns POLLOUT");
-    flux_msg_destroy (msg2);
-
-    // get pollfd set up with no messages pending
-    ok ((pfd.fd = flux_pollfd (h2)) >= 0,
-        "flux_pollfd works");
-    pfd.events = POLLIN; // poll fd becomes "readable" when pollevents should
-    pfd.revents = 0;     //   be checked
-    ok (poll (&pfd, 1, 0) == 1 && pfd.revents == POLLIN,
-        "flux_pollfd suggests we check pollevents");
-    ok (flux_pollevents (h2) == FLUX_POLLOUT,
-        "flux_pollevents returns POLLOUT only");
+    pfd.fd = flux_pollfd (h2);
     pfd.events = POLLIN;
     pfd.revents = 0;
-    ok (poll (&pfd, 1, 0) == 0, // because edge triggered
-        "flux_pollfd says not ready, now that we've checked pollevents");
-
-    // enqueue 2 messages
-    ok (flux_send (h1, msg, 0) == 0,
-        "flux_send h1 works");
-    ok (flux_send (h1, msg, 0) == 0,
-        "flux_send h1 works");
-    pfd.events = POLLIN,
-    pfd.revents = 0,
-    ok (poll (&pfd, 1, 0) == 1 && pfd.revents == POLLIN,
-        "pollfd suggests we read pollevents");
+    rc = poll (&pfd, 1, 1000); // timeout is in units of ms
+    ok (rc == 1,
+        "pollfd became ready");
     ok (flux_pollevents (h2) == (FLUX_POLLOUT | FLUX_POLLIN),
-        "flux_pollevents returns POLLOUT|POLLIN");
-    ok (poll (&pfd, 1, 0) == 0,
-        "flux_pollfd says not ready, now that we've checked pollevents");
+        "flux_pollevents h2 returns POLLOUT|POLLIN");
+    ok ((msg2 = flux_recv (h2, FLUX_MATCH_ANY, 0)) != NULL,
+        "flux_recv h2 works");
+    flux_msg_decref (msg2);
+    recv_count_is (h2, 0, "RECV_QUEUE_COUNT h2 = 0");
 
     // N.B. we don't own the pollfd so no close here
     flux_msg_destroy (msg);
