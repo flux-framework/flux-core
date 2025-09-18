@@ -92,7 +92,7 @@ def check_restore(context):
     ranks="0",
     before=["kvs"],
     after=["content-backing", "check-restore"],
-    requires=["check-restore", "content-backing", "kvs"],
+    requires=["check-restore", "content-backing"],
     needs=["content-backing", "check-restore"],
     needs_attrs=["content.restore"],
 )
