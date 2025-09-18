@@ -994,3 +994,4 @@ sysmon
 datadir
 rcX
 epoll
+libuv
