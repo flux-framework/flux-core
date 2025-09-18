@@ -23,6 +23,14 @@ enum {
 struct msg_deque *msg_deque_create (int flags);
 void msg_deque_destroy (struct msg_deque *q);
 
+/* By default, there are no limts on msg_deques.
+ * If one is added, then upon reaching full, push fails with EWOULDBLOCK
+ * and upon reaching non-full, POLLOUT is raised.
+ * A limit of zero means unlimited.
+ */
+int msg_deque_set_limit (struct msg_deque *q, int limit);
+int msg_deque_get_limit (struct msg_deque *q);
+
 /* msg_deque_push_back() and msg_deque_push_front() steal a reference on
  * 'msg' on success.  If MSG_DEQUE_SINGLE_THREAD was not specified, then
  * that is expected to be the *only* reference and further access to the
