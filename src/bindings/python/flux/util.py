@@ -810,6 +810,16 @@ class OutputFormat:
             fields.update([x for x, y in self.sort_keys])
         return list(fields)
 
+    @staticmethod
+    def _calculate_width(width):
+        if width == 0:
+            try:
+                width = os.get_terminal_size().columns
+            except OSError:
+                # No terminal found (or other error), set width to unlimited:
+                width = -1
+        return width
+
     # This should be a method, not a function since it is overridden by
     # inheriting classes
     # pylint: disable=no-self-use
@@ -845,10 +855,21 @@ class OutputFormat:
         fmt = "".join(format_list)
         return fmt
 
-    def header(self):
-        """Return a header row using the current format"""
+    def header(self, width=-1):
+        """
+        Return a header row using the current format
+        Args:
+            width (integer): If set > 0, truncate output after width columns.
+                if 0, then width is set to the current terminal width as
+                returned from :py:func:`os.get_terminal_size`. If < 0 (the
+                default), then no truncation occurs.
+        """
         formatter = self.HeaderFormatter()
-        return formatter.format(self.header_format(), **self.headings)
+        result = formatter.format(self.header_format(), **self.headings)
+        width = self._calculate_width(width)
+        if width > 0 and len(result) > width:
+            result = result[: width - 1] + "+"
+        return result
 
     def get_format_prepended(
         self,
@@ -1117,7 +1138,7 @@ class OutputFormat:
             items.sort(key=attrgetter(key), reverse=reverse)
         return items
 
-    def print_items(self, items, no_header=False, pre=None, post=None):
+    def print_items(self, items, no_header=False, width=-1, pre=None, post=None):
         """
         Handle printing a list of items with the current format.
 
@@ -1135,6 +1156,10 @@ class OutputFormat:
         Args:
             items (iterable): list of items to format
             no_header (boolean): disable header row (default: False)
+            width (integer): If set > 0, truncate output after width
+              columns. If 0, then width is set to the current terminal
+              width as returned from :py:func:`os.get_terminal_size`.
+              if < 0 (the default), then no truncation occurs.
             pre (callable): Function to call before printing each item
             post (callable): Function to call after printing each item
         """
@@ -1147,12 +1172,16 @@ class OutputFormat:
 
         items = self.sort_items(items)
 
+        width = self._calculate_width(width)
+
         if not no_header:
-            print(formatter.header())
+            print(formatter.header(width=width))
         for item in items:
             line = formatter.format(item)
             if not line or line.isspace():
                 continue
+            if width > 0 and len(line) > width:
+                line = line[: width - 1] + "+"
             if callable(pre):
                 pre(item)
             try:
