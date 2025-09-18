@@ -8,10 +8,12 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
+import errno
 import os
 from pathlib import Path
 from subprocess import Popen
 
+import flux.kvs
 from flux.modprobe import run_all_rc_scripts, task
 
 
@@ -105,6 +107,7 @@ def restore(context):
     if dumpfile.exists():
         cmd = f"flux restore --sd-notify --quiet --checkpoint --size-limit=100M {dumpfile}"
         context.bash(cmd)
+        context.set("dump_restored", True)
     if dumplink and dumplink.exists():
         dumplink.unlink()
 
@@ -135,6 +138,36 @@ def check_clean_shutdown(context):
     fi
     """
     )
+
+
+# The most common scenario we want to fsck is when the flux instance
+# was not shut down cleanly.  In other words, when:
+#
+# A) a checkpoint exists
+# B) a dump was not restored
+#
+# If a checkpoint does not exist, we can assume this is the first bootup
+# of an instance.
+#
+# If a dump was restored, we can assume the prior instance was shutdown
+# cleanly.
+@task(
+    "fsck",
+    ranks="0",
+    before=["kvs"],
+    after=["content-backing", "restore"],
+    requires=["content-backing"],
+    needs=["content-backing"],
+)
+def fsck(context):
+    try:
+        flux.kvs.kvs_checkpoint_lookup(context.handle)
+    except OSError as e:
+        if e.errno != errno.ENOENT:
+            raise
+        return
+    if not context.get("dump_restored", False):
+        context.bash("flux fsck")
 
 
 @task(
