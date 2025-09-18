@@ -10,33 +10,6 @@
 
 /* msg_dequeue.c - reactive, thread-safe, output-restricted message deque */
 
-/* The pollfd/pollevents pattern was borrowed from zeromq's ZMQ_EVENTS/ZMQ_FD,
- * described in zmq_getsockopt(3).  It is an edge-triggered notification system
- * in which the pollfd, a special file descriptor created with eventfd(2),
- * can be watched reactively for a POLLIN event, then the actual event on the
- * queue is determined by sampling pollevents.  The valid pollevents bits are:
- *
- * POLLIN   messages are available to pop
- * POLLOUT  messages may be pushed (always asserted currently)
- *
- * The pollevents should not be confused with pollfd events.  In pollfd, only
- * POLLIN is expected, signaling that one of the bits is newly set in
- * pollevents, and used to wake up a reactor loop to service those bits.
- *
- * "edge-triggered" means that pollfd does not reassert if the reactor handler
- * returns with the condition that caused the event still true.  In the case
- * of msg_deque POLLIN events, a handler must pop all messages before
- * returning, or if fairness is a concern (one message queue starving out other
- * reactor handlers), a specialized watcher in the pattern of ev_flux.c or
- * ev_zmq.c is needed.  ev_zmq.c contains further explanation about that
- * technique. When msg_deque is used within a connector, the reactive signaling
- * is encapsulated in the flux_t handle, so flux_handle_watcher_create(3),
- * based on ev_flux.c, already implements a fair handler.
- *
- * In the current implementation, msg_deque size is unlimited, so POLLOUT is
- * always asserted in pollevents.
- */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
