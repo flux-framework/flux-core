@@ -272,7 +272,7 @@ int msg_deque_pollfd (struct msg_deque *q)
     msg_deque_lock (q);
     if (q->pollfd < 0) {
         q->event = q->pollevents ? 1 : 0;
-        q->pollfd = eventfd (q->pollevents, EFD_NONBLOCK);
+        q->pollfd = eventfd (q->event, EFD_NONBLOCK);
     }
     rc = q->pollfd;
     msg_deque_unlock (q);
