@@ -40,6 +40,11 @@ int msg_deque_push_back (struct msg_deque *q, flux_msg_t *msg);
 int msg_deque_push_front (struct msg_deque *q, flux_msg_t *msg);
 flux_msg_t *msg_deque_pop_front (struct msg_deque *q);
 
+/* pollfd raises POLLIN when an event bit is set in pollevents.
+ * An unfortunate side effect of using eventfd() internally is that
+ * POLLOUT is raised when pollevents clears the pollfd.
+ * Users should watch POLLIN only.
+ */
 int msg_deque_pollfd (struct msg_deque *q);
 int msg_deque_pollevents (struct msg_deque *q);
 
