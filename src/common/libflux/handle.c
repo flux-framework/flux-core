@@ -1165,9 +1165,9 @@ int flux_pollevents (flux_t *h)
             return -1;
         if ((e & POLLIN))
             events |= FLUX_POLLIN;
-        if ((e & POLLERR))
-            events |= FLUX_POLLERR;
-        /* POLLOUT is purposefully ignored */
+        /* POLLOUT is purposefully ignored.
+         * Other bits are not possible with msg_deque.
+         */
     }
     return events;
 }
