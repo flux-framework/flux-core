@@ -483,8 +483,8 @@ def task(name, **kwargs):
         requires (optional, list): An optional list of task or module names
             this task requires. This is used to ensure required tasks are
             active when activating another task. It does not indicate that
-            this task will necessarily be run before the tasks it requires.
-            (See ``before`` for that feature)
+            this task will necessarily be run before or after the tasks it
+            requires. (See ``before`` or ``after`` for those features)
         needs (options, list): Disable this task if any task in ``needs`` is
             not active.
         provides (optional, list): An optional list of string service name
