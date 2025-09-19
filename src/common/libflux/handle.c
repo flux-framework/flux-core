@@ -1119,7 +1119,22 @@ int flux_pollfd (flux_t *h)
         }
         /* add connector pollfd (if defined) */
         if (h->ops->pollfd) {
-            ev.events = EPOLLET | EPOLLIN | EPOLLOUT;
+            /* The connector may indicate which events are significant
+             * on its pollfd method if other than POLLIN | POLLOUT.
+             */
+            int events;
+            if (flux_opt_get (h,
+                              FLUX_OPT_POLLFD_EVENTS,
+                              &events,
+                              sizeof (events)) == 0) {
+                ev.events = EPOLLET;
+                if (events & POLLIN)
+                    ev.events |= EPOLLIN;
+                if (events & POLLOUT)
+                    ev.events |= EPOLLOUT;
+            }
+            else
+                ev.events = EPOLLET | EPOLLIN | EPOLLOUT;
             ev.data.fd = h->ops->pollfd (h->impl);
             if (ev.data.fd < 0)
                 goto error;
@@ -1149,7 +1164,6 @@ int flux_pollevents (flux_t *h)
     /* consume all epoll events before sampling pollevents */
     while (epoll_wait (h->pollfd, &ev, 1, 0) == 1)
         ;
-
     /* get connector events (if applicable) */
     if (h->ops->pollevents) {
         if ((events = h->ops->pollevents (h->impl)) < 0)
