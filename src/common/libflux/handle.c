@@ -616,7 +616,7 @@ int flux_reconnect (flux_t *h)
      */
     if (h->ops->pollfd) {
         struct epoll_event ev = {
-            .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
+            .events = EPOLLET | EPOLLIN | EPOLLOUT,
         };
         if ((ev.data.fd = h->ops->pollfd (h->impl)) < 0
             || epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
@@ -1103,15 +1103,14 @@ int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
 int flux_pollfd (flux_t *h)
 {
     h = lookup_clone_ancestor (h);
+    struct epoll_event ev = { 0 };
 
     if (h->pollfd < 0) {
-        struct epoll_event ev = {
-            .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
-        };
         if ((h->pollfd = epoll_create1 (EPOLL_CLOEXEC)) < 0)
             goto error;
         /* add re-queue pollfd (if defined) */
         if (!(h->flags & FLUX_O_NOREQUEUE)) {
+            ev.events = EPOLLET | EPOLLIN | EPOLLOUT;
             ev.data.fd = msg_deque_pollfd (h->queue);
             if (ev.data.fd < 0)
                 goto error;
@@ -1120,6 +1119,7 @@ int flux_pollfd (flux_t *h)
         }
         /* add connector pollfd (if defined) */
         if (h->ops->pollfd) {
+            ev.events = EPOLLET | EPOLLIN | EPOLLOUT;
             ev.data.fd = h->ops->pollfd (h->impl);
             if (ev.data.fd < 0)
                 goto error;
