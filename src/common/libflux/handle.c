@@ -1140,16 +1140,16 @@ int flux_pollevents (flux_t *h)
 {
     h = lookup_clone_ancestor (h);
     int e, events = 0;
+    struct epoll_event ev;
 
     /* create pollfd if needed */
     if (flux_pollfd (h) < 0)
         return -1;
 
-    /* wait for handle event */
-    if (h->pollfd >= 0) {
-        struct epoll_event ev;
-        (void)epoll_wait (h->pollfd, &ev, 1, 0);
-    }
+    /* consume all epoll events before sampling pollevents */
+    while (epoll_wait (h->pollfd, &ev, 1, 0) == 1)
+        ;
+
     /* get connector events (if applicable) */
     if (h->ops->pollevents) {
         if ((events = h->ops->pollevents (h->impl)) < 0)
