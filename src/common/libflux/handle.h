@@ -67,6 +67,7 @@ enum {
 #define FLUX_OPT_ROUTER_NAME        "flux::router_name"
 #define FLUX_OPT_SEND_QUEUE_COUNT   "flux::send_queue_count"
 #define FLUX_OPT_RECV_QUEUE_COUNT   "flux::recv_queue_count"
+#define FLUX_OPT_POLLFD_EVENTS      "flux::pollfd_events"
 
 /* Create/destroy a broker handle.
  * The 'uri' scheme name selects a connector to dynamically load.
