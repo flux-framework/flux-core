@@ -1110,7 +1110,7 @@ int flux_pollfd (flux_t *h)
             goto error;
         /* add re-queue pollfd (if defined) */
         if (!(h->flags & FLUX_O_NOREQUEUE)) {
-            ev.events = EPOLLET | EPOLLIN | EPOLLOUT;
+            ev.events = EPOLLET | EPOLLIN;
             ev.data.fd = msg_deque_pollfd (h->queue);
             if (ev.data.fd < 0)
                 goto error;
