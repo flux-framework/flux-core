@@ -40,12 +40,18 @@ struct module_builtin {
     mod_main_f main;
 };
 
-module_t *module_create (flux_t *h,
-                         const char *parent_uuid,
-                         const char *name,
-                         mod_main_f mod_main,
-                         json_t *args,
-                         flux_error_t *error);
+module_t *module_create_thread (flux_t *h,
+                                const char *parent_uuid,
+                                const char *name,
+                                mod_main_f mod_main,
+                                json_t *args,
+                                flux_error_t *error);
+module_t *module_create_exec (flux_t *h,
+                              const char *parent_uuid,
+                              const char *name,
+                              const char *path,
+                              json_t *args,
+                              flux_error_t *error);
 void module_destroy (module_t *p);
 
 /* accessors
