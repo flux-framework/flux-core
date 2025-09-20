@@ -1141,6 +1141,10 @@ int flux_pollevents (flux_t *h)
     h = lookup_clone_ancestor (h);
     int e, events = 0;
 
+    /* create pollfd if needed */
+    if (flux_pollfd (h) < 0)
+        return -1;
+
     /* wait for handle event */
     if (h->pollfd >= 0) {
         struct epoll_event ev;
@@ -1161,10 +1165,9 @@ int flux_pollevents (flux_t *h)
             return -1;
         if ((e & POLLIN))
             events |= FLUX_POLLIN;
-        if ((e & POLLOUT))
-            events |= FLUX_POLLOUT;
         if ((e & POLLERR))
             events |= FLUX_POLLERR;
+        /* POLLOUT is purposefully ignored */
     }
     return events;
 }
