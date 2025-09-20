@@ -367,27 +367,18 @@ void test_poll (void)
         "flux_pollevents h2 initially returns POLLOUT");
     recv_count_is (h2, 0, "RECV_QUEUE_COUNT h2 = 0");
 
-    /* POLLIN must not be pending for the test that follows.
-     * The flux_pollevents() call above should clear it, if set initially.
-     * However, due to flux-framework/flux-core#7067, one try may not be
-     * sufficient (seems like 3 is the magic number but let's do 10).
-     */
-    for (int i = 0; i < 10; i++) {
-        pfd.fd = flux_pollfd (h2);
-        pfd.events = POLLIN;
-        pfd.revents = 0;
-        rc = poll (&pfd, 1, 0);
-        if (rc < 0)
-            diag ("poll: %s", strerror (errno));
-        if (rc == 1) {
-            int revents = flux_pollevents (h2);
-            diag ("pollfd is ready, pollevents = 0x%x", revents);
-        }
-        if (rc == 0)
-            break;
+    pfd.fd = flux_pollfd (h2);
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    rc = poll (&pfd, 1, 0);
+    if (rc < 0)
+        diag ("poll: %s", strerror (errno));
+    if (rc == 1) {
+        int revents = flux_pollevents (h2);
+        diag ("pollfd is ready, pollevents = 0x%x", revents);
     }
     ok (rc == 0,
-        "pollfd is not ready");
+        "pollfd is not ready, as required by the next test");
 
     if (!(msg = flux_request_encode ("foo", NULL)))
         BAIL_OUT ("flux_request_encode failed");

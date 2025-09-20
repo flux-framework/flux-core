@@ -23,6 +23,14 @@ enum {
 struct msg_deque *msg_deque_create (int flags);
 void msg_deque_destroy (struct msg_deque *q);
 
+/* By default, there are no limits on msg_deques.
+ * If one is added, then upon reaching full, push fails with EWOULDBLOCK
+ * and upon reaching non-full, POLLOUT is raised.
+ * A limit of zero means unlimited.
+ */
+int msg_deque_set_limit (struct msg_deque *q, int limit);
+int msg_deque_get_limit (struct msg_deque *q);
+
 /* msg_deque_push_back() and msg_deque_push_front() steal a reference on
  * 'msg' on success.  If MSG_DEQUE_SINGLE_THREAD was not specified, then
  * that is expected to be the *only* reference and further access to the
@@ -32,6 +40,11 @@ int msg_deque_push_back (struct msg_deque *q, flux_msg_t *msg);
 int msg_deque_push_front (struct msg_deque *q, flux_msg_t *msg);
 flux_msg_t *msg_deque_pop_front (struct msg_deque *q);
 
+/* pollfd raises POLLIN when an event bit is set in pollevents.
+ * An unfortunate side effect of using eventfd() internally is that
+ * POLLOUT is raised when pollevents clears the pollfd.
+ * Users should watch POLLIN only.
+ */
 int msg_deque_pollfd (struct msg_deque *q);
 int msg_deque_pollevents (struct msg_deque *q);
 
