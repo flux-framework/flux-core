@@ -18,6 +18,7 @@ import os
 
 import yaml
 from _flux._core import ffi
+from _flux._count.lib import count_decode
 from flux import hostlist, idset
 from flux.util import Fileref, del_treedict, parse_fsd, set_treedict
 
@@ -257,6 +258,9 @@ class Jobspec(object):
         count = res["count"]
         if isinstance(count, abc.Mapping):
             cls._validate_complex_range(count)
+        elif isinstance(count, str):
+            if count_decode(count.encode("utf-8")) == ffi.NULL:
+                raise ValueError("count string must be a valid idset or range")
         elif not isinstance(count, int):
             raise TypeError("count must be an int or mapping")
         else:
