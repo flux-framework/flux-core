@@ -330,6 +330,8 @@ following optional arguments:
 **requires**
    (optional, list) A list of task or module names this task requires. This is
    used to ensure required tasks are active when activating another task.
+   It does not indicate that this task will necessarily be run before or after
+   the tasks it requires. (See ``before`` or ``after` for those features)
 
 **needs**
    (optional, list) A list of tasks or modules this task needs. Disables this
@@ -342,11 +344,15 @@ following optional arguments:
 
 **before**
    (optional, list) A list of tasks or modules for which this task must be
-   run before.
+   run before.  Note that "before" behavior slightly differs between subcommands.
+   For ``run`` or ``rc1``, this task runs before listed modules are loaded.
+   For ``rc3``, this task is run before listed modules are removed.
 
 **after**
    (optional, list) A list of tasks or modules for which this task must be
-   run after.
+   run after.  Note that "before" behavior slightly differs between subcommands.
+   For ``run`` or ``rc1``, this task runs after listed modules are loaded.
+   For ``rc3``, this task is run after listed modules are removed.
 
 **needs_attrs**
    (optional, list) A list of broker attributes on which this task depends.
