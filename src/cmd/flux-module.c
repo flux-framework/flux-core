@@ -85,12 +85,18 @@ static struct optparse_option reload_opts[] =  {
       .usage = "Forcibly stop an unresponsive module thread when it"
                " reaches the next pthread(7) cancellation point",
     },
+    { .name = "exec", .has_arg = 0,
+      .usage = "Load module as a separate process",
+    },
     OPTPARSE_TABLE_END,
 };
 
 static struct optparse_option load_opts[] =  {
     { .name = "name", .has_arg = 1, .arginfo = "NAME",
       .usage = "Override default module name",
+    },
+    { .name = "exec", .has_arg = 0,
+      .usage = "Load module as a separate process",
     },
     OPTPARSE_TABLE_END,
 };
@@ -329,9 +335,10 @@ static void module_load (flux_t *h,
     if (canonicalize_if_path (path, &fullpath) < 0)
         log_err_exit ("could not canonicalize module path '%s'", path);
     if (!(args = args_create (argc, argv))
-        || !(payload = json_pack ("{s:s s:O}",
+        || !(payload = json_pack ("{s:s s:O s:b}",
                                   "path", fullpath ? fullpath : path,
-                                  "args", args))
+                                  "args", args,
+                                  "exec", optparse_hasopt (p, "exec") ? 1 : 0))
         || (name && set_string (payload, "name", name) < 0))
         log_msg_exit ("failed to create module.load payload");
     if (!(f = flux_rpc_pack (h,
