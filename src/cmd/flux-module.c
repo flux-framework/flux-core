@@ -330,8 +330,8 @@ static void module_load (flux_t *h,
         log_err_exit ("could not canonicalize module path '%s'", path);
     if (!(args = args_create (argc, argv))
         || !(payload = json_pack ("{s:s s:O}",
-                               "path", fullpath ? fullpath : path,
-                               "args", args))
+                                  "path", fullpath ? fullpath : path,
+                                  "args", args))
         || (name && set_string (payload, "name", name) < 0))
         log_msg_exit ("failed to create module.load payload");
     if (!(f = flux_rpc_pack (h,
@@ -494,12 +494,23 @@ void lsmod_print_header (FILE *f, bool longopt)
     if (longopt) {
         fprintf (f,
                  "%-25.25s %4s  %c %s %s %-8s %s\n",
-                 "Module", "Idle", 'S', "Sendq", "Recvq", "Service", "Path");
+                 "Module",
+                 "Idle",
+                 'S',
+                 "Sendq",
+                 "Recvq",
+                 "Service",
+                 "Path");
     }
     else {
         fprintf (f,
                  "%-25s %4s  %c %s %s %s\n",
-                 "Module", "Idle", 'S', "Sendq", "Recvq", "Service");
+                 "Module",
+                 "Idle",
+                 'S',
+                 "Sendq",
+                 "Recvq",
+                 "Service");
     }
 }
 
@@ -520,7 +531,8 @@ void lsmod_print_entry (FILE *f,
 
     if (longopt) {
         char *s = lsmod_services_string (services, name, 8);
-        fprintf (f, "%-25.25s %4s  %c %5d %5d %-8s %s\n",
+        fprintf (f,
+                 "%-25.25s %4s  %c %5d %5d %-8s %s\n",
                  name,
                  idle_s,
                  state,
@@ -532,7 +544,8 @@ void lsmod_print_entry (FILE *f,
     }
     else {
         char *s = lsmod_services_string (services, name, 0);
-        fprintf (f, "%-25.25s %4s  %c %5d %5d %s\n",
+        fprintf (f,
+                 "%-25.25s %4s  %c %5d %5d %s\n",
                  name,
                  idle_s,
                  state,
@@ -558,7 +571,8 @@ void lsmod_print_list (FILE *f, json_t *o, bool longopt)
     json_array_foreach (o, index, value) {
         recvqueue = 0;
         sendqueue = 0;
-        if (json_unpack (value, "{s:s s:s s:i s:i s:o s?i s?i}",
+        if (json_unpack (value,
+                         "{s:s s:s s:i s:i s:o s?i s?i}",
                          "name", &name,
                          "path", &path,
                          "idle", &idle,
