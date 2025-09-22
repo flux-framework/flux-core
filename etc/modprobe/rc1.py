@@ -103,7 +103,7 @@ def restore(context):
         return
     print(f"restoring content from {dumpfile}")
     if dumpfile.exists():
-        cmd = f"flux restore --quiet --checkpoint --size-limit=100M {dumpfile}"
+        cmd = f"flux restore --sd-notify --quiet --checkpoint --size-limit=100M {dumpfile}"
         context.bash(cmd)
     if dumplink and dumplink.exists():
         dumplink.unlink()
