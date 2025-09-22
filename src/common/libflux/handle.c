@@ -616,7 +616,7 @@ int flux_reconnect (flux_t *h)
      */
     if (h->ops->pollfd) {
         struct epoll_event ev = {
-            .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
+            .events = EPOLLET | EPOLLIN | EPOLLOUT,
         };
         if ((ev.data.fd = h->ops->pollfd (h->impl)) < 0
             || epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
@@ -1103,15 +1103,14 @@ int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
 int flux_pollfd (flux_t *h)
 {
     h = lookup_clone_ancestor (h);
+    struct epoll_event ev = { 0 };
 
     if (h->pollfd < 0) {
-        struct epoll_event ev = {
-            .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
-        };
         if ((h->pollfd = epoll_create1 (EPOLL_CLOEXEC)) < 0)
             goto error;
         /* add re-queue pollfd (if defined) */
         if (!(h->flags & FLUX_O_NOREQUEUE)) {
+            ev.events = EPOLLET | EPOLLIN;
             ev.data.fd = msg_deque_pollfd (h->queue);
             if (ev.data.fd < 0)
                 goto error;
@@ -1120,6 +1119,22 @@ int flux_pollfd (flux_t *h)
         }
         /* add connector pollfd (if defined) */
         if (h->ops->pollfd) {
+            /* The connector may indicate which events are significant
+             * on its pollfd method if other than POLLIN | POLLOUT.
+             */
+            int events;
+            if (flux_opt_get (h,
+                              FLUX_OPT_POLLFD_EVENTS,
+                              &events,
+                              sizeof (events)) == 0) {
+                ev.events = EPOLLET;
+                if (events & POLLIN)
+                    ev.events |= EPOLLIN;
+                if (events & POLLOUT)
+                    ev.events |= EPOLLOUT;
+            }
+            else
+                ev.events = EPOLLET | EPOLLIN | EPOLLOUT;
             ev.data.fd = h->ops->pollfd (h->impl);
             if (ev.data.fd < 0)
                 goto error;
@@ -1140,16 +1155,15 @@ int flux_pollevents (flux_t *h)
 {
     h = lookup_clone_ancestor (h);
     int e, events = 0;
+    struct epoll_event ev;
 
     /* create pollfd if needed */
     if (flux_pollfd (h) < 0)
         return -1;
 
-    /* wait for handle event */
-    if (h->pollfd >= 0) {
-        struct epoll_event ev;
-        (void)epoll_wait (h->pollfd, &ev, 1, 0);
-    }
+    /* consume all epoll events before sampling pollevents */
+    while (epoll_wait (h->pollfd, &ev, 1, 0) == 1)
+        ;
     /* get connector events (if applicable) */
     if (h->ops->pollevents) {
         if ((events = h->ops->pollevents (h->impl)) < 0)
@@ -1165,9 +1179,9 @@ int flux_pollevents (flux_t *h)
             return -1;
         if ((e & POLLIN))
             events |= FLUX_POLLIN;
-        if ((e & POLLERR))
-            events |= FLUX_POLLERR;
-        /* POLLOUT is purposefully ignored */
+        /* POLLOUT is purposefully ignored.
+         * Other bits are not possible with msg_deque.
+         */
     }
     return events;
 }

@@ -276,6 +276,12 @@ static int op_getopt (void *impl, const char *option, void *val, size_t size)
             goto error;
         memcpy (val, &count, size);
     }
+    else if (streq (option, FLUX_OPT_POLLFD_EVENTS)) {
+        int events = POLLIN;
+        if (size != sizeof (events) || !val)
+            goto error;
+        memcpy (val, &events, size);
+    }
     else
         goto error;
     return 0;

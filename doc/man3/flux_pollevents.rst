@@ -31,9 +31,10 @@ that POLLIN is raised when the handle becomes ready for reading or writing,
 but is not re-raised if those conditions are still true when :func:`poll`
 is re-entered.  The file descriptor is created on the first call to
 :func:`flux_pollfd` or :func:`flux_pollevents`.  It is used for signaling
-purposes only, not for I/O.
+purposes only, must not be read, written, or closed.
 
-:func:`flux_pollevents` returns a bitmask of poll flags for handle :var:`h`
+:func:`flux_pollevents` is normally called after a POLLIN event on
+:func:`flux_pollfd`.  It returns a bitmask of poll flags for handle :var:`h`
 and clears the pending :func:`flux_pollfd` POLLIN event, if any.
 
 Valid poll flags are:
@@ -56,6 +57,12 @@ the Flux reactor by combining prep, check, and idle watchers into a
 composite watcher for the edge triggered source.  Other event loops such
 as libev and libuv have similar concepts.  For a Flux example, refer to the
 source code for :man3:`flux_handle_watcher_create`.
+
+It is possible for the :func:`flux_pollfd` to raise POLLIN and then for
+:func:`flux_pollevents` to return zero.  Spurious wake-ups are to be expected
+from time to time with edge-triggered event sources and should not be treated
+as errors.
+
 
 RETURN VALUE
 ============
