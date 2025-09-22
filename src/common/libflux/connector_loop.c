@@ -97,6 +97,14 @@ static int op_getopt (void *impl, const char *option, void *val, size_t size)
             goto error;
         memcpy (val, &ctx->cred.rolemask, size);
     }
+    else if (streq (option, "flux::message_count_limit")) {
+        int limit;
+        if ((limit = msg_deque_get_limit (ctx->queue)) < 0)
+            return -1;
+        if (size != sizeof (limit) || !val)
+            goto error;
+        memcpy (val, &limit, size);
+    }
     else
         goto error;
     return 0;
@@ -124,6 +132,15 @@ static int op_setopt (void *impl,
         if (size != val_size || !val)
             goto error;
         memcpy (&ctx->cred.rolemask, val, val_size);
+    }
+    else if (streq (option, "flux::message_count_limit")) {
+        int limit;
+        val_size = sizeof (limit);
+        if (size != val_size || !val)
+            goto error;
+        memcpy (&limit, val, val_size);
+        if (msg_deque_set_limit (ctx->queue, limit) < 0)
+            return -1;
     }
     else
         goto error;

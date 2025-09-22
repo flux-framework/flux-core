@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <poll.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -380,16 +381,85 @@ void test_basic (void)
     flux_close (h);
 }
 
+/* Call this when POLLIN must not be pending as a precondition for a test.
+ * One call to flux_pollevents() call above should clear it.
+ * However, due to flux-framework/flux-core#7067, one try may not be
+ * sufficient (seems like 3 is the magic number but let's do 10).
+ * This was borrowed from the interthread unit test.
+ */
+void wait_unbusy (flux_t *h)
+{
+    int rc;
+    for (int i = 0; i < 10; i++) {
+        struct pollfd pfd;
+        pfd.fd = flux_pollfd (h);
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        rc = poll (&pfd, 1, 0);
+        if (rc < 0)
+            diag ("poll: %s", strerror (errno));
+        if (rc == 1) {
+            int revents = flux_pollevents (h);
+            diag ("pollfd is ready, pollevents = 0x%x", revents);
+        }
+        if (rc == 0)
+            break;
+    }
+    ok (rc == 0,
+        "pollfd is not ready");
+}
+
 void test_pollfd (void)
 {
     flux_t *h;
+    struct pollfd pfd;
+    flux_msg_t *msg;
+    flux_msg_t *msg1;
+
     if (!(h = flux_open ("loop://", 0)))
         BAIL_OUT ("can't continue without loop handle");
     flux_comms_error_set (h, comms_err, NULL);
 
-    ok (flux_pollfd (h) >= 0,
-        "flux_pollfd works");
+    int limit = 1;
+    if (flux_opt_set (h, "flux::message_count_limit", &limit, sizeof (limit)) < 0)
+        BAIL_OUT ("cannot set loop message count limit");
+    ok (flux_opt_get (h, "flux::message_count_limit", &limit, sizeof (limit)) == 0
+        && limit == 1,
+        "loop:// message count limit set to 1");
 
+    if (!(msg = flux_request_encode ("foo.bar", "baz")))
+        BAIL_OUT ("could not create test message");
+
+    ok ((flux_pollfd (h)) >= 0,
+        "flux_pollfd works");
+    ok (flux_pollevents (h) == FLUX_POLLOUT,
+        "flux_pollevents initially returns POLLOUT");
+
+    wait_unbusy (h);
+
+    ok (flux_send (h, msg, 0) == 0,
+        "send 1 message");
+
+    pfd.fd = flux_pollfd (h);
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    ok (poll (&pfd, 1, 0) == 1 && flux_pollevents (h) == FLUX_POLLIN,
+        "pollfd is ready and pollevents == POLLIN");
+
+    wait_unbusy (h);
+
+    msg1 = flux_recv (h, FLUX_MATCH_ANY, 0);
+    ok (msg1 != NULL,
+        "receive 1 message");
+    flux_msg_decref (msg1);
+
+    pfd.fd = flux_pollfd (h);
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    ok (poll (&pfd, 1, 0) == 1 && flux_pollevents (h) == FLUX_POLLOUT,
+        "pollfd is ready and pollevents == POLLOUT");
+
+    flux_msg_decref (msg);
     flux_close (h);
 }
 

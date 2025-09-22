@@ -10,33 +10,6 @@
 
 /* msg_dequeue.c - reactive, thread-safe, output-restricted message deque */
 
-/* The pollfd/pollevents pattern was borrowed from zeromq's ZMQ_EVENTS/ZMQ_FD,
- * described in zmq_getsockopt(3).  It is an edge-triggered notification system
- * in which the pollfd, a special file descriptor created with eventfd(2),
- * can be watched reactively for a POLLIN event, then the actual event on the
- * queue is determined by sampling pollevents.  The valid pollevents bits are:
- *
- * POLLIN   messages are available to pop
- * POLLOUT  messages may be pushed (always asserted currently)
- *
- * The pollevents should not be confused with pollfd events.  In pollfd, only
- * POLLIN is expected, signaling that one of the bits is newly set in
- * pollevents, and used to wake up a reactor loop to service those bits.
- *
- * "edge-triggered" means that pollfd does not reassert if the reactor handler
- * returns with the condition that caused the event still true.  In the case
- * of msg_deque POLLIN events, a handler must pop all messages before
- * returning, or if fairness is a concern (one message queue starving out other
- * reactor handlers), a specialized watcher in the pattern of ev_flux.c or
- * ev_zmq.c is needed.  ev_zmq.c contains further explanation about that
- * technique. When msg_deque is used within a connector, the reactive signaling
- * is encapsulated in the flux_t handle, so flux_handle_watcher_create(3),
- * based on ev_flux.c, already implements a fair handler.
- *
- * In the current implementation, msg_deque size is unlimited, so POLLOUT is
- * always asserted in pollevents.
- */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -60,7 +33,28 @@ struct msg_deque {
     uint64_t event;
     pthread_mutex_t lock;
     int flags;
+    int count;
+    int limit; // 0 = unlimited
 };
+
+int msg_deque_get_limit (struct msg_deque *q)
+{
+    if (!q) {
+        errno = EINVAL;
+        return -1;
+    }
+    return q->limit;
+}
+
+int msg_deque_set_limit (struct msg_deque *q, int limit)
+{
+    if (!q || limit < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    q->limit = limit;
+    return 0;
+}
 
 void msg_deque_destroy (struct msg_deque *q)
 {
@@ -154,6 +148,22 @@ bool check_push_args (struct msg_deque *q, flux_msg_t *msg)
     return true;
 }
 
+// call under lock
+static inline bool msg_deque_full_at (struct msg_deque *q, int delta)
+{
+    if (q->limit != 0 && q->count + delta >= q->limit)
+        return true;
+    return false;
+}
+
+// call under lock
+static inline bool msg_deque_empty_at (struct msg_deque *q, int delta)
+{
+    if (q->count + delta == 0)
+        return true;
+    return false;
+}
+
 int msg_deque_push_back (struct msg_deque *q, flux_msg_t *msg)
 {
     if (!check_push_args (q, msg)) {
@@ -161,16 +171,24 @@ int msg_deque_push_back (struct msg_deque *q, flux_msg_t *msg)
         return -1;
     }
     msg_deque_lock (q);
+    if (msg_deque_full_at (q, 0)) {
+        errno = EWOULDBLOCK;
+        goto error_unlock;
+    }
     if (!(q->pollevents & POLLIN)) {
         q->pollevents |= POLLIN;
-        if (msg_deque_raise_event (q) < 0) {
-            msg_deque_unlock (q);
-            return -1;
-        }
+        if (msg_deque_raise_event (q) < 0)
+            goto error_unlock;
     }
+    if ((q->pollevents & POLLOUT) && msg_deque_full_at (q, +1))
+        q->pollevents &= ~POLLOUT;
     list_add (&q->messages, &msg->list);
+    q->count++;
     msg_deque_unlock (q);
     return 0;
+error_unlock:
+    msg_deque_unlock (q);
+    return -1;
 }
 
 int msg_deque_push_front (struct msg_deque *q, flux_msg_t *msg)
@@ -180,16 +198,24 @@ int msg_deque_push_front (struct msg_deque *q, flux_msg_t *msg)
         return -1;
     }
     msg_deque_lock (q);
+    if (msg_deque_full_at (q, 0)) {
+        errno = EWOULDBLOCK;
+        goto error_unlock;
+    }
     if (!(q->pollevents & POLLIN)) {
         q->pollevents |= POLLIN;
-        if (msg_deque_raise_event (q) < 0) {
-            msg_deque_unlock (q);
-            return -1;
-        }
+        if (msg_deque_raise_event (q) < 0)
+            goto error_unlock;
     }
+    if ((q->pollevents & POLLOUT) && msg_deque_full_at (q, +1))
+        q->pollevents &= ~POLLOUT;
     list_add_tail (&q->messages, &msg->list);
+    q->count++;
     msg_deque_unlock (q);
     return 0;
+error_unlock:
+    msg_deque_unlock (q);
+    return -1;
 }
 
 flux_msg_t *msg_deque_pop_front (struct msg_deque *q)
@@ -199,12 +225,21 @@ flux_msg_t *msg_deque_pop_front (struct msg_deque *q)
     msg_deque_lock (q);
     flux_msg_t *msg = list_tail (&q->messages, struct flux_msg, list);
     if (msg) {
-        list_del_init (&msg->list);
-        if ((q->pollevents & POLLIN) && list_empty (&q->messages))
+        if (!(q->pollevents & POLLOUT) && !msg_deque_full_at (q, -1)) {
+            q->pollevents |= POLLOUT;
+            if (msg_deque_raise_event (q) < 0)
+                goto error_unlock;
+        }
+        if ((q->pollevents & POLLIN) && msg_deque_empty_at (q, -1))
             q->pollevents &= ~POLLIN;
+        list_del_init (&msg->list);
+        q->count--;
     }
     msg_deque_unlock (q);
     return msg;
+error_unlock:
+    msg_deque_unlock (q);
+    return NULL;
 }
 
 bool msg_deque_empty (struct msg_deque *q)
@@ -212,9 +247,9 @@ bool msg_deque_empty (struct msg_deque *q)
     if (!q)
         return true;
     msg_deque_lock (q);
-    bool res = list_empty (&q->messages);
+    size_t count = q->count;
     msg_deque_unlock (q);
-    return res;
+    return count == 0 ? true : false;
 }
 
 size_t msg_deque_count (struct msg_deque *q)
@@ -222,10 +257,7 @@ size_t msg_deque_count (struct msg_deque *q)
     if (!q)
         return 0;
     msg_deque_lock (q);
-    size_t count = 0;
-    flux_msg_t *msg = NULL;
-    list_for_each (&q->messages, msg, list)
-        count++;
+    size_t count = q->count;
     msg_deque_unlock (q);
     return count;
 }
