@@ -240,6 +240,28 @@ class Jobspec(object):
             raise ValueError("operator must be one of {}".format(valid_operator_values))
 
     @classmethod
+    def _validate_count_string(cls, count):
+        try:
+            idset.decode(count)
+        except ValueError:
+            values = count.split(":")
+            if len(values) > 3 or ("-" not in values[0] and "+" not in values[0]):
+                raise ValueError("count string must be a valid idset or range")
+            range_dict = {}
+            if "-" in values[0]:
+                rmin, _, rmax = values[0].partition("-")
+                range_dict["max"] = int(rmax)
+            elif "+" in values[0]:
+                rmin = values[0].rstrip("+")
+            range_dict["min"] = int(rmin)
+            if len(values) > 1:
+                range_dict["operand"] = int(values[1])
+                range_dict["operator"] = "+"
+            if len(values) > 2:
+                range_dict["operator"] = values[2]
+            cls._validate_complex_range(range_dict)
+
+    @classmethod
     # pylint: disable=too-many-branches
     def _validate_resource(cls, res):
         if not isinstance(res, abc.Mapping):
@@ -257,6 +279,8 @@ class Jobspec(object):
         count = res["count"]
         if isinstance(count, abc.Mapping):
             cls._validate_complex_range(count)
+        elif isinstance(count, str):
+            cls._validate_count_string(count)
         elif not isinstance(count, int):
             raise TypeError("count must be an int or mapping")
         else:
