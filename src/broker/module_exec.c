@@ -26,6 +26,9 @@
 #include "config.h"
 #endif
 #include <stdlib.h>
+#ifdef HAVE_SYS_PRCTL_H
+#include <sys/prctl.h>
+#endif
 #ifdef HAVE_ARGZ_ADD
 #include <argz.h>
 #else
@@ -332,6 +335,9 @@ int main (int argc, char *argv[])
     else {
         broker_mode_init (&me);
         flux_log_set_appname (me.h, me.name);
+#ifdef PR_SET_NAME
+        (void)prctl (PR_SET_NAME, me.name, 0, 0, 0);
+#endif
     }
 
     /* Set flux::uuid and flux::name per RFC 5
