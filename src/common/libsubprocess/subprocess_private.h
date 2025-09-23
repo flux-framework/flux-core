@@ -84,6 +84,8 @@ struct flux_subprocess {
     int channels_eof_expected;      /* number of eofs to expect */
     int channels_eof_sent;          /* counter to avoid loop checks */
 
+    zhash_t *msgchans;              /* name => struct msgchan */
+
     int status;      /* Raw status from waitpid(2), valid if exited       */
 
     flux_subprocess_state_t state;

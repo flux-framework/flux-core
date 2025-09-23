@@ -159,6 +159,29 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val);
 const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
 
+/*  Request a message channel for communication between process and caller.
+ *
+ *  The 'name' argument is the name of an environment variable that will be
+ *   set to a fd:// URI on the process end.  The file descriptor in the path
+ *   component of this URI represents one end of a socketpair opened in the
+ *   caller and passed to the process.
+ *
+ *  The 'uri' argument is normally an interthread:// connector URI that will
+ *   represent the channel on the caller end and act as message buffer.
+ *   The rules of interthread:// are that a given URI may be flux_open()ed up
+ *   to twice within the same process address space, in any order.  The
+ *   subprocess object will be one opener for the specified URI.  The caller
+ *   may be the other opener, or the URI may be safely passed to another
+ *   thread and opened there.  The interthread URI should be chosen so it
+ *   doesn't conflict with other URIs in the same process address space.
+ *
+ *  The two URIs will be joined back-to-back, so messages sent on one end will
+ *   appear on the other end.
+ */
+int flux_cmd_add_message_channel (flux_cmd_t *cmd,
+                                  const char *name,
+                                  const char *uri);
+
 #ifdef __cplusplus
 }
 #endif

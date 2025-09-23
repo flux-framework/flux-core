@@ -30,6 +30,7 @@
 #include <jansson.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/str/str.h"
 
 #include "command_private.h"
@@ -51,11 +52,39 @@ struct flux_command {
 
     /* Extra channels to create in the subprocess (i.e. socketpairs) */
     zlist_t *channels;
+
+    /* Optional message channels (list of 'struct cmd_msgchan') */
+    zlist_t *msgchans;
 };
 
 /*
  *  Static functions:
  */
+
+static void cmd_msgchan_destroy (struct cmd_msgchan *cm)
+{
+    if (cm) {
+        int saved_errno = errno;
+        free (cm->uri);
+        free (cm->name);
+        free (cm);
+        errno = saved_errno;
+    }
+}
+
+static struct cmd_msgchan *cmd_msgchan_create (const char *name,
+                                               const char *uri)
+{
+    struct cmd_msgchan *cm;
+    if (!(cm = calloc (1, sizeof (*cm))))
+        return NULL;
+    if (!(cm->uri = strdup (uri)) || !(cm->name = strdup (name)))
+        goto error;
+    return cm;
+error:
+    cmd_msgchan_destroy (cm);
+    return NULL;
+}
 
 /*
  *  Initialize an argz vector. If av == NULL then the argz vector is
@@ -336,7 +365,7 @@ fail:
     return NULL;
 }
 
-static zlist_t *zlist_fromjson (json_t *o)
+static zlist_t *channels_fromjson (json_t *o)
 {
     int errnum = EPROTO;
     size_t index;
@@ -363,7 +392,7 @@ fail:
     return NULL;
 }
 
-static json_t * zlist_tojson (zlist_t *l)
+static json_t *channels_tojson (zlist_t *l)
 {
     char *s = NULL;
     json_t *o = json_array ();
@@ -386,8 +415,7 @@ err:
     return NULL;
 }
 
-
-static const char * z_list_find (zlist_t *l, const char *s)
+static const char *channels_find (zlist_t *l, const char *s)
 {
     const char *v = zlist_first (l);
     while (v != NULL) {
@@ -396,6 +424,92 @@ static const char * z_list_find (zlist_t *l, const char *s)
         v = zlist_next (l);
     }
     return NULL;
+}
+
+/* This was added after the original design so if 'o' is
+ * NULL (not present in object), return an empty list
+ * rather than an error.
+ */
+static zlist_t *msgchans_fromjson (json_t *o)
+{
+    size_t index;
+    json_t *entry;
+    zlist_t *l;
+
+    if (!(l = zlist_new ())) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (o) {
+        if (!json_is_array (o))
+            goto inval;
+        json_array_foreach (o, index, entry) {
+            const char *name;
+            const char *uri;
+            struct cmd_msgchan *cm;
+
+            if (json_unpack (entry, "[ss]", &name, &uri) < 0)
+                goto inval;
+            if (!(cm = cmd_msgchan_create (name, uri))
+                || zlist_append (l, cm) < 0) {
+                cmd_msgchan_destroy (cm);
+                zlist_destroy (&l);
+                errno = ENOMEM;
+                return NULL;
+            }
+            zlist_freefn (l, cm, (zlist_free_fn *)cmd_msgchan_destroy, true);
+        }
+    }
+    return l;
+inval:
+    zlist_destroy (&l);
+    errno = EINVAL;
+    return NULL;
+}
+
+static json_t *msgchans_tojson (zlist_t *l)
+{
+    struct cmd_msgchan *cm;
+    json_t *o = json_array ();
+
+    if (o == NULL)
+        goto err;
+
+    cm = zlist_first (l);
+    while (cm) {
+        json_t *val = json_pack ("[ss]", cm->name, cm->uri);
+        if (!val || json_array_append_new (o, val) < 0) {
+            json_decref (val);
+            goto err;
+        }
+        cm = zlist_next (l);
+    }
+    return o;
+err:
+    json_decref (o);
+    return NULL;
+}
+
+static struct cmd_msgchan *msgchans_find (zlist_t *l, const char *s)
+{
+    struct cmd_msgchan *cm = zlist_first (l);
+    while (cm != NULL) {
+        if (streq (s, cm->name))
+            return cm;
+        cm = zlist_next (l);
+    }
+    return NULL;
+}
+
+static zlist_t *msgchans_dup (zlist_t *l)
+{
+    json_t *o;
+    zlist_t *cpy;
+    if (!(o = msgchans_tojson (l)))
+        return NULL;
+    cpy = msgchans_fromjson (o);
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return cpy;
 }
 
 /*  Version of zhash_dup() that duplicates both string keys and values
@@ -431,6 +545,7 @@ static void flux_cmd_free (flux_cmd_t *cmd)
         free (cmd->envz);
         zhash_destroy (&cmd->opts);
         zlist_destroy (&cmd->channels);
+        zlist_destroy (&cmd->msgchans);
         free (cmd);
         errno = saved_errno;
     }
@@ -453,7 +568,8 @@ flux_cmd_t *flux_cmd_create (int argc, char *argv[], char **env)
         goto fail;
 
     if (!(cmd->opts = zhash_new ())
-       || !(cmd->channels = zlist_new ())) {
+       || !(cmd->channels = zlist_new ())
+       || !(cmd->msgchans = zlist_new ())) {
         errno = ENOMEM;
         goto fail;
     }
@@ -659,12 +775,37 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name)
 {
     if (name == NULL)
         return -1;
-    if (z_list_find (cmd->channels, name)) {
+    if (channels_find (cmd->channels, name)) {
         errno = EEXIST;
         return -1;
     }
     /* autofree is set on cmd->channels, so name is automatically strdup'd */
     return zlist_append (cmd->channels, (char *)name);
+}
+
+int flux_cmd_add_message_channel (flux_cmd_t *cmd,
+                                  const char *name,
+                                  const char *uri)
+{
+    struct cmd_msgchan *cm;
+    if (!cmd || !name || !uri) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (msgchans_find (cmd->msgchans, name)) {
+        errno = EEXIST;
+        return -1;
+    }
+    if (!(cm = cmd_msgchan_create (name, uri))
+        || zlist_append (cmd->msgchans, cm) < 0) {
+        cmd_msgchan_destroy (cm);
+        return -1;
+    }
+    zlist_freefn (cmd->msgchans,
+                  cm,
+                  (zlist_free_fn *)cmd_msgchan_destroy,
+                  true);
+    return 0;
 }
 
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val)
@@ -697,6 +838,8 @@ flux_cmd_t * flux_cmd_copy (const flux_cmd_t *src)
         goto err;
     if (src->cwd && !(cmd->cwd = strdup (src->cwd)))
         goto err;
+    if (!(cmd->msgchans = msgchans_dup (src->msgchans)))
+        goto err;
     cmd->channels = zlist_dup (src->channels);
     cmd->opts = z_hash_dup (src->opts);
     return (cmd);
@@ -712,6 +855,7 @@ flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp)
     json_t *jargv = NULL;
     json_t *jopts = NULL;
     json_t *jchans = NULL;
+    json_t *jmsgchans = NULL;
     const char *cwd = NULL;
     flux_cmd_t *cmd = NULL;;
 
@@ -722,12 +866,13 @@ flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp)
     if (json_unpack_ex (o,
                         errp,
                         0,
-                        "{s?s, s:o, s:o, s:o, s:o}",
+                        "{s?s s:o s:o s:o s:o s?o}",
                         "cwd", &cwd,
                         "cmdline", &jargv,
                         "env", &jenv,
                         "opts", &jopts,
-                        "channels", &jchans) < 0) {
+                        "channels", &jchans,
+                        "msgchan", &jmsgchans) < 0) {
         errnum = EPROTO;
         goto fail;
     }
@@ -735,7 +880,8 @@ flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp)
         || (argz_fromjson (jargv, &cmd->argz, &cmd->argz_len) < 0)
         || (envz_fromjson (jenv, &cmd->envz, &cmd->envz_len) < 0)
         || !(cmd->opts = zhash_fromjson (jopts))
-        || !(cmd->channels = zlist_fromjson (jchans))) {
+        || !(cmd->channels = channels_fromjson (jchans))
+        || !(cmd->msgchans = msgchans_fromjson (jmsgchans))) {
         errnum = errno;
         goto fail;
     }
@@ -794,9 +940,17 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
     }
 
     /* Pack channels */
-    if (!(a = zlist_tojson (cmd->channels)))
+    if (!(a = channels_tojson (cmd->channels)))
         goto err;
     if (json_object_set_new (o, "channels", a) != 0) {
+        json_decref (a);
+        goto err;
+    }
+
+    /* Pack msgchan */
+    if (!(a = msgchans_tojson (cmd->msgchans)))
+        goto err;
+    if (json_object_set_new (o, "msgchan", a) != 0) {
         json_decref (a);
         goto err;
     }
@@ -835,6 +989,11 @@ int cmd_set_env (flux_cmd_t *cmd, char **env)
 zlist_t *cmd_channel_list (flux_cmd_t *cmd)
 {
     return cmd->channels;
+}
+
+zlist_t *cmd_msgchan_list (flux_cmd_t *cmd)
+{
+    return cmd->msgchans;
 }
 
 int cmd_find_opts (const flux_cmd_t *cmd, const char **substrings)

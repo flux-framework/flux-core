@@ -12,7 +12,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux \
 	-DLLOG_ENABLE_DEBUG=1 \
-	$(JANSSON_CFLAGS)
+	$(JANSSON_CFLAGS) \
+	$(LIBUUID_CFLAGS)
 
 noinst_LTLIBRARIES = \
 	libsubprocess.la
@@ -43,7 +44,9 @@ libsubprocess_la_SOURCES = \
 	fbuf_watcher.h \
 	fbuf_watcher.c \
 	bulk-exec.h \
-	bulk-exec.c
+	bulk-exec.c \
+	msgchan.h \
+	msgchan.c
 
 fluxcoreinclude_HEADERS = \
 	command.h \
@@ -60,11 +63,14 @@ TESTS = \
 	test_iochan.t \
 	test_fbuf.t \
 	test_fbuf_watcher.t \
-	test_bulk-exec-einval.t
+	test_bulk-exec-einval.t \
+	test_msgchan.t \
+	test_message_channel.t
 
 check_PROGRAMS = \
 	$(TESTS) \
 	test_echo \
+	test_echomsg \
 	test_multi_echo \
 	test_fork_sleep \
 	test_fdcopy \
@@ -170,6 +176,21 @@ test_bulk_exec_einval_t_CPPFLAGS = $(test_cppflags)
 test_bulk_exec_einval_t_LDADD = $(test_ldadd)
 test_bulk_exec_einval_t_LDFLAGS = $(test_ldflags)
 
+test_msgchan_t_SOURCES = test/msgchan.c
+test_msgchan_t_CPPFLAGS = $(test_cppflags)
+test_msgchan_t_LDADD = \
+	$(test_ldadd) \
+	$(UUID_LIBS)
+
+test_msgchan_t_LDFLAGS = $(test_ldflags)
+
+test_message_channel_t_SOURCES = test/message_channel.c
+test_message_channel_t_CPPFLAGS = \
+	-DTEST_SUBPROCESS_DIR=\"$(top_builddir)/src/common/libsubprocess/\" \
+	$(test_cppflags)
+test_message_channel_t_LDADD = $(test_ldadd)
+test_message_channel_t_LDFLAGS = $(test_ldflags)
+
 test_echo_SOURCES = test/test_echo.c
 
 test_fdcopy_SOURCES = test/fdcopy.c
@@ -177,3 +198,7 @@ test_fdcopy_SOURCES = test/fdcopy.c
 test_multi_echo_SOURCES = test/test_multi_echo.c
 
 test_fork_sleep_SOURCES = test/test_fork_sleep.c
+
+test_echomsg_SOURCES = test/echomsg.c
+test_echomsg_CPPFLAGS = $(test_cppflags)
+test_echomsg_LDADD = $(test_ldadd)
