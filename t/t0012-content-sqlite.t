@@ -143,6 +143,11 @@ test_expect_success 'fill the cache with more data for later purging' '
 	${SPAMUTIL} 10000 200 >/dev/null
 '
 
+test_expect_success 'checkpoint-get returns ENOENT if there is no checkpoint' '
+	test_must_fail checkpoint_get 2> get.err &&
+	grep "No such file or directory" get.err
+'
+
 test_expect_success 'checkpoint-put w/ rootref bar' '
 	checkpoint_put bar
 '
