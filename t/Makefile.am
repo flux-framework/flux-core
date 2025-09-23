@@ -311,6 +311,7 @@ TESTSCRIPTS = \
 	python/t0032-resource-journal.py \
 	python/t0033-eventlog-formatter.py \
 	python/t0034-queuelist.py \
+	python/t0035-kvs-no-checkpoint.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY
@@ -330,6 +331,7 @@ EXTRA_DIST= \
 	test-under-flux/t_modcheck.t \
 	test-under-flux/test.t \
 	rc/rc1-kvs.py \
+	rc/rc1-content.py \
 	rc/rc1-job.py \
 	rc/rc3.py \
 	shell/input \

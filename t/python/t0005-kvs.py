@@ -980,6 +980,19 @@ class TestKVS(unittest.TestCase):
         self.assertEqual(full_vals[0], 1)
         self.assertEqual(full_vals[1], "ENOENT")
 
+    def test_kvs_checkpoint_01_lookup(self):
+        c = flux.kvs.kvs_checkpoint_lookup(self.f)
+        self.assertEqual(c[0]["version"], 1)
+        self.assertIn("sequence", c[0])
+        self.assertIn("timestamp", c[0])
+        self.assertIn("rootref", c[0])
+
+        c = flux.kvs.kvs_checkpoint_lookup(self.f, cache_bypass=True)
+        self.assertEqual(c[0]["version"], 1)
+        self.assertIn("sequence", c[0])
+        self.assertIn("timestamp", c[0])
+        self.assertIn("rootref", c[0])
+
 
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
