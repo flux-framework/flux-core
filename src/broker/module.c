@@ -677,6 +677,21 @@ ssize_t module_get_recv_queue_count (module_t *p)
     return count;
 }
 
+
+bool module_is_exec (module_t *p)
+{
+    if (!p || !p->is_exec)
+        return false;
+    return true;
+}
+
+pid_t module_get_pid (module_t *p)
+{
+    if (!p || !p->is_exec)
+        return -1;
+    return flux_subprocess_pid (p->exec.p);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

@@ -344,7 +344,15 @@ static int modhash_load_finalize (struct modhash *mh,
     }
     modhash_add (mh, p);
 
-    flux_log (mh->ctx->h, LOG_DEBUG, "insmod %s", module_get_name (p));
+    if (module_is_exec (p)) {
+        flux_log (mh->ctx->h,
+                  LOG_DEBUG,
+                  "insmod %s exec pid=%d",
+                  module_get_name (p),
+                  (int)module_get_pid (p));
+    }
+    else
+        flux_log (mh->ctx->h, LOG_DEBUG, "insmod %s", module_get_name (p));
     return 0;
 }
 
