@@ -1302,12 +1302,14 @@ _flux_module()
 
     local load_OPTS="\
         --name= \
+        --exec \
     "
     local remove_OPTS="\
         -f --force \
     "
     local reload_OPTS="\
         ${remove_OPTS} \
+        ${load_OPTS} \
     "
     local stats_OPTS="\
         -p --parse= \
