@@ -38,8 +38,8 @@ args, remainder = parser.parse_known_args()
 sys.argv[1:] = remainder
 
 
-def is_exe(fpath):
-    return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+def is_file(fpath):
+    return os.path.isfile(fpath)
 
 
 def sanitize_env(env):
@@ -77,16 +77,13 @@ def rerun_under_flux(size=1, personality="full"):
 
     command = [flux_exe, "start", "--test-size", str(size)]
     if personality != "full":
-        for rc_num in [1, 3]:
-            attr = "broker.rc{}_path".format(rc_num)
-            if personality == "minimal":
-                command.append("-S{}=".format(attr))
-            else:
-                path = "{}/t/rc/rc{}-{}".format(srcdir, rc_num, personality)
-                command.append("-S{}={}".format(attr, path))
-                if not is_exe(path):
-                    print("cannot execute {}".format(path), file=sys.stderr)
-                    sys.exit(1)
+        rc1 = f"{srcdir}/t/rc/rc1-{personality}.py"
+        rc3 = f"{srcdir}/t/rc/rc3.py"
+        if not is_file(rc1):
+            print(f"cannot run {rc1}", file=sys.stderr)
+            sys.exit(1)
+        command.append(f"-Sbroker.rc1_path=flux modprobe run {rc1}")
+        command.append(f"-Sbroker.rc3_path=flux modprobe run {rc3}")
 
     command.extend([sys.executable, sys.argv[0]])
 

@@ -233,10 +233,10 @@ test_under_flux() {
         flags="${flags} --root=$SHARNESS_TRASH_DIRECTORY"
         unset root
     elif test "$personality" != "full"; then
-        RC1_PATH=$FLUX_SOURCE_DIR/t/rc/rc1-$personality
-        RC3_PATH=$FLUX_SOURCE_DIR/t/rc/rc3-$personality
-        test -x $RC1_PATH || error "cannot execute $RC1_PATH"
-        test -x $RC3_PATH || error "cannot execute $RC3_PATH"
+        RC1="$FLUX_SOURCE_DIR/t/rc/rc1-${personality}.py"
+        test -f $RC1 || error "could not find rc1 file: $RC1"
+        RC1_PATH="flux modprobe run ${RC1}"
+        RC3_PATH="flux modprobe run $FLUX_SOURCE_DIR/t/rc/rc3.py"
     else
         unset RC1_PATH
         unset RC3_PATH
@@ -270,8 +270,8 @@ test_under_flux() {
       exec flux start --test-size=${size} \
                       ${BROKER_RUNDIR+--test-rundir=${BROKER_RUNDIR}} \
                       ${BROKER_RUNDIR+--test-rundir-cleanup} \
-                      ${RC1_PATH+-o -Sbroker.rc1_path=${RC1_PATH}} \
-                      ${RC3_PATH+-o -Sbroker.rc3_path=${RC3_PATH}} \
+                      ${RC1_PATH+-o -Sbroker.rc1_path="${RC1_PATH}"} \
+                      ${RC3_PATH+-o -Sbroker.rc3_path="${RC3_PATH}"} \
                       ${sysopts} \
                       ${logopts} \
                       ${valgrind} \
