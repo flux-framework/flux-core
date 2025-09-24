@@ -292,6 +292,7 @@ class Module(Task):
         "needs-config",
         "priority",
         "disabled",
+        "exec",
     )
 
     def __init__(self, conf):
@@ -306,6 +307,7 @@ class Module(Task):
 
         self.module = conf.get("module", name)
         self.args = conf.get("args", [])
+        self.exec = conf.get("exec", False)
         self.run = self._load
 
         # Build kwargs to pass along to Task class
@@ -333,7 +335,7 @@ class Module(Task):
 
     def _load(self, context):
         args = context.getopts(self.name, default=self.args, also=self.provides)
-        payload = {"path": self.module, "args": args}
+        payload = {"path": self.module, "args": args, "exec": self.exec}
 
         if self.name != self.module:
             payload["name"] = self.name
