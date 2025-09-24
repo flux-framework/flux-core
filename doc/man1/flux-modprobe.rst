@@ -239,6 +239,10 @@ Each entry in the ``modules`` array supports the following keys:
 **args**
    (optional, array of string) Array of default module arguments.
 
+**exec**
+   (optional, boolean) If true, run module as a separate process instead
+   of as a thread in the Flux broker process. Default: false.
+
 **ranks**
    (optional, str) The set of ranks on which this module should be loaded by
    default. May either be an RFC 22 idset string, or a string prefixed with
@@ -283,6 +287,23 @@ The ``modprobe.toml`` config file also supports the following keys:
    by dropping a file into the ``modprobe.d`` directory., e.g. ::
 
      feasibility.ranks = "0,5,7"
+
+Module configuration may also be extended via the ``modules`` table in the
+broker config (see :man5:`flux-config`). This approach is useful to modify
+configuration for individual Flux instances. Each entry in the ``modules``
+table should itself be a table of updates for a named module, for example:
+
+.. code-block:: toml
+
+  [modules]
+  feasibility.ranks = "0,1"
+
+Or, to enable the same config for an instance launched by
+:command:`flux alloc`:
+
+.. code-block:: console
+
+  $ flux alloc -N16 --conf=modules.feasibility.ranks="0,1"
 
 .. _modprobe_rc:
 

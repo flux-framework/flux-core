@@ -24,6 +24,10 @@
 #
 #   args     (optional) An array of module arguments.
 #
+#   exec     (optional) A boolean indicating if the module should be executed
+#            as a separate process. The default is False, which runs the
+#            module as a thread in the broker process.
+#
 #   ranks    (optional) The set of ranks on this module should be loaded.
 #            May either be an RFC 22 idset string, or a string beginning with
 #            `>` or `<` followed by a single integer. (e.g. ">0" to load a

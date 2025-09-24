@@ -985,4 +985,20 @@ test_expect_success 'modprobe: module requires works with needs' '
 	grep alternate-scheduler alternative-needs.out &&
 	grep required-module alternative-needs.out
 '
+test_expect_success 'modprobe: module exec=True runs module as process' '
+	mkdir modprobe.d &&
+	test_when_finished "rm -rf modprobe.d" &&
+	cat <<-EOF >modprobe.d/exec.toml &&
+	sched-simple.exec = true
+	EOF
+	FLUX_MODPROBE_PATH=$(pwd) flux modprobe show sched-simple \
+		| jq -e ".exec == true" &&
+	FLUX_MODPROBE_PATH=$(pwd) flux start flux dmesg -H >exec.log &&
+	grep sched-simple exec.log &&
+	grep "sched-simple exec" exec.log
+'
+test_expect_success 'modprobe: module exec option can be set in broker config' '
+	flux alloc -N1 --conf=modules.sched-simple.exec=true flux dmesg -H \
+	  | grep "sched-simple exec"
+'
 test_done
