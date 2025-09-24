@@ -30,10 +30,24 @@
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/basename.h"
 #include "src/common/librouter/subhash.h"
+#include "src/common/librouter/rpc_track.h"
 #include "ccan/str/str.h"
 
 #include "module.h"
 #include "modservice.h"
+
+struct broker_module_thread {
+    struct module_args args;/* passed to module thread via (void *) param */
+    pthread_t t;            /* module thread */
+};
+
+struct broker_module_exec {
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p;
+    struct rpc_track *tracker;
+};
+
+extern char **environ;
 
 struct broker_module {
     flux_t *h;              /* ref to broker's internal flux_t handle */
@@ -44,12 +58,15 @@ struct broker_module {
 
     flux_t *h_broker_end;   /* broker end of interthread channel */
 
-    struct module_args args;/* passed to module thread via (void *) param */
+    bool is_exec;
+    union {
+        struct broker_module_thread thread;
+        struct broker_module_exec exec;
+    };
 
     uuid_t uuid;            /* uuid for unique request sender identity */
     char uuid_str[UUID_STR_LEN];
     char uri[128];
-    pthread_t t;            /* module thread */
     char *name;
     int status;
     int errnum;
@@ -147,12 +164,11 @@ error:
     return NULL;
 }
 
-module_t *module_create (flux_t *h,
-                         const char *parent_uuid,
-                         const char *name,
-                         mod_main_f mod_main,
-                         json_t *mod_args,
-                         flux_error_t *error)
+static module_t *module_create (flux_t *h,
+                                const char *parent_uuid,
+                                const char *name,
+                                json_t *mod_args,
+                                flux_error_t *error)
 {
     flux_reactor_t *r = flux_get_reactor (h);
     module_t *p;
@@ -198,11 +214,6 @@ module_t *module_create (flux_t *h,
         flux_msg_decref (msg);
         goto cleanup;
     }
-    /* Prepare (void *) argument to module thread.
-     * Take care not to change these while the thread is executing.
-     */
-    p->args.uri = p->uri;
-    p->args.main = mod_main;
     return p;
 nomem:
     errprintf (error, "out of memory");
@@ -210,6 +221,55 @@ nomem:
 cleanup:
     module_destroy (p);
     return NULL;
+}
+
+module_t *module_create_exec (flux_t *h,
+                              const char *parent_uuid,
+                              const char *name,
+                              const char *path,
+                              json_t *mod_args,
+                              flux_error_t *error)
+{
+    module_t *p;
+    if (!(p = module_create (h, parent_uuid, name, mod_args, error)))
+        return NULL;
+    p->is_exec = true;
+
+    const char *av[] = { "flux", "module-exec", path, NULL };
+    int ac = 3;
+    if (!(p->exec.cmd = flux_cmd_create (ac, (char **)av, environ))
+        || flux_cmd_add_message_channel (p->exec.cmd,
+                                         "FLUX_MODULE_URI",
+                                         p->uri) < 0) {
+        errprintf (error, "error creating %s command object", p->name);
+        module_destroy (p);
+        return NULL;
+    }
+    if (!(p->exec.tracker = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG))) {
+        errprintf (error, "error creating %s rpc tracker", p->name);
+        module_destroy (p);
+        return NULL;
+    }
+    return p;
+}
+
+module_t *module_create_thread (flux_t *h,
+                                const char *parent_uuid,
+                                const char *name,
+                                mod_main_f mod_main,
+                                json_t *mod_args,
+                                flux_error_t *error)
+{
+    module_t *p;
+    if (!(p = module_create (h, parent_uuid, name, mod_args, error)))
+        return NULL;
+
+    /* Prepare (void *) argument to module thread.
+     * Take care not to change these while the thread is executing.
+     */
+    p->thread.args.uri = p->uri;
+    p->thread.args.main = mod_main;
+    return p;
 }
 
 const char *module_get_name (module_t *p)
@@ -257,6 +317,14 @@ flux_msg_t *module_recvmsg (module_t *p)
 {
     flux_msg_t *msg;
     msg = flux_recv (p->h_broker_end, FLUX_MATCH_ANY, FLUX_O_NONBLOCK);
+    if (msg && p->is_exec) {
+        int saved_errno = errno;
+        int type;
+        if (flux_msg_get_type (msg, &type) == 0
+            && type == FLUX_MSGTYPE_RESPONSE)
+            rpc_track_update (p->exec.tracker, msg);
+        errno = saved_errno;
+    }
     return msg;
 }
 
@@ -286,6 +354,13 @@ int module_sendmsg_new (module_t *p, flux_msg_t **msg)
         *msg = NULL;
         return 0;
     }
+    if (p->is_exec && type == FLUX_MSGTYPE_REQUEST) {
+        flux_msg_t *cpy;
+        if ((cpy = flux_msg_copy (*msg, false))) {
+            rpc_track_update (p->exec.tracker, cpy);
+            flux_msg_decref (cpy);
+        }
+    }
     return flux_send_new (p->h_broker_end, msg, 0);
 }
 
@@ -303,6 +378,25 @@ int module_disconnect_arm (module_t *p,
     return 0;
 }
 
+static void log_tracker_error (flux_t *h, const flux_msg_t *msg, int errnum)
+{
+    if (errnum != ENOSYS) {
+        const char *topic = "unknown";
+        (void)flux_msg_get_topic (msg, &topic);
+        flux_log_error (h,
+                        "tracker: error sending %s EHOSTUNREACH response",
+                        topic);
+    }
+}
+
+static void fail_module_rpcs (const flux_msg_t *msg, void *arg)
+{
+    module_t *p = arg;
+
+    if (flux_respond_error (p->h, msg, EHOSTUNREACH, "module disconnect") < 0)
+        log_tracker_error (p->h, msg, errno);
+}
+
 void module_destroy (module_t *p)
 {
     int e;
@@ -312,20 +406,28 @@ void module_destroy (module_t *p)
     if (!p)
         return;
 
-    if (p->t) {
-        if ((e = pthread_join (p->t, &res)) != 0)
-            log_errn_exit (e, "pthread_join");
-        if (p->status != FLUX_MODSTATE_EXITED) {
-            /* Calls broker.c module_status_cb() => service_remove_byuuid()
-             * and releases a reference on 'p'.  Without this, disconnect
-             * requests sent when other modules are destroyed can still find
-             * this service name and trigger a use-after-free segfault.
-             * See also: flux-framework/flux-core#4564.
-             */
-            module_set_status (p, FLUX_MODSTATE_EXITED);
+    if (p->is_exec) {
+        flux_subprocess_destroy (p->exec.p);
+        flux_cmd_destroy (p->exec.cmd);
+        rpc_track_purge (p->exec.tracker, fail_module_rpcs, p);
+        rpc_track_destroy (p->exec.tracker);
+    }
+    else {
+        if (p->thread.t) {
+            if ((e = pthread_join (p->thread.t, &res)) != 0)
+                log_errn_exit (e, "pthread_join");
+            if (res == PTHREAD_CANCELED)
+                flux_log (p->h, LOG_DEBUG, "%s thread was canceled", p->name);
         }
-        if (res == PTHREAD_CANCELED)
-            flux_log (p->h, LOG_DEBUG, "%s thread was canceled", p->name);
+    }
+    if (p->status != FLUX_MODSTATE_EXITED) {
+        /* Calls broker.c module_status_cb() => service_remove_byuuid()
+         * and releases a reference on 'p'.  Without this, disconnect
+         * requests sent when other modules are destroyed can still find
+         * this service name and trigger a use-after-free segfault.
+         * See also: flux-framework/flux-core#4564.
+         */
+        module_set_status (p, FLUX_MODSTATE_EXITED);
     }
 
     /* Send disconnect messages to services used by this module.
@@ -393,15 +495,85 @@ int module_set_defer (module_t *p, bool flag)
     return 0;
 }
 
+/* Log something and notify the broker (via its module status callback)
+ * if a module running as a sub-process terminates.  N.B. this isn't called
+ * if the sub-process enters the FAILED state - see similar code in the
+ * state callback below.
+ */
+static void exec_completion_cb (flux_subprocess_t *proc)
+{
+    module_t *p = flux_subprocess_aux_get (proc, "module");
+    int rc;
+    bool failed = true;
+    if ((rc = flux_subprocess_exit_code (proc)) >= 0) {
+        if (rc == 0)
+            failed = false;
+        else
+            flux_log (p->h, LOG_ERR, "%s: exited with rc=%d", p->name, rc);
+    }
+    else if ((rc = flux_subprocess_signaled (proc)) >= 0)
+        flux_log (p->h, LOG_ERR, "%s: killed by %s", p->name, strsignal (rc));
+    else
+        flux_log (p->h, LOG_ERR, "%s: completed (not signal or exit)", p->name);
+    if (p->status != FLUX_MODSTATE_EXITED) {
+        if (failed)
+            module_set_errnum (p, ECHILD);
+        module_set_status (p, FLUX_MODSTATE_EXITED);
+    }
+}
+
+static void exec_state_cb (flux_subprocess_t *proc,
+                           flux_subprocess_state_t state)
+{
+    module_t *p = flux_subprocess_aux_get (proc, "module");
+    switch (state) {
+        case FLUX_SUBPROCESS_RUNNING:
+            break;
+        case FLUX_SUBPROCESS_FAILED:
+            flux_log (p->h,
+                      LOG_ERR,
+                      "%s: %s failed: %s",
+                      p->name,
+                      flux_subprocess_state_string (state),
+                      strerror (flux_subprocess_fail_errno (proc)));
+            if (p->status != FLUX_MODSTATE_EXITED) {
+                module_set_errnum (p, ECHILD);
+                module_set_status (p, FLUX_MODSTATE_EXITED);
+            }
+            break;
+        case FLUX_SUBPROCESS_EXITED:
+        case FLUX_SUBPROCESS_INIT:
+        case FLUX_SUBPROCESS_STOPPED:
+            break; // ignore
+    }
+
+}
+
 int module_start (module_t *p)
 {
     int errnum;
     int rc = -1;
 
     flux_watcher_start (p->broker_w);
-    if ((errnum = pthread_create (&p->t, NULL, module_thread, &p->args))) {
-        errno = errnum;
-        goto done;
+    if (p->is_exec) {
+        flux_reactor_t *r = flux_get_reactor (p->h);
+        flux_subprocess_ops_t ops = {
+            .on_completion = exec_completion_cb,
+            .on_state_change = exec_state_cb,
+        };
+        int flags = FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH;
+        if (!(p->exec.p = flux_local_exec (r, flags, p->exec.cmd, &ops))
+            || flux_subprocess_aux_set (p->exec.p, "module", p, NULL) < 0)
+            goto done;
+    }
+    else {
+        if ((errnum = pthread_create (&p->thread.t,
+                                      NULL,
+                                      module_thread,
+                                      &p->thread.args))) {
+            errno = errnum;
+            goto done;
+        }
     }
     rc = 0;
 done:
@@ -410,14 +582,24 @@ done:
 
 int module_cancel (module_t *p, flux_error_t *error)
 {
-    if (p->t) {
-        int e;
-        if ((e = pthread_cancel (p->t)) != 0 && e != ESRCH) {
-            errprintf (error, "pthread_cancel: %s", strerror (e));
+    if (p->is_exec) {
+        flux_future_t *f;
+        if (!(f = flux_subprocess_kill (p->exec.p, SIGKILL))) {
+            errprintf (error, "flux_subprocess_kill: %s", strerror (errno));
             return -1;
         }
-        p->module_unload_requested = true;
+        flux_future_destroy (f);
     }
+    else {
+        if (p->thread.t) {
+            int e;
+            if ((e = pthread_cancel (p->thread.t)) != 0 && e != ESRCH) {
+                errprintf (error, "pthread_cancel: %s", strerror (e));
+                return -1;
+            }
+        }
+    }
+    p->module_unload_requested = true;
     return 0;
 }
 
@@ -493,6 +675,21 @@ ssize_t module_get_recv_queue_count (module_t *p)
                       sizeof (count)) < 0)
         return -1;
     return count;
+}
+
+
+bool module_is_exec (module_t *p)
+{
+    if (!p || !p->is_exec)
+        return false;
+    return true;
+}
+
+pid_t module_get_pid (module_t *p)
+{
+    if (!p || !p->is_exec)
+        return -1;
+    return flux_subprocess_pid (p->exec.p);
 }
 
 /*

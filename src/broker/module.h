@@ -40,12 +40,18 @@ struct module_builtin {
     mod_main_f main;
 };
 
-module_t *module_create (flux_t *h,
-                         const char *parent_uuid,
-                         const char *name,
-                         mod_main_f mod_main,
-                         json_t *args,
-                         flux_error_t *error);
+module_t *module_create_thread (flux_t *h,
+                                const char *parent_uuid,
+                                const char *name,
+                                mod_main_f mod_main,
+                                json_t *args,
+                                flux_error_t *error);
+module_t *module_create_exec (flux_t *h,
+                              const char *parent_uuid,
+                              const char *name,
+                              const char *path,
+                              json_t *args,
+                              flux_error_t *error);
 void module_destroy (module_t *p);
 
 /* accessors
@@ -123,6 +129,9 @@ bool module_is_subscribed (module_t *p, const char *topic);
 
 ssize_t module_get_send_queue_count (module_t *p);
 ssize_t module_get_recv_queue_count (module_t *p);
+
+bool module_is_exec (module_t *p);
+pid_t module_get_pid (module_t *p);
 
 #endif /* !_BROKER_MODULE_H */
 

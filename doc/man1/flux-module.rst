@@ -6,8 +6,8 @@ flux-module(1)
 SYNOPSIS
 ========
 
-| **flux** **module** **load** [*--name*] *module* [*args...*]
-| **flux** **module** **reload** [*--name*] [*--force*] *module* [*args...*]
+| **flux** **module** **load** [*--name*] [*--exec*] *module* [*args...*]
+| **flux** **module** **reload** [*--name*] [*--exec*] [*--force*] *module* [*args...*]
 | **flux** **module** **remove** [*--force*] *name*
 | **flux** **module** **list** [*-l*]
 | **flux** **module** **stats** [*-R*] [*--clear*] *name*
@@ -44,6 +44,10 @@ entered the running state (see LIST OUTPUT below).
   Override the default module name.  A single shared object file may be
   loaded multiple times under different names.
 
+.. option:: --exec
+
+  Load the module in a separate process, e.g. for isolation or debugging.
+
 reload
 ------
 
@@ -59,6 +63,10 @@ Reload module *name*. This is equivalent to running
 .. option:: -n, --name=NAME
 
   Override the default module name.
+
+.. option:: --exec
+
+  Load the module in a separate process, e.g. for isolation or debugging.
 
 remove
 ------

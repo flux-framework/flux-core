@@ -61,6 +61,11 @@ static module_t *modhash_load_builtin (modhash_t *mh,
                                       const char *name,
                                       json_t *args,
                                       flux_error_t *error);
+static module_t *modhash_load_exec (modhash_t *mh,
+                                    const char *name,
+                                    char *path,
+                                    json_t *args,
+                                    flux_error_t *error);
 
 int modhash_response_sendmsg_new (modhash_t *mh, flux_msg_t **msg)
 {
@@ -316,7 +321,7 @@ static int mod_svc_cb (flux_msg_t **msg, void *arg)
 /* Perform the final steps of loading a broker module:
  * - set status and message callbacks
  * - register a service under the module name
- * - start the module thread
+ * - start the module thread/process
  * * insert the module object into the modhash
  */
 static int modhash_load_finalize (struct modhash *mh,
@@ -339,23 +344,26 @@ static int modhash_load_finalize (struct modhash *mh,
     }
     modhash_add (mh, p);
 
-    flux_log (mh->ctx->h, LOG_DEBUG, "insmod %s", module_get_name (p));
+    if (module_is_exec (p)) {
+        flux_log (mh->ctx->h,
+                  LOG_DEBUG,
+                  "insmod %s exec pid=%d",
+                  module_get_name (p),
+                  (int)module_get_pid (p));
+    }
+    else
+        flux_log (mh->ctx->h, LOG_DEBUG, "insmod %s", module_get_name (p));
     return 0;
 }
 
-static module_t *modhash_load_dso (modhash_t *mh,
-                                   const char *name_or_null,
-                                   const char *path_or_name,
-                                   json_t *args,
-                                   flux_error_t *error)
+static int modhash_resolve_dso (const char *name_or_null,
+                                const char *path_or_name,
+                                char **namep,
+                                char **pathp,
+                                flux_error_t *error)
 {
-    broker_ctx_t *ctx = mh->ctx;
-    const char *broker_uuid = overlay_get_uuid (ctx->overlay);
     char *path = NULL;
     char *name = NULL;
-    void *dso;
-    mod_main_f mod_main;
-    module_t *p;
 
     /* Handle 'flux module load /path/to/foo.dso' or 'flux module load foo'.
      * In the latter case, search FLUX_MODULE_PATH for foo.dso.
@@ -363,7 +371,7 @@ static module_t *modhash_load_dso (modhash_t *mh,
     if (strchr (path_or_name, '/')) {
         if (!(path = strdup (path_or_name))) {
             errprintf (error, "error duplicating module path");
-            return NULL;
+            return -1;
         }
     }
     else {
@@ -371,10 +379,10 @@ static module_t *modhash_load_dso (modhash_t *mh,
         if (!searchpath) {
             errprintf (error, "FLUX_MODULE_PATH is not set in the environment");
             errno = EINVAL;
-            return NULL;
+            return -1;
         }
         if (!(path = module_dso_search (path_or_name, searchpath, error)))
-            return NULL;
+            return -1;
     }
     /* If the name is not specified, derive it from the module path.
      * E.g. the path '/path/to/foo.dso' suggests a module name of 'foo'.
@@ -389,44 +397,54 @@ static module_t *modhash_load_dso (modhash_t *mh,
                    "error duplicating module name: %s",
                    strerror (errno));
         ERRNO_SAFE_WRAP (free, path);
-        goto error;
+        return -1;
     }
+    *namep = name;
+    *pathp = path;
+    return 0;
+}
+
+static module_t *modhash_load_dso (modhash_t *mh,
+                                   const char *name,
+                                   char *path, // stolen
+                                   json_t *args,
+                                   flux_error_t *error)
+{
+    broker_ctx_t *ctx = mh->ctx;
+    const char *broker_uuid = overlay_get_uuid (ctx->overlay);
+    void *dso;
+    mod_main_f mod_main;
+    module_t *p;
+
     /* Now open the DSO and obtain the mod_main() function pointer
      * that will be called from a new module thread in module_start().
      * The name is only passed to this function so the deprecated mod_name
      * symbol can be sanity checked, if defined.
      */
-    if (!(dso = module_dso_open (path, name, &mod_main, error))) {
-        ERRNO_SAFE_WRAP (free, path);
-        goto error;
-    }
+    if (!(dso = module_dso_open (path, name, &mod_main, error)))
+        return NULL;
+
     /* Create the module object.
      */
-    if (!(p = module_create (ctx->h,
-                             broker_uuid,
-                             name,
-                             mod_main,
-                             args,
-                             error))
+    if (!(p = module_create_thread (ctx->h,
+                                    broker_uuid,
+                                    name,
+                                    mod_main,
+                                    args,
+                                    error))
         || module_aux_set (p, NULL, dso, module_dso_close) < 0) {
         module_dso_close (dso);
-        ERRNO_SAFE_WRAP (free, path);
-        goto error_module;
+        goto error;
     }
     if (module_aux_set (p, "path", path, (flux_free_f)free) < 0) {
-        ERRNO_SAFE_WRAP (free, path);
-        goto error_module;
+        errprintf (error,
+                   "error stashing module path in aux container: %s",
+                   strerror (errno));
+        goto error;
     }
-    /*  Register service, start module thread, and insert into modhash.
-     */
-    if (modhash_load_finalize (ctx->modhash, p, error) < 0)
-        goto error_module;
-    free (name);
     return p;
-error_module:
-    module_destroy (p);
 error:
-    ERRNO_SAFE_WRAP (free, name);
+    module_destroy (p);
     return NULL;
 }
 
@@ -448,8 +466,9 @@ static void load_cb (flux_t *h,
                      void *arg)
 {
     broker_ctx_t *ctx = arg;
-    const char *name = NULL;
-    const char *path;
+    const char *name_or_null = NULL;
+    const char *path_or_name;
+    int exec = 0;
     json_t *args;
     flux_error_t error;
     const char *errmsg = NULL;
@@ -458,24 +477,57 @@ static void load_cb (flux_t *h,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s?s s:s s:o}",
-                             "name", &name,
-                             "path", &path,
-                             "args", &args) < 0)
+                             "{s?s s:s s:o s?b}",
+                             "name", &name_or_null,
+                             "path", &path_or_name,
+                             "args", &args,
+                             "exec", &exec) < 0)
         goto error;
-    if ((builtin = builtins_find (ctx->modhash, path))) {
-        p = modhash_load_builtin (ctx->modhash, builtin, name, args, &error);
+
+    if ((builtin = builtins_find (ctx->modhash, path_or_name))) {
+        if (exec) {
+            errno = EINVAL;
+            errmsg = "built-in modules cannot execute in a separate process";
+            goto error;
+        }
+        p = modhash_load_builtin (ctx->modhash,
+                                  builtin,
+                                  name_or_null,
+                                  args,
+                                  &error);
         if (!p) {
             errmsg = error.text;
             goto error;
         }
     }
     else {
-        if (!(p = modhash_load_dso (ctx->modhash, name, path, args, &error))) {
+        char *name = NULL;
+        char *path = NULL;
+        if (modhash_resolve_dso (name_or_null,
+                                 path_or_name,
+                                 &name,
+                                 &path,
+                                 &error) < 0) {
             errmsg = error.text;
             goto error;
         }
+        if (exec)
+            p = modhash_load_exec (ctx->modhash, name, path, args, &error);
+        else
+            p = modhash_load_dso (ctx->modhash, name, path, args, &error);
+        if (!p) {
+            ERRNO_SAFE_WRAP (free, name);
+            ERRNO_SAFE_WRAP (free, path);
+            errmsg = error.text;
+            goto error;
+        }
+        free (name);
+        // N.B. path is stolen by modhash_load_*() on success
     }
+    /* Register service, start module thread, and insert into modhash.
+     */
+    if (modhash_load_finalize (ctx->modhash, p, &error) < 0)
+        goto error_module;
     /* Push the insmod request onto the module.  A response will be generated
      * from the module status callback, after the module is active.
      */
@@ -974,12 +1026,12 @@ static module_t *modhash_load_builtin (modhash_t *mh,
     module_t *p;
     char *cpy;
 
-    if (!(p = module_create (mh->ctx->h,
-                             broker_uuid,
-                             name ? name : bb->name,
-                             bb->main,
-                             args,
-                             error)))
+    if (!(p = module_create_thread (mh->ctx->h,
+                                    broker_uuid,
+                                    name ? name : bb->name,
+                                    bb->main,
+                                    args,
+                                    error)))
         return NULL;
     if (!(cpy = strdup ("builtin"))
         || module_aux_set (p, "path", cpy, (flux_free_f)free) < 0) {
@@ -989,8 +1041,6 @@ static module_t *modhash_load_builtin (modhash_t *mh,
         ERRNO_SAFE_WRAP (free, cpy);
         goto error;
     }
-    if (modhash_load_finalize (mh, p, error) < 0)
-        goto error;
     return p;
 error:
     module_destroy (p);
@@ -1052,10 +1102,14 @@ flux_future_t *modhash_load_builtins (modhash_t *mh, flux_error_t *error)
         mh->f_builtins_load = f;
     }
     for (int i = 0; i < ARRAY_SIZE (builtins); i++) {
+        module_t *p;
         if (mh->ctx->verbose > 1)
             log_msg ("loading %s", builtins[i]->name);
-        if (!modhash_load_builtin (mh, builtins[i], NULL, NULL, error))
+        if (!(p = modhash_load_builtin (mh, builtins[i], NULL, NULL, error))
+            || modhash_load_finalize (mh, p, error) < 0) {
+            module_destroy (p);
             return NULL;
+        }
     }
     modhash_load_builtins_cond_fulfill (mh, mh->f_builtins_load);
     return mh->f_builtins_load;
@@ -1100,6 +1154,36 @@ flux_future_t *modhash_unload_builtins (modhash_t *mh)
     }
     modhash_unload_builtins_cond_fulfill (mh, mh->f_builtins_unload);
     return mh->f_builtins_unload;
+}
+
+static module_t *modhash_load_exec (modhash_t *mh,
+                                    const char *name,
+                                    char *path, // stolen
+                                    json_t *args,
+                                    flux_error_t *error)
+{
+    broker_ctx_t *ctx = mh->ctx;
+    const char *broker_uuid = overlay_get_uuid (ctx->overlay);
+    module_t *p;
+
+    if (!(p = module_create_exec (ctx->h,
+                                  broker_uuid,
+                                  name,
+                                  path,
+                                  args,
+                                  error)))
+        goto error;
+    if (module_aux_set (p, "path", path, (flux_free_f)free) < 0) {
+        ERRNO_SAFE_WRAP (free, path);
+        errprintf (error,
+                   "error stashing module path in aux container: %s",
+                   strerror (errno));
+        goto error;
+    }
+    return p;
+error:
+    module_destroy (p);
+    return NULL;
 }
 
 /*
