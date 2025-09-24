@@ -239,6 +239,10 @@ Each entry in the ``modules`` array supports the following keys:
 **args**
    (optional, array of string) Array of default module arguments.
 
+**exec**
+   (optional, boolean) If true, run module as a separate process instead
+   of as a thread in the Flux broker process. Default: false.
+
 **ranks**
    (optional, str) The set of ranks on which this module should be loaded by
    default. May either be an RFC 22 idset string, or a string prefixed with
