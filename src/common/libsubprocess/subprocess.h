@@ -51,18 +51,18 @@ typedef enum {
  * Subprocess flags
  */
 enum {
-    /* flux_local_exec(): let parent stdin, stdout, stderr, carry to
+    /* let parent stdin, stdout, stderr, carry to
      * child.  Do not create "stdin", "stdout", or "stderr" channels.
      * Subsequently, flux_subprocess_write()/close()/read()/read_line()
      * will fail on streams of "stdin", "stdout", or "stderr".
      */
     FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH = 1,
-    /* flux_local_exec(): do not call setpgrp() before exec(2) */
+    /* do not call setpgrp() before exec(2) */
     FLUX_SUBPROCESS_FLAGS_NO_SETPGRP = 2,
-    /* flux_local_exec(): use fork(2)/exec(2) even if posix_spawn(3)
+    /* use fork(2)/exec(2) even if posix_spawn(3)
      * available */
     FLUX_SUBPROCESS_FLAGS_FORK_EXEC = 4,
-    /* flux_rexec(): In order to improve performance, do not locally
+    /* flux_rexec() only: In order to improve performance, do not locally
      * copy and buffer output from the remote subprocess.  Immediately
      * call output callbacks.  Users should call
      * flux_subprocess_read() to retrieve the data.  If

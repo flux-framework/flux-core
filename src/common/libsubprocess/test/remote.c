@@ -56,35 +56,6 @@ struct simple_ctx {
 
 extern char **environ;
 
-void corner_case_test (flux_t *h)
-{
-    char *true_av[] = { "true", NULL };
-    flux_subprocess_t *p;
-    flux_cmd_t *cmd;
-
-    cmd = flux_cmd_create (1, true_av, environ);
-    if (!cmd)
-        BAIL_OUT ("flux_cmd_create failed");
-
-    /* N.B. Issue #5968: flags are not passed from `flux_rexec` to
-     * remote subprocesses.  As of this test addition, errors may
-     * occur on other flags, but the only actual flag that should not
-     * be allowed on remote subprocesses is
-     * FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH, which makes no sense
-     * for non-local subprocesses.
-     *
-     * Although other flags would elicit failures, we do not test them.
-     */
-    p = flux_rexec (h,
-                    FLUX_NODEID_ANY,
-                    FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH,
-                    cmd,
-                    NULL);
-    ok (p == NULL && errno == EINVAL,
-        "flux_rexec failed for unsupported flag");
-    flux_cmd_destroy (cmd);
-}
-
 static void simple_output_cb (flux_subprocess_t *p, const char *stream)
 {
     struct simple_ctx *ctx = flux_subprocess_aux_get (p, "ctx");
@@ -753,8 +724,6 @@ int main (int argc, char *argv[])
 
     h = rcmdsrv_create (SERVER_NAME);
 
-    diag ("corner_case_test");
-    corner_case_test (h);
     diag ("simple_test");
     simple_test (h);
     diag ("simple_pre_running_write_close");

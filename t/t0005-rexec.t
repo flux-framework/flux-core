@@ -293,7 +293,7 @@ test_expect_success 'rexec from rank 1 to rank 0 works' '
 
 test_expect_success NO_CHAIN_LINT 'kill fails with ESRCH when pid is unknown' '
 	test_must_fail $rexec_script kill 15 12345678 2>kill.err &&
-	grep "No such process" kill.err
+	grep "does not belong to any subprocess" kill.err
 '
 
 test_done
