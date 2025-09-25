@@ -45,6 +45,7 @@ struct broker_module_exec {
     flux_cmd_t *cmd;
     flux_subprocess_t *p;
     struct rpc_track *tracker;
+    flux_future_t *f_kill;
 };
 
 extern char **environ;
@@ -411,6 +412,7 @@ void module_destroy (module_t *p)
         flux_cmd_destroy (p->exec.cmd);
         rpc_track_purge (p->exec.tracker, fail_module_rpcs, p);
         rpc_track_destroy (p->exec.tracker);
+        flux_future_destroy (p->exec.f_kill);
     }
     else {
         if (p->thread.t) {
@@ -556,13 +558,16 @@ int module_start (module_t *p)
 
     flux_watcher_start (p->broker_w);
     if (p->is_exec) {
-        flux_reactor_t *r = flux_get_reactor (p->h);
         flux_subprocess_ops_t ops = {
             .on_completion = exec_completion_cb,
             .on_state_change = exec_state_cb,
         };
         int flags = FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH;
-        if (!(p->exec.p = flux_local_exec (r, flags, p->exec.cmd, &ops))
+        if (!(p->exec.p = flux_rexec (p->h,
+                                      FLUX_NODEID_ANY,
+                                      flags,
+                                      p->exec.cmd,
+                                      &ops))
             || flux_subprocess_aux_set (p->exec.p, "module", p, NULL) < 0)
             goto done;
     }
@@ -580,15 +585,30 @@ done:
     return rc;
 }
 
+static void kill_continuation (flux_future_t *f, void *arg)
+{
+    module_t *p = arg;
+
+    if (flux_future_get (f, NULL) < 0) {
+        int level = LOG_DEBUG;
+        if (errno != ESRCH)
+            level = LOG_ERR;
+        flux_log (p->h, level, "module_cancel: %s", future_strerror (f, errno));
+    }
+}
+
 int module_cancel (module_t *p, flux_error_t *error)
 {
     if (p->is_exec) {
-        flux_future_t *f;
-        if (!(f = flux_subprocess_kill (p->exec.p, SIGKILL))) {
-            errprintf (error, "flux_subprocess_kill: %s", strerror (errno));
+        if (p->exec.f_kill)
+            flux_future_destroy (p->exec.f_kill);
+        if (!(p->exec.f_kill = flux_subprocess_kill (p->exec.p, SIGKILL))
+            || flux_future_then (p->exec.f_kill, -1, kill_continuation, p)) {
+            errprintf (error,
+                       "could not send SIGKILL request: %s",
+                       future_strerror (p->exec.f_kill, errno));
             return -1;
         }
-        flux_future_destroy (f);
     }
     else {
         if (p->thread.t) {
