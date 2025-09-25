@@ -897,9 +897,9 @@ def kvs_watch_async(
           detect this as the exact key has not been changed.  Defaults to
           False.
 
-    :rtype: :py:obj:`flux.kvs.KVSWatchFuture`
-    :return: Call .get() from the then callback to
-      get the currently returned value from the Future object.
+    Returns:
+        flux.kvs.KVSWatchFuture: Call .get() from the then callback to
+        get the currently returned value from the Future object.
     """
 
     flags = flux.constants.FLUX_KVS_WATCH
@@ -911,3 +911,25 @@ def kvs_watch_async(
         flags |= flux.constants.FLUX_KVS_WATCH_FULL
     future = RAW.flux_kvs_lookup(flux_handle, namespace, flags, key)
     return KVSWatchFuture(future)
+
+
+def kvs_checkpoint_lookup(flux_handle, cache_bypass=False):
+    """Lookup KVS checkpoint(s)
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        cache_bypass: lookup directly to backing store
+
+    Returns:
+        list: array of checkpoint objects
+    """
+
+    topic = "content.checkpoint-get"
+    if cache_bypass:
+        topic = "content-backing.checkpoint-get"
+    rsp = RPC(flux_handle, topic)
+    a = rsp.get()["value"]
+    # backwards compatibility, lookup returns a single checkpoint dict
+    if isinstance(a, dict):
+        return [a]
+    return a

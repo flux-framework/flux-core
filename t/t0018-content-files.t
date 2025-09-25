@@ -179,6 +179,11 @@ test_expect_success 'flux module stats reports zero object count' '
 	    --type int --parse object_count content-files) -eq 0
 '
 
+test_expect_success 'checkpoint-get returns ENOENT if there is no checkpoint' '
+	test_must_fail checkpoint_get 2> get.err &&
+	grep "No such file or directory" get.err
+'
+
 test_expect_success 'checkpoint-put w/ rootref bar' '
 	checkpoint_put bar
 '
