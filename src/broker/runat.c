@@ -67,6 +67,7 @@ struct runat {
     struct termios saved_termios;
     runat_notify_f notify_cb;
     void *notify_handle;
+    bool standalone_test_flag;
 };
 
 static void runat_command_destroy (struct runat_command *cmd);
@@ -190,6 +191,33 @@ static void completion_cb (flux_subprocess_t *p)
     start_next_command (r, entry);
 }
 
+static void kill_continuation (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+
+    if (flux_future_get (f, NULL) < 0) {
+        int level = LOG_DEBUG;
+        if (errno != ESRCH)
+            level = LOG_ERR;
+        flux_log (h, level, "kill: %s", future_strerror (f, errno));
+    }
+}
+
+static int kill_async (flux_subprocess_t *p, int signum)
+{
+    flux_future_t *f;
+    if (!(f = flux_subprocess_kill (p, signum))
+        || flux_future_then (f, -1, kill_continuation, NULL) < 0
+        || flux_subprocess_aux_set (p,
+                                    NULL,
+                                    f,
+                                    (flux_free_f)flux_future_destroy) < 0) {
+            flux_future_destroy (f);
+            return -1;
+    }
+    return 0;
+}
+
 /* If state changes to running and the abort flag is set, send abort_signal.
  * This closes a race where the 'entry' might continue running if the abort
  * is called as a process is starting up.
@@ -199,7 +227,6 @@ static void state_change_cb (flux_subprocess_t *p,
 {
     struct runat *r = flux_subprocess_aux_get (p, "runat");
     struct runat_entry *entry = flux_subprocess_aux_get (p, "runat_entry");
-    flux_future_t *f = NULL;
 
     switch (state) {
         case FLUX_SUBPROCESS_INIT:
@@ -219,21 +246,17 @@ static void state_change_cb (flux_subprocess_t *p,
                 && tcgetpgrp (STDIN_FILENO) == getpgrp ()) {
                 entry->foreground = true;
                 if (tcsetpgrp (STDIN_FILENO, flux_subprocess_pid (p)) < 0
-                    || !(f = flux_subprocess_kill (p, SIGCONT))) {
+                    || kill_async (p, SIGCONT) < 0) {
                     flux_log_error (r->h,
                                     "error bringing %s into foreground",
                                     entry->name);
                 }
-                flux_future_destroy (f);
             }
             break;
         case FLUX_SUBPROCESS_RUNNING:
             if (entry->aborted) {
-                if (!(f = flux_subprocess_kill (p, abort_signal))) {
-                    if (errno != ESRCH)
-                        flux_log_error (r->h, "kill %s", entry->name);
-                }
-                flux_future_destroy (f);
+                if (kill_async (p, abort_signal) < 0)
+                    flux_log_error (r->h, "kill %s", entry->name);
             }
             break;
     }
@@ -273,13 +296,26 @@ static flux_subprocess_t *start_command (struct runat *r,
         ops.on_stdout = stdio_cb;
         ops.on_stderr = stdio_cb;
     }
-    if (!(p = flux_local_exec_ex (flux_get_reactor (r->h),
-                                  cmd->flags,
-                                  cmd->cmd,
-                                  &ops,
-                                  NULL,
-                                  flux_llog,
-                                  r->h)))
+    if (r->standalone_test_flag) {
+        p = flux_local_exec_ex (flux_get_reactor (r->h),
+                                cmd->flags,
+                                cmd->cmd,
+                                &ops,
+                                NULL,
+                                flux_llog,
+                                r->h);
+    }
+    else {
+        p = flux_rexec_ex (r->h,
+                           "rexec",
+                           FLUX_NODEID_ANY,
+                           cmd->flags,
+                           cmd->cmd,
+                           &ops,
+                           flux_llog,
+                           r->h);
+    }
+    if (!p)
         return NULL;
     if (flux_subprocess_aux_set (p, "runat_entry", entry, NULL) < 0)
         goto error;
@@ -647,12 +683,8 @@ int runat_abort (struct runat *r, const char *name)
         return -1;
     }
     if ((cmd = zlist_head (entry->commands)) && cmd->p != NULL) {
-        flux_future_t *f;
-        if (!(f = flux_subprocess_kill (cmd->p, abort_signal))) {
-            if (errno != ESRCH)
-                flux_log_error (r->h, "kill %s", entry->name);
-        }
-        flux_future_destroy (f);
+        if (kill_async (cmd->p, abort_signal) < 0)
+            flux_log_error (r->h, "kill %s", entry->name);
     }
     entry->aborted = true;
     return 0;
@@ -737,6 +769,20 @@ struct runat *runat_create (flux_t *h,
 error:
     runat_destroy (r);
     return NULL;
+}
+
+// for unit testing only
+struct runat *runat_create_test (flux_t *h,
+                                 const char *local_uri,
+                                 const char *jobid,
+                                 runat_notify_f notify_cb,
+                                 void *notify_handle)
+{
+    struct runat *r;
+    if (!(r = runat_create (h, local_uri, jobid, notify_cb, notify_handle)))
+        return NULL;
+    r->standalone_test_flag = true;
+    return r;
 }
 
 void runat_destroy (struct runat *r)

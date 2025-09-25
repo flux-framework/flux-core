@@ -93,6 +93,14 @@ bool runat_is_completed (struct runat *r, const char *name);
  */
 bool runat_is_interactive (struct runat *r, const char *name);
 
+// only for unit testing
+struct runat *runat_create_test (flux_t *h,
+                                 const char *local_uri,
+                                 const char *jobid,
+                                 runat_notify_f notify_cb,
+                                 void *notify_handle);
+
+
 #endif /* !_BROKER_RUNAT_H */
 
 /*
