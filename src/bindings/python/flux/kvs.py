@@ -897,9 +897,9 @@ def kvs_watch_async(
           detect this as the exact key has not been changed.  Defaults to
           False.
 
-    :rtype: :py:obj:`flux.kvs.KVSWatchFuture`
-    :return: Call .get() from the then callback to
-      get the currently returned value from the Future object.
+    Returns:
+        flux.kvs.KVSWatchFuture: Call .get() from the then callback to
+        get the currently returned value from the Future object.
     """
 
     flags = flux.constants.FLUX_KVS_WATCH
