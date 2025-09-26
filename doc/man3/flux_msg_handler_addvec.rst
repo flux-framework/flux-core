@@ -39,9 +39,12 @@ The last entry in the array is set to NULL.
 returned from :func:`flux_msg_handler_addvec`.
 
 These functions are convenience functions which call
-:man3:`flux_msg_handler_create`, :man3:`flux_msg_handler_start`; and
-:man3:`flux_msg_handler_stop`, :man3:`flux_msg_handler_destroy` on each element
-of the array, respectively.
+:man3:`flux_msg_handler_create`, :man3:`flux_msg_handler_start`,
+:man3:`flux_msg_handler_allow_rolemask`; and :man3:`flux_msg_handler_stop`,
+:man3:`flux_msg_handler_destroy` on each element of the array, respectively.
+The defaults of :var:`typemask` and :var:`topic_glob` are described in
+:man3:`flux_msg_cmp`.  The default rolemask is described in
+:man3:`flux_msg_handler_allow_rolemask` and is set with a :var:`rolemask` of 0.
 
 If :func:`flux_msg_handler_addvec` encounters an error creating a message
 handler, all previously created message handlers in the array are destroyed
@@ -71,4 +74,4 @@ RESOURCES
 SEE ALSO
 ========
 
-:man3:`flux_msg_handler_create`
+:man3:`flux_msg_handler_create`, :man3:`flux_msg_handler_allow_rolemask`
