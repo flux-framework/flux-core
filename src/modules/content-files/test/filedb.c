@@ -68,6 +68,23 @@ void test_badargs (const char *dbpath)
         "filedb_put key=<long> failed with EOVERFLOW");
     ok (errstr != NULL,
         "and error string was set");
+
+    /* validate */
+
+    errno = 0;
+    errstr = NULL;
+    ok (filedb_validate (dbpath, "..", &errstr) < 0 && errno == EINVAL,
+        "filedb_validate key=\"..\" failed with EINVAL");
+    ok (errstr != NULL,
+        "and error string was set");
+
+    errno = 0;
+    errstr = NULL;
+    ok (filedb_validate (dbpath, longkey, &errstr) < 0
+        && errno == EOVERFLOW,
+        "filedb_validate key=<long> failed with EOVERFLOW");
+    ok (errstr != NULL,
+        "and error string was set");
 }
 
 void test_simple (const char *dbpath)
@@ -78,10 +95,14 @@ void test_simple (const char *dbpath)
     void *data;
     size_t size;
 
-    /* simple put, get */
+    /* simple validate, put, get */
 
+    ok (filedb_validate (dbpath, "key1", &errstr) < 0,
+        "filedb_validate fails on non-existent key");
     ok (filedb_put (dbpath, "key1", val1, sizeof (val1), &errstr) == 0,
         "filedb_put key1={abc} works");
+    ok (filedb_validate (dbpath, "key1", &errstr) == 0,
+        "filedb_validate success existent key");
     size = 0;
     data = NULL;
     ok (filedb_get (dbpath, "key1", &data, &size, &errstr) == 0,
