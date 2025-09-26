@@ -122,6 +122,7 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_msg_cmp.3 \
 	man3/flux_msg_create.3 \
 	man3/flux_msg_handler_addvec.3 \
+	man3/flux_msg_handler_allow_rolemask.rst \
 	man3/flux_signal_watcher_create.3 \
 	man3/flux_stat_watcher_create.3 \
 	man3/flux_respond.3 \
