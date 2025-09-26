@@ -71,7 +71,6 @@
 #include "log.h"
 #include "runat.h"
 #include "heaptrace.h"
-#include "exec.h"
 #include "boot_config.h"
 #include "boot_pmi.h"
 #include "publisher.h"
@@ -471,10 +470,6 @@ int main (int argc, char *argv[])
     }
     if (heaptrace_initialize (ctx.h) < 0) {
         log_err ("heaptrace_initialize");
-        goto cleanup;
-    }
-    if (exec_initialize (ctx.h, ctx.rank, ctx.attrs) < 0) {
-        log_err ("exec_initialize");
         goto cleanup;
     }
     if (flux_aux_set (ctx.h,
@@ -1359,7 +1354,6 @@ static struct internal_service services[] = {
     { "runat",              NULL },
     { "state-machine",      NULL },
     { "shutdown",           NULL },
-    { "rexec",              NULL },
     { NULL, NULL, },
 };
 
