@@ -561,6 +561,24 @@ flux_subprocess_t * flux_local_exec (flux_reactor_t *r,
     return flux_local_exec_ex (r, flags, cmd, ops, NULL, NULL, NULL);
 }
 
+flux_future_t *flux_rexec_bg (flux_t *h,
+                              const char *service_name,
+                              int rank,
+                              int flags,
+                              const flux_cmd_t *cmd)
+{
+    if (!h
+        || (rank < 0
+            && rank != FLUX_NODEID_ANY
+            && rank != FLUX_NODEID_UPSTREAM)
+        || !cmd
+        || !flux_cmd_argc (cmd)) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return subprocess_rexec_bg (h, service_name, rank, cmd, flags);
+}
+
 flux_subprocess_t *flux_rexec_ex (flux_t *h,
                                   const char *service_name,
                                   int rank,

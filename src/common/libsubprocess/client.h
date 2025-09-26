@@ -32,6 +32,12 @@ flux_future_t *subprocess_rexec (flux_t *h,
                                  int flags,
                                  int lflags);
 
+flux_future_t *subprocess_rexec_bg (flux_t *h,
+                                    const char *service_name,
+                                    uint32_t rank,
+                                    const flux_cmd_t *cmd,
+                                    int local_flags);
+
 int subprocess_rexec_get (flux_future_t *f);
 bool subprocess_rexec_is_started (flux_future_t *f, pid_t *pid);
 bool subprocess_rexec_is_stopped (flux_future_t *f);

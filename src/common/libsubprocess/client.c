@@ -146,6 +146,45 @@ error:
     return NULL;
 }
 
+flux_future_t *subprocess_rexec_bg (flux_t *h,
+                                    const char *service_name,
+                                    uint32_t rank,
+                                    const flux_cmd_t *cmd,
+                                    int local_flags)
+{
+    flux_future_t *f = NULL;
+    json_t *ocmd = NULL;
+    char *topic = NULL;
+
+    /* FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF is not allowed with background
+     * execution, raise error if set:
+     */
+    if (local_flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (service_name == NULL)
+        service_name = "rexec";
+
+    if (asprintf (&topic, "%s.exec", service_name) < 0
+        || !(ocmd = cmd_tojson (cmd)))
+        goto out;
+
+    f = flux_rpc_pack (h,
+                       topic,
+                       rank,
+                       0,
+                       "{s:O s:i s:i}",
+                       "cmd", ocmd,
+                       "flags", 0,
+                       "local_flags", local_flags);
+out:
+    ERRNO_SAFE_WRAP (free, topic);
+    ERRNO_SAFE_WRAP (json_decref, ocmd);
+    return f;
+}
+
 int subprocess_rexec_get (flux_future_t *f)
 {
     struct rexec_ctx *ctx;
