@@ -351,12 +351,14 @@ static void server_exec_cb (flux_t *h,
     const char *errmsg = NULL;
     flux_error_t error;
     int flags;
+    int lflags = 0;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:o s:i}",
+                             "{s:o s:i s?i}",
                              "cmd", &cmd_obj,
-                             "flags", &flags) < 0)
+                             "flags", &flags,
+                             "lflags", &lflags) < 0)
         goto error;
     if (s->shutdown) {
         errmsg = "subprocess server is shutting down";
@@ -414,7 +416,7 @@ static void server_exec_cb (flux_t *h,
     flux_cmd_unsetenv (cmd, "NOTIFY_SOCKET"); // see sd_notify(3)
 
     if (!(p = flux_local_exec_ex (flux_get_reactor (s->h),
-                                  0,
+                                  lflags,
                                   cmd,
                                   &ops,
                                   NULL,
@@ -531,6 +533,8 @@ static void server_kill_cb (flux_t *h,
     int signum;
     flux_error_t error;
     const char *errmsg = NULL;
+    flux_subprocess_t *p;
+    flux_future_t *f = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -543,15 +547,24 @@ static void server_kill_cb (flux_t *h,
         errno = EPERM;
         goto error;
     }
-    if (!proc_find_bypid (s, pid)
-        || killpg (pid, signum) < 0)
+    if (!(p = proc_find_bypid (s, pid))) {
+        errprintf (&error, "pid %d does not belong to any subprocess", pid);
+        errmsg = error.text;
         goto error;
+    }
+    if (!(f = flux_subprocess_kill (p, signum))
+        || flux_future_get (f, NULL) < 0) { // will never block
+        errprintf (&error, "%s", future_strerror (f, errno));
+        errmsg = error.text;
+        goto error;
+    }
     if (flux_respond (h, msg, NULL) < 0) {
         llog_error (s,
                     "error responding to %s.kill request: %s",
                     s->service_name,
                     strerror (errno));
     }
+    flux_future_destroy (f);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0) {
@@ -560,6 +573,7 @@ error:
                     s->service_name,
                     strerror (errno));
     }
+    flux_future_destroy (f);
 }
 
 static const char *subprocess_sender (flux_subprocess_t *p)

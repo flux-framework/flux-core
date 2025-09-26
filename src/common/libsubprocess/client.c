@@ -107,7 +107,8 @@ flux_future_t *subprocess_rexec (flux_t *h,
                                  const char *service_name,
                                  uint32_t rank,
                                  flux_cmd_t *cmd,
-                                 int flags)
+                                 int flags,
+                                 int lflags)
 {
     flux_future_t *f = NULL;
     struct rexec_ctx *ctx;
@@ -125,9 +126,10 @@ flux_future_t *subprocess_rexec (flux_t *h,
                              topic,
                              rank,
                              FLUX_RPC_STREAMING,
-                             "{s:O s:i}",
+                             "{s:O s:i s:i}",
                              "cmd", ctx->cmd,
-                             "flags", ctx->flags))
+                             "flags", ctx->flags,
+                             "lflags", lflags))
         || flux_future_aux_set (f,
                                 "flux::rexec",
                                 ctx,

@@ -27,6 +27,7 @@
 #include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/fdutils.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 
@@ -571,7 +572,10 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
 {
     flux_subprocess_t *p = NULL;
     flux_reactor_t *r;
-    int valid_flags = FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF;
+    int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
+                       | FLUX_SUBPROCESS_FLAGS_NO_SETPGRP
+                       | FLUX_SUBPROCESS_FLAGS_FORK_EXEC
+                       | FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF);
 
     if (!h
         || (rank < 0
@@ -989,6 +993,36 @@ static bool subprocess_signal_allowed (flux_subprocess_t *p)
     return flux_subprocess_active (p);
 }
 
+static flux_future_t *kill_create (pid_t pid, int sig)
+{
+    flux_future_t *f;
+    flux_error_t error;
+    if (!(f = flux_future_create (NULL, NULL)))
+        return NULL;
+    if (kill (pid, sig) < 0) {
+        errprintf (&error, "kill: %s", strerror (errno));
+        flux_future_fulfill_error (f, errno, error.text);
+    }
+    else
+        flux_future_fulfill (f, NULL, NULL);
+    return f;
+}
+
+static flux_future_t *killpg_create (int pgrp, int sig)
+{
+    flux_future_t *f;
+    flux_error_t error;
+    if (!(f = flux_future_create (NULL, NULL)))
+        return NULL;
+    if (killpg (pgrp, sig) < 0) {
+        errprintf (&error, "killpg: %s", strerror (errno));
+        flux_future_fulfill_error (f, errno, error.text);
+    }
+    else
+        flux_future_fulfill (f, NULL, NULL);
+    return f;
+}
+
 flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
 {
     flux_future_t *f = NULL;
@@ -1005,28 +1039,20 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
     }
 
     if (p->local) {
-        int ret;
         if (p->pid <= (pid_t) 0) {
             errno = ESRCH;
             return NULL;
         }
         if (!(p->flags & FLUX_SUBPROCESS_FLAGS_NO_SETPGRP))
-            ret = killpg (p->pid, signum);
+            f = killpg_create (p->pid, signum);
         else
-            ret = kill (p->pid, signum);
-        f = flux_future_create (NULL, NULL);
-        if (ret < 0)
-            flux_future_fulfill_error (f, errno, NULL);
-        else
-            flux_future_fulfill (f, NULL, NULL);
+            f = kill_create (p->pid, signum);
     }
     else {
         if (p->state == FLUX_SUBPROCESS_INIT)
             f = add_pending_signal (p, signum);
         else
             f = remote_kill (p, signum);
-        if (!f)
-            return NULL;
     }
     /*  Future must have a reactor in order to call flux_future_then(3):
      */
