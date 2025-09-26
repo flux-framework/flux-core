@@ -184,6 +184,19 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
                                   subprocess_log_f log_fn,
                                   void *log_data);
 
+/* Like flux_rexec(3), but run process in background.
+ *
+ * If service_name is NULL, then default to `rexec`.
+ *
+ * Once the process has been started, the returned future will be fulfilled
+ * with the payload ``{"rank":i, "pid":i}``, or an error response if there
+ * is an error.
+ */
+flux_future_t *flux_rexec_bg (flux_t *h,
+                              const char *service_name,
+                              int rank,
+                              int flags,
+                              const flux_cmd_t *cmd);
 
 /* Start / stop a read stream temporarily on local processes.  This
  * may be useful for flow control.
