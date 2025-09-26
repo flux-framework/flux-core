@@ -435,6 +435,17 @@ components or writing tests.
    hang. This environment variable can be used to modify or disable (set to 0)
    the timeout.
 
+.. envvar:: FLUX_PYCLI_LOGLEVEL
+
+   Controls the logging level for Flux Python command line tools. By
+   default, tools use ``logging.INFO``, which suppresses debug
+   messages and exception backtraces. Set this variable to a
+   numeric logging level to override the default. See the Python
+   `logging <https://docs.python.org/3/library/logging.html#levels>`_
+   documentation for valid numeric values. The most useful setting is
+   :envvar:`FLUX_PYCLI_LOGLEVEL=10`, which sets ``logging.DEBUG`` with
+   debug messages and full backtraces.
+
 MISCELLANEOUS
 =============
 
