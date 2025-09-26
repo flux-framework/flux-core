@@ -108,7 +108,7 @@ flux_future_t *subprocess_rexec (flux_t *h,
                                  uint32_t rank,
                                  flux_cmd_t *cmd,
                                  int flags,
-                                 int lflags)
+                                 int local_flags)
 {
     flux_future_t *f = NULL;
     struct rexec_ctx *ctx;
@@ -129,7 +129,7 @@ flux_future_t *subprocess_rexec (flux_t *h,
                              "{s:O s:i s:i}",
                              "cmd", ctx->cmd,
                              "flags", ctx->flags,
-                             "lflags", lflags))
+                             "local_flags", local_flags))
         || flux_future_aux_set (f,
                                 "flux::rexec",
                                 ctx,

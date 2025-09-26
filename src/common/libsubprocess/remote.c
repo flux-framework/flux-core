@@ -580,7 +580,7 @@ int remote_exec (flux_subprocess_t *p)
 {
     flux_future_t *f;
     int flags = 0;
-    int lflags = p->flags;
+    int local_flags = p->flags;
 
     if (zlist_size (cmd_channel_list (p->cmd)) > 0)
         flags |= SUBPROCESS_REXEC_CHANNEL;
@@ -593,14 +593,14 @@ int remote_exec (flux_subprocess_t *p)
 
     /* Clear LOCAL_UNBUF for the remote subprocess object.
      */
-    lflags &= ~FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF;
+    local_flags &= ~FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF;
 
     if (!(f = subprocess_rexec (p->h,
                                 p->service_name,
                                 p->rank,
                                 p->cmd,
                                 flags,
-                                lflags))
+                                local_flags))
         || flux_future_then (f, -1., rexec_continuation, p) < 0) {
         llog_debug (p,
                     "error sending rexec.exec request: %s",

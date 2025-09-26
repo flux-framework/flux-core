@@ -351,14 +351,14 @@ static void server_exec_cb (flux_t *h,
     const char *errmsg = NULL;
     flux_error_t error;
     int flags;
-    int lflags = 0;
+    int local_flags = 0;
 
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:o s:i s?i}",
                              "cmd", &cmd_obj,
                              "flags", &flags,
-                             "lflags", &lflags) < 0)
+                             "local_flags", &local_flags) < 0)
         goto error;
     if (s->shutdown) {
         errmsg = "subprocess server is shutting down";
@@ -416,7 +416,7 @@ static void server_exec_cb (flux_t *h,
     flux_cmd_unsetenv (cmd, "NOTIFY_SOCKET"); // see sd_notify(3)
 
     if (!(p = flux_local_exec_ex (flux_get_reactor (s->h),
-                                  lflags,
+                                  local_flags,
                                   cmd,
                                   &ops,
                                   NULL,
