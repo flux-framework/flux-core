@@ -41,13 +41,14 @@ test_expect_success 'banner message is printed in interactive recovery mode' '
 	grep "Entering Flux recovery mode" banner.out
 '
 test_expect_success '--recovery is not ignored if --test-size is specified' '
-	run_timeout --env=SHELL=/bin/sh 120 \
-	    $runpty -i none flux start \
-	        -Sbroker.rc1_path= \
-	        -Sbroker.rc3_path= \
-	    	--test-size=1 \
-	        --recovery=$(pwd)/test1 >banner.out &&
-	grep "Entering Flux recovery mode" banner.out
+	echo 1 >recovery-mode.exp &&
+	flux start \
+	    -Sbroker.rc1_path= \
+	    -Sbroker.rc3_path= \
+	    --test-size=1 \
+	    --recovery=$(pwd)/test1 \
+	    flux getattr broker.recovery-mode >recovery-mode.out &&
+	test_cmp recovery-mode.exp recovery-mode.out
 '
 test_expect_success 'rc1 failure is ignored in recovery mode' '
 	flux start --recovery=$(pwd)/test1 \
