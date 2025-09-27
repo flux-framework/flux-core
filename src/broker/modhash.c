@@ -40,6 +40,7 @@ struct modhash {
 
 extern struct module_builtin builtin_connector_local;
 extern struct module_builtin builtin_groups;
+extern struct module_builtin builtin_rexec;
 
 /* Builtin modules are loaded in this order and
  * unloaded in the reverse order.
@@ -47,6 +48,7 @@ extern struct module_builtin builtin_groups;
 static struct module_builtin *builtins[] = {
     &builtin_connector_local,
     &builtin_groups,
+    &builtin_rexec,
 };
 
 static json_t *modhash_get_modlist (modhash_t *mh,

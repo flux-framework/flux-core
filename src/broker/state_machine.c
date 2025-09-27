@@ -25,7 +25,6 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/libutil/errprintf.h"
-#include "src/common/libsubprocess/server.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 
@@ -650,50 +649,17 @@ static void unload_builtins_continuation (flux_future_t *f, void *arg)
     flux_reactor_stop (flux_get_reactor (s->ctx->h));
 }
 
-static void subproc_continuation (flux_future_t *f, void *arg)
-{
-    struct state_machine *s = arg;
-    flux_t *h = s->ctx->h;
-
-    /* Log any subprocess shutdown timeout, then cause the subprocess server's
-     * destructor to be invoked by removing it from the flux_t aux container.
-     * Any remaining processes will get a SIGKILL.
-     */
-    if (flux_future_get (f, NULL) < 0) {
-        flux_log (h,
-                  LOG_ERR,
-                  "timed out waiting for subprocesses to exit on SIGTERM");
-    }
-    flux_future_destroy (f);
-    flux_aux_set (h, "flux::exec", NULL, NULL);
-
-    /* Next task is to remove the builtin modules, including connector-local.
-     * N.B. the future is modhash property.
-     */
-    if (!(f = modhash_unload_builtins (s->ctx->modhash))
-        || flux_future_then (f, -1, unload_builtins_continuation, s) < 0) {
-        flux_log_error (h, "unload builtins initiation");
-        flux_reactor_stop (flux_get_reactor (h));
-    }
-}
-
-/* Stop all subprocesses, then unload the connector-local module,
- * then stop the broker's reactor.
+/* Unload builtin modules, then stop the broker's reactor.
  */
 static void action_exit (struct state_machine *s)
 {
     flux_t *h = s->ctx->h;
-    subprocess_server_t *subserv = flux_aux_get (h, "flux::exec");
     flux_future_t *f;
 
-    /* Send a SIGTERM to all procs.  The continuation is called after a 5s
-     * timeout or when all subprocesses are cleaned up.
-     */
-    if (!(f = subprocess_server_shutdown (subserv, SIGTERM))
-        || flux_future_then (f, 5., subproc_continuation, s) < 0) {
-        flux_log_error (h, "error initiating subprocess server shutdown");
+    if (!(f = modhash_unload_builtins (s->ctx->modhash))
+        || flux_future_then (f, -1, unload_builtins_continuation, s) < 0) {
+        flux_log_error (h, "unload builtins initiation");
         flux_reactor_stop (flux_get_reactor (h));
-        flux_future_destroy (f);
     }
 #if HAVE_LIBSYSTEMD
     if (s->ctx->sd_notify)

@@ -51,8 +51,6 @@ libbroker_la_SOURCES = \
 	state_machine.c \
 	heaptrace.h \
 	heaptrace.c \
-	exec.h \
-	exec.c \
 	boot_config.h \
 	boot_config.c \
 	boot_pmi.h \

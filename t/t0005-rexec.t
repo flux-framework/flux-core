@@ -175,16 +175,18 @@ test_expect_success 'rexec kill with already pending signal gets error' '
 	grep "rexec: flux_subprocess_kill: Invalid argument" KK.out
 '
 
+# Usage: wait_rexec_process_count pattern expected rank
 wait_rexec_process_count () {
-	expected=$1
-	rank=$2
+	pattern=$1
+	expected=$2
+	rank=$3
 	i=0
-	$rexec_script ps --rank $rank > output &&
+	$rexec_script ps --rank $rank | grep $pattern > output &&
 	count=`cat output | wc -l` &&
 	while [ "${count}" != "${expected}" ] && [ $i -lt 30 ]
 	do
 	    sleep 1
-	    $rexec_script ps --rank $rank > output &&
+	    $rexec_script ps --rank $rank | grep $pattern > output &&
 	    count=`cat output | wc -l` &&
 	    i=$((i + 1))
 	done
@@ -200,7 +202,7 @@ test_expect_success NO_CHAIN_LINT 'rexec ps works' '
 	pid1=$!
 	$rexec -r 1 sleep 100 &
 	pid2=$!
-	wait_rexec_process_count 2 1 &&
+	wait_rexec_process_count sleep 2 1 &&
 	kill -TERM $pid1 &&
 	kill -TERM $pid2
 '
@@ -210,10 +212,10 @@ test_expect_success NO_CHAIN_LINT 'disconnect terminates all running processes' 
 	pid1=$!
 	$rexec -r 1 sleep 100 &
 	pid2=$!
-	wait_rexec_process_count 2 1 &&
+	wait_rexec_process_count sleep 2 1 &&
 	kill -TERM $pid1 &&
 	kill -TERM $pid2 &&
-	wait_rexec_process_count 0 1
+	wait_rexec_process_count sleep 0 1
 '
 
 test_expect_success 'rexec line buffering works (default)' '
@@ -264,22 +266,21 @@ test_expect_success 'rexec from rank 1 to rank 0 is restricted' '
 
 test_expect_success NO_CHAIN_LINT 'ps, kill work locally on rank 0' '
 	$rexec sleep 3600 &
-	wait_rexec_process_count 1 0 &&
-	pid=$($rexec_script ps |cut -f1) &&
-	$rexec_script kill 15 $pid &&
-	wait_rexec_process_count 0 0
+	wait_rexec_process_count sleep 1 0 &&
+	pid=$($rexec_script ps | grep sleep | cut -f1) &&
+	($rexec_script kill 15 $pid) &&
+	wait_rexec_process_count sleep 0 0
 '
-
 test_expect_success NO_CHAIN_LINT 'ps, kill fail remotely on rank 0' '
 	$rexec sleep 3600 &
-	wait_rexec_process_count 1 0 &&
-	pid=$($rexec_script ps | cut -f1) &&
+	wait_rexec_process_count sleep 1 0 &&
+	pid=$($rexec_script ps | grep sleep | cut -f1) &&
 	(FLUX_URI=$(cat uri1) test_must_fail \
 		$rexec_script ps --rank 0) &&
 	(FLUX_URI=$(cat uri1) test_must_fail \
 		$rexec_script kill --rank 0 15 $pid) &&
 	$rexec_script kill 15 $pid &&
-	wait_rexec_process_count 0 0
+	wait_rexec_process_count sleep 0 0
 '
 
 test_expect_success 'configure access.allow-guest-user = false' '
