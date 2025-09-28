@@ -24,8 +24,6 @@
 
 const char *config_get_job_shell (struct jobinfo *job);
 
-const char *config_get_cwd (struct jobinfo *job);
-
 const char *config_get_imp_path (void);
 
 const char *config_get_exec_service (void);
