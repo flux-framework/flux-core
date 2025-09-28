@@ -40,6 +40,11 @@ void method_stats_clear_event_cb (flux_t *h,
                                   flux_msg_handler_t *mh,
                                   const flux_msg_t *msg,
                                   void *arg);
+void method_config_reload_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg);
+
 
 
 #endif /* !_FLUX_CORE_METHOD_H */
