@@ -2714,7 +2714,7 @@ void overlay_destroy (struct overlay *ov)
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
-        "event.publish",
+        "overlay.publish",
         overlay_publish_cb,
         FLUX_ROLE_USER,
     },
