@@ -73,7 +73,6 @@
 #include "heaptrace.h"
 #include "boot_config.h"
 #include "boot_pmi.h"
-#include "publisher.h"
 #include "state_machine.h"
 #include "shutdown.h"
 #include "rundir.h"
@@ -323,13 +322,6 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* Arrange for subscription management.
-     */
-    if (!(ctx.publisher = publisher_create (&ctx))) {
-        log_err ("error setting up subscription services");
-        goto cleanup;
-    }
-
     /* Create rundir now as it may be needed for overlay sockets during
      * bootstrap.  N.B. tmpdir is used later when statedir is created.
      */
@@ -559,7 +551,6 @@ cleanup:
     overlay_destroy (ctx.overlay);
     service_switch_destroy (ctx.services);
     broker_remove_services (handlers);
-    publisher_destroy (ctx.publisher);
     brokercfg_destroy (ctx.config);
     runat_destroy (ctx.runat);
     flux_watcher_destroy (ctx.w_internal);
@@ -1291,6 +1282,67 @@ error:
         flux_log_error (h, "service_remove: flux_respond_error");
 }
 
+static void event_subscribe_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    const char *uuid;
+    const char *topic;
+
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
+        goto error;
+    if ((uuid = flux_msg_route_first (msg))) {
+        module_t *p;
+        if (!(p = modhash_lookup (ctx->modhash, uuid))
+            || module_subscribe (p, topic) < 0)
+            goto error;
+    }
+    else {
+        if (subhash_subscribe (ctx->sub, topic) < 0)
+            goto error;
+    }
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to subscribe request");
+    return;
+error:
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to subscribe request");
+}
+
+static void event_unsubscribe_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    const char *uuid;
+    const char *topic;
+
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
+        goto error;
+    if ((uuid = flux_msg_route_first (msg))) {
+        module_t *p;
+        if (!(p = modhash_lookup (ctx->modhash, uuid))
+            || module_unsubscribe (p, topic) < 0)
+            goto error;
+    }
+    else {
+        if (subhash_unsubscribe (ctx->sub, topic) < 0)
+            goto error;
+    }
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to unsubscribe request");
+    return;
+error:
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to unsubscribe request");
+}
 
 static const struct flux_msg_handler_spec htab[] = {
     {
@@ -1328,6 +1380,18 @@ static const struct flux_msg_handler_spec htab[] = {
         "service.remove",
         service_remove_cb,
         FLUX_ROLE_USER,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "event.subscribe",
+        event_subscribe_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "event.unsubscribe",
+        event_unsubscribe_cb,
+        0
     },
     FLUX_MSGHANDLER_TABLE_END,
 };

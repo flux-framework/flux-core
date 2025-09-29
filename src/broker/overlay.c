@@ -1169,7 +1169,7 @@ static void parent_event_checkseq (struct overlay *ov, const flux_msg_t *msg)
         return;
     }
     if (seq <= ov->event_seq) {
-        //flux_log (ov->h, LOG_DEBUG, "duplicate event %d", seq);
+        flux_log (ov->h, LOG_DEBUG, "duplicate event %d", seq);
         return;
     }
     if (ov->event_seq > 0) { /* don't log initial missed events */
