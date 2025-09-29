@@ -13,16 +13,8 @@
 
 #include "broker.h"
 
-typedef int (*publisher_send_f)(void *arg, const flux_msg_t *msg);
-
-struct publisher *publisher_create (struct broker *ctx,
-                                    publisher_send_f cb,
-                                    void *arg);
+struct publisher *publisher_create (struct broker *ctx);
 void publisher_destroy (struct publisher *pub);
-
-/* Publish an encoded event message, assigning sequence number.
- */
-int publisher_send (struct publisher *pub, const flux_msg_t *msg);
 
 #endif /* !_BROKER_PUBLISHER_H */
 
