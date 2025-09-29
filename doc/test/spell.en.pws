@@ -995,3 +995,5 @@ datadir
 rcX
 epoll
 libuv
+PYCLI
+backtraces
