@@ -582,21 +582,22 @@ int main (int argc, char *argv[])
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
-    /* overlay_control_start() calls flux_sync_create(), thus
-     * requires event.subscribe to have a handler before running.
-     */
-    if (overlay_control_start (ctx.overlay) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "error initializing overlay control messages: %s",
-                  strerror (errno));
-        goto cleanup;
-    }
 
     /* Configure broker state machine
      */
     if (!(ctx.state_machine = state_machine_create (&ctx, &error))) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
+        goto cleanup;
+    }
+    /* overlay_start() calls flux_sync_create(), thus
+     * requires event.subscribe to have a handler before running.
+     * Also it makes an RPC to the state machine.
+     */
+    if (overlay_start (ctx.overlay) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error starting overlay: %s",
+                  strerror (errno));
         goto cleanup;
     }
     /* This registers a state machine callback so call after

@@ -43,6 +43,7 @@
 #include "attr.h"
 #include "trace.h"
 #include "bizcard.h"
+#include "state_machine.h"
 
 /* How long to wait (seconds) for a peer broker's TCP ACK before disconnecting.
  * This can be configured via TOML and on the broker command line.
@@ -155,6 +156,8 @@ struct overlay {
     flux_reactor_t *reactor;
     flux_msg_handler_t **handlers;
     flux_future_t *f_sync;
+    flux_future_t *f_state;
+    broker_state_t broker_state;
 
     struct topology *topo;
     uint32_t size;
@@ -172,7 +175,7 @@ struct overlay {
 
     struct parent parent;
 
-    bool shutdown_in_progress;  // no new downstream connections permitted
+    bool spurn_hello;           // no new downstream connections permitted
     void *bind_zsock;           // NULL if no downstream peers
     struct bizcard *bizcard;
     flux_watcher_t *bind_w;
@@ -204,6 +207,7 @@ static int overlay_control_parent (struct overlay *ov,
 static void overlay_health_respond_all (struct overlay *ov);
 static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank);
 static int overlay_publish_new (struct overlay *ov, flux_msg_t **msg, int *seq);
+static void goodbye_continuation (flux_future_t *f, void *arg);
 
 /* Convenience iterator for ov->children
  */
@@ -267,6 +271,22 @@ static void subtree_status_update (struct overlay *ov)
     }
 }
 
+static void overlay_state_machine_post (struct overlay *ov,
+                                        const char *event,
+                                        bool is_error)
+{
+    flux_future_t *f;
+    if (!(f = flux_rpc_pack (ov->h,
+                             "state-machine.post",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_NORESPONSE,
+                             "{s:s s:b}",
+                             "event", event,
+                             "error", is_error ? 1 : 0)))
+        flux_log_error (ov->h, "error posting %s event", event);
+    flux_future_destroy (f);
+}
+
 static void overlay_monitor_respond_one (flux_t *h,
                                          const flux_msg_t *msg,
                                          struct child *child)
@@ -302,6 +322,13 @@ static void overlay_monitor_notify (struct overlay *ov, uint32_t rank)
         if ((child = child_lookup_byrank (ov, rank)))
             overlay_monitor_respond_one (ov->h, msg, child);
         msg = flux_msglist_next (ov->monitor_requests);
+    }
+
+    /* Notify state machine once all child subtrees are offline
+     */
+    if (ov->broker_state == STATE_SHUTDOWN) {
+        if (ov->child_count > 0 && overlay_get_child_peer_count (ov) == 0)
+            overlay_state_machine_post (ov, "children-complete", false);
     }
 }
 
@@ -724,6 +751,66 @@ request_error:
     flux_msg_decref (msg);
 }
 
+/* The broker state has changed.
+ */
+static void state_continuation (flux_future_t *f, void *arg)
+{
+    struct overlay *ov = arg;
+    broker_state_t state;
+
+    if (flux_rpc_get_unpack (f, "{s:i}", "state", &state) < 0) {
+        if (errno != ENODATA)
+            flux_log_error (ov->h, "state-machine.monitor");
+        return;
+    }
+    switch (state) {
+        case STATE_NONE:
+        case STATE_JOIN:
+        case STATE_INIT:
+        case STATE_QUORUM:
+        case STATE_RUN:
+            break;
+        case STATE_CLEANUP:
+            ov->spurn_hello = true;
+            break;
+        case STATE_SHUTDOWN:
+            /* When the (online) child peer count drops to zero while
+             * in SHUTDOWN state, children-complete will be posted in
+             * overlay_monitor_notify().  If that is already true, for example
+             * if there are no children or they are not connected, post
+             * children-none here.
+             */
+            if (overlay_get_child_peer_count (ov) == 0)
+                overlay_state_machine_post (ov, "children-none", false);
+            ov->spurn_hello = true;
+            break;
+        case STATE_FINALIZE:
+            break;
+        case STATE_GOODBYE:
+            /* Send an overlay.goodbye request to parent, if any.
+             * The overlay.goodbye response handler posts goodbye.
+             * If the request cannot be sent, post it here.
+             * N.B. on rank 0, the broker shutdown logic posts goodbye.
+             */
+            if (ov->rank > 0) {
+                flux_future_t *f;
+                if (!(f = overlay_goodbye_parent (ov))
+                    || flux_future_then (f, -1, goodbye_continuation, ov) < 0) {
+                    flux_log_error (ov->h,
+                                    "error sending overlay.goodbye request");
+                    flux_future_destroy (f);
+                    overlay_state_machine_post (ov, "goodbye", false);
+                }
+            }
+            break;
+        case STATE_EXIT:
+            break;
+    }
+    ov->broker_state = state;
+
+    flux_future_reset (f);
+}
+
 static void sync_cb (flux_future_t *f, void *arg)
 {
     struct overlay *ov = arg;
@@ -736,13 +823,23 @@ static void sync_cb (flux_future_t *f, void *arg)
     flux_future_reset (f);
 }
 
-int overlay_control_start (struct overlay *ov)
+/* Set up periodic callback for sending heartbeat control messages to the
+ * TBON parent and checking for torpid children.
+ * Also, stream broker state machine updates since the overlay must take
+ * actions on transition into certain states.
+ */
+int overlay_start (struct overlay *ov)
 {
-    if (!ov->f_sync) {
-        if (!(ov->f_sync = flux_sync_create (ov->h, sync_min))
-            || flux_future_then (ov->f_sync, sync_max, sync_cb, ov) < 0)
-            return -1;
-    }
+    if (!(ov->f_sync = flux_sync_create (ov->h, sync_min))
+        || flux_future_then (ov->f_sync, sync_max, sync_cb, ov) < 0
+        || !(ov->f_state = flux_rpc_pack (ov->h,
+                                          "state-machine.monitor",
+                                          FLUX_NODEID_ANY,
+                                          FLUX_RPC_STREAMING,
+                                          "{s:i}",
+                                          "final", STATE_GOODBYE))
+           || flux_future_then (ov->f_state, -1, state_continuation, ov) < 0)
+        return -1;
     return 0;
 }
 
@@ -1050,7 +1147,7 @@ static void child_cb (flux_reactor_t *r,
          * we don't bother checking if we've seen this UUID before, which can
          * be slow given current design.  See flux-framework/flux-core#5864.
          */
-        if (is_hello && !ov->shutdown_in_progress) {
+        if (is_hello && !ov->spurn_hello) {
             hello_request_handler (ov, msg);
         }
         /* Or one of the following cases occurred that requires (or at least
@@ -1140,6 +1237,8 @@ static void parent_disconnect (struct overlay *ov)
         ov->parent.offline = true;
         rpc_track_purge (ov->parent.tracker, fail_parent_rpc, ov);
         overlay_monitor_notify (ov, FLUX_NODEID_ANY);
+        if (overlay_parent_error (ov))
+            overlay_state_machine_post (ov, "parent-fail", true);
     }
 }
 
@@ -1394,8 +1493,7 @@ error:
 
 /* Process overlay.hello response.
  * If the response indicates an error, set in motion a clean broker exit by
- * printing the error message to stderr and notifying the state machine
- * that it should check overlay_parent_error() / overlay_parent_success().
+ * printing the error message to stderr and notifying the state machine.
  */
 static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg)
 {
@@ -1418,6 +1516,8 @@ static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg)
     ov->parent.hello_responded = true;
     ov->parent.hello_error = false;
     overlay_monitor_notify (ov, FLUX_NODEID_ANY);
+    if (overlay_parent_error (ov))
+        overlay_state_machine_post (ov, "parent-fail", true);
     return;
 error:
     flux_log (ov->h,
@@ -1427,6 +1527,8 @@ error:
     ov->parent.hello_responded = true;
     ov->parent.hello_error = true;
     overlay_monitor_notify (ov, FLUX_NODEID_ANY);
+    if (overlay_parent_error (ov))
+        overlay_state_machine_post (ov, "parent-fail", true);
 }
 
 /* Send overlay.hello message to TBON parent.
@@ -1693,7 +1795,7 @@ int overlay_bind (struct overlay *ov,
  */
 void overlay_shutdown (struct overlay *overlay)
 {
-    overlay->shutdown_in_progress = true;
+    overlay->spurn_hello = true;
 }
 
 /* Call after overlay bootstrap (bind/connect),
@@ -1797,6 +1899,14 @@ static void overlay_goodbye_response_cb (flux_t *h,
 {
     struct overlay *ov = arg;
     flux_future_fulfill (ov->parent.f_goodbye, NULL, NULL);
+}
+
+static void goodbye_continuation (flux_future_t *f, void *arg)
+{
+    struct overlay *ov = arg;
+    if (ov->broker_state == STATE_GOODBYE)
+        overlay_state_machine_post (ov, "goodbye", false);
+    flux_future_destroy (f);
 }
 
 /* This allows the state machine to delay overlay_destroy() and its
@@ -2702,6 +2812,7 @@ void overlay_destroy (struct overlay *ov)
         zmqutil_zap_destroy (ov->zap);
 
         flux_future_destroy (ov->f_sync);
+        flux_future_destroy (ov->f_state);
         flux_msg_handler_delvec (ov->handlers);
         ov->status = SUBTREE_STATUS_OFFLINE;
         overlay_control_parent (ov, CONTROL_STATUS, ov->status);
@@ -2928,9 +3039,6 @@ struct overlay *overlay_create (flux_t *h,
     if (!(ov->health_requests = flux_msglist_create ())
         || !(ov->trace_requests = flux_msglist_create ()))
         goto error;
-    if (!(ov->parent.f_goodbye = flux_future_create (NULL, NULL)))
-        goto error;
-    flux_future_set_flux (ov->parent.f_goodbye, h);
     return ov;
 nomem:
     errno = ENOMEM;

@@ -46,7 +46,7 @@ void overlay_destroy (struct overlay *ov);
  * This registers a sync callback, and will fail if event.subscribe
  * doesn't have a handler yet.
  */
-int overlay_control_start (struct overlay *ov);
+int overlay_start (struct overlay *ov);
 
 /* Set the overlay topology.
  */
