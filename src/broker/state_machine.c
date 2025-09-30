@@ -1336,6 +1336,32 @@ static void overlay_monitor_cb (struct overlay *overlay,
     }
 }
 
+static void state_machine_post_cb (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
+{
+    struct state_machine *s = arg;
+    const char *event;
+    int error = 0;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s?b}",
+                             "event", &event,
+                             "error", &error) < 0) {
+        flux_log_error (h, "state-machine.post");
+        return;
+    }
+    if (!flux_msg_is_noresponse (msg)) {
+        (void)flux_respond_error (h, msg, EPROTO, NULL);
+        return;
+    }
+    state_machine_post (s, event);
+    if (error)
+        s->ctx->exit_rc = 1;
+}
+
 static void state_machine_get_cb (flux_t *h,
                                   flux_msg_handler_t *mh,
                                   const flux_msg_t *msg,
@@ -1388,6 +1414,12 @@ static void state_machine_sd_notify_cb (flux_t *h,
 }
 
 static const struct flux_msg_handler_spec htab[] = {
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "state-machine.post",
+        state_machine_post_cb,
+        0,
+    },
     {
         FLUX_MSGTYPE_REQUEST,
         "state-machine.monitor",
