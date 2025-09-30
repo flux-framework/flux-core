@@ -95,7 +95,7 @@ test_expect_success 'content validate works on valid hash' '
 	grep "valid" validate1.out
 '
 
-test_expect_success 'content validate works on invalid hash' '
+test_expect_success 'content validate fails on invalid hash' '
 	HASHSTR="sha1-abcdef01234567890abcdef01234567890abcdef" &&
 	test_must_fail ${VALIDATE} ${HASHSTR} 2> validate2.err &&
 	grep "No such file" validate2.err
