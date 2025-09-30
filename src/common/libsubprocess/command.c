@@ -448,7 +448,7 @@ static zlist_t *msgchans_fromjson (json_t *o)
             const char *uri;
             struct cmd_msgchan *cm;
 
-            if (json_unpack (entry, "[ss]", &name, &uri) < 0)
+            if (json_unpack (entry, "{s:s s:s}", "name", &name, "uri", &uri) < 0)
                 goto inval;
             if (!(cm = cmd_msgchan_create (name, uri))
                 || zlist_append (l, cm) < 0) {
@@ -477,7 +477,7 @@ static json_t *msgchans_tojson (zlist_t *l)
 
     cm = zlist_first (l);
     while (cm) {
-        json_t *val = json_pack ("[ss]", cm->name, cm->uri);
+        json_t *val = json_pack ("{s:s s:s}", "name", cm->name, "uri", cm->uri);
         if (!val || json_array_append_new (o, val) < 0) {
             json_decref (val);
             goto err;
