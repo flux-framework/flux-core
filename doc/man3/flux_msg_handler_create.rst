@@ -77,6 +77,9 @@ FLUX_MSGTYPE_EVENT
 :func:`flux_msg_handler_destroy` destroys a handler, after internally
 stopping it.
 
+The message handler defaults to the role of FLUX_ROLE_OWNER.  See
+:func:`flux_msg_handler_allow_rolemask` to adjust the rolemask.
+
 
 CAVEATS
 =======
@@ -116,4 +119,5 @@ RESOURCES
 SEE ALSO
 ========
 
-:man3:`flux_get_reactor`, :man3:`flux_reactor_run`, :man3:`flux_msg_cmp`
+:man3:`flux_get_reactor`, :man3:`flux_reactor_run`, :man3:`flux_msg_cmp`,
+:man3:`flux_msg_handler_allow_rolemask`
