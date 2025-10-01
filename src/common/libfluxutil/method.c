@@ -231,4 +231,29 @@ void method_stats_clear_event_cb (flux_t *h,
         flux_clr_msgcounters (h);
 }
 
+void method_config_reload_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
+{
+    const char *errstr = NULL;
+    const flux_conf_t *conf;
+
+    if (flux_conf_reload_decode (msg, &conf) < 0) {
+        errstr = "Failed to parse config-reload request";
+        goto error;
+    }
+    if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
+        flux_conf_decref (conf);
+        errstr = "Failed to update config";
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+}
+
 // vi:ts=4 sw=4 expandtab

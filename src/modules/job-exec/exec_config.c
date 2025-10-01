@@ -65,30 +65,6 @@ const char *config_get_job_shell (struct jobinfo *job)
     return path ? path : exec_conf.default_job_shell;
 }
 
-static const char *jobspec_get_cwd (json_t *jobspec)
-{
-    const char *cwd = NULL;
-    if (jobspec)
-        (void) json_unpack (jobspec,
-                            "{s:{s:{s:s}}}",
-                             "attributes",
-                              "system",
-                               "cwd", &cwd);
-    return cwd;
-}
-
-const char *config_get_cwd (struct jobinfo *job)
-{
-    const char *cwd = NULL;
-    if (job) {
-        if (job->multiuser)
-            cwd = "/";
-        else if (!(cwd = jobspec_get_cwd (job->jobspec)))
-            cwd = default_cwd;
-    }
-    return cwd;
-}
-
 const char *config_get_imp_path (void)
 {
     return exec_conf.flux_imp_path;

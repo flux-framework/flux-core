@@ -569,11 +569,10 @@ static int exec_init (struct jobinfo *job)
     struct exec_ctx *ctx = NULL;
     struct bulk_exec *exec = NULL;
     const struct idset *ranks = NULL;
-    const char *imp_path = NULL;
     const char *service;
     flux_error_t error;
 
-    if (job->multiuser && !(imp_path = config_get_imp_path ())) {
+    if (job->multiuser && !config_get_imp_path ()) {
         flux_log (job->h,
                   LOG_ERR,
                   "unable run multiuser job with no IMP configured!");
