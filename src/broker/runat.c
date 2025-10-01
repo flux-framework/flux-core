@@ -22,6 +22,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <signal.h>
+#include <string.h>
 #ifdef HAVE_ARGZ_ADD
 #include <argz.h>
 #else
@@ -262,19 +263,32 @@ static void state_change_cb (flux_subprocess_t *p,
     }
 }
 
+/* Log subprocess output.
+ * Don't assume NUL termination due to FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF.
+ * Don't assume \n termination, but use that as a separator in case
+ * multiple lines are sent in one go.
+ */
 static void stdio_cb (flux_subprocess_t *p, const char *stream)
 {
     struct runat *r = flux_subprocess_aux_get (p, "runat");
     struct runat_entry *entry = flux_subprocess_aux_get (p, "runat_entry");
     int index = entry->count - zlist_size (entry->commands);
-    const char *line;
+    int level = streq (stream, "stderr") ? LOG_ERR : LOG_INFO;
+    const char *data;
     int len;
 
-    if ((len = flux_subprocess_getline (p, stream, &line)) > 0) {
-        if (streq (stream, "stderr"))
-            flux_log (r->h, LOG_ERR, "%s.%d: %s", entry->name, index, line);
-        else
-            flux_log (r->h, LOG_INFO, "%s.%d: %s", entry->name, index, line);
+    len = flux_subprocess_read (p, stream, &data);
+    while (len > 0) {
+        int n = len;
+        int skip = 0;
+        char *cp;
+        if ((cp = memchr (data, '\n', len))) {
+            n = cp - data;
+            skip = 1;
+        }
+        flux_log (r->h, level, "%s.%d: %.*s", entry->name, index, n, data);
+        data += (n + skip);
+        len -= (n + skip);
     }
 }
 
@@ -309,7 +323,7 @@ static flux_subprocess_t *start_command (struct runat *r,
         p = flux_rexec_ex (r->h,
                            "rexec",
                            FLUX_NODEID_ANY,
-                           cmd->flags,
+                           cmd->flags | FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF,
                            cmd->cmd,
                            &ops,
                            flux_llog,
