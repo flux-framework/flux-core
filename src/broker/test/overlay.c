@@ -165,12 +165,7 @@ void single (flux_t *h)
     if (!(msg = flux_event_encode ("foo", NULL)))
         BAIL_OUT ("flux_event_encode failed");
     ok (overlay_sendmsg (ctx->ov, msg, OVERLAY_DOWNSTREAM) == 0,
-        "%s: overlay_sendmsg event where=DOWN succeeds",
-        ctx->name);
-    errno = 0;
-    ok (overlay_sendmsg (ctx->ov, msg, OVERLAY_UPSTREAM) < 0
-        && errno == EHOSTUNREACH,
-        "%s: overlay_sendmsg event where=UP fails with EHOSTUNREACH",
+        "%s: overlay_sendmsg event succeeds",
         ctx->name);
     flux_msg_decref (msg);
 
@@ -392,7 +387,7 @@ void trio (flux_t *h)
     if (!(msg = flux_event_encode ("eeek", NULL)))
         BAIL_OUT ("flux_event_encode failed");
     ok (overlay_sendmsg (ctx[1]->ov, msg, OVERLAY_UPSTREAM) == 0,
-        "%s: overlay_sendmsg event where=UP works", ctx[1]->name);
+        "%s: overlay_sendmsg event works", ctx[1]->name);
     flux_msg_decref (msg);
 
     rmsg = recvmsg_timeout (ctx[0], 5);
@@ -403,6 +398,12 @@ void trio (flux_t *h)
     ok (!flux_msg_is_local (rmsg),
         "%s: flux_msg_is_local returns false for event from child",
         ctx[0]->name);
+
+    rmsg = recvmsg_timeout (ctx[1], 5);
+    ok (rmsg != NULL,
+        "%s: event was received by overlay", ctx[1]->name);
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "eeek"),
+        "%s: received message has expected topic", ctx[1]->name);
 
     /* Response 0->1
      */

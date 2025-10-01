@@ -46,7 +46,6 @@ struct broker {
     struct brokercfg *config;
     struct subhash *sub;        /* subscriptions for internal services */
     struct content_cache *cache;
-    struct publisher *publisher;
 
     struct runat *runat;
     struct state_machine *state_machine;
@@ -62,7 +61,6 @@ struct broker {
 
 typedef struct broker broker_ctx_t;
 
-int broker_event_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
 int broker_response_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
 void broker_request_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
 void broker_panic (broker_ctx_t *ctx, const char *fmt, ...);

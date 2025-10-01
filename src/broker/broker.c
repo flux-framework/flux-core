@@ -73,7 +73,6 @@
 #include "heaptrace.h"
 #include "boot_config.h"
 #include "boot_pmi.h"
-#include "publisher.h"
 #include "state_machine.h"
 #include "shutdown.h"
 #include "rundir.h"
@@ -100,8 +99,6 @@ static void broker_remove_services (flux_msg_handler_t *handlers[]);
 static void set_proctitle (uint32_t rank);
 
 static int create_runat_phases (broker_ctx_t *ctx);
-
-static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg);
 
 static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred);
 
@@ -322,15 +319,6 @@ int main (int argc, char *argv[])
                                         overlay_recv_cb,
                                         &ctx))) {
         log_err ("overlay_create");
-        goto cleanup;
-    }
-
-    /* Arrange for the publisher to route event messages.
-     */
-    if (!(ctx.publisher = publisher_create (&ctx,
-                                            (publisher_send_f)handle_event,
-                                            &ctx))) {
-        log_err ("error setting up event publishing service");
         goto cleanup;
     }
 
@@ -563,7 +551,6 @@ cleanup:
     overlay_destroy (ctx.overlay);
     service_switch_destroy (ctx.services);
     broker_remove_services (handlers);
-    publisher_destroy (ctx.publisher);
     brokercfg_destroy (ctx.config);
     runat_destroy (ctx.runat);
     flux_watcher_destroy (ctx.w_internal);
@@ -1295,6 +1282,67 @@ error:
         flux_log_error (h, "service_remove: flux_respond_error");
 }
 
+static void event_subscribe_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    const char *uuid;
+    const char *topic;
+
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
+        goto error;
+    if ((uuid = flux_msg_route_first (msg))) {
+        module_t *p;
+        if (!(p = modhash_lookup (ctx->modhash, uuid))
+            || module_subscribe (p, topic) < 0)
+            goto error;
+    }
+    else {
+        if (subhash_subscribe (ctx->sub, topic) < 0)
+            goto error;
+    }
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to subscribe request");
+    return;
+error:
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to subscribe request");
+}
+
+static void event_unsubscribe_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    const char *uuid;
+    const char *topic;
+
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
+        goto error;
+    if ((uuid = flux_msg_route_first (msg))) {
+        module_t *p;
+        if (!(p = modhash_lookup (ctx->modhash, uuid))
+            || module_unsubscribe (p, topic) < 0)
+            goto error;
+    }
+    else {
+        if (subhash_unsubscribe (ctx->sub, topic) < 0)
+            goto error;
+    }
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to unsubscribe request");
+    return;
+error:
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to unsubscribe request");
+}
 
 static const struct flux_msg_handler_spec htab[] = {
     {
@@ -1332,6 +1380,18 @@ static const struct flux_msg_handler_spec htab[] = {
         "service.remove",
         service_remove_cb,
         FLUX_ROLE_USER,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "event.subscribe",
+        event_subscribe_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "event.unsubscribe",
+        event_unsubscribe_cb,
+        0
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -1396,13 +1456,17 @@ static void broker_remove_services (flux_msg_handler_t *handlers[])
  **/
 
 /* Handle messages received from overlay peers.
+ * N.B. even when there is only one node, event messages are processed
+ * by the overlay.
  */
 static int overlay_recv_cb (flux_msg_t **msg, overlay_where_t where, void *arg)
 {
     broker_ctx_t *ctx = arg;
     int type;
+    const char *topic;
 
-    if (flux_msg_get_type (*msg, &type) < 0)
+    if (flux_msg_get_type (*msg, &type) < 0
+        || flux_msg_get_topic (*msg, &topic) < 0)
         return -1;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
@@ -1415,19 +1479,14 @@ static int overlay_recv_cb (flux_msg_t **msg, overlay_where_t where, void *arg)
                 goto drop;
             break;
         case FLUX_MSGTYPE_EVENT:
-            /* If event originated from upstream peer, then it has already been
-             * published and we are to continue its distribution.
-             * Otherwise, take the next step to get the event published.
-             */
-            if (where == OVERLAY_UPSTREAM) {
-                if (handle_event (ctx, *msg) < 0)
-                    goto drop;
+            if (modhash_event_mcast (ctx->modhash, *msg) < 0)
+                flux_log_error (ctx->h,
+                                "mcast failed to broker modules");
+            if (subhash_topic_match (ctx->sub, topic)
+                && flux_send_new (ctx->h_internal, msg, 0) < 0) {
+                flux_log_error (ctx->h,
+                                "send failed on internal broker handle");
             }
-            else {
-                if (broker_event_sendmsg_new (ctx, msg) < 0)
-                    goto drop;
-            }
-            break;
         default:
             break;
     }
@@ -1439,57 +1498,12 @@ drop:
      * which happens if sending module unloads before finishing all RPCs.
      */
     if (type != FLUX_MSGTYPE_RESPONSE || errno != ENOSYS) {
-        const char *topic = "unknown";
-        (void)flux_msg_get_topic (*msg, &topic);
         flux_log_error (ctx->h,
-                        "DROP %s %s topic=%s",
-                        where == OVERLAY_UPSTREAM ? "upstream" : "downstream",
+                        "DROP overlay %s topic=%s",
                         flux_msg_typestr (type),
                         topic);
     }
     return -1;
-}
-
-/* Distribute events downstream, and to module and broker-resident subscribers.
- * On rank 0, publisher is wired to send events here also.
- */
-static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
-{
-    uint32_t seq;
-    const char *topic;
-
-    if (flux_msg_get_seq (msg, &seq) < 0
-        || flux_msg_get_topic (msg, &topic) < 0) {
-        flux_log (ctx->h, LOG_ERR, "dropping malformed event");
-        return -1;
-    }
-    if (seq <= ctx->event_recv_seq) {
-        //flux_log (ctx->h, LOG_DEBUG, "dropping duplicate event %d", seq);
-        return -1;
-    }
-    if (ctx->event_recv_seq > 0) { /* don't log initial missed events */
-        int first = ctx->event_recv_seq + 1;
-        int count = seq - first;
-        if (count > 1)
-            flux_log (ctx->h, LOG_ERR, "lost events %d-%d", first, seq - 1);
-        else if (count == 1)
-            flux_log (ctx->h, LOG_ERR, "lost event %d", first);
-    }
-    ctx->event_recv_seq = seq;
-
-    /* Forward to this rank's children.
-     */
-    overlay_sendmsg (ctx->overlay, msg, OVERLAY_DOWNSTREAM);
-
-    /* Internal services may install message handlers for events.
-     */
-    if (subhash_topic_match (ctx->sub, topic)) {
-        if (flux_send (ctx->h_internal, msg, 0) < 0)
-            flux_log_error (ctx->h, "send failed on internal broker handle");
-    }
-    /* Finally, route to local module subscribers.
-     */
-    return modhash_event_mcast (ctx->modhash, msg);
 }
 
 static bool signal_is_deadly (int signum)
@@ -1669,25 +1683,6 @@ int broker_response_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg)
     return 0;
 }
 
-/* Events are forwarded up the TBON to rank 0, then published per RFC 3.
- * An alternate publishing mechanism that allows the event sequence number
- * to be obtained is to send an RPC to event.pub.
- */
-int broker_event_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg)
-{
-    if (ctx->rank > 0) {
-        if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0)
-            return -1;
-    }
-    else {
-        if (publisher_send (ctx->publisher, *msg) < 0)
-            return -1;
-        flux_msg_decref (*msg);
-        *msg = NULL;
-    }
-    return 0;
-}
-
 /* Handle messages received from the "router end" of the back to back
  * interthread handles.  Hand the message off to routing logic.
  */
@@ -1713,7 +1708,7 @@ static void h_internal_watcher (flux_reactor_t *r,
                 goto error;
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (broker_event_sendmsg_new (ctx, &msg) < 0)
+            if (overlay_sendmsg_new (ctx->overlay, &msg, OVERLAY_ANY) < 0)
                 goto error;
             break;
         default:
