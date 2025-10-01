@@ -184,11 +184,11 @@ broker.sd-stop-timeout
 
 conf.shell_initrc [Updates: C, R]
    The path to the :man1:`flux-shell` initrc script.  Default:
-   ``${prefix}/etc/flux/shell/initrc.lua``.
+   ``${sysconfdir}/flux/shell/initrc.lua``.
 
 conf.shell_pluginpath [Updates: C, R]
    The list of colon-separated directories to be searched by :man1:`flux-shell`
-   for shell plugins.  Default: ``${prefix}/lib/flux/shell/plugins``.
+   for shell plugins.  Default: ``${libdir}/flux/shell/plugins``.
 
 config.path [Updates: see below]
    A config file or directory (containing ``*.toml`` config files) for
