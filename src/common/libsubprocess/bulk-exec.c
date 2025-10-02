@@ -380,25 +380,26 @@ static int exec_start_cmd (struct bulk_exec *exec,
          */
         if (streq (exec->service, "sdexec")) {
             char idbuf[21];
-            char name[128];
+            char buf[128];
             if (flux_job_id_encode (exec->id,
                                     "f58plain",
                                     idbuf,
                                     sizeof (idbuf)) < 0)
                 return -1;
-            snprintf (name,
-                      sizeof (name),
+            snprintf (buf,
+                      sizeof (buf),
                       "%s-%lu-%s.service",
                       exec->name,
                       (unsigned long)rank,
                       idbuf);
-            if (flux_cmd_setopt (cmd->cmd, "SDEXEC_NAME", name) < 0
-                || flux_cmd_setopt (cmd->cmd,
-                                    "SDEXEC_PROP_Description",
-                                    "User workload") < 0) {
-                flux_log_error (exec->h, "Unable to set sdexec options");
-                return -1;
-            }
+            if (flux_cmd_setopt (cmd->cmd, "SDEXEC_NAME", buf) < 0)
+                goto opt_error;
+            snprintf (buf,
+                      sizeof (buf),
+                      "User workload for Flux job %s",
+                      idbuf);
+            if (flux_cmd_setopt (cmd->cmd, "SDEXEC_PROP_Description", buf) < 0)
+                goto opt_error;
         }
         flux_subprocess_t *p = flux_rexec_ex (exec->h,
                                               bulk_exec_service_name (exec),
@@ -426,6 +427,9 @@ static int exec_start_cmd (struct bulk_exec *exec,
         count++;
     }
     return count;
+opt_error:
+    flux_log_error (exec->h, "Unable to set sdexec options");
+    return -1;
 }
 
 void bulk_exec_stop (struct bulk_exec *exec)
