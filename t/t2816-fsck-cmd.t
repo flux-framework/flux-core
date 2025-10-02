@@ -54,20 +54,20 @@ test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
 test_expect_success 'flux-fsck works (simple)' '
-	flux fsck 2> simple.out &&
-	grep "Checking integrity" simple.out &&
-	grep "Total errors: 0" simple.out
+	flux fsck > simple.out 2> simple.err &&
+	grep "Checking integrity" simple.err &&
+	grep "Total errors: 0" simple.err
 '
 test_expect_success 'flux-fsck verbose works (simple)' '
-	flux fsck --verbose 2> verbose.out &&
-	grep "testdir$" verbose.out &&
-	grep "testdir\.a" verbose.out &&
-	grep "testdir\.b" verbose.out &&
-	grep "testdir\.c" verbose.out &&
-	grep "testdir\.d" verbose.out &&
-	grep "testdir\.adir" verbose.out &&
-	grep "testdir\.bdir" verbose.out &&
-	grep "alink" verbose.out
+	flux fsck --verbose > verbose.out 2> verbose.err &&
+	grep "testdir$" verbose.err &&
+	grep "testdir\.a" verbose.err &&
+	grep "testdir\.b" verbose.err &&
+	grep "testdir\.c" verbose.err &&
+	grep "testdir\.d" verbose.err &&
+	grep "testdir\.adir" verbose.err &&
+	grep "testdir\.bdir" verbose.err &&
+	grep "alink" verbose.err
 '
 # Cover value with a very large number of appends
 # N.B. from 1000 to 3000 instead of 0 to 2000, easier to debug errors
@@ -86,10 +86,10 @@ test_expect_success LONGTEST 'unload kvs' '
 	flux module remove kvs
 '
 test_expect_success LONGTEST 'flux-fsck works (big)' '
-	flux fsck --verbose 2> bigval.out &&
-	grep "Checking integrity" bigval.out &&
-	grep "bigval" bigval.out &&
-	grep "Total errors: 0" bigval.out
+	flux fsck --verbose > bigval.out 2> bigval.err &&
+	grep "Checking integrity" bigval.err &&
+	grep "bigval" bigval.err &&
+	grep "Total errors: 0" bigval.err
 '
 test_expect_success 'load kvs' '
 	flux module load kvs
@@ -110,23 +110,23 @@ test_expect_success 'unload kvs' '
 '
 # line count includes extra diagnostic messages
 test_expect_success 'flux-fsck detects errors (testdir.b)' '
-	test_must_fail flux fsck 2> fsckerrors1.out &&
-	test_debug "cat fsckerrors1.out" &&
-	count=$(cat fsckerrors1.out | wc -l) &&
+	test_must_fail flux fsck > fsckerrors1.out 2> fsckerrors1.err &&
+	test_debug "cat fsckerrors1.err" &&
+	count=$(cat fsckerrors1.err | wc -l) &&
 	test $count -eq 3 &&
-	grep "testdir\.b" fsckerrors1.out | grep "missing blobref(s)" &&
-	grep "Total errors: 1" fsckerrors1.out
+	grep "testdir\.b" fsckerrors1.err | grep "missing blobref(s)" &&
+	grep "Total errors: 1" fsckerrors1.err
 '
 test_expect_success 'flux-fsck --verbose outputs details (testdir.b)' '
-	test_must_fail flux fsck --verbose 2> fsckerrors1V.out &&
-	test_debug "cat fsckerrors1V.out" &&
-	grep "testdir\.b" fsckerrors1V.out | grep "missing blobref" | grep "index=1" &&
-	grep "Total errors: 1" fsckerrors1V.out
+	test_must_fail flux fsck --verbose > fsckerrors1V.out 2> fsckerrors1V.err &&
+	test_debug "cat fsckerrors1V.err" &&
+	grep "testdir\.b" fsckerrors1V.err | grep "missing blobref" | grep "index=1" &&
+	grep "Total errors: 1" fsckerrors1V.err
 '
 test_expect_success 'flux-fsck no output with --quiet (testdir.b)' '
-	test_must_fail flux fsck --quiet 2> fsckerrors2.out &&
-	test_debug "cat fsckerrors2.out" &&
-	count=$(cat fsckerrors2.out | wc -l) &&
+	test_must_fail flux fsck --quiet > fsckerrors2.out 2> fsckerrors2.err &&
+	test_debug "cat fsckerrors2.err" &&
+	count=$(cat fsckerrors2.err | wc -l) &&
 	test $count -eq 0
 '
 test_expect_success 'load kvs' '
@@ -146,26 +146,26 @@ test_expect_success 'unload kvs' '
 '
 # line count includes extra diagnostic messages
 test_expect_success 'flux-fsck detects errors (testdir.b & c)' '
-	test_must_fail flux fsck 2> fsckerrors3.out &&
-	test_debug "cat fsckerrors3.out" &&
-	count=$(cat fsckerrors3.out | wc -l) &&
+	test_must_fail flux fsck > fsckerrors3.out 2> fsckerrors3.err &&
+	test_debug "cat fsckerrors3.err" &&
+	count=$(cat fsckerrors3.err | wc -l) &&
 	test $count -eq 4 &&
-	grep "testdir\.b" fsckerrors3.out | grep "missing blobref(s)" &&
-	grep "testdir\.c" fsckerrors3.out | grep "missing blobref(s)" &&
-	grep "Total errors: 2" fsckerrors3.out
+	grep "testdir\.b" fsckerrors3.err | grep "missing blobref(s)" &&
+	grep "testdir\.c" fsckerrors3.err | grep "missing blobref(s)" &&
+	grep "Total errors: 2" fsckerrors3.err
 '
 test_expect_success 'flux-fsck --verbose outputs details (testdir.b & c)' '
-	test_must_fail flux fsck --verbose 2> fsckerrors3V.out &&
-	test_debug "cat fsckerrors3V.out" &&
-	grep "testdir\.b" fsckerrors3V.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.c" fsckerrors3V.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.c" fsckerrors3V.out | grep "missing blobref" | grep "index=2" &&
-	grep "Total errors: 2" fsckerrors3V.out
+	test_must_fail flux fsck --verbose > fsckerrors3V.out 2> fsckerrors3V.err &&
+	test_debug "cat fsckerrors3V.err" &&
+	grep "testdir\.b" fsckerrors3V.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.c" fsckerrors3V.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.c" fsckerrors3V.err | grep "missing blobref" | grep "index=2" &&
+	grep "Total errors: 2" fsckerrors3V.err
 '
 test_expect_success 'flux-fsck no output with --quiet (testdir.b & c)' '
-	test_must_fail flux fsck --quiet 2> fsckerrors4.out &&
-	test_debug "cat fsckerrors4.out" &&
-	count=$(cat fsckerrors4.out | wc -l) &&
+	test_must_fail flux fsck --quiet > fsckerrors4.out 2> fsckerrors4.err &&
+	test_debug "cat fsckerrors4.err" &&
+	count=$(cat fsckerrors4.err | wc -l) &&
 	test $count -eq 0
 '
 test_expect_success 'load kvs' '
@@ -185,29 +185,29 @@ test_expect_success 'unload kvs' '
 '
 # line count includes extra diagnostic messages
 test_expect_success 'flux-fsck detects errors (testdir.b & c & d)' '
-	test_must_fail flux fsck 2> fsckerrors5.out &&
-	test_debug "cat fsckerrors5.out" &&
-	count=$(cat fsckerrors5.out | wc -l) &&
+	test_must_fail flux fsck > fsckerrors5.out 2> fsckerrors5.err &&
+	test_debug "cat fsckerrors5.err" &&
+	count=$(cat fsckerrors5.err | wc -l) &&
 	test $count -eq 5 &&
-	grep "testdir\.b" fsckerrors5.out | grep "missing blobref(s)" &&
-	grep "testdir\.c" fsckerrors5.out | grep "missing blobref(s)" &&
-	grep "testdir\.d" fsckerrors5.out | grep "missing blobref(s)" &&
-	grep "Total errors: 3" fsckerrors5.out
+	grep "testdir\.b" fsckerrors5.err | grep "missing blobref(s)" &&
+	grep "testdir\.c" fsckerrors5.err | grep "missing blobref(s)" &&
+	grep "testdir\.d" fsckerrors5.err | grep "missing blobref(s)" &&
+	grep "Total errors: 3" fsckerrors5.err
 '
 test_expect_success 'flux-fsck --verbose outputs details (testdir.b & c & d)' '
-	test_must_fail flux fsck --verbose 2> fsckerrors5V.out &&
-	test_debug "cat fsckerrors5V.out" &&
-	grep "testdir\.b" fsckerrors5V.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.c" fsckerrors5V.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.c" fsckerrors5V.out | grep "missing blobref" | grep "index=2" &&
-	grep "testdir\.d" fsckerrors5V.out | grep "missing blobref" | grep "index=0" &&
-	grep "testdir\.d" fsckerrors5V.out | grep "missing blobref" | grep "index=1" &&
-	grep "Total errors: 3" fsckerrors5V.out
+	test_must_fail flux fsck --verbose >fsckerrors5V.out 2> fsckerrors5V.err &&
+	test_debug "cat fsckerrors5V.err" &&
+	grep "testdir\.b" fsckerrors5V.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.c" fsckerrors5V.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.c" fsckerrors5V.err | grep "missing blobref" | grep "index=2" &&
+	grep "testdir\.d" fsckerrors5V.err | grep "missing blobref" | grep "index=0" &&
+	grep "testdir\.d" fsckerrors5V.err | grep "missing blobref" | grep "index=1" &&
+	grep "Total errors: 3" fsckerrors5V.err
 '
 test_expect_success 'flux-fsck no output with --quiet (testdir.b & c & d)' '
-	test_must_fail flux fsck --quiet 2> fsckerrors6.out &&
-	test_debug "cat fsckerrors6.out" &&
-	count=$(cat fsckerrors6.out | wc -l) &&
+	test_must_fail flux fsck --quiet > fsckerrors6.out 2> fsckerrors6.err &&
+	test_debug "cat fsckerrors6.err" &&
+	count=$(cat fsckerrors6.err | wc -l) &&
 	test $count -eq 0
 '
 test_expect_success 'load kvs' '
@@ -239,31 +239,31 @@ test_expect_success 'unload kvs' '
 '
 # line count includes extra diagnostic messages
 test_expect_success 'flux-fsck detects errors (testdir.b & c & d & bdir)' '
-	test_must_fail flux fsck 2> fsckerrors7.out &&
-	test_debug "cat fsckerrors7.out" &&
-	count=$(cat fsckerrors7.out | wc -l) &&
+	test_must_fail flux fsck > fsckerrors7.out 2> fsckerrors7.err &&
+	test_debug "cat fsckerrors7.err" &&
+	count=$(cat fsckerrors7.err | wc -l) &&
 	test $count -eq 6 &&
-	grep "testdir\.b" fsckerrors7.out | grep "missing blobref(s)" &&
-	grep "testdir\.c" fsckerrors7.out | grep "missing blobref(s)" &&
-	grep "testdir\.d" fsckerrors7.out | grep "missing blobref(s)" &&
-	grep "testdir\.bdir" fsckerrors7.out | grep "missing dirref blobref" &&
-	grep "Total errors: 4" fsckerrors7.out
+	grep "testdir\.b" fsckerrors7.err | grep "missing blobref(s)" &&
+	grep "testdir\.c" fsckerrors7.err | grep "missing blobref(s)" &&
+	grep "testdir\.d" fsckerrors7.err | grep "missing blobref(s)" &&
+	grep "testdir\.bdir" fsckerrors7.err | grep "missing dirref blobref" &&
+	grep "Total errors: 4" fsckerrors7.err
 '
 test_expect_success 'flux-fsck --verbose outputs details (testdir.b & c & d & bdir)' '
-	test_must_fail flux fsck --verbose 2> fsckerrors7V.out &&
-	test_debug "cat fsckerrors7V.out" &&
-	grep "testdir\.b" fsckerrors7V.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.c" fsckerrors7V.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.c" fsckerrors7V.out | grep "missing blobref" | grep "index=2" &&
-	grep "testdir\.d" fsckerrors7V.out | grep "missing blobref" | grep "index=0" &&
-	grep "testdir\.d" fsckerrors7V.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.bdir" fsckerrors7V.out | grep "missing dirref blobref" &&
-	grep "Total errors: 4" fsckerrors7V.out
+	test_must_fail flux fsck --verbose > fsckerrors7V.out 2> fsckerrors7V.err &&
+	test_debug "cat fsckerrors7V.err" &&
+	grep "testdir\.b" fsckerrors7V.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.c" fsckerrors7V.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.c" fsckerrors7V.err | grep "missing blobref" | grep "index=2" &&
+	grep "testdir\.d" fsckerrors7V.err | grep "missing blobref" | grep "index=0" &&
+	grep "testdir\.d" fsckerrors7V.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.bdir" fsckerrors7V.err | grep "missing dirref blobref" &&
+	grep "Total errors: 4" fsckerrors7V.err
 '
 test_expect_success 'flux-fsck no output with --quiet (testdir.b & c & d & bdir)' '
-	test_must_fail flux fsck --quiet 2> fsckerrors8.out &&
-	test_debug "cat fsckerrors8.out" &&
-	count=$(cat fsckerrors8.out | wc -l) &&
+	test_must_fail flux fsck --quiet > fsckerrors8.out 2> fsckerrors8.err &&
+	test_debug "cat fsckerrors8.err" &&
+	count=$(cat fsckerrors8.err | wc -l) &&
 	test $count -eq 0
 '
 #
@@ -271,81 +271,86 @@ test_expect_success 'flux-fsck no output with --quiet (testdir.b & c & d & bdir)
 #
 # line count includes extra diagnostic messages
 test_expect_success 'flux-fsck works on rootref a' '
-	flux fsck --verbose --rootref=$(cat a.rootref) 2> rootref1.out &&
-	test_debug "cat rootref1.out" &&
-	count=$(cat rootref1.out | wc -l) &&
+	flux fsck --verbose --rootref=$(cat a.rootref) > rootref1.out 2> rootref1.err &&
+	test_debug "cat rootref1.err" &&
+	count=$(cat rootref1.err | wc -l) &&
 	test $count -eq 3 &&
-	grep "testdir\.a" rootref1.out &&
-	grep "Total errors: 0" rootref1.out
+	grep "testdir\.a" rootref1.err &&
+	grep "Total errors: 0" rootref1.err
 '
 test_expect_success 'flux-fsck works on rootref b' '
-	flux fsck --verbose --rootref=$(cat b.rootref) 2> rootref2.out &&
-	test_debug "cat rootref2.out" &&
-	count=$(cat rootref2.out | wc -l) &&
+	flux fsck --verbose --rootref=$(cat b.rootref) > rootref2.out 2> rootref2.err &&
+	test_debug "cat rootref2.err" &&
+	count=$(cat rootref2.err | wc -l) &&
 	test $count -eq 4 &&
-	grep "testdir\.a" rootref2.out &&
-	grep "testdir\.b" rootref2.out &&
-	grep "Total errors: 0" rootref2.out
+	grep "testdir\.a" rootref2.err &&
+	grep "testdir\.b" rootref2.err &&
+	grep "Total errors: 0" rootref2.err
 '
 test_expect_success 'flux-fsck works on rootref c' '
-	flux fsck --verbose --rootref=$(cat c.rootref) 2> rootref3.out &&
-	test_debug "cat rootref3.out" &&
-	count=$(cat rootref3.out | wc -l) &&
+	flux fsck --verbose --rootref=$(cat c.rootref) > rootref3.out 2> rootref3.err &&
+	test_debug "cat rootref3.err" &&
+	count=$(cat rootref3.err | wc -l) &&
 	test $count -eq 5 &&
-	grep "testdir\.a" rootref3.out &&
-	grep "testdir\.b" rootref3.out &&
-	grep "testdir\.c" rootref3.out &&
-	grep "Total errors: 0" rootref3.out
+	grep "testdir\.a" rootref3.err &&
+	grep "testdir\.b" rootref3.err &&
+	grep "testdir\.c" rootref3.err &&
+	grep "Total errors: 0" rootref3.err
 '
 test_expect_success 'flux-fsck works on rootref d' '
-	flux fsck --verbose --rootref=$(cat d.rootref) 2> rootref4.out &&
-	test_debug "cat rootref4.out" &&
-	count=$(cat rootref4.out | wc -l) &&
+	flux fsck --verbose --rootref=$(cat d.rootref) > rootref4.out 2> rootref4.err &&
+	test_debug "cat rootref4.err" &&
+	count=$(cat rootref4.err | wc -l) &&
 	test $count -eq 6 &&
-	grep "testdir\.a" rootref4.out &&
-	grep "testdir\.b" rootref4.out &&
-	grep "testdir\.c" rootref4.out &&
-	grep "testdir\.d" rootref4.out &&
-	grep "Total errors: 0" rootref4.out
+	grep "testdir\.a" rootref4.err &&
+	grep "testdir\.b" rootref4.err &&
+	grep "testdir\.c" rootref4.err &&
+	grep "testdir\.d" rootref4.err &&
+	grep "Total errors: 0" rootref4.err
 '
 test_expect_success 'flux-fsck works on rootref w/ bad b' '
-	test_must_fail flux fsck --verbose --rootref=$(cat bbad.rootref) 2> rootref5.out &&
-	test_debug "cat rootref5.out" &&
-	grep "testdir\.b" rootref5.out | grep "missing blobref" | grep "index=1" &&
-	grep "Total errors: 1" rootref5.out
+	test_must_fail flux fsck --verbose --rootref=$(cat bbad.rootref) \
+		       > rootref5.out 2> rootref5.err &&
+	test_debug "cat rootref5.err" &&
+	grep "testdir\.b" rootref5.err | grep "missing blobref" | grep "index=1" &&
+	grep "Total errors: 1" rootref5.err
 '
 test_expect_success 'flux-fsck works on rootref c w/ bad b and c' '
-	test_must_fail flux fsck --verbose --rootref=$(cat cbad.rootref) 2> rootref6.out &&
-	test_debug "cat rootref6.out" &&
-	grep "testdir\.b" rootref6.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.c" rootref6.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.c" rootref6.out | grep "missing blobref" | grep "index=2" &&
-	grep "Total errors: 2" rootref6.out
+	test_must_fail flux fsck --verbose --rootref=$(cat cbad.rootref) \
+		       > rootref6.out 2> rootref6.err &&
+	test_debug "cat rootref6.err" &&
+	grep "testdir\.b" rootref6.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.c" rootref6.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.c" rootref6.err | grep "missing blobref" | grep "index=2" &&
+	grep "Total errors: 2" rootref6.err
 '
 test_expect_success 'flux-fsck works on rootref d w/ bad b and c and d' '
-	test_must_fail flux fsck --verbose --rootref=$(cat dbad.rootref) 2> rootref7.out &&
-	test_debug "cat rootref7.out" &&
-	grep "testdir\.b" rootref7.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.c" rootref7.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.c" rootref7.out | grep "missing blobref" | grep "index=2" &&
-	grep "testdir\.d" rootref7.out | grep "missing blobref" | grep "index=0" &&
-	grep "testdir\.d" rootref7.out | grep "missing blobref" | grep "index=1" &&
-	grep "Total errors: 3" rootref7.out
+	test_must_fail flux fsck --verbose --rootref=$(cat dbad.rootref) \
+		       > rootref7.out 2> rootref7.err &&
+	test_debug "cat rootref7.err" &&
+	grep "testdir\.b" rootref7.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.c" rootref7.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.c" rootref7.err | grep "missing blobref" | grep "index=2" &&
+	grep "testdir\.d" rootref7.err | grep "missing blobref" | grep "index=0" &&
+	grep "testdir\.d" rootref7.err | grep "missing blobref" | grep "index=1" &&
+	grep "Total errors: 3" rootref7.err
 '
 test_expect_success 'flux-fsck works on rootref w/ bad b and c and d and bdir' '
-	test_must_fail flux fsck --verbose --rootref=$(cat bdirbad.rootref) 2> rootref8.out &&
-	test_debug "cat rootref8.out" &&
-	grep "testdir\.b" rootref8.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.c" rootref8.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.c" rootref8.out | grep "missing blobref" | grep "index=2" &&
-	grep "testdir\.d" rootref8.out | grep "missing blobref" | grep "index=0" &&
-	grep "testdir\.d" rootref8.out | grep "missing blobref" | grep "index=1" &&
-	grep "testdir\.bdir" rootref8.out | grep "missing dirref blobref" &&
-	grep "Total errors: 4" rootref8.out
+	test_must_fail flux fsck --verbose --rootref=$(cat bdirbad.rootref) \
+		       > rootref8.out 2> rootref8.err &&
+	test_debug "cat rootref8.err" &&
+	grep "testdir\.b" rootref8.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.c" rootref8.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.c" rootref8.err | grep "missing blobref" | grep "index=2" &&
+	grep "testdir\.d" rootref8.err | grep "missing blobref" | grep "index=0" &&
+	grep "testdir\.d" rootref8.err | grep "missing blobref" | grep "index=1" &&
+	grep "testdir\.bdir" rootref8.err | grep "missing dirref blobref" &&
+	grep "Total errors: 4" rootref8.err
 '
 test_expect_success 'flux-fsck --rootref fails on non-existent ref' '
-	test_must_fail flux fsck --rootref=sha1-1234567890123456789012345678901234567890 2> rootref9.out &&
-	grep "Total errors: 1" rootref9.out
+	test_must_fail flux fsck --rootref=sha1-1234567890123456789012345678901234567890 \
+		       > rootref9.out 2> rootref9.err &&
+	grep "Total errors: 1" rootref9.err
 '
 test_expect_success 'flux-fsck --rootref fails on invalid ref' '
 	test_must_fail flux fsck --rootref=lalalal
@@ -358,7 +363,7 @@ test_expect_success 'checkpoint-get returned final expected rootref' '
 	test_cmp checkpointbad.out bdirbad.rootref
 '
 test_expect_success 'flux-fsck --repair works (1)' '
-	test_must_fail flux fsck --repair 2> repair1.err &&
+	test_must_fail flux fsck --repair > repair1.out 2> repair1.err &&
 	grep "testdir\.b" repair1.err | grep "repaired" &&
 	grep "testdir\.c" repair1.err | grep "repaired" &&
 	grep "testdir\.d" repair1.err | grep "repaired" &&
@@ -401,7 +406,7 @@ test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
 test_expect_success 'flux-fsck passes now' '
-	flux fsck 2> postrepair1.err &&
+	flux fsck > postrepair1.out 2> postrepair1.err &&
 	grep "Total errors: 0" postrepair1.err
 '
 test_expect_success 'load kvs' '
@@ -422,7 +427,7 @@ test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
 test_expect_success 'flux-fsck --repair does nothing now (2)' '
-	flux fsck --repair 2> repair2.err &&
+	flux fsck --repair > repair2.out 2> repair2.err &&
 	grep "Total errors: 0" repair2.err
 '
 test_expect_success 'load kvs' '
@@ -445,7 +450,7 @@ test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
 test_expect_success 'flux-fsck --repair works (3)' '
-	test_must_fail flux fsck --repair 2> repair3.err &&
+	test_must_fail flux fsck --repair > repair3.out 2> repair3.err &&
 	grep "testdir\.d\.e" repair3.err | grep "repaired" &&
 	grep "Total errors: 1" repair3.err
 '
