@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _BROKER_STATE_MACHINE_H
-#define _BROKER_STATE_MACHINE_H
+#ifndef BROKER_STATE_MACHINE_H
+#define BROKER_STATE_MACHINE_H
 
 struct broker;
 
@@ -42,7 +42,7 @@ void state_machine_panic (struct state_machine *s);
 
 void state_machine_sd_notify (struct state_machine *s, const char *status);
 
-#endif /* !_BROKER_STATE_MACHINE_H */
+#endif /* !BROKER_STATE_MACHINE_H */
 
 /*
  * vi:ts=4 sw=4 expandtab

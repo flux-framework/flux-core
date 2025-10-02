@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _BROKER_SERVICE_H
-#define _BROKER_SERVICE_H
+#ifndef BROKER_SERVICE_H
+#define BROKER_SERVICE_H
 
 #include <jansson.h>
 
@@ -35,7 +35,7 @@ const char *service_get_uuid (struct service_switch *sw, const char *name);
 
 json_t *service_list_byuuid (struct service_switch *sw, const char *uuid);
 
-#endif /* !_BROKER_SERVICE_H */
+#endif /* !BROKER_SERVICE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

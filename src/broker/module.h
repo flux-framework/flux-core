@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _BROKER_MODULE_H
-#define _BROKER_MODULE_H
+#ifndef BROKER_MODULE_H
+#define BROKER_MODULE_H
 
 #include <jansson.h>
 #include <flux/core.h>
@@ -133,7 +133,7 @@ ssize_t module_get_recv_queue_count (module_t *p);
 bool module_is_exec (module_t *p);
 pid_t module_get_pid (module_t *p);
 
-#endif /* !_BROKER_MODULE_H */
+#endif /* !BROKER_MODULE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

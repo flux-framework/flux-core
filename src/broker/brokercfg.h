@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _BROKER_BROKERCFG_H
-#define _BROKER_BROKERCFG_H
+#ifndef BROKER_BROKERCFG_H
+#define BROKER_BROKERCFG_H
 
 #include <flux/core.h>
 #include "attr.h"
@@ -23,7 +23,7 @@ struct brokercfg *brokercfg_create (flux_t *h,
                                     modhash_t *modhash);
 void brokercfg_destroy (struct brokercfg *cfg);
 
-#endif /* !_BROKER_BROKERCFG_H */
+#endif /* !BROKER_BROKERCFG_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

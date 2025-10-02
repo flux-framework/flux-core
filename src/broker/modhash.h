@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _BROKER_MODHASH_H
-#define _BROKER_MODHASH_H
+#ifndef BROKER_MODHASH_H
+#define BROKER_MODHASH_H
 
 #include <jansson.h>
 
@@ -76,7 +76,7 @@ int modhash_service_remove (modhash_t *mh,
                             const char *service,
                             flux_error_t *error);
 
-#endif /* !_BROKER_MODHASH_H */
+#endif /* !BROKER_MODHASH_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

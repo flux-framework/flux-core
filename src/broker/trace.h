@@ -27,6 +27,6 @@ void trace_overlay_msg (flux_t *h,
                         struct flux_msglist *trace_requests,
                         const flux_msg_t *msg);
 
-#endif /* BROKER_TRACE_H */
+#endif /* !BROKER_TRACE_H */
 
 // vi:ts=4 sw=4 expandtab

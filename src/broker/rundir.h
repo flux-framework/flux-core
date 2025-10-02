@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#ifndef BROKER_RUNDIR_H
+#define BROKER_RUNDIR_H
+
 /* Check that 'path' is a directory owned by the instance owner
  * with at least owner=rwx permissions.
  */
@@ -19,5 +22,7 @@ int rundir_create (attr_t *attrs,
                    const char *attr_name,
                    const char *tmpdir,
                    flux_error_t *error);
+
+#endif /* !BROKER_RUNDIR_H */
 
 // vi:ts=4 sw=4 expandtab

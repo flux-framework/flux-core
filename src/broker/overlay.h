@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _BROKER_OVERLAY_H
-#define _BROKER_OVERLAY_H
+#ifndef BROKER_OVERLAY_H
+#define BROKER_OVERLAY_H
 
 #include <jansson.h>
 #include <stdint.h>
@@ -172,7 +172,7 @@ void overlay_shutdown (struct overlay *overlay);
  */
 flux_future_t *overlay_goodbye_parent (struct overlay *overlay);
 
-#endif /* !_BROKER_OVERLAY_H */
+#endif /* !BROKER_OVERLAY_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -8,15 +8,15 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _BROKER_SHUTDOWN_H
-#define _BROKER_SHUTDOWN_H
+#ifndef BROKER_SHUTDOWN_H
+#define BROKER_SHUTDOWN_H
 
 struct broker;
 
 struct shutdown *shutdown_create (struct broker *ctx);
 void shutdown_destroy (struct shutdown *shutdown);
 
-#endif /* !_BROKER_SHUTDOWN_H */
+#endif /* !BROKER_SHUTDOWN_H */
 
 /*
  * vi:ts=4 sw=4 expandtab

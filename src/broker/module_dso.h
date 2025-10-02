@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _BROKER_MODULE_DSO_H
-#define _BROKER_MODULE_DSO_H
+#ifndef BROKER_MODULE_DSO_H
+#define BROKER_MODULE_DSO_H
 
 #include <flux/core.h>
 
@@ -43,6 +43,6 @@ void module_dso_close (void *dso);
  */
 char *module_dso_name (const char *path);
 
-#endif /* !_BROKER_MODULE_DSO_H */
+#endif /* !BROKER_MODULE_DSO_H */
 
 // vi:ts=4 sw=4 expandtab

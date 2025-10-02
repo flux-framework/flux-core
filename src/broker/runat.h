@@ -11,8 +11,8 @@
 /* Execute list of commands, sequentially, by name.
  */
 
-#ifndef _BROKER_RUNAT_H
-#define _BROKER_RUNAT_H
+#ifndef BROKER_RUNAT_H
+#define BROKER_RUNAT_H
 
 enum {
     RUNAT_FLAG_LOG_STDIO = 1,   /* stdout/stderr go to flux_log (o/w
@@ -101,7 +101,7 @@ struct runat *runat_create_test (flux_t *h,
                                  void *notify_handle);
 
 
-#endif /* !_BROKER_RUNAT_H */
+#endif /* !BROKER_RUNAT_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
