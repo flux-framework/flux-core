@@ -58,7 +58,7 @@ test_expect_success 'unload kvs' '
 test_expect_success 'flux-fsck works (simple)' '
 	flux fsck > simple.out 2> simple.err &&
 	grep "Checking integrity" simple.out &&
-	grep "Total errors: 0" simple.err
+	test_must_fail grep "Total errors" simple.err
 '
 test_expect_success 'flux-fsck verbose works (simple)' '
 	flux fsck --verbose > verbose.out 2> verbose.err &&
@@ -69,7 +69,8 @@ test_expect_success 'flux-fsck verbose works (simple)' '
 	grep "testdir\.d" verbose.err &&
 	grep "testdir\.adir" verbose.err &&
 	grep "testdir\.bdir" verbose.err &&
-	grep "alink" verbose.err
+	grep "alink" verbose.err &&
+	grep "Total errors: 0" verbose.err
 '
 # Cover value with a very large number of appends
 # N.B. from 1000 to 3000 instead of 0 to 2000, easier to debug errors
@@ -131,11 +132,13 @@ test_expect_success 'flux-fsck prefixes error messages on tty runs' '
 	test_must_fail $runpty flux fsck > fsckerrors1PTY.out &&
 	test_must_fail grep "flux-fsck" fsckerrors1PTY.err
 '
-test_expect_success 'flux-fsck no output with --quiet (testdir.b)' '
+test_expect_success 'flux-fsck errors still output with --quiet (testdir.b)' '
 	test_must_fail flux fsck --quiet > fsckerrors2.out 2> fsckerrors2.err &&
 	test_debug "cat fsckerrors2.err" &&
 	count=$(cat fsckerrors2.err | wc -l) &&
-	test $count -eq 0
+	test $count -eq 2 &&
+	grep "testdir\.b" fsckerrors2.err | grep "missing blobref(s)" &&
+	grep "Total errors: 1" fsckerrors2.err
 '
 test_expect_success 'load kvs' '
 	flux module load kvs
@@ -169,11 +172,14 @@ test_expect_success 'flux-fsck --verbose outputs details (testdir.b & c)' '
 	grep "testdir\.c" fsckerrors3V.err | grep "missing blobref" | grep "index=2" &&
 	grep "Total errors: 2" fsckerrors3V.err
 '
-test_expect_success 'flux-fsck no output with --quiet (testdir.b & c)' '
+test_expect_success 'flux-fsck errors still output with --quiet (testdir.b & c)' '
 	test_must_fail flux fsck --quiet > fsckerrors4.out 2> fsckerrors4.err &&
 	test_debug "cat fsckerrors4.err" &&
 	count=$(cat fsckerrors4.err | wc -l) &&
-	test $count -eq 0
+	test $count -eq 3 &&
+	grep "testdir\.b" fsckerrors4.err | grep "missing blobref(s)" &&
+	grep "testdir\.c" fsckerrors4.err | grep "missing blobref(s)" &&
+	grep "Total errors: 2" fsckerrors4.err
 '
 test_expect_success 'load kvs' '
 	flux module load kvs
@@ -210,11 +216,15 @@ test_expect_success 'flux-fsck --verbose outputs details (testdir.b & c & d)' '
 	grep "testdir\.d" fsckerrors5V.err | grep "missing blobref" | grep "index=1" &&
 	grep "Total errors: 3" fsckerrors5V.err
 '
-test_expect_success 'flux-fsck no output with --quiet (testdir.b & c & d)' '
+test_expect_success 'flux-fsck errors still output with --quiet (testdir.b & c & d)' '
 	test_must_fail flux fsck --quiet > fsckerrors6.out 2> fsckerrors6.err &&
 	test_debug "cat fsckerrors6.err" &&
 	count=$(cat fsckerrors6.err | wc -l) &&
-	test $count -eq 0
+	test $count -eq 4 &&
+	grep "testdir\.b" fsckerrors6.err | grep "missing blobref(s)" &&
+	grep "testdir\.c" fsckerrors6.err | grep "missing blobref(s)" &&
+	grep "testdir\.d" fsckerrors6.err | grep "missing blobref(s)" &&
+	grep "Total errors: 3" fsckerrors6.err
 '
 test_expect_success 'load kvs' '
 	flux module load kvs
@@ -265,11 +275,16 @@ test_expect_success 'flux-fsck --verbose outputs details (testdir.b & c & d & bd
 	grep "testdir\.bdir" fsckerrors7V.err | grep "missing dirref blobref" &&
 	grep "Total errors: 4" fsckerrors7V.err
 '
-test_expect_success 'flux-fsck no output with --quiet (testdir.b & c & d & bdir)' '
+test_expect_success 'flux-fsck errors still output with --quiet (testdir.b & c & d & bdir)' '
 	test_must_fail flux fsck --quiet > fsckerrors8.out 2> fsckerrors8.err &&
 	test_debug "cat fsckerrors8.err" &&
 	count=$(cat fsckerrors8.err | wc -l) &&
-	test $count -eq 0
+	test $count -eq 5 &&
+	grep "testdir\.b" fsckerrors8.err | grep "missing blobref(s)" &&
+	grep "testdir\.c" fsckerrors8.err | grep "missing blobref(s)" &&
+	grep "testdir\.d" fsckerrors8.err | grep "missing blobref(s)" &&
+	grep "testdir\.bdir" fsckerrors8.err | grep "missing dirref blobref" &&
+	grep "Total errors: 4" fsckerrors8.err
 '
 #
 # --rootref tests
@@ -419,7 +434,7 @@ test_expect_success 'unload kvs' '
 '
 test_expect_success 'flux-fsck passes now' '
 	flux fsck > postrepair1.out 2> postrepair1.err &&
-	grep "Total errors: 0" postrepair1.err
+	test_must_fail grep "Total errors" postrepair1.err
 '
 test_expect_success 'load kvs' '
 	flux module load kvs
@@ -440,7 +455,7 @@ test_expect_success 'unload kvs' '
 '
 test_expect_success 'flux-fsck --repair does nothing now (2)' '
 	flux fsck --repair > repair2.out 2> repair2.err &&
-	grep "Total errors: 0" repair2.err &&
+	test_must_fail grep "Total errors" repair2.err &&
 	test_must_fail grep "Total repairs" repair2.err &&
 	test_must_fail grep "Total unlinked directories" repair2.err
 '

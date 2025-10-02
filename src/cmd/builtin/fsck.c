@@ -66,7 +66,7 @@ static void fsck_treeobj (struct fsck_ctx *ctx,
 
 static void valref_validate (struct fsck_valref_data *fvd);
 
-static void verrmsg (struct fsck_ctx *ctx, const char *fmt, va_list ap)
+static void vmsg (struct fsck_ctx *ctx, const char *fmt, va_list ap)
 {
     char buf[128];
     vsnprintf (buf, sizeof (buf), fmt, ap);
@@ -79,13 +79,22 @@ static void verrmsg (struct fsck_ctx *ctx, const char *fmt, va_list ap)
 }
 
 static __attribute__ ((format (printf, 2, 3)))
-void errmsg (struct fsck_ctx *ctx, const char *fmt, ...)
+void warn (struct fsck_ctx *ctx, const char *fmt, ...)
 {
     va_list ap;
     if (ctx->quiet)
         return;
     va_start (ap, fmt);
-    verrmsg (ctx, fmt, ap);
+    vmsg (ctx, fmt, ap);
+    va_end (ap);
+}
+
+static __attribute__ ((format (printf, 2, 3)))
+void errmsg (struct fsck_ctx *ctx, const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    vmsg (ctx, fmt, ap);
     va_end (ap);
 }
 
@@ -367,7 +376,7 @@ static void fsck_valref (struct fsck_ctx *ctx,
 
             unlink_path (ctx, path);
 
-            errmsg (ctx, "%s repaired and moved to lost+found", path);
+            warn (ctx, "%s repaired and moved to lost+found", path);
 
             json_decref (repaired);
         }
@@ -441,7 +450,7 @@ static void fsck_dirref (struct fsck_ctx *ctx,
         ctx->errorcount++;
         if (ctx->repair && errno == ENOENT) {
             unlink_path (ctx, path);
-            errmsg (ctx, "%s unlinked due to missing blobref", path);
+            warn (ctx, "%s unlinked due to missing blobref", path);
             ctx->unlink_dir_count++;
         }
         flux_future_destroy (f);
@@ -473,7 +482,7 @@ static void fsck_treeobj (struct fsck_ctx *ctx,
         return;
     }
     if (ctx->verbose)
-        errmsg (ctx, "%s", path);
+        warn (ctx, "%s", path);
     if (treeobj_is_symlink (treeobj))
         fsck_symlink (ctx, path, treeobj);
     else if (treeobj_is_val (treeobj))
@@ -637,7 +646,7 @@ static void sync_checkpoint (struct fsck_ctx *ctx)
 
     flux_future_destroy (f);
 
-    errmsg (ctx, "Updated primary checkpoint to include lost+found");
+    warn (ctx, "Updated primary checkpoint to include lost+found");
 }
 
 /* "validate" support added in v0.77.0.  Use "load" for backwards
@@ -730,7 +739,8 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
     flux_future_destroy (f);
 
-    errmsg (&ctx, "Total errors: %d", ctx.errorcount);
+    if (ctx.verbose || ctx.errorcount)
+        errmsg (&ctx, "Total errors: %d", ctx.errorcount);
 
     if (ctx.repair) {
         if (ctx.repair_count) {
