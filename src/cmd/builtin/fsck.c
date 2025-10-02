@@ -360,8 +360,7 @@ static void fsck_valref (struct fsck_ctx *ctx,
 
             unlink_path (ctx, path);
 
-            if (!ctx->quiet)
-                fprintf (stderr, "%s repaired and moved to lost+found\n", path);
+            errmsg (ctx, "%s repaired and moved to lost+found", path);
 
             json_decref (repaired);
         }
@@ -435,8 +434,7 @@ static void fsck_dirref (struct fsck_ctx *ctx,
         ctx->errorcount++;
         if (ctx->repair && errno == ENOENT) {
             unlink_path (ctx, path);
-            if (!ctx->quiet)
-                fprintf (stderr, "%s unlinked due to missing blobref\n", path);
+            errmsg (ctx, "%s unlinked due to missing blobref", path);
         }
         flux_future_destroy (f);
         return;
@@ -467,7 +465,7 @@ static void fsck_treeobj (struct fsck_ctx *ctx,
         return;
     }
     if (ctx->verbose)
-        fprintf (stderr, "%s\n", path);
+        errmsg (ctx, "%s", path);
     if (treeobj_is_symlink (treeobj))
         fsck_symlink (ctx, path, treeobj);
     else if (treeobj_is_val (treeobj))
@@ -631,8 +629,7 @@ static void sync_checkpoint (struct fsck_ctx *ctx)
 
     flux_future_destroy (f);
 
-    if (!ctx->quiet)
-        fprintf (stderr, "Updated primary checkpoint to include lost+found\n");
+    errmsg (ctx, "Updated primary checkpoint to include lost+found");
 }
 
 /* "validate" support added in v0.77.0.  Use "load" for backwards
@@ -726,8 +723,7 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
     flux_future_destroy (f);
 
-    if (!ctx.quiet)
-        fprintf (stderr, "Total errors: %d\n", ctx.errorcount);
+    errmsg (&ctx, "Total errors: %d", ctx.errorcount);
 
     if (ctx.repair && ctx.repair_count) {
         const char *tmp;
