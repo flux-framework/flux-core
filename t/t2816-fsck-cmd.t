@@ -55,7 +55,7 @@ test_expect_success 'unload kvs' '
 '
 test_expect_success 'flux-fsck works (simple)' '
 	flux fsck > simple.out 2> simple.err &&
-	grep "Checking integrity" simple.err &&
+	grep "Checking integrity" simple.out &&
 	grep "Total errors: 0" simple.err
 '
 test_expect_success 'flux-fsck verbose works (simple)' '
@@ -108,12 +108,11 @@ test_expect_success 'call sync to ensure we have checkpointed' '
 test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
-# line count includes extra diagnostic messages
 test_expect_success 'flux-fsck detects errors (testdir.b)' '
 	test_must_fail flux fsck > fsckerrors1.out 2> fsckerrors1.err &&
 	test_debug "cat fsckerrors1.err" &&
 	count=$(cat fsckerrors1.err | wc -l) &&
-	test $count -eq 3 &&
+	test $count -eq 2 &&
 	grep "testdir\.b" fsckerrors1.err | grep "missing blobref(s)" &&
 	grep "Total errors: 1" fsckerrors1.err
 '
@@ -144,12 +143,11 @@ test_expect_success 'call sync to ensure we have checkpointed' '
 test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
-# line count includes extra diagnostic messages
 test_expect_success 'flux-fsck detects errors (testdir.b & c)' '
 	test_must_fail flux fsck > fsckerrors3.out 2> fsckerrors3.err &&
 	test_debug "cat fsckerrors3.err" &&
 	count=$(cat fsckerrors3.err | wc -l) &&
-	test $count -eq 4 &&
+	test $count -eq 3 &&
 	grep "testdir\.b" fsckerrors3.err | grep "missing blobref(s)" &&
 	grep "testdir\.c" fsckerrors3.err | grep "missing blobref(s)" &&
 	grep "Total errors: 2" fsckerrors3.err
@@ -183,12 +181,11 @@ test_expect_success 'call sync to ensure we have checkpointed' '
 test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
-# line count includes extra diagnostic messages
 test_expect_success 'flux-fsck detects errors (testdir.b & c & d)' '
 	test_must_fail flux fsck > fsckerrors5.out 2> fsckerrors5.err &&
 	test_debug "cat fsckerrors5.err" &&
 	count=$(cat fsckerrors5.err | wc -l) &&
-	test $count -eq 5 &&
+	test $count -eq 4 &&
 	grep "testdir\.b" fsckerrors5.err | grep "missing blobref(s)" &&
 	grep "testdir\.c" fsckerrors5.err | grep "missing blobref(s)" &&
 	grep "testdir\.d" fsckerrors5.err | grep "missing blobref(s)" &&
@@ -237,12 +234,11 @@ test_expect_success 'call sync to ensure we have checkpointed' '
 test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
-# line count includes extra diagnostic messages
 test_expect_success 'flux-fsck detects errors (testdir.b & c & d & bdir)' '
 	test_must_fail flux fsck > fsckerrors7.out 2> fsckerrors7.err &&
 	test_debug "cat fsckerrors7.err" &&
 	count=$(cat fsckerrors7.err | wc -l) &&
-	test $count -eq 6 &&
+	test $count -eq 5 &&
 	grep "testdir\.b" fsckerrors7.err | grep "missing blobref(s)" &&
 	grep "testdir\.c" fsckerrors7.err | grep "missing blobref(s)" &&
 	grep "testdir\.d" fsckerrors7.err | grep "missing blobref(s)" &&

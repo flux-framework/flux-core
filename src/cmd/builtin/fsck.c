@@ -709,9 +709,7 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
             struct tm tm;
             if (!timestamp_from_double (timestamp, &tm, NULL))
                 strftime (buf, sizeof (buf), "%Y-%m-%dT%T", &tm);
-            fprintf (stderr,
-                     "Checking integrity of checkpoint from %s\n",
-                     buf);
+            printf ("Checking integrity of checkpoint from %s\n", buf);
         }
 
         ctx.sequence = sequence;
