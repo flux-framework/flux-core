@@ -162,7 +162,20 @@ static void proc_completion_cb (flux_subprocess_t *p)
     subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
     const flux_msg_t *request = flux_subprocess_aux_get (p, msgkey);
 
-    if (!p->bg && p->state != FLUX_SUBPROCESS_FAILED)
+    if (p->bg) {
+        int exitcode;
+        flux_cmd_t *cmd = flux_subprocess_get_cmd (p);
+
+        if ((exitcode = flux_subprocess_exit_code (p)) < 0) {
+            llog_info (s,
+                       "%s: Killed by signal %d",
+                       flux_cmd_arg (cmd, 0),
+                       flux_subprocess_signaled (p));
+        }
+        else
+            llog_info (s, "%s: Exit %d", flux_cmd_arg (cmd, 0), exitcode);
+    }
+    else if (p->state != FLUX_SUBPROCESS_FAILED)
         proc_end_stream (s, request, p);
 
     proc_delete (s, p);
