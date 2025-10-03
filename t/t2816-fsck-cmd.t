@@ -8,6 +8,8 @@ test_description='Test flux fsck command'
 
 test_under_flux 1 minimal
 
+runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer"
+
 test_expect_success 'load content and content-sqlite module' '
 	flux module load content &&
 	flux module load content-sqlite
@@ -121,6 +123,13 @@ test_expect_success 'flux-fsck --verbose outputs details (testdir.b)' '
 	test_debug "cat fsckerrors1V.err" &&
 	grep "testdir\.b" fsckerrors1V.err | grep "missing blobref" | grep "index=1" &&
 	grep "Total errors: 1" fsckerrors1V.err
+'
+test_expect_success 'flux-fsck does not prefix error messages on non-tty runs' '
+	grep "flux-fsck" fsckerrors1.err
+'
+test_expect_success 'flux-fsck prefixes error messages on tty runs' '
+	test_must_fail $runpty flux fsck > fsckerrors1PTY.out &&
+	test_must_fail grep "flux-fsck" fsckerrors1PTY.err
 '
 test_expect_success 'flux-fsck no output with --quiet (testdir.b)' '
 	test_must_fail flux fsck --quiet > fsckerrors2.out 2> fsckerrors2.err &&
