@@ -83,7 +83,8 @@ static struct rexec_ctx *rexec_ctx_create (flux_cmd_t *cmd,
     int valid_flags = SUBPROCESS_REXEC_STDOUT
         | SUBPROCESS_REXEC_STDERR
         | SUBPROCESS_REXEC_CHANNEL
-        | SUBPROCESS_REXEC_WRITE_CREDIT;
+        | SUBPROCESS_REXEC_WRITE_CREDIT
+        | SUBPROCESS_REXEC_BACKGROUND;
 
     if ((flags & ~valid_flags)) {
         errno = EINVAL;
@@ -144,6 +145,45 @@ error:
     ERRNO_SAFE_WRAP (free, topic);
     flux_future_destroy (f);
     return NULL;
+}
+
+flux_future_t *subprocess_rexec_bg (flux_t *h,
+                                    const char *service_name,
+                                    uint32_t rank,
+                                    const flux_cmd_t *cmd,
+                                    int local_flags)
+{
+    flux_future_t *f = NULL;
+    json_t *ocmd = NULL;
+    char *topic = NULL;
+
+    if (service_name == NULL)
+        service_name = "rexec";
+
+    if (asprintf (&topic, "%s.exec", service_name) < 0) {
+        errno = ENOMEM;
+        goto out;
+    }
+    if (!(ocmd = cmd_tojson (cmd)))
+        goto out;
+
+    /* Clear LOCAL_UNBUF from local_flags. Not a local flag and doesn't
+     * make sense with SUBPROCESS_EXEC_BACKGROUND.
+     */
+    local_flags &= ~FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF;
+
+    f = flux_rpc_pack (h,
+                       topic,
+                       rank,
+                       FLUX_RPC_STREAMING,
+                       "{s:O s:i s:i}",
+                       "cmd", ocmd,
+                       "flags", SUBPROCESS_REXEC_BACKGROUND,
+                       "local_flags", local_flags);
+out:
+    ERRNO_SAFE_WRAP (free, topic);
+    ERRNO_SAFE_WRAP (json_decref, ocmd);
+    return f;
 }
 
 int subprocess_rexec_get (flux_future_t *f)

@@ -23,6 +23,7 @@ enum {
     SUBPROCESS_REXEC_STDERR = 2,
     SUBPROCESS_REXEC_CHANNEL = 4,
     SUBPROCESS_REXEC_WRITE_CREDIT = 8,
+    SUBPROCESS_REXEC_BACKGROUND = 16,
 };
 
 flux_future_t *subprocess_rexec (flux_t *h,
@@ -31,6 +32,12 @@ flux_future_t *subprocess_rexec (flux_t *h,
                                  flux_cmd_t *cmd,
                                  int flags,
                                  int lflags);
+
+flux_future_t *subprocess_rexec_bg (flux_t *h,
+                                    const char *service_name,
+                                    uint32_t rank,
+                                    const flux_cmd_t *cmd,
+                                    int local_flags);
 
 int subprocess_rexec_get (flux_future_t *f);
 bool subprocess_rexec_is_started (flux_future_t *f, pid_t *pid);
