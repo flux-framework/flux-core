@@ -38,6 +38,9 @@
 #include "src/common/libflux/message_route.h" // for msg_route_sendto()
 #include "src/common/libccan/ccan/base64/base64.h"
 #include "ccan/str/str.h"
+#ifndef HAVE_STRLCPY
+#include "src/common/libmissing/strlcpy.h"
+#endif
 
 #include "overlay.h"
 #include "attr.h"
@@ -1467,7 +1470,12 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
         goto error;
     }
 
-    snprintf (child->uuid, sizeof (child->uuid), "%s", uuid);
+    if (strlcpy (child->uuid,
+                 uuid,
+                 sizeof (child->uuid)) >= sizeof (child->uuid)) {
+        errno = EOVERFLOW;
+        goto error;
+    }
     overlay_child_status_update (ov, child, status, NULL);
 
     flux_log (ov->h,
@@ -1512,7 +1520,12 @@ static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg)
               "hello parent %lu %s",
               (unsigned long)ov->parent.rank,
               uuid);
-    snprintf (ov->parent.uuid, sizeof (ov->parent.uuid), "%s", uuid);
+    if (strlcpy (ov->parent.uuid,
+                 uuid,
+                 sizeof (ov->parent.uuid)) >= sizeof (ov->parent.uuid)) {
+        errno = EOVERFLOW;
+        goto error;
+    }
     ov->parent.hello_responded = true;
     ov->parent.hello_error = false;
     overlay_monitor_notify (ov, FLUX_NODEID_ANY);
@@ -2936,7 +2949,6 @@ struct overlay *overlay_create (flux_t *h,
                                 flux_error_t *errp)
 {
     struct overlay *ov;
-    uuid_t uuid;
 
     if (!(ov = calloc (1, sizeof (*ov))))
         goto error;
@@ -2957,8 +2969,15 @@ struct overlay *overlay_create (flux_t *h,
         goto error;
     flux_watcher_start (ov->w_channel);
     ov->version = FLUX_CORE_VERSION_HEX;
-    uuid_generate (uuid);
-    uuid_unparse (uuid, ov->uuid);
+
+    const char *uuid;
+    if (attr_get (attrs, "broker.uuid", &uuid, NULL) < 0)
+        goto error;
+    if (strlcpy (ov->uuid, uuid, sizeof (ov->uuid)) >= sizeof (ov->uuid)) {
+        errno = EOVERFLOW;
+        goto error;
+    }
+
     if (zctx) {
         ov->zctx = zctx;
         ov->zctx_external = true;

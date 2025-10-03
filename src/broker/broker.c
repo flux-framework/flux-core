@@ -15,6 +15,10 @@
 #include <signal.h>
 #include <locale.h>
 #include <inttypes.h>
+#include <uuid.h>
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN 37     // defined in later libuuid headers
+#endif
 #ifdef HAVE_SYS_PRCTL_H
 #include <sys/prctl.h>
 #endif
@@ -123,6 +127,8 @@ static int init_critical_ranks_attr (struct overlay *ov,
 
 static int execute_parental_notifications (struct broker *ctx,
                                            flux_error_t *error);
+
+static int init_broker_uuid (struct broker *ctx);
 
 static struct optparse_option opts[] = {
     { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
@@ -316,6 +322,19 @@ int main (int argc, char *argv[])
         else
             level = LOG_ERR;
         (void)attr_add_int (ctx.attrs, "log-stderr-level", level, 0);
+    }
+
+    /* Set the broker.uuid attribute, used for request/response routing.
+     * Changing the uuid each time a broker restarts ensures that a new
+     * broker won't receive responses to requests made by its predecessor.
+     * N.B. this also sets flux::uuid, for use by the broker.ping method.
+     */
+    if (init_broker_uuid (&ctx) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error adding broker uuid to aux container: %s",
+                  strerror (errno));
+        goto cleanup;
     }
 
     const char *val;
@@ -568,16 +587,6 @@ int main (int argc, char *argv[])
                   strerror (errno));
         goto cleanup;
     }
-    if (flux_aux_set (ctx.h,
-                      "flux::uuid",
-                      (char *)overlay_get_uuid (ctx.overlay),
-                      NULL) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "error adding broker uuid to aux container: %s",
-                  strerror (errno));
-        goto cleanup;
-    }
     if (!(handlers = broker_add_services (&ctx, &error))) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
@@ -686,6 +695,23 @@ cleanup:
     optparse_destroy (ctx.opts);
 
     return ctx.exit_rc;
+}
+
+static int init_broker_uuid (struct broker *ctx)
+{
+    uuid_t uuid;
+    char *uuid_str;
+
+    if (!(uuid_str = calloc (1, UUID_STR_LEN)))
+        return -1;
+    uuid_generate (uuid);
+    uuid_unparse (uuid, uuid_str);
+    if (attr_add (ctx->attrs, "broker.uuid", uuid_str, ATTR_IMMUTABLE) < 0
+        || flux_aux_set (ctx->h, "flux::uuid", uuid_str, free) < 0) {
+        ERRNO_SAFE_WRAP (free, uuid_str);
+        return -1;
+    }
+    return 0;
 }
 
 static int init_attrs_broker_pid (attr_t *attrs, pid_t pid, flux_error_t *errp)
