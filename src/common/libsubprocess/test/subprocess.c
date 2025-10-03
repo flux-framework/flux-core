@@ -95,6 +95,11 @@ void test_corner_cases (flux_reactor_t *r)
         && errno == EINVAL,
         "flux_rexec fails with invalid flag");
 
+    ok (flux_rexec_bg (NULL, NULL, 0, 0, NULL) == NULL && errno == EINVAL,
+        "flux_rexec_bg fails with EINVAL with NULL inputs");
+    ok (flux_rexec_bg (h, NULL, 0, 0, NULL) == NULL && errno == EINVAL,
+        "flux_rexec_bg fails with EINVAL with NULL cmd");
+
     ok ((cmd = flux_cmd_create (0, avbad, NULL)) != NULL,
         "flux_cmd_create with 0 args works");
     ok (flux_local_exec (r, 0, cmd, NULL) == NULL
