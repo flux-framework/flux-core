@@ -544,6 +544,34 @@ test_expect_success 'modprobe fails if task raises exception' '
 	test_debug "cat output${seq}" &&
 	grep "next:.*test exception" output${seq}
 '
+seq=$((seq=seq+1))
+test_expect_success 'modprobe aborts pending tasks on error' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first", before=["*"])
+	def first(context):
+	    print("first")
+
+	@task("next")
+	def next(context):
+	   raise RuntimeError("test exception")
+
+	@task("next2")
+	def next2(context):
+	    print("next2")
+
+	@task("last", after=["next"])
+	def last(context):
+	    print("last")
+	EOF
+	test_must_fail flux modprobe run test${seq}.py >output${seq} 2>&1 &&
+	test_debug "cat output${seq}" &&
+	grep "first" output${seq} &&
+	grep "next2" output${seq} &&
+	grep "next:.*test exception" output${seq} &&
+	test_must_fail grep last output${seq}
+'
 test_expect_success 'modprobe: FLUX_MODPROBE_PATH works' '
 	FLUX_MODPROBE_PATH=/test/path \
 	  flux modprobe rc1 --dry-run --verbose >path.out 2>&1 &&

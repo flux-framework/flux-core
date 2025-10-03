@@ -1045,13 +1045,18 @@ class Modprobe:
         executor = ThreadPoolExecutor(max_workers=max_workers)
         futures = {}
         started = {}
+        aborted = False
 
         while sorter.is_active():
             for task in [self.get_task(x) for x in sorter.get_ready()]:
                 if task.name not in started:
-                    future = executor.submit(task.runtask, self.context)
-                    started[task.name] = task
-                    futures[future] = task
+                    if not aborted:
+                        future = executor.submit(task.runtask, self.context)
+                        started[task.name] = task
+                        futures[future] = task
+                    else:
+                        # Do not run task, mark it done
+                        sorter.done(task.name)
 
             done, not_done = concurrent.futures.wait(
                 futures.keys(), return_when=concurrent.futures.FIRST_COMPLETED
@@ -1064,6 +1069,10 @@ class Modprobe:
                 except Exception as exc:
                     print(f"{task.name}: {exc}", file=sys.stderr)
                     self.exitcode = 1
+                    aborted = True
+                    # cancel any non-running but scheduled futures immediately
+                    for x in not_done:
+                        x.cancel()
                 sorter.done(task.name)
                 del futures[future]
 
