@@ -997,3 +997,4 @@ epoll
 libuv
 PYCLI
 backtraces
+libdir
