@@ -352,7 +352,7 @@ following optional arguments:
    (optional, list) A list of task or module names this task requires. This is
    used to ensure required tasks are active when activating another task.
    It does not indicate that this task will necessarily be run before or after
-   the tasks it requires. (See ``before`` or ``after` for those features)
+   the tasks it requires. (See ``before`` or ``after`` for those features)
 
 **needs**
    (optional, list) A list of tasks or modules this task needs. Disables this
