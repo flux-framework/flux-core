@@ -64,7 +64,7 @@ static void fsck_treeobj (struct fsck_ctx *ctx,
 
 static void valref_validate (struct fsck_valref_data *fvd);
 
-static void read_verror (const char *fmt, va_list ap)
+static void verrmsg (const char *fmt, va_list ap)
 {
     char buf[128];
     vsnprintf (buf, sizeof (buf), fmt, ap);
@@ -72,13 +72,13 @@ static void read_verror (const char *fmt, va_list ap)
 }
 
 static __attribute__ ((format (printf, 2, 3)))
-void read_error (struct fsck_ctx *ctx, const char *fmt, ...)
+void errmsg (struct fsck_ctx *ctx, const char *fmt, ...)
 {
     va_list ap;
     if (ctx->quiet)
         return;
     va_start (ap, fmt);
-    read_verror (fmt, ap);
+    verrmsg (fmt, ap);
     va_end (ap);
 }
 
@@ -108,16 +108,16 @@ static void valref_validate_continuation (flux_future_t *f, void *arg)
         int *index = flux_future_aux_get (f, "index");
         if (fvd->ctx->verbose) {
             if (errno == ENOENT)
-                read_error (fvd->ctx,
-                            "%s: missing blobref index=%d",
-                            fvd->path,
-                            (*index));
+                errmsg (fvd->ctx,
+                        "%s: missing blobref index=%d",
+                        fvd->path,
+                        (*index));
             else
-                read_error (fvd->ctx,
-                            "%s: error retrieving blobref index=%d: %s",
-                            fvd->path,
-                            (*index),
-                            future_strerror (f, errno));
+                errmsg (fvd->ctx,
+                        "%s: error retrieving blobref index=%d: %s",
+                        fvd->path,
+                        (*index),
+                        future_strerror (f, errno));
         }
         fvd->errorcount++;
         fvd->errnum = errno;     /* we'll report the last errno */
@@ -341,12 +341,12 @@ static void fsck_valref (struct fsck_ctx *ctx,
         /* each invalid blobref will be output in verbose mode */
         if (!ctx->verbose) {
             if (fvd.errnum == ENOENT)
-                read_error (ctx, "%s: missing blobref(s)", path);
+                errmsg (ctx, "%s: missing blobref(s)", path);
             else
-                read_error (ctx,
-                            "%s: error retrieving blobref(s): %s",
-                            path,
-                            strerror (fvd.errnum));
+                errmsg (ctx,
+                        "%s: error retrieving blobref(s): %s",
+                        path,
+                        strerror (fvd.errnum));
         }
         ctx->errorcount++;
 
@@ -360,8 +360,7 @@ static void fsck_valref (struct fsck_ctx *ctx,
 
             unlink_path (ctx, path);
 
-            if (!ctx->quiet)
-                fprintf (stderr, "%s repaired and moved to lost+found\n", path);
+            errmsg (ctx, "%s repaired and moved to lost+found", path);
 
             json_decref (repaired);
         }
@@ -414,10 +413,10 @@ static void fsck_dirref (struct fsck_ctx *ctx,
 
     count = treeobj_get_count (treeobj);
     if (count != 1) {
-        read_error (ctx,
-                    "%s: invalid dirref treeobj count=%d",
-                    path,
-                    count);
+        errmsg (ctx,
+                "%s: invalid dirref treeobj count=%d",
+                path,
+                count);
         ctx->errorcount++;
         return;
     }
@@ -426,28 +425,27 @@ static void fsck_dirref (struct fsck_ctx *ctx,
                                       CONTENT_FLAG_CACHE_BYPASS))
         || content_load_get (f, &buf, &buflen) < 0) {
         if (errno == ENOENT)
-            read_error (ctx, "%s: missing dirref blobref", path);
+            errmsg (ctx, "%s: missing dirref blobref", path);
         else
-            read_error (ctx,
-                        "%s: error retrieving dirref blobref: %s",
-                        path,
-                        future_strerror (f, errno));
+            errmsg (ctx,
+                    "%s: error retrieving dirref blobref: %s",
+                    path,
+                    future_strerror (f, errno));
         ctx->errorcount++;
         if (ctx->repair && errno == ENOENT) {
             unlink_path (ctx, path);
-            if (!ctx->quiet)
-                fprintf (stderr, "%s unlinked due to missing blobref\n", path);
+            errmsg (ctx, "%s unlinked due to missing blobref", path);
         }
         flux_future_destroy (f);
         return;
     }
     if (!(treeobj_deref = treeobj_decodeb (buf, buflen))) {
-        read_error (ctx, "%s: could not decode directory", path);
+        errmsg (ctx, "%s: could not decode directory", path);
         ctx->errorcount++;
         goto cleanup;
     }
     if (!treeobj_is_dir (treeobj_deref)) {
-        read_error (ctx, "%s: dirref references non-directory", path);
+        errmsg (ctx, "%s: dirref references non-directory", path);
         ctx->errorcount++;
         goto cleanup;
     }
@@ -462,12 +460,12 @@ static void fsck_treeobj (struct fsck_ctx *ctx,
                           json_t *treeobj)
 {
     if (treeobj_validate (treeobj) < 0) {
-        read_error (ctx, "%s: invalid tree object", path);
+        errmsg (ctx, "%s: invalid tree object", path);
         ctx->errorcount++;
         return;
     }
     if (ctx->verbose)
-        fprintf (stderr, "%s\n", path);
+        errmsg (ctx, "%s", path);
     if (treeobj_is_symlink (treeobj))
         fsck_symlink (ctx, path, treeobj);
     else if (treeobj_is_val (treeobj))
@@ -493,9 +491,9 @@ static void fsck_blobref (struct fsck_ctx *ctx, const char *blobref)
                                       blobref,
                                       CONTENT_FLAG_CACHE_BYPASS))
         || content_load_get (f, &buf, &buflen) < 0) {
-        read_error (ctx,
-                    "cannot load root tree object: %s",
-                    future_strerror (f, errno));
+        errmsg (ctx,
+                "cannot load root tree object: %s",
+                future_strerror (f, errno));
         ctx->errorcount++;
         flux_future_destroy (f);
         return;
@@ -631,8 +629,7 @@ static void sync_checkpoint (struct fsck_ctx *ctx)
 
     flux_future_destroy (f);
 
-    if (!ctx->quiet)
-        fprintf (stderr, "Updated primary checkpoint to include lost+found\n");
+    errmsg (ctx, "Updated primary checkpoint to include lost+found");
 }
 
 /* "validate" support added in v0.77.0.  Use "load" for backwards
@@ -726,8 +723,7 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
     flux_future_destroy (f);
 
-    if (!ctx.quiet)
-        fprintf (stderr, "Total errors: %d\n", ctx.errorcount);
+    errmsg (&ctx, "Total errors: %d", ctx.errorcount);
 
     if (ctx.repair && ctx.repair_count) {
         const char *tmp;
