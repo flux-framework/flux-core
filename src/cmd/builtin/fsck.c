@@ -730,23 +730,28 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
     errmsg (&ctx, "Total errors: %d", ctx.errorcount);
 
-    if (ctx.repair && ctx.repair_count) {
-        const char *tmp;
-        if (!(tmp = flux_attr_get (ctx.h, "content.hash"))
-            || !(ctx.hash_name = strdup (tmp)))
-            log_err_exit ("could not get content hash name");
+    if (ctx.repair) {
+        if (ctx.repair_count) {
+            const char *tmp;
+            if (!(tmp = flux_attr_get (ctx.h, "content.hash"))
+                || !(ctx.hash_name = strdup (tmp)))
+                log_err_exit ("could not get content hash name");
 
-        if (!(ctx.repair_treeobjs = zlist_new ()))
-            log_err_exit ("cannot create list for treeobjs");
+            if (!(ctx.repair_treeobjs = zlist_new ()))
+                log_err_exit ("cannot create list for treeobjs");
 
-        get_treeobjs (&ctx, ctx.root);
+            get_treeobjs (&ctx, ctx.root);
 
-        /* and gotta save root at end too */
-        save_treeobj (&ctx, ctx.root);
+            /* and gotta save root at end too */
+            save_treeobj (&ctx, ctx.root);
 
-        store_treeobjs (&ctx);
+            store_treeobjs (&ctx);
 
-        sync_checkpoint (&ctx);
+            sync_checkpoint (&ctx);
+        }
+
+        if (ctx.repair_count || ctx.verbose)
+            errmsg (&ctx, "Total repairs: %d", ctx.repair_count);
     }
 
     zlist_destroy (&ctx.repair_treeobjs);
