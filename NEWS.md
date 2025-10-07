@@ -1,3 +1,80 @@
+flux-core version 0.79.0 - 2025-10-07
+-------------------------------------
+
+## New Features
+
+ * python: add explicit `attr_set()` method to Flux handle class (#7127)
+ * add `flux_rexec_bg(3)` and `flux exec --bg` (#7107)
+ * flux-fsck: prefix output when not attached to a tty (#7114)
+ * broker: add default config-reload module method (#7099)
+ * bulk-exec: include jobid in unit Description (#7104)
+ * broker: convert subprocess server to a built-in module (#7084)
+ * python: support `kvs_lookup_checkpoint` (#7081)
+ * modprobe: support module `exec` option to load modules as processes (#7080)
+ * switch to modprobe by default for rc1 and rc3 (#7005)
+ * add flux module load --exec option (#7075)
+ * libsubprocess: add message channels (#7073)
+ * libflux: add fd:// connector (#7072)
+ * validator: validate resource count strings (#7052)
+ * flux-jobs: add `-w, --width[=N]` option (#7063)
+ * python: consider output header w/ expandable width (#7053)
+ * add flux-module-exec for standalone module debugging (#7046)
+ * Show full usernames by default in flux-jobs(1) and flux-pgrep(1) (#7042)
+ * add flux-cgroup command and improve cgroup portability (#7035)
+ * allow MemorySwapMax to be configured (#7036)
+
+## Fixes
+
+ * etc/modprobe: rc3 post-finish-event needs kvs (#7117)
+ * modprobe: abort operation on first task failure (#7106)
+ * adjust subprocess server protocol to conform to RFC 42 (#7090)
+ * libsubprocess: rename `lflags` to `local_flags` (#7087)
+ * libsubprocess: allow all flags to work remotely (#7086)
+ * libflux: reduce spurious pollfd wake-ups (#7071)
+ * libflux: fix `flux_pollevents()` POLLOUT logic (#7068)
+ * modprobe/rc1: call flux restore with --sd-notify (#7076)
+ * etc/modprobe: remove kvs requires on restore task (#7069)
+ * libflux: ensure `flux_pollfd()` is edge triggered (#7066)
+ * libflux: fix `flux_pollfd()` file descriptor leak (#7065)
+ * libflux: do not require out parameters in `flux_response_decode_raw()`
+   (#7064)
+ * flux-fsck: use content.load on older versions (#7045)
+ * flux-{jobs,pgrep}: remove precision from username outputs (#7056)
+ * modprobe: add missing call to executor.shutdown() (#7055)
+ * libeventlog: set reactor when creating future (#7048)
+ * flux-jobs: add space before parentheses for `-c/--count` option, add
+   "+" for `-u/--user` help message (#7047)
+ * libkvs: allow checkpoint read on older versions (#7044)
+ * flux-module: fix list output alignment (#7038)
+ * sysmon: handle hybrid cgroup hierarchy (#7029)
+
+## Cleanup
+
+ * flux-fsck: misc cleanup (#7110)
+ * broker: rename event.publish to overlay.publish (#7109)
+ * broker: disable duplicate buffering on rc subprocs (#7098)
+ * broker: simplify internal event routing (#7100)
+ * misc cleanup in content-files and tests (#7097)
+ * flux-job: remove cancel[all] subcommands (#7058)
+ * modprobe: move package provided files out of `/etc` (#7039)
+
+## Build/CI/Testsuite/Documentation
+
+ * doc: point users to el8 SRPM packages on github (#7126)
+ * doc: fix formatting typo in flux-modprobe(1) (#7116)
+ * doc: update flux-broker-attributes(7) defaults (#7103)
+ * doc: add manpage for flux_msg_handler_allow_rolemask(3) and
+   flux_msg_handler_deny_rolemask(3) (#7088)
+ * doc: document `FLUX_PYCLI_LOGLEVEL` in flux-environment(7) (#7089)
+ * mergify: disable temporary PR branches (#7096)
+ * testsuite: simplify test to avoid hang (#7092)
+ * doc: add extra clarification to modprobe docs (#7070)
+ * testsuite: fix a couple tests in t0100-modprobe.t (#7062)
+ * testsuite: sanitize environment in python/subflux.py (#7057)
+ * doc: add `attach --tail` to flux-job(1) (#7033)
+ * testsuite: fix t2622-job-shell-sysmon.t skip_all behavior (#7025)
+ * testsuite: fix t2429-shell-lost when hostname includes domain (#7024)
+
 flux-core version 0.78.0 - 2025-09-03
 -------------------------------------
 
