@@ -378,6 +378,8 @@ test_expect_success 'flux-fsck --repair works (1)' '
 	grep "testdir\.bdir" repair1.err | grep "missing dirref blobref" &&
 	grep "testdir\.bdir" repair1.err | grep "unlinked" &&
 	grep "Total errors: 4" repair1.err &&
+	grep "Total repairs: 3" repair1.err &&
+	grep "Total unlinked directories: 1" repair1.err &&
 	grep "Updated primary checkpoint" repair1.err
 '
 test_expect_success 'load kvs' '
@@ -438,7 +440,15 @@ test_expect_success 'unload kvs' '
 '
 test_expect_success 'flux-fsck --repair does nothing now (2)' '
 	flux fsck --repair > repair2.out 2> repair2.err &&
-	grep "Total errors: 0" repair2.err
+	grep "Total errors: 0" repair2.err &&
+	test_must_fail grep "Total repairs" repair2.err &&
+	test_must_fail grep "Total unlinked directories" repair2.err
+'
+test_expect_success 'flux-fsck --repair --verbose outputs repair summary (2V)' '
+	flux fsck --repair --verbose > repair2V.out 2> repair2V.err &&
+	grep "Total errors: 0" repair2V.err &&
+	grep "Total repairs: 0" repair2V.err &&
+	grep "Total unlinked directories: 0" repair2V.err
 '
 test_expect_success 'load kvs' '
 	flux module load kvs
@@ -464,6 +474,8 @@ test_expect_success 'flux-fsck --repair works (3)' '
 	grep "testdir\.d\.e" repair3.err | grep "missing blobref(s)" &&
 	grep "testdir\.d\.e" repair3.err | grep "repaired" &&
 	grep "Total errors: 1" repair3.err &&
+	grep "Total repairs: 1" repair3.err &&
+	test_must_fail grep "Total unlinked directories" repair3.err &&
 	grep "Updated primary checkpoint" repair3.err
 '
 test_expect_success 'load kvs' '
