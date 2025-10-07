@@ -1,0 +1,20 @@
+version: 1
+resources:
+  - type: slot
+    count:
+      min: 2
+      max: 1
+      operand: 1
+      operator: "+"
+    label: foo
+    with:
+      - type: node
+        count: 1
+tasks:
+  - command: [ "app" ]
+    slot: foo
+    count:
+      per_slot: 1
+attributes:
+  system:
+    duration: 1
