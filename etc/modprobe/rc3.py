@@ -20,7 +20,7 @@ def run_all_rc3(context):
     run_all_rc_scripts(3)
 
 
-@task("post-finish-event", ranks="0", before=["kvs"])
+@task("post-finish-event", ranks="0", before=["kvs"], needs=["kvs"])
 def post_finish_event(context):
     context.bash("flux startlog --post-finish-event")
 
