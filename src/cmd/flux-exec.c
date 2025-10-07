@@ -35,6 +35,7 @@
 #include "src/common/libsubprocess/fbuf.h"
 #include "src/common/libsubprocess/fbuf_watcher.h"
 #include "ccan/str/str.h"
+#include "ccan/ptrint/ptrint.h"
 
 #define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
 
@@ -43,6 +44,9 @@ static struct optparse_option cmdopts[] = {
       .usage = "Specify target ranks.  Default is \"all\"" },
     { .name = "exclude", .key = 'x', .has_arg = 1, .arginfo = "IDSET",
       .usage = "Exclude ranks from target." },
+    { .name = "bg", .has_arg = 0,
+      .usage = "Run process in background and exit",
+    },
     { .name = "dir", .key = 'd', .has_arg = 1, .arginfo = "PATH",
       .usage = "Set the working directory to PATH" },
     { .name = "label-io", .key = 'l', .has_arg = 0,
@@ -639,6 +643,61 @@ int get_jobid_rexec_info (flux_t *h,
     return 0;
 }
 
+static void rexec_background_cb (flux_future_t *f, void *arg)
+{
+    flux_cmd_t *cmd = arg;
+    int rank = ptr2int (flux_future_aux_get (f, "rank"));
+    int pid;
+
+    if (flux_rpc_get_unpack (f, "{s:i}", "pid", &pid) < 0) {
+        log_msg ("Error: rank %u: %s: %s",
+                 rank,
+                 flux_cmd_arg (cmd, 0),
+                 future_strerror (f, errno));
+        /* Set global exit code for failure:
+         */
+        exit_code = 1;
+    }
+    else
+        printf ("%d: %d\n", rank, pid);
+    flux_future_destroy (f);
+}
+
+static int rexec_background (flux_t *h,
+                             const char *service_name,
+                             const struct idset *targets,
+                             int flags,
+                             const flux_cmd_t *cmd)
+{
+    flux_future_t *f;
+    int rc = 0;
+    unsigned int rank;
+
+    if (service_name == NULL)
+        service_name = "rexec";
+
+    rank = idset_first (targets);
+    while (rank != IDSET_INVALID_ID) {
+        if (!(f = flux_rexec_bg (h, service_name, rank, flags, cmd))
+            || flux_future_aux_set (f, "rank", int2ptr (rank), NULL) < 0
+            || flux_future_then (f,
+                                 -1.,
+                                 rexec_background_cb,
+                                 (void *) cmd) < 0) {
+            rc = -1;
+            log_err ("failed to send exec request for %s on rank %u",
+                     flux_cmd_arg (cmd, 0),
+                     rank);
+            flux_future_destroy (f);
+        }
+
+        rank = idset_next (targets, rank);
+    }
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        rc = -1;
+    return rc;
+}
+
 
 int main (int argc, char *argv[])
 {
@@ -770,6 +829,16 @@ int main (int argc, char *argv[])
     if (!(hanging = idset_copy (targets)))
         log_err_exit ("idset_copy");
 
+    service_name = optparse_get_str (opts,
+                                     "service",
+                                     job_service ? job_service : "rexec");
+
+    if (optparse_hasopt (opts, "bg")) {
+        if (rexec_background (h, service_name, targets, 0, cmd) < 0)
+            log_msg_exit ("failed to start all processes in background");
+        goto cleanup;
+    }
+
     monotime (&t0);
     if (optparse_getopt (opts, "verbose", NULL) > 0) {
         const char *argv0 = flux_cmd_arg (cmd, 0);
@@ -795,10 +864,6 @@ int main (int argc, char *argv[])
 
     if (!(exitsets = zhashx_new ()))
         log_err_exit ("zhashx_new()");
-
-    service_name = optparse_get_str (opts,
-                                     "service",
-                                     job_service ? job_service : "rexec");
 
     // sdexec stdin flow is disabled by default
     if (streq (service_name, "sdexec"))
@@ -900,6 +965,7 @@ int main (int argc, char *argv[])
         }
     }
 
+cleanup:
     /* Clean up.
      */
     idset_destroy (targets);

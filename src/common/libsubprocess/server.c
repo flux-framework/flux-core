@@ -21,6 +21,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/llog.h"
+#include "src/common/libutil/basename.h"
 #include "src/common/libioencode/ioencode.h"
 #include "ccan/str/str.h"
 
@@ -143,7 +144,27 @@ static void proc_completion_cb (flux_subprocess_t *p)
     subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
     const flux_msg_t *request = flux_subprocess_aux_get (p, msgkey);
 
-    if (p->state != FLUX_SUBPROCESS_FAILED) {
+    if (p->bg) {
+        int exitcode;
+        flux_cmd_t *cmd = flux_subprocess_get_cmd (p);
+
+        if ((exitcode = flux_subprocess_exit_code (p)) < 0) {
+            llog_info (s,
+                       "%s[%d]: Killed by signal %d",
+                       flux_cmd_arg (cmd, 0),
+                       (int) p->pid,
+                       flux_subprocess_signaled (p));
+        }
+        else {
+            const char *command = basename_simple (flux_cmd_arg (cmd, 0));
+            llog_info (s,
+                       "%s[%d]: Exit %d",
+                       command,
+                       (int) p->pid,
+                       exitcode);
+        }
+    }
+    else if (p->state != FLUX_SUBPROCESS_FAILED) {
         /* no fallback if this fails */
         if (flux_respond_error (s->h, request, ENODATA, NULL) < 0) {
             llog_error (s,
@@ -196,28 +217,42 @@ static void proc_state_change_cb (flux_subprocess_t *p,
                                 "{s:s s:i}",
                                 "type", "started",
                                 "pid", flux_subprocess_pid (p));
+        /* If this is a background process, remove request from subprocess
+         * aux item list, since it will no longer be valid after this point.
+         */
+        if (p->bg)
+            flux_subprocess_aux_set (p, msgkey, NULL, NULL);
     }
     else if (state == FLUX_SUBPROCESS_EXITED) {
-        rc = flux_respond_pack (s->h,
-                                request,
-                                "{s:s s:i}",
-                                "type", "finished",
-                                "status", flux_subprocess_status (p));
+        if (!p->bg)
+            rc = flux_respond_pack (s->h,
+                                    request,
+                                    "{s:s s:i}",
+                                    "type", "finished",
+                                    "status", flux_subprocess_status (p));
     }
     else if (state == FLUX_SUBPROCESS_STOPPED) {
-        rc = flux_respond_pack (s->h,
-                                request,
-                                "{s:s}",
-                                "type", "stopped");
+        if (!p->bg)
+            rc = flux_respond_pack (s->h,
+                                    request,
+                                    "{s:s}",
+                                    "type", "stopped");
     }
     else if (state == FLUX_SUBPROCESS_FAILED) {
         const char *errmsg = NULL;
         if (p->failed_error.text[0] != '\0')
             errmsg = p->failed_error.text;
-        rc = flux_respond_error (s->h,
-                                 request,
-                                 p->failed_errno,
-                                 errmsg);
+
+        /* N.B. background process may also fail here, but check for
+         * valid request before responding in case request has been
+         * cleared.
+         */
+        if (request) {
+            rc = flux_respond_error (s->h,
+                                     request,
+                                     p->failed_errno,
+                                     errmsg);
+        }
         proc_delete (s, p); // N.B. proc_delete preserves errno
     } else {
         errno = EPROTO;
@@ -291,15 +326,25 @@ static void proc_output_cb (flux_subprocess_t *p, const char *stream)
         goto error;
     }
 
-    if (len) {
-        if (proc_output (p, stream, s, request, buf, len, false) < 0)
-            goto error;
+    if (!p->bg) {
+        if (len) {
+            if (proc_output (p, stream, s, request, buf, len, false) < 0)
+                goto error;
+        }
+        else {
+            if (proc_output (p, stream, s, request, NULL, 0, true) < 0)
+                goto error;
+        }
     }
-    else {
-        if (proc_output (p, stream, s, request, NULL, 0, true) < 0)
-            goto error;
-    }
+    else if (len) {
+        /* background process: log output (ignore EOF) */
 
+        const char *command = basename_simple (flux_cmd_arg (p->cmd, 0));
+        if (streq (stream, "stderr"))
+            llog_error (s, "%s[%d]: %s", command, (int)p->pid, buf);
+        else
+            llog_info (s, "%s[%d]: %s", command, (int)p->pid, buf);
+    }
     return;
 
 error:
@@ -353,6 +398,10 @@ static void server_exec_cb (flux_t *h,
     int flags;
     int local_flags = 0;
 
+    /* Per RFC 42, non-streaming request runs process in background:
+     */
+    bool background = !flux_msg_is_streaming (msg);
+
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:o s:i s?i}",
@@ -372,9 +421,9 @@ static void server_exec_cb (flux_t *h,
     }
     if (!(flags & SUBPROCESS_REXEC_CHANNEL))
         ops.on_channel_out = NULL;
-    if (!(flags & SUBPROCESS_REXEC_STDOUT))
+    if (!background && !(flags & SUBPROCESS_REXEC_STDOUT))
         ops.on_stdout = NULL;
-    if (!(flags & SUBPROCESS_REXEC_STDERR))
+    if (!background && !(flags & SUBPROCESS_REXEC_STDERR))
         ops.on_stderr = NULL;
     if (!(flags & SUBPROCESS_REXEC_WRITE_CREDIT))
         ops.on_credit = NULL;
@@ -426,6 +475,8 @@ static void server_exec_cb (flux_t *h,
         errmsg = error.text;
         goto error;
     }
+
+    p->bg = background;
 
     if (flux_subprocess_aux_set (p,
                                  msgkey,
@@ -663,7 +714,7 @@ static void server_disconnect_cb (flux_t *h,
         p = zlistx_first (s->subprocesses);
         while (p) {
             const char *uuid = subprocess_sender (p);
-            if (sender && streq (uuid, sender))
+            if (!p->bg && sender && streq (uuid, sender))
                 server_kill (p, SIGKILL);
             p = zlistx_next (s->subprocesses);
         }

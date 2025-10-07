@@ -11,6 +11,8 @@ Test exec functionality
 SIZE=4
 test_under_flux ${SIZE} minimal
 
+rkill="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py kill"
+
 invalid_rank() {
        echo $((${SIZE} + 1))
 }
@@ -331,5 +333,46 @@ test_expect_success 'dbus environment variable is not overwritten if set' '
 	EOT
 	test_cmp dbus.exp dbus.out
 '
+test_expect_success 'create check-pid.py python script' '
+	cat <<-EOF >check-pid.py
+	import sys
+	import flux
 
+	rank = int(sys.argv[1])
+	pid = int(sys.argv[2])
+
+	resp = flux.Flux().rpc("rexec.list", nodeid=rank).get()
+	for proc in resp["procs"]:
+	    remote_pid = proc["pid"]
+	    if remote_pid == pid:
+	        print(f"found pid={pid}=={remote_pid}", file=sys.stderr)
+	        sys.exit(0)
+	print(f"pid {pid} not found on rank {rank}", file=sys.stderr)
+	sys.exit(1)
+	EOF
+'
+test_expect_success 'rexec: --bg option works' '
+	IFS=": " read -r rank pid <<-EOF &&
+	$(flux exec -r0 --bg sleep 10)
+	EOF
+	test_debug "echo started pid $pid on rank $rank" &&
+	flux python check-pid.py $rank $pid
+'
+dmesg_grep=${SHARNESS_TEST_SRCDIR}/scripts/dmesg-grep.py
+test_expect_success 'rexec: terminate bg pid and exit status is logged' '
+	$rkill -r $rank 9 $pid &&
+	$dmesg_grep -t10 "sleep\\[$pid\\]: Killed by signal 9" &&
+	test_must_fail flux python check-pid.py $rank $pid
+'
+test_expect_success 'rexec: --bg logs output, exit code to broker logs' '
+	flux exec -r 0 --bg \
+	    sh -c "echo some stdout; echo some stderr >&2; exit 1" &&
+	$dmesg_grep -t10 "rexec.*sh.*: some stdout" &&
+	$dmesg_grep -t10 "rexec.*sh.*: some stderr" &&
+	$dmesg_grep -t10 "rexec.*sh.*: Exit 1"
+'
+test_expect_success 'rexec: --bg with non-existent command fails' '
+	test_must_fail flux exec -r 0 --bg nosuchcommand &&
+	test_must_fail flux exec --bg nosuchcommand
+'
 test_done

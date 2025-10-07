@@ -97,6 +97,15 @@ OPTIONS
    is mostly meant for testing or as a convenience to execute a configured
    ``prolog`` or ``epilog`` command under the IMP.
 
+.. option:: --bg
+
+   Run processes in background. The rank and PID of each successfully
+   started process are written to stdout. The program exits once all
+   requested processes have started or failed, but processes continue
+   running as children of the server until they exit or the server shuts
+   down. Process output is logged to the server's stdout and stderr. The
+   :option:`--label-io` and :option:`--no-input` options are ignored.
+
 CAVEATS
 =======
 

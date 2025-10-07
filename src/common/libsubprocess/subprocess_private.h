@@ -112,6 +112,7 @@ struct flux_subprocess {
     char *service_name;
     flux_future_t *f;           /* primary future reactor */
     bool remote_completed;      /* if remote has completed */
+    bool bg;                    /* if flags & SUBPROCESS_REXEC_BACKGROUND */
     int failed_errno;           /* Holds errno if FAILED state reached */
     flux_error_t failed_error;  /* Holds detailed message for failed_errno */
     int signal_pending;         /* signal sent while starting */
