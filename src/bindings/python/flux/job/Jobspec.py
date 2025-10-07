@@ -148,7 +148,7 @@ def _attr_key_prepend(key):
 class Jobspec(object):
     top_level_keys = set(["resources", "tasks", "version", "attributes"])
 
-    def __init__(self, resources, tasks, **kwargs):
+    def __init__(self, resources, tasks, attributes, version):
         """
         Constructor for Canonical Jobspec, as described in RFC 14
 
@@ -163,27 +163,14 @@ class Jobspec(object):
         :raises TypeError:
         """
 
-        # ensure that no unknown keyword arguments are used
-        _validate_keys(
-            ["attributes", "version"],
-            kwargs,
-            keys_optional=False,
-            allow_additional=False,
-        )
-
-        if "version" not in kwargs:
-            raise ValueError("version must be set")
-        version = kwargs["version"]
-        attributes = kwargs.get("attributes", None)
-
         if not isinstance(resources, abc.Sequence):
             raise TypeError("resources must be a sequence")
         if not isinstance(tasks, abc.Sequence):
             raise TypeError("tasks must be a sequence")
-        if not isinstance(version, int):
-            raise TypeError("version must be an integer")
         if not isinstance(attributes, abc.Mapping):
             raise TypeError("attributes must be a mapping")
+        if not isinstance(version, int):
+            raise TypeError("version must be an integer")
         if version < 1:
             raise ValueError("version must be >= 1")
 
@@ -200,11 +187,10 @@ class Jobspec(object):
         for task in tasks:
             self._validate_task(task)
 
-        if attributes is not None:
-            self._validate_attributes(attributes)
+        self._validate_attributes(attributes)
 
-            if "system" in attributes:
-                self._validate_system_attributes(attributes["system"])
+        if "system" in attributes:
+            self._validate_system_attributes(attributes["system"])
 
     @classmethod
     def from_yaml_stream(cls, yaml_stream):
@@ -801,7 +787,7 @@ class Jobspec(object):
 
 
 class JobspecV1(Jobspec):
-    def __init__(self, resources, tasks, **kwargs):
+    def __init__(self, resources, tasks, attributes, version=1):
         """
         Constructor for Version 1 of the Jobspec
 
@@ -815,31 +801,17 @@ class JobspecV1(Jobspec):
                         JobspecV1(**jobspec)
         """
 
-        # ensure that no unknown keyword arguments are used
-        _validate_keys(
-            ["attributes", "version"],
-            kwargs,
-            keys_optional=True,
-            allow_additional=False,
-        )
-
-        if "version" not in kwargs:
-            kwargs["version"] = 1
-        elif kwargs["version"] != 1:
+        if version != 1:
             raise ValueError("version must be 1")
 
-        super(JobspecV1, self).__init__(resources, tasks, **kwargs)
+        super(JobspecV1, self).__init__(resources, tasks, attributes, version)
 
         # validate V1 specific requirements:
-        self._v1_validate(resources, tasks, kwargs)
+        self._v1_validate(resources, tasks, attributes, version)
 
     @staticmethod
-    def _v1_validate(resources, tasks, kwargs):
+    def _v1_validate(resources, tasks, attributes, version):
         # process extra V1 attributes requirements:
-
-        # attributes already required by base Jobspec validator
-        attributes = kwargs["attributes"]
-
         # attributes.system.duration is required
         if "system" not in attributes:
             raise ValueError("attributes.system is a required key")
