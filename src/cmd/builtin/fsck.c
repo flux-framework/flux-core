@@ -42,6 +42,7 @@ struct fsck_ctx {
     bool verbose;
     bool quiet;
     bool repair;
+    bool isatty;
     int errorcount;
 };
 
@@ -64,11 +65,16 @@ static void fsck_treeobj (struct fsck_ctx *ctx,
 
 static void valref_validate (struct fsck_valref_data *fvd);
 
-static void verrmsg (const char *fmt, va_list ap)
+static void verrmsg (struct fsck_ctx *ctx, const char *fmt, va_list ap)
 {
     char buf[128];
     vsnprintf (buf, sizeof (buf), fmt, ap);
-    fprintf (stderr, "%s\n", buf);
+    /* no need for log_err() prefix and formatting if user is running
+     * on command line */
+    if (ctx->isatty)
+        fprintf (stderr, "%s\n", buf);
+    else
+        log_msg ("%s", buf);
 }
 
 static __attribute__ ((format (printf, 2, 3)))
@@ -78,7 +84,7 @@ void errmsg (struct fsck_ctx *ctx, const char *fmt, ...)
     if (ctx->quiet)
         return;
     va_start (ap, fmt);
-    verrmsg (fmt, ap);
+    verrmsg (ctx, fmt, ap);
     va_end (ap);
 }
 
@@ -680,6 +686,7 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
         ctx.repair = true;
 
     ctx.h = builtin_get_flux_handle (p);
+    ctx.isatty = isatty (STDERR_FILENO);
 
     if (kvs_is_running (&ctx))
         log_msg_exit ("please unload kvs module before using flux-fsck");
@@ -709,9 +716,7 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
             struct tm tm;
             if (!timestamp_from_double (timestamp, &tm, NULL))
                 strftime (buf, sizeof (buf), "%Y-%m-%dT%T", &tm);
-            fprintf (stderr,
-                     "Checking integrity of checkpoint from %s\n",
-                     buf);
+            printf ("Checking integrity of checkpoint from %s\n", buf);
         }
 
         ctx.sequence = sequence;
