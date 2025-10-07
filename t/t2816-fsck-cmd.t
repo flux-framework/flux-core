@@ -89,7 +89,7 @@ test_expect_success LONGTEST 'unload kvs' '
 '
 test_expect_success LONGTEST 'flux-fsck works (big)' '
 	flux fsck --verbose > bigval.out 2> bigval.err &&
-	grep "Checking integrity" bigval.err &&
+	grep "Checking integrity" bigval.out &&
 	grep "bigval" bigval.err &&
 	grep "Total errors: 0" bigval.err
 '
