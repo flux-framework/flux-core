@@ -401,10 +401,12 @@ flux-pam (optional)
   running their jobs.
 
 .. note::
-    Flux packages are currently maintained only for the
+    Sites are strongly encouraged to use packages when deploying a system
+    installation of Flux.  Source RPM packages are maintained for the
     `TOSS <https://computing.llnl.gov/projects/toss-speeding-commodity-cluster-computing>`_
-    Red Hat Enterprise Linux based Linux distribution, which is not publicly
-    distributed.  Open an issue in `flux-core <https://github.com/flux-framework/flux-core>`_
+    Red Hat Enterprise Linux based Linux distribution and are included with
+    github release assets for each new release.
+    Open an issue in `flux-core <https://github.com/flux-framework/flux-core>`_
     if you would like to become a maintainer of Flux packages for another Linux
     distribution so we can share packaging tips and avoid duplicating effort.
 

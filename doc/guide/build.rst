@@ -87,9 +87,10 @@ parallelism.  ``make recheck`` re-runs any failing checks.
 Packages
 --------
 
-RPM packages for TOSS 4 (RHEL 8 based) are produced by the TOSS build system
-and can be made available externally on request.  When requested, these are
-manually added to the release assets on github.
+Source RPM packages for TOSS 4 (RHEL 8 based) are made available in
+the release assets published on github.  Sites deploying a Flux system
+installation are strongly encouraged to use these packages, if possible.
+Source RPM packages for TOSS 5 (RHEL 9 based) are available upon request.
 
 deb packages for Debian or Ubuntu can be built from a release tarball with
 ``make deb``, producing debs in the ``debbuild`` sub-directory.  This target
