@@ -37,6 +37,7 @@ struct fsck_ctx {
     json_t *root;
     int sequence;
     int repair_count;
+    int unlink_dir_count;
     zlist_t *repair_treeobjs;
     char *hash_name;
     bool verbose;
@@ -441,6 +442,7 @@ static void fsck_dirref (struct fsck_ctx *ctx,
         if (ctx->repair && errno == ENOENT) {
             unlink_path (ctx, path);
             errmsg (ctx, "%s unlinked due to missing blobref", path);
+            ctx->unlink_dir_count++;
         }
         flux_future_destroy (f);
         return;
@@ -752,6 +754,11 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
 
         if (ctx.repair_count || ctx.verbose)
             errmsg (&ctx, "Total repairs: %d", ctx.repair_count);
+
+        if (ctx.unlink_dir_count || ctx.verbose)
+            errmsg (&ctx,
+                    "Total unlinked directories: %d",
+                    ctx.unlink_dir_count);
     }
 
     zlist_destroy (&ctx.repair_treeobjs);
