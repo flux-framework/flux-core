@@ -284,6 +284,22 @@ class Flux(Wrapper):
     def attr_get(self, attr_name):
         return self.flux_attr_get(attr_name).decode("utf-8")
 
+    def attr_set(self, attr, value):
+        """
+        Set a broker attribute
+        Args:
+            attr (str): attribute to set
+            value (str): attribute value.
+        Raises:
+            ValueError: either ``attr`` or ``value`` are not strings.
+            OSError: failure in underlying ``flux_attr_set(3)`` API call.
+        """
+        if not isinstance(attr, str):
+            raise ValueError("Attribute name must be a string")
+        if not isinstance(value, str):
+            raise ValueError("Attribute value must be a string")
+        self.flux_attr_set(attr, value)
+
     def conf_get(self, key=None, default=None, update=False):
         """
         Access Flux configuration via this handle. On first use, the

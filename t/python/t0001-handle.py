@@ -88,6 +88,23 @@ class TestHandle(unittest.TestCase):
         rank = self.f.get_rank()
         self.assertEqual(attr_rank, rank)
 
+    def test_attr_set(self):
+        self.f.attr_set("foo", "bar")
+        self.assertEqual(self.f.attr_get("foo"), "bar")
+
+        self.f.attr_set("baz", str(1))
+        self.assertEqual(self.f.attr_get("baz"), "1")
+
+        self.f.attr_set("utf8-test", "ƒ Φ Ψ Ω Ö")
+        self.assertEqual(self.f.attr_get("utf8-test"), "ƒ Φ Ψ Ω Ö")
+
+        with self.assertRaises(OSError):
+            self.f.attr_set("local-uri", "foo")
+        with self.assertRaises(ValueError):
+            self.f.attr_set("foo", 1)
+        with self.assertRaises(ValueError):
+            self.f.attr_set(42, "foo")
+
     def test_conf_get(self):
         # Works with empty config
         self.assertEqual(self.f.conf_get(), {})
