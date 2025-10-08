@@ -187,7 +187,7 @@ test_expect_success 'flux-job: id --to=f58 works' '
 	test "$jobid" = "$MINJOBID_F58"
 '
 
-UTF8_LOCALE=$(locale -a | grep UTF-8 | head -n1)
+UTF8_LOCALE=$(locale -a | grep 'UTF-8\|utf8' | head -n1)
 if flux version | grep +ascii-only; then
 	UTF8_LOCALE=""
 fi
