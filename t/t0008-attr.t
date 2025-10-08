@@ -46,5 +46,8 @@ test_expect_success 'get request with empty payload fails with EPROTO(71)' '
 test_expect_success 'set request with empty payload fails with EPROTO(71)' '
 	${RPC} attr.set 71 </dev/null
 '
+test_expect_success 'rm request with empty payload fails with EPROTO(71)' '
+	${RPC} attr.rm 71 </dev/null
+'
 
 test_done
