@@ -65,8 +65,8 @@ static void sdmon_bus_restart (struct sdmon_bus *bus);
 
 static const char *path_prefix = "/org/freedesktop/systemd1/unit";
 
-static const char *sys_glob = "flux-*";
-static const char *usr_glob = "*shell-*"; // match with and without imp- prefix
+static const char *def_sys_glob = "flux-*";
+static const char *def_usr_glob = "*shell-*"; // match with and without imp- prefix
 
 static const char *unit_allow[] = {
     "flux-housekeeping",
@@ -444,6 +444,25 @@ static int sdmon_bus_initialize (struct sdmon_bus *bus,
     return 0;
 }
 
+static int sdmon_parse_args (int argc,
+                             char **argv,
+                             const char **usr_glob,
+                             flux_error_t *error)
+{
+    for (int i = 0; i < argc; i++) {
+        if (strstarts (argv[i], "usr_glob=")) {
+            *usr_glob = argv[i] + 9;
+        }
+        else {
+            errprintf (error, "%s: unknown option", argv[i]);
+            goto inval;
+        }
+    }
+    return 0;
+inval:
+    errno = EINVAL;
+    return -1;
+}
 
 static void sdmon_ctx_destroy (struct sdmon_ctx *ctx)
 {
@@ -487,10 +506,16 @@ int mod_main (flux_t *h, int argc, char **argv)
     struct sdmon_ctx *ctx;
     flux_error_t error;
     const char *modname = flux_aux_get (h, "flux::name");
+    const char *usr_glob = def_usr_glob;
+    const char *sys_glob = def_sys_glob;
     int rc = -1;
 
     if (!(ctx = sdmon_ctx_create (h)))
         goto error;
+    if (sdmon_parse_args (argc, argv, &usr_glob, &error) < 0) {
+        flux_log_error (h, "%s", error.text);
+        goto error;
+    }
     if (flux_msg_handler_addvec_ex (h, modname, htab, ctx, &ctx->handlers) < 0)
         goto error;
     if (sdbus_is_loaded (h, "sdbus-sys", ctx->rank, &error) < 0
