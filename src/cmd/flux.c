@@ -21,6 +21,7 @@
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <pwd.h>
+#include <locale.h>
 
 #include "ccan/str/str.h"
 #include "src/common/libutil/log.h"
@@ -137,6 +138,8 @@ int main (int argc, char *argv[])
     int n;
 
     log_init ("flux");
+
+    setlocale (LC_ALL, "");
 
     p = setup_optparse_parse_args (argc, argv);
 
