@@ -98,6 +98,18 @@ test_expect_success 'kvs: unlink works' '
 	  test_must_fail flux kvs get $KEY.object
 '
 
+UTF8_LOCALE=$(locale -a | grep 'UTF-8\|utf8' | head -n1)
+if flux version | grep +ascii-only; then
+        UTF8_LOCALE=""
+fi
+test -n "$UTF8_LOCALE" && test_set_prereq UTF8_LOCALE
+
+test_expect_success UTF8_LOCALE 'flux kvs dir can display a UTF-8 key' '
+        (LC_ALL=${UTF8_LOCALE} flux start sh -c "flux kvs put ƒuzzybunny=42 \
+	 && flux kvs dir | grep bunny")
+'
+test_done
+
 #
 # Basic put, get, unlink tests w/ multiple key inputs
 #
