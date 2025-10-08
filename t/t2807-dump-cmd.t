@@ -235,6 +235,26 @@ test_expect_success 'restart flux instance and try to run a job' '
 		flux run true
 '
 
+# Cover UTF-8 keys
+
+UTF8_LOCALE=$(locale -a | grep 'UTF-8\|utf8' | head -n1)
+if flux version | grep +ascii-only; then
+        UTF8_LOCALE=""
+fi
+test -n "$UTF8_LOCALE" && test_set_prereq UTF8_LOCALE
+
+test_expect_success UTF8_LOCALE 'create a dump with a UTF-8 key in it' '
+	(LC_ALL=${UTF8_LOCALE} flux start -Scontent.dump=widedump.tar \
+	    flux kvs put ƒuzzybunny=42)
+'
+test_expect_success UTF8_LOCALE 'list UTF-8 dump' '
+	(LC_ALL=${UTF8_LOCALE} tar tvf widedump.tar)
+'
+test_expect_success UTF8_LOCALE 'restore UTF-8 dump' '
+	(LC_ALL=${UTF8_LOCALE} flux start -Scontent.restore=widedump.tar \
+	    flux kvs get ƒuzzybunny)
+'
+
 # Cover --size-limit
 
 test_expect_success 'create bigdump.tar with a 12M blob in it' '

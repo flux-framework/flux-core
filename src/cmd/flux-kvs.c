@@ -662,13 +662,6 @@ kv_printf (const char *key, int maxcol, const char *fmt, ...)
             if (*(p + 1) != '\0')
                 overflow = true;
         }
-        for (p = kv; *p != '\0'; p++) {
-            if (!isprint (*p)) {
-                *p = '\0';
-                overflow = true;
-                break;
-            }
-        }
     }
     printf ("%s%s\n",
             kv,
