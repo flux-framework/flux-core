@@ -501,8 +501,26 @@ test_expect_success 'flux-fsck --repair overwrites older recoveries' '
 	echo "test1test4" > losttestdire3.exp &&
 	test_cmp losttestdire3.exp losttestdire3.out
 '
+test_expect_success 'make a new key and make it invalid (testdir.f)' '
+	flux kvs put testdir.f=A &&
+	flux kvs put --append testdir.f=B &&
+	flux kvs get --treeobj testdir.f > testdirf.out &&
+	cat testdirf.out | jq -c .data[1]=\"sha1-1234567890123456789012345678901234567890\" > testdirfbad.out &&
+	flux kvs put --treeobj testdir.f="$(cat testdirfbad.out)" &&
+	flux kvs getroot -b > fbad.rootref
+'
 test_expect_success 'unload kvs' '
 	flux module remove kvs
+'
+test_expect_success 'flux-fsck --repair with --quiet suppresses expected messages' '
+	test_must_fail flux fsck --repair --quiet > repair4.out 2> repair4.err &&
+	grep "testdir\.f" repair4.err > repair4testdirf.err &&
+	grep "missing blobref(s)" repair4testdirf.err &&
+	test_must_fail grep "repaired" repair4testdirf.err &&
+	grep "Total errors: 1" repair4.err &&
+	grep "Total repairs: 1" repair4.err &&
+	test_must_fail grep "Total unlinked directories" repair4.err &&
+	test_must_fail grep "Updated primary checkpoint" repair4.err
 '
 test_expect_success 'remove content & content-sqlite modules' '
 	flux module remove content-sqlite &&
