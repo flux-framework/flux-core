@@ -15,10 +15,10 @@ test_expect_success 'flux getattr rank works' '
 	test "${ATTR_VAL}" -eq 0
 '
 test_expect_success 'flux setattr rank fails (immutable)' '
-	! flux setattr rank 42
+	test_must_fail flux setattr rank 42
 '
 test_expect_success 'flux getattr attrtest.nonexist fails' '
-	! flux getattr nonexist
+	test_must_fail flux getattr nonexist
 '
 test_expect_success 'flux setattr works' '
 	flux setattr attrtest.foo bar &&
