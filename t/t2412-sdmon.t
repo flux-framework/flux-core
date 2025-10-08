@@ -26,6 +26,8 @@ test_under_flux 1 minimal
 
 flux setattr log-stderr-level 1
 
+testname="t2412-$$"
+
 # Usage: start test unit NAME (without service suffix)
 start_test_unit() {
 	local sleep=$(which sleep)
@@ -75,13 +77,7 @@ test_expect_success 'load sdbus,sdexec modules' '
 	flux module load sdexec
 '
 test_expect_success 'load sdmon module' '
-	flux module load sdmon
-'
-test_expect_success 'make sure residual test units are not running' '
-	stop_test_unit shell-t2412 || true &&
-	stop_test_unit imp-shell-t2412 || true &&
-	reset_test_unit shell-t2412 || true &&
-	reset_test_unit imp-shell-t2412 || true
+	flux module load sdmon usr_glob="*shell-${testname}*"
 '
 test_expect_success 'wait for it to join the sdmon.online group' '
 	run_timeout 30 $groups waitfor --count=1 sdmon.online
@@ -90,7 +86,7 @@ test_expect_success 'module stats units array is empty' '
 	flux module stats sdmon | jq -e ".units == []"
 '
 test_expect_success 'run a systemd unit with imp-shell- prefix' '
-	start_test_unit imp-shell-t2412
+	start_test_unit imp-shell-${testname}
 '
 test_expect_success 'wait for module stats to show test unit' '
 	wait_for_some 30
@@ -109,19 +105,19 @@ test_expect_success 'wait for module stats to show test unit' '
 	wait_for_some 30
 '
 test_expect_success 'stop the unit' '
-	stop_test_unit imp-shell-t2412
+	stop_test_unit imp-shell-${testname}
 '
 test_expect_success 'wait for sdmon to join the sdmon.online group' '
 	run_timeout 30 $groups waitfor --count=1 sdmon.online
 '
 test_expect_success 'run a systemd unit with shell- prefix' '
-	start_test_unit shell-t2412
+	start_test_unit shell-${testname}
 '
 test_expect_success 'wait for module stats to show test unit' '
 	wait_for_some 30
 '
 test_expect_success 'stop the unit' '
-	stop_test_unit shell-t2412
+	stop_test_unit shell-${testname}
 '
 test_expect_success 'wait for module stats stop showing test unit' '
 	wait_for_none 30
@@ -130,11 +126,11 @@ test_expect_success 'force sdbus to reconnect to d-bus' '
 	bus_reconnect sdbus
 '
 test_expect_success 'run a systemd unit and wait for it to appear' '
-	start_test_unit shell-t2412 &&
+	start_test_unit shell-${testname} &&
 	wait_for_some 30
 '
 test_expect_success 'stop the unit and wait for it to vanish' '
-	stop_test_unit shell-t2412 &&
+	stop_test_unit shell-${testname} &&
 	wait_for_none 30
 '
 test_expect_success 'remove sdmon module' '
@@ -144,5 +140,11 @@ test_expect_success 'remove sdexec,sdbus modules' '
 	flux module remove sdexec &&
 	flux module remove sdbus &&
 	flux module remove sdbus-sys
+'
+test_expect_success 'clean up any residual test units' '
+	stop_test_unit shell-${testname} || true &&
+	stop_test_unit imp-shell-${testname} || true &&
+	reset_test_unit shell-${testname} || true &&
+	reset_test_unit imp-shell-${testname} || true
 '
 test_done

@@ -34,6 +34,8 @@ test_under_flux 1 full --config-path=$(pwd)/config
 
 flux setattr log-stderr-level 1
 
+testname="t2412-$$"
+
 groups="flux python ${SHARNESS_TEST_SRCDIR}/scripts/groups.py"
 
 # Usage: start test unit NAME (without service suffix)
@@ -67,8 +69,14 @@ wait_for_some() {
         done
 }
 
-test_expect_success 'make sure residual test units are not running' '
-        stop_test_unit shell-t2413 2>/dev/null || true
+test_expect_success 'stop sdmon' '
+        flux module remove sdmon
+'
+test_expect_success 'flux module load sdmon fails on unknown module option' '
+        test_must_fail flux module load sdmon unknown
+'
+test_expect_success 'load sdmon with restrictive glob' '
+        flux module load sdmon usr_glob="*shell-${testname}*"
 '
 test_expect_success 'wait for sdmon.online group' '
 	run_timeout 30 $groups waitfor --count=1 sdmon.online
@@ -77,7 +85,7 @@ test_expect_success 'wait for online resource event' '
 	run_timeout 30 flux resource eventlog --wait=online
 '
 test_expect_success 'start a test unit that looks like a job shell' '
-	start_test_unit shell-t2413
+	start_test_unit shell-${testname}
 '
 test_expect_success 'wait for module stats to show test unit' '
         wait_for_some 30
@@ -91,7 +99,7 @@ test_expect_success 'clear dmesg, then reload sdmon, resource, sched-simple' '
 	flux module load sched-simple
 '
 test_expect_success 'stop test unit' '
-	stop_test_unit shell-t2413
+	stop_test_unit shell-${testname}
 '
 test_expect_success 'wait for module stats to show nothing' '
         wait_for_none 30
@@ -101,8 +109,11 @@ test_expect_success 'wait for online resource event' '
 '
 test_expect_success 'unit cleanup was logged' '
 	flux dmesg -H >dmesg.out &&
-	grep "shell-t2413.service needs cleanup" dmesg.out &&
+	grep "shell-${testname}.service needs cleanup" dmesg.out &&
 	grep "cleanup complete" dmesg.out
+'
+test_expect_success 'clean up any residual test units' '
+        stop_test_unit shell-${testname} 2>/dev/null || true
 '
 
 test_done
