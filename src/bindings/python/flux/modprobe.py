@@ -201,6 +201,27 @@ class Task:
         # convert self.ranks to rank conditional object:
         self.ranks = rank_conditional(self.ranks)
 
+    @staticmethod
+    def _check_spec(spec, getter):
+        """
+        Check if an identifier is set or unset based on an input ``spec``
+        and a ``getter`` function which should return the value of a ``spec``
+        (e.g. a config key or broker attribute) or None if the spec is
+        unset.
+
+        If ``spec`` begins with ``!``, then this function returns True only
+        if getter returns None for ``spec[1:]``. Otherwise, this function
+        returns False if the getter returns None for ``spec``.
+
+        Examples:
+          _check_spec("foo", getter) -> True if getter("foo") returns non-None
+          _check_spec("!foo", getter) -> True if getter("foo") returns None
+        """
+        inverted = spec.startswith("!")
+        attr = spec[1:] if inverted else spec
+        value = getter(attr)
+        return value is None if inverted else value is not None
+
     def enabled(self, context=None):
         """
         Return True if task is currently not disabled. A task may be
@@ -216,12 +237,10 @@ class Task:
         if self.disabled or not self.ranks.test(context.rank):
             return False
         for key in self.needs_config:
-            val = context.handle.conf_get(key)
-            if not val:
+            if not self._check_spec(key, context.handle.conf_get):
                 return False
         for attr in self.needs_attrs:
-            val = context.attr_get(attr)
-            if not val:
+            if not self._check_spec(attr, context.attr_get):
                 return False
         return True
 
