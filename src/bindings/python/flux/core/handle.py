@@ -300,6 +300,20 @@ class Flux(Wrapper):
             raise ValueError("Attribute value must be a string")
         self.flux_attr_set(attr, value)
 
+    def attr_remove(self, attr):
+        """
+        Remove a broker attribute
+        Args:
+            attr (str): attribute to remove
+        Raises:
+            ValueError: ``attr`` is not a string.
+            OSError: failure in underlying RPC call.
+        """
+        if not isinstance(attr, str):
+            raise ValueError("Attribute name must be a string")
+        payload = {"name": attr}
+        self.rpc("attr.rm", payload).get()
+
     def conf_get(self, key=None, default=None, update=False):
         """
         Access Flux configuration via this handle. On first use, the
