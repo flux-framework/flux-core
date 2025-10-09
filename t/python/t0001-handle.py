@@ -105,6 +105,21 @@ class TestHandle(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.f.attr_set(42, "foo")
 
+    def test_attr_remove(self):
+        self.f.attr_set("testrm", "rm")
+        self.assertEqual(self.f.attr_get("testrm"), "rm")
+
+        self.f.attr_remove("testrm")
+
+        with self.assertRaises(OSError):
+            self.f.attr_get("testrm")
+
+        with self.assertRaises(OSError):
+            self.f.attr_remove("local-uri")
+
+        with self.assertRaises(ValueError):
+            self.f.attr_remove(1)
+
     def test_conf_get(self):
         # Works with empty config
         self.assertEqual(self.f.conf_get(), {})
