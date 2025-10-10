@@ -110,7 +110,7 @@ static int welcome_decode_new (struct module_ctx *ctx, flux_msg_t **msg)
 
     flux_conf_t *cf;
     if (!(cf = flux_conf_pack ("O", conf))
-        || flux_set_conf (ctx->h, cf) < 0) {
+        || flux_set_conf_new (ctx->h, cf) < 0) {
         flux_conf_decref (cf);
         goto error;
     }

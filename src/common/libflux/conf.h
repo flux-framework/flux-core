@@ -56,7 +56,7 @@ flux_conf_t *flux_conf_parse (const char *path, flux_error_t *error);
  * Re-setting the object decrefs the old one.
  */
 const flux_conf_t *flux_get_conf (flux_t *h);
-int flux_set_conf (flux_t *h, const flux_conf_t *conf);
+int flux_set_conf_new (flux_t *h, const flux_conf_t *conf);
 
 /* Access config object.
  * If error is non-NULL, it is filled with error details on failure.

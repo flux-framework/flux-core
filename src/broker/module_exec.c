@@ -95,7 +95,7 @@ static int config_cache_from_json (flux_t *h, json_t *conf)
     flux_conf_t *cf;
 
     if (!(cf = flux_conf_pack ("O", conf))
-        || flux_set_conf (h, cf) < 0) {
+        || flux_set_conf_new (h, cf) < 0) {
         flux_conf_decref (cf);
         return -1;
     }

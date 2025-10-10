@@ -243,7 +243,7 @@ void method_config_reload_cb (flux_t *h,
         errstr = "Failed to parse config-reload request";
         goto error;
     }
-    if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
+    if (flux_set_conf_new (h, flux_conf_incref (conf)) < 0) {
         flux_conf_decref (conf);
         errstr = "Failed to update config";
         goto error;

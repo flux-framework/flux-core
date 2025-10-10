@@ -259,7 +259,7 @@ static void reload_cb (flux_t *h,
         errstr = error.text;
         goto error;
     }
-    if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
+    if (flux_set_conf_new (h, flux_conf_incref (conf)) < 0) {
         errstr = "error updating cached configuration";
         goto error;
     }

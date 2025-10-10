@@ -130,7 +130,7 @@ static void config_reload_cb (flux_t *h,
         }
         ccb = zlistx_next (conf->callbacks);
     }
-    if (flux_set_conf (h, flux_conf_incref (instance_conf)) < 0) {
+    if (flux_set_conf_new (h, flux_conf_incref (instance_conf)) < 0) {
         errstr = "error updating cached configuration";
         flux_conf_decref (instance_conf);
         goto error;

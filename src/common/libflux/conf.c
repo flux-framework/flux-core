@@ -443,7 +443,7 @@ flux_conf_t *flux_conf_parse (const char *path, flux_error_t *error)
     return conf_parse_file (path, error);
 }
 
-int flux_set_conf (flux_t *h, const flux_conf_t *conf)
+int flux_set_conf_new (flux_t *h, const flux_conf_t *conf)
 {
     return flux_aux_set (h,
                          conf_auxkey,

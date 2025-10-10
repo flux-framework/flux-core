@@ -33,17 +33,6 @@ struct brokercfg {
     flux_future_t *reload_f;
 };
 
-static int brokercfg_set (flux_t *h,
-                          const flux_conf_t *conf,
-                          flux_error_t *error)
-{
-    if (flux_set_conf (h, conf) < 0) {
-        errprintf (error, "Error caching config object");
-        return -1;
-    }
-    return 0;
-}
-
 /* Parse config object from TOML config files if path is set;
  * otherwise, create an empty config object.  Store the object
  * in ctx->h for later access by flux_get_conf().
@@ -69,8 +58,10 @@ static int brokercfg_parse (flux_t *h,
             return -1;
         }
     }
-    if (brokercfg_set (h, conf, errp) < 0)
+    if (flux_set_conf_new (h, conf) < 0) {
+        errprintf (errp, "Error caching config object");
         goto error;
+    }
     return 0;
 error:
     flux_conf_decref (conf);
@@ -235,7 +226,8 @@ static void load_cb (flux_t *h,
         errprintf (&error, "error decoding config.load request");
         goto error;
     }
-    if (brokercfg_set (h, flux_conf_incref (conf), &error) < 0) {
+    if (flux_set_conf_new (h, conf) < 0) {
+        errprintf (&error, "Error caching config object");
         flux_conf_decref (conf);
         goto error;
     }

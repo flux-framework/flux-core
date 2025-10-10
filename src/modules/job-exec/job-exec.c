@@ -1770,7 +1770,7 @@ static void config_reload_cb (flux_t *h,
         }
         i++;
     }
-    if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
+    if (flux_set_conf_new (h, flux_conf_incref (conf)) < 0) {
         errprintf (&err, "error updating cached configuration");
         flux_conf_decref (conf);
         goto error;

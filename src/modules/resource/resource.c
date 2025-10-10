@@ -197,7 +197,7 @@ static void config_reload_cb (flux_t *h,
         goto error;
     }
     reslog_set_journal_max (ctx->reslog, config.journal_max);
-    if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
+    if (flux_set_conf_new (h, flux_conf_incref (conf)) < 0) {
         errstr = "error updating cached configuration";
         goto error;
     }
