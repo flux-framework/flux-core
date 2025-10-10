@@ -377,9 +377,13 @@ following optional arguments:
 
 **needs_attrs**
    (optional, list) A list of broker attributes on which this task depends.
+   If the attribute begins with the character ``!``, then this task will only
+   be enabled if the named attribute is not set.
 
 **needs_config**
-   (optional, list) A list of config keys on which this task depends.
+   (optional, list) A list of config keys on which this task depends. If a
+   key is prefixed with the character ``!``, then this task will only be
+   enabled if that config key is not set.
 
 Example
 
