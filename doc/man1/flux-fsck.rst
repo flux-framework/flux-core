@@ -32,7 +32,8 @@ OPTIONS
 
 .. option:: -q, --quiet
 
-   Don't output diagnostic messages and discovered errors.
+   Don't output non-core diagnostic messages.  Can significantly reduce
+   output if output will be logged.
 
 .. option:: -r, --rootref=BLOBREF
 
