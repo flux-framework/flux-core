@@ -781,7 +781,7 @@ static struct optparse_option fsck_opts[] = {
       .usage = "List keys as they are being validated",
     },
     { .name = "quiet", .key = 'q', .has_arg = 0,
-      .usage = "Don't output diagnostic messages and discovered errors",
+      .usage = "Reduce output to essential information.",
     },
     { .name = "rootref", .key = 'r', .has_arg = 1, .arginfo = "BLOBREF",
       .usage = "Check integrity starting with BLOBREF",
