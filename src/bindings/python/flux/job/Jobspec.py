@@ -148,7 +148,7 @@ def _attr_key_prepend(key):
 class Jobspec(object):
     top_level_keys = set(["resources", "tasks", "version", "attributes"])
 
-    def __init__(self, resources, tasks, **kwargs):
+    def __init__(self, resources, tasks, attributes, version):
         """
         Constructor for Canonical Jobspec, as described in RFC 14
 
@@ -163,27 +163,14 @@ class Jobspec(object):
         :raises TypeError:
         """
 
-        # ensure that no unknown keyword arguments are used
-        _validate_keys(
-            ["attributes", "version"],
-            kwargs,
-            keys_optional=False,
-            allow_additional=False,
-        )
-
-        if "version" not in kwargs:
-            raise ValueError("version must be set")
-        version = kwargs["version"]
-        attributes = kwargs.get("attributes", None)
-
         if not isinstance(resources, abc.Sequence):
             raise TypeError("resources must be a sequence")
         if not isinstance(tasks, abc.Sequence):
             raise TypeError("tasks must be a sequence")
-        if not isinstance(version, int):
-            raise TypeError("version must be an integer")
         if not isinstance(attributes, abc.Mapping):
             raise TypeError("attributes must be a mapping")
+        if not isinstance(version, int):
+            raise TypeError("version must be an integer")
         if version < 1:
             raise ValueError("version must be >= 1")
 
@@ -200,11 +187,10 @@ class Jobspec(object):
         for task in tasks:
             self._validate_task(task)
 
-        if attributes is not None:
-            self._validate_attributes(attributes)
+        self._validate_attributes(attributes)
 
-            if "system" in attributes:
-                self._validate_system_attributes(attributes["system"])
+        if "system" in attributes:
+            self._validate_system_attributes(attributes["system"])
 
     @classmethod
     def from_yaml_stream(cls, yaml_stream):
@@ -223,21 +209,31 @@ class Jobspec(object):
     def _validate_complex_range(range_dict):
         if "min" not in range_dict:
             raise ValueError("min must be in range")
-        if len(range_dict) > 1:
-            _validate_keys(["min", "max", "operator", "operand"], range_dict.keys())
+        _validate_keys(
+            ["min", "max", "operand", "operator"], range_dict.keys(), keys_optional=True
+        )
         for key in ["min", "max", "operand"]:
             if key not in range_dict:
                 continue
             if not isinstance(range_dict[key], int):
-                raise TypeError("{} must be an int".format(key))
+                raise TypeError(f"{key} must be an int")
             if range_dict[key] < 1:
-                raise ValueError("{} must be > 0".format(key))
-        valid_operator_values = ["+", "*", "^"]
-        if (
-            "operator" in range_dict
-            and range_dict["operator"] not in valid_operator_values
-        ):
-            raise ValueError("operator must be one of {}".format(valid_operator_values))
+                raise ValueError(f"{key} must be > 0")
+        if "max" in range_dict and range_dict["max"] < range_dict["min"]:
+            raise ValueError("max must be >= min")
+        if ("operand" in range_dict) != ("operator" in range_dict):
+            raise ValueError("operand and operator must both be in range if either is")
+        if "operator" in range_dict:
+            operator = range_dict["operator"]
+            if not isinstance(operator, str) or len(operator) != 1:
+                raise TypeError("operator must be a single character str")
+            valid_operator_values = ["+", "*", "^"]
+            if operator not in valid_operator_values:
+                raise ValueError(f"operator must be one of {valid_operator_values}")
+            if operator in ["*", "^"] and range_dict["operand"] < 2:
+                raise ValueError("operand must be > 1 for '*' or '^' operator")
+            if operator == "^" and range_dict["min"] < 2:
+                raise ValueError("min must be > 1 for '^' operator")
 
     @classmethod
     def _validate_count_string(cls, count):
@@ -287,7 +283,7 @@ class Jobspec(object):
             # node, slot, and core must have count > 0, but allow 0 for
             # any other resource type.
             if res["type"] in ["node", "slot", "core"] and count < 1:
-                raise ValueError("node or slot count must be > 0")
+                raise ValueError("node, slot, or core count must be > 0")
             if count < 0:
                 raise ValueError("count must be >= 0")
 
@@ -335,7 +331,7 @@ class Jobspec(object):
             raise TypeError("slot must be a string")
 
         if "attributes" in task and not isinstance(task["attributes"], abc.Mapping):
-            raise TypeError("count must be a mapping")
+            raise TypeError("attributes must be a mapping")
 
         command = task["command"]
         if len(command) == 0:
@@ -791,7 +787,7 @@ class Jobspec(object):
 
 
 class JobspecV1(Jobspec):
-    def __init__(self, resources, tasks, **kwargs):
+    def __init__(self, resources, tasks, attributes, version=1):
         """
         Constructor for Version 1 of the Jobspec
 
@@ -805,31 +801,17 @@ class JobspecV1(Jobspec):
                         JobspecV1(**jobspec)
         """
 
-        # ensure that no unknown keyword arguments are used
-        _validate_keys(
-            ["attributes", "version"],
-            kwargs,
-            keys_optional=True,
-            allow_additional=False,
-        )
-
-        if "version" not in kwargs:
-            kwargs["version"] = 1
-        elif kwargs["version"] != 1:
+        if version != 1:
             raise ValueError("version must be 1")
 
-        super(JobspecV1, self).__init__(resources, tasks, **kwargs)
+        super(JobspecV1, self).__init__(resources, tasks, attributes, version)
 
         # validate V1 specific requirements:
-        self._v1_validate(resources, tasks, kwargs)
+        self._v1_validate(resources, tasks, attributes, version)
 
     @staticmethod
-    def _v1_validate(resources, tasks, kwargs):
+    def _v1_validate(resources, tasks, attributes, version):
         # process extra V1 attributes requirements:
-
-        # attributes already required by base Jobspec validator
-        attributes = kwargs["attributes"]
-
         # attributes.system.duration is required
         if "system" not in attributes:
             raise ValueError("attributes.system is a required key")

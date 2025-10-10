@@ -2,9 +2,7 @@ version: 1
 resources:
   - type: slot
     count:
-      min: 1
-      operator: "+"
-      operand: 1
+      min: 0
     label: foo
     with:
       - type: node

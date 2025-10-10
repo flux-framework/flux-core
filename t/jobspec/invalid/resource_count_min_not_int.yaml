@@ -1,10 +1,11 @@
 version: 1
 resources:
   - type: slot
+    count:
+      min: "1"
     label: foo
-    count: 0
     with:
-      - type: core
+      - type: node
         count: 1
 tasks:
   - command: [ "app" ]
