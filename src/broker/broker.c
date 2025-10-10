@@ -84,8 +84,10 @@ static void h_internal_watcher (flux_reactor_t *r,
                                 flux_watcher_t *w,
                                 int revents,
                                 void *arg);
-
-static int overlay_recv_cb (flux_msg_t **msg, overlay_where_t where, void *arg);
+static void overlay_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg);
 
 static void signal_cb (flux_reactor_t *r,
                        flux_watcher_t *w,
@@ -316,11 +318,21 @@ int main (int argc, char *argv[])
                                         ctx.hostname,
                                         ctx.attrs,
                                         NULL,
-                                        overlay_recv_cb,
-                                        &ctx))) {
+                                        "interthread://overlay"))) {
         log_err ("overlay_create");
         goto cleanup;
     }
+    if (!(ctx.h_overlay = flux_open ("interthread://overlay", 0))
+        || flux_set_reactor (ctx.h_overlay, ctx.reactor) < 0
+        || !(ctx.w_overlay = flux_handle_watcher_create (ctx.reactor,
+                                                         ctx.h_overlay,
+                                                          FLUX_POLLIN,
+                                                          overlay_cb,
+                                                          &ctx))) {
+        log_err ("error opening overlay message channel");
+        goto cleanup;
+    }
+    flux_watcher_start (ctx.w_overlay);
 
     /* Create rundir now as it may be needed for overlay sockets during
      * bootstrap.  N.B. tmpdir is used later when statedir is created.
@@ -548,6 +560,8 @@ cleanup:
     zlist_destroy (&ctx.sigwatchers);
     shutdown_destroy (ctx.shutdown);
     state_machine_destroy (ctx.state_machine);
+    flux_watcher_destroy (ctx.w_overlay);
+    flux_close (ctx.h_overlay);
     overlay_destroy (ctx.overlay);
     service_switch_destroy (ctx.services);
     broker_remove_services (handlers);
@@ -1455,44 +1469,52 @@ static void broker_remove_services (flux_msg_handler_t *handlers[])
  ** reactor callbacks
  **/
 
-/* Handle messages received from overlay peers.
+/* Handle messages on interthread://overlay
  * N.B. even when there is only one node, event messages are processed
  * by the overlay.
  */
-static int overlay_recv_cb (flux_msg_t **msg, overlay_where_t where, void *arg)
+static void overlay_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
+    flux_t *h = flux_handle_watcher_get_flux (w);
     broker_ctx_t *ctx = arg;
+    flux_msg_t *msg;
     int type;
     const char *topic;
 
-    if (flux_msg_get_type (*msg, &type) < 0
-        || flux_msg_get_topic (*msg, &topic) < 0)
-        return -1;
+    if (!(msg = flux_recv (h, FLUX_MATCH_ANY, 0))
+        || flux_msg_get_type (msg, &type) < 0
+        || flux_msg_get_topic (msg, &topic) < 0) {
+        flux_msg_decref (msg);
+        return;
+    }
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
             /* broker_request_sendmsg_new() generates a response on error.
              */
-            broker_request_sendmsg_new (ctx, msg);
+            broker_request_sendmsg_new (ctx, &msg);
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            if (broker_response_sendmsg_new (ctx, msg) < 0)
+            if (broker_response_sendmsg_new (ctx, &msg) < 0)
                 goto drop;
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (modhash_event_mcast (ctx->modhash, *msg) < 0)
+            if (modhash_event_mcast (ctx->modhash, msg) < 0)
                 flux_log_error (ctx->h,
                                 "mcast failed to broker modules");
             if (subhash_topic_match (ctx->sub, topic)
-                && flux_send_new (ctx->h_internal, msg, 0) < 0) {
+                && flux_send_new (ctx->h_internal, &msg, 0) < 0) {
                 flux_log_error (ctx->h,
                                 "send failed on internal broker handle");
             }
         default:
             break;
     }
-    flux_msg_decref (*msg);
-    *msg = NULL;
-    return 0;
+    flux_msg_decref (msg);
+    msg = NULL;
+    return;
 drop:
     /* Suppress logging if a response could not be sent due to ENOSYS,
      * which happens if sending module unloads before finishing all RPCs.
@@ -1503,7 +1525,6 @@ drop:
                         flux_msg_typestr (type),
                         topic);
     }
-    return -1;
 }
 
 static bool signal_is_deadly (int signum)
@@ -1599,7 +1620,7 @@ static int broker_request_sendmsg_new_internal (broker_ctx_t *ctx,
     /* Route up TBON if destination if upstream of this broker.
      */
     if (upstream && nodeid == ctx->rank) {
-        if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0)
+        if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
             return -1;
     }
     /* Deliver to local service if destination *could* be this broker.
@@ -1609,11 +1630,8 @@ static int broker_request_sendmsg_new_internal (broker_ctx_t *ctx,
         if (service_send_new (ctx->services, msg) < 0) {
             if (errno != ENOSYS)
                 return -1;
-            if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0) {
-                if (errno == EHOSTUNREACH)
-                    errno = ENOSYS;
+            if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
                 return -1;
-            }
         }
     }
     /* Deliver to local service if this broker is the addressed rank.
@@ -1625,7 +1643,7 @@ static int broker_request_sendmsg_new_internal (broker_ctx_t *ctx,
     /* Send the request up or down TBON as addressed.
      */
     else {
-        if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_ANY) < 0)
+        if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
             return -1;
     }
     return 0;
@@ -1669,11 +1687,11 @@ int broker_response_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg)
             return -1;
     }
     else if (overlay_uuid_is_parent (ctx->overlay, uuid)) {
-        if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0)
+        if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
             return -1;
     }
     else if (overlay_uuid_is_child (ctx->overlay, uuid)) {
-        if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_DOWNSTREAM) < 0)
+        if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
             return -1;
     }
     else {
@@ -1708,7 +1726,7 @@ static void h_internal_watcher (flux_reactor_t *r,
                 goto error;
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (overlay_sendmsg_new (ctx->overlay, &msg, OVERLAY_ANY) < 0)
+            if (flux_send_new (ctx->h_overlay, &msg, 0) < 0)
                 goto error;
             break;
         default:

@@ -27,6 +27,8 @@ struct broker {
     char hostname[_POSIX_HOST_NAME_MAX + 1];
 
     struct overlay *overlay;
+    flux_t *h_overlay;
+    flux_watcher_t *w_overlay;
     uint32_t rank;
     uint32_t size;
 
