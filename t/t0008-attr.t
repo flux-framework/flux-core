@@ -15,10 +15,10 @@ test_expect_success 'flux getattr rank works' '
 	test "${ATTR_VAL}" -eq 0
 '
 test_expect_success 'flux setattr rank fails (immutable)' '
-	! flux setattr rank 42
+	test_must_fail flux setattr rank 42
 '
 test_expect_success 'flux getattr attrtest.nonexist fails' '
-	! flux getattr nonexist
+	test_must_fail flux getattr nonexist
 '
 test_expect_success 'flux setattr works' '
 	flux setattr attrtest.foo bar &&
@@ -45,6 +45,9 @@ test_expect_success 'get request with empty payload fails with EPROTO(71)' '
 '
 test_expect_success 'set request with empty payload fails with EPROTO(71)' '
 	${RPC} attr.set 71 </dev/null
+'
+test_expect_success 'rm request with empty payload fails with EPROTO(71)' '
+	${RPC} attr.rm 71 </dev/null
 '
 
 test_done
