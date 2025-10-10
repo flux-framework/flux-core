@@ -529,32 +529,6 @@ flux_conf_t *flux_conf_pack (const char *fmt, ...)
     return conf;
 }
 
-int flux_conf_reload_decode (const flux_msg_t *msg, const flux_conf_t **confp)
-{
-    const char *auxkey = "flux::conf";
-    json_t *o;
-    flux_conf_t *conf;
-
-    if (!(conf = flux_msg_aux_get (msg, auxkey))) {
-        if (flux_request_unpack (msg, NULL, "o", &o) < 0)
-            return -1;
-        if (!(conf = flux_conf_create ()))
-            return -1;
-        json_decref (conf->obj);
-        conf->obj = json_incref (o);
-        if (flux_msg_aux_set (msg,
-                              auxkey,
-                              (flux_conf_t *)conf,
-                              (flux_free_f)flux_conf_decref) < 0) {
-            flux_conf_decref (conf);
-            return -1;
-        }
-    }
-    if (confp)
-        *confp = conf;
-    return 0;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

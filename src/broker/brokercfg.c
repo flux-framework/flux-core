@@ -219,10 +219,12 @@ static void load_cb (flux_t *h,
                      void *arg)
 {
     struct brokercfg *cfg = arg;
-    const flux_conf_t *conf = NULL;
+    json_t *o;
+    flux_conf_t *conf;
     flux_error_t error;
 
-    if (flux_conf_reload_decode (msg, &conf) < 0) {
+    if (flux_request_unpack (msg, NULL, "o", &o) < 0
+        || !(conf = flux_conf_pack ("O", o))) {
         errprintf (&error, "error decoding config.load request");
         goto error;
     }

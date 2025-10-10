@@ -185,25 +185,29 @@ static void config_reload_cb (flux_t *h,
                               void *arg)
 {
     struct resource_ctx *ctx = arg;
-    const flux_conf_t *conf;
+    flux_conf_t *conf;
     flux_error_t error;
     const char *errstr = NULL;
     struct resource_config config = {0};
 
-    if (flux_conf_reload_decode (msg, &conf) < 0)
-        goto error;
-    if (parse_config (ctx, conf, &config, &error) < 0) {
-        errstr = error.text;
+    if (flux_module_config_request_decode (msg, &conf) < 0) {
+        errstr = "error unpacking config-reload request";
         goto error;
     }
+    if (parse_config (ctx, conf, &config, &error) < 0) {
+        errstr = error.text;
+        goto error_decref;
+    }
     reslog_set_journal_max (ctx->reslog, config.journal_max);
-    if (flux_set_conf_new (h, flux_conf_incref (conf)) < 0) {
+    if (flux_set_conf_new (h, conf) < 0) {
         errstr = "error updating cached configuration";
-        goto error;
+        goto error_decref;
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config-reload request");
     return;
+error_decref:
+    flux_conf_decref (conf);
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to config-reload request");

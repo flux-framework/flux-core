@@ -757,16 +757,22 @@ static void reload_cb (flux_t *h,
                        void *arg)
 {
     struct job_ingest_ctx *ctx = arg;
-    const flux_conf_t *conf;
+    flux_conf_t *conf;
     flux_error_t error;
     const char *errstr = NULL;
 
-    if (flux_conf_reload_decode (msg, &conf) < 0) {
+    if (flux_module_config_request_decode (msg, &conf) < 0) {
         errstr = "Failed to parse config-reload request";
         goto error;
     }
     if (job_ingest_configure (ctx, conf, 0, NULL, &error) < 0) {
         errstr = error.text;
+        flux_conf_decref (conf);
+        goto error;
+    }
+    if (flux_set_conf_new (h, conf) < 0) {
+        errstr = "error updating config";
+        flux_conf_decref (conf);
         goto error;
     }
     if (flux_respond (h, msg, NULL) < 0)
