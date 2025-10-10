@@ -711,6 +711,8 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
         json_t *checkpt;
         double timestamp;
         int sequence;
+        char buf[64] = "";
+        struct tm tm;
 
         /* index 0 is most recent checkpoint */
         if (!(f = kvs_checkpoint_lookup (ctx.h, KVS_CHECKPOINT_FLAG_CACHE_BYPASS))
@@ -722,13 +724,9 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
             log_msg_exit ("error fetching checkpoints: %s",
                           future_strerror (f, errno));
 
-        if (!ctx.quiet) {
-            char buf[64] = "";
-            struct tm tm;
-            if (!timestamp_from_double (timestamp, &tm, NULL))
-                strftime (buf, sizeof (buf), "%Y-%m-%dT%T", &tm);
-            printf ("Checking integrity of checkpoint from %s\n", buf);
-        }
+        if (!timestamp_from_double (timestamp, &tm, NULL))
+            strftime (buf, sizeof (buf), "%Y-%m-%dT%T", &tm);
+        printf ("Checking integrity of checkpoint from %s\n", buf);
 
         ctx.sequence = sequence;
     }
