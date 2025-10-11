@@ -14,6 +14,7 @@
 #include "types.h"
 #include "message.h"
 #include "conf.h"
+#include "conf_builtin.h"
 #include "handle.h"
 #include "reactor.h"
 #include "watcher.h"
