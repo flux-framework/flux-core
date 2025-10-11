@@ -480,6 +480,19 @@ flux_reactor_t *flux_get_reactor (flux_t *h)
     return r;
 }
 
+int flux_set_conf_new (flux_t *h, const flux_conf_t *conf)
+{
+    return flux_aux_set (h,
+                         "flux::conf_object",
+                         (flux_conf_t *)conf,
+                         conf ? (flux_free_f)flux_conf_decref : NULL);
+}
+
+const flux_conf_t *flux_get_conf (flux_t *h)
+{
+    return flux_aux_get (h, "flux::conf_object");
+}
+
 /* Create an idset that is configured as an allocator per idset_alloc(3) to
  * be used as a matchtag allocator.  Remove FLUX_MATCHTAG_NONE from the pool.
  */

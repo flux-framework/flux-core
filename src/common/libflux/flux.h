@@ -13,6 +13,7 @@
 
 #include "types.h"
 #include "message.h"
+#include "conf.h"
 #include "handle.h"
 #include "reactor.h"
 #include "watcher.h"
@@ -27,7 +28,6 @@
 #include "module.h"
 #include "attr.h"
 #include "flog.h"
-#include "conf.h"
 #include "future.h"
 #include "service.h"
 #include "version.h"

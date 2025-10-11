@@ -44,8 +44,6 @@ struct flux_conf {
     int refcount;
 };
 
-static const char *conf_auxkey = "flux::conf_object";
-
 static struct builtin builtin_tab[] = {
     {
         .key = "confdir",
@@ -441,19 +439,6 @@ flux_conf_t *flux_conf_parse (const char *path, flux_error_t *error)
     if (S_ISDIR(st.st_mode))
         return conf_parse_dir (path, error);
     return conf_parse_file (path, error);
-}
-
-int flux_set_conf_new (flux_t *h, const flux_conf_t *conf)
-{
-    return flux_aux_set (h,
-                         conf_auxkey,
-                         (flux_conf_t *)conf,
-                         conf ? (flux_free_f)flux_conf_decref : NULL);
-}
-
-const flux_conf_t *flux_get_conf (flux_t *h)
-{
-    return flux_aux_get (h, conf_auxkey);
 }
 
 int flux_conf_vunpack (const flux_conf_t *conf,

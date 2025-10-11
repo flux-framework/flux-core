@@ -103,6 +103,12 @@ flux_t *flux_clone (flux_t *orig);
 flux_reactor_t *flux_get_reactor (flux_t *h);
 int flux_set_reactor (flux_t *h, flux_reactor_t *r);
 
+/* Get/set config object cached in flux_t handle, with destructor.
+ * Re-setting the object decrefs the old one.
+ */
+const flux_conf_t *flux_get_conf (flux_t *h);
+int flux_set_conf_new (flux_t *h, const flux_conf_t *conf);
+
 /* Drop connection to broker and re-establish, if supported by connector.
  */
 int flux_reconnect (flux_t *h);
