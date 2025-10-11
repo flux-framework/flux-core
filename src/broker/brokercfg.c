@@ -51,21 +51,13 @@ static int brokercfg_parse (flux_t *h,
                        error.text);
             return -1;
         }
-    }
-    else {
-        if (!(conf = flux_conf_create ())) {
-            errprintf (errp, "Error creating config object");
+        if (flux_set_conf_new (h, conf) < 0) {
+            errprintf (errp, "Error caching config object");
+            flux_conf_decref (conf);
             return -1;
         }
     }
-    if (flux_set_conf_new (h, conf) < 0) {
-        errprintf (errp, "Error caching config object");
-        goto error;
-    }
     return 0;
-error:
-    flux_conf_decref (conf);
-    return -1;
 }
 
 /* Now that all modules have responded to '<name>.config-reload' request,

@@ -364,6 +364,7 @@ void test_in_handle (void)
     char dir[PATH_MAX + 1];
     char path[PATH_MAX + 1];
     flux_conf_t *conf;
+    json_t *o;
     flux_t *h;
     int i;
 
@@ -393,8 +394,9 @@ void test_in_handle (void)
 
     ok (flux_set_conf_new (h, NULL) == 0,
         "flux_set_conf_new conf=NULL works");
-    ok (flux_get_conf (h) == NULL,
-        "flux_get_conf now returns NULL");
+    ok (flux_conf_unpack (flux_get_conf (h), NULL, "o", &o) == 0
+        && json_object_size (o) == 0,
+        "flux_get_conf now returns an empty object");
 
     if (unlink (path) < 0)
         BAIL_OUT ("unlink: %s", strerror (errno));

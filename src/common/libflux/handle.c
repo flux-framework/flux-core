@@ -490,7 +490,19 @@ int flux_set_conf_new (flux_t *h, const flux_conf_t *conf)
 
 const flux_conf_t *flux_get_conf (flux_t *h)
 {
-    return flux_aux_get (h, "flux::conf_object");
+    flux_conf_t *conf = flux_aux_get (h, "flux::conf_object");
+    if (!conf) {
+        if ((conf = flux_conf_create ())) {
+            if (flux_aux_set (h,
+                              "flux::conf_object",
+                              conf,
+                              (flux_free_f)flux_conf_decref) < 0) {
+                flux_conf_decref (conf);
+                conf = NULL;
+            }
+        }
+    }
+    return conf;
 }
 
 /* Create an idset that is configured as an allocator per idset_alloc(3) to
