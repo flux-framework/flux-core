@@ -15,6 +15,7 @@
 
 #include "src/common/libutil/intree.h"
 #include "ccan/str/str.h"
+#include "ccan/array_size/array_size.h"
 
 #include "conf_builtin.h"
 
@@ -139,13 +140,11 @@ static struct builtin builtin_tab[] = {
         .val_installed = X_RUNSTATEDIR "/flux",
         .val_intree = NULL
     },
-    { NULL, NULL, NULL },
 };
 
 const char *flux_conf_builtin_get (const char *name,
                                    enum flux_conf_builtin_hint hint)
 {
-    struct builtin *entry;
     bool intree = false;
     const char *val = NULL;
 
@@ -163,9 +162,12 @@ const char *flux_conf_builtin_get (const char *name,
                 intree = true;
             break;
     }
-    for (entry = &builtin_tab[0]; entry->key != NULL; entry++) {
-        if (name && streq (entry->key, name)) {
-            val = intree ? entry->val_intree : entry->val_installed;
+    for (int i = 0; i < ARRAY_SIZE (builtin_tab); i++) {
+        if (name && streq (builtin_tab[i].key, name)) {
+            if (intree)
+                val = builtin_tab[i].val_intree;
+            else
+                val = builtin_tab[i].val_installed;
             break;
         }
     }
