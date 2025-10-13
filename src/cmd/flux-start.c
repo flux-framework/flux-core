@@ -57,6 +57,7 @@ static struct {
     const char *start_mode;
     flux_reactor_t *reactor;
     flux_watcher_t *timer;
+    bool shutdown;
     zlist_t *clients;
     optparse_t *opts;
     int verbose;
@@ -280,15 +281,25 @@ void exit_timeout (flux_reactor_t *r,
                    int revents, void *arg)
 {
     struct client *cli;
+    struct idset *ids;
 
+    ids = idset_create (ctx.test_size, 0);
     cli = zlist_first (ctx.clients);
     while (cli) {
         if (cli->p) {
             flux_future_t *f = flux_subprocess_kill (cli->p, SIGKILL);
+            if (f && ids)
+                idset_set (ids, cli->rank);
             flux_future_destroy (f);
         }
         cli = zlist_next (ctx.clients);
     }
+    if (ids && idset_count (ids) > 0) {
+        char *s = idset_encode (ids, IDSET_FLAG_RANGE);
+        log_msg ("Exit timeout: killed rank %s", s ? s : "null");
+        free (s);
+    }
+    idset_destroy (ids);
 }
 
 void update_timer (void)
@@ -314,10 +325,11 @@ void update_timer (void)
         if (count > 0 && leader_exit)
             shutdown = true;
     }
-    if (shutdown)
+    if (shutdown && !ctx.shutdown)
         flux_watcher_start (ctx.timer);
-    else
+    else if (!shutdown && ctx.shutdown)
         flux_watcher_stop (ctx.timer);
+    ctx.shutdown = shutdown;
 }
 
 static void completion_cb (flux_subprocess_t *p)
