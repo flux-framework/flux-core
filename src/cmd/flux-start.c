@@ -57,6 +57,7 @@ static struct {
     const char *start_mode;
     flux_reactor_t *reactor;
     flux_watcher_t *timer;
+    bool shutdown;
     zlist_t *clients;
     optparse_t *opts;
     int verbose;
@@ -324,10 +325,11 @@ void update_timer (void)
         if (count > 0 && leader_exit)
             shutdown = true;
     }
-    if (shutdown)
+    if (shutdown && !ctx.shutdown)
         flux_watcher_start (ctx.timer);
-    else
+    else if (!shutdown && ctx.shutdown)
         flux_watcher_stop (ctx.timer);
+    ctx.shutdown = shutdown;
 }
 
 static void completion_cb (flux_subprocess_t *p)
