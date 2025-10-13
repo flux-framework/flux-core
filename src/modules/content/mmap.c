@@ -529,6 +529,8 @@ json_t *content_mmap_get_stats (struct content_mmap *mm)
     json_t *o;
     json_t *mmap;
 
+    if (!mm)
+        return NULL;
     if (!(o = json_object ()))
         goto nomem;
     key = hola_hash_first (mm->tags);

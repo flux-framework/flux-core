@@ -32,6 +32,12 @@ unregister_backing() {
 	jq -j -c -n  "{name:\"$1\"}" | $RPC content.unregister-backing
 }
 
+test_expect_success 'flux module stats content works on leader' '
+	flux module stats content
+'
+test_expect_success 'flux module stats content works on follower' '
+	flux exec -r 1 flux module stats content
+'
 test_expect_success 'register-backing name=foo works' '
 	register_backing foo
 '
