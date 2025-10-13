@@ -42,6 +42,7 @@ fluxcoreinclude_HEADERS = \
 	attr.h \
 	flog.h \
 	conf.h \
+	conf_builtin.h \
 	future.h \
 	service.h \
 	plugin.h \
@@ -88,6 +89,7 @@ libflux_la_SOURCES = \
 	module.c \
 	conf_private.h \
 	conf.c \
+	conf_builtin.c \
 	control.c \
 	future.c \
 	composite_future.c \

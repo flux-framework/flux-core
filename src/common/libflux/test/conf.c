@@ -364,6 +364,7 @@ void test_in_handle (void)
     char dir[PATH_MAX + 1];
     char path[PATH_MAX + 1];
     flux_conf_t *conf;
+    json_t *o;
     flux_t *h;
     int i;
 
@@ -380,8 +381,8 @@ void test_in_handle (void)
     create_test_file (dir, "foo", "toml", path, sizeof (path), t1);
     if (!(conf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failure: %s", strerror (errno));
-    ok (flux_set_conf (h, conf) == 0,
-        "flux_set_conf works");
+    ok (flux_set_conf_new (h, conf) == 0,
+        "flux_set_conf_new works");
     ok (flux_get_conf (h) == conf,
         "flux_get_conf works");
 
@@ -391,10 +392,11 @@ void test_in_handle (void)
     ok (flux_conf_unpack (conf, NULL, "{s:i}", "i", &i) == 0 && i == 1,
         "and config content is as expected");
 
-    ok (flux_set_conf (h, NULL) == 0,
-        "flux_set_conf conf=NULL works");
-    ok (flux_get_conf (h) == NULL,
-        "flux_get_conf now returns NULL");
+    ok (flux_set_conf_new (h, NULL) == 0,
+        "flux_set_conf_new conf=NULL works");
+    ok (flux_conf_unpack (flux_get_conf (h), NULL, "o", &o) == 0
+        && json_object_size (o) == 0,
+        "flux_get_conf now returns an empty object");
 
     if (unlink (path) < 0)
         BAIL_OUT ("unlink: %s", strerror (errno));

@@ -47,6 +47,23 @@ int flux_module_set_running (flux_t *h)
     return 0;
 }
 
+int flux_module_config_request_decode (const flux_msg_t *msg,
+                                       flux_conf_t **confp)
+{
+    json_t *o;
+    flux_conf_t *conf;
+
+    if (flux_request_unpack (msg, NULL, "o", &o) < 0
+        || !(conf = flux_conf_pack ("O", o)))
+        return -1;
+    if (confp)
+        *confp = conf;
+    else
+        flux_conf_decref (conf);
+    return 0;
+}
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

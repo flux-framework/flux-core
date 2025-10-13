@@ -249,23 +249,27 @@ static void reload_cb (flux_t *h,
                        void *arg)
 {
     struct connector_local *ctx = arg;
-    const flux_conf_t *conf;
+    flux_conf_t *conf;
     flux_error_t error;
     const char *errstr = NULL;
 
-    if (flux_conf_reload_decode (msg, &conf) < 0)
-        goto error;
-    if (parse_config (ctx, conf, &error) < 0) {
-        errstr = error.text;
+    if (flux_module_config_request_decode (msg, &conf) < 0) {
+        errstr = "Error unpacking config-reload request";
         goto error;
     }
-    if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
+    if (parse_config (ctx, conf, &error) < 0) {
+        errstr = error.text;
+        goto error_decref;
+    }
+    if (flux_set_conf_new (h, conf) < 0) {
         errstr = "error updating cached configuration";
-        goto error;
+        goto error_decref;
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config-reload request");
     return;
+error_decref:
+    flux_conf_decref (conf);
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to config-reload request");

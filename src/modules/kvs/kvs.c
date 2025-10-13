@@ -2477,20 +2477,28 @@ static void config_reload_cb (flux_t *h,
                               void *arg)
 {
     struct kvs_ctx *ctx = arg;
-    const flux_conf_t *conf;
+    flux_conf_t *conf;
     const char *errstr = NULL;
     flux_error_t error;
 
-    if (flux_conf_reload_decode (msg, &conf) < 0)
+    if (flux_module_config_request_decode (msg, &conf) < 0) {
+        errstr = "error unpacking config-reload request";
         goto error;
+    }
     if (kvs_checkpoint_reload (ctx->kcp, conf, &error) < 0) {
         errstr = error.text;
-        goto error;
+        goto error_decref;
+    }
+    if (flux_set_conf_new (h, conf) < 0) {
+        errstr = "error updating config";
+        goto error_decref;
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config-reload request");
     return;
- error:
+error_decref:
+    flux_conf_decref (conf);
+error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to config-reload request");
 }

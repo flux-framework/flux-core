@@ -1746,38 +1746,38 @@ static void config_reload_cb (flux_t *h,
                               void *arg)
 {
     struct job_exec_ctx *ctx = arg;
-    const flux_conf_t *conf;
+    flux_conf_t *conf;
     struct exec_implementation *impl;
     flux_error_t err;
     int i = 0;
 
-    if (flux_conf_reload_decode (msg, &conf) < 0) {
+    if (flux_module_config_request_decode (msg, &conf) < 0) {
         errprintf (&err, "Error parsing new config: %s", strerror (errno));
         goto error;
     }
-
     if (job_exec_set_config_globals (h,
                                      conf,
                                      ctx->argc,
                                      ctx->argv,
                                      &err) < 0)
-        goto error;
+        goto error_decref;
 
     while ((impl = implementations[i]) && impl->name) {
         if (impl->config) {
             if ((*impl->config) (h, conf, ctx->argc, ctx->argv, &err) < 0)
-                goto error;
+                goto error_decref;
         }
         i++;
     }
-    if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
+    if (flux_set_conf_new (h, conf) < 0) {
         errprintf (&err, "error updating cached configuration");
-        flux_conf_decref (conf);
-        goto error;
+        goto error_decref;
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config-reload request");
     return;
+error_decref:
+    flux_conf_decref (conf);
 error:
     if (flux_respond_error (h, msg, errno, err.text) < 0)
         flux_log_error (h, "error responding to config-reload request");

@@ -37,6 +37,12 @@ bool flux_module_debug_test (flux_t *h, int flag, bool clear);
  */
 int flux_module_set_running (flux_t *h);
 
+/* Decode config-reload request, setting 'conf' to a config object.
+ * The caller should release *conf with flux_conf_decref().
+ */
+int flux_module_config_request_decode (const flux_msg_t *msg,
+                                       flux_conf_t **conf);
+
 #ifdef __cplusplus
 }
 #endif

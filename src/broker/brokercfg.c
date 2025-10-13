@@ -33,17 +33,6 @@ struct brokercfg {
     flux_future_t *reload_f;
 };
 
-static int brokercfg_set (flux_t *h,
-                          const flux_conf_t *conf,
-                          flux_error_t *error)
-{
-    if (flux_set_conf (h, conf) < 0) {
-        errprintf (error, "Error caching config object");
-        return -1;
-    }
-    return 0;
-}
-
 /* Parse config object from TOML config files if path is set;
  * otherwise, create an empty config object.  Store the object
  * in ctx->h for later access by flux_get_conf().
@@ -62,19 +51,13 @@ static int brokercfg_parse (flux_t *h,
                        error.text);
             return -1;
         }
-    }
-    else {
-        if (!(conf = flux_conf_create ())) {
-            errprintf (errp, "Error creating config object");
+        if (flux_set_conf_new (h, conf) < 0) {
+            errprintf (errp, "Error caching config object");
+            flux_conf_decref (conf);
             return -1;
         }
     }
-    if (brokercfg_set (h, conf, errp) < 0)
-        goto error;
     return 0;
-error:
-    flux_conf_decref (conf);
-    return -1;
 }
 
 /* Now that all modules have responded to '<name>.config-reload' request,
@@ -228,14 +211,17 @@ static void load_cb (flux_t *h,
                      void *arg)
 {
     struct brokercfg *cfg = arg;
-    const flux_conf_t *conf = NULL;
+    json_t *o;
+    flux_conf_t *conf;
     flux_error_t error;
 
-    if (flux_conf_reload_decode (msg, &conf) < 0) {
+    if (flux_request_unpack (msg, NULL, "o", &o) < 0
+        || !(conf = flux_conf_pack ("O", o))) {
         errprintf (&error, "error decoding config.load request");
         goto error;
     }
-    if (brokercfg_set (h, flux_conf_incref (conf), &error) < 0) {
+    if (flux_set_conf_new (h, conf) < 0) {
+        errprintf (&error, "Error caching config object");
         flux_conf_decref (conf);
         goto error;
     }

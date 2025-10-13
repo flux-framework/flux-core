@@ -998,3 +998,4 @@ libuv
 PYCLI
 backtraces
 libdir
+enum

@@ -539,21 +539,27 @@ static void reload_cb (flux_t *h,
                        void *arg)
 {
     struct sdbus_ctx *ctx = arg;
-    const flux_conf_t *conf;
+    flux_conf_t *conf;
     flux_error_t error;
     const char *errstr = NULL;
 
-    if (flux_conf_reload_decode (msg, &conf) < 0) {
+    if (flux_module_config_request_decode (msg, &conf) < 0) {
         errstr = "Failed to parse config-reload request";
         goto error;
     }
     if (sdbus_configure (ctx, conf, &error) < 0) {
         errstr = error.text;
-        goto error;
+        goto error_decref;
+    }
+    if (flux_set_conf_new (h, conf) < 0) {
+        errstr = "error updating cached configuration";
+        goto error_decref;
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config-reload request");
     return;
+error_decref:
+    flux_conf_decref (conf);
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to config-reload request");

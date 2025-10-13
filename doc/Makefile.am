@@ -110,6 +110,10 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_get_rank.3 \
 	man3/flux_attr_get.3 \
 	man3/flux_get_reactor.3 \
+	man3/flux_get_conf.3 \
+	man3/flux_module_set_running.3 \
+	man3/flux_conf_create.3 \
+	man3/flux_conf_builtin_get.3 \
 	man3/flux_reactor_create.3 \
 	man3/flux_fd_watcher_create.3 \
 	man3/flux_watcher_start.3 \
@@ -202,7 +206,16 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_msg_set_noresponse.3 \
 	man3/flux_get_size.3 \
 	man3/flux_attr_set.3 \
+	man3/flux_module_debug_test.3 \
+	man3/flux_module_config_request_decode.3 \
 	man3/flux_set_reactor.3 \
+	man3/flux_set_conf_new.3 \
+	man3/flux_conf_incref.3 \
+	man3/flux_conf_decref.3 \
+	man3/flux_conf_copy.3 \
+	man3/flux_conf_unpack.3 \
+	man3/flux_conf_pack.3 \
+	man3/flux_conf_parse.3 \
 	man3/flux_reactor_destroy.3 \
 	man3/flux_reactor_run.3 \
 	man3/flux_reactor_stop.3 \
