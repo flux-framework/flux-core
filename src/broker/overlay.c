@@ -1845,17 +1845,32 @@ static void overlay_stats_get_cb (flux_t *h,
                                   void *arg)
 {
     struct overlay *ov = arg;
+    size_t sendq = 0;
+    size_t recvq = 0;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
+    if (ov->h_channel) {
+        (void)flux_opt_get (ov->h_channel,
+                            FLUX_OPT_RECV_QUEUE_COUNT,
+                            &recvq,
+                            sizeof (recvq));
+        (void)flux_opt_get (ov->h_channel,
+                            FLUX_OPT_SEND_QUEUE_COUNT,
+                            &sendq,
+                            sizeof (sendq));
+    }
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:i s:i s:i s:i}",
+                           "{s:i s:i s:i s:i s:i s:{s:i s:i}}",
                            "child-count", ov->child_count,
                            "child-connected", overlay_get_child_peer_count (ov),
                            "parent-count", ov->rank > 0 ? 1 : 0,
                            "parent-rpc", rpc_track_count (ov->parent.tracker),
-                           "child-rpc", child_rpc_track_count (ov)) < 0)
+                           "child-rpc", child_rpc_track_count (ov),
+                           "interthread",
+                             "sendq", (int)sendq,
+                             "recvq", (int)recvq) < 0)
         flux_log_error (h, "error responding to overlay.stats-get");
     return;
 error:
