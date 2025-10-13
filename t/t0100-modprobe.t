@@ -218,6 +218,46 @@ test_expect_success 'modprobe needs_attrs prevents task from running' '
 	test_cmp test${seq}.expected output${seq}
 '
 seq=$((seq=seq+1))
+test_expect_success 'modprobe needs_attrs with `!` prevents task from running' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+	@task("first")
+	def first(context):
+	    print("first")
+
+	@task("last", needs_attrs=["!size"])
+	def last(context):
+	    print("last")
+	EOF
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	first
+	EOF
+	test_cmp test${seq}.expected output${seq}
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe needs_attrs works with attr set to zero' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+	@task("first")
+	def first(context):
+	    print("first")
+
+	@task("last", needs_attrs=["zero"], after=["*"])
+	def last(context):
+	    print("last")
+	EOF
+	flux setattr zero 0 &&
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	first
+	last
+	EOF
+	test_cmp test${seq}.expected output${seq}
+'
+seq=$((seq=seq+1))
 test_expect_success 'modprobe needs_attrs works' '
 	cat <<-EOF >test${seq}.py &&
 	from flux.modprobe import task
@@ -231,6 +271,46 @@ test_expect_success 'modprobe needs_attrs works' '
 	    print("last")
 	EOF
 	flux setattr needed 1 &&
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	first
+	last
+	EOF
+	test_cmp test${seq}.expected output${seq}
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe `!` with another attr also prevents task' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+	@task("first")
+	def first(context):
+	    print("first")
+
+	@task("last", needs_attrs=["!size", "needed"])
+	def last(context):
+	    print("last")
+	EOF
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	first
+	EOF
+	test_cmp test${seq}.expected output${seq}
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe needs_attrs with `!` works' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first", before=["*"])
+	def first(context):
+	    print("first")
+
+	@task("last", needs_attrs=["!noexist"])
+	def last(context):
+	    print("last")
+	EOF
 	flux modprobe run test${seq}.py >output${seq} &&
 	test_debug "cat output${seq}" &&
 	cat <<-EOF >test${seq}.expected &&
@@ -274,6 +354,48 @@ test_expect_success 'modprobe needs_config works' '
 	EOF
 	flux config load <<-EOF &&
 	needed = 1
+	EOF
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	first
+	last
+	EOF
+	test_cmp test${seq}.expected output${seq}
+'
+seq=$((seq=seq+1))
+# note config value `needed` still set from previous test
+test_expect_success 'modprobe needs_config with `!` prevents task from running' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first")
+	def first(context):
+	    print("first")
+
+	@task("last", needs_config=["!needed"])
+	def last(context):
+	    print("last")
+	EOF
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	first
+	EOF
+	test_cmp test${seq}.expected output${seq}
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe needs_config with `!` works' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first")
+	def first(context):
+	    print("first")
+
+	@task("last", needs_config=["!noentry"], after=["*"])
+	def last(context):
+	    print("last")
 	EOF
 	flux modprobe run test${seq}.py >output${seq} &&
 	test_debug "cat output${seq}" &&
