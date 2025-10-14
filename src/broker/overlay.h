@@ -164,11 +164,8 @@ int overlay_set_monitor_cb (struct overlay *ov,
 int overlay_register_attrs (struct overlay *overlay);
 
 /* Stop allowing new connections from downstream peers.
- * If unbind is false, stop all communication on the socket.
- * Otherwise arrange to send a disconnect control message in response
- * to all messages.
  */
-void overlay_shutdown (struct overlay *overlay, bool unbind);
+void overlay_shutdown (struct overlay *overlay);
 
 /* Say goodbye to parent.
  * After this, sends to parent are dropped.

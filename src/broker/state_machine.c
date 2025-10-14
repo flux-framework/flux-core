@@ -515,7 +515,7 @@ static void action_cleanup (struct state_machine *s)
      * let existing ones continue to communicate so they can
      * shut down and disconnect.
      */
-    overlay_shutdown (s->ctx->overlay, false);
+    overlay_shutdown (s->ctx->overlay);
 
     if (runat_is_defined (s->ctx->runat, "cleanup")) {
         if (runat_start (s->ctx->runat, "cleanup", runat_completion_cb, s) < 0) {
@@ -538,10 +538,6 @@ static void action_cleanup (struct state_machine *s)
 static void action_finalize (struct state_machine *s)
 {
     sd_timeout_reset (s);
-    /* Now that all clients have disconnected, finalize all
-     * downstream communication.
-     */
-    overlay_shutdown (s->ctx->overlay, true);
 
     if (runat_is_defined (s->ctx->runat, "rc3")) {
         if (runat_start (s->ctx->runat, "rc3", runat_completion_cb, s) < 0) {
@@ -582,6 +578,8 @@ static void shutdown_warn_timer_cb (flux_reactor_t *r,
 static void action_shutdown (struct state_machine *s)
 {
     sd_timeout_reset (s);
+
+    overlay_shutdown (s->ctx->overlay);
 
     if (overlay_get_child_peer_count (s->ctx->overlay) == 0) {
         state_machine_post (s, "children-none");
