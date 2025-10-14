@@ -1093,7 +1093,7 @@ int parse_args (struct content_cache *cache, int argc, char **argv)
                 flux_log (cache->h, LOG_ERR, "error parsing %s", argv[i]);
                 return -1;
             }
-            cache->purge_old_entry = val;
+            cache->flush_batch_limit = val;
         }
         else if (strstarts (argv[i], "blob-size-limit=")) {
             if (parse_u32 (argv[i] + 16, &val) < 0) {

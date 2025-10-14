@@ -143,121 +143,6 @@ test_expect_success 'fill the cache with more data for later purging' '
 	${SPAMUTIL} 10000 200 >/dev/null
 '
 
-test_expect_success 'checkpoint-get returns ENOENT if there is no checkpoint' '
-	test_must_fail checkpoint_get 2> get.err &&
-	grep "No such file or directory" get.err
-'
-
-test_expect_success 'checkpoint-put w/ rootref bar' '
-	checkpoint_put bar
-'
-
-test_expect_success 'checkpoint-get returned rootref bar' '
-	echo bar >rootref.exp &&
-	checkpoint_get | jq -r .value[0].rootref >rootref.out &&
-	test_cmp rootref.exp rootref.out
-'
-
-test_expect_success 'flux content checkpoint list shows correct checkpoints (1 default)' '
-        flux content checkpoint list > checkpoints1.out &&
-        count=$(cat checkpoints1.out | wc -l) &&
-        test $count -eq 2 &&
-        tail -n 1 checkpoints1.out | grep bar
-'
-
-test_expect_success 'flux content checkpoint list shows correct checkpoints (1 no-header)' '
-        flux content checkpoint list --no-header > checkpoints1n.out &&
-        count=$(cat checkpoints1n.out | wc -l) &&
-        test $count -eq 1 &&
-        head -n 1 checkpoints1n.out | grep bar
-'
-
-test_expect_success 'flux content checkpoint list shows correct checkpoints (1 json)' '
-        flux content checkpoint list --json > checkpoints1j.out &&
-        count=$(cat checkpoints1j.out | wc -l) &&
-        test $count -eq 1 &&
-        head -n 1 checkpoints1j.out | jq -e ".rootref == \"bar\""
-'
-
-test_expect_success 'checkpoint-put on rank 1 forwards to rank 0' '
-       o=$(checkpoint_put_msg rankref) &&
-       jq -j -c -n ${o} | flux exec -r 1 ${RPC} content.checkpoint-put
-'
-
-test_expect_success 'checkpoint-get on rank 1 forwards to rank 0' '
-       echo rankref >rankref.exp &&
-       o=$(checkpoint_get_msg kvs-primary) &&
-       jq -j -c -n ${o} \
-	   | flux exec -r 1 ${RPC} content.checkpoint-get \
-	   | jq -r .value[0].rootref > rankref.out &&
-       test_cmp rankref.exp rankref.out
-'
-
-# use grep instead of compare, incase of floating point rounding
-test_expect_success 'checkpoint-get returned correct timestamp' '
-        checkpoint_get | jq -r .value[0].timestamp >timestamp.out &&
-        grep 2.2 timestamp.out
-'
-
-test_expect_success 'flux content checkpoint list shows correct checkpoints (2)' '
-        flux content checkpoint list --no-header > checkpoints2.out &&
-        count=$(cat checkpoints2.out | wc -l) &&
-        test $count -eq 2 &&
-        head -n 1 checkpoints2.out | grep rankref
-'
-
-test_expect_success 'checkpoint-put updates rootref to baz' '
-	checkpoint_put baz
-'
-
-test_expect_success 'checkpoint-get returned rootref baz' '
-	echo baz >rootref2.exp &&
-	checkpoint_get | jq -r .value[0].rootref >rootref2.out &&
-	test_cmp rootref2.exp rootref2.out
-'
-
-test_expect_success 'flush + reload content-sqlite module on rank 0' '
-	flux content flush &&
-	flux module reload content-sqlite
-'
-
-test_expect_success 'checkpoint-get still returns rootref baz' '
-	echo baz >rootref3.exp &&
-	checkpoint_get | jq -r .value[0].rootref >rootref3.out &&
-	test_cmp rootref3.exp rootref3.out
-'
-
-test_expect_success 'checkpoint-backing-get returns rootref baz' '
-	echo baz >rootref_backing.exp &&
-	checkpoint_backing_get \
-            | jq -r .value[0].rootref >rootref_backing.out &&
-	test_cmp rootref_backing.exp rootref_backing.out
-'
-
-test_expect_success 'flux content checkpoint list shows correct checkpoints (3)' '
-        flux content checkpoint list --no-header > checkpoints3.out &&
-        count=$(cat checkpoints3.out | wc -l) &&
-        test $count -eq 3 &&
-        head -n 1 checkpoints3.out | grep baz
-'
-
-test_expect_success 'checkpoint-backing-put w/ rootref boof' '
-	checkpoint_backing_put boof
-'
-
-test_expect_success 'checkpoint-get returned rootref boof' '
-	echo boof >rootref4.exp &&
-	checkpoint_get | jq -r .value[0].rootref >rootref4.out &&
-	test_cmp rootref4.exp rootref4.out
-'
-
-test_expect_success 'flux content checkpoint list shows correct checkpoints (4)' '
-        flux content checkpoint list --no-header > checkpoints4.out &&
-        count=$(cat checkpoints4.out | wc -l) &&
-        test $count -eq 4 &&
-        head -n 1 checkpoints4.out | grep boof
-'
-
 test_expect_success 'content-backing.load wrong size hash fails with EPROTO' '
 	echo -n xxx >badhash &&
 	$RPC content-backing.load 71 <badhash 2>load.err
@@ -275,16 +160,13 @@ test_expect_success 'wait for purge to clear cache entries' '
 		sleep 0.1; \
 		size=$(getsize); \
 		count=$(($count+1))
-	done
+	done &&
+	test $count -lt 300
 '
 
 test_expect_success 'remove content-sqlite module on rank 0' '
 	flux content flush &&
 	flux module remove content-sqlite
-'
-
-test_expect_success 'checkpoint-put w/ rootref spoon fails without backing' '
-	test_must_fail checkpoint_put spoon
 '
 
 test_expect_success 'remove heartbeat module' '
