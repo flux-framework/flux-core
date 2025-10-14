@@ -52,12 +52,16 @@ flux pstree -x --skip-root=no
 #  Now simulate a node failure by killing a broker in parent
 #  instance, along with all its children
 broker_pid=$(flux exec -r 3 flux getattr broker.pid)
+descendants=$(list_descendants $broker_pid)
 
-log "Killing rank 3 (pid %d) and all children\n" $broker_pid
-kill -9 $(list_descendants $broker_pid) $broker_pid
+log "disconnect rank 3 broker to simulate node crash\n"
+flux overlay disconnect 3
 
 log "Wait for exception event in $jobid\n"
 flux job wait-event -vt 100 $jobid exception
+
+log "Killing rank 3 broker (pid %d) and all children\n" $broker_pid
+kill -9 $descendants $broker_pid
 
 log "But running a 3 node job in $jobid still works:\n"
 flux proxy $jobid flux run -vvv -t 100s -N3 hostname
