@@ -1686,7 +1686,10 @@ class UtilConfig:
         try:
             return formats[format_name]["format"]
         except KeyError:
-            raise ValueError(f"--format: No such format {format_name}")
+            s = re.sub(r"\w+", r"{\g<0>}", format_name)
+            raise ValueError(
+                f"--format: No such format {format_name} (Did you mean '{s}'?)"
+            )
 
     def __getattr__(self, attr):
         return self.config[attr]
