@@ -275,7 +275,8 @@ test_expect_success 'wait for purge to clear cache entries' '
 		sleep 0.1; \
 		size=$(getsize); \
 		count=$(($count+1))
-	done
+	done &&
+	test $count -lt 300
 '
 
 test_expect_success 'remove content-sqlite module on rank 0' '
