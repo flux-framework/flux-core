@@ -234,6 +234,36 @@ these are abbreviated as D, P, S, R, C, CD, F, CA, and TO respectively.
 OUTPUT FORMAT
 =============
 
+.. note::
+   Format strings passed as command line arguments may contain characters
+   that have special meaning to the shell. Common problematic characters
+   include braces (``{`` and ``}``) in csh and tcsh, and exclamation marks
+   (``!``) in most shells when history expansion is enabled. To prevent
+   the shell from interpreting these characters, enclose format string
+   arguments in single quotes, for example ::
+
+     $ flux jobs -o '{cwd}'
+
+   or ::
+
+     $ flux jobs -o '{runtime!F}'
+
+   Single quotes preserve the literal value of all characters and prevent
+   shell expansion, ensuring the format string is passed to :command:`flux
+   jobs` exactly as written. Double quotes provide some protection, but
+   will not prevent history substitution via ``!`` in bourne compatible
+   shells.
+
+.. warning::
+   In tcsh, exclamation marks (``!``) trigger history expansion even within
+   single quotes. When using tcsh with format strings containing exclamation
+   marks, the exclamation mark must be escaped with a backslash ::
+
+     $ flux jobs -o '{runtime\!F}'
+
+   or history expansion can be temporarily disabled with ``set histchars=""``.
+
+
 The :option:`--format` option can be used to specify an output format to
 :program:`flux jobs` using Python's string format syntax. For example, the
 following is the format used for the default format:
@@ -273,9 +303,6 @@ actual width of the largest presented queue.
 
 If a format field is preceded by the string ``?+:``, then the field is
 eliminated if empty, or set the maximum item width.
-
-As a reminder to the reader, some shells will interpret braces
-(``{`` and ``}``) in the format string.  They may need to be quoted.
 
 The special presentation type *h* can be used to convert an empty
 string, "0s", "0.0", "0:00:00", or epoch time to a hyphen. For example, normally
@@ -317,10 +344,6 @@ the following conversion flags are supported by :program:`flux jobs`:
    convert a floating point number into a percentage fitting in 5 characters
    including the "%" character. E.g. 0.5 becomes "50%" 0.015 becomes 1.5%,
    and 0.0005 becomes 0.05% etc.
-
-As a reminder to the reader, some shells will interpret the exclamation
-point (``!``) when using a conversion flag.  The exclamation point may
-need to be escaped (``\!``).
 
 Annotations can be retrieved via the *annotations* field name.
 Specific keys and sub-object keys can be retrieved separated by a
