@@ -999,3 +999,7 @@ PYCLI
 backtraces
 libdir
 enum
+csh
+tcsh
+bourne
+histchars
