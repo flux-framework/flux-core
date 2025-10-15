@@ -1685,19 +1685,9 @@ int overlay_bind (struct overlay *ov, const char *uri, const char *uri2)
 
 /* Don't allow downstream peers to reconnect while we are shutting down.
  */
-void overlay_shutdown (struct overlay *overlay, bool unbind)
+void overlay_shutdown (struct overlay *overlay)
 {
     overlay->shutdown_in_progress = true;
-
-    if (unbind && overlay->bind_zsock) {
-        const char *uri;
-        uri = bizcard_uri_first (overlay->bizcard);
-        while (uri) {
-            if (zmq_unbind (overlay->bind_zsock, uri) < 0)
-                flux_log (overlay->h, LOG_ERR, "zmq_unbind %s failed", uri);
-            uri = bizcard_uri_next (overlay->bizcard);
-        }
-    }
 }
 
 /* Call after overlay bootstrap (bind/connect),
