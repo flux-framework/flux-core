@@ -434,15 +434,6 @@ void overlay_set_ipv6 (struct overlay *ov, int enable)
     ov->enable_ipv6 = enable;
 }
 
-bool overlay_peer_is_torpid (struct overlay *ov, uint32_t rank)
-{
-    struct child *child;
-
-    if (!(child = child_lookup_byrank (ov, rank)))
-        return false;
-    return child->torpid;
-}
-
 static void log_torpid_child (flux_t *h,
                                uint32_t rank,
                                bool torpid,
@@ -2023,19 +2014,6 @@ struct idset *overlay_get_default_critical_ranks (struct overlay *ov)
     return ranks;
 }
 
-/* Recursive function to build subtree topology object.
- * Right now the tree is regular.  In the future support the configuration
- * of irregular tree topologies.
- */
-json_t *overlay_get_subtree_topo (struct overlay *ov, int rank)
-{
-    if (!ov) {
-        errno = EINVAL;
-        return NULL;
-    }
-    return topology_get_json_subtree_at (ov->topo, rank);
-}
-
 /* Get the topology of the subtree rooted here.
  */
 static void overlay_topology_cb (flux_t *h,
@@ -2055,7 +2033,7 @@ static void overlay_topology_cb (flux_t *h,
         errno = ENOENT;
         goto error;
     }
-    if (!(topo = overlay_get_subtree_topo (ov, rank)))
+    if (!(topo = topology_get_json_subtree_at (ov->topo, rank)))
         goto error;
     if (flux_respond_pack (h, msg, "O", topo) < 0)
         flux_log_error (h, "error responding to overlay.topology");

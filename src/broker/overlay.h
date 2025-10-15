@@ -113,26 +113,10 @@ int overlay_set_tbon_interface_hint (struct overlay *ov, const char *val);
  */
 struct idset *overlay_get_default_critical_ranks (struct overlay *ov);
 
-/* Fetch TBON subtree topo at 'rank'.  The returned topology object has the
- * following recursive structure, where "children" is an array of topology
- * objects:
- *
- * {"rank":i, "size":i, "children":o}
- *
- * If rank has no children, the "children" array will be present but empty.
- * Caller must release returned object with json_decref().
- */
-json_t *overlay_get_subtree_topo (struct overlay *ov, int rank);
-
 /* Fetch status for TBON subtree rooted at 'rank'.  If 'rank' is not this
  * broker's rank or one of its direct descendants, "unknown" is returned.
  */
 const char *overlay_get_subtree_status (struct overlay *ov, int rank);
-
-/* A TBON child is "torpid" if no messages (including regular control messages)
- * have been received from it for a while.
- */
-bool overlay_peer_is_torpid (struct overlay *ov, uint32_t rank);
 
 /* Broker should call overlay_bind() if there are children.  This may happen
  * before any peers are authorized as long as they are authorized before they
@@ -153,7 +137,6 @@ int overlay_connect (struct overlay *ov);
  * - overlay_get_child_peer_count() - number of online children
  * - overlay_get_child_peer_idset () - set of online children
  * - overlay_get_subtree_status (rank) - subtree status of child
- * - overlay_get_subtree_topo (rank) - topology of subtree rooted at child
  */
 int overlay_set_monitor_cb (struct overlay *ov,
                             overlay_monitor_f cb,
