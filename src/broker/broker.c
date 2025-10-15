@@ -271,6 +271,13 @@ int main (int argc, char *argv[])
     }
     flux_watcher_start (ctx.w_internal);
 
+    /* Set early logger configuration so that flux_log(3) et al can
+     * be used before the rank is known, reactor is running, etc..
+     */
+    flux_log_set_redirect (ctx.h, log_early, ctx.attrs);
+    flux_log_set_hostname (ctx.h, ctx.hostname); // in lieu of rank
+    flux_log_set_appname (ctx.h, "broker");
+
     const char *val;
     if (attr_get (ctx.attrs, "broker.sd-notify", &val, NULL) == 0
         && !streq (val, "0")) {
@@ -410,8 +417,7 @@ int main (int argc, char *argv[])
                   flux_reactor_now (ctx.reactor) - ctx.starttime);
     }
 
-    /* Initialize logging.
-     * OK to call flux_log*() after this.
+    /* Initialize the full log subsystem.
      */
     if (logbuf_initialize (ctx.h, ctx.rank, ctx.attrs) < 0)
         goto cleanup;

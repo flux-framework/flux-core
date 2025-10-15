@@ -529,38 +529,55 @@ static void log_fp (FILE *fp, int flags, const char *buf, int len)
     const char *msg;
     size_t msglen;
     int severity;
-    uint32_t nodeid;
 
     if (fp) {
         if (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) < 0) {
             fprintf (fp, "%.*s\n", len, buf);
         }
         else {
-            nodeid = strtoul (hdr.hostname, NULL, 10);
             severity = STDLOG_SEVERITY (hdr.pri);
             if ((flags & LOG_FOR_SYSTEMD)) {
                 fprintf (fp,
-                         "<%d>%s.%s[%" PRIu32 "]: %.*s\n",
+                         "<%d>%s.%s[%s]: %.*s\n",
                          severity,
                          hdr.appname,
                          stdlog_severity_to_string (severity),
-                         nodeid,
+                         hdr.hostname,
                          (int)msglen,
                          msg);
             }
             else {
                 log_timestamp (fp, &hdr);
                 fprintf (fp,
-                         "%s.%s[%" PRIu32 "]: %.*s\n",
+                         "%s.%s[%s]: %.*s\n",
                          hdr.appname,
                          stdlog_severity_to_string (severity),
-                         nodeid,
+                         hdr.hostname,
                          (int)msglen,
                          msg);
             }
         }
         fflush (fp);
     }
+}
+
+void log_early (const char *buf, int len, void *arg)
+{
+    attr_t *attrs = arg;
+    const char *val;
+    int flags = 0;
+    uint32_t level;
+    struct stdlog_header hdr;
+
+    if (attr_get (attrs, "log-stderr-mode", &val, NULL) == 0
+        && streq (val, "local")) {
+        flags = LOG_FOR_SYSTEMD;
+    }
+    if (attr_get_uint32 (attrs, "log-stderr-level", &level) == 0
+        && stdlog_decode (buf, len, &hdr, NULL, NULL, NULL, NULL) == 0
+        && STDLOG_SEVERITY (hdr.pri) > level)
+        return;
+    log_fp (stderr, flags, buf, len);
 }
 
 static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
@@ -780,8 +797,8 @@ int logbuf_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
         goto error;
     if (flux_msg_handler_addvec (h, htab, logbuf, &logbuf->handlers) < 0)
         goto error;
-    flux_log_set_appname (h, "broker");
     flux_log_set_redirect (h, logbuf_append_redirect, logbuf);
+    flux_log_set_hostname (h, NULL); // use the rank
     flux_aux_set (h, "flux::logbuf", logbuf, logbuf_finalize);
     return 0;
 error:
