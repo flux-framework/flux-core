@@ -188,7 +188,7 @@ static void dump_valref (struct archive *ar,
                                           treeobj_get_blobref (treeobj, i),
                                           content_flags))
             || flux_future_get (f, (const void **)&msg) < 0
-            || flux_response_decode_raw (msg, NULL, &data, &len) < 0) {
+            || flux_response_decode_raw (msg, NULL, NULL, &len) < 0) {
             read_error ("%s: missing blobref %d: %s",
                         path,
                         i,
