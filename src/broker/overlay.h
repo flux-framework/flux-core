@@ -93,7 +93,6 @@ int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey);
 /* Misc. accessors
  */
 uint32_t overlay_get_rank (struct overlay *ov);
-void overlay_set_rank (struct overlay *ov, uint32_t rank); // test only
 uint32_t overlay_get_size (struct overlay *ov);
 int overlay_get_child_peer_count (struct overlay *ov);
 struct idset *overlay_get_child_peer_idset (struct overlay *ov);
@@ -102,7 +101,6 @@ const char *overlay_get_parent_uri (struct overlay *ov);
 const struct bizcard *overlay_get_bizcard (struct overlay *ov);
 int overlay_set_parent_uri (struct overlay *ov, const char *uri);
 bool overlay_parent_error (struct overlay *ov);
-void overlay_set_version (struct overlay *ov, int version); // test only
 const char *overlay_get_uuid (struct overlay *ov);
 bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid);
 bool overlay_uuid_is_child (struct overlay *ov, const char *uuid);
@@ -155,8 +153,12 @@ void overlay_shutdown (struct overlay *overlay);
  */
 flux_future_t *overlay_goodbye_parent (struct overlay *overlay);
 
-#endif /* !BROKER_OVERLAY_H */
+/* Private to overlay unit test
+ */
+void overlay_test_set_rank (struct overlay *ov, uint32_t rank);
+void overlay_test_set_version (struct overlay *ov, int version);
 
+#endif /* !BROKER_OVERLAY_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

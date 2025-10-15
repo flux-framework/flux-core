@@ -373,7 +373,7 @@ uint32_t overlay_get_rank (struct overlay *ov)
     return ov->rank;
 }
 
-void overlay_set_rank (struct overlay *ov, uint32_t rank)
+void overlay_test_set_rank (struct overlay *ov, uint32_t rank)
 {
     ov->rank = rank;
 }
@@ -394,7 +394,7 @@ bool overlay_parent_error (struct overlay *ov)
             || ov->parent.offline);
 }
 
-void overlay_set_version (struct overlay *ov, int version)
+void overlay_test_set_version (struct overlay *ov, int version)
 {
     ov->version = version;
 }
