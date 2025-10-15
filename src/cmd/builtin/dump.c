@@ -162,7 +162,7 @@ static void dump_valref (struct archive *ar,
                          json_t *treeobj)
 {
     int count = treeobj_get_count (treeobj);
-    struct flux_msglist *l;
+    const flux_msg_t **msgs;
     const flux_msg_t *msg;
     int total_size = 0;
     struct archive_entry *entry;
@@ -172,16 +172,8 @@ static void dump_valref (struct archive *ar,
     /* We need the total size before we start writing archive data,
      * so make a first pass, saving the data for writing later.
      */
-    /* N.B. first attempt was to save the futures in an array, but ran into:
-     *   flux: ev_epoll.c:134: epoll_modify: Assertion `("libev: I/O watcher
-     *    with invalid fd found in epoll_ctl", errno != EBADF && errno != ELOOP
-     *    && errno != EINVAL)' failed.
-     * while archiving a resource.eventlog with 781 entries.  Instead of
-     * retaining the futures for a second pass, just retain references to the
-     * content.load response messages.
-     */
-    if (!(l = flux_msglist_create ()))
-        log_err_exit ("could not create message list");
+    if (!(msgs = calloc (count, sizeof (msg))))
+        log_err_exit ("could not create messages array");
     for (int i = 0; i < count; i++) {
         flux_future_t *f;
         if (!(f = content_load_byblobref (h,
@@ -194,11 +186,12 @@ static void dump_valref (struct archive *ar,
                         i,
                         future_strerror (f, errno));
             flux_future_destroy (f);
-            flux_msglist_destroy (l);
+            for (int j = 0; j < i; j++)
+                flux_msg_decref (msgs[j]);
+            free (msgs);
             return;
         }
-        if (flux_msglist_append (l, msg) < 0)
-            log_err_exit ("could not stash load response message");
+        msgs[i] = flux_msg_incref (msg);
         total_size += len;
         flux_future_destroy (f);
     }
@@ -214,16 +207,16 @@ static void dump_valref (struct archive *ar,
 
     if (archive_write_header (ar, entry) != ARCHIVE_OK)
         log_msg_exit ("%s", archive_error_string (ar));
-    while ((msg = flux_msglist_pop (l))) {
-        if (flux_response_decode_raw (msg, NULL, &data, &len) < 0)
+    for (int i = 0; i < count; i++) {
+        if (flux_response_decode_raw (msgs[i], NULL, &data, &len) < 0)
             log_err_exit ("error processing stashed valref responses");
         if (len > 0)
             dump_write_data (ar, data, len);
-        flux_msg_decref (msg);
+        flux_msg_decref (msgs[i]);
     }
     archive_entry_free (entry);
     progress (h, 1);
-    flux_msglist_destroy (l);
+    free (msgs);
 }
 
 static void dump_val (struct archive *ar,
