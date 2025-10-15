@@ -37,6 +37,11 @@ ingest_module ()
 test_expect_success 'flux job-validator works' '
 	flux run --dry-run hostname | flux job-validator --jobspec-only
 '
+test_expect_success 'flux job-validator detects invalid input' '
+	flux run --dry-run hostname | test_must_fail flux job-validator \
+		2>invalid.error &&
+	grep "Missing keys" invalid.error
+'
 #  Attempt to trick validator into loading a bad urllib by modification
 #  of PYTHONPATH (issue #5547 reproducer). This affects all Python utils,
 #  but we test the validator as a surrogate for the rest:

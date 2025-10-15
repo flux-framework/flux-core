@@ -64,7 +64,13 @@ class ValidatorJobInfo:
         urgency (int): Job urgency
     """
 
+    required_keys = {"jobspec", "userid", "flags", "urgency"}
+
     def __init__(self, jobinfo):
+        if self.required_keys - jobinfo.keys():
+            raise ValueError(
+                "Missing keys in input. Did you mean to use --jobspec-only?"
+            )
         self.jobinfo = jobinfo
 
     def __getattr__(self, attr):
