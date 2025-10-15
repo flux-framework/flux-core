@@ -23,14 +23,21 @@ extern "C" {
 typedef void (*flux_log_f)(const char *buf, int len, void *arg);
 
 /* Set log appname for handle instance.
- * Value will be truncated after FLUX_MAX_APPNAME bytes.
+ * Value will be truncated after 48 characters (not including NUL).
  */
 void flux_log_set_appname (flux_t *h, const char *s);
 
 /* Set log procid for handle instance.
- * Value will be truncated after FLUX_MAX_PROCID bytes.
+ * Value will be truncated after 128 characters (not including NUL).
  */
 void flux_log_set_procid (flux_t *h, const char *s);
+
+/* Set log hostname for handle instance.
+ * Value will be truncated after 255 characters (not including NUL).
+ * Set to NULL or empty string and flux_log() will call flux_get_rank()
+ * and use that as the log hostname.
+ */
+void flux_log_set_hostname (flux_t *h, const char *s);
 
 /* Log a message at the specified level, as defined for syslog(3).
  *

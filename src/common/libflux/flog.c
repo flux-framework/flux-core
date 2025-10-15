@@ -34,6 +34,7 @@ typedef struct {
     char buf[FLUX_MAX_LOGBUF];
     flux_log_f cb;
     void *cb_arg;
+    char hostname[STDLOG_MAX_HOSTNAME + 1];
 } logctx_t;
 
 static void freectx (void *arg)
@@ -86,6 +87,12 @@ void flux_log_set_procid (flux_t *h, const char *s)
         snprintf (ctx->procid, sizeof (ctx->procid), "%s", s);
 }
 
+void flux_log_set_hostname (flux_t *h, const char *s)
+{
+    logctx_t *ctx = getctx (h);
+    if (ctx)
+        snprintf (ctx->hostname, sizeof (ctx->hostname), "%s", s ? s : "");
+}
 
 void flux_log_set_redirect (flux_t *h, flux_log_f fun, void *arg)
 {
@@ -148,7 +155,6 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     int n;
     size_t len;
     char timestamp[WALLCLOCK_MAXLEN];
-    char hostname[STDLOG_MAX_HOSTNAME + 1];
     struct stdlog_header hdr;
     char *xtra = NULL;
     char *mbuf = NULL;
@@ -167,10 +173,9 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     hdr.pri = STDLOG_PRI (level, LOG_USER);
     if (wallclock_get_zulu (timestamp, sizeof (timestamp)) >= 0)
         hdr.timestamp = timestamp;
-    if (flux_get_rank (h, &rank) == 0) {
-        snprintf (hostname, sizeof (hostname), "%" PRIu32, rank);
-        hdr.hostname = hostname;
-    }
+    if (ctx->hostname[0] == '\0' && flux_get_rank (h, &rank) == 0)
+        snprintf (ctx->hostname, sizeof (ctx->hostname), "%" PRIu32, rank);
+    hdr.hostname = ctx->hostname;
     hdr.appname = ctx->appname;
     hdr.procid = ctx->procid;
 
