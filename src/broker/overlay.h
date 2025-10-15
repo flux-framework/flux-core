@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _BROKER_OVERLAY_H
-#define _BROKER_OVERLAY_H
+#ifndef BROKER_OVERLAY_H
+#define BROKER_OVERLAY_H
 
 #include <jansson.h>
 #include <stdint.h>
@@ -93,7 +93,6 @@ int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey);
 /* Misc. accessors
  */
 uint32_t overlay_get_rank (struct overlay *ov);
-void overlay_set_rank (struct overlay *ov, uint32_t rank); // test only
 uint32_t overlay_get_size (struct overlay *ov);
 int overlay_get_child_peer_count (struct overlay *ov);
 struct idset *overlay_get_child_peer_idset (struct overlay *ov);
@@ -102,7 +101,6 @@ const char *overlay_get_parent_uri (struct overlay *ov);
 const struct bizcard *overlay_get_bizcard (struct overlay *ov);
 int overlay_set_parent_uri (struct overlay *ov, const char *uri);
 bool overlay_parent_error (struct overlay *ov);
-void overlay_set_version (struct overlay *ov, int version); // test only
 const char *overlay_get_uuid (struct overlay *ov);
 bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid);
 bool overlay_uuid_is_child (struct overlay *ov, const char *uuid);
@@ -113,26 +111,10 @@ int overlay_set_tbon_interface_hint (struct overlay *ov, const char *val);
  */
 struct idset *overlay_get_default_critical_ranks (struct overlay *ov);
 
-/* Fetch TBON subtree topo at 'rank'.  The returned topology object has the
- * following recursive structure, where "children" is an array of topology
- * objects:
- *
- * {"rank":i, "size":i, "children":o}
- *
- * If rank has no children, the "children" array will be present but empty.
- * Caller must release returned object with json_decref().
- */
-json_t *overlay_get_subtree_topo (struct overlay *ov, int rank);
-
 /* Fetch status for TBON subtree rooted at 'rank'.  If 'rank' is not this
  * broker's rank or one of its direct descendants, "unknown" is returned.
  */
 const char *overlay_get_subtree_status (struct overlay *ov, int rank);
-
-/* A TBON child is "torpid" if no messages (including regular control messages)
- * have been received from it for a while.
- */
-bool overlay_peer_is_torpid (struct overlay *ov, uint32_t rank);
 
 /* Broker should call overlay_bind() if there are children.  This may happen
  * before any peers are authorized as long as they are authorized before they
@@ -153,7 +135,6 @@ int overlay_connect (struct overlay *ov);
  * - overlay_get_child_peer_count() - number of online children
  * - overlay_get_child_peer_idset () - set of online children
  * - overlay_get_subtree_status (rank) - subtree status of child
- * - overlay_get_subtree_topo (rank) - topology of subtree rooted at child
  */
 int overlay_set_monitor_cb (struct overlay *ov,
                             overlay_monitor_f cb,
@@ -172,8 +153,12 @@ void overlay_shutdown (struct overlay *overlay);
  */
 flux_future_t *overlay_goodbye_parent (struct overlay *overlay);
 
-#endif /* !_BROKER_OVERLAY_H */
+/* Private to overlay unit test
+ */
+void overlay_test_set_rank (struct overlay *ov, uint32_t rank);
+void overlay_test_set_version (struct overlay *ov, int version);
 
+#endif /* !BROKER_OVERLAY_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

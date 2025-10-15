@@ -630,7 +630,7 @@ void check_monitor (flux_t *h)
      * Disable rank 0 stopping the reactor and enable rank 3 to do it.
      */
     overlay_set_monitor_cb (ctx[3]->ov, monitor_cb, ctx[3]);
-    overlay_set_version (ctx[3]->ov, 0xffffff);
+    overlay_test_set_version (ctx[3]->ov, 0xffffff);
     if (overlay_connect (ctx[3]->ov) < 0)
         BAIL_OUT ("%s: overlay_connect failed", ctx[3]->name);
 
@@ -645,7 +645,7 @@ void check_monitor (flux_t *h)
     /* rank 4 will have its rank altered to '42' for overlay.hello
      */
     overlay_set_monitor_cb (ctx[4]->ov, monitor_cb, ctx[4]);
-    overlay_set_rank (ctx[4]->ov, 42);
+    overlay_test_set_rank (ctx[4]->ov, 42);
     if (overlay_connect (ctx[4]->ov) < 0)
         BAIL_OUT ("%s: overlay_connect failed", ctx[4]->name);
 

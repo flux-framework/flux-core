@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _BROKER_H
-#define _BROKER_H
+#ifndef BROKER_H
+#define BROKER_H
 
 #include <limits.h>
 #include <stdarg.h>
@@ -65,7 +65,7 @@ int broker_response_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
 void broker_request_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
 void broker_panic (broker_ctx_t *ctx, const char *fmt, ...);
 
-#endif /* !_BROKER_H */
+#endif /* !BROKER_H */
 
 /*
  * vi:ts=4 sw=4 expandtab
