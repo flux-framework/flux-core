@@ -431,18 +431,13 @@ PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
 PKG_CHECK_MODULES([LIBUUID], [uuid], [], [])
 PKG_CHECK_MODULES([CURSES], [ncursesw], [], [])
 PKG_CHECK_MODULES([LIBARCHIVE], [libarchive], [], [])
-
-AC_ARG_WITH([system-bash-completion-dir],
-    AS_HELP_STRING([--with-system-bash-completion-dir],
-                   [Build with system bash-completion dir]))
-AS_IF([test "x$with_system_bash_completion_dir" = "xyes"], [
-    PKG_CHECK_EXISTS([bash-completion],
-      [bashcompdir=`$PKG_CONFIG --variable=completionsdir bash-completion`],
-      [bashcompdir="${sysconfdir}/bash_completion.d"])
-  ], [
-    bashcompdir="${sysconfdir}/bash_completion.d"
-  ]
-)
+PKG_CHECK_MODULES([BASH_COMPLETION], [bash-completion], [
+    bashcompdir="`$PKG_CONFIG \
+        --define-variable=datadir=${datadir} \
+        --variable=completionsdir bash-completion`"
+], [
+    bashcompdir="${datadir}/bash-completion/completions"
+])
 AC_SUBST(bashcompdir)
 
 LX_FIND_MPI
