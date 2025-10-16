@@ -677,7 +677,10 @@ static void server_list_cb (flux_t *h,
         }
         p = zlistx_next (s->subprocesses);
     }
-    if (flux_respond_pack (h, msg, "{s:i s:o}", "rank", s->rank,
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:o}",
+                           "rank", s->rank,
                            "procs", procs) < 0) {
         llog_error (s,
                     "error responding to %s.list request: %s",
