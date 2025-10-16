@@ -111,7 +111,8 @@ test_expect_success 'unload content-sqlite' '
 '
 
 # Intermediate rootdir versions are not preserved across dump/restore.
-# Expect a blobcount of 4: rootdir 5th version + 'a' + 'b' + 'x',
+# Expect a blobcount of 4: rootdir 7th version + 'a' + 'b' + 'x',
+# N.B. 'w' is now contained in the root
 #
 test_expect_success 'count blobs after restore'\'s' implicit garbage collection' '
 	echo 4 >blobcount2.exp &&
