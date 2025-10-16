@@ -16,7 +16,10 @@
 #include "attr.h"
 #include "overlay.h"
 
-int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs);
+int boot_pmi (const char *hostname,
+              struct overlay *overlay,
+              attr_t *attrs,
+              flux_error_t *error);
 
 #endif /* BROKER_BOOT_PMI_H */
 
