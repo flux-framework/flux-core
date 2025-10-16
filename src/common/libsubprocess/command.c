@@ -37,6 +37,8 @@
 #include "command.h"
 
 struct flux_command {
+    char *label;
+
     char *cwd;
 
     /* Command arguments in argz format */
@@ -541,6 +543,7 @@ static void flux_cmd_free (flux_cmd_t *cmd)
     if (cmd) {
         int saved_errno = errno;
         free (cmd->cwd);
+        free (cmd->label);
         free (cmd->argz);
         free (cmd->envz);
         zhash_destroy (&cmd->opts);
@@ -824,6 +827,30 @@ const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var)
     return zhash_lookup (cmd->opts, var);
 }
 
+int flux_cmd_set_label (flux_cmd_t *cmd, const char *label)
+{
+    char *next = NULL;
+
+    if (!cmd || (label && strlen (label) == 0)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (label && !(next = strdup (label)))
+        return -1;
+    free (cmd->label);
+    cmd->label = next;
+
+    return 0;
+}
+
+const char *flux_cmd_get_label (flux_cmd_t *cmd)
+{
+    if (cmd)
+        return cmd->label;
+    return NULL;
+}
+
 flux_cmd_t * flux_cmd_copy (const flux_cmd_t *src)
 {
     error_t e = 0;
@@ -837,6 +864,8 @@ flux_cmd_t * flux_cmd_copy (const flux_cmd_t *src)
     if (e != 0)
         goto err;
     if (src->cwd && !(cmd->cwd = strdup (src->cwd)))
+        goto err;
+    if (src->label && !(cmd->label = strdup (src->label)))
         goto err;
     if (!(cmd->msgchans = msgchans_dup (src->msgchans)))
         goto err;
@@ -857,6 +886,7 @@ flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp)
     json_t *jchans = NULL;
     json_t *jmsgchans = NULL;
     const char *cwd = NULL;
+    const char *label = NULL;
     flux_cmd_t *cmd = NULL;;
 
     if (!(cmd = calloc (1, sizeof (*cmd)))) {
@@ -866,7 +896,8 @@ flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp)
     if (json_unpack_ex (o,
                         errp,
                         0,
-                        "{s?s s:o s:o s:o s:o s?o}",
+                        "{s?s s?s s:o s:o s:o s:o s?o}",
+                        "label", &label,
                         "cwd", &cwd,
                         "cmdline", &jargv,
                         "env", &jenv,
@@ -876,7 +907,8 @@ flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp)
         errnum = EPROTO;
         goto fail;
     }
-    if ((cwd && !(cmd->cwd = strdup (cwd)))
+    if ((label && !(cmd->label = strdup (label)))
+        || (cwd && !(cmd->cwd = strdup (cwd)))
         || (argz_fromjson (jargv, &cmd->argz, &cmd->argz_len) < 0)
         || (envz_fromjson (jenv, &cmd->envz, &cmd->envz_len) < 0)
         || !(cmd->opts = zhash_fromjson (jopts))
@@ -906,6 +938,16 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
         if (!(a = json_string (cmd->cwd)))
             goto err;
         if (json_object_set_new (o, "cwd", a) != 0) {
+            json_decref (a);
+            goto err;
+        }
+    }
+
+    /* Pack label */
+    if (cmd->label) {
+        if (!(a = json_string (cmd->label)))
+            goto err;
+        if (json_object_set_new (o, "label", a) != 0) {
             json_decref (a);
             goto err;
         }
