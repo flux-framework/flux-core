@@ -24,7 +24,6 @@
 #include <jansson.h>
 
 #include "src/common/libflux/plugin_private.h"
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/aux.h"
@@ -417,7 +416,7 @@ void module_destroy (module_t *p)
     else {
         if (p->thread.t) {
             if ((e = pthread_join (p->thread.t, &res)) != 0)
-                log_errn_exit (e, "pthread_join");
+                flux_log (p->h, LOG_ERR, "pthread_join: %s", strerror (e));
             if (res == PTHREAD_CANCELED)
                 flux_log (p->h, LOG_DEBUG, "%s thread was canceled", p->name);
         }

@@ -93,23 +93,34 @@ static void signal_cb (flux_reactor_t *r,
                        void *arg);
 static int broker_handle_signals (broker_ctx_t *ctx);
 
-static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
+static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx,
+                                                 flux_error_t *error);
 
 static void set_proctitle (uint32_t rank);
 
-static int create_runat_phases (broker_ctx_t *ctx);
+static int create_runat_phases (broker_ctx_t *ctx, flux_error_t *error);
 
-static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred);
+static int init_attrs (attr_t *attrs,
+                       pid_t pid,
+                       struct flux_msg_cred *cred,
+                       flux_error_t *error);
 
-static void init_attrs_post_boot (attr_t *attrs);
+static int init_attrs_post_boot (attr_t *attrs, flux_error_t *error);
 
-static void init_attrs_starttime (attr_t *attrs, double starttime);
+static int init_attrs_starttime (attr_t *attrs,
+                                 double starttime,
+                                 flux_error_t *error);
 
-static int init_local_uri_attr (struct overlay *ov, attr_t *attrs);
+static int init_local_uri_attr (struct overlay *ov,
+                                attr_t *attrs,
+                                flux_error_t *error);
 
-static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs);
+static int init_critical_ranks_attr (struct overlay *ov,
+                                     attr_t *attrs,
+                                     flux_error_t *error);
 
-static int execute_parental_notifications (struct broker *ctx);
+static int execute_parental_notifications (struct broker *ctx,
+                                           flux_error_t *error);
 
 static struct optparse_option opts[] = {
     { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
@@ -121,14 +132,17 @@ static struct optparse_option opts[] = {
     OPTPARSE_TABLE_END,
 };
 
-void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
+int parse_command_line_arguments (broker_ctx_t *ctx,
+                                  int argc,
+                                  char *argv[],
+                                  flux_error_t *errp)
 {
     int optindex;
     const char *arg;
 
     if (!(ctx->opts = optparse_create ("flux-broker"))
         || optparse_add_option_table (ctx->opts, opts) != OPTPARSE_SUCCESS)
-        log_msg_exit ("error setting up option parsing");
+        return errprintf (errp, "error setting up option parsing");
     if ((optindex = optparse_parse_args (ctx->opts, argc, argv)) < 0)
         exit (1);
 
@@ -139,12 +153,20 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
     while ((arg = optparse_getopt_next (ctx->opts, "setattr"))) {
         char *val, *attr;
         if (!(attr = strdup (arg)))
-            log_err_exit ("out of memory duplicating optarg");
+            return errprintf (errp, "out of memory duplicating optarg");
         if ((val = strchr (attr, '=')))
             *val++ = '\0';
-        if (attr_add (ctx->attrs, attr, val, 0) < 0)
-            if (attr_set (ctx->attrs, attr, val) < 0)
-                log_err_exit ("setattr %s=%s", attr, val);
+        if (attr_add (ctx->attrs, attr, val, 0) < 0) {
+            if (attr_set (ctx->attrs, attr, val) < 0) {
+                errprintf (errp,
+                           "setattr %s=%s: %s",
+                           attr,
+                           val,
+                           strerror (errno));
+                free (attr);
+                return -1;
+            }
+        }
         free (attr);
     }
 
@@ -153,8 +175,9 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
         if ((e = argz_create (argv + optindex,
                               &ctx->init_shell_cmd,
                               &ctx->init_shell_cmd_len)) != 0)
-            log_errn_exit (e, "argz_create");
+            return errprintf (errp, "argz_create: %s", strerror (e));
     }
+    return 0;
 }
 
 static int increase_rlimits (void)
@@ -164,16 +187,10 @@ static int increase_rlimits (void)
     /*  Increase number of open files to max to prevent potential failures
      *   due to file descriptor exhaustion (e.g. failure to open /dev/urandom)
      */
-    if (getrlimit (RLIMIT_NOFILE, &rlim) < 0) {
-        log_err ("getrlimit");
+    if (getrlimit (RLIMIT_NOFILE, &rlim) < 0)
         return -1;
-    }
     rlim.rlim_cur = rlim.rlim_max;
-    if (setrlimit (RLIMIT_NOFILE, &rlim) < 0) {
-        log_err ("Failed to increase nofile limit");
-        return -1;
-    }
-    return 0;
+    return setrlimit (RLIMIT_NOFILE, &rlim);
 }
 
 /* SIGHUP handler that resets SIGHUP handling to default after
@@ -215,7 +232,8 @@ int main (int argc, char *argv[])
      * on the broker's internal handle. */
     ctx.cred.rolemask = FLUX_ROLE_OWNER | FLUX_ROLE_LOCAL;
 
-    init_attrs (ctx.attrs, getpid (), &ctx.cred);
+    if (init_attrs (ctx.attrs, getpid (), &ctx.cred, &error) < 0)
+        log_msg_exit ("%s", error.text);
 
     const char *hostname = getenv ("FLUX_FAKE_HOSTNAME");
     if (hostname)
@@ -223,7 +241,8 @@ int main (int argc, char *argv[])
     else if (gethostname (ctx.hostname, sizeof (ctx.hostname)) < 0)
         log_err_exit ("gethostname");
 
-    parse_command_line_arguments (argc, argv, &ctx);
+    if (parse_command_line_arguments (&ctx, argc, argv, &error) < 0)
+        log_msg_exit ("%s", error.text);
 
     /* Block all signals but those that we want to generate core dumps.
      * Save old mask and actions for SIGINT, SIGTERM.
@@ -301,8 +320,10 @@ int main (int argc, char *argv[])
     if (attr_get (ctx.attrs, "broker.sd-notify", &val, NULL) == 0
         && !streq (val, "0")) {
 #if !HAVE_LIBSYSTEMD
-        log_err ("broker.sd_notify is set but Flux was not built"
-                 " with systemd support.");
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "broker.sd_notify is set but Flux was not built"
+                  " with systemd support.");
         goto cleanup;
 #else
         ctx.sd_notify = true;
@@ -312,7 +333,10 @@ int main (int argc, char *argv[])
     /* Initialize module infrastructure.
      */
     if (!(ctx.modhash = modhash_create (&ctx))) {
-        log_err ("error creating broker module hash");
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error creating broker module hash: %s",
+                  strerror (errno));
         goto cleanup;
     }
 
@@ -325,18 +349,25 @@ int main (int argc, char *argv[])
                                          ctx.attrs,
                                          ctx.modhash,
                                          &error))) {
-        log_err ("%s", error.text);
+        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
     conf = flux_get_conf (ctx.h);
 
-    if (increase_rlimits () < 0)
+    if (increase_rlimits () < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "Failed to increase nofile limit: %s", strerror (errno));
         goto cleanup;
+    }
 
     /* Prepare signal handling
      */
     if (broker_handle_signals (&ctx) < 0) {
-        log_err ("broker_handle_signals");
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "Error installing signal handlers: %s",
+                  strerror (errno));
         goto cleanup;
     }
 
@@ -347,7 +378,10 @@ int main (int argc, char *argv[])
                                         overlay_recv_cb,
                                         &ctx,
                                         &error))) {
-        log_err ("overlay_create: %s", error.text);
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "Error initializing overlay: %s",
+                  error.text);
         goto cleanup;
     }
 
@@ -359,7 +393,7 @@ int main (int argc, char *argv[])
                        "rundir",
                        tmpdir ? tmpdir : "/tmp",
                        &error) < 0) {
-        log_msg ("rundir %s", error.text);
+        flux_log (ctx.h, LOG_CRIT, "rundir %s", error.text);
         goto cleanup;
     }
 
@@ -368,7 +402,10 @@ int main (int argc, char *argv[])
      */
     flux_reactor_now_update (ctx.reactor);
     ctx.starttime = flux_reactor_now (ctx.reactor);
-    init_attrs_starttime (ctx.attrs, ctx.starttime);
+    if (init_attrs_starttime (ctx.attrs, ctx.starttime, &error) < 0) {
+        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
+        goto cleanup;
+    }
 
     /* Execute broker network bootstrap.
      * Default method is pmi.
@@ -382,8 +419,7 @@ int main (int argc, char *argv[])
     }
     if (!method || !streq (method, "config")) {
         if (boot_pmi (ctx.hostname, ctx.overlay, ctx.attrs, &error) < 0) {
-            log_msg ("%s", error.text);
-            log_msg ("bootstrap failed");
+            flux_log (ctx.h, LOG_CRIT, "bootstrap: %s", error.text);
             goto cleanup;
         }
     }
@@ -393,19 +429,23 @@ int main (int argc, char *argv[])
                          ctx.overlay,
                          ctx.attrs,
                          &error) < 0) {
-            log_msg ("%s", error.text);
-            log_msg ("bootstrap failed");
+            flux_log (ctx.h, LOG_CRIT, "bootstrap: %s", error.text);
             goto cleanup;
         }
     }
 
-    init_attrs_post_boot (ctx.attrs);
+    if (init_attrs_post_boot (ctx.attrs, &error) < 0) {
+        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
+        goto cleanup;
+    }
 
     ctx.rank = overlay_get_rank (ctx.overlay);
     ctx.size = overlay_get_size (ctx.overlay);
 
-    if (ctx.size == 0)
-        log_err_exit ("internal error: instance size is zero!");
+    if (ctx.size == 0) {
+        flux_log (ctx.h, LOG_CRIT, "internal error: instance size is zero!");
+        goto cleanup;
+    }
 
     /* Now that rank is known, create or check the statedir.
      * The statedir is only used on the leader broker, so unset the
@@ -424,7 +464,7 @@ int main (int argc, char *argv[])
                            "statedir",
                            tmpdir ? tmpdir : "/var/tmp",
                            &error) < 0) {
-            log_msg ("statedir %s", error.text);
+            flux_log (ctx.h, LOG_CRIT, "statedir %s", error.text);
             goto cleanup;
         }
     }
@@ -434,52 +474,68 @@ int main (int argc, char *argv[])
 
     /* Must be called after overlay setup */
     if (overlay_register_attrs (ctx.overlay) < 0) {
-        log_err ("registering overlay attributes");
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "registering overlay attributes: %s",
+                  strerror (errno));
         goto cleanup;
     }
 
     if (ctx.verbose) {
         flux_reactor_now_update (ctx.reactor);
-        log_msg ("boot: rank=%d size=%d time %.3fs",
+        flux_log (ctx.h,
+                  LOG_INFO,
+                  "boot: rank=%d size=%d time %.3fs",
                   ctx.rank,
                   ctx.size,
                   flux_reactor_now (ctx.reactor) - ctx.starttime);
     }
-
-    /* Initialize the full log subsystem.
-     */
-    if (logbuf_initialize (ctx.h, ctx.rank, ctx.attrs) < 0)
-        goto cleanup;
 
     /* Allow flux_get_rank(), flux_get_size(), flux_get_hostybyrank(), etc.
      * to work in the broker without causing a synchronous RPC to self that
      * would deadlock.
      */
     if (attr_cache_immutables (ctx.attrs, ctx.h) < 0) {
-        log_err ("error priming broker attribute cache");
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error priming broker attribute cache: %s",
+                  strerror (errno));
+        goto cleanup;
+    }
+
+    /* Initialize the full log subsystem.
+     */
+    if (logbuf_initialize (ctx.h, ctx.rank, ctx.attrs) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "Error initializing logging: %s",
+                  strerror (errno));
         goto cleanup;
     }
 
     if (ctx.verbose) {
         const char *parent = overlay_get_parent_uri (ctx.overlay);
         const char *child = overlay_get_bind_uri (ctx.overlay);
-        log_msg ("parent: %s", parent ? parent : "none");
-        log_msg ("child: %s", child ? child : "none");
+        flux_log (ctx.h, LOG_INFO, "parent: %s", parent ? parent : "none");
+        flux_log (ctx.h, LOG_INFO, "child: %s", child ? child : "none");
     }
 
     set_proctitle (ctx.rank);
 
-    if (init_local_uri_attr (ctx.overlay, ctx.attrs) < 0 // used by runat
-        || init_critical_ranks_attr (ctx.overlay, ctx.attrs) < 0)
+    // N.B. local-uri is used by runat
+    if (init_local_uri_attr (ctx.overlay, ctx.attrs, &error) < 0
+        || init_critical_ranks_attr (ctx.overlay, ctx.attrs, &error) < 0) {
+        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
+    }
 
     /* Wire up the overlay.
      */
     if (ctx.rank > 0) {
         if (ctx.verbose)
-            log_msg ("initializing overlay connect");
+            flux_log (ctx.h, LOG_INFO, "initializing overlay connect");
         if (overlay_connect (ctx.overlay) < 0) {
-            log_err ("overlay_connect");
+            flux_log (ctx.h, LOG_CRIT, "overlay_connect: %s", strerror (errno));
             goto cleanup;
         }
     }
@@ -487,70 +543,89 @@ int main (int argc, char *argv[])
     /* Register internal services
      */
     if (attr_register_handlers (ctx.attrs, ctx.h) < 0) {
-        log_err ("attr_register_handlers");
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "attr_register_handlers: %s",
+                  strerror (errno));
         goto cleanup;
     }
     if (heaptrace_initialize (ctx.h) < 0) {
-        log_err ("heaptrace_initialize");
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "heaptrace_initialize: %s",
+                  strerror (errno));
         goto cleanup;
     }
     if (flux_aux_set (ctx.h,
                       "flux::uuid",
                       (char *)overlay_get_uuid (ctx.overlay),
                       NULL) < 0) {
-        log_err ("error adding broker uuid to aux container");
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error adding broker uuid to aux container: %s",
+                  strerror (errno));
         goto cleanup;
     }
-    if (!(handlers = broker_add_services (&ctx))) {
-        log_err ("broker_add_services");
+    if (!(handlers = broker_add_services (&ctx, &error))) {
+        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
     /* overlay_control_start() calls flux_sync_create(), thus
      * requires event.subscribe to have a handler before running.
      */
     if (overlay_control_start (ctx.overlay) < 0) {
-        log_err ("error initializing overlay control messages");
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error initializing overlay control messages: %s",
+                  strerror (errno));
         goto cleanup;
     }
 
     /* Configure broker state machine
      */
     if (!(ctx.state_machine = state_machine_create (&ctx, &error))) {
-        log_err ("%s", error.text);
+        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
     /* This registers a state machine callback so call after
      * state_machine_create().
      */
-    if (create_runat_phases (&ctx) < 0)
+    if (create_runat_phases (&ctx, &error) < 0) {
+        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
+    }
 
     state_machine_kickoff (ctx.state_machine);
 
     /* Create shutdown mechanism
      */
     if (!(ctx.shutdown = shutdown_create (&ctx))) {
-        log_err ("error creating shutdown mechanism");
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error creating shutdown mechanism: %s",
+                  strerror (errno));
         goto cleanup;
     }
 
-    if (ctx.rank == 0 && execute_parental_notifications (&ctx) < 0)
+    if (ctx.rank == 0 && execute_parental_notifications (&ctx, &error) < 0) {
+        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
+    }
 
     /* Event loop
      */
     if (ctx.verbose > 1)
-        log_msg ("entering event loop");
+        flux_log (ctx.h, LOG_INFO, "entering event loop");
     /* Once we enter the reactor, default exit_rc is now 0 */
     ctx.exit_rc = 0;
     if (flux_reactor_run (ctx.reactor, 0) < 0)
-        log_err ("flux_reactor_run");
+        flux_log_error (ctx.h, "flux_reactor_run");
     if (ctx.verbose > 1)
-        log_msg ("exited event loop");
+        flux_log (ctx.h, LOG_INFO, "exited event loop");
 
 cleanup:
     if (ctx.verbose > 1)
-        log_msg ("cleaning up");
+        flux_log (ctx.h, LOG_INFO, "cleaning up");
 
     /* If the broker is the current process group leader, send SIGHUP
      * to the current process group to attempt cleanup of any rc2
@@ -561,7 +636,7 @@ cleanup:
     if (getpgrp () == getpid ()) {
         if (signal (SIGHUP, sighup_handler) < 0
             || kill (0, SIGHUP) < 0)
-            log_err ("failed to raise SIGHUP on process group");
+            flux_log_error (ctx.h, "failed to raise SIGHUP on process group");
     }
 
     /* Restore default sigmask and actions for SIGINT, SIGTERM
@@ -569,7 +644,7 @@ cleanup:
     if (sigprocmask (SIG_SETMASK, &old_sigmask, NULL) < 0
         || sigaction (SIGINT, &old_sigact_int, NULL) < 0
         || sigaction (SIGTERM, &old_sigact_term, NULL) < 0)
-        log_err ("error restoring signal mask");
+        flux_log_error (ctx.h, "error restoring signal mask");
 
     /* Unregister builtin services
      */
@@ -598,7 +673,7 @@ cleanup:
     return ctx.exit_rc;
 }
 
-static void init_attrs_broker_pid (attr_t *attrs, pid_t pid)
+static int init_attrs_broker_pid (attr_t *attrs, pid_t pid, flux_error_t *errp)
 {
     char *attrname = "broker.pid";
     char pidval[32];
@@ -608,51 +683,65 @@ static void init_attrs_broker_pid (attr_t *attrs, pid_t pid)
                   attrname,
                   pidval,
                   ATTR_IMMUTABLE) < 0)
-        log_err_exit ("attr_add %s", attrname);
+        return errprintf (errp, "attr_add %s: %s", attrname, strerror (errno));
+    return 0;
 }
 
-static void init_attrs_rc_paths (attr_t *attrs)
+static int init_attrs_rc_paths (attr_t *attrs, flux_error_t *errp)
 {
     if (attr_add (attrs,
                   "broker.rc1_path",
                   flux_conf_builtin_get ("rc1_path", FLUX_CONF_AUTO),
                   0) < 0)
-        log_err_exit ("attr_add rc1_path");
-
+        return errprintf (errp, "attr_add rc1_path: %s", strerror (errno));
     if (attr_add (attrs,
                   "broker.rc3_path",
                   flux_conf_builtin_get ("rc3_path", FLUX_CONF_AUTO),
                   0) < 0)
-        log_err_exit ("attr_add rc3_path");
+        return errprintf (errp, "attr_add rc3_path: %s", strerror (errno));
+    return 0;
 }
 
-static void init_attrs_shell_paths (attr_t *attrs)
+static int init_attrs_shell_paths (attr_t *attrs, flux_error_t *errp)
 {
     if (attr_add (attrs,
                   "conf.shell_pluginpath",
                   flux_conf_builtin_get ("shell_pluginpath", FLUX_CONF_AUTO),
-                  0) < 0)
-        log_err_exit ("attr_add conf.shell_pluginpath");
+                  0) < 0) {
+        return errprintf (errp,
+                          "attr_add conf.shell_pluginpath: %s",
+                          strerror (errno));
+    }
     if (attr_add (attrs,
                   "conf.shell_initrc",
                   flux_conf_builtin_get ("shell_initrc", FLUX_CONF_AUTO),
-                  0) < 0)
-        log_err_exit ("attr_add conf.shell_initrc");
+                  0) < 0) {
+        return errprintf (errp,
+                          "attr_add conf.shell_initrc: %s",
+                          strerror (errno));
+    }
+    return 0;
 }
 
-static void init_attrs_starttime (attr_t *attrs, double starttime)
+static int init_attrs_starttime (attr_t *attrs,
+                                 double starttime,
+                                 flux_error_t *errp)
 {
     char buf[32];
 
     snprintf (buf, sizeof (buf), "%.2f", starttime);
-    if (attr_add (attrs, "broker.starttime", buf, ATTR_IMMUTABLE) < 0)
-        log_err_exit ("error setting broker.starttime attribute");
+    if (attr_add (attrs, "broker.starttime", buf, ATTR_IMMUTABLE) < 0) {
+        return errprintf (errp,
+                          "error setting broker.starttime attribute: %s",
+                          strerror (errno));
+    }
+    return 0;
 }
 
 /* Initialize attributes after bootstrap since these attributes may depend
  * on whether this instance is a job or not.
  */
-static void init_attrs_post_boot (attr_t *attrs)
+static int init_attrs_post_boot (attr_t *attrs, flux_error_t *errp)
 {
     const char *val;
     bool instance_is_job;
@@ -674,7 +763,7 @@ static void init_attrs_post_boot (attr_t *attrs)
     else
         val = NULL;
     if (attr_add (attrs, "parent-uri", val, ATTR_IMMUTABLE) < 0)
-        log_err_exit ("setattr parent-uri");
+        return errprintf (errp, "setattr parent-uri: %s", strerror (errno));
     unsetenv ("FLUX_URI");
 
     /* Unset FLUX_PROXY_REMOTE since once a new broker starts we're no
@@ -684,8 +773,11 @@ static void init_attrs_post_boot (attr_t *attrs)
 
     if (instance_is_job) {
         val = getenv ("FLUX_KVS_NAMESPACE");
-        if (attr_add (attrs, "parent-kvs-namespace", val, ATTR_IMMUTABLE) < 0)
-            log_err_exit ("setattr parent-kvs-namespace");
+        if (attr_add (attrs, "parent-kvs-namespace", val, ATTR_IMMUTABLE) < 0) {
+            return errprintf (errp,
+                              "setattr parent-kvs-namespace: %s",
+                              strerror (errno));
+        }
     }
     unsetenv ("FLUX_KVS_NAMESPACE");
 
@@ -693,25 +785,33 @@ static void init_attrs_post_boot (attr_t *attrs)
     if (!val || !instance_is_job)
         val = "/";
     if (attr_add (attrs, "jobid-path", val, ATTR_IMMUTABLE) < 0)
-        log_err_exit ("setattr jobid-path");
+        return errprintf (errp, "setattr jobid-path: %s", strerror (errno));
     unsetenv ("FLUX_JOB_ID_PATH");
+
+    return 0;
 }
 
-static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
+static int init_attrs (attr_t *attrs,
+                       pid_t pid,
+                       struct flux_msg_cred *cred,
+                       flux_error_t *errp)
 {
-    init_attrs_broker_pid (attrs, pid);
-    init_attrs_rc_paths (attrs);
-    init_attrs_shell_paths (attrs);
+    if (init_attrs_broker_pid (attrs, pid, errp) < 0
+        || init_attrs_rc_paths (attrs, errp) < 0
+        || init_attrs_shell_paths (attrs, errp) < 0)
+        return -1;
 
     /* Allow version to be changed by instance owner for testing
      */
     if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING, 0) < 0)
-        log_err_exit ("attr_add version");
+        return errprintf (errp, "attr_add version: %s", strerror (errno));
 
     char tmp[32];
     snprintf (tmp, sizeof (tmp), "%ju", (uintmax_t)cred->userid);
     if (attr_add (attrs, "security.owner", tmp, ATTR_IMMUTABLE) < 0)
-        log_err_exit ("attr_add owner");
+        return errprintf (errp, "attr_add owner: %s", strerror (errno));
+
+    return 0;
 }
 
 static void set_proctitle (uint32_t rank)
@@ -756,29 +856,37 @@ static bool is_interactive_shell (const char *argz, size_t argz_len)
 static int create_runat_rc2 (struct runat *r,
                              int flags,
                              const char *argz,
-                             size_t argz_len)
+                             size_t argz_len,
+                             flux_error_t *errp)
 {
     if (is_interactive_shell (argz, argz_len)) { // run interactive shell
         /*  Check if stdin is a tty and error out if not to avoid
          *   confusing users with what appears to be a hang.
          */
-        if (!isatty (STDIN_FILENO))
-            log_msg_exit ("stdin is not a tty - can't run interactive shell");
+        if (!isatty (STDIN_FILENO)) {
+            return errprintf (errp,
+                              "stdin is not a tty -"
+                              " can't run interactive shell");
+        }
         if (runat_push_shell (r, "rc2", argz, flags) < 0)
-            return -1;
+            goto error;
     }
     else if (argz_count (argz, argz_len) == 1) { // run shell -c "command"
         if (runat_push_shell_command (r, "rc2", argz, flags) < 0)
-            return -1;
+            goto error;
     }
     else { // direct exec
         if (runat_push_command (r, "rc2", argz, argz_len, flags) < 0)
-            return -1;
+            goto error;
     }
     return 0;
+error:
+    return errprintf (errp,
+                      "error creating rc2 execution context: %s",
+                      strerror (errno));
 }
 
-static int create_runat_phases (broker_ctx_t *ctx)
+static int create_runat_phases (broker_ctx_t *ctx, flux_error_t *errp)
 {
     const char *jobid = NULL;
     const char *rc1, *rc3, *local_uri;
@@ -788,18 +896,12 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* jobid may be NULL */
     (void) attr_get (ctx->attrs, "jobid", &jobid, NULL);
 
-    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0) {
-        log_err ("local-uri is not set");
-        return -1;
-    }
-    if (attr_get (ctx->attrs, "broker.rc1_path", &rc1, NULL) < 0) {
-        log_err ("broker.rc1_path is not set");
-        return -1;
-    }
-    if (attr_get (ctx->attrs, "broker.rc3_path", &rc3, NULL) < 0) {
-        log_err ("broker.rc3_path is not set");
-        return -1;
-    }
+    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0)
+        return errprintf (errp, "local-uri is not set");
+    if (attr_get (ctx->attrs, "broker.rc1_path", &rc1, NULL) < 0)
+        return errprintf (errp, "broker.rc1_path is not set");
+    if (attr_get (ctx->attrs, "broker.rc3_path", &rc3, NULL) < 0)
+        return errprintf (errp, "broker.rc3_path is not set");
     if (attr_get (ctx->attrs, "broker.rc2_none", NULL, NULL) == 0)
         rc2_none = true;
 
@@ -819,10 +921,8 @@ static int create_runat_phases (broker_ctx_t *ctx)
                                      local_uri,
                                      jobid,
                                      (runat_notify_f)state_machine_sd_notify,
-                                     ctx->state_machine))) {
-        log_err ("runat_create");
-        return -1;
-    }
+                                     ctx->state_machine)))
+        return errprintf (errp, "runat_create: %s", strerror (errno));
 
     /* rc1 - initialization
      */
@@ -831,8 +931,9 @@ static int create_runat_phases (broker_ctx_t *ctx)
                                       "rc1",
                                       rc1,
                                       RUNAT_FLAG_LOG_STDIO) < 0) {
-            log_err ("runat_push_shell_command rc1");
-            return -1;
+            return errprintf (errp,
+                              "runat_push_shell_command rc1: %s",
+                              strerror (errno));
         }
     }
 
@@ -842,10 +943,9 @@ static int create_runat_phases (broker_ctx_t *ctx)
         if (create_runat_rc2 (ctx->runat,
                               rc2_nopgrp ? RUNAT_FLAG_NO_SETPGRP: 0,
                               ctx->init_shell_cmd,
-                              ctx->init_shell_cmd_len) < 0) {
-            log_err ("create_runat_rc2");
+                              ctx->init_shell_cmd_len,
+                              errp) < 0)
             return -1;
-        }
     }
 
     /* rc3 - finalization
@@ -855,14 +955,17 @@ static int create_runat_phases (broker_ctx_t *ctx)
                                       "rc3",
                                       rc3,
                                       RUNAT_FLAG_LOG_STDIO) < 0) {
-            log_err ("runat_push_shell_command rc3");
-            return -1;
+            return errprintf (errp,
+                              "runat_push_shell_command rc3: %s",
+                              strerror (errno));
         }
     }
     return 0;
 }
 
-static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
+static int init_local_uri_attr (struct overlay *ov,
+                                attr_t *attrs,
+                                flux_error_t *errp)
 {
     const char *uri;
 
@@ -871,53 +974,45 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
         const char *rundir;
         char buf[1024];
 
-        if (attr_get (attrs, "rundir", &rundir, NULL) < 0) {
-            log_msg ("rundir attribute is not set");
-            return -1;
-        }
-        if (snprintf (buf, sizeof (buf), "local://%s/local-%d",
-                      rundir, rank) >= sizeof (buf)) {
-            log_msg ("buffer overflow while building local-uri");
-            return -1;
-        }
-        if (attr_add (attrs, "local-uri", buf, ATTR_IMMUTABLE) < 0) {
-            log_err ("setattr local-uri");
-            return -1;
-        }
+        if (attr_get (attrs, "rundir", &rundir, NULL) < 0)
+            return errprintf (errp, "rundir attribute is not set");
+        if (snprintf (buf,
+                      sizeof (buf),
+                      "local://%s/local-%d",
+                      rundir, rank) >= sizeof (buf))
+            return errprintf (errp, "buffer overflow while building local-uri");
+        if (attr_add (attrs, "local-uri", buf, ATTR_IMMUTABLE) < 0)
+            return errprintf (errp, "setattr local-uri: %s", strerror (errno));
     }
     else {
         char path[1024];
         flux_error_t error;
 
-        if (!strstarts (uri, "local://")) {
-            log_msg ("local-uri is malformed");
-            return -1;
-        }
-        if (snprintf (path, sizeof (path), "%s", uri + 8) >= sizeof (path)) {
-            log_msg ("buffer overflow while checking local-uri");
-            return -1;
-        }
-        if (rundir_checkdir (dirname (path), &error) < 0) {
-            log_msg ("local-uri directory %s", error.text);
-            return -1;
-        }
+        if (!strstarts (uri, "local://"))
+            return errprintf (errp, "local-uri is malformed");
+        if (snprintf (path, sizeof (path), "%s", uri + 8) >= sizeof (path))
+            return errprintf (errp, "buffer overflow while checking local-uri");
+        if (rundir_checkdir (dirname (path), &error) < 0)
+            return errprintf (errp, "local-uri directory %s", error.text);
 
         /* see #3925 */
         struct sockaddr_un sa;
         size_t path_limit = sizeof (sa.sun_path) - 1;
         size_t path_length = strlen (uri + 8);
         if (path_length > path_limit) {
-            log_msg ("local-uri length of %zu bytes exceeds max %zu"
-                     " AF_UNIX socket path length",
-                     path_length,
-                     path_limit);
-            return -1;
+            return errprintf (errp,
+                              "local-uri length of %zu bytes exceeds max %zu"
+                              " AF_UNIX socket path length",
+                              path_length,
+                              path_limit);
         }
     }
     return 0;
 }
 
-static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs)
+static int init_critical_ranks_attr (struct overlay *ov,
+                                     attr_t *attrs,
+                                     flux_error_t *errp)
 {
     int rc = -1;
     const char *val;
@@ -927,21 +1022,23 @@ static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs)
     if (attr_get (attrs, "broker.critical-ranks", &val, NULL) < 0) {
         if (!(critical_ranks = overlay_get_default_critical_ranks (ov))
             || !(ranks = idset_encode (critical_ranks, IDSET_FLAG_RANGE))) {
-            log_err ("unable to calculate critical-ranks attribute");
+            errprintf (errp, "unable to calculate critical-ranks attribute");
             goto out;
         }
         if (attr_add (attrs,
                       "broker.critical-ranks",
                       ranks,
                       ATTR_IMMUTABLE) < 0) {
-            log_err ("attr_add critical_ranks");
+            errprintf (errp, "attr_add critical_ranks: %s", strerror (errno));
             goto out;
         }
     }
     else {
         if (!(critical_ranks = idset_decode (val))
             || idset_last (critical_ranks) >= overlay_get_size (ov)) {
-            log_msg ("invalid value for broker.critical-ranks='%s'", val);
+            errprintf (errp,
+                       "invalid value for broker.critical-ranks='%s'",
+                       val);
             goto out;
         }
         /*  Need to set immutable flag when attr set on command line
@@ -949,7 +1046,10 @@ static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs)
         if (attr_set_flags (attrs,
                             "broker.critical-ranks",
                             ATTR_IMMUTABLE) < 0) {
-            log_err ("failed to make broker.criitcal-ranks attr immutable");
+            errprintf (errp,
+                       "failed to make broker.critical-ranks"
+                       " attr immutable: %s",
+                       strerror (errno));
             goto out;
         }
     }
@@ -963,14 +1063,16 @@ out:
 static flux_future_t *set_uri_job_memo (flux_t *h,
                                         const char *hostname,
                                         flux_jobid_t id,
-                                        attr_t *attrs)
+                                        attr_t *attrs,
+                                        flux_error_t *errp)
 {
     const char *local_uri = NULL;
     const char *path;
     char uri [1024];
+    flux_future_t *f;
 
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
-        log_err ("Unexpectedly unable to fetch local-uri attribute");
+        errprintf (errp, "Unexpectedly unable to fetch local-uri attribute");
         return NULL;
     }
     path = local_uri + 8; /* forward past "local://" */
@@ -978,17 +1080,23 @@ static flux_future_t *set_uri_job_memo (flux_t *h,
                  sizeof (uri),
                  "ssh://%s%s",
                  hostname, path) >= sizeof (uri)) {
-        log_msg ("buffer overflow while checking local-uri");
+        errprintf (errp, "buffer overflow while checking local-uri");
         return NULL;
     }
-    return flux_rpc_pack (h,
-                          "job-manager.memo",
-                          FLUX_NODEID_ANY,
-                          0,
-                          "{s:I s:{s:s}}",
-                          "id", id,
-                          "memo",
-                            "uri", uri);
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.memo",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:I s:{s:s}}",
+                             "id", id,
+                             "memo",
+                             "uri", uri))) {
+        errprintf (errp,
+                   "error sending job-manager.memo request: %s",
+                   strerror (errno));
+        return NULL;
+    }
+    return f;
 }
 
 /*  Encode idset of critical nodes/shell ranks, which is calculated
@@ -1055,7 +1163,8 @@ static flux_future_t *set_critical_ranks (flux_t *h,
     return f;
 }
 
-static int execute_parental_notifications (struct broker *ctx)
+static int execute_parental_notifications (struct broker *ctx,
+                                           flux_error_t *errp)
 {
     const char *jobid = NULL;
     const char *parent_uri = NULL;
@@ -1074,35 +1183,41 @@ static int execute_parental_notifications (struct broker *ctx)
         || jobid == NULL)
         return 0;
 
-    if (flux_job_id_parse (jobid, &id) < 0) {
-        log_err ("Unable to parse jobid attribute '%s'", jobid);
-        return -1;
-    }
+    if (flux_job_id_parse (jobid, &id) < 0)
+        return errprintf (errp, "Unable to parse jobid attribute '%s'", jobid);
 
     /*  Open connection to parent instance:
      */
     if (!(h = flux_open (parent_uri, 0))) {
-        log_err ("flux_open to parent failed");
-        return -1;
+        return errprintf (errp,
+                          "flux_open to parent failed %s",
+                          strerror (errno));
     }
 
     /*  Perform any RPCs to parent in parallel */
-    if (!(f = set_uri_job_memo (h, ctx->hostname, id, ctx->attrs)))
+    if (!(f = set_uri_job_memo (h, ctx->hostname, id, ctx->attrs, errp)))
         goto out;
 
     /*  Note: not an error if rpc to set critical ranks fails, but
      *  issue an error notifying user that no critical ranks are set.
      */
-    if (!(f2 = set_critical_ranks (h, id, ctx->attrs)))
-        log_msg ("Unable to get critical ranks, all ranks will be critical");
+    if (!(f2 = set_critical_ranks (h, id, ctx->attrs))) {
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "Unable to get critical ranks, all ranks will be critical");
+    }
 
     /*  Wait for RPC results */
     if (flux_future_get (f, NULL) < 0) {
-        log_err ("job-manager.memo uri");
+        errprintf (errp,
+                   "job-manager.memo uri: %s",
+                   future_strerror (f, errno));
         goto out;
     }
     if (f2 && flux_future_get (f2, NULL) < 0 && errno != ENOSYS) {
-        log_err ("job-exec.critical-ranks");
+        errprintf (errp,
+                   "job-exec.critical-ranks: %s",
+                   future_strerror (f2, errno));
         goto out;
     }
     rc = 0;
@@ -1120,7 +1235,7 @@ static bool nodeset_member (const char *s, uint32_t rank)
 
     if (s) {
         if (!(ns = idset_decode (s)))
-            log_msg_exit ("malformed nodeset: %s", s);
+            return false;
         member = idset_test (ns, rank);
         idset_destroy (ns);
     }
@@ -1142,13 +1257,14 @@ static int broker_handle_signals (broker_ctx_t *ctx)
     flux_watcher_t *w;
 
     for (i = 0; i < ARRAY_SIZE (sigs); i++) {
-        w = flux_signal_watcher_create (ctx->reactor, sigs[i], signal_cb, ctx);
-        if (!w) {
-            log_err ("flux_signal_watcher_create");
+        if (!(w = flux_signal_watcher_create (ctx->reactor,
+                                              sigs[i],
+                                              signal_cb,
+                                              ctx)))
             return -1;
-        }
         if (zlist_push (ctx->sigwatchers, w) < 0) {
-            log_errn (ENOMEM, "zlist_push");
+            flux_watcher_destroy (w);
+            errno = ENOMEM;
             return -1;
         }
         zlist_freefn (ctx->sigwatchers, w, broker_destroy_sigwatcher, false);
@@ -1455,7 +1571,8 @@ static struct internal_service services[] = {
  * Register message handlers for some broker services.  Others are registered
  * in their own initialization functions.
  */
-static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
+static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx,
+                                                 flux_error_t *errp)
 {
     flux_msg_handler_t **handlers;
     struct internal_service *svc;
@@ -1466,13 +1583,18 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
                          svc->name, NULL,
                          route_to_handle,
                          ctx) < 0) {
-            log_err ("error registering service for %s", svc->name);
+            errprintf (errp,
+                       "error registering service for %s: %s",
+                       svc->name,
+                       strerror (errno));
             return NULL;
         }
     }
 
     if (flux_msg_handler_addvec (ctx->h, htab, ctx, &handlers) < 0) {
-        log_err ("error registering message handlers");
+        errprintf (errp,
+                   "error registering message handlers: %s",
+                   strerror (errno));
         return NULL;
     }
     return handlers;
