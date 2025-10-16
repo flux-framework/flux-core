@@ -637,19 +637,15 @@ static json_t *process_info (flux_subprocess_t *p)
 {
     flux_cmd_t *cmd;
     json_t *info = NULL;
-    char *s;
 
-    if (!(cmd = flux_subprocess_get_cmd (p))
-            || !(s = flux_cmd_stringify (cmd)))
+    if (!(cmd = flux_subprocess_get_cmd (p)))
         return NULL;
     if (!(info = json_pack ("{s:i s:s}",
                             "pid", flux_subprocess_pid (p),
                             "cmd", flux_cmd_arg (cmd, 0)))) {
-        free (s);
         errno = ENOMEM;
         return NULL;
     }
-    free (s);
     return info;
 }
 
