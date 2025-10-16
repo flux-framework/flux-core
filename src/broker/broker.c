@@ -278,6 +278,25 @@ int main (int argc, char *argv[])
     flux_log_set_hostname (ctx.h, ctx.hostname); // in lieu of rank
     flux_log_set_appname (ctx.h, "broker");
 
+    /* Give log-stderr-mode and log-stderr-level some values informed
+     * by --verbose if they weren't explicitly specified on the command line.
+     * No fatal errors here - best effort.
+     */
+    if (attr_get (ctx.attrs, "log-stderr-mode", NULL, NULL) < 0) {
+        if (ctx.verbose > 0)
+            (void)attr_add (ctx.attrs, "log-stderr-mode", "local", 0);
+    }
+    if (attr_get (ctx.attrs, "log-stderr-level", NULL, NULL) < 0) {
+        int level;
+        if (ctx.verbose > 1)
+            level = LOG_DEBUG;
+        else if (ctx.verbose == 1)
+            level = LOG_INFO;
+        else
+            level = LOG_ERR;
+        (void)attr_add_int (ctx.attrs, "log-stderr-level", level, 0);
+    }
+
     const char *val;
     if (attr_get (ctx.attrs, "broker.sd-notify", &val, NULL) == 0
         && !streq (val, "0")) {
