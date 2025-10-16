@@ -49,7 +49,8 @@ test_expect_success 'load kvs and create some kvs content' '
 	flux kvs put --no-merge x=$(cat x.val) &&
 	flux kvs link --target-namespace=smurf otherthing z &&
 	flux kvs put --no-merge w= &&
-	flux kvs put --no-merge --append w=foo
+	flux kvs put --no-merge --append w=foo &&
+	flux kvs put --no-merge --append w=bar
 '
 test_expect_success 'unload kvs' '
 	flux module remove kvs
@@ -81,10 +82,11 @@ test_expect_success 'unload content-sqlite' '
 # (1) rootdir 5th version (z is contained in root)
 # (1) rootdir 6th version (w probably contained in root)
 # (3) rootdir 7th version ('w' empty blobref + append to 'w')
-# Total: 12 blobs
+# (2) rootdir 8th version (append to 'w')
+# Total: 14 blobs
 #
 test_expect_success 'count blobs representing those five keys' '
-	echo 12 >blobcount.exp &&
+	echo 14 >blobcount.exp &&
 	countblobs >blobcount.out &&
 	test_cmp blobcount.exp blobcount.out
 '
@@ -110,7 +112,7 @@ test_expect_success 'unload content-sqlite' '
 '
 
 # Intermediate rootdir versions are not preserved across dump/restore.
-# Expect a blobcount of 4: rootdir 7th version + 'a' + 'b' + 'x',
+# Expect a blobcount of 4: rootdir 8th version + 'a' + 'b' + 'x',
 # N.B. 'w' is now contained in the root
 #
 test_expect_success 'count blobs after restore'\'s' implicit garbage collection' '
@@ -129,7 +131,7 @@ test_expect_success 'verify that exact KVS content was restored' '
 	test $(flux kvs get x) = $(cat x.val) &&
 	test $(flux kvs readlink y) = "linkedthing" &&
 	test $(flux kvs readlink z) = "smurf::otherthing" &&
-	test $(flux kvs get w) = "foo"
+	test $(flux kvs get w) = "foobar"
 '
 test_expect_success 'now restore to key and verify content' '
 	flux restore -v --key zz foo.tar &&
