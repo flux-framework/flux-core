@@ -575,22 +575,16 @@ int boot_pmi (const char *hostname,
             goto error;
         }
         if (prefer_tcp || nlocal == 0) {
-            if (overlay_bind (overlay, tcp, NULL) < 0) {
-                errprintf (errp, "bind %s: %s", tcp, strerror (errno));
+            if (overlay_bind (overlay, tcp, NULL, errp) < 0)
                 goto error;
-            }
         }
         else if (!prefer_tcp && nlocal == child_count) {
-            if (overlay_bind (overlay, ipc, NULL) < 0) {
-                errprintf (errp, "bind %s: %s", ipc, strerror (errno));
+            if (overlay_bind (overlay, ipc, NULL, errp) < 0)
                 goto error;
-            }
         }
         else {
-            if (overlay_bind (overlay, tcp, ipc) < 0) {
-                errprintf (errp, "bind %s: %s", tcp, strerror (errno));
+            if (overlay_bind (overlay, tcp, ipc, errp) < 0)
                 goto error;
-            }
         }
     }
 

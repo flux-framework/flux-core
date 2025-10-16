@@ -15,7 +15,6 @@
 #include <jansson.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
@@ -563,7 +562,7 @@ static module_t *unload_module (broker_ctx_t *ctx,
     if (cancel) {
         flux_error_t error;
         if (module_cancel (p, &error) < 0) {
-            log_msg ("%s: %s", name, error.text);
+            flux_log (ctx->h, LOG_ERR, "%s: %s", name, error.text);
             return NULL;
         }
     }
@@ -841,11 +840,18 @@ int modhash_destroy (modhash_t *mh)
     if (mh) {
         if (mh->zh_byuuid) {
             FOREACH_ZHASH (mh->zh_byuuid, uuid, p) {
-                log_msg ("broker module '%s' was not properly shut down",
-                         module_get_name (p));
+                flux_log (mh->ctx->h,
+                          LOG_ERR,
+                          "broker module '%s' was not properly shut down",
+                          module_get_name (p));
                 flux_error_t error;
-                if (module_cancel (p, &error) < 0)
-                    log_msg ("%s: %s", module_get_name (p), error.text);
+                if (module_cancel (p, &error) < 0) {
+                    flux_log (mh->ctx->h,
+                              LOG_ERR,
+                              "%s: %s",
+                              module_get_name (p),
+                              error.text);
+                }
                 count++;
             }
             zhash_destroy (&mh->zh_byuuid);
@@ -1106,7 +1112,7 @@ flux_future_t *modhash_load_builtins (modhash_t *mh, flux_error_t *error)
     for (int i = 0; i < ARRAY_SIZE (builtins); i++) {
         module_t *p;
         if (mh->ctx->verbose > 1)
-            log_msg ("loading %s", builtins[i]->name);
+            flux_log (mh->ctx->h, LOG_INFO, "loading %s", builtins[i]->name);
         if (!(p = modhash_load_builtin (mh, builtins[i], NULL, NULL, error))
             || modhash_load_finalize (mh, p, error) < 0) {
             module_destroy (p);
@@ -1145,7 +1151,7 @@ flux_future_t *modhash_unload_builtins (modhash_t *mh)
         struct module_builtin *mod = builtins[i - 1];
 
         if (mh->ctx->verbose > 1)
-            log_msg ("unloading %s", mod->name);
+            flux_log (mh->ctx->h, LOG_INFO, "unloading %s", mod->name);
         if (!unload_module (mh->ctx, mod->name, false)) {
             if (errno != ENOENT) {
                 flux_log_error (mh->ctx->h,

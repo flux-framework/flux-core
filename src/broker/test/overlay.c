@@ -22,6 +22,7 @@
 #include "src/common/libzmqutil/sockopt.h"
 #include "src/common/libzmqutil/cert.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/stdlog.h"
 #include "src/common/libutil/unlink_recursive.h"
 #include "ccan/str/str.h"
@@ -108,8 +109,14 @@ struct context *ctx_create (flux_t *h,
     ctx->size = size;
     ctx->rank = rank;
     snprintf (ctx->name, sizeof (ctx->name), "test%d", rank);
-    if (!(ctx->ov = overlay_create (h, ctx->name, ctx->attrs, zctx, cb, ctx)))
-        BAIL_OUT ("overlay_create");
+    if (!(ctx->ov = overlay_create (h,
+                                    ctx->name,
+                                    ctx->attrs,
+                                    zctx,
+                                    cb,
+                                    ctx,
+                                    &error)))
+        BAIL_OUT ("overlay_create: %s", error.text);
     if (!(ctx->uuid = overlay_get_uuid (ctx->ov)))
         BAIL_OUT ("overlay_get_uuid failed");
     diag ("created %s: rank %d size %d uuid %s",
@@ -278,6 +285,7 @@ void trio (flux_t *h)
     void *zsock_curve;
     struct cert *cert;
     const char *sender;
+    flux_error_t error;
 
     ctx[0] = ctx_create (h, size, 0, "kary:2", recv_cb);
 
@@ -288,7 +296,7 @@ void trio (flux_t *h)
         "%s: overlay_cert_pubkey works", ctx[0]->name);
 
     snprintf (parent_uri, sizeof (parent_uri), "ipc://%s/flux_ipc_%s", get_test_dir (), ctx[0]->name);
-    ok (overlay_bind (ctx[0]->ov, parent_uri, NULL) == 0,
+    ok (overlay_bind (ctx[0]->ov, parent_uri, NULL, NULL) == 0,
         "%s: overlay_bind %s works", ctx[0]->name, parent_uri);
 
     ctx[1] = ctx_create (h, size, 1, "kary:2", recv_cb);
@@ -443,9 +451,11 @@ void trio (flux_t *h)
     errno = 0;
     if (snprintf (uri, sizeof uri, "ipc://%s/flux_ipc_foo", get_test_dir ()) < 0)
         BAIL_OUT("asprintf failed");
-    ok (overlay_bind (ctx[1]->ov, uri, NULL) < 0
+    err_init (&error);
+    ok (overlay_bind (ctx[1]->ov, uri, NULL, &error) < 0
         && errno == EADDRINUSE,
         "%s: second overlay_bind in proc fails with EADDRINUSE", ctx[0]->name);
+    diag ("%s", error.text);
 
     /* Various tests of rank 2 without proper authorization.
      * First a baseline - resend 1->0 and make sure timed recv works.
@@ -521,6 +531,7 @@ void test_create (flux_t *h,
 {
     char uri[PATH_MAX + 200] = { 0 };
     int rank;
+    flux_error_t error;
 
     for (rank = 0; rank < size; rank++) {
         ctx[rank] = ctx_create (h, size, rank, NULL, recv_cb);
@@ -533,8 +544,10 @@ void test_create (flux_t *h,
              * handler, and overlay_authorize() will fail if it doesn't
              * exist.
              */
-            if (overlay_bind (ctx[0]->ov, uri, NULL) < 0)
-                BAIL_OUT ("%s: overlay_bind failed", ctx[0]->name);
+            if (overlay_bind (ctx[0]->ov, uri, NULL, &error) < 0)
+                BAIL_OUT ("%s: overlay_bind failed: %s",
+                          ctx[0]->name,
+                          error.text);
         }
         else {
             if (overlay_authorize (ctx[0]->ov,
@@ -665,31 +678,40 @@ void wrongness (flux_t *h)
 {
     struct overlay *ov;
     attr_t *attrs;
+    flux_error_t error;
 
     if (!(attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
+
+    err_init (&error);
     errno = 0;
-    ok (overlay_create (NULL, "test0", attrs, zctx, NULL, NULL) == NULL
+    ok (overlay_create (NULL, "test0", attrs, zctx, NULL, NULL, &error) == NULL
         && errno == EINVAL,
         "overlay_create h=NULL fails with EINVAL");
+    diag ("%s", error.text);
+
+    err_init (&error);
     errno = 0;
-    ok (overlay_create (h, "test0", NULL, zctx, NULL, NULL) == NULL
+    ok (overlay_create (h, "test0", NULL, zctx, NULL, NULL, &error) == NULL
         && errno == EINVAL,
         "overlay_create attrs=NULL fails with EINVAL");
+    diag ("%s", error.text);
     attr_destroy (attrs);
 
     if (!(attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
-    if (!(ov = overlay_create (h, "test0", attrs, zctx, NULL, NULL)))
-        BAIL_OUT ("overlay_create failed");
+    if (!(ov = overlay_create (h, "test0", attrs, zctx, NULL, NULL, &error)))
+        BAIL_OUT ("overlay_create failed: %s", error.text);
 
     errno = 0;
     struct context *ctx = ctx_create (h, 1, 0, "kary:2", NULL);
     char * uri = NULL;
     if (asprintf (&uri, "ipc://%s/flux_ipc_foobar", get_test_dir ()) < 0)
         BAIL_OUT ("asprintf failed");
-    ok (overlay_bind (ov, uri, NULL) < 0 && errno == EINVAL,
+    err_init (&error);
+    ok (overlay_bind (ov, uri, NULL, &error) < 0 && errno == EINVAL,
         "overlay_bind fails if called before rank is known");
+    diag ("%s", error.text);
     ctx_destroy(ctx);
     if (unlink (uri) < 0 && errno != ENOENT)
         BAIL_OUT ("could not remove %s", uri);

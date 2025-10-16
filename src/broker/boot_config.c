@@ -630,10 +630,8 @@ int boot_config (flux_t *h,
     /* If a curve certificate was provided, load it.
      */
     if (conf.curve_cert) {
-        if (overlay_cert_load (overlay, conf.curve_cert) < 0) {
-            errprintf (errp,
-                       "Error loading certificate: %s",
-                       strerror (errno));
+        if (overlay_cert_load (overlay, conf.curve_cert, &error) < 0) {
+            errprintf (errp, "Error loading certificate: %s", error.text);
             goto error;
         }
     }
@@ -673,7 +671,7 @@ int boot_config (flux_t *h,
                                        sizeof (bind_uri),
                                        errp) < 0)
             goto error;
-        if (overlay_bind (overlay, bind_uri, NULL) < 0)
+        if (overlay_bind (overlay, bind_uri, NULL, errp) < 0)
             goto error;
         if (overlay_authorize (overlay,
                                overlay_cert_name (overlay),

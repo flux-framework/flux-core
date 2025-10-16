@@ -345,8 +345,9 @@ int main (int argc, char *argv[])
                                         ctx.attrs,
                                         NULL,
                                         overlay_recv_cb,
-                                        &ctx))) {
-        log_err ("overlay_create");
+                                        &ctx,
+                                        &error))) {
+        log_err ("overlay_create: %s", error.text);
         goto cleanup;
     }
 
