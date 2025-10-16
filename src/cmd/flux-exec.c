@@ -47,6 +47,9 @@ static struct optparse_option cmdopts[] = {
     { .name = "bg", .has_arg = 0,
       .usage = "Run process in background and exit",
     },
+    { .name = "label", .has_arg = 1, .arginfo = "LABEL",
+      .usage = "Set a remote process label.",
+    },
     { .name = "dir", .key = 'd', .has_arg = 1, .arginfo = "PATH",
       .usage = "Set the working directory to PATH" },
     { .name = "label-io", .key = 'l', .has_arg = 0,
@@ -735,6 +738,10 @@ int main (int argc, char *argv[])
 
     if (!(cmd = flux_cmd_create (argc - optindex, &argv[optindex], environ)))
         log_err_exit ("flux_cmd_create");
+
+    if (optparse_getopt (opts, "label", &optargp) > 0
+        && flux_cmd_set_label (cmd, optargp) < 0)
+        log_err_exit ("failed to set label");
 
     flux_cmd_unsetenv (cmd, "FLUX_PROXY_REMOTE");
 
