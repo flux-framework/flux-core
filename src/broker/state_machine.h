@@ -27,7 +27,8 @@ typedef enum {
 } broker_state_t;
 
 
-struct state_machine *state_machine_create (struct broker *ctx);
+struct state_machine *state_machine_create (struct broker *ctx,
+                                            flux_error_t *error);
 void state_machine_destroy (struct state_machine *s);
 
 void state_machine_kickoff (struct state_machine *s);

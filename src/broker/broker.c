@@ -515,8 +515,8 @@ int main (int argc, char *argv[])
 
     /* Configure broker state machine
      */
-    if (!(ctx.state_machine = state_machine_create (&ctx))) {
-        log_err ("error creating broker state machine");
+    if (!(ctx.state_machine = state_machine_create (&ctx, &error))) {
+        log_err ("%s", error.text);
         goto cleanup;
     }
     /* This registers a state machine callback so call after
