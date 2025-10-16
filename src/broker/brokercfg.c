@@ -17,7 +17,6 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/errprintf.h"
 
 #include "attr.h"
@@ -278,30 +277,30 @@ void brokercfg_destroy (struct brokercfg *cfg)
 struct brokercfg *brokercfg_create (flux_t *h,
                                     const char *path,
                                     attr_t *attrs,
-                                    modhash_t *modhash)
+                                    modhash_t *modhash,
+                                    flux_error_t *error)
 {
     struct brokercfg *cfg;
-    flux_error_t error;
 
     if (!(cfg = calloc (1, sizeof (*cfg))))
-        return NULL;
+        goto error_nomsg;
     cfg->h = h;
     cfg->modhash = modhash;
     if (!path)
         path = getenv ("FLUX_CONF_DIR");
     if (path) {
         if (!(cfg->path = strdup (path)))
-            goto error;
+            goto error_nomsg;
     }
-    if (brokercfg_parse (h, path, &error) < 0) {
-        log_msg ("%s", error.text);
+    if (brokercfg_parse (h, path, error) < 0)
         goto error;
-    }
     if (flux_msg_handler_addvec (h, htab, cfg, &cfg->handlers) < 0)
-        goto error;
+        goto error_nomsg;
     if (attr_add (attrs, "config.path", path, ATTR_IMMUTABLE) < 0)
-        goto error;
+        goto error_nomsg;
     return cfg;
+error_nomsg:
+    errprintf (error, "%s", strerror (errno));
 error:
     brokercfg_destroy (cfg);
     return NULL;

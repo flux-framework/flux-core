@@ -323,8 +323,11 @@ int main (int argc, char *argv[])
                                                            "config-path",
                                                            NULL),
                                          ctx.attrs,
-                                         ctx.modhash)))
+                                         ctx.modhash,
+                                         &error))) {
+        log_err ("%s", error.text);
         goto cleanup;
+    }
     conf = flux_get_conf (ctx.h);
 
     if (increase_rlimits () < 0)

@@ -20,7 +20,8 @@ struct brokercfg;
 struct brokercfg *brokercfg_create (flux_t *h,
                                     const char *path,
                                     attr_t *attr,
-                                    modhash_t *modhash);
+                                    modhash_t *modhash,
+                                    flux_error_t *error);
 void brokercfg_destroy (struct brokercfg *cfg);
 
 #endif /* !BROKER_BROKERCFG_H */
