@@ -386,7 +386,12 @@ int main (int argc, char *argv[])
         }
     }
     else {
-        if (boot_config (ctx.h, ctx.hostname, ctx.overlay, ctx.attrs) < 0) {
+        if (boot_config (ctx.h,
+                         ctx.hostname,
+                         ctx.overlay,
+                         ctx.attrs,
+                         &error) < 0) {
+            log_msg ("%s", error.text);
             log_msg ("bootstrap failed");
             goto cleanup;
         }
