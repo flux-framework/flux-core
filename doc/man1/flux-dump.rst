@@ -76,6 +76,13 @@ OPTIONS
    store.  This may be slightly faster, depending on how frequently the same
    content blobs are referenced by multiple keys.
 
+.. option:: --maxreqs=N
+
+   Speed up :program:`flux-dump` by increasing the number of
+   concurrent lookup requests that can be made.  Increasing the value
+   of N may impact KVS responsiveness and should be done with care on
+   a live system.  Defaults to 2.
+
 .. option:: --ignore-failed-read
 
    If KVS metadata is encountered that references nonexistent blobrefs

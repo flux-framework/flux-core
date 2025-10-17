@@ -1007,3 +1007,4 @@ cpusets
 sproc
 testsuite
 sharness
+maxreqs
