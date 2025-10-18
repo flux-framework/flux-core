@@ -460,7 +460,14 @@ static void log_timestamp (FILE *fp, struct stdlog_header *hdr)
         || strftime (timezone, sizeof (timezone), "%Z", &tm) == 0
         || strftime (year, sizeof (year), "%Y", &tm) == 0)
         fprintf (fp, "%s ", hdr->timestamp);
-    fprintf (fp, "%s.%06ld %s %s ", datetime, (long)tv.tv_usec, timezone, year);
+    else {
+        fprintf (fp,
+                 "%s.%06ld %s %s ",
+                 datetime,
+                 (long)tv.tv_usec,
+                 timezone,
+                 year);
+    }
 }
 
 static void make_syslog_prefix (logbuf_t *logbuf, char *buf, size_t size)
