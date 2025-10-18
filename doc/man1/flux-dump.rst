@@ -76,6 +76,10 @@ OPTIONS
    store.  This may be slightly faster, depending on how frequently the same
    content blobs are referenced by multiple keys.
 
+.. option:: --fast
+
+   Speed up :program:`flux-dump` by running some operations asynchronously
+
 .. option:: --ignore-failed-read
 
    If KVS metadata is encountered that references nonexistent blobrefs

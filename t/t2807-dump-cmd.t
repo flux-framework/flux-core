@@ -49,13 +49,17 @@ test_expect_success 'load kvs and create some kvs content' '
 	flux kvs put --no-merge x=$(cat x.val) &&
 	flux kvs link --target-namespace=smurf otherthing z &&
 	flux kvs put --no-merge w= &&
-	flux kvs put --no-merge --append w=foo
+	flux kvs put --no-merge --append w=foo &&
+	flux kvs put --no-merge --append w=bar
 '
 test_expect_success 'unload kvs' '
 	flux module remove kvs
 '
 test_expect_success 'dump default=kvs-primary checkpoint' '
 	flux dump --checkpoint foo.tar
+'
+test_expect_success 'repeat dump with --fast' '
+	flux dump --fast --checkpoint fast.tar
 '
 test_expect_success 'repeat dump with -q' '
 	flux dump -q --checkpoint foo.tar
@@ -81,10 +85,11 @@ test_expect_success 'unload content-sqlite' '
 # (1) rootdir 5th version (z is contained in root)
 # (1) rootdir 6th version (w probably contained in root)
 # (3) rootdir 7th version ('w' empty blobref + append to 'w')
-# Total: 12 blobs
+# (2) rootdir 8th version (append to 'w')
+# Total: 14 blobs
 #
 test_expect_success 'count blobs representing those five keys' '
-	echo 12 >blobcount.exp &&
+	echo 14 >blobcount.exp &&
 	countblobs >blobcount.out &&
 	test_cmp blobcount.exp blobcount.out
 '
@@ -111,7 +116,8 @@ test_expect_success 'unload content-sqlite' '
 '
 
 # Intermediate rootdir versions are not preserved across dump/restore.
-# Expect a blobcount of 4: rootdir 5th version + 'a' + 'b' + 'x',
+# Expect a blobcount of 4: rootdir 8th version + 'a' + 'b' + 'x',
+# N.B. 'w' is now contained in the root
 #
 test_expect_success 'count blobs after restore'\'s' implicit garbage collection' '
 	echo 4 >blobcount2.exp &&
@@ -129,7 +135,7 @@ test_expect_success 'verify that exact KVS content was restored' '
 	test $(flux kvs get x) = $(cat x.val) &&
 	test $(flux kvs readlink y) = "linkedthing" &&
 	test $(flux kvs readlink z) = "smurf::otherthing" &&
-	test $(flux kvs get w) = "foo"
+	test $(flux kvs get w) = "foobar"
 '
 test_expect_success 'now restore to key and verify content' '
 	flux restore -v --key zz foo.tar &&
@@ -196,6 +202,52 @@ test_expect_success 'run a flux instance, preserving content.sqlite' '
 	flux start -Sstatedir=$(pwd)/test true
 '
 
+#
+# --fast
+#
+
+# N.B. from previous tests, data is already in the content cache
+# and does not "need" to be flushed, thus affects tests below
+test_expect_success 'clear content cache' '
+	flux content dropcache
+'
+test_expect_success 'remove backing file and load content-sqlite' '
+	rm -f content.sqlite &&
+	flux module load content-sqlite
+'
+test_expect_success 'restore content when --fast was used' '
+	flux restore -v --checkpoint fast.tar
+'
+test_expect_success 'unload content-sqlite' '
+	flux content flush &&
+	flux content dropcache &&
+	flux module remove content-sqlite
+'
+# N.B. see notes above on why 4 blobs
+test_expect_success 'count blobs after restore'\'s' implicit garbage collection' '
+	echo 4 >blobcount3.exp &&
+	countblobs >blobcount3.out &&
+	test_cmp blobcount3.exp blobcount3.out
+'
+test_expect_success 'load content-sqlite + kvs and list content' '
+	flux module load content-sqlite &&
+	flux module load kvs &&
+	flux kvs dir -R
+'
+test_expect_success 'verify that exact KVS content was restored' '
+	test $(flux kvs get a.b.c) = "testkey" &&
+	test $(flux kvs get x) = $(cat x.val) &&
+	test $(flux kvs readlink y) = "linkedthing" &&
+	test $(flux kvs readlink z) = "smurf::otherthing" &&
+	test $(flux kvs get w) = "foobar"
+'
+test_expect_success 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success 'unload content-sqlite' '
+	flux module remove content-sqlite
+'
+
 reader() {
 	local dbdir=$1
         flux start -Sbroker.rc1_path= \
@@ -253,6 +305,66 @@ test_expect_success UTF8_LOCALE 'list UTF-8 dump' '
 test_expect_success UTF8_LOCALE 'restore UTF-8 dump' '
 	(LC_ALL=${UTF8_LOCALE} flux start -Scontent.restore=widedump.tar \
 	    flux kvs get ƒuzzybunny)
+'
+
+# Cover value with a very large number of appends
+
+test_expect_success LONGTEST 'remove backing file and load content-sqlite' '
+	rm -f content.sqlite &&
+	flux module load content-sqlite
+'
+# N.B. from 1000 to 3000 instead of 0 to 2000, easier to debug errors
+# using fold(1) (i.e. all numbers same width)
+test_expect_success LONGTEST 'load kvs and create some kvs content' '
+	flux module load kvs &&
+	for i in `seq 1000 3000`; do
+	    flux kvs put --append bigval=${i}
+	done &&
+	flux kvs get bigval > bigval.exp
+'
+test_expect_success LONGTEST 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success LONGTEST 'dump default=kvs-primary checkpoint' '
+	flux dump --checkpoint bigval.tar
+'
+test_expect_success LONGTEST 'dump default=kvs-primary checkpoint w/ --fast' '
+	flux dump --checkpoint --fast bigvalfast.tar
+'
+test_expect_success LONGTEST 'unload content-sqlite, remove backing, reload content-sqlite' '
+	flux module remove content-sqlite &&
+	rm -f content.sqlite &&
+	flux module load content-sqlite
+'
+test_expect_success LONGTEST 'restore content' '
+	flux restore --checkpoint bigval.tar
+'
+test_expect_success LONGTEST 'load kvs and check bigval value' '
+	flux module load kvs &&
+	flux kvs get bigval > bigval.out &&
+	test_cmp bigval.out bigval.exp
+'
+test_expect_success LONGTEST 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success LONGTEST 'unload content-sqlite, remove backing, reload content-sqlite' '
+	flux module remove content-sqlite &&
+	rm -f content.sqlite &&
+	flux module load content-sqlite
+'
+test_expect_success LONGTEST 'restore content from fast dump' '
+	flux restore --checkpoint bigvalfast.tar
+'
+test_expect_success LONGTEST 'load kvs and check bigval value from fast dump' '
+	flux module load kvs &&
+	flux kvs get bigval > bigval.out &&
+	test_cmp bigval.out bigval.exp
+'
+test_expect_success LONGTEST 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success LONGTEST 'unload content-sqlite' '
+	flux module remove content-sqlite
 '
 
 # Cover --size-limit
