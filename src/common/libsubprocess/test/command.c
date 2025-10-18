@@ -102,6 +102,8 @@ void set_cmd_attributes (flux_cmd_t *cmd)
         "flux_cmd_add_channel");
     ok (flux_cmd_setopt (cmd, "OPTION", "VALUE") >= 0,
         "flux_cmd_setopt");
+    ok (flux_cmd_set_label (cmd, "foo") == 0,
+        "flux_cmd_set_label (cmd, 'foo')");
 }
 
 /* set alternate way, to ensure alternate ways also work */
@@ -158,6 +160,8 @@ void check_cmd_attributes (flux_cmd_t *cmd)
         "flux_cmd_getcwd");
     is (flux_cmd_getopt (cmd, "OPTION"), "VALUE",
         "flux_cmd_getopt (cmd, 'OPTION') == VALUE");
+    is (flux_cmd_get_label (cmd), "foo",
+        "flux_cmd_get_label (cmd) returns 'foo'");
 }
 
 void test_find_opts (void)
@@ -390,6 +394,30 @@ void test_env_glob (void)
     flux_cmd_destroy (cmd);
 }
 
+void test_label (void)
+{
+    flux_cmd_t *cmd;
+
+    if (!(cmd = flux_cmd_create (0, NULL, NULL)))
+        BAIL_OUT ("failed to create command object");
+    ok (flux_cmd_get_label (cmd) == NULL,
+        "flux_cmd_get_label () returns NULL for unset label");
+    ok (flux_cmd_set_label (NULL, NULL) < 0 && errno == EINVAL,
+        "flux_cmd_set_label () returns EINVAL on invalid argument");
+    ok (flux_cmd_set_label (cmd, "") < 0 && errno == EINVAL,
+        "flux_cmd_set_label () returns EINVAL with zero-length label");
+    ok (flux_cmd_set_label (cmd, "foo") == 0,
+        "flux_cmd_set_label () works");
+    is (flux_cmd_get_label (cmd), "foo",
+        "flux_cmd_get_label now returns 'foo'");
+    ok (flux_cmd_set_label (cmd, NULL) == 0,
+        "flux_cmd_set_label (NULL) works");
+    ok (flux_cmd_get_label (cmd) == NULL,
+        "flux_cmd_get_label (cmd) now shows that label unset");
+
+    flux_cmd_destroy (cmd);
+}
+
 int main (int argc, char *argv[])
 {
     json_t *o;
@@ -457,6 +485,8 @@ int main (int argc, char *argv[])
     test_arg_insert_delete ();
 
     test_stringify ();
+
+    test_label ();
 
     done_testing ();
     return 0;

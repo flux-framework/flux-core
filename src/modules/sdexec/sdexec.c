@@ -1041,9 +1041,10 @@ static void list_cb (flux_t *h,
         json_t *o;
         if ((proc = flux_msg_aux_get (req, "sdproc"))
             && json_unpack (proc->cmd, "{s:[s]}", "cmdline", &arg0) == 0
-            && (o = json_pack ("{s:i s:s}",
+            && (o = json_pack ("{s:i s:s s:s}",
                                "pid", sdexec_unit_pid (proc->unit),
-                               "cmd", arg0))) {
+                               "cmd", arg0,
+                               "label", ""))) {
             if (json_array_append_new (procs, o) < 0) {
                 json_decref (o);
                 goto nomem;

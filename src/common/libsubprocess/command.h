@@ -182,6 +182,13 @@ int flux_cmd_add_message_channel (flux_cmd_t *cmd,
                                   const char *name,
                                   const char *uri);
 
+
+/*  Set a string "label" for this command that can be used to refer to it
+ *  in other API calls.
+ */
+int flux_cmd_set_label (flux_cmd_t *cmd, const char *label);
+const char *flux_cmd_get_label (flux_cmd_t *cmd);
+
 #ifdef __cplusplus
 }
 #endif

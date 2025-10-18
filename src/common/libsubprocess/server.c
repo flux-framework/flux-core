@@ -51,6 +51,7 @@ struct subprocess_server {
     subprocess_log_f llog;
     void *llog_data;
     zlistx_t *subprocesses;
+    zhashx_t *labels;
     flux_msg_handler_t **handlers;
     subprocess_server_auth_f auth_cb;
     void *arg;
@@ -74,12 +75,16 @@ static void proc_destructor (void **item)
 static int proc_save (subprocess_server_t *s, flux_subprocess_t *p)
 {
     void *handle;
+    const char *label = flux_cmd_get_label (p->cmd);
 
     if (!(handle = zlistx_add_end (s->subprocesses, p))) {
+        if (label)
+            zhashx_delete (s->labels, label);
         errno = ENOMEM;
         return -1;
     }
-    if (flux_subprocess_aux_set (p, lstkey, handle, NULL) < 0) {
+    if (flux_subprocess_aux_set (p, lstkey, handle, NULL) < 0
+        || (label && zhashx_insert (s->labels, label, p) < 0)) {
         int saved_errno = errno;
         zlistx_detach (s->subprocesses, handle);
         errno = saved_errno;
@@ -90,8 +95,12 @@ static int proc_save (subprocess_server_t *s, flux_subprocess_t *p)
 
 static void proc_delete (subprocess_server_t *s, flux_subprocess_t *p)
 {
+    const char *label;
     int saved_errno = errno;
     void *handle = flux_subprocess_aux_get (p, lstkey);
+
+    if ((label = flux_cmd_get_label (p->cmd)))
+        zhashx_delete (s->labels, label);
 
     zlistx_delete (s->subprocesses, handle);
 
@@ -99,6 +108,16 @@ static void proc_delete (subprocess_server_t *s, flux_subprocess_t *p)
         flux_future_fulfill (s->shutdown, NULL, NULL);
 
     errno = saved_errno;
+}
+
+static flux_subprocess_t *proc_find_bylabel (subprocess_server_t *s,
+                                             const char *label)
+{
+    flux_subprocess_t *p;
+    if ((p = zhashx_lookup (s->labels, label)))
+        return p;
+    errno = ESRCH;
+    return NULL;
 }
 
 static flux_subprocess_t *proc_find_bypid (subprocess_server_t *s, pid_t pid)
@@ -147,10 +166,13 @@ static void proc_completion_cb (flux_subprocess_t *p)
     if (p->bg) {
         int exitcode;
         flux_cmd_t *cmd = flux_subprocess_get_cmd (p);
+        const char *label = flux_cmd_get_label (cmd);
 
         if ((exitcode = flux_subprocess_exit_code (p)) < 0) {
             llog_info (s,
-                       "%s[%d]: Killed by signal %d",
+                       "%s%s%s[%d]: Killed by signal %d",
+                       label ? label : "",
+                       label ? ": " : "",
                        flux_cmd_arg (cmd, 0),
                        (int) p->pid,
                        flux_subprocess_signaled (p));
@@ -158,7 +180,9 @@ static void proc_completion_cb (flux_subprocess_t *p)
         else {
             const char *command = basename_simple (flux_cmd_arg (cmd, 0));
             llog_info (s,
-                       "%s[%d]: Exit %d",
+                       "%s%s%s[%d]: Exit %d",
+                       label ? label : "",
+                       label ? ": " : "",
                        command,
                        (int) p->pid,
                        exitcode);
@@ -397,6 +421,7 @@ static void server_exec_cb (flux_t *h,
     flux_error_t error;
     int flags;
     int local_flags = 0;
+    const char *label;
 
     /* Per RFC 42, non-streaming request runs process in background:
      */
@@ -433,6 +458,11 @@ static void server_exec_cb (flux_t *h,
         goto error;
     }
 
+    if ((label = flux_cmd_get_label (cmd))
+        && proc_find_bylabel (s, label)) {
+        errmsg = "command label is not unique";
+        goto error;
+    }
     if (!flux_cmd_argc (cmd)) {
         errno = EPROTO;
         errmsg = "command string is empty";
@@ -582,6 +612,7 @@ static void server_kill_cb (flux_t *h,
     subprocess_server_t *s = arg;
     pid_t pid;
     int signum;
+    const char *label = NULL;
     flux_error_t error;
     const char *errmsg = NULL;
     flux_subprocess_t *p;
@@ -589,16 +620,26 @@ static void server_kill_cb (flux_t *h,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{ s:i s:i }",
+                             "{ s:i s:i s?s }",
                              "pid", &pid,
-                             "signum", &signum) < 0)
+                             "signum", &signum,
+                             "label", &label) < 0)
         goto error;
     if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
         errmsg = error.text;
         errno = EPERM;
         goto error;
     }
-    if (!(p = proc_find_bypid (s, pid))) {
+    if (label) {
+        if (!(p = proc_find_bylabel (s, label))) {
+            errprintf (&error,
+                       "label %s does not belong to any subprocess",
+                       label);
+            errmsg = error.text;
+            goto error;
+        }
+    }
+    else if (!(p = proc_find_bypid (s, pid))) {
         errprintf (&error, "pid %d does not belong to any subprocess", pid);
         errmsg = error.text;
         goto error;
@@ -637,19 +678,18 @@ static json_t *process_info (flux_subprocess_t *p)
 {
     flux_cmd_t *cmd;
     json_t *info = NULL;
-    char *s;
+    const char *label;
 
-    if (!(cmd = flux_subprocess_get_cmd (p))
-            || !(s = flux_cmd_stringify (cmd)))
+    if (!(cmd = flux_subprocess_get_cmd (p)))
         return NULL;
-    if (!(info = json_pack ("{s:i s:s}",
+    label = flux_cmd_get_label (cmd);
+    if (!(info = json_pack ("{s:i s:s s:s}",
                             "pid", flux_subprocess_pid (p),
-                            "cmd", flux_cmd_arg (cmd, 0)))) {
-        free (s);
+                            "cmd", flux_cmd_arg (cmd, 0),
+                            "label", label ? label : ""))) {
         errno = ENOMEM;
         return NULL;
     }
-    free (s);
     return info;
 }
 
@@ -681,7 +721,10 @@ static void server_list_cb (flux_t *h,
         }
         p = zlistx_next (s->subprocesses);
     }
-    if (flux_respond_pack (h, msg, "{s:i s:o}", "rank", s->rank,
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:o}",
+                           "rank", s->rank,
                            "procs", procs) < 0) {
         llog_error (s,
                     "error responding to %s.list request: %s",
@@ -785,6 +828,7 @@ void subprocess_server_destroy (subprocess_server_t *s)
         flux_msg_handler_delvec (s->handlers);
         server_killall (s, SIGKILL);
         zlistx_destroy (&s->subprocesses);
+        zhashx_destroy (&s->labels);
         flux_future_destroy (s->shutdown);
         free (s->service_name);
         free (s->local_uri);
@@ -815,7 +859,8 @@ subprocess_server_t *subprocess_server_create (flux_t *h,
     s->llog = log_fn;
     s->llog_data = log_data;
 
-    if (!(s->subprocesses = zlistx_new ()))
+    if (!(s->subprocesses = zlistx_new ())
+        || !(s->labels = zhashx_new ()))
         goto error;
     zlistx_set_destructor (s->subprocesses, proc_destructor);
     if (!(s->service_name = strdup (service_name)))
