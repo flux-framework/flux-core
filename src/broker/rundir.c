@@ -17,7 +17,6 @@
 #include <stdlib.h>
 #include <sys/un.h>
 
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/intree.h"
