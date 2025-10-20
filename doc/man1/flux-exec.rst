@@ -106,6 +106,13 @@ OPTIONS
    down. Process output is logged to the server's stdout and stderr. The
    :option:`--label-io` and :option:`--no-input` options are ignored.
 
+.. option:: --label=LABEL
+
+   Set a string label for the remote process. When specified, the label
+   allows the process to be referenced by name in addition to process ID
+   in subsequent operations. The label appears in process list responses
+   and must be unique across all processes managed by the subprocess server.
+
 CAVEATS
 =======
 

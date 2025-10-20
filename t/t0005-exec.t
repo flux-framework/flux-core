@@ -12,6 +12,7 @@ SIZE=4
 test_under_flux ${SIZE} minimal
 
 rkill="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py kill"
+rps="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py ps"
 
 invalid_rank() {
        echo $((${SIZE} + 1))
@@ -374,5 +375,22 @@ test_expect_success 'rexec: --bg logs output, exit code to broker logs' '
 test_expect_success 'rexec: --bg with non-existent command fails' '
 	test_must_fail flux exec -r 0 --bg nosuchcommand &&
 	test_must_fail flux exec --bg nosuchcommand
+'
+test_expect_success 'rexec: zero-length --label fails' '
+	test_must_fail flux exec --label="" true
+'
+test_expect_success 'rexec: --label works' '
+	flux exec -r 0 --bg --label=foo sleep 300 &&
+	$rps | grep foo
+'
+test_expect_success 'rexec: --label fails with pre-existing label' '
+	test_must_fail flux exec -r 0 --label=foo true
+'
+test_expect_success 'rexec: can kill process by label' '
+	$rkill -r 0 15 foo  &&
+	$dmesg_grep -t10 "foo: sleep\\[.*\\]: Killed by signal 15"
+'
+test_expect_success 'rexec: kill of unknown label fails' '
+	test_must_fail $rkill -r 0 15 badlabel
 '
 test_done

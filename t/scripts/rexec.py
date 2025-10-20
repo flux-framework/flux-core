@@ -20,11 +20,11 @@ import flux
 def kill(args):
     h = flux.Flux()
     try:
-        h.rpc(
-            args.service + ".kill",
-            nodeid=args.rank,
-            payload={"pid": int(args.pid), "signum": int(args.signum)},
-        ).get()
+        payload = {"pid": int(args.pid), "signum": int(args.signum)}
+    except ValueError:
+        payload = {"pid": -1, "label": args.pid, "signum": int(args.signum)}
+    try:
+        h.rpc(args.service + ".kill", nodeid=args.rank, payload=payload).get()
     except OSError as exc:
         LOGGER.error(f"kill: {exc}")
         sys.exit(1)
@@ -41,7 +41,9 @@ def ps(args):
         LOGGER.error(f"ps: {exc}")
         sys.exit(1)
     for item in resp["procs"]:
-        print(f"{item['pid']:<8}\t{item['cmd']}")
+        if not item["label"]:
+            item["label"] = "-"
+        print(f"{item['pid']:<8}\t{item['label']}\t{item['cmd']}")
 
 
 LOGGER = logging.getLogger("rexec")
