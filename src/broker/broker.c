@@ -94,7 +94,6 @@ static void signal_cb (flux_reactor_t *r,
 static int broker_handle_signals (broker_ctx_t *ctx);
 
 static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
-static void broker_remove_services (flux_msg_handler_t *handlers[]);
 
 static void set_proctitle (uint32_t rank);
 
@@ -550,7 +549,7 @@ cleanup:
     state_machine_destroy (ctx.state_machine);
     overlay_destroy (ctx.overlay);
     service_switch_destroy (ctx.services);
-    broker_remove_services (handlers);
+    flux_msg_handler_delvec (handlers);
     brokercfg_destroy (ctx.config);
     runat_destroy (ctx.runat);
     flux_watcher_destroy (ctx.w_internal);
@@ -1442,13 +1441,6 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
         return NULL;
     }
     return handlers;
-}
-
-/* Unregister message handlers
- */
-static void broker_remove_services (flux_msg_handler_t *handlers[])
-{
-    flux_msg_handler_delvec (handlers);
 }
 
 /**
