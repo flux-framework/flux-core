@@ -21,7 +21,6 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/aux.h"
@@ -180,7 +179,7 @@ void *module_thread (void *arg)
     /* Connect to broker socket, enable logging, register built-in services
      */
     if (!(ctx.h = flux_open (args->uri, 0))) {
-        log_err ("flux_open %s", args->uri);
+        flux_log_error (NULL, "flux_open %s", args->uri); // goes to stderr
         goto done;
     }
 
@@ -191,7 +190,7 @@ void *module_thread (void *arg)
     if (!(msg = flux_recv (ctx.h, match, 0))
         || welcome_decode_new (&ctx, (flux_msg_t **)&msg) < 0) {
         flux_msg_decref (msg);
-        log_err ("welcome failure");
+        flux_log (ctx.h, LOG_ERR, "welcome failure");
         goto done;
     }
 
@@ -202,25 +201,25 @@ void *module_thread (void *arg)
      */
     if (flux_aux_set (ctx.h, "flux::uuid", (char *)ctx.uuid, NULL) < 0
         || flux_aux_set (ctx.h, "flux::name", ctx.name, NULL) < 0) {
-        log_err ("error setting flux:: attributes");
+        flux_log_error (ctx.h, "error setting flux:: attributes");
         goto done;
     }
 
     /* Register services
      */
     if (modservice_register (ctx.h) < 0) {
-        log_err ("error registering internal services");
+        flux_log_error (ctx.h, "error registering internal services");
         goto done;
     }
 
     /* Block all signals
      */
     if (sigfillset (&signal_set) < 0) {
-        log_err ("sigfillset");
+        flux_log_error (ctx.h, "sigfillset");
         goto done;
     }
     if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0) {
-        log_errn (errnum, "pthread_sigmask");
+        flux_log (ctx.h, LOG_ERR, "pthread_sigmask: %s", strerror (errnum));
         goto done;
     }
 

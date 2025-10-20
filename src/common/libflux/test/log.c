@@ -17,11 +17,18 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
 
+void diag_log (const char *buf, int len, void *arg)
+{
+    char **pp = arg;
+    *pp = strndup (buf, len);
+}
+
 int main (int argc, char *argv[])
 {
     flux_t *h;
     char *s;
     int truncation_size = 3073;
+    char *ptr;
 
     plan (NO_PLAN);
 
@@ -46,11 +53,33 @@ int main (int argc, char *argv[])
     if (!(s = calloc (1, truncation_size)))
         BAIL_OUT ("Failed to allocate memory for truncation test");
     memset (s, 'a', truncation_size - 2);
-
     ok (flux_log (NULL, LOG_INFO, "# %s", s) == 0,
         "flux_log h=NULL works with long message");
-
     free (s);
+
+    ptr = NULL;
+    flux_log_set_redirect (h, diag_log, &ptr);
+    flux_log (h, LOG_DEBUG, "TestingOneTwo");
+    ok (ptr != NULL && strstr (ptr, "TestingOneTwo"),
+        "flux_log_set_redirect works");
+    free (ptr);
+
+    ptr = NULL;
+    flux_log_set_appname (h, "Smurfs");
+    flux_log (h, LOG_DEBUG, "TestingOneTwo");
+    ok (ptr != NULL && strstr (ptr, "Smurfs"),
+        "flux_log_set_appname works");
+    free (ptr);
+
+    ptr = NULL;
+    flux_log_set_hostname (h, "xyz123");
+    flux_log (h, LOG_DEBUG, "TestingOneTwo");
+    ok (ptr != NULL && strstr (ptr, "xyz123"),
+        "flux_log_set_hostname works");
+    free (ptr);
+
+    flux_log_set_redirect (h, NULL, NULL);
+
     test_server_stop (h);
     flux_close (h);
     done_testing();

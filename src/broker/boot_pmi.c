@@ -17,7 +17,6 @@
 #include <flux/hostlist.h>
 #include <flux/taskmap.h>
 
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/errno_safe.h"
@@ -194,8 +193,9 @@ static int format_tcp_uri (char *buf,
     char ipaddr[_POSIX_HOST_NAME_MAX + 1];
 
     if (attr_get (attrs, "tbon.interface-hint", &hint, NULL) < 0) {
-        log_err ("tbon.interface-hint attribute is not set");
-        return -1;
+        return errprintf (error,
+                          "tbon.interface-hint attribute is not set: %s",
+                          strerror (errno));
     }
     if (streq (hint, "hostname"))
         flags |= IPADDR_HOSTNAME;
@@ -264,15 +264,18 @@ static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
     return rc;
 }
 
-static int set_broker_boot_method_attr (attr_t *attrs, const char *value)
+static int set_broker_boot_method_attr (attr_t *attrs,
+                                        const char *value,
+                                        flux_error_t *errp)
 {
     (void)attr_delete (attrs, "broker.boot-method", true);
     if (attr_add (attrs,
                   "broker.boot-method",
                   value,
                   ATTR_IMMUTABLE) < 0) {
-        log_err ("setattr broker.boot-method");
-        return -1;
+        return errprintf (errp,
+                          "setattr broker.boot-method: %s",
+                          strerror (errno));
     }
     return 0;
 }
@@ -409,7 +412,10 @@ static void trace_upmi (void *arg, const char *text)
     fprintf (stderr, "boot_pmi: %s\n", text);
 }
 
-int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
+int boot_pmi (const char *hostname,
+              struct overlay *overlay,
+              attr_t *attrs,
+              flux_error_t *errp)
 {
     const char *topo_uri;
     flux_error_t error;
@@ -430,10 +436,8 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
     json_t *value;
 
     // N.B. overlay_create() sets the tbon.topo attribute
-    if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
-        log_msg ("error fetching tbon.topo attribute");
-        return -1;
-    }
+    if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0)
+        return errprintf (errp, "error fetching tbon.topo attribute");
     if (attr_get (attrs, "broker.boot-method", &upmi_method, NULL) < 0)
         upmi_method = NULL;
     if (getenv ("FLUX_PMI_DEBUG"))
@@ -442,63 +446,87 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
                               upmi_flags,
                               trace_upmi,
                               NULL,
-                              &error))) {
-        log_msg ("boot_pmi: %s", error.text);
-        return -1;
-    }
+                              &error)))
+        return errprintf (errp, "boot_pmi: %s", error.text);
     if (upmi_initialize (upmi, &info, &error) < 0) {
-        log_msg ("%s: initialize: %s", upmi_describe (upmi), error.text);
+        errprintf (errp,
+                   "%s: initialize: %s",
+                   upmi_describe (upmi),
+                   error.text);
         upmi_destroy (upmi);
         return -1;
     }
     if (info.dict != NULL) {
         json_object_foreach(info.dict, dkey, value) {
             if (!json_is_string(value)) {
-                log_err ("%s: initialize: value associated to key %s is not a string", upmi_describe (upmi), dkey);
+                errprintf (errp,
+                           "%s: initialize: value associated to key %s"
+                           " is not a string",
+                           upmi_describe (upmi),
+                           dkey);
                 goto error;
             }
             if (attr_add (attrs, dkey, json_string_value(value), ATTR_IMMUTABLE) < 0) {
-                log_err("%s: initialize: could not put attribute for key %s", upmi_describe (upmi), dkey);
+                errprintf (errp,
+                           "%s: initialize: could not put attribute"
+                           " for key %s",
+                           upmi_describe (upmi),
+                           dkey);
                 goto error;
             }
         }
     }
     if (set_instance_level_attr (upmi, attrs, &under_flux) < 0) {
-        log_err ("set_instance_level_attr");
+        errprintf (errp, "set_instance_level_attr: %s", strerror (errno));
         goto error;
     }
     if (under_flux) {
         if (attr_add (attrs, "jobid", info.name, ATTR_IMMUTABLE) < 0) {
-            log_err ("error setting jobid attribute");
+            errprintf (errp,
+                       "error setting jobid attribute: %s",
+                       strerror (errno));
             goto error;
         }
     }
     if (set_tbon_interface_hint_attr (upmi, attrs, overlay, under_flux) < 0) {
-        log_err ("error setting tbon.interface-hint attribute");
+        errprintf (errp,
+                   "error setting tbon.interface-hint attribute: %s",
+                   strerror (errno));
         goto error;
     }
     if (!(topo = topology_create (topo_uri, info.size, &error))) {
-        log_msg ("error creating '%s' topology: %s", topo_uri, error.text);
+        errprintf (errp,
+                   "error creating '%s' topology: %s",
+                   topo_uri,
+                   error.text);
         goto error;
     }
     if (topology_set_rank (topo, info.rank) < 0
-        || overlay_set_topology (overlay, topo) < 0)
+        || overlay_set_topology (overlay, topo) < 0) {
+        errprintf (errp, "error setting rank/topology: %s", strerror (errno));
         goto error;
+    }
     if (!(hl = hostlist_create ())) {
-        log_err ("hostlist_create");
+        errprintf (errp, "error creating hostlist: %s", strerror (errno));
         goto error;
     }
 
     if (info.size == 1) {
-        if (create_singleton_taskmap (&taskmap, &error) < 0)
+        if (create_singleton_taskmap (&taskmap, &error) < 0) {
+            errprintf (errp, "error creating taskmap: %s", error.text);
             goto error;
+        }
     }
     else {
-        if (fetch_taskmap (upmi, &taskmap, &error) < 0)
+        if (fetch_taskmap (upmi, &taskmap, &error) < 0) {
+            errprintf (errp, "error fetching taskmap: %s", error.text);
             goto error;
+        }
     }
     if (set_broker_mapping_attr (attrs, taskmap) < 0) {
-        log_err ("error setting broker.mapping attribute");
+        errprintf (errp,
+                   "error setting broker.mapping attribute: %s",
+                   strerror (errno));
         goto error;
     }
 
@@ -506,7 +534,7 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
      */
     if (info.size == 1) {
         if (hostlist_append (hl, hostname) < 0) {
-            log_err ("hostlist_append");
+            errprintf (errp, "hostlist_append: %s", strerror (errno));
             goto error;
         }
         goto done;
@@ -519,8 +547,12 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
     child_count = topology_get_child_ranks (topo, NULL, 0);
     if (child_count > 0) {
         if (!(child_ranks = calloc (child_count, sizeof (child_ranks[0])))
-            || topology_get_child_ranks (topo, child_ranks, child_count) < 0)
+            || topology_get_child_ranks (topo, child_ranks, child_count) < 0) {
+            errprintf (errp,
+                       "error fetching child ranks from topology: %s",
+                       strerror (errno));
             goto error;
+        }
     }
 
     /* If there are to be downstream peers, then bind to a socket.
@@ -535,23 +567,23 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
         nlocal = clique_ranks (taskmap, info.rank, child_ranks, child_count);
 
         if (format_tcp_uri (tcp, sizeof (tcp), attrs, &error) < 0) {
-            log_err ("%s", error.text);
+            errprintf (errp, "%s", error.text);
             goto error;
         }
         if (format_ipc_uri (ipc, sizeof (ipc), attrs, info.rank, &error) < 0) {
-            log_err ("%s", error.text);
+            errprintf (errp, "%s", error.text);
             goto error;
         }
         if (prefer_tcp || nlocal == 0) {
-            if (overlay_bind (overlay, tcp, NULL) < 0)
+            if (overlay_bind (overlay, tcp, NULL, errp) < 0)
                 goto error;
         }
         else if (!prefer_tcp && nlocal == child_count) {
-            if (overlay_bind (overlay, ipc, NULL) < 0)
+            if (overlay_bind (overlay, ipc, NULL, errp) < 0)
                 goto error;
         }
         else {
-            if (overlay_bind (overlay, tcp, ipc) < 0)
+            if (overlay_bind (overlay, tcp, ipc, errp) < 0)
                 goto error;
         }
     }
@@ -559,10 +591,12 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
     /* Each broker writes a business card consisting of hostname,
      * public key, and URIs (if any).
      */
-    if (!(bc = overlay_get_bizcard (overlay)))
+    if (!(bc = overlay_get_bizcard (overlay))) {
+        errprintf (errp, "get business card: %s", strerror (errno));
         goto error;
+    }
     if (put_bizcard (upmi, info.rank, bc, &error) < 0) {
-        log_msg ("%s", error.text);
+        errprintf (errp, "put business card: %s", error.text);
         goto error;
     }
 
@@ -570,20 +604,25 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
                   "tbon.endpoint",
                   bizcard_uri_first (bc), // OK if NULL
                   ATTR_IMMUTABLE) < 0) {
-        log_err ("setattr tbon.endpoint");
+        errprintf (errp, "setattr tbon.endpoint: %s", strerror (errno));
         goto error;
     }
 
     /* BARRIER */
     if (upmi_barrier (upmi, &error) < 0) {
-        log_msg ("%s: barrier: %s", upmi_describe (upmi), error.text);
+        errprintf (errp, "%s: barrier: %s", upmi_describe (upmi), error.text);
         goto error;
     }
 
     /* Cache bizcard results by rank to avoid repeated PMI lookups.
      */
-    if (!(cache = bizcache_create (info.size)))
+    if (!(cache = bizcache_create (info.size))) {
+        errprintf (errp,
+                   "%s: error creating business card cache: %s",
+                   upmi_describe (upmi),
+                   strerror (errno));
         goto error;
+    }
 
     /* Fetch the business card of parent and inform overlay of URI
      * and public key.
@@ -592,21 +631,19 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
         int parent_rank = topology_get_parent (topo);
         const char *uri = NULL;
 
-        if (get_bizcard (upmi, cache, parent_rank, &bc, &error) < 0) {
-            log_msg ("%s", error.text);
+        if (get_bizcard (upmi, cache, parent_rank, &bc, errp) < 0)
             goto error;
-        }
         if (!get_prefer_tcp (attrs)
             && clique_ranks (taskmap, info.rank, &parent_rank, 1) == 1)
             uri = bizcard_uri_find (bc, "ipc://");
         if (!uri)
             uri = bizcard_uri_find (bc, NULL);
         if (overlay_set_parent_uri (overlay, uri) < 0) {
-            log_err ("overlay_set_parent_uri");
+            errprintf (errp, "overlay_set_parent_uri: %s", strerror (errno));
             goto error;
         }
         if (overlay_set_parent_pubkey (overlay, bizcard_pubkey (bc)) < 0) {
-            log_err ("overlay_set_parent_pubkey");
+            errprintf (errp, "overlay_set_parent_pubkey: %s", strerror (errno));
             goto error;
         }
     }
@@ -617,13 +654,15 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
         int child_rank = child_ranks[i];
         char name[64];
 
-        if (get_bizcard (upmi, cache, child_rank, &bc, &error) < 0) {
-            log_msg ("%s", error.text);
+        if (get_bizcard (upmi, cache, child_rank, &bc, errp) < 0)
             goto error;
-        }
         (void)snprintf (name, sizeof (name), "%d", i);
         if (overlay_authorize (overlay, name, bizcard_pubkey (bc)) < 0) {
-            log_err ("overlay_authorize %s=%s", name, bizcard_pubkey (bc));
+            errprintf (errp,
+                       "overlay_authorize %s=%s: %s",
+                       name,
+                       bizcard_pubkey (bc),
+                       strerror (errno));
             goto error;
         }
     }
@@ -632,12 +671,10 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
      * The hostlist is built independently (and in parallel) on all ranks.
      */
     for (i = 0; i < info.size; i++) {
-        if (get_bizcard (upmi, cache, i, &bc, &error) < 0) {
-            log_msg ("%s", error.text);
+        if (get_bizcard (upmi, cache, i, &bc, errp) < 0)
             goto error;
-        }
         if (hostlist_append (hl, bizcard_hostname (bc)) < 0) {
-            log_err ("hostlist_append");
+            errprintf (errp, "hostlist_append: %s", strerror (errno));
             goto error;
         }
     }
@@ -646,19 +683,21 @@ int boot_pmi (const char *hostname, struct overlay *overlay, attr_t *attrs)
      * Need to ensure that all clients are "allowed".
      */
     if (upmi_barrier (upmi, &error) < 0) {
-        log_msg ("%s: barrier: %s", upmi_describe (upmi), error.text);
+        errprintf (errp, "%s: barrier: %s", upmi_describe (upmi), error.text);
         goto error;
     }
 
 done:
     if (set_hostlist_attr (attrs, hl) < 0) {
-        log_err ("setattr hostlist");
+        errprintf (errp, "setattr hostlist: %s", strerror (errno));
         goto error;
     }
-    if (set_broker_boot_method_attr (attrs, upmi_describe (upmi)) < 0)
+    if (set_broker_boot_method_attr (attrs, upmi_describe (upmi), &error) < 0) {
+        errprintf (errp, "%s: %s", upmi_describe (upmi), error.text);
         goto error;
+    }
     if (upmi_finalize (upmi, &error) < 0) {
-        log_msg ("%s: finalize: %s", upmi_describe (upmi), error.text);
+        errprintf (errp, "%s: finalize: %s", upmi_describe (upmi), error.text);
         goto error;
     }
     upmi_destroy (upmi);
@@ -669,13 +708,9 @@ done:
     bizcache_destroy (cache);
     return 0;
 error:
-    /* We've logged error to stderr before getting here so the fatal
-     * error message passed to the PMI server does not necessarily need
-     * to be highly detailed.  Some implementations of abort may not
-     * return.
+    /* N.B. Some implementations of abort may not return.
      */
-    if (upmi_abort (upmi, "fatal bootstrap error", &error) < 0)
-        log_msg ("upmi_abort: %s", error.text);
+    (void)upmi_abort (upmi, errp ? errp->text : "fatal bootstrap error", NULL);
     upmi_destroy (upmi);
     hostlist_destroy (hl);
     free (child_ranks);

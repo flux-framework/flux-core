@@ -18,7 +18,6 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/fsd.h"
@@ -802,7 +801,7 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
     int rc = 1;
 
     if (runat_get_exit_code (r, name, &rc) < 0)
-        log_err ("runat_get_exit_code %s", name);
+        flux_log_error (s->ctx->h, "runat_get_exit_code %s", name);
 
     if (streq (name, "rc1")) {
         if (rc == 0)
@@ -977,38 +976,41 @@ static bool quorum_configure_deprecated (struct state_machine *s,
     else
         return false;
     if (s->ctx->rank == 0) {
-        log_msg ("warning: broker.quorum is now a size - assuming %lu",
-                 (unsigned long)s->quorum.size);
+        flux_log (s->ctx->h,
+                  LOG_ERR,
+                  "warning: broker.quorum is now a size - assuming %lu",
+                  (unsigned long)s->quorum.size);
     }
     return true;
 }
 
 /* Configure the count of broker ranks needed for quorum (default=<size>).
  */
-static int quorum_configure (struct state_machine *s)
+static int quorum_configure (struct state_machine *s,
+                             const char *name,
+                             flux_error_t *errp)
 {
     const char *val;
-    if (attr_get (s->ctx->attrs, "broker.quorum", &val, NULL) == 0) {
+    if (attr_get (s->ctx->attrs, name, &val, NULL) == 0) {
         if (!quorum_configure_deprecated (s, val)) {
             errno = 0;
             s->quorum.size = strtoul (val, NULL, 10);
             if (errno != 0
                 || s->quorum.size < 1
                 || s->quorum.size > s->ctx->size) {
-                log_msg ("Error parsing broker.quorum attribute");
                 errno = EINVAL;
-                return -1;
+                return errprintf (errp, "Error parsing %s attribute", name);
             }
         }
-        if (attr_set_flags (s->ctx->attrs, "broker.quorum", ATTR_IMMUTABLE) < 0)
-            return -1;
+        if (attr_set_flags (s->ctx->attrs, name, ATTR_IMMUTABLE) < 0)
+            return errprintf (errp, "%s: %s", name, strerror (errno));
     }
     else {
         s->quorum.size = s->ctx->size;
         char buf[16];
         snprintf (buf, sizeof (buf), "%lu", (unsigned long)s->quorum.size);
-        if (attr_add (s->ctx->attrs, "broker.quorum", buf, ATTR_IMMUTABLE) < 0)
-            return -1;
+        if (attr_add (s->ctx->attrs, name, buf, ATTR_IMMUTABLE) < 0)
+            return errprintf (errp, "%s: %s", name, strerror (errno));
     }
     return 0;
 }
@@ -1016,7 +1018,8 @@ static int quorum_configure (struct state_machine *s)
 static int timeout_configure (struct state_machine *s,
                               const char *name,
                               double *value,
-                              double default_value)
+                              double default_value,
+                              flux_error_t *errp)
 {
     const char *val;
     char fsd[32];
@@ -1025,13 +1028,11 @@ static int timeout_configure (struct state_machine *s,
         if (streq (val, "none"))
             *value = -1;
         else {
-            if (fsd_parse_duration (val, value) < 0) {
-                log_msg ("Error parsing %s attribute", name);
-                return -1;
-            }
+            if (fsd_parse_duration (val, value) < 0)
+                return errprintf (errp, "Error parsing %s attribute", name);
         }
         if (attr_delete (s->ctx->attrs, name, true) < 0)
-            return -1;
+            return errprintf (errp, "%s: %s", name, strerror (errno));
     }
     else
         *value = default_value;
@@ -1039,10 +1040,10 @@ static int timeout_configure (struct state_machine *s,
         snprintf (fsd, sizeof (fsd), "none");
     else {
         if (fsd_format_duration (fsd, sizeof (fsd), *value) < 0)
-            return -1;
+            return errprintf (errp, "Error parsing %s attribute", name);
     }
     if (attr_add (s->ctx->attrs, name, fsd, ATTR_IMMUTABLE) < 0)
-        return -1;
+        return errprintf (errp, "%s: %s", name, strerror (errno));
     return 0;
 }
 
@@ -1443,13 +1444,14 @@ void state_machine_destroy (struct state_machine *s)
     }
 }
 
-struct state_machine *state_machine_create (struct broker *ctx)
+struct state_machine *state_machine_create (struct broker *ctx,
+                                            flux_error_t *errp)
 {
     struct state_machine *s;
     flux_reactor_t *r = flux_get_reactor (ctx->h);
 
     if (!(s = calloc (1, sizeof (*s))))
-        return NULL;
+        goto error;
     s->ctx = ctx;
     s->state = STATE_NONE;
     monotime (&s->t_start);
@@ -1493,34 +1495,33 @@ struct state_machine *state_machine_create (struct broker *ctx)
         || idset_range_set (s->quorum.all, 0, s->ctx->size - 1) < 0)
         goto error;
 
-    if (quorum_configure (s) < 0
+    if (quorum_configure (s, "broker.quorum", errp) < 0
         || timeout_configure (s,
                               "broker.quorum-warn",
                               &s->quorum.warn_period,
-                              default_quorum_warn) < 0) {
-        log_err ("error configuring quorum attributes");
-        goto error;
-    }
+                              default_quorum_warn,
+                              errp) < 0)
+        goto error_hasmsg;
     if (timeout_configure (s,
                            "broker.cleanup-timeout",
                            &s->cleanup.timeout,
-                           default_cleanup_timeout) < 0) {
-        log_err ("error configuring cleanup timeout attribute");
-        goto error;
+                           default_cleanup_timeout,
+                           errp) < 0) {
+        goto error_hasmsg;
     }
     if (timeout_configure (s,
                            "broker.sd-stop-timeout",
                            &s->sd.stop_timeout,
-                           default_sd_stop_timeout) < 0) {
-        log_err ("error configuring systemd stop timeout attribute");
-        goto error;
+                           default_sd_stop_timeout,
+                           errp) < 0) {
+        goto error_hasmsg;
     }
     if (timeout_configure (s,
                            "broker.shutdown-warn",
                            &s->shutdown.warn_period,
-                           default_shutdown_warn) < 0) {
-        log_err ("error configuring shutdown warn attribute");
-        goto error;
+                           default_shutdown_warn,
+                           errp) < 0) {
+        goto error_hasmsg;
     }
     norestart_configure (s);
     overlay_set_monitor_cb (ctx->overlay, overlay_monitor_cb, s);
@@ -1528,6 +1529,8 @@ struct state_machine *state_machine_create (struct broker *ctx)
 nomem:
     errno = ENOMEM;
 error:
+    errprintf (errp, "%s", strerror (errno));
+error_hasmsg:
     state_machine_destroy (s);
     return NULL;
 }

@@ -18,6 +18,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/test_file.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/broker/boot_config.h"
 #include "ccan/str/str.h"
 
@@ -42,11 +43,12 @@ void test_parse (const char *dir)
 "  { host = \"foo[1-62]\" },\n" \
 "  { host = \"foo63\" },\n" \
 "]\n";
+    flux_error_t error;
 
     create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
-    rc = boot_config_parse (cf, &conf, &hosts);
+    rc = boot_config_parse (cf, &conf, &hosts, NULL);
     ok (rc == 0,
         "boot_conf_parse worked");
     ok (hosts != NULL && json_array_size (hosts) == 64,
@@ -61,40 +63,84 @@ void test_parse (const char *dir)
     ok (streq (conf.default_connect, "tcp://x%h:42"),
         "and set default_connect correctly (with %%p substitution)");
 
-    ok (boot_config_getrankbyname (hosts, "foo0", &rank) == 0
+    ok (boot_config_getrankbyname (hosts, "foo0", &rank, NULL) == 0
         && rank == 0,
        "boot_config_getrankbyname found rank 0");
-    ok (boot_config_getrankbyname (hosts, "foo1", &rank) == 0
+    ok (boot_config_getrankbyname (hosts, "foo1", &rank, NULL) == 0
         && rank == 1,
        "boot_config_getrankbyname found rank 1");
-    ok (boot_config_getrankbyname (hosts, "foo42", &rank) == 0
+    ok (boot_config_getrankbyname (hosts, "foo42", &rank, NULL) == 0
         && rank == 42,
        "boot_config_getrankbyname found rank 42");
-    ok (boot_config_getrankbyname (hosts, "notfound", &rank) < 0,
+    err_init (&error);
+    ok (boot_config_getrankbyname (hosts, "notfound", &rank, &error) < 0,
        "boot_config_getrankbyname fails on unknown entry");
+    diag ("%s", error.text);
 
-    ok (boot_config_getbindbyrank (hosts, &conf, 0, uri, sizeof (uri)) == 0
+    ok (boot_config_getbindbyrank (hosts,
+                                   &conf,
+                                   0,
+                                   uri,
+                                   sizeof (uri),
+                                   NULL) == 0
         && streq (uri, "tcp://en0:42"),
         "boot_config_getbindbyrank 0 works with expected value");
-    ok (boot_config_getbindbyrank (hosts, &conf, 1, uri, sizeof (uri)) == 0
+    ok (boot_config_getbindbyrank (hosts,
+                                   &conf,
+                                   1,
+                                   uri,
+                                   sizeof (uri),
+                                   NULL) == 0
         && streq (uri, "tcp://en0:42"),
         "boot_config_getbindbyrank 1 works with expected value");
-    ok (boot_config_getbindbyrank (hosts, &conf, 63, uri, sizeof (uri)) == 0
+    ok (boot_config_getbindbyrank (hosts,
+                                   &conf,
+                                   63,
+                                   uri,
+                                   sizeof (uri),
+                                   NULL) == 0
         && streq (uri, "tcp://en0:42"),
         "boot_config_getbindbyrank 63 works with expected value");
-    ok (boot_config_getbindbyrank (hosts, &conf, 64, uri, sizeof (uri))  < 0,
+    err_init (&error);
+    ok (boot_config_getbindbyrank (hosts,
+                                   &conf,
+                                   64,
+                                   uri,
+                                   sizeof (uri),
+                                   &error)  < 0,
         "boot_config_getbindbyrank 64 fails");
+    diag ("%s", error.text);
 
-    ok (boot_config_geturibyrank (hosts, &conf, 0, uri, sizeof (uri)) == 0
+    ok (boot_config_geturibyrank (hosts,
+                                  &conf,
+                                  0,
+                                  uri,
+                                  sizeof (uri),
+                                  NULL) == 0
         && streq (uri, "tcp://xfoo0:42"),
         "boot_config_geturibyrank 0 works with expected value");
-    ok (boot_config_geturibyrank (hosts, &conf, 1, uri, sizeof (uri)) == 0
+    ok (boot_config_geturibyrank (hosts,
+                                  &conf,
+                                  1,
+                                  uri,
+                                  sizeof (uri),
+                                  NULL) == 0
         && streq (uri, "tcp://xfoo1:42"),
         "boot_config_geturibyrank 1 works with expected value");
-    ok (boot_config_geturibyrank (hosts, &conf, 63, uri, sizeof (uri)) == 0
+    ok (boot_config_geturibyrank (hosts,
+                                  &conf,
+                                  63,
+                                  uri,
+                                  sizeof (uri),
+                                  NULL) == 0
         && streq (uri, "tcp://xfoo63:42"),
         "boot_config_geturibyrank 63 works with expected value");
-    ok (boot_config_geturibyrank (hosts, &conf, 64, uri, sizeof (uri))  < 0,
+    ok (boot_config_geturibyrank (hosts,
+                                  &conf,
+                                  64,
+                                  uri,
+                                  sizeof (uri),
+                                  NULL)  < 0,
         "boot_config_geturibyrank 64 fails");
 
     json_decref (hosts);
@@ -111,6 +157,7 @@ void test_overflow_bind (const char *dir)
     struct boot_conf conf;
     char t[MAX_URI*2];
     json_t *hosts;
+    flux_error_t error;
 
     if (snprintf (t,
                   sizeof (t),
@@ -120,8 +167,10 @@ void test_overflow_bind (const char *dir)
     create_test_file (dir, "boot", "toml", path, sizeof (path), t);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
-    ok (boot_config_parse (cf, &conf, &hosts) == -1,
+    err_init (&error);
+    ok (boot_config_parse (cf, &conf, &hosts, &error) == -1,
         "boot_conf_parse caught default_bind overflow");
+    diag ("%s", error.text);
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
@@ -136,6 +185,7 @@ void test_overflow_connect (const char *dir)
     struct boot_conf conf;
     char t[MAX_URI*2];
     json_t *hosts;
+    flux_error_t error;
 
     if (snprintf (t,
                   sizeof (t),
@@ -146,8 +196,10 @@ void test_overflow_connect (const char *dir)
 
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
-    ok (boot_config_parse (cf, &conf, &hosts) == -1,
+    err_init (&error);
+    ok (boot_config_parse (cf, &conf, &hosts, &error) == -1,
         "boot_conf_parse caught default_connect overflow");
+    diag ("%s", error.text);
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
@@ -166,13 +218,16 @@ void test_bad_hosts_entry (const char *dir)
 "hosts = [\n" \
 "  42,\n" \
 "]\n";
+    flux_error_t error;
 
     create_test_file (dir, "boot", "toml", path, sizeof (path), input);
 
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
-    ok (boot_config_parse (cf, &conf, &hosts) == -1,
+    err_init (&error);
+    ok (boot_config_parse (cf, &conf, &hosts, &error) == -1,
         "boot_config_parse failed bad hosts entry");
+    diag ("%s", error.text);
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
@@ -193,22 +248,39 @@ void test_missing_info (const char *dir)
 "hosts = [\n" \
 "  { host = \"foo\" },\n" \
 "]\n";
+    flux_error_t error;
 
     create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
-    if (boot_config_parse (cf, &conf, &hosts) < 0)
+    err_init (&error);
+    if (boot_config_parse (cf, &conf, &hosts, &error) < 0)
         BAIL_OUT ("boot_config_parse unexpectedly failed");
+    diag ("%s", error.text);
     if (!hosts)
         BAIL_OUT ("cannot continue without hosts array");
-    ok (boot_config_getrankbyname (hosts, "foo", &rank) == 0
+    ok (boot_config_getrankbyname (hosts, "foo", &rank, NULL) == 0
         && rank == 0,
         "boot_config_getrankbyname found entry");
-    ok (boot_config_getbindbyrank (hosts, &conf, 0, uri, sizeof(uri)) < 0,
+    err_init (&error);
+    ok (boot_config_getbindbyrank (hosts,
+                                   &conf,
+                                   0,
+                                   uri,
+                                   sizeof(uri),
+                                   &error) < 0,
         "boot_config_getbindbyrank fails due to missing bind uri");
-    ok (boot_config_geturibyrank (hosts, &conf, 0, uri, sizeof(uri)) < 0,
+    diag ("%s", error.text);
+    err_init (&error);
+    ok (boot_config_geturibyrank (hosts,
+                                  &conf,
+                                  0,
+                                  uri,
+                                  sizeof(uri),
+                                  &error) < 0,
         "boot_config_geturibyrank fails due to missing connect uri");
+    diag ("%s", error.text);
 
     json_decref (hosts);
 
@@ -229,13 +301,16 @@ void test_bad_host_hostlist (const char *dir)
 "hosts = [\n" \
 "  { host=\"foo[1-\" },\n" \
 "]\n";
+    flux_error_t error;
 
     create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
-    ok (boot_config_parse (cf, &conf, &hosts) == -1,
+    err_init (&error);
+    ok (boot_config_parse (cf, &conf, &hosts, &error) == -1,
         "boot_config_parse failed on host entry containing bad idset");
+    diag ("%s", error.text);
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
@@ -254,13 +329,16 @@ void test_bad_host_bind (const char *dir)
 "hosts = [\n" \
 "  { host=\"foo\", bind=42 },\n" \
 "]\n";
+    flux_error_t error;
 
     create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
-    ok (boot_config_parse (cf, &conf, &hosts) < 0,
+    err_init (&error);
+    ok (boot_config_parse (cf, &conf, &hosts, &error) < 0,
         "boot_config_parse failed on host entry with wrong bind type");
+    diag ("%s", error.text);
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
@@ -279,13 +357,16 @@ void test_bad_host_key (const char *dir)
 "hosts = [\n" \
 "  { host=\"foo\", wrongkey=42 },\n" \
 "]\n";
+    flux_error_t error;
 
     create_test_file (dir, "boot", "toml", path, sizeof (path), input);
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
-    ok (boot_config_parse (cf, &conf, &hosts) < 0,
+    err_init (&error);
+    ok (boot_config_parse (cf, &conf, &hosts, &error) < 0,
         "boot_config_parse failed on host entry with unknown key");
+    diag ("%s", error.text);
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
@@ -336,7 +417,7 @@ void test_empty (const char *dir)
         BAIL_OUT ("flux_conf_parse failed");
 
     hosts = (json_t *)(uintptr_t)1;
-    ok (boot_config_parse (cf, &conf, &hosts) == 0 && hosts == NULL,
+    ok (boot_config_parse (cf, &conf, &hosts, NULL) == 0 && hosts == NULL,
         "boot_config_parse works with empty bootstrap stanza");
 
     if (unlink (path) < 0)
@@ -362,7 +443,7 @@ void test_empty_hosts (const char *dir)
         BAIL_OUT ("flux_conf_parse failed");
 
     hosts = (json_t *)(uintptr_t)1;
-    ok (boot_config_parse (cf, &conf, &hosts) == 0 && hosts == NULL,
+    ok (boot_config_parse (cf, &conf, &hosts, NULL) == 0 && hosts == NULL,
         "boot_config_parse works with empty hosts array");
 
     if (unlink (path) < 0)
@@ -449,7 +530,7 @@ void test_attr (const char *dir)
     if (attrs == NULL)
         BAIL_OUT ("cannot continue without attrs");
 
-    rc = boot_config_attr (attrs, "localhost", NULL);
+    rc = boot_config_attr (attrs, "localhost", NULL, NULL);
     ok (rc == 0,
         "boot_config_attr works NULL hosts");
     ok (attr_get (attrs, "hostlist", NULL, NULL) == 0,
@@ -462,7 +543,7 @@ void test_attr (const char *dir)
     hosts = json_array ();
     if (hosts == NULL)
         BAIL_OUT ("cannot continue without empty hosts array");
-    rc = boot_config_attr (attrs, "localhost", hosts);
+    rc = boot_config_attr (attrs, "localhost", hosts, NULL);
     ok (rc == 0,
         "boot_config_attr works empty hosts");
     ok (attr_get (attrs, "hostlist", NULL, NULL) == 0,
@@ -471,7 +552,7 @@ void test_attr (const char *dir)
     hosts = NULL;
     attr_destroy (attrs);
 
-    rc = boot_config_parse (cf, &conf, &hosts);
+    rc = boot_config_parse (cf, &conf, &hosts, NULL);
     ok (rc == 0,
         "boot_conf_parse worked");
     if (hosts == NULL)
@@ -480,7 +561,7 @@ void test_attr (const char *dir)
     attrs = attr_create ();
     if (!attrs)
         BAIL_OUT ("attr_create failed");
-    rc = boot_config_attr (attrs, "foo0", hosts);
+    rc = boot_config_attr (attrs, "foo0", hosts, NULL);
     ok (rc == 0,
         "boot_config_attr works on input hosts");
     ok (attr_get (attrs, "hostlist", &val, &flags) == 0
@@ -510,7 +591,7 @@ void test_curve_cert (const char *dir)
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
-    ok (boot_config_parse (cf, &conf, &hosts) == 0 && hosts == NULL,
+    ok (boot_config_parse (cf, &conf, &hosts, NULL) == 0 && hosts == NULL,
         "boot_config_parse works with curve_cert");
     ok (conf.curve_cert != NULL && streq (conf.curve_cert, "meep"),
         "and curve_cert has expected value");
@@ -535,7 +616,7 @@ void test_ipv6 (const char *dir)
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
-    ok (boot_config_parse (cf, &conf, &hosts) == 0 && hosts == NULL,
+    ok (boot_config_parse (cf, &conf, &hosts, NULL) == 0 && hosts == NULL,
         "boot_config_parse works with enable_ipv6");
     ok (conf.enable_ipv6 != 0,
         "and enable_ipv6 has expected value");
@@ -572,7 +653,7 @@ void test_dup_hosts (const char *dir)
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
-    ok (boot_config_parse (cf, &conf, &hosts) == 0,
+    ok (boot_config_parse (cf, &conf, &hosts, NULL) == 0,
         "boot_config_parse handles duplicate hosts");
     ok (hosts != NULL && json_array_size (hosts) == 128,
         "and post-processed hosts array has expected size");

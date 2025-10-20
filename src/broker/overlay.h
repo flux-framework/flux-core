@@ -48,7 +48,8 @@ struct overlay *overlay_create (flux_t *h,
                                 attr_t *attrs,
                                 void *zctx,
                                 overlay_recv_f cb,
-                                void *arg);
+                                void *arg,
+                                flux_error_t *error);
 void overlay_destroy (struct overlay *ov);
 
 /* Start sending control messages to parent and monitoring peers.
@@ -82,7 +83,9 @@ int overlay_sendmsg_new (struct overlay *ov,
  * files, each broker loads an (assumed) identical key-pair from a file.
  * Only the public key may be shared over the network, never the private key.
  */
-int overlay_cert_load (struct overlay *ov, const char *path);
+int overlay_cert_load (struct overlay *ov,
+                       const char *path,
+                       flux_error_t *error);
 const char *overlay_cert_pubkey (struct overlay *ov);
 const char *overlay_cert_name (struct overlay *ov);
 int overlay_authorize (struct overlay *ov,
@@ -120,7 +123,10 @@ const char *overlay_get_subtree_status (struct overlay *ov, int rank);
  * before any peers are authorized as long as they are authorized before they
  * try to connect.  Note: uri2 (a secondary endpoint) MAY be NULL
  */
-int overlay_bind (struct overlay *ov, const char *uri, const char *uri2);
+int overlay_bind (struct overlay *ov,
+                  const char *uri,
+                  const char *uri2,
+                  flux_error_t *error);
 
 /* Broker should call overlay_connect(), after overlay_set_parent_uri()
  * and overlay_set_parent_pubkey(), if there is a parent.

@@ -25,7 +25,7 @@
 #include <flux/taskmap.h>
 
 #include "src/common/libyuarel/yuarel.h"
-#include "src/common/libutil/log.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "ccan/str/str.h"
 
@@ -136,7 +136,7 @@ static int boot_config_append_host (json_t *hosts,
  * any entries that have the same host key.
  * The caller must release the returned JSON object with json_decref().
  */
-static json_t *boot_config_expand_hosts (json_t *hosts)
+static json_t *boot_config_expand_hosts (json_t *hosts, flux_error_t *errp)
 {
     json_t *nhosts = NULL;
     json_t *hash = NULL;
@@ -145,7 +145,7 @@ static json_t *boot_config_expand_hosts (json_t *hosts)
 
     if (!(nhosts = json_array ())
         || !(hash = json_object ())) {
-        log_msg ("Config file error [bootstrap]: out of memory");
+        errprintf (errp, "Config file error [bootstrap]: out of memory");
         goto error;
     }
     json_array_foreach (hosts, index, value) {
@@ -164,14 +164,16 @@ static json_t *boot_config_expand_hosts (json_t *hosts)
                             "bind", &bind,
                             "connect", &connect,
                             "parent", &parent) < 0) {
-            log_msg ("Config file error [bootstrap] host entry: %s",
-                     error.text);
+            errprintf (errp,
+                       "Config file error [bootstrap] host entry: %s",
+                       error.text);
             goto error;
         }
         if (!(hl = hostlist_decode (host))) {
-            log_msg ("Config file error [bootstrap]:"
-                     " host value '%s' is not a valid hostlist",
-                     host);
+            errprintf (errp,
+                       "Config file error [bootstrap]:"
+                       " host value '%s' is not a valid hostlist",
+                       host);
             goto error;
         }
         s = hostlist_first (hl);
@@ -180,16 +182,20 @@ static json_t *boot_config_expand_hosts (json_t *hosts)
             if (!(entry = json_object_get (hash, s))) {
                 if (boot_config_append_host (nhosts, s, value) < 0
                     || json_object_set (hash, s, value) < 0) {
-                    log_msg ("Config file error [bootstrap]:"
-                             " error appending host %s", s);
+                    errprintf (errp,
+                               "Config file error [bootstrap]:"
+                               " error appending host %s",
+                               s);
                     hostlist_destroy (hl);
                     goto error;
                 }
             }
             else {
                 if (json_object_update (entry, value) < 0) {
-                    log_msg ("Config file error [bootstrap]:"
-                             " error merging host %s", s);
+                    errprintf (errp,
+                               "Config file error [bootstrap]:"
+                               " error merging host %s",
+                               s);
                     hostlist_destroy (hl);
                     goto error;
                 }
@@ -214,7 +220,8 @@ error:
  */
 int boot_config_parse (const flux_conf_t *cf,
                        struct boot_conf *conf,
-                       json_t **hostsp)
+                       json_t **hostsp,
+                       flux_error_t *errp)
 {
     flux_error_t error;
     const char *default_bind = NULL;
@@ -232,8 +239,9 @@ int boot_config_parse (const flux_conf_t *cf,
                             "default_connect", &default_connect,
                             "hosts", &conf->hosts,
                             "enable_ipv6", &conf->enable_ipv6) < 0) {
-        log_msg ("Config file error [bootstrap]: %s", error.text);
-        return -1;
+        return errprintf (errp,
+                          "Config file error [bootstrap]: %s",
+                          error.text);
     }
 
     /* Take care of %p substitution in the default bind/connect URI's
@@ -245,9 +253,9 @@ int boot_config_parse (const flux_conf_t *cf,
                                     default_bind,
                                     NULL,
                                     conf->default_port) < 0) {
-            log_msg ("Config file error [bootstrap] %s",
-                     "buffer overflow building default bind URI");
-            return -1;
+            return errprintf (errp,
+                              "Config file error [bootstrap]"
+                              " buffer overflow building default bind URI");
         }
     }
     if (default_connect) {
@@ -256,9 +264,9 @@ int boot_config_parse (const flux_conf_t *cf,
                                     default_connect,
                                     NULL,
                                     conf->default_port) < 0) {
-            log_msg ("Config file error [bootstrap] %s",
-                     "buffer overflow building default connect URI");
-            return -1;
+            return errprintf (errp,
+                              "Config file error [bootstrap]"
+                              " buffer overflow building default connect URI");
         }
     }
 
@@ -266,11 +274,12 @@ int boot_config_parse (const flux_conf_t *cf,
      */
     if (conf->hosts) {
         if (!json_is_array (conf->hosts)) {
-            log_msg ("Config file error [bootstrap] hosts must be array type");
-            return -1;
+            return errprintf (errp,
+                              "Config file error [bootstrap]"
+                              " hosts must be array type");
         }
         if (json_array_size (conf->hosts) > 0) {
-            if (!(hosts = boot_config_expand_hosts (conf->hosts)))
+            if (!(hosts = boot_config_expand_hosts (conf->hosts, errp)))
                 return -1;
         }
     }
@@ -278,16 +287,19 @@ int boot_config_parse (const flux_conf_t *cf,
     /* Fail early if size > 1 and there is no CURVE certificate configured.
      */
     if (json_array_size (conf->hosts) > 1 && !conf->curve_cert) {
-        log_msg ("Config file error [bootstrap] %s",
-                 "curve_cert is required for size > 1");
-        return -1;
+        return errprintf (errp,
+                          "Config file error [bootstrap]"
+                          " curve_cert is required for size > 1");
     }
 
     *hostsp = hosts;
     return 0;
 }
 
-int boot_config_attr (attr_t *attrs, const char *hostname, json_t *hosts)
+int boot_config_attr (attr_t *attrs,
+                      const char *hostname,
+                      json_t *hosts,
+                      flux_error_t *errp)
 {
     struct hostlist *hl = NULL;
     struct taskmap *map = NULL;
@@ -302,7 +314,9 @@ int boot_config_attr (attr_t *attrs, const char *hostname, json_t *hosts)
                       "hostlist",
                       hostname,
                       ATTR_IMMUTABLE) < 0) {
-            log_err ("failed to set hostlist attribute to localhost");
+            errprintf (errp,
+                       "failed to set hostlist attribute to localhost: %s",
+                       strerror (errno));
             goto error;
         }
         return 0;
@@ -314,12 +328,16 @@ int boot_config_attr (attr_t *attrs, const char *hostname, json_t *hosts)
     json_array_foreach (hosts, index, value) {
         const char *host;
         if (json_unpack (value, "{s:s}", "host", &host) < 0) {
-            log_msg ("Internal error [bootstrap]: missing host field");
+            errprintf (errp, "Internal error [bootstrap]: missing host field");
             errno = EINVAL;
             goto error;
         }
-        if (hostlist_append (hl, host) < 0)
+        if (hostlist_append (hl, host) < 0) {
+            errprintf (errp,
+                       "Internal error [bootstrap]: hostlist_append: %s",
+                       strerror (errno));
             goto error;
+        }
     }
 
     if (!(s = hostlist_encode (hl)))
@@ -329,7 +347,10 @@ int boot_config_attr (attr_t *attrs, const char *hostname, json_t *hosts)
                   "hostlist",
                   s,
                   ATTR_IMMUTABLE) < 0) {
-        log_err ("failed to set hostlist attribute to config derived value");
+        errprintf (errp,
+                   "failed to set hostlist attribute to"
+                   " config derived value: %s",
+                   strerror (errno));
         goto error;
     }
     free (s);
@@ -343,17 +364,19 @@ int boot_config_attr (attr_t *attrs, const char *hostname, json_t *hosts)
         val = NULL;
     else {
         if (!(map = taskmap_create ())
-            || taskmap_append (map, 0, json_array_size (hosts), 1) < 0)
+            || taskmap_append (map, 0, json_array_size (hosts), 1) < 0) {
+            errprintf (errp, "error creating taskmap: %s", strerror (errno));
             goto error;
+        }
         if (!(s = taskmap_encode (map, 0))) {
-            log_msg ("encoding broker.mapping");
+            errprintf (errp, "error encoding broker.mapping");
             errno = EOVERFLOW;
             goto error;
         }
         val = s;
     }
     if (attr_add (attrs, "broker.mapping", val, ATTR_IMMUTABLE) < 0) {
-        log_err ("setattr broker.mapping");
+        errprintf (errp, "setattr broker.mapping: %s", strerror (errno));
         goto error;
     }
 
@@ -368,7 +391,10 @@ error:
 /* Find host 'name' in hosts array, and set 'rank' to its array index.
  * Return 0 on success, -1 on failure.
  */
-int boot_config_getrankbyname (json_t *hosts, const char *name, uint32_t *rank)
+int boot_config_getrankbyname (json_t *hosts,
+                               const char *name,
+                               uint32_t *rank,
+                               flux_error_t *errp)
 {
     size_t index;
     json_t *entry;
@@ -384,8 +410,9 @@ int boot_config_getrankbyname (json_t *hosts, const char *name, uint32_t *rank)
             return 0;
         }
     }
-    log_msg ("Config file error [bootstrap]: %s not found in hosts", name);
-    return -1;
+    return errprintf (errp,
+                      "Config file error [bootstrap]: %s not found in hosts",
+                      name);
 }
 
 static int gethostentry (json_t *hosts,
@@ -393,14 +420,16 @@ static int gethostentry (json_t *hosts,
                          uint32_t rank,
                          const char **host,
                          const char **bind,
-                         const char **uri)
+                         const char **uri,
+                         flux_error_t *errp)
 {
     json_t *entry;
 
     if (!(entry = json_array_get (hosts, rank))) {
-        log_msg ("Config file error [bootstrap] rank %u not found in hosts",
-                 (unsigned int)rank);
-        return -1;
+        return errprintf (errp,
+                          "Config file error [bootstrap]"
+                          " rank %u not found in hosts",
+                          (unsigned int)rank);
     }
     /* N.B. entry already validated by boot_config_parse().
      */
@@ -421,28 +450,30 @@ int boot_config_getbindbyrank (json_t *hosts,
                                struct boot_conf *conf,
                                uint32_t rank,
                                char *buf,
-                               int bufsz)
+                               int bufsz,
+                               flux_error_t *errp)
 {
     const char *uri = NULL;
     const char *bind = NULL;
     const char *host = NULL;
 
-    if (gethostentry (hosts, conf, rank, &host, &bind, &uri) < 0)
+    if (gethostentry (hosts, conf, rank, &host, &bind, &uri, errp) < 0)
         return -1;
     if (!bind)
         bind = conf->default_bind;
     if (strlen (bind) == 0) {
-        log_msg ("Config file error [bootstrap]: rank %u missing bind URI",
-                 (unsigned int)rank);
-        return -1;
+        return errprintf (errp,
+                          "Config file error [bootstrap]:"
+                          " rank %u missing bind URI",
+                          (unsigned int)rank);
     }
     if (boot_config_format_uri (buf,
                                 bufsz,
                                 bind,
                                 host,
                                 conf->default_port) < 0) {
-        log_msg ("Config file error [bootstrap]: buffer overflow");
-        return -1;
+        return errprintf (errp,
+                          "Config file error [bootstrap]: buffer overflow");
     }
     return 0;
 }
@@ -456,41 +487,48 @@ int boot_config_geturibyrank (json_t *hosts,
                               struct boot_conf *conf,
                               uint32_t rank,
                               char *buf,
-                              int bufsz)
+                              int bufsz,
+                              flux_error_t *errp)
 {
     const char *uri = NULL;
     const char *bind = NULL;
     const char *host = NULL;
 
-    if (gethostentry (hosts, conf, rank, &host, &bind, &uri) < 0)
+    if (gethostentry (hosts, conf, rank, &host, &bind, &uri, errp) < 0)
         return -1;
     if (!uri)
         uri = conf->default_connect;
     if (strlen (uri) == 0) {
-        log_msg ("Config file error [bootstrap]: rank %u missing connect URI",
-                 (unsigned int)rank);
-        return -1;
+        return errprintf (errp,
+                          "Config file error [bootstrap]:"
+                          " rank %u missing connect URI",
+                          (unsigned int)rank);
     }
     if (boot_config_format_uri (buf,
                                 bufsz,
                                 uri,
                                 host,
                                 conf->default_port) < 0) {
-        log_msg ("Config file error [bootstrap]: buffer overflow");
+        return errprintf (errp,
+                          "Config file error [bootstrap]:"
+                          " buffer overflow");
         return -1;
     }
     return 0;
 }
 
-static int set_broker_boot_method_attr (attr_t *attrs, const char *value)
+static int set_broker_boot_method_attr (attr_t *attrs,
+                                        const char *value,
+                                        flux_error_t *errp)
 {
     (void)attr_delete (attrs, "broker.boot-method", true);
     if (attr_add (attrs,
                   "broker.boot-method",
                   value,
                   ATTR_IMMUTABLE) < 0) {
-        log_err ("setattr broker.boot-method");
-        return -1;
+        return errprintf (errp,
+                          "setattr broker.boot-method: %s",
+                          strerror (errno));
     }
     return 0;
 }
@@ -520,9 +558,10 @@ static void warn_of_invalid_host (flux_t *h, const char *uri)
         freeaddrinfo (result);
         goto done;
     }
-    log_msg ("Warning: unable to resolve upstream peer %s: %s",
-             u.host,
-             gai_strerror (e));
+    flux_log (h,
+              LOG_WARNING, "unable to resolve upstream peer %s: %s",
+              u.host,
+              gai_strerror (e));
 done:
     free (cpy);
 }
@@ -530,7 +569,8 @@ done:
 int boot_config (flux_t *h,
                  const char *hostname,
                  struct overlay *overlay,
-                 attr_t *attrs)
+                 attr_t *attrs,
+                 flux_error_t *errp)
 {
     struct boot_conf conf;
     uint32_t rank;
@@ -542,17 +582,17 @@ int boot_config (flux_t *h,
 
     /* Ingest the [bootstrap] stanza.
      */
-    if (boot_config_parse (flux_get_conf (h), &conf, &hosts) < 0)
+    if (boot_config_parse (flux_get_conf (h), &conf, &hosts, errp) < 0)
         return -1;
 
-    if (boot_config_attr (attrs, hostname, hosts) < 0)
+    if (boot_config_attr (attrs, hostname, hosts, errp) < 0)
         goto error;
 
     /* If hosts array was specified, match hostname to determine rank,
      * and size is the length of the hosts array.  O/w rank=0, size=1.
      */
     if (hosts != NULL) {
-        if (boot_config_getrankbyname (hosts, hostname, &rank) < 0)
+        if (boot_config_getrankbyname (hosts, hostname, &rank, errp) < 0)
             goto error;
         size = json_array_size (hosts);
     }
@@ -563,25 +603,37 @@ int boot_config (flux_t *h,
 
     // N.B. overlay_create() sets the tbon.topo attribute
     if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
-        log_msg ("error fetching tbon.topo attribute");
+        errprintf (errp,
+                   "error fetching tbon.topo attribute: %s",
+                   strerror (errno));
         goto error;
     }
     topology_hosts_set (hosts);
     topo = topology_create (topo_uri, size, &error);
     topology_hosts_set (NULL);
     if (!topo) {
-        log_msg ("Error creating %s topology: %s", topo_uri, error.text);
+        errprintf (errp,
+                   "Error creating %s topology: %s",
+                   topo_uri,
+                   error.text);
         goto error;
     }
     if (topology_set_rank (topo, rank) < 0
-        || overlay_set_topology (overlay, topo) < 0)
+        || overlay_set_topology (overlay, topo) < 0) {
+        errprintf (errp,
+                   "Error setting %s topology: %s",
+                   topo_uri,
+                   strerror (errno));
         goto error;
+    }
 
     /* If a curve certificate was provided, load it.
      */
     if (conf.curve_cert) {
-        if (overlay_cert_load (overlay, conf.curve_cert) < 0)
-            goto error; // prints error
+        if (overlay_cert_load (overlay, conf.curve_cert, &error) < 0) {
+            errprintf (errp, "Error loading certificate: %s", error.text);
+            goto error;
+        }
     }
 
     /* If user requested ipv6, enable it here.
@@ -592,7 +644,9 @@ int boot_config (flux_t *h,
     /* Ensure that tbon.interface-hint is set.
      */
     if (overlay_set_tbon_interface_hint (overlay, NULL) < 0) {
-        log_err ("error setting tbon.interface-hint attribute");
+        errprintf (errp,
+                   "error setting tbon.interface-hint attribute: %s",
+                   strerror (errno));
         goto error;
     }
 
@@ -606,33 +660,40 @@ int boot_config (flux_t *h,
         char bind_uri[MAX_URI + 1];
         char my_uri[MAX_URI + 1];
 
-        if (!hosts)
-            log_err_exit ("internal error: hosts object is NULL");
+        if (!hosts) {
+            errprintf (errp, "internal error: hosts object is NULL");
+            goto error;
+        }
         if (boot_config_getbindbyrank (hosts,
                                        &conf,
                                        rank,
                                        bind_uri,
-                                       sizeof (bind_uri)) < 0)
+                                       sizeof (bind_uri),
+                                       errp) < 0)
             goto error;
-        if (overlay_bind (overlay, bind_uri, NULL) < 0)
+        if (overlay_bind (overlay, bind_uri, NULL, errp) < 0)
             goto error;
         if (overlay_authorize (overlay,
                                overlay_cert_name (overlay),
                                overlay_cert_pubkey (overlay)) < 0) {
-            log_err ("overlay_authorize");
+            errprintf (errp, "overlay_authorize: %s", strerror (errno));
             goto error;
         }
         if (boot_config_geturibyrank (hosts,
                                       &conf,
                                       rank,
                                       my_uri,
-                                      sizeof (my_uri)) < 0)
+                                      sizeof (my_uri),
+                                      errp) < 0)
             goto error;
         if (attr_add (attrs,
                       "tbon.endpoint",
                       my_uri,
                       ATTR_IMMUTABLE) < 0) {
-            log_err ("setattr tbon.endpoint %s", my_uri);
+            errprintf (errp,
+                       "setattr tbon.endpoint %s: %s",
+                       my_uri,
+                       strerror (errno));
             goto error;
         }
     }
@@ -641,7 +702,9 @@ int boot_config (flux_t *h,
                       "tbon.endpoint",
                       NULL,
                       ATTR_IMMUTABLE) < 0) {
-            log_err ("setattr tbon.endpoint NULL");
+            errprintf (errp,
+                       "setattr tbon.endpoint NULL: %s",
+                       strerror (errno));
             goto error;
         }
     }
@@ -654,16 +717,22 @@ int boot_config (flux_t *h,
                                       &conf,
                                       topology_get_parent (topo),
                                       parent_uri,
-                                      sizeof (parent_uri)) < 0)
+                                      sizeof (parent_uri),
+                                      errp) < 0)
             goto error;
         warn_of_invalid_host (h, parent_uri);
         if (overlay_set_parent_uri (overlay, parent_uri) < 0) {
-            log_err ("overlay_set_parent_uri %s", parent_uri);
+            errprintf (errp,
+                       "overlay_set_parent_uri %s: %s",
+                       parent_uri,
+                       strerror (errno));
             goto error;
         }
         if (overlay_set_parent_pubkey (overlay,
                                        overlay_cert_pubkey (overlay)) < 0) {
-            log_err ("overlay_set_parent_pubkey self");
+            errprintf (errp,
+                       "overlay_set_parent_pubkey self: %s",
+                       strerror (errno));
             goto error;
         }
     }
@@ -674,10 +743,10 @@ int boot_config (flux_t *h,
                   "instance-level",
                   "0",
                   ATTR_IMMUTABLE) < 0) {
-        log_err ("setattr instance-level 0");
+        errprintf (errp, "setattr instance-level 0: %s", strerror (errno));
         goto error;
     }
-    if (set_broker_boot_method_attr (attrs, "config") < 0)
+    if (set_broker_boot_method_attr (attrs, "config", errp) < 0)
         goto error;
     json_decref (hosts);
     topology_decref (topo);

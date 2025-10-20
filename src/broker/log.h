@@ -16,6 +16,18 @@
 
 int logbuf_initialize (flux_t *h, uint32_t rank, attr_t *attrs);
 
+/* Special logger for the broker before it is fully initialized.
+ *
+ * Call the following before using flux_log():
+ *    flux_log_set_redirect (h, log_early, ctx.attrs);
+ *    flux_log_set_hostname (h, "?");
+ *    flux_log_set_appname (h, "broker");
+ *
+ * Later when logbuf_initialize() is called, the full log subsystem
+ * will take over.
+ */
+void log_early (const char *buf, int len, void *arg);
+
 #endif /* BROKER_LOG_H */
 
 /*
