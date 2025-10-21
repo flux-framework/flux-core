@@ -762,9 +762,6 @@ class MiniCmd:
         self.watcher = None
         self.plugins = CLIPluginRegistry(prog)
         self.parser = self.create_parser(prog, usage, description, exclude_io)
-        group = self.parser.add_argument_group("Options provided by plugins")
-        for option in self.plugins.options:
-            group.add_argument(option.name, **option.kwargs)
 
     def run_command(self):
         """
@@ -781,7 +778,15 @@ class MiniCmd:
         sys.stderr = open(
             sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
         )
-        args = self.get_parser().parse_args()
+        parser = self.get_parser()
+
+        # ensure plugins argument group comes last in `--help` output:
+        group = parser.add_argument_group("Options provided by plugins")
+        for option in self.plugins.options:
+            group.add_argument(option.name, **option.kwargs)
+
+        args = parser.parse_args()
+
         self.main(args)
 
     @staticmethod
