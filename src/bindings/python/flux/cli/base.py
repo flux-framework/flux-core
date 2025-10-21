@@ -781,11 +781,19 @@ class MiniCmd:
         parser = self.get_parser()
 
         # ensure plugins argument group comes last in `--help` output:
-        group = parser.add_argument_group("Options provided by plugins")
+        group = parser.add_argument_group(
+            "Options provided by plugins "
+            + "(--help=OPTION for extended plugin documentation)"
+        )
         for option in self.plugins.options:
             group.add_argument(option.name, **option.kwargs)
 
         args = parser.parse_args()
+        if args.help == "default":
+            parser.print_help()
+            sys.exit(0)
+        elif args.help is not None:
+            self.plugins.print_help(args.help)
 
         self.main(args)
 
@@ -809,6 +817,14 @@ class MiniCmd:
             usage=usage,
             description=description,
             formatter_class=flux.util.help_formatter(),
+            add_help=False,
+        )
+        parser.add_argument(
+            "--help",
+            nargs="?",
+            const="default",
+            metavar="TOPIC",
+            help="Show this help message or extended help for TOPIC and exit",
         )
         parser.add_argument(
             "-B",

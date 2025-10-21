@@ -9,8 +9,12 @@
 ##############################################################
 
 import glob
+import inspect
+import sys
+import termios
 from abc import ABC
 from os import getenv
+from pydoc import ttypager
 
 from flux.conf_builtin import conf_builtin_get
 from flux.importer import import_path
@@ -56,6 +60,25 @@ class CLIPlugin(ABC):  # pragma no cover
         self.prefix = prefix
         self.version = version
         self.options = []
+
+    def help(self, option):
+        """Print a help message for this plugin and option ``option``
+
+        By default, prints the plugin's docstring to stdout.
+        Plugins may override this behavior by overriding this method.
+        """
+        docstring = inspect.getdoc(self)
+        if docstring is None or docstring == inspect.getdoc(CLIPlugin):
+            print(
+                f"No extra documentation for option `{option.name}` found.",
+                file=sys.stderr,
+            )
+            return
+        print(f"\nDocumentation for plugin providing option `{option.name}`:\n")
+        try:
+            ttypager(docstring)
+        except termios.error:
+            sys.stdout.write(docstring + "\n")
 
     def add_option(self, name, **kwargs):
         """Allow plugin to register options in its dictionary
@@ -128,6 +151,21 @@ class CLIPluginRegistry:
                 raise ValueError("failed to get builtin confdir")
             self.plugindir = f"{etc}/cli/plugins"
         self._load_plugins(self.prog)
+
+    def print_help(self, name):
+        """
+        Print docstring for plugin associated with option ``name`` and exit
+
+        Raises:
+            ValueError: No help found for ``name``
+        """
+        for plugin in self.plugins:
+            for option in plugin.options:
+                # match name to option with or without leading `--`:
+                if name in (option.name, option.name.lstrip("-")):
+                    plugin.help(option)
+                    sys.exit(0)
+        raise ValueError(f"--help: no such option {name}")
 
     def _add_plugins(self, module, program):
         entries = [
