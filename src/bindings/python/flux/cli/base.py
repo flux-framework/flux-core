@@ -766,6 +766,24 @@ class MiniCmd:
         for option in self.plugins.options:
             group.add_argument(option.name, **option.kwargs)
 
+    def run_command(self):
+        """
+        Convenience method containing common code to run a command derived
+        from the MiniCmd base class.
+
+        This function reopens standard output and error in a mode suitable
+        for utf8 output, initializes the command's ArgParse parser, parses
+        command line arguments and finally executes ``self.main(args)``.
+        """
+        sys.stdout = open(
+            sys.stdout.fileno(), "w", encoding="utf8", errors="surrogateescape"
+        )
+        sys.stderr = open(
+            sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
+        )
+        args = self.get_parser().parse_args()
+        self.main(args)
+
     @staticmethod
     def create_parser(
         prog, usage=None, description=None, exclude_io=False, add_help=True

@@ -9,7 +9,6 @@
 ##############################################################
 
 import logging
-import sys
 
 import flux
 import flux.cli.alloc as base
@@ -20,27 +19,15 @@ LOGGER = logging.getLogger("flux-alloc")
 
 @flux.util.CLIMain(LOGGER)
 def main():
-    sys.stdout = open(
-        sys.stdout.fileno(), "w", encoding="utf8", errors="surrogateescape"
-    )
-    sys.stderr = open(
-        sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
-    )
-
     description = """
     Allocate resources and start a new Flux instance. Once the instance
     has started, attach to it interactively.
     """
-
-    alloc = base.AllocCmd(
+    base.AllocCmd(
         "flux alloc",
         usage="flux alloc [OPTIONS...] [COMMAND] [ARGS...]",
         description=description,
-    )
-    parser = alloc.get_parser()
-    parser.set_defaults(func=alloc.main)
-    args = parser.parse_args()
-    args.func(args)
+    ).run_command()
 
 
 if __name__ == "__main__":
