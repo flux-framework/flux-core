@@ -73,6 +73,10 @@ enum {
      * error.
      */
     FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF = 8,
+    /* flux_rexec_bg() only: allow flux_rexec_wait(3) to be called
+     * for this subprocess
+     */
+    FLUX_SUBPROCESS_FLAGS_WAITABLE = 16,
 };
 
 /*
