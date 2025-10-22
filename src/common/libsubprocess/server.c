@@ -604,6 +604,25 @@ error:
     proc_internal_fatal (p);
 }
 
+static flux_subprocess_t *proc_find (subprocess_server_t *s,
+                                     pid_t pid,
+                                     const char *label,
+                                     flux_error_t *errp)
+{
+    flux_subprocess_t *p = NULL;
+    if (label) {
+        if (!(p = proc_find_bylabel (s, label))) {
+            errprintf (errp,
+                       "label %s does not belong to any subprocess",
+                       label);
+        }
+    }
+    else if (!(p = proc_find_bypid (s, pid))) {
+        errprintf (errp, "pid %d does not belong to any subprocess", pid);
+    }
+    return p;
+}
+
 static void server_kill_cb (flux_t *h,
                             flux_msg_handler_t *mh,
                             const flux_msg_t *msg,
@@ -630,17 +649,7 @@ static void server_kill_cb (flux_t *h,
         errno = EPERM;
         goto error;
     }
-    if (label) {
-        if (!(p = proc_find_bylabel (s, label))) {
-            errprintf (&error,
-                       "label %s does not belong to any subprocess",
-                       label);
-            errmsg = error.text;
-            goto error;
-        }
-    }
-    else if (!(p = proc_find_bypid (s, pid))) {
-        errprintf (&error, "pid %d does not belong to any subprocess", pid);
+    if (!(p = proc_find (s, pid, label, &error))) {
         errmsg = error.text;
         goto error;
     }
