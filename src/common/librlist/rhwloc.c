@@ -273,10 +273,10 @@ out:
 /*  Return true if the hwloc "backend" type string matches a GPU
  *   which should be indexed as a compute GPU.
  */
-static bool backend_is_coproc (const char *s)
+static bool backend_is_coproc (const char *s, const char *nvidia_backend)
 {
-    /* Only count cudaX, openclX, and rmsiX devices for now */
-    return (streq (s, "CUDA")
+    /* Only count cudaX or nvmlX, openclX, and rmsiX devices for now */
+    return (streq (s, nvidia_backend)
             || streq (s, "OpenCL")
             || streq (s, "RSMI"));
 }
@@ -291,6 +291,18 @@ char * rhwloc_gpu_idset_string (hwloc_topology_t topo)
     if (!ids)
         return NULL;
 
+    /*  NVIDIA GPUs can be found by both the CUDA or NVML Backends.
+     *  We would like to catch either option, but not double count
+     *  if both are present, so make a first pass to see if any CUDA
+     *  osdevs are present, otherwise check NVML in the next loop.
+     */
+    bool isCudaPresent = false;
+    while ((obj = hwloc_get_next_osdev (topo, obj))) {
+        const char *s = hwloc_obj_get_info_by_name (obj, "Backend");
+        if (s && streq (s, "CUDA"))
+            isCudaPresent = true;
+    }
+
     /*  Manually index GPUs -- os_index does not seem to be valid for
      *  these devices in some cases, and logical index also seems
      *  incorrect (?)
@@ -298,7 +310,7 @@ char * rhwloc_gpu_idset_string (hwloc_topology_t topo)
     index = 0;
     while ((obj = hwloc_get_next_osdev (topo, obj))) {
         const char *s = hwloc_obj_get_info_by_name (obj, "Backend");
-        if (s && backend_is_coproc (s))
+        if (s && backend_is_coproc (s, isCudaPresent ? "CUDA" : "NVML"))
             idset_set (ids, index++);
     }
     if (idset_count (ids) > 0)
