@@ -590,6 +590,10 @@ int remote_exec (flux_subprocess_t *p)
         flags |= SUBPROCESS_REXEC_STDERR;
     if (p->ops.on_credit)
         flags |= SUBPROCESS_REXEC_WRITE_CREDIT;
+    if (local_flags & FLUX_SUBPROCESS_FLAGS_WAITABLE) {
+        local_flags &= ~FLUX_SUBPROCESS_FLAGS_WAITABLE;
+        flags |= SUBPROCESS_REXEC_WAITABLE;
+    }
 
     /* Clear LOCAL_UNBUF for the remote subprocess object.
      */

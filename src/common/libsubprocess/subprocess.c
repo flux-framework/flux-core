@@ -593,7 +593,8 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
     int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
                        | FLUX_SUBPROCESS_FLAGS_NO_SETPGRP
                        | FLUX_SUBPROCESS_FLAGS_FORK_EXEC
-                       | FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF);
+                       | FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF
+                       | FLUX_SUBPROCESS_FLAGS_WAITABLE);
 
     if (!h
         || (rank < 0
