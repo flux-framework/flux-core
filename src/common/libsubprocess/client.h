@@ -23,6 +23,7 @@ enum {
     SUBPROCESS_REXEC_STDERR = 2,
     SUBPROCESS_REXEC_CHANNEL = 4,
     SUBPROCESS_REXEC_WRITE_CREDIT = 8,
+    SUBPROCESS_REXEC_WAITABLE = 16,
 };
 
 flux_future_t *subprocess_rexec (flux_t *h,
