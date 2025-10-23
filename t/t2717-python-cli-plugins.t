@@ -12,6 +12,26 @@ test_expect_success 'flux-alloc: base --help message includes plugin options' '
 	flux alloc --help \
 		| grep -e "Options provided by plugins:" -e "--amd-gpumode"
 '
+test_expect_success 'flux-alloc: --help=foo fails' '
+	test_must_fail flux alloc --help=foo 2>help-foo.err &&
+	test_debug "cat help-foo.err" &&
+	grep "no such option" help-foo.err
+'
+test_expect_success 'flux-alloc: --help=amd-gpumode works' '
+	flux alloc --help=amd-gpumode >help-gpumode.out &&
+	test_debug "cat help-gpumode.out" &&
+	grep "Documentation for plugin" help-gpumode.out
+'
+test_expect_success 'flux-alloc: --help=--amd-gpumode works' '
+	flux alloc --help=--amd-gpumode >help--gpumode.out &&
+	test_debug "cat help--gpumode.out" &&
+	grep "Documentation for plugin" help--gpumode.out
+'
+test_expect_success 'flux-alloc: --help= works with tty' '
+	runpty.py -o help.json -f asciicast flux alloc --help=amd-gpumode &&
+	test_debug "jq -S <help.json" &&
+	grep "Documentation for plugin" help.json
+'
 test_expect_success 'flux-alloc: a job that does not provide plugins can run' '
 	flux alloc -N1 hostname
 '
@@ -25,13 +45,13 @@ test_expect_success 'flux-alloc: job with invalid key to plugin is rejected' '
 	grep "flux-alloc: ERROR: Invalid option" err.out
 '
 test_expect_success 'flux-alloc: job with preinit has config set accordingly' '
-	flux alloc --amd-gpumode=TPX -N1 flux config get > config.json && 
+	flux alloc --amd-gpumode=TPX -N1 flux config get > config.json &&
 	test $(jq -r .resource.rediscover config.json) = "true"
 '
 test_expect_success 'flux-alloc: multiple valid plugin options are accepted' '
 	flux alloc -N1 --amd-gpumode=TPX --ex-match-policy=firstnodex \
 		flux config get > config2.json &&
-	test $(jq -r .resource.rediscover config2.json) = "true" && 
+	test $(jq -r .resource.rediscover config2.json) = "true" &&
 	test $(jq -r ".[\"sched-fluxion-resource\"][\"match-policy\"] == \"firstnodex\"" config2.json) = "true"
 '
 test_expect_success 'flux-alloc: plugin without a prefix behaves appropriately' '
