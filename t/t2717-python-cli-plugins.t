@@ -6,7 +6,7 @@ test_description='Test command line plugin interface'
 
 export FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/
 
-test_under_flux 4 job
+test_under_flux 1 job
 
 test_expect_success 'flux-alloc: base --help message includes plugin options' '
 	flux run --help \
