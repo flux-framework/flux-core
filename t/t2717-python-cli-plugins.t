@@ -9,7 +9,7 @@ export FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/
 test_under_flux 1 job
 
 test_expect_success 'flux-alloc: base --help message includes plugin options' '
-	flux run --help \
+	flux alloc --help \
 		| grep -e "Options provided by plugins:" -e "--amd-gpumode"
 '
 test_expect_success 'flux-alloc: a job that does not provide plugins can run' '
