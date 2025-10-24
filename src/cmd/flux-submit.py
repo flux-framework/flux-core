@@ -9,7 +9,6 @@
 ##############################################################
 
 import logging
-import sys
 
 import flux
 import flux.cli.submit as base
@@ -19,22 +18,7 @@ LOGGER = logging.getLogger("flux-submit")
 
 @flux.util.CLIMain(LOGGER)
 def main():
-    sys.stdout = open(
-        sys.stdout.fileno(), "w", encoding="utf8", errors="surrogateescape"
-    )
-    sys.stderr = open(
-        sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
-    )
-
-    # Prepare the submit parser
-    submit = base.SubmitCmd(
-        "flux submit",
-        description="enqueue a job",
-    )
-    parser = submit.get_parser()
-    parser.set_defaults(func=submit.main)
-    args = parser.parse_args()
-    args.func(args)
+    base.SubmitCmd("flux submit", description="enqueue a job").run_command()
 
 
 if __name__ == "__main__":

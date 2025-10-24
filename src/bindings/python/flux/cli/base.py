@@ -762,9 +762,40 @@ class MiniCmd:
         self.watcher = None
         self.plugins = CLIPluginRegistry(prog)
         self.parser = self.create_parser(prog, usage, description, exclude_io)
-        group = self.parser.add_argument_group("Options provided by plugins")
+
+    def run_command(self):
+        """
+        Convenience method containing common code to run a command derived
+        from the MiniCmd base class.
+
+        This function reopens standard output and error in a mode suitable
+        for utf8 output, initializes the command's ArgParse parser, parses
+        command line arguments and finally executes ``self.main(args)``.
+        """
+        sys.stdout = open(
+            sys.stdout.fileno(), "w", encoding="utf8", errors="surrogateescape"
+        )
+        sys.stderr = open(
+            sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
+        )
+        parser = self.get_parser()
+
+        # ensure plugins argument group comes last in `--help` output:
+        group = parser.add_argument_group(
+            "Options provided by plugins "
+            + "(--help=OPTION for extended plugin documentation)"
+        )
         for option in self.plugins.options:
             group.add_argument(option.name, **option.kwargs)
+
+        args = parser.parse_args()
+        if args.help == "default":
+            parser.print_help()
+            sys.exit(0)
+        elif args.help is not None:
+            self.plugins.print_help(args.help)
+
+        self.main(args)
 
     @staticmethod
     def create_parser(
@@ -786,6 +817,14 @@ class MiniCmd:
             usage=usage,
             description=description,
             formatter_class=flux.util.help_formatter(),
+            add_help=False,
+        )
+        parser.add_argument(
+            "--help",
+            nargs="?",
+            const="default",
+            metavar="TOPIC",
+            help="Show this help message or extended help for TOPIC and exit",
         )
         parser.add_argument(
             "-B",

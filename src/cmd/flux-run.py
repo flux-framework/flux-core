@@ -9,7 +9,6 @@
 ##############################################################
 
 import logging
-import sys
 
 import flux
 import flux.cli.run as base
@@ -19,22 +18,10 @@ LOGGER = logging.getLogger("flux-run")
 
 @flux.util.CLIMain(LOGGER)
 def main():
-    sys.stdout = open(
-        sys.stdout.fileno(), "w", encoding="utf8", errors="surrogateescape"
-    )
-    sys.stderr = open(
-        sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
-    )
-
-    # Prepare the submit parser
-    run = base.RunCmd(
+    base.RunCmd(
         "flux run",
         description="run a job interactively",
-    )
-    parser = run.get_parser()
-    parser.set_defaults(func=run.main)
-    args = parser.parse_args()
-    args.func(args)
+    ).run_command()
 
 
 if __name__ == "__main__":
