@@ -12,6 +12,7 @@
 
 import argparse
 import logging
+import os
 import sys
 
 import flux
@@ -27,6 +28,31 @@ def kill(args):
         h.rpc(args.service + ".kill", nodeid=args.rank, payload=payload).get()
     except OSError as exc:
         LOGGER.error(f"kill: {exc}")
+        sys.exit(1)
+
+
+def wait(args):
+    h = flux.Flux()
+    try:
+        payload = {"pid": int(args.pid)}
+    except ValueError:
+        payload = {"pid": -1, "label": args.pid}
+    try:
+        status = int(
+            h.rpc(args.service + ".wait", nodeid=args.rank, payload=payload).get()[
+                "status"
+            ]
+        )
+
+        exitcode = 0
+        if os.WIFEXITED(status):
+            exitcode = os.WEXITSTATUS(status)
+        elif os.WIFSIGNALED(status):
+            exitcode = 128 + os.WTERMSIG(status)
+        sys.exit(exitcode)
+
+    except OSError as exc:
+        LOGGER.error(f"wait: {exc}")
         sys.exit(1)
 
 
@@ -57,47 +83,47 @@ def main():
     )
     subparsers.required = True
 
-    # kill
-    kill_parser = subparsers.add_parser(
-        "kill",
-        formatter_class=flux.util.help_formatter(),
-    )
-    kill_parser.add_argument(
+    # Parent parser with common arguments
+    common_parser = argparse.ArgumentParser(add_help=False)
+    common_parser.add_argument(
         "-r",
         "--rank",
         type=int,
         help="Send RPC to specified broker rank",
         default=flux.constants.FLUX_NODEID_ANY,
     )
-    kill_parser.add_argument(
+    common_parser.add_argument(
         "-s",
         "--service",
         type=str,
         help="Send RPC to specified service (default rexec)",
         default="rexec",
+    )
+
+    # kill
+    kill_parser = subparsers.add_parser(
+        "kill",
+        parents=[common_parser],
+        formatter_class=flux.util.help_formatter(),
     )
     kill_parser.add_argument("signum")
     kill_parser.add_argument("pid")
     kill_parser.set_defaults(func=kill)
 
+    # wait
+    wait_parser = subparsers.add_parser(
+        "wait",
+        parents=[common_parser],
+        formatter_class=flux.util.help_formatter(),
+    )
+    wait_parser.add_argument("pid")
+    wait_parser.set_defaults(func=wait)
+
     # ps
     ps_parser = subparsers.add_parser(
         "ps",
+        parents=[common_parser],
         formatter_class=flux.util.help_formatter(),
-    )
-    ps_parser.add_argument(
-        "-r",
-        "--rank",
-        type=int,
-        help="Send RPC to specified broker rank",
-        default=flux.constants.FLUX_NODEID_ANY,
-    )
-    ps_parser.add_argument(
-        "-s",
-        "--service",
-        type=str,
-        help="Send RPC to specified service (default rexec)",
-        default="rexec",
     )
     ps_parser.set_defaults(func=ps)
 
