@@ -87,7 +87,7 @@ def ps(args):
     for item in resp["procs"]:
         if not item["label"]:
             item["label"] = "-"
-        print(f"{item['pid']:<8}\t{item['label']}\t{item['cmd']}")
+        print(f"{item['pid']:<8}\t{item['state']}\t{item['label']:<10}\t{item['cmd']}")
 
 
 LOGGER = logging.getLogger("rexec")
