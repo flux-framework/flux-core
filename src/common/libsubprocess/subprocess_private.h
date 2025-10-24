@@ -118,6 +118,7 @@ struct flux_subprocess {
 
     /* server */
     bool bg;                    /* if flags & SUBPROCESS_REXEC_BACKGROUND */
+    const flux_msg_t *waiter;   /* subprocess wait request */
 };
 
 void subprocess_check_completed (flux_subprocess_t *p);
