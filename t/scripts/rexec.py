@@ -18,17 +18,43 @@ import sys
 import flux
 
 
+def exit_with_status(status):
+    """
+    Given wait status ``status``, exit with an appropriate exit code
+    """
+    exitcode = 0
+    status = int(status)
+    if os.WIFEXITED(status):
+        exitcode = os.WEXITSTATUS(status)
+    elif os.WIFSIGNALED(status):
+        exitcode = 128 + os.WTERMSIG(status)
+    sys.exit(exitcode)
+
+
 def kill(args):
     h = flux.Flux()
     try:
         payload = {"pid": int(args.pid), "signum": int(args.signum)}
     except ValueError:
         payload = {"pid": -1, "label": args.pid, "signum": int(args.signum)}
+    if args.wait:
+        # For testing purposes, send wait request before sending kill request:
+        wait_f = h.rpc(
+            args.service + ".wait",
+            nodeid=args.rank,
+            payload={x: payload[x] for x in ("pid", "label") if x in payload},
+        )
     try:
         h.rpc(args.service + ".kill", nodeid=args.rank, payload=payload).get()
     except OSError as exc:
         LOGGER.error(f"kill: {exc}")
         sys.exit(1)
+    if args.wait:
+        try:
+            exit_with_status(wait_f.get()["status"])
+        except OSError as exc:
+            LOGGER.error(f"kill: wait failed: {exc}")
+            sys.exit(1)
 
 
 def wait(args):
@@ -38,19 +64,11 @@ def wait(args):
     except ValueError:
         payload = {"pid": -1, "label": args.pid}
     try:
-        status = int(
+        exit_with_status(
             h.rpc(args.service + ".wait", nodeid=args.rank, payload=payload).get()[
                 "status"
             ]
         )
-
-        exitcode = 0
-        if os.WIFEXITED(status):
-            exitcode = os.WEXITSTATUS(status)
-        elif os.WIFSIGNALED(status):
-            exitcode = 128 + os.WTERMSIG(status)
-        sys.exit(exitcode)
-
     except OSError as exc:
         LOGGER.error(f"wait: {exc}")
         sys.exit(1)
@@ -105,6 +123,12 @@ def main():
         "kill",
         parents=[common_parser],
         formatter_class=flux.util.help_formatter(),
+    )
+    kill_parser.add_argument(
+        "-w",
+        "--wait",
+        action="store_true",
+        help="wait for process after sending signal",
     )
     kill_parser.add_argument("signum")
     kill_parser.add_argument("pid")
