@@ -41,7 +41,7 @@ OPTIONS
    checkpoint.  This option directs flux-fsck to start at an arbitrary
    point.  BLOBREF must refer to an RFC 11 tree object of type "dir".
 
-.. option:: -r, --repair
+.. option:: -R, --repair
 
    Remove any dangling references found in KVS metadata. If a KVS
    value changes as a result of this repair, the key is moved to the
