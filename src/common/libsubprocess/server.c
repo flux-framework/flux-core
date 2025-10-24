@@ -747,14 +747,17 @@ static json_t *process_info (flux_subprocess_t *p)
     flux_cmd_t *cmd;
     json_t *info = NULL;
     const char *label;
+    const char *state;
 
     if (!(cmd = flux_subprocess_get_cmd (p)))
         return NULL;
     label = flux_cmd_get_label (cmd);
-    if (!(info = json_pack ("{s:i s:s s:s}",
+    state = flux_subprocess_active (p) ? "R" : "Z";
+    if (!(info = json_pack ("{s:i s:s s:s s:s}",
                             "pid", flux_subprocess_pid (p),
                             "cmd", flux_cmd_arg (cmd, 0),
-                            "label", label ? label : ""))) {
+                            "label", label ? label : "",
+                            "state", state))) {
         errno = ENOMEM;
         return NULL;
     }
