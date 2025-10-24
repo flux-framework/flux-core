@@ -47,6 +47,9 @@ static struct optparse_option cmdopts[] = {
     { .name = "bg", .has_arg = 0,
       .usage = "Run process in background and exit",
     },
+    { .name = "waitable", .has_arg = 0,
+      .usage = "Process remains a zombie until exit status is collected",
+    },
     { .name = "label", .has_arg = 1, .arginfo = "LABEL",
       .usage = "Set a remote process label.",
     },
@@ -722,6 +725,7 @@ int main (int argc, char *argv[])
     struct timespec t0;
     const char *service_name;
     char *job_service = NULL;
+    int flags = FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF;
 
     log_init ("flux-exec");
 
@@ -742,6 +746,9 @@ int main (int argc, char *argv[])
     if (optparse_getopt (opts, "label", &optargp) > 0
         && flux_cmd_set_label (cmd, optargp) < 0)
         log_err_exit ("failed to set label");
+
+    if (optparse_hasopt (opts, "waitable"))
+        flags |= FLUX_SUBPROCESS_FLAGS_WAITABLE;
 
     flux_cmd_unsetenv (cmd, "FLUX_PROXY_REMOTE");
 
@@ -841,7 +848,10 @@ int main (int argc, char *argv[])
                                      job_service ? job_service : "rexec");
 
     if (optparse_hasopt (opts, "bg")) {
-        if (rexec_background (h, service_name, targets, 0, cmd) < 0)
+        int flags = 0;
+        if (optparse_hasopt (opts, "waitable"))
+            flags |= FLUX_SUBPROCESS_FLAGS_WAITABLE;
+        if (rexec_background (h, service_name, targets, flags, cmd) < 0)
             log_msg_exit ("failed to start all processes in background");
         goto cleanup;
     }
@@ -895,7 +905,7 @@ int main (int argc, char *argv[])
         if (!(p = flux_rexec_ex (h,
                                  service_name,
                                  rank,
-                                 FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF,
+                                 flags,
                                  cmd,
                                  &ops,
                                  NULL,
