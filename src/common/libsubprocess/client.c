@@ -83,7 +83,8 @@ static struct rexec_ctx *rexec_ctx_create (flux_cmd_t *cmd,
     int valid_flags = SUBPROCESS_REXEC_STDOUT
         | SUBPROCESS_REXEC_STDERR
         | SUBPROCESS_REXEC_CHANNEL
-        | SUBPROCESS_REXEC_WRITE_CREDIT;
+        | SUBPROCESS_REXEC_WRITE_CREDIT
+        | SUBPROCESS_REXEC_WAITABLE;
 
     if ((flags & ~valid_flags)) {
         errno = EINVAL;
@@ -155,6 +156,7 @@ flux_future_t *subprocess_rexec_bg (flux_t *h,
     flux_future_t *f = NULL;
     json_t *ocmd = NULL;
     char *topic = NULL;
+    int flags = 0;
 
     /* FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF is not allowed with background
      * execution, raise error if set:
@@ -162,6 +164,12 @@ flux_future_t *subprocess_rexec_bg (flux_t *h,
     if (local_flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF) {
         errno = EINVAL;
         return NULL;
+    }
+    /* Move waitable flag from local_flags to flags
+     */
+    if (local_flags & FLUX_SUBPROCESS_FLAGS_WAITABLE) {
+        local_flags &= ~FLUX_SUBPROCESS_FLAGS_WAITABLE;
+        flags |= SUBPROCESS_REXEC_WAITABLE;
     }
 
     if (service_name == NULL)
@@ -177,7 +185,7 @@ flux_future_t *subprocess_rexec_bg (flux_t *h,
                        0,
                        "{s:O s:i s:i}",
                        "cmd", ocmd,
-                       "flags", 0,
+                       "flags", flags,
                        "local_flags", local_flags);
 out:
     ERRNO_SAFE_WRAP (free, topic);

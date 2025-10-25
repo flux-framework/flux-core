@@ -106,6 +106,20 @@ OPTIONS
    down. Process output is logged to the server's stdout and stderr. The
    :option:`--label-io` and :option:`--no-input` options are ignored.
 
+.. option:: --waitable
+
+   Make the subprocess waitable. This option is only meaningful when combined
+   with :option:`--bg`.
+
+   When a background subprocess is marked waitable, it remains in the
+   subprocess server's process list after it exits, entering a zombie state
+   until its exit status is collected via a wait RPC. Without this flag,
+   background subprocesses are automatically reaped when they exit and their
+   status cannot be retrieved.
+
+   For non-background (streaming) subprocesses, this option has no effect
+   since the exit status is always delivered in the finish RPC response.
+
 .. option:: --label=LABEL
 
    Set a string label for the remote process. When specified, the label
