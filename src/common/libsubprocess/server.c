@@ -8,6 +8,88 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* libsubprocess server - remote subprocess execution service
+ *
+ * OVERVIEW
+ * --------
+ * This module implements a subprocess server that executes processes
+ * on behalf of remote clients via the subprocess protocol defined in
+ * RFC 42. The server handles subprocess lifecycle management including
+ * execution, I/O streaming, signal delivery, and process cleanup.
+ *
+ * RPC ENDPOINTS
+ * -------------
+ * exec       - Start a new subprocess (streaming or background)
+ * write      - Write data to subprocess stdin
+ * kill       - Send signal to subprocess
+ * list       - List active and zombie subprocesses
+ * wait       - Wait for and collect exit status of waitable subprocess
+ * disconnect - Notify server of client disconnect
+ *
+ * EXEC REQUEST TYPES
+ * -------------------
+ * 1. Streaming (foreground): Default mode. Server streams stdout/stderr back
+ *    to client via streaming RPC responses and delivers final exit status
+ *    in the "finished" response. Process is removed from server list
+ *    after final response is sent.
+ *
+ * 2. Non-streaming (background): Process runs detached. Server does not
+ *    stream output or send status responses. Process is removed from server
+ *    list immediately upon exit unless marked waitable.
+ *
+ * 3. Waitable: Background process enters zombie state upon exit, remaining
+ *    in server list until status is collected via wait RPC or server is
+ *    shutdown. See RFC 42 for protocol details.
+ *
+ * PROCESS LIFECYCLE
+ * -----------------
+ * Normal subprocess:
+ *   exec -> running -> exited -> [removed from list]
+ *
+ * Waitable subprocess:
+ *   exec -> running -> exited -> zombie -> wait RPC -> [removed from list]
+ *
+ * WAITABLE SUBPROCESS BEHAVIOR
+ * ----------------------------
+ * - Only background processes can be waitable.
+ *
+ * - Processes that fail to start are never kept as zombies, regardless of
+ *   waitable flag. They are immediately removed with error response sent
+ *   to client.
+ *
+ * - Zombie processes remain in the list with state "Z" until:
+ *   a) A client successfully calls the wait RPC
+ *   b) Server shutdown (zombies are purged during shutdown sequence)
+ *
+ * - Only one concurrent waiter per process is allowed. Second wait attempt
+ *   returns EINVAL.
+ *
+ * - If a waiting client disconnects before process exits, the pending wait
+ *   is cancelled and another client may wait for the process.
+ *
+ * - wait RPC can be called before or after process exit:
+ *   - Before exit: RPC blocks until process exits, then returns status
+ *   - After exit: RPC returns immediately with cached status
+ *
+ * - Once status is collected process is removed from server list and cannot
+ *   be waited on again.
+ *
+ * DISCONNECT HANDLING
+ * -------------------
+ * When a client disconnects:
+ * - Streaming (non-background) processes from that client are killed with
+ *   SIGKILL
+ * - Any pending wait RPC from that client is cancelled
+ * - Background processes continue running regardless of client disconnect
+ *
+ * IMPLEMENTATION NOTES
+ * --------------------
+ * - Process list maintained in s->subprocesses (zlistx)
+ * - Process lookup by PID via iteration, by label via s->labels hash
+ * - p->waiter stores pending wait RPC message if wait is in progress
+ * - proc_delete() handles wait notification and process deletion
+ */
+
 #if HAVE_CONFIG_H
 # include "config.h"
 #endif
