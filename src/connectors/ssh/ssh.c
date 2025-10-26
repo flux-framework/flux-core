@@ -26,6 +26,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/strstrip.h"
+#include "src/common/libutil/fdutils.h"
 #include "src/common/libyuarel/yuarel.h"
 #ifndef HAVE_STRLCPY
 #include "src/common/libmissing/strlcpy.h"
@@ -327,6 +328,13 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
      */
     if (!(ctx->uclient = usock_client_create (popen2_get_fd (ctx->p)))) {
         char *data = NULL;
+
+        /* Set stderr fd to nonblocking to avoid a hang in read_all() when
+         * the client uconn connection has failed, but the remote command
+         * has not exited. This can occur, for example, if there is stdout
+         * emitted from shell rc files like .bashrc or .cshrc.
+         */
+        fd_set_nonblocking (popen2_get_stderr_fd (ctx->p));
         if (read_all (popen2_get_stderr_fd (ctx->p), (void **) &data) > 0)
             errprintf (errp, "%s", strstrip (data));
         free (data);
