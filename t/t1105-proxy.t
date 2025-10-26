@@ -74,7 +74,7 @@ test_expect_success 'flux-proxy fails if flux-uri fails' '
 
 test_expect_success 'flux-proxy fails with unknown URI path (ENOENT)' '
 	test_must_fail flux proxy local:///noexist  2>badpath.err &&
-	grep "No such file or directory" badpath.err
+	grep "broker socket /noexist was not found" badpath.err
 '
 
 test_expect_success 'flux-proxy forwards LD_LIBRARY_PATH' '
