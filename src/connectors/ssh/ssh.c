@@ -337,6 +337,18 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
         fd_set_nonblocking (popen2_get_stderr_fd (ctx->p));
         if (read_all (popen2_get_stderr_fd (ctx->p), (void **) &data) > 0)
             errprintf (errp, "%s", strstrip (data));
+        else {
+            /* If there is no data emitted on the stderr of the remote command
+             * then assume read of zero sentinel failed due to unexpected data
+             * emitted from the remote, e.g. from shell rc files. Give a hint
+             * to the user that the ssh connection is not clean and to check
+             * their shell init files.
+             */
+            errprintf (errp,
+                       "Unable to establish clean ssh connection.\n"
+                       "Hint: Check that shell init files do not write to "
+                       "stdout when non-interactive.");
+        }
         free (data);
         goto error;
     }
