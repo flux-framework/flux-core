@@ -189,7 +189,22 @@ test_expect_success 'ssh:// stderr is redirected with Python flux.Flux()' '
 	test_must_be_empty open_ex.err &&
 	test_cmp open_ex.expected open_ex.out
 '
-
+test_expect_success 'create test flux command that emits data on stdout' '
+	cat <<-EOF >flux-bad.sh &&
+	#!/bin/sh
+	echo foo
+	exec flux "$@"
+	EOF
+	chmod +x flux-bad.sh
+'
+test_expect_success 'flux_open_ex(ssh://...) fails without hang' '
+	( export FLUX_URI=ssh://localhost$TEST_SOCKDIR &&
+	  export FLUX_SSH_RCMD=$(pwd)/flux-bad.sh &&
+	  export FLUX_SSH=$TEST_SSH &&
+	  run_timeout 60 flux python open_ex.py >connbad.out 2>&1 ) &&
+	test_debug "cat connbad.out" &&
+	grep "Hint: Check that shell init files do not write to stdout" connbad.out
+'
 test_expect_success 'remove heartbeat module' '
         flux module remove heartbeat
 '
