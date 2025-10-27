@@ -1934,6 +1934,9 @@ _flux_exec()
         -n --noinput \
         -v --verbose \
         -q --quiet \
+        --label= \
+        --bg \
+        --waitable \
     "
 
     _flux_split_longopt && split=true
