@@ -26,6 +26,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/strstrip.h"
+#include "src/common/libutil/fdutils.h"
 #include "src/common/libyuarel/yuarel.h"
 #ifndef HAVE_STRLCPY
 #include "src/common/libmissing/strlcpy.h"
@@ -327,8 +328,27 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
      */
     if (!(ctx->uclient = usock_client_create (popen2_get_fd (ctx->p)))) {
         char *data = NULL;
+
+        /* Set stderr fd to nonblocking to avoid a hang in read_all() when
+         * the client uconn connection has failed, but the remote command
+         * has not exited. This can occur, for example, if there is stdout
+         * emitted from shell rc files like .bashrc or .cshrc.
+         */
+        fd_set_nonblocking (popen2_get_stderr_fd (ctx->p));
         if (read_all (popen2_get_stderr_fd (ctx->p), (void **) &data) > 0)
             errprintf (errp, "%s", strstrip (data));
+        else {
+            /* If there is no data emitted on the stderr of the remote command
+             * then assume read of zero sentinel failed due to unexpected data
+             * emitted from the remote, e.g. from shell rc files. Give a hint
+             * to the user that the ssh connection is not clean and to check
+             * their shell init files.
+             */
+            errprintf (errp,
+                       "Unable to establish clean ssh connection.\n"
+                       "Hint: Check that shell init files do not write to "
+                       "stdout when non-interactive.");
+        }
         free (data);
         goto error;
     }

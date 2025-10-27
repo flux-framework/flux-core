@@ -371,6 +371,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     int optindex;
     flux_reactor_t *r;
     int flags = 0;
+    flux_error_t error;
 
     memset (&ctx, 0, sizeof (ctx));
 
@@ -387,8 +388,8 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     if (optparse_hasopt (p, "reconnect"))
         flags |= FLUX_O_RPCTRACK;
 
-    if (!(ctx.h = flux_open (uri, flags)))
-        log_err_exit ("%s", uri);
+    if (!(ctx.h = flux_open_ex (uri, flags, &error)))
+        log_msg_exit ("%s: %s", uri, error.text);
     ctx.remote_uri_authority = uri_remote_get_authority (uri);
     free (uri);
     flux_log_set_appname (ctx.h, "proxy");
