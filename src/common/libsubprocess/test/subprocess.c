@@ -111,6 +111,15 @@ void test_corner_cases (flux_reactor_t *r)
         && errno == EINVAL,
         "flux_rexec_bg fails if FLUX_SUBPROCESS_LOCAL_UNBUF flag is set");
 
+    ok (flux_rexec_wait (NULL, NULL, 0, 0, NULL) == NULL && errno == EINVAL,
+        "flux_rexec_wait fails with EINVAL on NULL inputs");
+    ok (flux_rexec_wait (h, NULL, 0, -1, NULL) == NULL && errno == EINVAL,
+        "flux_rexec_wait fails with EINVAL with invalid pid");
+    ok (flux_rexec_wait (h, NULL, 0, 1234, "foo") == NULL && errno == EINVAL,
+        "flux_rexec_wait fails with EINVAL when both pid and label specified");
+    ok (flux_rexec_wait (h, NULL, -42, 1234, NULL) == NULL && errno == EINVAL,
+        "flux_rexec_wait fails with EINVAL with invalid rank");
+
     ok (flux_local_exec (r, 0, cmd, NULL) == NULL
         && errno == EINVAL,
         "flux_local_exec fails with cmd with zero args");
