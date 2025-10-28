@@ -32,7 +32,7 @@ struct shell_affinity {
     hwloc_cpuset_t *pertask;
 };
 
-int wrap_hwloc_set_cpubind(hwloc_topology_t topo, hwloc_cpuset_t set, int i)
+int wrap_hwloc_set_cpubind (hwloc_topology_t topo, hwloc_cpuset_t set, int i)
 {
     int ret = 0;
 #if !defined (__APPLE__)
@@ -293,7 +293,7 @@ static int shell_affinity_topology_init (flux_shell_t *shell,
  *   topology, gathering number of local tasks and assigned core list,
  *   and getting the resulting cpuset for the entire shell.
  */
-static struct shell_affinity * shell_affinity_create (flux_shell_t *shell)
+static struct shell_affinity *shell_affinity_create (flux_shell_t *shell)
 {
     struct shell_affinity *sa = calloc (1, sizeof (*sa));
     if (!sa)
@@ -302,7 +302,7 @@ static struct shell_affinity * shell_affinity_create (flux_shell_t *shell)
         goto err;
     if (flux_shell_rank_info_unpack (shell,
                                      -1,
-                                     "{ s:i s:{s:s} }",
+                                     "{s:i s:{s:s}}",
                                      "ntasks", &sa->ntasks,
                                      "resources",
                                        "cores", &sa->cores) < 0) {
@@ -343,7 +343,7 @@ static bool affinity_getopt (flux_shell_t *shell, const char **resultp)
 static int flux_shell_task_getid (flux_shell_task_t *task)
 {
     int id = -1;
-    if (flux_shell_task_info_unpack (task, "{ s:i }", "localid", &id) < 0)
+    if (flux_shell_task_info_unpack (task, "{s:i}", "localid", &id) < 0)
         return -1;
     return id;
 }
@@ -425,7 +425,8 @@ static int affinity_init (flux_plugin_t *p,
             return -1;
     }
     if (sa->pertask
-        && flux_plugin_add_handler (p, "task.exec",
+        && flux_plugin_add_handler (p,
+                                    "task.exec",
                                     task_affinity,
                                     sa) < 0)
             shell_log_errno ("failed to add task.exec handler");
