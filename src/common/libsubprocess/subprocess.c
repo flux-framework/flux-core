@@ -28,6 +28,7 @@
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 
@@ -578,6 +579,44 @@ flux_future_t *flux_rexec_bg (flux_t *h,
     }
     return subprocess_rexec_bg (h, service_name, rank, cmd, flags);
 }
+
+flux_future_t *flux_rexec_wait (flux_t *h,
+                                const char *service_name,
+                                int rank,
+                                pid_t pid,
+                                const char *label)
+{
+    char *topic = NULL;
+    flux_future_t *f = NULL;
+
+    if (!h
+        || (pid <= 0 && !label) // neither pid nor label set
+        || (pid > 0 && label)   // both specified: ambiguous
+        || (rank < 0
+            && rank != FLUX_NODEID_ANY
+            && rank != FLUX_NODEID_UPSTREAM)) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!service_name)
+        service_name = "rexec";
+    if (asprintf (&topic, "%s.wait", service_name) < 0)
+        goto out;
+    if (label)
+        f = flux_rpc_pack (h,
+                           topic,
+                           rank,
+                           0,
+                           "{s:i s:s}",
+                           "pid", -1,
+                           "label", label);
+    else
+        f = flux_rpc_pack (h, topic, rank, 0, "{s:i}", "pid", pid);
+out:
+    ERRNO_SAFE_WRAP (free, topic);
+    return f;
+}
+
 
 flux_subprocess_t *flux_rexec_ex (flux_t *h,
                                   const char *service_name,
