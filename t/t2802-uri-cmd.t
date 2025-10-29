@@ -153,6 +153,14 @@ test_expect_success 'setup fake srun and scontrol cmds for mock slurm testing' '
 	exec flux uri pid:$$
 	EOF
 	chmod +x srun &&
+	cat <<-EOF >squeue &&
+	#!/bin/sh
+	# used by resolver to get nodelist, just echo a couple fake hosts
+	test -n "\$SQUEUE_FAIL" && exit 1
+	test -n "\$SQUEUE_EMPTY" && exit 0
+	echo foo[100-101]
+	EOF
+	chmod +x squeue &&
 	#  slurm resolver attempts to list pids from `scontrol listpids`
 	#  return a single listpids line with our pid for mocking
 	#  set
@@ -173,7 +181,15 @@ test_expect_success 'flux-uri mock testing of slurm resolver works' '
 	test_debug "echo slurm:1234 with REMOTE=t got $result" &&
 	test "$result" = "$FLUX_URI" &&
 	( export PATH=$(pwd):$PATH REMOTE=t SRUN_FAIL=t &&
-	  test_expect_code 1 flux uri slurm:1234 )
+	  test_expect_code 1 flux uri slurm:1234 ) &&
+	( export PATH=$(pwd):$PATH REMOTE=t SQUEUE_FAIL=t &&
+	  test_expect_code 1 flux uri slurm:1234 2>squeue1.err) &&
+	test_debug "cat squeue1.err" &&
+	grep -i "unable to query nodelist" squeue1.err &&
+	( export PATH=$(pwd):$PATH REMOTE=t SQUEUE_EMPTY=t &&
+	  test_expect_code 1 flux uri slurm:1234 2>squeue2.err) &&
+	test_debug "cat squeue2.err" &&
+	grep -i "empty nodelist" squeue2.err
 '
 test_expect_success 'setup fake csm_allocation_query for mock lsf testing' '
 	cat <<-EOF >csm_allocation_query &&
