@@ -62,7 +62,7 @@ static int recursive_get_slot_count (int *slot_count,
     const char *type;
     json_t *count;
     json_t *with;
-    
+
     if (level == 0 ) {
         *slot_count = -1;
         *is_node_specified = false;
@@ -75,7 +75,9 @@ static int recursive_get_slot_count (int *slot_count,
     }
     json_array_foreach (curr_resource, index, value) {
         with = NULL;
-        if (json_unpack_ex (value, error, 0,
+        if (json_unpack_ex (value,
+                            error,
+                            0,
                             "{s:s s:o s?o}",
                             "type", &type,
                             "count", &count,
@@ -115,7 +117,9 @@ static int recursive_get_slot_count (int *slot_count,
     return (*slot_count);
 }
 
-struct jobspec *jobspec_parse (const char *jobspec, rcalc_t *r, json_error_t *error)
+struct jobspec *jobspec_parse (const char *jobspec,
+                               rcalc_t *r,
+                               json_error_t *error)
 {
     struct jobspec *job;
     json_t *resources;
@@ -140,7 +144,9 @@ struct jobspec *jobspec_parse (const char *jobspec, rcalc_t *r, json_error_t *er
      *  object itself doesn't seem to catch the changes to these inner
      *  json_t * objects)
      */
-    if (json_unpack_ex (job->jobspec, error, 0,
+    if (json_unpack_ex (job->jobspec,
+                        error,
+                        0,
                         "{s:i s:o s:[{s:o s:o}] s:{s?{s?s s?O s?{s?O}}}}",
                         "version", &job->version,
                         "resources", &resources,
