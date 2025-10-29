@@ -38,7 +38,7 @@ def slurm_job_pids(jobid):
             if int(fields[3]) != 0:
                 continue
             pid = int(fields[0])
-            if pid != os.getpid():
+            if pid > 0 and pid != os.getpid():
                 pids.append(pid)
         except (ValueError, IndexError):
             pass
