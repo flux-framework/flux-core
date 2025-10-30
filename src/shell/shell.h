@@ -166,6 +166,7 @@ int flux_shell_rank_info_unpack (flux_shell_t *shell,
  *   "cores_per_slot":i  # number of cores per task slot
  *   "nnodes":i          # number of nodes requested, -1 if unset
  *   "slots_per_node":i  # number of slots per node, -1 if unavailable
+ *   "node_exclusive":b  # true if exclusive flag used for node resource
  *  }
  *
  */
