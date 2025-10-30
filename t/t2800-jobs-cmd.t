@@ -505,6 +505,13 @@ test_expect_success 'flux-jobs error on all unknown IDs' '
 	test $count -eq 3
 '
 
+test_expect_success 'flux-jobs no error on one known ID' '
+	flux jobs --no-header f1 f2 $(flux job last) 2> ids2.err &&
+	test_debug "cat ids2.err" &&
+	count=$(grep -i unknown ids2.err | wc -l) &&
+	test $count -eq 2
+'
+
 test_expect_success 'flux-jobs errors with illegal IDs' '
 	test_must_fail flux jobs --no-header IllegalID 2> illegal_ids.err &&
 	grep "invalid JobID value" illegal_ids.err
