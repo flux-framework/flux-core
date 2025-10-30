@@ -741,11 +741,12 @@ static json_t *flux_shell_get_jobspec_info_object (flux_shell_t *shell)
     /*  Only v1 supported for now:
      */
     if (jobspec->version == 1) {
-        o = json_pack ("{s:i s:i s:i s:i s:i s:i s:b}",
+        o = json_pack ("{s:i s:i s:i s:i s:i s:i s:i s:b}",
                        "version", jobspec->version,
                        "ntasks", jobspec->task_count,
                        "nslots", jobspec->slot_count,
                        "cores_per_slot", jobspec->cores_per_slot,
+                       "gpus_per_slot", jobspec->gpus_per_slot,
                        "nnodes", jobspec->node_count,
                        "slots_per_node", jobspec->slots_per_node,
                        "node_exclusive", jobspec->node_exclusive);
