@@ -299,8 +299,7 @@ static void put_valref_lost_and_found (struct fsck_ctx *ctx,
     ctx->repair_count++;
 }
 
-static void unlink_path (struct fsck_ctx *ctx,
-                         const char *path)
+static void unlink_path (struct fsck_ctx *ctx, const char *path)
 {
     json_t *dir = ctx->root;
     char *cpy;
