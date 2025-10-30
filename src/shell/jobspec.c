@@ -117,6 +117,30 @@ static int recursive_get_slot_count (int *slot_count,
     return (*slot_count);
 }
 
+static bool is_node_exclusive (json_t *resource)
+{
+    size_t index;
+    const char *type;
+    json_t *value;
+    json_t *with;
+    int exclusive = 0;
+
+    json_array_foreach (resource, index, value) {
+        with = NULL;
+        if (json_unpack (value,
+                         "{s:s s?b s?o}",
+                         "type", &type,
+                         "exclusive", &exclusive,
+                         "with", &with) < 0)
+            return false;
+        if (streq (type, "node"))
+            return exclusive;
+        if (with)
+            return is_node_exclusive (with);
+    }
+    return false;
+}
+
 struct jobspec *jobspec_parse (const char *jobspec,
                                rcalc_t *r,
                                json_error_t *error)
@@ -208,6 +232,9 @@ struct jobspec *jobspec_parse (const char *jobspec,
         }
         job->cores_per_slot = rcalc_total_cores (r) / job->slot_count;
     }
+    /* Set job->node_exclusive
+     */
+    job->node_exclusive = is_node_exclusive (resources);
 
     /* Set job->task_count
      */
