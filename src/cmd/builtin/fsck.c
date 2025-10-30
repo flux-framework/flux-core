@@ -266,9 +266,9 @@ static json_t *get_dir (struct fsck_ctx *ctx,
     return o;
 }
 
-static void put_valref_lost_and_found (struct fsck_ctx *ctx,
-                                       const char *path,
-                                       json_t *repaired)
+static void put_lost_and_found (struct fsck_ctx *ctx,
+                                const char *path,
+                                json_t *obj)
 {
     json_t *dir = ctx->root;
     char *cpy;
@@ -291,12 +291,10 @@ static void put_valref_lost_and_found (struct fsck_ctx *ctx,
         dir = subdir;
     }
 
-    if (treeobj_insert_entry (dir, name, repaired) < 0)
-        log_err_exit ("cannot insert repaired valref");
+    if (treeobj_insert_entry (dir, name, obj) < 0)
+        log_err_exit ("cannot insert treeobj to %s", path);
 
     free (cpy);
-
-    ctx->repair_count++;
 }
 
 static void unlink_path (struct fsck_ctx *ctx, const char *path)
@@ -323,7 +321,7 @@ static void unlink_path (struct fsck_ctx *ctx, const char *path)
     }
 
     if (treeobj_delete_entry (dir, name) < 0)
-        log_err_exit ("cannot unlink repaired entry");
+        log_err_exit ("cannot unlink entry %s", path);
 
     free (cpy);
 }
@@ -368,9 +366,11 @@ static void fsck_valref (struct fsck_ctx *ctx,
             && fvd.errorcount == zlist_size (fvd.missing_indexes)) {
             json_t *repaired = repair_valref (ctx, treeobj, &fvd);
 
-            put_valref_lost_and_found (ctx, path, repaired);
+            put_lost_and_found (ctx, path, repaired);
 
             unlink_path (ctx, path);
+
+            ctx->repair_count++;
 
             warn (ctx, "%s repaired and moved to lost+found", path);
 
