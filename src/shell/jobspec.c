@@ -200,6 +200,7 @@ struct jobspec *jobspec_parse (const char *jobspec,
     if (r != NULL && rcalc_total_slots (r) > 0) {
         job->slot_count = rcalc_total_slots (r);
         job->cores_per_slot = rcalc_total_cores (r) / job->slot_count;
+        job->gpus_per_slot = rcalc_total_gpus (r) / job->slot_count;
         /* Check whether nodes were explicitly specified in jobspec
          */
         if (json_unpack_ex (resources, error, 0, "[{s:s}]", "type", &type) < 0) {
@@ -231,6 +232,7 @@ struct jobspec *jobspec_parse (const char *jobspec,
             job->slots_per_node = -1;
         }
         job->cores_per_slot = rcalc_total_cores (r) / job->slot_count;
+        job->gpus_per_slot = rcalc_total_gpus (r) / job->slot_count;
     }
     /* Set job->node_exclusive
      */
