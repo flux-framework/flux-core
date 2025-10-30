@@ -13,6 +13,7 @@ import os
 import subprocess
 from pathlib import PurePath
 
+from flux.hostlist import Hostlist
 from flux.uri import FluxURIResolver, URIResolverPlugin
 
 
@@ -38,11 +39,26 @@ def slurm_job_pids(jobid):
             if int(fields[3]) != 0:
                 continue
             pid = int(fields[0])
-            if pid != os.getpid():
+            if pid > 0 and pid != os.getpid():
                 pids.append(pid)
         except (ValueError, IndexError):
             pass
     return pids
+
+
+def slurm_job_hostlist(jobid):
+    """
+    Get the hostlist for a Slurm job
+    """
+    try:
+        return Hostlist(
+            subprocess.check_output(
+                ["squeue", "-h", "-o", "%N", "-j", jobid], encoding="utf-8"
+            ).strip()
+        )
+    except subprocess.CalledProcessError:
+        # squeue failed or job not found
+        raise ValueError(f"unable to query nodelist for Slurm job {jobid}")
 
 
 def slurm_resolve_remote(jobid):
@@ -53,6 +69,9 @@ def slurm_resolve_remote(jobid):
 
     on the first node of the Slurm job
     """
+    hostlist = slurm_job_hostlist(jobid)
+    if not hostlist:
+        raise ValueError(f"empty nodelist returned for Slurm job {jobid}")
 
     #  Clear FLUX_URI in srun environment so we don't confuse
     #   ourselves and return the current FLUX_URI from flux-uri's
@@ -65,6 +84,8 @@ def slurm_resolve_remote(jobid):
             "srun",
             "--overlap",
             f"--jobid={jobid}",
+            "-w",
+            hostlist[0],
             "-n1",
             "-N1",
             "flux",
