@@ -428,7 +428,7 @@ test_expect_success 'job-manager: wait for valid jobs to appear inactive' '
 	while ! test_inactive $(cat valid_ids); do echo retry; sleep 0.1; done
 '
 test_expect_success 'job-manager: flux jobs does not list invalid jobs' '
-	test_unknown $(cat invalid_ids)
+	test_expect_code 1 test_unknown $(cat invalid_ids)
 '
 
 test_expect_success 'job-manager: plugin can manage dependencies' '
