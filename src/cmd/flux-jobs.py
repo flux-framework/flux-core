@@ -558,6 +558,13 @@ def main():
         formatter.set_sort_keys(args.sort)
 
     (jobs, truncated) = fetch_jobs(args, formatter.fields)
+    if args.jobids and not jobs:
+        # one or more jobids provided on command line, but none of these
+        # jobs were returned. Exit with error immediately. Errors already
+        # printed while processing RPC response, so need for another log
+        # message here.
+        sys.exit(1)
+
     sformatter = JobInfoFormat(formatter.filter(jobs, no_header=args.no_header))
 
     if not args.no_header:
