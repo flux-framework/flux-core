@@ -98,6 +98,55 @@ test_expect_success 'flux-shell: invalid option is ignored' '
 	test_debug "cat invalid.out" &&
 	grep "invalid option" invalid.out
 '
+#
+# verbose, dry-run tests:
+#
+test_expect_success 'flux-shell: cpu-affinity=verbose prints cpuset' '
+	flux run -n1 -c1 -ocpu-affinity=verbose hostname >verbose.out 2>&1 &&
+	test_debug "cat verbose.out" &&
+	grep "cpus:" verbose.out
+'
+test_expect_success MULTICORE 'flux-shell: cpu-affinity=verbose,per-task prints per-task cpusets' '
+	flux run --label-io -n2 -c1 \
+	    -ocpu-affinity=verbose,per-task \
+	    hostname >verbose-per-task.out 2>&1 &&
+	test_debug "cat verbose-per-task.out" &&
+	grep "cpus:" verbose-per-task.out &&
+	grep "task 0: cpus:" verbose-per-task.out &&
+	grep "task 1: cpus:" verbose-per-task.out
+'
+test_expect_success 'flux-shell: cpu-affinity=dry-run prints but does not bind' '
+	hwloc-bind --get > no-bind.expected &&
+	flux run -n1 -c1 -ocpu-affinity=dry-run \
+	    hwloc-bind --get >dry-run.out &&
+	test_debug "cat dry-run.out" &&
+	test_cmp no-bind.expected dry-run.out
+'
+test_expect_success MULTICORE 'flux-shell: cpu-affinity=dry-run,per-task prints without binding' '
+	flux run --label-io -n2 -c1 \
+	    -ocpu-affinity=dry-run,per-task \
+	    hwloc-bind --get >dry-run-per-task.out 2>&1 &&
+	test_debug "cat dry-run-per-task.out" &&
+	grep "task 0: cpus:" dry-run-per-task.out &&
+	grep "task 1: cpus:" dry-run-per-task.out &&
+	grep "0: $(cat no-bind.expected)" dry-run-per-task.out &&
+	grep "1: $(cat no-bind.expected)" dry-run-per-task.out
+'
+test_expect_success MULTICORE 'flux-shell: cpu-affinity=dry-run,verbose works' '
+	flux run -n1 -c2 -ocpu-affinity=dry-run,verbose \
+	    hostname >dry-run-verbose.out 2>&1 &&
+	test_debug "cat dry-run-verbose.out" &&
+	grep "cpus:" dry-run-verbose.out
+'
+test_expect_success MULTICORE 'flux-shell: cpu-affinity handles verbose and map option' '
+	flux run -n1 -c1 -ocpu-affinity=verbose,map:0 \
+	    hostname >verbose-map.out 2>&1 &&
+	test_debug "cat verbose-map.out" &&
+	grep "cpus: 0" verbose-map.out
+'
+#
+# GPU tests:
+#
 test_expect_success 'flux-shell: CUDA_VISIBLE_DEVICES=-1 set by default' '
 	flux run printenv CUDA_VISIBLE_DEVICES >default-gpubind.out 2>&1 &&
 	test_debug "cat default-gpubind.out" &&
