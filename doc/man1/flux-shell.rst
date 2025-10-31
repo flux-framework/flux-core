@@ -288,6 +288,18 @@ plugins include:
     :func:`hwloc_bitmap_snprintf` and :func:`hwloc_bitmap_taskset_snprintf`
     functions.
 
+  verbose
+    Log the cpuset assigned to the shell and each task (if :option:`per-task`
+    is used). When combined with options listed above, the :option:`verbose`
+    option must come first followed by a comma.
+
+  dry-run
+   Print cpusets but do not actually apply CPU affinity bindings. Useful
+   for testing and debugging affinity configurations. Implies
+   :option:`verbose`. When used with options listed above, the
+   :option:`dry-run` option must come first followed by a comma.
+
+
 .. option:: gpu-affinity=OPT
 
   Adjust operation of the builtin shell ``gpubind`` plugin.  This plugin
