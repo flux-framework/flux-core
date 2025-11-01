@@ -41,8 +41,10 @@ static int check_jobspec_info (flux_plugin_t *p,
     int ntasks, ntasks_expected;
     int nslots, nslots_expected;
     int cores_per_slot, cps_expected;
+    int gpus_per_slot, gps_expected;
     int nnodes, nnodes_expected;
     int slots_per_node, spn_expected;
+    int node_exclusive, node_exclusive_expected;
     char *json_str = NULL;
     int rc;
 
@@ -58,28 +60,34 @@ static int check_jobspec_info (flux_plugin_t *p,
 
     rc = flux_shell_getopt_unpack (shell,
                                    "jobspec_info",
-                                   "{s:i s:i s:i s:i s:i}",
+                                   "{s:i s:i s:i s:i s:i s:i s:b}",
                                    "ntasks", &ntasks_expected,
                                    "nnodes", &nnodes_expected,
                                    "nslots", &nslots_expected,
                                    "cores_per_slot", &cps_expected,
-                                   "slots_per_node", &spn_expected);
+                                   "gpus_per_slot", &gps_expected,
+                                   "slots_per_node", &spn_expected,
+                                   "node_exclusive", &node_exclusive_expected);
     if (rc < 0)
         return die ("flux_shell_getopt_unpack: %s\n", strerror (errno));
 
     rc = flux_shell_jobspec_info_unpack (shell,
-                                         "{s:i s:i s:i s:i s:i s:i}",
+                                         "{s:i s:i s:i s:i s:i s:i s:i s:b}",
                                          "version", &version,
                                          "ntasks", &ntasks,
                                          "nslots", &nslots,
                                          "cores_per_slot", &cores_per_slot,
+                                         "gpus_per_slot", &gpus_per_slot,
                                          "nnodes", &nnodes,
-                                         "slots_per_node", &slots_per_node);
+                                         "slots_per_node", &slots_per_node,
+                                         "node_exclusive", &node_exclusive
+                                    );
     ok (rc == 0,
         "flux_jobspec_info_unpack works");
 
     ok (version == 1,
-        "version is reported as 1");
+        "version is reported as 1 (got %d)",
+        version);
     ok (ntasks == ntasks_expected,
         "ntasks (%d) has expected value (%d)", ntasks, ntasks_expected);
     ok (nnodes == nnodes_expected,
@@ -90,10 +98,18 @@ static int check_jobspec_info (flux_plugin_t *p,
         "cores_per_slot (%d) has expected value (%d)",
         cores_per_slot,
         cps_expected);
+    ok (gpus_per_slot == gps_expected,
+        "gpus_per_slot (%d) has expected value (%d)",
+        gpus_per_slot,
+        gps_expected);
     ok (slots_per_node == spn_expected,
         "slots_per_node (%d) has expected value (%d)",
         slots_per_node,
         spn_expected);
+    ok (node_exclusive == node_exclusive_expected,
+        "node_exclusive (%s) has expected value (%s)",
+        node_exclusive ? "true" : "false",
+        node_exclusive_expected ? "true" : "false");
 
     return exit_status () == 0 ? 0 : -1;
 }

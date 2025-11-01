@@ -258,7 +258,9 @@ test_expect_success 'flux-shell: initrc: jobspec-info plugin works' '
 	cat >${name}.json <<-"EOF" &&
 	{ "ntasks":1, "nnodes":1, "nslots":1,
 	  "cores_per_slot":1,
-	  "slots_per_node":1
+	  "gpus_per_slot":0,
+	  "slots_per_node":1,
+	  "node_exclusive":false
 	}
 	EOF
 	flux run -N1 -n1 -c1 -o verbose=2 \
