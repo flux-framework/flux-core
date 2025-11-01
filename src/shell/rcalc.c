@@ -32,6 +32,8 @@ struct rankinfo {
     int ngpus;
     const char *cores;
     const char *gpus;
+    char *adjusted_cores;
+    char *adjusted_gpus;
     struct idset *cpuset;
     struct idset *gpuset;
 };
@@ -79,6 +81,8 @@ void rcalc_destroy (rcalc_t *r)
     for (int i = 0; i < r->nranks; i++) {
         idset_destroy (r->ranks[i].cpuset);
         idset_destroy (r->ranks[i].gpuset);
+        free (r->ranks[i].adjusted_cores);
+        free (r->ranks[i].adjusted_gpus);
     }
     free (r->ranks);
     free (r->alloc);
@@ -476,9 +480,14 @@ static void rcalc_rankinfo_set (rcalc_t *r, int id,
     rli->ntasks = ai->ntasks;
     /*  Copy cores string to rli, in the very unlikely event that
      *   we get a huge cores string, indicate truncation.
+     * If adjusted cores/gpus exists, use those values instead.
      */
-    strcpy_trunc (rli->cores, sizeof (rli->cores), ri->cores);
-    strcpy_trunc (rli->gpus, sizeof (rli->gpus), ri->gpus);
+    strcpy_trunc (rli->cores,
+                  sizeof (rli->cores),
+                  ri->adjusted_cores ? ri->adjusted_cores : ri->cores);
+    strcpy_trunc (rli->gpus,
+                  sizeof (rli->gpus),
+                  ri->adjusted_gpus ? ri->adjusted_gpus : ri->gpus);
 }
 
 int rcalc_get_rankinfo (rcalc_t *r, int rank, struct rcalc_rankinfo *rli)
@@ -507,6 +516,58 @@ int rcalc_has_rank (rcalc_t *r, int rank)
     if (rcalc_rankinfo_find (r, rank))
         return (1);
     return (0);
+}
+
+static int rankinfo_adjust_cores (struct rankinfo *ri, int total)
+{
+    if (ri->ncores > total) {
+        int n = 0;
+        unsigned int i = idset_first (ri->cpuset);
+        while (i != IDSET_INVALID_ID) {
+            if (++n > total)
+                idset_clear (ri->cpuset, i);
+            i = idset_next (ri->cpuset, i);
+        }
+        if (!(ri->adjusted_cores = idset_encode (ri->cpuset,
+                                                 IDSET_FLAG_RANGE)))
+            return -1;
+    }
+    return 0;
+}
+
+static int rankinfo_adjust_gpus (struct rankinfo *ri, int total)
+{
+    if (ri->ngpus > total) {
+        int n = 0;
+        unsigned int i = idset_first (ri->gpuset);
+        while (i != IDSET_INVALID_ID) {
+            if (++n > total)
+                idset_clear (ri->gpuset, i);
+            i = idset_next (ri->gpuset, i);
+        }
+        if (!(ri->adjusted_gpus = idset_encode (ri->gpuset,
+                                                IDSET_FLAG_RANGE)))
+            return -1;
+    }
+    return 0;
+}
+
+int rcalc_normalize_resources_per_task (rcalc_t *r,
+                                        int cores_per_task,
+                                        int gpus_per_task)
+{
+    for (int i = 0; i < r->nranks; i++) {
+        int ntasks = r->alloc[i].ntasks;
+        int cores_required = ntasks * cores_per_task;
+        int gpus_required = ntasks * gpus_per_task;
+
+        /* Reduce cores on this rank if > required cores
+         */
+        if (rankinfo_adjust_cores (&r->ranks[i], cores_required) < 0
+            || rankinfo_adjust_gpus (&r->ranks[i], gpus_required) < 0)
+            return -1;
+    }
+    return 0;
 }
 
 /*

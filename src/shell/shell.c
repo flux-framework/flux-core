@@ -741,13 +741,15 @@ static json_t *flux_shell_get_jobspec_info_object (flux_shell_t *shell)
     /*  Only v1 supported for now:
      */
     if (jobspec->version == 1) {
-        o = json_pack ("{s:i s:i s:i s:i s:i s:i}",
+        o = json_pack ("{s:i s:i s:i s:i s:i s:i s:i s:b}",
                        "version", jobspec->version,
                        "ntasks", jobspec->task_count,
                        "nslots", jobspec->slot_count,
                        "cores_per_slot", jobspec->cores_per_slot,
+                       "gpus_per_slot", jobspec->gpus_per_slot,
                        "nnodes", jobspec->node_count,
-                       "slots_per_node", jobspec->slots_per_node);
+                       "slots_per_node", jobspec->slots_per_node,
+                       "node_exclusive", jobspec->node_exclusive);
     }
     else
         o = json_pack ("{s:i}", "version", jobspec->version);
@@ -1640,6 +1642,65 @@ out:
     return rc;
 }
 
+/* Fix jobspec v1 quirk with uneven distribution of tasks to nodes (#7174)
+ *
+ * With jobspec v1 and an unequal distribution of tasks to nodes when
+ * nodes have been explicitly requested (e.g. `flux run -N2 -n3 ...`)
+ * extra slots are requested in jobspec due to the v1 requirement that
+ * there can only be one `node` resource in the jobspec resources array.
+ *
+ * This function fixes this case by removing the extra slot from affected
+ * ranks in the rcalc rankinfo. This then ensures each task has an equal
+ * count of cores/gpus assigned, at the expense of wasting a slot.
+ *
+ * Apply this fix as narrowly as possible by ensuring the following:
+ * - jobspec version is 1
+ * - the jobspec did not specify node exclusive allocation
+ * - number of nodes allocated > 1
+ * - there are more total slots than tasks
+ *
+ */
+static int shell_adjust_resources_per_task (flux_shell_t *shell)
+{
+    struct shell_info *info = shell->info;
+    struct jobspec *jobspec = info->jobspec;
+
+    if (jobspec->version == 1
+        && !jobspec->node_exclusive
+        && jobspec->node_count > 1
+        && jobspec->slot_count > info->total_ntasks) {
+        struct rcalc_rankinfo ri;
+
+        if (rcalc_normalize_resources_per_task (info->rcalc,
+                                                jobspec->cores_per_slot,
+                                                jobspec->gpus_per_slot) < 0) {
+            shell_log_error ("error normalizing resources per task");
+            return -1;
+        }
+        /* Now update stored rcalc rankinfo. Compare old and new values and
+         * emit a warning to user if something changed.
+         */
+        if (rcalc_get_nth (info->rcalc, info->shell_rank, &ri) < 0) {
+            shell_log_error ("error getting adjusted rcalc rank info");
+            return -1;
+        }
+        if (!streq (info->rankinfo.cores, ri.cores))
+            shell_warn ("%s: adjusted cores from %s to %s",
+                        shell->hostname,
+                        info->rankinfo.cores,
+                        ri.cores);
+        if (!streq (info->rankinfo.gpus, ri.gpus))
+            shell_warn ("%s: adjusted gpus from %s to %s",
+                        shell->hostname,
+                        info->rankinfo.gpus,
+                        ri.gpus);
+        /* Update rank info
+         */
+        info->rankinfo = ri;
+    }
+    return 0;
+}
+
 static int shell_init (flux_shell_t *shell)
 {
     return plugstack_call (shell->plugstack, "shell.init", NULL);
@@ -1990,6 +2051,12 @@ int main (int argc, char *argv[])
 
     if (shell_taskmap (&shell) < 0)
         shell_die (1, "shell_taskmap");
+
+    /* Check for jobspec v1 unequal distribution of tasks quirk and
+     * apply workaround if necessary
+     */
+    if (shell_adjust_resources_per_task (&shell) < 0)
+        shell_die (1, "failed to adjust resources per task");
 
     /* Register the default components of the shell.init eventlog event
      * context. This includes the current taskmap, which may have been

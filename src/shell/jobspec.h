@@ -22,8 +22,10 @@ struct jobspec {
     int task_count;             // number of tasks in job
     int slot_count;             // number of task slots
     int cores_per_slot;         // number of cores per task slot
+    int gpus_per_slot;          // number of gpus per task slot
     int slots_per_node;         // number of slots per node (-1=unspecified)
     int node_count;             // number of nodes (-1=unspecified)
+    bool node_exclusive;        // exclusive=true on node resource
     json_t *command;
     const char *cwd;
     json_t *environment;

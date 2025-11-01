@@ -68,4 +68,20 @@ int rcalc_get_nth (rcalc_t *r, int id, struct rcalc_rankinfo *ri);
  */
 int rcalc_update_map (rcalc_t *r, struct taskmap *map);
 
+/* Normalize resources per task across all ranks in rcalc.
+ *
+ * This function adjusts the resource allocations in rcalc by removing excess
+ * cores and gpus from ranks that have more resources than required for their
+ * task count. After adjustment, each task will have the specified number of
+ * cores_per_task and gpus_per_task, with leftover resources from padding
+ * slots removed.
+ *
+ * The function modifies the rcalc object in place, updating the stored
+ * cores and gpus strings for affected ranks.
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int rcalc_normalize_resources_per_task (rcalc_t *r,
+                                        int cores_per_task,
+                                        int gpus_per_task);
 #endif /* !SHELL_RCALC_H */
