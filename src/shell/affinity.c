@@ -32,7 +32,7 @@ struct shell_affinity {
     hwloc_cpuset_t *pertask;
 };
 
-int wrap_hwloc_set_cpubind(hwloc_topology_t topo, hwloc_cpuset_t set, int i)
+int wrap_hwloc_set_cpubind (hwloc_topology_t topo, hwloc_cpuset_t set, int i)
 {
     int ret = 0;
 #if !defined (__APPLE__)
@@ -247,6 +247,39 @@ err:
     return NULL;
 }
 
+static char *cpuset_to_string (hwloc_cpuset_t cpuset)
+{
+    char *result = NULL;
+    if (hwloc_bitmap_list_asprintf (&result, cpuset) < 0)
+        shell_log_errno ("hwloc_bitmap_list_asprintf");
+    return result;
+}
+
+static void print_pertask_cpusets (flux_shell_t *shell,
+                                   struct shell_affinity *sa)
+{
+    char *s;
+    int i;
+    int rank;
+    flux_shell_task_t *task;
+
+    if (sa->pertask) {
+        task = flux_shell_task_first (shell);
+        while (task) {
+            if (flux_shell_task_info_unpack (task,
+                                             "{s:i s:i}",
+                                             "localid", &i,
+                                             "rank", &rank) < 0)
+                shell_log_errno ("flux_shell_task_info_unpack");
+            else if ((s = cpuset_to_string (sa->pertask[i]))) {
+                shell_log ("task %d: cpus: %s", rank, s);
+                free (s);
+            }
+            task = flux_shell_task_next (shell);
+        }
+    }
+}
+
 static void shell_affinity_destroy (void *arg)
 {
     struct shell_affinity *sa = arg;
@@ -293,7 +326,7 @@ static int shell_affinity_topology_init (flux_shell_t *shell,
  *   topology, gathering number of local tasks and assigned core list,
  *   and getting the resulting cpuset for the entire shell.
  */
-static struct shell_affinity * shell_affinity_create (flux_shell_t *shell)
+static struct shell_affinity *shell_affinity_create (flux_shell_t *shell)
 {
     struct shell_affinity *sa = calloc (1, sizeof (*sa));
     if (!sa)
@@ -302,7 +335,7 @@ static struct shell_affinity * shell_affinity_create (flux_shell_t *shell)
         goto err;
     if (flux_shell_rank_info_unpack (shell,
                                      -1,
-                                     "{ s:i s:{s:s} }",
+                                     "{s:i s:{s:s}}",
                                      "ntasks", &sa->ntasks,
                                      "resources",
                                        "cores", &sa->cores) < 0) {
@@ -315,16 +348,38 @@ err:
     return NULL;
 }
 
+static bool consume_option (const char **optp, const char *name)
+{
+    const char *p = *optp;
+    if (strstarts (*optp, name)) {
+        /* forward past name and any ',' */
+        p += strlen (name);
+        if (*p == ',')
+            p++;
+        *optp = p;
+        return true;
+    }
+    return false;
+}
+
 /*  Parse any shell 'cpu-affinity' and return true if shell affinity
  *   is enabled. Return any string option setting in resultp.
  *  By default, affinity is enabled unless cpu-affinity="off".
  */
-static bool affinity_getopt (flux_shell_t *shell, const char **resultp)
+static bool affinity_getopt (flux_shell_t *shell,
+                             const char **resultp,
+                             bool *verbose,
+                             bool *dry_run)
 {
     int rc;
+    const char *opt;
+
+    *verbose = false;
+    *dry_run = false;
+
     /* Default if not set is "on" */
     *resultp = "on";
-    rc = flux_shell_getopt_unpack (shell, "cpu-affinity", "s", resultp);
+    rc = flux_shell_getopt_unpack (shell, "cpu-affinity", "s", &opt);
     if (rc == 0) {
         return true;
     }
@@ -332,7 +387,20 @@ static bool affinity_getopt (flux_shell_t *shell, const char **resultp)
         shell_warn ("cpu-affinity: invalid option: %s", *resultp);
         return true;
     }
-    else if (streq (*resultp, "off"))
+    /* Check for options dry-run and verbose, both of which must come at
+     * the beginning of the option string and can optionally be followed
+     * by a comma.
+     */
+    while (true) {
+        if (consume_option (&opt, "dry-run"))
+            *dry_run = true;
+        else if (consume_option (&opt, "verbose"))
+            *verbose = true;
+        else
+            break;
+    }
+    *resultp = opt;
+    if (streq (*resultp, "off"))
         return false;
     return true;
 }
@@ -343,7 +411,7 @@ static bool affinity_getopt (flux_shell_t *shell, const char **resultp)
 static int flux_shell_task_getid (flux_shell_task_t *task)
 {
     int id = -1;
-    if (flux_shell_task_info_unpack (task, "{ s:i }", "localid", &id) < 0)
+    if (flux_shell_task_info_unpack (task, "{s:i}", "localid", &id) < 0)
         return -1;
     return id;
 }
@@ -380,13 +448,16 @@ static int affinity_init (flux_plugin_t *p,
                           flux_plugin_arg_t *args,
                           void *data)
 {
+    char *s;
     const char *option;
+    bool dry_run;
+    bool verbose;
     struct shell_affinity *sa = NULL;
     flux_shell_t *shell = flux_plugin_get_shell (p);
 
     if (!shell)
         return shell_log_errno ("flux_plugin_get_shell");
-    if (!affinity_getopt (shell, &option)) {
+    if (!affinity_getopt (shell, &option, &verbose, &dry_run)) {
         shell_debug ("disabling affinity due to cpu-affinity=off");
         return 0;
     }
@@ -407,7 +478,12 @@ static int affinity_init (flux_plugin_t *p,
         shell_affinity_destroy (sa);
         return -1;
     }
-    if (wrap_hwloc_set_cpubind (sa->topo, sa->cpuset, 0) < 0)
+    if ((dry_run || verbose)
+        && (s = cpuset_to_string (sa->cpuset))) {
+        shell_log ("cpus: %s", s);
+        free (s);
+    }
+    if (!dry_run && wrap_hwloc_set_cpubind (sa->topo, sa->cpuset, 0) < 0)
         return shell_log_errno ("hwloc_set_cpubind");
 
     /*  If cpu-affinity=per-task, then distribute ntasks over whatever
@@ -424,11 +500,16 @@ static int affinity_init (flux_plugin_t *p,
         if (!(sa->pertask = parse_cpuset_list (option+4, sa->ntasks)))
             return -1;
     }
-    if (sa->pertask
-        && flux_plugin_add_handler (p, "task.exec",
+    if (!dry_run
+        && sa->pertask
+        && flux_plugin_add_handler (p,
+                                    "task.exec",
                                     task_affinity,
                                     sa) < 0)
             shell_log_errno ("failed to add task.exec handler");
+
+    if (dry_run || verbose)
+        print_pertask_cpusets (shell, sa);
 
     return 0;
 }
