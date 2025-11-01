@@ -193,8 +193,8 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
  * If service_name is NULL, then default to `rexec`.
  *
  * Once the process has been started, the returned future will be fulfilled
- * with the payload ``{"rank":i, "pid":i}``, or an error response if there
- * is an error.
+ * with the RPC payload `{"rank":i, "pid":i}`, or an error response if
+ * there is an error, and may be unpacked with `flux_rpc_get_unpack(3)`.
  */
 flux_future_t *flux_rexec_bg (flux_t *h,
                               const char *service_name,
