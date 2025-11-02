@@ -344,7 +344,6 @@ EXTRA_DIST= \
 	scripts/run_timeout.py \
 	scripts/startctl.py \
 	scripts/groups.py \
-	scripts/rexec.py \
 	jobspec \
 	resource \
 	marshall \
