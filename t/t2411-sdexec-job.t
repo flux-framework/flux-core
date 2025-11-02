@@ -36,7 +36,7 @@ flux exec flux setattr log-stderr-level 7
 
 sdexec="flux exec --service sdexec"
 lptest="flux lptest"
-rkill="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py kill -s sdexec"
+rkill="flux sproc kill -s sdexec"
 
 test_expect_success 'job gets exception if sdexec requested but not loaded' '
 	test_must_fail flux run --setattr system.exec.bulkexec.service=sdexec \

@@ -12,7 +12,6 @@ SIZE=4
 test_under_flux ${SIZE} minimal
 
 TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
-rexec_script="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py"
 rexec="${FLUX_BUILD_DIR}/t/rexec/rexec"
 
 test_expect_success 'basic rexec functionality (process success)' '
@@ -181,12 +180,12 @@ wait_rexec_process_count () {
 	expected=$2
 	rank=$3
 	i=0
-	$rexec_script ps --rank $rank | grep $pattern > output &&
+	flux sproc ps --rank $rank | grep $pattern > output &&
 	count=`cat output | wc -l` &&
 	while [ "${count}" != "${expected}" ] && [ $i -lt 30 ]
 	do
 	    sleep 1
-	    $rexec_script ps --rank $rank | grep $pattern > output &&
+	    flux sproc ps --rank $rank | grep $pattern > output &&
 	    count=`cat output | wc -l` &&
 	    i=$((i + 1))
 	done
@@ -267,19 +266,19 @@ test_expect_success 'rexec from rank 1 to rank 0 is restricted' '
 test_expect_success NO_CHAIN_LINT 'ps, kill work locally on rank 0' '
 	$rexec sleep 3600 &
 	wait_rexec_process_count sleep 1 0 &&
-	pid=$($rexec_script ps | grep sleep | cut -f1) &&
-	($rexec_script kill 15 $pid) &&
+	pid=$(flux sproc ps -no "{pid}:{cmd}" | grep sleep | cut -f1 -d:) &&
+	(flux sproc kill 15 $pid) &&
 	wait_rexec_process_count sleep 0 0
 '
 test_expect_success NO_CHAIN_LINT 'ps, kill fail remotely on rank 0' '
 	$rexec sleep 3600 &
 	wait_rexec_process_count sleep 1 0 &&
-	pid=$($rexec_script ps | grep sleep | cut -f1) &&
+	pid=$(flux sproc ps -no "{pid}:{cmd}" | grep sleep | cut -f1 -d:) &&
 	(FLUX_URI=$(cat uri1) test_must_fail \
-		$rexec_script ps --rank 0) &&
+		flux sproc ps --rank 0) &&
 	(FLUX_URI=$(cat uri1) test_must_fail \
-		$rexec_script kill --rank 0 15 $pid) &&
-	$rexec_script kill 15 $pid &&
+		flux sproc kill --rank 0 15 $pid) &&
+	flux sproc kill 15 $pid &&
 	wait_rexec_process_count sleep 0 0
 '
 
@@ -293,7 +292,7 @@ test_expect_success 'rexec from rank 1 to rank 0 works' '
 '
 
 test_expect_success NO_CHAIN_LINT 'kill fails with ESRCH when pid is unknown' '
-	test_must_fail $rexec_script kill 15 12345678 2>kill.err &&
+	test_must_fail flux sproc kill 15 12345678 2>kill.err &&
 	grep "does not belong to any subprocess" kill.err
 '
 
