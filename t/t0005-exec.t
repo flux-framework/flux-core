@@ -13,6 +13,7 @@ test_under_flux ${SIZE} minimal
 
 rkill="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py kill"
 rps="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py ps"
+rwait="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py wait"
 
 invalid_rank() {
        echo $((${SIZE} + 1))
@@ -392,5 +393,178 @@ test_expect_success 'rexec: can kill process by label' '
 '
 test_expect_success 'rexec: kill of unknown label fails' '
 	test_must_fail $rkill -r 0 15 badlabel
+'
+test_expect_success 'rexec: wait RPC fails for nonexistent pid' '
+	test_must_fail $rwait -r 0 1234
+'
+test_expect_success 'rexec: wait RPC fails for nonexistent label' '
+	test_must_fail $rwait -r 0 badlabel
+'
+test_expect_success 'rexec: --waitable requires --bg' '
+	test_must_fail flux exec -r 0 --waitable sleep 0
+'
+test_expect_success 'rexec: waitable bg failed proc does not become zombie' '
+	test_must_fail flux exec -r 0 --bg --waitable nosuchcommand &&
+	$rps > waitable-fail-ps.out &&
+	test_debug "cat waitable-fail-ps.out" &&
+	test_must_fail grep nosuchcommand waitable-fail-ps.out
+'
+test_expect_success 'rexec: subprocesses can be waitable' '
+	IFS=": " read -r rank pid <<-EOF &&
+	$(flux exec -r0 --bg --waitable sleep 0)
+	EOF
+	test_debug "echo started waitable process $pid on rank $rank" &&
+	$rps &&
+	$rps | grep $pid &&
+	$rwait $pid
+'
+test_expect_success 'rexec: waitable flag rejected for streaming rpc' '
+	cat <<-EOF >waitable-streaming.py &&
+	import os
+	import sys
+	import flux
+	from flux.constants import FLUX_RPC_STREAMING
+
+	FLUX_SUBPROCESS_FLAGS_WAITABLE = 16
+
+	cmd = dict(
+	    cmdline=["true"],
+            cwd=os.getcwd(),
+	    channels=[],
+	    opts={},
+            env=dict(os.environ)
+	)
+	flux.Flux().rpc(
+	    "rexec.exec",
+	    payload={"cmd": cmd, "flags": FLUX_SUBPROCESS_FLAGS_WAITABLE},
+	    flags=FLUX_RPC_STREAMING,
+	).get()
+	EOF
+	test_must_fail flux python waitable-streaming.py 2>wait-stream.err &&
+	test_debug "cat wait-stream.err" &&
+	grep "only supported in background mode" wait-stream.err
+'
+test_expect_success 'rexec: waitable subprocess returns nonzero status' '
+	IFS=": " read -r rank pid <<-EOF &&
+	$(flux exec -r0 --bg --waitable false)
+	EOF
+	test_debug "echo started waitable process $pid on rank $rank" &&
+	$rps &&
+	$rps | grep $pid &&
+	test_expect_code 1 $rwait $pid
+'
+test_expect_success 'rexec: wait for active process works' '
+	flux exec -r 0 --label=test --bg --waitable sleep inf &&
+	$rps &&
+	$rps | grep test &&
+	test_expect_code 143 $rkill --wait -r 0 15 test
+'
+test_expect_success 'rexec: create wait+disconnect test utility' '
+	cat <<-EOF >wait-disconnect.py
+	import sys
+	import flux
+	f = flux.Flux().rpc("rexec.wait", {"pid":-1, "label":sys.argv[1]})
+	EOF
+'
+test_expect_success 'rexec: wait disconnect cancels waiter' '
+	flux exec -r 0 --label=test --bg --waitable sleep inf &&
+	$rps | grep test &&
+	flux python wait-disconnect.py test &&
+	$rps | grep test &&
+	test_expect_code 143 $rkill --wait -r 0 15 test
+'
+test_expect_success 'rexec: multiple waiters on same process fails' '
+	cat <<-EOF >double-wait.py &&
+	import sys
+	import flux
+	h = flux.Flux()
+	# Start first wait
+	f1 = h.rpc("rexec.wait", {"pid":-1, "label":"double-wait"})
+	# Try to start second wait - should fail
+	try:
+	    f2 = h.rpc("rexec.wait", {"pid":-1, "label":"double-wait"})
+	    f2.get()
+	    sys.exit(1)  # Should not reach here
+	except OSError as e:
+	    if e.errno != 22:  # EINVAL
+	        raise
+	    print(f"Got expected error: {e}")
+	EOF
+	flux exec -r 0 --label=double-wait --bg --waitable sleep inf &&
+	flux python double-wait.py &&
+	$rkill -r 0 15 double-wait
+'
+test_expect_success 'rexec: wait on already-reaped process fails' '
+	IFS=": " read -r rank pid <<-EOF &&
+	$(flux exec -r0 --bg --waitable sleep 0)
+	EOF
+	$rwait $pid &&
+	test_must_fail $rwait $pid
+'
+test_expect_success 'rexec: wait on non-waitable process fails' '
+	flux exec -r0 --bg --label=non-waitable sleep inf  &&
+	test_must_fail $rwait non-waitable &&
+	$rkill -r 0 15 non-waitable
+'
+test_expect_success 'rexec: wait fails for non-background process' '
+	flux exec -r 0 --label=stream-wait sleep 0 &&
+	$rps > stream-wait-ps.out &&
+	test_debug "cat stream-wait-ps.out" &&
+	test_must_fail grep stream-wait stream-wait-ps.out
+'
+test_expect_success 'rexec: wait by label works' '
+	flux exec -r 0 --label=wait-by-label --bg --waitable false &&
+	$rps | grep wait-by-label &&
+	test_expect_code 1 $rwait wait-by-label
+'
+test_expect_success 'rexec: zombie processes shown with Z state' '
+	IFS=": " read -r rank pid <<-EOF &&
+	$(flux exec -r0 --bg --waitable sleep 0)
+	EOF
+	$rps > zombie-state.out &&
+	test_debug "cat zombie-state.out" &&
+	grep "$pid.*Z" zombie-state.out &&
+	$rwait $pid
+'
+test_expect_success 'rexec: running processes shown with R state' '
+	flux exec -r 0 --label=running --bg --waitable sleep inf &&
+	$rps > running-state.out &&
+	test_debug "cat running-state.out" &&
+	grep "R.*running" running-state.out &&
+	$rkill -r 0 15 running
+'
+test_expect_success 'rexec: wait returns correct exit status for killed process' '
+	flux exec -r 0 --label=sigterm-test --bg --waitable sleep inf &&
+	test_expect_code 143 $rkill --wait -r 0 15 sigterm-test
+'
+test_expect_success 'rexec: wait returns correct exit status for signal 9' '
+	flux exec -r 0 --label=sigkill-test --bg --waitable sleep inf &&
+	test_expect_code 137 $rkill --wait -r 0 9 sigkill-test
+'
+test_expect_success 'rexec: server shutdown works with zombie processes' '
+	cat <<-EOF >shutdown-zombies.sh &&
+	#!/bin/bash
+	# Start instance with subprocess server
+	cat <<-EOF2 >shutdown-test.sh &&
+		# Create zombie processes
+		flux exec -r 0 --bg --waitable --label=z1 sleep 0
+		flux exec -r 0 --bg --waitable --label=z2 sleep 0
+		flux exec -r 0 --bg --waitable --label=z3 sleep 0
+		# Verify zombies exist
+		flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py ps \
+		    | grep "Z"
+		# Exit - should cleanup zombies during shutdown
+	EOF2
+	flux start -s 1 bash shutdown-test.sh
+	# If we get here, shutdown succeeded
+	EOF
+	chmod +x shutdown-zombies.sh &&
+	./shutdown-zombies.sh
+'
+test_expect_success 'rexec: failed processes are not kept as zombies' '
+	test_must_fail flux exec -r 0 --bg --waitable /nonexistent/command &&
+	$rps > failed-zombie.out &&
+	test_debug "cat failed-zombie.out" &&
+	test_must_fail grep nonexistent failed-zombie.out
 '
 test_done

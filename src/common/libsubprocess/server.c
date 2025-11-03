@@ -8,6 +8,88 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* libsubprocess server - remote subprocess execution service
+ *
+ * OVERVIEW
+ * --------
+ * This module implements a subprocess server that executes processes
+ * on behalf of remote clients via the subprocess protocol defined in
+ * RFC 42. The server handles subprocess lifecycle management including
+ * execution, I/O streaming, signal delivery, and process cleanup.
+ *
+ * RPC ENDPOINTS
+ * -------------
+ * exec       - Start a new subprocess (streaming or background)
+ * write      - Write data to subprocess stdin
+ * kill       - Send signal to subprocess
+ * list       - List active and zombie subprocesses
+ * wait       - Wait for and collect exit status of waitable subprocess
+ * disconnect - Notify server of client disconnect
+ *
+ * EXEC REQUEST TYPES
+ * -------------------
+ * 1. Streaming (foreground): Default mode. Server streams stdout/stderr back
+ *    to client via streaming RPC responses and delivers final exit status
+ *    in the "finished" response. Process is removed from server list
+ *    after final response is sent.
+ *
+ * 2. Non-streaming (background): Process runs detached. Server does not
+ *    stream output or send status responses. Process is removed from server
+ *    list immediately upon exit unless marked waitable.
+ *
+ * 3. Waitable: Background process enters zombie state upon exit, remaining
+ *    in server list until status is collected via wait RPC or server is
+ *    shutdown. See RFC 42 for protocol details.
+ *
+ * PROCESS LIFECYCLE
+ * -----------------
+ * Normal subprocess:
+ *   exec -> running -> exited -> [removed from list]
+ *
+ * Waitable subprocess:
+ *   exec -> running -> exited -> zombie -> wait RPC -> [removed from list]
+ *
+ * WAITABLE SUBPROCESS BEHAVIOR
+ * ----------------------------
+ * - Only background processes can be waitable.
+ *
+ * - Processes that fail to start are never kept as zombies, regardless of
+ *   waitable flag. They are immediately removed with error response sent
+ *   to client.
+ *
+ * - Zombie processes remain in the list with state "Z" until:
+ *   a) A client successfully calls the wait RPC
+ *   b) Server shutdown (zombies are purged during shutdown sequence)
+ *
+ * - Only one concurrent waiter per process is allowed. Second wait attempt
+ *   returns EINVAL.
+ *
+ * - If a waiting client disconnects before process exits, the pending wait
+ *   is cancelled and another client may wait for the process.
+ *
+ * - wait RPC can be called before or after process exit:
+ *   - Before exit: RPC blocks until process exits, then returns status
+ *   - After exit: RPC returns immediately with cached status
+ *
+ * - Once status is collected process is removed from server list and cannot
+ *   be waited on again.
+ *
+ * DISCONNECT HANDLING
+ * -------------------
+ * When a client disconnects:
+ * - Streaming (non-background) processes from that client are killed with
+ *   SIGKILL
+ * - Any pending wait RPC from that client is cancelled
+ * - Background processes continue running regardless of client disconnect
+ *
+ * IMPLEMENTATION NOTES
+ * --------------------
+ * - Process list maintained in s->subprocesses (zlistx)
+ * - Process lookup by PID via iteration, by label via s->labels hash
+ * - p->waiter stores pending wait RPC message if wait is in progress
+ * - proc_delete() handles wait notification and process deletion
+ */
+
 #if HAVE_CONFIG_H
 # include "config.h"
 #endif
@@ -63,6 +145,36 @@ struct subprocess_server {
 
 static void server_kill (flux_subprocess_t *p, int signum);
 
+static inline bool is_waitable (flux_subprocess_t *p)
+{
+    /* Currently, processes are only waitable if they have the waitable
+     * flag and they are in background mode.
+     */
+    return (p->bg && p->waitable);
+}
+
+static inline void clear_waitable (flux_subprocess_t *p)
+{
+    p->waitable = false;
+    flux_msg_decref (p->waiter);
+    p->waiter = NULL;
+}
+
+/* If subprocess is waitable, complete, and has a waiter, respond
+ * with status and clear waitable flag and waiter. Otherwise, do nothing.
+ */
+static void wait_notify (subprocess_server_t *s, flux_subprocess_t *p)
+{
+    if (is_waitable (p) && !flux_subprocess_active (p) && p->waiter) {
+        if (flux_respond_pack (s->h,
+                               p->waiter,
+                               "{s:i}",
+                               "status", flux_subprocess_status (p)) < 0)
+            llog_error (s, "wait respond pid %d", flux_subprocess_pid (p));
+        clear_waitable (p);
+    }
+}
+
 // zlistx_destructor_fn footprint
 static void proc_destructor (void **item)
 {
@@ -99,6 +211,20 @@ static void proc_delete (subprocess_server_t *s, flux_subprocess_t *p)
     int saved_errno = errno;
     void *handle = flux_subprocess_aux_get (p, lstkey);
 
+    /* Notify waiter if there is one and this process is complete.
+     * Clears waitable flag if notification occurs.
+     */
+    wait_notify (s, p);
+
+    /* Processes that are still waitable (i.e. have the waitable flag but
+     * no current waiter) stay in subprocesses list until an wait RPC or
+     * the server is shutdown.
+     */
+    if (is_waitable (p))
+        goto out;
+
+    /* Otherwise, process can be deleted:
+     */
     if ((label = flux_cmd_get_label (p->cmd)))
         zhashx_delete (s->labels, label);
 
@@ -106,7 +232,7 @@ static void proc_delete (subprocess_server_t *s, flux_subprocess_t *p)
 
     if (zlistx_size (s->subprocesses) == 0 && s->shutdown)
         flux_future_fulfill (s->shutdown, NULL, NULL);
-
+out:
     errno = saved_errno;
 }
 
@@ -276,6 +402,10 @@ static void proc_state_change_cb (flux_subprocess_t *p,
                                      request,
                                      p->failed_errno,
                                      errmsg);
+            /* Clear waitable flag since a response of final state has
+             * been sent to client.
+             */
+            clear_waitable (p);
         }
         proc_delete (s, p); // N.B. proc_delete preserves errno
     } else {
@@ -508,6 +638,17 @@ static void server_exec_cb (flux_t *h,
 
     p->bg = background;
 
+    /* Waitable flag only allowed in background mode:
+     */
+    if (flags & SUBPROCESS_REXEC_WAITABLE) {
+        if (!p->bg) {
+            errmsg = "waitable flag only supported in background mode";
+            errno = EINVAL;
+            goto error;
+        }
+        p->waitable = true;
+    }
+
     if (flux_subprocess_aux_set (p,
                                  msgkey,
                                  (void *)flux_msg_incref (msg),
@@ -604,6 +745,25 @@ error:
     proc_internal_fatal (p);
 }
 
+static flux_subprocess_t *proc_find (subprocess_server_t *s,
+                                     pid_t pid,
+                                     const char *label,
+                                     flux_error_t *errp)
+{
+    flux_subprocess_t *p = NULL;
+    if (label) {
+        if (!(p = proc_find_bylabel (s, label))) {
+            errprintf (errp,
+                       "label %s does not belong to any subprocess",
+                       label);
+        }
+    }
+    else if (!(p = proc_find_bypid (s, pid))) {
+        errprintf (errp, "pid %d does not belong to any subprocess", pid);
+    }
+    return p;
+}
+
 static void server_kill_cb (flux_t *h,
                             flux_msg_handler_t *mh,
                             const flux_msg_t *msg,
@@ -630,17 +790,7 @@ static void server_kill_cb (flux_t *h,
         errno = EPERM;
         goto error;
     }
-    if (label) {
-        if (!(p = proc_find_bylabel (s, label))) {
-            errprintf (&error,
-                       "label %s does not belong to any subprocess",
-                       label);
-            errmsg = error.text;
-            goto error;
-        }
-    }
-    else if (!(p = proc_find_bypid (s, pid))) {
-        errprintf (&error, "pid %d does not belong to any subprocess", pid);
+    if (!(p = proc_find (s, pid, label, &error))) {
         errmsg = error.text;
         goto error;
     }
@@ -679,14 +829,17 @@ static json_t *process_info (flux_subprocess_t *p)
     flux_cmd_t *cmd;
     json_t *info = NULL;
     const char *label;
+    const char *state;
 
     if (!(cmd = flux_subprocess_get_cmd (p)))
         return NULL;
     label = flux_cmd_get_label (cmd);
-    if (!(info = json_pack ("{s:i s:s s:s}",
+    state = flux_subprocess_active (p) ? "R" : "Z";
+    if (!(info = json_pack ("{s:i s:s s:s s:s}",
                             "pid", flux_subprocess_pid (p),
                             "cmd", flux_cmd_arg (cmd, 0),
-                            "label", label ? label : ""))) {
+                            "label", label ? label : "",
+                            "state", state))) {
         errno = ENOMEM;
         return NULL;
     }
@@ -759,9 +912,62 @@ static void server_disconnect_cb (flux_t *h,
             const char *uuid = subprocess_sender (p);
             if (!p->bg && sender && streq (uuid, sender))
                 server_kill (p, SIGKILL);
+            if (p->waiter
+                && streq (flux_msg_route_first (p->waiter), sender)) {
+                flux_msg_decref (p->waiter);
+                p->waiter = NULL;
+            }
             p = zlistx_next (s->subprocesses);
         }
     }
+}
+
+static void server_wait_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
+{
+    subprocess_server_t *s = arg;
+    flux_subprocess_t *p;
+    flux_error_t error;
+    const char *errmsg = NULL;
+    pid_t pid;
+    const char *label = NULL;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:i s?s }",
+                             "pid", &pid,
+                             "label", &label) < 0)
+        goto error;
+    if (!(p = proc_find (s, pid, label, &error))) {
+        errmsg = error.text;
+        goto error;
+    }
+    if (!is_waitable (p)) {
+        errmsg = "process is not waitable";
+        errno = EINVAL;
+        goto error;
+    }
+    if (p->waiter) {
+        errmsg = "process is already being waited on";
+        errno = EINVAL;
+        goto error;
+    }
+    p->waiter = flux_msg_incref (msg);
+
+    /* If process is complete, proc_delete() notifies p->waiter of final
+     * status and removes process from s->processes if wait response was
+     * sent. Otherwise, does nothing.
+     */
+    proc_delete (s, p);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        llog_error (s,
+                    "error responding to %s.wait request: %s",
+                    s->service_name,
+                    strerror (errno));
 }
 
 static struct flux_msg_handler_spec htab[] = {
@@ -783,6 +989,11 @@ static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,
       "list",
       server_list_cb,
+      0
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "wait",
+      server_wait_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
@@ -808,13 +1019,33 @@ static void server_kill (flux_subprocess_t *p, int signum)
     flux_future_destroy (f);
 }
 
-static int server_killall (subprocess_server_t *s, int signum)
+static void server_purge_zombies (subprocess_server_t *s)
 {
     flux_subprocess_t *p;
 
     p = zlistx_first (s->subprocesses);
     while (p) {
-        server_kill (p, signum);
+        if (!flux_subprocess_active (p)) {
+            clear_waitable (p);
+            proc_delete (s, p);
+        }
+        p = zlistx_next (s->subprocesses);
+    }
+}
+
+static int server_killall (subprocess_server_t *s, int signum)
+{
+    flux_subprocess_t *p;
+
+    /* Delete zombies so they do not hold up shutdown
+     */
+    server_purge_zombies (s);
+
+    p = zlistx_first (s->subprocesses);
+    while (p) {
+        clear_waitable (p);
+        if (flux_subprocess_active (p))
+            server_kill (p, signum);
         p = zlistx_next (s->subprocesses);
     }
 

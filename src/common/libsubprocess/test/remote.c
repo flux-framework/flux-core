@@ -716,6 +716,113 @@ void sigstop_test (flux_t *h)
     flux_cmd_destroy (cmd);
 }
 
+void bg_kill (flux_t *h, const char *label)
+{
+    flux_future_t *f;
+    char *topic;
+
+    if (asprintf (&topic, "%s.kill", SERVER_NAME) < 0)
+        BAIL_OUT ("failed to create kill topic string");
+    f = flux_rpc_pack (h,
+                       topic,
+                       FLUX_NODEID_ANY,
+                       0,
+                       "{s:i s:s s:i}",
+                       "pid", -1,
+                       "label", label,
+                       "signum", 15);
+    if (!f)
+        BAIL_OUT ("failed to send %s RPC", topic);
+    ok (flux_future_get (f, NULL) == 0,
+        "%s: kill successful",
+        label);
+    flux_future_destroy (f);
+    free (topic);
+}
+
+void bg_test (flux_t *h,
+              const char *label,
+              int argc,
+              char **argv,
+              int expected_status,
+              bool kill)
+{
+    int status;
+    int rc;
+    flux_future_t *f;
+    flux_cmd_t *cmd;
+    bool wait_on_pid = false;
+    int pid;
+
+    if (!label) {
+        /* Wait using pid */
+        wait_on_pid = true;
+        label = "wait-on-pid";
+    }
+    diag ("%s: background test argc=%d cmd=%s", label, argc, argv[0]);
+    cmd = flux_cmd_create (argc, argv, environ);
+    if (!cmd)
+        BAIL_OUT ("flux_cmd_create failed");
+    if (!wait_on_pid) {
+        ok (flux_cmd_set_label (cmd, label) == 0,
+            "%s: set cmd label",
+            label);
+    }
+    f = flux_rexec_bg (h,
+                       SERVER_NAME,
+                       FLUX_NODEID_ANY,
+                       FLUX_SUBPROCESS_FLAGS_WAITABLE,
+                       cmd);
+    flux_cmd_destroy (cmd);
+    if (!f)
+        BAIL_OUT ("%s: flux_rexec_bg failed", label);
+    rc = flux_rpc_get_unpack (f, "{s:i}", "pid", &pid);
+    flux_future_destroy (f);
+    if (expected_status < 0) {
+        ok (rc < 0 && errno == -expected_status,
+            "%s: got rc=%d (expected -1) with errno=%d (expected %d)",
+            label,
+            rc,
+            errno,
+            -expected_status);
+        return;
+    }
+    ok (rc == 0,
+        "%s: flux_rexec_bg returned success",
+        label);
+    if (kill)
+        bg_kill (h, label);
+    f = flux_rexec_wait (h,
+                         SERVER_NAME,
+                         FLUX_NODEID_ANY,
+                         wait_on_pid ? pid : -1,
+                         wait_on_pid ? NULL : label);
+    if (!f)
+        BAIL_OUT ("%s: flux_rexec_wait failed", label);
+    ok (flux_rpc_get_unpack (f, "{s:i}", "status", &status) == 0,
+        "%s: flux_rpc_get_unpack returned successfully",
+        label);
+    ok (status == expected_status,
+        "%s: got expected status (got 0x%04x, expected 0x%04x",
+        label,
+        status,
+        expected_status);
+    flux_future_destroy (f);
+}
+
+void background_waitable_test (flux_t *h)
+{
+    char *cmd_noexist[] = { "/noexist", NULL };
+    char *cmd_true[] = { "true", NULL };
+    char *cmd_false[] = { "false", NULL };
+    char *cmd_sleep[] = { "sleep", "inf", NULL };
+    bg_test (h, "noexist", 1, cmd_noexist, -ENOENT, false);
+    bg_test (h, "success", 1, cmd_true, 0, false);
+    bg_test (h, NULL, 1, cmd_true, 0, false);
+    bg_test (h, "failure", 1, cmd_false, 256, false);
+    bg_test (h, "sleep", 2, cmd_sleep, 15, true);
+}
+
 int main (int argc, char *argv[])
 {
     flux_t *h;
@@ -736,6 +843,8 @@ int main (int argc, char *argv[])
     local_unbuf_multiline_test (h);
     diag ("sigstop_test");
     sigstop_test (h);
+    diag ("background_test");
+    background_waitable_test (h);
 
     test_server_stop (h);
     flux_close (h);

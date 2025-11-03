@@ -112,10 +112,14 @@ struct flux_subprocess {
     char *service_name;
     flux_future_t *f;           /* primary future reactor */
     bool remote_completed;      /* if remote has completed */
-    bool bg;                    /* if flags & SUBPROCESS_REXEC_BACKGROUND */
     int failed_errno;           /* Holds errno if FAILED state reached */
     flux_error_t failed_error;  /* Holds detailed message for failed_errno */
     int signal_pending;         /* signal sent while starting */
+
+    /* server */
+    bool bg;                    /* if flags & SUBPROCESS_REXEC_BACKGROUND */
+    bool waitable;              /* if flags & SUBPROCESS_REXEC_WAITABLE */
+    const flux_msg_t *waiter;   /* subprocess wait request */
 };
 
 void subprocess_check_completed (flux_subprocess_t *p);

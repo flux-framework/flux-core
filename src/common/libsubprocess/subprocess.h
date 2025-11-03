@@ -73,6 +73,10 @@ enum {
      * error.
      */
     FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF = 8,
+    /* flux_rexec_bg() only: allow flux_rexec_wait(3) to be called
+     * for this subprocess
+     */
+    FLUX_SUBPROCESS_FLAGS_WAITABLE = 16,
 };
 
 /*
@@ -189,14 +193,30 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
  * If service_name is NULL, then default to `rexec`.
  *
  * Once the process has been started, the returned future will be fulfilled
- * with the payload ``{"rank":i, "pid":i}``, or an error response if there
- * is an error.
+ * with the RPC payload `{"rank":i, "pid":i}`, or an error response if
+ * there is an error, and may be unpacked with `flux_rpc_get_unpack(3)`.
  */
 flux_future_t *flux_rexec_bg (flux_t *h,
                               const char *service_name,
                               int rank,
                               int flags,
                               const flux_cmd_t *cmd);
+
+/* Wait for a subprocess started with the FLUX_SUBPROCESS_FLAGS_WAITABLE flag
+ * using either command label or process id. When specifying a `label`, set
+ * `pid = -1`. It is an error to specify both `label` and `pid`.
+ *
+ * If service_name is NULL, then default to `rexec`.
+ *
+ * The future will be fulfilled with the RPC payload `{"status":i}` on
+ * process completion, or with an error response if there is an error, and
+ * may be unpacked with `flux_rpc_get_unpack(3)`.
+ */
+flux_future_t *flux_rexec_wait (flux_t *h,
+                                const char *service_name,
+                                int rank,
+                                pid_t pid,
+                                const char *label);
 
 /* Start / stop a read stream temporarily on local processes.  This
  * may be useful for flow control.
