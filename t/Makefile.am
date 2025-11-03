@@ -312,6 +312,7 @@ TESTSCRIPTS = \
 	python/t0033-eventlog-formatter.py \
 	python/t0034-queuelist.py \
 	python/t0035-kvs-no-checkpoint.py \
+	python/t0036-subprocess.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY
