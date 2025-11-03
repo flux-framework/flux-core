@@ -7,8 +7,8 @@ test_description='Test flux-shell default affinity implementation'
 test_under_flux 2
 
 if ! which hwloc-bind > /dev/null; then
-    skip_all='skipping affinity tests since hwloc-bind not found'
-    test_done
+	skip_all='skipping affinity tests since hwloc-bind not found'
+	test_done
 fi
 
 FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
@@ -25,89 +25,138 @@ test $(${CPUS_ALLOWED_COUNT}) = 1 || test_set_prereq MULTICORE
 echo >&2 "# Running tests on $($CPUS_ALLOWED_COUNT) cores"
 
 test_expect_success 'flux-shell: affinity hwloc-calc works' '
-    hwloc-bind --get &&
-    hwloc-bind --get | hwloc-calc --number-of core &&
-    hwloc-bind --get | hwloc-calc --number-of pu
+	hwloc-bind --get &&
+	hwloc-bind --get | hwloc-calc --number-of core &&
+	hwloc-bind --get | hwloc-calc --number-of pu
 '
 test_expect_success 'flux-shell: default affinity works (1 core)' '
-    flux run -n1 -c1 $CPUS_ALLOWED_COUNT > result.n1 &&
-    test_debug "cat result.n1" &&
-    test "$(cat result.n1)" = "1"
+	flux run -n1 -c1 $CPUS_ALLOWED_COUNT > result.n1 &&
+	test_debug "cat result.n1" &&
+	test "$(cat result.n1)" = "1"
 '
 test_expect_success MULTICORE 'flux-shell: default affinity works (2 cores)' '
-    flux run -n1 -c2 $CPUS_ALLOWED_COUNT > result.n1 &&
-    test_debug "cat result.n1" &&
-    test "$(cat result.n1)" = "2"
+	flux run -n1 -c2 $CPUS_ALLOWED_COUNT > result.n1 &&
+	test_debug "cat result.n1" &&
+	test "$(cat result.n1)" = "2"
 '
 test_expect_success MULTICORE 'flux-shell: per-task affinity works' '
-    flux run --label-io -ocpu-affinity=per-task -n2 -c1 \
+	flux run --label-io -ocpu-affinity=per-task -n2 -c1 \
 		hwloc-bind --get > per-task.out &&
-    task0set=$(sed -n "s/^0: //p" per-task.out) &&
-    task1set=$(sed -n "s/^1: //p" per-task.out) &&
-    test_debug "echo checking ${task0set} not equal ${task1set}" &&
-    test "$task0set" != "$task1set"
+	task0set=$(sed -n "s/^0: //p" per-task.out) &&
+	task1set=$(sed -n "s/^1: //p" per-task.out) &&
+	test_debug "echo checking ${task0set} not equal ${task1set}" &&
+	test "$task0set" != "$task1set"
 '
 test_expect_success 'flux-shell: per-task affinity sanity check' '
-    flux run --label-io -ocpu-affinity=per-task -n1 -c1 \
+	flux run --label-io -ocpu-affinity=per-task -n1 -c1 \
 		hwloc-bind --get
 '
 test_expect_success MULTICORE 'flux-shell: map affinity works' '
-    flux run --label-io -o cpu-affinity="map:1;0" -n 2 \
+	flux run --label-io -o cpu-affinity="map:1;0" -n 2 \
 	hwloc-bind --get > map1.out &&
-    task0set=$(sed -n "s/^0: //p" map1.out) &&
-    task1set=$(sed -n "s/^1: //p" map1.out) &&
-    test_debug "echo checking ${task0set}=0x2 ${task1set}=0x1" &&
-    test "$(hwloc-calc --taskset $task0set)" = "0x2" &&
-    test "$(hwloc-calc --taskset $task1set)" = "0x1"
+	task0set=$(sed -n "s/^0: //p" map1.out) &&
+	task1set=$(sed -n "s/^1: //p" map1.out) &&
+	test_debug "echo checking ${task0set}=0x2 ${task1set}=0x1" &&
+	test "$(hwloc-calc --taskset $task0set)" = "0x2" &&
+	test "$(hwloc-calc --taskset $task1set)" = "0x1"
 '
 test_expect_success MULTICORE 'flux-shell: map affinity reuses underspecified sets' '
-    flux run --label-io -o cpu-affinity=map:1 -n 2 \
+	flux run --label-io -o cpu-affinity=map:1 -n 2 \
 	hwloc-bind --get > map2.out &&
-    task0set=$(sed -n "s/^0: //p" map2.out) &&
-    task1set=$(sed -n "s/^1: //p" map2.out) &&
-    test_debug "echo checking ${task0set}=0x2 ${task1set}=0x2" &&
-    test "$(hwloc-calc --taskset $task0set)" = "0x2" &&
-    test "$(hwloc-calc --taskset $task1set)" = "0x2"
+	task0set=$(sed -n "s/^0: //p" map2.out) &&
+	task1set=$(sed -n "s/^1: //p" map2.out) &&
+	test_debug "echo checking ${task0set}=0x2 ${task1set}=0x2" &&
+	test "$(hwloc-calc --taskset $task0set)" = "0x2" &&
+	test "$(hwloc-calc --taskset $task1set)" = "0x2"
 '
 test_expect_success MULTICORE 'flux-shell: map affinity can use hex bitmasks' '
-    flux run --label-io -o cpu-affinity="map:0x1;0x2" -n 2 \
+	flux run --label-io -o cpu-affinity="map:0x1;0x2" -n 2 \
 	hwloc-bind --get > map3.out &&
-    task0set=$(sed -n "s/^0: //p" map3.out) &&
-    task1set=$(sed -n "s/^1: //p" map3.out) &&
-    test_debug "echo checking ${task0set}=0x1 ${task1set}=0x2" &&
-    test "$(hwloc-calc --taskset $task0set)" = "0x1" &&
-    test "$(hwloc-calc --taskset $task1set)" = "0x2"
+	task0set=$(sed -n "s/^0: //p" map3.out) &&
+	task1set=$(sed -n "s/^1: //p" map3.out) &&
+	test_debug "echo checking ${task0set}=0x1 ${task1set}=0x2" &&
+	test "$(hwloc-calc --taskset $task0set)" = "0x1" &&
+	test "$(hwloc-calc --taskset $task1set)" = "0x2"
 '
 test_expect_success 'flux-shell: map affinity can use a mix of inputs' '
-    id=$(flux submit --label-io -o cpu-affinity="map:0xf,0xf;0-3" -n 2 \
+	id=$(flux submit --label-io -o cpu-affinity="map:0xf,0xf;0-3" -n 2 \
 	hwloc-bind --get) &&
-    flux job attach $id >map4.out 2>&1 &&
-    test_debug "cat map4.out"
+	flux job attach $id >map4.out 2>&1 &&
+	test_debug "cat map4.out"
 '
 test_expect_success 'flux-shell: invalid cpuset is detected' '
-    test_must_fail flux run -o cpu-affinity="map:0x0;1" -n 2 \
-        hwloc-bind --get
+	test_must_fail flux run -o cpu-affinity="map:0x0;1" -n 2 \
+	    hwloc-bind --get
 '
 test_expect_success 'flux-shell: affinity can be disabled' '
-    hwloc-bind --get > affinity-off.expected &&
-    flux run -ocpu-affinity=off -n1 hwloc-bind --get >affinity-off.out &&
-    test_cmp affinity-off.expected affinity-off.out
+	hwloc-bind --get > affinity-off.expected &&
+	flux run -ocpu-affinity=off -n1 hwloc-bind --get >affinity-off.out &&
+	test_cmp affinity-off.expected affinity-off.out
 '
 test_expect_success 'flux-shell: invalid option is ignored' '
-    flux run -ocpu-affinity=1 -n1 hwloc-bind --get >invalid.out 2>&1 &&
-    test_debug "cat invalid.out" &&
-    grep "invalid option" invalid.out
+	flux run -ocpu-affinity=1 -n1 hwloc-bind --get >invalid.out 2>&1 &&
+	test_debug "cat invalid.out" &&
+	grep "invalid option" invalid.out
 '
+#
+# verbose, dry-run tests:
+#
+test_expect_success 'flux-shell: cpu-affinity=verbose prints cpuset' '
+	flux run -n1 -c1 -ocpu-affinity=verbose hostname >verbose.out 2>&1 &&
+	test_debug "cat verbose.out" &&
+	grep "cpus:" verbose.out
+'
+test_expect_success MULTICORE 'flux-shell: cpu-affinity=verbose,per-task prints per-task cpusets' '
+	flux run --label-io -n2 -c1 \
+	    -ocpu-affinity=verbose,per-task \
+	    hostname >verbose-per-task.out 2>&1 &&
+	test_debug "cat verbose-per-task.out" &&
+	grep "cpus:" verbose-per-task.out &&
+	grep "task 0: cpus:" verbose-per-task.out &&
+	grep "task 1: cpus:" verbose-per-task.out
+'
+test_expect_success 'flux-shell: cpu-affinity=dry-run prints but does not bind' '
+	hwloc-bind --get > no-bind.expected &&
+	flux run -n1 -c1 -ocpu-affinity=dry-run \
+	    hwloc-bind --get >dry-run.out &&
+	test_debug "cat dry-run.out" &&
+	test_cmp no-bind.expected dry-run.out
+'
+test_expect_success MULTICORE 'flux-shell: cpu-affinity=dry-run,per-task prints without binding' '
+	flux run --label-io -n2 -c1 \
+	    -ocpu-affinity=dry-run,per-task \
+	    hwloc-bind --get >dry-run-per-task.out 2>&1 &&
+	test_debug "cat dry-run-per-task.out" &&
+	grep "task 0: cpus:" dry-run-per-task.out &&
+	grep "task 1: cpus:" dry-run-per-task.out &&
+	grep "0: $(cat no-bind.expected)" dry-run-per-task.out &&
+	grep "1: $(cat no-bind.expected)" dry-run-per-task.out
+'
+test_expect_success MULTICORE 'flux-shell: cpu-affinity=dry-run,verbose works' '
+	flux run -n1 -c2 -ocpu-affinity=dry-run,verbose \
+	    hostname >dry-run-verbose.out 2>&1 &&
+	test_debug "cat dry-run-verbose.out" &&
+	grep "cpus:" dry-run-verbose.out
+'
+test_expect_success MULTICORE 'flux-shell: cpu-affinity handles verbose and map option' '
+	flux run -n1 -c1 -ocpu-affinity=verbose,map:0 \
+	    hostname >verbose-map.out 2>&1 &&
+	test_debug "cat verbose-map.out" &&
+	grep "cpus: 0" verbose-map.out
+'
+#
+# GPU tests:
+#
 test_expect_success 'flux-shell: CUDA_VISIBLE_DEVICES=-1 set by default' '
-    flux run printenv CUDA_VISIBLE_DEVICES >default-gpubind.out 2>&1 &&
-    test_debug "cat default-gpubind.out" &&
-    grep "^-1" default-gpubind.out
+	flux run printenv CUDA_VISIBLE_DEVICES >default-gpubind.out 2>&1 &&
+	test_debug "cat default-gpubind.out" &&
+	grep "^-1" default-gpubind.out
 '
 test_expect_success 'flux-shell: CUDA_VISIBLE_DEVICES=-1 works with existing value' '
-    CUDA_VISIBLE_DEVICES=0,1 \
-       flux run printenv CUDA_VISIBLE_DEVICES >override-gpubind.out 2>&1 &&
-    test_debug "cat override-gpubind.out" &&
-    grep "^-1" override-gpubind.out
+	CUDA_VISIBLE_DEVICES=0,1 \
+	   flux run printenv CUDA_VISIBLE_DEVICES >override-gpubind.out 2>&1 &&
+	test_debug "cat override-gpubind.out" &&
+	grep "^-1" override-gpubind.out
 '
 #  GPU affinity tests use alloc-bypass shell since simple-sched doesnt
 #   schedule GPUs.

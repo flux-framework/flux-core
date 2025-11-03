@@ -8,7 +8,8 @@
      - Description
 
    * - :option:`cpu-affinity`
-     - Set task affinity to cores (:option:`off|per-task|map:LIST|on`)
+     - Set task affinity to cores
+       (:option:`[verbose,dry-run,]off|per-task|map:LIST|on`)
 
    * - :option:`gpu-affinity`
      - Set task affinity to GPUs (:option:`off|per-task|map:LIST|on`)
