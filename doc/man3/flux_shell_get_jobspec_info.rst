@@ -40,8 +40,10 @@ For jobspec version 1, the following keys are also available:
      "ntasks":i,         # number of tasks requested
      "nslots":i,         # number of task slots
      "cores_per_slot":i  # number of cores per task slot
+     "gpus_per_slot":i   # number of gpus per task slot
      "nnodes":i          # number of nodes requested, -1 if unset
      "slots_per_node":i  # number of slots per node, -1 if unavailable
+     "node_exclusive":b  # true if exclusive=true set on node resource
     }
 
 This summary information is derived from the jobspec by the shell and

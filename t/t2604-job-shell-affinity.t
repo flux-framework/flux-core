@@ -145,6 +145,24 @@ test_expect_success MULTICORE 'flux-shell: cpu-affinity handles verbose and map 
 	grep "cpus: 0" verbose-map.out
 '
 #
+# Issue #7174 (unequal distribution of tasks across nodes)
+test_expect_success MULTICORE 'flux-shell: issue #7174 reproducer' '
+	flux run -N2 -n3 -c1 -o cpu-affinity=verbose hostname \
+	    >7174.out 2>&1 &&
+	grep "adjusted cores from 0-1 to 0" 7174.out
+'
+test_expect_success MULTICORE 'flux-shell: no #7174 workaround with node exclusive' '
+	flux run -xN2 -n3 -c1 -o cpu-affinity=verbose hostname \
+	    >7174-exclusive.out 2>&1 &&
+	test_must_fail grep "adjusted cores" 7174-exclusive.out
+'
+test_expect_success MULTICORE 'flux-shell: issue #7174 reproducer with per-task' '
+	flux run -N2 -n3 -c1 -o verbose -o cpu-affinity=verbose,per-task true \
+	    >7174-per-task.out 2>&1 &&
+	grep "adjusted cores from 0-1 to 0" 7174-per-task.out &&
+	grep "task 2: cpus: 0" 7174-per-task.out
+'
+#
 # GPU tests:
 #
 test_expect_success 'flux-shell: CUDA_VISIBLE_DEVICES=-1 set by default' '
@@ -269,5 +287,58 @@ test_expect_success 'flux-shell: gpu-affinity bad arg is ignored' '
 	test_debug "cat ${name}.out" &&
 	test_debug "cat ${name}.err" >&2 &&
 	grep "Failed to get gpu-affinity shell option" ${name}.err
+'
+test_expect_success 'flux-shell: create multi-node multi-gpu R' '
+	cat >R2.gpu <<-EOF
+	{
+	  "version": 1,
+	  "execution": {
+	    "R_lite": [
+	      {
+		"children": {
+		  "core": "0-1",
+		  "gpu": "0-1"
+		},
+		"rank": "0-1"
+	      }
+	    ],
+	    "nodelist": [
+	      "$(hostname),$(hostname)"
+	    ]
+	  }
+	}
+	EOF
+'
+test_expect_success 'flux-shell: gpu-affinity per-task with uneven distribution' '
+	name=gpu-per-task-xtra &&
+	flux run -N2 -n3 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R2.gpu)" \
+		-o gpu-affinity=per-task \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output &&
+	cat >${name}.expected <<-EOF  &&
+	0: 0
+	1: 1
+	2: 0
+	EOF
+	test_debug "cat ${name}.output" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-affinity uneven distribution node-exclusive' '
+	name=gpu-per-task-exclusive &&
+	flux run -xN2 -n3 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R2.gpu)" \
+		-o gpu-affinity=per-task \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output &&
+	cat >${name}.expected <<-EOF  &&
+	0: 0
+	1: 1
+	2: 0,1
+	EOF
+	test_debug "cat ${name}.output" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
 '
 test_done
