@@ -786,7 +786,7 @@ static struct optparse_option fsck_opts[] = {
     { .name = "rootref", .key = 'r', .has_arg = 1, .arginfo = "BLOBREF",
       .usage = "Check integrity starting with BLOBREF",
     },
-    { .name = "repair", .key = 'r', .has_arg = 0,
+    { .name = "repair", .key = 'R', .has_arg = 0,
       .usage = "Repair recoverable keys and place in lost+found",
     },
     OPTPARSE_TABLE_END
