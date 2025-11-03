@@ -169,8 +169,11 @@ static void dump_valref (struct archive *ar,
     const void *data;
     size_t len;
 
-    /* We need the total size before we start writing archive data,
-     * so make a first pass, saving the data for writing later.
+    /* Load all data comprising the valref before starting the archive
+     * entry. This is because the total size of the value must
+     * calculated and written before any data, and any load errors
+     * must be detected so the whole entry can be skipped if
+     * --ignore-failed-read.
      */
     /* N.B. first attempt was to save the futures in an array, but ran into:
      *   flux: ev_epoll.c:134: epoll_modify: Assertion `("libev: I/O watcher
