@@ -25,6 +25,7 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libcontent/content.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
 
 #include "builtin.h"
@@ -121,24 +122,24 @@ static void valref_validate_continuation (flux_future_t *f, void *arg)
     struct fsck_valref_data *fvd = arg;
 
     if (flux_rpc_get (f, NULL) < 0) {
-        int *index = flux_future_aux_get (f, "index");
+        int index = ptr2int (flux_future_aux_get (f, "index"));
         if (fvd->ctx->verbose) {
             if (errno == ENOENT)
                 errmsg (fvd->ctx,
                         "%s: missing blobref index=%d",
                         fvd->path,
-                        (*index));
+                        index);
             else
                 errmsg (fvd->ctx,
                         "%s: error retrieving blobref index=%d: %s",
                         fvd->path,
-                        (*index),
+                        index,
                         future_strerror (f, errno));
         }
         fvd->errorcount++;
         fvd->errnum = errno;     /* we'll report the last errno */
         if (fvd->ctx->repair && errno == ENOENT)
-            save_missing_ref_index (fvd, *index);
+            save_missing_ref_index (fvd, index);
     }
     fvd->in_flight--;
 
@@ -159,7 +160,6 @@ static void valref_validate (struct fsck_valref_data *fvd)
     ssize_t hash_size;
     const char *blobref;
     flux_future_t *f;
-    int *indexp;
 
     blobref = treeobj_get_blobref (fvd->treeobj, fvd->index);
 
@@ -170,10 +170,7 @@ static void valref_validate (struct fsck_valref_data *fvd)
         log_err_exit ("failed to validate valref blob");
     if (flux_future_then (f, -1, valref_validate_continuation, fvd) < 0)
         log_err_exit ("cannot validate valref blob");
-    if (!(indexp = (int *)malloc (sizeof (int))))
-        log_err_exit ("cannot allocate index memory");
-    (*indexp) = fvd->index;
-    if (flux_future_aux_set (f, "index", indexp, free) < 0)
+    if (flux_future_aux_set (f, "index", int2ptr (fvd->index), NULL) < 0)
         log_err_exit ("could not save index value");
 }
 
