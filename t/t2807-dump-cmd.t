@@ -88,9 +88,8 @@ test_expect_success 'count blobs representing those five keys' '
 	countblobs >blobcount.out &&
 	test_cmp blobcount.exp blobcount.out
 '
-test_expect_success 'remove backing file and load content-sqlite' '
-	rm -f content.sqlite &&
-	flux module load content-sqlite
+test_expect_success 'load content-sqlite and truncate old file to start fresh' '
+	flux module load content-sqlite truncate
 '
 test_expect_success 'restore content' '
 	flux restore --checkpoint foo.tar
