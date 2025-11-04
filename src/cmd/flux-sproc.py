@@ -1,5 +1,5 @@
 ###############################################################
-# Copyright 2023 Lawrence Livermore National Security, LLC
+# Copyright 2025 Lawrence Livermore National Security, LLC
 # (c.f. AUTHORS, NOTICE.LLNS, COPYING)
 #
 # This file is part of the Flux resource manager framework.
@@ -8,14 +8,14 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-# rexec - bare bones rexec client
-
 import argparse
+import errno
 import logging
 import os
 import sys
 
 import flux
+import flux.subprocess as subprocess
 
 
 def exit_with_status(status):
@@ -31,27 +31,52 @@ def exit_with_status(status):
     sys.exit(exitcode)
 
 
-def kill(args):
-    h = flux.Flux()
+def pid_or_label(arg):
+    """
+    Return pid and label where:
+    - pid is None if arg is a non integer string
+    - label is None if arg is an integer
+    Returns:
+        pid, label
+    """
     try:
-        payload = {"pid": int(args.pid), "signum": int(args.signum)}
+        return int(arg), None
     except ValueError:
-        payload = {"pid": -1, "label": args.pid, "signum": int(args.signum)}
+        # arg is not an integer
+        return None, str(arg)
+
+
+def kill(args):
+    wait_rpc = None
+    h = flux.Flux()
+    pid, label = pid_or_label(args.pid)
     if args.wait:
         # For testing purposes, send wait request before sending kill request:
-        wait_f = h.rpc(
-            args.service + ".wait",
-            nodeid=args.rank,
-            payload={x: payload[x] for x in ("pid", "label") if x in payload},
+        wait_rpc = subprocess.wait(
+            h, pid=pid, label=label, service=args.service, nodeid=args.rank
         )
     try:
-        h.rpc(args.service + ".kill", nodeid=args.rank, payload=payload).get()
+        subprocess.kill(
+            h,
+            signum=args.signum,
+            pid=pid,
+            label=label,
+            service=args.service,
+            nodeid=args.rank,
+        ).get()
     except OSError as exc:
         LOGGER.error(f"kill: {exc}")
-        sys.exit(1)
+        # Process may have already been reaped by the wait RPC initiated
+        # above, which will cause the kill RPC to fail with ESRCH. In this
+        # case fall through to wait statement so program exits with collected
+        # wait status (or fails with a wait error in the case the process
+        # really could not be found:
+        if not (args.wait and exc.errno == errno.ESRCH):
+            sys.exit(1)
+
     if args.wait:
         try:
-            exit_with_status(wait_f.get()["status"])
+            exit_with_status(wait_rpc.get_status())
         except OSError as exc:
             LOGGER.error(f"kill: wait failed: {exc}")
             sys.exit(1)
@@ -59,43 +84,44 @@ def kill(args):
 
 def wait(args):
     h = flux.Flux()
+    pid, label = pid_or_label(args.pid)
     try:
-        payload = {"pid": int(args.pid)}
-    except ValueError:
-        payload = {"pid": -1, "label": args.pid}
-    try:
-        exit_with_status(
-            h.rpc(args.service + ".wait", nodeid=args.rank, payload=payload).get()[
-                "status"
-            ]
+        rpc = subprocess.wait(
+            h, pid=pid, label=label, service=args.service, nodeid=args.rank
         )
+        exit_with_status(rpc.get_status())
     except OSError as exc:
         LOGGER.error(f"wait: {exc}")
         sys.exit(1)
 
 
 def ps(args):
-    h = flux.Flux()
+    headings = {
+        "pid": "PID",
+        "state": "ST",
+        "label": "LABEL",
+        "rank": "RANK",
+        "cmd": "COMMAND",
+    }
+    fmt = args.format or "{pid:>9} {state:<2} {label:<12} {cmd}"
+    formatter = flux.util.OutputFormat(fmt, headings=headings)
+
     try:
-        resp = h.rpc(
-            args.service + ".list",
-            nodeid=int(args.rank),
-        ).get()
+        procs = subprocess.list(
+            flux.Flux(), service=args.service, nodeid=args.rank
+        ).get_processes()
     except OSError as exc:
         LOGGER.error(f"ps: {exc}")
         sys.exit(1)
-    for item in resp["procs"]:
-        if not item["label"]:
-            item["label"] = "-"
-        print(f"{item['pid']:<8}\t{item['state']}\t{item['label']:<10}\t{item['cmd']}")
+    formatter.print_items(procs, no_header=args.no_header)
 
 
-LOGGER = logging.getLogger("rexec")
+LOGGER = logging.getLogger("flux-sproc")
 
 
 @flux.util.CLIMain(LOGGER)
 def main():
-    parser = argparse.ArgumentParser(prog="rexec")
+    parser = argparse.ArgumentParser(prog="flux-sproc")
     subparsers = parser.add_subparsers(
         title="supported subcommands", description="", dest="subcommand"
     )
@@ -148,6 +174,17 @@ def main():
         "ps",
         parents=[common_parser],
         formatter_class=flux.util.help_formatter(),
+    )
+    ps_parser.add_argument(
+        "-o",
+        "--format",
+        help="Specify output format using Python's string format syntax",
+    )
+    ps_parser.add_argument(
+        "-n",
+        "--no-header",
+        action="store_true",
+        help="Suppress header output",
     )
     ps_parser.set_defaults(func=ps)
 

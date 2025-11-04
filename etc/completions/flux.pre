@@ -2209,6 +2209,47 @@ _flux_modprobe()
     fi
 }
 
+# flux-sproc(1) completions
+_flux_sproc()
+{
+    local cmd=$1
+    local subcmds="ps kill wait"
+    local split=false
+    common_OPTS="\
+        -r --rank= \
+        -s --service= \
+    "
+    ps_OPTS="\
+        $common_OPTS \
+        -o --format= \
+        -n --no-header \
+    "
+    kill_OPTS="\
+        $common_OPTS \
+        -w --wait \
+    "
+    wait_OPTS="\
+        $common_OPTS
+    "
+
+    _flux_split_longopt && split=true
+    if [[ $cmd != "sproc" ]]; then
+        # Don't substitute longopts if already fully completed
+        if [[ $cur == --*= ]]; then
+            COMPREPLY=()
+            return 0
+        fi
+        var="${cmd//-/_}_OPTS"
+        COMPREPLY=( $(compgen -W "${!var}" -- "$cur") )
+        if [[ "${COMPREPLY[@]}" == *= ]]; then
+            # no space if suggestions ends with '='
+            compopt -o nospace
+        fi
+    else
+        COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
+    fi
+    return 0
+}
 
 _flux_core()
 {
@@ -2341,6 +2382,9 @@ _flux_core()
         ;;
     modprobe)
         _flux_modprobe $subcmd
+        ;;
+    sproc)
+        _flux_sproc $subcmd
         ;;
     help)
         COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )

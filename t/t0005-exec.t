@@ -11,9 +11,9 @@ Test exec functionality
 SIZE=4
 test_under_flux ${SIZE} minimal
 
-rkill="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py kill"
-rps="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py ps"
-rwait="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py wait"
+rkill="flux sproc kill"
+rps="flux sproc ps"
+rwait="flux sproc wait"
 
 invalid_rank() {
        echo $((${SIZE} + 1))
@@ -551,8 +551,7 @@ test_expect_success 'rexec: server shutdown works with zombie processes' '
 		flux exec -r 0 --bg --waitable --label=z2 sleep 0
 		flux exec -r 0 --bg --waitable --label=z3 sleep 0
 		# Verify zombies exist
-		flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py ps \
-		    | grep "Z"
+		flux sproc ps | grep "Z"
 		# Exit - should cleanup zombies during shutdown
 	EOF2
 	flux start -s 1 bash shutdown-test.sh

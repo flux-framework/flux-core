@@ -28,8 +28,8 @@ flux setattr log-stderr-level 1
 
 sdexec="flux exec --service sdexec"
 lptest="flux lptest"
-rkill="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py kill -s sdexec"
-rps="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py ps -s sdexec"
+rkill="flux sproc kill -s sdexec"
+rps="flux sproc ps -s sdexec"
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
 # systemd 239 requires commands to be fully qualified, while 249 does not
