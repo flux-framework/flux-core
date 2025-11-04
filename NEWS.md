@@ -1,3 +1,57 @@
+flux-core version 0.80.0 - 2025-11-04
+-------------------------------------
+
+## New Features
+
+ * shell: add `cpu-affinity=dry-run` and `verbose` options (#7181)
+ * libsubprocess: add RFC 42 waitable process support (#7170)
+ * libsubprocess: support RFC 42 process labels (#7156)
+ * add `flux sproc` command for managing subprocesses (#7183)
+ * librlist: enable NVML backend for rhwloc (#7166)
+ * support plugin-specific help via `--help=OPTION` in cli submission
+   commands (#7165)
+ * etc/modprobe: run flux-fsck in rc1  (#7082)
+ * flux-start: print message when --test-exit-timeout expires (#7145)
+ * python: support new `handle.attr_remove()` to remove broker attribute
+   (#7137)
+ * modprobe: add `!` prefix for task `needs_attrs` and `needs_config` (#7139)
+
+## Fixes
+
+ * flux-fsck: fix duplicate option character (#7169)
+ * shell: fix core/gpu distribution with uneven task counts across nodes
+   (#7182)
+ * flux-jobs: fix exit status when jobids provided on command line are
+   unknown (#7180)
+ * fix slurm URI resolver errors for multinode jobs (#7179)
+ * connectors: ssh: fix hang and improve error messages on failure (#7171)
+ * improve `flux job-validator` handling of invalid input (#7151)
+ * broker: fix potential `zmq_unbind()` race (#7150)
+ * content: fix module option parsing bug and improve tests (#7148)
+ * Improve range validation and cleanup validator (#7130)
+ * content: fix segfault in content.stats-get handler (#7143)
+ * flux-fsck: do not suppress all messages with --quiet (#7134)
+ * flux-fsck: add repair output summary (#7133)
+ * initialize locale in built-in flux commands, especially flux-dump and
+   flux-restore (#7131)
+
+## Cleanup
+
+ * broker: clean up broker logging to facilitate future refactoring (#7160)
+ * minor broker code cleanup (#7152)
+ * libflux: clean up and document configuration API (#7141)
+
+## Build/CI/Testsuite/Documentation
+
+ * testsuite: drop maxrss > 0 test (#7163)
+ * configure: use system bash completions directory by default (#7149)
+ * improve documentation and errors around misquoted `--format=` arguments
+   (#7147)
+ * testsuite: improve reliability of t4583-free-range-test.sh (#7146)
+ * testsuite: improve test-inception.sh script (#7140)
+ * testsuite: fix occasional sdmon test failures (#7129)
+
+
 flux-core version 0.79.0 - 2025-10-07
 -------------------------------------
 
