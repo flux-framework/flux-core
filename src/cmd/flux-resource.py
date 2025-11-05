@@ -163,9 +163,16 @@ def undrain(args):
     """
     Send an "undrain" request to resource module for args.targets
     """
+    if args.update and args.force:
+        LOGGER.error("Only one of --force and --update may be specified")
+        sys.exit(1)
     payload = {"targets": args.targets}
-    if args.force:
-        payload["mode"] = "force"
+    if args.update:
+        payload["mode"] = "update"
+    elif args.force == 1:
+        payload["mode"] = "overwrite"
+    elif args.force == 2:
+        payload["mode"] = "force-overwrite"
     if args.reason:
         payload["reason"] = " ".join(args.reason)
     RPC(flux.Flux(), "resource.undrain", payload, nodeid=0).get()
@@ -929,10 +936,19 @@ def main():
         "undrain", formatter_class=flux.util.help_formatter()
     )
     undrain_parser.add_argument(
+        "-u",
+        "--update",
+        action="store_true",
+        help="Update only. Do not return an error if one or more targets "
+        + "are not drained. Do not overwrite any existing undrain reason.",
+    )
+    undrain_parser.add_argument(
         "-f",
         "--force",
-        action="store_true",
-        help="Do not fail if any targets are not drained",
+        action="count",
+        default=0,
+        help="Force overwrite of existing undrain reason. Specify twice "
+        + "to also update undrain timestamp.",
     )
     undrain_parser.add_argument(
         "targets", help="List of targets to resume (IDSET or HOSTLIST)"
