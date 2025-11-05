@@ -14,20 +14,28 @@
  * but may be used for determining job request satisfiability.
  *
  * Handle RPCs from front-end commands.
- * - if a node in undrain target is not drained, request fails
- * - if a node in undrain target is excluded, request fails
- * - if a node in drain target is already drained, request status depends
- *   on setting of optional 'mode' member:
- *    - If mode is not set, request fails
- *    - If mode=overwrite, request succeeds and reason is updated
- *    - If mode=force-overwrite, request succeeds and timestamp and reason
- *      are updated
- *    - If mode=update, request succeeds and reason is updated only for
- *      those target that are not drained or do not have reason set.
+ *
+ * Drain/undrain fails if targets are already in the requested state, unless
+ * one of the following options are used.  The effect on those targets
+ * depends on the options used:
+ *
+ * --update (mode=update, overwrite=0)
+ *   Update reason, only if unset.
+ *
+ * --force (mode=overwrite, overwrite=1)
+ *   Update reason unconditionally.
+ *
+ * --force --force (mode=force-overwrite, overwrite=2)
+ *   Update reason and timestamp unconditionally.
  *
  * Post events for each drain/undrain action.  Drain state is sticky
  * across module reload / instance restart.  The state is reacquired
  * by replaying the eventlog.
+ *
+ * Other notes:
+ * - nodes configured to be statically excluded cannot be drained.
+ * - undrain reasons and timestamps are only recorded in the eventlog,
+ *   not the in memory cache.
  */
 
 #if HAVE_CONFIG_H
