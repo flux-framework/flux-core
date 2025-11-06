@@ -450,8 +450,7 @@ static void fsck_dirref (struct fsck_ctx *ctx,
             warn (ctx, "%s unlinked due to missing blobref", path);
             ctx->unlink_dir_count++;
         }
-        flux_future_destroy (f);
-        return;
+        goto cleanup;
     }
     if (!(treeobj_deref = treeobj_decodeb (buf, buflen))) {
         errmsg (ctx, "%s: could not decode directory", path);
