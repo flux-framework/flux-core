@@ -18,12 +18,6 @@
 #include "topology.h"
 #include "bizcard.h"
 
-typedef enum {
-    OVERLAY_ANY = 0,
-    OVERLAY_UPSTREAM,
-    OVERLAY_DOWNSTREAM,
-} overlay_where_t;
-
 /* Overlay control messages
  */
 enum control_type {
@@ -35,9 +29,6 @@ enum control_type {
 struct overlay;
 
 typedef void (*overlay_monitor_f)(struct overlay *ov, uint32_t rank, void *arg);
-typedef int (*overlay_recv_f)(flux_msg_t **msg,
-                              overlay_where_t from,
-                              void *arg);
 
 /* Create overlay network, registering 'cb' to be called with each
  * received message.
@@ -47,8 +38,7 @@ struct overlay *overlay_create (flux_t *h,
                                 const char *hostname,
                                 attr_t *attrs,
                                 void *zctx,
-                                overlay_recv_f cb,
-                                void *arg,
+                                const char *uri,
                                 flux_error_t *error);
 void overlay_destroy (struct overlay *ov);
 
@@ -61,18 +51,6 @@ int overlay_control_start (struct overlay *ov);
 /* Set the overlay topology.
  */
 int overlay_set_topology (struct overlay *ov, struct topology *topo);
-
-/* Send a message on the overlay network.
- * 'where' determines whether the message is routed upstream or downstream.
- */
-int overlay_sendmsg (struct overlay *ov,
-                     const flux_msg_t *msg,
-                     overlay_where_t where);
-/* same as above but steals reference to 'msg' on success.
- */
-int overlay_sendmsg_new (struct overlay *ov,
-                         flux_msg_t **msg,
-                         overlay_where_t where);
 
 /* Each broker has a public, private CURVE key-pair.  Call overlay_authorize()
  * with the public key of each downstream peer to authorize it to connect,
