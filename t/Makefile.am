@@ -539,6 +539,7 @@ check_LTLIBRARIES = \
 	job-manager/plugins/offline.la \
 	job-manager/plugins/call.la \
 	job-manager/plugins/callee.la \
+	job-manager/plugins/load-order.la \
 	stats/stats-basic.la \
 	stats/stats-immediate.la
 
@@ -1140,6 +1141,15 @@ job_manager_plugins_callee_la_LDFLAGS = \
 job_manager_plugins_callee_la_LIBADD = \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_load_order_la_SOURCES = \
+	job-manager/plugins/load-order.c
+job_manager_plugins_load_order_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_load_order_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_load_order_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
 
 util_jobspec1_validate_SOURCES = util/jobspec1-validate.c
 util_jobspec1_validate_CPPFLAGS = $(test_cppflags)
