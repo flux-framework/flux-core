@@ -591,4 +591,21 @@ test_expect_success 'job-manager: test flux_jobtap_call()' '
 	flux jobtap load ${PLUGINPATH}/call.so &&
 	flux run hostname
 '
+test_expect_success 'job-manager: submit a set of jobs in various states' '
+	flux submit --cc=1-$(flux resource list -no {ncores}) -n1 sleep inf &&
+	flux submit --cc=1-3 -n1 sleep inf &&
+	flux submit --cc=1-5 --dependency=singleton --job-name=t -n1 sleep inf
+'
+test_expect_success 'job-manager: test flux_jobtap_set_load_sort_order(none)' '
+	flux jobtap load --remove=all ${PLUGINPATH}/load-order.so sort=none
+'
+test_expect_success 'job-manager: test flux_jobtap_set_load_sort_order(state)' '
+	flux jobtap load --remove=all ${PLUGINPATH}/load-order.so sort=state
+'
+test_expect_success 'job-manager: test flux_jobtap_set_load_sort_order(-state)' '
+	flux jobtap load --remove=all ${PLUGINPATH}/load-order.so sort=-state
+'
+test_expect_success 'job-manager: cancel all jobs' '
+	flux cancel --all
+'
 test_done

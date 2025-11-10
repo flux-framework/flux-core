@@ -44,6 +44,18 @@ int flux_jobtap_service_register_ex (flux_plugin_t *p,
                                      flux_msg_handler_f cb,
                                      void *arg);
 
+
+/*  Set the sort order of jobs at initial plugin load. This will determine
+ *   the order in which job.{create,new} callbacks are called for jobs that
+ *   are active at the time a plugin is loaded. Choices include:
+ *
+ *  "none"    Do not sort jobs. This is the default
+ *  "state"   Order jobs by state (PRIORITY, DEPEND, SCHED, RUN, CLEANUP),
+ *            then job id (which orders roughly by submit time)
+ *  "-state"  Sort by reverse state, then job id
+ */
+int flux_jobtap_set_load_sort_order (flux_plugin_t *p, const char *mode);
+
 /*  Start a loop to re-prioritize all jobs. The plugin "priority.get"
  *   callback will be called for each job currently in SCHED or
  *   PRIORITY states.

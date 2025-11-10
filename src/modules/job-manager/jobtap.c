@@ -300,12 +300,92 @@ static int current_job_pop (struct jobtap *jobtap)
     return zlistx_delete (jobtap->jobstack, NULL);
 }
 
+static int job_id_cmp (const void *a, const void *b)
+{
+    const struct job *job1 = a;
+    const struct job *job2 = b;
+    if (job1->id == job2->id)
+        return 0;
+    if (job1->id < job2->id)
+        return -1;
+    return 1;
+}
+
+/* Sort jobs by state, then submit time (via jobid)
+ */
+static int job_state_cmp (const void *a, const void *b)
+{
+    const struct job *job1 = a;
+    const struct job *job2 = b;
+    if (job1->state == job2->state)
+        return job_id_cmp (a, b);
+    return job1->state < job2->state ? -1 : 1;
+}
+
+/* Sort jobs by reverse state, then submit time (via jobid)
+ */
+static int job_state_reverse_cmp (const void *a, const void *b)
+{
+    const struct job *job1 = a;
+    const struct job *job2 = b;
+    if (job1->state == job2->state)
+        return job_id_cmp (a, b);
+    return job1->state > job2->state ? -1 : 1;
+}
+
+static void job_list_sort (zlistx_t *jobs, const char *mode)
+{
+    if (streq (mode, "state"))
+        zlistx_set_comparator (jobs, job_state_cmp);
+    else if (streq (mode, "-state"))
+        zlistx_set_comparator (jobs, job_state_reverse_cmp);
+    else
+        return;
+    zlistx_sort (jobs);
+}
+
+/* Return true if `mode` is a valid job sort order
+ */
+static inline bool sort_mode_valid (const char *mode)
+{
+    return (streq (mode, "none")
+            || streq (mode, "state")
+            || streq (mode, "-state"));
+}
+
+int flux_jobtap_set_load_sort_order (flux_plugin_t *p, const char *mode)
+{
+    char *sort_mode = NULL;
+    struct jobtap *jobtap = flux_plugin_aux_get (p, "flux::jobtap");
+
+    if (!jobtap || !mode || !sort_mode_valid (mode)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* avoid unnecessary copy by ignoring "none" (same as unset)
+     */
+    if (streq (mode, "none"))
+        return 0;
+
+    if (!(sort_mode = strdup (mode))
+        || flux_plugin_aux_set (p,
+                                "jobtap::sort_mode",
+                                sort_mode,
+                                free) < 0) {
+        ERRNO_SAFE_WRAP (free, sort_mode);
+        return -1;
+    }
+    return 0;
+}
+
 static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
                                            const char *path,
                                            json_t *conf,
                                            flux_error_t *errp)
 {
     struct job_manager *ctx = jobtap->ctx;
+    const char *sort_mode = NULL;
     flux_plugin_t *p = NULL;
     flux_plugin_arg_t *args;
     zlistx_t *jobs;
@@ -320,6 +400,11 @@ static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
         errprintf (errp, "zhashx_values() failed");
         goto error;
     }
+    /*  Sort jobs if requested
+     */
+    if ((sort_mode = flux_plugin_aux_get (p, "jobtap::sort_mode")))
+        job_list_sort (jobs, sort_mode);
+
     job = zlistx_first (jobs);
     while (job) {
         if (current_job_push (jobtap, job) < 0) {

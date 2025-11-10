@@ -139,6 +139,19 @@ job.create
 
   It is safe to post events from a ``job.create`` handler in all cases.
 
+  .. note::
+    In case 3 ``job.create`` is called for active jobs in unspecified order.
+    If a plugin requires an ordering guarantee, the plugin should call
+    ``flux_jobtap_set_load_sort_order(3)`` from the ``flux_plugin_init()``
+    callback. This function takes a ``mode`` parameter of either ``state``,
+    to sort jobs by state (then jobid), or ``-state`` to sort by reverse
+    state (then jobid). For example ::
+
+       flux_jobtap_set_load_sort_order (p, "state");
+
+    will ensure that ``job.create`` and ``job.new`` are called on jobs
+    in PRIORITY first, then DEPEND, then SCHED, and so on.
+
 job.destroy
   The ``job.destroy`` topic is called after a job is rejected or becomes
   inactive.
