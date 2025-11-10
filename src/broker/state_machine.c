@@ -573,7 +573,27 @@ static void shutdown_warn_timer_cb (flux_reactor_t *r,
     flux_watcher_start (w);
 }
 
-
+/* SHUTDOWN state triggers an orderly shutdown of the TBON subtree.
+ * This may occur on the leader during instance shutdown or at any other broker,
+ * e.g. if its rc1 fails or if a module panics during RUN state. Shutdown is
+ * orchestrated from leaves-to-root as follows:
+ *
+ * - the root of the subtree enters SHUTDOWN state
+ *
+ * - its TBON children (who are monitoring parent state) enter SHUTDOWN state
+ *
+ * - leaf brokers post children-none and do FINALIZE->GOODBYE->EXIT
+ *
+ * - non-leaf brokers post children-complete once all their children have
+ *   exited, then do FINALIZE->GOODBYE->EXIT
+ *
+ * The last of the non-leaf brokers to exit is the root of the subtree.
+ * The shutdown does not propagate upstream from there.
+ *
+ * Importantly, rc3 is run in FINALIZE state, so it always executes with
+ * the parent in SHUTDOWN state, before it has executed its rc3, with all
+ * services live.
+ */
 static void action_shutdown (struct state_machine *s)
 {
     sd_timeout_reset (s);
@@ -1179,7 +1199,8 @@ static void log_monitor_respond_error (flux_t *h)
         flux_log_error (h, "error responding to state-machine.monitor request");
 }
 
-/* Return true if request should continue to receive updates
+/* Respond to single state-machine.monitor request.
+ * Return true if request should continue to receive updates.
  */
 static bool monitor_update_one (flux_t *h,
                                 const flux_msg_t *msg,
@@ -1204,6 +1225,9 @@ nodata:
     return false;
 }
 
+/* The local state changed.
+ * Notify any streaming state-machine.monitor streaming requests.
+ */
 static void monitor_update (flux_t *h,
                             struct flux_msglist *requests,
                             broker_state_t state)
@@ -1218,6 +1242,9 @@ static void monitor_update (flux_t *h,
     }
 }
 
+/* Handle state-machine.monitor request.  The streaming flag is optional.
+ * If unset, then just respond with the current state.
+ */
 static void state_machine_monitor_cb (flux_t *h,
                                       flux_msg_handler_t *mh,
                                       const flux_msg_t *msg,
@@ -1237,7 +1264,16 @@ error:
         log_monitor_respond_error (h);
 }
 
-static void monitor_continuation (flux_future_t *f, void *arg)
+/* When the TBON parent broker state changes, consider whether to post
+ * an event locally.  The decision depends on the new parent state and
+ * the current broker state.  For example:
+ *
+ * Local state   Possible local events
+ * JOIN:         parent-ready, parent-fail
+ * QUORUM:       quorum-full, quorum-fail
+ * RUN:          shutdown, parent-fail
+ */
+static void monitor_parent_continuation (flux_future_t *f, void *arg)
 {
     struct state_machine *s = arg;
     flux_t *h = s->ctx->h;
@@ -1278,7 +1314,7 @@ static flux_future_t *monitor_parent (flux_t *h, void *arg)
                              "{s:i}",
                              "final", STATE_SHUTDOWN)))
         return NULL;
-    if (flux_future_then (f, -1, monitor_continuation, arg) < 0) {
+    if (flux_future_then (f, -1, monitor_parent_continuation, arg) < 0) {
         flux_future_destroy (f);
         return NULL;
     }
