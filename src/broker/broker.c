@@ -117,12 +117,13 @@ static int init_attrs_starttime (attr_t *attrs,
                                  double starttime,
                                  flux_error_t *error);
 
-static int init_local_uri_attr (struct overlay *ov,
-                                attr_t *attrs,
+static int init_local_uri_attr (attr_t *attrs,
+                                uint32_t rank,
                                 flux_error_t *error);
 
-static int init_critical_ranks_attr (struct overlay *ov,
-                                     attr_t *attrs,
+static int init_critical_ranks_attr (attr_t *attrs,
+                                     uint32_t size,
+                                     struct overlay *ov,
                                      flux_error_t *error);
 
 static int execute_parental_notifications (struct broker *ctx,
@@ -464,17 +465,23 @@ int main (int argc, char *argv[])
             goto cleanup;
         }
     }
+    if (overlay_register_attrs (ctx.overlay) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "registering overlay attributes: %s",
+                  strerror (errno));
+        goto cleanup;
+    }
 
     if (init_attrs_post_boot (ctx.attrs, &error) < 0) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
 
-    ctx.rank = overlay_get_rank (ctx.overlay);
-    ctx.size = overlay_get_size (ctx.overlay);
-
-    if (ctx.size == 0) {
-        flux_log (ctx.h, LOG_CRIT, "internal error: instance size is zero!");
+    if (attr_get_uint32 (ctx.attrs, "rank", &ctx.rank) < 0
+        || attr_get_uint32 (ctx.attrs, "size", &ctx.size) < 0
+        || ctx.size == 0) {
+        flux_log (ctx.h, LOG_CRIT, "internal error: rank/size init failure");
         goto cleanup;
     }
 
@@ -501,15 +508,6 @@ int main (int argc, char *argv[])
     }
     else {
         (void)attr_delete (ctx.attrs, "statedir", true);
-    }
-
-    /* Must be called after overlay setup */
-    if (overlay_register_attrs (ctx.overlay) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "registering overlay attributes: %s",
-                  strerror (errno));
-        goto cleanup;
     }
 
     if (ctx.verbose) {
@@ -545,8 +543,10 @@ int main (int argc, char *argv[])
     }
 
     if (ctx.verbose) {
-        const char *parent = overlay_get_parent_uri (ctx.overlay);
-        const char *child = overlay_get_bind_uri (ctx.overlay);
+        const char *parent = NULL;
+        const char *child = NULL;
+        (void)attr_get (ctx.attrs, "tbon.parent-endpoint", &parent, NULL);
+        (void)attr_get (ctx.attrs, "tbon.endpoint", &child, NULL);
         flux_log (ctx.h, LOG_INFO, "parent: %s", parent ? parent : "none");
         flux_log (ctx.h, LOG_INFO, "child: %s", child ? child : "none");
     }
@@ -554,8 +554,11 @@ int main (int argc, char *argv[])
     set_proctitle (ctx.rank);
 
     // N.B. local-uri is used by runat
-    if (init_local_uri_attr (ctx.overlay, ctx.attrs, &error) < 0
-        || init_critical_ranks_attr (ctx.overlay, ctx.attrs, &error) < 0) {
+    if (init_local_uri_attr (ctx.attrs, ctx.rank, &error) < 0
+        || init_critical_ranks_attr (ctx.attrs,
+                                     ctx.size,
+                                     ctx.overlay,
+                                     &error) < 0) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
@@ -1004,14 +1007,13 @@ static int create_runat_phases (broker_ctx_t *ctx, flux_error_t *errp)
     return 0;
 }
 
-static int init_local_uri_attr (struct overlay *ov,
-                                attr_t *attrs,
+static int init_local_uri_attr (attr_t *attrs,
+                                uint32_t rank,
                                 flux_error_t *errp)
 {
     const char *uri;
 
     if (attr_get (attrs, "local-uri", &uri, NULL) < 0) {
-        uint32_t rank = overlay_get_rank (ov);
         const char *rundir;
         char buf[1024];
 
@@ -1051,8 +1053,9 @@ static int init_local_uri_attr (struct overlay *ov,
     return 0;
 }
 
-static int init_critical_ranks_attr (struct overlay *ov,
-                                     attr_t *attrs,
+static int init_critical_ranks_attr (attr_t *attrs,
+                                     uint32_t size,
+                                     struct overlay *ov,
                                      flux_error_t *errp)
 {
     int rc = -1;
@@ -1076,7 +1079,7 @@ static int init_critical_ranks_attr (struct overlay *ov,
     }
     else {
         if (!(critical_ranks = idset_decode (val))
-            || idset_last (critical_ranks) >= overlay_get_size (ov)) {
+            || idset_last (critical_ranks) >= size) {
             errprintf (errp,
                        "invalid value for broker.critical-ranks='%s'",
                        val);

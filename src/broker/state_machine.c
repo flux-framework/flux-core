@@ -287,9 +287,9 @@ static void action_join (struct state_machine *s)
     else {
 #if HAVE_LIBSYSTEMD
         if (s->ctx->sd_notify) {
-            sd_notifyf (0,
-                        "STATUS=Joining Flux instance via %s",
-                        overlay_get_parent_uri (s->ctx->overlay));
+            const char *uri = "?";
+            (void)attr_get (s->ctx->attrs, "tbon.parent-endpoint", &uri, NULL);
+            sd_notifyf (0, "STATUS=Joining Flux instance via %s", uri);
         }
 #endif
         join_check_parent (s);
