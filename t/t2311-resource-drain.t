@@ -146,6 +146,11 @@ test_expect_success 'drain update mode works with idset' '
 	flux resource undrain 0
 '
 
+test_expect_success 'undrain event was posted with overwrite=0' '
+	flux kvs eventlog get resource.eventlog |grep undrain >undrain.out &&
+	grep overwrite=0 undrain.out
+'
+
 test_expect_success 'drain works with idset' '
 	flux resource drain 2-3 &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 3 &&
@@ -160,7 +165,7 @@ test_expect_success 'reload resource module to simulate instance restart' '
 '
 
 test_expect_success 'undrain one node' '
-	flux resource undrain 3 &&
+	flux resource undrain --force 3 &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 2
 '
 
@@ -168,17 +173,27 @@ test_expect_success 'undrain event was logged' '
 	$dmesg_grep -t 10 "undrain idset=3"
 '
 
+test_expect_success 'undrain --force posted undrain event with overwrite=1' '
+	flux kvs eventlog get resource.eventlog |grep undrain >undrain2.out &&
+	grep overwrite=1 undrain2.out
+'
+
 test_expect_success 'two nodes are still drained' '
 	test $(flux resource list -n -s down -o {nnodes}) -eq 2
 '
 
 test_expect_success 'undrain remaining nodes with a reason' '
-	flux resource undrain 1-2 "reason for undrain" &&
+	flux resource undrain -ff 1-2 "reason for undrain" &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 0
 '
 
 test_expect_success 'undrain event with reason was logged' '
 	$dmesg_grep -t 10 "undrain idset=1-2 .*reason=reason for undrain"
+'
+
+test_expect_success 'undrain -ff posted undrain event with overwrite=2' '
+	flux kvs eventlog get resource.eventlog |grep undrain >undrain3.out &&
+	grep overwrite=2 undrain3.out
 '
 
 test_expect_success 'resource.eventlog has three undrain events' '
