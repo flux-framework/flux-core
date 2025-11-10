@@ -164,7 +164,7 @@ test_expect_success 'undrain one node' '
 	test $(flux resource list -n -s down -o {nnodes}) -eq 2
 '
 
-test_expect_success 'udrain event was logged' '
+test_expect_success 'undrain event was logged' '
 	$dmesg_grep -t 10 "undrain idset=3"
 '
 
@@ -177,7 +177,7 @@ test_expect_success 'undrain remaining nodes with a reason' '
 	test $(flux resource list -n -s down -o {nnodes}) -eq 0
 '
 
-test_expect_success 'udrain event with reason was logged' '
+test_expect_success 'undrain event with reason was logged' '
 	$dmesg_grep -t 10 "undrain idset=1-2 .*reason=reason for undrain"
 '
 
