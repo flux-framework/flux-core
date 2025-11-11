@@ -124,7 +124,6 @@ struct parent {
     bool hello_responded;
     bool offline;           // set upon receipt of CONTROL_DISCONNECT
     bool goodbye_sent;
-    flux_future_t *f_goodbye;
     struct rpc_track *tracker;
     struct zmqutil_monitor *monitor;
 };
@@ -140,11 +139,6 @@ static const double default_torpid_min = 5.0;
 static const double default_torpid_max = 30.0;
 
 static const char *default_interface_hint = "default-route";
-
-struct overlay_monitor {
-    overlay_monitor_f cb;
-    void *arg;
-};
 
 struct overlay {
     void *zctx;
@@ -189,7 +183,6 @@ struct overlay {
     struct timespec status_timestamp;
     struct zmqutil_monitor *bind_monitor;
 
-    zlist_t *monitor_callbacks;
     struct flux_msglist *monitor_requests;
 
     flux_t *h_channel;
@@ -210,7 +203,8 @@ static int overlay_control_parent (struct overlay *ov,
 static void overlay_health_respond_all (struct overlay *ov);
 static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank);
 static int overlay_publish_new (struct overlay *ov, flux_msg_t **msg, int *seq);
-static void goodbye_continuation (flux_future_t *f, void *arg);
+static int overlay_goodbye_parent (struct overlay *overlay, flux_error_t *errp);
+static int overlay_get_child_online_peer_count (struct overlay *ov);
 
 /* Convenience iterator for ov->children
  */
@@ -305,17 +299,7 @@ static void overlay_monitor_respond_one (flux_t *h,
 
 static void overlay_monitor_notify (struct overlay *ov, uint32_t rank)
 {
-    struct overlay_monitor *mon;
     const flux_msg_t *msg;
-
-    /* Notify monitor callbacks that peer may have updates.
-     * The callback owner uses overlay accessors to probe what changed.
-     */
-    mon = zlist_first (ov->monitor_callbacks);
-    while (mon) {
-        mon->cb (ov, rank, mon->arg);
-        mon = zlist_next (ov->monitor_callbacks);
-    }
 
     /* Notify monitor requests of possible new peer status or torpidity.
      */
@@ -329,10 +313,10 @@ static void overlay_monitor_notify (struct overlay *ov, uint32_t rank)
 
     /* Notify state machine once all child subtrees are offline
      */
-    if (ov->broker_state == STATE_SHUTDOWN) {
-        if (ov->child_count > 0 && overlay_get_child_peer_count (ov) == 0)
-            overlay_state_machine_post (ov, "children-complete", false);
-    }
+    if (ov->broker_state == STATE_SHUTDOWN
+        && ov->child_count > 0
+        && overlay_get_child_online_peer_count (ov) == 0)
+        overlay_state_machine_post (ov, "children-complete", false);
 }
 
 int overlay_set_topology (struct overlay *ov, struct topology *topo)
@@ -397,27 +381,12 @@ error:
     return -1;
 }
 
-uint32_t overlay_get_rank (struct overlay *ov)
-{
-    return ov->rank;
-}
-
 void overlay_test_set_rank (struct overlay *ov, uint32_t rank)
 {
     ov->rank = rank;
 }
 
-uint32_t overlay_get_size (struct overlay *ov)
-{
-    return ov->size;
-}
-
-const char *overlay_get_uuid (struct overlay *ov)
-{
-    return ov->uuid;
-}
-
-bool overlay_parent_error (struct overlay *ov)
+static bool overlay_parent_error (struct overlay *ov)
 {
     return ((ov->parent.hello_responded && ov->parent.hello_error)
             || ov->parent.offline);
@@ -428,7 +397,7 @@ void overlay_test_set_version (struct overlay *ov, int version)
     ov->version = version;
 }
 
-int overlay_get_child_peer_count (struct overlay *ov)
+static int overlay_get_child_online_peer_count (struct overlay *ov)
 {
     struct child *child;
     int count = 0;
@@ -438,24 +407,6 @@ int overlay_get_child_peer_count (struct overlay *ov)
             count++;
     }
     return count;
-}
-
-struct idset *overlay_get_child_peer_idset (struct overlay *ov)
-{
-    struct idset *ids;
-    struct child *child;
-
-    if (!(ids = idset_create (ov->size, 0)))
-        return NULL;
-    foreach_overlay_child (ov, child) {
-        if (subtree_is_online (child->status))
-            if (idset_set (ids, child->rank) < 0)
-                goto error;
-    }
-    return ids;
-error:
-    idset_destroy (ids);
-    return NULL;
 }
 
 void overlay_set_ipv6 (struct overlay *ov, int enable)
@@ -547,20 +498,6 @@ static struct child *child_lookup_route (struct overlay *ov, uint32_t rank)
     return child_lookup_byrank (ov, child_rank);
 }
 
-bool overlay_uuid_is_child (struct overlay *ov, const char *uuid)
-{
-    if (child_lookup_online (ov, uuid) != NULL)
-        return true;
-    return false;
-}
-
-bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid)
-{
-    if (ov->rank > 0 && streq (uuid, ov->parent.uuid))
-        return true;
-    return false;
-}
-
 int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey)
 {
     if (!(ov->parent.pubkey = strdup (pubkey)))
@@ -574,11 +511,6 @@ int overlay_set_parent_uri (struct overlay *ov, const char *uri)
     if (!(ov->parent.uri = strdup (uri)))
         return -1;
     return 0;
-}
-
-const char *overlay_get_parent_uri (struct overlay *ov)
-{
-    return ov->parent.uri;
 }
 
 static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg)
@@ -779,7 +711,7 @@ static void state_continuation (flux_future_t *f, void *arg)
              * if there are no children or they are not connected, post
              * children-none here.
              */
-            if (overlay_get_child_peer_count (ov) == 0)
+            if (overlay_get_child_online_peer_count (ov) == 0)
                 overlay_state_machine_post (ov, "children-none", false);
             ov->spurn_hello = true;
             break;
@@ -792,12 +724,9 @@ static void state_continuation (flux_future_t *f, void *arg)
              * N.B. on rank 0, the broker shutdown logic posts goodbye.
              */
             if (ov->rank > 0) {
-                flux_future_t *f;
-                if (!(f = overlay_goodbye_parent (ov))
-                    || flux_future_then (f, -1, goodbye_continuation, ov) < 0) {
-                    flux_log_error (ov->h,
-                                    "error sending overlay.goodbye request");
-                    flux_future_destroy (f);
+                flux_error_t error;
+                if (overlay_goodbye_parent (ov, &error) < 0) {
+                    flux_log (ov->h, LOG_ERR, "%s", error.text);
                     overlay_state_machine_post (ov, "goodbye", false);
                 }
             }
@@ -840,11 +769,6 @@ int overlay_start (struct overlay *ov)
            || flux_future_then (ov->f_state, -1, state_continuation, ov) < 0)
         return -1;
     return 0;
-}
-
-const char *overlay_get_bind_uri (struct overlay *ov)
-{
-    return bizcard_uri_first (ov->bizcard);
 }
 
 const struct bizcard *overlay_get_bizcard (struct overlay *ov)
@@ -1800,13 +1724,6 @@ int overlay_bind (struct overlay *ov,
     return 0;
 }
 
-/* Don't allow downstream peers to reconnect while we are shutting down.
- */
-void overlay_shutdown (struct overlay *overlay)
-{
-    overlay->spurn_hello = true;
-}
-
 /* Call after overlay bootstrap (bind/connect),
  * to get concretized 0MQ endpoints.
  */
@@ -1845,24 +1762,6 @@ int overlay_register_attrs (struct overlay *overlay)
     return 0;
 }
 
-int overlay_set_monitor_cb (struct overlay *ov,
-                            overlay_monitor_f cb,
-                            void *arg)
-{
-    struct overlay_monitor *mon;
-
-    if (!(mon = calloc (1, sizeof (*mon))))
-        return -1;
-    mon->cb = cb;
-    mon->arg = arg;
-    if (zlist_append (ov->monitor_callbacks, mon) < 0) {
-        free (mon);
-        errno = ENOMEM;
-        return -1;
-    }
-    return 0;
-}
-
 /* A child has sent an overlay.goodbye request.
  * Respond, then transition it to OFFLINE.
  */
@@ -1897,9 +1796,8 @@ error:
         flux_log_error (h, "error responding to overlay.goodbye");
 }
 
-/* The parent has responded to overlay.goodbye.  Fulfill the future
- * returned by overlay_goodbye_parent() so the state machine can
- * make progress.
+/* The parent has responded to overlay.goodbye.  Post the goodbye event
+ * so the state machine can make progress.
  */
 static void overlay_goodbye_response_cb (flux_t *h,
                                          flux_msg_handler_t *mh,
@@ -1907,15 +1805,8 @@ static void overlay_goodbye_response_cb (flux_t *h,
                                          void *arg)
 {
     struct overlay *ov = arg;
-    flux_future_fulfill (ov->parent.f_goodbye, NULL, NULL);
-}
-
-static void goodbye_continuation (flux_future_t *f, void *arg)
-{
-    struct overlay *ov = arg;
     if (ov->broker_state == STATE_GOODBYE)
         overlay_state_machine_post (ov, "goodbye", false);
-    flux_future_destroy (f);
 }
 
 /* This allows the state machine to delay overlay_destroy() and its
@@ -1926,7 +1817,7 @@ static void goodbye_continuation (flux_future_t *f, void *arg)
  * processed and gets an EHOSTUNREACH for an online peer.
  * See flux-framework/flux-core#5881.
  */
-flux_future_t *overlay_goodbye_parent (struct overlay *ov)
+static int overlay_goodbye_parent (struct overlay *ov, flux_error_t *errp)
 {
     flux_msg_t *msg;
 
@@ -1934,19 +1825,21 @@ flux_future_t *overlay_goodbye_parent (struct overlay *ov)
      * flux-framework/flux-core#5991
      */
     if (!(ov->parent.hello_responded)) {
-        errno = EHOSTUNREACH;
-        return NULL;
+        errprintf (errp,
+                   "cannot send overlay.goodbye because overlay.hello"
+                   " is still in progress");
+        return -1;
     }
     if (!(msg = flux_request_encode ("overlay.goodbye", NULL))
         || flux_msg_set_rolemask (msg, FLUX_ROLE_OWNER) < 0
         || overlay_sendmsg_parent (ov, msg) < 0) {
         flux_msg_decref (msg);
-        return NULL;
+        errprintf (errp, "error sending overlay.goodbye: %s", strerror (errno));
+        return -1;
     }
     ov->parent.goodbye_sent = true; // suppress further sends to parent
     flux_msg_decref (msg);
-    flux_future_incref (ov->parent.f_goodbye);
-    return ov->parent.f_goodbye;
+    return 0;
 }
 
 static int child_rpc_track_count (struct overlay *ov)
@@ -1979,11 +1872,12 @@ static void overlay_stats_get_cb (flux_t *h,
                             &sendq,
                             sizeof (sendq));
     }
+    int child_connected = overlay_get_child_online_peer_count (ov);
     if (flux_respond_pack (h,
                            msg,
                            "{s:i s:i s:i s:i s:i s:{s:i s:i}}",
                            "child-count", ov->child_count,
-                           "child-connected", overlay_get_child_peer_count (ov),
+                           "child-connected", child_connected,
                            "parent-count", ov->rank > 0 ? 1 : 0,
                            "parent-rpc", rpc_track_count (ov->parent.tracker),
                            "child-rpc", child_rpc_track_count (ov),
@@ -2133,20 +2027,6 @@ static void disconnect_cb (flux_t *h,
                   "overlay: goodbye to %d monitor clients",
                   count);
     }
-}
-
-const char *overlay_get_subtree_status (struct overlay *ov, int rank)
-{
-    const char *result = "unknown";
-
-    if (rank == ov->rank)
-        result = subtree_status_str (ov->status);
-    else {
-        struct child *child;
-        if ((child = child_lookup_byrank (ov, rank)))
-            result = subtree_status_str (child->status);
-    }
-    return result;
 }
 
 struct idset *overlay_get_default_critical_ranks (struct overlay *ov)
@@ -2825,7 +2705,6 @@ void overlay_destroy (struct overlay *ov)
         flux_msg_handler_delvec (ov->handlers);
         ov->status = SUBTREE_STATUS_OFFLINE;
         overlay_control_parent (ov, CONTROL_STATUS, ov->status);
-        flux_future_destroy (ov->parent.f_goodbye);
 
         flux_close (ov->h_channel);
         flux_watcher_destroy (ov->w_channel);
@@ -2849,13 +2728,6 @@ void overlay_destroy (struct overlay *ov)
             free (ov->children);
         }
         rpc_track_destroy (ov->parent.tracker);
-        if (ov->monitor_callbacks) {
-            struct monitor *mon;
-
-            while ((mon = zlist_pop (ov->monitor_callbacks)))
-                free (mon);
-            zlist_destroy (&ov->monitor_callbacks);
-        }
         flux_msglist_destroy (ov->monitor_requests);
         flux_msglist_destroy (ov->trace_requests);
         topology_decref (ov->topo);
@@ -2978,8 +2850,6 @@ struct overlay *overlay_create (flux_t *h,
         ov->zctx = zctx;
         ov->zctx_external = true;
     }
-    if (!(ov->monitor_callbacks = zlist_new ()))
-        goto nomem;
     if (!(ov->monitor_requests = flux_msglist_create ()))
         goto error;
     if (overlay_configure_attr_int (ov->attrs,
@@ -3055,8 +2925,6 @@ struct overlay *overlay_create (flux_t *h,
         || !(ov->trace_requests = flux_msglist_create ()))
         goto error;
     return ov;
-nomem:
-    errno = ENOMEM;
 error:
     errprintf (errp, "%s", strerror (errno));
 error_hasmsg:
