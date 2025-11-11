@@ -1854,30 +1854,16 @@ void broker_request_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg)
 
 /* Route a response message, determining next hop from route stack.
  * If there is no next hop, routing is complete to broker-resident service.
- * If the next hop is an overlay peer, route up or down the TBON.
- * If not a peer, look up a module by uuid.
+ * If the message is addressed to a module, send it there
+ * Otherwise, send to the overlay network for TBON forwarding.
  */
 int broker_response_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg)
 {
-    const char *uuid;
-
-    if (!(uuid = flux_msg_route_last (*msg))) {
-        if (flux_send_new (ctx->h_internal, msg, 0) < 0)
-            return -1;
-    }
-    else if (overlay_uuid_is_parent (ctx->overlay, uuid)) {
-        if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
-            return -1;
-    }
-    else if (overlay_uuid_is_child (ctx->overlay, uuid)) {
-        if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
-            return -1;
-    }
-    else {
-        if (modhash_response_sendmsg_new (ctx->modhash, msg) < 0)
-            return -1;
-    }
-    return 0;
+    if (flux_msg_route_count (*msg) == 0)
+        return flux_send_new (ctx->h_internal, msg, 0);
+    if (modhash_response_sendmsg_new (ctx->modhash, msg) == 0)
+        return 0;
+    return flux_send_new (ctx->h_overlay, msg, 0);
 }
 
 /* Handle messages received from the "router end" of the back to back

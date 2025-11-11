@@ -275,8 +275,6 @@ void single (flux_t *h)
 
     ok (!flux_recv (ctx->h_channel, FLUX_MATCH_ANY, FLUX_O_NONBLOCK),
         "flux_recv got nothing (response was dropped)");
-    ok (match_list (logs, "error sending response to child") > 0,
-        "%s: overlay logged expected error", ctx->name);
 
     /* Request
      * Should get an ENOSYS response since request is not rank-addressed

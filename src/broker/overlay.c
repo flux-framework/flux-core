@@ -715,16 +715,12 @@ static void channel_cb (flux_reactor_t *r,
             if (ov->rank > 0
                 && (uuid = flux_msg_route_last (msg)) != NULL
                 && streq (uuid, ov->parent.uuid)) {
-                if (overlay_sendmsg_parent (ov, msg) < 0) {
-                    flux_log_error (ov->h, "error sending response to parent");
+                if (overlay_sendmsg_parent (ov, msg) < 0)
                     goto done;
-                }
             }
             else {
-                if (overlay_sendmsg_child (ov, msg) < 0) {
-                    flux_log_error (ov->h, "error sending response to child");
+                if (overlay_sendmsg_child (ov, msg) < 0)
                     goto done;
-                }
             }
             break;
         case FLUX_MSGTYPE_EVENT:
