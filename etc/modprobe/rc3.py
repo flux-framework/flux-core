@@ -47,7 +47,7 @@ def content_dump(context):
 
     print(f"dumping content to {dumpfile}")
     context.bash(
-        "flux dump --sd-notify --quiet --ignore-failed-read "
+        "flux dump --sd-notify --quiet --ignore-failed-read --maxreqs=128 "
         + f"--checkpoint {dumpfile}"
     )
     if dumplink:
