@@ -17,7 +17,7 @@ SYNOPSIS
 
 | **flux** **resource** **drain** [*-n*] [*-o* *FORMAT*] [*-i* *TARGETS*]
 | **flux** **resource** **drain** [*-f*] [*-u*] [*targets*] [*reason*]
-| **flux** **resource** **undrain** [*-f*] *targets* [*reason*]
+| **flux** **resource** **undrain** [*-f*] [*-u*] *targets* [*reason*]
 
 | **flux** **resource** **reload** [-f] [--xml] *path*
 
@@ -329,7 +329,14 @@ This command is restricted to the Flux instance owner.
 
 .. option:: -f, --force
 
-  Do not fail if any of the *targets* are not drained.
+  If any of *targets* are not drained, do not fail.  Overwrite the
+  original undrain reason.  When :option:`--force` is specified twice,
+  the original undrain timestamp is also overwritten.
+
+.. option:: -u, --update
+
+  If any of *targets* are not drained, do not fail and do not overwrite
+  the existing undrain reason or timestamp.
 
 reload
 ------

@@ -14,20 +14,28 @@
  * but may be used for determining job request satisfiability.
  *
  * Handle RPCs from front-end commands.
- * - if a node in undrain target is not drained, request fails
- * - if a node in undrain target is excluded, request fails
- * - if a node in drain target is already drained, request status depends
- *   on setting of optional 'mode' member:
- *    - If mode is not set, request fails
- *    - If mode=overwrite, request succeeds and reason is updated
- *    - If mode=force-overwrite, request succeeds and timestamp and reason
- *      are updated
- *    - If mode=update, request succeeds and reason is updated only for
- *      those target that are not drained or do not have reason set.
+ *
+ * Drain/undrain fails if targets are already in the requested state, unless
+ * one of the following options are used.  The effect on those targets
+ * depends on the options used:
+ *
+ * --update (mode=update, overwrite=0)
+ *   Update reason, only if unset.
+ *
+ * --force (mode=overwrite, overwrite=1)
+ *   Update reason unconditionally.
+ *
+ * --force --force (mode=force-overwrite, overwrite=2)
+ *   Update reason and timestamp unconditionally.
  *
  * Post events for each drain/undrain action.  Drain state is sticky
  * across module reload / instance restart.  The state is reacquired
  * by replaying the eventlog.
+ *
+ * Other notes:
+ * - nodes configured to be statically excluded cannot be drained.
+ * - undrain reasons and timestamps are only recorded in the eventlog,
+ *   not the in memory cache.
  */
 
 #if HAVE_CONFIG_H
@@ -79,12 +87,36 @@ static int get_timestamp_now (double *timestamp)
     return 0;
 }
 
-static int update_draininfo_rank (struct drain *drain,
-                                  unsigned int rank,
-                                  bool drained,
-                                  double timestamp,
-                                  const char *reason,
-                                  int overwrite)
+static int draininfo_undrain_rank (struct drain *drain, unsigned int rank)
+{
+    if (rank >= drain->ctx->size) {
+        errno = EINVAL;
+        return -1;
+    }
+    drain->info[rank].drained = false;
+    drain->info[rank].timestamp = 0.;
+    free (drain->info[rank].reason);
+    drain->info[rank].reason = NULL;
+    return 0;
+}
+
+static int draininfo_undrain_idset (struct drain *drain, struct idset *idset)
+{
+    unsigned int rank;
+
+    rank = idset_first (idset);
+    while (rank != IDSET_INVALID_ID) {
+        if (draininfo_undrain_rank (drain, rank) < 0)
+            return -1;
+        rank = idset_next (idset, rank);
+    }
+    return 0;
+}
+static int draininfo_drain_rank (struct drain *drain,
+                                 unsigned int rank,
+                                 double timestamp,
+                                 const char *reason,
+                                 int overwrite)
 {
     char *cpy = NULL;
 
@@ -105,30 +137,28 @@ static int update_draininfo_rank (struct drain *drain,
 
     free (drain->info[rank].reason);
     drain->info[rank].reason = cpy;
-    if (drain->info[rank].drained != drained || overwrite == 2) {
-        drain->info[rank].drained = drained;
+    if (!drain->info[rank].drained || overwrite == 2) {
+        drain->info[rank].drained = true;
         drain->info[rank].timestamp = timestamp;
     }
     return 0;
 }
 
-static int update_draininfo_idset (struct drain *drain,
-                                   struct idset *idset,
-                                   bool drained,
-                                   double timestamp,
-                                   const char *reason,
-                                   int overwrite)
+static int draininfo_drain_idset (struct drain *drain,
+                                  struct idset *idset,
+                                  double timestamp,
+                                  const char *reason,
+                                  int overwrite)
 {
     unsigned int rank;
 
     rank = idset_first (idset);
     while (rank != IDSET_INVALID_ID) {
-        if (update_draininfo_rank (drain,
-                                   rank,
-                                   drained,
-                                   timestamp,
-                                   reason,
-                                   overwrite) < 0)
+        if (draininfo_drain_rank (drain,
+                                  rank,
+                                  timestamp,
+                                  reason,
+                                  overwrite) < 0)
             return -1;
         rank = idset_next (idset, rank);
     }
@@ -330,12 +360,7 @@ static void drain_cb (flux_t *h,
         errstr = error.text;
         goto error;
     }
-    if (update_draininfo_idset (drain,
-                                idset,
-                                true,
-                                timestamp,
-                                reason,
-                                overwrite) < 0)
+    if (draininfo_drain_idset (drain, idset, timestamp, reason, overwrite) < 0)
         goto error;
     if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE))
         || !(nodelist = flux_hostmap_lookup (h, idstr, NULL)))
@@ -401,7 +426,7 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
     }
     if (get_timestamp_now (&timestamp) < 0)
         return -1;
-    if (update_draininfo_rank (drain, rank, true, timestamp, reason, 0) < 0)
+    if (draininfo_drain_rank (drain, rank, timestamp, reason, 0) < 0)
         return -1;
     snprintf (rankstr, sizeof (rankstr), "%ju", (uintmax_t)rank);
     if (!(nodelist = flux_hostmap_lookup (drain->ctx->h, rankstr, NULL)))
@@ -431,53 +456,33 @@ done:
     return rc;
 }
 
-static int undrain_rank_idset (struct drain *drain,
-                               const flux_msg_t *msg,
-                               struct idset *idset,
-                               const char *reason)
+static int undrain_idset_check (struct drain *drain,
+                                struct idset *idset,
+                                flux_error_t *errp)
 {
-    char *idstr;
-    char *nodelist = NULL;
-    int rc = -1;
+    int error_count = 0;
+    unsigned int rank;
+    struct idset *errids = idset_create (drain->ctx->size, 0);
 
-    if (idset_count (idset) == 0)
-        return 0;
-    if (update_draininfo_idset (drain, idset, false, 0., NULL, 1) < 0)
-        return -1;
-    if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE))
-        || !(nodelist = flux_hostmap_lookup (drain->ctx->h, idstr, NULL)))
-        goto done;
-    if (reason)
-        rc = reslog_post_pack (drain->ctx->reslog,
-                               msg,
-                               0.,
-                               "undrain",
-                               0,
-                               "{s:s s:s s:s}",
-                               "idset", idstr,
-                               "nodelist", nodelist,
-                               "reason", reason);
-    else
-        rc = reslog_post_pack (drain->ctx->reslog,
-                               msg,
-                               0.,
-                               "undrain",
-                               0,
-                               "{s:s s:s}",
-                               "idset", idstr,
-                               "nodelist", nodelist);
-
-    flux_log (drain->ctx->h,
-              LOG_INFO,
-              "undrain idset=%s nodelist=%s reason=%s",
-              idstr,
-              nodelist,
-              reason ? reason : "");
-
-done:
-    ERRNO_SAFE_WRAP (free, nodelist);
-    ERRNO_SAFE_WRAP (free, idstr);
-    return rc;
+    rank = idset_first (idset);
+    while (rank != IDSET_INVALID_ID) {
+        if (!drain->info[rank].drained) {
+            (void)idset_set (errids, rank);
+            error_count++;
+        }
+        rank = idset_next (idset, rank);
+    }
+    if (error_count > 0) {
+        char *s = idset_encode (errids, IDSET_FLAG_RANGE);
+        errprintf (errp,
+                   "rank%s %s not drained",
+                   error_count > 1 ? "s" : "",
+                   s ? s : "(unknown)");
+        free (s);
+        errno = EEXIST;
+    }
+    idset_destroy (errids);
+    return (error_count > 0 ? -1 : 0);
 }
 
 /* Un-drain a set of ranked execution targets.
@@ -489,30 +494,35 @@ static void undrain_cb (flux_t *h,
                         void *arg)
 {
     struct drain *drain = arg;
-    const char *s;
+    const char *targets;
     const char *mode = NULL;
     const char *reason = NULL;
     struct idset *idset = NULL;
-    struct idset *undrained = NULL;
-    unsigned int id;
     const char *errstr = NULL;
     flux_error_t error;
-    bool force = false;
+    bool update_only = false;
+    int overwrite = 0;
+    char *nodelist = NULL;
+    int rc;
 
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:s s?s s?s}",
-                             "targets", &s,
+                             "targets", &targets,
                              "mode", &mode,
                              "reason", &reason) < 0)
         goto error;
-    if (!(idset = drain_idset_decode (drain, s, &error))) {
+    if (!(idset = drain_idset_decode (drain, targets, &error))) {
         errstr = error.text;
         goto error;
     }
     if (mode) {
-        if (streq (mode, "force"))
-            force = true;
+        if (streq (mode, "update"))
+            update_only = true;
+        else if (streq (mode, "overwrite"))
+            overwrite = 1;
+        else if (streq (mode, "force-overwrite"))
+            overwrite = 2;
         else {
             errprintf (&error, "invalid undrain mode '%s' specified", mode);
             errno = EINVAL;
@@ -520,62 +530,66 @@ static void undrain_cb (flux_t *h,
             goto error;
         }
     }
-    if (!force && !(undrained = idset_create (0, IDSET_FLAG_AUTOGROW))) {
-        errprintf (&error,
-                   "failed to create idset for undrained ranks: %s",
-                   strerror (errno));
+    /* Check for ranks that aren't drained.
+     * That is fatal if no --update or --force.
+     */
+    if (!overwrite &&
+        !update_only &&
+        undrain_idset_check (drain, idset, &error) < 0) {
         errstr = error.text;
         goto error;
     }
-    id = idset_first (idset);
-    while (id != IDSET_INVALID_ID) {
-        if (!drain->info[id].drained) {
-            int rc;
-            /* This rank is already undrained, remove it from targets
-             * if mode=force. Otherwise, add rank to undrained idset.
-             */
-            rc = force ? idset_clear (idset, id) : idset_set (undrained, id);
-            if (rc < 0) {
-                errprintf (&error, "failed to update undrain target idset");
-                errstr = error.text;
-                goto error;
-            }
-        }
-        id = idset_next (idset, id);
-    }
-    if (!force && idset_count (undrained) > 0) {
-        char *nodelist = NULL;
-        char *ranks = idset_encode (undrained, IDSET_FLAG_RANGE);
-        if (ranks)
-            nodelist = flux_hostmap_lookup (h, ranks, NULL);
-        errprintf (&error,
-                   "%s (rank%s %s) not drained",
-                   nodelist ? nodelist : "unknown",
-                   idset_count (undrained) > 1 ? "s" : "",
-                   ranks ? ranks : "unknown");
-        free (ranks);
-        free (nodelist);
-        errstr = error.text;
-        errno = EINVAL;
+    /* Update the in-memory draininfo array.
+     * The reason and timestamp are not updated for "undrain".
+     */
+    if (draininfo_undrain_idset (drain, idset) < 0)
         goto error;
-    }
-    if (idset_count (idset) == 0) {
-        /* If idset is now empty then no targets are drained and
-         * mode=force was used. Therefore, immediately return success:
-         */
-        if (flux_respond (h, msg, NULL) < 0)
-            flux_log_error (h, "error responding to undrain request");
-    }
-    else if (undrain_rank_idset (drain, msg, idset, reason) < 0)
+    /* Post an undrain event.
+     * Ownership of 'msg' is passed to the event posting machinery
+     * which responds when complete.
+     */
+    if (!(nodelist = flux_hostmap_lookup (drain->ctx->h, targets, NULL)))
         goto error;
+    if (reason)
+        rc = reslog_post_pack (drain->ctx->reslog,
+                               msg,
+                               0.,
+                               "undrain",
+                               0,
+                               "{s:s s:s s:i s:s}",
+                               "idset", targets,
+                               "nodelist", nodelist,
+                               "overwrite", overwrite,
+                               "reason", reason);
+    else
+        rc = reslog_post_pack (drain->ctx->reslog,
+                               msg,
+                               0.,
+                               "undrain",
+                               0,
+                               "{s:s s:s s:i}",
+                               "idset", targets,
+                               "nodelist", nodelist,
+                               "overwrite", overwrite);
+    if (rc < 0)
+        goto error;
+
+    flux_log (drain->ctx->h,
+              LOG_INFO,
+              "undrain idset=%s nodelist=%s overwrite=%d reason=%s",
+              targets,
+              nodelist,
+              overwrite,
+              reason ? reason : "");
+
     idset_destroy (idset);
-    idset_destroy (undrained);
+    free (nodelist);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to undrain request");
     idset_destroy (idset);
-    idset_destroy (undrained);
+    free (nodelist);
 }
 
 /* Add rank to ids, adjusting rank if the rank:host mapping has changed.
@@ -679,12 +693,11 @@ static int replay_eventlog (struct drain *drain,
                                index + 1);
                     return -1;
                 }
-                if (update_draininfo_idset (drain,
-                                            idset,
-                                            true,
-                                            timestamp,
-                                            reason,
-                                            overwrite) < 0) {
+                if (draininfo_drain_idset (drain,
+                                           idset,
+                                           timestamp,
+                                           reason,
+                                           overwrite) < 0) {
                     errprintf (error,
                                "line %zu: drain update error",
                                index + 1);
@@ -711,12 +724,7 @@ static int replay_eventlog (struct drain *drain,
                                index + 1);
                     return -1;
                 }
-                if (update_draininfo_idset (drain,
-                                            idset,
-                                            false,
-                                            timestamp,
-                                            NULL,
-                                            1) < 0) {
+                if (draininfo_undrain_idset (drain, idset) < 0) {
                     errprintf (error,
                                "line %zu: undrain update error",
                                index + 1);
@@ -756,19 +764,14 @@ static int reconcile_excluded (struct drain *drain,
     }
     if (idset_count (undrain_ranks) > 0) {
         double timestamp;
-        if (get_timestamp_now (&timestamp) < 0
-            || update_draininfo_idset (drain,
-                                       undrain_ranks,
-                                       false,
-                                       timestamp,
-                                       NULL,
-                                       1) < 0) {
+        if (draininfo_undrain_idset (drain, undrain_ranks) < 0) {
             errprintf (error,
-                       "error draining excluded nodes: %s",
+                       "error undraining excluded nodes: %s",
                        strerror (errno));
             goto done;
         }
-        if (!(s = idset_encode (undrain_ranks, IDSET_FLAG_RANGE))
+        if (get_timestamp_now (&timestamp) < 0
+            || !(s = idset_encode (undrain_ranks, IDSET_FLAG_RANGE))
             || !(nodelist = flux_hostmap_lookup (drain->ctx->h, s, NULL))
             || reslog_post_pack (drain->ctx->reslog,
                                  NULL,
@@ -779,7 +782,7 @@ static int reconcile_excluded (struct drain *drain,
                                  "idset", s,
                                  "nodelist", nodelist) < 0) {
             errprintf (error,
-                       "error posting drain event for excluded nodes: %s",
+                       "error posting undrain event for excluded nodes: %s",
                        strerror (errno));
             goto done;
         }
