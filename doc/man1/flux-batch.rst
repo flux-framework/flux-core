@@ -174,9 +174,10 @@ mixed within the submission script. The submission directive specification
 is fully detailed in RFC 36, but is summarized here for convenience:
 
  * A submission directive is indicated by a line that starts with
-   a prefix of non-alphanumeric characters followed by a tag ``FLUX:`` or
-   ``flux:``. The prefix plus tag is called the *directive sentinel*. E.g.,
-   in the example below the sentinel is ``# flux:``: ::
+   a prefix of zero or more non-alphanumeric characters followed by
+   a tag ``FLUX:`` or ``flux:``. The prefix plus tag is called the
+   *directive sentinel*. E.g., in the example below the sentinel is
+   ``# flux:``: ::
 
      #!/bin/sh
      # flux: -N4 -n16
@@ -188,7 +189,11 @@ is fully detailed in RFC 36, but is summarized here for convenience:
    directive after any non-blank line that doesn't start with the common
    prefix.
  * The directive starts after the sentinel to the end of the line.
- * The ``#`` character is supported as a comment character in directives.
+ * The ``#`` character is supported as a comment character within directives.
+   For example: ::
+
+     # flux: -N4 # this is a comment
+
  * UNIX shell quoting is supported in directives.
  * Triple quoted strings can be used to include newlines and quotes without
    further escaping. If a triple quoted string is used across multiple lines,
@@ -200,8 +205,75 @@ is fully detailed in RFC 36, but is summarized here for convenience:
      # flux:   item = "foo"
      # flux: """
 
-Submission directives may be used to set default command line options for
-:program:`flux batch` for a given script. Options given on the command line
+Language-Agnostic Design
+------------------------
+
+Unlike batch systems that embed the directive marker within the comment
+syntax (e.g., ``#SBATCH``), Flux separates these concerns. The prefix
+(``#``, ``--``, ``%``, ``//`` etc.) is part of your script's native
+comment syntax, while ``flux:`` marks the directive itself. This allows
+Flux submission directives to work in any scripting language or shell
+(Python, Lua, etc.) without a language-specific parser. This approach
+also allows submission directives to be used within multi-line comments
+or quotes, for example: ::
+
+  #!/usr/bin/env python3
+  #
+  """
+  flux: -N2
+  flux: -n2
+  """
+
+Note that within multi-line comments or quoted strings, no comment prefix
+is needed since you're already in a comment context. Here the sentinel
+is simply ``flux:`` (with an empty prefix).
+
+Because the prefix is script-language syntax (not part of the directive),
+changing the prefix breaks the sentinel pattern. For example, if your
+first directive is ``# flux:``, you cannot use ``## flux:`` later, as
+these are considered different sentinels.
+
+Commenting Out Directives
+-------------------------
+
+To disable a directive without removing it, place ``#`` **after** the
+sentinel to comment out the arguments: ::
+
+   # flux: -N4              # active directive
+   # flux: # -N4            # disabled (commented out)
+   # flux: # testing nodes  # disabled with explanation
+
+The ``#`` character comments out everything that follows on the line,
+making this a no-op directive while maintaining the same sentinel pattern.
+This works regardless of your script's native comment syntax because the
+``#`` is interpreted by the directive parser, not the script language.
+
+Examples in Different Languages
+--------------------------------
+
+Shell script: ::
+
+   #!/bin/sh
+   # flux: -N4
+   # flux: # -N8  (disabled)
+
+Python script: ::
+
+   #!/usr/bin/env python3
+   # flux: -N4
+   # flux: # -N8  (disabled)
+
+Lua script: ::
+
+   #!/usr/bin/env lua
+   -- flux: -N4
+   -- flux: # -N8  (disabled)
+
+Command Line Override
+---------------------
+
+Submission directives set default command line options for
+:program:`flux batch`. Options given on the command line
 override those in the submission script, e.g.: ::
 
    $ flux batch --job-name=test-name --wrap <<-EOF

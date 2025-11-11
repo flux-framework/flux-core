@@ -228,7 +228,13 @@ class DirectiveParser:
             elif sentinel != self.sentinel:
                 raise ValueError(
                     f"line {lineno}: sentinel changed from "
-                    + f"'{self.sentinel}' to '{sentinel}'"
+                    f"'{self.sentinel}' to '{sentinel}'\n\n"
+                    "All directives in a file must use the same sentinel.\n\n"
+                    "If you're trying to disable this directive, place a comment\n"
+                    "character AFTER the sentinel, not in the prefix:\n\n"
+                    f"  {self.sentinel} # {value.lstrip()}\n\n"
+                    "The '#' character comments out the rest of the line, making\n"
+                    "this directive a no-op while maintaining the same sentinel."
                 )
 
             if value.endswith('"""') or value.endswith("'''"):
