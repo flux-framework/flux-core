@@ -436,7 +436,7 @@ broker configuration and attributes, and even run shell commands.
 **context.get(key, default=None)**
    Get arbitrary data set by other tasks with optional default value
 
-**context.attr_get(attr, default=None**
+**context.attr_get(attr, default=None)**
    Get broker attribute. If attribute is not set, return ``default``.
 
 **context.conf_get(key, default=None)**
