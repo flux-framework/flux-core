@@ -14,9 +14,10 @@
 #include <jansson.h>
 #include <stdint.h>
 
+#include "src/common/libpmi/bizcard.h"
+
 #include "attr.h"
 #include "topology.h"
-#include "bizcard.h"
 
 /* Overlay control messages
  */

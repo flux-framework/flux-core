@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef BROKER_BIZCARD_H
-#define BROKER_BIZCARD_H
+#ifndef LIBPMI_BIZCARD_H
+#define LIBPMI_BIZCARD_H
 
 #include <flux/core.h>
 
@@ -28,6 +28,6 @@ const char *bizcard_uri_find (const struct bizcard *bc, const char *scheme);
 const char *bizcard_pubkey (const struct bizcard *bc);
 const char *bizcard_hostname (const struct bizcard *bc);
 
-#endif /* BROKER_BIZCARD_H */
+#endif /* LIBPMI_BIZCARD_H */
 
 // vi:ts=4 sw=4 expandtab

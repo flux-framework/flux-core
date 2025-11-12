@@ -22,6 +22,7 @@
 #include <jansson.h>
 #include <uuid.h>
 
+#include "src/common/libpmi/bizcard.h"
 #include "src/common/libzmqutil/msg_zsock.h"
 #include "src/common/libzmqutil/sockopt.h"
 #include "src/common/libzmqutil/zwatcher.h"
@@ -44,7 +45,6 @@
 #include "overlay.h"
 #include "attr.h"
 #include "trace.h"
-#include "bizcard.h"
 #include "state_machine.h"
 
 /* How long to wait (seconds) for a peer broker's TCP ACK before disconnecting.
