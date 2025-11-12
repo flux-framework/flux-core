@@ -16,4 +16,6 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = libfluxutil.la
 libfluxutil_la_SOURCES = \
 	conf_policy.h \
-	conf_policy.c
+	conf_policy.c \
+	conf_bootstrap.h \
+	conf_bootstrap.c
