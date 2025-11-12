@@ -212,7 +212,7 @@ class ConstraintParser:
 
     Terms are joined by AND unless OR is specified, such that ``a b c``
     is the same as ``a && b && c``. A term can be negated with ``-``
-    (e.g. ``-a b c`` is equivlant to ``(not a)&b&c``), but to negate a
+    (e.g. ``-a b c`` is equivalent to ``(not a)&b&c``), but to negate a
     whole expression, NOT must be used (e.g. ``-(a|b)`` is a syntax error,
     use ``not (a|b)`` instead).
 

@@ -40,9 +40,9 @@ void rcalc_destroy (rcalc_t *r);
 
 /*  Return # of total tasks contained in rcalc object */
 int rcalc_total_ntasks (rcalc_t *r);
-/*  Return # of total cores asssigned to rcalc object */
+/*  Return # of total cores assigned to rcalc object */
 int rcalc_total_cores (rcalc_t *r);
-/*  Return # of total gpus asssigned to rcalc object */
+/*  Return # of total gpus assigned to rcalc object */
 int rcalc_total_gpus (rcalc_t *r);
 /*  Return total # of slots in rcalc object */
 int rcalc_total_slots (rcalc_t *r);

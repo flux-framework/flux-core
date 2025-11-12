@@ -22,6 +22,10 @@ extend-exclude = [
   "t/sharness",
 ]
 
+[default.extend-identifiers]
+gl_pathc = "gl_pathc"
+infp = "infp"
+
 [default.extend-words]
 # in hwloc output
 hsi = "hsi"
