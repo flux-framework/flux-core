@@ -44,6 +44,7 @@ libupmi_la_SOURCES = \
 	upmi_libpmi.c \
 	upmi_libpmi2.c \
 	upmi_single.c \
+	upmi_config.c \
 	bizcard.c \
 	bizcard.h \
 	bizcache.c \

@@ -58,16 +58,18 @@ static int upmi_preinit (struct upmi *upmi,
 int upmi_simple_init (flux_plugin_t *p);
 int upmi_libpmi2_init (flux_plugin_t *p);
 int upmi_libpmi_init (flux_plugin_t *p);
+int upmi_config_init (flux_plugin_t *p);
 int upmi_single_init (flux_plugin_t *p);
 
 static flux_plugin_init_f builtins[] = {
     &upmi_simple_init,
     &upmi_libpmi2_init,
     &upmi_libpmi_init,
+    &upmi_config_init,
     &upmi_single_init,
 };
 
-static const char *default_methods = "simple libpmi2 libpmi single";
+static const char *default_methods = "config simple libpmi2 libpmi single";
 
 void upmi_destroy (struct upmi *upmi)
 {
