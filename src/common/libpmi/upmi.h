@@ -38,6 +38,12 @@ struct upmi *upmi_create (const char *spec,
                           upmi_trace_f cb,
                           void *arg,
                           flux_error_t *error);
+struct upmi *upmi_create_ex (const char *spec,
+                             int flags,
+                             json_t *args,
+                             upmi_trace_f cb,
+                             void *arg,
+                             flux_error_t *error);
 void upmi_destroy (struct upmi *upmi);
 const char *upmi_describe (struct upmi *upmi);
 

@@ -26,6 +26,7 @@
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "upmi.h"
@@ -49,6 +50,7 @@ struct upmi {
 void upmi_trace (struct upmi *upmi, const char *fmt, ...);
 static int upmi_preinit (struct upmi *upmi,
                          int flags,
+                         json_t *args,
                          const char *path,
                          const char **note,
                          flux_error_t *error);
@@ -238,11 +240,12 @@ again:
     return p;
 }
 
-struct upmi *upmi_create (const char *uri,
-                          int flags,
-                          upmi_trace_f trace_fun,
-                          void *trace_arg,
-                          flux_error_t *errp)
+struct upmi *upmi_create_ex (const char *uri,
+                             int flags,
+                             json_t *args,
+                             upmi_trace_f trace_fun,
+                             void *trace_arg,
+                             flux_error_t *errp)
 {
     struct upmi *upmi;
     const char *searchpath;
@@ -269,7 +272,7 @@ struct upmi *upmi_create (const char *uri,
             goto error;
         if ((path = strchr (uri, ':')))
             path++;
-        if (upmi_preinit (upmi, upmi->flags, path, &note, errp) < 0)
+        if (upmi_preinit (upmi, upmi->flags, args, path, &note, errp) < 0)
             goto error;
         if (note != NULL)
             upmi_trace (upmi, "%s", note);
@@ -282,7 +285,12 @@ struct upmi *upmi_create (const char *uri,
         while (uri) {
             upmi_trace (upmi, "trying '%s'", uri);
             if ((upmi->plugin = lookup_plugin (upmi, uri, &error))
-                && upmi_preinit (upmi, upmi->flags, NULL, &note, &error) == 0) {
+                && upmi_preinit (upmi,
+                                 upmi->flags,
+                                 args,
+                                 NULL,
+                                 &note,
+                                 &error) == 0) {
                 upmi_trace (upmi, "%s", note ? note : "selected");
                 break;
             }
@@ -298,6 +306,15 @@ struct upmi *upmi_create (const char *uri,
 error:
     upmi_destroy (upmi);
     return NULL;
+}
+
+struct upmi *upmi_create (const char *uri,
+                          int flags,
+                          upmi_trace_f trace_fun,
+                          void *trace_arg,
+                          flux_error_t *errp)
+{
+    return upmi_create_ex (uri, flags, NULL, trace_fun, trace_arg, errp);
 }
 
 const char *upmi_describe (struct upmi *upmi)
@@ -369,6 +386,7 @@ static int upmi_call (struct upmi *upmi,
 
 static int upmi_preinit (struct upmi *upmi,
                          int flags,
+                         json_t *args,
                          const char *path,
                          const char **notep,
                          flux_error_t *error)
@@ -394,6 +412,27 @@ static int upmi_preinit (struct upmi *upmi,
             goto nomem;
         }
     }
+    if (args) {
+        if (!json_is_object (args)) {
+            errprintf (error, "arguments must be a json object");
+            errno = EINVAL;
+            goto error;
+        }
+        const char *key;
+        json_t *value;
+        json_object_foreach (args, key, value) {
+            if (json_object_get (payload, key) != NULL) {
+                errprintf (error,
+                           "preinit argument '%s' conflicts with builtin",
+                           key);
+                errno = EEXIST;
+                goto error;
+
+            }
+            if (json_object_set (payload, key, value) < 0)
+                goto nomem;
+        }
+    }
     rc = upmi_call (upmi, "upmi.preinit", error, "O", payload);
     json_decref (payload);
     if (rc == 0 && notep) {
@@ -406,8 +445,9 @@ static int upmi_preinit (struct upmi *upmi,
     }
     return rc;
 nomem:
-    json_decref (payload);
     errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, payload);
     return -1;
 }
 
