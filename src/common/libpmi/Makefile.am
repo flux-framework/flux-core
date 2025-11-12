@@ -74,6 +74,10 @@ test_ldadd = \
 	$(LIBRT) \
 	$(LIBDL)
 
+test_cflags = \
+	-Wno-unused-value \
+	$(AM_CFLAGS)
+
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
 	-DUPMI_TEST_SEARCHPATH=\"$(builddir)/test/plugin/.libs\" \
@@ -122,6 +126,7 @@ test_canonical2_t_CPPFLAGS = $(test_cppflags)
 test_canonical2_t_LDADD = $(test_ldadd)
 
 test_upmi_t_SOURCES = test/upmi.c
+test_upmi_t_CFLAGS = $(test_cflags)
 test_upmi_t_CPPFLAGS = $(test_cppflags)
 test_upmi_t_LDADD = \
 	$(top_builddir)/src/common/libpmi/libupmi.la \

@@ -102,6 +102,12 @@ void test_inval (void)
     if (upmi_initialize (upmi, NULL, &error) < 0)
         BAIL_OUT ("upmi_initialize failed");
     upmi_destroy (upmi);
+
+    error.text[0] = '\0';
+    upmi = upmi_create_ex ("single", 0, json_null (), NULL, NULL, &error);
+    ok (upmi == NULL,
+        "upmi_create_ex args=json_null fails");
+    diag ("%s", error.text);
 }
 
 /* The "singlex" dso (a clone of "single" with a different name) is
@@ -170,6 +176,92 @@ void test_env (void)
     (void)unsetenv ("FLUX_PMI_CLIENT_SEARCHPATH");
 }
 
+void test_config (void)
+{
+    struct upmi *upmi;
+    flux_error_t error;
+    json_t *args;
+    json_t *config;
+    struct upmi_info info;
+    char *value;
+
+    args = json_pack ("{s:b}", "noflux", 1);
+    if (args == NULL)
+        BAIL_OUT ("could not create test args");
+    upmi = upmi_create_ex ("config",
+                           UPMI_TRACE | UPMI_LIBPMI_NOFLUX,
+                           args,
+                           diag_trace,
+                           NULL,
+                           &error);
+    ok (upmi == NULL,
+        "upmi_create spec=config fails with 'noflux' name collision")
+        && diag ("%s", error.text);
+    json_decref (args);
+
+    upmi = upmi_create_ex ("config",
+                           UPMI_TRACE,
+                           NULL,
+                           diag_trace,
+                           NULL,
+                           &error);
+    ok (upmi == NULL,
+        "upmi_create spec=config fails without args")
+        && diag ("%s", error.text);
+
+    config = json_pack ("{s:{s:i s:[{s:s s:s} {s:s}] s:s}}",
+                        "bootstrap",
+                          "default_port", 8050,
+                          "hosts",
+                            "host", "big0",
+                              "connect", "tcp://big0:%p",
+                            "host", "big[1-16383]",
+                          "curve_cert", "/a/valid/path");
+    if (config == NULL)
+        BAIL_OUT ("could not create test config");
+
+    args = json_pack ("{s:s s:O}",
+                      "hostname", "big42",
+                      "config", config);
+    if (args == NULL)
+        BAIL_OUT ("could not create test args");
+    upmi = upmi_create_ex ("config",
+                           UPMI_TRACE,
+                           args,
+                           diag_trace,
+                           NULL,
+                           &error);
+    ok (upmi != NULL,
+        "upmi_create_ex spec=config works with fake config")
+        || diag ("%s", error.text);
+    ok (upmi_initialize (upmi, &info, &error) == 0,
+        "upmi_initialize works")
+        || diag ("%s", error.text);
+    cmp_ok (info.rank, "==", 42,
+            "my rank is 42");
+    cmp_ok (info.size, "==", 16384,
+            "my size is 16384");
+
+    value = NULL;
+    ok (upmi_get (upmi, "42", -1, &value, &error) == 0
+        && value != NULL,
+        "upmi_get 42 fetched my business card")
+        || diag ("%s", error.text);
+    free (value);
+
+    value = NULL;
+    ok (upmi_get (upmi, "0", -1, &value, &error) == 0
+        && value != NULL,
+        "upmi_get 0 fetched leader's business card")
+        || diag ("%s", error.text);
+    free (value);
+
+    upmi_destroy (upmi);
+
+    json_decref (args);
+    json_decref (config);
+}
+
 int main (int argc, char **argv)
 {
     plan (NO_PLAN);
@@ -181,6 +273,7 @@ int main (int argc, char **argv)
     test_inval ();
     test_dso ();
     test_env ();
+    test_config ();
 
     done_testing ();
     return 0;
