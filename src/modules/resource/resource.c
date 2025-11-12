@@ -42,7 +42,7 @@
  * exclude = "targets"
  *   Exclude specified broker rank(s) or hosts from scheduling
  *
- * [[resource.confg]]
+ * [[resource.config]]
  *   Resource configuration array
  *
  * path = "/path"

@@ -25,7 +25,7 @@ try:
     h = flux.Flux()
     #
     # Wait on barrier to ensure all tasks have started
-    # (prevents premature termintion by SIGINT while Python is initiating)
+    # (prevents premature termination by SIGINT while Python is initiating)
     #
     size = int(os.environ["FLUX_JOB_SIZE"])
     taskid = int(os.environ["FLUX_TASK_RANK"])

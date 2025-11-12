@@ -54,7 +54,7 @@ struct opt_parser {
     int            option_index;
 
     int            left_margin;     /* Size of --help output left margin    */
-    int            option_width;    /* Width of --help output for optiion   */
+    int            option_width;    /* Width of --help output for option    */
     int            current_group;   /* Current option group number          */
     zlist_t *      option_list;     /* List of options for this program     */
 

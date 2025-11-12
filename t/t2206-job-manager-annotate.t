@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test flux job manager annoate service'
+test_description='Test flux job manager annotate service'
 
 . `dirname $0`/job-manager/sched-helper.sh
 

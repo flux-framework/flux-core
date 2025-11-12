@@ -448,7 +448,7 @@ static int dependency_after_cb (flux_plugin_t *p,
                                        "failed to append to list");
     }
 
-    /*  Create a reference in the current job to the depednency, so it can
+    /*  Create a reference in the current job to the dependency, so it can
      *   be removed if this job terminates before PRIORITY state.
      */
     if (!(ref = after_ref_create (afterid, l, after))
