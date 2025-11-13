@@ -307,10 +307,13 @@ static int check_limit (const char *queue,
     if ((over && LIMIT_OVER (limit, value))
         || (!over && LIMIT_UNDER (limit, value)))
         return errprintf (errp,
-                          "requested %s %s policy limit of %d",
+                          "requested %s (%d) %s policy limit of %d%s%s",
                           resource,
+                          value,
                           over ? "exceeds" : "is under",
-                          limit);
+                          limit,
+                          queue ? " for queue ": "",
+                          queue ? queue : "");
     return 0;
 }
 
