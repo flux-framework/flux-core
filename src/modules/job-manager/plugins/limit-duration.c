@@ -193,17 +193,24 @@ static int check_limit (struct limit_duration *ctx,
 {
     double limit = ctx->general_limit;
     double qlimit = queues_lookup (ctx->queues, queue);
+    bool unlimited = duration == DURATION_UNLIMITED;
 
     if (qlimit != DURATION_INVALID)
         limit = qlimit;
     if (limit != DURATION_INVALID
         && limit != DURATION_UNLIMITED
-        && (duration > limit || duration == DURATION_UNLIMITED)) {
+        && (duration > limit || unlimited)) {
+        char requested[64];
         char fsd[64];
+        fsd_format_duration_ex (requested, sizeof (requested), duration, 2);
         fsd_format_duration_ex (fsd, sizeof (fsd), limit, 2);
         return errprintf (error,
-                          "requested duration exceeds policy limit of %s",
-                          fsd);
+                          "requested duration (%s) exceeds policy limit of "
+                          "%s%s%s",
+                          unlimited ? "unlimited" : requested,
+                          fsd,
+                          queue ? " for queue " : "",
+                          queue ? queue : "");
     }
     return 0;
 }
