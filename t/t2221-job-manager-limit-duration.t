@@ -40,10 +40,18 @@ test_expect_success 'configure policy.limits.duration and queue duration' '
 	flux queue start --all
 '
 test_expect_success 'a job that exceeds policy.limits.duration is rejected' '
-	test_must_fail flux submit --queue=debug -t 2h true
+	test_must_fail flux submit --queue=debug -t 2h true 2>limit.err &&
+	test_debug "cat limit.err"
+'
+test_expect_success 'error message includes expected details' '
+	grep "duration (2h) exceeds.*limit of 1h for queue debug" limit.err
 '
 test_expect_success 'a job with no limit is also rejected' '
-	test_must_fail flux submit --queue=debug -t 0 true
+	test_must_fail flux submit --queue=debug -t 0 true 2>limit2.err &&
+	test_debug "cat limit2.err"
+'
+test_expect_success 'error message includes expected details' '
+	grep "duration (unlimited) exceeds.*limit of 1h for queue debug" limit2.err
 '
 test_expect_success 'but is accepted by a queue with higher limit' '
 	flux submit \
