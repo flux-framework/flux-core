@@ -15,11 +15,25 @@ import json
 import math
 import numbers
 import os
+import threading
 
 import yaml
 from _flux._core import ffi
-from flux import hostlist, idset
+from flux import Flux, hostlist, idset
 from flux.util import Fileref, del_treedict, parse_fsd, set_treedict
+
+# thread local storage to support shared and cached validation data
+_tls = threading.local()
+
+
+def _get_flux():
+    """
+    Obtain a per-thread Flux handle created on-demand
+    (used for Jobspec validation)
+    """
+    if not hasattr(_tls, "flux"):
+        _tls.flux = Flux()
+    return _tls.flux
 
 
 def _convert_jobspec_arg_to_string(jobspec):
@@ -72,6 +86,29 @@ def _validate_property_query(name):
         raise TypeError(f"invalid character in property '{name}'")
 
 
+def _validate_hosts(hosts):
+    """
+    Raise an exception if any of a set of hosts are not valid for the current
+    enclosing Flux instance.
+    """
+    if not hasattr(_tls, "hostlist"):
+        _tls.hostlist = None
+        try:
+            string = _get_flux().attr_get("hostlist")
+            if string is not None:
+                _tls.hostlist = hostlist.decode(string)
+        except (FileNotFoundError, ValueError):
+            # ignore failures above and leave hostlist set to None,
+            # effectively causes this check to be ignored.
+            pass
+
+    if _tls.hostlist is not None:
+        try:
+            _tls.hostlist.index(hosts)
+        except FileNotFoundError as exc:
+            raise ValueError(f"host constraint contains invalid hosts: {exc}")
+
+
 def _validate_constraint_op(operator, args):
     if not isinstance(operator, str):
         raise TypeError(f"constraint operation {operator} is not a string")
@@ -85,7 +122,7 @@ def _validate_constraint_op(operator, args):
             _validate_property_query(name)
     elif operator in ["hostlist"]:
         for hosts in args:
-            hostlist.decode(hosts)
+            _validate_hosts(hostlist.decode(hosts))
     elif operator in ["ranks"]:
         for ranks in args:
             idset.decode(ranks)

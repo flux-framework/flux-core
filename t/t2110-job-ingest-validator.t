@@ -117,6 +117,19 @@ test_expect_success 'job-ingest: all valid jobspecs accepted' '
 test_expect_success 'job-ingest: invalid jobs rejected' '
 	test_invalid ${JOBSPEC}/invalid/*
 '
+test_expect_success 'job-ingest: invalid hostlist constraint is caught' '
+	test_must_fail flux run --requires=host:badhost true \
+		2>host-inval.err &&
+	test_debug "cat host-inval.err" &&
+	grep "invalid host.*badhost.*not found" host-inval.err
+'
+test_expect_success 'job-ingest: one invalid host among multiple is caught' '
+	host=$(hostname) &&
+	test_must_fail flux run --requires=host:$host,badhost true \
+		2>hosts-inval.err &&
+	test_debug "cat hosts-inval.err" &&
+	grep "invalid host.*badhost.*not found" hosts-inval.err
+'
 test_expect_success 'job-ingest: stop the queue so no more jobs run' '
 	flux queue stop
 '
