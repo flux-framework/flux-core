@@ -297,6 +297,45 @@ error:
     return -1;
 }
 
+static int check_limit (const char *queue,
+                        const char *resource,
+                        bool over,
+                        int limit,
+                        int value,
+                        flux_error_t *errp)
+{
+    if ((over && LIMIT_OVER (limit, value))
+        || (!over && LIMIT_UNDER (limit, value)))
+        return errprintf (errp,
+                          "requested %s (%d) %s policy limit of %d%s%s",
+                          resource,
+                          value,
+                          over ? "exceeds" : "is under",
+                          limit,
+                          queue ? " for queue ": "",
+                          queue ? queue : "");
+    return 0;
+}
+
+static int check_over (const char *queue,
+                       const char *resource,
+                       int limit,
+                       int value,
+                       flux_error_t *errp)
+{
+    return check_limit (queue, resource, true, limit, value, errp);
+}
+
+static int check_under (const char *queue,
+                        const char *resource,
+                        int limit,
+                        int value,
+                        flux_error_t *errp)
+{
+    return check_limit (queue, resource, false, limit, value, errp);
+}
+
+
 static int check_limits (struct limit_job_size *ctx,
                          struct jj_counts *counts,
                          const char *queue,
@@ -305,41 +344,21 @@ static int check_limits (struct limit_job_size *ctx,
     struct limits limits;
     struct limits *queue_limits;
 
+    int nnodes = counts->nnodes;
+    int ncores = counts->nslots * counts->slot_size;
+    int ngpus = counts->nslots * counts->slot_gpus;
+
     limits = ctx->general_limits;
     if (queue && (queue_limits = queues_lookup (ctx->queues, queue)))
         limits_override (&limits, queue_limits);
 
-    if (LIMIT_OVER (limits.max.nnodes, counts->nnodes)) {
-        return errprintf (error,
-                          "requested nnodes exceeds policy limit of %d",
-                          limits.max.nnodes);
-    }
-    if (LIMIT_OVER (limits.max.ncores, counts->nslots * counts->slot_size)) {
-        return errprintf (error,
-                          "requested ncores exceeds policy limit of %d",
-                          limits.max.ncores);
-    }
-    if (LIMIT_OVER (limits.max.ngpus, counts->nslots * counts->slot_gpus)) {
-        return errprintf (error,
-                          "requested ngpus exceeds policy limit of %d",
-                          limits.max.ngpus);
-    }
-    if (LIMIT_UNDER (limits.min.nnodes, counts->nnodes)) {
-        return errprintf (error,
-                          "requested nnodes is under policy limit of %d",
-                          limits.min.nnodes);
-    }
-    if (LIMIT_UNDER (limits.min.ncores, counts->nslots * counts->slot_size)) {
-        return errprintf (error,
-                          "requested ncores is under policy limit of %d",
-                          limits.min.ncores);
-    }
-    if (LIMIT_UNDER (limits.min.ngpus, counts->nslots * counts->slot_gpus)) {
-        return errprintf (error,
-                          "requested ngpus is under policy limit of %d",
-                          limits.min.ngpus);
-    }
-
+    if (check_over (queue, "nnodes", limits.max.nnodes, nnodes, error) < 0
+        || check_over (queue, "ncores", limits.max.ncores, ncores, error) < 0
+        || check_over (queue, "ngpus", limits.max.ngpus, ngpus, error) < 0
+        || check_under (queue, "nnodes", limits.min.nnodes, nnodes, error) < 0
+        || check_under (queue, "ncores", limits.min.ncores, ncores, error) < 0
+        || check_under (queue, "ngpus", limits.min.ngpus, ngpus, error) < 0)
+        return -1;
     return 0;
 }
 

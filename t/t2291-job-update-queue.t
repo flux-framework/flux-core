@@ -80,7 +80,7 @@ test_expect_success 'job runs on batch resources' '
 test_expect_success 'update to queue with lower duration limit fails' '
 	jobid=$(flux submit -q batch --urgency=hold hostname) &&
 	test_must_fail flux update $jobid queue=debug 2>queue.err &&
-	grep "duration exceeds policy limit" queue.err
+	grep "duration.*exceeds policy limit" queue.err
 '
 test_expect_success 'update of duration allows queue update' '
 	flux update $jobid queue=debug duration=1m  &&

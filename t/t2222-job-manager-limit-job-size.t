@@ -82,7 +82,11 @@ test_expect_success 'a job is accepted if under general gpu limit' '
 	flux submit --queue=debug -n1 true
 '
 test_expect_success 'a job is rejected if over gpu limit' '
-	test_must_fail flux submit --queue=debug -n1 -g1 true
+	test_must_fail flux submit --queue=debug -n1 -g1 true 2>debug.err &&
+	test_debug "cat debug.err"
+'
+test_expect_success 'error message contains queue name' '
+	grep "for queue debug" debug.err
 '
 test_expect_success 'same job is accepted with unlimited queue override' '
 	flux submit --queue=batch -n1 -g1 true
