@@ -149,7 +149,7 @@ test_expect_success 'reload update-duration plugin with owner-allow-any=0' '
 test_expect_success 'update duration above policy limit now fails' '
 	test_expect_code 1 flux update $jobid duration=1h 2>limit.err &&
 	test_debug "cat limit.err" &&
-	grep "requested duration exceeds policy limit" limit.err
+	grep "requested duration.*exceeds policy limit" limit.err
 '
 test_expect_success 'update fails for running job' '
 	jobid=$(flux submit -t1m --wait-event=start sleep 60) &&
