@@ -119,7 +119,12 @@ test_expect_success 'fsck repaired KVS corruption' '
 '
 
 test_expect_success 'fsck moved bad data to lost+found' '
-	sudo -u flux flux start --recovery "flux kvs get lost+found.${kvsdir}.testdatabad"
+	sudo -u flux flux start --recovery "flux kvs get lost+found.${kvsdir}.testdatabad" > testdatabad.out
+'
+
+test_expect_success 'corrupted data fixed correctly' '
+	echo "13" > testdatabad.exp &&
+	test_cmp testdatabad.exp testdatabad.out
 '
 
 test_expect_success 'restart flux' '
