@@ -18,7 +18,6 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
 struct broker {
-    void *zctx;
     flux_t *h;
     flux_t *h_internal;
     flux_watcher_t *w_internal;
