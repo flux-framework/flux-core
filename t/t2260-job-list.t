@@ -7,7 +7,7 @@ test_description='Test flux job list services'
 . $(dirname $0)/sharness.sh
 
 export FLUX_CONF_DIR=$(pwd)
-test_under_flux 4 job
+test_under_flux 4 job --test-hosts=node[0-3]
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-list/list-rpc.py"
