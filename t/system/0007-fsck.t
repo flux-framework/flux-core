@@ -127,6 +127,10 @@ test_expect_success 'corrupted data fixed correctly' '
 	test_cmp testdatabad.exp testdatabad.out
 '
 
+test_expect_success 'other job data moved to lost+found too' '
+	sudo -u flux flux start --recovery "flux kvs get lost+found.${kvsdir}.eventlog"
+'
+
 test_expect_success 'restart flux' '
 	sudo systemctl start flux
 '
