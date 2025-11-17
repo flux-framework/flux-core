@@ -201,10 +201,11 @@ if [[ "$INSTALL_ONLY" == "t" ]]; then
     docker rm tmp.$$
     test $RC -ne 0 &&  die "docker run of 'make install' failed"
 else
+    TMPFS_OPTS="destination=/test/tmpfs-1m,tmpfs-size=1048576,tmpfs-mode=1777"
     docker run --rm \
         --workdir=$WORKDIR \
         --volume=$TOP:$WORKDIR \
-        --mount type=tmpfs,destination=/test/tmpfs-1m,tmpfs-size=1048576 \
+        --mount type=tmpfs,$TMPFS_OPTS \
         ${PLATFORM} \
         $MOUNT_HOME_ARGS \
         -e PLATFORM \
