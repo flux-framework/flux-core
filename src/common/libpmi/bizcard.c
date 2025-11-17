@@ -46,6 +46,36 @@ struct bizcard *bizcard_incref (struct bizcard *bc)
     return bc;
 }
 
+struct bizcard *bizcard_fromjson (json_t *obj)
+{
+    struct bizcard *bc;
+
+    if (!obj || json_unpack_ex (obj,
+                                NULL,
+                                JSON_VALIDATE_ONLY,
+                                "{s:s s?s s?[]}",
+                                "host",
+                                "pubkey",
+                                "uri") < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(bc = calloc (1, sizeof (*bc))))
+        return NULL;
+    bc->obj = json_incref (obj);
+    bc->refcount = 1;
+    return bc;
+}
+
+const json_t *bizcard_get_json (const struct bizcard *bc)
+{
+    if (!bc) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return bc->obj;
+}
+
 struct bizcard *bizcard_create (const char *hostname, const char *pubkey)
 {
     struct bizcard *bc;
