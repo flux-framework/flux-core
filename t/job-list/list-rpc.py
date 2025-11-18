@@ -10,7 +10,7 @@
 
 # Usage: flux python list-rpc.py < payload.json
 #
-#  Send constructed payloads to job-info list interfaces and
+#  Send constructed payloads to job-list interfaces and
 #  print errors for benefit of testing
 
 import flux
