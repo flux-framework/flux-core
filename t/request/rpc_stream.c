@@ -12,12 +12,25 @@
 #include "config.h"
 #endif
 #include <unistd.h>
+#include <getopt.h>
 #include <jansson.h>
 #include <stdio.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/log.h"
+
+#define OPTIONS "e:"
+static const struct option longopts[] = {
+    {"end-key", no_argument,  0, 'e'},
+    { 0, 0, 0, 0 },
+};
+
+void usage (void)
+{
+    fprintf (stderr, "Usage: rpc_stream [-e <end_key>] topic <payload\n");
+    exit (1);
+}
 
 int main (int argc, char *argv[])
 {
@@ -28,17 +41,23 @@ int main (int argc, char *argv[])
     void *inbuf;
     const char *out;
     const char *end_key = NULL;
+    int ch;
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (argc != 2 && argc != 3) {
-        fprintf (stderr, "Usage: rpc_stream topic [end-key] <payload\n");
-        exit (1);
+    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
+        switch (ch) {
+            case 'e':
+                end_key = optarg;
+                break;
+            default:
+                usage ();
+        }
     }
-    topic = argv[1];
-    if (argc == 3)
-        end_key = argv[2];
+    if (argc - optind != 1)
+        usage ();
+    topic = argv[optind++];
 
     /* N.B. As a safety measure, read_all() adds a NUL char to the buffer
      * that is not accounted for in the returned length.
