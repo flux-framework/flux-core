@@ -54,8 +54,11 @@ int main (int argc, char *argv[])
 
     bool done = false;
     do {
-        if (flux_rpc_get (f, &out) < 0)
+        if (flux_rpc_get (f, &out) < 0) {
+            if (errno == ENODATA)
+                break;
             log_msg_exit ("%s: %s", topic, future_strerror (f, errno));
+        }
         printf ("%s\n", out);
         fflush (stdout);
         if (end_key) {
