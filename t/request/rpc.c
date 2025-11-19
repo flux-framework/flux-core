@@ -63,8 +63,15 @@ int main (int argc, char *argv[])
     if (argc - optind != 1 && argc - optind != 2)
         usage ();
     topic = argv[optind++];
-    if (argc - optind > 0)
-        expected_errno = strtoul (argv[optind++], NULL, 10);
+    if (argc - optind > 0) {
+        char *endptr;
+        errno = 0;
+        expected_errno = strtoul (argv[optind++], &endptr, 10);
+        if (errno != 0
+            || expected_errno == 0
+            || *endptr != '\0')
+            log_msg_exit ("expected errno invalid");
+    }
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
