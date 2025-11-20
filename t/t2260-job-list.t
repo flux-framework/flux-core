@@ -747,8 +747,7 @@ test_expect_success 'flux job list by rank (invalid)' '
 	constraint="{ and: [ {ranks:[3]} ] }" &&
 	jq -j -c -n  \
 	  "{max_entries:1000, attrs:[\"ranks\"], constraint:${constraint}}" \
-	  | test_must_fail $RPC job-list.list 2>ranks.err &&
-	grep "value must be a string" ranks.err
+	  | $RPC job-list.list 71 "value must be a string"
 '
 #
 # legacy RPC tests
