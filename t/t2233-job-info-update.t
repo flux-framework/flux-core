@@ -438,7 +438,7 @@ test_expect_success 'update-lookup request with empty payload fails with EPROTO(
 test_expect_success 'update-watch request with empty payload fails with EPROTO(71)' '
 	${RPC} job-info.update-watch 71 </dev/null
 '
-test_expect_success 'update-lookup request with invalid key fails with EINVAL(22))' '
+test_expect_success 'update-lookup request with invalid key fails with EINVAL(22)' '
 	echo "{\"id\":42, \"key\":\"foobar\", \"flags\":0}" \
 		| ${RPC} job-info.update-lookup 22
 '
@@ -447,7 +447,7 @@ test_expect_success 'update-watch request invalid key fails' '
 		| test_must_fail ${RPC_STREAM} job-info.update-watch 2> invalidkey.err && \
 	grep "unsupported key" invalidkey.err
 '
-test_expect_success 'update-lookup request with invalid flags fails with EPROTO(71))' '
+test_expect_success 'update-lookup request with invalid flags fails with EPROTO(71)' '
 	echo "{\"id\":42, \"key\":\"R\", \"flags\":499}" \
 		| ${RPC} job-info.update-lookup 71
 '
