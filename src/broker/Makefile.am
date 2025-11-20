@@ -104,7 +104,6 @@ flux_module_exec_LDFLAGS =
 
 TESTS = test_attr.t \
 	test_service.t \
-	test_boot_config.t \
 	test_runat.t \
 	test_overlay.t \
 	test_topology.t \
@@ -145,11 +144,6 @@ test_service_t_SOURCES = test/service.c
 test_service_t_CPPFLAGS = $(test_cppflags)
 test_service_t_LDADD = $(test_ldadd)
 test_service_t_LDFLAGS = $(test_ldflags)
-
-test_boot_config_t_SOURCES = test/boot_config.c
-test_boot_config_t_CPPFLAGS = $(test_cppflags)
-test_boot_config_t_LDADD = $(test_ldadd)
-test_boot_config_t_LDFLAGS = $(test_ldflags)
 
 test_runat_t_SOURCES = test/runat.c
 test_runat_t_CPPFLAGS = $(test_cppflags)
