@@ -233,7 +233,7 @@ test_expect_success 'job-manager: events-journal request fails with EPROTO on em
 
 test_expect_success 'job-manager: events-journal request fails if not streaming RPC' '
 	jq -j -c -n "{}" > cc1.in &&
-	test_must_fail $RPC job-manager.events-journal < cc1.in
+	$RPC job-manager.events-journal 71 < cc1.in
 '
 
 test_expect_success 'job-manager: events-journal request fails if allow not an object' '
