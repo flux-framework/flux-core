@@ -18,7 +18,7 @@
 
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errprintf.h"
-#include "src/common/libfluxutil/policy.h"
+#include "src/common/libfluxutil/conf_policy.h"
 
 #include "job-manager.h"
 #include "journal.h"
@@ -119,7 +119,7 @@ static void config_reload_cb (flux_t *h,
         errstr = "Error unpacking config-reload request";
         goto error;
     }
-    if (policy_validate (instance_conf, &error) < 0) {
+    if (conf_policy_validate (instance_conf, &error) < 0) {
         errstr = error.text;
         goto error_decref;
     }
@@ -169,7 +169,7 @@ struct conf *conf_create (struct job_manager *ctx, flux_error_t *error)
     if (!(conf = calloc (1, sizeof (*conf))))
         goto error;
     conf->ctx = ctx;
-    if (policy_validate (flux_get_conf (ctx->h), error) < 0)
+    if (conf_policy_validate (flux_get_conf (ctx->h), error) < 0)
         goto error_nofill;
     if (!(conf->callbacks = zlistx_new ())) {
         errno = ENOMEM;

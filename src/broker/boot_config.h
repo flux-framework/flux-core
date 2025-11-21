@@ -26,49 +26,6 @@ int boot_config (flux_t *h,
                  attr_t *attrs,
                  flux_error_t *error);
 
-/* The following is exported for unit testing.
- */
-#define MAX_URI 2048
-
-struct boot_conf {
-    const char *curve_cert;
-    int default_port;
-    char default_bind[MAX_URI + 1];
-    char default_connect[MAX_URI + 1];
-    json_t *hosts;
-    int enable_ipv6;
-};
-
-int boot_config_geturibyrank (json_t *hosts,
-                              struct boot_conf *conf,
-                              uint32_t rank,
-                              char *buf,
-                              int bufsz,
-                              flux_error_t *error);
-int boot_config_getbindbyrank (json_t *hosts,
-                               struct boot_conf *conf,
-                               uint32_t rank,
-                               char *buf,
-                               int bufsz,
-                               flux_error_t *error);
-int boot_config_getrankbyname (json_t *hosts,
-                               const char *name,
-                               uint32_t *rank,
-                               flux_error_t *error);
-int boot_config_parse (const flux_conf_t *cf,
-                       struct boot_conf *conf,
-                       json_t **hosts,
-                       flux_error_t *error);
-int boot_config_attr (attr_t *attrs,
-                      const char *hostname,
-                      json_t *hosts,
-                      flux_error_t *error);
-int boot_config_format_uri (char *buf,
-                            int bufsz,
-                            const char *fmt,
-                            const char *host,
-                            int port);
-
 #endif /* BROKER_BOOT_CONFIG_H */
 
 /*

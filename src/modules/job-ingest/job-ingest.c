@@ -27,7 +27,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/parse_size.h"
 #include "src/common/libjob/job_hash.h"
-#include "src/common/libfluxutil/policy.h"
+#include "src/common/libfluxutil/conf_policy.h"
 #include "ccan/str/str.h"
 
 #include "util.h"
@@ -680,7 +680,7 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
     const char *buffer_size = NULL;
     const char *max_fluid_id = NULL;
 
-    if (policy_validate (conf, error) < 0)
+    if (conf_policy_validate (conf, error) < 0)
         return -1;
     if (flux_conf_unpack (conf,
                           &conf_error,
