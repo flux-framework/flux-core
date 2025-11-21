@@ -14,11 +14,11 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/errno_safe.h"
-#include "src/common/libfluxutil/method.h"
 #include "ccan/str/str.h"
 
 #include "module.h"
 #include "modservice.h"
+#include "method.h"
 
 typedef struct {
     flux_t *h;

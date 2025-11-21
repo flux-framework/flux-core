@@ -51,7 +51,6 @@
 #include "src/common/libutil/intree.h"
 #include "src/common/libutil/basename.h"
 #include "src/common/librouter/subhash.h"
-#include "src/common/libfluxutil/method.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 #include "ccan/ptrint/ptrint.h"
@@ -64,6 +63,7 @@
 
 #include "module.h"
 #include "modhash.h"
+#include "method.h"
 #include "brokercfg.h"
 #include "overlay.h"
 #include "service.h"

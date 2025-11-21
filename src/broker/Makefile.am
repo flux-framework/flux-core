@@ -35,6 +35,8 @@ libbroker_la_SOURCES = \
 	modhash.h \
 	modservice.c \
 	modservice.h \
+	method.c \
+	method.h \
 	overlay.h \
 	overlay.c \
 	bizcard.h \
