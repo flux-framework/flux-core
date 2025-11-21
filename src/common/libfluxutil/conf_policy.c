@@ -20,7 +20,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/fsd.h"
 
-#include "policy.h"
+#include "conf_policy.h"
 
 static int validate_policy_jobspec (json_t *o,
                                     const char *key,
@@ -395,7 +395,7 @@ inval:
     return -1;
 }
 
-int policy_validate (const flux_conf_t *conf, flux_error_t *error)
+int conf_policy_validate (const flux_conf_t *conf, flux_error_t *error)
 {
     const char *defqueue;
 

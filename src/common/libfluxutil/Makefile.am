@@ -15,5 +15,5 @@ AM_CPPFLAGS = \
 
 noinst_LTLIBRARIES = libfluxutil.la
 libfluxutil_la_SOURCES = \
-	policy.h \
-	policy.c
+	conf_policy.h \
+	conf_policy.c
