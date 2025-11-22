@@ -31,7 +31,6 @@
 
 #include "broker.h"
 #include "runat.h"
-#include "overlay.h"
 #include "attr.h"
 #include "modhash.h"
 #include "shutdown.h"
@@ -55,6 +54,11 @@ struct cleanup {
 struct shutdown {
     double warn_period;
     flux_watcher_t *warn_timer;
+    flux_future_t *health_f;
+};
+
+struct goodbye {
+    flux_watcher_t *timer;
 };
 
 struct monitor {
@@ -87,6 +91,7 @@ struct state_machine {
     struct quorum quorum;
     struct cleanup cleanup;
     struct shutdown shutdown;
+    struct goodbye goodbye;
 
     struct systemd sd;
 
@@ -162,6 +167,7 @@ static struct state_next nexttab[] = {
     { "rc2-fail",           STATE_RUN,          STATE_CLEANUP },
     { "panic",              STATE_RUN,          STATE_SHUTDOWN },
     { "shutdown",           STATE_RUN,          STATE_CLEANUP },
+    { "parent-fail",        STATE_RUN,          STATE_CLEANUP },
     { "rc2-none",           STATE_RUN,          STATE_RUN },
     { "cleanup-success",    STATE_CLEANUP,      STATE_SHUTDOWN },
     { "cleanup-none",       STATE_CLEANUP,      STATE_SHUTDOWN },
@@ -281,9 +287,9 @@ static void action_join (struct state_machine *s)
     else {
 #if HAVE_LIBSYSTEMD
         if (s->ctx->sd_notify) {
-            sd_notifyf (0,
-                        "STATUS=Joining Flux instance via %s",
-                        overlay_get_parent_uri (s->ctx->overlay));
+            const char *uri = "?";
+            (void)attr_get (s->ctx->attrs, "tbon.parent-endpoint", &uri, NULL);
+            sd_notifyf (0, "STATUS=Joining Flux instance via %s", uri);
         }
 #endif
         join_check_parent (s);
@@ -507,14 +513,13 @@ static void cleanup_timer_cb (flux_reactor_t *r,
         (void)runat_abort (s->ctx->runat, "cleanup");
 }
 
+/* Note that the overlay watches the local broker state and responds
+ * to a transition to CLEANUP by setting a flag that prevents TBON children
+ * from saying hello.
+ */
 static void action_cleanup (struct state_machine *s)
 {
     sd_timeout_reset (s);
-    /* Prevent new downstream clients from saying hello, but
-     * let existing ones continue to communicate so they can
-     * shut down and disconnect.
-     */
-    overlay_shutdown (s->ctx->overlay);
 
     if (runat_is_defined (s->ctx->runat, "cleanup")) {
         if (runat_start (s->ctx->runat, "cleanup", runat_completion_cb, s) < 0) {
@@ -536,6 +541,7 @@ static void action_cleanup (struct state_machine *s)
 
 static void action_finalize (struct state_machine *s)
 {
+    flux_watcher_stop (s->shutdown.warn_timer);
     sd_timeout_reset (s);
 
     if (runat_is_defined (s->ctx->runat, "rc3")) {
@@ -548,47 +554,121 @@ static void action_finalize (struct state_machine *s)
         state_machine_post (s, "rc3-none");
 }
 
+static int health_get_online_children (flux_future_t *f, char **ranks)
+{
+    json_t *children;
+    struct idset *ids;
+    size_t index;
+    json_t *entry;
+    char *s;
+    int count = 0;
+
+    if (flux_rpc_get_unpack (f, "{s:o}", "children", &children) < 0
+        || !(ids = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        return -1;
+    json_array_foreach (children, index, entry) {
+        int rank;
+        const char *status;
+        if (json_unpack (entry,
+                         "{s:i s:s}",
+                         "rank", &rank,
+                         "status", &status) < 0) {
+            goto error;
+        }
+        if (!streq (status, "offline") && !streq (status, "lost")) {
+            if (idset_set (ids, rank) < 0)
+                goto error;
+            count++;
+        }
+    }
+    if (!(s = idset_encode (ids, IDSET_FLAG_RANGE)))
+        goto error;
+    *ranks = s;
+    idset_destroy (ids);
+    return count;
+error:
+    idset_destroy (ids);
+    return -1;
+}
+
+/* Warn the user of the peers that are causing shutdown to be delayed.
+ * Only this and nothing more.
+ */
+static void shutdown_warn_continuation (flux_future_t *f, void *arg)
+{
+    struct state_machine *s = arg;
+
+    if (s->state == STATE_SHUTDOWN) {
+        char *ranks = NULL;
+        char *hosts = NULL;
+        int count;
+
+        if ((count = health_get_online_children (f, &ranks)) > 0)
+            hosts = flux_hostmap_lookup (s->ctx->h, ranks, NULL);
+        flux_log (s->ctx->h,
+                  LOG_ERR,
+                  "shutdown delayed: waiting for %d peers: %s (rank %s)",
+                  count,
+                  hosts ? hosts : "?",
+                  ranks ? ranks : "?");
+        free (hosts);
+        free (ranks);
+    }
+}
+
 static void shutdown_warn_timer_cb (flux_reactor_t *r,
                                     flux_watcher_t *w,
                                     int revents,
                                     void *arg)
 {
     struct state_machine *s = arg;
-    struct idset *ranks = overlay_get_child_peer_idset (s->ctx->overlay);
-    char *rankstr = idset_encode (ranks, IDSET_FLAG_RANGE);
-    char *hoststr = flux_hostmap_lookup (s->ctx->h, rankstr, NULL);
 
-    flux_log (s->ctx->h,
-              LOG_ERR,
-              "shutdown delayed: waiting for %d peers: %s (rank %s)",
-              overlay_get_child_peer_count (s->ctx->overlay),
-              hoststr ? hoststr : "?",
-              rankstr ? rankstr : "?");
-
-    free (hoststr);
-    free (rankstr);
-    idset_destroy (ranks);
-
+    flux_future_destroy (s->shutdown.health_f);
+    if (!(s->shutdown.health_f = flux_rpc (s->ctx->h,
+                                           "overlay.health",
+                                           NULL,
+                                           FLUX_NODEID_ANY,
+                                           0))
+        || flux_future_then (s->shutdown.health_f,
+                             -1,
+                             shutdown_warn_continuation,
+                             s) < 0)
+        flux_log (s->ctx->h, LOG_ERR, "shutdown delayed: waiting for peers");
     flux_timer_watcher_reset (w, s->shutdown.warn_period, 0.);
     flux_watcher_start (w);
 }
 
-
+/* SHUTDOWN state triggers an orderly shutdown of the TBON subtree.
+ * This may occur on the leader during instance shutdown or at any other broker,
+ * e.g. if its rc1 fails or if a module panics during RUN state. Shutdown is
+ * orchestrated from leaves-to-root as follows:
+ *
+ * - the root of the subtree enters SHUTDOWN state
+ *
+ * - its TBON children (who are monitoring parent state) enter SHUTDOWN state
+ *
+ * - leaf brokers post children-none and do FINALIZE->GOODBYE->EXIT
+ *
+ * - non-leaf brokers post children-complete once all their children have
+ *   exited, then do FINALIZE->GOODBYE->EXIT
+ *
+ * The last of the non-leaf brokers to exit is the root of the subtree.
+ * The shutdown does not propagate upstream from there.
+ *
+ * Importantly, rc3 is run in FINALIZE state, so it always executes with
+ * the parent in SHUTDOWN state, before it has executed its rc3, with all
+ * services live.
+ *
+ * The overlay is responsible for monitoring the broker state machine and
+ * posting the events above after SHUTDOWN is entered.  On entry to SHUTDOWN
+ * it also sets a flag that prevents TBON children from saying hello.
+ */
 static void action_shutdown (struct state_machine *s)
 {
     sd_timeout_reset (s);
-
-    overlay_shutdown (s->ctx->overlay);
-
-    if (overlay_get_child_peer_count (s->ctx->overlay) == 0) {
-        state_machine_post (s, "children-none");
-        return;
-    }
 #if HAVE_LIBSYSTEMD
     if (s->ctx->sd_notify) {
-        sd_notifyf (0,
-                    "STATUS=Waiting for %d peers to shutdown",
-                    overlay_get_child_peer_count (s->ctx->overlay));
+        sd_notifyf (0, "STATUS=Waiting for overlay peers to shutdown");
     }
 #endif
     if (s->shutdown.warn_period >= 0) {
@@ -599,38 +679,30 @@ static void action_shutdown (struct state_machine *s)
     }
 }
 
-static void goodbye_continuation (flux_future_t *f, void *arg)
+static void goodbye_timer_cb (flux_reactor_t *r,
+                              flux_watcher_t *w,
+                              int revents,
+                              void *arg)
 {
     struct state_machine *s = arg;
-    if (flux_future_get (f, NULL) < 0) {
+
+    if (s->state == STATE_GOODBYE) {
         flux_log (s->ctx->h,
                   LOG_ERR,
-                  "overlay.goodbye: %s",
-                  future_strerror (f, errno));
+                  "goodbye timeout after %.1fs",
+                  goodbye_timeout);
+        state_machine_post (s, "goodbye");
     }
-    state_machine_post (s, "goodbye");
-    flux_future_destroy (f);
 }
 
+/* On entry to GOODBYE state, the overlay subsystem sends overlay.goodbye to
+ * its TBON parent.  When the parent responds, it posts the goodbye event.
+ * On rank 0, goodbye is posted by shutdown.c.
+ */
 static void action_goodbye (struct state_machine *s)
 {
     sd_timeout_reset (s);
-    /* On rank 0, "goodbye" is posted by shutdown.c.
-     * On other ranks, send a goodbye message and wait for a response
-     * (with timeout) before continuing on.
-     */
-    if (s->ctx->rank > 0) {
-        flux_future_t *f;
-        if (!(f = overlay_goodbye_parent (s->ctx->overlay))
-            || flux_future_then (f,
-                                 goodbye_timeout,
-                                 goodbye_continuation,
-                                 s) < 0) {
-            flux_log_error (s->ctx->h, "error sending overlay.goodbye request");
-            flux_future_destroy (f);
-            state_machine_post (s, "goodbye");
-        }
-    }
+    flux_watcher_start (s->goodbye.timer);
 }
 
 static void unload_builtins_continuation (flux_future_t *f, void *arg)
@@ -653,6 +725,7 @@ static void action_exit (struct state_machine *s)
     flux_t *h = s->ctx->h;
     flux_future_t *f;
 
+    flux_watcher_stop (s->goodbye.timer);
     if (!(f = modhash_unload_builtins (s->ctx->modhash))
         || flux_future_then (f, -1, unload_builtins_continuation, s) < 0) {
         flux_log_error (h, "unload builtins initiation");
@@ -1179,7 +1252,8 @@ static void log_monitor_respond_error (flux_t *h)
         flux_log_error (h, "error responding to state-machine.monitor request");
 }
 
-/* Return true if request should continue to receive updates
+/* Respond to single state-machine.monitor request.
+ * Return true if request should continue to receive updates.
  */
 static bool monitor_update_one (flux_t *h,
                                 const flux_msg_t *msg,
@@ -1204,6 +1278,9 @@ nodata:
     return false;
 }
 
+/* The local state changed.
+ * Notify any streaming state-machine.monitor streaming requests.
+ */
 static void monitor_update (flux_t *h,
                             struct flux_msglist *requests,
                             broker_state_t state)
@@ -1218,6 +1295,9 @@ static void monitor_update (flux_t *h,
     }
 }
 
+/* Handle state-machine.monitor request.  The streaming flag is optional.
+ * If unset, then just respond with the current state.
+ */
 static void state_machine_monitor_cb (flux_t *h,
                                       flux_msg_handler_t *mh,
                                       const flux_msg_t *msg,
@@ -1237,7 +1317,16 @@ error:
         log_monitor_respond_error (h);
 }
 
-static void monitor_continuation (flux_future_t *f, void *arg)
+/* When the TBON parent broker state changes, consider whether to post
+ * an event locally.  The decision depends on the new parent state and
+ * the current broker state.  For example:
+ *
+ * Local state   Possible local events
+ * JOIN:         parent-ready, parent-fail
+ * QUORUM:       quorum-full, quorum-fail
+ * RUN:          shutdown, parent-fail
+ */
+static void monitor_parent_continuation (flux_future_t *f, void *arg)
 {
     struct state_machine *s = arg;
     flux_t *h = s->ctx->h;
@@ -1278,62 +1367,43 @@ static flux_future_t *monitor_parent (flux_t *h, void *arg)
                              "{s:i}",
                              "final", STATE_SHUTDOWN)))
         return NULL;
-    if (flux_future_then (f, -1, monitor_continuation, arg) < 0) {
+    if (flux_future_then (f, -1, monitor_parent_continuation, arg) < 0) {
         flux_future_destroy (f);
         return NULL;
     }
     return f;
 }
 
-/* This callback is called when the overlay connection state has changed.
+/* N.B. overlay posts the following:
+ * On loss of parent
+ *   {"event":"parent-fail","error":true}
+ * Once all child subtrees are offline/lost:
+ *   {"event":"children-complete","error":false"}
  */
-static void overlay_monitor_cb (struct overlay *overlay,
-                                uint32_t rank,
-                                void *arg)
+static void state_machine_post_cb (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     struct state_machine *s = arg;
-    int count;
+    const char *event;
+    int error = 0;
 
-    switch (s->state) {
-        /* IN JOIN state, post parent-fail if something goes wrong with the
-         * parent TBON connection.
-         */
-        case STATE_JOIN:
-            if (overlay_parent_error (overlay)) {
-                s->ctx->exit_rc = 1;
-                state_machine_post (s, "parent-fail");
-            }
-            break;
-        case STATE_RUN:
-            if (overlay_parent_error (overlay)) {
-                s->ctx->exit_rc = 1;
-                state_machine_post (s, "shutdown");
-            }
-            break;
-        /* In SHUTDOWN state, post exit event if children have disconnected.
-         * If there are no children on entry to SHUTDOWN state (e.g. leaf
-         * node) the exit event is posted immediately in action_shutdown().
-         */
-        case STATE_SHUTDOWN:
-            count = overlay_get_child_peer_count (overlay);
-            if (count == 0) {
-                state_machine_post (s, "children-complete");
-                flux_watcher_stop (s->shutdown.warn_timer);
-            }
-#if HAVE_LIBSYSTEMD
-            else {
-                if (s->ctx->sd_notify) {
-                    sd_notifyf (0,
-                                "STATUS=Waiting for %d peer%s to shutdown",
-                                count,
-                                count > 1 ? "s" : "");
-                }
-            }
-#endif
-            break;
-        default:
-            break;
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s?b}",
+                             "event", &event,
+                             "error", &error) < 0) {
+        flux_log_error (h, "state-machine.post");
+        return;
     }
+    if (!flux_msg_is_noresponse (msg)) {
+        (void)flux_respond_error (h, msg, EPROTO, NULL);
+        return;
+    }
+    state_machine_post (s, event);
+    if (error)
+        s->ctx->exit_rc = 1;
 }
 
 static void state_machine_get_cb (flux_t *h,
@@ -1390,6 +1460,12 @@ static void state_machine_sd_notify_cb (flux_t *h,
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
+        "state-machine.post",
+        state_machine_post_cb,
+        0,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
         "state-machine.monitor",
         state_machine_monitor_cb,
         0,
@@ -1439,6 +1515,8 @@ void state_machine_destroy (struct state_machine *s)
         flux_future_destroy (s->quorum.f);
         flux_watcher_destroy (s->cleanup.timer);
         flux_watcher_destroy (s->shutdown.warn_timer);
+        flux_future_destroy (s->shutdown.health_f);
+        flux_watcher_destroy (s->goodbye.timer);
         free (s);
         errno = saved_errno;
     }
@@ -1479,7 +1557,12 @@ struct state_machine *state_machine_create (struct broker *ctx,
                                                         0.,
                                                         0.,
                                                         shutdown_warn_timer_cb,
-                                                        s)))
+                                                        s))
+        || !(s->goodbye.timer = flux_timer_watcher_create (r,
+                                                           goodbye_timeout,
+                                                           0.,
+                                                           goodbye_timer_cb,
+                                                           s)))
         goto error;
     flux_watcher_start (s->prep);
     flux_watcher_start (s->check);
@@ -1524,7 +1607,6 @@ struct state_machine *state_machine_create (struct broker *ctx,
         goto error_hasmsg;
     }
     norestart_configure (s);
-    overlay_set_monitor_cb (ctx->overlay, overlay_monitor_cb, s);
     return s;
 nomem:
     errno = ENOMEM;

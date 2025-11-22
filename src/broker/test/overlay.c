@@ -14,6 +14,10 @@
 
 #include <errno.h>
 #include <string.h>
+#include <uuid.h>
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN 37     // defined in later libuuid headers
+#endif
 #include <flux/core.h>
 #include <zmq.h>
 
@@ -47,7 +51,7 @@ struct context {
     int rank;
     int size;
     struct topology *topo;
-    const char *uuid;
+    char *uuid;
     const flux_msg_t *msg;
 };
 
@@ -82,6 +86,22 @@ void check_attr (struct context *ctx, const char *k, const char *v)
         "%s: %s=%s", ctx->name, k, v ? v : "NULL");
 }
 
+static char *init_broker_uuid (flux_t *h, attr_t *attrs)
+{
+    uuid_t uuid;
+    char *uuid_str;
+
+    if (!(uuid_str = calloc (1, UUID_STR_LEN)))
+        return NULL;
+    uuid_generate (uuid);
+    uuid_unparse (uuid, uuid_str);
+    if (attr_add (attrs, "broker.uuid", uuid_str, ATTR_IMMUTABLE) < 0) {
+        free (uuid_str);
+        return NULL;
+    }
+    return uuid_str;
+}
+
 void ctx_destroy (struct context *ctx)
 {
     flux_watcher_destroy (ctx->w_channel);
@@ -90,6 +110,7 @@ void ctx_destroy (struct context *ctx)
     overlay_destroy (ctx->ov);
     flux_msg_decref (ctx->msg);
     topology_decref (ctx->topo);
+    free (ctx->uuid);
     free (ctx);
 }
 
@@ -107,6 +128,8 @@ struct context *ctx_create (flux_t *h,
         BAIL_OUT ("calloc failed");
     if (!(ctx->attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
+    if (!(ctx->uuid = init_broker_uuid (h, ctx->attrs)))
+        BAIL_OUT ("error creating broker.uuid");
     if (!(ctx->topo = topology_create (topo_uri, size, &error)))
         BAIL_OUT ("cannot create '%s' topology: %s", topo_uri, error.text);
     if (topology_set_rank (ctx->topo, rank) < 0)
@@ -123,8 +146,6 @@ struct context *ctx_create (flux_t *h,
                                     ctx->uri,
                                     &error)))
         BAIL_OUT ("overlay_create: %s", error.text);
-    if (!(ctx->uuid = overlay_get_uuid (ctx->ov)))
-        BAIL_OUT ("overlay_get_uuid failed");
     if (!(r = flux_get_reactor (h)))
         BAIL_OUT ("flux_get_reactor failed");
     if (!(ctx->h_channel = flux_open (ctx->uri, 0))
@@ -158,11 +179,6 @@ void single (flux_t *h)
     ok (overlay_set_topology (ctx->ov, ctx->topo) == 0,
         "%s: overlay_set_topology size=1 rank=0 works", ctx->name);
 
-    ok (overlay_get_size (ctx->ov) == 1,
-        "%s: overlay_get_size returns 1", ctx->name);
-    ok (overlay_get_rank (ctx->ov) == 0,
-        "%s: overlay_get_rank returns 0", ctx->name);
-
     ok ((critical_ranks = overlay_get_default_critical_ranks (ctx->ov)) != NULL,
         "%s: overlay_get_default_critical_ranks works", ctx->name);
     if (!(s = idset_encode (critical_ranks, IDSET_FLAG_RANGE)))
@@ -181,14 +197,6 @@ void single (flux_t *h)
     check_attr (ctx, "tbon.level", "0");
     check_attr (ctx, "tbon.maxlevel", "0");
     check_attr (ctx, "tbon.descendants", "0");
-
-    /* No parent uri.
-     * No bind uri because no children
-     */
-    ok (overlay_get_parent_uri (ctx->ov) == NULL,
-        "%s: overlay_get_parent_uri returned NULL", ctx->name);
-    ok (overlay_get_bind_uri (ctx->ov) == NULL,
-        "%s: overlay_get_bind_uri returned NULL", ctx->name);
 
     /* Event
      * Overlay re-publishes non-sequenced message, so we get it
@@ -254,8 +262,6 @@ void single (flux_t *h)
 
     ok (!flux_recv (ctx->h_channel, FLUX_MATCH_ANY, FLUX_O_NONBLOCK),
         "flux_recv got nothing (response was dropped)");
-    ok (match_list (logs, "error sending response to child") > 0,
-        "%s: overlay logged expected error", ctx->name);
 
     /* Request
      * Should get an ENOSYS response since request is not rank-addressed
@@ -299,9 +305,6 @@ void single (flux_t *h)
     ok (flux_response_decode (msg, NULL, NULL) < 0 && errno == EHOSTUNREACH,
         "%s: and response is EHOSTUNREACH", ctx->name);
     flux_msg_decref (msg);
-
-    ok (overlay_get_child_peer_count (ctx->ov) == 0,
-        "%s: overlay_get_child_peer_count returns 0", ctx->name);
 
     ctx_destroy (ctx);
 }
@@ -364,7 +367,6 @@ void trio (flux_t *h)
     char parent_uri[PATH_MAX + 64], uri[PATH_MAX + 64];
     const char *server_pubkey;
     const char *client_pubkey;
-    const char *tmp;
     const flux_msg_t *rmsg;
     flux_msg_t *msg;
     const char *topic;
@@ -395,9 +397,6 @@ void trio (flux_t *h)
         "%s: overlay_cert_pubkey works", ctx[1]->name);
     ok (overlay_set_parent_uri (ctx[1]->ov, parent_uri) == 0,
         "%s: overlay_set_parent_uri %s works", ctx[1]->name, parent_uri);
-    tmp = overlay_get_parent_uri (ctx[1]->ov);
-    ok (tmp != NULL && streq (tmp, parent_uri),
-        "%s: overlay_get_parent_uri returns same string", ctx[1]->name);
     ok (overlay_set_parent_pubkey (ctx[1]->ov, server_pubkey) == 0,
         "%s: overlay_set_parent_pubkey works", ctx[1]->name);
 
@@ -670,100 +669,6 @@ void test_destroy (int size, struct context *ctx[])
         ctx_destroy (ctx[rank]);
 }
 
-void monitor_diag_cb (struct overlay *ov, uint32_t rank, void *arg)
-{
-    struct context *ctx = arg;
-    diag ("%s: rank=%d status=%s children=%d parent_error=%s",
-          ctx->name,
-          (int)rank,
-          overlay_get_subtree_status (ov, rank),
-          overlay_get_child_peer_count (ov),
-          overlay_parent_error (ov) ? "true" : "false");
-}
-
-void monitor_cb (struct overlay *ov, uint32_t rank, void *arg)
-{
-    struct context *ctx = arg;
-    const char *status = overlay_get_subtree_status (ov, rank);
-    monitor_diag_cb (ov, rank, arg);
-    if (overlay_parent_error (ov)
-        || streq (status, "full")
-        || streq (status, "partial")
-        || streq (status, "lost")
-        || streq (status, "offline"))
-        flux_reactor_stop (flux_get_reactor (ctx->h));
-}
-
-void check_monitor (flux_t *h)
-{
-    const int size = 5;
-    struct context *ctx[size];
-
-    diag ("check_monitor BEGIN");
-
-    test_create (h, size, ctx);
-
-    diag ("check_monitor test_create returned");
-
-    /* If anything changes on rank 0, stop the reactor
-     */
-    overlay_set_monitor_cb (ctx[0]->ov, monitor_cb, ctx[0]);
-
-    /* connect (1->0) - rank 0 stops reactor on connect */
-    overlay_set_monitor_cb (ctx[1]->ov, monitor_diag_cb, ctx[1]);
-    if (overlay_connect (ctx[1]->ov) < 0)
-        BAIL_OUT ("%s: overlay_connect failed", ctx[1]->name);
-    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
-        "%s: reactor ran until child connected", ctx[0]->name);
-    ok (overlay_get_child_peer_count (ctx[0]->ov) == 1,
-        "%s: overlay_get_child_peer_count returns 1", ctx[0]->name);
-    overlay_set_monitor_cb (ctx[0]->ov, monitor_diag_cb, ctx[0]);
-
-    /* connect (2->0) - rank 2 stops reactor on connect */
-    overlay_set_monitor_cb (ctx[2]->ov, monitor_cb, ctx[2]);
-    if (overlay_connect (ctx[2]->ov) < 0)
-        BAIL_OUT ("%s: overlay_connect failed", ctx[2]->name);
-
-    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
-        "%s: reactor ran until child connected", ctx[0]->name);
-    ok (overlay_get_child_peer_count (ctx[0]->ov) == 2,
-        "%s: overlay_get_child_peer_count returns 2", ctx[0]->name);
-    ok (overlay_parent_error (ctx[2]->ov) == false,
-        "%s: overlay_parent_error returns false", ctx[2]->name);
-
-    /* rank 3 will try to connect with simulated wrong flux-core version
-     * Disable rank 0 stopping the reactor and enable rank 3 to do it.
-     */
-    overlay_set_monitor_cb (ctx[3]->ov, monitor_cb, ctx[3]);
-    overlay_test_set_version (ctx[3]->ov, 0xffffff);
-    if (overlay_connect (ctx[3]->ov) < 0)
-        BAIL_OUT ("%s: overlay_connect failed", ctx[3]->name);
-
-    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
-        "%s: reactor ran until bad version connection fails", ctx[0]->name);
-    ok (overlay_get_child_peer_count (ctx[0]->ov) == 2,
-        "%s: overlay_get_child_peer_count is still 2", ctx[0]->name);
-    ok (overlay_parent_error (ctx[3]->ov) == true,
-        "%s: overlay_parent_error returns true", ctx[3]->name);
-    overlay_set_monitor_cb (ctx[3]->ov, monitor_diag_cb, ctx[3]);
-
-    /* rank 4 will have its rank altered to '42' for overlay.hello
-     */
-    overlay_set_monitor_cb (ctx[4]->ov, monitor_cb, ctx[4]);
-    overlay_test_set_rank (ctx[4]->ov, 42);
-    if (overlay_connect (ctx[4]->ov) < 0)
-        BAIL_OUT ("%s: overlay_connect failed", ctx[4]->name);
-
-    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
-        "%s: reactor ran until bad rank connection fails", ctx[0]->name);
-    ok (overlay_get_child_peer_count (ctx[0]->ov) == 2,
-        "%s: overlay_get_child_peer_count is still 2", ctx[0]->name);
-    ok (overlay_parent_error (ctx[4]->ov) == true,
-        "%s: overlay_parent_error returns true", ctx[4]->name);
-
-    test_destroy (size, ctx);
-}
-
 /* Probe some possible failure cases
  */
 void wrongness (flux_t *h)
@@ -771,9 +676,25 @@ void wrongness (flux_t *h)
     struct overlay *ov;
     attr_t *attrs;
     flux_error_t error;
+    char *uuid;
 
     if (!(attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
+
+    err_init (&error);
+    errno = 0;
+    ok (overlay_create (h,
+                        "test0",
+                        attrs,
+                        zctx,
+                        "interthread://x",
+                        &error) == NULL
+        && errno == ENOENT,
+        "overlay_create w/o broker.uuid fails with ENOENT");
+    diag ("%s", error.text);
+
+    if (!init_broker_uuid (h, attrs))
+        BAIL_OUT ("error initializing uuid");
 
     err_init (&error);
     errno = 0;
@@ -802,6 +723,9 @@ void wrongness (flux_t *h)
 
     if (!(attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
+    if (!(uuid = init_broker_uuid (h, attrs)))
+        BAIL_OUT ("error creating broker.uuid");
+    free (uuid);
     if (!(ov = overlay_create (h,
                                "test0",
                                attrs,
@@ -879,16 +803,6 @@ int main (int argc, char *argv[])
     trio (h);
     clear_list (logs);
 
-    /* trio() and check_monitor() tests will bind to the same address
-     * in their tests.  Test can be racy and fail with EADDRINUSE if
-     * prior tests did not complete cleanup.  To ensure there are no
-     * issues, destroy & recreate zctx.  See issue 6404.
-     */
-    zmq_ctx_term (zctx);
-    if (!(zctx = zmq_ctx_new ()))
-        BAIL_OUT ("failed to recreate zmq context");
-
-    check_monitor (h);
     clear_list (logs);
 
     wrongness (h);

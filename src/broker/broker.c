@@ -15,6 +15,10 @@
 #include <signal.h>
 #include <locale.h>
 #include <inttypes.h>
+#include <uuid.h>
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN 37     // defined in later libuuid headers
+#endif
 #ifdef HAVE_SYS_PRCTL_H
 #include <sys/prctl.h>
 #endif
@@ -113,16 +117,19 @@ static int init_attrs_starttime (attr_t *attrs,
                                  double starttime,
                                  flux_error_t *error);
 
-static int init_local_uri_attr (struct overlay *ov,
-                                attr_t *attrs,
+static int init_local_uri_attr (attr_t *attrs,
+                                uint32_t rank,
                                 flux_error_t *error);
 
-static int init_critical_ranks_attr (struct overlay *ov,
-                                     attr_t *attrs,
+static int init_critical_ranks_attr (attr_t *attrs,
+                                     uint32_t size,
+                                     struct overlay *ov,
                                      flux_error_t *error);
 
 static int execute_parental_notifications (struct broker *ctx,
                                            flux_error_t *error);
+
+static int init_broker_uuid (struct broker *ctx);
 
 static struct optparse_option opts[] = {
     { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
@@ -318,6 +325,19 @@ int main (int argc, char *argv[])
         (void)attr_add_int (ctx.attrs, "log-stderr-level", level, 0);
     }
 
+    /* Set the broker.uuid attribute, used for request/response routing.
+     * Changing the uuid each time a broker restarts ensures that a new
+     * broker won't receive responses to requests made by its predecessor.
+     * N.B. this also sets flux::uuid, for use by the broker.ping method.
+     */
+    if (init_broker_uuid (&ctx) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error adding broker uuid to aux container: %s",
+                  strerror (errno));
+        goto cleanup;
+    }
+
     const char *val;
     if (attr_get (ctx.attrs, "broker.sd-notify", &val, NULL) == 0
         && !streq (val, "0")) {
@@ -445,17 +465,23 @@ int main (int argc, char *argv[])
             goto cleanup;
         }
     }
+    if (overlay_register_attrs (ctx.overlay) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "registering overlay attributes: %s",
+                  strerror (errno));
+        goto cleanup;
+    }
 
     if (init_attrs_post_boot (ctx.attrs, &error) < 0) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
 
-    ctx.rank = overlay_get_rank (ctx.overlay);
-    ctx.size = overlay_get_size (ctx.overlay);
-
-    if (ctx.size == 0) {
-        flux_log (ctx.h, LOG_CRIT, "internal error: instance size is zero!");
+    if (attr_get_uint32 (ctx.attrs, "rank", &ctx.rank) < 0
+        || attr_get_uint32 (ctx.attrs, "size", &ctx.size) < 0
+        || ctx.size == 0) {
+        flux_log (ctx.h, LOG_CRIT, "internal error: rank/size init failure");
         goto cleanup;
     }
 
@@ -482,15 +508,6 @@ int main (int argc, char *argv[])
     }
     else {
         (void)attr_delete (ctx.attrs, "statedir", true);
-    }
-
-    /* Must be called after overlay setup */
-    if (overlay_register_attrs (ctx.overlay) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "registering overlay attributes: %s",
-                  strerror (errno));
-        goto cleanup;
     }
 
     if (ctx.verbose) {
@@ -526,8 +543,10 @@ int main (int argc, char *argv[])
     }
 
     if (ctx.verbose) {
-        const char *parent = overlay_get_parent_uri (ctx.overlay);
-        const char *child = overlay_get_bind_uri (ctx.overlay);
+        const char *parent = NULL;
+        const char *child = NULL;
+        (void)attr_get (ctx.attrs, "tbon.parent-endpoint", &parent, NULL);
+        (void)attr_get (ctx.attrs, "tbon.endpoint", &child, NULL);
         flux_log (ctx.h, LOG_INFO, "parent: %s", parent ? parent : "none");
         flux_log (ctx.h, LOG_INFO, "child: %s", child ? child : "none");
     }
@@ -535,8 +554,11 @@ int main (int argc, char *argv[])
     set_proctitle (ctx.rank);
 
     // N.B. local-uri is used by runat
-    if (init_local_uri_attr (ctx.overlay, ctx.attrs, &error) < 0
-        || init_critical_ranks_attr (ctx.overlay, ctx.attrs, &error) < 0) {
+    if (init_local_uri_attr (ctx.attrs, ctx.rank, &error) < 0
+        || init_critical_ranks_attr (ctx.attrs,
+                                     ctx.size,
+                                     ctx.overlay,
+                                     &error) < 0) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
@@ -568,28 +590,8 @@ int main (int argc, char *argv[])
                   strerror (errno));
         goto cleanup;
     }
-    if (flux_aux_set (ctx.h,
-                      "flux::uuid",
-                      (char *)overlay_get_uuid (ctx.overlay),
-                      NULL) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "error adding broker uuid to aux container: %s",
-                  strerror (errno));
-        goto cleanup;
-    }
     if (!(handlers = broker_add_services (&ctx, &error))) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
-        goto cleanup;
-    }
-    /* overlay_control_start() calls flux_sync_create(), thus
-     * requires event.subscribe to have a handler before running.
-     */
-    if (overlay_control_start (ctx.overlay) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "error initializing overlay control messages: %s",
-                  strerror (errno));
         goto cleanup;
     }
 
@@ -597,6 +599,17 @@ int main (int argc, char *argv[])
      */
     if (!(ctx.state_machine = state_machine_create (&ctx, &error))) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
+        goto cleanup;
+    }
+    /* overlay_start() calls flux_sync_create(), thus
+     * requires event.subscribe to have a handler before running.
+     * Also it makes an RPC to the state machine.
+     */
+    if (overlay_start (ctx.overlay) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error starting overlay: %s",
+                  strerror (errno));
         goto cleanup;
     }
     /* This registers a state machine callback so call after
@@ -685,6 +698,23 @@ cleanup:
     optparse_destroy (ctx.opts);
 
     return ctx.exit_rc;
+}
+
+static int init_broker_uuid (struct broker *ctx)
+{
+    uuid_t uuid;
+    char *uuid_str;
+
+    if (!(uuid_str = calloc (1, UUID_STR_LEN)))
+        return -1;
+    uuid_generate (uuid);
+    uuid_unparse (uuid, uuid_str);
+    if (attr_add (ctx->attrs, "broker.uuid", uuid_str, ATTR_IMMUTABLE) < 0
+        || flux_aux_set (ctx->h, "flux::uuid", uuid_str, free) < 0) {
+        ERRNO_SAFE_WRAP (free, uuid_str);
+        return -1;
+    }
+    return 0;
 }
 
 static int init_attrs_broker_pid (attr_t *attrs, pid_t pid, flux_error_t *errp)
@@ -977,14 +1007,13 @@ static int create_runat_phases (broker_ctx_t *ctx, flux_error_t *errp)
     return 0;
 }
 
-static int init_local_uri_attr (struct overlay *ov,
-                                attr_t *attrs,
+static int init_local_uri_attr (attr_t *attrs,
+                                uint32_t rank,
                                 flux_error_t *errp)
 {
     const char *uri;
 
     if (attr_get (attrs, "local-uri", &uri, NULL) < 0) {
-        uint32_t rank = overlay_get_rank (ov);
         const char *rundir;
         char buf[1024];
 
@@ -1024,8 +1053,9 @@ static int init_local_uri_attr (struct overlay *ov,
     return 0;
 }
 
-static int init_critical_ranks_attr (struct overlay *ov,
-                                     attr_t *attrs,
+static int init_critical_ranks_attr (attr_t *attrs,
+                                     uint32_t size,
+                                     struct overlay *ov,
                                      flux_error_t *errp)
 {
     int rc = -1;
@@ -1049,7 +1079,7 @@ static int init_critical_ranks_attr (struct overlay *ov,
     }
     else {
         if (!(critical_ranks = idset_decode (val))
-            || idset_last (critical_ranks) >= overlay_get_size (ov)) {
+            || idset_last (critical_ranks) >= size) {
             errprintf (errp,
                        "invalid value for broker.critical-ranks='%s'",
                        val);
@@ -1824,30 +1854,16 @@ void broker_request_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg)
 
 /* Route a response message, determining next hop from route stack.
  * If there is no next hop, routing is complete to broker-resident service.
- * If the next hop is an overlay peer, route up or down the TBON.
- * If not a peer, look up a module by uuid.
+ * If the message is addressed to a module, send it there
+ * Otherwise, send to the overlay network for TBON forwarding.
  */
 int broker_response_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg)
 {
-    const char *uuid;
-
-    if (!(uuid = flux_msg_route_last (*msg))) {
-        if (flux_send_new (ctx->h_internal, msg, 0) < 0)
-            return -1;
-    }
-    else if (overlay_uuid_is_parent (ctx->overlay, uuid)) {
-        if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
-            return -1;
-    }
-    else if (overlay_uuid_is_child (ctx->overlay, uuid)) {
-        if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
-            return -1;
-    }
-    else {
-        if (modhash_response_sendmsg_new (ctx->modhash, msg) < 0)
-            return -1;
-    }
-    return 0;
+    if (flux_msg_route_count (*msg) == 0)
+        return flux_send_new (ctx->h_internal, msg, 0);
+    if (modhash_response_sendmsg_new (ctx->modhash, msg) == 0)
+        return 0;
+    return flux_send_new (ctx->h_overlay, msg, 0);
 }
 
 /* Handle messages received from the "router end" of the back to back

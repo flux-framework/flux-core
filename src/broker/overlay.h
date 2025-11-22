@@ -28,8 +28,6 @@ enum control_type {
 
 struct overlay;
 
-typedef void (*overlay_monitor_f)(struct overlay *ov, uint32_t rank, void *arg);
-
 /* Create overlay network, registering 'cb' to be called with each
  * received message.
  * Note: If zctx is NULL, it is created/destroyed on demand internally.
@@ -46,7 +44,7 @@ void overlay_destroy (struct overlay *ov);
  * This registers a sync callback, and will fail if event.subscribe
  * doesn't have a handler yet.
  */
-int overlay_control_start (struct overlay *ov);
+int overlay_start (struct overlay *ov);
 
 /* Set the overlay topology.
  */
@@ -73,29 +71,14 @@ int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey);
 
 /* Misc. accessors
  */
-uint32_t overlay_get_rank (struct overlay *ov);
-uint32_t overlay_get_size (struct overlay *ov);
-int overlay_get_child_peer_count (struct overlay *ov);
-struct idset *overlay_get_child_peer_idset (struct overlay *ov);
-const char *overlay_get_bind_uri (struct overlay *ov);
-const char *overlay_get_parent_uri (struct overlay *ov);
 const struct bizcard *overlay_get_bizcard (struct overlay *ov);
 int overlay_set_parent_uri (struct overlay *ov, const char *uri);
-bool overlay_parent_error (struct overlay *ov);
-const char *overlay_get_uuid (struct overlay *ov);
-bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid);
-bool overlay_uuid_is_child (struct overlay *ov, const char *uuid);
 void overlay_set_ipv6 (struct overlay *ov, int enable);
 int overlay_set_tbon_interface_hint (struct overlay *ov, const char *val);
 
 /* Return an idset of critical ranks, i.e. non-leaf brokers
  */
 struct idset *overlay_get_default_critical_ranks (struct overlay *ov);
-
-/* Fetch status for TBON subtree rooted at 'rank'.  If 'rank' is not this
- * broker's rank or one of its direct descendants, "unknown" is returned.
- */
-const char *overlay_get_subtree_status (struct overlay *ov, int rank);
 
 /* Broker should call overlay_bind() if there are children.  This may happen
  * before any peers are authorized as long as they are authorized before they
@@ -111,31 +94,9 @@ int overlay_bind (struct overlay *ov,
  */
 int overlay_connect (struct overlay *ov);
 
-/* Arrange for 'cb' to be called if:
- * - error on TBON parent (rank = FLUX_NODEID_ANY)
- * - a subtree rooted at rank (child) has changed status
- * The following accessors may be useful in the callback:
- * - overlay_parent_error() - test whether TBON parent connection has failed
- * - overlay_get_child_peer_count() - number of online children
- * - overlay_get_child_peer_idset () - set of online children
- * - overlay_get_subtree_status (rank) - subtree status of child
- */
-int overlay_set_monitor_cb (struct overlay *ov,
-                            overlay_monitor_f cb,
-                            void *arg);
-
 /* Register overlay-related broker attributes.
  */
 int overlay_register_attrs (struct overlay *overlay);
-
-/* Stop allowing new connections from downstream peers.
- */
-void overlay_shutdown (struct overlay *overlay);
-
-/* Say goodbye to parent.
- * After this, sends to parent are dropped.
- */
-flux_future_t *overlay_goodbye_parent (struct overlay *overlay);
 
 /* Private to overlay unit test
  */

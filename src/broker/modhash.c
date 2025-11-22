@@ -412,10 +412,13 @@ static module_t *modhash_load_dso (modhash_t *mh,
                                    flux_error_t *error)
 {
     broker_ctx_t *ctx = mh->ctx;
-    const char *broker_uuid = overlay_get_uuid (ctx->overlay);
+    const char *broker_uuid;
     void *dso;
     mod_main_f mod_main;
     module_t *p;
+
+    if (attr_get (ctx->attrs, "broker.uuid", &broker_uuid, NULL) < 0)
+        return NULL;
 
     /* Now open the DSO and obtain the mod_main() function pointer
      * that will be called from a new module thread in module_start().
@@ -1030,10 +1033,12 @@ static module_t *modhash_load_builtin (modhash_t *mh,
                                        json_t *args,
                                        flux_error_t *error)
 {
-    const char *broker_uuid = overlay_get_uuid (mh->ctx->overlay);
+    const char *broker_uuid;
     module_t *p;
     char *cpy;
 
+    if (attr_get (mh->ctx->attrs, "broker.uuid", &broker_uuid, NULL) < 0)
+        return NULL;
     if (!(p = module_create_thread (mh->ctx->h,
                                     broker_uuid,
                                     name ? name : bb->name,
@@ -1171,9 +1176,11 @@ static module_t *modhash_load_exec (modhash_t *mh,
                                     flux_error_t *error)
 {
     broker_ctx_t *ctx = mh->ctx;
-    const char *broker_uuid = overlay_get_uuid (ctx->overlay);
+    const char *broker_uuid;
     module_t *p;
 
+    if (attr_get (ctx->attrs, "broker.uuid", &broker_uuid, NULL) < 0)
+        return NULL;
     if (!(p = module_create_exec (ctx->h,
                                   broker_uuid,
                                   name,
