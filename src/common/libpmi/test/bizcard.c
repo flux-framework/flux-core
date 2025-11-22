@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <jansson.h>
 #include <flux/core.h>
 
 #include "ccan/str/str.h"
@@ -53,6 +54,7 @@ void test_simple (void)
     struct bizcard *bc;
     struct bizcard *bc2;
     const char *s;
+    const json_t *o;
 
     ok ((bc = bizcard_create ("hostname", "pubkey")) != NULL,
         "bizcard_create works");
@@ -110,6 +112,14 @@ void test_simple (void)
         "bizcard_decode works");
     ok (test_bizcard_equiv (bc, bc2),
         "new bizcard is same as the old one");
+    bizcard_decref (bc2);
+
+    ok ((o = bizcard_get_json (bc)) != NULL,
+        "bizcard_get_json works");
+    ok ((bc2 = bizcard_fromjson ((json_t *)o)) != NULL,
+        "bizcard_fromjson works");
+    ok (test_bizcard_equiv (bc, bc2),
+        "new bizcard is same as the old one");
 
     bizcard_incref (bc);
     bizcard_decref (bc);
@@ -123,6 +133,7 @@ void test_nopubkey (void)
     struct bizcard *bc;
     struct bizcard *bc2;
     const char *s;
+    const json_t *o;
 
     ok ((bc = bizcard_create ("thishost", NULL)) != NULL,
         "bizcard_create pubkey=NULL works");
@@ -134,6 +145,14 @@ void test_nopubkey (void)
         "bizcard_encode works");
     ok ((bc2 = bizcard_decode (s, NULL)) != NULL,
         "bizcard_decode works");
+    ok (test_bizcard_equiv (bc, bc2),
+        "new bizcard is same as the old one");
+    bizcard_decref (bc2);
+
+    ok ((o = bizcard_get_json (bc)) != NULL,
+        "bizcard_get_json works");
+    ok ((bc2 = bizcard_fromjson ((json_t *)o)) != NULL,
+        "bizcard_fromjson works");
     ok (test_bizcard_equiv (bc, bc2),
         "new bizcard is same as the old one");
 
@@ -203,6 +222,18 @@ void test_inval (void)
         "bizcard_pubkey NULL returns NULL");
     ok (bizcard_hostname (NULL) == NULL,
         "bizcard_hostname NULL returns NULL");
+
+    errno = 0;
+    ok (bizcard_fromjson (NULL) == NULL && errno == EINVAL,
+        "bizcard_fromjson obj=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (bizcard_fromjson (json_null ()) == NULL && errno == EINVAL,
+        "bizcard_fromjson obj=(JSON NULL) fails with EINVAL");
+
+    errno = 0;
+    ok (bizcard_get_json (NULL) == NULL && errno == EINVAL,
+        "bizcard_get_json bc=NULL fails with EINVAL");
 
     bizcard_decref (bc);
 }
