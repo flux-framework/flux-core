@@ -116,7 +116,7 @@ struct stack_hostname *hostname_stack_copy_one_less_digit (
     dst->suffix = dst->hostname + dst->len_prefix;
 
     dst->width = dst->len - dst->len_prefix;
-    if (dst->width < 0 || dst->width > 10) {
+    if (dst->width < 0 || dst->width >= 10) {
         errno = EINVAL;
         return NULL;
     }
