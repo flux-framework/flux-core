@@ -282,7 +282,7 @@ static flux_future_t *wrap_event_rpc (flux_t *h,
             return NULL;
         }
         if (!(f = flux_rpc_pack (h,
-                                 "overlay.publish",
+                                 "event.publish",
                                  0,
                                  0,
                                  "{s:s s:i s:s}",
@@ -298,7 +298,7 @@ static flux_future_t *wrap_event_rpc (flux_t *h,
     }
     else {
         if (!(f = flux_rpc_pack (h,
-                                 "overlay.publish",
+                                 "event.publish",
                                  0,
                                  0,
                                  "{s:s s:i}",
