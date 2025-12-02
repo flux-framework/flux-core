@@ -58,6 +58,12 @@ test_expect_success 'unload kvs' '
 test_expect_success 'dump default=kvs-primary checkpoint' '
 	flux dump --checkpoint foo.tar
 '
+test_expect_success 'dump with invalid input to --maxreqs fails' '
+	test_must_fail flux dump --maxreqs=0 --checkpoint fail.tar
+'
+test_expect_success 'repeat dump with --maxreqs' '
+	flux dump --maxreqs=1000 --checkpoint maxreqs.tar
+'
 test_expect_success 'repeat dump with -q' '
 	flux dump -q --checkpoint foo.tar
 '
@@ -198,6 +204,51 @@ test_expect_success 'run a flux instance, preserving content.sqlite' '
 	flux start -Sstatedir=$(pwd)/test true
 '
 
+#
+# --maxreqs
+#
+
+# N.B. from previous tests, data is already in the content cache
+# and does not "need" to be flushed, thus affects tests below
+test_expect_success 'clear content cache' '
+	flux content dropcache
+'
+test_expect_success 'load content-sqlite and truncate old file to start fresh' '
+	flux module load content-sqlite truncate
+'
+test_expect_success 'restore content when --maxreqs=1000 was used' '
+	flux restore -v --checkpoint maxreqs.tar
+'
+test_expect_success 'unload content-sqlite' '
+	flux content flush &&
+	flux content dropcache &&
+	flux module remove content-sqlite
+'
+# N.B. see notes above on why 4 blobs
+test_expect_success 'count blobs after restore'\'s' implicit garbage collection' '
+	echo 4 >blobcount3.exp &&
+	countblobs >blobcount3.out &&
+	test_cmp blobcount3.exp blobcount3.out
+'
+test_expect_success 'load content-sqlite + kvs and list content' '
+	flux module load content-sqlite &&
+	flux module load kvs &&
+	flux kvs dir -R
+'
+test_expect_success 'verify that exact KVS content was restored' '
+	test $(flux kvs get a.b.c) = "testkey" &&
+	test $(flux kvs get x) = $(cat x.val) &&
+	test $(flux kvs readlink y) = "linkedthing" &&
+	test $(flux kvs readlink z) = "smurf::otherthing" &&
+	test $(flux kvs get w) = "foobar"
+'
+test_expect_success 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success 'unload content-sqlite' '
+	flux module remove content-sqlite
+'
+
 reader() {
 	local dbdir=$1
         flux start -Sbroker.rc1_path= \
@@ -277,6 +328,9 @@ test_expect_success LONGTEST 'unload kvs' '
 test_expect_success LONGTEST 'dump default=kvs-primary checkpoint' '
 	flux dump --checkpoint bigval.tar
 '
+test_expect_success LONGTEST 'dump default=kvs-primary checkpoint w/ --maxreqs=1000' '
+	flux dump --checkpoint --maxreqs=1000 bigvalmaxreqs.tar
+'
 test_expect_success LONGTEST 'reload content-sqlite, truncate old file to start fresh' '
 	flux module reload content-sqlite truncate
 '
@@ -284,6 +338,20 @@ test_expect_success LONGTEST 'restore content' '
 	flux restore --checkpoint bigval.tar
 '
 test_expect_success LONGTEST 'load kvs and check bigval value' '
+	flux module load kvs &&
+	flux kvs get bigval > bigval.out &&
+	test_cmp bigval.out bigval.exp
+'
+test_expect_success LONGTEST 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success LONGTEST 'reload content-sqlite, truncate old file to start fresh' '
+	flux module reload content-sqlite truncate
+'
+test_expect_success LONGTEST 'restore content from maxreqs dump' '
+	flux restore --checkpoint bigvalmaxreqs.tar
+'
+test_expect_success LONGTEST 'load kvs and check bigval value from maxreqs dump' '
 	flux module load kvs &&
 	flux kvs get bigval > bigval.out &&
 	test_cmp bigval.out bigval.exp

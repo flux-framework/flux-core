@@ -25,9 +25,26 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libcontent/content.h"
+#include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
 
 #include "builtin.h"
+
+struct dump_valref_data
+{
+    flux_t *h;
+    json_t *treeobj;
+    const flux_msg_t **msgs;
+    const char *path;
+    int total_size;
+    int index;
+    int count;
+    int in_flight;
+    int errorcount;
+    int errnum;
+};
+
+static void get_blobref (struct dump_valref_data *dvd);
 
 static void dump_treeobj (struct archive *ar,
                           flux_t *h,
@@ -43,6 +60,7 @@ static time_t dump_time;
 static gid_t dump_gid;
 static uid_t dump_uid;
 static int keycount;
+static int async_max;
 
 static void read_verror (const char *fmt, va_list ap)
 {
@@ -156,18 +174,66 @@ static void dump_write_data (struct archive *ar, const void *data, int size)
                  "assuming non-fatal libarchive write size reporting error");
 }
 
+static void get_blobref_continuation (flux_future_t *f, void *arg)
+{
+    struct dump_valref_data *dvd = arg;
+    const flux_msg_t *msg;
+    size_t len;
+    int index;
+
+    index = ptr2int (flux_future_aux_get (f, "index"));
+    if (flux_future_get (f, (const void **)&msg) < 0
+        || flux_response_decode_raw (msg, NULL, NULL, &len) < 0) {
+        read_error ("%s: missing blobref %d: %s",
+                    dvd->path,
+                    index,
+                    future_strerror (f, errno));
+        flux_future_destroy (f);
+        dvd->in_flight--;
+        dvd->errorcount++;
+        dvd->errnum = errno;    /* we'll report the last errno */
+        return;
+    }
+    dvd->in_flight--;
+    dvd->total_size += len;
+    if (index >= dvd->count)
+        log_msg_exit ("invalid index specified: %d, count = %d",
+                      index,
+                      dvd->count);
+    dvd->msgs[index] = flux_msg_incref (msg);
+
+    /* if an error has occurred, we won't get more blobrefs */
+    if (dvd->index < dvd->count
+        && !dvd->errorcount) {
+        get_blobref (dvd);
+        dvd->in_flight++;
+        dvd->index++;
+    }
+    flux_future_destroy (f);
+}
+
+static void get_blobref (struct dump_valref_data *dvd)
+{
+    const char *blobref;
+    flux_future_t *f;
+
+    blobref = treeobj_get_blobref (dvd->treeobj, dvd->index);
+
+    if (!(f = content_load_byblobref (dvd->h, blobref, content_flags))
+        || flux_future_then (f, -1, get_blobref_continuation, dvd) < 0
+        || flux_future_aux_set (f, "index", int2ptr (dvd->index), NULL) < 0)
+        log_err_exit ("%s: cannot load blobref %d", dvd->path, dvd->index);
+}
+
 static void dump_valref (struct archive *ar,
                          flux_t *h,
                          const char *path,
                          json_t *treeobj)
 {
     int count = treeobj_get_count (treeobj);
-    struct flux_msglist *l;
-    const flux_msg_t *msg;
-    int total_size = 0;
+    const flux_msg_t **msgs;
     struct archive_entry *entry;
-    const void *data;
-    size_t len;
+    struct dump_valref_data dvd = {0};
 
     /* Load all data comprising the valref before starting the archive
      * entry. This is because the total size of the value must
@@ -183,32 +249,33 @@ static void dump_valref (struct archive *ar,
      * retaining the futures for a second pass, just retain references to the
      * content.load response messages.
      */
-    if (!(l = flux_msglist_create ()))
-        log_err_exit ("could not create message list");
-    for (int i = 0; i < count; i++) {
-        flux_future_t *f;
-        if (!(f = content_load_byblobref (h,
-                                          treeobj_get_blobref (treeobj, i),
-                                          content_flags))
-            || flux_future_get (f, (const void **)&msg) < 0
-            || flux_response_decode_raw (msg, NULL, NULL, &len) < 0) {
-            read_error ("%s: missing blobref %d: %s",
-                        path,
-                        i,
-                        future_strerror (f, errno));
-            flux_future_destroy (f);
-            flux_msglist_destroy (l);
-            return;
-        }
-        if (flux_msglist_append (l, msg) < 0)
-            log_err_exit ("could not stash load response message");
-        total_size += len;
-        flux_future_destroy (f);
+    if (!(msgs = calloc (count, sizeof (msgs[0]))))
+        log_err_exit ("could not create messages array");
+
+    dvd.h = h;
+    dvd.treeobj = treeobj;
+    dvd.msgs = msgs;
+    dvd.path = path;
+    dvd.count = count;
+
+    while (dvd.in_flight < async_max && dvd.index < dvd.count) {
+        get_blobref (&dvd);
+        dvd.in_flight++;
+        dvd.index++;
     }
+
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
+
+    if (dvd.errorcount) {
+        errno = dvd.errnum;
+        goto cleanup;
+    }
+
     if (!(entry = archive_entry_new ()))
         log_msg_exit ("error creating archive entry");
     archive_entry_set_pathname (entry, path);
-    archive_entry_set_size (entry, total_size);
+    archive_entry_set_size (entry, dvd.total_size);
     archive_entry_set_perm (entry, 0644);
     archive_entry_set_filetype (entry, AE_IFREG);
     archive_entry_set_mtime (entry, dump_time, 0);
@@ -217,16 +284,24 @@ static void dump_valref (struct archive *ar,
 
     if (archive_write_header (ar, entry) != ARCHIVE_OK)
         log_msg_exit ("%s", archive_error_string (ar));
-    while ((msg = flux_msglist_pop (l))) {
-        if (flux_response_decode_raw (msg, NULL, &data, &len) < 0)
+    for (int i = 0; i < dvd.count; i++) {
+        const void *data;
+        size_t len;
+        if (flux_response_decode_raw (msgs[i], NULL, &data, &len) < 0)
             log_err_exit ("error processing stashed valref responses");
         if (len > 0)
             dump_write_data (ar, data, len);
-        flux_msg_decref (msg);
+        flux_msg_decref (msgs[i]);
+        msgs[i] = NULL;
     }
     archive_entry_free (entry);
     progress (h, 1);
-    flux_msglist_destroy (l);
+cleanup:
+    for (int i = 0; i < dvd.count; i++) {
+        if (msgs[i])
+            flux_msg_decref (msgs[i]);
+    }
+    free (msgs);
 }
 
 static void dump_val (struct archive *ar,
@@ -425,6 +500,9 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
         content_flags |= CONTENT_FLAG_CACHE_BYPASS;
         kvs_checkpoint_flags |= KVS_CHECKPOINT_FLAG_CACHE_BYPASS;
     }
+    async_max = optparse_get_int (p, "maxreqs", 2);
+    if (async_max <= 0)
+        log_err_exit ("invalid value for maxreqs");
 
     dump_time = time (NULL);
     dump_uid = getuid ();
@@ -498,6 +576,9 @@ static struct optparse_option dump_opts[] = {
     },
     { .name = "sd-notify", .has_arg = 0,
       .usage = "Send status updates to systemd via flux-broker(1)",
+    },
+    { .name = "maxreqs", .has_arg = 1, .arginfo = "N",
+      .usage = "Increase number of concurrent requests (default 2)",
     },
     OPTPARSE_TABLE_END
 };
