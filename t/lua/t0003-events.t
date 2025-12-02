@@ -55,36 +55,36 @@ type_ok (msg, 'table', "recv_event: got msg as a table")
 is_deeply (msg, {}, "recv_event: got empty payload as expected")
 
 
--- poke at overlay.publish service
+-- poke at event.publish service
 -- good request, no payload
 local request = { topic = "foo", flags = 0 }
-local response, err = f:rpc ("overlay.publish", request);
-is (err, nil, "overlay.publish: works without payload")
+local response, err = f:rpc ("event.publish", request);
+is (err, nil, "event.publish: works without payload")
 
 -- good request, with raw payload
 local request = { topic = "foo", flags = 0, payload = "aGVsbG8gd29ybGQ=" }
-local response, err = f:rpc ("overlay.publish", request);
-is (err, nil, "overlay.publish: works with payload")
+local response, err = f:rpc ("event.publish", request);
+is (err, nil, "event.publish: works with payload")
 
 -- good request, with JSON "{}\0"
 local request = { topic = "foo", flags = 0, payload = "e30A" }
-local response, err = f:rpc ("overlay.publish", request);
-is (err, nil, "overlay.publish: works with json payload")
+local response, err = f:rpc ("event.publish", request);
+is (err, nil, "event.publish: works with json payload")
 
 -- flags missing from request
 local request = { topic = "foo" }
-local response, err = f:rpc ("overlay.publish", request);
-is (err, "Protocol error", "overlay.publish: no flags, fails with EPROTO")
+local response, err = f:rpc ("event.publish", request);
+is (err, "Protocol error", "event.publish: no flags, fails with EPROTO")
 
 -- mangled base64 payload
 local request = { topic = "foo", flags = 0, payload = "aGVsbG8gd29ybGQ%" }
-local response, err = f:rpc ("overlay.publish", request);
-is (err, "Protocol error", "overlay.publish: bad base64, fails with EPROTO")
+local response, err = f:rpc ("event.publish", request);
+is (err, "Protocol error", "event.publish: bad base64, fails with EPROTO")
 
 -- good request, mangled JSON payload "{\0"
 local request = { topic = "foo", flags = 4, payload = "ewA=" }
-local response, err = f:rpc ("overlay.publish", request);
-is (err, "Protocol error", "overlay.publish: bad json payload, fails with EPROTO")
+local response, err = f:rpc ("event.publish", request);
+is (err, "Protocol error", "event.publish: bad json payload, fails with EPROTO")
 
 done_testing ()
 

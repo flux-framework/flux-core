@@ -36,7 +36,6 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/librouter/rpc_track.h"
 #include "src/common/libflux/message_route.h" // for msg_route_sendto()
-#include "src/common/libccan/ccan/base64/base64.h"
 #include "ccan/str/str.h"
 #ifndef HAVE_STRLCPY
 #include "src/common/libmissing/strlcpy.h"
@@ -159,7 +158,7 @@ struct overlay {
     struct topology *topo;
     uint32_t size;
     uint32_t rank;
-    int event_seq;              // assign on rank 0, track on rank > 0
+    int event_seq;              // used for sequence verification
     char uuid[UUID_STR_LEN];
     int version;
     int zmqdebug;
@@ -202,9 +201,9 @@ static int overlay_control_parent (struct overlay *ov,
                                    int status);
 static void overlay_health_respond_all (struct overlay *ov);
 static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank);
-static int overlay_publish_new (struct overlay *ov, flux_msg_t **msg, int *seq);
 static int overlay_goodbye_parent (struct overlay *overlay, flux_error_t *errp);
 static int overlay_get_child_online_peer_count (struct overlay *ov);
+static void overlay_event_checkseq (struct overlay *ov, const flux_msg_t *msg);
 
 /* Convenience iterator for ov->children
  */
@@ -656,13 +655,15 @@ static void channel_cb (flux_reactor_t *r,
             }
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (ov->rank == 0) {    // publish
-                if (overlay_publish_new (ov, &msg, NULL) < 0) {
-                    flux_log_error (ov->h, "error publishing event");
-                    goto done;
-                }
+            /* On rank 0, the broker sends events to the overlay for downstream
+             * distribution.  On other ranks, the broker sends unpublished
+             * events for upstream publication.
+             */
+            if (ov->rank == 0) {
+                overlay_event_checkseq (ov, msg);
+                overlay_mcast_child (ov, msg);
             }
-            else {                  // forward upstream
+            else {
                 flux_msg_route_enable (msg);
                 if (overlay_sendmsg_parent (ov, msg) < 0) {
                     flux_log_error (ov->h, "error forwarding event upstream");
@@ -909,10 +910,7 @@ static int overlay_mcast_send (const flux_msg_t *msg, void *arg)
     return overlay_sendmsg_child (ov, msg);
 }
 
-/* Forward an event message to downstream peers.  This may be a new event
- * published on rank 0 via overlay_publish_new() or an event received from
- * the upstream (parent) overlay peer.  In either case, this propagates
- * the event to the next TBON level, where propagation continues.
+/* Forward an event message to downstream peers.
  */
 static void overlay_mcast_child (struct overlay *ov, flux_msg_t *msg)
 {
@@ -944,41 +942,6 @@ static void overlay_mcast_child (struct overlay *ov, flux_msg_t *msg)
                            ov->trace_requests,
                            msg);
     }
-}
-
-/* Publish an event message on rank 0 originating from:
- * - a downstream (child) overlay peer - received on child_cb()
- * - the local broker on behalf of a module or user
- * - the overlay.publish RPC (used when the publisher needs the seq number)
- *
- * N.B. the _new suffix in the function name is meant to indicate that
- * the reference to *msg is stolen by the function on success.
- */
-static int overlay_publish_new (struct overlay *ov,
-                                flux_msg_t **msg,
-                                int *seqp)
-{
-    int seq;
-
-    if (ov->rank != 0) {
-        errno = EINVAL;
-        return -1;
-    }
-    /* The event sequence starts with 1.
-     * This allows 0 to indicate "sequence not set".
-     */
-    seq = ++ov->event_seq;
-    if (flux_msg_set_seq (*msg, seq) < 0) {
-        ov->event_seq--;
-        return -1;
-    }
-    overlay_mcast_child (ov, *msg);
-    if (seqp)
-        *seqp = seq;
-    (void)flux_send_new (ov->h_channel, msg, 0);
-    flux_msg_decref (*msg);
-    *msg = NULL;
-    return 0;
 }
 
 static void logdrop (struct overlay *ov,
@@ -1123,13 +1086,17 @@ static void child_cb (flux_reactor_t *r,
             rpc_track_update (child->tracker, msg);
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (ov->rank == 0)      // publish
-                (void)overlay_publish_new (ov, &msg, NULL);
-            else {                  // forward upstream
+            /* An event message traveling upstream will always be unpublished.
+             * Forward upstream, or on rank 0, to local broker for publication.
+             */
+            if (ov->rank > 0) {
                 flux_msg_route_enable (msg);
                 overlay_sendmsg_parent (ov, msg);
+                goto done;
             }
-            goto done;
+            flux_msg_route_disable (msg);
+            // fall through to forward message to broker
+            break;
     }
     trace_overlay_msg (ov->h, "rx", child->rank, ov->trace_requests, msg);
     if (flux_send_new (ov->h_channel, &msg, 0) < 0)
@@ -1165,10 +1132,9 @@ static void parent_disconnect (struct overlay *ov)
     }
 }
 
-/* Sanity check an event message that has been received from the upstream
- * (parent) overlay peer.
+/* Sanity check that event messages are properly sequenced.
  */
-static void parent_event_checkseq (struct overlay *ov, const flux_msg_t *msg)
+static void overlay_event_checkseq (struct overlay *ov, const flux_msg_t *msg)
 {
     uint32_t seq;
 
@@ -1239,10 +1205,10 @@ static void parent_cb (flux_reactor_t *r,
              * An event type message should not have routing enabled
              * under normal circumstances, so turn it off here.
              */
-            parent_event_checkseq (ov, msg);
+            overlay_event_checkseq (ov, msg);
             overlay_mcast_child (ov, msg);
             flux_msg_route_disable (msg);
-            // fall through and let local broker receive this message
+            // fall through and let local broker distribute locally
             break;
         case FLUX_MSGTYPE_CONTROL: {
             int ctrl_type, reason;
@@ -2167,94 +2133,6 @@ error:
         flux_log_error (h, "error responding to overlay.trace");
 }
 
-static flux_msg_t *encode_event (const char *topic,
-                                 int flags,
-                                 struct flux_msg_cred cred,
-                                 const char *src)
-{
-    flux_msg_t *msg;
-    char *dst = NULL;
-
-    if (!(msg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
-        goto error;
-    if (flux_msg_set_topic (msg, topic) < 0)
-        goto error;
-    if (flux_msg_set_cred (msg, cred) < 0)
-        goto error;
-    if ((flags & FLUX_MSGFLAG_PRIVATE)) {
-        if (flux_msg_set_private (msg) < 0)
-            goto error;
-    }
-    if (src) { // optional payload
-        int srclen = strlen (src);
-        size_t dstbuflen = base64_decoded_length (srclen);
-        ssize_t dstlen;
-
-        if (!(dst = malloc (dstbuflen)))
-            goto error;
-        if ((dstlen = base64_decode (dst, dstbuflen, src, srclen)) < 0) {
-            errno = EPROTO;
-            goto error;
-        }
-        if (flux_msg_set_payload (msg, dst, dstlen) < 0) {
-            if (errno == EINVAL)
-                errno = EPROTO;
-            goto error;
-        }
-    }
-    free (dst);
-    return msg;
-error:
-    ERRNO_SAFE_WRAP (free, dst);
-    flux_msg_destroy (msg);
-    return NULL;
-}
-
-static void overlay_publish_cb (flux_t *h,
-                                flux_msg_handler_t *mh,
-                                const flux_msg_t *msg,
-                                void *arg)
-{
-    struct overlay *ov = arg;
-    const char *topic;
-    const char *payload = NULL; // optional
-    int flags;
-    struct flux_msg_cred cred;
-    flux_msg_t *event;
-    const char *errmsg = NULL;
-    int seq;
-
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{s:s s:i s?s}",
-                             "topic", &topic,
-                             "flags", &flags,
-                             "payload", &payload) < 0)
-        goto error;
-    if (ov->rank > 0) {
-        errno = EPROTO;
-        errmsg = "this service is only available on rank 0";
-        goto error;
-    }
-    if ((flags & ~(FLUX_MSGFLAG_PRIVATE)) != 0) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (flux_msg_get_cred (msg, &cred) < 0)
-        goto error;
-    if (!(event = encode_event (topic, flags, cred, payload))
-        || overlay_publish_new (ov, &event, &seq) < 0) {
-        flux_msg_decref (event);
-        goto error;
-    }
-    if (flux_respond_pack (h, msg, "{s:i}", "seq", seq) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-}
-
 int overlay_cert_load (struct overlay *ov,
                        const char *path,
                        flux_error_t *errp)
@@ -2740,12 +2618,6 @@ void overlay_destroy (struct overlay *ov)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "overlay.publish",
-        overlay_publish_cb,
-        FLUX_ROLE_USER,
-    },
     {
         FLUX_MSGTYPE_REQUEST,
         "overlay.trace",

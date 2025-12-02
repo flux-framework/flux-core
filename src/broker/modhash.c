@@ -227,7 +227,7 @@ static void module_cb (module_t *p, void *arg)
             broker_request_sendmsg_new (ctx, &msg);
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (flux_send_new (ctx->h_overlay, &msg, 0) < 0) {
+            if (flux_send_new (ctx->h, &msg, 0) < 0) {
                 flux_log_error (ctx->h,
                                 "%s(%s): send to overlay: %s",
                                 __FUNCTION__,
