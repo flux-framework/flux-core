@@ -1,3 +1,30 @@
+flux-core version 0.81.0 - 2025-12-02
+-------------------------------------
+
+## New Features
+ * etc/modprobe: use flux dump --maxreqs in rc3 (#7219)
+ * flux-dump: support --maxreqs option for faster dumping (#7158)
+ * validator: validate host constraints against instance hostlist (#7203)
+ * allow undrain reason to be updated (#7187)
+ * jobtap: add `flux_jobtap_set_load_sort_order()` (#7193)
+ * broker: convert to interthread overlay channel (#7112)
+
+## Fixes
+ * hostlist: fix off-by-one read error (#7216)
+ * job-manager: improve policy limit error messages (#7204)
+ * improve error messages and documentation for submission directives (#7197)
+
+## Cleanup
+ * broker: decouple state machine and overlay (#7209)
+ * broker: factor out bootstrap table parser (#7210)
+
+## Build/CI/Testsuite/Documentation
+ * ci: fix mount permissions for 1M tmpfs fs in docker (#7208)
+ * ci: update typos checker (#7198)
+ * doc: add missing paren in modprobe doc (#7202)
+ * doc: add section on running tests as Flux jobs to debug guide (#7199)
+ * flux-dump/flux-fsck misc cleanup (#7186)
+
 flux-core version 0.80.0 - 2025-11-04
 -------------------------------------
 
