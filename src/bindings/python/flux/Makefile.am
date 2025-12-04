@@ -26,6 +26,7 @@ nobase_fluxpy_PYTHON = \
 	cli/fortune.py \
 	cli/plugin.py \
 	cli/plugins/__init__.py \
+	cli/plugins/shape.py \
 	core/__init__.py \
 	core/watchers.py \
 	core/inner.py \

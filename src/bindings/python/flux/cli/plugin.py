@@ -193,7 +193,7 @@ class CLIPlugin(ABC):  # pragma no cover
 class CLIPluginRegistry:
     """Flux CLI plugin registry helper class"""
 
-    default_plugins = []
+    default_plugins = ["shape"]
     plugin_namespace = "flux.cli.plugins"
 
     def __init__(self, prog):
