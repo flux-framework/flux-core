@@ -259,7 +259,7 @@ void list_cb (flux_t *h,
 {
     struct list_ctx *ctx = arg;
     flux_error_t err;
-    json_t *jobs;
+    json_t *jobs = NULL;
     json_t *attrs;
     int max_entries;
     double since = 0.;
@@ -268,6 +268,8 @@ void list_cb (flux_t *h,
     struct list_constraint *c = NULL;
     struct state_constraint *statec = NULL;
     flux_error_t error;
+    size_t index;
+    json_t *value;
 
     if (!ctx->jsctx->initialized) {
         if (flux_msglist_append (ctx->deferred_requests, msg) < 0)
@@ -339,8 +341,20 @@ void list_cb (flux_t *h,
                            attrs, c, statec)))
         goto error;
 
-    if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
-        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+    if (flux_msg_is_streaming (msg)) {
+        json_array_foreach (jobs, index, value) {
+            if (flux_respond_pack (h, msg, "{s:[O]}", "jobs", value) < 0) {
+                flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+                goto error;
+            }
+        }
+        if (flux_respond_error (h, msg, ENODATA, NULL) < 0)
+            flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    }
+    else {
+        if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+    }
 
     json_decref (jobs);
     list_constraint_destroy (c);
@@ -351,6 +365,7 @@ void list_cb (flux_t *h,
 error:
     if (flux_respond_error (h, msg, errno, err.text) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    json_decref (jobs);
     list_constraint_destroy (c);
     state_constraint_destroy (statec);
     json_decref (legacy_constraint);
