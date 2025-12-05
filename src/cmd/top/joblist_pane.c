@@ -30,6 +30,7 @@ struct joblist_pane {
     int jobid_width;
     WINDOW *win;
     json_t *jobs_all;
+    json_t *jobs_query;
     json_t *jobs;
     struct ucache *ucache;
 
@@ -256,19 +257,11 @@ void joblist_filter_jobs (struct joblist_pane *joblist)
     joblist->jobs = json_incref (joblist->jobs_all);
 }
 
-static void joblist_continuation (flux_future_t *f, void *arg)
+static void joblist_query_finish (struct joblist_pane *joblist)
 {
-    struct joblist_pane *joblist = arg;
-    json_t *jobs;
-
-    if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0) {
-        if (errno != ENOSYS)
-            fatal (errno, "error decoding job-list.list RPC response");
-        flux_future_destroy (f);
-        return;
-    }
     json_decref (joblist->jobs_all);
-    joblist->jobs_all = json_incref (jobs);
+    joblist->jobs_all = joblist->jobs_query;
+    joblist->jobs_query = NULL;
     joblist_filter_jobs (joblist);
     joblist_pane_draw (joblist);
     if (joblist->top->test_exit) {
@@ -276,7 +269,34 @@ static void joblist_continuation (flux_future_t *f, void *arg)
         wrefresh (joblist->win);
         test_exit_check (joblist->top);
     }
-    flux_future_destroy (f);
+}
+
+static void joblist_continuation (flux_future_t *f, void *arg)
+{
+    struct joblist_pane *joblist = arg;
+    json_t *jobs;
+    size_t index;
+    json_t *value;
+    if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0) {
+        if (errno == ENODATA) {
+            joblist_query_finish (joblist);
+            flux_future_destroy (f);
+            return;
+        }
+        if (errno != ENOSYS)
+            fatal (errno, "error decoding job-list.list RPC response");
+        flux_future_destroy (f);
+        return;
+    }
+    if (!joblist->jobs_query) {
+        if (!(joblist->jobs_query = json_array ()))
+            fatal (ENOMEM, "error allocating jobs query array");
+    }
+    json_array_foreach (jobs, index, value) {
+        if (json_array_append (joblist->jobs_query, value) < 0)
+            fatal (ENOMEM, "error appending to jobs query array");
+    }
+    flux_future_reset (f);
 }
 
 
@@ -365,7 +385,7 @@ void joblist_pane_query (struct joblist_pane *joblist)
     if (!(f = flux_rpc_pack (joblist->top->h,
                              "job-list.list",
                              0,
-                             0,
+                             FLUX_RPC_STREAMING,
                              "{s:i s:{s:[i]} s:[s,s,s,s,s,s,s,s]}",
                              "max_entries", win_dim.y_length - 1,
                              "constraint",
