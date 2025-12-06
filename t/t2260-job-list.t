@@ -10,7 +10,6 @@ export FLUX_CONF_DIR=$(pwd)
 test_under_flux 4 job --test-hosts=node[0-3]
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
-listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-list/list-rpc.py"
 JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py"
 
@@ -747,8 +746,7 @@ test_expect_success 'flux job list by rank (invalid)' '
 	constraint="{ and: [ {ranks:[3]} ] }" &&
 	jq -j -c -n  \
 	  "{max_entries:1000, attrs:[\"ranks\"], constraint:${constraint}}" \
-	  | test_must_fail $RPC job-list.list 2>ranks.err &&
-	grep "value must be a string" ranks.err
+	  | $RPC job-list.list 71 "value must be a string"
 '
 #
 # legacy RPC tests
@@ -2785,64 +2783,34 @@ test_expect_success 'list request with empty payload fails with EPROTO(71)' '
 	${RPC} job-list.list 71 </dev/null
 '
 test_expect_success 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
-	name="attrs-not-array" &&
 	jq -j -c -n  "{max_entries:5, attrs:5}" \
-	  | $listRPC >${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 71: invalid payload: attrs must be an array
-	EOF
-	test_cmp ${name}.expected ${name}.out
+	  | $RPC job-list.list 71 "invalid payload: attrs must be an array"
 '
 test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
-	name="attr-not-string" &&
 	jq -j -c -n  "{max_entries:5, attrs:[5]}" \
-	  | $listRPC > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: attr has no string value
-	EOF
-	test_cmp ${name}.expected ${name}.out
+	  | $RPC job-list.list 22 "attr has no string value"
 '
 test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
-	name="field-not-valid" &&
 	jq -j -c -n  "{max_entries:5, attrs:[\"foo\"]}" \
-	  | $listRPC > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: foo is not a valid attribute
-	EOF
-	test_cmp ${name}.expected ${name}.out
+	  | $RPC job-list.list 22 "foo is not a valid attribute"
 '
 test_expect_success 'list-id request with empty payload fails with EPROTO(71)' '
 	${RPC} job-list.list-id 71 </dev/null
 '
 test_expect_success 'list-id request with invalid input fails with EPROTO(71) (attrs not an array)' '
-	name="list-id-attrs-not-array" &&
 	id=`flux submit hostname | flux job id` &&
 	jq -j -c -n  "{id:${id}, attrs:5}" \
-	  | $listRPC list-id > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 71: invalid payload: attrs must be an array
-	EOF
-	test_cmp ${name}.expected ${name}.out
+	  | $RPC job-list.list-id 71 "invalid payload: attrs must be an array"
 '
 test_expect_success 'list-id request with invalid input fails with EINVAL(22) (attrs non-string)' '
-	name="list-id-invalid-attrs" &&
 	id=$(flux jobs -c1 -ano {id.dec}) &&
 	jq -j -c -n  "{id:${id}, attrs:[5]}" \
-	  | $listRPC list-id > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: attr has no string value
-	EOF
-	test_cmp ${name}.expected ${name}.out
+	  | $RPC job-list.list-id 22 "attr has no string value"
 '
 test_expect_success 'list-id request with invalid input fails with EINVAL(22) (attrs illegal field)' '
-	name="list-id-invalid-attr" &&
 	id=$(flux jobs -c1 -ano {id.dec}) &&
 	jq -j -c -n  "{id:${id}, attrs:[\"foo\"]}" \
-	  | $listRPC list-id >${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: foo is not a valid attribute
-	EOF
-	test_cmp ${name}.expected ${name}.out
+	  | $RPC job-list.list-id 22 "foo is not a valid attribute"
 '
 # Restart job-list from the KVS.  job-list used to pull in job eventlogs
 # directly from the KVS at startup, but now it gets them via the job manager
