@@ -1020,8 +1020,12 @@ class Modprobe:
         for name in tasks:
             task = self.get_task(name)
             if "*" in task.after:
+                # Add all tasks to deps (except those that also specify "*"
+                # in their 'after' list)
                 deps[task.name] = [
-                    self.get_task(x).name for x in tasks if x != task.name
+                    self.get_task(x).name
+                    for x in tasks
+                    if "*" not in self.get_task(x).after
                 ]
             else:
                 after_tasks = [self.get_task(x).name for x in task.after]
