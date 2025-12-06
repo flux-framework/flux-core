@@ -50,7 +50,6 @@ RUN yum -y update \
 	munge-devel \
 	ncurses-devel \
 	lz4-devel \
-	sqlite-devel \
 	libuuid-devel \
 	hwloc-devel \
 	mpich-devel \
