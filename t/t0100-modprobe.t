@@ -161,7 +161,40 @@ test_expect_success 'modprobe after=* works' '
 	EOF
 	test_cmp test${seq}.expected output${seq}
 '
+seq=$((seq=seq+1))
+test_expect_success 'modprobe multiple after=* works' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+	def setup(context):
+	    print("setup")
 
+	@task("first", before=["*"])
+	def first(context):
+	    print("first")
+
+	@task("last")
+	def last(context):
+	    print("last")
+
+	@task("really-last", after=["*"])
+	def really_last(context):
+	    print("really-last")
+
+	@task("also-really-last", after=["*"])
+	def also_really_last(context):
+	    print("also-really-last")
+	EOF
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	also-really-last
+	really-last
+	EOF
+	# order of really-last and also-really-last not guaranteed, just
+	# make sure really-last and also-really-last came after the others:
+	cat output${seq} | tail -2 | sort >output${seq}.sorted &&
+	test_cmp test${seq}.expected output${seq}.sorted
+'
 seq=$((seq=seq+1))
 test_expect_success 'modprobe needs prevents task from running' '
 	cat <<-EOF >test${seq}.py &&
