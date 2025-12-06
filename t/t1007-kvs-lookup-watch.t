@@ -823,26 +823,26 @@ test_expect_success 'kvs-watch.lookup request with empty payload fails with EPRO
 # N.B. FLUX_KVS_WATCH = 4
 test_expect_success 'kvs-watch.lookup request non-streaming w/ WATCH fails with EPROTO(71)' '
 	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":4}" \
-		${RPC} kvs-watch.lookup 71
+		| ${RPC} kvs-watch.lookup 71
 '
 # N.B. FLUX_KVS_STREAM = 512
 test_expect_success 'kvs-watch.lookup request non-streaming w/ STREAM fails with EPROTO(71)' '
 	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":512}" \
-		${RPC} kvs-watch.lookup 71
+		| ${RPC} kvs-watch.lookup 71
 '
 test_expect_success 'kvs-watch.lookup request w/ WATCH and STREAM fails with EPROTO(71)' '
 	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":516}" \
-		${RPC_STREAM} kvs-watch.lookup 71
+		| ${RPC_STREAM} kvs-watch.lookup 71
 '
 # N.B. FLUX_KVS_WATCH_FULL = 64
 test_expect_success 'kvs-watch.lookup request extra WATCH flag w/o WATCH fails with EPROTO(71)' '
 	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":64}" \
-		${RPC_STREAM} kvs-watch.lookup 71
+		| ${RPC_STREAM} kvs-watch.lookup 71
 '
 # N.B. FLUX_KVS_WATCH_INITIAL_SENTINEL = 1024
 test_expect_success 'kvs-watch.lookup request INITIAL_SENTINEL w/o APPEND fails with EPROTO(71)' '
 	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":1028}" \
-		${RPC_STREAM} kvs-watch.lookup 71
+		| ${RPC_STREAM} kvs-watch.lookup 71
 '
 
 #

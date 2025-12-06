@@ -69,9 +69,6 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     int max_entries = optparse_get_int (p, "count", 0);
     flux_t *h;
     flux_future_t *f;
-    json_t *jobs;
-    size_t index;
-    json_t *value;
     uint32_t userid;
     int states = 0;
     json_t *c;
@@ -112,21 +109,26 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     if (!(f = flux_rpc_pack (h,
                              "job-list.list",
                              FLUX_NODEID_ANY,
-                             0,
+                             FLUX_RPC_STREAMING,
                              "{s:i s:[s] s:o}",
                              "max_entries", max_entries,
                              "attrs", "all",
                              "constraint", c)))
         log_err_exit ("flux_rpc_pack");
-    if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
-        log_msg_exit ("flux job-list.list: %s", future_strerror (f, errno));
-    json_array_foreach (jobs, index, value) {
+    while (1) {
+        json_t *job;
         char *str;
-        str = json_dumps (value, 0);
+        if (flux_rpc_get_unpack (f, "{s:o}", "job", &job) < 0) {
+            if (errno == ENODATA)
+                break;
+            log_msg_exit ("flux job-list.list: %s", future_strerror (f, errno));
+        }
+        str = json_dumps (job, 0);
         if (!str)
             log_msg_exit ("error parsing list response");
         printf ("%s\n", str);
         free (str);
+        flux_future_reset (f);
     }
     flux_future_destroy (f);
     flux_close (h);
@@ -141,9 +143,6 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
     double since = optparse_get_double (p, "since", 0.);
     flux_t *h;
     flux_future_t *f;
-    json_t *jobs;
-    size_t index;
-    json_t *value;
     json_t *c;
 
     if (isatty (STDOUT_FILENO)) {
@@ -165,22 +164,27 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
     if (!(f = flux_rpc_pack (h,
                              "job-list.list",
                              FLUX_NODEID_ANY,
-                             0,
+                             FLUX_RPC_STREAMING,
                              "{s:i s:f s:[s] s:o}",
                              "max_entries", max_entries,
                              "since", since,
                              "attrs", "all",
                              "constraint", c)))
         log_err_exit ("flux_rpc_pack");
-    if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
-        log_msg_exit ("flux job-list.list: %s", future_strerror (f, errno));
-    json_array_foreach (jobs, index, value) {
+    while (1) {
+        json_t *job;
         char *str;
-        str = json_dumps (value, 0);
+        if (flux_rpc_get_unpack (f, "{s:o}", "job", &job) < 0) {
+            if (errno == ENODATA)
+                break;
+            log_msg_exit ("flux job-list.list: %s", future_strerror (f, errno));
+        }
+        str = json_dumps (job, 0);
         if (!str)
             log_msg_exit ("error parsing list response");
         printf ("%s\n", str);
         free (str);
+        flux_future_reset (f);
     }
     flux_future_destroy (f);
     flux_close (h);
