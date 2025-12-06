@@ -69,6 +69,10 @@ exits, Flux exits.
 For more information on starting Flux in various environments and using it,
 please refer to our [docs](https://flux-framework.readthedocs.io) pages.
 
+#### Contributing
+
+We are an open-source community and welcome contributions and feedback. For Governance, Contributing, contacts, and Code of Conduct guides, see [RFC 1.](https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_1.html). 
+
 #### Release
 
 SPDX-License-Identifier: LGPL-3.0
