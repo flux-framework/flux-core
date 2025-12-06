@@ -369,11 +369,29 @@ following optional arguments:
    are loaded. During shutdown (``rc3``), this task runs before the listed
    modules are removed.
 
+   The special value ``"*"`` ensures this task runs before all other named
+   tasks (except ``setup()`` and other tasks that also specify ``before=["*"]``).
+   Multiple tasks using ``before=["*"]`` run in parallel with no guaranteed
+   ordering. If a task uses ``before=["*"]`` then the ``after`` list must be empty.
+
+   .. note::
+      A task with ``before=["*"]`` cannot be listed in another task's
+      ``before`` list, as this would create a circular dependency.
+
 **after**
    (optional, list) A list of tasks or modules that this task must run after.
    During startup (``run`` or ``rc1``), this task runs after the listed modules
    are loaded. During shutdown (``rc3``), this task runs after the listed
    modules are removed.
+
+   The special value ``"*"`` ensures this task runs after all other named
+   tasks (except other tasks that also specify ``after=["*"]``). Multiple tasks
+   using ``after=["*"]`` run in parallel with no guaranteed order. If a task uses
+   ``after=["*"]`` then the ``before`` list must be empty.
+
+   .. note::
+      A task with ``after=["*"]`` cannot be listed in another task's
+      ``after`` list, as this would create a circular dependency.
 
 **needs_attrs**
    (optional, list) A list of broker attributes on which this task depends.
