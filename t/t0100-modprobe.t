@@ -103,6 +103,36 @@ test_expect_success 'modprobe before=* works' '
 	test_cmp test${seq}.expected output${seq}
 '
 seq=$((seq=seq+1))
+test_expect_success 'modprobe multiple before=* works' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+	def setup(context):
+	    print("setup")
+
+	@task("first", before=["*"])
+	def first(context):
+	    print("first")
+
+	@task("also-before", before=["*"])
+	def also_before(context):
+	    print("also-before")
+
+	@task("last")
+	def last(context):
+	    print("last")
+	EOF
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	also-before
+	first
+	EOF
+	# order of first and also-before not guaranteed. Just make sure
+	# they both come after setup and before last:
+	cat output${seq} | head -3 | tail -2 | sort >output${seq}.sorted &&
+	test_cmp test${seq}.expected output${seq}.sorted
+'
+seq=$((seq=seq+1))
 test_expect_success 'modprobe after=* works' '
 	cat <<-EOF >test${seq}.py &&
 	from flux.modprobe import task
