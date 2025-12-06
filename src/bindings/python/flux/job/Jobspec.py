@@ -169,6 +169,29 @@ def validate_jobspec(jobspec, require_version=None):
     return True, jobspec
 
 
+def validate_counts(resources):
+    """
+    Validate counts of resources. Counts must be a positive integer.
+
+    :param resources:  dictionary following the specification in RFC14 for
+                       the `resources` top-level key
+    """
+    for resource in resources:
+        # e.g., count: 2, type: core, count type: int
+        count = resource["count"]
+        res_type = resource["type"]
+        count_type = type(count).__name__
+
+        # Count of resource must be an integer
+        if not isinstance(count, int):
+            raise ValueError(
+                f"resource count must be an integer for type '{res_type}' (got '{count_type}')"
+            )
+        # Count must be a non-negative integer (0) not allowed, already tested.
+        # Recursively call for with blocks
+        validate_counts(resource.get("with", []))
+
+
 def _attr_key_prepend(key):
     """
     Amend a key provided to setattr, getattr, etc. to prepend ``attributes.``
@@ -864,6 +887,9 @@ class JobspecV1(Jobspec):
         for task in tasks:
             if task["count"].keys().isdisjoint({"per_slot", "total"}):
                 raise ValueError("count per_slot or total must be set")
+
+        # validate resources counts (non-negative integers)
+        validate_counts(resources)
 
     def _set_extra_options(
         self,
