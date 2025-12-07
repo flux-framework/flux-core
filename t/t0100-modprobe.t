@@ -246,6 +246,45 @@ test_expect_success 'modprobe fails when task lists after=* task as dependency' 
 	grep "nodes are in a cycle" ${seq}.err
 '
 seq=$((seq=seq+1))
+test_expect_success 'modprobe fails when task has before=* and after' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+	def setup(context):
+	    print("setup")
+
+	@task("first", before=["*"])
+	def first(context):
+	    print("first")
+
+	@task("next", before=["*"], after=["first"])
+	def next(context):
+	    print("next")
+
+	EOF
+	test_must_fail flux modprobe run test${seq}.py 2>${seq}.err &&
+	test_debug "cat ${seq}.err" &&
+	grep "next: cannot specify.*before=.*after.*is also set" ${seq}.err
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe fails when task has after=* and before' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+	def setup(context):
+	    print("setup")
+
+	@task("last", after=["*"])
+	def last(context):
+	    print("last")
+
+	@task("before", after=["*"], before=["last"])
+	def before(context):
+	    print("before")
+	EOF
+	test_must_fail flux modprobe run test${seq}.py 2>${seq}.err &&
+	test_debug "cat ${seq}.err" &&
+	grep "before: cannot specify.*after=.*before.*is also set" ${seq}.err
+'
+seq=$((seq=seq+1))
 test_expect_success 'modprobe needs prevents task from running' '
 	cat <<-EOF >test${seq}.py &&
 	from flux.modprobe import task
