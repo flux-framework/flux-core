@@ -201,6 +201,17 @@ class Task:
         # convert self.ranks to rank conditional object:
         self.ranks = rank_conditional(self.ranks)
 
+        if "*" in self.before and self.after:
+            raise ValueError(
+                f"{self.name}: cannot specify 'before=[\"*\"]' "
+                f"when 'after' is also set (after={self.after})"
+            )
+        if "*" in self.after and self.before:
+            raise ValueError(
+                f"{self.name}: cannot specify 'after=[\"*\"]' "
+                f"when 'before' is also set (before={self.before})"
+            )
+
     @staticmethod
     def _check_spec(spec, getter):
         """
