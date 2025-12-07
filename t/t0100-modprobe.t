@@ -133,6 +133,29 @@ test_expect_success 'modprobe multiple before=* works' '
 	test_cmp test${seq}.expected output${seq}.sorted
 '
 seq=$((seq=seq+1))
+test_expect_success 'modprobe fails when task lists before=* task in before list' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+	def setup(context):
+	    print("setup")
+
+	@task("first", before=["*"])
+	def first(context):
+	    print("first")
+
+	@task("before-first", before=["first"])
+	def before_first(context):
+	    print("before-first")
+
+	@task("last")
+	def last(context):
+	    print("last")
+	EOF
+	test_must_fail flux modprobe run test${seq}.py 2>${seq}.err &&
+	test_debug "cat ${seq}.err" &&
+	grep "nodes are in a cycle" ${seq}.err
+'
+seq=$((seq=seq+1))
 test_expect_success 'modprobe after=* works' '
 	cat <<-EOF >test${seq}.py &&
 	from flux.modprobe import task
@@ -194,6 +217,33 @@ test_expect_success 'modprobe multiple after=* works' '
 	# make sure really-last and also-really-last came after the others:
 	cat output${seq} | tail -2 | sort >output${seq}.sorted &&
 	test_cmp test${seq}.expected output${seq}.sorted
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe fails when task lists after=* task as dependency' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+	def setup(context):
+	    print("setup")
+
+	@task("first", before=["*"])
+	def first(context):
+	    print("first")
+
+	@task("last")
+	def last(context):
+	    print("last")
+
+	@task("really-last", after=["*"])
+	def really_last(context):
+	    print("really-last")
+
+	@task("after-really-last", after=["really-last"])
+	def after_really_last(context):
+	    print("after-really-last")
+	EOF
+	test_must_fail flux modprobe run test${seq}.py 2>${seq}.err &&
+	test_debug "cat ${seq}.err" &&
+	grep "nodes are in a cycle" ${seq}.err
 '
 seq=$((seq=seq+1))
 test_expect_success 'modprobe needs prevents task from running' '
