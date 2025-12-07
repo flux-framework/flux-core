@@ -64,6 +64,7 @@ jobs:
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
+    - run: git fetch --tags || true
     - run: >
         src/test/docker/docker-run-checks.sh --image=el8 --install-only \
           --tag=fluxrm/flux-core:el8
