@@ -19,7 +19,7 @@ IDSETUTIL=${FLUX_BUILD_DIR}/src/common/libidset/test_idsetutil
 
 # Usage: acquire_stream timeout outfile [end-event]
 acquire_stream() {
-	run_timeout $1 $RPC_STREAM resource.acquire $3 </dev/null >$2
+	run_timeout $1 $RPC_STREAM -e $3 resource.acquire </dev/null >$2
 }
 
 # Usage: waitup N

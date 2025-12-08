@@ -12,12 +12,27 @@
 #include "config.h"
 #endif
 #include <unistd.h>
+#include <getopt.h>
 #include <jansson.h>
 #include <stdio.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/log.h"
+
+#define OPTIONS "e:"
+static const struct option longopts[] = {
+    {"end-key", no_argument,  0, 'e'},
+    { 0, 0, 0, 0 },
+};
+
+void usage (void)
+{
+    fprintf (stderr,
+             "Usage: rpc_stream [-e <end_key>] topic "
+             "[errnum] [errmsg] <payload\n");
+    exit (1);
+}
 
 int main (int argc, char *argv[])
 {
@@ -27,18 +42,39 @@ int main (int argc, char *argv[])
     ssize_t inlen;
     void *inbuf;
     const char *out;
+    int expected_errno = -1;
+    const char *expected_errmsg = NULL;
     const char *end_key = NULL;
+    int ch;
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (argc != 2 && argc != 3) {
-        fprintf (stderr, "Usage: rpc_stream topic [end-key] <payload\n");
-        exit (1);
+    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
+        switch (ch) {
+            case 'e':
+                end_key = optarg;
+                break;
+            default:
+                usage ();
+        }
     }
-    topic = argv[1];
-    if (argc == 3)
-        end_key = argv[2];
+    if (argc - optind != 1
+        && argc - optind != 2
+        && argc - optind != 3)
+        usage ();
+    topic = argv[optind++];
+    if (argc - optind > 0) {
+        char *endptr;
+        errno = 0;
+        expected_errno = strtoul (argv[optind++], &endptr, 10);
+        if (errno != 0
+            || expected_errno < 0
+            || *endptr != '\0')
+            log_msg_exit ("expected errno invalid");
+    }
+    if (argc - optind > 0)
+        expected_errmsg = argv[optind++];
 
     /* N.B. As a safety measure, read_all() adds a NUL char to the buffer
      * that is not accounted for in the returned length.
@@ -54,8 +90,25 @@ int main (int argc, char *argv[])
 
     bool done = false;
     do {
-        if (flux_rpc_get (f, &out) < 0)
+        if (flux_rpc_get (f, &out) < 0) {
+            if (errno == ENODATA)
+                break;
+            if (expected_errno > 0) {
+                if (errno != expected_errno)
+                    log_msg_exit ("%s: failed with errno=%d != expected %d",
+                                  topic, errno, expected_errno);
+                if (expected_errmsg) {
+                    const char *errmsg = flux_future_error_string (f);
+                    if (!errmsg || strstr (errmsg, expected_errmsg) == NULL)
+                        log_msg_exit ("%s: failed with errmsg=%s, expected=%s",
+                                      topic,
+                                      errmsg ? errmsg : "(null)",
+                                      expected_errmsg);
+                }
+                break;
+            }
             log_msg_exit ("%s: %s", topic, future_strerror (f, errno));
+        }
         printf ("%s\n", out);
         fflush (stdout);
         if (end_key) {

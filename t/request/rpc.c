@@ -29,7 +29,8 @@ static const struct option longopts[] = {
 
 void usage (void)
 {
-    fprintf (stderr, "Usage: rpc [-r] [-R] topic [errnum] <payload >payload\n");
+    fprintf (stderr,
+             "Usage: rpc [-r] [-R] topic [errnum] [errmsg] <payload >payload\n");
     exit (1);
 }
 
@@ -43,6 +44,7 @@ int main (int argc, char *argv[])
     const char *outbuf;
     size_t outlen;
     int expected_errno = -1;
+    const char *expected_errmsg = NULL;
     int ch;
     bool raw_request = false;
     bool raw_response = false;
@@ -60,11 +62,22 @@ int main (int argc, char *argv[])
                 usage ();
         }
     }
-    if (argc - optind != 1 && argc - optind != 2)
+    if (argc - optind != 1
+        && argc - optind != 2
+        && argc - optind != 3)
         usage ();
     topic = argv[optind++];
+    if (argc - optind > 0) {
+        char *endptr;
+        errno = 0;
+        expected_errno = strtoul (argv[optind++], &endptr, 10);
+        if (errno != 0
+            || expected_errno < 0
+            || *endptr != '\0')
+            log_msg_exit ("expected errno invalid");
+    }
     if (argc - optind > 0)
-        expected_errno = strtoul (argv[optind++], NULL, 10);
+        expected_errmsg = argv[optind++];
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -92,6 +105,14 @@ int main (int argc, char *argv[])
             if (errno != expected_errno)
                 log_msg_exit ("%s: failed with errno=%d != expected %d",
                               topic, errno, expected_errno);
+            if (expected_errmsg) {
+                const char *errmsg = flux_future_error_string (f);
+                if (!errmsg || strstr (errmsg, expected_errmsg) == NULL)
+                    log_msg_exit ("%s: failed with errmsg=%s, expected=%s",
+                                  topic,
+                                  errmsg ? errmsg : "(null)",
+                                  expected_errmsg);
+            }
         }
         else
             log_msg_exit ("%s: %s", topic, future_strerror (f, errno));

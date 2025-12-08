@@ -109,7 +109,7 @@ test_expect_success 'quorum-get RPC fails on rank > 0' '
 
 test_expect_success 'monitor streaming RPC works' '
 	flux start ${ARGS} \
-		$SRPC state-machine.monitor state \
+		$SRPC -e state state-machine.monitor \
 		</dev/null >state.out &&
 	jq -cea .state state.out
 '

@@ -156,8 +156,7 @@ test_expect_success 'flux content checkpoint list shows correct checkpoints (6)'
 '
 
 test_expect_success 'checkpoint-put bad request fails with EPROTO' '
-	test_must_fail $RPC content.checkpoint-put </dev/null 2>badput.err &&
-	grep "Protocol error" badput.err
+	$RPC content.checkpoint-put 71 "Protocol error" </dev/null
 '
 
 test_expect_success 'reload content-files module' '
