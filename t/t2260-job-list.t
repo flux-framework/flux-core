@@ -829,6 +829,17 @@ test_expect_success 'flux job list only completed jobs (legacy RPC)' '
 	test_cmp completed.ids legacy_result_completed.out
 '
 
+# non-streaming backwards compatibility
+
+test_expect_success 'flux job list works with non-streaming RPC' '
+	id=$(id -u) &&
+	constraint="{ userid:[${id}] }" &&
+	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | jq .jobs[].id > list_constraint_backwards.out &&
+	numlines=$(cat all.ids | wc -l) &&
+	test $(cat list_constraint_backwards.out | wc -l) -eq ${numlines}
+'
+
 # with single anonymous queue, queues arrays should be zero length
 test_expect_success 'job stats lists jobs in correct state (mix)' '
 	flux job stats | jq -e ".job_states.depend == 0" &&
