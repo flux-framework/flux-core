@@ -20,9 +20,26 @@ from flux.rpc import RPC
 
 
 class JobListRPC(RPC):
+    def __init__(self, *args, **kwargs):
+        if "flags" in kwargs:
+            kwargs["flags"] |= flux.constants.FLUX_RPC_STREAMING
+        else:
+            kwargs["flags"] = flux.constants.FLUX_RPC_STREAMING
+        super().__init__(*args, **kwargs)
+
     def get_jobs(self):
-        """Returns all jobs in the RPC."""
-        return self.get()["jobs"]
+        """Returns all jobs."""
+        jobs = []
+        while True:
+            try:
+                jobstmp = self.get()["jobs"]
+                jobs.extend(jobstmp)
+            except OSError as exc:
+                if exc.errno == errno.ENODATA:
+                    break
+                raise
+            self.reset()
+        return jobs
 
     def get_jobinfos(self):
         """Yields a JobInfo object for each job in its current state.

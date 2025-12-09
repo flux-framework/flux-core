@@ -10,6 +10,7 @@ export FLUX_CONF_DIR=$(pwd)
 test_under_flux 4 job --test-hosts=node[0-3]
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+RPC_STREAM=${FLUX_BUILD_DIR}/t/request/rpc_stream
 JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py"
 
@@ -238,7 +239,7 @@ test_expect_success 'flux job list only canceled jobs' '
 	result=`${JOB_CONV} strtoresult CANCELED` &&
 	constraint="{ and: [ {userid:[${id}]}, {results:[${result}]}] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_result_canceled.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_result_canceled.out &&
 	test_cmp canceled.ids list_result_canceled.out
 '
 
@@ -247,7 +248,7 @@ test_expect_success 'flux job list only failed jobs' '
 	result=`${JOB_CONV} strtoresult FAILED` &&
 	constraint="{ and: [ {userid:[${id}]}, {results:[${result}]}] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_result_failed.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_result_failed.out &&
 	test_cmp failed.ids list_result_failed.out
 '
 
@@ -256,7 +257,7 @@ test_expect_success 'flux job list only timeout jobs' '
 	result=`${JOB_CONV} strtoresult TIMEOUT` &&
 	constraint="{ and: [ {userid:[${id}]}, {results:[${result}]}] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_result_timeout.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_result_timeout.out &&
 	test_cmp timeout.ids list_result_timeout.out
 '
 
@@ -265,7 +266,7 @@ test_expect_success 'flux job list only completed jobs' '
 	result=`${JOB_CONV} strtoresult COMPLETED` &&
 	constraint="{ and: [ {userid:[${id}]}, {results:[${result}]}] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_result_completed.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_result_completed.out &&
 	test_cmp completed.ids list_result_completed.out
 '
 
@@ -398,7 +399,7 @@ test_expect_success 'flux job list hostname jobs' '
 	id=$(id -u) &&
 	constraint="{ and: [ {userid:[${id}]}, {name:[\"hostname\"]}] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_hostname_jobs.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_hostname_jobs.out &&
 	numlines=$(cat pending.ids completed.ids | wc -l) &&
 	test $(cat list_constraint_hostname_jobs.out | wc -l) -eq ${numlines}
 '
@@ -407,7 +408,7 @@ test_expect_success 'flux job list active hostname jobs' '
 	id=$(id -u) &&
 	constraint="{ and: [ {userid:[${id}]}, {states:[\"active\"]}, {name:[\"hostname\"]}] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_pending_hostname.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_pending_hostname.out &&
 	test_cmp list_constraint_pending_hostname.out pending.ids
 '
 
@@ -415,7 +416,7 @@ test_expect_success 'flux job list inactive hostname jobs' '
 	id=$(id -u) &&
 	constraint="{ and: [ {userid:[${id}]}, {states:[\"inactive\"]}, {name:[\"hostname\"]}] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_inactive_hostname.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_inactive_hostname.out &&
 	test_cmp list_constraint_inactive_hostname.out completed.ids
 '
 
@@ -423,7 +424,7 @@ test_expect_success 'flux job list invalid queue' '
 	id=$(id -u) &&
 	constraint="{ and: [ {userid:[${id}]}, {queue:[\"blarg\"]}] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_invalid_queue.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_invalid_queue.out &&
 	test $(cat list_constraint_invalid_queue.out | wc -l) -eq 0
 '
 
@@ -432,7 +433,7 @@ test_expect_success 'flux job list active (1)' '
 	state2=`${JOB_CONV} strtostate RUN` &&
 	constraint="{ or: [ {states:[${state1}]}, {states:[${state2}]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_active1.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_active1.out &&
 	numlines=$(cat active.ids | wc -l) &&
 	test $(cat list_constraint_active1.out | wc -l) -eq ${numlines}
 '
@@ -441,7 +442,7 @@ test_expect_success 'flux job list active (2)' '
 	state1=`${JOB_CONV} strtostate INACTIVE` &&
 	constraint="{ not: [ {states:[${state1}]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_active2.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_active2.out &&
 	numlines=$(cat active.ids | wc -l) &&
 	test $(cat list_constraint_active2.out | wc -l) -eq ${numlines}
 '
@@ -451,7 +452,7 @@ test_expect_success 'flux job list pending jobs or inactive jobs (1)' '
 	state2=`${JOB_CONV} strtostate INACTIVE` &&
 	constraint="{ or: [ {states:[${state1}]}, {states:[${state2}]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_pending_inactive1.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_pending_inactive1.out &&
 	numlines=$(cat pending.ids inactive.ids | wc -l) &&
 	test $(cat list_constraint_pending_inactive1.out | wc -l) -eq ${numlines}
 '
@@ -461,7 +462,7 @@ test_expect_success 'flux job list pending jobs or inactive jobs (2)' '
 	state2=`${JOB_CONV} strtostate INACTIVE` &&
 	constraint="{ or: [ {states:[${state1}, ${state2}]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_pending_inactive2.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_pending_inactive2.out &&
 	numlines=$(cat pending.ids inactive.ids | wc -l) &&
 	test $(cat list_constraint_pending_inactive2.out | wc -l) -eq ${numlines}
 '
@@ -471,7 +472,7 @@ test_expect_success 'flux job list failed and canceled jobs (1)' '
 	result2=`${JOB_CONV} strtoresult CANCELED` &&
 	constraint="{ or: [ {results:[${result1}]}, {results:[${result2}]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_failed_canceled1.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_failed_canceled1.out &&
 	numlines=$(cat canceled.ids failed.ids | wc -l) &&
 	test $(cat list_constraint_failed_canceled1.out | wc -l) -eq ${numlines}
 '
@@ -481,7 +482,7 @@ test_expect_success 'flux job list failed and canceled jobs (2)' '
 	result2=`${JOB_CONV} strtoresult CANCELED` &&
 	constraint="{ and: [ {userid:[${id}]}, {results:[${result1}, ${result2}]}] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_failed_canceled2.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_failed_canceled2.out &&
 	numlines=$(cat canceled.ids failed.ids | wc -l) &&
 	test $(cat list_constraint_failed_canceled2.out | wc -l) -eq ${numlines}
 '
@@ -492,7 +493,7 @@ test_expect_success 'flux job list pending jobs or failed jobs (1)' '
 	result1=`${JOB_CONV} strtoresult FAILED` &&
 	constraint="{ or: [ {states:[${state1}]}, {and: [ {states:[${state2}]}, {results:[${result1}]} ] } ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_pending_failed1.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_pending_failed1.out &&
 	numlines=$(cat pending.ids failed.ids | wc -l) &&
 	test $(cat list_constraint_pending_failed1.out | wc -l) -eq ${numlines}
 '
@@ -502,7 +503,7 @@ test_expect_success 'flux job list pending jobs or failed jobs (2)' '
 	result1=`${JOB_CONV} strtoresult FAILED` &&
 	constraint="{ or: [ {states:[${state1}]}, {results:[${result1}]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_pending_failed2.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_pending_failed2.out &&
 	numlines=$(cat pending.ids failed.ids | wc -l) &&
 	test $(cat list_constraint_pending_failed2.out | wc -l) -eq ${numlines}
 '
@@ -511,7 +512,7 @@ test_expect_success 'flux job list inactive (1)' '
 	state1=`${JOB_CONV} strtostate INACTIVE` &&
 	constraint="{ or: [ {states:[${state1}]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_inactive1.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_inactive1.out &&
 	numlines=$(cat inactive.ids | wc -l) &&
 	test $(cat list_constraint_inactive1.out | wc -l) -eq ${numlines}
 '
@@ -521,7 +522,7 @@ test_expect_success 'flux job list inactive (2)' '
 	state2=`${JOB_CONV} strtostate RUN` &&
 	constraint="{ not: [ { or: [ {states:[${state1}]}, {states:[${state2}]} ] } ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_inactive2.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_inactive2.out &&
 	numlines=$(cat inactive.ids | wc -l) &&
 	test $(cat list_constraint_inactive2.out | wc -l) -eq ${numlines}
 '
@@ -529,7 +530,7 @@ test_expect_success 'flux job list inactive (2)' '
 test_expect_success 'flux job list have run via t_run (1)' '
 	constraint="{ or: [ {t_run:[\">=0\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_t_run1.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_t_run1.out &&
 	numlines=$(cat running.ids failed.ids timeout.ids completed.ids | wc -l) &&
 	test $(cat list_constraint_t_run1.out | wc -l) -eq ${numlines}
 '
@@ -538,7 +539,7 @@ test_expect_success 'flux job list have run via t_run (1)' '
 test_expect_success 'flux job list have run via t_run (2)' '
 	constraint="{ or: [ {t_run:[\">=1.0\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_t_run2.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_t_run2.out &&
 	numlines=$(cat running.ids failed.ids timeout.ids completed.ids | wc -l) &&
 	test $(cat list_constraint_t_run2.out | wc -l) -eq ${numlines}
 '
@@ -546,7 +547,7 @@ test_expect_success 'flux job list have run via t_run (2)' '
 test_expect_success 'flux job list have run via t_run (3)' '
 	constraint="{ or: [ {t_run:[\">1.1\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_t_run3.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_t_run3.out &&
 	numlines=$(cat running.ids failed.ids timeout.ids completed.ids | wc -l) &&
 	test $(cat list_constraint_t_run3.out | wc -l) -eq ${numlines}
 '
@@ -554,7 +555,7 @@ test_expect_success 'flux job list have run via t_run (3)' '
 test_expect_success 'flux job list inactive via t_inactive (1)' '
 	constraint="{ or: [ {t_inactive:[\">=0\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_t_inactive1.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_t_inactive1.out &&
 	numlines=$(cat inactive.ids | wc -l) &&
 	test $(cat list_constraint_t_inactive1.out | wc -l) -eq ${numlines}
 '
@@ -563,7 +564,7 @@ test_expect_success 'flux job list inactive via t_inactive (1)' '
 test_expect_success 'flux job list inactive via t_inactive (2)' '
 	constraint="{ or: [ {t_inactive:[\">=1.0\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_t_inactive2.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_t_inactive2.out &&
 	numlines=$(cat inactive.ids | wc -l) &&
 	test $(cat list_constraint_t_inactive2.out | wc -l) -eq ${numlines}
 '
@@ -571,7 +572,7 @@ test_expect_success 'flux job list inactive via t_inactive (2)' '
 test_expect_success 'flux job list inactive via t_inactive (3)' '
 	constraint="{ or: [ {t_inactive:[\">1.1\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_t_inactive3.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_t_inactive3.out &&
 	numlines=$(cat inactive.ids | wc -l) &&
 	test $(cat list_constraint_t_inactive3.out | wc -l) -eq ${numlines}
 '
@@ -579,21 +580,21 @@ test_expect_success 'flux job list inactive via t_inactive (3)' '
 test_expect_success 'flux job list none via t_inactive (1)' '
 	constraint="{ or: [ {t_inactive:[\"<0\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_none1.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_none1.out &&
 	test $(cat list_constraint_none1.out | wc -l) -eq 0
 '
 
 test_expect_success 'flux job list none via t_inactive (2)' '
 	constraint="{ or: [ {t_inactive:[\"<=0\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_none1.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_none1.out &&
 	test $(cat list_constraint_none1.out | wc -l) -eq 0
 '
 
 test_expect_success 'flux job list all via t_depend (1)' '
 	constraint="{ or: [ {t_depend:[\">=0\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_all1.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_all1.out &&
 	numlines=$(cat all.ids | wc -l) &&
 	test $(cat list_constraint_all1.out | wc -l) -eq ${numlines}
 '
@@ -602,7 +603,7 @@ test_expect_success 'flux job list all via t_depend (1)' '
 test_expect_success 'flux job list all via t_depend (2)' '
 	constraint="{ or: [ {t_depend:[\">=1.0\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_all2.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_all2.out &&
 	numlines=$(cat all.ids | wc -l) &&
 	test $(cat list_constraint_all2.out | wc -l) -eq ${numlines}
 '
@@ -610,7 +611,7 @@ test_expect_success 'flux job list all via t_depend (2)' '
 test_expect_success 'flux job list all via t_depend (3)' '
 	constraint="{ or: [ {t_depend:[\">1.1\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > list_constraint_all3.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_all3.out &&
 	numlines=$(cat all.ids | wc -l) &&
 	test $(cat list_constraint_all3.out | wc -l) -eq ${numlines}
 '
@@ -628,7 +629,7 @@ test_expect_success 'flux job list all via t_depend (3)' '
 test_expect_success 'flux job list all jobs that ran on any node (1)' '
 	constraint="{ and: [ {hostlist:[\"node[0-3]\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > constraint_hostlist1.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > constraint_hostlist1.out &&
 	numlines=$(cat completed.ids running.ids failed.ids timeout.ids | wc -l) &&
 	test $(cat constraint_hostlist1.out | wc -l) -eq ${numlines}
 '
@@ -636,7 +637,7 @@ test_expect_success 'flux job list all jobs that ran on any node (1)' '
 test_expect_success 'flux job list all jobs that ran on any node (2)' '
 	constraint="{ and: [ {hostlist:[\"node[2-3]\", \"node1\", \"node0\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > constraint_hostlist2.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > constraint_hostlist2.out &&
 	numlines=$(cat completed.ids running.ids failed.ids timeout.ids | wc -l) &&
 	test $(cat constraint_hostlist2.out | wc -l) -eq ${numlines}
 '
@@ -645,7 +646,7 @@ test_expect_success 'flux job list all jobs that ran on any node (2)' '
 test_expect_success 'flux job list all jobs that ran on nodes[1-2] (1)' '
 	constraint="{ and: [ {hostlist:[\"node[1-2]\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > constraint_hostlist3.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > constraint_hostlist3.out &&
 	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 2) &&
 	test $(cat constraint_hostlist3.out | wc -l) -eq ${numlines}
 '
@@ -654,7 +655,7 @@ test_expect_success 'flux job list all jobs that ran on nodes[1-2] (1)' '
 test_expect_success 'flux job list all jobs that ran on nodes[1-2] (2)' '
 	constraint="{ and: [ {hostlist:[\"node1\", \"node2\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > constraint_hostlist4.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > constraint_hostlist4.out &&
 	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 2) &&
 	test $(cat constraint_hostlist4.out | wc -l) -eq ${numlines}
 '
@@ -663,7 +664,7 @@ test_expect_success 'flux job list all jobs that ran on nodes[1-2] (2)' '
 test_expect_success 'flux job list all jobs that ran on node3' '
 	constraint="{ and: [ {hostlist:[\"node3\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > constraint_hostlist5.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > constraint_hostlist5.out &&
 	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 4) &&
 	test $(cat constraint_hostlist5.out | wc -l) -eq ${numlines}
 '
@@ -673,7 +674,7 @@ test_expect_success 'flux job list completed jobs that ran on node3' '
 	state=`${JOB_CONV} strtostate INACTIVE` &&
 	constraint="{ and: [ {hostlist:[\"node3\"]}, {states:[${state}]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > constraint_hostlist6.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > constraint_hostlist6.out &&
 	numlines=$(expr $(cat completed.ids | wc -l) / 4) &&
 	test $(cat constraint_hostlist6.out | wc -l) -eq ${numlines}
 '
@@ -683,7 +684,7 @@ test_expect_success 'flux job list running jobs that ran on node3' '
 	state=`${JOB_CONV} strtostate RUNNING` &&
 	constraint="{ and: [ {hostlist:[\"node3\"]}, {states:[${state}]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > constraint_hostlist7.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > constraint_hostlist7.out &&
 	numlines=$(expr $(cat running.ids | wc -l) / 4) &&
 	test $(cat constraint_hostlist7.out | wc -l) -eq ${numlines}
 '
@@ -695,7 +696,7 @@ test_expect_success 'flux job list of running jobs that ran on node[1-2] after c
 	t_submit=`flux job list-ids ${id} | jq .t_submit` &&
 	constraint="{ and: [ {hostlist:[\"node[1-2]\"]}, {t_submit:[\">=${t_submit}\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > constraint_hostlist8.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > constraint_hostlist8.out &&
 	numlines=$(expr $(cat running.ids | wc -l) / 2) &&
 	test $(cat constraint_hostlist8.out | wc -l) -eq ${numlines}
 '
@@ -707,7 +708,7 @@ test_expect_success 'flux job list of running jobs that ran on node[1-2] after c
 	t_inactive=`flux job list-ids ${id} | jq .t_inactive` &&
 	constraint="{ and: [ {hostlist:[\"node[1-2]\"]}, {t_submit:[\">${t_inactive}\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > constraint_hostlist9.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > constraint_hostlist9.out &&
 	numlines=$(expr $(cat running.ids | wc -l) / 2) &&
 	test $(cat constraint_hostlist9.out | wc -l) -eq ${numlines}
 '
@@ -717,7 +718,7 @@ test_expect_success 'flux job list of all jobs that ran on node[1-2] after certa
 	id=`head -n1 completed.ids` &&
 	constraint="{ and: [ {hostlist:[\"node[1-2]\"]}, {t_submit:[\">5\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > constraint_hostlist9.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > constraint_hostlist9.out &&
 	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 2) &&
 	test $(cat constraint_hostlist9.out | wc -l) -eq ${numlines}
 '
@@ -725,7 +726,7 @@ test_expect_success 'flux job list of all jobs that ran on node[1-2] after certa
 test_expect_success 'flux job list by rank (0-3)' '
 	constraint="{ and: [ {ranks:[\"0-3\"]} ] }" &&
 	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq .jobs[].id > constraint_hostlist1.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > constraint_hostlist1.out &&
 	numlines=$(cat completed.ids running.ids failed.ids timeout.ids | wc -l) &&
 	test $(cat constraint_hostlist1.out | wc -l) -eq ${numlines}
 '
@@ -733,20 +734,21 @@ test_expect_success 'flux job list by rank (3)' '
 	constraint="{ and: [ {ranks:[\"3\"]} ] }" &&
 	jq -j -c -n  \
 	  "{max_entries:1000, attrs:[\"ranks\"], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq -r .jobs[].ranks | uniq > jobs.ranks &&
+	  | $RPC_STREAM job-list.list | jq -r .jobs[].ranks | uniq > jobs.ranks &&
 	test $(cat jobs.ranks) -eq 3
 '
 test_expect_success 'flux job list by rank (does not exist)' '
 	constraint="{ and: [ {ranks:[\"10\"]} ] }" &&
 	jq -j -c -n  \
 	  "{max_entries:1000, attrs:[\"ranks\"], constraint:${constraint}}" \
-	  | $RPC job-list.list | jq -e ".jobs|length == 0"
+	  | $RPC_STREAM job-list.list > jobs.noranks &&
+	test_cmp /dev/null jobs.noranks
 '
 test_expect_success 'flux job list by rank (invalid)' '
 	constraint="{ and: [ {ranks:[3]} ] }" &&
 	jq -j -c -n  \
 	  "{max_entries:1000, attrs:[\"ranks\"], constraint:${constraint}}" \
-	  | $RPC job-list.list 71 "value must be a string"
+	  | $RPC_STREAM job-list.list 71 "value must be a string"
 '
 #
 # legacy RPC tests
@@ -755,7 +757,7 @@ test_expect_success 'flux job list by rank (invalid)' '
 test_expect_success 'flux job list all hostname jobs (legacy RPC)' '
 	id=$(id -u) &&
 	jq -j -c -n  "{max_entries:1000, userid:${id}, states:0, results:0, name:\"hostname\", attrs:[]}" \
-	  | $RPC job-list.list | jq .jobs[].id > legacy_hostname_jobs.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > legacy_hostname_jobs.out &&
 	numlines=$(cat pending.ids completed.ids | wc -l) &&
 	test $(cat legacy_hostname_jobs.out | wc -l) -eq ${numlines}
 '
@@ -764,7 +766,7 @@ test_expect_success 'flux job list active hostname jobs (legacy RPC)' '
 	id=$(id -u) &&
 	state=`${JOB_CONV} strtostate ACTIVE` &&
 	jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:0, name:\"hostname\", attrs:[]}" \
-	  | $RPC job-list.list | jq .jobs[].id > legacy_pending_hostname.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > legacy_pending_hostname.out &&
 	test_cmp legacy_pending_hostname.out pending.ids
 '
 
@@ -772,21 +774,21 @@ test_expect_success 'flux job list inactive hostname jobs (legacy RPC)' '
 	id=$(id -u) &&
 	state=`${JOB_CONV} strtostate INACTIVE` &&
 	jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:0, name:\"hostname\", attrs:[]}" \
-	  | $RPC job-list.list | jq .jobs[].id > legacy_inactive_hostname.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > legacy_inactive_hostname.out &&
 	test_cmp legacy_inactive_hostname.out completed.ids
 '
 
 test_expect_success 'flux job list invalid queue (legacy RPC)' '
 	id=$(id -u) &&
 	jq -j -c -n  "{max_entries:1000, userid:${id}, states:0, results:0, queue:\"foof\", attrs:[]}" \
-	  | $RPC job-list.list | jq .jobs[].id > legacy_invalid_queue.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > legacy_invalid_queue.out &&
 	test $(cat legacy_invalid_queue.out | wc -l) -eq 0
 '
 
 test_expect_success 'flux job list active (legacy RPC)' '
 	state=`${JOB_CONV} strtostate ACTIVE` &&
 	jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:0, attrs:[]}" \
-	  | $RPC job-list.list | jq .jobs[].id > legacy_active.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > legacy_active.out &&
 	numlines=$(cat active.ids | wc -l) &&
 	test $(cat legacy_active.out | wc -l) -eq ${numlines}
 '
@@ -796,7 +798,7 @@ test_expect_success 'flux job list only canceled jobs (legacy RPC)' '
 	state=`${JOB_CONV} strtostate INACTIVE` &&
 	result=`${JOB_CONV} strtoresult CANCELED` &&
 	jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
-	  | $RPC job-list.list | jq .jobs[].id > legacy_result_canceled.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > legacy_result_canceled.out &&
 	test_cmp canceled.ids legacy_result_canceled.out
 '
 
@@ -805,7 +807,7 @@ test_expect_success 'flux job list only failed jobs (legacy RPC)' '
 	state=`${JOB_CONV} strtostate INACTIVE` &&
 	result=`${JOB_CONV} strtoresult FAILED` &&
 	jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
-	  | $RPC job-list.list | jq .jobs[].id > legacy_result_failed.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > legacy_result_failed.out &&
 	test_cmp failed.ids legacy_result_failed.out
 '
 
@@ -814,7 +816,7 @@ test_expect_success 'flux job list only timeout jobs (legacy RPC)' '
 	state=`${JOB_CONV} strtostate INACTIVE` &&
 	result=`${JOB_CONV} strtoresult TIMEOUT` &&
 	jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
-	  | $RPC job-list.list | jq .jobs[].id > legacy_result_timeout.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > legacy_result_timeout.out &&
 	test_cmp timeout.ids legacy_result_timeout.out
 '
 
@@ -823,8 +825,19 @@ test_expect_success 'flux job list only completed jobs (legacy RPC)' '
 	state=`${JOB_CONV} strtostate INACTIVE` &&
 	result=`${JOB_CONV} strtoresult COMPLETED` &&
 	jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
-	  | $RPC job-list.list | jq .jobs[].id > legacy_result_completed.out &&
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > legacy_result_completed.out &&
 	test_cmp completed.ids legacy_result_completed.out
+'
+
+# non-streaming backwards compatibility
+
+test_expect_success 'flux job list works with non-streaming RPC' '
+	id=$(id -u) &&
+	constraint="{ userid:[${id}] }" &&
+	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | jq .jobs[].id > list_constraint_backwards.out &&
+	numlines=$(cat all.ids | wc -l) &&
+	test $(cat list_constraint_backwards.out | wc -l) -eq ${numlines}
 '
 
 # with single anonymous queue, queues arrays should be zero length
@@ -2184,7 +2197,7 @@ test_expect_success 'verify task count preserved across restart' '
 test_expect_success 'list request with all attr works (job success)' '
 	flux run hostname &&
 	jq -j -c -n  "{max_entries:1, attrs:[\"all\"]}" \
-	  | $RPC job-list.list | jq ".jobs[0]" > all_success.out &&
+	  | $RPC_STREAM job-list.list | jq ".jobs[0]" > all_success.out &&
 	cat all_success.out | jq -e ".id" &&
 	cat all_success.out | jq -e ".userid" &&
 	cat all_success.out | jq -e ".urgency" &&
@@ -2210,7 +2223,7 @@ test_expect_success 'list request with all attr works (job success)' '
 test_expect_success 'list request with all attr works (job fail)' '
 	! flux run -N1000 -n1000 hostname &&
 	jq -j -c -n  "{max_entries:1, attrs:[\"all\"]}" \
-	  | $RPC job-list.list | jq ".jobs[0]" > all_fail.out &&
+	  | $RPC_STREAM job-list.list | jq ".jobs[0]" > all_fail.out &&
 	cat all_fail.out | jq -e ".id" &&
 	cat all_fail.out | jq -e ".userid" &&
 	cat all_fail.out | jq -e ".urgency" &&
@@ -2586,7 +2599,7 @@ all
 test_expect_success 'list request with empty attrs works' '
 	id=$(id -u) &&
 	jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[]}" \
-	  | $RPC job-list.list > list_empty_attrs.out &&
+	  | $RPC_STREAM job-list.list > list_empty_attrs.out &&
 	for attr in $JOB_ATTRIBUTES; do
 	test_must_fail grep $attr list_empty_attrs.out
 	done
@@ -2594,7 +2607,7 @@ test_expect_success 'list request with empty attrs works' '
 test_expect_success 'list request with excessive max_entries works' '
 	id=$(id -u) &&
 	jq -j -c -n  "{max_entries:100000, userid:${id}, states:0, results:0, attrs:[]}" \
-	  | $RPC job-list.list
+	  | $RPC_STREAM job-list.list
 '
 
 # list-attrs also lists the special attribute 'all'
@@ -2780,19 +2793,19 @@ test_expect_success 'remove queues' '
 #
 
 test_expect_success 'list request with empty payload fails with EPROTO(71)' '
-	${RPC} job-list.list 71 </dev/null
+	${RPC_STREAM} job-list.list 71 </dev/null
 '
 test_expect_success 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
 	jq -j -c -n  "{max_entries:5, attrs:5}" \
-	  | $RPC job-list.list 71 "invalid payload: attrs must be an array"
+	  | $RPC_STREAM job-list.list 71 "invalid payload: attrs must be an array"
 '
 test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
 	jq -j -c -n  "{max_entries:5, attrs:[5]}" \
-	  | $RPC job-list.list 22 "attr has no string value"
+	  | $RPC_STREAM job-list.list 22 "attr has no string value"
 '
 test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
 	jq -j -c -n  "{max_entries:5, attrs:[\"foo\"]}" \
-	  | $RPC job-list.list 22 "foo is not a valid attribute"
+	  | $RPC_STREAM job-list.list 22 "foo is not a valid attribute"
 '
 test_expect_success 'list-id request with empty payload fails with EPROTO(71)' '
 	${RPC} job-list.list-id 71 </dev/null
