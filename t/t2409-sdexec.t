@@ -21,6 +21,9 @@ if ! test_flux_security_version 0.14.0; then
 	skip_all="requires flux-security >= v0.14, got ${FLUX_SECURITY_VERSION}"
 	test_done
 fi
+if systemctl --user show dbus | grep -q OOMPolicy=; then
+	test_set_prereq OOMPOLICY
+fi
 
 test_under_flux 2 minimal
 
@@ -307,6 +310,25 @@ test_expect_success 'sdexec can set unit AllowedCPUs to an empty bitmask' '
 	    $systemctl --user show --property AllowedCPUs \
 	        t2409-allowedcpus2.service >allowedcpus2.out &&
 	test_cmp allowedcpus2.exp allowedcpus2.out
+'
+test_expect_success 'sdexec can set unit OOMScoreAdjust' '
+	echo "OOMScoreAdjust=100" >oomscoreadjust.exp &&
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-oomscoreadjust.service" \
+	    --setopt=SDEXEC_PROP_OOMScoreAdjust="100" \
+	    $systemctl --user show --property OOMScoreAdjust \
+	        t2409-oomscoreadjust.service >oomscoreadjust.out &&
+	test_cmp oomscoreadjust.exp oomscoreadjust.out
+'
+
+test_expect_success OOMPOLICY 'sdexec can set unit OOMPolicy' '
+	echo "OOMPolicy=kill" >oompolicy.exp &&
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-oompolicy.service" \
+	    --setopt=SDEXEC_PROP_OOMPolicy="kill" \
+	    $systemctl --user show --property OOMPolicy \
+	        t2409-oompolicy.service >oompolicy.out &&
+	test_cmp oompolicy.exp oompolicy.out
 '
 
 memtotal() {
