@@ -325,6 +325,17 @@ plugins include:
   Stops tasks in ``exec()`` using ``PTRACE_TRACEME``. Used for debugging
   parallel jobs. Users should not need to set this option directly.
 
+.. option:: oom.adjust=VALUE
+
+  Adjust each task's OOM score to make it more or less likely to be
+  killed when system memory is critically low.  A value of 1000 maximizes
+  the task's probability of being selected, while a value of -1000 would
+  prevent the task from being selected.  However, setting a negative value
+  is normally a privileged operation.
+
+  For more information, refer to :option:`oom_score_adj` in
+  :linux:man5:`proc`.
+
 .. option:: output.{stdout,stderr}.type=TYPE
 
   Set job output to for **stderr** or **stdout** to *TYPE*. *TYPE* may
