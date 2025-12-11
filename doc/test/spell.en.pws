@@ -1008,3 +1008,14 @@ sproc
 testsuite
 sharness
 maxreqs
+AllowedCPUs
+ExecStart
+KillMode
+OOM
+OOMScoreAdjust
+RemainAfterExit
+SendSIGKILL
+StandardErrorFileDescriptor
+StandardInputFileDescriptor
+StandardOutputFileDescriptor
+TimeoutStopUSec

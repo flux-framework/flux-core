@@ -103,8 +103,11 @@ testexec
 SDEXEC PROPERTIES
 =================
 
-When the sdexec service is selected, The following systemd unit properties may
-be set by adding them to the ``sdexec-properties`` table:
+When the sdexec service is selected, systemd unit properties may be set by
+adding them to the ``sdexec-properties`` sub-table.  All values must be
+specified as a TOML strings.  Properties that require other value types
+can only be specified if Flux knows about them so it can perform type
+conversion.  Those are:
 
 MemoryMax
    Specify the absolute limit on memory used by the job, in bytes. The value
@@ -124,6 +127,12 @@ MemoryMin, MemoryLow
 MemorySwapMax
    Specify the absolute limit on swap used by the job.  Values are formatted as
    described above.
+
+The following unit properties are reserved for use by Flux and should not be
+added to ``sdexec-properties``: AllowedCPUs, Description, Environment,
+ExecStart, KillMode, RemainAfterExit, SendSIGKILL, StandardInputFileDescriptor,
+StandardOutputFileDescriptor, StandardErrorFileDescriptor, TimeoutStopUSec,
+Type, WorkingDirectory.
 
 .. _testexec:
 
