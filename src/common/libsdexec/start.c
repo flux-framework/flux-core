@@ -175,6 +175,19 @@ static bool is_false (const char *s)
     return false;
 }
 
+static int prop_add_i32 (json_t *prop, const char *name, int32_t val)
+{
+    json_int_t i = val;
+    json_t *o;
+
+    if (!(o = json_pack ("[s[sI]]", name, "i", i))
+        || json_array_append_new (prop, o) < 0) {
+        json_decref (o);
+        return -1;
+    }
+    return 0;
+}
+
 static int prop_add_u32 (json_t *prop, const char *name, uint32_t val)
 {
     json_int_t i = val;
@@ -300,6 +313,15 @@ static int prop_add (json_t *prop, const char *name, const char *val)
             if (prop_add_u64 (prop, name, u) < 0)
                 return -1;
         }
+    }
+    else if (streq (name, "OOMScoreAdjust")) {
+        errno = 0;
+        char *endptr;
+        long l = strtol (val, &endptr, 10);
+        if (errno != 0 || *endptr != '\0')
+            return -1;
+        if (prop_add_i32 (prop, name, l) < 0)
+            return -1;
     }
     else {
         if (prop_add_string (prop, name, val) < 0)
