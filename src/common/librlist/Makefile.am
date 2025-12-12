@@ -21,6 +21,8 @@ noinst_LTLIBRARIES = \
 librlist_la_SOURCES = \
 	rnode.h \
 	rnode.c \
+	verify_config.h \
+	verify_config.c \
 	match.h \
 	match.c \
 	rlist.c \
