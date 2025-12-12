@@ -72,6 +72,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     uint32_t userid;
     int states = 0;
     json_t *c;
+    int version = 0;
 
     if (isatty (STDOUT_FILENO)) {
         fprintf (stderr,
@@ -119,7 +120,10 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         json_t *jobs;
         size_t index;
         json_t *value;
-        if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0) {
+        if (flux_rpc_get_unpack (f,
+                                 "{s:o s?i}",
+                                 "jobs", &jobs,
+                                 "version", &version) < 0) {
             if (errno == ENODATA)
                 break;
             log_msg_exit ("flux job-list.list: %s", future_strerror (f, errno));
@@ -131,6 +135,9 @@ int cmd_list (optparse_t *p, int argc, char **argv)
             printf ("%s\n", str);
             free (str);
         }
+        /* version 0 protocol does not stream, all results in one response */
+        if (version == 0)
+            break;
         flux_future_reset (f);
     }
     flux_future_destroy (f);
@@ -147,6 +154,7 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
     flux_t *h;
     flux_future_t *f;
     json_t *c;
+    int version = 0;
 
     if (isatty (STDOUT_FILENO)) {
         fprintf (stderr,
@@ -178,7 +186,10 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
         json_t *jobs;
         size_t index;
         json_t *value;
-        if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0) {
+        if (flux_rpc_get_unpack (f,
+                                 "{s:o s?i}",
+                                 "jobs", &jobs,
+                                 "version", &version) < 0) {
             if (errno == ENODATA)
                 break;
             log_msg_exit ("flux job-list.list: %s", future_strerror (f, errno));
@@ -190,6 +201,9 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
             printf ("%s\n", str);
             free (str);
         }
+        /* version 0 protocol does not stream, all results in one response */
+        if (version == 0)
+            break;
         flux_future_reset (f);
     }
     flux_future_destroy (f);
