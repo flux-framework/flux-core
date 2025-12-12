@@ -843,7 +843,6 @@ struct append_test {
     const char *ranksa;
     const char *coresa;
     const char *hostsa;
-
     const char *ranksb;
     const char *coresb;
     const char *hostsb;
@@ -1536,65 +1535,204 @@ struct verify_test {
     const char *gpusb;
     const char *hostsb;
 
+    const char *config;
+
     int result;
     const char *errmsg;
 };
 
 struct verify_test verify_tests[] = {
+    // Existing tests with NULL config (backward compatibility)
     {
         "0-5", "0-3", "0", "foo[0-5]",
         "1",   "0-3", "0", "foo1",
+        NULL,
         0,
         ""
     },
     {
         "0-5", "0-3", "0", "foo[0-5]",
         "1",   "0-3", "",  "foo1",
+        NULL,
         -1,
         "rank 1 (foo1) missing resources: gpu0"
     },
     {
         "0-5", "0-3", "0", "foo[0-5]",
         "5",   "0-1", "0", "foo5",
+        NULL,
         -1,
         "rank 5 (foo5) missing resources: core[2-3]"
     },
     {
         "0-5", "0-3", "0", "foo[0-5]",
         "5",   "0-3", "0", "foo7",
+        NULL,
         -1,
         "rank 5 got hostname 'foo7', expected 'foo5'"
     },
     {
         "0-5", "0-3", "0",   "foo[0-5]",
         "0",   "0-7", "0-1", "foo0",
+        NULL,
         1,
         "rank 0 (foo0) has extra resources: core[4-7],gpu1"
     },
     {
         "0-5", "0-3", "0", "foo[0-5]",
         "7",   "0-3", "0", "foo7",
+        NULL,
         -1,
         "rank 7 not found in expected ranks"
     },
     {
         "0-5", "0-3", "0", "foo[0-5]",
         "0",   "0-3", "0",  NULL,
+        NULL,
          0,
          "",
-
     },
     {
         "0-5", "0-3", "0", NULL,
         "0",   "0-3", "0", NULL,
+        NULL,
          0,
          "",
     },
     {
         "0-5", "0-3", "0", NULL,
         "0",   "0-3", "0", "foo0",
+        NULL,
          0,
          "",
+    },
+    // New tests: missing GPUs with ignore
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "1",   "0-3", "",  "foo1",
+        "{\"gpu\":\"ignore\"}",
+        0,
+        ""
+    },
+    // New tests: missing GPUs with allow-missing (still fails)
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "1",   "0-3", "",  "foo1",
+        "{\"gpu\":\"allow-missing\"}",
+        0,
+        ""
+    },
+    // New tests: missing cores with ignore
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "5",   "0-1", "0", "foo5",
+        "{\"core\":\"ignore\"}",
+        0,
+        ""
+    },
+    // New tests: missing cores with allow-missing
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "5",   "0-1", "0", "foo5",
+        "{\"core\":\"allow-missing\"}",
+        0,
+        ""
+    },
+    // New tests: missing cores still fails with allow-extra
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "5",   "0-1", "0", "foo5",
+        "{\"core\":\"allow-extra\"}",
+        -1,
+        "rank 5 (foo5) missing resources: core[2-3]"
+    },
+    // New tests: hostname mismatch with ignore
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "5",   "0-3", "0", "foo7",
+        "{\"hostname\":\"ignore\"}",
+        0,
+        ""
+    },
+    // New tests: extra resources with allow-extra
+    {
+        "0-5", "0-3", "0",   "foo[0-5]",
+        "0",   "0-7", "0-1", "foo0",
+        "{\"default\":\"allow-extra\"}",
+        0,
+        ""
+    },
+    // New tests: extra cores allowed, extra GPUs fail
+    {
+        "0-5", "0-3", "0",   "foo[0-5]",
+        "0",   "0-7", "0-1", "foo0",
+        "{\"core\":\"allow-extra\"}",
+        1,
+        "rank 0 (foo0) has extra resources: gpu1"
+    },
+    // New tests: extra GPUs allowed, extra cores fail
+    {
+        "0-5", "0-3", "0",   "foo[0-5]",
+        "0",   "0-7", "0-1", "foo0",
+        "{\"gpu\":\"allow-extra\"}",
+        1,
+        "rank 0 (foo0) has extra resources: core[4-7]"
+    },
+    // New tests: both extra cores and GPUs allowed
+    {
+        "0-5", "0-3", "0",   "foo[0-5]",
+        "0",   "0-7", "0-1", "foo0",
+        "{\"core\":\"allow-extra\",\"gpu\":\"allow-extra\"}",
+        0,
+        ""
+    },
+    // New tests: extra resources with allow-missing fails
+    {
+        "0-5", "0-3", "0",   "foo[0-5]",
+        "0",   "0-7", "0-1", "foo0",
+        "{\"default\":\"allow-missing\"}",
+        1,
+        "rank 0 (foo0) has extra resources: core[4-7],gpu1"
+    },
+    // New tests: extra cores with allow-missing fails
+    {
+        "0-5", "0-3", "0",   "foo[0-5]",
+        "0",   "0-7", "0", "foo0",
+        "{\"core\":\"allow-missing\"}",
+        1,
+        "rank 0 (foo0) has extra resources: core[4-7]"
+    },
+    // New tests: extra GPUs allowed, missing cores allowed
+    {
+        "0-5", "0-7", "0",   "foo[0-5]",
+        "0",   "0-3", "0-1", "foo0",
+        "{\"core\":\"allow-missing\",\"gpu\":\"allow-extra\"}",
+        0,
+        ""
+    },
+    // New tests: ignore all verification
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "5",   "0-1", "",  "foo7",
+        "{\"default\":\"ignore\"}",
+        0,
+        ""
+    },
+    // New tests: strict (default) with explicit config
+    {
+        "0-5", "0-3", "0",   "foo[0-5]",
+        "0",   "0-7", "0-1", "foo0",
+        "{\"default\":\"strict\"}",
+        1,
+        "rank 0 (foo0) has extra resources: core[4-7],gpu1"
+    },
+    // New tests: allow extra cores but still drain on missing
+    {
+        "0-5", "0-7", "0", "foo[0-5]",
+        "0",   "0-3", "0", "foo0",
+        "{\"core\":\"allow-extra\"}",
+        -1,
+        "rank 0 (foo0) missing resources: core[4-7]"
     },
     { 0 },
 };
@@ -1608,8 +1746,11 @@ void test_verify ()
         flux_error_t error;
         struct rlist *rla = NULL;
         struct rlist *rlb = NULL;
+        struct rlist_verify_config *config = NULL;
+        json_t *verify_obj = NULL;
         char *a;
         char *b;
+
         char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa, NULL);
         char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb, NULL);
 
@@ -1623,17 +1764,39 @@ void test_verify ()
         free (Ra);
         free (Rb);
 
+        // Parse verify config if provided
+        if (t->config) {
+            json_error_t json_error;
+            if (!(verify_obj = json_loads (t->config,
+                                           JSON_DECODE_ANY,
+                                           &json_error)))
+                BAIL_OUT ("invalid verify config in test: %s",
+                         json_error.text);
+            if (!(config = rlist_verify_config_create (verify_obj,
+                                                       &error))) {
+                json_decref (verify_obj);
+                BAIL_OUT ("rlist_verify_config_create failed: %s",
+                         error.text);
+            }
+        }
+
         a = rlist_dumps (rla);
         b = rlist_dumps (rlb);
 
-        rc = rlist_verify (&error, rla, rlb);
+        rc = rlist_verify_ex (&error, rla, rlb, config);
         ok (rc == t->result,
-            "rlist_verify: %s in %s = %d", b, a, rc);
+            "rlist_verify_ex: %s in %s (config=%s) = %d",
+            b,
+            a,
+            t->config ? t->config : "NULL",
+            rc);
         is (error.text, t->errmsg,
             "Got expected message: '%s'", error.text);
 
         free (a);
         free (b);
+        rlist_verify_config_destroy (config);
+        json_decref (verify_obj);
         rlist_destroy (rla);
         rlist_destroy (rlb);
 
