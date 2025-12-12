@@ -29,11 +29,18 @@ class JobListRPC(RPC):
 
     def get_jobs(self):
         """Returns all jobs."""
+        first = True
         jobs = []
         while True:
             try:
-                jobstmp = self.get()["jobs"]
-                jobs.extend(jobstmp)
+                resp = self.get()
+                jobs.extend(resp["jobs"])
+                if first:
+                    # version 0 protocol does not stream, all results in
+                    # one response
+                    if ("version" not in resp) or (resp["version"] == 0):
+                        break
+                    first = False
             except OSError as exc:
                 if exc.errno == errno.ENODATA:
                     break
