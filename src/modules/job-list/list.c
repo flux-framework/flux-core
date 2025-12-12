@@ -347,16 +347,34 @@ void list_cb (flux_t *h,
         goto error;
 
     if (flux_msg_is_streaming (msg)) {
+        bool first = true;
         json_array_foreach (jobs, index, value) {
-            if (flux_respond_pack (h, msg, "{s:[O]}", "jobs", value) < 0) {
-                flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-                goto error;
+            if (first) {
+                if (flux_respond_pack (h,
+                                       msg,
+                                       "{s:[O] s:i}",
+                                       "jobs", value,
+                                       "version", 1) < 0) {
+                    flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+                    goto error;
+                }
+                first = false;
+            }
+            else {
+                if (flux_respond_pack (h,
+                                       msg,
+                                       "{s:[O]}",
+                                       "jobs", value) < 0) {
+                    flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+                    goto error;
+                }
             }
         }
         if (flux_respond_error (h, msg, ENODATA, NULL) < 0)
             flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     }
     else {
+        /* N.B. do not send version field for legacy "version 0" */
         if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
             flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     }
