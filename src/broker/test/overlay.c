@@ -174,7 +174,6 @@ void single (flux_t *h)
     char *s;
     struct idset *critical_ranks;
     const char *topic;
-    uint32_t seq;
 
     ok (overlay_set_topology (ctx->ov, ctx->topo) == 0,
         "%s: overlay_set_topology size=1 rank=0 works", ctx->name);
@@ -197,56 +196,6 @@ void single (flux_t *h)
     check_attr (ctx, "tbon.level", "0");
     check_attr (ctx, "tbon.maxlevel", "0");
     check_attr (ctx, "tbon.descendants", "0");
-
-    /* Event
-     * Overlay re-publishes non-sequenced message, so we get it
-     * back with a sequence number.
-     */
-    if (!(msg = flux_event_encode ("foo_event", NULL)))
-        BAIL_OUT ("flux_event_encode failed");
-    ok (flux_send (ctx->h_channel, msg, 0) == 0,
-        "%s: flux_send event works", ctx->name);
-    flux_msg_decref (msg);
-
-    ok (flux_reactor_run (r, FLUX_REACTOR_ONCE) >= 0,
-        "flux_reactor_run ONCE");
-
-    msg = flux_recv (ctx->h_channel, FLUX_MATCH_EVENT, FLUX_O_NONBLOCK);
-    ok (flux_msg_get_topic (msg, &topic) == 0 && streq (topic, "foo_event"),
-        "%s: overlay published our message", ctx->name);
-    ok (flux_msg_get_seq (msg, &seq) == 0 && seq == 1,
-        "%s: event sequence = 1", ctx->name);
-    flux_msg_decref (msg);
-
-    /* Event publish request
-     */
-    if (!(msg = flux_request_encode ("overlay.publish", NULL))
-        || flux_msg_pack (msg,
-                          "{s:s s:i}",
-                          "topic", "smurf",
-                          "flags", FLUX_MSGFLAG_PRIVATE) < 0)
-        BAIL_OUT ("flux_request_encode failed");
-    ok (flux_send (ctx->h, msg, 0) == 0,
-        "%s: flux_send event works", ctx->name);
-    flux_msg_decref (msg);
-
-    ok (flux_reactor_run (r, FLUX_REACTOR_ONCE) >= 0,
-        "flux_reactor_run ONCE");
-
-    msg = flux_recv (ctx->h, FLUX_MATCH_RESPONSE, FLUX_O_NONBLOCK);
-    ok (flux_msg_get_topic (msg, &topic) == 0
-        && streq (topic, "overlay.publish"),
-        "%s overlay responded to publish request", ctx->name);
-    flux_msg_decref (msg);
-
-    msg = flux_recv (ctx->h_channel, FLUX_MATCH_EVENT, FLUX_O_NONBLOCK);
-    ok (flux_msg_get_topic (msg, &topic) == 0 && streq (topic, "smurf"),
-        "%s: event message is received", ctx->name);
-    ok (flux_msg_get_seq (msg, &seq) == 0 && seq == 2,
-        "%s: event sequence is 2", ctx->name);
-    ok (flux_msg_is_private (msg),
-        "%s: privacy flag is set", ctx->name);
-    flux_msg_decref (msg);
 
     /* Response
      * Will try child but there isn't one, so message is dropped.
@@ -493,12 +442,6 @@ void trio (flux_t *h)
         "%s: flux_msg_is_local returns false for event from child",
         ctx[0]->name);
 
-    rmsg = recvmsg_timeout (ctx[1], 5);
-    ok (rmsg != NULL,
-        "%s: event was received by overlay", ctx[1]->name);
-    ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "eeek"),
-        "%s: received message has expected topic", ctx[1]->name);
-
     /* Response 0->1
      */
     if (!(msg = flux_response_encode ("moop", NULL)))
@@ -530,12 +473,6 @@ void trio (flux_t *h)
         "%s: event was received by overlay", ctx[1]->name);
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "eeeb"),
         "%s: received message has expected topic", ctx[1]->name);
-
-    rmsg = recvmsg_timeout (ctx[0], 5);
-    ok (rmsg != NULL,
-        "%s: event was received by overlay", ctx[0]->name);
-    ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "eeeb"),
-        "%s: received message has expected topic", ctx[0]->name);
 
     /* Cover some error code in overlay_bind() where the ZAP handler
      * fails to initialize because its endpoint is already bound.

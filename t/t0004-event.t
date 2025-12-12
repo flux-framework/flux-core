@@ -87,8 +87,8 @@ test_expect_success 'publish private event with no payload (synchronous,loopback
 	run_timeout 5 flux event pub -p -s -l foo.bar
 '
 
-test_expect_success 'overlay.publish request with empty payload fails with EPROTO(71)' '
-	${RPC} overlay.publish 71 </dev/null
+test_expect_success 'event.publish request with empty payload fails with EPROTO(71)' '
+	${RPC} event.publish 71 </dev/null
 '
 
 
