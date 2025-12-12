@@ -8,9 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* oom.c - log kernel oom kill events
+/* oom.c - adjust task oom score and log kernel oom kill events
  *
- * This is an no-op if the cgroup v2 memory controller is not set up.
+ * Monitoring is disabled if the cgroup v2 memory controller is not set up.
  */
 
 #define FLUX_SHELL_PLUGIN_NAME "oom"
@@ -41,6 +41,7 @@
 #include "src/common/libutil/parse_size.h"
 #include "src/common/libutil/cgroup.h"
 #include "ccan/str/str.h"
+#include "ccan/ptrint/ptrint.h"
 
 #include "builtins.h"
 #include "internal.h"
@@ -162,6 +163,84 @@ error:
     return NULL;
 }
 
+static int peek_int (pid_t pid, const char *name, int *val)
+{
+    char path[1024];
+    FILE *fp;
+    int value;
+
+    snprintf (path, sizeof (path), "/proc/%d/%s", pid, name);
+    if (!(fp = fopen (path, "r")))
+        return -1;
+    if (fscanf (fp, "%d", &value) != 1) {
+        ERRNO_SAFE_WRAP (fclose, fp);
+        return -1;
+    }
+    (void)fclose (fp);
+    *val = value;
+    return 0;
+}
+
+static int poke_int (pid_t pid, const char *name, int val)
+{
+    char path[1024];
+    FILE *fp;
+
+    snprintf (path, sizeof (path), "/proc/%d/%s", pid, name);
+    if (!(fp = fopen (path, "w")))
+        return -1;
+    if (fprintf (fp, "%d", val) < 0) {
+        ERRNO_SAFE_WRAP (fclose, fp);
+        return -1;
+    }
+    if (fclose (fp) < 0)
+        return -1;
+    return 0;
+}
+
+/* N.B. avoid causing the job to fail if something doesn't work here.
+ * If there is a failure to adjust, log that at debug level.
+ * The proc reads are only to fill in the debug log - rather than
+ * complicate things, just report -9999 (an illegal but not crazy huge value)
+ * in the unlikely event that the read fails.
+ */
+static int oom_adjust (flux_plugin_t *p,
+                       const char *topic,
+                       flux_plugin_arg_t *args,
+                       void *data)
+{
+    int adjust = ptr2int (data);
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+    flux_shell_task_t *task;
+    pid_t pid;
+    int old_adjust = -9999;
+    int score = -9999;
+    bool failed = false;
+    int saved_errno;
+
+    if (!(shell = flux_plugin_get_shell (p))
+        || !(task = flux_shell_current_task (shell))
+        || flux_shell_task_info_unpack (task, "{s:I}", "pid", &pid) < 0)
+        return shell_log_errno ("failed to get current task pid");
+
+    (void)peek_int (pid, "oom_score_adj", &old_adjust);
+    if (poke_int (pid, "oom_score_adj", adjust) < 0) {
+        saved_errno = errno;
+        failed = true;
+    }
+    (void)peek_int (pid, "oom_score", &score);
+
+    shell_debug ("pid %d score_adj %d->%d score %d%s%s",
+                 pid,
+                 old_adjust,
+                 adjust,
+                 score,
+                 failed ? ": " : "",
+                 failed ? strerror (saved_errno) : "");
+
+    return 0;
+}
+
 static int oom_init (flux_plugin_t *p,
                      const char *topic,
                      flux_plugin_arg_t *arg,
@@ -170,6 +249,25 @@ static int oom_init (flux_plugin_t *p,
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct shell_oom *oom;
     flux_error_t error;
+    json_t *adjust = NULL;
+
+    /* Handle -o oom.adjust=VAL
+     * If the option is specified, register a task.fork handler which pokes
+     * /proc/pid/oom_score_adj for each task.  This works even if cgroup
+     * memory event monitoring is disabled below.
+     */
+    if (flux_shell_getopt_unpack (shell,
+                                  "oom",
+                                  "{s?o !}",
+                                  "adjust", &adjust) < 0)
+        return -1;
+    if (adjust) {
+        if (flux_plugin_add_handler (p,
+                                     "task.fork",
+                                     oom_adjust,
+                                     int2ptr (json_integer_value (adjust))) < 0)
+            return shell_log_errno ("error adding task.fork handler");
+    }
 
     if (!(oom = oom_create (shell, &error))) {
         shell_debug ("disabling oom detection: %s", error.text);
