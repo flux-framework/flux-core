@@ -14,6 +14,7 @@
 struct resource_config {
     json_t *R;
     const char *exclude_idset;
+    struct rlist_verify_config *verify;
     bool rediscover;
     bool noverify;
     bool norestrict;
