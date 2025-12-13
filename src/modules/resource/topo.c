@@ -82,12 +82,13 @@ static int drain_self (struct topo *topo, const char *reason)
     return 0;
 }
 
-static int topo_verify (struct topo *topo, json_t *R, bool nodrain)
+static int topo_verify (struct topo *topo,
+                        json_t *R,
+                        bool nodrain,
+                        struct rlist_verify_config *config)
 {
     json_error_t e;
     struct rlist *rl = NULL;
-    struct rlist *rl_cores = NULL;
-    struct rlist *r_local_cores = NULL;
     flux_error_t error;
     int rc = -1;
 
@@ -96,30 +97,13 @@ static int topo_verify (struct topo *topo, json_t *R, bool nodrain)
         errno = EINVAL;
         return -1;
     }
-
-    /*  Only verify cores (and rank hostname) for now.
-     *
-     *  This is to allow GPUs to be configured or set in a job's allocated
-     *  R even when the system installed libhwloc fails to detect GPUs
-     *  due to lack of appropriately configured backend or other reason.
-     *  (See flux-core issue #4181 for more details)
-     */
-    if (!(r_local_cores = rlist_copy_cores (topo->r_local))
-        || !(rl_cores = rlist_copy_cores (rl))) {
-        flux_log_error (topo->ctx->h, "rlist_copy_cores");
-        goto out;
-    }
-    rc = rlist_verify (&error, rl_cores, r_local_cores);
-    if (rc < 0 && !nodrain) {
+    rc = rlist_verify_ex (&error, rl, topo->r_local, config);
+    if (rc != 0 && !nodrain) {
         if (drain_self (topo, error.text) < 0)
             goto out;
     }
-    else if (rc != 0)
-        flux_log (topo->ctx->h, LOG_ERR, "verify: %s", error.text);
     rc = 0;
 out:
-    rlist_destroy (rl_cores);
-    rlist_destroy (r_local_cores);
     rlist_destroy (rl);
     return rc;
 }
@@ -346,7 +330,8 @@ struct topo *topo_create (struct resource_ctx *ctx,
 
         if (method && streq (method, "job-info"))
             nodrain = true;
-        if (!config->noverify && topo_verify (topo, R, nodrain) < 0)
+        if (!config->noverify
+            && topo_verify (topo, R, nodrain, config->verify) < 0)
             goto error;
     }
     /* Reduce topo to rank 0 unconditionally in case it is needed.
