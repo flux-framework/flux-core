@@ -367,4 +367,20 @@ test_expect_success 'appropriate message was logged' '
 	grep "shutdown delayed" shutdown.log
 '
 
+# N.B. brokers 1-2 may get stuck in goodbye handshake when broker 0 goes
+# away so add a short --test-exit-timeout
+test_expect_success 'run instance with short shutdown timeout' '
+	test_must_fail_or_be_terminated flux start -s3 \
+		--test-exit-timeout=5s \
+		-Slog-filename=shutdown2.log \
+		-Sbroker.rc1_path= \
+		-Sbroker.rc3_path="$(pwd)/rc3_hang" \
+		-Sbroker.shutdown-timeout=1s \
+		true
+'
+test_expect_success 'appropriate message was logged' '
+	grep "shutdown timeout" shutdown2.log
+'
+
+
 test_done

@@ -53,7 +53,9 @@ struct cleanup {
 
 struct shutdown {
     double warn_period;
+    double timeout;
     flux_watcher_t *warn_timer;
+    flux_watcher_t *timer;
     flux_future_t *health_f;
 };
 
@@ -182,6 +184,7 @@ static struct state_next nexttab[] = {
 
 static const double default_quorum_warn = 60; // log slow joiners
 static const double default_shutdown_warn = 60; // log slow shutdown
+static const double default_shutdown_timeout = -1;
 static const double default_cleanup_timeout = -1;
 static const double default_sd_stop_timeout = -1;
 static const double goodbye_timeout = 60;
@@ -638,6 +641,17 @@ static void shutdown_warn_timer_cb (flux_reactor_t *r,
     flux_watcher_start (w);
 }
 
+static void shutdown_timer_cb (flux_reactor_t *r,
+                               flux_watcher_t *w,
+                               int revents,
+                               void *arg)
+{
+    struct state_machine *s = arg;
+
+    flux_log (s->ctx->h, LOG_ERR, "shutdown timeout");
+    state_machine_post (s, "children-complete");
+}
+
 /* SHUTDOWN state triggers an orderly shutdown of the TBON subtree.
  * This may occur on the leader during instance shutdown or at any other broker,
  * e.g. if its rc1 fails or if a module panics during RUN state. Shutdown is
@@ -676,6 +690,12 @@ static void action_shutdown (struct state_machine *s)
                                   s->shutdown.warn_period,
                                   0.);
         flux_watcher_start (s->shutdown.warn_timer);
+    }
+    if (s->shutdown.timeout >= 0 && s->ctx->rank == 0) {
+        flux_timer_watcher_reset (s->shutdown.timer,
+                                  s->shutdown.timeout,
+                                  0.);
+        flux_watcher_start (s->shutdown.timer);
     }
 }
 
@@ -1515,6 +1535,7 @@ void state_machine_destroy (struct state_machine *s)
         flux_future_destroy (s->quorum.f);
         flux_watcher_destroy (s->cleanup.timer);
         flux_watcher_destroy (s->shutdown.warn_timer);
+        flux_watcher_destroy (s->shutdown.timer);
         flux_future_destroy (s->shutdown.health_f);
         flux_watcher_destroy (s->goodbye.timer);
         free (s);
@@ -1558,6 +1579,11 @@ struct state_machine *state_machine_create (struct broker *ctx,
                                                         0.,
                                                         shutdown_warn_timer_cb,
                                                         s))
+        || !(s->shutdown.timer = flux_timer_watcher_create (r,
+                                                            0.,
+                                                            0.,
+                                                            shutdown_timer_cb,
+                                                            s))
         || !(s->goodbye.timer = flux_timer_watcher_create (r,
                                                            goodbye_timeout,
                                                            0.,
@@ -1603,6 +1629,13 @@ struct state_machine *state_machine_create (struct broker *ctx,
                            "broker.shutdown-warn",
                            &s->shutdown.warn_period,
                            default_shutdown_warn,
+                           errp) < 0) {
+        goto error_hasmsg;
+    }
+    if (timeout_configure (s,
+                           "broker.shutdown-timeout",
+                           &s->shutdown.timeout,
+                           default_shutdown_timeout,
                            errp) < 0) {
         goto error_hasmsg;
     }
