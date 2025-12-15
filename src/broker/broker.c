@@ -76,8 +76,7 @@
 #include "log.h"
 #include "runat.h"
 #include "heaptrace.h"
-#include "boot_config.h"
-#include "boot_pmi.h"
+#include "bootstrap.h"
 #include "state_machine.h"
 #include "shutdown.h"
 #include "rundir.h"
@@ -220,8 +219,6 @@ int main (int argc, char *argv[])
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
     flux_msg_handler_t **handlers = NULL;
-    const flux_conf_t *conf;
-    const char *method;
 
     setlocale (LC_ALL, "");
 
@@ -375,7 +372,6 @@ int main (int argc, char *argv[])
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
-    conf = flux_get_conf (ctx.h);
 
     if (increase_rlimits () < 0) {
         flux_log (ctx.h,
@@ -394,18 +390,8 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (!(ctx.overlay = overlay_create (ctx.h,
-                                        ctx.hostname,
-                                        ctx.attrs,
-                                        NULL,
-                                        "interthread://overlay",
-                                        &error))) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "Error initializing overlay: %s",
-                  error.text);
-        goto cleanup;
-    }
+    /* Create interthread message channel for overlay subsystem.
+     */
     if (!(ctx.h_overlay = flux_open ("interthread://overlay", 0))
         || flux_set_reactor (ctx.h_overlay, ctx.reactor) < 0
         || !(ctx.w_overlay = flux_handle_watcher_create (ctx.reactor,
@@ -440,49 +426,46 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* Execute broker network bootstrap.
-     * Default method is pmi.
-     * If [bootstrap] is defined in configuration, use static configuration.
+    /* Execute broker bootstrap.
+     * The first phase sets info.rank and info.size.
+     * The next phase involving peer discovery is performed by the overlay
+     * subsystem.
      */
-    if (attr_get (ctx.attrs, "broker.boot-method", &method, NULL) < 0) {
-        if (flux_conf_unpack (conf, NULL, "{s:{}}", "bootstrap") == 0)
-            method = "config";
-        else
-            method = NULL;
+    if (!(ctx.boot = bootstrap_create (&ctx, &ctx.info, &error))) {
+        flux_log (ctx.h, LOG_CRIT, "bootstrap: %s", error.text);
+        goto cleanup;
     }
-    if (!method || !streq (method, "config")) {
-        if (boot_pmi (ctx.hostname, ctx.overlay, ctx.attrs, &error) < 0) {
-            flux_log (ctx.h, LOG_CRIT, "bootstrap: %s", error.text);
-            goto cleanup;
-        }
+
+    if (attr_add_int (ctx.attrs,
+                      "rank",
+                      ctx.info.rank,
+                      ATTR_IMMUTABLE) < 0
+        || attr_add_int (ctx.attrs,
+                         "size",
+                         ctx.info.size,
+                         ATTR_IMMUTABLE) < 0) {
+        flux_log (ctx.h, LOG_CRIT, "setattr rank/size: %s", strerror (errno));
+        goto cleanup;
     }
-    else {
-        if (boot_config (ctx.h,
-                         ctx.hostname,
-                         ctx.overlay,
-                         ctx.attrs,
-                         &error) < 0) {
-            flux_log (ctx.h, LOG_CRIT, "bootstrap: %s", error.text);
-            goto cleanup;
-        }
-    }
-    if (overlay_register_attrs (ctx.overlay) < 0) {
+    /* Initialize the overlay network.
+     */
+    if (!(ctx.overlay = overlay_create (ctx.h,
+                                        ctx.boot,
+                                        &ctx.info,
+                                        ctx.hostname,
+                                        ctx.attrs,
+                                        NULL,
+                                        "interthread://overlay",
+                                        &error))) {
         flux_log (ctx.h,
                   LOG_CRIT,
-                  "registering overlay attributes: %s",
-                  strerror (errno));
+                  "Error initializing overlay: %s",
+                  error.text);
         goto cleanup;
     }
 
     if (init_attrs_post_boot (ctx.attrs, &error) < 0) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
-        goto cleanup;
-    }
-
-    if (attr_get_uint32 (ctx.attrs, "rank", &ctx.rank) < 0
-        || attr_get_uint32 (ctx.attrs, "size", &ctx.size) < 0
-        || ctx.size == 0) {
-        flux_log (ctx.h, LOG_CRIT, "internal error: rank/size init failure");
         goto cleanup;
     }
 
@@ -498,7 +481,7 @@ int main (int argc, char *argv[])
      *
      * See also: file-hierarchy(7)
      */
-    if (ctx.rank == 0) {
+    if (ctx.info.rank == 0) {
         if (rundir_create (ctx.attrs,
                            "statedir",
                            tmpdir ? tmpdir : "/var/tmp",
@@ -516,8 +499,8 @@ int main (int argc, char *argv[])
         flux_log (ctx.h,
                   LOG_INFO,
                   "boot: rank=%d size=%d time %.3fs",
-                  ctx.rank,
-                  ctx.size,
+                  ctx.info.rank,
+                  ctx.info.size,
                   flux_reactor_now (ctx.reactor) - ctx.starttime);
     }
 
@@ -535,7 +518,7 @@ int main (int argc, char *argv[])
 
     /* Initialize the full log subsystem.
      */
-    if (logbuf_initialize (ctx.h, ctx.rank, ctx.attrs) < 0) {
+    if (logbuf_initialize (ctx.h, ctx.info.rank, ctx.attrs) < 0) {
         flux_log (ctx.h,
                   LOG_CRIT,
                   "Error initializing logging: %s",
@@ -552,12 +535,12 @@ int main (int argc, char *argv[])
         flux_log (ctx.h, LOG_INFO, "child: %s", child ? child : "none");
     }
 
-    set_proctitle (ctx.rank);
+    set_proctitle (ctx.info.rank);
 
     // N.B. local-uri is used by runat
-    if (init_local_uri_attr (ctx.attrs, ctx.rank, &error) < 0
+    if (init_local_uri_attr (ctx.attrs, ctx.info.rank, &error) < 0
         || init_critical_ranks_attr (ctx.attrs,
-                                     ctx.size,
+                                     ctx.info.size,
                                      ctx.overlay,
                                      &error) < 0) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
@@ -566,7 +549,7 @@ int main (int argc, char *argv[])
 
     /* Wire up the overlay.
      */
-    if (ctx.rank > 0) {
+    if (ctx.info.rank > 0) {
         if (ctx.verbose)
             flux_log (ctx.h, LOG_INFO, "initializing overlay connect");
         if (overlay_connect (ctx.overlay) < 0) {
@@ -633,7 +616,8 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (ctx.rank == 0 && execute_parental_notifications (&ctx, &error) < 0) {
+    if (ctx.info.rank == 0
+        && execute_parental_notifications (&ctx, &error) < 0) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
@@ -689,6 +673,7 @@ cleanup:
     service_switch_destroy (ctx.services);
     flux_msg_handler_delvec (handlers);
     brokercfg_destroy (ctx.config);
+    bootstrap_destroy (ctx.boot);
     runat_destroy (ctx.runat);
     flux_watcher_destroy (ctx.w_internal);
     flux_close (ctx.h_internal);
@@ -984,7 +969,7 @@ static int create_runat_phases (broker_ctx_t *ctx, flux_error_t *errp)
 
     /* rc2 - initial program
      */
-    if (ctx->rank == 0 && !rc2_none) {
+    if (ctx->info.rank == 0 && !rc2_none) {
         if (create_runat_rc2 (ctx->runat,
                               rc2_nopgrp ? RUNAT_FLAG_NO_SETPGRP: 0,
                               ctx->init_shell_cmd,
@@ -1507,7 +1492,7 @@ static void mcast_event_globally_new (struct broker *ctx, flux_msg_t **msg)
     const char *topic = NULL;
     (void)flux_msg_get_topic (*msg, &topic);
     if (subhash_topic_match (ctx->sub, topic)) {
-        if (ctx->size > 1) {
+        if (ctx->info.size > 1) {
             if (flux_send (ctx->h_internal, *msg, 0) < 0)
                 flux_log_error (ctx->h, "mcast failed to internal handle");
         }
@@ -1517,7 +1502,7 @@ static void mcast_event_globally_new (struct broker *ctx, flux_msg_t **msg)
         }
     }
 
-    if (ctx->size > 1) {
+    if (ctx->info.size > 1) {
         if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
             flux_log_error (ctx->h, "could not forward event to overlay");
     }
@@ -1609,7 +1594,7 @@ static void event_publish_cb (flux_t *h,
                              "flags", &flags,
                              "payload", &payload) < 0)
         goto error;
-    if (ctx->rank > 0) {
+    if (ctx->info.rank > 0) {
         errno = EPROTO;
         errmsg = "this service is only available on rank 0";
         goto error;
@@ -1784,7 +1769,7 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx,
     flux_msg_handler_t **handlers;
     struct internal_service *svc;
     for (svc = &services[0]; svc->name != NULL; svc++) {
-        if (!nodeset_member (svc->nodeset, ctx->rank))
+        if (!nodeset_member (svc->nodeset, ctx->info.rank))
             continue;
         if (service_add (ctx->services,
                          svc->name, NULL,
@@ -1844,7 +1829,7 @@ static void overlay_cb (flux_reactor_t *r,
             /* The overlay sends the broker only unpublished events on rank 0.
              * It only sends published events on other ranks.
              */
-            if (ctx->rank == 0) {
+            if (ctx->info.rank == 0) {
                 if (publish_event_new (ctx, &msg, NULL) < 0)
                     goto drop;
             }
@@ -1929,7 +1914,7 @@ static void signal_cb (flux_reactor_t *r,
 
     flux_log (ctx->h, LOG_INFO, "signal %d", signum);
 
-    if (ctx->rank == 0 && !signal_is_deadly (signum)) {
+    if (ctx->info.rank == 0 && !signal_is_deadly (signum)) {
         /* Attempt to forward non-deadly signals to jobs. If that fails,
          * then fall through to state_machine_kill() so the signal is
          * delivered somewhere.
@@ -1962,16 +1947,17 @@ static int broker_request_sendmsg_new_internal (broker_ctx_t *ctx,
         return -1;
     /* Route up TBON if destination if upstream of this broker.
      */
-    if (upstream && nodeid == ctx->rank) {
+    if (upstream && nodeid == ctx->info.rank) {
         if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
             return -1;
     }
     /* Deliver to local service if destination *could* be this broker.
      * If there is no such service locally (ENOSYS), route up TBON.
      */
-    else if ((upstream && nodeid != ctx->rank) || nodeid == FLUX_NODEID_ANY) {
+    else if ((upstream && nodeid != ctx->info.rank)
+        || nodeid == FLUX_NODEID_ANY) {
         if (service_send_new (ctx->services, msg) < 0) {
-            if (errno != ENOSYS || ctx->rank == 0)
+            if (errno != ENOSYS || ctx->info.rank == 0)
                 return -1;
             if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
                 return -1;
@@ -1979,7 +1965,7 @@ static int broker_request_sendmsg_new_internal (broker_ctx_t *ctx,
     }
     /* Deliver to local service if this broker is the addressed rank.
      */
-    else if (nodeid == ctx->rank) {
+    else if (nodeid == ctx->info.rank) {
         if (service_send_new (ctx->services, msg) < 0)
             return -1;
     }
@@ -2058,7 +2044,7 @@ static void h_internal_watcher (flux_reactor_t *r,
             /* Events sent on ctx->h are assumed to be unpublished,
              * so they must either be published or forwarded upstream.
              */
-            if (ctx->rank == 0) {
+            if (ctx->info.rank == 0) {
                 if (publish_event_new (ctx, &msg, NULL) < 0)
                     goto error;
             }

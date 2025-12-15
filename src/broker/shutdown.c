@@ -273,7 +273,7 @@ struct shutdown *shutdown_create (struct broker *ctx)
                                     shutdown,
                                     &shutdown->handlers) < 0)
         goto error;
-    if (ctx->rank == 0) {
+    if (ctx->info.rank == 0) {
         if (!(shutdown->f_monitor = monitor_request (shutdown)))
             return NULL;
     }
