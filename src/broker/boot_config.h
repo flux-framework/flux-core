@@ -13,6 +13,8 @@
 
 /* boot_config - bootstrap broker/overlay from config file */
 
+#include "src/common/libpmi/upmi.h"
+
 #include "attr.h"
 #include "overlay.h"
 
@@ -20,7 +22,9 @@
  *   tbon.endpoint (w)
  *   instance-level (w)
  */
-int boot_config (flux_t *h,
+int boot_config (struct bootstrap *boot,
+                 struct upmi_info *info,
+                 flux_t *h,
                  const char *hostname,
                  struct overlay *overlay,
                  attr_t *attrs,

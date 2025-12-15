@@ -23,6 +23,7 @@
 #include <uuid.h>
 
 #include "src/common/libpmi/bizcard.h"
+#include "src/common/libpmi/upmi.h"
 #include "src/common/libzmqutil/msg_zsock.h"
 #include "src/common/libzmqutil/sockopt.h"
 #include "src/common/libzmqutil/zwatcher.h"
@@ -46,6 +47,8 @@
 #include "attr.h"
 #include "trace.h"
 #include "state_machine.h"
+#include "boot_pmi.h"
+#include "boot_config.h"
 
 /* How long to wait (seconds) for a peer broker's TCP ACK before disconnecting.
  * This can be configured via TOML and on the broker command line.
@@ -331,8 +334,6 @@ int overlay_set_topology (struct overlay *ov, struct topology *topo)
         || topology_get_child_ranks (topo, child_ranks, child_count) < 0)
         goto error;
 
-    ov->size = topology_get_size (topo);
-    ov->rank = topology_get_rank (topo);
     if (!cert_meta_get (ov->cert, "name")) {
         char val[16];
         snprintf (val, sizeof (val), "%lu", (unsigned long)ov->rank);
@@ -1693,21 +1694,12 @@ int overlay_bind (struct overlay *ov,
 /* Call after overlay bootstrap (bind/connect),
  * to get concretized 0MQ endpoints.
  */
-int overlay_register_attrs (struct overlay *overlay)
+static int overlay_register_attrs (struct overlay *overlay)
 {
     if (attr_add (overlay->attrs,
                   "tbon.parent-endpoint",
                   overlay->parent.uri,
                   ATTR_IMMUTABLE) < 0)
-        return -1;
-    if (attr_add_uint32 (overlay->attrs,
-                         "rank",
-                         overlay->rank,
-                         ATTR_IMMUTABLE) < 0)
-        return -1;
-    if (attr_add_uint32 (overlay->attrs,
-                         "size", overlay->size,
-                         ATTR_IMMUTABLE) < 0)
         return -1;
     if (attr_add_int (overlay->attrs,
                       "tbon.level",
@@ -2682,6 +2674,8 @@ static const struct flux_msg_handler_spec htab[] = {
 };
 
 struct overlay *overlay_create (flux_t *h,
+                                struct bootstrap *boot,
+                                struct upmi_info *info,
                                 const char *hostname,
                                 attr_t *attrs,
                                 void *zctx,
@@ -2695,9 +2689,10 @@ struct overlay *overlay_create (flux_t *h,
     if (!(ov->hostname = strdup (hostname)))
         goto error;
     ov->attrs = attrs;
-    ov->rank = FLUX_NODEID_ANY;
     ov->parent.lastsent = -1;
     ov->h = h;
+    ov->rank = info->rank;
+    ov->size = info->size;
     ov->reactor = flux_get_reactor (h);
     if (!(ov->h_channel = flux_open (uri, 0))
         || flux_set_reactor (ov->h_channel, ov->reactor) < 0
@@ -2796,6 +2791,20 @@ struct overlay *overlay_create (flux_t *h,
     if (!(ov->health_requests = flux_msglist_create ())
         || !(ov->trace_requests = flux_msglist_create ()))
         goto error;
+    if (boot) {
+        if (streq (bootstrap_method (boot), "config")) {
+            if (boot_config (boot, info, h, hostname, ov, attrs, errp) < 0)
+                goto error;;
+        }
+        else {
+            if (boot_pmi (boot, info, hostname, ov, attrs, errp) < 0)
+                goto error;
+        }
+    }
+    if (overlay_register_attrs (ov) < 0) {
+        errprintf (errp, "overlay setattr error: %s", strerror (errno));
+        goto error;
+    }
     return ov;
 error:
     errprintf (errp, "%s", strerror (errno));
