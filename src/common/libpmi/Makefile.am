@@ -45,7 +45,9 @@ libupmi_la_SOURCES = \
 	upmi_libpmi2.c \
 	upmi_single.c \
 	bizcard.c \
-	bizcard.h
+	bizcard.h \
+	bizcache.c \
+	bizcache.h
 
 fluxinclude_HEADERS = \
 	pmi.h \
