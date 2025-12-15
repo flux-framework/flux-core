@@ -15,8 +15,13 @@
 
 #include "attr.h"
 #include "overlay.h"
+#include "bootstrap.h"
 
-int boot_pmi (const char *hostname,
+#include "src/common/libpmi/upmi.h"
+
+int boot_pmi (struct bootstrap *boot,
+              struct upmi_info *info,
+              const char *hostname,
               struct overlay *overlay,
               attr_t *attrs,
               flux_error_t *error);

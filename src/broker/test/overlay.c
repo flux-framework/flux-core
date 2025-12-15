@@ -29,6 +29,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/stdlog.h"
 #include "src/common/libutil/unlink_recursive.h"
+#include "src/common/libpmi/upmi.h"
 #include "ccan/str/str.h"
 
 #include "src/broker/overlay.h"
@@ -42,14 +43,13 @@ void *zctx;
 
 struct context {
     struct overlay *ov;
+    struct upmi_info info;
     flux_t *h;
     attr_t *attrs;
     char name[32];
     char uri[64];
     flux_t *h_channel;
     flux_watcher_t *w_channel;
-    int rank;
-    int size;
     struct topology *topo;
     char *uuid;
     const flux_msg_t *msg;
@@ -135,11 +135,13 @@ struct context *ctx_create (flux_t *h,
     if (topology_set_rank (ctx->topo, rank) < 0)
         BAIL_OUT ("cannot set topology rank");
     ctx->h = h;
-    ctx->size = size;
-    ctx->rank = rank;
+    ctx->info.rank = rank;
+    ctx->info.size = size;
     snprintf (ctx->name, sizeof (ctx->name), "test%d", rank);
     snprintf (ctx->uri, sizeof (ctx->uri), "interthread://test%d", rank);
     if (!(ctx->ov = overlay_create (h,
+                                    NULL,
+                                    &ctx->info,
                                     ctx->name,
                                     ctx->attrs,
                                     zctx,
@@ -161,7 +163,7 @@ struct context *ctx_create (flux_t *h,
             BAIL_OUT ("could not create handle watcher");
     }
     diag ("created %s: rank %d size %d uuid %s",
-          ctx->name, ctx->rank, ctx->size, ctx->uuid);
+          ctx->name, ctx->info.rank, ctx->info.size, ctx->uuid);
 
     return ctx;
 }
@@ -188,11 +190,7 @@ void single (flux_t *h)
     free (s);
     idset_destroy (critical_ranks);
 
-    ok (overlay_register_attrs (ctx->ov) == 0,
-        "%s: overlay_register_attrs works", ctx->name);
     check_attr (ctx, "tbon.parent-endpoint", NULL);
-    check_attr (ctx, "rank", "0");
-    check_attr (ctx, "size", "1");
     check_attr (ctx, "tbon.level", "0");
     check_attr (ctx, "tbon.maxlevel", "0");
     check_attr (ctx, "tbon.descendants", "0");
@@ -610,10 +608,14 @@ void test_destroy (int size, struct context *ctx[])
  */
 void wrongness (flux_t *h)
 {
+    struct upmi_info info;
     struct overlay *ov;
     attr_t *attrs;
     flux_error_t error;
     char *uuid;
+
+    info.size = 1;
+    info.rank = 0;
 
     if (!(attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
@@ -621,6 +623,8 @@ void wrongness (flux_t *h)
     err_init (&error);
     errno = 0;
     ok (overlay_create (h,
+                        NULL,
+                        &info,
                         "test0",
                         attrs,
                         zctx,
@@ -636,6 +640,8 @@ void wrongness (flux_t *h)
     err_init (&error);
     errno = 0;
     ok (overlay_create (NULL,
+                        NULL,
+                        &info,
                         "test0",
                         attrs,
                         zctx,
@@ -648,6 +654,8 @@ void wrongness (flux_t *h)
     err_init (&error);
     errno = 0;
     ok (overlay_create (h,
+                        NULL,
+                        &info,
                         "test0",
                         NULL,
                         zctx,
@@ -664,26 +672,14 @@ void wrongness (flux_t *h)
         BAIL_OUT ("error creating broker.uuid");
     free (uuid);
     if (!(ov = overlay_create (h,
+                               NULL,
+                               &info,
                                "test0",
                                attrs,
                                zctx,
                                "interthread://x",
                                &error)))
         BAIL_OUT ("overlay_create failed: %s", error.text);
-
-    errno = 0;
-    struct context *ctx = ctx_create (h, 1, 0, "kary:2", NULL);
-    char * uri = NULL;
-    if (asprintf (&uri, "ipc://%s/flux_ipc_foobar", get_test_dir ()) < 0)
-        BAIL_OUT ("asprintf failed");
-    err_init (&error);
-    ok (overlay_bind (ov, uri, NULL, &error) < 0 && errno == EINVAL,
-        "overlay_bind fails if called before rank is known");
-    diag ("%s", error.text);
-    ctx_destroy(ctx);
-    if (unlink (uri) < 0 && errno != ENOENT)
-        BAIL_OUT ("could not remove %s", uri);
-    free (uri);
 
     ok (!flux_msg_is_local (NULL),
         "flux_msg_is_local (NULL) returns false");
