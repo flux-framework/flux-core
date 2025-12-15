@@ -39,15 +39,19 @@ struct topology {
 
 static int kary_plugin_init (struct topology *topo,
                              const char *path,
+                             json_t *args,
                              flux_error_t *error);
 static int mincrit_plugin_init (struct topology *topo,
                                 const char *path,
+                                json_t *args,
                                 flux_error_t *error);
 static int binomial_plugin_init (struct topology *topo,
                                  const char *path,
+                                 json_t *args,
                                  flux_error_t *error);
 static int custom_plugin_init (struct topology *topo,
                                const char *path,
+                               json_t *args,
                                flux_error_t *error);
 
 static const struct topology_plugin builtin_plugins[] = {
@@ -56,13 +60,6 @@ static const struct topology_plugin builtin_plugins[] = {
     { .name = "binomial", .init = binomial_plugin_init },
     { .name = "custom", .init = custom_plugin_init },
 };
-
-static json_t *boot_hosts;
-
-void topology_hosts_set (json_t *hosts)
-{
-    boot_hosts = hosts;
-}
 
 static const struct topology_plugin *topology_plugin_lookup (const char *name)
 {
@@ -74,6 +71,7 @@ static const struct topology_plugin *topology_plugin_lookup (const char *name)
 
 static int topology_plugin_call (struct topology *topo,
                                  const char *uri,
+                                 json_t *args,
                                  flux_error_t *error)
 {
     const struct topology_plugin *plugin;
@@ -90,7 +88,7 @@ static int topology_plugin_call (struct topology *topo,
         errprintf (error, "unknown topology scheme '%s'", name);
         goto error;
     }
-    if (plugin->init (topo, path, error) < 0)
+    if (plugin->init (topo, path, args, error) < 0)
         goto error;
     free (name);
     return 0;
@@ -120,6 +118,7 @@ struct topology *topology_incref (struct topology *topo)
 
 struct topology *topology_create (const char *uri,
                                   int size,
+                                  json_t *args,
                                   flux_error_t *error)
 {
     struct topology *topo;
@@ -140,7 +139,7 @@ struct topology *topology_create (const char *uri,
     // topo->node is 0-initialized, so rank 0 is default parent of all nodes
 
     if (uri) {
-        if (topology_plugin_call (topo, uri, error) < 0)
+        if (topology_plugin_call (topo, uri, args, error) < 0)
             goto error;
     }
     return topo;
@@ -404,6 +403,7 @@ static int parse_k (const char *s, int *result)
  */
 static int kary_plugin_init (struct topology *topo,
                              const char *path,
+                             json_t *args,
                              flux_error_t *error)
 {
     int k;
@@ -462,6 +462,7 @@ static int mincrit_choose_k (int size, int max_fanout)
  */
 static int mincrit_plugin_init (struct topology *topo,
                                 const char *path,
+                                json_t *args,
                                 flux_error_t *error)
 {
     int k;
@@ -513,6 +514,7 @@ static void binomial_generate (struct topology *topo, int root, int k)
 
 static int binomial_plugin_init (struct topology *topo,
                                  const char *path,
+                                 json_t *args,
                                  flux_error_t *error)
 {
     int k;
@@ -554,9 +556,11 @@ static int gethostrank (const char *hostname, json_t *hosts, int *rank)
 
 static int custom_plugin_init (struct topology *topo,
                                const char *path,
+                               json_t *args,
                                flux_error_t *error)
 {
     size_t rank;
+    json_t *hosts;
     json_t *entry;
     const char *parent;
     const char *host;
@@ -566,9 +570,13 @@ static int custom_plugin_init (struct topology *topo,
         errprintf (error, "unknown custom topology directive: '%s'", path);
         return -1;
     }
-    if (!boot_hosts)
-        return 0;
-    json_array_foreach (boot_hosts, rank, entry) {
+    if (!args || json_unpack (args, "{s:o}", "hosts", &hosts) < 0)
+        return 0; // defaults OK if no hosts (e.g. singleton)
+    if (!json_is_array (hosts)) {
+        errprintf (error, "hosts must be an array");
+        return -1;
+    }
+    json_array_foreach (hosts, rank, entry) {
         if (json_unpack (entry,
                          "{s:s s:s}",
                          "host", &host,
@@ -585,7 +593,7 @@ static int custom_plugin_init (struct topology *topo,
             errprintf (error, "topology size does not match host array size");
             return -1;
         }
-        if (gethostrank (parent, boot_hosts, &parent_rank) < 0
+        if (gethostrank (parent, hosts, &parent_rank) < 0
             || parent_rank < 0 || parent_rank >= topo->size) {
             errprintf (error,
                        "Config file [bootstrap] hosts:"
