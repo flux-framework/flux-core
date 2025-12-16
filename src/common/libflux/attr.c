@@ -84,48 +84,18 @@ static struct attr_cache *get_attr_cache (flux_t *h)
     return c;
 }
 
-const char *flux_attr_get (flux_t *h, const char *name)
+static const char *attr_get (flux_t *h, const char *name)
 {
     struct attr_cache *c;
     const char *val;
     int flags;
     flux_future_t *f = NULL;
     char *cpy = NULL;
-    const char *orig_name = name;
-    char *proxy_remote = NULL;
 
-    if (!h || !name) {
-        errno = EINVAL;
-        return NULL;
-    }
     if (!(c = get_attr_cache (h)))
         return NULL;
-
-    /*  The attribute parent-uri is treated specifically here, since
-     *  a process connected to this instance via flux-proxy(1) should
-     *  have the parent-uri returned as a usable remote URI.
-     *
-     *  Therefore, if FLUX_PROXY_REMOTE is set in the current environment,
-     *  and the attribute is parent-uri, instead actually return the
-     *  handle-specific parent-remote-uri attribute. If this is not yet
-     *  available, fetch parent-uri and construct the remote uri by
-     *  substituting FLUX_PROXY_REMOTE in an ssh:// uri.
-     */
-    if (streq (name, "parent-uri")
-        && (proxy_remote = getenv ("FLUX_PROXY_REMOTE")))
-        name = "parent-remote-uri";
     if ((val = zhashx_lookup (c->cache, name)))
         return val;
-
-    /*  If FLUX_PROXY_REMOTE was set, try a lookup of 'orig_name' in
-     *  the cache before attempting an RPC. If successful, then set
-     *  the immutable flag for the parent-remote-uri attr (it should not
-     *  change), since 'flags' will not be set by the RPC, which is being
-     *  skipped.
-     */
-    if (proxy_remote && (val = zhashx_lookup (c->cache, orig_name)))
-        flags = FLUX_ATTRFLAG_IMMUTABLE;
-
     /*  If we still don't have a value for this attribute, try an RPC:
      */
     if (!val) {
@@ -134,7 +104,7 @@ const char *flux_attr_get (flux_t *h, const char *name)
                                  FLUX_NODEID_ANY,
                                  0,
                                  "{s:s}",
-                                 "name", orig_name)))
+                                 "name", name)))
             return NULL;
         if (flux_rpc_get_unpack (f,
                                  "{s:s s:i}",
@@ -142,16 +112,7 @@ const char *flux_attr_get (flux_t *h, const char *name)
                                  "flags", &flags) < 0)
             goto done;
     }
-
-    /*  If proxy_remote is non-NULL then parent-uri has been aliased to
-     *  parent-remote-uri. Swap a local URI to a remote:
-     */
-    if (proxy_remote
-        && strstarts (val, "local://")) {
-        if (asprintf (&cpy, "ssh://%s%s", proxy_remote, val+8) < 0)
-            goto done;
-    }
-    else if (!(cpy = strdup (val)))
+    if (!(cpy = strdup (val)))
         goto done;
     if ((flags & FLUX_ATTRFLAG_IMMUTABLE))
         zhashx_update (c->cache, name, cpy);
@@ -160,6 +121,55 @@ const char *flux_attr_get (flux_t *h, const char *name)
 done:
     flux_future_destroy (f);
     return cpy;
+}
+
+/*  The attribute parent-uri is treated specifically here, since
+ *  a process connected to this instance via flux-proxy(1) should
+ *  have the parent-uri returned as a usable remote URI.
+ *
+ *  Therefore, if FLUX_PROXY_REMOTE is set in the current environment,
+ *  post-process the parent-uri attribute to make it remote, and cache
+ *  the result under 'name' for future lookups.
+ */
+static const char *attr_get_proxy_remote (flux_t *h,
+                                          const char *proxy_remote,
+                                          const char *name)
+{
+    struct attr_cache *c;
+    const char *val;
+    char *cpy = NULL;
+
+    if (!(c = get_attr_cache (h)))
+        return NULL;
+    if ((val = zhashx_lookup (c->cache, name)))
+        return val;
+    if (!(val = attr_get (h, "parent-uri")))
+        return NULL;
+    if (strstarts (val, "local://")) {
+        if (asprintf (&cpy, "ssh://%s%s", proxy_remote, val + 8) < 0)
+            return NULL;
+    }
+    else {
+        if (!(cpy = strdup (val)))
+            return NULL;
+    }
+    zhashx_update (c->cache, name, cpy);
+    return cpy;
+}
+
+const char *flux_attr_get (flux_t *h, const char *name)
+{
+    const char *proxy_remote;
+
+    if (!h || !name) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (streq (name, "parent-uri")
+        && (proxy_remote = getenv ("FLUX_PROXY_REMOTE")))
+        return attr_get_proxy_remote (h, proxy_remote, "parent-remote-uri");
+
+    return attr_get (h, name);
 }
 
 int flux_attr_set (flux_t *h, const char *name, const char *val)
