@@ -18,8 +18,6 @@
 
 #include "ccan/str/str.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
-#include "src/common/libhostlist/hostlist.h"
-#include "src/common/libidset/idset.h"
 #include "src/common/libutil/errprintf.h"
 
 enum {
@@ -31,7 +29,6 @@ struct attr_cache {
     zhashx_t *temp;         // values that stay valid until next lookup
 
     zlistx_t *cache_iter;
-    struct hostlist *hostlist;
 };
 
 static void attr_cache_destroy (struct attr_cache *c)
@@ -41,7 +38,6 @@ static void attr_cache_destroy (struct attr_cache *c)
         zlistx_destroy (&c->cache_iter);
         zhashx_destroy (&c->cache);
         zhashx_destroy (&c->temp);
-        hostlist_destroy (c->hostlist);
         free (c);
         errno = saved_errno;
     }
@@ -257,130 +253,6 @@ int flux_get_rank (flux_t *h, uint32_t *rank)
         return -1;
     *rank = strtoul (val, NULL, 10);
     return 0;
-}
-
-static struct hostlist * get_hostlist (flux_t *h)
-{
-    struct attr_cache *c;
-
-    if (!(c = get_attr_cache (h)))
-        return NULL;
-    if (!c->hostlist) {
-        const char *val;
-        if (!(val = flux_attr_get (h, "hostlist"))
-            || !(c->hostlist = hostlist_decode (val)))
-            return NULL;
-    }
-    return c->hostlist;
-}
-
-const char *flux_get_hostbyrank (flux_t *h, uint32_t rank)
-{
-    struct hostlist *hl;
-    const char *result;
-
-    if (rank == FLUX_NODEID_ANY)
-        return "any";
-    if (rank == FLUX_NODEID_UPSTREAM)
-        return "upstream";
-    if (!(hl = get_hostlist (h)))
-        goto error;
-    if (!(result = hostlist_nth (hl, rank)))
-        goto error;
-    return result;
-error:
-    return "(null)";
-}
-
-int flux_get_rankbyhost (flux_t *h, const char *host)
-{
-    struct hostlist *hl;
-
-    if (!(hl = get_hostlist (h)))
-        return -1;
-    return hostlist_find (hl, host);
-}
-
-char *flux_hostmap_lookup (flux_t *h,
-                           const char *targets,
-                           flux_error_t *errp)
-{
-    struct hostlist *hostmap;
-    struct hostlist *hosts = NULL;
-    struct idset *ranks = NULL;
-    char *s = NULL;
-
-    if (!(hostmap = get_hostlist (h))) {
-        errprintf (errp, "%s", strerror (errno));
-        return NULL;
-    }
-
-    if ((ranks = idset_decode (targets))) {
-        unsigned int rank;
-        if (!(hosts = hostlist_create ())) {
-            errprintf (errp, "Out of memory");
-            goto err;
-        }
-        rank = idset_first (ranks);
-        while (rank != IDSET_INVALID_ID) {
-            const char *host;
-            if (!(host = hostlist_nth (hostmap, rank))) {
-                errprintf (errp, "rank %u is not in host map", rank);
-                goto err;
-            }
-            if (hostlist_append (hosts, host) < 0) {
-                errprintf (errp,
-                           "failed appending host %s: %s",
-                           host,
-                           strerror (errno));
-                goto err;
-            }
-            rank = idset_next (ranks, rank);
-        }
-        if (!(s = hostlist_encode (hosts))) {
-            errprintf (errp,
-                       "hostlist_encode: %s",
-                       strerror (errno));
-            goto err;
-        }
-    }
-    else if ((hosts = hostlist_decode (targets))) {
-        const char *host;
-        int rank = 0;
-        if (!(ranks = idset_create (0, IDSET_FLAG_AUTOGROW))) {
-            errprintf (errp, "Out of memory");
-            goto err;
-        }
-        host = hostlist_first (hosts);
-        while (host) {
-            if ((rank = hostlist_find (hostmap, host)) < 0) {
-                errprintf (errp, "host %s not found in host map", host);
-                goto err;
-            }
-            if (idset_set (ranks, rank) < 0) {
-                errprintf (errp,
-                           "idset_set (rank=%d): %s",
-                           rank,
-                           strerror (errno));
-                goto err;
-            }
-            host = hostlist_next (hosts);
-        }
-        if (!(s = idset_encode (ranks, IDSET_FLAG_RANGE))) {
-            errprintf (errp,
-                       "error encoding idset: %s",
-                       strerror (errno));
-            goto err;
-        }
-    }
-    else {
-        errprintf (errp, "target must be a valid idset or hostlist");
-        goto err;
-    }
-err:
-    hostlist_destroy (hosts);
-    idset_destroy (ranks);
-    return s;
 }
 
 int flux_get_instance_starttime (flux_t *h, double *starttimep)

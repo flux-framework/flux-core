@@ -40,6 +40,7 @@ fluxcoreinclude_HEADERS = \
 	event.h \
 	module.h \
 	attr.h \
+	hosts.h \
 	flog.h \
 	conf.h \
 	conf_builtin.h \
@@ -59,6 +60,7 @@ noinst_LTLIBRARIES = \
 libflux_la_SOURCES = \
 	flog.c \
 	attr.c \
+	hosts.c \
 	handle.c \
 	msg_deque.c \
 	msg_deque.h \

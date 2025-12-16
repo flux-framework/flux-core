@@ -28,6 +28,7 @@
 #include "event.h"
 #include "module.h"
 #include "attr.h"
+#include "hosts.h"
 #include "flog.h"
 #include "future.h"
 #include "service.h"
