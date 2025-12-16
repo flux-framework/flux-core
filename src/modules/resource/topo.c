@@ -84,7 +84,6 @@ static int drain_self (struct topo *topo, const char *reason)
 
 static int topo_verify (struct topo *topo,
                         json_t *R,
-                        bool nodrain,
                         struct rlist_verify_config *config)
 {
     json_error_t e;
@@ -97,8 +96,7 @@ static int topo_verify (struct topo *topo,
         errno = EINVAL;
         return -1;
     }
-    rc = rlist_verify_ex (&error, rl, topo->r_local, config);
-    if (rc != 0 && !nodrain) {
+    if (rlist_verify_ex (&error, rl, topo->r_local, config) != 0) {
         if (drain_self (topo, error.text) < 0)
             goto out;
     }
@@ -326,12 +324,12 @@ struct topo *topo_create (struct resource_ctx *ctx,
      */
     if ((R = inventory_get (ctx->inventory))) {
         const char *method = inventory_get_method (ctx->inventory);
-        bool nodrain = false;
+        bool noverify = config->noverify;
 
         if (method && streq (method, "job-info"))
-            nodrain = true;
-        if (!config->noverify
-            && topo_verify (topo, R, nodrain, config->verify) < 0)
+            noverify = true;
+
+        if (!noverify && topo_verify (topo, R, config->verify) < 0)
             goto error;
     }
     /* Reduce topo to rank 0 unconditionally in case it is needed.
