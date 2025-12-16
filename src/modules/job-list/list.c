@@ -337,8 +337,13 @@ void list_cb (flux_t *h,
         goto error;
     }
 
-    if (!(jobs = get_jobs (ctx->jsctx, &err, max_entries, since,
-                           attrs, c, statec)))
+    if (!(jobs = get_jobs (ctx->jsctx,
+                           &err,
+                           max_entries,
+                           since,
+                           attrs,
+                           c,
+                           statec)))
         goto error;
 
     if (flux_msg_is_streaming (msg)) {
