@@ -326,7 +326,8 @@ struct topo *topo_create (struct resource_ctx *ctx,
         const char *method = inventory_get_method (ctx->inventory);
         bool noverify = config->noverify;
 
-        if (method && streq (method, "job-info"))
+        if (method && streq (method, "job-info")
+            && !rlist_verify_config_is_explicit (config->verify))
             noverify = true;
 
         if (!noverify && topo_verify (topo, R, config->verify) < 0)
