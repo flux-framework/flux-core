@@ -265,6 +265,9 @@ int flux_get_rank (flux_t *h, uint32_t *rank)
     return 0;
 }
 
+/* broker.starttime is redirected to rank 0, since that is the
+ * only rank where the instance start time is accurately recorded.
+ */
 int flux_get_instance_starttime (flux_t *h, double *starttimep)
 {
     flux_future_t *f;
