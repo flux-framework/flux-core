@@ -8,9 +8,6 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* cleanup-event.c - emit a test event in CLEANUP state
- */
-
 #include <flux/jobtap.h>
 
 /* Disconnect rank 3 by default */
