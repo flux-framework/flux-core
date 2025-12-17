@@ -8,7 +8,6 @@ test_under_flux 4 full \
 	--test-exit-mode=leader
 
 OFFLINE_PLUGIN=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs/offline.so
-startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
 flux setattr log-stderr-level 1
 
