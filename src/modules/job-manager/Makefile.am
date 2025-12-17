@@ -111,12 +111,10 @@ plugins_alloc_check_la_LDFLAGS = \
 plugins_perilog_la_SOURCES = \
 	plugins/perilog.c
 plugins_perilog_la_LIBADD = \
-	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux/libflux.la \
+	$(top_builddir)/src/common/libsubprocess/bulk-exec.lo \
+	$(top_builddir)/src/common/libjob/job_hash.lo \
 	$(top_builddir)/src/common/librlist/librlist.la \
-	$(top_builddir)/src/common/libjob/libjob.la
+	$(top_builddir)/src/common/libflux-internal.la
 plugins_perilog_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
