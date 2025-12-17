@@ -10,6 +10,7 @@ EXTRA_DIST = \
 	README.md \
 	vscode.md \
 	NEWS.md \
+	CONTRIBUTING.md \
 	scripts/requirements-dev.txt \
 	scripts/install-deps-deb.sh \
 	scripts/install-deps-rpm.sh \
