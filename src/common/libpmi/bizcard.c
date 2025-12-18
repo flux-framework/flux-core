@@ -46,26 +46,63 @@ struct bizcard *bizcard_incref (struct bizcard *bc)
     return bc;
 }
 
+struct bizcard *bizcard_fromjson (json_t *obj)
+{
+    struct bizcard *bc;
+
+    if (!obj || json_unpack_ex (obj,
+                                NULL,
+                                JSON_VALIDATE_ONLY,
+                                "{s:s s?s s?[]}",
+                                "host",
+                                "pubkey",
+                                "uri") < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(bc = calloc (1, sizeof (*bc))))
+        return NULL;
+    bc->obj = json_incref (obj);
+    bc->refcount = 1;
+    return bc;
+}
+
+const json_t *bizcard_get_json (const struct bizcard *bc)
+{
+    if (!bc) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return bc->obj;
+}
+
 struct bizcard *bizcard_create (const char *hostname, const char *pubkey)
 {
     struct bizcard *bc;
 
-    if (!hostname || !pubkey) {
+    if (!hostname) {
         errno = EINVAL;
         return NULL;
     }
     if (!(bc = calloc (1, sizeof (*bc))))
         return NULL;
     bc->refcount = 1;
-    if (!(bc->obj = json_pack ("{s:s s:s s:[]}",
+    if (!(bc->obj = json_pack ("{s:s s:[]}",
                                "host", hostname,
-                               "pubkey", pubkey,
-                               "uri"))) {
-        errno = ENOMEM;
-        bizcard_decref (bc);
-        return NULL;
+                               "uri")))
+        goto nomem;
+    if (pubkey) {
+        json_t *o = json_string (pubkey);
+        if (!o || json_object_set_new (bc->obj, "pubkey", o) < 0) {
+            json_decref (o);
+            goto nomem;
+        }
     }
     return bc;
+nomem:
+    errno = ENOMEM;
+    bizcard_decref (bc);
+    return NULL;
 }
 
 const char *bizcard_encode (const struct bizcard *bc_const)
@@ -101,7 +138,7 @@ struct bizcard *bizcard_decode (const char *s, flux_error_t *error)
     if (json_unpack_ex (bc->obj,
                         &jerror,
                         JSON_VALIDATE_ONLY,
-                        "{s:s s:s s:o}",
+                        "{s:s s?s s:o}",
                         "host",
                         "pubkey",
                         "uri") < 0) {

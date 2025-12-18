@@ -22,6 +22,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libpmi/upmi.h"
+#include "src/common/libpmi/bizcache.h"
 #include "ccan/str/str.h"
 
 #include "attr.h"
@@ -280,133 +281,6 @@ static int set_broker_boot_method_attr (attr_t *attrs,
     return 0;
 }
 
-/* Small business card cache, by rank.
- * Business cards are fetched one by one from the PMI server.  To avoid
- * fetching the same ones more than once in different parts of the code,
- * implement a simple cache.
- */
-struct bizcache {
-    size_t size;
-    struct bizcard **cards; // indexed by rank, array storage follows struct
-};
-
-static struct bizcache *bizcache_create (size_t size)
-{
-    struct bizcache *cache;
-
-    cache = calloc (1, sizeof (*cache) + size * sizeof (struct bizcard *));
-    if (!cache)
-        return NULL;
-    cache->size = size;
-    cache->cards = (struct bizcard **)(cache + 1);
-    return cache;
-}
-
-static void bizcache_destroy (struct bizcache *cache)
-{
-    if (cache) {
-        int saved_errno = errno;
-        for (int i = 0; i < cache->size; i++)
-            bizcard_decref (cache->cards[i]);
-        free (cache);
-        errno = saved_errno;
-    }
-}
-
-static struct bizcard *bizcache_lookup (struct bizcache *cache, int rank)
-{
-    if (rank < 0 || rank >= cache->size)
-        return NULL;
-    return cache->cards[rank];
-}
-
-static int bizcache_insert (struct bizcache *cache,
-                            int rank,
-                            struct bizcard *bc)
-{
-    if (rank < 0 || rank >= cache->size) {
-        errno = EINVAL;
-        return -1;
-    }
-    cache->cards[rank] = bc;
-    return 0;
-}
-
-/* Put business card directly to PMI using rank as key.
- */
-static int put_bizcard (struct upmi *upmi,
-                        int rank,
-                        const struct bizcard *bc,
-                        flux_error_t *error)
-{
-    char key[64];
-    const char *s;
-    flux_error_t e;
-
-    (void)snprintf (key, sizeof (key), "%d", rank);
-    if (!(s = bizcard_encode (bc))) {
-        errprintf (error, "error encoding business card: %s", strerror (errno));
-        return -1;
-    }
-    if (upmi_put (upmi, key, s, &e) < 0) {
-        errprintf (error,
-                   "%s: put %s: %s",
-                   upmi_describe (upmi),
-                   key,
-                   e.text);
-        return -1;
-    }
-    return 0;
-}
-
-/* Return business card from cache, filling the cache entry by fetching
- * it from PMI if missing.  The caller must not free the business card.
- */
-static int get_bizcard (struct upmi *upmi,
-                        struct bizcache *cache,
-                        int rank,
-                        const struct bizcard **bcp,
-                        flux_error_t *error)
-{
-    char key[64];
-    char *val;
-    flux_error_t e;
-    struct bizcard *bc;
-
-    if ((bc = bizcache_lookup (cache, rank))) {
-        *bcp = bc;
-        return 0;
-    }
-
-    (void)snprintf (key, sizeof (key), "%d", rank);
-    if (upmi_get (upmi, key, rank, &val, &e) < 0) {
-        errprintf (error,
-                   "%s: get %s: %s",
-                   upmi_describe (upmi),
-                   key,
-                   e.text);
-        return -1;
-    }
-    if (!(bc = bizcard_decode (val, &e))) {
-        errprintf (error,
-                   "error decoding rank %d business card: %s",
-                   rank,
-                   e.text);
-        goto error;
-    }
-    if (bizcache_insert (cache, rank, bc) < 0) {
-        errprintf (error, "error caching rank %d business card", rank);
-        bizcard_decref (bc);
-        goto error;
-    }
-    free (val);
-    *bcp = bc;
-    return 0;
-error:
-    ERRNO_SAFE_WRAP (free, val);
-    return -1;
-}
-
 static void trace_upmi (void *arg, const char *text)
 {
     fprintf (stderr, "boot_pmi: %s\n", text);
@@ -588,6 +462,16 @@ int boot_pmi (const char *hostname,
         }
     }
 
+    /* Cache bizcard results by rank to avoid repeated PMI lookups.
+     */
+    if (!(cache = bizcache_create (upmi, info.size))) {
+        errprintf (errp,
+                   "%s: error creating business card cache: %s",
+                   upmi_describe (upmi),
+                   strerror (errno));
+        goto error;
+    }
+
     /* Each broker writes a business card consisting of hostname,
      * public key, and URIs (if any).
      */
@@ -595,7 +479,7 @@ int boot_pmi (const char *hostname,
         errprintf (errp, "get business card: %s", strerror (errno));
         goto error;
     }
-    if (put_bizcard (upmi, info.rank, bc, &error) < 0) {
+    if (bizcache_put (cache, info.rank, bc, &error) < 0) {
         errprintf (errp, "put business card: %s", error.text);
         goto error;
     }
@@ -614,16 +498,6 @@ int boot_pmi (const char *hostname,
         goto error;
     }
 
-    /* Cache bizcard results by rank to avoid repeated PMI lookups.
-     */
-    if (!(cache = bizcache_create (info.size))) {
-        errprintf (errp,
-                   "%s: error creating business card cache: %s",
-                   upmi_describe (upmi),
-                   strerror (errno));
-        goto error;
-    }
-
     /* Fetch the business card of parent and inform overlay of URI
      * and public key.
      */
@@ -631,7 +505,7 @@ int boot_pmi (const char *hostname,
         int parent_rank = topology_get_parent (topo);
         const char *uri = NULL;
 
-        if (get_bizcard (upmi, cache, parent_rank, &bc, errp) < 0)
+        if (bizcache_get (cache, parent_rank, &bc, errp) < 0)
             goto error;
         if (!get_prefer_tcp (attrs)
             && clique_ranks (taskmap, info.rank, &parent_rank, 1) == 1)
@@ -654,7 +528,7 @@ int boot_pmi (const char *hostname,
         int child_rank = child_ranks[i];
         char name[64];
 
-        if (get_bizcard (upmi, cache, child_rank, &bc, errp) < 0)
+        if (bizcache_get (cache, child_rank, &bc, errp) < 0)
             goto error;
         (void)snprintf (name, sizeof (name), "%d", i);
         if (overlay_authorize (overlay, name, bizcard_pubkey (bc)) < 0) {
@@ -671,7 +545,7 @@ int boot_pmi (const char *hostname,
      * The hostlist is built independently (and in parallel) on all ranks.
      */
     for (i = 0; i < info.size; i++) {
-        if (get_bizcard (upmi, cache, i, &bc, errp) < 0)
+        if (bizcache_get (cache, i, &bc, errp) < 0)
             goto error;
         if (hostlist_append (hl, bizcard_hostname (bc)) < 0) {
             errprintf (errp, "hostlist_append: %s", strerror (errno));

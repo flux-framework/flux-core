@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <jansson.h>
 #include <flux/core.h>
 
 #include "ccan/str/str.h"
@@ -31,8 +32,14 @@ bool test_bizcard_equiv (const struct bizcard *bc1,
 {
     if (!streq (bizcard_hostname (bc1), bizcard_hostname (bc2)))
         return false;
-    if (!streq (bizcard_pubkey (bc1), bizcard_pubkey (bc2)))
-        return false;
+    if (bizcard_pubkey (bc1) == NULL || bizcard_pubkey (bc2) == NULL) {
+        if (bizcard_pubkey (bc1) != bizcard_pubkey (bc2))
+            return false;
+    }
+    else {
+        if (!streq (bizcard_pubkey (bc1), bizcard_pubkey (bc2)))
+            return false;
+    }
     if (!streq_safe (bizcard_uri_first (bc1), bizcard_uri_first (bc2)))
         return false;
     do {
@@ -47,6 +54,7 @@ void test_simple (void)
     struct bizcard *bc;
     struct bizcard *bc2;
     const char *s;
+    const json_t *o;
 
     ok ((bc = bizcard_create ("hostname", "pubkey")) != NULL,
         "bizcard_create works");
@@ -104,12 +112,52 @@ void test_simple (void)
         "bizcard_decode works");
     ok (test_bizcard_equiv (bc, bc2),
         "new bizcard is same as the old one");
+    bizcard_decref (bc2);
+
+    ok ((o = bizcard_get_json (bc)) != NULL,
+        "bizcard_get_json works");
+    ok ((bc2 = bizcard_fromjson ((json_t *)o)) != NULL,
+        "bizcard_fromjson works");
+    ok (test_bizcard_equiv (bc, bc2),
+        "new bizcard is same as the old one");
 
     bizcard_incref (bc);
     bizcard_decref (bc);
 
     bizcard_decref (bc);
     bizcard_decref (bc2);
+}
+
+void test_nopubkey (void)
+{
+    struct bizcard *bc;
+    struct bizcard *bc2;
+    const char *s;
+    const json_t *o;
+
+    ok ((bc = bizcard_create ("thishost", NULL)) != NULL,
+        "bizcard_create pubkey=NULL works");
+
+    ok (bizcard_pubkey (NULL) == NULL,
+        "bizcard_pubkey returns NULL");
+
+    ok ((s = bizcard_encode (bc)) != NULL,
+        "bizcard_encode works");
+    ok ((bc2 = bizcard_decode (s, NULL)) != NULL,
+        "bizcard_decode works");
+    ok (test_bizcard_equiv (bc, bc2),
+        "new bizcard is same as the old one");
+    bizcard_decref (bc2);
+
+    ok ((o = bizcard_get_json (bc)) != NULL,
+        "bizcard_get_json works");
+    ok ((bc2 = bizcard_fromjson ((json_t *)o)) != NULL,
+        "bizcard_fromjson works");
+    ok (test_bizcard_equiv (bc, bc2),
+        "new bizcard is same as the old one");
+
+    bizcard_decref (bc2);
+    bizcard_decref (bc);
 }
 
 void test_inval (void)
@@ -120,9 +168,6 @@ void test_inval (void)
     errno = 0;
     ok (bizcard_create (NULL, "pubkey") == NULL && errno == EINVAL,
         "bizcard_create hostname=NULL fails with EINVAL");
-    errno = 0;
-    ok (bizcard_create ("hostname", NULL) == NULL && errno == EINVAL,
-        "bizcard_create pubkey=NULL fails with EINVAL");
 
     lives_ok ({bizcard_decref (NULL);},
               "bizcard_decref NULL doesn't crash");
@@ -178,6 +223,18 @@ void test_inval (void)
     ok (bizcard_hostname (NULL) == NULL,
         "bizcard_hostname NULL returns NULL");
 
+    errno = 0;
+    ok (bizcard_fromjson (NULL) == NULL && errno == EINVAL,
+        "bizcard_fromjson obj=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (bizcard_fromjson (json_null ()) == NULL && errno == EINVAL,
+        "bizcard_fromjson obj=(JSON NULL) fails with EINVAL");
+
+    errno = 0;
+    ok (bizcard_get_json (NULL) == NULL && errno == EINVAL,
+        "bizcard_get_json bc=NULL fails with EINVAL");
+
     bizcard_decref (bc);
 }
 
@@ -186,6 +243,7 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     test_simple ();
+    test_nopubkey ();
     test_inval ();
 
     done_testing ();

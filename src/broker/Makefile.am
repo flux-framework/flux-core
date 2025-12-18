@@ -39,8 +39,6 @@ libbroker_la_SOURCES = \
 	method.h \
 	overlay.h \
 	overlay.c \
-	bizcard.h \
-	bizcard.c \
 	service.h \
 	service.c \
 	attr.h \
@@ -106,12 +104,13 @@ TESTS = test_attr.t \
 	test_service.t \
 	test_runat.t \
 	test_overlay.t \
-	test_topology.t \
-	test_bizcard.t
+	test_topology.t
 
 test_ldadd = \
 	$(builddir)/libbroker.la \
 	$(top_builddir)/src/common/libtestutil/libtestutil.la \
+	$(top_builddir)/src/common/libpmi/libupmi.la \
+	$(top_builddir)/src/common/libpmi/libpmi_common.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -120,6 +119,7 @@ test_ldadd = \
 	$(ZMQ_LIBS) \
 	$(LIBSYSTEMD_LIBS) \
 	$(JANSSON_LIBS)
+
 
 test_ldflags = \
 	-no-install
@@ -159,10 +159,5 @@ test_topology_t_SOURCES = test/topology.c
 test_topology_t_CPPFLAGS = $(test_cppflags)
 test_topology_t_LDADD = $(test_ldadd)
 test_topology_t_LDFLAGS = $(test_ldflags)
-
-test_bizcard_t_SOURCES = test/bizcard.c
-test_bizcard_t_CPPFLAGS = $(test_cppflags)
-test_bizcard_t_LDADD = $(test_ldadd)
-test_bizcard_t_LDFLAGS = $(test_ldflags)
 
 EXTRA_DIST = README.md

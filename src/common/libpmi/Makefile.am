@@ -43,7 +43,11 @@ libupmi_la_SOURCES = \
 	upmi_simple.c \
 	upmi_libpmi.c \
 	upmi_libpmi2.c \
-	upmi_single.c
+	upmi_single.c \
+	bizcard.c \
+	bizcard.h \
+	bizcache.c \
+	bizcache.h
 
 fluxinclude_HEADERS = \
 	pmi.h \
@@ -53,7 +57,8 @@ TESTS = test_keyval.t \
 	test_simple.t \
 	test_canonical.t \
 	test_canonical2.t \
-	test_upmi.t
+	test_upmi.t \
+	test_bizcard.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -137,12 +142,19 @@ test_kvstest2_SOURCES = test/kvstest2.c
 test_kvstest2_CPPFLAGS = $(test_cppflags)
 test_kvstest2_LDADD = $(test_ldadd)
 
+
 test_plugin_singlex_la_SOURCES = test/plugin/singlex.c
 test_plugin_singlex_la_CPPFLAGS = $(test_cppflags)
 test_plugin_singlex_la_LIBADD = \
 	$(top_builddir)/src/common/libpmi/libupmi.la \
 	$(test_ldadd)
 test_plugin_singlex_la_LDFLAGS = -module -rpath /nowhere $(test_ldflags)
+
+test_bizcard_t_SOURCES = test/bizcard.c
+test_bizcard_t_CPPFLAGS = $(test_cppflags)
+test_bizcard_t_LDADD = \
+	$(top_builddir)/src/common/libpmi/libupmi.la \
+	$(test_ldadd)
 
 EXTRA_DIST = \
     ltrace.conf
