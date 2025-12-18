@@ -60,7 +60,7 @@ void test_flat (void)
     json_t *o;
     bool pass;
 
-    topo = topology_create (NULL, 16, NULL);
+    topo = topology_create (NULL, 16, NULL, NULL);
     ok (topo != NULL,
         "topology_create size=16 works");
     ok (topology_get_size (topo) == 16,
@@ -108,7 +108,7 @@ void test_k1 (void)
     int child_ranks[15];
     json_t *o;
 
-    topo = topology_create ("kary:1", 16, NULL);
+    topo = topology_create ("kary:1", 16, NULL, NULL);
     ok (topo != NULL,
         "topology_create kary:1 size=16 works");
     ok (topology_get_rank (topo) == 0,
@@ -150,7 +150,7 @@ void test_k2 (void)
     int child_ranks[15];
     json_t *o;
 
-    topo = topology_create ("kary:2", 16, NULL);
+    topo = topology_create ("kary:2", 16, NULL, NULL);
     ok (topo != NULL,
         "topology_create kary:2 size=16 works");
     ok (topology_get_rank (topo) == 0,
@@ -201,7 +201,7 @@ void test_k2_router (void)
     int child_ranks[15];
     json_t *o;
 
-    topo = topology_create ("kary:2", 16, NULL);
+    topo = topology_create ("kary:2", 16, NULL, NULL);
     ok (topo != NULL,
         "topology_create kary:2 size=16 works");
     ok (topology_set_rank (topo, 1) == 0,
@@ -280,7 +280,7 @@ void test_internal_ranks (void)
 
     struct internal_ranks_test *t = internal_ranks_tests;
     while (t && t->expected_ranks) {
-        if (!(topo = topology_create (t->uri, t->size, NULL)))
+        if (!(topo = topology_create (t->uri, t->size, NULL, NULL)))
             BAIL_OUT ("failed to create topology %s size=%d",
                       t->uri,
                       t->size);
@@ -352,7 +352,10 @@ json_t *pmap_hosts (struct pmap *map, size_t count, int size)
         if (!entry || json_array_append_new (hosts, entry) < 0)
             BAIL_OUT ("failed to append hosts array entry");
     }
-    return hosts;
+    json_t *args;
+    if (!(args = json_pack ("{s:o}", "hosts", hosts))) // steals 'hosts'
+        BAIL_OUT ("failed to enclose hosts in args envelope");
+    return args;
 }
 
 /* Does topology have 'expected' (idset) internal ranks?
@@ -405,59 +408,59 @@ void test_custom (void)
     flux_error_t error;
     json_t *hosts;
 
-    topo = topology_create ("custom:zzz", 256, &error);
+    topo = topology_create ("custom:zzz", 256, NULL, &error);
     if (!topo)
         diag ("%s", error.text);
     ok (topo == NULL,
         "topology_create custom: fails with URI path");
 
-    topology_hosts_set (NULL);
-    topo = topology_create ("custom:", 256, &error);
+    topo = topology_create ("custom:", 256, NULL, &error);
     ok (topo != NULL,
         "topology_create custom: works without hosts array");
     topology_decref (topo);
 
+    if (!(hosts = json_pack ("{s:n}", "hosts")))
+        BAIL_OUT ("could not create malformed hosts argument");
+    topo = topology_create ("custom:", 2, hosts, &error);
+    if (!topo)
+        diag ("%s", error.text);
+    ok (topo == NULL,
+        "topology_create custom failed with bad hosts argument");
+    json_decref (hosts);
+
     hosts = pmap_hosts (bad1, ARRAY_SIZE (bad1), 2);
-    topology_hosts_set (hosts);
-    topo = topology_create ("custom:", 2, &error);
+    topo = topology_create ("custom:", 2, hosts, &error);
     if (!topo)
         diag ("%s", error.text);
     ok (topo == NULL,
         "topology_create custom failed with rank 0 parent");
-    topology_hosts_set (NULL);
     json_decref (hosts);
 
     hosts = pmap_hosts (bad2, ARRAY_SIZE (bad2), 16);
-    topology_hosts_set (hosts);
-    topo = topology_create ("custom:", 16, &error);
+    topo = topology_create ("custom:", 16, hosts, &error);
     if (!topo)
         diag ("%s", error.text);
     ok (topo == NULL,
         "topology_create custom failed with graph cycle");
-    topology_hosts_set (NULL);
     json_decref (hosts);
 
     hosts = pmap_hosts (bad3, ARRAY_SIZE (bad3), 16);
-    topology_hosts_set (hosts);
-    topo = topology_create ("custom:", 16, &error);
+    topo = topology_create ("custom:", 16, hosts, &error);
     if (!topo)
         diag ("%s", error.text);
     ok (topo == NULL,
         "topology_create custom failed with self as parent");
-    topology_hosts_set (NULL);
     json_decref (hosts);
 
     hosts = pmap_hosts (cust1, ARRAY_SIZE (cust1), 256);
-    topology_hosts_set (hosts);
 
-    topo = topology_create ("custom:", 2, &error);
+    topo = topology_create ("custom:", 2, hosts, &error);
     if (!topo)
         diag ("%s", error.text);
     ok (topo == NULL,
         "topology_create custom failed with mismatched topo and host size");
 
-    topo = topology_create ("custom:", 256, &error);
-    topology_hosts_set (NULL);
+    topo = topology_create ("custom:", 256, hosts, &error);
     ok (topo != NULL,
         "configured custom 256 node topo");
     ok (topology_set_rank (topo, 1) == 0,
@@ -479,11 +482,11 @@ void test_invalid (void)
     struct topology *topo;
     int a[16];
 
-    if (!(topo = topology_create (NULL, 16, NULL)))
+    if (!(topo = topology_create (NULL, 16, NULL, NULL)))
         BAIL_OUT ("could not create topology");
 
     errno = 0;
-    ok (topology_create (NULL, 0, NULL) == NULL && errno == EINVAL,
+    ok (topology_create (NULL, 0, NULL, NULL) == NULL && errno == EINVAL,
         "topology_create size=0 fails with EINVAL");
 
     lives_ok ({topology_decref (NULL);},
@@ -575,7 +578,7 @@ void test_rank_aux (void)
     struct topology *topo;
     int errors;
 
-    if (!(topo = topology_create (NULL, 16, NULL)))
+    if (!(topo = topology_create (NULL, 16, NULL, NULL)))
         BAIL_OUT ("topology_create failed");
 
     errors = 0;
@@ -604,13 +607,13 @@ void test_binomial5 (void)
     flux_error_t error;
     int children[16];
 
-    topo = topology_create ("binomial:zz", 5, &error);
+    topo = topology_create ("binomial:zz", 5, NULL, &error);
     if (!topo)
         diag ("%s", error.text);
     ok (topo == NULL,
         "binomial topology fails with unknown path");
 
-    topo = topology_create ("binomial", 5, &error);
+    topo = topology_create ("binomial", 5, NULL, &error);
     ok (topo != NULL,
         "binomal topology of size=5 (non power of 2) works");
 
@@ -660,13 +663,13 @@ void test_mincrit5 (void)
     struct topology *topo;
     flux_error_t error;
 
-    topo = topology_create ("mincrit:zz", 5, &error);
+    topo = topology_create ("mincrit:zz", 5, NULL, &error);
     if (!topo)
         diag ("%s", error.text);
     ok (topo == NULL,
         "mincrit topology fails with unknown path");
 
-    topo = topology_create ("mincrit:2", 5, &error);
+    topo = topology_create ("mincrit:2", 5, NULL, &error);
     ok (topo != NULL,
         "mincrit:2 topology of size=5 works");
 

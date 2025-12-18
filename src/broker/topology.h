@@ -17,16 +17,17 @@
 #include <flux/idset.h>
 
 /* Create/destroy tree topology of size.
- * The default topology is "flat" (rank 0 is parent of all other ranks),
+ * The default topology is a flat one (rank 0 is parent of all other ranks),
  * and queries are from the perspective of rank 0.
  * If uri is non-NULL, the scheme selects a topology type, and the path
- * provides additional detail.  The following schemes are available:
- *
- * kary:K
- * Set the topology to a complete k-ary tree with fanout K.
+ * provides additional detail.
+ * If args is non-NULL it contains additional topology arguments.
+ * (The "custom" topology, looks for "hosts", which should be a hosts array
+ * from the [bootstrap] config.
  */
 struct topology *topology_create (const char *uri,
                                   int size,
+                                  json_t *args,
                                   flux_error_t *error);
 void topology_decref (struct topology *topo);
 struct topology *topology_incref (struct topology *topo);
@@ -69,7 +70,10 @@ void topology_hosts_set (json_t *hosts);
  */
 struct topology_plugin {
     const char *name;
-    int (*init)(struct topology *topo, const char *path, flux_error_t *error);
+    int (*init)(struct topology *topo,
+                const char *path,
+                json_t *args,
+                flux_error_t *error);
 };
 
 #endif /* !BROKER_TOPOLOGY_H */

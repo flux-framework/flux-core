@@ -494,7 +494,7 @@ int boot_pmi (const char *hostname,
                    strerror (errno));
         goto error;
     }
-    if (!(topo = topology_create (topo_uri, info.size, &error))) {
+    if (!(topo = topology_create (topo_uri, info.size, NULL, &error))) {
         errprintf (errp,
                    "error creating '%s' topology: %s",
                    topo_uri,

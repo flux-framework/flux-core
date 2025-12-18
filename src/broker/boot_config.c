@@ -240,6 +240,7 @@ int boot_config (flux_t *h,
     bool enable_ipv6 = false;
     const char *curve_cert = NULL;
     json_t *hosts = NULL;
+    json_t *topo_args = NULL;
     struct topology *topo = NULL;
     flux_error_t error;
     const char *topo_uri;
@@ -270,10 +271,8 @@ int boot_config (flux_t *h,
                    strerror (errno));
         goto error;
     }
-    topology_hosts_set (hosts);
-    topo = topology_create (topo_uri, size, &error);
-    topology_hosts_set (NULL);
-    if (!topo) {
+    if (!(topo_args = json_pack ("{s:O}", "hosts", hosts))
+        || !(topo = topology_create (topo_uri, size, topo_args, &error))) {
         errprintf (errp,
                    "Error creating %s topology: %s",
                    topo_uri,
@@ -394,10 +393,12 @@ int boot_config (flux_t *h,
     if (set_broker_boot_method_attr (attrs, "config", errp) < 0)
         goto error;
     json_decref (hosts);
+    json_decref (topo_args);
     topology_decref (topo);
     return 0;
 error:
     ERRNO_SAFE_WRAP (json_decref, hosts);
+    ERRNO_SAFE_WRAP (json_decref, topo_args);
     ERRNO_SAFE_WRAP (topology_decref, topo);
     return -1;
 }

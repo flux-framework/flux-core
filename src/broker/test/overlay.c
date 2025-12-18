@@ -130,7 +130,7 @@ struct context *ctx_create (flux_t *h,
         BAIL_OUT ("attr_create failed");
     if (!(ctx->uuid = init_broker_uuid (h, ctx->attrs)))
         BAIL_OUT ("error creating broker.uuid");
-    if (!(ctx->topo = topology_create (topo_uri, size, &error)))
+    if (!(ctx->topo = topology_create (topo_uri, size, NULL, &error)))
         BAIL_OUT ("cannot create '%s' topology: %s", topo_uri, error.text);
     if (topology_set_rank (ctx->topo, rank) < 0)
         BAIL_OUT ("cannot set topology rank");
