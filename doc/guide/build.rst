@@ -120,12 +120,23 @@ Flux-core and its dependencies can also be built using `spack
 
 .. code-block:: console
 
-  $ git clone --depth=100 https://github.com/spack/spack.git
+  $ git clone --depth=2 https://github.com/spack/spack.git
   $ cd spack
-  $ . share/spack/setup-env.sh
-  $ spack install flux-core@0.54.0 %gcc@11.4.0
+  $ spack compiler find 
+  $ spack install flux-core
   $ spack find flux-core
-  -- linux-ubuntu22.04-zen2 / gcc@11.4.0 --------------------------
-  flux-core@0.54.0
-  ==> 1 installed package
+  -- linux-ubuntu24.04-aarch64 / %c=clang@18.1.3 ------------------
+  flux-core@0.73.0
+  
+  -- linux-ubuntu24.04-aarch64 / %c=gcc@13.3.0 --------------------
+  flux-core@0.73.0
+  ==> 2 installed packages
+  $ . share/spack/setup-env.sh
   $ spack load flux-core
+  
+
+Some Flux developers prefer a more ephemeral Spack configuration that 
+configures Spack to use only in-directory configuration and caches and 
+ignore other directories and system config files. To enable that behavior,
+set ``SPACK_DISABLE_LOCAL_CONFIG=1`` and 
+``SPACK_USER_CACHE_PATH=$(pwd)/cache``.
