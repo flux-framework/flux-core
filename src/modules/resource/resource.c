@@ -48,8 +48,11 @@
  * path = "/path"
  *   Set path to resource object (if no resource.config array)
  *
- * noverify = true
- *   Skip verification that configured resources match local hwloc
+ * noverify = boolean
+ *   If true, skip all resource verification at broker startup (escape hatch)
+ *
+ * [resource.verify]
+ *   Table controlling granular resource verification behavior.
  *
  * norestrict = false
  *   When generating hwloc topology XML, do not restrict to current cpumask
@@ -66,6 +69,62 @@
  *   Maximum size allowed of the resource journal before it is truncated.
  */
 
+/* Initialize a resource_config object
+ */
+static void resource_config_init (struct resource_config *config)
+{
+    memset (config, 0, sizeof (*config));
+}
+
+/* Free memory associated with a resource_config object
+ */
+static void resource_config_deinit (struct resource_config *config)
+{
+    if (config) {
+        int saved_errno = errno;
+        rlist_verify_config_destroy (config->verify);
+        config->verify = NULL;
+        errno = saved_errno;
+    }
+}
+
+static struct rlist_verify_config *parse_verify_config (json_t *verify_obj,
+                                                        flux_error_t *errp)
+{
+    struct rlist_verify_config *verify;
+
+    if (!(verify = rlist_verify_config_create (NULL, errp)))
+        return NULL;
+
+    if (!verify_obj) {
+        /* Preserve existing resource module behavior by setting:
+         * - default = "allow-extra"
+         * - gpu = "ignore"
+         * - hostname = "strict"
+         */
+        if (rlist_verify_config_set_mode (verify,
+                                          "default",
+                                          RLIST_VERIFY_ALLOW_EXTRA) < 0
+        || rlist_verify_config_set_mode (verify,
+                                         "gpu",
+                                         RLIST_VERIFY_IGNORE) < 0
+        || rlist_verify_config_set_mode (verify,
+                                         "hostname",
+                                         RLIST_VERIFY_STRICT) < 0) {
+            errprintf (errp, "failed to set resource.verify defaults");
+            goto error;
+        }
+        return verify;
+    }
+    if (rlist_verify_config_update (verify, verify_obj, errp) < 0)
+        goto error;
+
+    return verify;
+error:
+    rlist_verify_config_destroy (verify);
+    return NULL;
+}
+
 static int parse_config (struct resource_ctx *ctx,
                          const flux_conf_t *conf,
                          struct resource_config *rconfig,
@@ -75,6 +134,7 @@ static int parse_config (struct resource_ctx *ctx,
     const char *exclude  = NULL;
     const char *path = NULL;
     const char *scheduling_path = NULL;
+    json_t *verify_obj = NULL;
     int noverify = 0;
     int norestrict = 0;
     int no_update_watch = 0;
@@ -85,11 +145,12 @@ static int parse_config (struct resource_ctx *ctx,
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s s?o s?s s?b s?b s?b s?b s?i !}}",
+                          "{s?{s?s s?s s?o s?o s?s s?b s?b s?b s?b s?i !}}",
                           "resource",
                             "path", &path,
                             "scheduling", &scheduling_path,
                             "config", &config,
+                            "verify", &verify_obj,
                             "exclude", &exclude,
                             "norestrict", &norestrict,
                             "noverify", &noverify,
@@ -161,6 +222,8 @@ static int parse_config (struct resource_ctx *ctx,
                             "systemd",
                               "enable", &systemd_enable);
     if (rconfig) {
+        if (!(rconfig->verify = parse_verify_config (verify_obj, errp)))
+            return -1;
         rconfig->journal_max = journal_max;
         rconfig->exclude_idset = exclude;
         rconfig->noverify = noverify ? true : false;
@@ -188,7 +251,9 @@ static void config_reload_cb (flux_t *h,
     flux_conf_t *conf;
     flux_error_t error;
     const char *errstr = NULL;
-    struct resource_config config = {0};
+    struct resource_config config;
+
+    resource_config_init (&config);
 
     if (flux_module_config_request_decode (msg, &conf) < 0) {
         errstr = "error unpacking config-reload request";
@@ -205,10 +270,13 @@ static void config_reload_cb (flux_t *h,
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config-reload request");
+
+    resource_config_deinit (&config);
     return;
 error_decref:
     flux_conf_decref (conf);
 error:
+    resource_config_deinit (&config);
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to config-reload request");
 }
@@ -358,7 +426,9 @@ int mod_main (flux_t *h, int argc, char **argv)
     struct resource_ctx *ctx;
     flux_error_t error;
     json_t *eventlog = NULL;
-    struct resource_config config = {0};
+    struct resource_config config;
+
+    resource_config_init (&config);
 
     if (!(ctx = resource_ctx_create (h)))
         goto error;
@@ -426,11 +496,13 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_reactor_run");
         goto error;
     }
+    resource_config_deinit (&config);
     resource_ctx_destroy (ctx);
     json_decref (eventlog);
     json_decref (config.R);
     return 0;
 error:
+    resource_config_deinit (&config);
     resource_ctx_destroy (ctx);
     ERRNO_SAFE_WRAP (json_decref, eventlog);
     ERRNO_SAFE_WRAP (json_decref, config.R);

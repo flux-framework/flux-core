@@ -773,9 +773,40 @@ static char * rnode_child_dumps (struct rnode *rnode)
     return s;
 }
 
-int rlist_verify (flux_error_t *errp,
-                  const struct rlist *expected,
-                  const struct rlist *rl)
+static int ignore_mask_missing (enum rlist_verify_mode core_mode,
+                                enum rlist_verify_mode gpu_mode)
+{
+    int rnode_ignore = 0;
+
+    if (gpu_mode == RLIST_VERIFY_IGNORE
+        || gpu_mode == RLIST_VERIFY_ALLOW_MISSING)
+        rnode_ignore |= RNODE_IGNORE_GPU;
+    if (core_mode == RLIST_VERIFY_IGNORE
+        || core_mode == RLIST_VERIFY_ALLOW_MISSING)
+        rnode_ignore |= RNODE_IGNORE_CORE;
+
+    return rnode_ignore;
+}
+
+static int ignore_mask_extra (enum rlist_verify_mode core_mode,
+                              enum rlist_verify_mode gpu_mode)
+{
+    int rnode_ignore = 0;
+
+    if (gpu_mode == RLIST_VERIFY_IGNORE
+        || gpu_mode == RLIST_VERIFY_ALLOW_EXTRA)
+        rnode_ignore |= RNODE_IGNORE_GPU;
+    if (core_mode == RLIST_VERIFY_IGNORE
+        || core_mode == RLIST_VERIFY_ALLOW_EXTRA)
+        rnode_ignore |= RNODE_IGNORE_CORE;
+
+    return rnode_ignore;
+}
+
+int rlist_verify_ex (flux_error_t *errp,
+                     const struct rlist *expected,
+                     const struct rlist *rl,
+                     struct rlist_verify_config *config)
 {
     struct rnode *n = NULL;
     struct rnode *exp = NULL;
@@ -783,6 +814,13 @@ int rlist_verify (flux_error_t *errp,
     zlistx_t *errors = NULL;
     int saved_errno;
     int rc = -1;
+
+    enum rlist_verify_mode hostname_mode =
+        rlist_verify_config_get_mode (config, "hostname");
+    enum rlist_verify_mode core_mode =
+        rlist_verify_config_get_mode (config, "core");
+    enum rlist_verify_mode gpu_mode =
+        rlist_verify_config_get_mode (config, "gpu");
 
     if (!(errors = errlist_create ())) {
         errprintf (errp, "Internal error: Out of memory");
@@ -805,7 +843,8 @@ int rlist_verify (flux_error_t *errp,
         errno = EINVAL;
         goto done;
     }
-    if (rnode_hostname_cmp (n, exp) != 0) {
+    if (hostname_mode == RLIST_VERIFY_STRICT
+        && rnode_hostname_cmp (n, exp) != 0) {
         errlist_append (errors,
                         "rank %d got hostname '%s', expected '%s'",
                         n->rank,
@@ -813,7 +852,12 @@ int rlist_verify (flux_error_t *errp,
                         exp->hostname ? exp->hostname : "unknown");
         goto done;
     }
-    if (!(diff = rnode_diff (exp, n))) {
+
+    /* Check for missing resources by comparing expected to actual:
+     */
+    if (!(diff = rnode_diff_ex (exp,
+                                n,
+                                ignore_mask_missing (core_mode, gpu_mode)))) {
         errlist_append (errors,
                         "Internal error: rnode_diff failed: %s",
                         strerror (errno));
@@ -828,7 +872,12 @@ int rlist_verify (flux_error_t *errp,
         goto done;
     }
     rnode_destroy (diff);
-    if (!(diff = rnode_diff (n, exp))) {
+
+    /* Check for extra resources by comparing actual to expected:
+     */
+    if (!(diff = rnode_diff_ex (n,
+                                exp,
+                                ignore_mask_extra (core_mode, gpu_mode)))) {
         errlist_append (errors,
                         "Internal error: rnode_diff failed: %s",
                         strerror (errno));
@@ -854,6 +903,13 @@ done:
     }
     errno = saved_errno;
     return rc;
+}
+
+int rlist_verify (flux_error_t *errp,
+                   const struct rlist *expected,
+                   const struct rlist *rl)
+{
+    return rlist_verify_ex (errp, expected, rl, NULL);
 }
 
 int rlist_append (struct rlist *rl, const struct rlist *rl2)

@@ -76,6 +76,71 @@ static void test_diff ()
     rnode_avail_check (result, "2-3");
     rnode_destroy (result);
 
+    result = rnode_diff_ex (a, c, RNODE_IGNORE_CORE);
+    ok (result != NULL,
+        "rnode_diff_ex (a, c, RNODE_IGNORE_CORE) works");
+    diag ("result: %d cores %d gpus",
+          rnode_count_type (result, "core"),
+          rnode_count_type (result, "gpu"));
+    ok (rnode_empty (result),
+        "result is empty");
+    rnode_destroy (result);
+
+    diag ("adding one gpu to rnode a");
+    if (!rnode_add_child (a, "gpu", "0"))
+        BAIL_OUT ("rnode_add_child failed");
+
+    diag ("rnode a: %d cores %d gpus",
+          rnode_count_type (a, "core"),
+          rnode_count_type (a, "gpu"));
+
+    result = rnode_diff (a, b);
+    ok (result != NULL,
+        "rnode_diff (a, b) works");
+    diag ("result: %d cores %d gpus",
+          rnode_count_type (result, "core"),
+          rnode_count_type (result, "gpu"));
+    ok (!rnode_empty (result),
+        "rnode is not empty");
+    diag ("result has %d total resources",
+          rnode_avail_total (result));
+    ok (rnode_count_type (result, "gpu") == 1,
+        "result has one available gpu");
+    rnode_destroy (result);
+
+    result = rnode_diff_ex (a, b, RNODE_IGNORE_GPU);
+    ok (result != NULL,
+        "rnode_diff_ex (a, b, RNODE_IGNORE_GPU) works");
+    diag ("result: %d cores %d gpus",
+          rnode_count_type (result, "core"),
+          rnode_count_type (result, "gpu"));
+    ok (rnode_empty (result),
+        "rnode is empty");
+    rnode_destroy (result);
+
+    result = rnode_diff_ex (a, c, RNODE_IGNORE_CORE);
+    ok (result != NULL,
+        "rnode_diff_ex (a, c, RNODE_IGNORE_CORE) works");
+    diag ("result: %d cores %d gpus",
+          rnode_count_type (result, "core"),
+          rnode_count_type (result, "gpu"));
+    ok (rnode_count_type (result, "gpu") == 1,
+        "result has one available gpu");
+    rnode_destroy (result);
+
+    result = rnode_diff_ex (a, c, RNODE_IGNORE_GPU);
+    ok (result != NULL,
+        "rnode_diff_ex (a, c, RNODE_IGNORE_GPU) works");
+    ok (!rnode_empty (result),
+        "rnode is not empty");
+    diag ("result: %d cores %d gpus",
+          rnode_count_type (result, "core"),
+          rnode_count_type (result, "gpu"));
+    rnode_avail_check (result, "2-3");
+    ok (rnode_count_type (result, "gpu") == 0,
+        "result has no available gpus");
+    rnode_destroy (result);
+
     rnode_destroy (a);
     rnode_destroy (b);
     rnode_destroy (c);

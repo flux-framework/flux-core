@@ -469,7 +469,22 @@ bool rnode_empty (const struct rnode *n)
     return count == 0;
 }
 
+static bool rnode_child_ignore (struct rnode_child *nc, int ignore_mask)
+{
+    if (((ignore_mask & RNODE_IGNORE_CORE) && streq (nc->name, "core"))
+        || ((ignore_mask & RNODE_IGNORE_GPU) && streq (nc->name, "gpu")))
+        return true;
+    return false;
+}
+
 struct rnode *rnode_diff (const struct rnode *a, const struct rnode *b)
+{
+    return rnode_diff_ex (a, b, 0);
+}
+
+struct rnode *rnode_diff_ex (const struct rnode *a,
+                             const struct rnode *b,
+                             int ignore_mask)
 {
     struct rnode_child *c;
     struct rnode *n = rnode_copy (a);
@@ -498,6 +513,17 @@ struct rnode *rnode_diff (const struct rnode *a, const struct rnode *b)
                 zhashx_delete (n->children, nc->name);
         }
         c = zhashx_next (b->children);
+    }
+    /* Clear ignored resources
+     */
+    if (ignore_mask) {
+        c = zhashx_first (n->children);
+        while (c) {
+            if (rnode_child_ignore (c, ignore_mask)
+                && rnode_child_clear (c) < 0)
+                goto err;
+            c = zhashx_next (n->children);
+        }
     }
     return n;
 err:

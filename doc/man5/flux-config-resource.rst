@@ -71,9 +71,80 @@ norestrict
    when the Flux system instance is constrained to a subset of cores,
    but jobs run within this instance should have access to all cores.
 
+verify
+   (optional) Boolean or table controlling resource verification behavior at
+   broker startup. When resources are verified, the actual resources discovered
+   via HWLOC are compared against the configured resources. Verification
+   failures cause the broker rank to drain itself with an appropriate message.
+
+   If set to a boolean:
+
+   - ``true``: Enable strict verification for all resources (hostname, cores,
+     and GPUs)
+   - ``false``: Disable verification for all resources (set default="ignore")
+
+   If set to a table, each resource type can be configured with one of four
+   verification modes:
+
+   - ``"strict"``: Drain rank on any mismatch (missing or extra resources)
+   - ``"allow-extra"``: Drain only on missing resources
+   - ``"allow-missing"``: Drain only on extra resources
+   - ``"ignore"``: Don't verify this resource type
+
+   The table supports a ``default`` key that sets the mode for all resource
+   types, and individual resource type keys (``hostname``, ``core``, ``gpu``)
+   that override the default.
+
+   .. note::
+
+    The default configuration when no ``resource.verify`` table is
+    explicitly set allows extra resources and ignores GPUs to preserve
+    backward compatibility with older versions of Flux. The implicit
+    configuration is as follows::
+
+     [resource.verify]
+     default = "allow-extra"
+     gpu = "ignore"
+     hostname = "strict"
+
+    If a ``[resource.verify]`` table is provided, even if empty, the
+    default behavior is strict verification for all resources::
+
+     [resource.verify]
+     default = "strict"
+
+   .. note::
+
+    When running as a job, resource verification is skipped by default
+    unless an explicit ``resource.verify`` configuration is provided.
+
+   Examples::
+
+     # Enable strict verification for all resources
+     [resource]
+     verify = true
+
+     # Empty verify table also enables strict verification
+     [resource.verify]
+
+     # Verify cores, but don't verify GPUs (useful when HWLOC cannot detect
+     # them)
+     [resource.verify]
+     gpu = "ignore"
+
+     # Allow extra cores but enforce strict GPU inventory
+     [resource.verify]
+     core = "allow-extra"
+
+     # Set global default with selective overrides
+     [resource.verify]
+     default = "allow-missing"
+     hostname = "strict"
+
 noverify
    (optional) If true, disable the draining of nodes when there is a
    discrepancy between configured resources and HWLOC-probed resources.
+   This setting overrides any setting in ``[resource.verify]``.
 
 rediscover
    (optional) If true, force rediscovery of resources using HWLOC, rather

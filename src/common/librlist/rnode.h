@@ -96,6 +96,16 @@ int rnode_add (struct rnode *orig, struct rnode *n);
  */
 struct rnode *rnode_diff (const struct rnode *a, const struct rnode *b);
 
+/*  Like rnode_diff() above, but ignore resource types in ignore_mask
+ */
+enum {
+    RNODE_IGNORE_CORE = 1,
+    RNODE_IGNORE_GPU = 2,
+};
+struct rnode *rnode_diff_ex (const struct rnode *a,
+                             const struct rnode *b,
+                             int ignore_mask);
+
 /*  Return an rnode object that is the set intersection of 'a' and 'b'.
  */
 struct rnode *rnode_intersect (const struct rnode *a, const struct rnode *b);

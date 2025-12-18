@@ -22,6 +22,8 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libflux/types.h" /* flux_error_t */
 
+#include "verify_config.h"
+
 /* A list of resource nodes */
 struct rlist {
     int total;
@@ -242,6 +244,14 @@ struct rlist *rlist_from_json (json_t *o, json_error_t *err);
 int rlist_verify (flux_error_t *error,
                   const struct rlist *expected,
                   const struct rlist *actual);
+
+/*  Like rlist_verify(), but accepts an rlist_verify_config object for
+ *   granular resource verification.
+ */
+int rlist_verify_ex (flux_error_t *error,
+                     const struct rlist *expected,
+                     const struct rlist *actual,
+                     struct rlist_verify_config *config);
 
 /*  Attempt to allocate nslots of slot_size across optional nnodes
  *   from the resource list `rl` using algorithm `mode`.

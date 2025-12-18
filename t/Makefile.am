@@ -189,6 +189,7 @@ TESTSCRIPTS = \
 	t2315-resource-system.t \
 	t2316-resource-rediscover.t \
 	t2317-resource-shrink.t \
+	t2318-resource-verify.t \
 	t2350-resource-list.t \
 	t2351-resource-status-input.t \
 	t2352-resource-cmd-config.t \

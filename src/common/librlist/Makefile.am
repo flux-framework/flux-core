@@ -21,6 +21,8 @@ noinst_LTLIBRARIES = \
 librlist_la_SOURCES = \
 	rnode.h \
 	rnode.c \
+	verify_config.h \
+	verify_config.c \
 	match.h \
 	match.c \
 	rlist.c \
@@ -45,6 +47,7 @@ test_ldflags = \
 
 TESTS = \
 	test_rnode.t \
+	test_verify_config.t \
 	test_match.t \
 	test_rlist.t \
 	test_rhwloc.t
@@ -61,6 +64,17 @@ test_rnode_t_LDADD = \
 	$(test_ldadd)
 test_rnode_t_LDFLAGS = \
 	$(test_ldflags)
+
+test_verify_config_t_SOURCES = \
+	test/verify_config.c
+test_verify_config_t_CPPFLAGS = \
+	$(test_cppflags)
+test_verify_config_t_LDADD = \
+	librlist.la \
+	$(test_ldadd)
+test_verify_config_t_LDFLAGS = \
+	$(test_ldflags)
+
 
 test_match_t_SOURCES = \
 	test/match.c
