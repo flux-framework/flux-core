@@ -491,6 +491,12 @@ EXTRA_DIST = \
 	guide/start.rst \
 	guide/interact.rst \
 	guide/admin.rst \
+	guide/admin_background.rst \
+	guide/admin_config.rst \
+	guide/admin_daily.rst \
+	guide/admin_install.rst \
+	guide/admin_preflight.rst \
+	guide/admin_trouble.rst \
 	guide/glossary.rst \
 	guide/internals.rst \
 	guide/debug.rst \
