@@ -491,6 +491,7 @@ EXTRA_DIST = \
 	guide/start.rst \
 	guide/interact.rst \
 	guide/admin.rst \
+	guide/admin_slurm.rst \
 	guide/admin_background.rst \
 	guide/admin_config.rst \
 	guide/admin_daily.rst \

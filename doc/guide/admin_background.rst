@@ -59,6 +59,8 @@ with operation differentiated only by configuration.
    Fox prevents Frog from submitting jobs on a cluster with Flux
    as the system resource manager.
 
+.. _background_components:
+
 Software Components
 ===================
 
@@ -169,6 +171,8 @@ R
 FLUID
   Flux Locally Unique ID, used for Flux job IDs, defined by
   `RFC 19 <https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_19.html>`_.
+
+.. _background_security:
 
 Security
 ========

@@ -28,3 +28,4 @@ Jump right in.
    admin_preflight
    admin_daily
    admin_trouble
+   admin_slurm
