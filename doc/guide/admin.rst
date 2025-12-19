@@ -4,13 +4,20 @@
 Flux Administrator's Guide
 ##########################
 
-The *Flux Administrator's Guide* documents relevant information for
-installation, configuration, and management of Flux as the native
-resource manager on a cluster.
+The *Flux Administrator's Guide* is for system installations of Flux
+as the native workload manager on an HPC cluster.  You are a system
+administrator.  This document assumes:
 
-.. note::
-    Flux is still beta software and many of the interfaces documented
-    in this guide may change with regularity.
+- Flux packages are available for your operating system.
+
+- Best practices for configuration management are followed.
+
+This document does *not* apply to getting Flux running as a portability
+layer or job step manager.  That's far easier and covered, for example,
+in :ref:`start_slurm`.
+
+
+Jump right in.
 
 .. toctree::
    :maxdepth: 1
