@@ -13,12 +13,14 @@
 
 #include <flux/core.h>
 #include "src/common/libpmi/upmi.h"
+#include "src/common/libpmi/bizcache.h"
 #include "broker.h"
 
 /* temporarily exposed during refactor */
 struct bootstrap {
-    struct upmi *upmi;
     struct broker *ctx;
+    struct upmi *upmi;
+    struct bizcache *cache;
 };
 
 struct bootstrap *bootstrap_create (struct broker *ctx,

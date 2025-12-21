@@ -298,7 +298,6 @@ int boot_pmi (struct bootstrap *boot,
     int i;
     bool under_flux;
     const struct bizcard *bc;
-    struct bizcache *cache = NULL;
     struct taskmap *taskmap = NULL;
     const char *dkey;
     json_t *value;
@@ -441,16 +440,6 @@ int boot_pmi (struct bootstrap *boot,
         }
     }
 
-    /* Cache bizcard results by rank to avoid repeated PMI lookups.
-     */
-    if (!(cache = bizcache_create (boot->upmi, info->size))) {
-        errprintf (errp,
-                   "%s: error creating business card cache: %s",
-                   upmi_describe (boot->upmi),
-                   strerror (errno));
-        goto error;
-    }
-
     /* Each broker writes a business card consisting of hostname,
      * public key, and URIs (if any).
      */
@@ -458,7 +447,7 @@ int boot_pmi (struct bootstrap *boot,
         errprintf (errp, "get business card: %s", strerror (errno));
         goto error;
     }
-    if (bizcache_put (cache, info->rank, bc, &error) < 0) {
+    if (bizcache_put (boot->cache, info->rank, bc, &error) < 0) {
         errprintf (errp, "put business card: %s", error.text);
         goto error;
     }
@@ -487,7 +476,7 @@ int boot_pmi (struct bootstrap *boot,
         int parent_rank = topology_get_parent (topo);
         const char *uri = NULL;
 
-        if (bizcache_get (cache, parent_rank, &bc, errp) < 0)
+        if (bizcache_get (boot->cache, parent_rank, &bc, errp) < 0)
             goto error;
         if (!get_prefer_tcp (attrs)
             && clique_ranks (taskmap, info->rank, &parent_rank, 1) == 1)
@@ -510,7 +499,7 @@ int boot_pmi (struct bootstrap *boot,
         int child_rank = child_ranks[i];
         char name[64];
 
-        if (bizcache_get (cache, child_rank, &bc, errp) < 0)
+        if (bizcache_get (boot->cache, child_rank, &bc, errp) < 0)
             goto error;
         (void)snprintf (name, sizeof (name), "%d", i);
         if (overlay_authorize (overlay, name, bizcard_pubkey (bc)) < 0) {
@@ -527,7 +516,7 @@ int boot_pmi (struct bootstrap *boot,
      * The hostlist is built independently (and in parallel) on all ranks.
      */
     for (i = 0; i < info->size; i++) {
-        if (bizcache_get (cache, i, &bc, errp) < 0)
+        if (bizcache_get (boot->cache, i, &bc, errp) < 0)
             goto error;
         if (hostlist_append (hl, bizcard_hostname (bc)) < 0) {
             errprintf (errp, "hostlist_append: %s", strerror (errno));
@@ -568,7 +557,6 @@ done:
     free (child_ranks);
     taskmap_destroy (taskmap);
     topology_decref (topo);
-    bizcache_destroy (cache);
     return 0;
 error:
     /* N.B. Some implementations of abort may not return.
@@ -580,7 +568,6 @@ error:
     free (child_ranks);
     taskmap_destroy (taskmap);
     topology_decref (topo);
-    bizcache_destroy (cache);
     return -1;
 }
 

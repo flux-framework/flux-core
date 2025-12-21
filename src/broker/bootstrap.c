@@ -34,6 +34,7 @@ void bootstrap_destroy (struct bootstrap *boot)
 {
     if (boot) {
         int saved_errno = errno;
+        bizcache_destroy (boot->cache);
         upmi_destroy (boot->upmi);
         free (boot);
         errno = saved_errno;
@@ -55,6 +56,7 @@ struct bootstrap *bootstrap_create (struct broker *ctx,
         errprintf (errp, "out of memory");
         return NULL;
     }
+    boot->ctx = ctx;
 
     if (getenv ("FLUX_PMI_DEBUG"))
         upmi_flags |= UPMI_TRACE;
@@ -79,6 +81,13 @@ struct bootstrap *bootstrap_create (struct broker *ctx,
                    "%s: initialize: %s",
                    upmi_describe (boot->upmi),
                    error.text);
+        goto error;
+    }
+    if (!(boot->cache = bizcache_create (boot->upmi, info->size))) {
+        errprintf (errp,
+                   "%s: error creating business card cache: %s",
+                   upmi_describe (boot->upmi),
+                   strerror (errno));
         goto error;
     }
     json_decref (upmi_args);
