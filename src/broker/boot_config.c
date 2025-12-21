@@ -199,7 +199,6 @@ int boot_config (struct bootstrap *boot,
     json_t *hosts = NULL;
     json_t *topo_args = NULL;
     struct topology *topo = NULL;
-    struct bizcache *cache = NULL;
     flux_error_t error;
     const char *topo_uri;
 
@@ -266,11 +265,6 @@ int boot_config (struct bootstrap *boot,
         goto error;
     }
 
-    if (!(cache = bizcache_create (boot->upmi, info->size))) {
-        errprintf (errp, "could not create business card cache");
-        goto error;
-    }
-
     /* If broker has "downstream" peers, determine the URI to bind to
      * from the config and tell overlay.  Also, set the tbon.endpoint
      * attribute to the URI peers will connect to.  If broker has no
@@ -292,7 +286,7 @@ int boot_config (struct bootstrap *boot,
             errprintf (errp, "overlay_authorize: %s", strerror (errno));
             goto error;
         }
-        if (bizcache_get (cache, info->rank, &bc, errp) < 0
+        if (bizcache_get (boot->cache, info->rank, &bc, errp) < 0
             || !(my_uri = bizcard_uri_first (bc))) {
             errprintf (errp,
                        "connect URI is undefined for rank %d", info->rank);
@@ -328,7 +322,7 @@ int boot_config (struct bootstrap *boot,
         uint32_t parent_rank = topology_get_parent (topo);
         const char *parent_uri;
 
-        if (bizcache_get (cache, parent_rank, &bc, errp) < 0
+        if (bizcache_get (boot->cache, parent_rank, &bc, errp) < 0
             || !(parent_uri = bizcard_uri_first (bc))) {
             errprintf (errp,
                        "connect URI is undefined for rank %d", info->rank);
@@ -362,13 +356,11 @@ int boot_config (struct bootstrap *boot,
     }
     if (set_broker_boot_method_attr (attrs, "config", errp) < 0)
         goto error;
-    bizcache_destroy (cache);
     json_decref (hosts);
     json_decref (topo_args);
     topology_decref (topo);
     return 0;
 error:
-    bizcache_destroy (cache);
     ERRNO_SAFE_WRAP (json_decref, hosts);
     ERRNO_SAFE_WRAP (json_decref, topo_args);
     ERRNO_SAFE_WRAP (topology_decref, topo);
