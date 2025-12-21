@@ -2285,18 +2285,6 @@ error:
     return -1;
 }
 
-/* This is called from boot_*.c with a default value to set if the attribute
- * is not set already.
- */
-int overlay_set_tbon_interface_hint (struct overlay *ov, const char *val)
-{
-    if (attr_get (ov->attrs, "tbon.interface-hint", NULL, NULL) == 0)
-        return 0;
-    if (!val)
-        val = default_interface_hint;
-    return attr_add (ov->attrs, "tbon.interface-hint", val, 0);
-}
-
 /* Set attribute with the following precedence:
  * 1. broker attribute
  * 2. TOML config
@@ -2340,6 +2328,8 @@ static int overlay_configure_interface_hint (struct overlay *ov,
         ;
     else if (getenv ("FLUX_IPADDR_HOSTNAME"))
         val = "hostname";
+    else
+        val = default_interface_hint;
 
     if (val && !attr_val) {
          if (attr_add (ov->attrs, long_name, val, 0) < 0) {

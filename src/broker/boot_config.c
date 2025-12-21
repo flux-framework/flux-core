@@ -137,22 +137,6 @@ static const char *getbindbyrank (json_t *hosts,
     return uri;
 }
 
-static int set_broker_boot_method_attr (attr_t *attrs,
-                                        const char *value,
-                                        flux_error_t *errp)
-{
-    (void)attr_delete (attrs, "broker.boot-method", true);
-    if (attr_add (attrs,
-                  "broker.boot-method",
-                  value,
-                  ATTR_IMMUTABLE) < 0) {
-        return errprintf (errp,
-                          "setattr broker.boot-method: %s",
-                          strerror (errno));
-    }
-    return 0;
-}
-
 /* Zeromq treats failed hostname resolution as a transient error, and silently
  * retries in the background, which can make config problems hard to diagnose.
  * Parse the URI in advance, and if the host portion is invalid, log it.
@@ -256,15 +240,6 @@ int boot_config (struct bootstrap *boot,
      */
     overlay_set_ipv6 (overlay, enable_ipv6);
 
-    /* Ensure that tbon.interface-hint is set.
-     */
-    if (overlay_set_tbon_interface_hint (overlay, NULL) < 0) {
-        errprintf (errp,
-                   "error setting tbon.interface-hint attribute: %s",
-                   strerror (errno));
-        goto error;
-    }
-
     /* If broker has "downstream" peers, determine the URI to bind to
      * from the config and tell overlay.  Also, set the tbon.endpoint
      * attribute to the URI peers will connect to.  If broker has no
@@ -345,17 +320,6 @@ int boot_config (struct bootstrap *boot,
         }
     }
 
-    /* instance-level (position in instance hierarchy) is always zero here.
-     */
-    if (attr_add (attrs,
-                  "instance-level",
-                  "0",
-                  ATTR_IMMUTABLE) < 0) {
-        errprintf (errp, "setattr instance-level 0: %s", strerror (errno));
-        goto error;
-    }
-    if (set_broker_boot_method_attr (attrs, "config", errp) < 0)
-        goto error;
     json_decref (hosts);
     json_decref (topo_args);
     topology_decref (topo);

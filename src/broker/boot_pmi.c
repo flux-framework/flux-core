@@ -32,53 +32,6 @@
 #include "boot_pmi.h"
 
 
-/*  If the broker is launched via flux-shell, then the shell may opt
- *  to set a "flux.instance-level" parameter in the PMI kvs to tell
- *  the booting instance at what "level" it will be running, i.e. the
- *  number of parents. If the PMI key is missing, this is not an error,
- *  instead the level of this instance is considered to be zero.
- */
-static int set_instance_level_attr (struct upmi *upmi,
-                                    attr_t *attrs,
-                                    bool *under_flux)
-{
-    char *val = NULL;
-    int rc = -1;
-
-    (void)upmi_get (upmi, "flux.instance-level", -1, &val, NULL);
-    if (attr_add (attrs, "instance-level", val ? val : "0", ATTR_IMMUTABLE) < 0)
-        goto error;
-    *under_flux = val ? true : false;
-    rc = 0;
-error:
-    ERRNO_SAFE_WRAP (free, val);
-    return rc;
-}
-
-/* If the tbon.interface-hint broker attr is not already set, set it.
- * If running under Flux, use the value, if any, placed in PMI KVS by
- * the enclsoing instance.  Otherwise, set a default value.
- */
-static int set_tbon_interface_hint_attr (struct upmi *upmi,
-                                         attr_t *attrs,
-                                         struct overlay *ov,
-                                         bool under_flux)
-{
-    char *val = NULL;
-    int rc = -1;
-
-    if (attr_get (attrs, "tbon.interface-hint", NULL, NULL) == 0)
-        return 0;
-    if (under_flux)
-        (void)upmi_get (upmi, "flux.tbon-interface-hint", -1, &val, NULL);
-    if (overlay_set_tbon_interface_hint (ov, val) < 0)
-        goto error;
-    rc = 0;
-error:
-    ERRNO_SAFE_WRAP (free, val);
-    return rc;
-}
-
 static int create_singleton_taskmap (struct taskmap **mp,
                                      flux_error_t *error)
 {
@@ -266,22 +219,6 @@ static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
     return rc;
 }
 
-static int set_broker_boot_method_attr (attr_t *attrs,
-                                        const char *value,
-                                        flux_error_t *errp)
-{
-    (void)attr_delete (attrs, "broker.boot-method", true);
-    if (attr_add (attrs,
-                  "broker.boot-method",
-                  value,
-                  ATTR_IMMUTABLE) < 0) {
-        return errprintf (errp,
-                          "setattr broker.boot-method: %s",
-                          strerror (errno));
-    }
-    return 0;
-}
-
 int boot_pmi (struct bootstrap *boot,
               struct upmi_info *info,
               const char *hostname,
@@ -296,56 +233,12 @@ int boot_pmi (struct bootstrap *boot,
     int child_count;
     int *child_ranks = NULL;
     int i;
-    bool under_flux;
     const struct bizcard *bc;
     struct taskmap *taskmap = NULL;
-    const char *dkey;
-    json_t *value;
 
     // N.B. overlay_create() sets the tbon.topo attribute
     if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0)
         return errprintf (errp, "error fetching tbon.topo attribute");
-    if (info->dict != NULL) {
-        json_object_foreach(info->dict, dkey, value) {
-            if (!json_is_string(value)) {
-                errprintf (errp,
-                           "%s: initialize: value associated to key %s"
-                           " is not a string",
-                           upmi_describe (boot->upmi),
-                           dkey);
-                goto error;
-            }
-            if (attr_add (attrs, dkey, json_string_value(value), ATTR_IMMUTABLE) < 0) {
-                errprintf (errp,
-                           "%s: initialize: could not put attribute"
-                           " for key %s",
-                           upmi_describe (boot->upmi),
-                           dkey);
-                goto error;
-            }
-        }
-    }
-    if (set_instance_level_attr (boot->upmi, attrs, &under_flux) < 0) {
-        errprintf (errp, "set_instance_level_attr: %s", strerror (errno));
-        goto error;
-    }
-    if (under_flux) {
-        if (attr_add (attrs, "jobid", info->name, ATTR_IMMUTABLE) < 0) {
-            errprintf (errp,
-                       "error setting jobid attribute: %s",
-                       strerror (errno));
-            goto error;
-        }
-    }
-    if (set_tbon_interface_hint_attr (boot->upmi,
-                                      attrs,
-                                      overlay,
-                                      under_flux) < 0) {
-        errprintf (errp,
-                   "error setting tbon.interface-hint attribute: %s",
-                   strerror (errno));
-        goto error;
-    }
     if (!(topo = topology_create (topo_uri, info->size, NULL, &error))) {
         errprintf (errp,
                    "error creating '%s' topology: %s",
@@ -538,12 +431,6 @@ int boot_pmi (struct bootstrap *boot,
 done:
     if (set_hostlist_attr (attrs, hl) < 0) {
         errprintf (errp, "setattr hostlist: %s", strerror (errno));
-        goto error;
-    }
-    if (set_broker_boot_method_attr (attrs,
-                                     upmi_describe (boot->upmi),
-                                     &error) < 0) {
-        errprintf (errp, "%s: %s", upmi_describe (boot->upmi), error.text);
         goto error;
     }
     if (upmi_finalize (boot->upmi, &error) < 0) {
