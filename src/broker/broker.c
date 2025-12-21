@@ -404,18 +404,6 @@ int main (int argc, char *argv[])
     }
     flux_watcher_start (ctx.w_overlay);
 
-    /* Create rundir now as it may be needed for overlay sockets during
-     * bootstrap.  N.B. tmpdir is used later when statedir is created.
-     */
-    const char *tmpdir = getenv ("TMPDIR");
-    if (rundir_create (ctx.attrs,
-                       "rundir",
-                       tmpdir ? tmpdir : "/tmp",
-                       &error) < 0) {
-        flux_log (ctx.h, LOG_CRIT, "rundir %s", error.text);
-        goto cleanup;
-    }
-
     /* Record the broker start time.
      */
     flux_reactor_now_update (ctx.reactor);
@@ -465,30 +453,25 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* Initialize the overlay network.
+    /* Set parent-uri, parent-kvs-namespace, jobid-path.
+     * Assumes that 'jobid' was set (if available) by bootstrap_create().
      */
-    if (!(ctx.overlay = overlay_create (ctx.h,
-                                        ctx.boot,
-                                        &ctx.info,
-                                        ctx.hostname,
-                                        ctx.attrs,
-                                        NULL,
-                                        "interthread://overlay",
-                                        &error))) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "Error initializing overlay: %s",
-                  error.text);
-        goto cleanup;
-    }
-
     if (init_attrs_post_boot (ctx.attrs, &error) < 0) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
 
-    /* Now that rank is known, create or check the statedir.
-     * The statedir is only used on the leader broker, so unset the
+    /* Create rundir/statedir.
+     */
+    const char *tmpdir = getenv ("TMPDIR");
+    if (rundir_create (ctx.attrs,
+                       "rundir",
+                       tmpdir ? tmpdir : "/tmp",
+                       &error) < 0) {
+        flux_log (ctx.h, LOG_CRIT, "rundir %s", error.text);
+        goto cleanup;
+    }
+    /* The statedir is only used on the leader broker, so unset the
      * attribute elsewhere.
      *
      * N.B. the system instance sets statedir to /var/lib/flux and supports
@@ -524,17 +507,6 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* Wire up the overlay.
-     */
-    if (ctx.info.rank > 0) {
-        if (ctx.verbose)
-            flux_log (ctx.h, LOG_INFO, "initializing overlay connect");
-        if (overlay_connect (ctx.overlay) < 0) {
-            flux_log (ctx.h, LOG_CRIT, "overlay_connect: %s", strerror (errno));
-            goto cleanup;
-        }
-    }
-
     /* Register internal services
      */
     if (attr_register_handlers (ctx.attrs, ctx.h) < 0) {
@@ -562,17 +534,6 @@ int main (int argc, char *argv[])
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
-    /* overlay_start() calls flux_sync_create(), thus
-     * requires event.subscribe to have a handler before running.
-     * Also it makes an RPC to the state machine.
-     */
-    if (overlay_start (ctx.overlay) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "error starting overlay: %s",
-                  strerror (errno));
-        goto cleanup;
-    }
     /* This registers a state machine callback so call after
      * state_machine_create().
      */
@@ -580,20 +541,6 @@ int main (int argc, char *argv[])
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
-
-    /* Start the state machine.  The first action taken is to load
-     * built-in broker modules, so make another pass at priming the
-     * ctx.h attribute cache, which becomes the starting point for the
-     * modules's attribute cache.
-     */
-    if (attr_cache_immutables (ctx.attrs, ctx.h) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "error priming broker attribute cache (second pass): %s",
-                  strerror (errno));
-        goto cleanup;
-    }
-    state_machine_kickoff (ctx.state_machine);
 
     /* Create shutdown mechanism
      */
@@ -610,6 +557,52 @@ int main (int argc, char *argv[])
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
+
+    /* Initialize the overlay network.
+     */
+    if (!(ctx.overlay = overlay_create (ctx.h,
+                                        ctx.boot,
+                                        &ctx.info,
+                                        ctx.hostname,
+                                        ctx.attrs,
+                                        NULL,
+                                        "interthread://overlay",
+                                        &error))) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "Error initializing overlay: %s",
+                  error.text);
+        goto cleanup;
+    }
+    if (ctx.info.rank > 0) {
+        if (ctx.verbose)
+            flux_log (ctx.h, LOG_INFO, "initializing overlay connect");
+        if (overlay_connect (ctx.overlay) < 0) {
+            flux_log (ctx.h, LOG_CRIT, "overlay_connect: %s", strerror (errno));
+            goto cleanup;
+        }
+    }
+    if (overlay_start (ctx.overlay) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error starting overlay: %s",
+                  strerror (errno));
+        goto cleanup;
+    }
+
+    /* Start the state machine.  The first action taken is to load
+     * built-in broker modules, so make another pass at priming the
+     * ctx.h attribute cache, which becomes the starting point for the
+     * modules's attribute cache.
+     */
+    if (attr_cache_immutables (ctx.attrs, ctx.h) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error priming broker attribute cache (second pass): %s",
+                  strerror (errno));
+        goto cleanup;
+    }
+    state_machine_kickoff (ctx.state_machine);
 
     /* Event loop
      */
