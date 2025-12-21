@@ -21,6 +21,7 @@ struct bootstrap {
     struct broker *ctx;
     struct upmi *upmi;
     struct bizcache *cache;
+    bool under_flux;
 };
 
 struct bootstrap *bootstrap_create (struct broker *ctx,

@@ -79,7 +79,6 @@ int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey);
 const struct bizcard *overlay_get_bizcard (struct overlay *ov);
 int overlay_set_parent_uri (struct overlay *ov, const char *uri);
 void overlay_set_ipv6 (struct overlay *ov, int enable);
-int overlay_set_tbon_interface_hint (struct overlay *ov, const char *val);
 
 /* Return an idset of critical ranks, i.e. non-leaf brokers
  */

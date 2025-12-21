@@ -20,6 +20,116 @@
 #include "attr.h"
 #include "bootstrap.h"
 
+/* Ensure attribute 'key' is set with the immutable flag.
+ * If unset, set it to 'default_value'.
+ */
+static int setattr (attr_t *attrs,
+                    const char *key,
+                    const char *default_value,
+                    flux_error_t *errp)
+{
+    int flags;
+    const char *val;
+
+    if (attr_get (attrs, key, &val, &flags) < 0) {
+        if (attr_add (attrs, key, default_value, ATTR_IMMUTABLE) < 0) {
+            errprintf (errp, "setattr %s: %s", key, strerror (errno));
+            return -1;
+        }
+    }
+    else if (!(flags & ATTR_IMMUTABLE)) {
+        if (attr_set_flags (attrs, key, ATTR_IMMUTABLE) < 0) {
+            errprintf (errp, "setattr-flags %s: %s", key, strerror (errno));
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static const char *getattr (attr_t *attrs, const char *key)
+{
+    const char *val;
+    if (attr_get (attrs, key, &val, NULL) < 0)
+        return NULL;
+    return val;
+}
+
+static char *lookup (struct upmi *upmi, const char *key)
+{
+    char *val;
+    if (upmi_get (upmi, key, -1, &val, NULL) < 0)
+        return NULL;
+    return val;
+}
+
+/* Initialize some broker attributes using information obtained during
+ * bootstrap, such as pre-put values from the PMI KVS.
+ */
+static int bootstrap_setattrs_early (struct bootstrap *boot,
+                                     flux_error_t *errp)
+{
+    attr_t *attrs = boot->ctx->attrs;
+
+    /* The info->dict exists so that out of tree upmi plugins, such as the
+     * one provided by flux-pmix, can set Flux broker attributes as a way
+     * of passing information to applications.
+     */
+    if (boot->ctx->info.dict) {
+        const char *key;
+        json_t *value;
+
+        json_object_foreach (boot->ctx->info.dict, key, value) {
+            if (!json_is_string (value)) {
+                errprintf (errp, "info dict key %s is not a string", key);
+                return -1;
+            }
+            if (setattr (attrs, key, json_string_value (value), errp) < 0)
+                return -1;
+        }
+    }
+
+    /* If running under Flux, setattr instance-level from PMI
+     * flux.instance-level.  If not running under Flux (key is missing),
+     * set it to zero.
+     */
+    if (boot->under_flux) {
+        char *val = lookup (boot->upmi, "flux.instance-level");
+        int rc;
+
+        if (!val)
+            boot->under_flux = false;
+        rc = setattr (attrs, "instance-level", val ? val : "0", errp);
+        free (val);
+        if (rc < 0)
+            return -1;
+    }
+
+    /* If running under Flux, setattr jobid to PMI KVS name.
+     */
+    if (boot->under_flux) {
+        if (setattr (attrs, "jobid", boot->ctx->info.name, errp))
+            return -1;
+    }
+
+    /* If running under Flux, and not already set, setattr tbon.interface-hint
+     * from PMI flux.tbon.interface-hint, if available.
+     * This is finalized later by the overlay.
+     */
+    if (boot->under_flux && !getattr (attrs, "tbon.interface-hint")) {
+        char *val = lookup (boot->upmi, "flux.tbon-interface-hint");
+        int rc;
+
+        if (val) {
+            rc = setattr (attrs, "tbon.interface-hint", val, errp);
+            free (val);
+            if (rc < 0)
+                return -1;
+        }
+    }
+
+    return 0;
+}
+
 const char *bootstrap_method (struct bootstrap *boot)
 {
     return boot ? upmi_describe (boot->upmi) : "unknown";
@@ -76,11 +186,22 @@ struct bootstrap *bootstrap_create (struct broker *ctx,
                                        NULL,
                                        errp)))
         goto error;
+    if (setattr (ctx->attrs,
+                 "broker.boot-method",
+                 upmi_describe (boot->upmi),
+                 errp) < 0)
+        goto error;
+
     if (upmi_initialize (boot->upmi, info, &error) < 0) {
         errprintf (errp,
                    "%s: initialize: %s",
                    upmi_describe (boot->upmi),
                    error.text);
+        goto error;
+    }
+    boot->under_flux = true; // until proven otherwise
+    if (bootstrap_setattrs_early (boot, &error) < 0) {
+        errprintf (errp, "%s: %s", upmi_describe (boot->upmi), error.text);
         goto error;
     }
     if (!(boot->cache = bizcache_create (boot->upmi, info->size))) {
