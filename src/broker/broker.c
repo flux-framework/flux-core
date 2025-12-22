@@ -447,6 +447,25 @@ int main (int argc, char *argv[])
         flux_log (ctx.h, LOG_CRIT, "setattr rank/size: %s", strerror (errno));
         goto cleanup;
     }
+    /* Allow flux_get_rank() and flux_get_size() to work in the broker
+     * without causing a synchronous RPC to self that would deadlock.
+     * Then initialize logging, defeating the earlier redirect.
+     */
+    if (attr_cache_immutables (ctx.attrs, ctx.h) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error priming broker attribute cache: %s",
+                  strerror (errno));
+        goto cleanup;
+    }
+    if (logbuf_initialize (ctx.h, ctx.info.rank, ctx.attrs) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "Error initializing logging: %s",
+                  strerror (errno));
+        goto cleanup;
+    }
+
     /* Initialize the overlay network.
      */
     if (!(ctx.overlay = overlay_create (ctx.h,
@@ -502,28 +521,6 @@ int main (int argc, char *argv[])
                   ctx.info.rank,
                   ctx.info.size,
                   flux_reactor_now (ctx.reactor) - ctx.starttime);
-    }
-
-    /* Allow flux_get_rank(), flux_get_size(), flux_get_hostybyrank(), etc.
-     * to work in the broker without causing a synchronous RPC to self that
-     * would deadlock.
-     */
-    if (attr_cache_immutables (ctx.attrs, ctx.h) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "error priming broker attribute cache: %s",
-                  strerror (errno));
-        goto cleanup;
-    }
-
-    /* Initialize the full log subsystem.
-     */
-    if (logbuf_initialize (ctx.h, ctx.info.rank, ctx.attrs) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "Error initializing logging: %s",
-                  strerror (errno));
-        goto cleanup;
     }
 
     if (ctx.verbose) {
@@ -604,6 +601,18 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
+    /* Start the state machine.  The first action taken is to load
+     * built-in broker modules, so make another pass at priming the
+     * ctx.h attribute cache, which becomes the starting point for the
+     * modules's attribute cache.
+     */
+    if (attr_cache_immutables (ctx.attrs, ctx.h) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error priming broker attribute cache (second pass): %s",
+                  strerror (errno));
+        goto cleanup;
+    }
     state_machine_kickoff (ctx.state_machine);
 
     /* Create shutdown mechanism
