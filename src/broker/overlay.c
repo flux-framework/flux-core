@@ -1557,6 +1557,7 @@ int overlay_connect (struct overlay *ov)
             return -1;
         if (zmq_connect (ov->parent.zsock, ov->parent.uri) < 0)
             return -1;
+        flux_log (ov->h, LOG_DEBUG, "connecting to %s", ov->parent.uri);
         if (!(ov->parent.w = zmqutil_watcher_create (ov->reactor,
                                                      ov->parent.zsock,
                                                      FLUX_POLLIN,
@@ -1598,6 +1599,7 @@ static int bind_uri (struct overlay *ov, const char *uri)
      */
     if (strstarts (new_uri, "ipc:///"))
         cleanup_push_string (cleanup_file, new_uri + 6);
+    flux_log (ov->h, LOG_DEBUG, "listening on %s", new_uri);
     free (new_uri);
     return 0;
 }
