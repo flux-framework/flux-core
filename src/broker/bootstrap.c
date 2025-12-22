@@ -200,6 +200,13 @@ struct bootstrap *bootstrap_create (struct broker *ctx,
         goto error;
     }
     boot->under_flux = true; // until proven otherwise
+    if (boot->ctx->verbose) {
+        flux_log (boot->ctx->h,
+                  LOG_INFO,
+                  "boot: rank=%d size=%d",
+                  info->rank,
+                  info->size);
+    }
     if (bootstrap_setattrs_early (boot, &error) < 0) {
         errprintf (errp, "%s: %s", upmi_describe (boot->upmi), error.text);
         goto error;
