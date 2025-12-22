@@ -512,15 +512,6 @@ int main (int argc, char *argv[])
         (void)attr_delete (ctx.attrs, "statedir", true);
     }
 
-    if (ctx.verbose) {
-        const char *parent = NULL;
-        const char *child = NULL;
-        (void)attr_get (ctx.attrs, "tbon.parent-endpoint", &parent, NULL);
-        (void)attr_get (ctx.attrs, "tbon.endpoint", &child, NULL);
-        flux_log (ctx.h, LOG_INFO, "parent: %s", parent ? parent : "none");
-        flux_log (ctx.h, LOG_INFO, "child: %s", child ? child : "none");
-    }
-
     set_proctitle (ctx.info.rank);
 
     // N.B. local-uri is used by runat
