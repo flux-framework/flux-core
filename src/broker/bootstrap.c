@@ -199,6 +199,13 @@ struct bootstrap *bootstrap_create (struct broker *ctx,
                    error.text);
         goto error;
     }
+    if (boot->ctx->verbose) {
+        flux_log (boot->ctx->h,
+                  LOG_INFO,
+                  "boot: rank=%d size=%d",
+                  info->rank,
+                  info->size);
+    }
     if (bootstrap_setattrs (boot, &error) < 0) {
         errprintf (errp, "%s: %s", upmi_describe (boot->upmi), error.text);
         goto error;
