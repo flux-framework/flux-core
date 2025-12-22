@@ -416,8 +416,7 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* Record the broker start time.  This time will also be used to
-     * capture how long network bootstrap takes.
+    /* Record the broker start time.
      */
     flux_reactor_now_update (ctx.reactor);
     ctx.starttime = flux_reactor_now (ctx.reactor);
@@ -511,16 +510,6 @@ int main (int argc, char *argv[])
     }
     else {
         (void)attr_delete (ctx.attrs, "statedir", true);
-    }
-
-    if (ctx.verbose) {
-        flux_reactor_now_update (ctx.reactor);
-        flux_log (ctx.h,
-                  LOG_INFO,
-                  "boot: rank=%d size=%d time %.3fs",
-                  ctx.info.rank,
-                  ctx.info.size,
-                  flux_reactor_now (ctx.reactor) - ctx.starttime);
     }
 
     if (ctx.verbose) {
