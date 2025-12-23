@@ -71,16 +71,15 @@ test_expect_success 'flux-run: validate-only plugins are properly validated' '
 	test_must_fail flux run -o verbose=blekh hostname 2> out5.err &&
 	grep "shell.options.verbose: expected integer, got <class" out5.err
 '
-test_expect_success 'flux-alloc: new plugin with the same name/dest as another fails' '
-	export FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/failure &&
-	test_must_fail flux run --help 2> out6.err &&
-	grep "conflicts with another option" out6.err &&
-	unset FLUX_CLI_PLUGINPATH
-'
 test_expect_success 'flux-alloc: new plugin with the same name, diff dest/prefix is accepted' '
-	FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/success \
+	FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/:$FLUX_CLI_PLUGINPATH \
 		flux run --help >> help1.out &&
 	grep -e "I am a valid plugin" \
 	     -e "Option for setting AMD SMI compute partitioning" help1.out
+'
+test_expect_success 'flux-alloc: new plugin with the same name/dest as another fails' '
+	export FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins:$FLUX_CLI_PLUGINPATH &&
+	test_must_fail flux run --help 2> out6.err &&
+	grep "conflicts with another option" out6.err
 '
 test_done

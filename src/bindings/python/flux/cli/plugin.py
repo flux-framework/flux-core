@@ -144,12 +144,11 @@ class CLIPluginRegistry:
         self.prog = prog
         self.plugins = []
         etc = conf_builtin_get("confdir")
+        self.plugindirs = [f"{etc}/cli/plugins"]
         if getenv("FLUX_CLI_PLUGINPATH"):
-            self.plugindir = getenv("FLUX_CLI_PLUGINPATH")
-        else:
-            if etc is None:
-                raise ValueError("failed to get builtin confdir")
-            self.plugindir = f"{etc}/cli/plugins"
+            user_defined_paths = str(getenv("FLUX_CLI_PLUGINPATH")).split(":")
+            for path in user_defined_paths:
+                self.plugindirs.insert(0, path)
         self._load_plugins(self.prog)
 
     def print_help(self, name):
@@ -178,13 +177,15 @@ class CLIPluginRegistry:
                 isinstance(entry, type)
                 and issubclass(entry, CLIPlugin)
                 and entry != CLIPlugin
+                and entry not in self.plugins
             ):
                 self.plugins.append(entry(program))
 
     def _load_plugins(self, program):
         """Load all cli plugins from the standard path"""
-        for path in glob.glob(f"{self.plugindir}/*.py"):
-            self._add_plugins(import_path(path), program)
+        for dir in self.plugindirs:
+            for path in glob.glob(f"{dir}/*.py"):
+                self._add_plugins(import_path(path), program)
         option_dests = {}
         self.options = []
         for plugin in self.plugins:
