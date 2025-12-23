@@ -1,7 +1,8 @@
 [![ci](https://github.com/flux-framework/flux-core/workflows/ci/badge.svg)](https://github.com/flux-framework/flux-core/actions?query=workflow%3A.github%2Fworkflows%2Fmain.yml)
 [![codecov](https://codecov.io/gh/flux-framework/flux-core/branch/master/graph/badge.svg)](https://codecov.io/gh/flux-framework/flux-core)
 
-See our [Online Documentation](https://flux-framework.readthedocs.io)!
+See our [Flux Framework Documentation](https://flux-framework.readthedocs.io)
+and the [Flux Core Documentation](https://flux-framework.readthedocs.io/projects/flux-core)
 
 _NOTE: the github issue tracker is the primary way to communicate
 with Flux developers._
@@ -16,12 +17,7 @@ building blocks are also in development under the
 [flux-framework github organization](https://github.com/flux-framework),
 including a workload [scheduler](https://github.com/flux-framework/flux-sched).
 
-Framework projects use the C4 development model pioneered in
-the ZeroMQ project and forked as
-[Flux RFC 1](https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_1.html).
-Flux licensing and collaboration plans are described in
-[Flux RFC 2](https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_2.html).
-Protocols and API's used in Flux will be documented as Flux RFC's.
+Contributors: please see [CONTRIBUTING](CONTRIBUTING.md).
 
 #### Build Requirements
 
@@ -67,7 +63,7 @@ A shell is spawned in which Flux commands can be executed.  When the shell
 exits, Flux exits.
 
 For more information on starting Flux in various environments and using it,
-please refer to our [docs](https://flux-framework.readthedocs.io) pages.
+please refer to our [documentation](https://flux-framework.readthedocs.io/projects/flux-core/en/latest/guide/start.html).
 
 #### Release
 

@@ -25,7 +25,18 @@ in the following RFCs from the [flux-framework/rfc][1] project:
     This RFC details the preferred code style guidelines for contributions
     to Flux projects.
 
+ * [*RFC 47: Flux Framework Contributor Code of Conduct*][5]
+
+    Behave!
+
+ * [*RFC 48: Flux Framework Project Governance*][6]
+
+    This RFC describes the rules for the development and community
+    management of Flux projects.
+
 [1]: https://github.com/flux-framework/rfc
 [2]: https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_1.html
 [3]: https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_2.html
 [4]: https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_7.html
+[5]: https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_47.html
+[6]: https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_48.html
