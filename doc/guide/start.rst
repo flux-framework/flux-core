@@ -135,6 +135,8 @@ have to provide any input while the instance is running:
 This is how many of Flux-core's tests work.  The initial program is a test
 script run under a test instance started by the test suite.
 
+.. _start_slurm:
+
 Starting with Slurm
 -------------------
 
