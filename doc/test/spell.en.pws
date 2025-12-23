@@ -1020,3 +1020,5 @@ StandardErrorFileDescriptor
 StandardInputFileDescriptor
 StandardOutputFileDescriptor
 TimeoutStopUSec
+aarch
+pwd
