@@ -15,41 +15,72 @@ Check back with us at the end of 2026.
 Flux Maturity
 =============
 
-Flux is in daily production use as the system workload manager on
-`El Capitan <https://hpc.llnl.gov/hardware/compute-platforms/el-capitan>`_
-(currently in slot 1 of the `TOP500 <https://www.top500.org/>`_
-and its unclassified sister systems at LLNL.  The process of standing up
-those systems brought the Flux team together to address problems of
-scale and stability with unprecedented urgency.  As a result, system
-deployments of Flux on virtually any size system are viable at this point.
-That said, the process also brought into focus missing features, now
-prioritized.  As of December 2025:
+The Flux project began around 2012.  Flux has been used for a decade or more
+for managing complex ensembles and workflows at LLNL under Slurm and LSF
+in situations where the traditional workload managers were not up to the task.
+Although Flux was designed from the beginning to replace Slurm and was
+deployed as such on several small systems at LLNL, it did not gain momentum
+as a system workload manager until 2024 with the early deliveries of
+`El Capitan <https://hpc.llnl.gov/hardware/compute-platforms/el-capitan>`_.
 
-- Binary packages are only published internally for the TOSS operating
-  system.  Source RPM packages for RHEL 8 and 9 are manually attached to
-  github releases.  Wider operating system support and binary package
-  distribution are being discussed.
+Flux is now in daily production use as the sole system workload manager on
+El Capitan (currently, in late 2025, in slot 1 of the `TOP500 <https://www.top500.org/>`_)
+and its unclassified sister systems at LLNL.  These machines are capability
+workhorses, continuously in demand for LLNL's most cutting edge,
+mission-critical activities.  The process of standing them up brought the
+Flux team together to address problems of scale and stability with
+unprecedented urgency.  As a result, system deployments of Flux on
+virtually any size system are viable at this point.
 
-- All nodes of Flux instance must run the same flux broker release version.
-  When flux-core 1.0.0 is released, relaxed version interoperability rules
-  will be published.  For now, rolling upgrades are not possible.
+This experience brought missing features into focus that have now been
+prioritized for near term development.  We expect substantial progress to
+be made on all of these items in 2026:
 
-- Support for restarting Flux without perturbing running jobs is expected
-  late 2026.
+Rolling software upgrade
+  Flux nodes won't interact with other Flux nodes unless they are running
+  *exactly* the same flux-core version.  When flux-core 1.0.0 is released,
+  relaxed rules will be enacted to support rolling upgrades.
 
-- Reservation support is expected mid 2026.
+Flux restart with running jobs
+  Restarting Flux kills running jobs.  The design to allow running
+  jobs to continue is not yet fully implemented.
 
-- Flux's flexible resource representation is not yet mature.  Meanwhile,
-  hardware locality and binding needs of modern applications can be tricky
-  to satisfy in Flux.
+Reservations
+  Flux does not yet have a way to request immovable future allocations.
+  Arrangements for dedicated application time currently
+  require manual/scripted actions by system administrators.
 
-- The system Flux does not preserve job :term:`step` data by default.
+Flux graph-based scheduling scalability
+  Efforts to optimize the Fluxion scheduler graph-based resource
+  representation for storage space efficiency are ongoing.  Meanwhile a
+  flat resource model similar to Slurm's that scales well but is limited
+  in capability is typically used on large systems.
 
-- Although Flux has an optional local fair-share accounting system for
-  gathering usage data and setting job priorities, there is not yet support
-  for a site-wide, aggregated accounting system.
+Preservation of job step information
+  Slurm's smallest unit of work is the job step.  Slurm keeps metadata
+  for each step which can be retrieved after the job (allocation) completes.
+  In Flux, there are no job steps.  Instead, a sub-instance of Flux is started
+  on a resource allocation, and user applications are run as jobs within the
+  sub-instance.  There is little coupling between the system instance and its
+  sub-instances which improves scalability.  Unfortunately, sub-instance job
+  data is not preserved unless the user explicitly arranges for it, which some
+  find surprising.
 
-- No commercial support or training options.
+Multi-system fair share accounting
+  Flux has an optional fair-share accounting system for gathering usage data
+  and setting job priorities.  Unlike Slurm, there is not yet a capability to
+  deploy one accounting system for multiple Flux systems.
+
+Package availability
+  Flux system administrators are encouraged to install Flux as system packages,
+  but pre-built packages are not widely available.  Source RPM packages for
+  RHEL 8 and 9 are manually attached to GitHub releases.  Very soon this will
+  be automated for all sub-projects that the team currently packages for RHEL.
+  Also, discussions are underway with Red Hat regarding inclusion in Fedora
+  and EPEL.
+
+Commercial support and training
+  This is an important and current area of discussion.
 
 Flux Design Advantages
 ======================
