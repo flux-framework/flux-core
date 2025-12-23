@@ -94,22 +94,26 @@ Flux has a solid security design
   :ref:`background_security`.
 
 Flux doesn't need a step manager
-  Each batch job or allocation is a new (single user) instance of Flux
-  with full capability and configurability, and a :term:`step` is really
-  a :term:`job` in Flux.  Limitations of Slurm's step manager have been
-  a source of long standing problems.
+  In Slurm, a *job* is a resource allocation scheduled by the Slurm scheduler.
+  Within the allocation, a *job step* is a unit of work scheduled by the the
+  Slurm step manager. Since a new Flux instance can be launched as a
+  :term:`job` in another Flux instance (subdividing its resources), there is
+  no need have a step abstraction or a step manager.  All units of work are
+  jobs scheduled and launched by the same robust system.  Limitations of
+  Slurm's step manager have been a source of long standing problems.
 
 Flux APIs are not an afterthought
   Well thought out Python and C APIs make it easy to integrate Flux with
-  workflow systems and new environments.
+  workflow systems and new environments.  Flux APIs are licensed under the
+  non-viral LGPL-3.0.  Experimental bindings for Go and Julia are also
+  available.
 
 Flux has a rich resource representation
   Flux's design incorporates a graph-based resource model that is
-  extensible to arbitrary resource types.  Caveat: not yet fully implemented.
+  extensible to arbitrary resource types.
 
 Flux is dynamic
-  Flux supports growing and shrinking allocations.  Caveat: not yet fully
-  implemented.
+  The Flux design supports growing and shrinking allocations.
 
 Flux is scalable
   Flux's recursive launch design enables each allocation to scale
@@ -117,16 +121,19 @@ Flux is scalable
   scalability comparable to Slurm.  But a cluster will typically be running
   many instances of Flux compared to one instance of Slurm.
 
-Flux encourages experimentation
-  In addition to extensibility via plugins (see :ref:`background_components`),
-  unprivileged users can trivially launch reconfigured or modified single-user
-  Flux instances in system resource allocations.
-
-Flux uses reactive messaging
+Flux uses event-driven messaging
   In contrast to Slurm's multi-threaded, monolithic server design, Flux
-  is built upon distributed message brokers and reactive (asynchronous)
-  agents that communicate only with messages.  Building distributed services
-  on this substrate is interesting, fun, and scales well.
+  is built upon distributed message brokers and event-driven (asynchronous,
+  reactive) agents that communicate only with messages.  Building distributed
+  services on this substrate is interesting, fun, and scales well.
+
+Flux is portable, modular, and composable
+  A single-user Flux instance is trivial to start anywhere, without
+  administrative privilege.  It can run as a parallel job in an allocation
+  of any workload manager, standalone on your laptop or Raspberry Pi, and can
+  be integrated into converged and cloud environments.  A single-user Flux
+  instance is controlled by its owner and may be reconfigured, extended, or
+  modified at will.  Slurm's monolithic design cannot offer this freedom.
 
 Slurm Long Term Viability
 =========================
