@@ -300,14 +300,8 @@ static int op_preinit (flux_plugin_t *p,
                                 "config", &config,
                                 "hostname", &hostname) < 0)
         return upmi_seterror (p, args, "error unpacking preinit arguments");
-    if (!config || !hostname) {
-        return upmi_seterror (p,
-                              args,
-                              "preinit required config/hostname arguments"
-                              " are missing");
-    }
-    if (!json_object_get (config, "bootstrap"))
-        return upmi_seterror (p, args, "no [bootstrap] table is configured");
+    if (!config || !hostname || !json_object_get (config, "bootstrap"))
+        return upmi_seterror (p, args, "bootstrap configuration not found");
     if (!(ctx = plugin_ctx_create (config, hostname))
         || flux_plugin_aux_set (p,
                                 plugin_name,
