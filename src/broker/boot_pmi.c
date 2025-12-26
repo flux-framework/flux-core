@@ -28,55 +28,9 @@
 #include "attr.h"
 #include "overlay.h"
 #include "topology.h"
+#include "bootstrap.h"
 #include "boot_pmi.h"
 
-
-/*  If the broker is launched via flux-shell, then the shell may opt
- *  to set a "flux.instance-level" parameter in the PMI kvs to tell
- *  the booting instance at what "level" it will be running, i.e. the
- *  number of parents. If the PMI key is missing, this is not an error,
- *  instead the level of this instance is considered to be zero.
- */
-static int set_instance_level_attr (struct upmi *upmi,
-                                    attr_t *attrs,
-                                    bool *under_flux)
-{
-    char *val = NULL;
-    int rc = -1;
-
-    (void)upmi_get (upmi, "flux.instance-level", -1, &val, NULL);
-    if (attr_add (attrs, "instance-level", val ? val : "0", ATTR_IMMUTABLE) < 0)
-        goto error;
-    *under_flux = val ? true : false;
-    rc = 0;
-error:
-    ERRNO_SAFE_WRAP (free, val);
-    return rc;
-}
-
-/* If the tbon.interface-hint broker attr is not already set, set it.
- * If running under Flux, use the value, if any, placed in PMI KVS by
- * the enclsoing instance.  Otherwise, set a default value.
- */
-static int set_tbon_interface_hint_attr (struct upmi *upmi,
-                                         attr_t *attrs,
-                                         struct overlay *ov,
-                                         bool under_flux)
-{
-    char *val = NULL;
-    int rc = -1;
-
-    if (attr_get (attrs, "tbon.interface-hint", NULL, NULL) == 0)
-        return 0;
-    if (under_flux)
-        (void)upmi_get (upmi, "flux.tbon-interface-hint", -1, &val, NULL);
-    if (overlay_set_tbon_interface_hint (ov, val) < 0)
-        goto error;
-    rc = 0;
-error:
-    ERRNO_SAFE_WRAP (free, val);
-    return rc;
-}
 
 static int create_singleton_taskmap (struct taskmap **mp,
                                      flux_error_t *error)
@@ -265,28 +219,9 @@ static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
     return rc;
 }
 
-static int set_broker_boot_method_attr (attr_t *attrs,
-                                        const char *value,
-                                        flux_error_t *errp)
-{
-    (void)attr_delete (attrs, "broker.boot-method", true);
-    if (attr_add (attrs,
-                  "broker.boot-method",
-                  value,
-                  ATTR_IMMUTABLE) < 0) {
-        return errprintf (errp,
-                          "setattr broker.boot-method: %s",
-                          strerror (errno));
-    }
-    return 0;
-}
-
-static void trace_upmi (void *arg, const char *text)
-{
-    fprintf (stderr, "boot_pmi: %s\n", text);
-}
-
-int boot_pmi (const char *hostname,
+int boot_pmi (struct bootstrap *boot,
+              struct upmi_info *info,
+              const char *hostname,
               struct overlay *overlay,
               attr_t *attrs,
               flux_error_t *errp)
@@ -294,88 +229,24 @@ int boot_pmi (const char *hostname,
     const char *topo_uri;
     flux_error_t error;
     struct hostlist *hl = NULL;
-    struct upmi *upmi;
-    struct upmi_info info;
     struct topology *topo = NULL;
     int child_count;
     int *child_ranks = NULL;
     int i;
-    int upmi_flags = UPMI_LIBPMI_NOFLUX;
-    const char *upmi_method;
-    bool under_flux;
     const struct bizcard *bc;
-    struct bizcache *cache = NULL;
     struct taskmap *taskmap = NULL;
-    const char *dkey;
-    json_t *value;
 
     // N.B. overlay_create() sets the tbon.topo attribute
     if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0)
         return errprintf (errp, "error fetching tbon.topo attribute");
-    if (attr_get (attrs, "broker.boot-method", &upmi_method, NULL) < 0)
-        upmi_method = NULL;
-    if (getenv ("FLUX_PMI_DEBUG"))
-        upmi_flags |= UPMI_TRACE;
-    if (!(upmi = upmi_create (upmi_method,
-                              upmi_flags,
-                              trace_upmi,
-                              NULL,
-                              &error)))
-        return errprintf (errp, "boot_pmi: %s", error.text);
-    if (upmi_initialize (upmi, &info, &error) < 0) {
-        errprintf (errp,
-                   "%s: initialize: %s",
-                   upmi_describe (upmi),
-                   error.text);
-        upmi_destroy (upmi);
-        return -1;
-    }
-    if (info.dict != NULL) {
-        json_object_foreach(info.dict, dkey, value) {
-            if (!json_is_string(value)) {
-                errprintf (errp,
-                           "%s: initialize: value associated to key %s"
-                           " is not a string",
-                           upmi_describe (upmi),
-                           dkey);
-                goto error;
-            }
-            if (attr_add (attrs, dkey, json_string_value(value), ATTR_IMMUTABLE) < 0) {
-                errprintf (errp,
-                           "%s: initialize: could not put attribute"
-                           " for key %s",
-                           upmi_describe (upmi),
-                           dkey);
-                goto error;
-            }
-        }
-    }
-    if (set_instance_level_attr (upmi, attrs, &under_flux) < 0) {
-        errprintf (errp, "set_instance_level_attr: %s", strerror (errno));
-        goto error;
-    }
-    if (under_flux) {
-        if (attr_add (attrs, "jobid", info.name, ATTR_IMMUTABLE) < 0) {
-            errprintf (errp,
-                       "error setting jobid attribute: %s",
-                       strerror (errno));
-            goto error;
-        }
-    }
-    if (set_tbon_interface_hint_attr (upmi, attrs, overlay, under_flux) < 0) {
-        errprintf (errp,
-                   "error setting tbon.interface-hint attribute: %s",
-                   strerror (errno));
-        goto error;
-    }
-    if (!(topo = topology_create (topo_uri, info.size, NULL, &error))) {
+    if (!(topo = topology_create (topo_uri, info->size, NULL, &error))) {
         errprintf (errp,
                    "error creating '%s' topology: %s",
                    topo_uri,
                    error.text);
         goto error;
     }
-    if (topology_set_rank (topo, info.rank) < 0
+    if (topology_set_rank (topo, info->rank) < 0
         || overlay_set_topology (overlay, topo) < 0) {
         errprintf (errp, "error setting rank/topology: %s", strerror (errno));
         goto error;
@@ -385,14 +256,14 @@ int boot_pmi (const char *hostname,
         goto error;
     }
 
-    if (info.size == 1) {
+    if (info->size == 1) {
         if (create_singleton_taskmap (&taskmap, &error) < 0) {
             errprintf (errp, "error creating taskmap: %s", error.text);
             goto error;
         }
     }
     else {
-        if (fetch_taskmap (upmi, &taskmap, &error) < 0) {
+        if (fetch_taskmap (boot->upmi, &taskmap, &error) < 0) {
             errprintf (errp, "error fetching taskmap: %s", error.text);
             goto error;
         }
@@ -406,7 +277,7 @@ int boot_pmi (const char *hostname,
 
     /* A size=1 instance has no peers, so skip the PMI exchange.
      */
-    if (info.size == 1) {
+    if (info->size == 1) {
         if (hostlist_append (hl, hostname) < 0) {
             errprintf (errp, "hostlist_append: %s", strerror (errno));
             goto error;
@@ -438,13 +309,13 @@ int boot_pmi (const char *hostname,
         char tcp[1024];
         char ipc[1024];
 
-        nlocal = clique_ranks (taskmap, info.rank, child_ranks, child_count);
+        nlocal = clique_ranks (taskmap, info->rank, child_ranks, child_count);
 
         if (format_tcp_uri (tcp, sizeof (tcp), attrs, &error) < 0) {
             errprintf (errp, "%s", error.text);
             goto error;
         }
-        if (format_ipc_uri (ipc, sizeof (ipc), attrs, info.rank, &error) < 0) {
+        if (format_ipc_uri (ipc, sizeof (ipc), attrs, info->rank, &error) < 0) {
             errprintf (errp, "%s", error.text);
             goto error;
         }
@@ -462,16 +333,6 @@ int boot_pmi (const char *hostname,
         }
     }
 
-    /* Cache bizcard results by rank to avoid repeated PMI lookups.
-     */
-    if (!(cache = bizcache_create (upmi, info.size))) {
-        errprintf (errp,
-                   "%s: error creating business card cache: %s",
-                   upmi_describe (upmi),
-                   strerror (errno));
-        goto error;
-    }
-
     /* Each broker writes a business card consisting of hostname,
      * public key, and URIs (if any).
      */
@@ -479,7 +340,7 @@ int boot_pmi (const char *hostname,
         errprintf (errp, "get business card: %s", strerror (errno));
         goto error;
     }
-    if (bizcache_put (cache, info.rank, bc, &error) < 0) {
+    if (bizcache_put (boot->cache, info->rank, bc, &error) < 0) {
         errprintf (errp, "put business card: %s", error.text);
         goto error;
     }
@@ -493,22 +354,25 @@ int boot_pmi (const char *hostname,
     }
 
     /* BARRIER */
-    if (upmi_barrier (upmi, &error) < 0) {
-        errprintf (errp, "%s: barrier: %s", upmi_describe (upmi), error.text);
+    if (upmi_barrier (boot->upmi, &error) < 0) {
+        errprintf (errp,
+                   "%s: barrier: %s",
+                   upmi_describe (boot->upmi),
+                   error.text);
         goto error;
     }
 
     /* Fetch the business card of parent and inform overlay of URI
      * and public key.
      */
-    if (info.rank > 0) {
+    if (info->rank > 0) {
         int parent_rank = topology_get_parent (topo);
         const char *uri = NULL;
 
-        if (bizcache_get (cache, parent_rank, &bc, errp) < 0)
+        if (bizcache_get (boot->cache, parent_rank, &bc, errp) < 0)
             goto error;
         if (!get_prefer_tcp (attrs)
-            && clique_ranks (taskmap, info.rank, &parent_rank, 1) == 1)
+            && clique_ranks (taskmap, info->rank, &parent_rank, 1) == 1)
             uri = bizcard_uri_find (bc, "ipc://");
         if (!uri)
             uri = bizcard_uri_find (bc, NULL);
@@ -528,7 +392,7 @@ int boot_pmi (const char *hostname,
         int child_rank = child_ranks[i];
         char name[64];
 
-        if (bizcache_get (cache, child_rank, &bc, errp) < 0)
+        if (bizcache_get (boot->cache, child_rank, &bc, errp) < 0)
             goto error;
         (void)snprintf (name, sizeof (name), "%d", i);
         if (overlay_authorize (overlay, name, bizcard_pubkey (bc)) < 0) {
@@ -544,8 +408,8 @@ int boot_pmi (const char *hostname,
     /* Fetch the business card of all ranks and build hostlist.
      * The hostlist is built independently (and in parallel) on all ranks.
      */
-    for (i = 0; i < info.size; i++) {
-        if (bizcache_get (cache, i, &bc, errp) < 0)
+    for (i = 0; i < info->size; i++) {
+        if (bizcache_get (boot->cache, i, &bc, errp) < 0)
             goto error;
         if (hostlist_append (hl, bizcard_hostname (bc)) < 0) {
             errprintf (errp, "hostlist_append: %s", strerror (errno));
@@ -556,8 +420,11 @@ int boot_pmi (const char *hostname,
     /* One more barrier before allowing connects to commence.
      * Need to ensure that all clients are "allowed".
      */
-    if (upmi_barrier (upmi, &error) < 0) {
-        errprintf (errp, "%s: barrier: %s", upmi_describe (upmi), error.text);
+    if (upmi_barrier (boot->upmi, &error) < 0) {
+        errprintf (errp,
+                   "%s: barrier: %s",
+                   upmi_describe (boot->upmi),
+                   error.text);
         goto error;
     }
 
@@ -566,31 +433,28 @@ done:
         errprintf (errp, "setattr hostlist: %s", strerror (errno));
         goto error;
     }
-    if (set_broker_boot_method_attr (attrs, upmi_describe (upmi), &error) < 0) {
-        errprintf (errp, "%s: %s", upmi_describe (upmi), error.text);
+    if (upmi_finalize (boot->upmi, &error) < 0) {
+        errprintf (errp,
+                   "%s: finalize: %s",
+                   upmi_describe (boot->upmi),
+                   error.text);
         goto error;
     }
-    if (upmi_finalize (upmi, &error) < 0) {
-        errprintf (errp, "%s: finalize: %s", upmi_describe (upmi), error.text);
-        goto error;
-    }
-    upmi_destroy (upmi);
     hostlist_destroy (hl);
     free (child_ranks);
     taskmap_destroy (taskmap);
     topology_decref (topo);
-    bizcache_destroy (cache);
     return 0;
 error:
     /* N.B. Some implementations of abort may not return.
      */
-    (void)upmi_abort (upmi, errp ? errp->text : "fatal bootstrap error", NULL);
-    upmi_destroy (upmi);
+    (void)upmi_abort (boot->upmi,
+                      errp ? errp->text : "fatal bootstrap error",
+                      NULL);
     hostlist_destroy (hl);
     free (child_ranks);
     taskmap_destroy (taskmap);
     topology_decref (topo);
-    bizcache_destroy (cache);
     return -1;
 }
 

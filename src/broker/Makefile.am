@@ -51,6 +51,8 @@ libbroker_la_SOURCES = \
 	state_machine.c \
 	heaptrace.h \
 	heaptrace.c \
+	bootstrap.h \
+	bootstrap.c \
 	boot_config.h \
 	boot_config.c \
 	boot_pmi.h \
@@ -110,6 +112,7 @@ test_ldadd = \
 	$(builddir)/libbroker.la \
 	$(top_builddir)/src/common/libtestutil/libtestutil.la \
 	$(top_builddir)/src/common/libpmi/libupmi.la \
+	$(top_builddir)/src/common/libpmi/libpmi_client.la \
 	$(top_builddir)/src/common/libpmi/libpmi_common.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \

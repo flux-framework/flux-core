@@ -18,11 +18,13 @@
 #include <zmq.h>
 #include <unistd.h>
 #include <flux/core.h>
+#include <flux/taskmap.h>
 #include <inttypes.h>
 #include <jansson.h>
 #include <uuid.h>
 
 #include "src/common/libpmi/bizcard.h"
+#include "src/common/libpmi/upmi.h"
 #include "src/common/libzmqutil/msg_zsock.h"
 #include "src/common/libzmqutil/sockopt.h"
 #include "src/common/libzmqutil/zwatcher.h"
@@ -46,6 +48,8 @@
 #include "attr.h"
 #include "trace.h"
 #include "state_machine.h"
+#include "boot_pmi.h"
+#include "boot_config.h"
 
 /* How long to wait (seconds) for a peer broker's TCP ACK before disconnecting.
  * This can be configured via TOML and on the broker command line.
@@ -331,8 +335,6 @@ int overlay_set_topology (struct overlay *ov, struct topology *topo)
         || topology_get_child_ranks (topo, child_ranks, child_count) < 0)
         goto error;
 
-    ov->size = topology_get_size (topo);
-    ov->rank = topology_get_rank (topo);
     if (!cert_meta_get (ov->cert, "name")) {
         char val[16];
         snprintf (val, sizeof (val), "%lu", (unsigned long)ov->rank);
@@ -1556,6 +1558,7 @@ int overlay_connect (struct overlay *ov)
             return -1;
         if (zmq_connect (ov->parent.zsock, ov->parent.uri) < 0)
             return -1;
+        flux_log (ov->h, LOG_DEBUG, "connecting to %s", ov->parent.uri);
         if (!(ov->parent.w = zmqutil_watcher_create (ov->reactor,
                                                      ov->parent.zsock,
                                                      FLUX_POLLIN,
@@ -1597,6 +1600,7 @@ static int bind_uri (struct overlay *ov, const char *uri)
      */
     if (strstarts (new_uri, "ipc:///"))
         cleanup_push_string (cleanup_file, new_uri + 6);
+    flux_log (ov->h, LOG_DEBUG, "listening on %s", new_uri);
     free (new_uri);
     return 0;
 }
@@ -1690,24 +1694,181 @@ int overlay_bind (struct overlay *ov,
     return 0;
 }
 
+/*  Encode idset of critical nodes/shell ranks, which is calculated
+ *   from broker.mapping and broker.critical-ranks.
+ */
+static char *encode_critical_nodes (attr_t *attrs)
+{
+    struct idset *ranks = NULL;
+    struct idset *nodeids = NULL;
+    struct taskmap *map = NULL;
+    char *s = NULL;
+    int nodeid;
+    const char *mapping;
+    const char *ranks_attr;
+    unsigned int i;
+
+
+    if (attr_get (attrs, "broker.mapping", &mapping, NULL) < 0
+        || mapping == NULL
+        || !(map = taskmap_decode (mapping, NULL))
+        || attr_get (attrs, "broker.critical-ranks", &ranks_attr, NULL) < 0
+        || !(ranks = idset_decode (ranks_attr))
+        || !(nodeids = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        goto done;
+
+    /*  Map the broker ranks from the broker.critical-ranks attr to
+     *  shell ranks/nodeids using PMI_process_mapping (this handles the
+     *  rare case where multiple brokers per node/shell were launched)
+     */
+    i = idset_first (ranks);
+    while (i != IDSET_INVALID_ID) {
+        if ((nodeid = taskmap_nodeid (map, i)) < 0
+            || idset_set (nodeids, nodeid) < 0)
+            goto done;
+        i = idset_next (ranks, i);
+    }
+    s = idset_encode (nodeids, IDSET_FLAG_RANGE);
+done:
+    taskmap_destroy (map);
+    idset_destroy (ranks);
+    idset_destroy (nodeids);
+    return s;
+}
+
+static flux_future_t *set_critical_ranks (flux_t *h,
+                                          flux_jobid_t id,
+                                          attr_t *attrs)
+{
+    int saved_errno;
+    flux_future_t *f;
+    char *nodeids;
+
+    if (!(nodeids = encode_critical_nodes (attrs)))
+        return NULL;
+    f = flux_rpc_pack (h,
+                       "job-exec.critical-ranks",
+                       FLUX_NODEID_ANY, 0,
+                       "{s:I s:s}",
+                       "id", id,
+                       "ranks", nodeids);
+    saved_errno = errno;
+    free (nodeids);
+    errno = saved_errno;
+    return f;
+}
+
+static int overlay_execute_parental_notifications (struct overlay *ov,
+                                                   flux_error_t *errp)
+{
+    const char *jobid = NULL;
+    const char *parent_uri = NULL;
+    flux_jobid_t id;
+    flux_t *h = NULL;
+    flux_future_t *f = NULL;
+    int rc = -1;
+
+    /* Skip if "jobid" or "parent-uri" not set, this is probably
+     *  not a child of any Flux instance.
+     */
+    if (attr_get (ov->attrs, "parent-uri", &parent_uri, NULL) < 0
+        || parent_uri == NULL
+        || attr_get (ov->attrs, "jobid", &jobid, NULL) < 0
+        || jobid == NULL)
+        return 0;
+
+    if (flux_job_id_parse (jobid, &id) < 0)
+        return errprintf (errp, "Unable to parse jobid attribute '%s'", jobid);
+
+    /*  Open connection to parent instance:
+     */
+    if (!(h = flux_open (parent_uri, 0))) {
+        return errprintf (errp,
+                          "flux_open to parent failed %s",
+                          strerror (errno));
+    }
+
+    /*  Note: not an error if rpc to set critical ranks fails, but
+     *  issue an error notifying user that no critical ranks are set.
+     */
+    if (!(f = set_critical_ranks (h, id, ov->attrs))) {
+        flux_log (ov->h,
+                  LOG_ERR,
+                  "Unable to get critical ranks, all ranks will be critical");
+    }
+
+    /*  Wait for RPC results */
+    if (f && flux_future_get (f, NULL) < 0 && errno != ENOSYS) {
+        errprintf (errp,
+                   "job-exec.critical-ranks: %s",
+                   future_strerror (f, errno));
+        goto out;
+    }
+    rc = 0;
+out:
+    flux_close (h);
+    flux_future_destroy (f);
+    return rc;
+}
+
+static int overlay_register_critical_ranks (struct overlay *ov,
+                                            flux_error_t *errp)
+{
+    int rc = -1;
+    const char *val;
+    char *ranks = NULL;
+    struct idset *critical_ranks = NULL;
+
+    if (attr_get (ov->attrs, "broker.critical-ranks", &val, NULL) < 0) {
+        if (!(critical_ranks = overlay_get_default_critical_ranks (ov))
+            || !(ranks = idset_encode (critical_ranks, IDSET_FLAG_RANGE))) {
+            errprintf (errp, "unable to calculate critical-ranks attribute");
+            goto out;
+        }
+        if (attr_add (ov->attrs,
+                      "broker.critical-ranks",
+                      ranks,
+                      ATTR_IMMUTABLE) < 0) {
+            errprintf (errp, "attr_add critical_ranks: %s", strerror (errno));
+            goto out;
+        }
+    }
+    else {
+        if (!(critical_ranks = idset_decode (val))
+            || idset_last (critical_ranks) >= ov->size) {
+            errprintf (errp,
+                       "invalid value for broker.critical-ranks='%s'",
+                       val);
+            goto out;
+        }
+        /*  Need to set immutable flag when attr set on command line
+         */
+        if (attr_set_flags (ov->attrs,
+                            "broker.critical-ranks",
+                            ATTR_IMMUTABLE) < 0) {
+            errprintf (errp,
+                       "failed to make broker.critical-ranks"
+                       " attr immutable: %s",
+                       strerror (errno));
+            goto out;
+        }
+    }
+    rc = 0;
+out:
+    idset_destroy (critical_ranks);
+    free (ranks);
+    return rc;
+}
+
 /* Call after overlay bootstrap (bind/connect),
  * to get concretized 0MQ endpoints.
  */
-int overlay_register_attrs (struct overlay *overlay)
+static int overlay_register_attrs (struct overlay *overlay)
 {
     if (attr_add (overlay->attrs,
                   "tbon.parent-endpoint",
                   overlay->parent.uri,
                   ATTR_IMMUTABLE) < 0)
-        return -1;
-    if (attr_add_uint32 (overlay->attrs,
-                         "rank",
-                         overlay->rank,
-                         ATTR_IMMUTABLE) < 0)
-        return -1;
-    if (attr_add_uint32 (overlay->attrs,
-                         "size", overlay->size,
-                         ATTR_IMMUTABLE) < 0)
         return -1;
     if (attr_add_int (overlay->attrs,
                       "tbon.level",
@@ -2293,18 +2454,6 @@ error:
     return -1;
 }
 
-/* This is called from boot_*.c with a default value to set if the attribute
- * is not set already.
- */
-int overlay_set_tbon_interface_hint (struct overlay *ov, const char *val)
-{
-    if (attr_get (ov->attrs, "tbon.interface-hint", NULL, NULL) == 0)
-        return 0;
-    if (!val)
-        val = default_interface_hint;
-    return attr_add (ov->attrs, "tbon.interface-hint", val, 0);
-}
-
 /* Set attribute with the following precedence:
  * 1. broker attribute
  * 2. TOML config
@@ -2348,6 +2497,8 @@ static int overlay_configure_interface_hint (struct overlay *ov,
         ;
     else if (getenv ("FLUX_IPADDR_HOSTNAME"))
         val = "hostname";
+    else
+        val = default_interface_hint;
 
     if (val && !attr_val) {
          if (attr_add (ov->attrs, long_name, val, 0) < 0) {
@@ -2682,6 +2833,8 @@ static const struct flux_msg_handler_spec htab[] = {
 };
 
 struct overlay *overlay_create (flux_t *h,
+                                struct bootstrap *boot,
+                                struct upmi_info *info,
                                 const char *hostname,
                                 attr_t *attrs,
                                 void *zctx,
@@ -2695,9 +2848,10 @@ struct overlay *overlay_create (flux_t *h,
     if (!(ov->hostname = strdup (hostname)))
         goto error;
     ov->attrs = attrs;
-    ov->rank = FLUX_NODEID_ANY;
     ov->parent.lastsent = -1;
     ov->h = h;
+    ov->rank = info->rank;
+    ov->size = info->size;
     ov->reactor = flux_get_reactor (h);
     if (!(ov->h_channel = flux_open (uri, 0))
         || flux_set_reactor (ov->h_channel, ov->reactor) < 0
@@ -2796,6 +2950,28 @@ struct overlay *overlay_create (flux_t *h,
     if (!(ov->health_requests = flux_msglist_create ())
         || !(ov->trace_requests = flux_msglist_create ()))
         goto error;
+    if (boot) {
+        if (streq (bootstrap_method (boot), "config")) {
+            if (boot_config (boot, info, h, hostname, ov, attrs, errp) < 0)
+                goto error;;
+        }
+        else {
+            if (boot_pmi (boot, info, hostname, ov, attrs, errp) < 0)
+                goto error;
+        }
+    }
+    if (overlay_register_attrs (ov) < 0) {
+        errprintf (errp, "overlay setattr error: %s", strerror (errno));
+        goto error;
+    }
+    if (boot) {
+        if (overlay_register_critical_ranks (ov, errp) < 0)
+            goto error_hasmsg;
+        if (ov->rank == 0) {
+            if (overlay_execute_parental_notifications (ov, errp) < 0)
+                goto error_hasmsg;
+        }
+    }
     return ov;
 error:
     errprintf (errp, "%s", strerror (errno));
