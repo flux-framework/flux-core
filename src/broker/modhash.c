@@ -26,7 +26,6 @@
 #include "broker.h"
 #include "trace.h"
 #include "modhash.h"
-#include "overlay.h"
 
 struct modhash {
     zhash_t *zh_byuuid;
