@@ -22,12 +22,15 @@ struct bootstrap {
     struct upmi *upmi;
     struct bizcache *cache;
     bool under_flux;
+    bool finalized;
 };
 
 struct bootstrap *bootstrap_create (struct broker *ctx,
                                     struct upmi_info *info,
                                     flux_error_t *errp);
 void bootstrap_destroy (struct bootstrap *boot);
+
+int bootstrap_finalize (struct bootstrap *boot, flux_error_t *errp);
 
 const char *bootstrap_method (struct bootstrap *boot);
 

@@ -21,7 +21,6 @@
 #include <jansson.h>
 #include <sys/param.h>
 #include <flux/core.h>
-#include <flux/hostlist.h>
 
 #include "src/common/libfluxutil/conf_bootstrap.h"
 #include "src/common/libyuarel/yuarel.h"
@@ -37,57 +36,6 @@
 #include "bootstrap.h"
 #include "boot_config.h"
 
-
-static int boot_config_attr (attr_t *attrs,
-                             const char *hostname,
-                             json_t *hosts,
-                             flux_error_t *errp)
-{
-    struct hostlist *hl = NULL;
-    char *s = NULL;
-    size_t index;
-    json_t *value;
-    int rv = -1;
-
-    if (!(hl = hostlist_create ()))
-        goto error;
-
-    json_array_foreach (hosts, index, value) {
-        const char *host;
-        if (json_unpack (value, "{s:s}", "host", &host) < 0) {
-            errprintf (errp, "Internal error [bootstrap]: missing host field");
-            errno = EINVAL;
-            goto error;
-        }
-        if (hostlist_append (hl, host) < 0) {
-            errprintf (errp,
-                       "Internal error [bootstrap]: hostlist_append: %s",
-                       strerror (errno));
-            goto error;
-        }
-    }
-
-    if (!(s = hostlist_encode (hl)))
-        goto error;
-
-    if (attr_add (attrs,
-                  "hostlist",
-                  s,
-                  ATTR_IMMUTABLE) < 0) {
-        errprintf (errp,
-                   "failed to set hostlist attribute to"
-                   " config derived value: %s",
-                   strerror (errno));
-        goto error;
-    }
-    free (s);
-    s = NULL;
-    rv = 0;
-error:
-    hostlist_destroy (hl);
-    free (s);
-    return rv;
-}
 
 /* Look up the host entry for 'rank' and return bind URI, if any.
  */
@@ -166,9 +114,6 @@ int boot_config (struct bootstrap *boot,
                               &hosts,
                               errp) < 0)
         return -1;
-
-    if (boot_config_attr (attrs, hostname, hosts, errp) < 0)
-        goto error;
 
     // N.B. overlay_create() sets the tbon.topo attribute
     if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {

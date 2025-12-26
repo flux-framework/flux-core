@@ -2797,6 +2797,10 @@ struct overlay *overlay_create (flux_t *h,
         errprintf (errp, "overlay setattr error: %s", strerror (errno));
         goto error;
     }
+    if (boot) {
+        if (bootstrap_finalize (boot, errp) < 0)
+            goto error_hasmsg;
+    }
     return ov;
 error:
     errprintf (errp, "%s", strerror (errno));

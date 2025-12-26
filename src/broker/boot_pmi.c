@@ -14,7 +14,6 @@
 #include <limits.h>
 #include <unistd.h>
 #include <jansson.h>
-#include <flux/hostlist.h>
 #include <flux/taskmap.h>
 
 #include "src/common/libutil/cleanup.h"
@@ -125,28 +124,6 @@ static int format_ipc_uri (char *buf,
     return 0;
 }
 
-static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
-{
-    const char *value;
-    char *s;
-    int rc = -1;
-
-    /*  Allow hostlist attribute to be set on command line for testing.
-     *  The value must be re-added if so, so that the IMMUTABLE flag can
-     *   be set so that the attribute is properly cached.
-     */
-    if (attr_get (attrs, "hostlist", &value, NULL) == 0) {
-        s = strdup (value);
-        (void) attr_delete (attrs, "hostlist", true);
-    }
-    else
-        s = hostlist_encode (hl);
-    if (s && attr_add (attrs, "hostlist", s, ATTR_IMMUTABLE) == 0)
-        rc = 0;
-    ERRNO_SAFE_WRAP (free, s);
-    return rc;
-}
-
 int boot_pmi (struct bootstrap *boot,
               struct upmi_info *info,
               const char *hostname,
@@ -156,7 +133,6 @@ int boot_pmi (struct bootstrap *boot,
 {
     const char *topo_uri;
     flux_error_t error;
-    struct hostlist *hl = NULL;
     struct topology *topo = NULL;
     int child_count;
     int *child_ranks = NULL;
@@ -180,20 +156,11 @@ int boot_pmi (struct bootstrap *boot,
         errprintf (errp, "error setting rank/topology: %s", strerror (errno));
         goto error;
     }
-    if (!(hl = hostlist_create ())) {
-        errprintf (errp, "error creating hostlist: %s", strerror (errno));
-        goto error;
-    }
 
     /* A size=1 instance has no peers, so skip the PMI exchange.
      */
-    if (info->size == 1) {
-        if (hostlist_append (hl, hostname) < 0) {
-            errprintf (errp, "hostlist_append: %s", strerror (errno));
-            goto error;
-        }
+    if (info->size == 1)
         goto done;
-    }
 
     /* Enable ipv6 for maximum flexibility in address selection.
      */
@@ -323,18 +290,6 @@ int boot_pmi (struct bootstrap *boot,
         }
     }
 
-    /* Fetch the business card of all ranks and build hostlist.
-     * The hostlist is built independently (and in parallel) on all ranks.
-     */
-    for (i = 0; i < info->size; i++) {
-        if (bizcache_get (boot->cache, i, &bc, errp) < 0)
-            goto error;
-        if (hostlist_append (hl, bizcard_hostname (bc)) < 0) {
-            errprintf (errp, "hostlist_append: %s", strerror (errno));
-            goto error;
-        }
-    }
-
     /* One more barrier before allowing connects to commence.
      * Need to ensure that all clients are "allowed".
      */
@@ -347,18 +302,6 @@ int boot_pmi (struct bootstrap *boot,
     }
 
 done:
-    if (set_hostlist_attr (attrs, hl) < 0) {
-        errprintf (errp, "setattr hostlist: %s", strerror (errno));
-        goto error;
-    }
-    if (upmi_finalize (boot->upmi, &error) < 0) {
-        errprintf (errp,
-                   "%s: finalize: %s",
-                   upmi_describe (boot->upmi),
-                   error.text);
-        goto error;
-    }
-    hostlist_destroy (hl);
     free (child_ranks);
     taskmap_destroy (taskmap);
     topology_decref (topo);
@@ -369,7 +312,6 @@ error:
     (void)upmi_abort (boot->upmi,
                       errp ? errp->text : "fatal bootstrap error",
                       NULL);
-    hostlist_destroy (hl);
     free (child_ranks);
     taskmap_destroy (taskmap);
     topology_decref (topo);

@@ -34,6 +34,7 @@
 #include "attr.h"
 #include "modhash.h"
 #include "shutdown.h"
+#include "bootstrap.h"
 
 struct quorum {
     uint32_t size;
@@ -306,6 +307,7 @@ static void action_join (struct state_machine *s)
 static void kickoff_continuation (flux_future_t *f, void *arg)
 {
     struct state_machine *s = arg;
+    flux_error_t error;
 
     if (flux_future_get (f, NULL) < 0) {
         flux_log (s->ctx->h,
@@ -313,6 +315,12 @@ static void kickoff_continuation (flux_future_t *f, void *arg)
                   "error loading builtins: %s",
                   future_strerror (f, errno));
         goto error;
+    }
+    if (bootstrap_finalize (s->ctx->boot, &error) < 0) {
+        flux_log (s->ctx->h,
+                  LOG_ERR,
+                  "error finalizing bootstrap: %s",
+                  error.text);
     }
     state_machine_post (s, "builtins-success");
     return;
