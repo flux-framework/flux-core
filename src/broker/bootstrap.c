@@ -14,6 +14,7 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
+#include <flux/hostlist.h>
 #include <flux/taskmap.h>
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
@@ -117,7 +118,6 @@ error:
     return -1;
 }
 
-
 /* Initialize some broker attributes using information obtained during
  * bootstrap, such as pre-put values from the PMI KVS.
  */
@@ -197,6 +197,77 @@ const char *bootstrap_method (struct bootstrap *boot)
 static void trace_upmi (void *arg, const char *text)
 {
     fprintf (stderr, "bootstrap: %s\n", text);
+}
+
+/* Set the hostlist attribute.  There are three cases:
+ * 1. set on command line (used in test)
+ * 2. singleton
+ * 3. use hostnames from business cards (assuming exchange has occurred).
+ */
+static int setattr_hostlist (struct bootstrap *boot, flux_error_t *errp)
+{
+    const char *hostlist;
+    const struct bizcard *bc;
+    struct hostlist *hl = NULL;
+    char *hosts = NULL;
+
+    if ((hostlist = getattr (boot->ctx->attrs, "hostlist"))) {
+    }
+    else if (boot->ctx->info.size == 1) {
+        hostlist = boot->ctx->hostname;
+    }
+    else {
+        if (!(hl = hostlist_create ())) {
+            errprintf (errp, "hostlist_create: %s", strerror (errno));
+            return -1;
+        }
+        for (int rank = 0; rank < boot->ctx->info.size; rank++) {
+            if (bizcache_get (boot->cache, rank, &bc, errp) < 0)
+                goto error;
+            if (hostlist_append (hl, bizcard_hostname (bc)) < 0) {
+                errprintf (errp, "hostlist_append: %s", strerror (errno));
+                goto error;
+            }
+        }
+        if (!(hosts = hostlist_encode (hl))) {
+            errprintf (errp, "hostlist_encode: %s", strerror (errno));
+            goto error;
+        }
+        hostlist = hosts;
+    }
+    if (setattr (boot->ctx->attrs, "hostlist", hostlist, errp) < 0)
+        goto error;
+    free (hosts);
+    hostlist_destroy (hl);
+    return 0;
+error:
+    hostlist_destroy (hl);
+    ERRNO_SAFE_WRAP (free, hosts);
+    return -1;
+}
+
+int bootstrap_finalize (struct bootstrap *boot, flux_error_t *errp)
+{
+    flux_error_t error;
+
+    if (boot->finalized)
+        return 0;
+    if (setattr_hostlist (boot, errp) < 0)
+        return -1;
+    if (attr_cache_immutables (boot->ctx->attrs, boot->ctx->h) < 0) {
+        errprintf (errp, "error caching immutables");
+        return -1;
+    }
+    if (upmi_finalize (boot->upmi, &error) < 0) {
+        errprintf (errp,
+                   "%s: finalize: %s",
+                   upmi_describe (boot->upmi),
+                   error.text);
+        return -1;
+    }
+    boot->finalized = true;
+
+    return 0;
 }
 
 void bootstrap_destroy (struct bootstrap *boot)
