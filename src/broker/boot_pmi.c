@@ -32,78 +32,6 @@
 #include "boot_pmi.h"
 
 
-static int create_singleton_taskmap (struct taskmap **mp,
-                                     flux_error_t *error)
-{
-    struct taskmap *map;
-    flux_error_t e;
-
-    if (!(map = taskmap_decode ("[[0,1,1,1]]", &e))) {
-        errprintf (error, "error creating singleton taskmap: %s", e.text);
-        return -1;
-    }
-    *mp = map;
-    return 0;
-}
-
-/* Fetch key from the PMI server and decode it as a taskmap.
- * Return -1 with error filled if a parse error occurs.
- * Return 0 if map was properly parsed OR if it doesn't exist.
- */
-static int fetch_taskmap_one (struct upmi *upmi,
-                              const char *key,
-                              struct taskmap **mp,
-                              flux_error_t *error)
-{
-    struct taskmap *map;
-    char *val;
-    flux_error_t e;
-
-    if (upmi_get (upmi, key, -1, &val, NULL) < 0) {
-        *mp = NULL;
-        return 0;
-    }
-    if (!(map = taskmap_decode (val, &e))) {
-        errprintf (error, "%s: error decoding %s", key, e.text);
-        free (val);
-        return -1;
-    }
-    free (val);
-    *mp = map;
-    return 0;
-}
-
-static int fetch_taskmap (struct upmi *upmi,
-                          struct taskmap **mp,
-                          flux_error_t *error)
-{
-    struct taskmap *map;
-    if (fetch_taskmap_one (upmi, "flux.taskmap", &map, error) < 0)
-        return -1;
-    if (map == NULL
-        && fetch_taskmap_one (upmi, "PMI_process_mapping", &map, error) < 0)
-        return -1;
-    *mp = map; // might be NULL - that is OK
-    return 0;
-}
-
-/* Set broker.mapping attribute.
- * It is not an error if the map is NULL.
- */
-static int set_broker_mapping_attr (attr_t *attrs, struct taskmap *map)
-{
-    char *val = NULL;
-
-    if (map && !(val = taskmap_encode (map, 0)))
-        return -1;
-    if (attr_add (attrs, "broker.mapping", val, ATTR_IMMUTABLE) < 0) {
-        ERRNO_SAFE_WRAP (free, val);
-        return -1;
-    }
-    free (val);
-    return 0;
-}
-
 /* Return the number of ranks[] members that are in the same clique as rank.
  */
 static int clique_ranks (struct taskmap *map, int rank, int *ranks, int nranks)
@@ -235,6 +163,7 @@ int boot_pmi (struct bootstrap *boot,
     int i;
     const struct bizcard *bc;
     struct taskmap *taskmap = NULL;
+    const char *broker_mapping;
 
     // N.B. overlay_create() sets the tbon.topo attribute
     if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0)
@@ -253,25 +182,6 @@ int boot_pmi (struct bootstrap *boot,
     }
     if (!(hl = hostlist_create ())) {
         errprintf (errp, "error creating hostlist: %s", strerror (errno));
-        goto error;
-    }
-
-    if (info->size == 1) {
-        if (create_singleton_taskmap (&taskmap, &error) < 0) {
-            errprintf (errp, "error creating taskmap: %s", error.text);
-            goto error;
-        }
-    }
-    else {
-        if (fetch_taskmap (boot->upmi, &taskmap, &error) < 0) {
-            errprintf (errp, "error fetching taskmap: %s", error.text);
-            goto error;
-        }
-    }
-    if (set_broker_mapping_attr (attrs, taskmap) < 0) {
-        errprintf (errp,
-                   "error setting broker.mapping attribute: %s",
-                   strerror (errno));
         goto error;
     }
 
@@ -296,6 +206,14 @@ int boot_pmi (struct bootstrap *boot,
             errprintf (errp,
                        "error fetching child ranks from topology: %s",
                        strerror (errno));
+            goto error;
+        }
+    }
+
+    if (attr_get (attrs, "broker.mapping", &broker_mapping, NULL) == 0) {
+        if (broker_mapping
+            && !(taskmap = taskmap_decode (broker_mapping, &error))) {
+            errprintf (errp, "error decoding broker.mapping: %s", error.text);
             goto error;
         }
     }

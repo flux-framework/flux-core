@@ -22,7 +22,6 @@
 #include <sys/param.h>
 #include <flux/core.h>
 #include <flux/hostlist.h>
-#include <flux/taskmap.h>
 
 #include "src/common/libfluxutil/conf_bootstrap.h"
 #include "src/common/libyuarel/yuarel.h"
@@ -45,11 +44,9 @@ static int boot_config_attr (attr_t *attrs,
                              flux_error_t *errp)
 {
     struct hostlist *hl = NULL;
-    struct taskmap *map = NULL;
     char *s = NULL;
     size_t index;
     json_t *value;
-    char *val;
     int rv = -1;
 
     if (!(hl = hostlist_create ()))
@@ -85,34 +82,8 @@ static int boot_config_attr (attr_t *attrs,
     }
     free (s);
     s = NULL;
-
-    /* Generate broker.mapping.
-     * For now, set it to NULL if there are multiple brokers per node.
-     */
-    hostlist_uniq (hl);
-    if (hostlist_count (hl) < json_array_size (hosts))
-        val = NULL;
-    else {
-        if (!(map = taskmap_create ())
-            || taskmap_append (map, 0, json_array_size (hosts), 1) < 0) {
-            errprintf (errp, "error creating taskmap: %s", strerror (errno));
-            goto error;
-        }
-        if (!(s = taskmap_encode (map, 0))) {
-            errprintf (errp, "error encoding broker.mapping");
-            errno = EOVERFLOW;
-            goto error;
-        }
-        val = s;
-    }
-    if (attr_add (attrs, "broker.mapping", val, ATTR_IMMUTABLE) < 0) {
-        errprintf (errp, "setattr broker.mapping: %s", strerror (errno));
-        goto error;
-    }
-
     rv = 0;
 error:
-    taskmap_destroy (map);
     hostlist_destroy (hl);
     free (s);
     return rv;
