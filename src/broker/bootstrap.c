@@ -14,8 +14,10 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
+#include <flux/taskmap.h>
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "attr.h"
 #include "bootstrap.h"
@@ -61,6 +63,60 @@ static char *lookup (struct upmi *upmi, const char *key)
         return NULL;
     return val;
 }
+
+/* Set the broker.mapping attribute.  There are four cases:
+ * 1. singleton or config file bootstrap:  always 1 broker per node
+ * 2. flux.taskmap set in PMI:  pass thru (re-encode to check)
+ * 3. PMI_process_mapping set in PMI:  translate to Flux taskmap
+ * 4. no value (NULL)
+ */
+static int setattr_broker_mapping (struct bootstrap *boot, flux_error_t *errp)
+{
+    flux_error_t error;
+    char *val = NULL;
+    struct taskmap *map = NULL;
+
+    if (boot->ctx->info.size == 1
+        || streq (upmi_describe (boot->upmi), "config")) {
+        if (asprintf (&val, "[[0,%d,1,1]]", boot->ctx->info.size) < 0) {
+            errprintf (errp, "broker.mapping: %s", strerror (errno));
+            return -1;
+        }
+    }
+    else if (boot->under_flux && (val = lookup (boot->upmi, "flux.taskmap"))) {
+        if (!(map = taskmap_decode (val, &error))) {
+            errprintf (errp, "flux.taskmap: %s", error.text);
+            goto error;
+        }
+        free (val);
+        if (!(val = taskmap_encode (map, 0))) {
+            errprintf (errp, "flux.taskmap: %s", strerror (errno));
+            goto error;
+        }
+    }
+    else if ((val = lookup (boot->upmi, "PMI_process_mapping"))) {
+        if (!(map = taskmap_decode (val, &error))) {
+            errprintf (errp, "PMI_process_mapping: %s", error.text);
+            goto error;
+        }
+        free (val);
+        if (!(val = taskmap_encode (map, 0))) {
+            errprintf (errp, "PMI_process_mapping: %s", strerror (errno));
+            goto error;
+        }
+    }
+    (void)attr_delete (boot->ctx->attrs, "broker.mapping", true);
+    if (setattr (boot->ctx->attrs, "broker.mapping", val, errp) < 0)
+        goto error;
+    taskmap_destroy (map);
+    free (val);
+    return 0;
+error:
+    taskmap_destroy (map);
+    ERRNO_SAFE_WRAP (free, val);
+    return -1;
+}
+
 
 /* Initialize some broker attributes using information obtained during
  * bootstrap, such as pre-put values from the PMI KVS.
@@ -126,6 +182,9 @@ static int bootstrap_setattrs_early (struct bootstrap *boot,
                 return -1;
         }
     }
+
+    if (setattr_broker_mapping (boot, errp) < 0)
+        return -1;
 
     return 0;
 }
