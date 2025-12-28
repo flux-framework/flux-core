@@ -40,6 +40,7 @@ extern struct module_builtin builtin_config;
 extern struct module_builtin builtin_connector_local;
 extern struct module_builtin builtin_groups;
 extern struct module_builtin builtin_rexec;
+extern struct module_builtin builtin_overlay;
 
 /* Builtin modules are loaded in this order and
  * unloaded in the reverse order.
@@ -49,6 +50,7 @@ static struct module_builtin *builtins[] = {
     &builtin_connector_local,
     &builtin_groups,
     &builtin_rexec,
+    &builtin_overlay,
 };
 
 static json_t *modhash_get_modlist (modhash_t *mh,
