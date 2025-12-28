@@ -30,7 +30,9 @@ struct bootstrap *bootstrap_create (struct broker *ctx,
                                     flux_error_t *errp);
 void bootstrap_destroy (struct bootstrap *boot);
 
-int bootstrap_finalize (struct bootstrap *boot, flux_error_t *errp);
+int bootstrap_finalize (struct bootstrap *boot,
+                        const char *default_critical_ranks,
+                        flux_error_t *errp);
 
 const char *bootstrap_method (struct bootstrap *boot);
 

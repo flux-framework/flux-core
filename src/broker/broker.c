@@ -121,14 +121,6 @@ static int init_local_uri_attr (attr_t *attrs,
                                 uint32_t rank,
                                 flux_error_t *error);
 
-static int init_critical_ranks_attr (attr_t *attrs,
-                                     uint32_t size,
-                                     struct overlay *ov,
-                                     flux_error_t *error);
-
-static int execute_parental_notifications (struct broker *ctx,
-                                           flux_error_t *error);
-
 static int init_broker_uuid (struct broker *ctx);
 
 static struct optparse_option opts[] = {
@@ -498,11 +490,7 @@ int main (int argc, char *argv[])
     set_proctitle (ctx.info.rank);
 
     // N.B. local-uri is used by runat
-    if (init_local_uri_attr (ctx.attrs, ctx.info.rank, &error) < 0
-        || init_critical_ranks_attr (ctx.attrs,
-                                     ctx.info.size,
-                                     ctx.overlay,
-                                     &error) < 0) {
+    if (init_local_uri_attr (ctx.attrs, ctx.info.rank, &error) < 0) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
@@ -549,12 +537,6 @@ int main (int argc, char *argv[])
                   LOG_CRIT,
                   "error creating shutdown mechanism: %s",
                   strerror (errno));
-        goto cleanup;
-    }
-
-    if (ctx.info.rank == 0
-        && execute_parental_notifications (&ctx, &error) < 0) {
-        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
 
@@ -1019,225 +1001,6 @@ static int init_local_uri_attr (attr_t *attrs,
         }
     }
     return 0;
-}
-
-static int init_critical_ranks_attr (attr_t *attrs,
-                                     uint32_t size,
-                                     struct overlay *ov,
-                                     flux_error_t *errp)
-{
-    int rc = -1;
-    const char *val;
-    char *ranks = NULL;
-    struct idset *critical_ranks = NULL;
-
-    if (attr_get (attrs, "broker.critical-ranks", &val, NULL) < 0) {
-        if (!(critical_ranks = overlay_get_default_critical_ranks (ov))
-            || !(ranks = idset_encode (critical_ranks, IDSET_FLAG_RANGE))) {
-            errprintf (errp, "unable to calculate critical-ranks attribute");
-            goto out;
-        }
-        if (attr_add (attrs,
-                      "broker.critical-ranks",
-                      ranks,
-                      ATTR_IMMUTABLE) < 0) {
-            errprintf (errp, "attr_add critical_ranks: %s", strerror (errno));
-            goto out;
-        }
-    }
-    else {
-        if (!(critical_ranks = idset_decode (val))
-            || idset_last (critical_ranks) >= size) {
-            errprintf (errp,
-                       "invalid value for broker.critical-ranks='%s'",
-                       val);
-            goto out;
-        }
-        /*  Need to set immutable flag when attr set on command line
-         */
-        if (attr_set_flags (attrs,
-                            "broker.critical-ranks",
-                            ATTR_IMMUTABLE) < 0) {
-            errprintf (errp,
-                       "failed to make broker.critical-ranks"
-                       " attr immutable: %s",
-                       strerror (errno));
-            goto out;
-        }
-    }
-    rc = 0;
-out:
-    idset_destroy (critical_ranks);
-    free (ranks);
-    return rc;
-}
-
-static flux_future_t *set_uri_job_memo (flux_t *h,
-                                        const char *hostname,
-                                        flux_jobid_t id,
-                                        attr_t *attrs,
-                                        flux_error_t *errp)
-{
-    const char *local_uri = NULL;
-    const char *path;
-    char uri [1024];
-    flux_future_t *f;
-
-    if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
-        errprintf (errp, "Unexpectedly unable to fetch local-uri attribute");
-        return NULL;
-    }
-    path = local_uri + 8; /* forward past "local://" */
-    if (snprintf (uri,
-                 sizeof (uri),
-                 "ssh://%s%s",
-                 hostname, path) >= sizeof (uri)) {
-        errprintf (errp, "buffer overflow while checking local-uri");
-        return NULL;
-    }
-    if (!(f = flux_rpc_pack (h,
-                             "job-manager.memo",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:I s:{s:s}}",
-                             "id", id,
-                             "memo",
-                             "uri", uri))) {
-        errprintf (errp,
-                   "error sending job-manager.memo request: %s",
-                   strerror (errno));
-        return NULL;
-    }
-    return f;
-}
-
-/*  Encode idset of critical nodes/shell ranks, which is calculated
- *   from broker.mapping and broker.critical-ranks.
- */
-static char *encode_critical_nodes (attr_t *attrs)
-{
-    struct idset *ranks = NULL;
-    struct idset *nodeids = NULL;
-    struct taskmap *map = NULL;
-    char *s = NULL;
-    int nodeid;
-    const char *mapping;
-    const char *ranks_attr;
-    unsigned int i;
-
-
-    if (attr_get (attrs, "broker.mapping", &mapping, NULL) < 0
-        || mapping == NULL
-        || !(map = taskmap_decode (mapping, NULL))
-        || attr_get (attrs, "broker.critical-ranks", &ranks_attr, NULL) < 0
-        || !(ranks = idset_decode (ranks_attr))
-        || !(nodeids = idset_create (0, IDSET_FLAG_AUTOGROW)))
-        goto done;
-
-    /*  Map the broker ranks from the broker.critical-ranks attr to
-     *  shell ranks/nodeids using PMI_process_mapping (this handles the
-     *  rare case where multiple brokers per node/shell were launched)
-     */
-    i = idset_first (ranks);
-    while (i != IDSET_INVALID_ID) {
-        if ((nodeid = taskmap_nodeid (map, i)) < 0
-            || idset_set (nodeids, nodeid) < 0)
-            goto done;
-        i = idset_next (ranks, i);
-    }
-    s = idset_encode (nodeids, IDSET_FLAG_RANGE);
-done:
-    taskmap_destroy (map);
-    idset_destroy (ranks);
-    idset_destroy (nodeids);
-    return s;
-}
-
-static flux_future_t *set_critical_ranks (flux_t *h,
-                                          flux_jobid_t id,
-                                          attr_t *attrs)
-{
-    int saved_errno;
-    flux_future_t *f;
-    char *nodeids;
-
-    if (!(nodeids = encode_critical_nodes (attrs)))
-        return NULL;
-    f = flux_rpc_pack (h,
-                       "job-exec.critical-ranks",
-                       FLUX_NODEID_ANY, 0,
-                       "{s:I s:s}",
-                       "id", id,
-                       "ranks", nodeids);
-    saved_errno = errno;
-    free (nodeids);
-    errno = saved_errno;
-    return f;
-}
-
-static int execute_parental_notifications (struct broker *ctx,
-                                           flux_error_t *errp)
-{
-    const char *jobid = NULL;
-    const char *parent_uri = NULL;
-    flux_jobid_t id;
-    flux_t *h = NULL;
-    flux_future_t *f = NULL;
-    flux_future_t *f2 = NULL;
-    int rc = -1;
-
-    /* Skip if "jobid" or "parent-uri" not set, this is probably
-     *  not a child of any Flux instance.
-     */
-    if (attr_get (ctx->attrs, "parent-uri", &parent_uri, NULL) < 0
-        || parent_uri == NULL
-        || attr_get (ctx->attrs, "jobid", &jobid, NULL) < 0
-        || jobid == NULL)
-        return 0;
-
-    if (flux_job_id_parse (jobid, &id) < 0)
-        return errprintf (errp, "Unable to parse jobid attribute '%s'", jobid);
-
-    /*  Open connection to parent instance:
-     */
-    if (!(h = flux_open (parent_uri, 0))) {
-        return errprintf (errp,
-                          "flux_open to parent failed %s",
-                          strerror (errno));
-    }
-
-    /*  Perform any RPCs to parent in parallel */
-    if (!(f = set_uri_job_memo (h, ctx->hostname, id, ctx->attrs, errp)))
-        goto out;
-
-    /*  Note: not an error if rpc to set critical ranks fails, but
-     *  issue an error notifying user that no critical ranks are set.
-     */
-    if (!(f2 = set_critical_ranks (h, id, ctx->attrs))) {
-        flux_log (ctx->h,
-                  LOG_ERR,
-                  "Unable to get critical ranks, all ranks will be critical");
-    }
-
-    /*  Wait for RPC results */
-    if (flux_future_get (f, NULL) < 0) {
-        errprintf (errp,
-                   "job-manager.memo uri: %s",
-                   future_strerror (f, errno));
-        goto out;
-    }
-    if (f2 && flux_future_get (f2, NULL) < 0 && errno != ENOSYS) {
-        errprintf (errp,
-                   "job-exec.critical-ranks: %s",
-                   future_strerror (f2, errno));
-        goto out;
-    }
-    rc = 0;
-out:
-    flux_close (h);
-    flux_future_destroy (f);
-    flux_future_destroy (f2);
-    return rc;
 }
 
 static bool nodeset_member (const char *s, uint32_t rank)

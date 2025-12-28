@@ -321,7 +321,7 @@ static void kickoff_continuation (flux_future_t *f, void *arg)
                   future_strerror (f, errno));
         goto error;
     }
-    if (bootstrap_finalize (s->ctx->boot, &error) < 0) {
+    if (bootstrap_finalize (s->ctx->boot, NULL, &error) < 0) {
         flux_log (s->ctx->h,
                   LOG_ERR,
                   "error finalizing bootstrap: %s",
