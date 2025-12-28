@@ -2798,8 +2798,21 @@ struct overlay *overlay_create (flux_t *h,
         goto error;
     }
     if (boot) {
-        if (bootstrap_finalize (boot, errp) < 0)
+        struct idset *ids = overlay_get_default_critical_ranks (ov);
+        char *crit;
+        if (!ids || !(crit = idset_encode (ids, IDSET_FLAG_RANGE))) {
+            errprintf (errp,
+                       "error calculating default critical ranks: %s",
+                       strerror (errno));
+            idset_destroy (ids);
             goto error_hasmsg;
+        }
+        idset_destroy (ids);
+        if (bootstrap_finalize (boot, crit, errp) < 0) {
+            free (crit);
+            goto error_hasmsg;
+        }
+        free (crit);
     }
     return ov;
 error:

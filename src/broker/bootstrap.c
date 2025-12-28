@@ -246,7 +246,214 @@ error:
     return -1;
 }
 
-int bootstrap_finalize (struct bootstrap *boot, flux_error_t *errp)
+static int setattr_broker_critical_ranks (struct bootstrap *boot,
+                                          const char *default_value,
+                                          flux_error_t *errp)
+{
+    const char *crit;
+    char *val = NULL;
+    int rc;
+
+    if ((crit = getattr (boot->ctx->attrs, "broker.critical-ranks"))) {
+        struct idset *ids = idset_decode (crit);
+        unsigned int last = idset_last (ids);
+        idset_destroy (ids);
+        if (last == IDSET_INVALID_ID || last >= boot->ctx->info.size) {
+            errprintf (errp,
+                       "invalid value for broker.critical-ranks='%s'",
+                       crit);
+            return -1;
+        }
+    }
+    else {
+        if (default_value)
+            crit = default_value;
+        else {
+            if (asprintf (&val, "0-%d", boot->ctx->info.size - 1) < 0) {
+                errprintf (errp,
+                           "building broker.critical-ranks: %s",
+                           strerror (errno));
+                return -1;
+            }
+            crit = val;
+        }
+    }
+    rc = setattr (boot->ctx->attrs, "broker.critical-ranks", crit, errp);
+    free (val);
+    return rc;
+}
+
+/*  Encode idset of critical nodes/shell ranks, which is calculated
+ *   from broker.mapping and broker.critical-ranks.
+ */
+static char *encode_critical_nodes (attr_t *attrs)
+{
+    struct idset *ranks = NULL;
+    struct idset *nodeids = NULL;
+    struct taskmap *map = NULL;
+    char *s = NULL;
+    int nodeid;
+    const char *mapping;
+    const char *ranks_attr;
+    unsigned int i;
+
+    if (!(mapping = getattr (attrs, "broker.mapping"))
+        || !(map = taskmap_decode (mapping, NULL))
+        || !(ranks_attr = getattr (attrs, "broker.critical-ranks"))
+        || !(ranks = idset_decode (ranks_attr))
+        || !(nodeids = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        goto done;
+
+    /*  Map the broker ranks from the broker.critical-ranks attr to
+     *  shell ranks/nodeids using PMI_process_mapping (this handles the
+     *  rare case where multiple brokers per node/shell were launched)
+     */
+    i = idset_first (ranks);
+    while (i != IDSET_INVALID_ID) {
+        if ((nodeid = taskmap_nodeid (map, i)) < 0
+            || idset_set (nodeids, nodeid) < 0)
+            goto done;
+        i = idset_next (ranks, i);
+    }
+    s = idset_encode (nodeids, IDSET_FLAG_RANGE);
+done:
+    taskmap_destroy (map);
+    idset_destroy (ranks);
+    idset_destroy (nodeids);
+    return s;
+}
+
+static flux_future_t *set_critical_ranks (flux_t *h,
+                                          flux_jobid_t id,
+                                          attr_t *attrs)
+{
+    int saved_errno;
+    flux_future_t *f;
+    char *nodeids;
+
+    if (!(nodeids = encode_critical_nodes (attrs)))
+        return NULL;
+    f = flux_rpc_pack (h,
+                       "job-exec.critical-ranks",
+                       FLUX_NODEID_ANY, 0,
+                       "{s:I s:s}",
+                       "id", id,
+                       "ranks", nodeids);
+    saved_errno = errno;
+    free (nodeids);
+    errno = saved_errno;
+    return f;
+}
+
+static flux_future_t *set_uri_job_memo (flux_t *h,
+                                        const char *hostname,
+                                        flux_jobid_t id,
+                                        attr_t *attrs,
+                                        flux_error_t *errp)
+{
+    const char *local_uri = NULL;
+    const char *path;
+    char uri [1024];
+    flux_future_t *f;
+
+    if (!(local_uri = getattr (attrs, "local-uri"))) {
+        errprintf (errp, "Unexpectedly unable to fetch local-uri attribute");
+        return NULL;
+    }
+    path = local_uri + 8; /* forward past "local://" */
+    if (snprintf (uri,
+                 sizeof (uri),
+                 "ssh://%s%s",
+                 hostname, path) >= sizeof (uri)) {
+        errprintf (errp, "buffer overflow while checking local-uri");
+        return NULL;
+    }
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.memo",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:I s:{s:s}}",
+                             "id", id,
+                             "memo",
+                             "uri", uri))) {
+        errprintf (errp,
+                   "error sending job-manager.memo request: %s",
+                   strerror (errno));
+        return NULL;
+    }
+    return f;
+}
+
+static int execute_parental_notifications (struct bootstrap *boot,
+                                           flux_error_t *errp)
+{
+    const char *jobid = NULL;
+    const char *parent_uri = NULL;
+    flux_jobid_t id;
+    flux_t *h = NULL;
+    flux_future_t *f = NULL;
+    flux_future_t *f2 = NULL;
+    int rc = -1;
+
+    /*  This is rank 0 of an instance started by Flux.
+     */
+    if (!(parent_uri = getattr (boot->ctx->attrs, "parent-uri")))
+        return errprintf (errp, "getattr parent-uri failed");
+    if (!(jobid = getattr (boot->ctx->attrs, "jobid")))
+        return errprintf (errp, "getattr jobid failed");
+
+    if (flux_job_id_parse (jobid, &id) < 0)
+        return errprintf (errp, "Unable to parse jobid attribute '%s'", jobid);
+
+    /*  Open connection to parent instance:
+     */
+    if (!(h = flux_open (parent_uri, 0))) {
+        return errprintf (errp,
+                          "flux_open to parent failed %s",
+                          strerror (errno));
+    }
+
+    /*  Perform any RPCs to parent in parallel */
+    if (!(f = set_uri_job_memo (h,
+                                boot->ctx->hostname,
+                                id,
+                                boot->ctx->attrs,
+                                errp)))
+        goto out;
+
+    /*  Note: not an error if rpc to set critical ranks fails, but
+     *  issue an error notifying user that no critical ranks are set.
+     */
+    if (!(f2 = set_critical_ranks (h, id, boot->ctx->attrs))) {
+        flux_log (boot->ctx->h,
+                  LOG_ERR,
+                  "Unable to get critical ranks, all ranks will be critical");
+    }
+
+    /*  Wait for RPC results */
+    if (flux_future_get (f, NULL) < 0) {
+        errprintf (errp,
+                   "job-manager.memo uri: %s",
+                   future_strerror (f, errno));
+        goto out;
+    }
+    if (f2 && flux_future_get (f2, NULL) < 0 && errno != ENOSYS) {
+        errprintf (errp,
+                   "job-exec.critical-ranks: %s",
+                   future_strerror (f2, errno));
+        goto out;
+    }
+    rc = 0;
+out:
+    flux_close (h);
+    flux_future_destroy (f);
+    flux_future_destroy (f2);
+    return rc;
+}
+
+int bootstrap_finalize (struct bootstrap *boot,
+                        const char *default_critical_ranks,
+                        flux_error_t *errp)
 {
     flux_error_t error;
 
@@ -254,6 +461,12 @@ int bootstrap_finalize (struct bootstrap *boot, flux_error_t *errp)
         return 0;
     if (setattr_hostlist (boot, errp) < 0)
         return -1;
+    if (setattr_broker_critical_ranks (boot, default_critical_ranks, errp) < 0)
+        return -1;
+    if (boot->under_flux && boot->ctx->info.rank == 0) {
+        if (execute_parental_notifications (boot, errp) < 0)
+            return -1;
+    }
     if (attr_cache_immutables (boot->ctx->attrs, boot->ctx->h) < 0) {
         errprintf (errp, "error caching immutables");
         return -1;
