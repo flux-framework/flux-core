@@ -35,8 +35,6 @@ libbroker_la_SOURCES = \
 	modservice.h \
 	method.c \
 	method.h \
-	overlay.h \
-	overlay.c \
 	service.h \
 	service.c \
 	attr.h \
@@ -51,14 +49,8 @@ libbroker_la_SOURCES = \
 	heaptrace.c \
 	bootstrap.h \
 	bootstrap.c \
-	boot_config.h \
-	boot_config.c \
-	boot_pmi.h \
-	boot_pmi.c \
 	shutdown.h \
 	shutdown.c \
-	topology.h \
-	topology.c \
 	trace.h \
 	trace.c \
 	rundir.h \
@@ -72,8 +64,8 @@ flux_broker_LDADD = \
 	$(top_builddir)/src/modules/libmodule_builtins.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \
-	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libpmi/libupmi.la \
 	$(top_builddir)/src/common/libpmi/libpmi_client.la \
 	$(top_builddir)/src/common/libpmi/libpmi_common.la \
@@ -102,9 +94,7 @@ flux_module_exec_LDFLAGS =
 
 TESTS = test_attr.t \
 	test_service.t \
-	test_runat.t \
-	test_overlay.t \
-	test_topology.t
+	test_runat.t
 
 test_ldadd = \
 	$(builddir)/libbroker.la \
@@ -150,15 +140,5 @@ test_runat_t_SOURCES = test/runat.c
 test_runat_t_CPPFLAGS = $(test_cppflags)
 test_runat_t_LDADD = $(test_ldadd)
 test_runat_t_LDFLAGS = $(test_ldflags)
-
-test_overlay_t_SOURCES = test/overlay.c
-test_overlay_t_CPPFLAGS = $(test_cppflags)
-test_overlay_t_LDADD = $(test_ldadd)
-test_overlay_t_LDFLAGS = $(test_ldflags)
-
-test_topology_t_SOURCES = test/topology.c
-test_topology_t_CPPFLAGS = $(test_cppflags)
-test_topology_t_LDADD = $(test_ldadd)
-test_topology_t_LDFLAGS = $(test_ldflags)
 
 EXTRA_DIST = README.md

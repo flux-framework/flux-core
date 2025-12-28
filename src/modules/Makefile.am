@@ -20,6 +20,7 @@ SUBDIRS = \
 	job-manager \
 	job-list \
 	job-exec \
+	overlay \
 	resource \
 	sdbus
 
@@ -30,7 +31,8 @@ libmodule_builtins_la_SOURCES = \
 	connector-local/local.c \
 	groups/groups.c \
 	rexec/rexec.c
-libmodule_builtins_la_LIBADD =
+libmodule_builtins_la_LIBADD = \
+	$(builddir)/overlay/liboverlay.la
 libmodule_builtins_la_LDFLAGS = $(san_ld_zdef_flag)
 
 fluxmod_LTLIBRARIES = \

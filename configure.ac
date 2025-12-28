@@ -638,6 +638,7 @@ AC_CONFIG_FILES( \
   src/modules/job-manager/Makefile \
   src/modules/job-list/Makefile \
   src/modules/job-exec/Makefile \
+  src/modules/overlay/Makefile \
   src/modules/resource/Makefile \
   src/modules/sdbus/Makefile \
   src/test/Makefile \

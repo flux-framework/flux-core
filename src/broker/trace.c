@@ -13,7 +13,7 @@
 #endif
 #include <jansson.h>
 
-#include "overlay.h"
+#include "src/modules/overlay/overlay.h"
 #include "trace.h"
 
 #include "ccan/str/str.h"

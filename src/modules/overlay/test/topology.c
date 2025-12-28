@@ -19,7 +19,7 @@
 #include "ccan/array_size/array_size.h"
 #include "ccan/ptrint/ptrint.h"
 
-#include "src/broker/topology.h"
+#include "topology.h"
 
 void check_subtree (json_t *o,
                     const char *s,
