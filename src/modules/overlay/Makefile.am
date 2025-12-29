@@ -33,17 +33,20 @@ liboverlay_la_SOURCES = \
 	overlay.c
 
 TESTS = \
-	test_topology.t
-
-#	test_overlay.t
+	test_topology.t \
+	test_overlay.t
 
 test_ldadd = \
 	$(builddir)/liboverlay.la \
+	$(top_builddir)/src/broker/trace.lo \
+	$(top_builddir)/src/common/libpmi/libupmi.la \
+	$(top_builddir)/src/common/libtestutil/libtestutil.la \
 	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
+	$(ZMQ_LIBS) \
 	$(JANSSON_LIBS) \
         $(LIBPTHREAD)
 
@@ -61,10 +64,10 @@ TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
 
-#test_overlay_t_SOURCES = test/overlay.c
-#test_overlay_t_CPPFLAGS = $(test_cppflags)
-#test_overlay_t_LDADD = $(test_ldadd)
-#test_overlay_t_LDFLAGS = $(test_ldflags)
+test_overlay_t_SOURCES = test/overlay.c
+test_overlay_t_CPPFLAGS = $(test_cppflags)
+test_overlay_t_LDADD = $(test_ldadd)
+test_overlay_t_LDFLAGS = $(test_ldflags)
 
 test_topology_t_SOURCES = test/topology.c
 test_topology_t_CPPFLAGS = $(test_cppflags)

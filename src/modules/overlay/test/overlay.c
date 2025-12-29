@@ -29,12 +29,11 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/stdlog.h"
 #include "src/common/libutil/unlink_recursive.h"
-#include "src/common/libpmi/upmi.h"
 #include "ccan/str/str.h"
+#include "ccan/ptrint/ptrint.h"
 
-#include "src/broker/overlay.h"
-#include "src/broker/attr.h"
-#include "src/broker/topology.h"
+#include "overlay.h"
+#include "topology.h"
 
 #include "src/common/libtestutil/test_file.h"
 
@@ -43,9 +42,9 @@ void *zctx;
 
 struct context {
     struct overlay *ov;
-    struct upmi_info info;
+    uint32_t rank;
+    uint32_t size;
     flux_t *h;
-    attr_t *attrs;
     char name[32];
     char uri[64];
     flux_t *h_channel;
@@ -80,13 +79,13 @@ void check_attr (struct context *ctx, const char *k, const char *v)
 {
     const char *val;
 
-    ok (attr_get (ctx->attrs, k, &val, NULL)  == 0
+    ok ((val = flux_attr_get (ctx->h, k)) != NULL
         && ((v == NULL && val == NULL)
             || (v != NULL && val != NULL && streq (v, val))),
         "%s: %s=%s", ctx->name, k, v ? v : "NULL");
 }
 
-static char *init_broker_uuid (flux_t *h, attr_t *attrs)
+static char *init_broker_uuid (flux_t *h)
 {
     uuid_t uuid;
     char *uuid_str;
@@ -95,7 +94,7 @@ static char *init_broker_uuid (flux_t *h, attr_t *attrs)
         return NULL;
     uuid_generate (uuid);
     uuid_unparse (uuid, uuid_str);
-    if (attr_add (attrs, "broker.uuid", uuid_str, ATTR_IMMUTABLE) < 0) {
+    if (flux_attr_set_cacheonly (h, "broker.uuid", uuid_str) < 0) {
         free (uuid_str);
         return NULL;
     }
@@ -106,7 +105,6 @@ void ctx_destroy (struct context *ctx)
 {
     flux_watcher_destroy (ctx->w_channel);
     flux_close (ctx->h_channel);
-    attr_destroy (ctx->attrs);
     overlay_destroy (ctx->ov);
     flux_msg_decref (ctx->msg);
     topology_decref (ctx->topo);
@@ -126,24 +124,21 @@ struct context *ctx_create (flux_t *h,
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         BAIL_OUT ("calloc failed");
-    if (!(ctx->attrs = attr_create ()))
-        BAIL_OUT ("attr_create failed");
-    if (!(ctx->uuid = init_broker_uuid (h, ctx->attrs)))
+    if (!(ctx->uuid = init_broker_uuid (h)))
         BAIL_OUT ("error creating broker.uuid");
     if (!(ctx->topo = topology_create (topo_uri, size, NULL, &error)))
         BAIL_OUT ("cannot create '%s' topology: %s", topo_uri, error.text);
     if (topology_set_rank (ctx->topo, rank) < 0)
         BAIL_OUT ("cannot set topology rank");
     ctx->h = h;
-    ctx->info.rank = rank;
-    ctx->info.size = size;
     snprintf (ctx->name, sizeof (ctx->name), "test%d", rank);
     snprintf (ctx->uri, sizeof (ctx->uri), "interthread://test%d", rank);
     if (!(ctx->ov = overlay_create (h,
-                                    NULL,
-                                    &ctx->info,
+                                    rank,
+                                    size,
                                     ctx->name,
-                                    ctx->attrs,
+                                    ctx->uuid,
+                                    NULL,
                                     zctx,
                                     ctx->uri,
                                     &error)))
@@ -163,7 +158,7 @@ struct context *ctx_create (flux_t *h,
             BAIL_OUT ("could not create handle watcher");
     }
     diag ("created %s: rank %d size %d uuid %s",
-          ctx->name, ctx->info.rank, ctx->info.size, ctx->uuid);
+          ctx->name, rank, size, ctx->uuid);
 
     return ctx;
 }
@@ -607,42 +602,20 @@ void test_destroy (int size, struct context *ctx[])
  */
 void wrongness (flux_t *h)
 {
-    struct upmi_info info;
+    uint32_t rank = 0;
+    uint32_t size = 1;
     struct overlay *ov;
-    attr_t *attrs;
     flux_error_t error;
     char *uuid;
-
-    info.size = 1;
-    info.rank = 0;
-
-    if (!(attrs = attr_create ()))
-        BAIL_OUT ("attr_create failed");
-
-    err_init (&error);
-    errno = 0;
-    ok (overlay_create (h,
-                        NULL,
-                        &info,
-                        "test0",
-                        attrs,
-                        zctx,
-                        "interthread://x",
-                        &error) == NULL
-        && errno == ENOENT,
-        "overlay_create w/o broker.uuid fails with ENOENT");
-    diag ("%s", error.text);
-
-    if (!init_broker_uuid (h, attrs))
-        BAIL_OUT ("error initializing uuid");
 
     err_init (&error);
     errno = 0;
     ok (overlay_create (NULL,
-                        NULL,
-                        &info,
+                        rank,
+                        size,
                         "test0",
-                        attrs,
+                        "myuuid",
+                        NULL,
                         zctx,
                         "interthread://x",
                         &error) == NULL
@@ -650,31 +623,15 @@ void wrongness (flux_t *h)
         "overlay_create h=NULL fails with EINVAL");
     diag ("%s", error.text);
 
-    err_init (&error);
-    errno = 0;
-    ok (overlay_create (h,
-                        NULL,
-                        &info,
-                        "test0",
-                        NULL,
-                        zctx,
-                        "interthread://x",
-                        &error) == NULL
-        && errno == EINVAL,
-        "overlay_create attrs=NULL fails with EINVAL");
-    diag ("%s", error.text);
-    attr_destroy (attrs);
-
-    if (!(attrs = attr_create ()))
-        BAIL_OUT ("attr_create failed");
-    if (!(uuid = init_broker_uuid (h, attrs)))
+    if (!(uuid = init_broker_uuid (h)))
         BAIL_OUT ("error creating broker.uuid");
     free (uuid);
     if (!(ov = overlay_create (h,
-                               NULL,
-                               &info,
+                               rank,
+                               size,
                                "test0",
-                               attrs,
+                               "myuuid",
+                               NULL,
                                zctx,
                                "interthread://x",
                                &error)))
@@ -684,7 +641,6 @@ void wrongness (flux_t *h)
         "flux_msg_is_local (NULL) returns false");
 
     overlay_destroy (ov);
-    attr_destroy (attrs);
 }
 
 void diag_logger (const char *buf, int len, void *arg)
@@ -722,6 +678,8 @@ int main (int argc, char *argv[])
         BAIL_OUT ("zlist_new failed");
     if (!(h = flux_open ("loop://", 0)))
         BAIL_OUT ("could not create loop handle");
+    if (flux_opt_set (h, "flux::attr_redirect", NULL, 0) < 0)
+        BAIL_OUT ("flux_opt_set flux::attr_redirect: %s", strerror (errno));
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
         BAIL_OUT ("flux_attr_set_cacheonly rank failed");
     if (flux_attr_set_cacheonly (h, "hostlist", "test[0-7]") < 0)
