@@ -22,7 +22,9 @@ liboverlay_la_SOURCES = \
 	topology.h \
 	topology.c \
 	compat.h \
-	compat.c
+	compat.c \
+	boot_util.h \
+	boot_util.c
 
 # overlay.h overlay.c
 # boot_pmi.h boot_pmi.c
