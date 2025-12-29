@@ -1483,6 +1483,7 @@ static struct internal_service services[] = {
     { "event",              NULL },
     { "service",            NULL },
     { "module",             NULL },
+    { "bootstrap",          NULL },
     { "runat",              NULL },
     { "state-machine",      NULL },
     { "shutdown",           NULL },

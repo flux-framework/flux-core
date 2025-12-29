@@ -27,6 +27,7 @@ struct bootstrap {
     struct broker *ctx;
     struct upmi *upmi;
     struct bizcache *cache;
+    flux_msg_handler_t **handlers;
     bool under_flux;
     bool finalized;
 };
@@ -491,10 +492,197 @@ int bootstrap_finalize (struct bootstrap *boot,
     return 0;
 }
 
+/* Overlay calls bootstrap.iam to publish this broker's business card.
+ */
+static void bootstrap_iam_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
+{
+    struct bootstrap *boot = arg;
+    json_t *bizcard;
+    struct bizcard *bc = NULL;
+    flux_error_t error;
+    const char *errmsg = NULL;
+
+    if (flux_request_unpack (msg, NULL, "{s:o}", "bizcard", &bizcard) < 0)
+        goto error;
+    if (!(bc = bizcard_fromjson (bizcard))) {
+        errprintf (&error, "bizcard decode error: %s", strerror (errno));
+        errmsg = error.text;
+        goto error;
+    }
+    if (bizcache_put (boot->cache, boot->ctx->info.rank, bc, &error) < 0) {
+        errmsg = error.text;
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to bootstrap.iam request");
+    bizcard_decref (bc);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to bootstrap.iam request");
+    bizcard_decref (bc);
+}
+
+/* Overlay calls bootstrap.barrier after putting its own business card.
+ * It may then start fetching peer business cards.
+ */
+static void bootstrap_barrier_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
+{
+    struct bootstrap *boot = arg;
+    flux_error_t e;
+    flux_error_t error;
+    const char *errmsg = NULL;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (upmi_barrier (boot->upmi, &e) < 0) {
+        errprintf (&error,
+                   "%s: barrier: %s",
+                   upmi_describe (boot->upmi),
+                   e.text);
+        errmsg = error.text;
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to bootstrap.barrier request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to bootstrap.barrier request");
+}
+
+/* Overlay calls bootstrap.whois to fetch the business cards of its
+ * direct peers, by rank.  The business cards are streamed, one per
+ * response.  This may be called multiple times.
+ */
+static void bootstrap_whois_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    struct bootstrap *boot = arg;
+    json_t *ranks;
+    struct idset *ids = NULL;
+    unsigned long rank;
+    flux_error_t error;
+    flux_error_t e;
+    const char *errmsg = NULL;
+    const struct bizcard *bc;
+
+    if (flux_request_unpack (msg, NULL, "{s:o}", "ranks", &ranks) < 0)
+        goto error;
+    if (json_is_integer (ranks)) {
+        if (!(ids = idset_create (0, IDSET_FLAG_AUTOGROW))
+            || idset_set (ids, json_integer_value (ranks)) < 0)
+            goto error;
+    }
+    else if (json_is_string (ranks)) {
+        if (!(ids = idset_decode (json_string_value (ranks))))
+            goto error;
+    }
+    else
+        goto error_proto;
+    if (idset_count (ids) > 1 && !flux_msg_is_streaming (msg))
+        goto error_proto;
+    rank = idset_first (ids);
+    while (rank != IDSET_INVALID_ID) {
+        if (bizcache_get (boot->cache, rank, &bc, &e) < 0) {
+            errprintf (&error,
+                       "error fetching bizcard for rank %lu: %s",
+                       rank,
+                       e.text);
+            errmsg = error.text;
+            goto error;
+        }
+        if (flux_respond_pack (h,
+                               msg,
+                               "{s:i s:O}",
+                               "rank", rank,
+                               "bizcard", bizcard_get_json (bc)) < 0)
+            flux_log_error (h, "error responding to bootstrap.whois request");
+        rank = idset_next (ids, rank);
+    }
+    if (flux_msg_is_streaming (msg)) {
+        if (flux_respond_error (h, msg, ENODATA, NULL) < 0)
+            flux_log_error (h, "error responding to bootstrap.whois request");
+    }
+    idset_destroy (ids);
+    return;
+error_proto:
+    errno = EPROTO;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to bootstrap.whois request");
+    idset_destroy (ids);
+}
+
+/* overlay calls bootstrap.finalize to end the bootstrap session.
+ * The overlay also specifies a topology-aware set of default critical ranks.
+ */
+static void bootstrap_finalize_cb (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
+{
+    struct bootstrap *boot = arg;
+    const char *crit = NULL;
+    flux_error_t error;
+    const char *errmsg = NULL;
+
+    if (flux_request_unpack (msg, NULL, "{s?s}", "crit", &crit) < 0)
+        goto error;
+    if (bootstrap_finalize (boot, crit, &error) < 0) {
+        errmsg = error.text;
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to bootstrap.finalize request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to bootstrap.finalize request");
+}
+
+
+static const struct flux_msg_handler_spec htab[] = {
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "bootstrap.iam",
+        bootstrap_iam_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "bootstrap.whois",
+        bootstrap_whois_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "bootstrap.barrier",
+        bootstrap_barrier_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "bootstrap.finalize",
+        bootstrap_finalize_cb,
+        0
+    },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
 void bootstrap_destroy (struct bootstrap *boot)
 {
     if (boot) {
         int saved_errno = errno;
+        flux_msg_handler_delvec (boot->handlers);
         bizcache_destroy (boot->cache);
         upmi_destroy (boot->upmi);
         free (boot);
@@ -569,6 +757,17 @@ struct bootstrap *bootstrap_create (struct broker *ctx,
                    strerror (errno));
         goto error;
     }
+    if (flux_msg_handler_addvec (boot->ctx->h,
+                                 htab,
+                                 boot,
+                                 &boot->handlers) < 0) {
+        errprintf (errp,
+                   "%s: error registering message handlers: %s",
+                   upmi_describe (boot->upmi),
+                   strerror (errno));
+        goto error;
+    }
+
     json_decref (upmi_args);
     return boot;
 error:
