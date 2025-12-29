@@ -24,11 +24,13 @@ liboverlay_la_SOURCES = \
 	compat.h \
 	compat.c \
 	boot_util.h \
-	boot_util.c
-
-# overlay.h overlay.c
-# boot_pmi.h boot_pmi.c
-# boot_config.h boot_config.c
+	boot_util.c \
+	boot_pmi.h \
+	boot_pmi.c \
+	boot_config.h \
+	boot_config.c \
+	overlay.h \
+	overlay.c
 
 TESTS = \
 	test_topology.t

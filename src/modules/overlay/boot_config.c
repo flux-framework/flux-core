@@ -30,10 +30,10 @@
 #include "src/common/libpmi/bizcache.h"
 #include "ccan/str/str.h"
 
-#include "attr.h"
+#include "compat.h"
 #include "overlay.h"
 #include "topology.h"
-#include "bootstrap.h"
+#include "boot_util.h"
 #include "boot_config.h"
 
 
@@ -89,12 +89,11 @@ done:
     free (cpy);
 }
 
-int boot_config (struct bootstrap *boot,
-                 struct upmi_info *info,
-                 flux_t *h,
+int boot_config (flux_t *h,
+                 uint32_t rank,
+                 uint32_t size,
                  const char *hostname,
                  struct overlay *overlay,
-                 attr_t *attrs,
                  flux_error_t *errp)
 {
     bool enable_ipv6 = false;
@@ -116,24 +115,21 @@ int boot_config (struct bootstrap *boot,
         return -1;
 
     // N.B. overlay_create() sets the tbon.topo attribute
-    if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
+    if (compat_attr_get (h, "tbon.topo", &topo_uri, NULL) < 0) {
         errprintf (errp,
                    "error fetching tbon.topo attribute: %s",
                    strerror (errno));
         goto error;
     }
     if (!(topo_args = json_pack ("{s:O}", "hosts", hosts))
-        || !(topo = topology_create (topo_uri,
-                                     info->size,
-                                     topo_args,
-                                     &error))) {
+        || !(topo = topology_create (topo_uri, size, topo_args, &error))) {
         errprintf (errp,
                    "Error creating %s topology: %s",
                    topo_uri,
                    error.text);
         goto error;
     }
-    if (topology_set_rank (topo, info->rank) < 0
+    if (topology_set_rank (topo, rank) < 0
         || overlay_set_topology (overlay, topo) < 0) {
         errprintf (errp,
                    "Error setting %s topology: %s",
@@ -162,12 +158,12 @@ int boot_config (struct bootstrap *boot,
      * downstream peers, set tbon.endpoint to NULL.
      */
     if (topology_get_child_ranks (topo, NULL, 0) > 0
-        && attr_get (attrs, "broker.recovery-mode", NULL, NULL) < 0) {
-        const struct bizcard *bc;
-        const char *bind_uri;
+        && compat_attr_get (h, "broker.recovery-mode", NULL, NULL) < 0) {
+        struct bizcard *bc;
         const char *my_uri;
+        const char *bind_uri;
 
-        if (!(bind_uri = getbindbyrank (hosts, info->rank, errp)))
+        if (!(bind_uri = getbindbyrank (hosts, rank, errp)))
             goto error;
         if (overlay_bind (overlay, bind_uri, NULL, errp) < 0)
             goto error;
@@ -177,28 +173,33 @@ int boot_config (struct bootstrap *boot,
             errprintf (errp, "overlay_authorize: %s", strerror (errno));
             goto error;
         }
-        if (bizcache_get (boot->cache, info->rank, &bc, errp) < 0
-            || !(my_uri = bizcard_uri_first (bc))) {
+
+        if (!(bc = boot_util_whois_rank (h, rank, errp)))
+            goto error;
+        if (!(my_uri = bizcard_uri_first (bc))) {
             errprintf (errp,
-                       "connect URI is undefined for rank %d", info->rank);
+                       "connect URI is undefined for rank %d", rank);
+            bizcard_decref (bc);
             goto error;
         }
-        if (attr_add (attrs,
-                      "tbon.endpoint",
-                      my_uri,
-                      ATTR_IMMUTABLE) < 0) {
+        if (compat_attr_add (h,
+                             "tbon.endpoint",
+                             my_uri,
+                             ATTR_IMMUTABLE) < 0) {
             errprintf (errp,
                        "setattr tbon.endpoint %s: %s",
                        my_uri,
                        strerror (errno));
+            bizcard_decref (bc);
             goto error;
         }
+        bizcard_decref (bc);
     }
     else {
-        if (attr_add (attrs,
-                      "tbon.endpoint",
-                      NULL,
-                      ATTR_IMMUTABLE) < 0) {
+        if (compat_attr_add (h,
+                             "tbon.endpoint",
+                             NULL,
+                             ATTR_IMMUTABLE) < 0) {
             errprintf (errp,
                        "setattr tbon.endpoint NULL: %s",
                        strerror (errno));
@@ -208,15 +209,17 @@ int boot_config (struct bootstrap *boot,
 
     /* If broker has an "upstream" peer, determine its URI and tell overlay.
      */
-    if (info->rank > 0) {
-        const struct bizcard *bc;
+    if (rank > 0) {
+        struct bizcard *bc;
         uint32_t parent_rank = topology_get_parent (topo);
         const char *parent_uri;
 
-        if (bizcache_get (boot->cache, parent_rank, &bc, errp) < 0
-            || !(parent_uri = bizcard_uri_first (bc))) {
+        if (!(bc = boot_util_whois_rank (h, parent_rank, errp)))
+            goto error;
+        if (!(parent_uri = bizcard_uri_first (bc))) {
             errprintf (errp,
-                       "connect URI is undefined for rank %d", info->rank);
+                       "connect URI is undefined for rank %u", parent_rank);
+            bizcard_decref (bc);
             goto error;
         }
         warn_of_invalid_host (h, parent_uri);
@@ -225,8 +228,10 @@ int boot_config (struct bootstrap *boot,
                        "overlay_set_parent_uri %s: %s",
                        parent_uri,
                        strerror (errno));
+            bizcard_decref (bc);
             goto error;
         }
+        bizcard_decref (bc);
         if (overlay_set_parent_pubkey (overlay,
                                        overlay_cert_pubkey (overlay)) < 0) {
             errprintf (errp,

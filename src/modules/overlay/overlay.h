@@ -17,9 +17,7 @@
 #include "src/common/libpmi/bizcard.h"
 #include "src/common/libpmi/upmi.h"
 
-#include "attr.h"
 #include "topology.h"
-#include "bootstrap.h"
 
 /* Overlay control messages
  */
@@ -36,10 +34,11 @@ struct overlay;
  * Note: If zctx is NULL, it is created/destroyed on demand internally.
  */
 struct overlay *overlay_create (flux_t *h,
-                                struct bootstrap *boot,
-                                struct upmi_info *info,
+                                uint32_t rank,
+                                uint32_t size,
                                 const char *hostname,
-                                attr_t *attrs,
+                                const char *uuid,
+                                const char *boot_method,
                                 void *zctx,
                                 const char *uri,
                                 flux_error_t *error);
