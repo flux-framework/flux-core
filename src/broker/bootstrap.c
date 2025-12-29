@@ -23,6 +23,14 @@
 #include "attr.h"
 #include "bootstrap.h"
 
+struct bootstrap {
+    struct broker *ctx;
+    struct upmi *upmi;
+    struct bizcache *cache;
+    bool under_flux;
+    bool finalized;
+};
+
 /* Ensure attribute 'key' is set with the immutable flag.
  * If unset, set it to 'default_value'.
  */
