@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef BROKER_BOOT_PMI_H
-#define BROKER_BOOT_PMI_H
+#ifndef _OVERLAY_BOOT_PMI_H
+#define _OVERLAY_BOOT_PMI_H
 
 /* boot_pmi - bootstrap broker/overlay with PMI */
 
@@ -26,7 +26,7 @@ int boot_pmi (struct bootstrap *boot,
               attr_t *attrs,
               flux_error_t *error);
 
-#endif /* BROKER_BOOT_PMI_H */
+#endif /* _OVERLAY_BOOT_PMI_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
