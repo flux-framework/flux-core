@@ -238,6 +238,8 @@ int main (int argc, char *argv[])
         strlcpy (ctx.hostname, hostname, sizeof (ctx.hostname));
     else if (gethostname (ctx.hostname, sizeof (ctx.hostname)) < 0)
         log_err_exit ("gethostname");
+    if (attr_add (ctx.attrs, "hostname", ctx.hostname, ATTR_IMMUTABLE) < 0)
+        log_err_exit ("setattr hostname");
 
     if (parse_command_line_arguments (&ctx, argc, argv, &error) < 0)
         log_msg_exit ("%s", error.text);
