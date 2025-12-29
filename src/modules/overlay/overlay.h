@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef BROKER_OVERLAY_H
-#define BROKER_OVERLAY_H
+#ifndef _OVERLAY_OVERLAY_H
+#define _OVERLAY_OVERLAY_H
 
 #include <jansson.h>
 #include <stdint.h>
@@ -103,7 +103,7 @@ int overlay_connect (struct overlay *ov);
 void overlay_test_set_rank (struct overlay *ov, uint32_t rank);
 void overlay_test_set_version (struct overlay *ov, int version);
 
-#endif /* !BROKER_OVERLAY_H */
+#endif /* !_OVERLAY_OVERLAY_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

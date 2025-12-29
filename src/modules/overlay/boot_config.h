@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef BROKER_BOOT_CONFIG_H
-#define BROKER_BOOT_CONFIG_H
+#ifndef _OVERLAY_BOOT_CONFIG_H
+#define _OVERLAY_BOOT_CONFIG_H
 
 /* boot_config - bootstrap broker/overlay from config file */
 
@@ -30,7 +30,7 @@ int boot_config (struct bootstrap *boot,
                  attr_t *attrs,
                  flux_error_t *error);
 
-#endif /* BROKER_BOOT_CONFIG_H */
+#endif /* _OVERLAY_BOOT_CONFIG_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
