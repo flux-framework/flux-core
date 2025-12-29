@@ -20,7 +20,9 @@ noinst_LTLIBRARIES = liboverlay.la
 liboverlay_la_SOURCES = \
 	main.c \
 	topology.h \
-	topology.c
+	topology.c \
+	compat.h \
+	compat.c
 
 # overlay.h overlay.c
 # boot_pmi.h boot_pmi.c
