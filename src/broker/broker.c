@@ -76,8 +76,7 @@
 #include "log.h"
 #include "runat.h"
 #include "heaptrace.h"
-#include "boot_config.h"
-#include "boot_pmi.h"
+#include "bootstrap.h"
 #include "state_machine.h"
 #include "shutdown.h"
 #include "rundir.h"
@@ -121,14 +120,6 @@ static int init_attrs_starttime (attr_t *attrs,
 static int init_local_uri_attr (attr_t *attrs,
                                 uint32_t rank,
                                 flux_error_t *error);
-
-static int init_critical_ranks_attr (attr_t *attrs,
-                                     uint32_t size,
-                                     struct overlay *ov,
-                                     flux_error_t *error);
-
-static int execute_parental_notifications (struct broker *ctx,
-                                           flux_error_t *error);
 
 static int init_broker_uuid (struct broker *ctx);
 
@@ -220,8 +211,6 @@ int main (int argc, char *argv[])
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
     flux_msg_handler_t **handlers = NULL;
-    const flux_conf_t *conf;
-    const char *method;
 
     setlocale (LC_ALL, "");
 
@@ -375,7 +364,6 @@ int main (int argc, char *argv[])
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
-    conf = flux_get_conf (ctx.h);
 
     if (increase_rlimits () < 0) {
         flux_log (ctx.h,
@@ -394,18 +382,8 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (!(ctx.overlay = overlay_create (ctx.h,
-                                        ctx.hostname,
-                                        ctx.attrs,
-                                        NULL,
-                                        "interthread://overlay",
-                                        &error))) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "Error initializing overlay: %s",
-                  error.text);
-        goto cleanup;
-    }
+    /* Create interthread message channel for overlay subsystem.
+     */
     if (!(ctx.h_overlay = flux_open ("interthread://overlay", 0))
         || flux_set_reactor (ctx.h_overlay, ctx.reactor) < 0
         || !(ctx.w_overlay = flux_handle_watcher_create (ctx.reactor,
@@ -418,8 +396,64 @@ int main (int argc, char *argv[])
     }
     flux_watcher_start (ctx.w_overlay);
 
-    /* Create rundir now as it may be needed for overlay sockets during
-     * bootstrap.  N.B. tmpdir is used later when statedir is created.
+    /* Record the broker start time.
+     */
+    flux_reactor_now_update (ctx.reactor);
+    ctx.starttime = flux_reactor_now (ctx.reactor);
+    if (init_attrs_starttime (ctx.attrs, ctx.starttime, &error) < 0) {
+        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
+        goto cleanup;
+    }
+
+    /* Execute broker bootstrap.
+     * The first phase sets info.rank and info.size.
+     * The next phase involving peer discovery is performed by the overlay
+     * subsystem.
+     */
+    if (!(ctx.boot = bootstrap_create (&ctx, &ctx.info, &error))) {
+        flux_log (ctx.h, LOG_CRIT, "bootstrap: %s", error.text);
+        goto cleanup;
+    }
+
+    if (attr_add_int (ctx.attrs,
+                      "rank",
+                      ctx.info.rank,
+                      ATTR_IMMUTABLE) < 0
+        || attr_add_int (ctx.attrs,
+                         "size",
+                         ctx.info.size,
+                         ATTR_IMMUTABLE) < 0) {
+        flux_log (ctx.h, LOG_CRIT, "setattr rank/size: %s", strerror (errno));
+        goto cleanup;
+    }
+    /* Allow flux_get_rank() and flux_get_size() to work in the broker
+     * without causing a synchronous RPC to self that would deadlock.
+     * Then initialize logging, defeating the earlier redirect.
+     */
+    if (attr_cache_immutables (ctx.attrs, ctx.h) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error priming broker attribute cache: %s",
+                  strerror (errno));
+        goto cleanup;
+    }
+    if (logbuf_initialize (ctx.h, ctx.info.rank, ctx.attrs) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "Error initializing logging: %s",
+                  strerror (errno));
+        goto cleanup;
+    }
+
+    /* Set parent-uri, parent-kvs-namespace, jobid-path.
+     * Assumes that 'jobid' was set (if available) by bootstrap_create().
+     */
+    if (init_attrs_post_boot (ctx.attrs, &error) < 0) {
+        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
+        goto cleanup;
+    }
+
+    /* Create rundir/statedir.
      */
     const char *tmpdir = getenv ("TMPDIR");
     if (rundir_create (ctx.attrs,
@@ -429,65 +463,7 @@ int main (int argc, char *argv[])
         flux_log (ctx.h, LOG_CRIT, "rundir %s", error.text);
         goto cleanup;
     }
-
-    /* Record the broker start time.  This time will also be used to
-     * capture how long network bootstrap takes.
-     */
-    flux_reactor_now_update (ctx.reactor);
-    ctx.starttime = flux_reactor_now (ctx.reactor);
-    if (init_attrs_starttime (ctx.attrs, ctx.starttime, &error) < 0) {
-        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
-        goto cleanup;
-    }
-
-    /* Execute broker network bootstrap.
-     * Default method is pmi.
-     * If [bootstrap] is defined in configuration, use static configuration.
-     */
-    if (attr_get (ctx.attrs, "broker.boot-method", &method, NULL) < 0) {
-        if (flux_conf_unpack (conf, NULL, "{s:{}}", "bootstrap") == 0)
-            method = "config";
-        else
-            method = NULL;
-    }
-    if (!method || !streq (method, "config")) {
-        if (boot_pmi (ctx.hostname, ctx.overlay, ctx.attrs, &error) < 0) {
-            flux_log (ctx.h, LOG_CRIT, "bootstrap: %s", error.text);
-            goto cleanup;
-        }
-    }
-    else {
-        if (boot_config (ctx.h,
-                         ctx.hostname,
-                         ctx.overlay,
-                         ctx.attrs,
-                         &error) < 0) {
-            flux_log (ctx.h, LOG_CRIT, "bootstrap: %s", error.text);
-            goto cleanup;
-        }
-    }
-    if (overlay_register_attrs (ctx.overlay) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "registering overlay attributes: %s",
-                  strerror (errno));
-        goto cleanup;
-    }
-
-    if (init_attrs_post_boot (ctx.attrs, &error) < 0) {
-        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
-        goto cleanup;
-    }
-
-    if (attr_get_uint32 (ctx.attrs, "rank", &ctx.rank) < 0
-        || attr_get_uint32 (ctx.attrs, "size", &ctx.size) < 0
-        || ctx.size == 0) {
-        flux_log (ctx.h, LOG_CRIT, "internal error: rank/size init failure");
-        goto cleanup;
-    }
-
-    /* Now that rank is known, create or check the statedir.
-     * The statedir is only used on the leader broker, so unset the
+    /* The statedir is only used on the leader broker, so unset the
      * attribute elsewhere.
      *
      * N.B. the system instance sets statedir to /var/lib/flux and supports
@@ -498,7 +474,7 @@ int main (int argc, char *argv[])
      *
      * See also: file-hierarchy(7)
      */
-    if (ctx.rank == 0) {
+    if (ctx.info.rank == 0) {
         if (rundir_create (ctx.attrs,
                            "statedir",
                            tmpdir ? tmpdir : "/var/tmp",
@@ -511,68 +487,12 @@ int main (int argc, char *argv[])
         (void)attr_delete (ctx.attrs, "statedir", true);
     }
 
-    if (ctx.verbose) {
-        flux_reactor_now_update (ctx.reactor);
-        flux_log (ctx.h,
-                  LOG_INFO,
-                  "boot: rank=%d size=%d time %.3fs",
-                  ctx.rank,
-                  ctx.size,
-                  flux_reactor_now (ctx.reactor) - ctx.starttime);
-    }
-
-    /* Allow flux_get_rank(), flux_get_size(), flux_get_hostybyrank(), etc.
-     * to work in the broker without causing a synchronous RPC to self that
-     * would deadlock.
-     */
-    if (attr_cache_immutables (ctx.attrs, ctx.h) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "error priming broker attribute cache: %s",
-                  strerror (errno));
-        goto cleanup;
-    }
-
-    /* Initialize the full log subsystem.
-     */
-    if (logbuf_initialize (ctx.h, ctx.rank, ctx.attrs) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "Error initializing logging: %s",
-                  strerror (errno));
-        goto cleanup;
-    }
-
-    if (ctx.verbose) {
-        const char *parent = NULL;
-        const char *child = NULL;
-        (void)attr_get (ctx.attrs, "tbon.parent-endpoint", &parent, NULL);
-        (void)attr_get (ctx.attrs, "tbon.endpoint", &child, NULL);
-        flux_log (ctx.h, LOG_INFO, "parent: %s", parent ? parent : "none");
-        flux_log (ctx.h, LOG_INFO, "child: %s", child ? child : "none");
-    }
-
-    set_proctitle (ctx.rank);
+    set_proctitle (ctx.info.rank);
 
     // N.B. local-uri is used by runat
-    if (init_local_uri_attr (ctx.attrs, ctx.rank, &error) < 0
-        || init_critical_ranks_attr (ctx.attrs,
-                                     ctx.size,
-                                     ctx.overlay,
-                                     &error) < 0) {
+    if (init_local_uri_attr (ctx.attrs, ctx.info.rank, &error) < 0) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
-    }
-
-    /* Wire up the overlay.
-     */
-    if (ctx.rank > 0) {
-        if (ctx.verbose)
-            flux_log (ctx.h, LOG_INFO, "initializing overlay connect");
-        if (overlay_connect (ctx.overlay) < 0) {
-            flux_log (ctx.h, LOG_CRIT, "overlay_connect: %s", strerror (errno));
-            goto cleanup;
-        }
     }
 
     /* Register internal services
@@ -602,17 +522,6 @@ int main (int argc, char *argv[])
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
-    /* overlay_start() calls flux_sync_create(), thus
-     * requires event.subscribe to have a handler before running.
-     * Also it makes an RPC to the state machine.
-     */
-    if (overlay_start (ctx.overlay) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "error starting overlay: %s",
-                  strerror (errno));
-        goto cleanup;
-    }
     /* This registers a state machine callback so call after
      * state_machine_create().
      */
@@ -620,8 +529,6 @@ int main (int argc, char *argv[])
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
-
-    state_machine_kickoff (ctx.state_machine);
 
     /* Create shutdown mechanism
      */
@@ -633,10 +540,51 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (ctx.rank == 0 && execute_parental_notifications (&ctx, &error) < 0) {
-        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
+    /* Initialize the overlay network.
+     */
+    if (!(ctx.overlay = overlay_create (ctx.h,
+                                        ctx.boot,
+                                        &ctx.info,
+                                        ctx.hostname,
+                                        ctx.attrs,
+                                        NULL,
+                                        "interthread://overlay",
+                                        &error))) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "Error initializing overlay: %s",
+                  error.text);
         goto cleanup;
     }
+    if (ctx.info.rank > 0) {
+        if (ctx.verbose)
+            flux_log (ctx.h, LOG_INFO, "initializing overlay connect");
+        if (overlay_connect (ctx.overlay) < 0) {
+            flux_log (ctx.h, LOG_CRIT, "overlay_connect: %s", strerror (errno));
+            goto cleanup;
+        }
+    }
+    if (overlay_start (ctx.overlay) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error starting overlay: %s",
+                  strerror (errno));
+        goto cleanup;
+    }
+
+    /* Start the state machine.  The first action taken is to load
+     * built-in broker modules, so make another pass at priming the
+     * ctx.h attribute cache, which becomes the starting point for the
+     * modules's attribute cache.
+     */
+    if (attr_cache_immutables (ctx.attrs, ctx.h) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error priming broker attribute cache (second pass): %s",
+                  strerror (errno));
+        goto cleanup;
+    }
+    state_machine_kickoff (ctx.state_machine);
 
     /* Event loop
      */
@@ -689,6 +637,7 @@ cleanup:
     service_switch_destroy (ctx.services);
     flux_msg_handler_delvec (handlers);
     brokercfg_destroy (ctx.config);
+    bootstrap_destroy (ctx.boot);
     runat_destroy (ctx.runat);
     flux_watcher_destroy (ctx.w_internal);
     flux_close (ctx.h_internal);
@@ -984,7 +933,7 @@ static int create_runat_phases (broker_ctx_t *ctx, flux_error_t *errp)
 
     /* rc2 - initial program
      */
-    if (ctx->rank == 0 && !rc2_none) {
+    if (ctx->info.rank == 0 && !rc2_none) {
         if (create_runat_rc2 (ctx->runat,
                               rc2_nopgrp ? RUNAT_FLAG_NO_SETPGRP: 0,
                               ctx->init_shell_cmd,
@@ -1052,225 +1001,6 @@ static int init_local_uri_attr (attr_t *attrs,
         }
     }
     return 0;
-}
-
-static int init_critical_ranks_attr (attr_t *attrs,
-                                     uint32_t size,
-                                     struct overlay *ov,
-                                     flux_error_t *errp)
-{
-    int rc = -1;
-    const char *val;
-    char *ranks = NULL;
-    struct idset *critical_ranks = NULL;
-
-    if (attr_get (attrs, "broker.critical-ranks", &val, NULL) < 0) {
-        if (!(critical_ranks = overlay_get_default_critical_ranks (ov))
-            || !(ranks = idset_encode (critical_ranks, IDSET_FLAG_RANGE))) {
-            errprintf (errp, "unable to calculate critical-ranks attribute");
-            goto out;
-        }
-        if (attr_add (attrs,
-                      "broker.critical-ranks",
-                      ranks,
-                      ATTR_IMMUTABLE) < 0) {
-            errprintf (errp, "attr_add critical_ranks: %s", strerror (errno));
-            goto out;
-        }
-    }
-    else {
-        if (!(critical_ranks = idset_decode (val))
-            || idset_last (critical_ranks) >= size) {
-            errprintf (errp,
-                       "invalid value for broker.critical-ranks='%s'",
-                       val);
-            goto out;
-        }
-        /*  Need to set immutable flag when attr set on command line
-         */
-        if (attr_set_flags (attrs,
-                            "broker.critical-ranks",
-                            ATTR_IMMUTABLE) < 0) {
-            errprintf (errp,
-                       "failed to make broker.critical-ranks"
-                       " attr immutable: %s",
-                       strerror (errno));
-            goto out;
-        }
-    }
-    rc = 0;
-out:
-    idset_destroy (critical_ranks);
-    free (ranks);
-    return rc;
-}
-
-static flux_future_t *set_uri_job_memo (flux_t *h,
-                                        const char *hostname,
-                                        flux_jobid_t id,
-                                        attr_t *attrs,
-                                        flux_error_t *errp)
-{
-    const char *local_uri = NULL;
-    const char *path;
-    char uri [1024];
-    flux_future_t *f;
-
-    if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
-        errprintf (errp, "Unexpectedly unable to fetch local-uri attribute");
-        return NULL;
-    }
-    path = local_uri + 8; /* forward past "local://" */
-    if (snprintf (uri,
-                 sizeof (uri),
-                 "ssh://%s%s",
-                 hostname, path) >= sizeof (uri)) {
-        errprintf (errp, "buffer overflow while checking local-uri");
-        return NULL;
-    }
-    if (!(f = flux_rpc_pack (h,
-                             "job-manager.memo",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:I s:{s:s}}",
-                             "id", id,
-                             "memo",
-                             "uri", uri))) {
-        errprintf (errp,
-                   "error sending job-manager.memo request: %s",
-                   strerror (errno));
-        return NULL;
-    }
-    return f;
-}
-
-/*  Encode idset of critical nodes/shell ranks, which is calculated
- *   from broker.mapping and broker.critical-ranks.
- */
-static char *encode_critical_nodes (attr_t *attrs)
-{
-    struct idset *ranks = NULL;
-    struct idset *nodeids = NULL;
-    struct taskmap *map = NULL;
-    char *s = NULL;
-    int nodeid;
-    const char *mapping;
-    const char *ranks_attr;
-    unsigned int i;
-
-
-    if (attr_get (attrs, "broker.mapping", &mapping, NULL) < 0
-        || mapping == NULL
-        || !(map = taskmap_decode (mapping, NULL))
-        || attr_get (attrs, "broker.critical-ranks", &ranks_attr, NULL) < 0
-        || !(ranks = idset_decode (ranks_attr))
-        || !(nodeids = idset_create (0, IDSET_FLAG_AUTOGROW)))
-        goto done;
-
-    /*  Map the broker ranks from the broker.critical-ranks attr to
-     *  shell ranks/nodeids using PMI_process_mapping (this handles the
-     *  rare case where multiple brokers per node/shell were launched)
-     */
-    i = idset_first (ranks);
-    while (i != IDSET_INVALID_ID) {
-        if ((nodeid = taskmap_nodeid (map, i)) < 0
-            || idset_set (nodeids, nodeid) < 0)
-            goto done;
-        i = idset_next (ranks, i);
-    }
-    s = idset_encode (nodeids, IDSET_FLAG_RANGE);
-done:
-    taskmap_destroy (map);
-    idset_destroy (ranks);
-    idset_destroy (nodeids);
-    return s;
-}
-
-static flux_future_t *set_critical_ranks (flux_t *h,
-                                          flux_jobid_t id,
-                                          attr_t *attrs)
-{
-    int saved_errno;
-    flux_future_t *f;
-    char *nodeids;
-
-    if (!(nodeids = encode_critical_nodes (attrs)))
-        return NULL;
-    f = flux_rpc_pack (h,
-                       "job-exec.critical-ranks",
-                       FLUX_NODEID_ANY, 0,
-                       "{s:I s:s}",
-                       "id", id,
-                       "ranks", nodeids);
-    saved_errno = errno;
-    free (nodeids);
-    errno = saved_errno;
-    return f;
-}
-
-static int execute_parental_notifications (struct broker *ctx,
-                                           flux_error_t *errp)
-{
-    const char *jobid = NULL;
-    const char *parent_uri = NULL;
-    flux_jobid_t id;
-    flux_t *h = NULL;
-    flux_future_t *f = NULL;
-    flux_future_t *f2 = NULL;
-    int rc = -1;
-
-    /* Skip if "jobid" or "parent-uri" not set, this is probably
-     *  not a child of any Flux instance.
-     */
-    if (attr_get (ctx->attrs, "parent-uri", &parent_uri, NULL) < 0
-        || parent_uri == NULL
-        || attr_get (ctx->attrs, "jobid", &jobid, NULL) < 0
-        || jobid == NULL)
-        return 0;
-
-    if (flux_job_id_parse (jobid, &id) < 0)
-        return errprintf (errp, "Unable to parse jobid attribute '%s'", jobid);
-
-    /*  Open connection to parent instance:
-     */
-    if (!(h = flux_open (parent_uri, 0))) {
-        return errprintf (errp,
-                          "flux_open to parent failed %s",
-                          strerror (errno));
-    }
-
-    /*  Perform any RPCs to parent in parallel */
-    if (!(f = set_uri_job_memo (h, ctx->hostname, id, ctx->attrs, errp)))
-        goto out;
-
-    /*  Note: not an error if rpc to set critical ranks fails, but
-     *  issue an error notifying user that no critical ranks are set.
-     */
-    if (!(f2 = set_critical_ranks (h, id, ctx->attrs))) {
-        flux_log (ctx->h,
-                  LOG_ERR,
-                  "Unable to get critical ranks, all ranks will be critical");
-    }
-
-    /*  Wait for RPC results */
-    if (flux_future_get (f, NULL) < 0) {
-        errprintf (errp,
-                   "job-manager.memo uri: %s",
-                   future_strerror (f, errno));
-        goto out;
-    }
-    if (f2 && flux_future_get (f2, NULL) < 0 && errno != ENOSYS) {
-        errprintf (errp,
-                   "job-exec.critical-ranks: %s",
-                   future_strerror (f2, errno));
-        goto out;
-    }
-    rc = 0;
-out:
-    flux_close (h);
-    flux_future_destroy (f);
-    flux_future_destroy (f2);
-    return rc;
 }
 
 static bool nodeset_member (const char *s, uint32_t rank)
@@ -1507,7 +1237,7 @@ static void mcast_event_globally_new (struct broker *ctx, flux_msg_t **msg)
     const char *topic = NULL;
     (void)flux_msg_get_topic (*msg, &topic);
     if (subhash_topic_match (ctx->sub, topic)) {
-        if (ctx->size > 1) {
+        if (ctx->info.size > 1) {
             if (flux_send (ctx->h_internal, *msg, 0) < 0)
                 flux_log_error (ctx->h, "mcast failed to internal handle");
         }
@@ -1517,7 +1247,7 @@ static void mcast_event_globally_new (struct broker *ctx, flux_msg_t **msg)
         }
     }
 
-    if (ctx->size > 1) {
+    if (ctx->info.size > 1) {
         if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
             flux_log_error (ctx->h, "could not forward event to overlay");
     }
@@ -1609,7 +1339,7 @@ static void event_publish_cb (flux_t *h,
                              "flags", &flags,
                              "payload", &payload) < 0)
         goto error;
-    if (ctx->rank > 0) {
+    if (ctx->info.rank > 0) {
         errno = EPROTO;
         errmsg = "this service is only available on rank 0";
         goto error;
@@ -1784,7 +1514,7 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx,
     flux_msg_handler_t **handlers;
     struct internal_service *svc;
     for (svc = &services[0]; svc->name != NULL; svc++) {
-        if (!nodeset_member (svc->nodeset, ctx->rank))
+        if (!nodeset_member (svc->nodeset, ctx->info.rank))
             continue;
         if (service_add (ctx->services,
                          svc->name, NULL,
@@ -1844,7 +1574,7 @@ static void overlay_cb (flux_reactor_t *r,
             /* The overlay sends the broker only unpublished events on rank 0.
              * It only sends published events on other ranks.
              */
-            if (ctx->rank == 0) {
+            if (ctx->info.rank == 0) {
                 if (publish_event_new (ctx, &msg, NULL) < 0)
                     goto drop;
             }
@@ -1929,7 +1659,7 @@ static void signal_cb (flux_reactor_t *r,
 
     flux_log (ctx->h, LOG_INFO, "signal %d", signum);
 
-    if (ctx->rank == 0 && !signal_is_deadly (signum)) {
+    if (ctx->info.rank == 0 && !signal_is_deadly (signum)) {
         /* Attempt to forward non-deadly signals to jobs. If that fails,
          * then fall through to state_machine_kill() so the signal is
          * delivered somewhere.
@@ -1962,16 +1692,17 @@ static int broker_request_sendmsg_new_internal (broker_ctx_t *ctx,
         return -1;
     /* Route up TBON if destination if upstream of this broker.
      */
-    if (upstream && nodeid == ctx->rank) {
+    if (upstream && nodeid == ctx->info.rank) {
         if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
             return -1;
     }
     /* Deliver to local service if destination *could* be this broker.
      * If there is no such service locally (ENOSYS), route up TBON.
      */
-    else if ((upstream && nodeid != ctx->rank) || nodeid == FLUX_NODEID_ANY) {
+    else if ((upstream && nodeid != ctx->info.rank)
+        || nodeid == FLUX_NODEID_ANY) {
         if (service_send_new (ctx->services, msg) < 0) {
-            if (errno != ENOSYS || ctx->rank == 0)
+            if (errno != ENOSYS || ctx->info.rank == 0)
                 return -1;
             if (flux_send_new (ctx->h_overlay, msg, 0) < 0)
                 return -1;
@@ -1979,7 +1710,7 @@ static int broker_request_sendmsg_new_internal (broker_ctx_t *ctx,
     }
     /* Deliver to local service if this broker is the addressed rank.
      */
-    else if (nodeid == ctx->rank) {
+    else if (nodeid == ctx->info.rank) {
         if (service_send_new (ctx->services, msg) < 0)
             return -1;
     }
@@ -2058,7 +1789,7 @@ static void h_internal_watcher (flux_reactor_t *r,
             /* Events sent on ctx->h are assumed to be unpublished,
              * so they must either be published or forwarded upstream.
              */
-            if (ctx->rank == 0) {
+            if (ctx->info.rank == 0) {
                 if (publish_event_new (ctx, &msg, NULL) < 0)
                     goto error;
             }
