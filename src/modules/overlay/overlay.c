@@ -205,6 +205,7 @@ static int overlay_control_parent (struct overlay *ov,
 static void overlay_health_respond_all (struct overlay *ov);
 static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank);
 static int overlay_goodbye_parent (struct overlay *overlay, flux_error_t *errp);
+static void overlay_goodbye_cb (struct overlay *ov, const flux_msg_t *msg);
 static int overlay_get_child_online_peer_count (struct overlay *ov);
 static void overlay_event_checkseq (struct overlay *ov, const flux_msg_t *msg);
 
@@ -1076,6 +1077,11 @@ static void child_cb (flux_reactor_t *r,
             goto done;
         }
         case FLUX_MSGTYPE_REQUEST:
+            if (flux_msg_get_topic (msg, &topic) == 0
+                && streq (topic, "overlay.goodbye")) {
+                overlay_goodbye_cb (ov, msg);
+                goto done;
+            }
             break;
         case FLUX_MSGTYPE_RESPONSE:
             /* Response message traveling upstream requires special handling:
@@ -1199,6 +1205,12 @@ static void parent_cb (flux_reactor_t *r,
     }
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
+            if (ov->broker_state == STATE_GOODBYE
+                && flux_msg_get_topic (msg, &topic) == 0
+                && streq (topic, "overlay.goodbye")) {
+                overlay_state_machine_post (ov, "goodbye", false);
+                goto done;
+            }
             rpc_track_update (ov->parent.tracker, msg);
             break;
         case FLUX_MSGTYPE_EVENT:
@@ -1726,48 +1738,35 @@ static int overlay_register_attrs (struct overlay *overlay)
 /* A child has sent an overlay.goodbye request.
  * Respond, then transition it to OFFLINE.
  */
-static void overlay_goodbye_cb (flux_t *h,
-                                flux_msg_handler_t *mh,
-                                const flux_msg_t *msg,
-                                void *arg)
+static void overlay_goodbye_cb (struct overlay *ov, const flux_msg_t *msg)
 {
-    struct overlay *ov = arg;
     const char *uuid;
     struct child *child;
     flux_msg_t *response = NULL;
 
     if (flux_request_decode (msg, NULL, NULL) < 0
-        || !(uuid = flux_msg_route_last (msg))
-        || !(child = child_lookup_online (ov, uuid)))
-        goto error;
-    if (!(response = flux_response_derive (msg, 0)))
-        goto error;
-    if (overlay_sendmsg_child (ov, response) < 0) {
+        || !(uuid = flux_msg_route_last (msg))) {
+        flux_log (ov->h, LOG_ERR, "overlay.goodbye: %s", strerror (errno));
+        return;
+    }
+    if (!(child = child_lookup_online (ov, uuid))) {
+        flux_log (ov->h, LOG_ERR, "overlay.goodbye: uuid unknown");
+        return;
+    }
+    if (!(response = flux_response_derive (msg, 0))
+        || overlay_sendmsg_child (ov, response) < 0) {
+        flux_log (ov->h,
+                  LOG_ERR,
+                  "overlay.goodbye: error sending response: %s",
+                  strerror (errno));
         flux_msg_decref (response);
-        goto error;
+        return;
     }
     overlay_child_status_update (ov,
                                  child,
                                  SUBTREE_STATUS_OFFLINE,
                                  "administrative shutdown");
     flux_msg_decref (response);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "error responding to overlay.goodbye");
-}
-
-/* The parent has responded to overlay.goodbye.  Post the goodbye event
- * so the state machine can make progress.
- */
-static void overlay_goodbye_response_cb (flux_t *h,
-                                         flux_msg_handler_t *mh,
-                                         const flux_msg_t *msg,
-                                         void *arg)
-{
-    struct overlay *ov = arg;
-    if (ov->broker_state == STATE_GOODBYE)
-        overlay_state_machine_post (ov, "goodbye", false);
 }
 
 /* This allows the state machine to delay overlay_destroy() and its
@@ -2653,18 +2652,6 @@ static const struct flux_msg_handler_spec htab[] = {
         "overlay.disconnect-parent",
         overlay_disconnect_parent_cb,
         0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "overlay.goodbye",
-        overlay_goodbye_cb,
-        0,
-    },
-    {
-        FLUX_MSGTYPE_RESPONSE,
-        "overlay.goodbye",
-        overlay_goodbye_response_cb,
-        0,
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
