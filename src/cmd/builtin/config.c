@@ -18,6 +18,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/tomltk.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 
@@ -61,6 +62,79 @@ static int parse_json_type (const char *s,
         }
     }
     return -1;
+}
+
+static json_t *parse_boolean (const char *s)
+{
+    if (s[0] == '0' || s[0] == 'f' || s[0] == 'F' || s[0] == '\0')
+        return json_false ();
+    return json_true ();
+}
+
+static json_t *parse_real (const char *s)
+{
+    char *endptr;
+    errno = 0;
+    double d = strtod (s, &endptr);
+    if (errno != 0 || *endptr != '\0')
+        return NULL;
+    return json_real (d);
+}
+
+static json_t *parse_int (const char *s)
+{
+    char *endptr;
+    errno = 0;
+    json_int_t i = strtoll (s, &endptr, 0);
+    if (errno != 0 || *endptr != '\0')
+        return NULL;
+    return json_integer (i);
+}
+
+static json_t *create_json (const char *s,
+                            json_type type,
+                            fsd_subtype_t fsd_subtype)
+{
+    json_t *o = NULL;
+
+    switch (type) {
+        case JSON_TRUE:
+        case JSON_FALSE:
+            o = parse_boolean (s);
+            break;
+        case JSON_REAL:
+            if (!(o = parse_real (s)))
+                log_msg_exit ("Error parsing real value");
+            break;
+        case JSON_INTEGER:
+            if (!(o = parse_int (s)))
+                log_msg_exit ("Error parsing integer value");
+            break;
+        case JSON_OBJECT:
+            if (!(o = json_loads (s, 0, NULL)) || !json_is_object (o))
+                log_msg_exit ("Error parsing json object");
+            break;
+        case JSON_ARRAY:
+            if (!(o = json_loads (s, 0, NULL)) || !json_is_array (o))
+                log_msg_exit ("Error parsing json array");
+            break;
+        case JSON_STRING:
+            if (fsd_subtype == FSD_STRING) {
+                double t;
+                if (fsd_parse_duration (s, &t) < 0)
+                    log_msg_exit ("Error parsing Flux Standard Duration");
+            }
+            if (s[0] == '"')
+                o = json_loads (s, JSON_DECODE_ANY, NULL);
+            else
+                o = json_string (s);
+            if (!o || !json_is_string (o))
+                log_msg_exit ("Error parsing string");
+            break;
+        case JSON_NULL:
+            break; // can't happen
+    }
+    return o;
 }
 
 static void print_object (json_t *o)
@@ -179,6 +253,98 @@ static int config_get (optparse_t *p, int ac, char *av[])
     flux_future_destroy (f);
     flux_close (h);
     return (0);
+}
+
+static int config_unset (optparse_t *p, int ac, char *av[])
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h;
+    const char *path;
+    flux_future_t *fread;
+    flux_future_t *fwrite;
+    json_t *o;
+
+    if (optindex != ac - 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    path = av[optindex++];
+    if (!(h = builtin_get_flux_handle (p)))
+        log_err_exit ("flux_open");
+    if (!(fread = flux_rpc (h, "config.get", NULL, FLUX_NODEID_ANY, 0))
+        || flux_rpc_get_unpack (fread, "o", &o) < 0) {
+        log_msg_exit ("Error fetching config object: %s",
+                      future_strerror (fread, errno));
+    }
+    if (jpath_del (o, path) < 0)
+        log_err_exit ("Error deleting %s from config object", path);
+    if (!(fwrite = flux_rpc_pack (h, "config.load", FLUX_NODEID_ANY, 0, "O", o))
+        || flux_rpc_get (fwrite, NULL) < 0) {
+        log_msg_exit ("Error updating config object: %s",
+                      future_strerror (fwrite, errno));
+    }
+    flux_future_destroy (fwrite);
+    flux_future_destroy (fread);
+    flux_close (h);
+    return 0;
+}
+
+static int config_set (optparse_t *p, int ac, char *av[])
+{
+    int optindex = optparse_option_index (p);
+    const char *typestr = optparse_get_str (p, "type", NULL);
+    json_type type = JSON_STRING;
+    fsd_subtype_t fsd_subtype = FSD_NONE;
+    flux_t *h;
+    const char *path;
+    const char *value;
+    flux_future_t *fread;
+    flux_future_t *fwrite;
+    json_t *o;
+    json_t *old_val;
+    json_t *new_val;
+
+    if (optindex != ac - 2) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    path = av[optindex++];
+    value = av[optindex++];
+    if (typestr) {
+        if (parse_json_type (typestr, &type, &fsd_subtype) < 0)
+            log_msg_exit ("Unknown type: %s", typestr);
+        if (streq (typestr, "fsd-integer") || streq (typestr, "fsd-real"))
+            log_msg_exit ("Invalid type for the set subcommand: %s", typestr);
+    }
+    if (!(h = builtin_get_flux_handle (p)))
+        log_err_exit ("flux_open");
+    if (!(fread = flux_rpc (h, "config.get", NULL, FLUX_NODEID_ANY, 0))
+        || flux_rpc_get_unpack (fread, "o", &o) < 0) {
+        log_msg_exit ("Error fetching config object: %s",
+                      future_strerror (fread, errno));
+    }
+    /* Match the type of the old value, if any (unless overridden).
+     * If it's not set, then require --type.
+     */
+    if (!typestr) {
+        if (!(old_val = jpath_get (o, path)))
+            log_msg_exit ("Type is unknown, please specify --type");
+        type = json_typeof (old_val);
+        fsd_subtype = FSD_NONE;
+    }
+    if (!(new_val = create_json (value, type, fsd_subtype))
+        || jpath_set_new (o, path, new_val) < 0)
+        log_msg_exit ("Error updating config object");
+    if (!(fwrite = flux_rpc_pack (h, "config.load", FLUX_NODEID_ANY, 0, "O", o))
+        || flux_rpc_get (fwrite, NULL) < 0) {
+        log_msg_exit ("Error updating config object: %s",
+                      future_strerror (fwrite, errno));
+    }
+
+    flux_future_destroy (fwrite);
+    flux_future_destroy (fread);
+    flux_close (h);
+    return 0;
 }
 
 static int builtin_get (optparse_t *p, int ac, char *av[])
@@ -319,6 +485,14 @@ static struct optparse_option builtin_opts[] = {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option set_opts[] = {
+    { .name = "type", .key = 't', .has_arg = 1, .arginfo = "TYPE",
+      .usage = "Specify type (string, integer, real, boolean"
+          ", object, array, fsd)",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_subcommand config_subcmds[] = {
     { "load",
       "[PATH]",
@@ -340,6 +514,20 @@ static struct optparse_subcommand config_subcmds[] = {
       config_get,
       0,
       get_opts,
+    },
+    { "set",
+      "[OPTIONS] NAME VALUE",
+      "Set broker configuration value",
+      config_set,
+      0,
+      set_opts,
+    },
+    { "unset",
+      "NAME",
+      "Unset broker configuration value",
+      config_unset,
+      0,
+      NULL,
     },
     { "builtin",
       "NAME",
