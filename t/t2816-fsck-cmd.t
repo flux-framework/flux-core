@@ -526,5 +526,145 @@ test_expect_success 'remove content & content-sqlite modules' '
 	flux module remove content-sqlite &&
 	flux module remove content
 '
+#
+# --repair && --job-aware
+#
+test_expect_success 'load content, content-sqlite w/ truncate, and kvs' '
+	flux module load content &&
+	flux module load content-sqlite truncate &&
+	flux module load kvs
+'
+test_expect_success 'create some misc content' '
+	flux kvs put val="val" &&
+	flux kvs put dir.val="v" &&
+	flux kvs put --append dir.val="a" &&
+	flux kvs put --append dir.val="l"
+'
+test_expect_success 'create some job-like content' '
+	flux kvs put job.0123.4567.89ab.cdef.J="J" &&
+	flux kvs put job.0123.4567.89ab.cdef.log="1" &&
+	flux kvs put --append job.0123.4567.89ab.cdef.log="2" &&
+	flux kvs put --append job.0123.4567.89ab.cdef.log="3" &&
+	flux kvs put job.0123.4567.89ab.cdef.Adir.data="A" &&
+	flux kvs put --append job.0123.4567.89ab.cdef.Adir.data="B" &&
+	flux kvs put --append job.0123.4567.89ab.cdef.Adir.data="C" &&
+	flux kvs put job.0123.4567.89ab.cdef.Bdir.data="A" &&
+	flux kvs put --append job.0123.4567.89ab.cdef.Bdir.data="B" &&
+	flux kvs put --append job.0123.4567.89ab.cdef.Bdir.data="C" &&
+	flux kvs link tosomewhere job.0123.4567.89ab.cdef.alink
+'
+# N.B. we want two dirs, one will have corruption while the other will not
+# this is to ensure one dir is a dirref and has not been "processed"
+# when job-aware is done.
+test_expect_success 'create some job-like content we will corrupt ' '
+	flux kvs put job.0123.4567.89ab.badd.J="J" &&
+	flux kvs put job.0123.4567.89ab.badd.good="1" &&
+	flux kvs put --append job.0123.4567.89ab.badd.good="2" &&
+	flux kvs put --append job.0123.4567.89ab.badd.good="3" &&
+	flux kvs put job.0123.4567.89ab.badd.bad="1" &&
+	flux kvs put --append job.0123.4567.89ab.badd.bad="2" &&
+	flux kvs put --append job.0123.4567.89ab.badd.bad="3" &&
+	flux kvs put job.0123.4567.89ab.badd.Adir.good="A" &&
+	flux kvs put --append job.0123.4567.89ab.badd.Adir.good="B" &&
+	flux kvs put --append job.0123.4567.89ab.badd.Adir.good="C" &&
+	flux kvs put job.0123.4567.89ab.badd.Adir.bad="A" &&
+	flux kvs put --append job.0123.4567.89ab.badd.Adir.bad="B" &&
+	flux kvs put --append job.0123.4567.89ab.badd.Adir.bad="C" &&
+	flux kvs put job.0123.4567.89ab.badd.Bdir.good="A" &&
+	flux kvs put --append job.0123.4567.89ab.badd.Bdir.good="B" &&
+	flux kvs put --append job.0123.4567.89ab.badd.Bdir.good="C" &&
+	flux kvs link tosomewhere job.0123.4567.89ab.badd.alink
+'
+test_expect_success 'call sync to ensure we have checkpointed' '
+	flux kvs sync
+'
+test_expect_success 'save treeobjs for later' '
+	flux kvs get --treeobj job.0123.4567.89ab.badd.bad > bad.out &&
+	flux kvs get --treeobj job.0123.4567.89ab.badd.Adir.bad > adirbad.out
+'
+test_expect_success 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success 'flux-fsck --repair --job-aware works (no errors)' '
+	flux fsck --repair --job-aware > jobaware1.out 2> jobaware1.err &&
+	grep "Checking integrity" jobaware1.out &&
+	test_must_fail grep "Total errors" jobaware1.err
+'
+test_expect_success 'load kvs' '
+	flux module load kvs
+'
+test_expect_success 'make a job treeobj bad (bad)' '
+	cat bad.out | jq -c .data[1]=\"sha1-1234567890123456789012345678901234567890\" > badcorrupt.out &&
+	flux kvs put --treeobj job.0123.4567.89ab.badd.bad="$(cat badcorrupt.out)"
+'
+test_expect_success 'make a job treeobj bad (guest.bad)' '
+	cat adirbad.out | jq -c .data[1]=\"sha1-1234567890123456789012345678901234567890\" > adirbadcorrupt.out &&
+	flux kvs put --treeobj job.0123.4567.89ab.badd.Adir.bad="$(cat adirbadcorrupt.out)"
+'
+test_expect_success 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success 'flux-fsck --repair --job-aware works (errors)' '
+	test_must_fail flux fsck --repair --job-aware --verbose > jobaware2.out 2> jobaware2.err &&
+	grep "Checking integrity" jobaware2.out &&
+	grep "Total errors" jobaware2.err
+'
+test_expect_success 'load kvs' '
+	flux module load kvs
+'
+test_expect_success 'flux-fsck --repair --job-aware recovers data to lost+found' '
+	flux kvs get lost+found.job.0123.4567.89ab.badd.bad > jobaware_lost_bad.out &&
+	echo "13" > jobaware_lost_bad.out.exp &&
+	test_cmp jobaware_lost_bad.out.exp jobaware_lost_bad.out &&
+	flux kvs get lost+found.job.0123.4567.89ab.badd.Adir.bad > jobaware_list_adir_bad.out &&
+	echo "AC" > jobaware_list_adir_bad.exp &&
+	test_cmp jobaware_list_adir_bad.exp jobaware_list_adir_bad.out
+'
+test_expect_success 'flux-fsck --repair --job-aware moves all job data' '
+	flux kvs get lost+found.job.0123.4567.89ab.badd.J > jobaware_lost_j.out &&
+	echo "J" > jobaware_lost_j.exp &&
+	test_cmp jobaware_lost_j.exp jobaware_lost_j.out &&
+	flux kvs get lost+found.job.0123.4567.89ab.badd.good > jobaware_lost_good.out &&
+	echo "123" > jobaware_lost_good.exp &&
+	test_cmp jobaware_lost_good.exp jobaware_lost_good.out &&
+	flux kvs get lost+found.job.0123.4567.89ab.badd.Adir.good > jobaware_lost_adir_good.out &&
+	echo "ABC" > jobaware_lost_adir_good.exp &&
+	test_cmp jobaware_lost_adir_good.exp jobaware_lost_adir_good.out &&
+	flux kvs get lost+found.job.0123.4567.89ab.badd.Bdir.good > jobaware_lost_bdir_good.out &&
+	echo "ABC" > jobaware_lost_bdir_good.exp &&
+	test_cmp jobaware_lost_bdir_good.exp jobaware_lost_bdir_good.out
+'
+test_expect_success 'flux-fsck --repair --job-aware unlinks bad job' '
+	flux kvs get --treeobj job.0123.4567.89ab &&
+	test_must_fail flux kvs get --treeobj job.0123.4567.89ab.badd
+'
+test_expect_success 'flux-fsck --repair --job-aware leaves good entries' '
+	flux kvs get val > jobaware_val.out &&
+	echo "val" > jobaware_val.exp &&
+	test_cmp jobaware_val.exp jobaware_val.out &&
+	flux kvs get dir.val > jobaware_dirval.out &&
+	echo "val" > jobaware_dirval.exp &&
+	test_cmp jobaware_dirval.exp jobaware_dirval.out &&
+	flux kvs get job.0123.4567.89ab.cdef.J > jobaware_J.out &&
+	echo "J" > jobaware_J.exp &&
+	test_cmp jobaware_J.exp jobaware_J.out &&
+	flux kvs get job.0123.4567.89ab.cdef.log > jobaware_log.out &&
+	echo "123" > jobaware_log.exp &&
+	test_cmp jobaware_log.exp jobaware_log.out &&
+	flux kvs get job.0123.4567.89ab.cdef.Adir.data > jobaware_adirdata.out &&
+	echo "ABC" > jobaware_adirdata.exp &&
+	test_cmp jobaware_adirdata.exp jobaware_adirdata.out &&
+	flux kvs get job.0123.4567.89ab.cdef.Bdir.data > jobaware_bdirdata.out &&
+	echo "ABC" > jobaware_bdirdata.exp &&
+	test_cmp jobaware_bdirdata.exp jobaware_bdirdata.out &&
+	flux kvs get --treeobj job.0123.4567.89ab.cdef.alink
+'
+test_expect_success 'unload kvs' '
+	flux module remove kvs
+'
+test_expect_success 'remove content & content-sqlite modules' '
+	flux module remove content-sqlite &&
+	flux module remove content
+'
 
 test_done
