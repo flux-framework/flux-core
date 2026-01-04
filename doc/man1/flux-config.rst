@@ -11,7 +11,7 @@ SYNOPSIS
 | **flux** **config** **get** [*--default=VALUE*] [*--type=TYPE*] [*NAME*]
 | **flux** **config** **set** [*--type=TYPE*] *NAME* *VALUE*
 | **flux** **config** **unset** *NAME*
-| **flux** **config** **builtin** [*NAME*]
+| **flux** **config** **builtin** *NAME*
 | **flux** **config** **load** [*PATH*]
 | **flux** **config** **reload**
 
