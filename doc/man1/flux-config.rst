@@ -9,6 +9,8 @@ SYNOPSIS
 ========
 
 | **flux** **config** **get** [*--default=VALUE*] [*--type=TYPE*] [*NAME*]
+| **flux** **config** **set** [*--type=TYPE*] *NAME* *VALUE*
+| **flux** **config** **unset** *NAME*
 | **flux** **config** **builtin** [*NAME*]
 | **flux** **config** **load** [*PATH*]
 | **flux** **config** **reload**
@@ -63,6 +65,28 @@ scripts.
    ``system``, ``security``, and ``imp`` may be used as shorthand for the
    compiled-in paths to system configuration objects.
 
+set
+---
+
+:program:`flux config set` queries the TOML configuration for a given Flux
+broker, then updates the value of *NAME*, which is expected to be a
+period-delimited path name representing a TOML key.
+
+.. program:: flux config set
+
+.. option:: -t, --type=TYPE
+
+   Specify the type of *VALUE*. Valid types are *string*, *integer*, *real*,
+   *boolean*, *object*, *array*, and *fsd*.  If the type is unspecified and
+   *NAME* already has a value, the type of the existing value is used.
+
+
+unset
+-----
+
+:program:`flux config unset` queries the TOML configuration for a given Flux
+broker, then deletes *NAME*, which is expected to be a period-delimited
+path name representing a TOML key.
 
 builtin
 -------
@@ -201,6 +225,10 @@ EXAMPLES
 
    $ flux config get --type=fsd-integer tbon.tcp_user_timeout
    60
+
+::
+
+   $ flux config set --type=fsd tbon.torpid_min 5m
 
 
 RESOURCES
