@@ -2244,51 +2244,6 @@ static int overlay_configure_attr_int (flux_t *h,
     return 0;
 }
 
-#if 0 // FIXME
-static int set_torpid (const char *name, const char *val, void *arg)
-{
-    struct overlay *ov = arg;
-    double d;
-
-    if (fsd_parse_duration (val, &d) < 0)
-        return -1;
-    if (streq (name, "tbon.torpid_max"))
-        ov->torpid_max = d;
-    else if (streq (name, "tbon.torpid_min")) {
-        if (d == 0)
-            goto error;
-        ov->torpid_min = d;
-    }
-    else
-        goto error;
-    return 0;
-error:
-    errno = EINVAL;
-    return -1;
-}
-
-static int get_torpid (const char *name, const char **val, void *arg)
-{
-    struct overlay *ov = arg;
-    static char buf[64];
-    double d;
-
-    if (streq (name, "tbon.torpid_max"))
-        d = ov->torpid_max;
-    else if (streq (name, "tbon.torpid_min"))
-        d = ov->torpid_min;
-    else
-        goto error;
-    if (fsd_format_duration (buf, sizeof (buf), d) < 0)
-        return -1;
-    *val = buf;
-    return 0;
-error:
-    errno = EINVAL;
-    return -1;
-}
-#endif
-
 /* Set attribute with the following precedence:
  * 1. broker attribute
  * 2. TOML config
@@ -2346,67 +2301,71 @@ static int overlay_configure_interface_hint (struct overlay *ov,
     return 0;
 }
 
-static int overlay_configure_torpid (struct overlay *ov, flux_error_t *errp)
+static int overlay_configure_torpid (struct overlay *ov,
+                                     const flux_conf_t *conf,
+                                     bool initialize,
+                                     flux_error_t *errp)
 {
-    const flux_conf_t *cf;
+    flux_error_t error;
+    double tmin_val = -1;
+    double tmax_val = -1;
+    const char *tmin;
+    const char *tmax;
+    char fsd[64];
 
-    /* Start with compiled in defaults.
-     */
-    ov->torpid_min = default_torpid_min;
-    ov->torpid_max = default_torpid_max;
-
-    /* Override with config file settings, if any.
-     */
-    if ((cf = flux_get_conf (ov->h))) {
-        flux_error_t error;
-        const char *min_fsd = NULL;
-        const char *max_fsd = NULL;
-
-        if (flux_conf_unpack (flux_get_conf (ov->h),
-                              &error,
-                              "{s?{s?s s?s}}",
-                              "tbon",
-                                "torpid_min", &min_fsd,
-                                "torpid_max", &max_fsd) < 0) {
-            return errprintf (errp,
-                              "Config file error [tbon]: %s",
-                              error.text);
-        }
-        if (min_fsd) {
-            if (fsd_parse_duration (min_fsd, &ov->torpid_min) < 0
-                || ov->torpid_min == 0) {
-                return errprintf (errp,
-                                  "Config file error parsing"
-                                  " tbon.torpid_min value");
-            }
-        }
-        if (max_fsd) {
-            if (fsd_parse_duration (max_fsd, &ov->torpid_max) < 0) {
-                return errprintf (errp,
-                                  "Config file error parsing"
-                                  " tbon.torpid_max value");
-            }
-        }
+    // compiled-in default
+    if (initialize) {
+        tmin_val = default_torpid_min;
+        tmax_val = default_torpid_max;
     }
-#if 0 // FIXME
-    /* Override with broker attribute (command line/runtime) settings, if any.
-     */
-    if (attr_add_active (ov->attrs,
-                         "tbon.torpid_max",
-                         0,
-                         get_torpid,
-                         set_torpid,
-                         ov) < 0)
-        return errprintf (errp, "%s", strerror (errno));
-    if (attr_add_active (ov->attrs,
-                         "tbon.torpid_min",
-                         0,
-                         get_torpid,
-                         set_torpid,
-                         ov) < 0)
-        return errprintf (errp, "%s", strerror (errno));
-#endif
 
+    // TOML config (initial and updates)
+    tmin = tmax = NULL;
+    if (flux_conf_unpack (conf,
+                          &error,
+                          "{s?{s?s s?s}}",
+                          "tbon",
+                            "torpid_min", &tmin,
+                            "torpid_max", &tmax) < 0)
+        return errprintf (errp, "Config file error [tbon]: %s", error.text);
+    if (tmin && fsd_parse_duration (tmin, &tmin_val) < 0)
+        return errprintf (errp, "Config file error parsing tbon.torpid_min");
+    if (tmax && fsd_parse_duration (tmax, &tmax_val) < 0)
+        return errprintf (errp, "Config file error parsing tbon.torpid_max");
+
+    // command line attribute setting
+    if (initialize) {
+        if ((tmin = flux_attr_get (ov->h, "tbon.torpid_min"))
+            && fsd_parse_duration (tmin, &tmin_val) < 0)
+            return errprintf (errp, "error parsing tbon.torpid_min attribute");
+        if ((tmax = flux_attr_get (ov->h, "tbon.torpid_max"))
+            && fsd_parse_duration (tmax, &tmax_val) < 0)
+            return errprintf (errp, "error parsing tbon.torpid_max attribute");
+    }
+
+    // update tbon.torpid_min
+    if (tmin_val != -1) {
+        if (tmin_val == 0)
+            return errprintf (errp, "tbon.torpid_min must be nonzero");
+        double tmax_check = tmax_val != -1 ? tmax_val : ov->torpid_max;
+        if (tmax_check != 0 && !(tmin_val < tmax_check))
+            return errprintf (errp, "tbon.torpid_min must be less than torpid_max");
+        if (fsd_format_duration (fsd, sizeof (fsd), tmin_val) < 0
+            || flux_attr_set (ov->h, "tbon.torpid_min", fsd) < 0)
+            return errprintf (errp, "error updating tbon.torpid_min attribute");
+        ov->torpid_min = tmin_val;
+    }
+    // update tbon.torpid_max
+    if (tmax_val != -1) {
+        double tmin_check = tmin_val != -1 ? tmin_val : ov->torpid_min;
+        if (tmax_val != 0 && !(tmax_val > tmin_check))
+            return errprintf (errp,
+                              "tbon.torpid_max must be greater than torpid_min");
+        if (fsd_format_duration (fsd, sizeof (fsd), tmax_val) < 0
+            || flux_attr_set (ov->h, "tbon.torpid_max", fsd) < 0)
+            return errprintf (errp, "error updating tbon.torpid_min attribute");
+        ov->torpid_max = tmax_val;
+    }
     return 0;
 }
 
@@ -2555,6 +2514,38 @@ static int overlay_configure_topo (struct overlay *ov, flux_error_t *errp)
     return 0;
 }
 
+static void overlay_config_reload_cb (flux_t *h,
+                                      flux_msg_handler_t *mh,
+                                      const flux_msg_t *msg,
+                                      void *arg)
+{
+    struct overlay *ov = arg;
+    flux_error_t error;
+    const char *errstr = NULL;
+    flux_conf_t *conf;
+
+    if (flux_module_config_request_decode (msg, &conf) < 0) {
+        errstr = "Failed to parse config-reload request";
+        goto error;
+    }
+    if (overlay_configure_torpid (ov, conf, false, &error) < 0) {
+        errstr = error.text;
+        goto error;
+    }
+    if (flux_set_conf_new (h, conf) < 0) {
+        errstr = "Failed to update config";
+        goto error_decref;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+    return;
+error_decref:
+    flux_conf_decref (conf);
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+}
+
 void overlay_destroy (struct overlay *ov)
 {
     if (ov) {
@@ -2616,6 +2607,12 @@ static const struct flux_msg_handler_spec htab[] = {
         "overlay.stats-get",
         overlay_stats_get_cb,
         FLUX_ROLE_USER,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.config-reload",
+        overlay_config_reload_cb,
+        0,
     },
     {
         FLUX_MSGTYPE_REQUEST,
@@ -2710,7 +2707,7 @@ struct overlay *overlay_create (flux_t *h,
                                           "interface-hint",
                                           errp) < 0)
         goto error_hasmsg;
-    if (overlay_configure_torpid (ov, errp) < 0)
+    if (overlay_configure_torpid (ov, flux_get_conf (ov->h), true, errp) < 0)
         goto error_hasmsg;
     if (overlay_configure_timeout (ov,
                                    "tbon",
