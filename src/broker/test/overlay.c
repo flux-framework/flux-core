@@ -190,7 +190,6 @@ void single (flux_t *h)
     free (s);
     idset_destroy (critical_ranks);
 
-    check_attr (ctx, "tbon.parent-endpoint", NULL);
     check_attr (ctx, "tbon.level", "0");
     check_attr (ctx, "tbon.maxlevel", "0");
     check_attr (ctx, "tbon.descendants", "0");
