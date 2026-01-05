@@ -289,18 +289,26 @@ tbon.interface-hint [Updates: C, R]
    3. the enclosing Flux instance's value (via the PMI KVS)
    4. the compiled-in default of default-route
 
-tbon.torpid_min [Updates: C, R]
+tbon.torpid_min [Updates: C]
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
    will allow the connection to its TBON parent to remain idle before sending a
    control message to indicate create activity.  Default: ``5s``.
 
-tbon.torpid_max [Updates: C, R]
+tbon.torpid_max [Updates: C]
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
    will wait for an idle TBON child connection to send messages before
    declaring it torpid (unresponsive).  A value of 0 disables torpid node
    checking.  New work is not scheduled on a node while torpid, but a job
    running on a node when it becomes torpid is allowed to complete.
    Default: ``30s``.
+
+.. note::
+
+   The ``tbon.torpid_min`` and ``tbon.torpid_max`` values can be updated
+   on a live system by updating the configuration using :man1:`flux-config`.
+   The relevant configuration table is described in :man5:`flux-config-tbon`.
+   In older releases, they could be updated using :man1:`flux-setattr`, but
+   that is no longer true.
 
 tbon.tcp_user_timeout
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
