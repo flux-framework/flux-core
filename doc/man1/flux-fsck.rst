@@ -55,6 +55,14 @@ OPTIONS
    This option should be considered :ref:`EXPERIMENTAL <fsck_experimental>`
    at this time.
 
+.. option:: -j, --job-aware
+
+   When specified with :option:`--repair`, if a single key within a
+   job's directory is corrupted, all data from the job will be moved
+   to the lost+found directory.
+
+   This option should be considered :ref:`EXPERIMENTAL <fsck_experimental>`
+   at this time.
 
 EXIT STATUS
 ===========
