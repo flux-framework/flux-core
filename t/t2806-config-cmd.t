@@ -232,5 +232,90 @@ test_expect_success NO_SECURITY_CONF 'flux-config get --config-path=security fai
 test_expect_success NO_IMP_CONF 'flux-config get --config-path=imp fails when missing' '
 	test_must_fail flux config get --config-path=imp
 '
+test_expect_success 'flux-config set fails with no broker' '
+	test_must_fail sh -c "FLUX_URI=/nope flux config set --type=string z a"
+'
+test_expect_success 'flux-config set requires value' '
+	test_must_fail flux config set --type=string foo
+'
+test_expect_success 'flux-config set requires type if unset' '
+	test_must_fail flux config set bar 42
+'
+test_expect_success 'flux-config set refuses fsd-integer, fsd-real types' '
+	test_must_fail flux config set --type=fsd-integer bar 42 &&
+	test_must_fail flux config set --type=fsd-real bar 42
+'
+test_expect_success 'flux-config set works with type' '
+	flux config set --type=integer bar 42 &&
+	flux config get --type=integer bar
+'
+test_expect_success 'flux-config reuses type if set' '
+	flux config set bar 43 &&
+	flux config get --type=integer bar
+'
+test_expect_success 'flux-config set --type=real fails on bad value' '
+	test_must_fail flux config set --type=real foo hello
+'
+test_expect_success 'flux-config set --type=integer fails on bad value' '
+	test_must_fail flux config set --type=integer foo hello
+'
+test_expect_success 'flux-config set --type=string fails on bad value' '
+	test_must_fail flux config set --type=string foo "\"hello"
+'
+test_expect_success 'flux-config set --type=fsd fails on bad value' '
+	test_must_fail flux config set --type=fsd foo hello
+'
+test_expect_success 'flux-config set --type=array fails on bad value' '
+	test_must_fail flux config set --type=array foo "[1 2]"
+'
+test_expect_success 'flux-config set --type=object fails on bad value' '
+	test_must_fail flux config set --type=object foo "{foo}"
+'
+test_expect_success 'flux-config sets a string by path' '
+	flux config set --type=string a.b.string xyz &&
+	test "$(flux config get --type=string a.b.string)" = "xyz"
+'
+test_expect_success 'flux-config sets an integer by path' '
+	flux config set --type=integer a.b.integer 99 &&
+	test "$(flux config get --type=integer a.b.integer)" = "99"
+'
+# Avoid checking for an exact match here since significant digits may vary
+test_expect_success 'flux-config sets a real by path' '
+	flux config set --type=real a.b.real 3.14 &&
+	flux config get --type=real a.b.real
+'
+test_expect_success 'flux-config sets a boolean true by path' '
+	flux config set --type=boolean a.b.booleanT true &&
+	test "$(flux config get --type=boolean a.b.booleanT)" = "true"
+'
+test_expect_success 'flux-config sets a boolean false by path' '
+	flux config set --type=boolean a.b.booleanF false &&
+	test "$(flux config get --type=boolean a.b.booleanF)" = "false"
+'
+test_expect_success 'flux-config sets an array by path' '
+	flux config set --type=array a.b.array "[1,2,3]" &&
+	test "$(flux config get --type=array a.b.array)" = "[1,2,3]"
+'
+test_expect_success 'flux-config sets an object by path' '
+	flux config set --type=object a.b.object "{}" &&
+	test "$(flux config get --type=object a.b.object)" = "{}"
+'
+test_expect_success 'flux-config sets an fsd by path' '
+	flux config set --type=fsd a.b.fsd 45m &&
+	test "$(flux config get --type=fsd-integer a.b.fsd)" = "2700"
+'
+test_expect_success 'flux-config unset fails with no broker' '
+	test_must_fail sh -c "FLUX_URI=/nope flux config unset a.b.fsd"
+'
+test_expect_success 'flux-config unset requires key' '
+	test_must_fail flux config unset
+'
+test_expect_success 'flux-config unset succeeds on an unknown key' '
+	flux config unset not.a.key
+'
+test_expect_success 'flux-config unset works' '
+	flux config unset a.b.string &&
+	test_must_fail flux config get --type=string a.b.string
+'
 
 test_done
