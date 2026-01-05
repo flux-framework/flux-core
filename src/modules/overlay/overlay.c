@@ -471,6 +471,18 @@ static void update_torpid_children (struct overlay *ov)
     }
 }
 
+static struct child *child_lookup (struct overlay *ov, const char *id)
+{
+    if (id) {
+        struct child *child;
+        foreach_overlay_child (ov, child) {
+            if (streq (id, child->uuid))
+                return child;
+        }
+    }
+    return NULL;
+}
+
 /* N.B. overlay_child_status_update() ensures child_lookup_online() only
  * succeeds for online peers.
  */
@@ -801,14 +813,35 @@ static void log_tracker_error (flux_t *h, const flux_msg_t *msg, int errnum)
 static void fail_child_rpcs (const flux_msg_t *msg, void *arg)
 {
     struct overlay *ov = arg;
-    flux_msg_t *rep;
+    flux_msg_t *response;
+    const char *last_hop;
+    struct child *child;
 
-    if (!(rep = flux_response_derive (msg, EHOSTUNREACH))
-        || flux_msg_route_delete_last (rep) < 0
-        || flux_msg_route_delete_last (rep) < 0
-        || flux_send (ov->h, rep, 0) < 0)
-        log_tracker_error (ov->h, rep, errno);
-    flux_msg_destroy (rep);
+    if (!(response = flux_response_derive (msg, EHOSTUNREACH))
+        || flux_msg_route_delete_last (response) < 0
+        || flux_msg_route_delete_last (response) < 0)
+        goto error;
+
+    last_hop = flux_msg_route_last (response);
+
+    if ((child = child_lookup (ov, last_hop))) {
+        if (overlay_sendmsg_child (ov, response) < 0)
+            goto error;
+        flux_msg_decref (response);
+    }
+    else if (ov->rank > 0 && last_hop && streq (last_hop, ov->parent.uuid)) {
+        if (overlay_sendmsg_parent (ov, response) < 0)
+            goto error;
+        flux_msg_decref (response);
+    }
+    else {
+        if (flux_send_new (ov->h_channel, &response, 0) < 0)
+            goto error;
+    }
+    return;
+error:
+    log_tracker_error (ov->h, response, errno);
+    flux_msg_destroy (response);
 }
 
 static void overlay_child_status_update (struct overlay *ov,
@@ -1120,12 +1153,26 @@ done:
 static void fail_parent_rpc (const flux_msg_t *msg, void *arg)
 {
     struct overlay *ov = arg;
+    flux_msg_t *response;
+    const char *last_hop;
 
-    if (flux_respond_error (ov->h,
-                            msg,
-                            EHOSTUNREACH,
-                            "overlay disconnect") < 0)
-        log_tracker_error (ov->h, msg, errno);
+    if (!(response = flux_response_derive (msg, EHOSTUNREACH))
+        || flux_msg_set_string (response, "overlay disconnect") < 0)
+        goto error;
+    last_hop = flux_msg_route_last (response);
+    if (child_lookup (ov, last_hop)) {
+        if (overlay_sendmsg_child (ov, response) < 0)
+            goto error;
+        flux_msg_decref (response);
+    }
+    else {
+        if (flux_send_new (ov->h_channel, &response, 0) < 0)
+            goto error;
+    }
+    return;
+error:
+    log_tracker_error (ov->h, msg, errno);
+    flux_msg_decref (response);
 }
 
 static void parent_disconnect (struct overlay *ov)
