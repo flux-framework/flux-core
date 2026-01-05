@@ -18,64 +18,73 @@ test_expect_success 'load heartbeat module with fast rate for testing' '
         flux module reload heartbeat period=0.5s
 '
 
+# Usage: set_torpid min max
+set_torpid() {
+	flux config get \
+		| jq ".tbon.torpid_min = \"$1\"" \
+		| jq ".tbon.torpid_max = \"$2\"" \
+		| flux config load
+}
+# Usage: get_torpid name_suffix
+get_torpid() {
+	flux getattr tbon.torpid_$1
+}
+# Usage: set_torpid_all min max
+set_torpid_all() {
+	flux config get \
+		| jq ".tbon.torpid_min = \"$1\"" \
+		| jq ".tbon.torpid_max = \"$2\"" \
+		| flux exec flux config load
+}
+
 test_expect_success 'tbon.torpid max/min have expected values' '
-	TMIN=$(flux getattr tbon.torpid_min) &&
-	TMAX=$(flux getattr tbon.torpid_max) &&
-	test "$TMAX" = "30s" &&
-	test "$TMIN" = "5s"
+	test "$(get_torpid max)" = "30s" &&
+	test "$(get_torpid min)" = "5s"
 '
 
 test_expect_success 'tbon.torpid min/max can be set on live system' '
-	flux setattr tbon.torpid_max 60s &&
-	TMAX=$(flux getattr tbon.torpid_max) &&
-	test "$TMAX" = "1m" &&
-	flux setattr tbon.torpid_min 30s &&
-	TMIN=$(flux getattr tbon.torpid_min) &&
-	test "$TMIN" = "30s"
+	set_torpid 30s 60s &&
+	test "$(get_torpid min)" = "30s" &&
+	test "$(get_torpid max)" = "1m"
 '
 
 test_expect_success 'tbon.torpid min/max cannot be set to non-FSD value' '
-	test_must_fail flux setattr tbon.torpid_min foo &&
-	test_must_fail flux setattr tbon.torpid_max bar
+	test_must_fail set_torpid 1s foo &&
+	test_must_fail set_torpid bar 1s
 '
-
 test_expect_success 'tbon.torpid_min cannot be set to zero' '
-	test_must_fail flux setattr tbon.torpid_min 0
+	test_must_fail set_torpid 0 1s
 '
 
 test_expect_success 'torpid_min can be set via config' '
-	mkdir -p conf.d &&
-	cat >conf.d/tbon.toml <<-EOT &&
+	echo 6s >tmin.exp &&
+	cat >tbon.toml <<-EOT &&
 	tbon.torpid_min = "6s"
 	EOT
-	TMIN=$(FLUX_CONF_DIR=conf.d flux start flux getattr tbon.torpid_min) &&
-	test "$TMIN" = "6s"
+	flux start --config=tbon.toml flux getattr tbon.torpid_min >tmin.out &&
+	test_cmp tmin.exp tmin.out
 '
 
 test_expect_success 'torpid_min cannot be set to 0 via config' '
-	mkdir -p conf.d &&
-	cat >conf.d/tbon.toml <<-EOT &&
+	cat >tbon2.toml <<-EOT &&
 	tbon.torpid_min = "0"
 	EOT
-	test_must_fail bash -c "FLUX_CONF_DIR=conf.d flux start \
-		flux getattr tbon.torpid_min"
+	test_must_fail flux start --config=tbon2.toml true
 '
 
-test_expect_success 'torpid_max can be set to 0 via config' '
-	mkdir -p conf.d &&
-	cat >conf.d/tbon.toml <<-EOT &&
+test_expect_success 'torpid_max can be set to 0 (disable) via config' '
+	echo 0s >tmax.exp &&
+	cat >tbon3.toml <<-EOT &&
 	tbon.torpid_max = "0"
 	EOT
-	TMAX=$(FLUX_CONF_DIR=conf.d flux start flux getattr tbon.torpid_max) &&
-	test "$TMAX" = "0s"
+	flux start --config=tbon3.toml flux getattr tbon.torpid_max >tmax.out &&
+	test_cmp tmax.exp tmax.out
 '
 
 # tbon.torpid_min should be >= sync_min (1s hardwired)
 test_expect_success 'reduce tbon.torpid max/min values for testing' '
-	flux exec flux setattr tbon.torpid_min 1s &&
-	flux exec flux setattr tbon.torpid_max 2s
+	set_torpid 1s 2s
 '
-
 test_expect_success 'kill -STOP broker 1' '
 	$startctl kill 1 19
 '
@@ -93,7 +102,7 @@ test_expect_success 'rank 1 is removed from broker.torpid group' '
 '
 
 test_expect_success 'set tbon.torpid_max to impossible to attain value' '
-	flux setattr tbon.torpid_max 0.1s
+	set_torpid 1s 0.1s
 '
 
 test_expect_success 'rank 1 is added to broker.torpid group' '
@@ -108,7 +117,7 @@ test_expect_success 'scheduler shows one node down' '
 '
 
 test_expect_success 'set tbon.torpid_max to zero to disable' '
-	flux setattr tbon.torpid_max 0
+	set_torpid 1s 0
 '
 
 test_expect_success 'rank 1 is removed from broker.torpid group' '
