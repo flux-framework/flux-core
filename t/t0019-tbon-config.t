@@ -115,7 +115,7 @@ test_expect_success 'tbon.interface-hint=hostname works' '
 	(grep ok interface-hostname.out ||
 	 grep "Cannot assign requested address" interface-hostname.out)
 '
-test_expect_success 'tbon.interface-hint defaults to default-router' '
+test_expect_success 'tbon.interface-hint defaults to default-route' '
 	flux start ${ARGS} flux getattr tbon.interface-hint >defhint.out &&
 	grep default-route defhint.out
 '
@@ -126,9 +126,9 @@ test_expect_success 'tbon.interface-hint default comes from parent' '
 '
 test_expect_success 'tbon.interface-hint from parent can be overridden' '
 	flux start -Stbon.interface-hint=hostname \
-	    flux alloc -N1 --broker-opts=-Stbon.interface-hint=default-router \
+	    flux alloc -N1 --broker-opts=-Stbon.interface-hint=default-route \
 	    flux getattr tbon.interface-hint >childhint2.out &&
-	grep default-router childhint2.out
+	grep default-route childhint2.out
 '
 # Note: the following test has been observed to fail (as expected) in more
 # ways than just nonzero exit or terminated by SIGKILL/SIGTERM (in CI the

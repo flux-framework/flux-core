@@ -15,9 +15,11 @@
 #include <stdint.h>
 
 #include "src/common/libpmi/bizcard.h"
+#include "src/common/libpmi/upmi.h"
 
 #include "attr.h"
 #include "topology.h"
+#include "bootstrap.h"
 
 /* Overlay control messages
  */
@@ -34,6 +36,8 @@ struct overlay;
  * Note: If zctx is NULL, it is created/destroyed on demand internally.
  */
 struct overlay *overlay_create (flux_t *h,
+                                struct bootstrap *boot,
+                                struct upmi_info *info,
                                 const char *hostname,
                                 attr_t *attrs,
                                 void *zctx,
@@ -75,7 +79,6 @@ int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey);
 const struct bizcard *overlay_get_bizcard (struct overlay *ov);
 int overlay_set_parent_uri (struct overlay *ov, const char *uri);
 void overlay_set_ipv6 (struct overlay *ov, int enable);
-int overlay_set_tbon_interface_hint (struct overlay *ov, const char *val);
 
 /* Return an idset of critical ranks, i.e. non-leaf brokers
  */
@@ -94,10 +97,6 @@ int overlay_bind (struct overlay *ov,
  * and overlay_set_parent_pubkey(), if there is a parent.
  */
 int overlay_connect (struct overlay *ov);
-
-/* Register overlay-related broker attributes.
- */
-int overlay_register_attrs (struct overlay *overlay);
 
 /* Private to overlay unit test
  */

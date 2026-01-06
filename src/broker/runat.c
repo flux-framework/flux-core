@@ -87,6 +87,7 @@ static const char *env_blocklist[] = {
     "FLUX_KVS_NAMESPACE",
     "FLUX_PROXY_REMOTE",
     "PMI_*",
+    "PMIX_*",
     "FLUX_PMI_LIBRARY_PATH",
     "I_MPI_PMI_LIBRARY",
     "SLURM_*",  // flux-framework/flux-core#5206

@@ -34,6 +34,7 @@
 #include "attr.h"
 #include "modhash.h"
 #include "shutdown.h"
+#include "bootstrap.h"
 
 struct quorum {
     uint32_t size;
@@ -285,7 +286,7 @@ static void action_init (struct state_machine *s)
 
 static void action_join (struct state_machine *s)
 {
-    if (s->ctx->rank == 0)
+    if (s->ctx->info.rank == 0)
         state_machine_post (s, "parent-none");
     else {
 #if HAVE_LIBSYSTEMD
@@ -303,9 +304,15 @@ static void action_join (struct state_machine *s)
 #endif
 }
 
+/* N.B. the overlay calls bootstrap_finalize(), but call it again here
+ * (idempotently), in case a future optimization is implemented in which
+ * the overlay code is short circuited for singleton instances.  Overlay
+ * bootstrap is assumed to be complete once the built-in modules are running.
+ */
 static void kickoff_continuation (flux_future_t *f, void *arg)
 {
     struct state_machine *s = arg;
+    flux_error_t error;
 
     if (flux_future_get (f, NULL) < 0) {
         flux_log (s->ctx->h,
@@ -313,6 +320,12 @@ static void kickoff_continuation (flux_future_t *f, void *arg)
                   "error loading builtins: %s",
                   future_strerror (f, errno));
         goto error;
+    }
+    if (bootstrap_finalize (s->ctx->boot, NULL, &error) < 0) {
+        flux_log (s->ctx->h,
+                  LOG_ERR,
+                  "error finalizing bootstrap: %s",
+                  error.text);
     }
     state_machine_post (s, "builtins-success");
     return;
@@ -423,7 +436,7 @@ static void action_quorum (struct state_machine *s)
         state_machine_post (s, "quorum-fail");
         return;
     }
-    if (s->ctx->rank > 0)
+    if (s->ctx->info.rank > 0)
         quorum_check_parent (s);
     else {
         if (!(s->quorum.f = flux_rpc_pack (s->ctx->h,
@@ -488,7 +501,7 @@ static void action_run (struct state_machine *s)
             state_machine_post (s, "rc2-fail");
         }
     }
-    else if (s->ctx->rank > 0)
+    else if (s->ctx->info.rank > 0)
         run_check_parent (s);
     else
         state_machine_post (s, "rc2-none");
@@ -497,8 +510,8 @@ static void action_run (struct state_machine *s)
     if (s->ctx->sd_notify) {
         sd_notifyf (0,
                     "STATUS=Running as %s of %d node Flux instance",
-                    s->ctx->rank == 0 ? "leader" : "member",
-                    (int)s->ctx->size);
+                    s->ctx->info.rank == 0 ? "leader" : "member",
+                    (int)s->ctx->info.size);
     }
 #endif
 }
@@ -691,7 +704,7 @@ static void action_shutdown (struct state_machine *s)
                                   0.);
         flux_watcher_start (s->shutdown.warn_timer);
     }
-    if (s->shutdown.timeout >= 0 && s->ctx->rank == 0) {
+    if (s->shutdown.timeout >= 0 && s->ctx->info.rank == 0) {
         flux_timer_watcher_reset (s->shutdown.timer,
                                   s->shutdown.timeout,
                                   0.);
@@ -851,7 +864,7 @@ int state_machine_shutdown (struct state_machine *s, flux_error_t *error)
         errno = EINVAL;
         return -1;
     }
-    if (s->ctx->rank != 0) {
+    if (s->ctx->info.rank != 0) {
         errprintf (error, "shutdown may only be initiated on rank 0");
         errno = EINVAL;
         return -1;
@@ -1061,14 +1074,14 @@ static bool quorum_configure_deprecated (struct state_machine *s,
                                          const char *val)
 {
     char all[64];
-    snprintf (all, sizeof (all), "0-%lu", (unsigned long)s->ctx->size - 1);
+    snprintf (all, sizeof (all), "0-%lu", (unsigned long)s->ctx->info.size - 1);
     if (streq (val, all))
-        s->quorum.size = s->ctx->size;
+        s->quorum.size = s->ctx->info.size;
     else if (streq (val, "0"))
         s->quorum.size = 1;
     else
         return false;
-    if (s->ctx->rank == 0) {
+    if (s->ctx->info.rank == 0) {
         flux_log (s->ctx->h,
                   LOG_ERR,
                   "warning: broker.quorum is now a size - assuming %lu",
@@ -1090,7 +1103,7 @@ static int quorum_configure (struct state_machine *s,
             s->quorum.size = strtoul (val, NULL, 10);
             if (errno != 0
                 || s->quorum.size < 1
-                || s->quorum.size > s->ctx->size) {
+                || s->quorum.size > s->ctx->info.size) {
                 errno = EINVAL;
                 return errprintf (errp, "Error parsing %s attribute", name);
             }
@@ -1099,7 +1112,7 @@ static int quorum_configure (struct state_machine *s,
             return errprintf (errp, "%s: %s", name, strerror (errno));
     }
     else {
-        s->quorum.size = s->ctx->size;
+        s->quorum.size = s->ctx->info.size;
         char buf[16];
         snprintf (buf, sizeof (buf), "%lu", (unsigned long)s->quorum.size);
         if (attr_add (s->ctx->attrs, name, buf, ATTR_IMMUTABLE) < 0)
@@ -1594,14 +1607,14 @@ struct state_machine *state_machine_create (struct broker *ctx,
     flux_watcher_start (s->check);
     if (!(s->monitor.requests = flux_msglist_create ()))
         goto error;
-    if (ctx->rank > 0) {
+    if (ctx->info.rank > 0) {
         if (!(s->monitor.f = monitor_parent (ctx->h, s)))
             goto error;
     }
-    if (!(s->quorum.online = idset_create (ctx->size, 0)))
+    if (!(s->quorum.online = idset_create (ctx->info.size, 0)))
         goto error;
-    if (!(s->quorum.all = idset_create (s->ctx->size, 0))
-        || idset_range_set (s->quorum.all, 0, s->ctx->size - 1) < 0)
+    if (!(s->quorum.all = idset_create (s->ctx->info.size, 0))
+        || idset_range_set (s->quorum.all, 0, s->ctx->info.size - 1) < 0)
         goto error;
 
     if (quorum_configure (s, "broker.quorum", errp) < 0
