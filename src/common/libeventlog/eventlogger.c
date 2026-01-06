@@ -164,7 +164,7 @@ static flux_future_t *eventlogger_commit_batch (struct eventlogger *ev,
          *   in big trouble anyway...
          */
         if ((f = flux_future_create (NULL, NULL))) {
-            flux_future_set_reactor (f, flux_get_reactor (ev->h));
+            flux_future_set_flux (f, ev->h);
             flux_future_fulfill (f, NULL, NULL);
         }
     }
