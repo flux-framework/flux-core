@@ -284,6 +284,8 @@ node deviation from common path
 startup
 -------
 
+The broker state machine is started in JOIN state after the built-in modules
+are confirmed to be running.
 The broker ranks > 0 wait for the parent to enter QUORUM state (*parent-ready*)
 then enters INIT state.  Rank 0 immediately enters INIT (*parent-none*).
 Upon entering INIT, the rc1 script is executed, then on completion, QUORUM
@@ -349,8 +351,14 @@ Events
   * - event
     - description
 
+  * - builtins-success
+    - All built-in modules are running (entered reactor)
+
+  * - builtins-fail
+    - A built-in module has failed to initialize
+
   * - parent-ready
-    - parent has entered BARRIER state
+    - parent has entered QUORUM state
 
   * - parent-none
     - this broker has no parent
@@ -370,11 +378,17 @@ Events
   * - rc1-fail
     - rc1 script completed with errors
 
+  * - rc1-ignorefail
+    - rc1 script completed with errors but broker is recovery mode
+
   * - quorum-full
     - configured quorum of brokers reached
 
-  * - quorum-timeout
+  * - quorum-fail
     - configured quorum not reached within timeout period
+
+  * - panic
+    - a broker module has experienced a fatal error
 
   * - rc2-none
     - no rc2 script (initial program) is defined on this broker
@@ -388,8 +402,8 @@ Events
   * - shutdown
     - broker received an external cue to begin shutting down
 
-  * - signal-abort
-    - broker received terminating signal
+  * - parent-fail
+    - parent has failed
 
   * - cleanup-none
     - no cleanup script is defined on this broker
@@ -405,9 +419,6 @@ Events
 
   * - children-none
     - this broker has no children
-
-  * - children-timeout
-    - children did not disconnected within timeout period
 
   * - rc3-none
     - no rc3 script is defined on this broker
