@@ -112,8 +112,8 @@ error:
 
 char *module_dso_name (const char *path)
 {
-    char *name;
-    char *cp;
+    const char *name;
+    const char *cp;
 
     name = basename_simple (path);
     // if path ends in .so or .so.VERSION, strip it off

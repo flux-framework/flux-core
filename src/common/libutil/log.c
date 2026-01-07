@@ -27,7 +27,7 @@
 #include "log.h"
 
 extern char *__progname;
-static char *prog = NULL;
+static const char *prog = NULL;
 
 void
 log_init (char *p)
