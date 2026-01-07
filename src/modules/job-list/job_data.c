@@ -77,7 +77,7 @@ struct job *job_create (flux_t *h, flux_jobid_t id)
  * full path */
 static const char *parse_job_name (const char *path)
 {
-    char *p = strrchr (path, '/');
+    const char *p = strrchr (path, '/');
     if (p) {
         p++;
         /* user mistake, specified a directory with trailing '/',

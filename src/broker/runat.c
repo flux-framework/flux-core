@@ -281,7 +281,7 @@ static void stdio_cb (flux_subprocess_t *p, const char *stream)
     while (len > 0) {
         int n = len;
         int skip = 0;
-        char *cp;
+        const char *cp;
         if ((cp = memchr (data, '\n', len))) {
             n = cp - data;
             skip = 1;
