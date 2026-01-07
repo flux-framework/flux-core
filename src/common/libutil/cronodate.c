@@ -227,7 +227,10 @@ static int get_range (const char *r, tm_unit_t u, int *lo, int *hi)
         *lo = tm_unit_min (u);
         *hi = tm_unit_max (u);
     }
-    else if ((p = strchr (r, '-'))) {
+    /* Cast needed: strchr returns const char* in C23, but we know
+     * r points to a strdup'd mutable copy from range_parse().
+     */
+    else if ((p = (char *)strchr (r, '-'))) {
         *(p++) = '\0';
         // r = lo, p = hi
         if (((*lo = tm_string2int (r, u)) < 0)
