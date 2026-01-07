@@ -337,15 +337,15 @@ static int parse_next_range (const char *str, struct _range *range)
     if (!orig)
         return -1;
 
-    if ((p = strchr (str, '-'))) {
+    if ((p = strchr (orig, '-'))) {
         *p++ = '\0';
         if (*p == '-') {  /* don't allow negative numbers */
             errno = EINVAL;
             goto error;
         }
     }
-    range->lo = strtoul (str, &q, 10);
-    if (q == str)  {
+    range->lo = strtoul (orig, &q, 10);
+    if (q == orig)  {
         errno = EINVAL;
         goto error;
     }
@@ -364,8 +364,8 @@ static int parse_next_range (const char *str, struct _range *range)
         goto error;
     }
 
+    range->width = strlen (orig);
     free (orig);
-    range->width = strlen (str);
     return 0;
 
   error:
