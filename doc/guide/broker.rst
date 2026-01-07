@@ -58,7 +58,7 @@ PMI
 ===
 
 When Flux is launched by Flux, by another resource manager, or as a
-standalone test instance, PMI is used for bootstrap.  The process involves
+stand-alone test instance, PMI is used for bootstrap.  The process involves
 network communication using the external PMI service.
 
 The broker PMI client uses a simple subset of PMI capabilities, abstracted for
@@ -133,8 +133,8 @@ Debugging: set the shell option :option:`verbose=2` for a server side trace
 on stderr from the shell *pmi* plugin.  The shell plugin options are further
 described in :man1:`flux-shell`.
 
-booting Flux as a standalone test instance
-------------------------------------------
+booting Flux as a stand-alone test instance
+-------------------------------------------
 
 An instance of size N may be launched on a single node using
 
