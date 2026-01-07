@@ -1094,7 +1094,7 @@ static void property_destructor (void **arg)
     }
 }
 
-static char * property_string_invalid (const char *s)
+static const char * property_string_invalid (const char *s)
 {
     return strpbrk (s, "^&'\"`|()");
 }
@@ -1111,11 +1111,12 @@ int rlist_add_property (struct rlist *rl,
     struct idset *unknown = NULL;
     int rc = -1;
     char *p;
+    const char *invalid;
 
-    if ((p = property_string_invalid (name))) {
+    if ((invalid = property_string_invalid (name))) {
         errprintf (errp,
                    "Invalid character '%c' in property \"%s\"",
-                   *p,
+                   *invalid,
                    name);
         errno = EINVAL;
         goto out;
@@ -1182,7 +1183,7 @@ int rlist_assign_properties (struct rlist *rl,
 {
     json_t *val;
     const char *name;
-    char *p;
+    const char *invalid;
     int rc = -1;
 
     if (!rl || !properties) {
@@ -1209,10 +1210,10 @@ int rlist_assign_properties (struct rlist *rl,
             errno = EINVAL;
             goto error;
         }
-        if ((p = property_string_invalid (name))) {
+        if ((invalid = property_string_invalid (name))) {
             errprintf (errp,
                        "invalid character '%c' in property \"%s\"",
-                        *p,
+                        *invalid,
                         name);
             errno = EINVAL;
             goto error;
