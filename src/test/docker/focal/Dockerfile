@@ -85,7 +85,6 @@ RUN apt-get update \
         liblua5.2-dev \
         lua-posix-dev \
         liblz4-dev \
-        libsqlite3-dev \
         uuid-dev \
         libhwloc-dev \
         libopenmpi-dev \
