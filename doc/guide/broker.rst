@@ -5,7 +5,21 @@ Broker
 ######
 
 The :man1:`flux-broker` provides an overlay network and a framework for
-implementing distributed, message-based services.
+implementing distributed, message-based services.  A set of brokers launched
+in parallel comprises a Flux instance.
+
+A broker consists of a single threaded event loop and built-in services.
+Some of these services are directly embedded in the broker (logging,
+configuration, state machine, etc).  Others are implemented as built-in
+broker modules (overlay, connector-local, groups, rexec) for performance
+or isolation.  Built-in broker modules have a private thread and event loop,
+and communicate with the main broker only via messages. They are integral
+to the proper functioning of the broker and are always loaded.
+
+The broker is extended by loading additional modules (KVS, job manager,
+scheduler).  Modules can be executed as broker threads or stand-alone
+processes.  Despite optionally sharing an address space, these extensions
+are not broker components per se and are not covered here.
 
 .. note::
   This document is incomplete.  Please open an issue on
@@ -13,60 +27,96 @@ implementing distributed, message-based services.
   if you have a need for broker information that is missing and we will
   do our best to answer questions and fill gaps in the documentation.
 
-
-*************************
-Broker Bootstrap Sequence
-*************************
+*********
+Bootstrap
+*********
 
 Each broker executes a bootstrap sequence to
 
 1. get the size of the Flux instance
 2. get its rank within the Flux instance
 3. get its level within the hierarchy of Flux instances
-4. get the mapping of broker ranks to nodes
-5. compute the broker ranks of its peers (TBON parent and children)
-6. get URI(s) of peers
-7. get public key(s) of peers to initialize secure communication
+4. get the broker's :term:`taskmap`, which helps identify its :term:`clique`.
+5. find the broker ranks of its direct :term:`TBON` peers by consulting
+   the topology
+6. get URIs of peers
+7. get public keys of peers to initialize secure communication
+8. build the instance :term:`hostlist`, which provides a mapping between
+   broker ranks and their hostnames
+9. determine the :term:`critical ranks`
 
-An instance bootstraps using one of two mechanisms:  PMI or Config File.
+The broker completes steps 1-4 before entering its event loop or starting
+the built-in modules.  The built-in overlay module completes steps 5-9
+before entering its event loop.  Since the broker state machine starts
+only after all the built-in modules have entered their event loops,
+bootstrap is finalized before any of the broker states described below are
+entered.
+
+An instance bootstraps using :term:`PMI` or a configuration file.
 
 PMI
 ===
 
 When Flux is launched by Flux, by another resource manager, or as a
-standalone test instance, PMI is used for bootstrap.
+stand-alone test instance, PMI is used for bootstrap.  The process involves
+network communication using the external PMI service.
 
 The broker PMI client uses a simple subset of PMI capabilities, abstracted for
 different server implementations in the plugin-based UPMI subsystem defined
-in `upmi.h <https://github.com/flux-framework/flux-core/blob/master/src/common/libpmi/upmi.h_`.  The broker PMI bootstrap sequence roughly follows the
+in `upmi.h <https://github.com/flux-framework/flux-core/blob/master/src/common/libpmi/upmi.h>`_.  The broker PMI bootstrap sequence roughly follows the
 steps outlined above.
 
-Steps 1-4 involve accessing parameters directly provided by the PMI server.
+In steps 1-4 the broker fetches parameters that are directly provided by
+the local PMI server, generally not requiring network communication.
+After these steps are completed, the broker starts the built-in modules.
 
-In step 5, the fixed tree topology is used to compute the ranks of the TBON
-parent and TBON children, if any.
+In step 5, the built-in overlay module uses the rank and size obtained
+earlier, combined with the TBON topology, to compute the ranks of its TBON
+parent and TBON children--its direct peers.
 
-If a broker has TBON children, it binds to a 0MQ URI that the children will
-connect to.  If step 4 indicates that all brokers mapped to a single node,
-the socket is bound to a local IPC path in the broker rundir.  If brokers are
-mapped to multiple nodes, the socket is bound to a TCP address on the interface
-hosting the default route and a randomly assigned port.  These URIs cannot
-be predicted by peers, so they must be exchanged via PMI.
+If a broker has TBON children, it binds to one or more 0MQ URIs that the
+children will connect to.  If the taskmap obtained in step 4 indicates
+that there are clique brokers (co-located peer brokers), the socket is
+bound to a local IPC path in the broker rundir.  If there are non-local
+peers, the socket is bound to a TCP address.  These URIs cannot be predicted
+by peers, so they must be exchanged via PMI.
 
-In addition, each broker generates a unique public, private CURVE keypair.
-The public keys must be shared with peers to enable secure communication.
+In addition, the overlay module on each broker generates a unique CURVE
+certificate.  The public keys must be shared with peers to enable secure
+communication.
 
-In step 6-7, each broker rank stores a "business card" containing its 0MQ URI
-and public key to the PMI KVS under its rank.  A PMI barrier is executed.
-Finally, the business cards for any peers are loaded from the PMI KVS.
-The bootstrap process is complete and overlay initialization may commence.
+In step 6-7, the overlay module on each broker rank stores a "business card"
+containing its 0MQ URIs and public key to the PMI KVS under its rank:
 
-For debugging, set :envvar:`FLUX_PMI_DEBUG=1` in the broker's environment
-to get a trace of the broker's client PMI calls on stderr.  Some PMI options
-may be tweaked by setting the :option:`broker.boot-method` attribute as
-described in :man7:`flux-broker-attributes`.  When there are broker bootstrap
-issues, sometimes it can be helpful to try to boot :man1:`flux-pmi`, a
-standalone PMI client.
+.. code-block:: console
+
+  /----------------------------------------------------\
+  | host:  fluke42                                     |
+  | pubkey: "Ph8TFQd&>-wSxsiPk)h[ac*wrKN@r]/-/&ZEmt]a" |
+  | uri: [                                             |
+  |   "ipc:///tmp/flux-zTSG2v/tbon-0",                 |
+  |   "tcp://[::ffff:10.0.2.13]:42735"                 |
+  | ]                                                  |
+  \----------------------------------------------------/
+
+A PMI barrier is executed.  After the barrier, the business cards for peers
+are loaded from the PMI KVS.  The TBON children's public keys are authorized
+to connect and another PMI barrier is executed, which ensures that all non-leaf
+brokers are ready to accept connections.  Once this final barrier is
+complete, the overlay module sends a message to the broker indicating that
+its bootstrap is complete and provides a topology-aware set of critical ranks.
+
+In steps 8-9, the broker fetches the business cards of all ranks, builds
+the hostlist, and sets the critical ranks (notifying the enclosing instance,
+if applicable).
+
+During steps 8-9, the overlay module tells 0MQ to establish TBON parent
+connections asynchronously and enters its event loop.  Once all the built-in
+modules enter their event loops, the broker state machine (see below) starts.
+
+When working on this code it may be helpful to set :envvar:`FLUX_PMI_DEBUG`
+to get some client PMI telemetry on stderr.  :man1:`flux-pmi` contains some
+helpful hints for debugging the PMI client.
 
 Flux booting Flux as a job
 --------------------------
@@ -83,8 +133,8 @@ Debugging: set the shell option :option:`verbose=2` for a server side trace
 on stderr from the shell *pmi* plugin.  The shell plugin options are further
 described in :man1:`flux-shell`.
 
-booting Flux as a standalone test instance
-------------------------------------------
+booting Flux as a stand-alone test instance
+-------------------------------------------
 
 An instance of size N may be launched on a single node using
 
@@ -95,47 +145,63 @@ An instance of size N may be launched on a single node using
 In this case, the PMI server is embedded in the start command, and the PMI-1
 wire protocol is used as described above.
 
-Debugging: use the :man1:`flux start` :option:`--verbose=2` option for a
+Debugging: use the :option:`flux start --test-size=N --verbose=2` for a
 server side trace on stderr.
 
 booting Flux as a job in a foreign resource manager
 ---------------------------------------------------
 
 The UPMI client used by the broker attempts to adapt to different situations
-if the PMI-1 wire protocol is not available.  It tries the following in order
-(unless configured otherwise):
+if the PMI-1 wire protocol is not available (unless configured otherwise):
 
 1. simple PMI wire protocol
 2. find a ``libpmi2.so`` library
 3. find a ``libpmi.so`` library
 4. assume singleton (rank = 0, size = 1)
 
+This list may be altered by setting :envvar:`FLUX_PMI_CLIENT_METHODS` and/or
+:envvar:`FLUX_PMI_CLIENT_SEARCHPATH`.  The method or library path can also
+be forced by setting the :option:`broker.boot-method` attribute, as described
+in :man7:`flux-broker-attributes`.
+
 Config File
 ===========
 
-When Flux is launched by systemd, the brokers go through a similar bootstrap
-process as under PMI, except that information is read from a set of identical
-TOML configuration files replicated across the cluster.  The TOML configuration
-contains a host array.
+When PMI is unavailable, Flux can bootstrap from static configuration files.
+The main use case for this is the :term:`system instance` which doesn't have
+access to PMI service.  Although this method is more scalable than PMI,
+its use is limited because it requires all TCP endpoints to be known in
+advance.
 
-In step 1-2, the broker scans the host array for an entry with a matching
-hostname.  The array index of the matching entry is the broker's rank,
-and also contains its URI.  The array size is the instance size.
+The configuration details are defined in the TOML ``[bootstrap]`` table,
+as described in :man5:`flux-config-bootstrap`.  It contains a rank-ordered
+hosts array that maps hostnames to broker ranks and provides 0MQ endpoint
+details for each rank.
 
-Steps 3-4 are satisfied by assuming that in this mode, there is one broker
-per node, and the instance is at the top (level 0) of the instance hierarchy.
+Config file bootstrap is implemented as a UPMI plugin that pre-populates
+the PMI KVS with business card for all ranks.  Steps 1-4 are the same as
+for PMI from the broker's point of view.  Within the UPMI plugin,
+the host array is scanned for an entry that matches the local hostname.
+The array index of the matching entry is the broker's rank, and the array size
+is the instance size.  The instance level is assumed to be zero, and the
+taskmap is assumed to be one broker per node.
 
 In step 5, as above, the tree topology is used to compute the ranks of the
-TBON parent and TBON children, if any.
+TBON parent and TBON children.  In this case the default topology is ``custom``,
+which is *flat* (rank 0 is everyone's parent) unless ``parent`` keys appear
+in the bootstrap hosts entries.
 
-Instead of generating a unique CURVE keypair per broker, an instance
-bootstrapped in this way shares a single CURVE keypair replicated across
-the cluster.
+Instead of generating a unique CURVE certificate per broker, the instance
+shares a single certificate that is assumed to be replicated out of band
+across the cluster.  Steps 6-7 are satisfied by simply accessing the
+certificate on disk, and looking up the peer rank indices in the hosts array.
+There are no barriers.  The overlay module sends a message to the broker
+indicating that its bootstrap is complete and provides the critical rank set.
 
-So steps 6-7 are satisfied by simply accessing the CURVE key certificate
-on disk, and looking up the peer rank indices in the hosts array.
-The bootstrap process is complete and overlay initialization may commence.
-
+In steps 8-9, the broker fetches the business cards of all ranks and builds
+the hostlist.  Meanwhile, as above, the overlay module tells 0MQ to establish
+TBON parent connections asynchronously, then enters its event loop.
+Broker start-up continues as previously described.
 
 ********************
 Broker State Machine
@@ -218,6 +284,8 @@ node deviation from common path
 startup
 -------
 
+The broker state machine is started in JOIN state after the built-in modules
+are confirmed to be running.
 The broker ranks > 0 wait for the parent to enter QUORUM state (*parent-ready*)
 then enters INIT state.  Rank 0 immediately enters INIT (*parent-none*).
 Upon entering INIT, the rc1 script is executed, then on completion, QUORUM
@@ -283,8 +351,14 @@ Events
   * - event
     - description
 
+  * - builtins-success
+    - All built-in modules are running (entered reactor)
+
+  * - builtins-fail
+    - A built-in module has failed to initialize
+
   * - parent-ready
-    - parent has entered BARRIER state
+    - parent has entered QUORUM state
 
   * - parent-none
     - this broker has no parent
@@ -304,11 +378,17 @@ Events
   * - rc1-fail
     - rc1 script completed with errors
 
+  * - rc1-ignorefail
+    - rc1 script completed with errors but broker is recovery mode
+
   * - quorum-full
     - configured quorum of brokers reached
 
-  * - quorum-timeout
+  * - quorum-fail
     - configured quorum not reached within timeout period
+
+  * - panic
+    - a broker module has experienced a fatal error
 
   * - rc2-none
     - no rc2 script (initial program) is defined on this broker
@@ -322,8 +402,8 @@ Events
   * - shutdown
     - broker received an external cue to begin shutting down
 
-  * - signal-abort
-    - broker received terminating signal
+  * - parent-fail
+    - parent has failed
 
   * - cleanup-none
     - no cleanup script is defined on this broker
@@ -339,9 +419,6 @@ Events
 
   * - children-none
     - this broker has no children
-
-  * - children-timeout
-    - children did not disconnected within timeout period
 
   * - rc3-none
     - no rc3 script is defined on this broker

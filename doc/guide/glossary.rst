@@ -11,6 +11,10 @@ used in our documentation that may not be familiar to all readers.
     that are co-located on a node.  Cliques may communicate with each other
     more efficiently than tasks on different nodes.
 
+  critical ranks
+    The Flux broker ranks that must remain online for Flux to continue
+    operating.
+
   enclosing instance
     The Flux instance that a process naturally interacts with.  It is
     the instance referred to by the :envvar:`FLUX_URI` environment variable,
@@ -87,6 +91,10 @@ used in our documentation that may not be familiar to all readers.
   parallel program
     A ranked group of :term:`tasks`, often the same executable, launched
     in parallel and working together to solve a problem.
+
+  PMI
+    The Process Management Interface is a quasi-standard interface for
+    bootstrapping MPI programs.  Version 1 is described in :doc:`rfc:spec_13`.
 
   priority
     The order in which the scheduler considers jobs.  By default, priority
