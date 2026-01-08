@@ -75,12 +75,14 @@ test_expect_success 'reconfig with bad TOML fails' '
 	test_must_fail flux config reload
 '
 
+# N.B. the config won't actually be updated unless something changes,
+# so set a dummy key
 test_expect_success 'connector-local restored private access policy' '
 	flux dmesg --clear &&
 	cat >access.toml <<-EOT &&
 	[access]
 	EOT
-	flux config reload &&
+	flux config set --type=integer secfoo 42 &&
 	flux dmesg | grep connector-local >dmesg6.out &&
 	grep allow-root-owner=false dmesg6.out &&
 	grep allow-guest-user=false dmesg6.out

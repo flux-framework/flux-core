@@ -42,6 +42,7 @@
 
 #include "src/broker/module.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
 
@@ -84,47 +85,88 @@ done:
     return rc;
 }
 
-/* Get the current list of loaded modules and update them all,
- * plus the broker.
+/* Restore current config to a list of modules.
  */
-static int update_all_modules (flux_t *h,
-                               const flux_conf_t *conf,
-                               flux_error_t *errp)
+static void revert_updates (flux_t *h, zlist_t *names)
 {
-    flux_future_t *f;
+    const flux_conf_t *conf = flux_get_conf (h);
+    const char *name;
+    flux_error_t error;
+
+    name = zlist_first (names);
+    while (name) {
+        if (update_one_module (h, name, conf, &error) < 0)
+            flux_log (h, LOG_ERR, "error reverting %s: %s", name, error.text);
+        name = zlist_next (names);
+    }
+}
+
+/* Get the current list of loaded modules and update them all,
+ * then the broker, then the local cached copy.  On success, 'conf'
+ * ownership is transferred to 'h'.  If any updates fail, revert the
+ * successful ones.
+ */
+static int update_all_new (flux_t *h,
+                           const flux_conf_t *conf,
+                           flux_error_t *errp)
+{
+    flux_future_t *f = NULL;
     json_t *mods;
     size_t index;
     json_t *entry;
     const char *name;
     flux_error_t error;
-    int rc = -1;
+    zlist_t *rollback;
+
+    if (!(rollback = zlist_new ()))
+        goto nomem;
+    zlist_autofree (rollback);
 
     if (!(f = flux_rpc (h, "module.list", NULL, FLUX_NODEID_ANY, 0))
         || flux_rpc_get_unpack (f, "{s:o}", "mods", &mods) < 0) {
         errprintf (errp, "module.list: %s", future_strerror (f, errno));
-        goto done;
+        goto error;
     }
     json_array_foreach (mods, index, entry) {
         if (json_unpack (entry, "{s:s}", "name", &name) < 0) {
             errprintf (errp, "malformed module.list response");
             errno = EPROTO;
-            goto done;
+            goto error;
         }
         if (streq (name, "config"))
             continue;
         if (update_one_module (h, name, conf, &error) < 0) {
             errprintf (errp, "error updating %s: %s", name, error.text);
-            goto done;
+            goto error;
         }
+        if (zlist_append (rollback, (char *)name) < 0)
+            goto nomem;
     }
     if (update_one_module (h, "broker", conf, &error) < 0) {
         errprintf (errp, "error updating broker: %s", error.text);
-        goto done;
+        goto error;
     }
-    rc = 0;
-done:
-    flux_future_destroy(f);
-    return rc;
+    if (zlist_append (rollback, "broker") < 0)
+        goto nomem;
+    if (flux_set_conf_new (h, conf) < 0) {
+        errprintf (&error, "Error caching config object: %s", strerror (errno));
+        goto error;
+    }
+    flux_future_destroy (f);
+    zlist_destroy (&rollback);
+    return 0;
+nomem:
+    errprintf (errp, "out of memory");
+    errno = ENOMEM;
+error:
+    if (rollback) {
+        int saved_errno = errno;
+        revert_updates (h, rollback);
+        zlist_destroy (&rollback);
+        errno = saved_errno;
+    }
+    flux_future_destroy (f);
+    return -1;
 }
 
 static bool config_equal (const flux_conf_t *c1, const flux_conf_t *c2)
@@ -164,15 +206,10 @@ static void reload_cb (flux_t *h,
         if (config_equal (flux_get_conf (h), conf))
             flux_conf_decref (conf);
         else {
-            if (flux_set_conf_new (h, conf) < 0) {
-                errprintf (&error,
-                           "Error caching config object: %s",
-                           strerror (errno));
+            if (update_all_new (h, conf, &error) < 0) {
                 flux_conf_decref (conf);
                 goto error;
             }
-            if (update_all_modules (h, conf, &error) < 0)
-                goto error;
         }
     }
     if (flux_respond (h, msg, NULL) < 0)
@@ -203,15 +240,10 @@ static void load_cb (flux_t *h,
     if (config_equal (flux_get_conf (h), conf))
         flux_conf_decref (conf);
     else {
-        if (flux_set_conf_new (h, conf) < 0) {
-            errprintf (&error,
-                       "Error caching config object: %s",
-                       strerror (errno));
+        if (update_all_new (h, conf, &error) < 0) {
             flux_conf_decref (conf);
             goto error;
         }
-        if (update_all_modules (h, conf, &error) < 0)
-            goto error;
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config.load request");
