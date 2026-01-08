@@ -140,15 +140,15 @@ static void eventlog_batch_error (struct eventlog_batch *batch, int errnum)
     zlist_remove (ev->pending, batch);
 }
 
-static void commit_cb (flux_future_t *f, void *arg)
+static void commit_batch_cb (flux_future_t *f, void *arg)
 {
     struct eventlog_batch *batch = arg;
     eventlogger_batch_complete (batch);
     flux_future_destroy (f);
 }
 
-static flux_future_t *eventlogger_commit_batch (struct eventlogger *ev,
-                                                struct eventlog_batch *batch)
+static flux_future_t *commit_batch (struct eventlogger *ev,
+                                    struct eventlog_batch *batch)
 {
     flux_future_t *f = NULL;
     flux_future_t *fc = NULL;
@@ -177,25 +177,25 @@ static flux_future_t *eventlogger_commit_batch (struct eventlogger *ev,
         flux_watcher_stop (batch->timer);
         if (!(fc = flux_kvs_commit (ev->h, ev->ns, flags, batch->txn)))
             return NULL;
-        if (!(f = flux_future_and_then (fc, commit_cb, batch)))
+        if (!(f = flux_future_and_then (fc, commit_batch_cb, batch)))
             flux_future_destroy (fc);
     }
     return f;
 }
 
-static flux_future_t *commit_batch (struct eventlogger *ev,
-                                    struct eventlog_batch **batchp)
+static flux_future_t *commit (struct eventlogger *ev,
+                              struct eventlog_batch **batchp)
 {
     struct eventlog_batch *batch = ev->current;
     if (batchp)
         *batchp = batch;
     ev->current = NULL;
-    return eventlogger_commit_batch (ev, batch);
+    return commit_batch (ev, batch);
 }
 
 flux_future_t *eventlogger_commit (struct eventlogger *ev)
 {
-    return commit_batch (ev, NULL);
+    return commit (ev, NULL);
 }
 
 static void timer_commit_cb (flux_future_t *f, void *arg)
@@ -216,7 +216,7 @@ static void timer_cb (flux_reactor_t *r,
     flux_future_t *f = NULL;
 
     batch->ev->current = NULL;
-    if (!(f = eventlogger_commit_batch (batch->ev, batch))
+    if (!(f = commit_batch (batch->ev, batch))
         || flux_future_then (f, timeout, timer_commit_cb, batch) < 0) {
         eventlog_batch_error (batch, errno);
         flux_future_destroy (f);
@@ -401,7 +401,7 @@ int eventlogger_flush (struct eventlogger *ev)
     int rc = -1;
     flux_future_t *f;
 
-    if (!(f = commit_batch (ev, &batch))
+    if (!(f = commit (ev, &batch))
         || flux_future_wait_for (f, ev->commit_timeout) < 0)
         goto out;
     if ((rc = flux_future_get (f, NULL)) < 0)
