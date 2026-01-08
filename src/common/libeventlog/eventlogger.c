@@ -154,6 +154,29 @@ static flux_future_t *commit_batch (struct eventlogger *ev,
     flux_future_t *fc = NULL;
     int flags = FLUX_KVS_TXN_COMPACT;
 
+    /*  Stop any pending timer watcher and start a
+     *   kvs commit operation. Call eventlogger_batch_complete()
+     *   when the commit is done, and return a future to the caller
+     *   that will be fulfilled on return from that function.
+     */
+    flux_watcher_stop (batch->timer);
+    if (!(fc = flux_kvs_commit (ev->h, ev->ns, flags, batch->txn)))
+        return NULL;
+    if (!(f = flux_future_and_then (fc, commit_batch_cb, batch)))
+        flux_future_destroy (fc);
+    return f;
+}
+
+static flux_future_t *commit (struct eventlogger *ev,
+                              struct eventlog_batch **batchp)
+{
+    struct eventlog_batch *batch = ev->current;
+    flux_future_t *f = NULL;
+
+    if (batchp)
+        *batchp = batch;
+    ev->current = NULL;
+
     if (!batch) {
         /*  If batch is NULL, return a fulfilled future immediately.
          *
@@ -167,29 +190,9 @@ static flux_future_t *commit_batch (struct eventlogger *ev,
             flux_future_set_flux (f, ev->h);
             flux_future_fulfill (f, NULL, NULL);
         }
+        return f;
     }
-    else {
-        /*  Otherwise, stop any pending timer watcher and start a
-         *   kvs commit operation. Call eventlogger_batch_complete()
-         *   when the commit is done, and return a future to the caller
-         *   that will be fulfilled on return from that function.
-         */
-        flux_watcher_stop (batch->timer);
-        if (!(fc = flux_kvs_commit (ev->h, ev->ns, flags, batch->txn)))
-            return NULL;
-        if (!(f = flux_future_and_then (fc, commit_batch_cb, batch)))
-            flux_future_destroy (fc);
-    }
-    return f;
-}
 
-static flux_future_t *commit (struct eventlogger *ev,
-                              struct eventlog_batch **batchp)
-{
-    struct eventlog_batch *batch = ev->current;
-    if (batchp)
-        *batchp = batch;
-    ev->current = NULL;
     return commit_batch (ev, batch);
 }
 
