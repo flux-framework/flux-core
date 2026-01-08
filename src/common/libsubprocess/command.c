@@ -173,7 +173,7 @@ static char **expand_argz (char *argz, size_t argz_len)
  */
 static char *env_entry_name (char *entry, char *dst, size_t len)
 {
-    char *p;
+    const char *p;
     if (!entry)
         return NULL;
     /* If there is no '=' in entry, then "name" is the entire entry. */
@@ -199,7 +199,7 @@ static char *env_entry_name (char *entry, char *dst, size_t len)
  */
 static const char * env_entry_value (const char *entry)
 {
-    char *p;
+    const char *p;
     if (!entry || !(p = strchr (entry, '=')))
         return NULL;
     return p+1;

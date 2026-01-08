@@ -141,7 +141,7 @@ static json_t *eventlog_entry_decode_common (const char *entry,
                                              bool trailing_newline)
 {
     int len;
-    char *ptr;
+    const char *ptr;
     json_t *o;
 
     if (!entry)

@@ -220,7 +220,7 @@ bool job_constraint_match (struct job_constraint *c, const struct rnode *n)
     return c->match (c, n);
 }
 
-static char *property_query_string_invalid (const char *s)
+static const char *property_query_string_invalid (const char *s)
 {
     /*  Return first invalid character.
      *  Invalid chaaracters are listed in RFC 20, but we specifically

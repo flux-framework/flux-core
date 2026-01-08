@@ -21,7 +21,7 @@
 
 static const char *parse_val (const char *s, const char *key)
 {
-    char *match;
+    const char *match;
     const char *cp = s;
     int keylen = strlen (key);
 

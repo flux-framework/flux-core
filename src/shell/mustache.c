@@ -74,11 +74,11 @@ char *mustache_render (struct mustache_renderer *mr,
     }
     for (;;) {
         int len;
-        char *end;
+        const char *end;
 
         /*  Look for opening "{{"
          */
-        char *start = strstr (pos, "{{");
+        const char *start = strstr (pos, "{{");
         if (start == NULL) {
             /*  No more mustache tags, put rest of string and finish
              */

@@ -53,7 +53,7 @@ bool get_next_eventlog_entry (const char **pp,
                               const char **tok,
                               size_t *toklen)
 {
-    char *term;
+    const char *term;
 
     if (!(term = strchr (*pp, '\n')))
         return false;

@@ -244,7 +244,7 @@ void parse_bad_input (void)
 
     for (i = 0; i < results.gl_pathc; i++) {
         char errbuf[255];
-        char *name = basename_simple (results.gl_pathv[i]);
+        const char *name = basename_simple (results.gl_pathv[i]);
         const char *reason;
         bool blocklist = matchtab (name, bad_input_blocklist, &reason);
 

@@ -174,7 +174,7 @@ int sign_none_unwrap (const char *input,
                       int *payloadsz,
                       uint32_t *userid)
 {
-    char *p;
+    const char *p;
 
     if (!input || !userid || !payload || !payloadsz)
         goto error_inval;

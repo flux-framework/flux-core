@@ -11,7 +11,7 @@
 #ifndef _UTIL_BASENAME_H
 #define _UTIL_BASENAME_H
 
-char *basename_simple (const char *path);
+const char *basename_simple (const char *path);
 
 #endif /* !_UTIL_BASENAME_H */
 

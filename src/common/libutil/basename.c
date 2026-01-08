@@ -19,10 +19,10 @@
  * https://github.com/lattera/glibc/blob/master/string/basename.c
  */
 
-char *basename_simple (const char *path)
+const char *basename_simple (const char *path)
 {
-    char *p = strrchr (path, '/');
-    return p ? p + 1 : (char *)path;
+    const char *p = strrchr (path, '/');
+    return p ? p + 1 : path;
 }
 
 // vi:ts=4 sw=4 expandtab

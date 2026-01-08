@@ -69,7 +69,7 @@ static void hash_destructor (void **item)
  */
 int disconnect_topic (const char *topic, char *buf, int len)
 {
-    char *p;
+    const char *p;
     int service_len;
     int used;
 

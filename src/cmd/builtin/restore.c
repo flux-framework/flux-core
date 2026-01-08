@@ -350,7 +350,7 @@ static json_t *restore_snapshot (struct archive *ar,
 static int shortblobref_length (const char *blobref)
 {
     int len = 8;
-    char *cp;
+    const char *cp;
 
     if ((cp = strchr (blobref, '-')))
         len += (cp - blobref) + 1;

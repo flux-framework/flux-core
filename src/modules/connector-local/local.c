@@ -284,7 +284,7 @@ static int mod_main (flux_t *h, int argc, char **argv)
 {
     struct connector_local ctx;
     const char *local_uri = NULL;
-    char *tmpdir;
+    const char *tmpdir;
     const char *sockpath;
     flux_error_t error;
     int rc = -1;
