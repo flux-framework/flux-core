@@ -26,6 +26,7 @@ SUBDIRS = \
 noinst_LTLIBRARIES = libmodule_builtins.la
 
 libmodule_builtins_la_SOURCES = \
+	config/config.c \
 	connector-local/local.c \
 	groups/groups.c \
 	rexec/rexec.c

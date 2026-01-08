@@ -36,6 +36,7 @@ struct modhash {
     flux_future_t *f_builtins_unload;
 };
 
+extern struct module_builtin builtin_config;
 extern struct module_builtin builtin_connector_local;
 extern struct module_builtin builtin_groups;
 extern struct module_builtin builtin_rexec;
@@ -44,6 +45,7 @@ extern struct module_builtin builtin_rexec;
  * unloaded in the reverse order.
  */
 static struct module_builtin *builtins[] = {
+    &builtin_config,
     &builtin_connector_local,
     &builtin_groups,
     &builtin_rexec,
