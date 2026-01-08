@@ -40,11 +40,13 @@ test_expect_success 'job duration was assigned from default' '
 	flux job info $(cat jobid1) jobspec >jobspec1 &&
 	jq -e ".attributes.system.duration == 10" <jobspec1
 '
+# N.B. the config won't actually be updated unless something changes,
+# so set a dummy key
 test_expect_success 'force module config update' '
 	flux module stats job-ingest >stats4.out &&
 	jq -r ".pipeline.frobnicator.pids[0]" <stats4.out >frob.pid &&
 	jq -r ".pipeline.validator.pids[0]" <stats4.out >val.pid &&
-	flux config get | flux config load
+	flux config set --type=integer foo 42
 '
 test_expect_success 'run a job to trigger work crew with new config' '
 	flux submit true

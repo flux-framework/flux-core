@@ -69,7 +69,6 @@
 #include "module.h"
 #include "modhash.h"
 #include "method.h"
-#include "brokercfg.h"
 #include "overlay.h"
 #include "service.h"
 #include "attr.h"
@@ -354,15 +353,30 @@ int main (int argc, char *argv[])
 
     /* Parse config.
      */
-    if (!(ctx.config = brokercfg_create (ctx.h,
-                                         optparse_get_str (ctx.opts,
-                                                           "config-path",
-                                                           NULL),
-                                         ctx.attrs,
-                                         ctx.modhash,
-                                         &error))) {
-        flux_log (ctx.h, LOG_CRIT, "%s", error.text);
-        goto cleanup;
+    const char *config_path = optparse_get_str (ctx.opts, "config-path", NULL);
+    if (!config_path)
+        config_path = getenv ("FLUX_CONF_DIR");
+    if (config_path) {
+        flux_conf_t *conf;
+        if (!(conf = flux_conf_parse (config_path, &error))) {
+            flux_log (ctx.h, LOG_CRIT, "Config file error: %s", error.text);
+            goto cleanup;
+        }
+        if (flux_set_conf_new (ctx.h, conf) < 0) {
+            flux_conf_decref (conf);
+            flux_log (ctx.h, LOG_CRIT, "Error caching config object");
+            goto cleanup;
+        }
+        if (attr_add (ctx.attrs,
+                      "config.path",
+                      config_path,
+                      ATTR_IMMUTABLE) < 0) {
+            flux_log (ctx.h,
+                      LOG_CRIT,
+                      "setattr config.path: %s",
+                      strerror (errno));
+            goto cleanup;
+        }
     }
 
     if (increase_rlimits () < 0) {
@@ -636,7 +650,6 @@ cleanup:
     overlay_destroy (ctx.overlay);
     service_switch_destroy (ctx.services);
     flux_msg_handler_delvec (handlers);
-    brokercfg_destroy (ctx.config);
     bootstrap_destroy (ctx.boot);
     runat_destroy (ctx.runat);
     flux_watcher_destroy (ctx.w_internal);
@@ -1446,6 +1459,12 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
+        "broker.config-reload",
+        method_config_reload_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
         "broker.disconnect",
         broker_disconnect_cb,
         0
@@ -1497,7 +1516,6 @@ static struct internal_service services[] = {
     { "service",            NULL },
     { "overlay",            NULL },
     { "module",             NULL },
-    { "config",             NULL },
     { "runat",              NULL },
     { "state-machine",      NULL },
     { "shutdown",           NULL },

@@ -318,4 +318,23 @@ test_expect_success 'flux-config unset works' '
 	test_must_fail flux config get --type=string a.b.string
 '
 
+# issue 7264 - ensure failed updates are entirely rejected
+test_expect_success 'clear the config object' '
+	flux config load </dev/null
+'
+test_expect_success 'load the heartbeat module' '
+	flux module load heartbeat
+'
+test_expect_success 'setting a bad heartbeat config value fails' '
+	test_must_fail flux config set --type=string heartbeat.period 42XYZ
+'
+test_expect_success 'the bad value is not lingering in the config object' '
+	echo "{}" >empty.exp &&
+	flux config get >empty.out &&
+	test_cmp empty.exp empty.out
+'
+test_expect_success 'unload the heartbeat module' '
+	flux module remove heartbeat
+'
+
 test_done

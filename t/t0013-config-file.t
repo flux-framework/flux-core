@@ -28,8 +28,7 @@ fi
 # check config file parsing
 #
 test_expect_success 'flux broker works with no config' '
-	flux broker ${ARGS} flux lsattr -v | grep config.path >noconfig.out &&
-	egrep "^config.path.*-$" noconfig.out
+	flux broker ${ARGS} true
 '
 
 test_expect_success 'flux broker works with empty config directory' '

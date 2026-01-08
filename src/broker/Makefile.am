@@ -24,8 +24,6 @@ fluxcmd_PROGRAMS = \
 noinst_LTLIBRARIES = libbroker.la
 
 libbroker_la_SOURCES = \
-	brokercfg.c \
-	brokercfg.h \
 	module_dso.c \
 	module_dso.h \
 	module.c \
