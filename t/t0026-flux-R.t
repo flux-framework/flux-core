@@ -82,6 +82,13 @@ test_expect_success 'flux R encode --xml works with AMD RSMI gpus' '
 	test_debug "echo encode XML = $result" &&
 	test "$result" = "rank0/core[0-47],gpu[0-7]"
 '
+test_expect_success 'flux R encode --xml works with El Capitan node' '
+	flux R encode --xml=$SHARNESS_TEST_SRCDIR/hwloc-data/elcap.xml \
+	    > R.elcap &&
+	result=$(flux R decode --short < R.elcap) &&
+	test_debug "echo encode XML = $result" &&
+	test "$result" = "rank0/core[0-95],gpu[0-3]"
+'
 test_expect_success 'flux R decode --include works' '
 	result=$(flux R encode -r 0-1023 | flux R decode --include 5-7 --short) &&
 	test_debug "echo $result" &&
