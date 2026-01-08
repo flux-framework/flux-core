@@ -127,6 +127,18 @@ done:
     return rc;
 }
 
+static bool config_equal (const flux_conf_t *c1, const flux_conf_t *c2)
+{
+    json_t *o1;
+    json_t *o2;
+
+    if (flux_conf_unpack (c1, NULL, "o", &o1) == 0
+        && flux_conf_unpack (c2, NULL, "o", &o2) == 0
+        && json_equal (o1, o2))
+        return true;
+    return false;
+}
+
 /* Handle request to re-parse config object from TOML config files.
  * Initiate reload of config in all loaded modules.
  */
@@ -149,15 +161,19 @@ static void reload_cb (flux_t *h,
             errprintf (&error, "Config file error: %s", rerror.text);
             goto error;
         }
-        if (flux_set_conf_new (h, conf) < 0) {
-            errprintf (&error,
-                       "Error caching config object: %s",
-                       strerror (errno));
+        if (config_equal (flux_get_conf (h), conf))
             flux_conf_decref (conf);
-            goto error;
+        else {
+            if (flux_set_conf_new (h, conf) < 0) {
+                errprintf (&error,
+                           "Error caching config object: %s",
+                           strerror (errno));
+                flux_conf_decref (conf);
+                goto error;
+            }
+            if (update_all_modules (h, conf, &error) < 0)
+                goto error;
         }
-        if (update_all_modules (h, conf, &error) < 0)
-            goto error;
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config.reload request");
@@ -184,13 +200,19 @@ static void load_cb (flux_t *h,
         errprintf (&error, "error decoding config.load request");
         goto error;
     }
-    if (flux_set_conf_new (h, conf) < 0) {
-        errprintf (&error, "Error caching config object: %s", strerror (errno));
+    if (config_equal (flux_get_conf (h), conf))
         flux_conf_decref (conf);
-        goto error;
+    else {
+        if (flux_set_conf_new (h, conf) < 0) {
+            errprintf (&error,
+                       "Error caching config object: %s",
+                       strerror (errno));
+            flux_conf_decref (conf);
+            goto error;
+        }
+        if (update_all_modules (h, conf, &error) < 0)
+            goto error;
     }
-    if (update_all_modules (h, conf, &error) < 0)
-        goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config.load request");
     return;
