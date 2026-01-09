@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef BROKER_OVERLAY_H
-#define BROKER_OVERLAY_H
+#ifndef _OVERLAY_OVERLAY_H
+#define _OVERLAY_OVERLAY_H
 
 #include <jansson.h>
 #include <stdint.h>
@@ -17,9 +17,7 @@
 #include "src/common/libpmi/bizcard.h"
 #include "src/common/libpmi/upmi.h"
 
-#include "attr.h"
 #include "topology.h"
-#include "bootstrap.h"
 
 /* Overlay control messages
  */
@@ -36,10 +34,11 @@ struct overlay;
  * Note: If zctx is NULL, it is created/destroyed on demand internally.
  */
 struct overlay *overlay_create (flux_t *h,
-                                struct bootstrap *boot,
-                                struct upmi_info *info,
+                                uint32_t rank,
+                                uint32_t size,
                                 const char *hostname,
-                                attr_t *attrs,
+                                const char *uuid,
+                                const char *boot_method,
                                 void *zctx,
                                 const char *uri,
                                 flux_error_t *error);
@@ -103,7 +102,7 @@ int overlay_connect (struct overlay *ov);
 void overlay_test_set_rank (struct overlay *ov, uint32_t rank);
 void overlay_test_set_version (struct overlay *ov, int version);
 
-#endif /* !BROKER_OVERLAY_H */
+#endif /* !_OVERLAY_OVERLAY_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
