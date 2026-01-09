@@ -29,13 +29,6 @@ set_torpid() {
 get_torpid() {
 	flux getattr tbon.torpid_$1
 }
-# Usage: set_torpid_all min max
-set_torpid_all() {
-	flux config get \
-		| jq ".tbon.torpid_min = \"$1\"" \
-		| jq ".tbon.torpid_max = \"$2\"" \
-		| flux exec flux config load
-}
 
 test_expect_success 'tbon.torpid max/min have expected values' '
 	test "$(get_torpid max)" = "30s" &&
@@ -129,6 +122,18 @@ test_expect_success 'scheduler shows no nodes down' '
 
 test_expect_success 'no nodes are drained' '
 	test $(flux resource status -s drain -no {nnodes}) -eq 0
+'
+# Ensure that the initial config sync with the leader doesn't clobber a
+# follower command line override, which should remain in effect until
+# the config is deliberately updated.
+test_expect_success 'cmdline torpid_max overrides initial config on follower' '
+	cat >precedence.toml <<-EOT &&
+	tbon.torpid_max = "2h"
+	EOT
+	echo 5h >precedence.exp &&
+	flux start -s2 -Stbon.torpid_max=5h \
+	    flux exec -r 1 flux getattr tbon.torpid_max >precedence.out &&
+	test_cmp precedence.exp precedence.out
 '
 
 test_done

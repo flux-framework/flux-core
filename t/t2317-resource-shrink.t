@@ -30,7 +30,7 @@ test_expect_success 'reduce tbon.torpid max/min values in subinstance for testin
 	flux proxy $jobid flux config get \
 	    | jq ".tbon.torpid_min = \"1s\"" \
 	    | jq ".tbon.torpid_max = \"2s\"" \
-	    | flux proxy $jobid flux exec flux config load
+	    | flux proxy $jobid flux config load
 '
 test_expect_success 'kill -STOP broker 3' '
 	pid=$(flux proxy $jobid flux exec -r 3 flux getattr broker.pid) &&
@@ -56,7 +56,7 @@ test_expect_success 'restore tbon.torpid max/min values in subinstance' '
 	flux proxy $jobid flux config get \
 	    | jq ".tbon.torpid_min = \"5s\"" \
 	    | jq ".tbon.torpid_max = \"30s\"" \
-	    | flux proxy $jobid flux exec flux config load
+	    | flux proxy $jobid flux config load
 '
 test_expect_success 'disconnect rank 3' '
 	flux overlay disconnect 3

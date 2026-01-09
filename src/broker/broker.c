@@ -1433,6 +1433,12 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
+        "broker.config-sync",
+        method_config_reload_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
         "broker.disconnect",
         broker_disconnect_cb,
         0

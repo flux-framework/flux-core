@@ -236,25 +236,27 @@ void method_config_reload_cb (flux_t *h,
                               const flux_msg_t *msg,
                               void *arg)
 {
-    const char *errstr = NULL;
+    const char *topic = "unknown";
+    flux_error_t error;
     flux_conf_t *conf;
 
+    (void)flux_msg_get_topic (msg, &topic);
     if (flux_module_config_request_decode (msg, &conf) < 0) {
-        errstr = "Failed to parse config-reload request";
+        errprintf (&error, "Failed to parse %s request", topic);
         goto error;
     }
     if (flux_set_conf_new (h, conf) < 0) {
-        errstr = "Failed to update config";
+        errprintf (&error, "Failed to update config");
         goto error_decref;
     }
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to config-reload request");
+        flux_log_error (h, "error responding to %s request", topic);
     return;
 error_decref:
     flux_conf_decref (conf);
 error:
-    if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to config-reload request");
+    if (flux_respond_error (h, msg, errno, error.text) < 0)
+        flux_log_error (h, "error responding to %s request", topic);
 }
 
 // vi:ts=4 sw=4 expandtab

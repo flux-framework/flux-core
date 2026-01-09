@@ -2562,36 +2562,43 @@ static int overlay_configure_topo (struct overlay *ov, flux_error_t *errp)
     return 0;
 }
 
+/* Handle a config update, topic: config-sync or config-reload.
+ * In the former case, the update should be handled like the initial
+ * config, where command line broker attribute settings override the config.
+ * In the latter case, the config overrides.
+ */
 static void overlay_config_reload_cb (flux_t *h,
                                       flux_msg_handler_t *mh,
                                       const flux_msg_t *msg,
                                       void *arg)
 {
     struct overlay *ov = arg;
+    const char *topic = "unknown";
     flux_error_t error;
-    const char *errstr = NULL;
     flux_conf_t *conf;
+    bool initialize = false;
 
-    if (flux_module_config_request_decode (msg, &conf) < 0) {
-        errstr = "Failed to parse config-reload request";
+    if (flux_request_decode (msg, &topic, NULL) < 0
+        || flux_module_config_request_decode (msg, &conf) < 0) {
+        errprintf (&error, "Failed to parse %s request", topic);
         goto error;
     }
-    if (overlay_configure_torpid (ov, conf, false, &error) < 0) {
-        errstr = error.text;
+    if (streq (topic, "overlay.config-sync"))
+        initialize = true;
+    if (overlay_configure_torpid (ov, conf, initialize, &error) < 0)
         goto error;
-    }
     if (flux_set_conf_new (h, conf) < 0) {
-        errstr = "Failed to update config";
+        errprintf (&error, "Failed to update config");
         goto error_decref;
     }
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to config-reload request");
+        flux_log_error (h, "error responding to %s request", topic);
     return;
 error_decref:
     flux_conf_decref (conf);
 error:
-    if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to config-reload request");
+    if (flux_respond_error (h, msg, errno, error.text) < 0)
+        flux_log_error (h, "error responding to %s request", topic);
 }
 
 void overlay_destroy (struct overlay *ov)
@@ -2659,6 +2666,12 @@ static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
         "overlay.config-reload",
+        overlay_config_reload_cb,
+        0,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.config-sync",
         overlay_config_reload_cb,
         0,
     },

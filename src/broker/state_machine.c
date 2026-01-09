@@ -311,8 +311,6 @@ static void action_config_sync (struct state_machine *s)
 #endif
     if (s->ctx->info.rank == 0)
         state_machine_post (s, "sync-none");
-    else
-        state_machine_post (s, "sync-success");
 }
 
 static void action_join (struct state_machine *s)
