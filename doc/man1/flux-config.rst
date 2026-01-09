@@ -19,7 +19,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-The :program:`flux config` manipulates the configuration of the local broker.
+The :program:`flux config` manipulates the Flux instance configuration.
 
 COMMANDS
 ========
@@ -29,12 +29,11 @@ get
 
 .. program:: flux config get
 
-:program:`flux config get` queries the TOML configuration for a given Flux
-broker.  if *NAME* is unspecified, it dumps the entire configuration object.
-Otherwise, *NAME* is expected to be a period-delimited path name representing
-a TOML key.  Return values are printed in string-encoded JSON form, except for
-string values, which are printed without quotes to simplify their use in shell
-scripts.
+:program:`flux config get` queries the TOML configuration.  if *NAME* is
+unspecified, it dumps the entire configuration object.  Otherwise, *NAME* is
+expected to be a period-delimited path name representing a TOML key.
+Return values are printed in string-encoded JSON form, except for string values,
+which are printed without quotes to simplify their use in shell scripts.
 
 .. option:: -d, --default=VALUE
 
@@ -68,9 +67,10 @@ scripts.
 set
 ---
 
-:program:`flux config set` queries the TOML configuration for a given Flux
-broker, then updates the value of *NAME*, which is expected to be a
-period-delimited path name representing a TOML key.
+:program:`flux config set` updates the value of *NAME* in the current configuration.
+*NAME* is expected to be a period-delimited path name representing a TOML key.
+This command may only be used on the leader (rank 0) broker and is restricted
+to the instance owner
 
 .. program:: flux config set
 
@@ -84,9 +84,10 @@ period-delimited path name representing a TOML key.
 unset
 -----
 
-:program:`flux config unset` queries the TOML configuration for a given Flux
-broker, then deletes *NAME*, which is expected to be a period-delimited
-path name representing a TOML key.
+:program:`flux config unset` deletes *NAME* in the current configuration.
+*NAME* is expected to be a period-delimited path name representing a TOML key.
+This command may only be used on the leader (rank 0) broker and is restricted
+to the instance owner.
 
 builtin
 -------
@@ -123,23 +124,33 @@ load
 
 .. program:: flux config load
 
-:program:`flux config load` replaces the current config with an object read
+:program:`flux config load` replaces the current configuration with an object read
 from standard input (JSON or TOML), or from ``*.toml`` in *PATH*, if specified.
+This command may only be used on the leader (rank 0) broker and is restricted
+to the instance owner.
+
 
 reload
 ------
 
 .. program:: flux config reload
 
-:program:`flux config reload` tells :man1:`flux-broker` to reload its TOML
-configuration after it has been modified.
+:program:`flux config reload` reloads the configuration from disk.
+This command may only be used on the leader (rank 0) broker and is restricted
+to the instance owner.  It has no effect if the configuration has not changed.
 
 On Flux instances started with :linux:man1:`systemd`,
 :program:`systemctl reload flux` invokes this command.
-This command is restricted to the instance owner.
 
-This command does not have an immediate effect in all cases.  For more
-information, refer to the :ref:`flux_config_caveats` section of
+.. option:: --follower-noop
+
+   Do nothing if invoked on a follower broker.  This is intended for the
+   systemd unit file so that configuration management software can invoke
+   :program:`systemctl reload flux` without the need to special-case follower
+   nodes.
+
+Configuration changes do not have an immediate effect in all cases.
+For more information, refer to the :ref:`flux_config_caveats` section of
 :man5:`flux-config`.
 
 
