@@ -50,6 +50,7 @@ struct brokercfg {
     flux_t *h;
     char *path;
     flux_msg_handler_t **handlers;
+    struct flux_msglist *getters;
 };
 
 /* Send the config-reload RPC to the named module.
@@ -169,6 +170,23 @@ error:
     return -1;
 }
 
+static void getters_respond (struct brokercfg *cfg, const flux_conf_t *conf)
+{
+    const flux_msg_t *msg;
+    json_t *o;
+
+    if (flux_conf_unpack (conf, NULL, "o", &o) < 0) {
+        flux_log (cfg->h, LOG_ERR, "error preparing config.get updates");
+        return;
+    }
+    msg = flux_msglist_first (cfg->getters);
+    while (msg) {
+        if (flux_respond_pack (cfg->h, msg, "O", o) < 0)
+            flux_log_error (cfg->h, "error responding to config.get request");
+        msg = flux_msglist_next (cfg->getters);
+    }
+}
+
 static bool config_equal (const flux_conf_t *c1, const flux_conf_t *c2)
 {
     json_t *o1;
@@ -210,6 +228,7 @@ static void reload_cb (flux_t *h,
                 flux_conf_decref (conf);
                 goto error;
             }
+            getters_respond (cfg, conf);
         }
     }
     if (flux_respond (h, msg, NULL) < 0)
@@ -228,6 +247,7 @@ static void load_cb (flux_t *h,
                      const flux_msg_t *msg,
                      void *arg)
 {
+    struct brokercfg *cfg = arg;
     flux_error_t error;
     json_t *o;
     flux_conf_t *conf;
@@ -244,6 +264,7 @@ static void load_cb (flux_t *h,
             flux_conf_decref (conf);
             goto error;
         }
+        getters_respond (cfg, conf);
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config.load request");
@@ -260,6 +281,7 @@ static void get_cb (flux_t *h,
                     const flux_msg_t *msg,
                     void *arg)
 {
+    struct brokercfg *cfg = arg;
     const char *errmsg = NULL;
     flux_error_t error;
     json_t *o;
@@ -272,16 +294,53 @@ static void get_cb (flux_t *h,
     }
     if (flux_respond_pack (h, msg, "O", o) < 0)
         flux_log_error (h, "error responding to config.get request");
+    if (flux_msg_is_streaming (msg)) {
+        if (flux_msglist_append (cfg->getters, msg) < 0)
+            goto error;
+    }
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "error responding to config.get request");
 }
 
+/* A streaming getter may have disconnected.  Clean up.
+ */
+static void disconnect_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct brokercfg *cfg = arg;
+
+    flux_msglist_disconnect (cfg->getters, msg);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  "config.reload", reload_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "config.load", load_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "config.get", get_cb, FLUX_ROLE_USER },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "config.reload",
+        reload_cb,
+        0,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "config.load",
+        load_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "config.get",
+        get_cb,
+        FLUX_ROLE_USER,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "config.disconnect",
+        disconnect_cb,
+        FLUX_ROLE_USER,
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -289,6 +348,7 @@ static void brokercfg_destroy (struct brokercfg *cfg)
 {
     if (cfg) {
         int saved_errno = errno;
+        flux_msglist_destroy (cfg->getters);
         flux_msg_handler_delvec (cfg->handlers);
         free (cfg->path);
         free (cfg);
@@ -308,6 +368,8 @@ static struct brokercfg *brokercfg_create (flux_t *h, const char *path)
             goto error;
     }
     if (flux_msg_handler_addvec (h, htab, cfg, &cfg->handlers) < 0)
+        goto error;
+    if (!(cfg->getters = flux_msglist_create ()))
         goto error;
     return cfg;
 error:
