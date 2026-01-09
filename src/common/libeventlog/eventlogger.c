@@ -39,6 +39,8 @@ struct eventlogger {
     void *arg;
 };
 
+static struct eventlog_batch * eventlog_batch_get (struct eventlogger *ev);
+
 static void eventlogger_decref (struct eventlogger *ev)
 {
     if (ev && --ev->refcount == 0) {
@@ -178,7 +180,8 @@ static flux_future_t *commit (struct eventlogger *ev,
     ev->current = NULL;
 
     if (!batch) {
-        /*  If batch is NULL, return a fulfilled future immediately.
+        /*  If batch is NULL and there is nothing pending, return a
+         *  fulfilled future immediately.
          *
          *  Note: There isn't much we can do if flux_future_create()
          *   fails, until the eventlogger gets a logging interface.
@@ -186,11 +189,33 @@ static flux_future_t *commit (struct eventlogger *ev,
          *   failure occurred. Likely other parts of the system are
          *   in big trouble anyway...
          */
-        if ((f = flux_future_create (NULL, NULL))) {
-            flux_future_set_flux (f, ev->h);
-            flux_future_fulfill (f, NULL, NULL);
+        if (zlist_size (ev->pending) == 0) {
+            if ((f = flux_future_create (NULL, NULL))) {
+                flux_future_set_flux (f, ev->h);
+                flux_future_fulfill (f, NULL, NULL);
+            }
+            return f;
         }
-        return f;
+
+        /*  If pending list is not empty, we need to wait until all
+         *  pending batches have completed before returning.
+         *  Accomplish this by creating a new batch and committing this
+         *  "empty batch".  While this may be inefficient (sending an
+         *  RPC that does nothing), this ensures that everything else
+         *  in this API works just as though a non-empty-batch was
+         *  committed.
+         *
+         *  N.B. eventlog_batch_get() places this new batch on the
+         *  pending list.
+         */
+
+        if (!(batch = eventlog_batch_get (ev)))
+            return NULL;
+        if (batchp)
+            *batchp = batch;
+        ev->current = NULL;
+        /* fallthrough: empty batch is now pending and will serialize
+         * behind previous batches */
     }
 
     return commit_batch (ev, batch);
