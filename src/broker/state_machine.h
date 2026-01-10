@@ -16,6 +16,7 @@ struct broker;
 typedef enum {
     STATE_LOAD_BUILTINS,    // load built-in modules
     STATE_JOIN,
+    STATE_CONFIG_SYNC,
     STATE_INIT,             // rc1
     STATE_QUORUM,
     STATE_RUN,              // initial program

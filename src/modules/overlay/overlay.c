@@ -712,6 +712,7 @@ static void state_continuation (flux_future_t *f, void *arg)
     switch (state) {
         case STATE_LOAD_BUILTINS:
         case STATE_JOIN:
+        case STATE_CONFIG_SYNC:
         case STATE_INIT:
         case STATE_QUORUM:
         case STATE_RUN:
