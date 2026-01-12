@@ -277,9 +277,9 @@ struct idset *drain_get (struct drain *drain)
  * On success, return idset object (caller must free).
  * On error, capture human readable error in 'errbuf', set errno, return NULL.
  */
-static struct idset *drain_idset_decode (struct drain *drain,
-                                         const char *ranks,
-                                         flux_error_t *errp)
+static struct idset *drain_targets_decode (struct drain *drain,
+                                           const char *ranks,
+                                           flux_error_t *errp)
 {
     struct idset *idset;
 
@@ -311,7 +311,7 @@ static void drain_cb (flux_t *h,
 {
     int rc;
     struct drain *drain = arg;
-    const char *s;
+    const char *targets;
     const char *mode = NULL;
     const char *reason = NULL;
     struct idset *idset = NULL;
@@ -326,11 +326,11 @@ static void drain_cb (flux_t *h,
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:s s?s s?s}",
-                             "targets", &s,
+                             "targets", &targets,
                              "reason", &reason,
                              "mode", &mode) < 0)
         goto error;
-    if (!(idset = drain_idset_decode (drain, s, &error))) {
+    if (!(idset = drain_targets_decode (drain, targets, &error))) {
         errstr = error.text;
         goto error;
     }
@@ -512,7 +512,7 @@ static void undrain_cb (flux_t *h,
                              "mode", &mode,
                              "reason", &reason) < 0)
         goto error;
-    if (!(idset = drain_idset_decode (drain, targets, &error))) {
+    if (!(idset = drain_targets_decode (drain, targets, &error))) {
         errstr = error.text;
         goto error;
     }
