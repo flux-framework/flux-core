@@ -205,7 +205,7 @@ test_expect_success 'setup fake csm_allocation_query for mock lsf testing' '
 '
 test_expect_success 'flux-uri mock testing of lsf resolver works' '
 	echo $FLUX_URI >lsf.exp &&
-	sh -c "flux uri --local lsf:$LSB_JOBID" >lsf.out &&
+	SHELL=/bin/sh flux uri --local lsf:$LSB_JOBID >lsf.out &&
 	test_cmp lsf.exp lsf.out
 '
 test_expect_success 'cleanup jobs' '
