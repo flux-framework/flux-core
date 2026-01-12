@@ -502,6 +502,7 @@ static void undrain_cb (flux_t *h,
     flux_error_t error;
     bool update_only = false;
     int overwrite = 0;
+    char *idstr = NULL;
     char *nodelist = NULL;
     int rc;
 
@@ -548,7 +549,8 @@ static void undrain_cb (flux_t *h,
      * Ownership of 'msg' is passed to the event posting machinery
      * which responds when complete.
      */
-    if (!(nodelist = flux_hostmap_lookup (drain->ctx->h, targets, NULL)))
+    if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE))
+        || !(nodelist = flux_hostmap_lookup (drain->ctx->h, idstr, NULL)))
         goto error;
     if (reason)
         rc = reslog_post_pack (drain->ctx->reslog,
@@ -557,7 +559,7 @@ static void undrain_cb (flux_t *h,
                                "undrain",
                                0,
                                "{s:s s:s s:i s:s}",
-                               "idset", targets,
+                               "idset", idstr,
                                "nodelist", nodelist,
                                "overwrite", overwrite,
                                "reason", reason);
@@ -568,7 +570,7 @@ static void undrain_cb (flux_t *h,
                                "undrain",
                                0,
                                "{s:s s:s s:i}",
-                               "idset", targets,
+                               "idset", idstr,
                                "nodelist", nodelist,
                                "overwrite", overwrite);
     if (rc < 0)
@@ -584,12 +586,14 @@ static void undrain_cb (flux_t *h,
 
     idset_destroy (idset);
     free (nodelist);
+    free (idstr);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to undrain request");
     idset_destroy (idset);
     free (nodelist);
+    free (idstr);
 }
 
 /* Add rank to ids, adjusting rank if the rank:host mapping has changed.
