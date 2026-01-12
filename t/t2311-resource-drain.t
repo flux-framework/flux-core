@@ -142,11 +142,12 @@ test_expect_success 'drain update mode works with idset' '
 	flux resource drain --update 0-1 test_reason_update &&
 	flux resource status -s drain -no {reason} | grep test_reason_update &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 2 &&
-	test $(flux resource status -s drain -no {nnodes}) -eq 2 &&
-	flux resource undrain 0
+	test $(flux resource status -s drain -no {nnodes}) -eq 2
 '
 
-test_expect_success 'undrain event was posted with overwrite=0' '
+test_expect_success 'undrain works with hostname and is posted with overwrite=0' '
+	flux resource undrain fake0 &&
+	test_debug "flux kvs eventlog get resource.eventlog" &&
 	flux kvs eventlog get resource.eventlog |grep undrain >undrain.out &&
 	grep overwrite=0 undrain.out
 '
