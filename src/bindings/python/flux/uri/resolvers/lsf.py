@@ -67,7 +67,7 @@ def lsf_job_pid(jobid):
         check=True,
     )
     for line in sp.stdout.decode("utf-8").split("\n"):
-        if "flux-broker" in line:
+        if "flux-broker-0" in line:
             pid = line.split()[0]
             if check_lsf_jobid(pid, jobid):
                 return pid
