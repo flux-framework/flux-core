@@ -52,13 +52,15 @@ test_expect_success 'fsck runs after unclean shutdown' '
 '
 
 test_expect_success 'corrupt some data' '
-	sudo flux kvs put testdata=1 &&
-	sudo flux kvs put --append testdata=2 &&
-	sudo flux kvs put --append testdata=3 &&
-	sudo flux kvs get --treeobj testdata > testdata.treeobj &&
+	JOBID=$(flux submit --wait hostname) &&
+	kvsdir=$(flux job id --to=kvs $JOBID)
+	sudo flux kvs put ${kvsdir}.testdata=1 &&
+	sudo flux kvs put --append ${kvsdir}.testdata=2 &&
+	sudo flux kvs put --append ${kvsdir}.testdata=3 &&
+	sudo flux kvs get --treeobj ${kvsdir}.testdata > testdata.treeobj &&
 	cat testdata.treeobj | jq -c .data[1]=\"sha1-1234567890123456789012345678901234567890\" > testdata.bad &&
-	sudo flux kvs put --treeobj testdatabad="$(cat testdata.bad)" &&
-	test_must_fail sudo flux kvs get testdatabad
+	sudo flux kvs put --treeobj ${kvsdir}.testdatabad="$(cat testdata.bad)" &&
+	test_must_fail sudo flux kvs get ${kvsdir}.testdatabad
 '
 
 test_expect_success 'call sync to ensure we have checkpointed' '
@@ -117,7 +119,16 @@ test_expect_success 'fsck repaired KVS corruption' '
 '
 
 test_expect_success 'fsck moved bad data to lost+found' '
-	sudo -u flux flux start --recovery "flux kvs get lost+found.testdatabad"
+	sudo -u flux flux start --recovery "flux kvs get lost+found.${kvsdir}.testdatabad" > testdatabad.out
+'
+
+test_expect_success 'corrupted data fixed correctly' '
+	echo "13" > testdatabad.exp &&
+	test_cmp testdatabad.exp testdatabad.out
+'
+
+test_expect_success 'other job data moved to lost+found too' '
+	sudo -u flux flux start --recovery "flux kvs get lost+found.${kvsdir}.eventlog"
 '
 
 test_expect_success 'restart flux' '

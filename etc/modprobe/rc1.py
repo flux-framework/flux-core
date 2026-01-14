@@ -169,7 +169,7 @@ def fsck(context):
     if not context.get("dump_restored", False):
         try:
             # Limit output to only core errors with --quiet
-            context.bash("flux fsck --repair --quiet")
+            context.bash("flux fsck --repair --job-aware --quiet")
         except RuntimeError:
             # disable content.dump in rc3
             context.handle.attr_remove("content.dump")
