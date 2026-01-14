@@ -13,16 +13,9 @@ DESCRIPTION
 
 .. program:: flux logger
 
-:program:`flux logger` appends Flux log entries to the local Flux
-broker's circular buffer.
-
-Log entries are associated with a :linux:man3:`syslog` style severity.
-Valid severity names are *emerg*, *alert*, *crit*, *err*,
-*warning*, *notice*, *info*, *debug*.
-
-Log entries may also have a user-defined application name.
-This is different than the syslog *facility*, which is always set
-to LOG_USER in Flux log messages.
+:program:`flux logger` sends a log message to the Flux log service.
+For more information, refer to the :ref:`broker_logging` section of
+:man1:`flux-broker`.
 
 The wall clock time (UTC) and the broker rank are added to the log
 message when it is created.
@@ -33,11 +26,13 @@ OPTIONS
 
 .. option:: -s, --severity=SEVERITY
 
-   Specify the log message severity. The default severity is *info*.
+   Specify the log message severity by name.  Valid severity names are
+   *emerg*, *alert*, *crit*, *err*, *warning*, *notice*, *info*, *debug*.
+   The default severity is *info*.
 
 .. option:: -n, --appname=NAME
 
-   Specify a user-defined application name to associate with the log message.
+   Log entries may have a user-defined application name.
    The default appname is *logger*.
 
 
@@ -50,4 +45,4 @@ RESOURCES
 SEE ALSO
 ========
 
-:man1:`flux-dmesg`, :man3:`flux_log`, :linux:man3:`syslog`
+:man1:`flux-broker`, :man1:`flux-dmesg`, :man3:`flux_log`, :linux:man3:`syslog`
