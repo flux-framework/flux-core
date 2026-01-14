@@ -182,7 +182,7 @@ static int set_level (int *value, const char *val)
     level = strtol (val, &endptr, 10);
     if (errno != 0 || *endptr != '\0')
         goto error;
-    if (level < LOG_EMERG || level > LOG_DEBUG) {
+    if (level > LOG_DEBUG) {
         errno = EINVAL;
         return -1;
     }
