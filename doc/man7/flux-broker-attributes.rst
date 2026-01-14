@@ -323,73 +323,58 @@ tbon.connect_timeout
 LOGGING
 =======
 
+The broker log service is described in the :ref:`broker_logging` section of
+:man1:`flux-broker`.  The following attributes affect log disposition.
+Attributes ending in "-level" are a numerical severity threshold, which
+matches log messages of equal and lesser (more severe) value.  There is
+a table of severity names vs numbers in the aforementioned description.
+
 log-ring-size [Updates: C, R]
-   The maximum number of log entries that can be stored in the ring buffer.
-   Default: ``1024``.
+   The maximum number of log messages that can be stored in the local
+   ring buffer.  Default: 1024.
 
 log-forward-level [Updates: C, R]
-   Log entries of numerical severity level less than or equal to this value
-   are forwarded to rank zero for permanent capture.  Default: ``7``.
+   Forward matching messages to the leader broker.  This is only helpful when
+   :option:`log-stderr-mode` is set to "leader", or :option:`log-filename` is
+   defined.  Default: 7 (LOG_DEBUG).
 
 log-critical-level [Updates: C, R]
-   Log entries of numerical severity level less than or equal to this value
-   are copied to stderr on the logging rank, for capture by the
-   enclosing instance.  Default: ``2``.
+   Copy matching log messages to local stderr.  This is intended to ensure
+   that important messages are not lost in situations so dire that
+   normal logging may be unreliable.  Default: 2 (LOG_CRIT).
 
 log-filename [Updates: C, R]
-   (rank zero only) If set, session log entries, as filtered by
-   ``log-forward-level``, are directed to this file.  Default: none.
+   Copy log messages to a file on the leader broker.
+   Messages from follower brokers are also captured if they match
+   :option:`log-forward-level`.  Default: none.
 
 log-syslog-enable [Updates: C, R]
-   If set to 1, each broker emits logs to syslog.  Default: none.
+   Copy log messages to syslog if they match :option:`log-syslog-level`.
+   Default: 0.
 
 log-syslog-level [Updates: C, R]
-   Log entries of numerical severity level less than or equal to this value
-   are emitted to syslog.  Default: ``2``.
+   Sets the severity threshold for syslog, if :option:`log-syslog-enable`
+   is set.  Default: 2 (LOG_CRIT).
 
 log-stderr-mode [Updates: C, R]
-   If set to "leader" (default), broker rank 0 emits forwarded logs from
-   other ranks to stderr, subject to the constraints of log-forward-level
-   and log-stderr-level.  If set to "local", each broker emits its own
-   logs to stderr, subject to the constraints of log-stderr-level.
-   Default: ``leader``.
+   Set the stderr mode to one of:
+
+   leader
+     Follower brokers forward messages that match :option:`log-forward-level`
+     to the leader, and the leader logs them to stderr if they match
+     :option:`log-stderr-level`.
+
+   local
+     Each broker emits its own logs to stderr, if they match
+     :option:`log-stderr-level`.
+
+   Default: leader.
 
 log-stderr-level (Updates: C, R)
-   Log entries of numerical severity level less than or equal to this value to
-   stderr, subject to log-stderr-mode.  Default: ``3``.
+   Copy matching log messages to stderr.  Default: 3 (LOG_ERR).
 
 log-level (Updates: C, R)
-   Log entries of numerical severity level less than or equal to this value
-   are stored in the ring buffer.  Default: ``7``.
-
-The numerical severity levels are defined as per :linux:man3:`syslog`:
-
-.. list-table::
-   :header-rows: 1
-
-   * - 0
-     - :const:`LOG_EMERG`
-
-   * - 1
-     - :const:`LOG_ALERT`
-
-   * - 2
-     - :const:`LOG_CRIT`
-
-   * - 3
-     - :const:`LOG_ERR`
-
-   * - 4
-     - :const:`LOG_WARNING`
-
-   * - 5
-     - :const:`LOG_NOTICE`
-
-   * - 6
-     - :const:`LOG_INFO`
-
-   * - 7
-     - :const:`LOG_DEBUG`
+   Allow matching messages to enter the logging system.  Default: 7 (LOG_DEBUG).
 
 CONTENT
 =======
