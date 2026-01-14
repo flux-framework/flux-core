@@ -36,7 +36,7 @@ typedef enum { LOG_FOR_SYSTEMD=1 } log_flags_t;
 
 /* See descriptions in flux-broker-attributes(7) */
 static const int default_ring_size = 1024;
-static const int default_forward_level = LOG_DEBUG;
+static const int default_forward_level = LOG_ERR;
 static const int default_critical_level = LOG_CRIT;
 static const int default_stderr_level = LOG_ERR;
 static const int default_syslog_level = LOG_ERR;

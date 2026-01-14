@@ -337,7 +337,7 @@ log-ring-size [Updates: C, R]
 log-forward-level [Updates: C, R]
    Forward matching messages to the leader broker.  This is only helpful when
    :option:`log-stderr-mode` is set to "leader", or :option:`log-filename` is
-   defined.  Default: 7 (LOG_DEBUG).
+   defined.  Default: 3 (LOG_ERR).
 
 log-critical-level [Updates: C, R]
    Copy matching log messages to local stderr.  This is intended to ensure
