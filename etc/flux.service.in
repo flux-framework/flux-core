@@ -17,6 +17,7 @@ ExecStart=/bin/bash -c '\
   -Sstatedir=${STATE_DIRECTORY:-/var/lib/flux} \
   -Slocal-uri=local://@X_RUNSTATEDIR@/flux/local \
   -Slog-stderr-level=6 \
+  -Slog-forward-level=-1 \
   -Slog-stderr-mode=local \
   -Sbroker.rc2_none \
   -Sbroker.quorum=1 \
