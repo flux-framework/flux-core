@@ -64,6 +64,8 @@ typedef struct {
     size_t ring_size;
     int seq;
     struct flux_msglist *followers;
+    int recv_local_count;
+    int recv_remote_count;
 } logbuf_t;
 
 struct logbuf_entry {
@@ -608,7 +610,10 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
             log_fp (stderr, flags, buf, len);
             logged_stderr = true;
         }
+        logbuf->recv_local_count++;
     }
+    else
+        logbuf->recv_remote_count++;
     if (severity <= logbuf->forward_level) {
         if (logbuf->rank == 0) {
             log_fp (logbuf->f, 0, buf, len);
@@ -760,9 +765,11 @@ static void stats_request_cb (flux_t *h,
 
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:i}",
+                           "{s:i s:i s:i s:i}",
                            "ring-used", (int)logbuf->ring_count,
-                           "count", logbuf->seq) < 0)
+                           "count", logbuf->seq,
+                           "local", logbuf->recv_local_count,
+                           "remote", logbuf->recv_remote_count) < 0)
         flux_log_error (h, "error responding to log.stats-get");
 }
 
