@@ -238,5 +238,23 @@ test_expect_success 'setting log-syslog-level to value with extra text fails' '
 	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-level=5xx \
 	    true
 '
+test_expect_success 'log-forward-level can be set to -1' '
+	echo "-1" >forward.exp &&
+	flux start \
+	    -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    -Slog-forward-level=-1 \
+	    flux getattr log-forward-level >forward.out &&
+	test_cmp forward.exp forward.out
+'
+test_expect_success 'setting log-forward-level to -1 works' '
+	rm -f forward.log &&
+	flux start --test-size=2 \
+	    -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    -Slog-forward-level=-1 \
+	    -Slog-critical-level=-1 \
+	    -Slog-filename=forward.log \
+	    flux exec -r 1 flux logger --severity=emerg "smurfs" &&
+	test_must_fail grep "logger.emerg" forward.log
+'
 
 test_done
