@@ -614,15 +614,14 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
     }
     else
         logbuf->recv_remote_count++;
-    if (severity <= logbuf->forward_level) {
-        if (logbuf->rank == 0) {
-            log_fp (logbuf->f, 0, buf, len);
-        }
-        else {
-            if (logbuf_forward (logbuf, buf, len) < 0)
-                rc = -1;
-        }
+
+    if (logbuf->rank == 0)
+        log_fp (logbuf->f, 0, buf, len);
+    else if (severity <= logbuf->forward_level) {
+        if (logbuf_forward (logbuf, buf, len) < 0)
+            rc = -1;
     }
+
     if (!logged_stderr
         && severity <= logbuf->stderr_level
         && logbuf->stderr_mode == MODE_LEADER
