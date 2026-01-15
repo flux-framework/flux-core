@@ -6,6 +6,13 @@ test_description='Test resource module verify configuration'
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
+# Note: On some systems RSMI GPU detection may not be influenced by
+# [CUDA|ROCR|HIP]_VISIBLE_DEVICES, which causes some tests below to fail
+# with "extra" GPUs. Since we're not testing GPU detection here, just
+# disable the rsmi component of HWLOC when used to avoid the issue.
+# (This needs to be done before test_under_flux is called)
+export HWLOC_COMPONENTS=-rsmi
+
 test_under_flux 1
 
 # check if we have more than one CPU in our affinity mask
