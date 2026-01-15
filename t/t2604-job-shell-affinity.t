@@ -162,6 +162,18 @@ test_expect_success MULTICORE 'flux-shell: issue #7174 reproducer with per-task'
 	grep "adjusted cores from 0-1 to 0" 7174-per-task.out &&
 	grep "task 2: cpus: 0" 7174-per-task.out
 '
+test_expect_success MULTICORE 'flux-shell: issue #7281: #7174 workaround disabled with per-resource' '
+	flux alloc -N2 -n4 -o verbose -o cpu-affinity=verbose \
+	    flux resource list -no {ncores}  \
+	    > 7281.out 2>7281.err &&
+	test_debug "cat 7281.err" &&
+	test_debug "cat 7281.out" &&
+	test_must_fail grep "adjusted cores" 7281.err &&
+	cat <<-EOF >7281.expected &&
+	4
+	EOF
+	test_cmp 7281.expected 7281.out
+'
 #
 # GPU tests:
 #
