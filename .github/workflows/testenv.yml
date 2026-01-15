@@ -1,0 +1,245 @@
+on: 
+  workflow_dispatch:
+    inputs:
+      distro:
+        description: 'Distro for which to rebuild testenv manifest'
+        required: true
+        default: 'noble'
+        type: choice
+        options:
+        - alpine
+#        - bookworm # reason: workflow doesn't yet support 32-bit
+        - el8
+        - el9
+        - fedora40
+        - focal
+        - jammy
+        - noble
+name: rebuild testenv containers using docker buildx
+jobs:
+  build-amd64-container:
+    name: build new testenv container for amd64
+    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    env: 
+      DOCKERHUB_REPO: fluxrm
+    outputs:
+      image_digest: ${{ steps.digest.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build and tar amd64 image
+        id: build
+        run: |
+          mkdir -p out
+          docker buildx build \
+            -o type=docker,dest=out/testenv-${{ inputs.distro }}-amd64.tar \
+            --platform=linux/amd64 \
+            --tag $DOCKERHUB_REPO/testenv:${{ inputs.distro }}-amd64 \
+            -f src/test/docker/${{ inputs.distro }}/Dockerfile .
+
+      - name: Upload amd64 container tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: testenv-${{ inputs.distro }}-amd64
+          path: out/testenv-${{ inputs.distro }}-amd64.tar
+          if-no-files-found: error
+  
+  build-arm64-container:
+    name: build new testenv container for arm64
+    timeout-minutes: 90
+    runs-on: ubuntu-24.04-arm
+    env: 
+      DOCKERHUB_REPO: fluxrm
+    outputs:
+      image_digest: ${{ steps.digest.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build and tar arm64 image
+        id: build
+        run: |
+          mkdir -p out
+          docker buildx build \
+            -o type=docker,dest=out/testenv-${{ inputs.distro }}-arm64.tar \
+            --platform=linux/arm64 \
+            --tag $DOCKERHUB_REPO/testenv:${{ inputs.distro }}-arm64 \
+            -f src/test/docker/${{ inputs.distro }}/Dockerfile .
+
+      - name: Upload arm64 container tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: testenv-${{ inputs.distro }}-arm64
+          path: out/testenv-${{ inputs.distro }}-arm64.tar
+          if-no-files-found: error
+
+  test-amd64-container:
+    name: Test newly-built amd64 container
+    needs:
+      - build-amd64-container
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      DOCKERHUB_REPO: fluxrm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+  
+      - name: fetch annotated tag
+        if: >
+          (matrix.create_release || matrix.docker_tag) &&
+          github.ref != 'refs/heads/master'
+        run: |
+          # Ensure git-describe works on a tag.
+          #  (checkout@v4 action may have left current tag as
+          #   lightweight instead of annotated. See
+          #   https://github.com/actions/checkout/issues/290)
+          #
+          echo github.ref == ${{ github.ref }} ;
+          git fetch -f origin ${{ github.ref }}:${{ github.ref }} ;
+          echo git describe now reports $(git describe --always)
+  
+  
+      - name: Download amd64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: testenv-${{ inputs.distro }}-amd64
+          path: artifacts
+
+      - name: Load images from tarballs
+        run: |
+          set -euo pipefail
+          docker load -i artifacts/testenv-${{ inputs.distro }}-amd64.tar
+          docker images | head -n 50
+
+      - name: run docker-run-checks
+        run: |
+          cd /home/runner/work/flux-core/flux-core
+          src/test/docker/docker-run-checks.sh -i ${{ inputs.distro }}-amd64 -j 4 --recheck --
+
+      - name: tmate debug
+        if: ${{ !cancelled() && runner.debug }}
+        uses: mxschmitt/action-tmate@v3
+
+  test-arm64-container:
+    name: Test newly-built arm64 container
+    needs:
+      - build-arm64-container
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    env:
+      DOCKERHUB_REPO: fluxrm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+  
+      - name: fetch annotated tag
+        if: >
+          (matrix.create_release || matrix.docker_tag) &&
+          github.ref != 'refs/heads/master'
+        run: |
+          # Ensure git-describe works on a tag.
+          #  (checkout@v4 action may have left current tag as
+          #   lightweight instead of annotated. See
+          #   https://github.com/actions/checkout/issues/290)
+          #
+          echo github.ref == ${{ github.ref }} ;
+          git fetch -f origin ${{ github.ref }}:${{ github.ref }} ;
+          echo git describe now reports $(git describe --always)
+  
+  
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: testenv-${{ inputs.distro }}-arm64
+          path: artifacts
+
+      - name: Load images from tarballs
+        run: |
+          docker load -i artifacts/testenv-${{ inputs.distro }}-arm64.tar
+          docker images | head -n 50
+
+      - name: run docker-run-checks
+        run: |
+          cd /home/runner/work/flux-core/flux-core
+          src/test/docker/docker-run-checks.sh -i ${{ inputs.distro }}-arm64 -j 4 --recheck --
+
+      - name: tmate debug
+        if: ${{ !cancelled() && runner.debug }}
+        uses: mxschmitt/action-tmate@v3
+
+  publish-manifest:
+    name: Push images + publish multi-arch manifest
+    timeout-minutes: 30
+    needs:
+      - test-amd64-container
+      - test-arm64-container
+    runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_REPO: fluxrm
+      DOCKER_USERNAME: travisflux
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_HUB_TRAVISFLUX_TOKEN }}
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: docker login
+        uses: docker/login-action@v3.6.0
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Download amd64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: testenv-${{ inputs.distro }}-amd64
+          path: artifacts
+
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: testenv-${{ inputs.distro }}-arm64
+          path: artifacts
+
+      - name: Load images from tarballs
+        run: |
+          docker load -i artifacts/testenv-${{ inputs.distro }}-amd64.tar
+          docker load -i artifacts/testenv-${{ inputs.distro }}-arm64.tar
+          docker images | head -n 50
+
+      # Push arch-specific tags first
+      - name: Push per-arch tags
+        run: |
+          AMD_TAG="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-amd64"
+          ARM_TAG="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-arm64"
+
+          docker push "${AMD_TAG}"
+          docker push "${ARM_TAG}"
+
+      # Then create the multi-arch manifest that points at the per-arch tags
+      - name: Create and push manifest
+        run: |
+          IMAGE="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}"
+          AMD_TAG="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-amd64"
+          ARM_TAG="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-arm64"
+
+          docker buildx imagetools create \
+            --tag "${IMAGE}" \
+            "${AMD_TAG}" \
+            "${ARM_TAG}"
+
+      - name: Inspect published manifest
+        run: docker buildx imagetools inspect ${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}
+# vim: set shiftwidth=2 tabstop=2 softtabstop=2 expandtab:
