@@ -36,7 +36,7 @@ typedef enum { LOG_FOR_SYSTEMD=1 } log_flags_t;
 
 /* See descriptions in flux-broker-attributes(7) */
 static const int default_ring_size = 1024;
-static const int default_forward_level = LOG_DEBUG;
+static const int default_forward_level = LOG_ERR;
 static const int default_critical_level = LOG_CRIT;
 static const int default_stderr_level = LOG_ERR;
 static const int default_syslog_level = LOG_ERR;
@@ -64,6 +64,8 @@ typedef struct {
     size_t ring_size;
     int seq;
     struct flux_msglist *followers;
+    int recv_local_count;
+    int recv_remote_count;
 } logbuf_t;
 
 struct logbuf_entry {
@@ -180,7 +182,7 @@ static int set_level (int *value, const char *val)
     level = strtol (val, &endptr, 10);
     if (errno != 0 || *endptr != '\0')
         goto error;
-    if (level < LOG_EMERG || level > LOG_DEBUG) {
+    if (level > LOG_DEBUG) {
         errno = EINVAL;
         return -1;
     }
@@ -608,16 +610,18 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
             log_fp (stderr, flags, buf, len);
             logged_stderr = true;
         }
+        logbuf->recv_local_count++;
     }
-    if (severity <= logbuf->forward_level) {
-        if (logbuf->rank == 0) {
-            log_fp (logbuf->f, 0, buf, len);
-        }
-        else {
-            if (logbuf_forward (logbuf, buf, len) < 0)
-                rc = -1;
-        }
+    else
+        logbuf->recv_remote_count++;
+
+    if (logbuf->rank == 0)
+        log_fp (logbuf->f, 0, buf, len);
+    else if (severity <= logbuf->forward_level) {
+        if (logbuf_forward (logbuf, buf, len) < 0)
+            rc = -1;
     }
+
     if (!logged_stderr
         && severity <= logbuf->stderr_level
         && logbuf->stderr_mode == MODE_LEADER
@@ -760,9 +764,11 @@ static void stats_request_cb (flux_t *h,
 
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:i}",
+                           "{s:i s:i s:i s:i}",
                            "ring-used", (int)logbuf->ring_count,
-                           "count", logbuf->seq) < 0)
+                           "count", logbuf->seq,
+                           "local", logbuf->recv_local_count,
+                           "remote", logbuf->recv_remote_count) < 0)
         flux_log_error (h, "error responding to log.stats-get");
 }
 

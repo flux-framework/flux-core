@@ -328,6 +328,7 @@ The broker log service is described in the :ref:`broker_logging` section of
 Attributes ending in "-level" are a numerical severity threshold, which
 matches log messages of equal and lesser (more severe) value.  There is
 a table of severity names vs numbers in the aforementioned description.
+Negative severity values can be used to indicate "match nothing".
 
 log-ring-size [Updates: C, R]
    The maximum number of log messages that can be stored in the local
@@ -336,7 +337,7 @@ log-ring-size [Updates: C, R]
 log-forward-level [Updates: C, R]
    Forward matching messages to the leader broker.  This is only helpful when
    :option:`log-stderr-mode` is set to "leader", or :option:`log-filename` is
-   defined.  Default: 7 (LOG_DEBUG).
+   defined.  Default: 3 (LOG_ERR).
 
 log-critical-level [Updates: C, R]
    Copy matching log messages to local stderr.  This is intended to ensure
