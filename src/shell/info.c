@@ -206,24 +206,6 @@ out:
     return rc;
 }
 
-static int get_per_resource_option (struct jobspec *jobspec,
-                                    const char **typep,
-                                    int *countp)
-{
-    json_error_t err;
-    json_t *o = NULL;
-
-    if (!(o = json_object_get (jobspec->options, "per-resource")))
-        return 0;
-    *countp = 1;
-    if (json_unpack_ex (o, &err, 0,
-                        "{s:s s?i}",
-                        "type", typep,
-                        "count", countp) < 0)
-        return shell_log_errn (0, "invalid per-resource spec: %s", err.text);
-    return 0;
-}
-
 struct taskmap *create_taskmap (struct shell_info *info)
 {
     struct taskmap *map = taskmap_create ();
@@ -288,10 +270,9 @@ int shell_info_set_taskmap (struct shell_info *info,
 struct shell_info *shell_info_create (flux_shell_t *shell)
 {
     struct shell_info *info;
-    const char *per_resource = NULL;
-    int per_resource_count = -1;
     int broker_rank = shell->broker_rank;
     struct taskmap *map = NULL;
+    struct jobspec *jobspec;
 
     if (!(info = calloc (1, sizeof (*info)))) {
         shell_log_errno ("shell_info_create");
@@ -302,25 +283,23 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
     if (shell_init_jobinfo (shell, info) < 0)
         goto error;
 
-    if (get_per_resource_option (info->jobspec,
-                                 &per_resource,
-                                 &per_resource_count) < 0)
-        goto error;
+    jobspec = info->jobspec;
 
-    if (per_resource != NULL) {
+    if (jobspec->per_resource != NULL) {
         if (rcalc_distribute_per_resource (info->rcalc,
-                                           per_resource,
-                                           per_resource_count) < 0) {
+                                           jobspec->per_resource,
+                                           jobspec->per_resource_count) < 0) {
             shell_log_error ("error distributing %d tasks per-%s over R",
-                             per_resource_count, per_resource);
+                             jobspec->per_resource_count,
+                             jobspec->per_resource);
             goto error;
         }
     }
     else if (rcalc_distribute (info->rcalc,
-                               info->jobspec->task_count,
-                               info->jobspec->cores_per_slot) < 0) {
+                               jobspec->task_count,
+                               jobspec->cores_per_slot) < 0) {
         shell_log_error ("error distributing %d tasks over R",
-                         info->jobspec->task_count);
+                         jobspec->task_count);
         goto error;
     }
     if (rcalc_get_rankinfo (info->rcalc, broker_rank, &info->rankinfo) < 0) {

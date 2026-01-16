@@ -1656,6 +1656,7 @@ out:
  * Apply this fix as narrowly as possible by ensuring the following:
  * - jobspec version is 1
  * - the jobspec did not specify node exclusive allocation
+ * - the jobspec did not specify a per-resource object
  * - number of nodes allocated > 1
  * - there are more total slots than tasks
  *
@@ -1667,6 +1668,7 @@ static int shell_adjust_resources_per_task (flux_shell_t *shell)
 
     if (jobspec->version == 1
         && !jobspec->node_exclusive
+        && !jobspec->per_resource
         && jobspec->node_count > 1
         && jobspec->slot_count > info->total_ntasks) {
         struct rcalc_rankinfo ri;

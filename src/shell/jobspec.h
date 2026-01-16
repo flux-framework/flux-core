@@ -30,6 +30,8 @@ struct jobspec {
     const char *cwd;
     json_t *environment;
     json_t *options;            // attributes.system.shell.options, if any
+    const char *per_resource;   // per-resource option, if set
+    int per_resource_count;     // per-resource count if per_resource non-NULL
 };
 
 struct jobspec *jobspec_parse (const char *jobspec, rcalc_t *r, json_error_t *error);

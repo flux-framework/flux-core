@@ -29,6 +29,8 @@ struct output {
     int slot_count;
     int cores_per_slot;
     int slots_per_node;
+    const char *per_resource;
+    int per_resource_count;
 };
 
 struct input good_input[] = {
@@ -82,20 +84,37 @@ struct input good_input[] = {
         "{\"version\": 1, \"resources\": [{\"type\": \"cluster\", \"count\": 1, \"with\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"default\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}]}]}, {\"type\": \"storage\", \"count\": 1562, \"exclusive\": true}]}], \"attributes\": {\"system\": {\"duration\": 57600}}, \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"default\", \"count\": {\"per_slot\": 1}}]}",
         "{\"version\": 1, \"execution\": {\"R_lite\": [{\"rank\": \"1\", \"children\": {\"core\": \"1\"}}]}}",
     },
+    {
+        "per-resource: type=node",
+        "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"socket\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}], \"label\": \"task\"}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}, \"shell\": {\"options\": {\"per-resource\": {\"type\": \"node\"}}}}}, \"version\": 1}",
+        "{\"version\": 1, \"execution\": {\"R_lite\": [{\"rank\": \"1\", \"children\": {\"core\": \"1\"}}]}}",
+    },
+    {
+        "per-resource: type=core",
+        "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"socket\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}], \"label\": \"task\"}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}, \"shell\": {\"options\": {\"per-resource\": {\"type\": \"core\"}}}}}, \"version\": 1}",
+        "{\"version\": 1, \"execution\": {\"R_lite\": [{\"rank\": \"1\", \"children\": {\"core\": \"1\"}}]}}",
+    },
+    {
+        "per-resource: type=core count=2",
+        "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"socket\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}], \"label\": \"task\"}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}, \"shell\": {\"options\": {\"per-resource\": {\"type\": \"core\", \"count\": 2}}}}}, \"version\": 1}",
+        "{\"version\": 1, \"execution\": {\"R_lite\": [{\"rank\": \"1\", \"children\": {\"core\": \"1\"}}]}}",
+    },
     { NULL, NULL, NULL },
 };
 struct output good_output[] = {
-     {1, 1, 1, -1},
-     {1, 1, 1, -1},
-     {1, 1, 1, 1},
-     {5, 5, 6, -1},
-     {1, 1, 2, 1},
-     {1, 1, 1, 1},
-     {1, 1, 2, 1},
-     {6, 6, 5, 3},
-     {1, 1, 1, 1},
-     {1, 1, 1, 1},
-     {0, 0, 0, 0},
+     {1, 1, 1, -1, NULL, -1},
+     {1, 1, 1, -1, NULL, -1},
+     {1, 1, 1, 1, NULL, -1},
+     {5, 5, 6, -1, NULL, -1},
+     {1, 1, 2, 1, NULL, -1},
+     {1, 1, 1, 1, NULL, -1},
+     {1, 1, 2, 1, NULL, -1},
+     {6, 6, 5, 3, NULL, -1},
+     {1, 1, 1, 1, NULL, -1},
+     {1, 1, 1, 1, NULL, -1},
+     {1, 1, 1, 1, "node", 1},
+     {1, 1, 1, 1, "core", 1},
+     {1, 1, 1, 1, "core", 2},
 };
 struct input bad_input[] = {
     { "empty object", "{}",  "{}" },
@@ -195,6 +214,16 @@ struct input bad_input[] = {
         "{\"tasks\": [{\"slot\": \"task\", \"count\": {\"per_slot\": 1}, \"command\": [\"hostname\"], \"attributes\": {}}], \"attributes\": {\"system\": {\"cwd\": \"/home/garlick/proj/flux-core/src/cmd\"}}, \"version\": 1, \"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"task\", \"count\": 1, \"with\": [{\"count\": 1, \"type\": \"core\"}]}]}, {\"type\": \"node\", \"count\": 1}]}",
         "{\"version\": 1, \"execution\": {\"R_lite\": [{\"rank\": \"1-2\", \"children\": {\"core\": \"1\"}}]}}",
     },
+    {
+        "invalid shell.options.per-resource",
+        "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"socket\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}], \"label\": \"task\"}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}, \"shell\": {\"options\": {\"per-resource\": {\"count\": 2}}}}}, \"version\": 1}",
+        "{\"version\": 1, \"execution\": {\"R_lite\": [{\"rank\": \"1-2\", \"children\": {\"core\": \"1\"}}]}}",
+    },
+    {
+        "invalid shell.options.per-resource",
+        "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"socket\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}], \"label\": \"task\"}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}, \"shell\": {\"options\": {\"per-resource\": {\"type\": \"node\", \"count\": 0}}}}}, \"version\": 1}",
+        "{\"version\": 1, \"execution\": {\"R_lite\": [{\"rank\": \"1-2\", \"children\": {\"core\": \"1\"}}]}}",
+    },
     { NULL, NULL, NULL },
 };
 
@@ -239,6 +268,26 @@ int main (int argc, char **argv)
                 good_input[i].desc,
                 js->slots_per_node,
                 expect->slots_per_node);
+            if (expect->per_resource == NULL)
+                ok (js->per_resource == NULL,
+                    "good.%d (%s) per_resource == NULL",
+                    i,
+                    good_input[i].desc);
+            else {
+                is (js->per_resource,
+                    expect->per_resource,
+                    "good.%d (%s) per_resource (%s) == (%s)",
+                    i,
+                    good_input[i].desc,
+                    js->per_resource,
+                    expect->per_resource);
+                ok (js->per_resource_count == expect->per_resource_count,
+                    "good.%d (%s) per-resource count (%d) == %d",
+                    i,
+                    good_input[i].desc,
+                    js->per_resource_count,
+                    expect->per_resource_count);
+            }
             jobspec_destroy (js);
         }
         rcalc_destroy (rs);

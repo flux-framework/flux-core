@@ -141,6 +141,33 @@ static bool is_node_exclusive (json_t *resource)
     return false;
 }
 
+static int get_per_resource_option (const struct jobspec *jobspec,
+                                    const char **typep,
+                                    int *countp,
+                                    json_error_t *errp)
+{
+    json_t *o = NULL;
+
+    if ((o = json_object_get (jobspec->options, "per-resource"))) {
+        json_error_t error;
+        *countp = 1;
+        if (json_unpack_ex (o,
+                            &error,
+                            0,
+                            "{s:s s?i}",
+                            "type", typep,
+                            "count", countp) < 0) {
+            set_error (errp, "invalid per-resource section: %s", error.text);
+            return -1;
+        }
+        if (*countp <= 0) {
+            set_error (errp, "per-resource.count must be > 0");
+            return -1;
+        }
+    }
+    return 0;
+}
+
 struct jobspec *jobspec_parse (const char *jobspec,
                                rcalc_t *r,
                                json_error_t *error)
@@ -262,6 +289,13 @@ struct jobspec *jobspec_parse (const char *jobspec,
         set_error (error, "Malformed command entry");
         goto error;
     }
+    /* Check for per-resource jobspec section
+     */
+    if (get_per_resource_option (job,
+                                 &job->per_resource,
+                                 &job->per_resource_count,
+                                 error) < 0)
+        goto error;
     return job;
 error:
     jobspec_destroy (job);
