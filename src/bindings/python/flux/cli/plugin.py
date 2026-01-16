@@ -10,10 +10,10 @@
 
 import glob
 import inspect
+import os
 import sys
 import termios
 from abc import ABC
-from os import getenv
 from pydoc import ttypager
 
 from flux.conf_builtin import conf_builtin_get
@@ -143,13 +143,7 @@ class CLIPluginRegistry:
     def __init__(self, prog):
         self.prog = prog
         self.plugins = []
-        etc = conf_builtin_get("confdir")
-        if getenv("FLUX_CLI_PLUGINPATH"):
-            self.plugindir = getenv("FLUX_CLI_PLUGINPATH")
-        else:
-            if etc is None:
-                raise ValueError("failed to get builtin confdir")
-            self.plugindir = f"{etc}/cli/plugins"
+        self.plugindirs = self._get_searchpath()
         self._load_plugins(self.prog)
 
     def print_help(self, name):
@@ -167,6 +161,22 @@ class CLIPluginRegistry:
                     sys.exit(0)
         raise ValueError(f"--help: no such option {name}")
 
+    def _get_searchpath(self):
+        """
+        Return list of dirs in ``FLUX_CLI_PLUGINPATH`` if set, plus the
+        default CLI plugin search path.
+        """
+        if "FLUX_CLI_PLUGINPATH" in os.environ:
+            searchpath = filter(
+                lambda s: s and not s.isspace(),
+                os.environ["FLUX_CLI_PLUGINPATH"].split(":"),
+            )
+        else:
+            builtindir = conf_builtin_get("libexecdir") ## guaranteed to exist?
+            sysdir = conf_builtin_get("confdir") ## for backwards compatibility
+            searchpath = [f"{builtindir}/cli/plugins", f"{sysdir}/cli/plugins"]
+        return searchpath
+
     def _add_plugins(self, module, program):
         entries = [
             getattr(module, attr) for attr in dir(module) if not attr.startswith("_")
@@ -178,25 +188,19 @@ class CLIPluginRegistry:
                 isinstance(entry, type)
                 and issubclass(entry, CLIPlugin)
                 and entry != CLIPlugin
+                and entry not in self.plugins
             ):
                 self.plugins.append(entry(program))
 
     def _load_plugins(self, program):
         """Load all cli plugins from the standard path"""
-        for path in glob.glob(f"{self.plugindir}/*.py"):
-            self._add_plugins(import_path(path), program)
-        option_dests = {}
+        for dir in self.plugindirs:
+            for path in glob.glob(f"{dir}/*.py"):
+                self._add_plugins(import_path(path), program)
         self.options = []
         for plugin in self.plugins:
             for option in plugin.options:
-                if option.kwargs["dest"] in option_dests:
-                    raise ValueError(
-                        f"{option.name} conflicts with another option (or its `dest`)"
-                    )
-                else:
-                    self.options.append(option)
-                    ## keep a temporary list of "dests" to ensure no conflicts
-                    option_dests[option.kwargs["dest"]] = 1
+                self.options.append(option)
         return self  ## possibly unnecessary now
 
     def preinit(self, args):
