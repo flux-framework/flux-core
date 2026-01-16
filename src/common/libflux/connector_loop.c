@@ -24,6 +24,13 @@ struct loop_ctx {
     flux_t *h;
     struct flux_msg_cred cred;
     struct msg_deque *queue;
+    bool attr_redirect;
+};
+
+static const struct flux_match match_attr_request= {
+    .typemask = FLUX_MSGTYPE_REQUEST,
+    .matchtag = FLUX_MATCHTAG_NONE,
+    .topic_glob = "attr.*",
 };
 
 static const struct flux_handle_ops handle_ops;
@@ -50,11 +57,50 @@ static int op_pollfd (void *impl)
     return msg_deque_pollfd (ctx->queue);
 }
 
+static int redirect_attr_request (struct loop_ctx *ctx, const flux_msg_t *msg)
+{
+    const char *topic;
+    if (flux_msg_get_topic (msg, &topic) < 0)
+        return -1;
+    if (streq (topic, "attr.get")) {
+        if (flux_respond_error (ctx->h, msg, ENOENT, NULL) < 0)
+            return -1;
+        return 0;
+    }
+    else if (streq (topic, "attr.set")) {
+        const char *name;
+        const char *value;
+        if (flux_request_unpack (msg,
+                                 NULL,
+                                 "{s:s s:s}",
+                                 "name", &name,
+                                 "value", &value) < 0
+            || flux_attr_set_cacheonly (ctx->h, name, value) < 0
+            || flux_respond (ctx->h, msg, NULL) < 0)
+            return -1;
+    }
+    else if (streq (topic, "attr.rm")) {
+        const char *name;
+        if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0
+            || flux_attr_set_cacheonly (ctx->h, name, NULL) < 0
+            || flux_respond (ctx->h, msg, NULL) < 0)
+            return -1;
+    }
+    else {
+        errno = ENOSYS;
+        return -1;
+    }
+    return 0;
+}
+
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
     struct loop_ctx *ctx = impl;
     flux_msg_t *cpy;
     struct flux_msg_cred cred;
+
+    if (ctx->attr_redirect && flux_msg_cmp (msg, match_attr_request))
+        return redirect_attr_request (ctx, msg);
 
     if (!(cpy = flux_msg_copy (msg, true)))
         goto error;
@@ -147,6 +193,11 @@ static int op_setopt (void *impl,
         memcpy (&limit, val, val_size);
         if (msg_deque_set_limit (ctx->queue, limit) < 0)
             return -1;
+    }
+    else if (streq (option, "flux::attr_redirect")) {
+        if (val != NULL || size > 0)
+            goto error;
+        ctx->attr_redirect = true;
     }
     else
         goto error;

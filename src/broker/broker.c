@@ -69,7 +69,6 @@
 #include "module.h"
 #include "modhash.h"
 #include "method.h"
-#include "overlay.h"
 #include "service.h"
 #include "attr.h"
 #include "log.h"
@@ -238,6 +237,8 @@ int main (int argc, char *argv[])
         strlcpy (ctx.hostname, hostname, sizeof (ctx.hostname));
     else if (gethostname (ctx.hostname, sizeof (ctx.hostname)) < 0)
         log_err_exit ("gethostname");
+    if (attr_add (ctx.attrs, "hostname", ctx.hostname, ATTR_IMMUTABLE) < 0)
+        log_err_exit ("setattr hostname");
 
     if (parse_command_line_arguments (&ctx, argc, argv, &error) < 0)
         log_msg_exit ("%s", error.text);
@@ -554,38 +555,6 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* Initialize the overlay network.
-     */
-    if (!(ctx.overlay = overlay_create (ctx.h,
-                                        ctx.boot,
-                                        &ctx.info,
-                                        ctx.hostname,
-                                        ctx.attrs,
-                                        NULL,
-                                        "interthread://overlay",
-                                        &error))) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "Error initializing overlay: %s",
-                  error.text);
-        goto cleanup;
-    }
-    if (ctx.info.rank > 0) {
-        if (ctx.verbose)
-            flux_log (ctx.h, LOG_INFO, "initializing overlay connect");
-        if (overlay_connect (ctx.overlay) < 0) {
-            flux_log (ctx.h, LOG_CRIT, "overlay_connect: %s", strerror (errno));
-            goto cleanup;
-        }
-    }
-    if (overlay_start (ctx.overlay) < 0) {
-        flux_log (ctx.h,
-                  LOG_CRIT,
-                  "error starting overlay: %s",
-                  strerror (errno));
-        goto cleanup;
-    }
-
     /* Start the state machine.  The first action taken is to load
      * built-in broker modules, so make another pass at priming the
      * ctx.h attribute cache, which becomes the starting point for the
@@ -647,7 +616,6 @@ cleanup:
     state_machine_destroy (ctx.state_machine);
     flux_watcher_destroy (ctx.w_overlay);
     flux_close (ctx.h_overlay);
-    overlay_destroy (ctx.overlay);
     service_switch_destroy (ctx.services);
     flux_msg_handler_delvec (handlers);
     bootstrap_destroy (ctx.boot);
@@ -1514,8 +1482,8 @@ static struct internal_service services[] = {
     { "heaptrace",          NULL },
     { "event",              NULL },
     { "service",            NULL },
-    { "overlay",            NULL },
     { "module",             NULL },
+    { "bootstrap",          NULL },
     { "runat",              NULL },
     { "state-machine",      NULL },
     { "shutdown",           NULL },
