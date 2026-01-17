@@ -1338,6 +1338,12 @@ void attach_event_continuation (flux_future_t *f, void *arg)
             ctx->exit_code = flux_job_waitstatus_to_exitcode (status, &error);
             if (ctx->exit_code != 0)
                 log_msg ("%s", error.text);
+
+            /* All shells have exited, so no more MPIR data is expected.
+             * Clean up MPIR state now to ensure flux-job attach exits
+             * properly when the job completes.
+             */
+            mpir_shutdown (ctx->h);
         }
     }
 

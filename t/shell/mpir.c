@@ -106,6 +106,7 @@ int main (int ac, char **av)
 
     flux_reactor_run (flux_get_reactor (h), 0);
 
+    mpir_shutdown (h);
     proctable_destroy (proctable);
     flux_close (h);
     optparse_destroy (p);

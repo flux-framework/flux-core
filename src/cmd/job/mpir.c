@@ -28,6 +28,7 @@
 #include "src/common/libutil/basename.h"
 #include "src/common/libjob/idf58.h"
 #include "src/common/libdebugged/debugged.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/shell/mpir/proctable.h"
 #include "ccan/str/str.h"
 
@@ -57,6 +58,9 @@ int MPIR_partial_attach_ok       = 1;
 
 char MPIR_executable_path[256];
 char MPIR_server_arguments[1024];
+
+/* List of processes started for MPIR_executable_path */
+static zlistx_t *processes = NULL;
 
 static void setup_mpir_proctable (const char *s)
 {
@@ -150,7 +154,6 @@ static void completion_cb (flux_subprocess_t *p)
         log_msg ("MPIR: rank %d: %s: %s", rank, prog, strsignal (signum));
     else if (exitcode != 0)
         log_msg ("MPIR: rank %d: %s: Exit %d", rank, prog, exitcode);
-    flux_subprocess_destroy (p);
 }
 
 static flux_cmd_t *mpir_make_tool_cmd (const char *path,
@@ -205,7 +208,14 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
         int rank = flux_subprocess_rank (p);
         const char *errmsg = flux_subprocess_fail_error (p);
         log_msg ("MPIR: rank %d: %s: %s", rank, prog, errmsg);
-        flux_subprocess_destroy (p);
+    }
+}
+
+static void proc_destructor (void **item)
+{
+    if (item) {
+        flux_subprocess_destroy (*item);
+        *item = NULL;
     }
 }
 
@@ -229,6 +239,11 @@ static void launch_tool_daemons (flux_t *h,
     if (!(cmd = mpir_make_tool_cmd (tool_path, tool_args, tool_args_len)))
         return;
 
+    if (!(processes = zlistx_new ()))
+        goto out;
+
+    zlistx_set_destructor (processes, proc_destructor);
+
     rank = idset_first (ranks);
     while (rank != IDSET_INVALID_ID) {
         flux_subprocess_t *p;
@@ -241,8 +256,15 @@ static void launch_tool_daemons (flux_t *h,
                                  NULL,
                                  NULL)))
             log_err ("MPIR: failed to launch %s", tool_path);
+
+        if (!zlistx_add_end (processes, p)) {
+            log_err ("MPIR: out of memory starting tool process");
+            flux_subprocess_destroy (p);
+            goto out;
+        }
         rank = idset_next (ranks, rank);
     }
+out:
     flux_cmd_destroy (cmd);
     return;
 }
@@ -303,6 +325,14 @@ void mpir_setup_interface (flux_t *h,
          */
         gen_attach_signal (h, id);
     }
+}
+
+void mpir_shutdown (flux_t *h)
+{
+    /* If tool processes were launched, clean them up here.
+     */
+    if (processes)
+        zlistx_destroy (&processes);
 }
 
 /* vi: ts=4 sw=4 expandtab
