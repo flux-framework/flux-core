@@ -116,9 +116,9 @@ error:
 }
 
 static int rexec_init (flux_plugin_t *p,
-                      const char *topic,
-                      flux_plugin_arg_t *arg,
-                      void *data)
+                       const char *topic,
+                       flux_plugin_arg_t *arg,
+                       void *data)
 {
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct shell_rexec *rexec;
@@ -135,9 +135,48 @@ static int rexec_init (flux_plugin_t *p,
     return 0;
 }
 
+static void shutdown_cb (flux_future_t *f, void *arg)
+{
+    flux_reactor_stop (flux_future_get_reactor (f));
+    flux_future_destroy (f);
+}
+
+static int rexec_exit (flux_plugin_t *p,
+                       const char *topic,
+                       flux_plugin_arg_t *arg,
+                       void *data)
+{
+    struct shell_rexec *rexec = flux_plugin_aux_get (p, "rexec");
+    if (rexec) {
+        flux_t *h = flux_shell_get_flux (rexec->shell);
+        flux_future_t *f;
+
+        /* Send SIGTERM to any subprocesses running in the server and
+         * tell the server to shutdown. Future will be fulfilled when
+         * all processes have exited (immediatebly if there are none).
+         *
+         * The reactor needs to be run for the future to be fulfilled,
+         * but the shell has exited flux_reactor_run() at this point,
+         * so call it explicitly here.
+         */
+        if (!(f = subprocess_server_shutdown (rexec->server, SIGTERM))
+            || flux_future_then (f, -1., shutdown_cb, NULL) < 0) {
+            shell_log_errno ("subprocess_server_shutdown");
+            flux_future_destroy (f);
+            return -1;
+        }
+
+        /* Run reactor until server is shutdown:
+         */
+        flux_reactor_run (flux_get_reactor (h), 0);
+    }
+    return 0;
+}
+
 struct shell_builtin builtin_rexec = {
     .name = FLUX_SHELL_PLUGIN_NAME,
     .init = rexec_init,
+    .exit = rexec_exit,
 };
 
 // vi:ts=4 sw=4 expandtab
