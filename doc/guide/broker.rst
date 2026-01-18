@@ -276,8 +276,10 @@ Normal State Transitions
 
 It may be helpful to walk through the state transitions that occur when
 a Flux instance runs to completion without encountering exceptional conditions.
-In the diagram blow, green = common path; blue = rank 0 deviation from common
-path; red = leaf node deviation from common path.
+
+In the diagram below, the edges for the common path are shown in black.
+The leader broker deviations from the common path are shown in blue.
+Leaf broker deviations from the common path are shown in green.
 
 .. figure:: images/states_norm.png
   :scale: 35%
