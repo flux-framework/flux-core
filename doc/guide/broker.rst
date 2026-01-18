@@ -221,9 +221,12 @@ on rank 0 launches a process and an event is generated upon process
 termination, while on rank > 0, entering CLEANUP does not launch a process,
 and immediately generates an event.
 
-.. image:: images/states.png
-  :scale: 100 %
+.. figure:: images/states.png
+  :scale: 35%
   :alt: broker state machine
+  :target: ../_images/states.png
+
+  Full broker state diagram (click to enlarge)
 
 .. list-table::
   :header-rows: 1
@@ -273,13 +276,15 @@ Normal State Transitions
 
 It may be helpful to walk through the state transitions that occur when
 a Flux instance runs to completion without encountering exceptional conditions.
+In the diagram blow, green = common path; blue = rank 0 deviation from common
+path; red = leaf node deviation from common path.
 
-.. image:: images/states_norm.png
-  :scale: 100 %
+.. figure:: images/states_norm.png
+  :scale: 35%
   :alt: broker state machine
+  :target: ../_images/states_norm.png
 
-green = common path; blue = rank 0 deviation from common path; red = leaf
-node deviation from common path
+  Normal state transitions (click to enlarge)
 
 startup
 -------
