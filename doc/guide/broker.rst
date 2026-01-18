@@ -221,6 +221,9 @@ on rank 0 launches a process and an event is generated upon process
 termination, while on rank > 0, entering CLEANUP does not launch a process,
 and immediately generates an event.
 
+In the diagram below, the edges for a normal broker life cycle are shown
+in black.  The edges for exceptional cases are shown in red.
+
 .. figure:: images/states.png
   :scale: 35%
   :alt: broker state machine
