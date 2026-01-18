@@ -14,7 +14,7 @@
 struct broker;
 
 typedef enum {
-    STATE_NONE,
+    STATE_LOAD_BUILTINS,    // load built-in modules
     STATE_JOIN,
     STATE_INIT,             // rc1
     STATE_QUORUM,
@@ -23,7 +23,7 @@ typedef enum {
     STATE_SHUTDOWN,
     STATE_FINALIZE,         // rc3
     STATE_GOODBYE,
-    STATE_EXIT,
+    STATE_EXIT,             // unload built-in modules
 } broker_state_t;
 
 

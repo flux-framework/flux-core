@@ -140,7 +140,8 @@ static void quorum_check_parent (struct state_machine *s);
 static void run_check_parent (struct state_machine *s);
 
 static struct state statetab[] = {
-    { STATE_NONE,       "none",             NULL },
+    { STATE_LOAD_BUILTINS,
+                        "load-builtins",    NULL },
     { STATE_JOIN,       "join",             action_join },
     { STATE_INIT,       "init",             action_init },
     { STATE_QUORUM,     "quorum",           action_quorum },
@@ -153,8 +154,10 @@ static struct state statetab[] = {
 };
 
 static struct state_next nexttab[] = {
-    { "builtins-success",   STATE_NONE,         STATE_JOIN },
-    { "builtins-fail",      STATE_NONE,         STATE_EXIT },
+    { "builtins-success",   STATE_LOAD_BUILTINS,
+                                                STATE_JOIN },
+    { "builtins-fail",      STATE_LOAD_BUILTINS,
+                                                STATE_EXIT },
     { "parent-ready",       STATE_JOIN,         STATE_INIT },
     { "parent-none",        STATE_JOIN,         STATE_INIT },
     { "parent-fail",        STATE_JOIN,         STATE_SHUTDOWN },
@@ -842,7 +845,7 @@ void state_machine_kill (struct state_machine *s, int signum)
         case STATE_FINALIZE:
             (void)runat_abort (s->ctx->runat, "rc3");
             break;
-        case STATE_NONE:
+        case STATE_LOAD_BUILTINS:
         case STATE_SHUTDOWN:
         case STATE_GOODBYE:
         case STATE_EXIT:
@@ -992,7 +995,7 @@ static void run_check_parent (struct state_machine *s)
         state_machine_post (s, "parent-fail");
     else if (s->monitor.parent_valid) {
         switch (s->monitor.parent_state) {
-            case STATE_NONE:
+            case STATE_LOAD_BUILTINS:
             case STATE_JOIN:
             case STATE_INIT:
             case STATE_QUORUM:
@@ -1020,7 +1023,7 @@ static void join_check_parent (struct state_machine *s)
         state_machine_post (s, "parent-fail");
     else if (s->monitor.parent_valid) {
         switch (s->monitor.parent_state) {
-            case STATE_NONE:
+            case STATE_LOAD_BUILTINS:
             case STATE_JOIN:
             case STATE_INIT:
                 break;
@@ -1048,7 +1051,7 @@ static void quorum_check_parent (struct state_machine *s)
         state_machine_post (s, "quorum-fail");
     else if (s->monitor.parent_valid) {
         switch (s->monitor.parent_state) {
-            case STATE_NONE:
+            case STATE_LOAD_BUILTINS:
             case STATE_JOIN:
             case STATE_QUORUM:
                 break;
@@ -1565,7 +1568,7 @@ struct state_machine *state_machine_create (struct broker *ctx,
     if (!(s = calloc (1, sizeof (*s))))
         goto error;
     s->ctx = ctx;
-    s->state = STATE_NONE;
+    s->state = STATE_LOAD_BUILTINS;
     monotime (&s->t_start);
     if (!(s->events = zlist_new ()))
         goto nomem;
