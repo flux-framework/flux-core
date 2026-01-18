@@ -22,6 +22,7 @@ digraph finite_state_machine {
     S -> 3 [ label = "children-complete" ];
     S -> 3 [ label = "children-none", color = "green" ];
     3 -> G [ label = "goodbye" ];
-    G -> E [ label = "rc3-none" ];
-    G -> E [ label = "rc3-success" ];
+    G -> U [ label = "rc3-none" ];
+    G -> U [ label = "rc3-success" ];
+    U -> E [ label = "builtins-done" ];
 }

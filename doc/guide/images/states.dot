@@ -9,7 +9,7 @@ digraph finite_state_machine {
     node [shape = circle];
     Start -> L;
     L -> J [ label = "builtins-success" ];
-    L -> E [ label = "builtins-fail", color = "red" ];
+    L -> U [ label = "builtins-fail", color = "red" ];
     J -> 1 [ label = "parent-ready" ];
     J -> 1 [ label = "parent-none" ];
     J -> S [ label = "parent-fail", color = "red" ];
@@ -31,7 +31,9 @@ digraph finite_state_machine {
     S -> 3 [ label = "children-none" ];
     S -> 3 [ label = "children-timeout", color = "red" ];
     3 -> G [ label = "goodbye" ];
-    G -> E [ label = "rc3-none" ];
-    G -> E [ label = "rc3-success" ];
-    G -> E [ label = "rc3-fail", color = "red" ];
+    G -> U [ label = "rc3-none" ];
+    G -> U [ label = "rc3-success" ];
+    G -> U [ label = "rc3-fail", color = "red" ];
+    U -> E [ label = "builtins-done" ];
+    U -> E [ label = "builtins-unload-fail", color = "red" ];
 }

@@ -274,9 +274,13 @@ in black.  The edges for exceptional cases are shown in red.
     - GOODBYE
     - wait for flux-shutdown, if any
 
+  * - U
+    - UNLOAD_BUILTINS
+    - unload built-in modules
+
   * - E
     - EXIT
-    - unload built-in modules, then stop reactor
+    - stop reactor
 
 Normal State Transitions
 ========================
@@ -330,7 +334,9 @@ All brokers with children remain in SHUTDOWN until their children disconnect
 (*children-complete*).  If they have no children (leaf node), they transition
 out of SHUTDOWN immediately (*children-none*). The next state is FINALIZE,
 where the rc3 script is executed.  Upon completion of rc3 (*rc3-success*),
-brokers transition to EXIT and disconnect from the parent.
+brokers transition through GOODBYE to wait for a :man1:`flux-shutdown` command
+to complete (*goodbye*), then to UNLOAD_BUILTINS, where built-in modules are
+unloaded (*builtins-done*), and finally EXIT state.
 
 Because each TBON tree level waits for the downstream level to disconnect
 before entering FINALIZE state, rc3 executes in downstream-to-upstream order.
@@ -445,6 +451,13 @@ Events
 
   * - goodbye
     - any flux-shutdown commands have completed
+
+  * - builtins-done
+    - built-in modules have been unloaded
+
+  * - builtins-unload-fail
+    - built-in modules failed to unload
+
 
 **************************
 System Instance Resiliency
