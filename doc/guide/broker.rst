@@ -235,6 +235,10 @@ and immediately generates an event.
     - state
     - action when transitioning into state
 
+  * - L
+    - LOAD_BUILTINS
+    - load built-in modules
+
   * - J
     - JOIN
     - wait for parent to enter QUORUM state
@@ -269,7 +273,7 @@ and immediately generates an event.
 
   * - E
     - EXIT
-    - exit broker
+    - unload built-in modules, then stop reactor
 
 Normal State Transitions
 ========================
@@ -291,8 +295,8 @@ Leaf broker deviations from the common path are shown in green.
 startup
 -------
 
-The broker state machine is started in JOIN state after the built-in modules
-are confirmed to be running.
+The broker state machine is started in LOAD_BUILTINS state, then enters
+JOIN state after the built-in modules are confirmed to be running.
 The broker ranks > 0 wait for the parent to enter QUORUM state (*parent-ready*)
 then enters INIT state.  Rank 0 immediately enters INIT (*parent-none*).
 Upon entering INIT, the rc1 script is executed, then on completion, QUORUM

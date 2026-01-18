@@ -3,11 +3,12 @@
 digraph finite_state_machine {
     rankdir=LR;
 
-    node [shape = point ]; N
+    node [shape = point ]; Start
     node [shape = doublecircle ]; E
 
     node [shape = circle];
-    N -> J;
+    Start -> L;
+    L -> J [ label = "builtins-success" ];
     J -> 1 [ label = "parent-ready" ];
     J -> 1 [ label = "parent-none", color = "blue" ];
     1 -> Q [ label = "rc1-none" ];
