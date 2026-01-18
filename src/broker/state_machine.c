@@ -117,6 +117,7 @@ struct state_next {
     broker_state_t next;
 };
 
+static void action_load_builtins (struct state_machine *s);
 static void action_join (struct state_machine *s);
 static void action_quorum (struct state_machine *s);
 static void action_init (struct state_machine *s);
@@ -141,7 +142,7 @@ static void run_check_parent (struct state_machine *s);
 
 static struct state statetab[] = {
     { STATE_LOAD_BUILTINS,
-                        "load-builtins",    NULL },
+                        "load-builtins",    action_load_builtins },
     { STATE_JOIN,       "join",             action_join },
     { STATE_INIT,       "init",             action_init },
     { STATE_QUORUM,     "quorum",           action_quorum },
@@ -312,7 +313,7 @@ static void action_join (struct state_machine *s)
  * the overlay code is short circuited for singleton instances.  Overlay
  * bootstrap is assumed to be complete once the built-in modules are running.
  */
-static void kickoff_continuation (flux_future_t *f, void *arg)
+static void load_builtins_continuation (flux_future_t *f, void *arg)
 {
     struct state_machine *s = arg;
     flux_error_t error;
@@ -340,7 +341,7 @@ error:
     state_machine_post (s, "builtins-fail");
 }
 
-void state_machine_kickoff (struct state_machine *s)
+static void action_load_builtins (struct state_machine *s)
 {
     flux_future_t *f;
     flux_error_t error;
@@ -349,7 +350,7 @@ void state_machine_kickoff (struct state_machine *s)
         flux_log (s->ctx->h, LOG_ERR, "error loading builtins: %s", error.text);
         goto error;
     }
-    if (flux_future_then (f, -1., kickoff_continuation, s) < 0) {
+    if (flux_future_then (f, -1., load_builtins_continuation, s) < 0) {
         flux_log_error (s->ctx->h, "error registering builtins continuation");
         goto error;
     }
@@ -360,6 +361,15 @@ error:
     else
         s->ctx->exit_rc = 1;
     state_machine_post (s, "builtins-fail");
+}
+
+void state_machine_kickoff (struct state_machine *s)
+{
+    monotime (&s->t_start);
+    s->state = STATE_LOAD_BUILTINS;
+    state_action (s, s->state);
+    monitor_update (s->ctx->h, s->monitor.requests, s->state);
+    wait_update (s->ctx->h, s->wait_requests, s->state);
 }
 
 static void quorum_warn_timer_cb (flux_reactor_t *r,
@@ -1568,8 +1578,6 @@ struct state_machine *state_machine_create (struct broker *ctx,
     if (!(s = calloc (1, sizeof (*s))))
         goto error;
     s->ctx = ctx;
-    s->state = STATE_LOAD_BUILTINS;
-    monotime (&s->t_start);
     if (!(s->events = zlist_new ()))
         goto nomem;
     zlist_autofree (s->events);
