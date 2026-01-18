@@ -733,6 +733,7 @@ static void state_continuation (flux_future_t *f, void *arg)
                 }
             }
             break;
+        case STATE_UNLOAD_BUILTINS:
         case STATE_EXIT:
             break;
     }

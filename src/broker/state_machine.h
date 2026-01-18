@@ -23,7 +23,8 @@ typedef enum {
     STATE_SHUTDOWN,
     STATE_FINALIZE,         // rc3
     STATE_GOODBYE,
-    STATE_EXIT,             // unload built-in modules
+    STATE_UNLOAD_BUILTINS,  // unload built-in modules
+    STATE_EXIT,             // stop the broker's reactor
 } broker_state_t;
 
 

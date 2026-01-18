@@ -126,6 +126,7 @@ static void action_cleanup (struct state_machine *s);
 static void action_shutdown (struct state_machine *s);
 static void action_finalize (struct state_machine *s);
 static void action_goodbye (struct state_machine *s);
+static void action_unload_builtins (struct state_machine *s);
 static void action_exit (struct state_machine *s);
 
 static void broker_online_cb (flux_future_t *f, void *arg);
@@ -151,6 +152,8 @@ static struct state statetab[] = {
     { STATE_SHUTDOWN,   "shutdown",         action_shutdown },
     { STATE_FINALIZE,   "finalize",         action_finalize },
     { STATE_GOODBYE,    "goodbye",          action_goodbye },
+    { STATE_UNLOAD_BUILTINS,
+                        "unload-builtins",  action_unload_builtins},
     { STATE_EXIT,       "exit",             action_exit },
 };
 
@@ -158,7 +161,7 @@ static struct state_next nexttab[] = {
     { "builtins-success",   STATE_LOAD_BUILTINS,
                                                 STATE_JOIN },
     { "builtins-fail",      STATE_LOAD_BUILTINS,
-                                                STATE_EXIT },
+                                                STATE_UNLOAD_BUILTINS},
     { "parent-ready",       STATE_JOIN,         STATE_INIT },
     { "parent-none",        STATE_JOIN,         STATE_INIT },
     { "parent-fail",        STATE_JOIN,         STATE_SHUTDOWN },
@@ -184,7 +187,12 @@ static struct state_next nexttab[] = {
     { "rc3-success",        STATE_FINALIZE,     STATE_GOODBYE },
     { "rc3-none",           STATE_FINALIZE,     STATE_GOODBYE },
     { "rc3-fail",           STATE_FINALIZE,     STATE_GOODBYE },
-    { "goodbye",            STATE_GOODBYE,      STATE_EXIT },
+    { "goodbye",            STATE_GOODBYE,      STATE_UNLOAD_BUILTINS },
+    { "builtins-done",      STATE_UNLOAD_BUILTINS,
+                                                STATE_EXIT },
+    { "builtins-unload-fail",
+                            STATE_UNLOAD_BUILTINS,
+                                                STATE_EXIT },
 };
 
 static const double default_quorum_warn = 60; // log slow joiners
@@ -760,13 +768,15 @@ static void unload_builtins_continuation (flux_future_t *f, void *arg)
                   LOG_ERR,
                   "unload builtins: %s",
                   future_strerror (f, errno));
+        state_machine_post (s, "builtins-unload-fail");
     }
-    flux_reactor_stop (flux_get_reactor (s->ctx->h));
+    else
+        state_machine_post (s, "builtins-done");
 }
 
 /* Unload builtin modules, then stop the broker's reactor.
  */
-static void action_exit (struct state_machine *s)
+static void action_unload_builtins (struct state_machine *s)
 {
     flux_t *h = s->ctx->h;
     flux_future_t *f;
@@ -775,12 +785,17 @@ static void action_exit (struct state_machine *s)
     if (!(f = modhash_unload_builtins (s->ctx->modhash))
         || flux_future_then (f, -1, unload_builtins_continuation, s) < 0) {
         flux_log_error (h, "unload builtins initiation");
-        flux_reactor_stop (flux_get_reactor (h));
+        state_machine_post (s, "builtins-unload-fail");
     }
+}
+
+static void action_exit (struct state_machine *s)
+{
 #if HAVE_LIBSYSTEMD
     if (s->ctx->sd_notify)
         sd_notify (0, "STATUS=Exiting");
 #endif
+    flux_reactor_stop (flux_get_reactor (s->ctx->h));
 }
 
 static void process_event (struct state_machine *s, const char *event)
@@ -858,6 +873,7 @@ void state_machine_kill (struct state_machine *s, int signum)
         case STATE_LOAD_BUILTINS:
         case STATE_SHUTDOWN:
         case STATE_GOODBYE:
+        case STATE_UNLOAD_BUILTINS:
         case STATE_EXIT:
             flux_log (h,
                       LOG_INFO,
@@ -1017,6 +1033,7 @@ static void run_check_parent (struct state_machine *s)
                 break;
             case STATE_FINALIZE:
             case STATE_GOODBYE:
+            case STATE_UNLOAD_BUILTINS:
             case STATE_EXIT:
                 state_machine_post (s, "parent-fail");
                 break;
@@ -1045,6 +1062,7 @@ static void join_check_parent (struct state_machine *s)
             case STATE_SHUTDOWN:
             case STATE_FINALIZE:
             case STATE_GOODBYE:
+            case STATE_UNLOAD_BUILTINS:
             case STATE_EXIT:
                 state_machine_post (s, "parent-fail");
                 break;
@@ -1073,6 +1091,7 @@ static void quorum_check_parent (struct state_machine *s)
             case STATE_SHUTDOWN:
             case STATE_FINALIZE:
             case STATE_GOODBYE:
+            case STATE_UNLOAD_BUILTINS:
             case STATE_EXIT:
                 state_machine_post (s, "quorum-fail");
                 break;
