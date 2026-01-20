@@ -39,6 +39,8 @@ struct eventlogger {
     void *arg;
 };
 
+static struct eventlog_batch * eventlog_batch_get (struct eventlogger *ev);
+
 static void eventlogger_decref (struct eventlogger *ev)
 {
     if (ev && --ev->refcount == 0) {
@@ -140,22 +142,46 @@ static void eventlog_batch_error (struct eventlog_batch *batch, int errnum)
     zlist_remove (ev->pending, batch);
 }
 
-static void commit_cb (flux_future_t *f, void *arg)
+static void commit_batch_cb (flux_future_t *f, void *arg)
 {
     struct eventlog_batch *batch = arg;
     eventlogger_batch_complete (batch);
     flux_future_destroy (f);
 }
 
-static flux_future_t *eventlogger_commit_batch (struct eventlogger *ev,
-                                                struct eventlog_batch *batch)
+static flux_future_t *commit_batch (struct eventlogger *ev,
+                                    struct eventlog_batch *batch)
 {
     flux_future_t *f = NULL;
     flux_future_t *fc = NULL;
     int flags = FLUX_KVS_TXN_COMPACT;
 
+    /*  Stop any pending timer watcher and start a
+     *   kvs commit operation. Call eventlogger_batch_complete()
+     *   when the commit is done, and return a future to the caller
+     *   that will be fulfilled on return from that function.
+     */
+    flux_watcher_stop (batch->timer);
+    if (!(fc = flux_kvs_commit (ev->h, ev->ns, flags, batch->txn)))
+        return NULL;
+    if (!(f = flux_future_and_then (fc, commit_batch_cb, batch)))
+        flux_future_destroy (fc);
+    return f;
+}
+
+static flux_future_t *commit (struct eventlogger *ev,
+                              struct eventlog_batch **batchp)
+{
+    struct eventlog_batch *batch = ev->current;
+    flux_future_t *f = NULL;
+
+    if (batchp)
+        *batchp = batch;
+    ev->current = NULL;
+
     if (!batch) {
-        /*  If batch is NULL, return a fulfilled future immediately.
+        /*  If batch is NULL and there is nothing pending, return a
+         *  fulfilled future immediately.
          *
          *  Note: There isn't much we can do if flux_future_create()
          *   fails, until the eventlogger gets a logging interface.
@@ -163,39 +189,41 @@ static flux_future_t *eventlogger_commit_batch (struct eventlogger *ev,
          *   failure occurred. Likely other parts of the system are
          *   in big trouble anyway...
          */
-        if ((f = flux_future_create (NULL, NULL))) {
-            flux_future_set_reactor (f, flux_get_reactor (ev->h));
-            flux_future_fulfill (f, NULL, NULL);
+        if (zlist_size (ev->pending) == 0) {
+            if ((f = flux_future_create (NULL, NULL))) {
+                flux_future_set_flux (f, ev->h);
+                flux_future_fulfill (f, NULL, NULL);
+            }
+            return f;
         }
-    }
-    else {
-        /*  Otherwise, stop any pending timer watcher and start a
-         *   kvs commit operation. Call eventlogger_batch_complete()
-         *   when the commit is done, and return a future to the caller
-         *   that will be fulfilled on return from that function.
-         */
-        flux_watcher_stop (batch->timer);
-        if (!(fc = flux_kvs_commit (ev->h, ev->ns, flags, batch->txn)))
-            return NULL;
-        if (!(f = flux_future_and_then (fc, commit_cb, batch)))
-            flux_future_destroy (fc);
-    }
-    return f;
-}
 
-static flux_future_t *commit_batch (struct eventlogger *ev,
-                                    struct eventlog_batch **batchp)
-{
-    struct eventlog_batch *batch = ev->current;
-    if (batchp)
-        *batchp = batch;
-    ev->current = NULL;
-    return eventlogger_commit_batch (ev, batch);
+        /*  If pending list is not empty, we need to wait until all
+         *  pending batches have completed before returning.
+         *  Accomplish this by creating a new batch and committing this
+         *  "empty batch".  While this may be inefficient (sending an
+         *  RPC that does nothing), this ensures that everything else
+         *  in this API works just as though a non-empty-batch was
+         *  committed.
+         *
+         *  N.B. eventlog_batch_get() places this new batch on the
+         *  pending list.
+         */
+
+        if (!(batch = eventlog_batch_get (ev)))
+            return NULL;
+        if (batchp)
+            *batchp = batch;
+        ev->current = NULL;
+        /* fallthrough: empty batch is now pending and will serialize
+         * behind previous batches */
+    }
+
+    return commit_batch (ev, batch);
 }
 
 flux_future_t *eventlogger_commit (struct eventlogger *ev)
 {
-    return commit_batch (ev, NULL);
+    return commit (ev, NULL);
 }
 
 static void timer_commit_cb (flux_future_t *f, void *arg)
@@ -206,15 +234,17 @@ static void timer_commit_cb (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-static void
-timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void timer_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     struct eventlog_batch *batch = arg;
     double timeout = batch->ev->commit_timeout;
     flux_future_t *f = NULL;
 
     batch->ev->current = NULL;
-    if (!(f = eventlogger_commit_batch (batch->ev, batch))
+    if (!(f = commit_batch (batch->ev, batch))
         || flux_future_then (f, timeout, timer_commit_cb, batch) < 0) {
         eventlog_batch_error (batch, errno);
         flux_future_destroy (f);
@@ -294,7 +324,8 @@ static int append_wait (struct eventlogger *ev,
 
     if (flux_kvs_txn_put (ev->current->txn,
                           FLUX_KVS_APPEND,
-                          path, entrystr) < 0)
+                          path,
+                          entrystr) < 0)
         return -1;
 
     return eventlogger_flush (ev);
@@ -398,7 +429,7 @@ int eventlogger_flush (struct eventlogger *ev)
     int rc = -1;
     flux_future_t *f;
 
-    if (!(f = commit_batch (ev, &batch))
+    if (!(f = commit (ev, &batch))
         || flux_future_wait_for (f, ev->commit_timeout) < 0)
         goto out;
     if ((rc = flux_future_get (f, NULL)) < 0)
