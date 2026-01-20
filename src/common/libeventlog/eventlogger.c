@@ -226,12 +226,25 @@ flux_future_t *eventlogger_commit (struct eventlogger *ev)
     return commit (ev, NULL);
 }
 
-static void timer_commit_cb (flux_future_t *f, void *arg)
+static void async_commit_cb (flux_future_t *f, void *arg)
 {
     struct eventlog_batch *batch = arg;
     if (flux_future_get (f, NULL) < 0)
         eventlog_batch_error (batch, errno);
     flux_future_destroy (f);
+}
+
+static void async_commit (struct eventlog_batch *batch)
+{
+    double timeout = batch->ev->commit_timeout;
+    flux_future_t *f = NULL;
+
+    batch->ev->current = NULL;
+    if (!(f = commit_batch (batch->ev, batch))
+        || flux_future_then (f, timeout, async_commit_cb, batch) < 0) {
+        eventlog_batch_error (batch, errno);
+        flux_future_destroy (f);
+    }
 }
 
 static void timer_cb (flux_reactor_t *r,
@@ -240,15 +253,7 @@ static void timer_cb (flux_reactor_t *r,
                       void *arg)
 {
     struct eventlog_batch *batch = arg;
-    double timeout = batch->ev->commit_timeout;
-    flux_future_t *f = NULL;
-
-    batch->ev->current = NULL;
-    if (!(f = commit_batch (batch->ev, batch))
-        || flux_future_then (f, timeout, timer_commit_cb, batch) < 0) {
-        eventlog_batch_error (batch, errno);
-        flux_future_destroy (f);
-    }
+    async_commit (batch);
 }
 
 static struct eventlog_batch * eventlog_batch_create (struct eventlogger *ev)
@@ -353,6 +358,10 @@ static int append_async (struct eventlogger *ev,
                   entry,
                   (zlist_free_fn *) json_decref,
                   true);
+
+    if (zlist_size (batch->entries) >= EVENTLOGGER_MAX_APPEND)
+        async_commit (batch);
+
     return 0;
 }
 
