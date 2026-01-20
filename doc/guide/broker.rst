@@ -246,6 +246,10 @@ in black.  The edges for exceptional cases are shown in red.
     - JOIN
     - wait for parent to enter QUORUM state
 
+  * - Y
+    - CONFIG_SYNC
+    - synchronize configuration with leader
+
   * - 1
     - INIT
     - run rc1 script
@@ -304,8 +308,13 @@ startup
 
 The broker state machine is started in LOAD_BUILTINS state, then enters
 JOIN state after the built-in modules are confirmed to be running.
-The broker ranks > 0 wait for the parent to enter QUORUM state (*parent-ready*)
-then enters INIT state.  Rank 0 immediately enters INIT (*parent-none*).
+
+Follower brokers wait for the parent to enter QUORUM state, then enter
+CONFIG_SYNC (*parent-ready*).  After updating configuration to match
+the leader's (*sync-success*), followers transition to INIT.  The leader,
+on the other hand, immediately transitions through CONFIG_SYNC (*sync-none*)
+and JOIN (*parent-none*) and enters INIT.
+
 Upon entering INIT, the rc1 script is executed, then on completion, QUORUM
 state is entered (*rc1-success*).  Because each TBON tree level waits for the
 upstream level to enter QUORUM state before entering INIT state, rc1 executes
@@ -388,6 +397,15 @@ Events
 
   * - parent-timeout
     - parent has not responded within timeout period
+
+  * - sync-success
+    - configuration is synchronized with parent
+
+  * - sync-none
+    - this broker has no parent
+
+  * - sync-fail
+    - unable to synchronize configuration with parent
 
   * - rc1-none
     - rc1 script is defined on this broker
