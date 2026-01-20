@@ -9,8 +9,10 @@ digraph finite_state_machine {
     node [shape = circle];
     Start -> L;
     L -> J [ label = "builtins-success" ];
-    J -> 1 [ label = "parent-ready" ];
-    J -> 1 [ label = "parent-none", color = "blue" ];
+    J -> Y [ label = "parent-ready" ];
+    J -> Y [ label = "parent-none", color = "blue" ];
+    Y -> 1 [ label = "sync-success" ];
+    Y -> 1 [ label = "sync-none", color = "blue" ];
     1 -> Q [ label = "rc1-none" ];
     1 -> Q [ label = "rc1-success" ];
     Q -> 2 [ label = "quorum-full" ];

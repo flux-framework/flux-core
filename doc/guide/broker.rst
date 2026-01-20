@@ -225,7 +225,7 @@ In the diagram below, the edges for a normal broker life cycle are shown
 in black.  The edges for exceptional cases are shown in red.
 
 .. figure:: images/states.png
-  :scale: 35%
+  :scale: 30%
   :alt: broker state machine
   :target: ../_images/states.png
 
@@ -297,7 +297,7 @@ The leader broker deviations from the common path are shown in blue.
 Leaf broker deviations from the common path are shown in green.
 
 .. figure:: images/states_norm.png
-  :scale: 35%
+  :scale: 30%
   :alt: broker state machine
   :target: ../_images/states_norm.png
 
