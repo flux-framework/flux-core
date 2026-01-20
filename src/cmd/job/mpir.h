@@ -18,4 +18,6 @@ void mpir_setup_interface (flux_t *h,
                            int leader_rank,
                            const char *shell_service);
 
+void mpir_shutdown (flux_t *h);
+
 #endif /* !FLUX_JOB_MPIR_H */

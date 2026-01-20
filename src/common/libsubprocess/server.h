@@ -49,6 +49,12 @@ void subprocess_server_destroy (subprocess_server_t *s);
  * there are some, the orig. reactor must be allowed to run in order for the
  * shutdown to make progress.  Therefore this future should be tracked with
  * flux_future_then(), not flux_future_get() which would deadlock.
+ *
+ * This function may be called more than once, e.g. to allow SIGKILL to be
+ * sent after a timeout of the initial call. In this case the previous
+ * future will no longer be fulfilled and should be destroyed.
+ *
+ * The caller owns the returned future and should eventually destroy it.
  */
 flux_future_t *subprocess_server_shutdown (subprocess_server_t *s, int signum);
 

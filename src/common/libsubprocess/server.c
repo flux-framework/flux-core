@@ -1060,7 +1060,6 @@ void subprocess_server_destroy (subprocess_server_t *s)
         server_killall (s, SIGKILL);
         zlistx_destroy (&s->subprocesses);
         zhashx_destroy (&s->labels);
-        flux_future_destroy (s->shutdown);
         free (s->service_name);
         free (s->local_uri);
         if (s->has_sigchld_ctx)
@@ -1127,20 +1126,35 @@ void subprocess_server_set_auth_cb (subprocess_server_t *s,
     s->arg = arg;
 }
 
+static void shutdown_future_invalidate (void *arg)
+{
+    subprocess_server_t *s = arg;
+    s->shutdown = NULL;
+}
+
 flux_future_t *subprocess_server_shutdown (subprocess_server_t *s, int signum)
 {
     flux_future_t *f;
 
-    if (!s || s->shutdown != NULL) {
+    if (!s) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_future_create (NULL, NULL)))
+
+    /* Create a future that will be fulfilled when all server processes
+     * have exited. Arrange to have this future invalidated if it is destroyed
+     * by the client so their callback doesn't get unnecessarily called
+     * and also to allow this function to be called multiple times.
+     */
+    if (!(f = flux_future_create (NULL, NULL))
+        || flux_future_aux_set (f, NULL, s, shutdown_future_invalidate) < 0) {
+        flux_future_destroy (f);
         return NULL;
+    }
     flux_future_set_reactor (f, flux_get_reactor (s->h));
     flux_future_set_flux (f, s->h);
-    flux_future_incref (f);
     s->shutdown = f;
+
     if (zlistx_size (s->subprocesses) == 0)
         flux_future_fulfill (f, NULL, NULL);
     else

@@ -25,17 +25,21 @@
 
 #include "src/common/libsubprocess/server.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/fsd.h"
 
 #include "builtins.h"
 #include "internal.h"
 #include "svc.h"
 #include "log.h"
 
+static double default_shutdown_timeout = 60.;
+
 struct shell_rexec {
     flux_shell_t *shell;
     subprocess_server_t *server;
     char *name;
     bool parent_is_trusted;
+    double shutdown_timeout;
 };
 
 static void rexec_destroy (struct shell_rexec *rexec)
@@ -80,6 +84,7 @@ static int rexec_auth_cb (const flux_msg_t *msg,
 static struct shell_rexec *rexec_create (flux_shell_t *shell)
 {
     struct shell_rexec *rexec;
+    const char *timeout = NULL;
 
     if (!(rexec = calloc (1, sizeof (*rexec))))
         return NULL;
@@ -92,6 +97,22 @@ static struct shell_rexec *rexec_create (flux_shell_t *shell)
     pid_t ppid = getppid (); // 0 =  parent is in a different pid namespace
     if (ppid > 0 && kill (getppid (), 0) == 0)
         rexec->parent_is_trusted = true;
+
+    rexec->shutdown_timeout = default_shutdown_timeout;
+
+    if (flux_shell_getopt_unpack (shell,
+                                  "rexec-shutdown-timeout",
+                                  "s",
+                                  &timeout) < 0) {
+        shell_log_errno ("invalid rexec-shutdown-timeout");
+        goto error;
+    }
+
+    if (timeout
+        && fsd_parse_duration (timeout, &rexec->shutdown_timeout) < 0) {
+        shell_log_errno ("failed to parse rexec-shutdown-timeout");
+        goto error;
+    }
 
     /* N.B. subprocess_server_create() registers the methods: exec, write,
      * kill, list, and disconnect.  Give the server its own namespace.  The
@@ -116,9 +137,9 @@ error:
 }
 
 static int rexec_init (flux_plugin_t *p,
-                      const char *topic,
-                      flux_plugin_arg_t *arg,
-                      void *data)
+                       const char *topic,
+                       flux_plugin_arg_t *arg,
+                       void *data)
 {
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct shell_rexec *rexec;
@@ -135,9 +156,83 @@ static int rexec_init (flux_plugin_t *p,
     return 0;
 }
 
+static void shutdown_cb (flux_future_t *f, void *arg)
+{
+    struct shell_rexec *rexec = arg;
+
+    /* On timeout, if shell_rexec was passed as arg, escalate to SIGKILL
+     * and wait for shutdown_timeout again. Pass NULL as arg this time so
+     * the callback stops the reactor on the second timeout instead of
+     * retrying indefinitely.
+     *
+     * This approach allows clients to receive completion messages for
+     * subprocesses terminated with SIGKILL. If we destroyed the subprocess
+     * server instead, SIGKILL would be sent but final RPCs to clients
+     * would never be sent.
+     */
+    if (flux_future_get (f, NULL) < 0
+        && errno == ETIMEDOUT
+        && rexec != NULL) {
+        flux_future_destroy (f);
+        if ((f = subprocess_server_shutdown (rexec->server, SIGKILL))
+            && flux_future_then (f,
+                                 rexec->shutdown_timeout,
+                                 shutdown_cb,
+                                 NULL) == 0)
+            return;
+
+        /* On failure, fall through to stopping the reactor. The subprocess
+         * server will be destroyed by the shell and SIGKILL sent again, but
+         * clients may not receive termination messages.
+         */
+        shell_warn ("failed to shutdown rexec server cleanly with SIGKILL");
+    }
+    flux_reactor_stop (flux_future_get_reactor (f));
+    flux_future_destroy (f);
+}
+
+static int rexec_exit (flux_plugin_t *p,
+                       const char *topic,
+                       flux_plugin_arg_t *arg,
+                       void *data)
+{
+    struct shell_rexec *rexec = flux_plugin_aux_get (p, "rexec");
+    if (rexec) {
+        flux_t *h = flux_shell_get_flux (rexec->shell);
+        flux_future_t *f;
+
+        /* Send SIGTERM to any subprocesses running in the server and
+         * tell the server to shutdown. Future will be fulfilled when
+         * all processes have exited (immediately if there are none),
+         * Wait for shutdown_timeout before giving up and handing control
+         * back to the shell. The subprocess server will then be destroyed
+         * at which point processes will be sent SIGKILL.
+         *
+         * The reactor needs to be run for the future to be fulfilled,
+         * but the shell has exited flux_reactor_run() at this point,
+         * so call it explicitly here.
+         */
+        if (!(f = subprocess_server_shutdown (rexec->server, SIGTERM))
+            || flux_future_then (f,
+                                 rexec->shutdown_timeout,
+                                 shutdown_cb,
+                                 rexec) < 0) {
+            shell_log_errno ("subprocess_server_shutdown");
+            flux_future_destroy (f);
+            return -1;
+        }
+
+        /* Run reactor until server is shutdown:
+         */
+        flux_reactor_run (flux_get_reactor (h), 0);
+    }
+    return 0;
+}
+
 struct shell_builtin builtin_rexec = {
     .name = FLUX_SHELL_PLUGIN_NAME,
     .init = rexec_init,
+    .exit = rexec_exit,
 };
 
 // vi:ts=4 sw=4 expandtab

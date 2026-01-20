@@ -383,4 +383,8 @@ test_expect_success 'job-shell: shell inherits FLUX_F58_FORCE_ASCII from job' '
 		id=$(flux submit --wait --output={{id}}.out hostname) &&
 	test -f ${id}.out
 '
+test_expect_success 'job-shell: rexec-shutdown-timeout catches bad values' '
+	test_must_fail flux run -o rexec-shutdown-timeout=1 true &&
+	test_must_fail flux run -o rexec-shutdown-timeout=1.1f true
+'
 test_done

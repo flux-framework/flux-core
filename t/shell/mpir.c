@@ -14,6 +14,8 @@
 #include "config.h"
 #endif
 
+#include <signal.h>
+
 #include <flux/core.h>
 #include <flux/optparse.h>
 
@@ -46,6 +48,12 @@ static struct optparse_option opts[] = {
       .has_arg = 0,
       .usage = "test tool launch via MPIR_executable_path",
     },
+    { .name = "send-sigcont",
+      .key = 'S',
+      .has_arg = 1,
+      .arginfo = "ID",
+      .usage = "send SIGCONT to job ID after tool launch",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -63,6 +71,7 @@ int main (int ac, char **av)
     int rank;
     flux_t *h = NULL;
     const char *service;
+    const char *jobid;
     optparse_t *p;
     int optindex;
 
@@ -104,8 +113,21 @@ int main (int ac, char **av)
     mpir_setup_interface (h, 0, false, false, rank, service);
     print_proctable ();
 
+    if ((jobid = optparse_get_str (p, "send-sigcont", NULL))) {
+        flux_jobid_t id;
+        flux_future_t *f;
+
+        if (flux_job_id_parse (jobid, &id) < 0)
+            log_msg_exit ("failed to parse jobid '%s'", jobid);
+        if (!(f = flux_job_kill (h, id, SIGCONT))
+            || flux_future_get (f, NULL) < 0)
+            log_err_exit ("flux_job_kill");
+        flux_future_destroy (f);
+    }
+
     flux_reactor_run (flux_get_reactor (h), 0);
 
+    mpir_shutdown (h);
     proctable_destroy (proctable);
     flux_close (h);
     optparse_destroy (p);

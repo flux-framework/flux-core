@@ -513,6 +513,13 @@ plugins include:
   two seconds).  The polling period may be changed to a different value
   in RFC 23 Flux Standard Duration format.
 
+.. option:: rexec-shutdown-timeout=FSD
+
+  When all tasks exit, processes launched via the rexec server receive
+  SIGTERM, then SIGKILL after this timeout (RFC 23 Flux Standard Duration).
+  Default: 60s.
+
+
 .. _flux_shell_initrc:
 
 SHELL INITRC

@@ -93,5 +93,52 @@ test_expect_success 'mpir: tool launch reports errors' '
 	flux job kill -s CONT $id &&
 	flux job attach $id
 '
-
+test_expect_success 'mpir: tool process is sent SIGTERM at end of job' '
+	id=$(flux submit --requires=rank:1,3 \
+	     -N2 -n2 -o stop-tasks-in-exec true) &&
+	flux job wait-event -vt 5 -p exec -m sync=true $id shell.start &&
+	shell_rank=$(shell_leader_rank $id) &&
+	shell_service=$(shell_service $id) &&
+	${mpir} -r ${shell_rank} -s ${shell_service} \
+	    --tool-launch --send-sigcont=$id sleep 30 >tool4.log 2>&1 &&
+	test_debug "cat tool4.log" &&
+	grep "MPIR: rank 1: sleep: Terminated" tool4.log &&
+	grep "MPIR: rank 3: sleep: Terminated" tool4.log &&
+	flux job attach -vvv $id
+'
+test_expect_success 'mpir: tool tasks are killed after rexec-shutdown-timeout' '
+	cat <<-EOF >mpir-catch-sigterm.sh &&
+	#!/bin/sh
+	# MPIR "tool" that ignores SIGTERM for testing fallback to SIGKILL
+	trap "echo got SIGTERM" 15
+	flux post-job-event \$1 ready
+	sleep inf
+	sleep inf
+	EOF
+	cat <<-EOF >wait-for-ready.sh &&
+	#!/bin/sh
+	# Wait for ready event from mpir-catch-sigterm then exit.
+	# This ensures the script has set up signal handler before it is
+	# sent SIGTERM.
+	flux --parent job wait-event -t 15 -c 2 \$FLUX_JOB_ID ready
+	EOF
+	chmod +x mpir-catch-sigterm.sh &&
+	chmod +x wait-for-ready.sh &&
+	id=$(flux submit -N2 -n2 -o stop-tasks-in-exec \
+	     -o rexec-shutdown-timeout=0.5s \
+	     ./wait-for-ready.sh) &&
+	flux job wait-event -vt 5 -p exec -m sync=true $id shell.start &&
+	shell_rank=$(shell_leader_rank $id) &&
+	shell_service=$(shell_service $id) &&
+	${mpir} -r ${shell_rank} -s ${shell_service} \
+	    --tool-launch --send-sigcont=$id \
+	    ./mpir-catch-sigterm.sh $id >tool5.log 2>&1 &&
+	test_debug "cat tool5.log" &&
+	# Ensure tool got SIGTERM then SIGKILL:
+	grep "MPIR: rank 0:.*: got SIGTERM" tool5.log &&
+	grep "MPIR: rank 1:.*: got SIGTERM" tool5.log &&
+	grep "MPIR: rank 0: mpir-catch-sigterm.sh: Killed" tool5.log &&
+	grep "MPIR: rank 1: mpir-catch-sigterm.sh: Killed" tool5.log &&
+	flux job wait-event -Hvt 15 $id clean
+'
 test_done
