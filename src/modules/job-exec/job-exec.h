@@ -100,6 +100,12 @@ struct jobinfo {
     int                   kill_count;
     flux_watcher_t       *kill_shell_timer;
     int                   kill_shell_count;
+
+    /* timer if max-kill-timeout is active at the time job is first signaled.
+     * overrides max-kill-count.
+     */
+    flux_watcher_t       *max_kill_timer;
+
     flux_watcher_t       *expiration_timer;
 
     double                t0;        /* timestamp we initially saw this job */
