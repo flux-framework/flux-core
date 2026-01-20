@@ -2,35 +2,38 @@
 
 digraph finite_state_machine {
     rankdir=LR;
-    size="8,5"
 
-    node [shape = point ]; N
+    node [shape = point ]; Start
     node [shape = doublecircle ]; E
 
     node [shape = circle];
-    N -> J;
+    Start -> L;
+    L -> J [ label = "builtins-success" ];
+    L -> U [ label = "builtins-fail", color = "red" ];
     J -> 1 [ label = "parent-ready" ];
     J -> 1 [ label = "parent-none" ];
-    J -> S [ label = "parent-fail" ];
-    J -> S [ label = "parent-timeout" ];
+    J -> S [ label = "parent-fail", color = "red" ];
+    J -> S [ label = "parent-timeout", color = "red" ];
     1 -> Q [ label = "rc1-none" ];
     1 -> Q [ label = "rc1-success" ];
-    1 -> S [ label = "rc1-fail" ];
+    1 -> S [ label = "rc1-fail", color = "red" ];
     Q -> 2 [ label = "quorum-full" ];
-    Q -> S [ label = "quorum-timeout" ];
+    Q -> S [ label = "quorum-timeout", color = "red" ];
     2 -> 2 [ label = "rc2-none" ];
     2 -> C [ label = "rc2-success" ];
-    2 -> C [ label = "rc2-fail" ];
+    2 -> C [ label = "rc2-fail", color = "red" ];
     2 -> C [ label = "shutdown" ];
-    2 -> C [ label = "signal-abort" ];
+    2 -> C [ label = "signal-abort", color = "red" ];
     C -> S [ label = "cleanup-none" ];
     C -> S [ label = "cleanup-success" ];
-    C -> S [ label = "cleanup-fail" ];
+    C -> S [ label = "cleanup-fail", color = "red" ];
     S -> 3 [ label = "children-complete" ];
     S -> 3 [ label = "children-none" ];
-    S -> 3 [ label = "children-timeout" ];
+    S -> 3 [ label = "children-timeout", color = "red" ];
     3 -> G [ label = "goodbye" ];
-    G -> E [ label = "rc3-none" ];
-    G -> E [ label = "rc3-success" ];
-    G -> E [ label = "rc3-fail" ];
+    G -> U [ label = "rc3-none" ];
+    G -> U [ label = "rc3-success" ];
+    G -> U [ label = "rc3-fail", color = "red" ];
+    U -> E [ label = "builtins-done" ];
+    U -> E [ label = "builtins-unload-fail", color = "red" ];
 }

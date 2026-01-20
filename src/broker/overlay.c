@@ -697,7 +697,7 @@ static void state_continuation (flux_future_t *f, void *arg)
         return;
     }
     switch (state) {
-        case STATE_NONE:
+        case STATE_LOAD_BUILTINS:
         case STATE_JOIN:
         case STATE_INIT:
         case STATE_QUORUM:
@@ -733,6 +733,7 @@ static void state_continuation (flux_future_t *f, void *arg)
                 }
             }
             break;
+        case STATE_UNLOAD_BUILTINS:
         case STATE_EXIT:
             break;
     }

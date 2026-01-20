@@ -64,7 +64,7 @@ test_expect_success 'simulate builtins-fail with a bad connector-local config' '
 		--config-path=badconfig.toml \
 		-Slog-stderr-level=6 \
 		true 2>builtins.err &&
-	grep "builtins-fail: none->exit" builtins.err
+	grep "builtins-fail: load-builtins->unload-builtins" builtins.err
 '
 test_expect_success 'create rc1 that blocks on FIFO for rank != 0' '
 	cat <<-EOT >rc1_block &&
@@ -163,7 +163,7 @@ test_expect_success 'capture state transitions from size=1 instance' '
 '
 
 test_expect_success 'all expected events and state transitions occurred' '
-	grep "builtins-success: none->join"		states.log &&
+	grep "builtins-success: load-builtins->join"	states.log &&
 	grep "parent-none: join->init"			states.log &&
 	grep "rc1-none: init->quorum"			states.log &&
 	grep "quorum-full: quorum->run"			states.log &&
@@ -171,7 +171,8 @@ test_expect_success 'all expected events and state transitions occurred' '
 	grep "cleanup-none: cleanup->shutdown"		states.log &&
 	grep "children-none: shutdown->finalize"	states.log &&
 	grep "rc3-none: finalize->goodbye"		states.log &&
-	grep "goodbye: goodbye->exit"			states.log
+	grep "goodbye: goodbye->unload-builtins"	states.log &&
+	grep "builtins-done: unload-builtins->exit"	states.log
 '
 
 test_expect_success 'capture state transitions from size=2 instance' '
@@ -181,7 +182,7 @@ test_expect_success 'capture state transitions from size=2 instance' '
 '
 
 test_expect_success 'all expected events and state transitions occurred on rank 0' '
-	grep "\[0\]: builtins-success: none->join"		states2.log &&
+	grep "\[0\]: builtins-success: load-builtins->join"	states2.log &&
 	grep "\[0\]: parent-none: join->init"			states2.log &&
 	grep "\[0\]: rc1-none: init->quorum"			states2.log &&
 	grep "\[0\]: quorum-full: quorum->run"			states2.log &&
@@ -189,11 +190,12 @@ test_expect_success 'all expected events and state transitions occurred on rank 
 	grep "\[0\]: cleanup-none: cleanup->shutdown"		states2.log &&
 	grep "\[0\]: children-complete: shutdown->finalize"	states2.log &&
 	grep "\[0\]: rc3-none: finalize->goodbye"		states2.log &&
-	grep "\[0\]: goodbye: goodbye->exit"			states2.log
+	grep "\[0\]: goodbye: goodbye->unload-builtins"		states2.log &&
+	grep "\[0\]: builtins-done: unload-builtins->exit"	states2.log
 '
 
 test_expect_success 'all expected events and state transitions occurred on rank 1' '
-	grep "\[1\]: builtins-success: none->join"		states2.log &&
+	grep "\[1\]: builtins-success: load-builtins->join"	states2.log &&
 	grep "\[1\]: parent-ready: join->init"			states2.log &&
 	grep "\[1\]: rc1-none: init->quorum"			states2.log &&
 	grep "\[1\]: quorum-full: quorum->run"			states2.log &&
@@ -201,7 +203,8 @@ test_expect_success 'all expected events and state transitions occurred on rank 
 	grep "\[1\]: cleanup-none: cleanup->shutdown"		states2.log &&
 	grep "\[1\]: children-none: shutdown->finalize"	        states2.log &&
 	grep "\[1\]: rc3-none: finalize->goodbye"		states2.log &&
-	grep "\[1\]: goodbye: goodbye->exit"		        states2.log
+	grep "\[1\]: goodbye: goodbye->unload-builtins"	        states2.log &&
+	grep "\[1\]: builtins-done: unload-builtins->exit"	states2.log
 '
 
 test_expect_success 'capture state transitions from instance with rc1 failure' '
@@ -213,12 +216,13 @@ test_expect_success 'capture state transitions from instance with rc1 failure' '
 '
 
 test_expect_success 'all expected events and state transitions occurred' '
-	grep "builtins-success: none->join"		states_rc1.log &&
+	grep "builtins-success: load-builtins->join"	states_rc1.log &&
 	grep "parent-none: join->init"			states_rc1.log &&
 	grep "rc1-fail: init->shutdown"			states_rc1.log &&
 	grep "children-none: shutdown->finalize"	states_rc1.log &&
 	grep "rc3-none: finalize->goodbye"		states_rc1.log &&
-	grep "goodbye: goodbye->exit"			states_rc1.log
+	grep "goodbye: goodbye->unload-builtins"	states_rc1.log &&
+	grep "builtins-done: unload-builtins->exit"	states_rc1.log
 '
 
 test_expect_success 'capture state transitions from instance with rc2 failure' '
@@ -229,7 +233,7 @@ test_expect_success 'capture state transitions from instance with rc2 failure' '
 '
 
 test_expect_success 'all expected events and state transitions occurred' '
-	grep "builtins-success: none->join"		states_rc2.log &&
+	grep "builtins-success: load-builtins->join"	states_rc2.log &&
 	grep "parent-none: join->init"			states_rc2.log &&
 	grep "rc1-none: init->quorum"			states_rc2.log &&
 	grep "quorum-full: quorum->run"			states_rc2.log &&
@@ -237,7 +241,8 @@ test_expect_success 'all expected events and state transitions occurred' '
 	grep "cleanup-none: cleanup->shutdown"		states_rc2.log &&
 	grep "children-none: shutdown->finalize"	states_rc2.log &&
 	grep "rc3-none: finalize->goodbye"		states_rc2.log &&
-	grep "goodbye: goodbye->exit"			states_rc2.log
+	grep "goodbye: goodbye->unload-builtins"	states_rc2.log &&
+	grep "builtins-done: unload-builtins->exit"	states_rc2.log
 '
 
 test_expect_success 'capture state transitions from instance with rc3 failure' '
@@ -249,7 +254,7 @@ test_expect_success 'capture state transitions from instance with rc3 failure' '
 '
 
 test_expect_success 'all expected events and state transitions occurred' '
-	grep "builtins-success: none->join"		states_rc3.log &&
+	grep "builtins-success: load-builtins->join"	states_rc3.log &&
 	grep "parent-none: join->init"			states_rc3.log &&
 	grep "rc1-none: init->quorum"			states_rc3.log &&
 	grep "quorum-full: quorum->run"			states_rc3.log &&
@@ -257,7 +262,8 @@ test_expect_success 'all expected events and state transitions occurred' '
 	grep "cleanup-none: cleanup->shutdown"		states_rc3.log &&
 	grep "children-none: shutdown->finalize"	states_rc3.log &&
 	grep "rc3-fail: finalize->goodbye"		states_rc3.log &&
-	grep "goodbye: goodbye->exit"			states_rc3.log
+	grep "goodbye: goodbye->unload-builtins"	states_rc3.log &&
+	grep "builtins-done: unload-builtins->exit"	states_rc3.log
 '
 
 test_expect_success 'instance rc1 failure exits with norestart code' '

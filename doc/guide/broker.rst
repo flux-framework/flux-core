@@ -221,9 +221,15 @@ on rank 0 launches a process and an event is generated upon process
 termination, while on rank > 0, entering CLEANUP does not launch a process,
 and immediately generates an event.
 
-.. image:: images/states.png
-  :scale: 100 %
+In the diagram below, the edges for a normal broker life cycle are shown
+in black.  The edges for exceptional cases are shown in red.
+
+.. figure:: images/states.png
+  :scale: 35%
   :alt: broker state machine
+  :target: ../_images/states.png
+
+  Full broker state diagram (click to enlarge)
 
 .. list-table::
   :header-rows: 1
@@ -231,6 +237,10 @@ and immediately generates an event.
   * - abbrev
     - state
     - action when transitioning into state
+
+  * - L
+    - LOAD_BUILTINS
+    - load built-in modules
 
   * - J
     - JOIN
@@ -264,9 +274,13 @@ and immediately generates an event.
     - GOODBYE
     - wait for flux-shutdown, if any
 
+  * - U
+    - UNLOAD_BUILTINS
+    - unload built-in modules
+
   * - E
     - EXIT
-    - exit broker
+    - stop reactor
 
 Normal State Transitions
 ========================
@@ -274,18 +288,22 @@ Normal State Transitions
 It may be helpful to walk through the state transitions that occur when
 a Flux instance runs to completion without encountering exceptional conditions.
 
-.. image:: images/states_norm.png
-  :scale: 100 %
-  :alt: broker state machine
+In the diagram below, the edges for the common path are shown in black.
+The leader broker deviations from the common path are shown in blue.
+Leaf broker deviations from the common path are shown in green.
 
-green = common path; blue = rank 0 deviation from common path; red = leaf
-node deviation from common path
+.. figure:: images/states_norm.png
+  :scale: 35%
+  :alt: broker state machine
+  :target: ../_images/states_norm.png
+
+  Normal state transitions (click to enlarge)
 
 startup
 -------
 
-The broker state machine is started in JOIN state after the built-in modules
-are confirmed to be running.
+The broker state machine is started in LOAD_BUILTINS state, then enters
+JOIN state after the built-in modules are confirmed to be running.
 The broker ranks > 0 wait for the parent to enter QUORUM state (*parent-ready*)
 then enters INIT state.  Rank 0 immediately enters INIT (*parent-none*).
 Upon entering INIT, the rc1 script is executed, then on completion, QUORUM
@@ -316,7 +334,9 @@ All brokers with children remain in SHUTDOWN until their children disconnect
 (*children-complete*).  If they have no children (leaf node), they transition
 out of SHUTDOWN immediately (*children-none*). The next state is FINALIZE,
 where the rc3 script is executed.  Upon completion of rc3 (*rc3-success*),
-brokers transition to EXIT and disconnect from the parent.
+brokers transition through GOODBYE to wait for a :man1:`flux-shutdown` command
+to complete (*goodbye*), then to UNLOAD_BUILTINS, where built-in modules are
+unloaded (*builtins-done*), and finally EXIT state.
 
 Because each TBON tree level waits for the downstream level to disconnect
 before entering FINALIZE state, rc3 executes in downstream-to-upstream order.
@@ -431,6 +451,13 @@ Events
 
   * - goodbye
     - any flux-shutdown commands have completed
+
+  * - builtins-done
+    - built-in modules have been unloaded
+
+  * - builtins-unload-fail
+    - built-in modules failed to unload
+
 
 **************************
 System Instance Resiliency

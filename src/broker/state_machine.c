@@ -117,6 +117,7 @@ struct state_next {
     broker_state_t next;
 };
 
+static void action_load_builtins (struct state_machine *s);
 static void action_join (struct state_machine *s);
 static void action_quorum (struct state_machine *s);
 static void action_init (struct state_machine *s);
@@ -125,6 +126,7 @@ static void action_cleanup (struct state_machine *s);
 static void action_shutdown (struct state_machine *s);
 static void action_finalize (struct state_machine *s);
 static void action_goodbye (struct state_machine *s);
+static void action_unload_builtins (struct state_machine *s);
 static void action_exit (struct state_machine *s);
 
 static void broker_online_cb (flux_future_t *f, void *arg);
@@ -140,7 +142,8 @@ static void quorum_check_parent (struct state_machine *s);
 static void run_check_parent (struct state_machine *s);
 
 static struct state statetab[] = {
-    { STATE_NONE,       "none",             NULL },
+    { STATE_LOAD_BUILTINS,
+                        "load-builtins",    action_load_builtins },
     { STATE_JOIN,       "join",             action_join },
     { STATE_INIT,       "init",             action_init },
     { STATE_QUORUM,     "quorum",           action_quorum },
@@ -149,12 +152,16 @@ static struct state statetab[] = {
     { STATE_SHUTDOWN,   "shutdown",         action_shutdown },
     { STATE_FINALIZE,   "finalize",         action_finalize },
     { STATE_GOODBYE,    "goodbye",          action_goodbye },
+    { STATE_UNLOAD_BUILTINS,
+                        "unload-builtins",  action_unload_builtins},
     { STATE_EXIT,       "exit",             action_exit },
 };
 
 static struct state_next nexttab[] = {
-    { "builtins-success",   STATE_NONE,         STATE_JOIN },
-    { "builtins-fail",      STATE_NONE,         STATE_EXIT },
+    { "builtins-success",   STATE_LOAD_BUILTINS,
+                                                STATE_JOIN },
+    { "builtins-fail",      STATE_LOAD_BUILTINS,
+                                                STATE_UNLOAD_BUILTINS},
     { "parent-ready",       STATE_JOIN,         STATE_INIT },
     { "parent-none",        STATE_JOIN,         STATE_INIT },
     { "parent-fail",        STATE_JOIN,         STATE_SHUTDOWN },
@@ -180,7 +187,12 @@ static struct state_next nexttab[] = {
     { "rc3-success",        STATE_FINALIZE,     STATE_GOODBYE },
     { "rc3-none",           STATE_FINALIZE,     STATE_GOODBYE },
     { "rc3-fail",           STATE_FINALIZE,     STATE_GOODBYE },
-    { "goodbye",            STATE_GOODBYE,      STATE_EXIT },
+    { "goodbye",            STATE_GOODBYE,      STATE_UNLOAD_BUILTINS },
+    { "builtins-done",      STATE_UNLOAD_BUILTINS,
+                                                STATE_EXIT },
+    { "builtins-unload-fail",
+                            STATE_UNLOAD_BUILTINS,
+                                                STATE_EXIT },
 };
 
 static const double default_quorum_warn = 60; // log slow joiners
@@ -309,7 +321,7 @@ static void action_join (struct state_machine *s)
  * the overlay code is short circuited for singleton instances.  Overlay
  * bootstrap is assumed to be complete once the built-in modules are running.
  */
-static void kickoff_continuation (flux_future_t *f, void *arg)
+static void load_builtins_continuation (flux_future_t *f, void *arg)
 {
     struct state_machine *s = arg;
     flux_error_t error;
@@ -337,7 +349,7 @@ error:
     state_machine_post (s, "builtins-fail");
 }
 
-void state_machine_kickoff (struct state_machine *s)
+static void action_load_builtins (struct state_machine *s)
 {
     flux_future_t *f;
     flux_error_t error;
@@ -346,7 +358,7 @@ void state_machine_kickoff (struct state_machine *s)
         flux_log (s->ctx->h, LOG_ERR, "error loading builtins: %s", error.text);
         goto error;
     }
-    if (flux_future_then (f, -1., kickoff_continuation, s) < 0) {
+    if (flux_future_then (f, -1., load_builtins_continuation, s) < 0) {
         flux_log_error (s->ctx->h, "error registering builtins continuation");
         goto error;
     }
@@ -357,6 +369,15 @@ error:
     else
         s->ctx->exit_rc = 1;
     state_machine_post (s, "builtins-fail");
+}
+
+void state_machine_kickoff (struct state_machine *s)
+{
+    monotime (&s->t_start);
+    s->state = STATE_LOAD_BUILTINS;
+    state_action (s, s->state);
+    monitor_update (s->ctx->h, s->monitor.requests, s->state);
+    wait_update (s->ctx->h, s->wait_requests, s->state);
 }
 
 static void quorum_warn_timer_cb (flux_reactor_t *r,
@@ -747,13 +768,15 @@ static void unload_builtins_continuation (flux_future_t *f, void *arg)
                   LOG_ERR,
                   "unload builtins: %s",
                   future_strerror (f, errno));
+        state_machine_post (s, "builtins-unload-fail");
     }
-    flux_reactor_stop (flux_get_reactor (s->ctx->h));
+    else
+        state_machine_post (s, "builtins-done");
 }
 
 /* Unload builtin modules, then stop the broker's reactor.
  */
-static void action_exit (struct state_machine *s)
+static void action_unload_builtins (struct state_machine *s)
 {
     flux_t *h = s->ctx->h;
     flux_future_t *f;
@@ -762,12 +785,17 @@ static void action_exit (struct state_machine *s)
     if (!(f = modhash_unload_builtins (s->ctx->modhash))
         || flux_future_then (f, -1, unload_builtins_continuation, s) < 0) {
         flux_log_error (h, "unload builtins initiation");
-        flux_reactor_stop (flux_get_reactor (h));
+        state_machine_post (s, "builtins-unload-fail");
     }
+}
+
+static void action_exit (struct state_machine *s)
+{
 #if HAVE_LIBSYSTEMD
     if (s->ctx->sd_notify)
         sd_notify (0, "STATUS=Exiting");
 #endif
+    flux_reactor_stop (flux_get_reactor (s->ctx->h));
 }
 
 static void process_event (struct state_machine *s, const char *event)
@@ -842,9 +870,10 @@ void state_machine_kill (struct state_machine *s, int signum)
         case STATE_FINALIZE:
             (void)runat_abort (s->ctx->runat, "rc3");
             break;
-        case STATE_NONE:
+        case STATE_LOAD_BUILTINS:
         case STATE_SHUTDOWN:
         case STATE_GOODBYE:
+        case STATE_UNLOAD_BUILTINS:
         case STATE_EXIT:
             flux_log (h,
                       LOG_INFO,
@@ -992,7 +1021,7 @@ static void run_check_parent (struct state_machine *s)
         state_machine_post (s, "parent-fail");
     else if (s->monitor.parent_valid) {
         switch (s->monitor.parent_state) {
-            case STATE_NONE:
+            case STATE_LOAD_BUILTINS:
             case STATE_JOIN:
             case STATE_INIT:
             case STATE_QUORUM:
@@ -1004,6 +1033,7 @@ static void run_check_parent (struct state_machine *s)
                 break;
             case STATE_FINALIZE:
             case STATE_GOODBYE:
+            case STATE_UNLOAD_BUILTINS:
             case STATE_EXIT:
                 state_machine_post (s, "parent-fail");
                 break;
@@ -1020,7 +1050,7 @@ static void join_check_parent (struct state_machine *s)
         state_machine_post (s, "parent-fail");
     else if (s->monitor.parent_valid) {
         switch (s->monitor.parent_state) {
-            case STATE_NONE:
+            case STATE_LOAD_BUILTINS:
             case STATE_JOIN:
             case STATE_INIT:
                 break;
@@ -1032,6 +1062,7 @@ static void join_check_parent (struct state_machine *s)
             case STATE_SHUTDOWN:
             case STATE_FINALIZE:
             case STATE_GOODBYE:
+            case STATE_UNLOAD_BUILTINS:
             case STATE_EXIT:
                 state_machine_post (s, "parent-fail");
                 break;
@@ -1048,7 +1079,7 @@ static void quorum_check_parent (struct state_machine *s)
         state_machine_post (s, "quorum-fail");
     else if (s->monitor.parent_valid) {
         switch (s->monitor.parent_state) {
-            case STATE_NONE:
+            case STATE_LOAD_BUILTINS:
             case STATE_JOIN:
             case STATE_QUORUM:
                 break;
@@ -1060,6 +1091,7 @@ static void quorum_check_parent (struct state_machine *s)
             case STATE_SHUTDOWN:
             case STATE_FINALIZE:
             case STATE_GOODBYE:
+            case STATE_UNLOAD_BUILTINS:
             case STATE_EXIT:
                 state_machine_post (s, "quorum-fail");
                 break;
@@ -1565,8 +1597,6 @@ struct state_machine *state_machine_create (struct broker *ctx,
     if (!(s = calloc (1, sizeof (*s))))
         goto error;
     s->ctx = ctx;
-    s->state = STATE_NONE;
-    monotime (&s->t_start);
     if (!(s->events = zlist_new ()))
         goto nomem;
     zlist_autofree (s->events);
