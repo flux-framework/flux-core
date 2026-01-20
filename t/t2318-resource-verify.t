@@ -11,7 +11,7 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 # with "extra" GPUs. Since we're not testing GPU detection here, just
 # disable the rsmi component of HWLOC when used to avoid the issue.
 # (This needs to be done before test_under_flux is called)
-if hwloc-ls | grep rsmi >/dev/null 2>&1; then
+if hwloc-ls --of console | grep rsmi >/dev/null 2>&1; then
     export HWLOC_COMPONENTS=-rsmi
 fi
 
