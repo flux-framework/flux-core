@@ -373,7 +373,7 @@ static int builtin_get (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
-static int internal_config_reload (optparse_t *p, int ac, char *av[])
+static int config_reload (optparse_t *p, int ac, char *av[])
 {
     flux_t *h;
     flux_future_t *f = NULL;
@@ -504,7 +504,7 @@ static struct optparse_subcommand config_subcmds[] = {
     { "reload",
       "[OPTIONS]",
       "Reload broker configuration from files",
-      internal_config_reload,
+      config_reload,
       0,
       NULL,
     },
