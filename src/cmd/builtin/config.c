@@ -384,11 +384,17 @@ static int config_reload (optparse_t *p, int ac, char *av[])
     }
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
+    if (optparse_hasopt (p, "follower-noop")) {
+        uint32_t rank;
+        if (flux_get_rank (h, &rank) == 0 && rank > 0)
+            goto done;
+    }
     if (!(f = flux_rpc (h, "config.reload", NULL, FLUX_NODEID_ANY, 0)))
         log_err_exit ("error constructing config.reload RPC");
     if (flux_future_get (f, NULL) < 0)
         log_msg_exit ("reload: %s", flux_future_error_string (f));
     flux_future_destroy (f);
+done:
     flux_close (h);
     return (0);
 }
@@ -457,6 +463,13 @@ int cmd_config (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+static struct optparse_option reload_opts[] = {
+    { .name = "follower-noop", .has_arg = 0,
+      .usage = "Do nothing if run on a non-leader broker (for systemd use)"
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option get_opts[] = {
     { .name = "config-path", .key = 'c', .has_arg = 1,
       .arginfo = "PATH|system|security|imp",
@@ -506,7 +519,7 @@ static struct optparse_subcommand config_subcmds[] = {
       "Reload broker configuration from files",
       config_reload,
       0,
-      NULL,
+      reload_opts,
     },
     { "get",
       "[OPTIONS] [NAME]",
