@@ -50,16 +50,6 @@ def setup(context):
 
 
 @task(
-    "config-reload",
-    ranks=">0",
-    needs_attrs=["config.path"],
-    before=["*"],
-)
-def config_reload(context):
-    context.rpc("config.reload").get()
-
-
-@task(
     "check-restore",
     ranks="0",
     before=["content-backing"],
