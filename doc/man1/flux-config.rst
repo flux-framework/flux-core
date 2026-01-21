@@ -111,9 +111,11 @@ configuration key names.  This command is available to all users.
    requiring installation.
 
 .. option:: --intree
+
    Force :program:`flux config builtin` to return in-tree paths.
 
 .. option:: --installed
+
    Force :program:`flux config builtin` to return installed paths.
 
 load
