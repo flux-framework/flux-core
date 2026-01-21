@@ -442,12 +442,8 @@ class KVSTxn:
         return Future(future)
 
     def put(self, key, value, raw=False):
-        """Put key=value in the KVS"""
+        """Put key=value in the KVS, set raw=True to write raw values"""
         put(self.fhdl, self._path + key, value, _kvstxn=self.txn, raw=raw)
-
-    def raw(self, key, value):
-        """Put raw key=value in the KVS, value must be of type "bytes" """
-        put_raw(self.fhdl, self._path + key, value, _kvstxn=self.txn)
 
     def mkdir(self, key):
         """Create a directory in the KVS"""
