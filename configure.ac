@@ -433,6 +433,7 @@ PKG_CHECK_MODULES([CURSES], [ncursesw], [], [])
 PKG_CHECK_MODULES([LIBARCHIVE], [libarchive], [], [])
 PKG_CHECK_MODULES([BASH_COMPLETION], [bash-completion], [
     bashcompdir="`$PKG_CONFIG \
+        --define-variable=prefix=${prefix} \
         --define-variable=datadir=${datadir} \
         --variable=completionsdir bash-completion`"
 ], [
