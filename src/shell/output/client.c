@@ -115,11 +115,11 @@ static void output_client_control (struct output_client *client, bool stop)
 
             if (stop) {
                 flux_subprocess_stream_stop (p, "stdout");
-                flux_subprocess_stream_stop (p, "stdout");
+                flux_subprocess_stream_stop (p, "stderr");
             }
             else {
                 flux_subprocess_stream_start (p, "stdout");
-                flux_subprocess_stream_start (p, "stdout");
+                flux_subprocess_stream_start (p, "stderr");
             }
             task = flux_shell_task_next (client->shell);
         }
