@@ -186,8 +186,7 @@ test_expect_success '[bootstrap] hosts array can be missing' '
 	cat <<-EOT >conf6/bootstrap.toml &&
 	[bootstrap]
 	EOT
-	flux broker ${ARGS} -c conf6 flux lsattr -v >missing_attr.out &&
-	grep "tbon.endpoint.*-$" missing_attr.out
+	flux broker ${ARGS} -c conf6 true
 '
 
 test_expect_success '[bootstrap] hosts array can be empty' '
@@ -197,8 +196,7 @@ test_expect_success '[bootstrap] hosts array can be empty' '
 	hosts = [
 	]
 	EOT
-	flux broker ${ARGS} -c conf7 flux lsattr -v >empty_attr.out &&
-	grep "tbon.endpoint.*-$" empty_attr.out
+	flux broker ${ARGS} -c conf7 true
 '
 
 test_expect_success 'create initial program for testing' '

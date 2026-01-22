@@ -98,7 +98,7 @@ static struct {
     { ZMQ_PROTOCOL_ERROR_ZMTP_MALFORMED_COMMAND_WELCOME,
       "ZMTP malformed command welcome" },
     { ZMQ_PROTOCOL_ERROR_ZMTP_INVALID_METADATA, "ZMTP invalid metadata" },
-    { ZMQ_PROTOCOL_ERROR_ZMTP_CRYPTOGRAPHIC, "ZMTP cryptographic" },
+    { ZMQ_PROTOCOL_ERROR_ZMTP_CRYPTOGRAPHIC, "ZMTP cryptographic error" },
     { ZMQ_PROTOCOL_ERROR_ZMTP_MECHANISM_MISMATCH, "ZMTP mechanism mismatch" },
     { ZMQ_PROTOCOL_ERROR_ZAP_UNSPECIFIED, "ZAP unspecified" },
     { ZMQ_PROTOCOL_ERROR_ZAP_MALFORMED_REPLY, "ZAP malformed reply" },

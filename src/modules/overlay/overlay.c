@@ -44,9 +44,10 @@
 #endif
 
 #include "overlay.h"
-#include "attr.h"
-#include "trace.h"
-#include "state_machine.h"
+#include "compat.h"
+#include "src/broker/trace.h"
+#include "src/broker/state_machine.h"
+#include "boot_util.h"
 #include "boot_pmi.h"
 #include "boot_config.h"
 
@@ -151,7 +152,6 @@ struct overlay {
 
     flux_t *h;
     char *hostname;
-    attr_t *attrs;
     flux_reactor_t *reactor;
     flux_msg_handler_t **handlers;
     flux_future_t *f_sync;
@@ -205,6 +205,7 @@ static int overlay_control_parent (struct overlay *ov,
 static void overlay_health_respond_all (struct overlay *ov);
 static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank);
 static int overlay_goodbye_parent (struct overlay *overlay, flux_error_t *errp);
+static void overlay_goodbye_cb (struct overlay *ov, const flux_msg_t *msg);
 static int overlay_get_child_online_peer_count (struct overlay *ov);
 static void overlay_event_checkseq (struct overlay *ov, const flux_msg_t *msg);
 
@@ -468,6 +469,18 @@ static void update_torpid_children (struct overlay *ov)
             }
         }
     }
+}
+
+static struct child *child_lookup (struct overlay *ov, const char *id)
+{
+    if (id) {
+        struct child *child;
+        foreach_overlay_child (ov, child) {
+            if (streq (id, child->uuid))
+                return child;
+        }
+    }
+    return NULL;
 }
 
 /* N.B. overlay_child_status_update() ensures child_lookup_online() only
@@ -800,14 +813,35 @@ static void log_tracker_error (flux_t *h, const flux_msg_t *msg, int errnum)
 static void fail_child_rpcs (const flux_msg_t *msg, void *arg)
 {
     struct overlay *ov = arg;
-    flux_msg_t *rep;
+    flux_msg_t *response;
+    const char *last_hop;
+    struct child *child;
 
-    if (!(rep = flux_response_derive (msg, EHOSTUNREACH))
-        || flux_msg_route_delete_last (rep) < 0
-        || flux_msg_route_delete_last (rep) < 0
-        || flux_send (ov->h, rep, 0) < 0)
-        log_tracker_error (ov->h, rep, errno);
-    flux_msg_destroy (rep);
+    if (!(response = flux_response_derive (msg, EHOSTUNREACH))
+        || flux_msg_route_delete_last (response) < 0
+        || flux_msg_route_delete_last (response) < 0)
+        goto error;
+
+    last_hop = flux_msg_route_last (response);
+
+    if ((child = child_lookup (ov, last_hop))) {
+        if (overlay_sendmsg_child (ov, response) < 0)
+            goto error;
+        flux_msg_decref (response);
+    }
+    else if (ov->rank > 0 && last_hop && streq (last_hop, ov->parent.uuid)) {
+        if (overlay_sendmsg_parent (ov, response) < 0)
+            goto error;
+        flux_msg_decref (response);
+    }
+    else {
+        if (flux_send_new (ov->h_channel, &response, 0) < 0)
+            goto error;
+    }
+    return;
+error:
+    log_tracker_error (ov->h, response, errno);
+    flux_msg_destroy (response);
 }
 
 static void overlay_child_status_update (struct overlay *ov,
@@ -1076,6 +1110,11 @@ static void child_cb (flux_reactor_t *r,
             goto done;
         }
         case FLUX_MSGTYPE_REQUEST:
+            if (flux_msg_get_topic (msg, &topic) == 0
+                && streq (topic, "overlay.goodbye")) {
+                overlay_goodbye_cb (ov, msg);
+                goto done;
+            }
             break;
         case FLUX_MSGTYPE_RESPONSE:
             /* Response message traveling upstream requires special handling:
@@ -1114,12 +1153,26 @@ done:
 static void fail_parent_rpc (const flux_msg_t *msg, void *arg)
 {
     struct overlay *ov = arg;
+    flux_msg_t *response;
+    const char *last_hop;
 
-    if (flux_respond_error (ov->h,
-                            msg,
-                            EHOSTUNREACH,
-                            "overlay disconnect") < 0)
-        log_tracker_error (ov->h, msg, errno);
+    if (!(response = flux_response_derive (msg, EHOSTUNREACH))
+        || flux_msg_set_string (response, "overlay disconnect") < 0)
+        goto error;
+    last_hop = flux_msg_route_last (response);
+    if (child_lookup (ov, last_hop)) {
+        if (overlay_sendmsg_child (ov, response) < 0)
+            goto error;
+        flux_msg_decref (response);
+    }
+    else {
+        if (flux_send_new (ov->h_channel, &response, 0) < 0)
+            goto error;
+    }
+    return;
+error:
+    log_tracker_error (ov->h, msg, errno);
+    flux_msg_decref (response);
 }
 
 static void parent_disconnect (struct overlay *ov)
@@ -1199,6 +1252,12 @@ static void parent_cb (flux_reactor_t *r,
     }
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
+            if (ov->broker_state == STATE_GOODBYE
+                && flux_msg_get_topic (msg, &topic) == 0
+                && streq (topic, "overlay.goodbye")) {
+                overlay_state_machine_post (ov, "goodbye", false);
+                goto done;
+            }
             rpc_track_update (ov->parent.tracker, msg);
             break;
         case FLUX_MSGTYPE_EVENT:
@@ -1500,9 +1559,9 @@ static int overlay_zmq_init (struct overlay *ov)
          */
         if (ov->rank > 0 && ov->zmq_io_threads != 1) {
             const char *key = "tbon.zmq_io_threads";
-            if (attr_set_flags (ov->attrs, key, 0) < 0
-                || attr_delete (ov->attrs, key, true) < 0
-                || attr_add_int (ov->attrs, key, 1, ATTR_IMMUTABLE) < 0)
+            if (compat_attr_set_flags (ov->h, key, 0) < 0
+                || compat_attr_delete (ov->h, key, true) < 0
+                || compat_attr_add_int (ov->h, key, 1, ATTR_IMMUTABLE) < 0)
                 return -1;
             ov->zmq_io_threads = 1;
         }
@@ -1699,25 +1758,25 @@ int overlay_bind (struct overlay *ov,
  */
 static int overlay_register_attrs (struct overlay *overlay)
 {
-    if (attr_add (overlay->attrs,
-                  "tbon.parent-endpoint",
-                  overlay->parent.uri,
-                  ATTR_IMMUTABLE) < 0)
+    if (compat_attr_add (overlay->h,
+                         "tbon.parent-endpoint",
+                         overlay->parent.uri,
+                         ATTR_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_int (overlay->attrs,
-                      "tbon.level",
-                      topology_get_level (overlay->topo),
-                      ATTR_IMMUTABLE) < 0)
+    if (compat_attr_add_int (overlay->h,
+                             "tbon.level",
+                             topology_get_level (overlay->topo),
+                             ATTR_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_int (overlay->attrs,
-                      "tbon.maxlevel",
-                      topology_get_maxlevel (overlay->topo),
-                      ATTR_IMMUTABLE) < 0)
+    if (compat_attr_add_int (overlay->h,
+                             "tbon.maxlevel",
+                             topology_get_maxlevel (overlay->topo),
+                             ATTR_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_int (overlay->attrs,
-                      "tbon.descendants",
-                      topology_get_descendant_count (overlay->topo),
-                      ATTR_IMMUTABLE) < 0)
+    if (compat_attr_add_int (overlay->h,
+                             "tbon.descendants",
+                             topology_get_descendant_count (overlay->topo),
+                             ATTR_IMMUTABLE) < 0)
         return -1;
 
     return 0;
@@ -1726,48 +1785,35 @@ static int overlay_register_attrs (struct overlay *overlay)
 /* A child has sent an overlay.goodbye request.
  * Respond, then transition it to OFFLINE.
  */
-static void overlay_goodbye_cb (flux_t *h,
-                                flux_msg_handler_t *mh,
-                                const flux_msg_t *msg,
-                                void *arg)
+static void overlay_goodbye_cb (struct overlay *ov, const flux_msg_t *msg)
 {
-    struct overlay *ov = arg;
     const char *uuid;
     struct child *child;
     flux_msg_t *response = NULL;
 
     if (flux_request_decode (msg, NULL, NULL) < 0
-        || !(uuid = flux_msg_route_last (msg))
-        || !(child = child_lookup_online (ov, uuid)))
-        goto error;
-    if (!(response = flux_response_derive (msg, 0)))
-        goto error;
-    if (overlay_sendmsg_child (ov, response) < 0) {
+        || !(uuid = flux_msg_route_last (msg))) {
+        flux_log (ov->h, LOG_ERR, "overlay.goodbye: %s", strerror (errno));
+        return;
+    }
+    if (!(child = child_lookup_online (ov, uuid))) {
+        flux_log (ov->h, LOG_ERR, "overlay.goodbye: uuid unknown");
+        return;
+    }
+    if (!(response = flux_response_derive (msg, 0))
+        || overlay_sendmsg_child (ov, response) < 0) {
+        flux_log (ov->h,
+                  LOG_ERR,
+                  "overlay.goodbye: error sending response: %s",
+                  strerror (errno));
         flux_msg_decref (response);
-        goto error;
+        return;
     }
     overlay_child_status_update (ov,
                                  child,
                                  SUBTREE_STATUS_OFFLINE,
                                  "administrative shutdown");
     flux_msg_decref (response);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "error responding to overlay.goodbye");
-}
-
-/* The parent has responded to overlay.goodbye.  Post the goodbye event
- * so the state machine can make progress.
- */
-static void overlay_goodbye_response_cb (flux_t *h,
-                                         flux_msg_handler_t *mh,
-                                         const flux_msg_t *msg,
-                                         void *arg)
-{
-    struct overlay *ov = arg;
-    if (ov->broker_state == STATE_GOODBYE)
-        overlay_state_machine_post (ov, "goodbye", false);
 }
 
 /* This allows the state machine to delay overlay_destroy() and its
@@ -2189,7 +2235,7 @@ int overlay_authorize (struct overlay *ov,
     return zmqutil_zap_authorize (ov->zap, name, pubkey);
 }
 
-static int overlay_configure_attr (attr_t *attrs,
+static int overlay_configure_attr (flux_t *h,
                                    const char *name,
                                    const char *default_value,
                                    const char **valuep)
@@ -2197,16 +2243,16 @@ static int overlay_configure_attr (attr_t *attrs,
     const char *val = default_value;
     int flags;
 
-    if (attr_get (attrs, name, &val, &flags) == 0) {
+    if (compat_attr_get (h, name, &val, &flags) == 0) {
         if (!(flags & ATTR_IMMUTABLE)) {
             flags |= ATTR_IMMUTABLE;
-            if (attr_set_flags (attrs, name, flags) < 0)
+            if (compat_attr_set_flags (h, name, flags) < 0)
                 return -1;
         }
     }
     else {
         val = default_value;
-        if (attr_add (attrs, name, val, ATTR_IMMUTABLE) < 0)
+        if (compat_attr_add (h, name, val, ATTR_IMMUTABLE) < 0)
             return -1;
     }
     if (valuep)
@@ -2214,7 +2260,7 @@ static int overlay_configure_attr (attr_t *attrs,
     return 0;
 }
 
-static int overlay_configure_attr_int (attr_t *attrs,
+static int overlay_configure_attr_int (flux_t *h,
                                        const char *name,
                                        int default_value,
                                        int *valuep,
@@ -2224,68 +2270,25 @@ static int overlay_configure_attr_int (attr_t *attrs,
     const char *val;
     char *endptr;
 
-    if (attr_get (attrs, name, &val, NULL) == 0) {
+    if (compat_attr_get (h, name, &val, NULL) == 0) {
         errno = 0;
         value = strtol (val, &endptr, 10);
         if (errno != 0 || *endptr != '\0') {
             errno = EINVAL;
             return errprintf (errp, "%s value must be an integer", name);
         }
-        if (attr_delete (attrs, name, true) < 0) {
+        if (compat_attr_delete (h, name, true) < 0) {
             return errprintf (errp,
                               "attr_delete %s: %s",
                               name,
                               strerror (errno));
         }
     }
-    if (attr_add_int (attrs, name, value, ATTR_IMMUTABLE) < 0)
+    if (compat_attr_add_int (h, name, value, ATTR_IMMUTABLE) < 0)
         return errprintf (errp, "attr_add %s: %s", name, strerror (errno));
     if (valuep)
         *valuep = value;
     return 0;
-}
-
-static int set_torpid (const char *name, const char *val, void *arg)
-{
-    struct overlay *ov = arg;
-    double d;
-
-    if (fsd_parse_duration (val, &d) < 0)
-        return -1;
-    if (streq (name, "tbon.torpid_max"))
-        ov->torpid_max = d;
-    else if (streq (name, "tbon.torpid_min")) {
-        if (d == 0)
-            goto error;
-        ov->torpid_min = d;
-    }
-    else
-        goto error;
-    return 0;
-error:
-    errno = EINVAL;
-    return -1;
-}
-
-static int get_torpid (const char *name, const char **val, void *arg)
-{
-    struct overlay *ov = arg;
-    static char buf[64];
-    double d;
-
-    if (streq (name, "tbon.torpid_max"))
-        d = ov->torpid_max;
-    else if (streq (name, "tbon.torpid_min"))
-        d = ov->torpid_min;
-    else
-        goto error;
-    if (fsd_format_duration (buf, sizeof (buf), d) < 0)
-        return -1;
-    *val = buf;
-    return 0;
-error:
-    errno = EINVAL;
-    return -1;
 }
 
 /* Set attribute with the following precedence:
@@ -2321,7 +2324,7 @@ static int overlay_configure_interface_hint (struct overlay *ov,
         }
     }
     (void)snprintf (long_name, sizeof (long_name), "%s.%s", table, name);
-    (void)attr_get (ov->attrs, long_name, &attr_val, &flags);
+    (void)compat_attr_get (ov->h, long_name, &attr_val, &flags);
 
     if (attr_val)
         val = attr_val;
@@ -2335,7 +2338,7 @@ static int overlay_configure_interface_hint (struct overlay *ov,
         val = default_interface_hint;
 
     if (val && !attr_val) {
-         if (attr_add (ov->attrs, long_name, val, 0) < 0) {
+         if (compat_attr_add (ov->h, long_name, val, 0) < 0) {
             return errprintf (errp,
                               "Error setting %s attribute value: %s",
                               long_name,
@@ -2345,66 +2348,71 @@ static int overlay_configure_interface_hint (struct overlay *ov,
     return 0;
 }
 
-static int overlay_configure_torpid (struct overlay *ov, flux_error_t *errp)
+static int overlay_configure_torpid (struct overlay *ov,
+                                     const flux_conf_t *conf,
+                                     bool initialize,
+                                     flux_error_t *errp)
 {
-    const flux_conf_t *cf;
+    flux_error_t error;
+    double tmin_val = -1;
+    double tmax_val = -1;
+    const char *tmin;
+    const char *tmax;
+    char fsd[64];
 
-    /* Start with compiled in defaults.
-     */
-    ov->torpid_min = default_torpid_min;
-    ov->torpid_max = default_torpid_max;
-
-    /* Override with config file settings, if any.
-     */
-    if ((cf = flux_get_conf (ov->h))) {
-        flux_error_t error;
-        const char *min_fsd = NULL;
-        const char *max_fsd = NULL;
-
-        if (flux_conf_unpack (flux_get_conf (ov->h),
-                              &error,
-                              "{s?{s?s s?s}}",
-                              "tbon",
-                                "torpid_min", &min_fsd,
-                                "torpid_max", &max_fsd) < 0) {
-            return errprintf (errp,
-                              "Config file error [tbon]: %s",
-                              error.text);
-        }
-        if (min_fsd) {
-            if (fsd_parse_duration (min_fsd, &ov->torpid_min) < 0
-                || ov->torpid_min == 0) {
-                return errprintf (errp,
-                                  "Config file error parsing"
-                                  " tbon.torpid_min value");
-            }
-        }
-        if (max_fsd) {
-            if (fsd_parse_duration (max_fsd, &ov->torpid_max) < 0) {
-                return errprintf (errp,
-                                  "Config file error parsing"
-                                  " tbon.torpid_max value");
-            }
-        }
+    // compiled-in default
+    if (initialize) {
+        tmin_val = default_torpid_min;
+        tmax_val = default_torpid_max;
     }
 
-    /* Override with broker attribute (command line/runtime) settings, if any.
-     */
-    if (attr_add_active (ov->attrs,
-                         "tbon.torpid_max",
-                         0,
-                         get_torpid,
-                         set_torpid,
-                         ov) < 0)
-        return errprintf (errp, "%s", strerror (errno));
-    if (attr_add_active (ov->attrs,
-                         "tbon.torpid_min",
-                         0,
-                         get_torpid,
-                         set_torpid,
-                         ov) < 0)
-        return errprintf (errp, "%s", strerror (errno));
+    // TOML config (initial and updates)
+    tmin = tmax = NULL;
+    if (flux_conf_unpack (conf,
+                          &error,
+                          "{s?{s?s s?s}}",
+                          "tbon",
+                            "torpid_min", &tmin,
+                            "torpid_max", &tmax) < 0)
+        return errprintf (errp, "Config file error [tbon]: %s", error.text);
+    if (tmin && fsd_parse_duration (tmin, &tmin_val) < 0)
+        return errprintf (errp, "Config file error parsing tbon.torpid_min");
+    if (tmax && fsd_parse_duration (tmax, &tmax_val) < 0)
+        return errprintf (errp, "Config file error parsing tbon.torpid_max");
 
+    // command line attribute setting
+    if (initialize) {
+        if ((tmin = flux_attr_get (ov->h, "tbon.torpid_min"))
+            && fsd_parse_duration (tmin, &tmin_val) < 0)
+            return errprintf (errp, "error parsing tbon.torpid_min attribute");
+        if ((tmax = flux_attr_get (ov->h, "tbon.torpid_max"))
+            && fsd_parse_duration (tmax, &tmax_val) < 0)
+            return errprintf (errp, "error parsing tbon.torpid_max attribute");
+    }
+
+    // update tbon.torpid_min
+    if (tmin_val != -1) {
+        if (tmin_val == 0)
+            return errprintf (errp, "tbon.torpid_min must be nonzero");
+        double tmax_check = tmax_val != -1 ? tmax_val : ov->torpid_max;
+        if (tmax_check != 0 && !(tmin_val < tmax_check))
+            return errprintf (errp, "tbon.torpid_min must be less than torpid_max");
+        if (fsd_format_duration (fsd, sizeof (fsd), tmin_val) < 0
+            || flux_attr_set (ov->h, "tbon.torpid_min", fsd) < 0)
+            return errprintf (errp, "error updating tbon.torpid_min attribute");
+        ov->torpid_min = tmin_val;
+    }
+    // update tbon.torpid_max
+    if (tmax_val != -1) {
+        double tmin_check = tmin_val != -1 ? tmin_val : ov->torpid_min;
+        if (tmax_val != 0 && !(tmax_val > tmin_check))
+            return errprintf (errp,
+                              "tbon.torpid_max must be greater than torpid_min");
+        if (fsd_format_duration (fsd, sizeof (fsd), tmax_val) < 0
+            || flux_attr_set (ov->h, "tbon.torpid_max", fsd) < 0)
+            return errprintf (errp, "error updating tbon.torpid_min attribute");
+        ov->torpid_max = tmax_val;
+    }
     return 0;
 }
 
@@ -2444,10 +2452,10 @@ static int overlay_configure_timeout (struct overlay *ov,
     }
     /* Override with broker attribute (command line only) settings, if any.
      */
-    if (attr_get (ov->attrs, long_name, &fsd, NULL) == 0) {
+    if (compat_attr_get (ov->h, long_name, &fsd, NULL) == 0) {
         if (fsd_parse_duration (fsd, &value) < 0)
             return errprintf (errp, "Error parsing %s attribute", long_name);
-        if (attr_delete (ov->attrs, long_name, true) < 0) {
+        if (compat_attr_delete (ov->h, long_name, true) < 0) {
             return errprintf (errp,
                               "attr_delete %s: %s",
                               long_name,
@@ -2459,7 +2467,7 @@ static int overlay_configure_timeout (struct overlay *ov,
         char buf[64];
         if (fsd_format_duration (buf, sizeof (buf), value) < 0)
             return errprintf (errp, "fsd format: %s", strerror (errno));
-        if (attr_add (ov->attrs, long_name, buf, ATTR_IMMUTABLE) < 0) {
+        if (compat_attr_add (ov->h, long_name, buf, ATTR_IMMUTABLE) < 0) {
             return errprintf (errp,
                               "attr_add %s: %s",
                               long_name,
@@ -2500,7 +2508,7 @@ static int overlay_configure_tbon_int (struct overlay *ov,
         }
     }
     (void)snprintf (attrname, sizeof (attrname), "tbon.%s", name);
-    if (overlay_configure_attr_int (ov->attrs,
+    if (overlay_configure_attr_int (ov->h,
                                     attrname,
                                     *value,
                                     value,
@@ -2537,11 +2545,11 @@ static int overlay_configure_topo (struct overlay *ov, flux_error_t *errp)
      */
     const char *fanout;
     char buf[16];
-    if (attr_get (ov->attrs, "tbon.fanout", &fanout, NULL) == 0) {
+    if (compat_attr_get (ov->h, "tbon.fanout", &fanout, NULL) == 0) {
         snprintf (buf, sizeof (buf), "kary:%s", fanout);
         topo_uri = buf;
     }
-    if (overlay_configure_attr (ov->attrs,
+    if (overlay_configure_attr (ov->h,
                                 "tbon.topo",
                                 topo_uri,
                                 NULL) < 0) {
@@ -2551,6 +2559,38 @@ static int overlay_configure_topo (struct overlay *ov, flux_error_t *errp)
         return -1;
     }
     return 0;
+}
+
+static void overlay_config_reload_cb (flux_t *h,
+                                      flux_msg_handler_t *mh,
+                                      const flux_msg_t *msg,
+                                      void *arg)
+{
+    struct overlay *ov = arg;
+    flux_error_t error;
+    const char *errstr = NULL;
+    flux_conf_t *conf;
+
+    if (flux_module_config_request_decode (msg, &conf) < 0) {
+        errstr = "Failed to parse config-reload request";
+        goto error;
+    }
+    if (overlay_configure_torpid (ov, conf, false, &error) < 0) {
+        errstr = error.text;
+        goto error;
+    }
+    if (flux_set_conf_new (h, conf) < 0) {
+        errstr = "Failed to update config";
+        goto error_decref;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+    return;
+error_decref:
+    flux_conf_decref (conf);
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to config-reload request");
 }
 
 void overlay_destroy (struct overlay *ov)
@@ -2617,6 +2657,12 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
+        "overlay.config-reload",
+        overlay_config_reload_cb,
+        0,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
         "overlay.health",
         overlay_health_cb,
         FLUX_ROLE_USER,
@@ -2651,26 +2697,15 @@ static const struct flux_msg_handler_spec htab[] = {
         overlay_disconnect_parent_cb,
         0
     },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "overlay.goodbye",
-        overlay_goodbye_cb,
-        0,
-    },
-    {
-        FLUX_MSGTYPE_RESPONSE,
-        "overlay.goodbye",
-        overlay_goodbye_response_cb,
-        0,
-    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
 struct overlay *overlay_create (flux_t *h,
-                                struct bootstrap *boot,
-                                struct upmi_info *info,
+                                uint32_t rank,
+                                uint32_t size,
                                 const char *hostname,
-                                attr_t *attrs,
+                                const char *uuid,
+                                const char *boot_method,
                                 void *zctx,
                                 const char *uri,
                                 flux_error_t *errp)
@@ -2681,11 +2716,10 @@ struct overlay *overlay_create (flux_t *h,
         goto error;
     if (!(ov->hostname = strdup (hostname)))
         goto error;
-    ov->attrs = attrs;
     ov->parent.lastsent = -1;
     ov->h = h;
-    ov->rank = info->rank;
-    ov->size = info->size;
+    ov->rank = rank;
+    ov->size = size;
     ov->reactor = flux_get_reactor (h);
     if (!(ov->h_channel = flux_open (uri, 0))
         || flux_set_reactor (ov->h_channel, ov->reactor) < 0
@@ -2698,9 +2732,6 @@ struct overlay *overlay_create (flux_t *h,
     flux_watcher_start (ov->w_channel);
     ov->version = FLUX_CORE_VERSION_HEX;
 
-    const char *uuid;
-    if (attr_get (attrs, "broker.uuid", &uuid, NULL) < 0)
-        goto error;
     if (strlcpy (ov->uuid, uuid, sizeof (ov->uuid)) >= sizeof (ov->uuid)) {
         errno = EOVERFLOW;
         goto error;
@@ -2712,7 +2743,7 @@ struct overlay *overlay_create (flux_t *h,
     }
     if (!(ov->monitor_requests = flux_msglist_create ()))
         goto error;
-    if (overlay_configure_attr_int (ov->attrs,
+    if (overlay_configure_attr_int (ov->h,
                                     "tbon.prefertcp",
                                     0,
                                     NULL,
@@ -2723,7 +2754,7 @@ struct overlay *overlay_create (flux_t *h,
                                           "interface-hint",
                                           errp) < 0)
         goto error_hasmsg;
-    if (overlay_configure_torpid (ov, errp) < 0)
+    if (overlay_configure_torpid (ov, flux_get_conf (ov->h), true, errp) < 0)
         goto error_hasmsg;
     if (overlay_configure_timeout (ov,
                                    "tbon",
@@ -2784,36 +2815,33 @@ struct overlay *overlay_create (flux_t *h,
     if (!(ov->health_requests = flux_msglist_create ())
         || !(ov->trace_requests = flux_msglist_create ()))
         goto error;
-    if (boot) {
-        if (streq (bootstrap_method (boot), "config")) {
-            if (boot_config (boot, info, h, hostname, ov, attrs, errp) < 0)
-                goto error;;
+    if (boot_method) {
+        if (streq (boot_method, "config")) {
+            if (boot_config (h, rank, size, hostname, ov, errp) < 0)
+                goto error_hasmsg;
         }
         else {
-            if (boot_pmi (boot, info, hostname, ov, attrs, errp) < 0)
-                goto error;
+            if (boot_pmi (h, rank, size, hostname, ov, errp) < 0)
+                goto error_hasmsg;
         }
     }
     if (overlay_register_attrs (ov) < 0) {
         errprintf (errp, "overlay setattr error: %s", strerror (errno));
         goto error;
     }
-    if (boot) {
-        struct idset *ids = overlay_get_default_critical_ranks (ov);
-        char *crit;
-        if (!ids || !(crit = idset_encode (ids, IDSET_FLAG_RANGE))) {
+    if (boot_method) {
+        struct idset *crit = overlay_get_default_critical_ranks (ov);
+        if (!crit) {
             errprintf (errp,
                        "error calculating default critical ranks: %s",
                        strerror (errno));
-            idset_destroy (ids);
             goto error_hasmsg;
         }
-        idset_destroy (ids);
-        if (bootstrap_finalize (boot, crit, errp) < 0) {
-            free (crit);
+        if (boot_util_finalize (h, crit, errp) < 0) {
+            idset_destroy (crit);
             goto error_hasmsg;
         }
-        free (crit);
+        idset_destroy (crit);
     }
     return ov;
 error:

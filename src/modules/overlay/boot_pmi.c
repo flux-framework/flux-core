@@ -24,10 +24,10 @@
 #include "src/common/libpmi/bizcache.h"
 #include "ccan/str/str.h"
 
-#include "attr.h"
+#include "compat.h"
 #include "overlay.h"
 #include "topology.h"
-#include "bootstrap.h"
+#include "boot_util.h"
 #include "boot_pmi.h"
 
 
@@ -51,10 +51,10 @@ static int clique_ranks (struct taskmap *map, int rank, int *ranks, int nranks)
 
 /* Check if TCP should be used, even if IPC could work.
  */
-static bool get_prefer_tcp (attr_t *attrs)
+static bool get_prefer_tcp (flux_t *h)
 {
     const char *val;
-    if (attr_get (attrs, "tbon.prefertcp", &val, NULL) < 0
+    if (compat_attr_get (h, "tbon.prefertcp", &val, NULL) < 0
         || val == NULL
         || streq (val, "0"))
         return false;
@@ -66,7 +66,7 @@ static bool get_prefer_tcp (attr_t *attrs)
  */
 static int format_tcp_uri (char *buf,
                            size_t size,
-                           attr_t *attrs,
+                           flux_t *h,
                            flux_error_t *error)
 {
     const char *hint;
@@ -74,7 +74,7 @@ static int format_tcp_uri (char *buf,
     const char *interface = NULL;
     char ipaddr[_POSIX_HOST_NAME_MAX + 1];
 
-    if (attr_get (attrs, "tbon.interface-hint", &hint, NULL) < 0) {
+    if (compat_attr_get (h, "tbon.interface-hint", &hint, NULL) < 0) {
         return errprintf (error,
                           "tbon.interface-hint attribute is not set: %s",
                           strerror (errno));
@@ -106,13 +106,13 @@ static int format_tcp_uri (char *buf,
  */
 static int format_ipc_uri (char *buf,
                            size_t size,
-                           attr_t *attrs,
+                           flux_t *h,
                            int rank,
                            flux_error_t *error)
 {
     const char *rundir;
 
-    if (attr_get (attrs, "rundir", &rundir, NULL) < 0) {
+    if (compat_attr_get (h, "rundir", &rundir, NULL) < 0) {
         errprintf (error, "rundir attribute is not set");
         return -1;
     }
@@ -124,11 +124,11 @@ static int format_ipc_uri (char *buf,
     return 0;
 }
 
-int boot_pmi (struct bootstrap *boot,
-              struct upmi_info *info,
+int boot_pmi (flux_t *h,
+              uint32_t rank,
+              uint32_t size,
               const char *hostname,
               struct overlay *overlay,
-              attr_t *attrs,
               flux_error_t *errp)
 {
     const char *topo_uri;
@@ -136,22 +136,20 @@ int boot_pmi (struct bootstrap *boot,
     struct topology *topo = NULL;
     int child_count;
     int *child_ranks = NULL;
-    int i;
-    const struct bizcard *bc;
     struct taskmap *taskmap = NULL;
     const char *broker_mapping;
 
     // N.B. overlay_create() sets the tbon.topo attribute
-    if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0)
+    if (compat_attr_get (h, "tbon.topo", &topo_uri, NULL) < 0)
         return errprintf (errp, "error fetching tbon.topo attribute");
-    if (!(topo = topology_create (topo_uri, info->size, NULL, &error))) {
+    if (!(topo = topology_create (topo_uri, size, NULL, &error))) {
         errprintf (errp,
                    "error creating '%s' topology: %s",
                    topo_uri,
                    error.text);
         goto error;
     }
-    if (topology_set_rank (topo, info->rank) < 0
+    if (topology_set_rank (topo, rank) < 0
         || overlay_set_topology (overlay, topo) < 0) {
         errprintf (errp, "error setting rank/topology: %s", strerror (errno));
         goto error;
@@ -159,7 +157,7 @@ int boot_pmi (struct bootstrap *boot,
 
     /* A size=1 instance has no peers, so skip the PMI exchange.
      */
-    if (info->size == 1)
+    if (size == 1)
         goto done;
 
     /* Enable ipv6 for maximum flexibility in address selection.
@@ -177,7 +175,7 @@ int boot_pmi (struct bootstrap *boot,
         }
     }
 
-    if (attr_get (attrs, "broker.mapping", &broker_mapping, NULL) == 0) {
+    if (compat_attr_get (h, "broker.mapping", &broker_mapping, NULL) == 0) {
         if (broker_mapping
             && !(taskmap = taskmap_decode (broker_mapping, &error))) {
             errprintf (errp, "error decoding broker.mapping: %s", error.text);
@@ -189,18 +187,18 @@ int boot_pmi (struct bootstrap *boot,
      * Depending on locality of children, use tcp://, ipc://, or both.
      */
     if (child_count > 0) {
-        bool prefer_tcp = get_prefer_tcp (attrs);
+        bool prefer_tcp = get_prefer_tcp (h);
         int nlocal;
         char tcp[1024];
         char ipc[1024];
 
-        nlocal = clique_ranks (taskmap, info->rank, child_ranks, child_count);
+        nlocal = clique_ranks (taskmap, rank, child_ranks, child_count);
 
-        if (format_tcp_uri (tcp, sizeof (tcp), attrs, &error) < 0) {
+        if (format_tcp_uri (tcp, sizeof (tcp), h, &error) < 0) {
             errprintf (errp, "%s", error.text);
             goto error;
         }
-        if (format_ipc_uri (ipc, sizeof (ipc), attrs, info->rank, &error) < 0) {
+        if (format_ipc_uri (ipc, sizeof (ipc), h, rank, &error) < 0) {
             errprintf (errp, "%s", error.text);
             goto error;
         }
@@ -217,101 +215,104 @@ int boot_pmi (struct bootstrap *boot,
                 goto error;
         }
     }
-
     /* Each broker writes a business card consisting of hostname,
      * public key, and URIs (if any).
      */
-    if (!(bc = overlay_get_bizcard (overlay))) {
-        errprintf (errp, "get business card: %s", strerror (errno));
-        goto error;
-    }
-    if (bizcache_put (boot->cache, info->rank, bc, &error) < 0) {
-        errprintf (errp, "put business card: %s", error.text);
-        goto error;
-    }
+    {
+        const struct bizcard *bc;
 
-    if (attr_add (attrs,
-                  "tbon.endpoint",
-                  bizcard_uri_first (bc), // OK if NULL
-                  ATTR_IMMUTABLE) < 0) {
-        errprintf (errp, "setattr tbon.endpoint: %s", strerror (errno));
-        goto error;
+        if (!(bc = overlay_get_bizcard (overlay))) {
+            errprintf (errp, "get business card: %s", strerror (errno));
+            goto error;
+        }
+        if (boot_util_iam (h, bc, errp) < 0)
+            goto error;
+        if (compat_attr_add (h,
+                             "tbon.endpoint",
+                             bizcard_uri_first (bc), // OK if NULL
+                             ATTR_IMMUTABLE) < 0) {
+            errprintf (errp, "setattr tbon.endpoint: %s", strerror (errno));
+            goto error;
+        }
     }
 
     /* BARRIER */
-    if (upmi_barrier (boot->upmi, &error) < 0) {
-        errprintf (errp,
-                   "%s: barrier: %s",
-                   upmi_describe (boot->upmi),
-                   error.text);
+    if (boot_util_barrier (h, errp) < 0)
         goto error;
-    }
 
     /* Fetch the business card of parent and inform overlay of URI
      * and public key.
      */
-    if (info->rank > 0) {
+    if (rank > 0) {
         int parent_rank = topology_get_parent (topo);
         const char *uri = NULL;
+        struct bizcard *bc;
 
-        if (bizcache_get (boot->cache, parent_rank, &bc, errp) < 0)
+        if (!(bc = boot_util_whois_rank (h, parent_rank, errp)))
             goto error;
-        if (!get_prefer_tcp (attrs)
-            && clique_ranks (taskmap, info->rank, &parent_rank, 1) == 1)
+        if (!get_prefer_tcp (h)
+            && clique_ranks (taskmap, rank, &parent_rank, 1) == 1)
             uri = bizcard_uri_find (bc, "ipc://");
         if (!uri)
             uri = bizcard_uri_find (bc, NULL);
         if (overlay_set_parent_uri (overlay, uri) < 0) {
             errprintf (errp, "overlay_set_parent_uri: %s", strerror (errno));
+            bizcard_decref (bc);
             goto error;
         }
         if (overlay_set_parent_pubkey (overlay, bizcard_pubkey (bc)) < 0) {
             errprintf (errp, "overlay_set_parent_pubkey: %s", strerror (errno));
+            bizcard_decref (bc);
             goto error;
         }
+        bizcard_decref (bc);
     }
 
     /* Fetch the business card of children and inform overlay of public keys.
      */
-    for (i = 0; i < child_count; i++) {
-        int child_rank = child_ranks[i];
+    if (child_count > 0) {
+        flux_future_t *f;
+        int child_rank;
+        struct bizcard *bc;
         char name[64];
 
-        if (bizcache_get (boot->cache, child_rank, &bc, errp) < 0)
+        if (!(f = boot_util_whois (h, child_ranks, child_count, errp)))
             goto error;
-        (void)snprintf (name, sizeof (name), "%d", i);
-        if (overlay_authorize (overlay, name, bizcard_pubkey (bc)) < 0) {
-            errprintf (errp,
-                       "overlay_authorize %s=%s: %s",
-                       name,
-                       bizcard_pubkey (bc),
-                       strerror (errno));
+        while ((child_rank = boot_util_whois_get_rank (f)) >= 0
+            && (bc = boot_util_whois_get_bizcard (f)) != NULL) {
+            (void)snprintf (name, sizeof (name), "%d", child_rank);
+            if (overlay_authorize (overlay, name, bizcard_pubkey (bc)) < 0) {
+                errprintf (errp,
+                           "overlay_authorize %s=%s: %s",
+                           name,
+                           bizcard_pubkey (bc),
+                           strerror (errno));
+                bizcard_decref (bc);
+                flux_future_destroy (f);
+                goto error;
+            }
+            bizcard_decref (bc);
+            flux_future_reset (f);
+        }
+        if (errno != ENODATA) {
+            errprintf (errp, "bootstrap.whois: %s", future_strerror (f, errno));
+            flux_future_destroy (f);
             goto error;
         }
+        flux_future_destroy (f);
     }
 
     /* One more barrier before allowing connects to commence.
      * Need to ensure that all clients are "allowed".
      */
-    if (upmi_barrier (boot->upmi, &error) < 0) {
-        errprintf (errp,
-                   "%s: barrier: %s",
-                   upmi_describe (boot->upmi),
-                   error.text);
+    if (boot_util_barrier (h, errp) < 0)
         goto error;
-    }
-
 done:
     free (child_ranks);
     taskmap_destroy (taskmap);
     topology_decref (topo);
     return 0;
 error:
-    /* N.B. Some implementations of abort may not return.
-     */
-    (void)upmi_abort (boot->upmi,
-                      errp ? errp->text : "fatal bootstrap error",
-                      NULL);
     free (child_ranks);
     taskmap_destroy (taskmap);
     topology_decref (topo);

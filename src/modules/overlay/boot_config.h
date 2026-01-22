@@ -8,29 +8,25 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef BROKER_BOOT_CONFIG_H
-#define BROKER_BOOT_CONFIG_H
+#ifndef _OVERLAY_BOOT_CONFIG_H
+#define _OVERLAY_BOOT_CONFIG_H
 
 /* boot_config - bootstrap broker/overlay from config file */
 
-#include "src/common/libpmi/upmi.h"
-
-#include "attr.h"
 #include "overlay.h"
 
 /* Broker attributes read/written directly by this method:
  *   tbon.endpoint (w)
  *   instance-level (w)
  */
-int boot_config (struct bootstrap *boot,
-                 struct upmi_info *info,
-                 flux_t *h,
+int boot_config (flux_t *h,
+                 uint32_t rank,
+                 uint32_t size,
                  const char *hostname,
                  struct overlay *overlay,
-                 attr_t *attrs,
                  flux_error_t *error);
 
-#endif /* BROKER_BOOT_CONFIG_H */
+#endif /* _OVERLAY_BOOT_CONFIG_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef BROKER_TOPOLOGY_H
-#define BROKER_TOPOLOGY_H
+#ifndef _OVERLAY_TOPOLOGY_H
+#define _OVERLAY_TOPOLOGY_H
 
 #include <sys/types.h>
 #include <jansson.h>
@@ -76,6 +76,6 @@ struct topology_plugin {
                 flux_error_t *error);
 };
 
-#endif /* !BROKER_TOPOLOGY_H */
+#endif /* !_OVERLAY_TOPOLOGY_H */
 
 // vi:ts=4 sw=4 expandtab

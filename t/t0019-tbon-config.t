@@ -130,14 +130,6 @@ test_expect_success 'tbon.interface-hint from parent can be overridden' '
 	    flux getattr tbon.interface-hint >childhint2.out &&
 	grep default-route childhint2.out
 '
-# Note: the following test has been observed to fail (as expected) in more
-# ways than just nonzero exit or terminated by SIGKILL/SIGTERM (in CI the
-# test sometimes fails with SIGPIPE). Therefore, use the blanket `!` here
-# since we just want to test failure, we don't care how it fails.
-test_expect_success 'tbon.endpoint cannot be set' '
-	! flux start ${ARGS} -s2 \
-		--setattr=tbon.endpoint=ipc:///tmp/customflux true
-'
 test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '
 	test_must_fail flux start ${ARGS} -s2 flux getattr tbon.parent-endpoint
 '

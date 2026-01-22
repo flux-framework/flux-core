@@ -26,8 +26,8 @@ torpid_min
    (optional) The amount of time (in RFC 23 Flux Standard Duration format) that
    a broker will allow the connection to its TBON parent to remain idle before
    sending a control message to create activity.  The default value of
-   ``5s`` should be reasonable in most circumstances.  This configured value
-   may be overridden by setting the ``tbon.torpid_min`` broker attribute.
+   ``5s`` should be reasonable in most circumstances.  This value can be
+   modified on a running system.
 
 torpid_max
    (optional) The amount of time (in RFC 23 Flux Standard Duration format) that
@@ -35,8 +35,7 @@ torpid_max
    declaring it torpid  (unresponsive). A value of 0 disables torpid node
    checking.  New work is not scheduled on a node while torpid, but a job
    running on a node when it becomes torpid is allowed to complete.  This
-   configured value may be overridden by setting the ``tbon.torpid_max``
-   broker attribute.
+   value can be modified on a running system.
 
 tcp_user_timeout
    (optional) The amount of time (in RFC 23 Flux Standard Duration format) that

@@ -246,12 +246,13 @@ static void state_change_cb (flux_subprocess_t *p,
             if (isatty (STDIN_FILENO)
                 && tcgetpgrp (STDIN_FILENO) == getpgrp ()) {
                 entry->foreground = true;
-                if (tcsetpgrp (STDIN_FILENO, flux_subprocess_pid (p)) < 0
-                    || kill_async (p, SIGCONT) < 0) {
+                if (tcsetpgrp (STDIN_FILENO, flux_subprocess_pid (p)) < 0) {
                     flux_log_error (r->h,
                                     "error bringing %s into foreground",
                                     entry->name);
                 }
+                else if (kill_async (p, SIGCONT) < 0)
+                    flux_log_error (r->h, "error continuing %s", entry->name);
             }
             break;
         case FLUX_SUBPROCESS_RUNNING:

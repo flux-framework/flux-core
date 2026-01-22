@@ -16,15 +16,6 @@
 #include "src/common/libpmi/bizcache.h"
 #include "broker.h"
 
-/* temporarily exposed during refactor */
-struct bootstrap {
-    struct broker *ctx;
-    struct upmi *upmi;
-    struct bizcache *cache;
-    bool under_flux;
-    bool finalized;
-};
-
 struct bootstrap *bootstrap_create (struct broker *ctx,
                                     struct upmi_info *info,
                                     flux_error_t *errp);
