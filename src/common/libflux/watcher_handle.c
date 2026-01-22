@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* hwatcher.c - reactor watcher for flux_t handle */
+/* watcher_handle.c - reactor watcher for flux_t handle */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -19,7 +19,7 @@
 
 #include "watcher_private.h"
 
-struct hwatcher {
+struct handle_watcher {
     flux_watcher_t *fd_w;
     flux_watcher_t *prepare_w;
     flux_watcher_t *idle_w;
@@ -28,17 +28,17 @@ struct hwatcher {
     int events;
 };
 
-static void hwatcher_start (flux_watcher_t *w)
+static void handle_watcher_start (flux_watcher_t *w)
 {
-    struct hwatcher *hw = watcher_get_data (w);
+    struct handle_watcher *hw = watcher_get_data (w);
 
     flux_watcher_start (hw->prepare_w);
     flux_watcher_start (hw->check_w);
 }
 
-static void hwatcher_stop (flux_watcher_t *w)
+static void handle_watcher_stop (flux_watcher_t *w)
 {
-    struct hwatcher *hw = watcher_get_data (w);
+    struct handle_watcher *hw = watcher_get_data (w);
 
     flux_watcher_stop (hw->prepare_w);
     flux_watcher_stop (hw->check_w);
@@ -46,9 +46,9 @@ static void hwatcher_stop (flux_watcher_t *w)
     flux_watcher_stop (hw->idle_w);
 }
 
-static void hwatcher_ref (flux_watcher_t *w)
+static void handle_watcher_ref (flux_watcher_t *w)
 {
-    struct hwatcher *hw = watcher_get_data (w);
+    struct handle_watcher *hw = watcher_get_data (w);
 
     flux_watcher_ref (hw->fd_w);
     flux_watcher_ref (hw->prepare_w);
@@ -56,9 +56,9 @@ static void hwatcher_ref (flux_watcher_t *w)
     flux_watcher_ref (hw->check_w);
 }
 
-static void hwatcher_unref (flux_watcher_t *w)
+static void handle_watcher_unref (flux_watcher_t *w)
 {
-    struct hwatcher *hw = watcher_get_data (w);
+    struct handle_watcher *hw = watcher_get_data (w);
 
     flux_watcher_unref (hw->fd_w);
     flux_watcher_unref (hw->prepare_w);
@@ -66,16 +66,16 @@ static void hwatcher_unref (flux_watcher_t *w)
     flux_watcher_unref (hw->check_w);
 }
 
-static bool hwatcher_is_active (flux_watcher_t *w)
+static bool handle_watcher_is_active (flux_watcher_t *w)
 {
-    struct hwatcher *hw = watcher_get_data (w);
+    struct handle_watcher *hw = watcher_get_data (w);
 
     return flux_watcher_is_active (hw->prepare_w);
 }
 
-static void hwatcher_destroy (flux_watcher_t *w)
+static void handle_watcher_destroy (flux_watcher_t *w)
 {
-    struct hwatcher *hw = watcher_get_data (w);
+    struct handle_watcher *hw = watcher_get_data (w);
     if (hw) {
         flux_watcher_destroy (hw->prepare_w);
         flux_watcher_destroy (hw->check_w);
@@ -84,13 +84,13 @@ static void hwatcher_destroy (flux_watcher_t *w)
     }
 }
 
-static void hwatcher_prepare_cb (flux_reactor_t *r,
-                                 flux_watcher_t *prepare_w,
-                                 int prepare_revents,
-                                 void *arg)
+static void handle_watcher_prepare_cb (flux_reactor_t *r,
+                                       flux_watcher_t *prepare_w,
+                                       int prepare_revents,
+                                       void *arg)
 {
     flux_watcher_t *w = arg;
-    struct hwatcher *hw = watcher_get_data (w);
+    struct handle_watcher *hw = watcher_get_data (w);
     int hevents;
 
     if ((hevents = flux_pollevents (hw->h)) < 0)
@@ -102,13 +102,13 @@ static void hwatcher_prepare_cb (flux_reactor_t *r,
         flux_watcher_start (hw->fd_w);
 }
 
-static void hwatcher_check_cb (flux_reactor_t *r,
-                               flux_watcher_t *check_w,
-                               int check_revents,
-                               void *arg)
+static void handle_watcher_check_cb (flux_reactor_t *r,
+                                     flux_watcher_t *check_w,
+                                     int check_revents,
+                                     void *arg)
 {
     flux_watcher_t *w = arg;
-    struct hwatcher *hw = watcher_get_data (w);
+    struct handle_watcher *hw = watcher_get_data (w);
     int hevents;
     int revents;
 
@@ -123,13 +123,13 @@ static void hwatcher_check_cb (flux_reactor_t *r,
         watcher_call (w, revents);
 }
 
-static struct flux_watcher_ops hwatcher_ops = {
-    .start = hwatcher_start,
-    .stop = hwatcher_stop,
-    .ref = hwatcher_ref,
-    .unref = hwatcher_unref,
-    .is_active = hwatcher_is_active,
-    .destroy = hwatcher_destroy,
+static struct flux_watcher_ops handle_watcher_ops = {
+    .start = handle_watcher_start,
+    .stop = handle_watcher_stop,
+    .ref = handle_watcher_ref,
+    .unref = handle_watcher_unref,
+    .is_active = handle_watcher_is_active,
+    .destroy = handle_watcher_destroy,
 };
 
 flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
@@ -138,18 +138,21 @@ flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
                                             flux_watcher_f cb,
                                             void *arg)
 {
-    struct hwatcher *hw;
+    struct handle_watcher *hw;
     flux_watcher_t *w;
-    if (!(w = watcher_create (r, sizeof (*hw), &hwatcher_ops, cb, arg)))
+    if (!(w = watcher_create (r, sizeof (*hw), &handle_watcher_ops, cb, arg)))
         return NULL;
     hw = watcher_get_data (w);
     hw->events = events | FLUX_POLLERR;
     hw->h = h;
 
-    if (!(hw->prepare_w = flux_prepare_watcher_create (r,
-                                                       hwatcher_prepare_cb,
-                                                       w))
-        || !(hw->check_w = flux_check_watcher_create (r, hwatcher_check_cb, w))
+    hw->prepare_w = flux_prepare_watcher_create (r,
+                                                 handle_watcher_prepare_cb,
+                                                 w);
+    if (!hw->prepare_w
+        || !(hw->check_w = flux_check_watcher_create (r,
+                                                      handle_watcher_check_cb,
+                                                      w))
         || !(hw->idle_w = flux_idle_watcher_create (r, NULL, NULL)))
         goto error;
 
@@ -165,11 +168,11 @@ error:
 
 flux_t *flux_handle_watcher_get_flux (flux_watcher_t *w)
 {
-    if (watcher_get_ops (w) != &hwatcher_ops) {
+    if (watcher_get_ops (w) != &handle_watcher_ops) {
         errno = EINVAL;
         return NULL;
     }
-    struct hwatcher *hw = watcher_get_data (w);
+    struct handle_watcher *hw = watcher_get_data (w);
     return hw->h;
 }
 

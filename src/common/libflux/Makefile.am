@@ -73,7 +73,7 @@ libflux_la_SOURCES = \
 	watcher.c \
 	watcher_private.h \
 	watcher_wrap.c \
-	hwatcher.c \
+	watcher_handle.c \
 	msg_handler.c \
 	message.c \
 	message_private.h \
