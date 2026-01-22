@@ -803,7 +803,7 @@ void bg_test (flux_t *h,
         "%s: flux_rpc_get_unpack returned successfully",
         label);
     ok (status == expected_status,
-        "%s: got expected status (got 0x%04x, expected 0x%04x",
+        "%s: got expected status (got 0x%04x, expected 0x%04x)",
         label,
         status,
         expected_status);
