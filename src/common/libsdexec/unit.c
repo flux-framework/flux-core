@@ -120,6 +120,13 @@ int sdexec_unit_wait_status (struct unit *unit)
     return -1;
 }
 
+static bool is_systemd_exit_code (int code)
+{
+    if (code < 200 || code > 243)
+        return false;
+    return true;
+}
+
 int sdexec_unit_systemd_error (struct unit *unit)
 {
     if (sdexec_unit_has_failed (unit))
@@ -131,7 +138,7 @@ bool sdexec_unit_has_finished (struct unit *unit)
 {
     if (unit) {
         if (unit->exec_main_status_is_set &&
-            unit->exec_main_status < 200) // systemd errors are [200-243]
+            !is_systemd_exit_code (unit->exec_main_status))
             return true;
     }
     return false;
@@ -141,7 +148,7 @@ bool sdexec_unit_has_failed (struct unit *unit)
 {
     if (unit) {
         if (unit->exec_main_status_is_set &&
-            unit->exec_main_status >= 200) // systemd errors are [200-243]
+            is_systemd_exit_code (unit->exec_main_status))
             return true;
     }
     return false;
@@ -156,7 +163,7 @@ bool sdexec_unit_has_started (struct unit *unit)
          * unless the exit status is a systemd error [200-243].
          */
         if ((unit->exec_main_status_is_set
-            && unit->exec_main_status < 200)
+            && !is_systemd_exit_code (unit->exec_main_status))
             || unit->substate == SUBSTATE_START) {
             return true;
         }

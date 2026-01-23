@@ -401,6 +401,18 @@ test_expect_success 'sdexec sets FLUX_URI to local broker' '
 	$sdexec -r 1 $printenv FLUX_URI >uri.out &&
 	test_must_fail test_cmp uri.exp uri.out
 '
+test_expect_success 'sdexec handles task exit 127' '
+	test_expect_code 127 $sdexec -r 0 /bin/sh -c "exit 127"
+'
+test_expect_success 'sdexec handles task exit 199' '
+	test_expect_code 199 $sdexec -r 0 /bin/sh -c "exit 199"
+'
+test_expect_success 'sdexec handles task exit 244' '
+	test_expect_code 244 $sdexec -r 0 /bin/sh -c "exit 244"
+'
+test_expect_success 'sdexec handles task exit 255' '
+	test_expect_code 255 $sdexec -r 0 /bin/sh -c "exit 255"
+'
 test_expect_success 'sdexec reconfig fails with bad sdexec-debug value' '
 	test_must_fail flux config load <<-EOT 2>config.err &&
 	[systemd]
