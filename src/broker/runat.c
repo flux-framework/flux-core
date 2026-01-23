@@ -53,6 +53,7 @@ struct runat_entry {
     bool completed;
     bool interactive;
     bool foreground;
+    bool needs_foreground;
     runat_completion_f cb;
     void *cb_arg;
 };
@@ -219,6 +220,31 @@ static int kill_async (flux_subprocess_t *p, int signum)
     return 0;
 }
 
+static void foreground_runat_entry (struct runat *r,
+                                    struct runat_entry *entry,
+                                    flux_subprocess_t *p)
+{
+    /*
+     *  If stdin is a tty and the broker is in a foreground process
+     *  group, the subprocess may have stopped due to SIGTTIN/SIGTTOU.
+     *  Attempt to bring the subprocess into the foreground and
+     *  continue it. Set the foreground flag on the entry so that the
+     *  broker knows to bring its own process group back into the
+     *  foreground after this subprocess is complete.
+     */
+    if (isatty (STDIN_FILENO)
+        && tcgetpgrp (STDIN_FILENO) == getpgrp ()) {
+        entry->foreground = true;
+        if (tcsetpgrp (STDIN_FILENO, flux_subprocess_pid (p)) < 0) {
+            flux_log_error (r->h,
+                            "error bringing %s into foreground",
+                            entry->name);
+        }
+        else if (kill_async (p, SIGCONT) < 0)
+            flux_log_error (r->h, "error continuing %s", entry->name);
+    }
+}
+
 /* If state changes to running and the abort flag is set, send abort_signal.
  * This closes a race where the 'entry' might continue running if the abort
  * is called as a process is starting up.
@@ -235,30 +261,24 @@ static void state_change_cb (flux_subprocess_t *p,
         case FLUX_SUBPROCESS_FAILED:
             break;
         case FLUX_SUBPROCESS_STOPPED:
-            /*
-             *  If stdin is a tty and the broker is in a foreground process
-             *  group, the subprocess may have stopped due to SIGTTIN/SIGTTOU.
-             *  Attempt to bring the subprocess into the foreground and
-             *  continue it. Set the foreground flag on the entry so that the
-             *  broker knows to bring its own process group back into the
-             *  foreground after this subprocess is complete.
+            /* STOPPED may arrive before RUNNING due to a protocol race
+             * (issue #5083) so the pid may not yet be available. If
+             * available, bring process into foreground immediately.
+             * Otherwise, defer via needs_foreground flag until RUNNING state.
              */
-            if (isatty (STDIN_FILENO)
-                && tcgetpgrp (STDIN_FILENO) == getpgrp ()) {
-                entry->foreground = true;
-                if (tcsetpgrp (STDIN_FILENO, flux_subprocess_pid (p)) < 0) {
-                    flux_log_error (r->h,
-                                    "error bringing %s into foreground",
-                                    entry->name);
-                }
-                else if (kill_async (p, SIGCONT) < 0)
-                    flux_log_error (r->h, "error continuing %s", entry->name);
-            }
+            if (flux_subprocess_pid (p) > 0)
+                foreground_runat_entry (r, entry, p);
+            else
+                entry->needs_foreground = true;
             break;
         case FLUX_SUBPROCESS_RUNNING:
             if (entry->aborted) {
                 if (kill_async (p, abort_signal) < 0)
                     flux_log_error (r->h, "kill %s", entry->name);
+            }
+            else if (entry->needs_foreground) {
+                foreground_runat_entry (r, entry, p);
+                entry->needs_foreground = false;
             }
             break;
     }
