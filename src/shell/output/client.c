@@ -39,9 +39,10 @@ struct output_client {
     flux_shell_t *shell;
     int shell_rank;
     bool stopped;
-    zlist_t *pending_writes;
     int lwm;
     int hwm;
+    int credits;
+    flux_future_t *f_getcredit;
 };
 
 static void client_send_eof (struct output_client *client)
@@ -57,7 +58,7 @@ static void client_send_eof (struct output_client *client)
         if (!(f = flux_shell_rpc_pack (client->shell,
                                        "write",
                                         0,
-                                        0,
+                                        FLUX_RPC_NORESPONSE,
                                         "{s:s s:i s:{}}",
                                         "name", "eof",
                                         "shell_rank", client->shell_rank,
@@ -74,15 +75,7 @@ void output_client_destroy (struct output_client *client)
 
         client_send_eof (client);
 
-        if (client->pending_writes) {
-            flux_future_t *f;
-            while ((f = zlist_pop (client->pending_writes))) {
-                if (flux_future_get (f, NULL) < 0 && errno != ENOSYS)
-                    shell_log_errno ("client write failed");
-                flux_future_destroy (f);
-            }
-        }
-        zlist_destroy (&client->pending_writes);
+        flux_future_destroy (client->f_getcredit);
         free (client);
         errno = saved_errno;
     }
@@ -93,17 +86,15 @@ struct output_client *output_client_create (flux_shell_t *shell,
                                             int client_hwm)
 {
     struct output_client *client;
-    if (!(client = calloc (1, sizeof (*client)))
-        || !(client->pending_writes = zlist_new ()))
-        goto out;
+
+    if (!(client = calloc (1, sizeof (*client))))
+        return NULL;
     client->shell = shell;
     client->shell_rank = shell->info->shell_rank;
     client->lwm = client_lwm;
     client->hwm = client_hwm;
+    client->credits = client_hwm;
     return client;
-out:
-    output_client_destroy (client);
-    return NULL;
 
 }
 
@@ -131,37 +122,61 @@ static void output_client_control (struct output_client *client, bool stop)
     }
 }
 
-static void output_send_cb (flux_future_t *f, void *arg)
+/* No more credit at the liquor store
+ * Suit is all dirty, my shoes is all wore
+ * Tired and lonely, my heart is all sore.  --Frank Zappa
+ */
+static void getcredit_continuation (flux_future_t *f, void *arg)
 {
     struct output_client *client = arg;
-    if (flux_future_get (f, NULL) < 0 && errno != ENOSYS)
-        shell_log_errno ("error writing output to leader");
-    zlist_remove (client->pending_writes, f);
-    flux_future_destroy (f);
+    int credits;
 
-    if (zlist_size (client->pending_writes) <= client->lwm)
-        output_client_control (client, false);
+    if (flux_rpc_get_unpack (f, "{s:i}", "credits", &credits) < 0) {
+        shell_log_errno ("output is stopped and getcredit failed");
+        return;
+    }
+
+    output_client_control (client, false);
+    client->credits += credits;
+
+    flux_future_destroy (f);
+    client->f_getcredit = NULL;
 }
 
 int output_client_send (struct output_client *client,
                         const char *type,
                         json_t *context)
 {
-    flux_future_t *f = NULL;
+    flux_future_t *f;
 
     if (!(f = flux_shell_rpc_pack (client->shell,
                                    "write",
                                    0,
-                                   0,
+                                   FLUX_RPC_NORESPONSE,
                                    "{s:s s:i s:O}",
                                    "name", type,
                                    "shell_rank", client->shell_rank,
-                                   "context", context))
-        || flux_future_then (f, -1., output_send_cb, client) < 0)
-        goto error;
-    if (zlist_append (client->pending_writes, f) < 0)
-        shell_log_error ("failed to append pending write");
-    if (zlist_size (client->pending_writes) >= client->hwm)
+                                   "context", context)))
+        return -1;
+    flux_future_destroy (f);
+    /* Order more credits at low water mark.
+     */
+    if (--client->credits <= client->lwm && !client->f_getcredit) {
+        if (!(f = flux_shell_rpc_pack (client->shell,
+                                       "write-getcredit",
+                                       0,
+                                       0,
+                                       "{s:i}",
+                                       "credits", client->hwm))
+            || flux_future_then (f, -1, getcredit_continuation, client)) {
+            shell_log_errno ("error requesting credit");
+            goto error;
+        }
+        client->f_getcredit = f;
+    }
+    /* Stop output when credits are at zero
+     */
+    if (client->credits == 0)
         output_client_control (client, true);
     return 0;
 error:
