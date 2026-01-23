@@ -336,5 +336,40 @@ test_expect_success 'the bad value is not lingering in the config object' '
 test_expect_success 'unload the heartbeat module' '
 	flux module remove heartbeat
 '
+test_expect_success 'flux config load fails on follower' '
+	test_must_fail flux start --test-size=2 \
+	    -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    flux exec -r 1 flux config load /dev/null
+'
+test_expect_success 'flux config reload fails on follower' '
+	test_must_fail flux start --test-size=2 \
+	    -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    flux exec -r 1 flux config reload
+'
+test_expect_success 'flux config set on leader propagates to all tbon levels' '
+	cat >fset.exp <<-EOT &&
+	1: bar
+	3: bar
+	EOT
+	flux start --test-size=4 \
+	    -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    -Stbon.topo=kary:2 \
+	    --config-path=/dev/null \
+	    sh -c "flux config set --type=string foo bar; \
+	    flux exec -l -r 1 flux config get foo; \
+	    flux exec -l -r 3 flux config get foo" >fset.out &&
+	test_cmp fset.exp fset.out
+'
+
+test_expect_success 'flux config reload --follower-noop works' '
+	echo baz >freload.exp &&
+	flux start --test-size=2 \
+	    -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    --config-path=/dev/null \
+	    sh -c "flux config set --type=string foo baz; \
+	    flux exec -r 1 flux config reload --follower-noop; \
+	    flux exec -r 1 flux config get foo" >freload.out &&
+	test_cmp freload.exp freload.out
+'
 
 test_done

@@ -17,7 +17,7 @@ test_expect_success 'tell brokers to log to stderr' '
 	flux exec flux setattr log-stderr-mode local
 '
 test_expect_success 'configure heartbeat' '
-	flux exec flux config load <<-EOT
+	flux config load <<-EOT
 	[heartbeat]
 	period = "0.1s"
 	timeout = "0.5s"

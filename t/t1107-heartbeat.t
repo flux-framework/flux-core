@@ -51,27 +51,6 @@ test_expect_success 'reconfig with empty table, period is 2s' '
 test_expect_success 'unload heartbeat' '
 	flux module unload heartbeat
 '
-test_expect_success 'reconfig period of 0 (unchecked)' '
-	flux config load <<-EOT
-	[heartbeat]
-	period = "0"
-	EOT
-'
-test_expect_success 'loading heartbeat fails with bad config' '
-	test_must_fail flux module load heartbeat
-'
-test_expect_success 'reconfig with empty [heartbeat] table' '
-	flux config load <<-EOT
-	[heartbeat]
-	EOT
-'
-test_expect_success 'load heartbeat, period is 2s' '
-	flux module load heartbeat &&
-	flux module stats heartbeat | jq -r -e ".period == 2"
-'
-test_expect_success 'unload heartbeat' '
-	flux module unload heartbeat
-'
 test_expect_success 'reload heartbeat with period=bad fsd' '
 	test_must_fail flux module load heartbeat period=1x
 '
@@ -150,7 +129,7 @@ test_expect_success 'reconfig with warn_thresh=10 works' '
 test_expect_success 'reload with period=0.1s timeout=infinity warn_thresh=3' '
 	flux exec flux setattr log-stderr-level 4 &&
 	flux exec -r 1 flux dmesg -C &&
-	flux exec -r 1 flux config load <<-EOT &&
+	flux config load <<-EOT &&
 	[heartbeat]
 	period = "0.1s"
 	timeout = "infinity"

@@ -122,8 +122,8 @@ test_expect_success 'create rc script that prints current state' '
 	chmod +x rc_getstate
 '
 
-test_expect_success 'monitor reports INIT(2) in rc1' '
-	echo 2 >rc1.exp &&
+test_expect_success 'monitor reports INIT(3) in rc1' '
+	echo 3 >rc1.exp &&
 	flux start \
 		-Sbroker.rc1_path=$(pwd)/rc_getstate \
 		-Sbroker.rc3_path= \
@@ -131,8 +131,8 @@ test_expect_success 'monitor reports INIT(2) in rc1' '
 	test_cmp rc1.exp rc.out
 '
 
-test_expect_success 'monitor reports RUN(4) in rc2' '
-	echo 4 >rc2.exp &&
+test_expect_success 'monitor reports RUN(5) in rc2' '
+	echo 5 >rc2.exp &&
 	flux start \
 		-Sbroker.rc1_path= \
 		-Sbroker.rc3_path= \
@@ -140,8 +140,8 @@ test_expect_success 'monitor reports RUN(4) in rc2' '
 	test_cmp rc2.exp rc.out
 '
 
-test_expect_success 'monitor reports CLEANUP(5) in cleanup script' '
-	echo 5 >cleanup.exp &&
+test_expect_success 'monitor reports CLEANUP(6) in cleanup script' '
+	echo 6 >cleanup.exp &&
 	flux start \
 		-Sbroker.rc1_path= \
 		-Sbroker.rc3_path= \
@@ -149,8 +149,8 @@ test_expect_success 'monitor reports CLEANUP(5) in cleanup script' '
 	test_cmp cleanup.exp rc.out
 '
 
-test_expect_success 'monitor reports FINALIZE(7) in rc3' '
-	echo 7 >rc3.exp &&
+test_expect_success 'monitor reports FINALIZE(8) in rc3' '
+	echo 8 >rc3.exp &&
 	flux start \
 		-Sbroker.rc1_path= \
 		-Sbroker.rc3_path=$(pwd)/rc_getstate \
@@ -164,7 +164,8 @@ test_expect_success 'capture state transitions from size=1 instance' '
 
 test_expect_success 'all expected events and state transitions occurred' '
 	grep "builtins-success: load-builtins->join"	states.log &&
-	grep "parent-none: join->init"			states.log &&
+	grep "parent-none: join->config-sync"		states.log &&
+	grep "sync-none: config-sync->init"		states.log &&
 	grep "rc1-none: init->quorum"			states.log &&
 	grep "quorum-full: quorum->run"			states.log &&
 	grep "rc2-success: run->cleanup"		states.log &&
@@ -183,7 +184,8 @@ test_expect_success 'capture state transitions from size=2 instance' '
 
 test_expect_success 'all expected events and state transitions occurred on rank 0' '
 	grep "\[0\]: builtins-success: load-builtins->join"	states2.log &&
-	grep "\[0\]: parent-none: join->init"			states2.log &&
+	grep "\[0\]: parent-none: join->config-sync"		states2.log &&
+	grep "\[0\]: sync-none: config-sync->init"		states2.log &&
 	grep "\[0\]: rc1-none: init->quorum"			states2.log &&
 	grep "\[0\]: quorum-full: quorum->run"			states2.log &&
 	grep "\[0\]: rc2-success: run->cleanup"			states2.log &&
@@ -196,7 +198,8 @@ test_expect_success 'all expected events and state transitions occurred on rank 
 
 test_expect_success 'all expected events and state transitions occurred on rank 1' '
 	grep "\[1\]: builtins-success: load-builtins->join"	states2.log &&
-	grep "\[1\]: parent-ready: join->init"			states2.log &&
+	grep "\[1\]: parent-ready: join->config-sync"		states2.log &&
+	grep "\[1\]: sync-success: config-sync->init"		states2.log &&
 	grep "\[1\]: rc1-none: init->quorum"			states2.log &&
 	grep "\[1\]: quorum-full: quorum->run"			states2.log &&
 	grep "\[1\]: shutdown: run->cleanup"			states2.log &&
@@ -217,7 +220,8 @@ test_expect_success 'capture state transitions from instance with rc1 failure' '
 
 test_expect_success 'all expected events and state transitions occurred' '
 	grep "builtins-success: load-builtins->join"	states_rc1.log &&
-	grep "parent-none: join->init"			states_rc1.log &&
+	grep "parent-none: join->config-sync"		states_rc1.log &&
+	grep "sync-none: config-sync->init"		states_rc1.log &&
 	grep "rc1-fail: init->shutdown"			states_rc1.log &&
 	grep "children-none: shutdown->finalize"	states_rc1.log &&
 	grep "rc3-none: finalize->goodbye"		states_rc1.log &&
@@ -234,7 +238,8 @@ test_expect_success 'capture state transitions from instance with rc2 failure' '
 
 test_expect_success 'all expected events and state transitions occurred' '
 	grep "builtins-success: load-builtins->join"	states_rc2.log &&
-	grep "parent-none: join->init"			states_rc2.log &&
+	grep "parent-none: join->config-sync"		states_rc2.log &&
+	grep "sync-none: config-sync->init"		states_rc2.log &&
 	grep "rc1-none: init->quorum"			states_rc2.log &&
 	grep "quorum-full: quorum->run"			states_rc2.log &&
 	grep "rc2-fail: run->cleanup"		        states_rc2.log &&
@@ -255,7 +260,8 @@ test_expect_success 'capture state transitions from instance with rc3 failure' '
 
 test_expect_success 'all expected events and state transitions occurred' '
 	grep "builtins-success: load-builtins->join"	states_rc3.log &&
-	grep "parent-none: join->init"			states_rc3.log &&
+	grep "parent-none: join->config-sync"		states_rc3.log &&
+	grep "sync-none: config-sync->init"		states_rc3.log &&
 	grep "rc1-none: init->quorum"			states_rc3.log &&
 	grep "quorum-full: quorum->run"			states_rc3.log &&
 	grep "rc2-success: run->cleanup"		states_rc3.log &&

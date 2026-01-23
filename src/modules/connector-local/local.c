@@ -249,34 +249,34 @@ static void reload_cb (flux_t *h,
                        void *arg)
 {
     struct connector_local *ctx = arg;
+    const char *topic = "unknown";
     flux_conf_t *conf;
     flux_error_t error;
-    const char *errstr = NULL;
 
-    if (flux_module_config_request_decode (msg, &conf) < 0) {
-        errstr = "Error unpacking config-reload request";
+    if (flux_request_decode (msg, &topic, NULL) < 0
+        || flux_module_config_request_decode (msg, &conf) < 0) {
+        errprintf (&error, "Error unpacking %s request", topic);
         goto error;
     }
-    if (parse_config (ctx, conf, &error) < 0) {
-        errstr = error.text;
+    if (parse_config (ctx, conf, &error) < 0)
         goto error_decref;
-    }
     if (flux_set_conf_new (h, conf) < 0) {
-        errstr = "error updating cached configuration";
+        errprintf (&error, "error updating cached configuration");
         goto error_decref;
     }
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to config-reload request");
+        flux_log_error (h, "error responding to %s request", topic);
     return;
 error_decref:
     flux_conf_decref (conf);
 error:
-    if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to config-reload request");
+    if (flux_respond_error (h, msg, errno, error.text) < 0)
+        flux_log_error (h, "error responding to %s request", topic);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "connector-local.config-reload", reload_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "connector-local.config-sync", reload_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

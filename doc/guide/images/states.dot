@@ -10,10 +10,13 @@ digraph finite_state_machine {
     Start -> L;
     L -> J [ label = "builtins-success" ];
     L -> U [ label = "builtins-fail", color = "red" ];
-    J -> 1 [ label = "parent-ready" ];
-    J -> 1 [ label = "parent-none" ];
+    J -> Y [ label = "parent-ready" ];
+    J -> Y [ label = "parent-none" ];
     J -> S [ label = "parent-fail", color = "red" ];
     J -> S [ label = "parent-timeout", color = "red" ];
+    Y -> 1 [ label = "sync-success" ];
+    Y -> 1 [ label = "sync-none" ];
+    Y -> S [ label = "sync-fail", color = "red" ];
     1 -> Q [ label = "rc1-none" ];
     1 -> Q [ label = "rc1-success" ];
     1 -> S [ label = "rc1-fail", color = "red" ];

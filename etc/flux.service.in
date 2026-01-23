@@ -32,7 +32,7 @@ ExecStart=/bin/bash -c '\
   -Scontent.restore=auto \
 '
 SyslogIdentifier=flux
-ExecReload=@X_BINDIR@/flux config reload
+ExecReload=@X_BINDIR@/flux config reload --follower-noop
 Restart=always
 RestartSec=30s
 RestartPreventExitStatus=42

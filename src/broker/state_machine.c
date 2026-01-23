@@ -119,6 +119,7 @@ struct state_next {
 
 static void action_load_builtins (struct state_machine *s);
 static void action_join (struct state_machine *s);
+static void action_config_sync (struct state_machine *s);
 static void action_quorum (struct state_machine *s);
 static void action_init (struct state_machine *s);
 static void action_run (struct state_machine *s);
@@ -145,6 +146,8 @@ static struct state statetab[] = {
     { STATE_LOAD_BUILTINS,
                         "load-builtins",    action_load_builtins },
     { STATE_JOIN,       "join",             action_join },
+    { STATE_CONFIG_SYNC,
+                        "config-sync",      action_config_sync },
     { STATE_INIT,       "init",             action_init },
     { STATE_QUORUM,     "quorum",           action_quorum },
     { STATE_RUN,        "run",              action_run },
@@ -162,9 +165,12 @@ static struct state_next nexttab[] = {
                                                 STATE_JOIN },
     { "builtins-fail",      STATE_LOAD_BUILTINS,
                                                 STATE_UNLOAD_BUILTINS},
-    { "parent-ready",       STATE_JOIN,         STATE_INIT },
-    { "parent-none",        STATE_JOIN,         STATE_INIT },
+    { "parent-ready",       STATE_JOIN,         STATE_CONFIG_SYNC },
+    { "parent-none",        STATE_JOIN,         STATE_CONFIG_SYNC },
     { "parent-fail",        STATE_JOIN,         STATE_SHUTDOWN },
+    { "sync-success",       STATE_CONFIG_SYNC,  STATE_INIT },
+    { "sync-none",          STATE_CONFIG_SYNC,  STATE_INIT },
+    { "sync-fail",          STATE_CONFIG_SYNC,  STATE_SHUTDOWN },
     { "rc1-success",        STATE_INIT,         STATE_QUORUM },
     { "rc1-none",           STATE_INIT,         STATE_QUORUM },
     { "rc1-ignorefail",     STATE_INIT,         STATE_QUORUM },
@@ -294,6 +300,17 @@ static void action_init (struct state_machine *s)
     }
     else
         state_machine_post (s, "rc1-none");
+}
+
+static void action_config_sync (struct state_machine *s)
+{
+#if HAVE_LIBSYSTEMD
+    if (s->ctx->sd_notify) {
+        sd_notifyf (0, "STATUS=Fetching configuration update from parent");
+    }
+#endif
+    if (s->ctx->info.rank == 0)
+        state_machine_post (s, "sync-none");
 }
 
 static void action_join (struct state_machine *s)
@@ -850,6 +867,9 @@ void state_machine_kill (struct state_machine *s, int signum)
         case STATE_JOIN:
             state_machine_post (s, "parent-fail");
             break;
+        case STATE_CONFIG_SYNC:
+            state_machine_post (s, "sync-fail");
+            break;
         case STATE_QUORUM:
             state_machine_post (s, "quorum-fail");
             break;
@@ -1023,6 +1043,7 @@ static void run_check_parent (struct state_machine *s)
         switch (s->monitor.parent_state) {
             case STATE_LOAD_BUILTINS:
             case STATE_JOIN:
+            case STATE_CONFIG_SYNC:
             case STATE_INIT:
             case STATE_QUORUM:
             case STATE_RUN:
@@ -1052,6 +1073,7 @@ static void join_check_parent (struct state_machine *s)
         switch (s->monitor.parent_state) {
             case STATE_LOAD_BUILTINS:
             case STATE_JOIN:
+            case STATE_CONFIG_SYNC:
             case STATE_INIT:
                 break;
             case STATE_QUORUM:
@@ -1081,6 +1103,7 @@ static void quorum_check_parent (struct state_machine *s)
         switch (s->monitor.parent_state) {
             case STATE_LOAD_BUILTINS:
             case STATE_JOIN:
+            case STATE_CONFIG_SYNC:
             case STATE_QUORUM:
                 break;
             case STATE_INIT:

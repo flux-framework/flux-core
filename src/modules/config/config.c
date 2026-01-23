@@ -13,8 +13,8 @@
  * The broker parses the configuration, if any, before bootstrap begins.
  * The broker caches this configuration object and also records the config
  * directory path, if any, in the config.path broker attribute.
- * Later, when modules are started (including this one), they receive a
- * copy of the broker's config object.
+ * Later, when built-in modules are started (including this one), they
+ * receive a copy of the broker's config object.
  *
  * There is no default config directory path, so by default the attribute
  * is not set and the config object is empty {}.
@@ -32,6 +32,21 @@
  * config.load
  *   Replace the current config object with one provided in the request.
  *   Send a config-reload RPC to all loaded modules and the broker.
+ *
+ * After the initial load from files, this module on follower brokers tracks
+ * TBON parent configuration (ultimately the leader's configuration), sending
+ * config-reload RPCs to all modules and the broker on each update.  Follower
+ * brokers (but not the leader) ignore changes to local on-disk configuration
+ * until the next restart.
+ *
+ * Synchronization:
+ * 1. each broker loads config from disk
+ * 2. built-in modules are started (with cloned broker config)
+ * 3. the broker progresses through STATE_NONE -> JOIN -> CONFIG_SYNC
+ * 4. at STATE_CONFIG_SYNC, this module fetches parent config (followers only)
+ * 5. config-sync is called on broker and built-in modules (followers only)
+ * 6. this module posts sync-success, transitioning broker to STATE_INIT
+ * 7. other modules are loaded (with cloned broker config, now == parent).
  */
 
 #if HAVE_CONFIG_H
@@ -41,6 +56,7 @@
 #include <jansson.h>
 
 #include "src/broker/module.h"
+#include "src/broker/state_machine.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
@@ -48,14 +64,20 @@
 
 struct brokercfg {
     flux_t *h;
+    uint32_t rank;
     char *path;
     flux_msg_handler_t **handlers;
+    struct flux_msglist *getters;
+    flux_future_t *f_config;
+    flux_future_t *f_state;
+    bool config_event_posted;
 };
 
 /* Send the config-reload RPC to the named module.
  * This works for the broker too since it implements broker.config-reload.
  */
 static int update_one_module (flux_t *h,
+                              bool initialize,
                               const char *name,
                               const flux_conf_t *conf,
                               flux_error_t *errp)
@@ -67,8 +89,9 @@ static int update_one_module (flux_t *h,
 
     if (snprintf (topic,
                   sizeof (topic),
-                  "%s.config-reload",
-                  name) >= sizeof (topic)) {
+                  "%s.config-%s",
+                  name,
+                  initialize ? "sync" : "reload") >= sizeof (topic)) {
         errprintf (errp, "buffer overflow");
         errno = EOVERFLOW;
         goto done;
@@ -87,7 +110,7 @@ done:
 
 /* Restore current config to a list of modules.
  */
-static void revert_updates (flux_t *h, zlist_t *names)
+static void revert_updates (flux_t *h, bool initialize, zlist_t *names)
 {
     const flux_conf_t *conf = flux_get_conf (h);
     const char *name;
@@ -95,7 +118,7 @@ static void revert_updates (flux_t *h, zlist_t *names)
 
     name = zlist_first (names);
     while (name) {
-        if (update_one_module (h, name, conf, &error) < 0)
+        if (update_one_module (h, initialize, name, conf, &error) < 0)
             flux_log (h, LOG_ERR, "error reverting %s: %s", name, error.text);
         name = zlist_next (names);
     }
@@ -107,6 +130,7 @@ static void revert_updates (flux_t *h, zlist_t *names)
  * successful ones.
  */
 static int update_all_new (flux_t *h,
+                           bool initialize,
                            const flux_conf_t *conf,
                            flux_error_t *errp)
 {
@@ -135,14 +159,14 @@ static int update_all_new (flux_t *h,
         }
         if (streq (name, "config"))
             continue;
-        if (update_one_module (h, name, conf, &error) < 0) {
+        if (update_one_module (h, initialize, name, conf, &error) < 0) {
             errprintf (errp, "error updating %s: %s", name, error.text);
             goto error;
         }
         if (zlist_append (rollback, (char *)name) < 0)
             goto nomem;
     }
-    if (update_one_module (h, "broker", conf, &error) < 0) {
+    if (update_one_module (h, initialize, "broker", conf, &error) < 0) {
         errprintf (errp, "error updating broker: %s", error.text);
         goto error;
     }
@@ -161,12 +185,29 @@ nomem:
 error:
     if (rollback) {
         int saved_errno = errno;
-        revert_updates (h, rollback);
+        revert_updates (h, initialize, rollback);
         zlist_destroy (&rollback);
         errno = saved_errno;
     }
     flux_future_destroy (f);
     return -1;
+}
+
+static void getters_respond (struct brokercfg *cfg, const flux_conf_t *conf)
+{
+    const flux_msg_t *msg;
+    json_t *o;
+
+    if (flux_conf_unpack (conf, NULL, "o", &o) < 0) {
+        flux_log (cfg->h, LOG_ERR, "error preparing config.get updates");
+        return;
+    }
+    msg = flux_msglist_first (cfg->getters);
+    while (msg) {
+        if (flux_respond_pack (cfg->h, msg, "O", o) < 0)
+            flux_log_error (cfg->h, "error responding to config.get request");
+        msg = flux_msglist_next (cfg->getters);
+    }
 }
 
 static bool config_equal (const flux_conf_t *c1, const flux_conf_t *c2)
@@ -198,6 +239,11 @@ static void reload_cb (flux_t *h,
         errprintf (&error, "error decoding config.reload request");
         goto error;
     }
+    if (cfg->rank > 0) {
+        errno = EINVAL;
+        errprintf (&error, "configuration can only be changed on rank 0");
+        goto error;
+    }
     if (cfg->path) {
         if (!(conf = flux_conf_parse (cfg->path, &rerror))) {
             errprintf (&error, "Config file error: %s", rerror.text);
@@ -206,10 +252,11 @@ static void reload_cb (flux_t *h,
         if (config_equal (flux_get_conf (h), conf))
             flux_conf_decref (conf);
         else {
-            if (update_all_new (h, conf, &error) < 0) {
+            if (update_all_new (h, false, conf, &error) < 0) {
                 flux_conf_decref (conf);
                 goto error;
             }
+            getters_respond (cfg, flux_get_conf (h));
         }
     }
     if (flux_respond (h, msg, NULL) < 0)
@@ -220,6 +267,7 @@ error:
         flux_log_error (h, "error responding to config.reload request");
 }
 
+
 /* Handle request to replace config object with request payload.
  * Initiate reload of config in all loaded modules.
  */
@@ -228,6 +276,7 @@ static void load_cb (flux_t *h,
                      const flux_msg_t *msg,
                      void *arg)
 {
+    struct brokercfg *cfg = arg;
     flux_error_t error;
     json_t *o;
     flux_conf_t *conf;
@@ -237,13 +286,20 @@ static void load_cb (flux_t *h,
         errprintf (&error, "error decoding config.load request");
         goto error;
     }
+    if (cfg->rank > 0) {
+        errno = EINVAL;
+        errprintf (&error, "configuration can only be changed on rank 0");
+        flux_conf_decref (conf);
+        goto error;
+    }
     if (config_equal (flux_get_conf (h), conf))
         flux_conf_decref (conf);
     else {
-        if (update_all_new (h, conf, &error) < 0) {
+        if (update_all_new (h, false, conf, &error) < 0) {
             flux_conf_decref (conf);
             goto error;
         }
+        getters_respond (cfg, flux_get_conf (h));
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config.load request");
@@ -260,6 +316,7 @@ static void get_cb (flux_t *h,
                     const flux_msg_t *msg,
                     void *arg)
 {
+    struct brokercfg *cfg = arg;
     const char *errmsg = NULL;
     flux_error_t error;
     json_t *o;
@@ -272,16 +329,154 @@ static void get_cb (flux_t *h,
     }
     if (flux_respond_pack (h, msg, "O", o) < 0)
         flux_log_error (h, "error responding to config.get request");
+    if (flux_msg_is_streaming (msg)) {
+        if (flux_msglist_append (cfg->getters, msg) < 0)
+            goto error;
+    }
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "error responding to config.get request");
 }
 
+/* A streaming getter may have disconnected.  Clean up.
+ */
+static void disconnect_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct brokercfg *cfg = arg;
+
+    flux_msglist_disconnect (cfg->getters, msg);
+}
+
+static void state_post_event (flux_t *h, const char *event)
+{
+    flux_future_t *f;
+    if (!(f = flux_rpc_pack (h,
+                             "state-machine.post",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_NORESPONSE,
+                             "{s:s s:b}",
+                             "event", event,
+                             "error", 0)))
+        flux_log_error (h, "error posting %s event", event);
+    flux_future_destroy (f);
+}
+
+/* Handle response from parent config module.  If this is called, this
+ * broker is a follower and configuration will track the leader.
+ * N.B. There is no mechanism for a follower to reject the configuration
+ * already accepted by the leader, therefore make all failures fatal.
+ */
+static void parent_continuation (flux_future_t *f, void *arg)
+{
+    struct brokercfg *cfg = arg;
+    json_t *o;
+    flux_conf_t *conf;
+    flux_error_t error;
+    bool initialize = false;
+
+    if (!cfg->config_event_posted)
+        initialize = true;
+
+    if (flux_rpc_get_unpack (f, "o", &o) < 0
+        || !(conf = flux_conf_pack ("O", o))) {
+        flux_log (cfg->h,
+                  LOG_CRIT,
+                  "parent update: %s",
+                  future_strerror (f, errno));
+        goto fatal;
+    }
+    if (config_equal (flux_get_conf (cfg->h), conf)) {
+        flux_log (cfg->h, LOG_DEBUG, "parent update ignored: no change");
+        flux_conf_decref (conf);
+        goto done;
+    }
+    if (update_all_new (cfg->h, initialize, conf, &error) < 0) {
+        flux_log (cfg->h, LOG_ERR, "parent update: %s", error.text);
+        flux_conf_decref (conf);
+        goto fatal;
+    }
+    flux_log (cfg->h, LOG_DEBUG, "parent update applied");
+    getters_respond (cfg, flux_get_conf (cfg->h));
+done:
+    if (!cfg->config_event_posted) {
+        int saved_errno = errno;
+        state_post_event (cfg->h, "sync-success");
+        cfg->config_event_posted = true;
+        errno = saved_errno;
+    }
+    flux_future_reset (f);
+    return;
+fatal:
+    if (cfg->config_event_posted)
+        flux_reactor_stop_error (flux_get_reactor (cfg->h));
+    else
+        state_post_event (cfg->h, "sync-fail");
+}
+
+static void state_continuation (flux_future_t *f, void *arg)
+{
+    struct brokercfg *cfg = arg;
+    int state;
+
+    if (flux_rpc_get_unpack (f, "{s:i}", "state", &state) < 0) {
+        if (errno != ENODATA) {
+            flux_log_error (cfg->h, "state-machine.monitor");
+            goto fatal;
+        }
+        return;
+    }
+    if (state == STATE_CONFIG_SYNC) {
+        if (!(cfg->f_config = flux_rpc (cfg->h,
+                                        "config.get",
+                                        NULL,
+                                        FLUX_NODEID_UPSTREAM,
+                                        FLUX_RPC_STREAMING))
+            || flux_future_then (cfg->f_config,
+                                 -1,
+                                 parent_continuation,
+                                 cfg) < 0) {
+            flux_log (cfg->h,
+                      LOG_ERR,
+                      "Error sending upstream config.get: %s",
+                      future_strerror (cfg->f_config, errno));
+            goto fatal;
+        }
+    }
+    flux_future_reset (f);
+    return;
+fatal:
+    state_post_event (cfg->h, "sync-fail");
+}
+
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  "config.reload", reload_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "config.load", load_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "config.get", get_cb, FLUX_ROLE_USER },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "config.reload",
+        reload_cb,
+        0,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "config.load",
+        load_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "config.get",
+        get_cb,
+        FLUX_ROLE_USER,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "config.disconnect",
+        disconnect_cb,
+        FLUX_ROLE_USER,
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -289,6 +484,9 @@ static void brokercfg_destroy (struct brokercfg *cfg)
 {
     if (cfg) {
         int saved_errno = errno;
+        flux_msglist_destroy (cfg->getters);
+        flux_future_destroy (cfg->f_config);
+        flux_future_destroy (cfg->f_state);
         flux_msg_handler_delvec (cfg->handlers);
         free (cfg->path);
         free (cfg);
@@ -309,6 +507,10 @@ static struct brokercfg *brokercfg_create (flux_t *h, const char *path)
     }
     if (flux_msg_handler_addvec (h, htab, cfg, &cfg->handlers) < 0)
         goto error;
+    if (!(cfg->getters = flux_msglist_create ()))
+        goto error;
+    if (flux_get_rank (h, &cfg->rank) < 0)
+        goto error;
     return cfg;
 error:
     brokercfg_destroy (cfg);
@@ -324,6 +526,24 @@ static int mod_main (flux_t *h, int argc, char *argv[])
         flux_log_error (h, "Error creating config context");
         goto done;
     }
+    if (cfg->rank > 0) {
+        if (!(cfg->f_state = flux_rpc_pack (h,
+                                            "state-machine.monitor",
+                                            FLUX_NODEID_ANY,
+                                            FLUX_RPC_STREAMING,
+                                            "{s:i}",
+                                            "final", STATE_CONFIG_SYNC))
+            || flux_future_then (cfg->f_state,
+                                 -1,
+                                 state_continuation,
+                                 cfg) < 0) {
+            flux_log (h,
+                      LOG_ERR,
+                      "Error sending state-machine.monitor: %s",
+                      future_strerror (cfg->f_state, errno));
+            goto done;
+        }
+    }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done;
@@ -338,7 +558,6 @@ struct module_builtin builtin_config = {
     .name = "config",
     .main = mod_main,
 };
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
