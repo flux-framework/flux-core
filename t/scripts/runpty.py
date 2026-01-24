@@ -19,6 +19,7 @@ import time
 from signal import SIGALRM, SIGINT, SIGTERM, SIGUSR1, SIGWINCH, alarm, signal
 
 from flux import util
+from flux.cli.base import decode_duration, decode_signal
 
 
 def setwinsize(fd, rows, cols):
@@ -161,6 +162,12 @@ def parse_args():
     parser.add_argument(
         "--line-buffer", help="Attempt to line buffer the output", action="store_true"
     )
+    parser.add_argument(
+        "-t",
+        "--timeout",
+        metavar="[SIGNAL@]TIME",
+        help="Set a timeout (and optional SIGNAL) for command",
+    )
     parser.add_argument("COMMAND")
     parser.add_argument("ARGS", nargs=argparse.REMAINDER)
     return parser.parse_args()
@@ -293,6 +300,26 @@ class TTYBuffer:
             writer(self.get())
 
 
+def parse_timeout_arg(arg):
+    """
+    Parse --timeout=[SIG@]TIME option
+    """
+    sig = SIGTERM
+    timestr = arg
+    if "@" in arg:
+        # SIG@TIME format:
+        sig, _, timestr = arg.partition("@")
+        sig = decode_signal(sig)
+
+    time = decode_duration(timestr)
+
+    # Add unit to timestr if missing:
+    if timestr[-1].isdigit() or timestr[-1] == ".":
+        timestr += "s"
+
+    return sig, time, timestr
+
+
 log = logging.getLogger("runpty")
 
 
@@ -309,12 +336,18 @@ def main():
         sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
     )
 
+    timeout_sec = None
+    timeout_arg = None
+    timeout_sig = SIGTERM
+
     args = parse_args()
     if args.no_output and args.output != "-":
         log.error("Do not specify --no-output and --output")
         sys.exit(1)
     if args.no_output:
         args.output = "/dev/null"
+    if args.timeout:
+        timeout_sig, timeout_sec, timeout_arg = parse_timeout_arg(args.timeout)
 
     try:
         formatter = formats[args.format]
@@ -392,11 +425,17 @@ def main():
             with open(args.expect) as fp:
                 expect.add_file(fp)
 
-        def timeout(sig, _):
-            os.kill(pid, SIGTERM)
-            log.error("timeout waiting for pattern '%s'", expect.current)
+        def timeout():
+            os.kill(pid, timeout_sig)
+            if args.expect:
+                log.error("timeout waiting for pattern '%s'", expect.current)
+            else:
+                log.error("command '%s' timed out after %s", args.COMMAND, timeout_arg)
 
-        signal(SIGALRM, timeout)
+        def sigalrm_handler(sig, _):
+            timeout()
+
+        signal(SIGALRM, sigalrm_handler)
 
         def read_tty():
             buf.read()
@@ -405,6 +444,10 @@ def main():
             buf.send_data(ofile.write_entry)
             if buf.eof:
                 loop.stop()
+
+        # Handle overall timeout
+        if timeout_sec is not None:
+            loop.call_later(timeout_sec, timeout)
 
         loop.add_reader(fd, read_tty)
         loop.run_forever()
