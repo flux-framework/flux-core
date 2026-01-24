@@ -13,7 +13,7 @@ FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
 INITRC_TESTDIR="${SHARNESS_TEST_SRCDIR}/shell/initrc"
 INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
-runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast"
+runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast -t SIGKILL@1m"
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
 shell_leader_rank() {
