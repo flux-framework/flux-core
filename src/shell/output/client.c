@@ -123,6 +123,7 @@ static void output_client_control (struct output_client *client, bool stop)
             }
             task = flux_shell_task_next (client->shell);
         }
+        client->stopped = stop;
     }
 }
 
