@@ -244,9 +244,14 @@ struct shell_output *shell_output_create (flux_plugin_t *p,
          */
         kvs_output_flush (out->kvs);
     }
-    else if (!(out->client = output_client_create (shell))) {
-        shell_log_errno ("failed to create output service client");
-        goto error;
+    else {
+        int lwm = out->conf->out.client_lwm;
+        int hwm = out->conf->out.client_hwm;
+
+        if (!(out->client = output_client_create (shell, lwm, hwm))) {
+            shell_log_errno ("failed to create output service client");
+            goto error;
+        }
     }
     return out;
 error:

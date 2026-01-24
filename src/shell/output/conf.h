@@ -25,6 +25,8 @@ struct output_stream {
     const char *buffer_type;
     const char *template;
     const char *mode;
+    int client_lwm;
+    int client_hwm;
     bool label;
     bool per_shell;
 };
