@@ -815,7 +815,7 @@ void background_waitable_test (flux_t *h)
     char *cmd_noexist[] = { "/noexist", NULL };
     char *cmd_true[] = { "true", NULL };
     char *cmd_false[] = { "false", NULL };
-    char *cmd_sleep[] = { "sleep", "inf", NULL };
+    char *cmd_sleep[] = { "sleep", "30", NULL };
     bg_test (h, "noexist", 1, cmd_noexist, -ENOENT, false);
     bg_test (h, "success", 1, cmd_true, 0, false);
     bg_test (h, NULL, 1, cmd_true, 0, false);
