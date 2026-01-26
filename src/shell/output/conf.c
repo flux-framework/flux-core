@@ -15,6 +15,7 @@
  * {
  *  "output": {
  *    "mode": "truncate|append",
+ *    "client": { "lwm": integer, "hwm": integer },
  *    "stdout" {
  *      "type": "kvs|file",
  *      "path": "template",
@@ -51,6 +52,9 @@
 #include "ccan/str/str.h"
 
 #include "output/conf.h"
+
+static const int default_client_lwm = 100;
+static const int default_client_hwm = 1000;
 
 /* Detect if a mustache template is per-shell or per-task by rendering
  * per-rank template on rank 0 and rank 1, then a per-task template using
@@ -98,8 +102,11 @@ static int output_stream_getopts (flux_shell_t *shell,
 
     if (flux_shell_getopt_unpack (shell,
                                   "output",
-                                  "{s?s s?{s?s s?s s?b s?{s?s}}}",
+                                  "{s?s s?{s?i s?i} s?{s?s s?s s?b s?{s?s}}}",
                                   "mode", &stream->mode,
+                                  "client",
+                                    "lwm", &stream->client_lwm,
+                                    "hwm", &stream->client_hwm,
                                   name,
                                    "type", &type,
                                    "path", &stream->template,
@@ -107,6 +114,12 @@ static int output_stream_getopts (flux_shell_t *shell,
                                    "buffer",
                                      "type", &stream->buffer_type) < 0) {
         shell_log_error ("failed to read %s output options", name);
+        return -1;
+    }
+    if (stream->client_lwm < 0
+        || stream->client_hwm < 0
+        || stream->client_lwm >= stream->client_hwm) {
+        shell_log_error ("invalid client.lwm and/or client.hwm specified");
         return -1;
     }
     if (type && streq (type, "kvs")) {
@@ -150,6 +163,8 @@ struct output_config *output_config_create (flux_shell_t *shell)
     conf->out.type = FLUX_OUTPUT_TYPE_KVS;
     conf->out.mode = "truncate";
     conf->out.buffer_type = "line";
+    conf->out.client_lwm = default_client_lwm;
+    conf->out.client_hwm = default_client_hwm;
     if (output_stream_getopts (shell, "stdout", &conf->out) < 0)
         goto error;
 

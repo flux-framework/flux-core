@@ -363,6 +363,21 @@ plugins include:
   Set the mode in which output files are opened to either truncate or
   append. The default is to truncate.
 
+.. option:: output.client.{lwm,hwm}=N
+
+  Set the high and low watermark values used for output flow control
+  when output is being aggregated on the leader shell.  Output is aggregated
+  by default, unless it is redirected to per-rank local files.
+
+  Flow control limits the growth of message backlogs on the leader shell.
+  The option values represent a count of unacknowledged messages sent to the
+  leader shell by the local shell.  When the high watermark is reached,
+  task output handling is stopped, potentially stalling tasks once their
+  local output buffers are exhausted.  When the number of messages drops
+  to the low watermark, task output handling resumes.
+
+  The default values of 100 and 1000 should be adequate in most cases.
+
 .. option:: input.stdin.type=TYPE
 
   Set job input for **stdin** to *TYPE*. *TYPE* may be either ``service``

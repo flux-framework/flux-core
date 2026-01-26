@@ -17,7 +17,7 @@
  * Notes:
  *  - Errors from write requests to leader shell are logged.
  *  - Outstanding RPCs at shell exit are waited for synchronously.
- *  - Number of in-flight write RPCs is limited by shell_output_hwm
+ *  - Number of in-flight write RPCs is limited by client->hwm
  *    to avoid matchtag exhaustion.
  */
 #if HAVE_CONFIG_H
@@ -35,14 +35,13 @@
 #include "info.h"
 #include "output/client.h"
 
-static const int shell_output_lwm = 100;
-static const int shell_output_hwm = 1000;
-
 struct output_client {
     flux_shell_t *shell;
     int shell_rank;
     bool stopped;
     zlist_t *pending_writes;
+    int lwm;
+    int hwm;
 };
 
 static void client_send_eof (struct output_client *client)
@@ -89,7 +88,9 @@ void output_client_destroy (struct output_client *client)
     }
 }
 
-struct output_client *output_client_create (flux_shell_t *shell)
+struct output_client *output_client_create (flux_shell_t *shell,
+                                            int client_lwm,
+                                            int client_hwm)
 {
     struct output_client *client;
     if (!(client = calloc (1, sizeof (*client)))
@@ -97,6 +98,8 @@ struct output_client *output_client_create (flux_shell_t *shell)
         goto out;
     client->shell = shell;
     client->shell_rank = shell->info->shell_rank;
+    client->lwm = client_lwm;
+    client->hwm = client_hwm;
     return client;
 out:
     output_client_destroy (client);
@@ -123,6 +126,8 @@ static void output_client_control (struct output_client *client, bool stop)
             }
             task = flux_shell_task_next (client->shell);
         }
+        client->stopped = stop;
+        shell_debug ("flow control %s", stop ? "stop" : "start");
     }
 }
 
@@ -134,7 +139,7 @@ static void output_send_cb (flux_future_t *f, void *arg)
     zlist_remove (client->pending_writes, f);
     flux_future_destroy (f);
 
-    if (zlist_size (client->pending_writes) <= shell_output_lwm)
+    if (zlist_size (client->pending_writes) <= client->lwm)
         output_client_control (client, false);
 }
 
@@ -156,7 +161,7 @@ int output_client_send (struct output_client *client,
         goto error;
     if (zlist_append (client->pending_writes, f) < 0)
         shell_log_error ("failed to append pending write");
-    if (zlist_size (client->pending_writes) >= shell_output_hwm)
+    if (zlist_size (client->pending_writes) >= client->hwm)
         output_client_control (client, true);
     return 0;
 error:

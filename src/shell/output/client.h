@@ -18,7 +18,9 @@
 #include <flux/core.h>
 #include <flux/shell.h>
 
-struct output_client *output_client_create (flux_shell_t *shell);
+struct output_client *output_client_create (flux_shell_t *shell,
+                                            int client_lwm,
+                                            int client_hwm);
 
 void output_client_destroy (struct output_client *client);
 

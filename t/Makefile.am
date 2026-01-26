@@ -216,6 +216,7 @@ TESTSCRIPTS = \
 	t2603-job-shell-initrc.t \
 	t2604-job-shell-affinity.t \
 	t2606-job-shell-output-redirection.t \
+	t2606-job-shell-output-flow.t \
 	t2607-job-shell-input.t \
 	t2608-job-shell-log.t \
 	t2609-job-shell-events.t \
