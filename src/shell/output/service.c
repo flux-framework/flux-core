@@ -100,7 +100,7 @@ static void output_service_write_cb (flux_t *h,
                                      void *arg)
 {
     struct output_service *service = arg;
-    int shell_rank;
+    int shell_rank = -1;
     json_t *o;
     const char *type;
 
@@ -109,16 +109,26 @@ static void output_service_write_cb (flux_t *h,
                              "{s:s s:i s:o}",
                              "name", &type,
                              "shell_rank", &shell_rank,
-                             "context", &o) < 0)
+                             "context", &o) < 0
+        || output_service_write (service, type, shell_rank, o) < 0)
+        shell_log_errno ("error recording write data for rank %d", shell_rank);
+}
+
+static void output_service_write_getcredit_cb (flux_t *h,
+                                               flux_msg_handler_t *mh,
+                                               const flux_msg_t *msg,
+                                               void *arg)
+{
+    int credits;
+
+    if (flux_request_unpack (msg, NULL, "{s:i}", "credits", &credits) < 0)
         goto error;
-    if (output_service_write (service, type, shell_rank, o) < 0)
-        goto error;
-    if (flux_respond (h, msg, NULL) < 0)
-        shell_log_errno ("flux_respond");
+    if (flux_respond_pack (h, msg, "{s:i}", "credits", credits) < 0)
+        shell_log_errno ("error responding to write-getcredit");
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
-        shell_log_errno ("flux_respond");
+        shell_log_errno ("error responding to write-getcredit");
 }
 
 static int shell_lost (flux_plugin_t *p,
@@ -169,6 +179,10 @@ struct output_service *output_service_create (struct shell_output *out,
         || flux_shell_service_register (out->shell,
                                         "write",
                                         output_service_write_cb,
+                                        service) < 0
+        || flux_shell_service_register (out->shell,
+                                        "write-getcredit",
+                                        output_service_write_getcredit_cb,
                                         service) < 0)
         goto error;
 
