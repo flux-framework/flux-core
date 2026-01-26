@@ -78,15 +78,18 @@ barrier
 
 .. program:: flux pmi barrier
 
-:program:`flux pmi barrier` does the following:
+:program:`flux pmi barrier` executes a PMI barrier and prints a message
+on rank 0 upon completion.
 
-  #. Execute PMI barrier
-  #. Execute PMI barrier
-  #. Print elapsed time of (2)
+.. option:: --test-timing
+
+  First execute a preliminary barrier to ensure all ranks enter the test
+  barrier at the same time, then execute a test barrier and print the elapsed
+  time for the test barrier on rank 0 stdout.
 
 .. option:: --test-count=N
 
-  Execute N barrier (step 2) operations (default 1).
+  Execute N barrier operations (default 1).
 
 .. option:: --test-abort=RANK
 

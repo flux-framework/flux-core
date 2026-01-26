@@ -161,15 +161,15 @@ test_expect_success 'PMI1 can calculate clique ranks with 128 tasks per node' '
 
 test_expect_success 'flux-pmi barrier works' '
 	flux run --label-io -n2 \
-	    flux pmi barrier
+	    flux pmi barrier --test-timing
 '
 test_expect_success 'flux-pmi barrier --test-count works' '
 	flux run --label-io -n2 \
-	    flux pmi barrier --test-count=2
+	    flux pmi barrier --test-timing --test-count=2
 '
 test_expect_success 'flux-pmi barrier --test-abort works' '
 	test_expect_code 143 flux run --label-io -n2 \
-	    flux pmi barrier --test-abort=1 2>barrier_abort.err &&
+	    flux pmi barrier --test-timing --test-abort=1 2>barrier_abort.err &&
 	grep -i abort barrier_abort.err
 '
 test_expect_success 'flux-pmi exchange works' '
@@ -197,7 +197,7 @@ test_expect_success 'flux-pmi get works with multiple keys' '
 	    flux pmi get flux.instance-level PMI_process_mapping
 '
 test_expect_success 'flux-pmi works outside of job' '
-	flux pmi -v --libpmi-noflux barrier
+	flux pmi -v --libpmi-noflux barrier --test-timing
 '
 test_expect_success 'flux-pmi fails with bad subcommand' '
 	test_must_fail flux run flux pmi notacmd
@@ -217,7 +217,8 @@ test_expect_success 'flux-pmi --method=simple fails outside of job' '
 	test_must_fail flux pmi --method=simple barrier
 '
 test_expect_success 'flux-pmi -v --method=simple works within job' '
-	flux run --label-io -n2 flux pmi -v --method=simple barrier
+	flux run --label-io -n2 \
+	    flux pmi -v --method=simple barrier --test-timing
 '
 test_expect_success 'flux-pmi -opmi=off --method=simple fails' '
 	test_must_fail flux run -o pmi=off \
@@ -233,7 +234,7 @@ test_expect_success 'flux-pmi --method=libpmi:/bad/path fails' '
 '
 test_expect_success 'flux-pmi --method=libpmi barrier works w/ flux libpmi.so' '
 	flux run -n2 bash -c "\
-	    flux pmi -v --method=libpmi:$(cat libpmi) barrier"
+	    flux pmi -v --method=libpmi:$(cat libpmi) barrier --test-timing"
 '
 test_expect_success 'flux-pmi --method=libpmi barrier abort works w/ flux libpmi.so' '
 	test_expect_code 143 flux run -n2 bash -c "\

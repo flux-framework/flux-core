@@ -77,8 +77,10 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
         log_msg_exit ("%s", error.text);
 
     // don't let task launch stragglers skew timing
-    if (upmi_barrier (upmi, &error) < 0)
-        log_msg_exit ("barrier: %s", error.text);
+    if (optparse_hasopt (p, "test-timing")) {
+        if (upmi_barrier (upmi, &error) < 0)
+            log_msg_exit ("barrier: %s", error.text);
+    }
 
     // abort one rank if --test-abort was specified
     if (test_abort != -1) {
@@ -93,13 +95,15 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
 
     while (count-- > 0) {
         monotime (&t);
+
         if (upmi_barrier (upmi, &error) < 0)
             log_msg_exit ("barrier: %s", error.text);
+
         if (info.rank == 0) {
-            printf ("%s: completed pmi barrier on %d tasks in %0.3fs.\n",
-                    label,
-                    info.size,
-                    monotime_since (t) / 1000);
+            printf ("%s: completed pmi barrier on %d tasks", label, info.size);
+            if (optparse_hasopt (p, "test-timing"))
+                printf (" in %0.3fs.", monotime_since (t) / 1000);
+            printf ("\n");
             fflush (stdout);
         }
     }
@@ -231,6 +235,8 @@ static struct optparse_option barrier_opts[] = {
        .usage = "For testing, execute N barrier operations (default 1)", },
     { .name = "test-abort",      .has_arg = 1, .arginfo = "RANK",
        .usage = "For testing, RANK calls abort instead of barrier", },
+    { .name = "test-timing",     .has_arg = 0,
+       .usage = "For testing, synchronize then measure barrier time", },
     OPTPARSE_TABLE_END,
 };
 static struct optparse_option get_opts[] = {
