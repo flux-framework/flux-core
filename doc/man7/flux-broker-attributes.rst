@@ -419,6 +419,20 @@ config
 runtime
   This attribute may be updated at runtime with :man1:`flux-setattr`.
 
+CAVEATS
+=======
+
+The broker does not detect misspelled attributes, because it doesn't know
+the set of all valid attributes.
+
+The broker does not detect attempts to set some read-only attributes, because
+it doesn't know the rules for all attributes.
+
+There is no mechanism for Flux components outside of the broker to be
+notified when attributes are updated at runtime.
+
+Due to these limitations, TOML configuration is gradually replacing broker
+attributes as the primary way to configure and update non-broker components.
 
 RESOURCES
 =========
