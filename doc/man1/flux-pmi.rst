@@ -37,6 +37,13 @@ OPTIONS
    Trace PMI operations.  This is equivalent to setting
    :envvar:`FLUX_PMI_DEBUG` in the broker environment.
 
+.. option:: -t, --timeout=FSD
+
+   Specify a timeout for the requested PMI operation(s) in RFC 23 Flux
+   Standard Duration format, e.g. "0.1s" or "32m".
+   If the timeout expires, the command exits with an error code.
+   Default: no timeout.
+
 .. option:: --method=URI
 
    Specify the PMI method to use, where the scheme portion of the URI specifies

@@ -321,4 +321,27 @@ test_expect_success 'flux-pmi -opmi=off --method=single works' '
 	flux run -o pmi=off \
 	    flux pmi --method=single barrier
 '
+# --timeout
+test_expect_success 'flux-pmi --timeout accepts FSD' '
+	flux run -o pmi=single \
+	    flux pmi --verbose --timeout=43m barrier
+'
+test_expect_success 'flux-pmi --timeout fails with invalid FSD' '
+	test_must_fail flux run \
+	    flux pmi --timeout=zzz barrier
+'
+test_expect_success 'flux-pmi --timeout works' '
+	cat >oneslow.sh <<-EOT &&
+	#!/bin/sh
+	test "\$(flux getattr rank)" = "1" && sleep 30
+	flux pmi --method=simple --verbose --timeout=1s barrier
+	if test $? -ne 0; then
+	    sleep 1
+	    exit 1
+	fi
+	EOT
+	chmod +x oneslow.sh &&
+	test_must_fail_or_be_terminated \
+	    flux run -l -opmi=simple -o exit-timeout=1s -N2 ./oneslow.sh
+'
 test_done

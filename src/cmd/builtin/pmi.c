@@ -14,7 +14,11 @@
 #include "builtin.h"
 
 #include <stdlib.h>
+#include <unistd.h>
 #include <time.h>
+#include <sys/time.h>
+#include <signal.h>
+#include <math.h>
 #include <flux/idset.h>
 
 #include "src/common/libpmi/upmi.h"
@@ -204,14 +208,41 @@ static void trace (void *arg, const char *text)
     fprintf (stderr, "%s\n", text);
 }
 
+static void sigalrm_handler (int arg)
+{
+    const char *s = "flux-pmi: timeout expired"
+                    " before PMI operation completed\n";
+    (void)!write (STDERR_FILENO, s, strlen (s));
+    _exit (1);
+}
+
 static int cmd_pmi (optparse_t *p, int argc, char *argv[])
 {
     const char *method = optparse_get_str (p, "method", NULL);
     int verbose = optparse_get_int (p, "verbose", 0);
+    double timeout = optparse_get_duration (p, "timeout", -1);
     flux_error_t error;
     int flags = 0;
 
     log_init ("flux-pmi");
+
+    if (timeout >= 0) {
+        struct itimerval it = {
+            .it_value.tv_sec = trunc (timeout),
+            .it_value.tv_usec = (timeout - trunc (timeout)) * 1E6,
+        };
+
+        signal (SIGALRM, sigalrm_handler);
+
+        if (setitimer (ITIMER_REAL, &it, NULL) < 0)
+            log_err_exit ("setitimer");
+
+        if (verbose > 0) {
+            log_msg ("Timer is set to %ju sec %ju usec",
+                     (uintmax_t)it.it_value.tv_sec,
+                     (uintmax_t)it.it_value.tv_usec);
+        }
+    }
 
     if (verbose > 0)
         flags |= UPMI_TRACE;
@@ -258,6 +289,9 @@ static struct optparse_option general_opts[] = {
       .usage = "Force-enable libpmi2 cray workarounds for testing", },
     { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
       .usage = "Trace PMI operations", },
+    { .name = "timeout",    .key = 't', .has_arg = 1, .arginfo = "FSD",
+      .usage = "Time out after the specified time in RFC 23"
+              " Flux Standard Duration" },
     OPTPARSE_TABLE_END,
 };
 
