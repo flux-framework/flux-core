@@ -163,13 +163,13 @@ test_expect_success 'flux-pmi barrier works' '
 	flux run --label-io -n2 \
 	    flux pmi barrier
 '
-test_expect_success 'flux-pmi barrier --count works' '
+test_expect_success 'flux-pmi barrier --test-count works' '
 	flux run --label-io -n2 \
-	    flux pmi barrier --count=2
+	    flux pmi barrier --test-count=2
 '
-test_expect_success 'flux-pmi barrier --abort works' '
+test_expect_success 'flux-pmi barrier --test-abort works' '
 	test_expect_code 143 flux run --label-io -n2 \
-	    flux pmi barrier --abort=1 2>barrier_abort.err &&
+	    flux pmi barrier --test-abort=1 2>barrier_abort.err &&
 	grep -i abort barrier_abort.err
 '
 test_expect_success 'flux-pmi exchange works' '
@@ -237,7 +237,7 @@ test_expect_success 'flux-pmi --method=libpmi barrier works w/ flux libpmi.so' '
 '
 test_expect_success 'flux-pmi --method=libpmi barrier abort works w/ flux libpmi.so' '
 	test_expect_code 143 flux run -n2 bash -c "\
-	    flux pmi -v --method=libpmi:$(cat libpmi) barrier --abort 1"
+	    flux pmi -v --method=libpmi:$(cat libpmi) barrier --test-abort 1"
 '
 test_expect_success 'flux-pmi --method=libpmi exchange works w/ flux libpmi.so' '
 	flux run -n2 bash -c "\
@@ -272,7 +272,7 @@ test_expect_success 'flux-pmi --method=libpmi2 barrier works w/ flux pmi lib' '
 '
 test_expect_success 'flux-pmi --method=libpmi2 barrier works w/ flux pmi lib' '
 	test_expect_code 143 flux run -n2 bash -c "\
-	    flux pmi -v --method=libpmi2:$(cat libpmi2) barrier --abort 1"
+	    flux pmi -v --method=libpmi2:$(cat libpmi2) barrier --test-abort 1"
 '
 test_expect_success 'flux-pmi --method=libpmi2 exchange works w/ flux pmi lib' '
 	flux run -n2 bash -c "\

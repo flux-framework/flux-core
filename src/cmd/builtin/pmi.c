@@ -59,8 +59,8 @@ static int internal_cmd_get (optparse_t *p, int argc, char *argv[])
 static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
 {
     int n = optparse_option_index (p);
-    int count = optparse_get_int (p, "count", 1);
-    int abort = optparse_get_int (p, "abort", -1);
+    int count = optparse_get_int (p, "test-count", 1);
+    int test_abort = optparse_get_int (p, "test-abort", -1);
     struct timespec t;
     const char *label;
     flux_error_t error;
@@ -80,9 +80,9 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
     if (upmi_barrier (upmi, &error) < 0)
         log_msg_exit ("barrier: %s", error.text);
 
-    // abort one rank if --abort was specified
-    if (abort != -1) {
-        if (info.rank == abort) {
+    // abort one rank if --test-abort was specified
+    if (test_abort != -1) {
+        if (info.rank == test_abort) {
             flux_error_t e;
             errprintf (&e, "flux-pmi: rank %d is aborting", info.rank);
             if (upmi_abort (upmi, e.text, &error) < 0) {
@@ -227,10 +227,10 @@ static int cmd_pmi (optparse_t *p, int argc, char *argv[])
 }
 
 static struct optparse_option barrier_opts[] = {
-    { .name = "count",      .has_arg = 1, .arginfo = "N",
-       .usage = "Execute N barrier operations (default 1)", },
-    { .name = "abort",      .has_arg = 1, .arginfo = "RANK",
-       .usage = "RANK calls abort instead of barrier", },
+    { .name = "test-count",      .has_arg = 1, .arginfo = "N",
+       .usage = "For testing, execute N barrier operations (default 1)", },
+    { .name = "test-abort",      .has_arg = 1, .arginfo = "RANK",
+       .usage = "For testing, RANK calls abort instead of barrier", },
     OPTPARSE_TABLE_END,
 };
 static struct optparse_option get_opts[] = {
