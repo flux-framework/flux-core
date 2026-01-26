@@ -10,29 +10,34 @@ Flux broker attributes are broker parameters with a scope of a single broker
 rank.  They may be listed with :man1:`flux-lsattr` and queried with
 :man1:`flux-getattr`.
 
-Attributes should be considered read-only, unless annotated below with:
+Many attributes may be set on the command line when Flux is started, e.g.
+with :option:`flux start --setattr` or :option:`flux broker --setattr`.
+This should be assumed to be possible unless marked otherwise.
 
-C
-   The attribute may be set on the :man1:`flux-broker` command line with
-   ``--setattr=NAME=VALUE``.
+Attributes that are strictly informational and not meant to be set on the
+command line or at runtime are tagged below with
+:ref:`[readonly] <attr_readonly>`
 
-R
-   The attribute may be updated on a running broker with :man1:`flux-setattr`.
+Attributes that override TOML configuration values when set on the command
+line are tagged below with :ref:`[config] <attr_config>`
+
+Attributes that may be updated at runtime with :man1:`flux-setattr` are
+tagged with :ref:`[runtime] <attr_runtime>`.
 
 
 GENERAL
 =======
 
-rank
+rank :ref:`[readonly] <attr_readonly>`
    The rank of the local broker.
 
-size
+size :ref:`[readonly] <attr_readonly>`
    The number of broker ranks in the flux instance
 
-version
+version :ref:`[readonly] <attr_readonly>`
    The version of flux-core that was used to build this broker.
 
-rundir [Updates: C]
+rundir
    A temporary directory where the broker's UNIX domain sockets are located.
    By default, each broker rank creates
    a unique temporary directory and removes it on exit.  If ``rundir`` is
@@ -43,12 +48,12 @@ rundir [Updates: C]
    directory is not removed by the broker on exit.  In most cases this
    attribute should not be set by users.
 
-rundir-cleanup [Updates: C]
+rundir-cleanup
    This attribute overrides the default ``rundir`` cleanup described above.
    If set to ``1`` the directory is removed on broker exit.
    If set to ``0`` the directory is not removed.
 
-statedir [Updates: C]
+statedir
    A directory in which persistent state is stored by the Flux leader broker.
    For example, content backing store data is stored here to facilitate
    restarts.  If unset, a unique temporary directory is created.
@@ -57,7 +62,7 @@ statedir [Updates: C]
    created the directory, then the directory is removed by the broker on exit.
    The state directory is only used on the leader (rank 0) broker.
 
-statedir-cleanup [Updates: C]
+statedir-cleanup
    This attribute overrides the default ``statedir`` cleanup described above.
    If set to ``1`` the directory is removed on broker exit.
    If set to ``0`` the directory is not removed.
@@ -68,115 +73,115 @@ statedir-cleanup [Updates: C]
    like directory, and the broker creates a unique temporary directory within
    that directory.
 
-security.owner
+security.owner :ref:`[readonly] <attr_readonly>`
    The numeric userid of the owner of this Flux instance.
 
-local-uri [Updates: C]
+local-uri
    The Flux URI that the local connector binds to for accepting connections
    from local Flux clients.  The name must begin with ``local://``
    and the path must refer to a :linux:man7:`unix` domain socket in an
    existing directory.
 
-parent-uri
+parent-uri :ref:`[readonly] <attr_readonly>`
    The URI that should be passed to :man3:`flux_open` to establish a connection
    to the enclosing instance.
 
-instance-level
+instance-level :ref:`[readonly] <attr_readonly>`
    The nesting level of this Flux instance, or ``0`` if there is no enclosing
    Flux instance.
 
-jobid
+jobid :ref:`[readonly] <attr_readonly>`
    The Flux job ID of this Flux instance, if it was launched by Flux as a job.
    The value is obtained from ``PMI_KVS_Get_my_name()`` which may be something
    other than a Flux job ID if Flux was started by another means.
 
-parent-kvs-namespace
+parent-kvs-namespace :ref:`[readonly] <attr_readonly>`
    The value of the broker's :envvar:`FLUX_KVS_NAMESPACE` environment variable.
    This is the KVS namespace assigned to this Flux instance by its enclosing
    instance, if it was launched by Flux as a job.
 
-hostlist
+hostlist :ref:`[readonly] <attr_readonly>`
    An RFC 29 hostlist in broker rank order.  This value may be used to
    translate between broker ranks and hostnames.
 
-broker.mapping
+broker.mapping :ref:`[readonly] <attr_readonly>`
    A string representing the process mapping of broker ranks in the Flux
    Task Map format described in RFC 34.  For example, ``[[0,16,1,1]]`` means
    the instance has one broker per node on 16 nodes, and ``[[0,1,16,1]]``
    means it has 16 brokers on one node.
 
-broker.critical-ranks [Updates: C]
+broker.critical-ranks
    An RFC 22 idset representing broker ranks that are considered critical
    to instance operation. The broker notifies the job execution system in
    the parent instance of these ranks such that a fatal job exception
    is raised when a failing node or other error occurs affecting any rank
    in this set. Default: rank 0 plus any other overlay network routers.
 
-broker.boot-method [Updates: C]
+broker.boot-method
    A URI representing the method used to bootstrap Flux.  Valid values are
    ``config`` (boot via TOML config file), ``simple`` (use the PMI-1 simple
    wire protocol), ``libpmi[:path]`` (use a PMI-1 shared library), or
    ``single`` (standalone size=1).  Additional boot methods may be provided
    by plugins.
 
-broker.pid
+broker.pid :ref:`[readonly] <attr_readonly>`
    The process id of the local broker.
 
-broker.quorum [Updates: C]
+broker.quorum
    The number of brokers that are required to be online before the rank 0
    broker enters the RUN state and starts the initial program, if any.
    Default: instance size.
 
-broker.quorum-warn [Updates: C]
+broker.quorum-warn
    The amount of time (in RFC 23 Flux Standard Duration format) that the
    rank 0 broker waits for the ``broker.quorum`` set to come online before
    warning of slow joiners.   Default: ``60s``.
 
-broker.shutdown-warn [Updates: C]
+broker.shutdown-warn
    During shutdown, the amount of time (in RFC 23 Flux Standard Duration
    format) that a broker waits for its TBON children to disconnect before
    warning of slow peers.  Default: ``60s``.
 
-broker.shutdown-timeout [Updates: C]
+broker.shutdown-timeout
    During shutdown, the amount of time (in RFC 23 Flux Standard Duration
    format) that a broker waits for its TBON children to disconnect before
    giving up and moving on to the next state.  Default: ``none``.
 
-broker.cleanup-timeout [Updates: C]
+broker.cleanup-timeout
    The amount of time (in RFC 23 Flux Standard Duration format) that the
    rank 0 broker waits for cleanup actions to complete when the broker has
    received a terminating signal.  Default: ``none``.
 
-broker.rc1_path [Updates: C]
+broker.rc1_path
    The command line executed by the broker for rc1.
    Default: ``flux modprobe rc1``.
 
-broker.rc3_path [Updates: C]
+broker.rc3_path
    The command line executed by the broker for rc3.
    Default: ``flux modprobe rc3``.
 
-broker.rc2_none [Updates: C]
+broker.rc2_none
    If set, do not run an initial program.
 
-broker.rc2_pgrp [Updates: C]
+broker.rc2_pgrp
    By default, rc2 will be placed in the same process group as the
    broker whenever the broker is itself a process group leader. If the
    ``broker.rc2_pgrp`` attribute is set, then rc2 will always be placed
    in its own process group.
 
-broker.exit-restart [Updates: C, R]
+broker.exit-restart :ref:`[runtime] <attr_runtime>`
    A numeric exit code that the broker uses to indicate that it should not be
    restarted.  This is set by the systemd unit file.  Default: unset.
 
-broker.module-nopanic [Updates: C, R]
+broker.module-nopanic :ref:`[runtime] <attr_runtime>`
    By default, when a broker module spuriously exits with error, the broker
    shuts down its subtree and fails.  If this attribute is set, this event
    is merely logged.
 
-broker.starttime
+broker.starttime :ref:`[readonly] <attr_readonly>`
    Timestamp of broker startup from :man3:`flux_reactor_now`.
 
-broker.sd-notify
+broker.sd-notify :ref:`[readonly] <attr_readonly>`
    A boolean indicating that the broker should use :linux:man3:`sd_notify`
    to inform systemd of its status.  This is set to 1 in the Flux systemd
    unit file.
@@ -187,15 +192,15 @@ broker.sd-stop-timeout
    towards shutdown.  This is set to the same value as ``TimeoutStopSec``
    in the Flux systemd unit file.
 
-conf.shell_initrc [Updates: C, R]
+conf.shell_initrc :ref:`[runtime] <attr_runtime>`
    The path to the :man1:`flux-shell` initrc script.  Default:
    ``${sysconfdir}/flux/shell/initrc.lua``.
 
-conf.shell_pluginpath [Updates: C, R]
+conf.shell_pluginpath :ref:`[runtime] <attr_runtime>`
    The list of colon-separated directories to be searched by :man1:`flux-shell`
    for shell plugins.  Default: ``${libdir}/flux/shell/plugins``.
 
-config.path [Updates: see below]
+config.path
    A config file or directory (containing ``*.toml`` config files) for
    this Flux instance. This attribute may be set via the :envvar:`FLUX_CONF_DIR`
    environment variable, or the :man1:`flux-broker` ``--config-path``
@@ -205,7 +210,7 @@ config.path [Updates: see below]
 TREE BASED OVERLAY NETWORK
 ==========================
 
-tbon.topo [Updates: C]
+tbon.topo :ref:`[config] <attr_config>`
    A URI describing the TBON tree topology.  The following schemes are
    available:
 
@@ -231,41 +236,41 @@ tbon.topo [Updates: C]
 
    The default value is ``kary:32``.
 
-tbon.descendants
+tbon.descendants :ref:`[readonly] <attr_readonly>`
    Number of descendants "below" this node of the tree based
    overlay network, not including this node.
 
-tbon.level
+tbon.level :ref:`[readonly] <attr_readonly>`
    The level of this node in the tree based overlay network.
    Root is level 0.
 
-tbon.maxlevel
+tbon.maxlevel :ref:`[readonly] <attr_readonly>`
    The maximum level number in the tree based overlay network.
    Maxlevel is 0 for a size=1 instance.
 
-tbon.parent-endpoint
+tbon.parent-endpoint :ref:`[readonly] <attr_readonly>`
    The ZeroMQ endpoint of this broker's TBON parent.
 
-tbon.zmqdebug [Updates: C]
+tbon.zmqdebug :ref:`[config] <attr_config>`
    If set to an non-zero integer value, 0MQ socket event logging is enabled,
    if available.  This is potentially useful for debugging overlay
    connectivity problems.  Default: ``0``.
 
-tbon.zmq_io_threads [Updates: C]
+tbon.zmq_io_threads :ref:`[config] <attr_config>`
    Set the number of I/O threads libzmq will start on the leader node.
    Default: ``1``.
 
-tbon.child_rcvhwm [Updates: C]
+tbon.child_rcvhwm :ref:`[config] <attr_config>`
    Limit the number of messages stored locally on behalf of each downstream
    TBON peer.  When the limit is reached, messages are queued on the peer
    instead.  Default: ``0`` (unlimited).
 
-tbon.prefertcp [Updates: C]
+tbon.prefertcp
    If set to an integer value other than zero, and the broker is bootstrapping
    with PMI, tcp:// endpoints will be used instead of ipc://, even if all
    brokers are on a single node.  Default: ``0``.
 
-tbon.interface-hint [Updates: C, R]
+tbon.interface-hint :ref:`[config] <attr_config>` :ref:`[runtime] <attr_runtime>`
    When bootstrapping with PMI, tcp endpoints are chosen heuristically
    using one of the following methods:
 
@@ -289,12 +294,15 @@ tbon.interface-hint [Updates: C, R]
    3. the enclosing Flux instance's value (via the PMI KVS)
    4. the compiled-in default of default-route
 
-tbon.torpid_min [Updates: C]
+   This attribute is inherited by sub-instances.  Changing it at runtime
+   affects new sub-instances, but not the current instance.
+
+tbon.torpid_min :ref:`[config] <attr_config>`
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
    will allow the connection to its TBON parent to remain idle before sending a
    control message to indicate create activity.  Default: ``5s``.
 
-tbon.torpid_max [Updates: C]
+tbon.torpid_max :ref:`[config] <attr_config>`
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
    will wait for an idle TBON child connection to send messages before
    declaring it torpid (unresponsive).  A value of 0 disables torpid node
@@ -310,23 +318,20 @@ tbon.torpid_max [Updates: C]
    In older releases, they could be updated using :man1:`flux-setattr`, but
    that is no longer true.
 
-tbon.tcp_user_timeout
+tbon.tcp_user_timeout :ref:`[config] <attr_config>`
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
    waits for a TBON child connection to acknowledge transmitted TCP data
    before forcibly closing the connection.  A value of 0 means use the system
    default.  This value affects how Flux responds to an abruptly turned off
    node, which could take up to 20m if this value is not set.  This attribute
-   may not be changed during runtime.  The broker attribute overrides
-   the :man5:`flux-config-tbon` ``tcp_user_timeout`` value, if configured.
-   See also: :linux:man7:`tcp`, TCP_USER_TIMEOUT socket option.
+   may not be changed during runtime.  See also: :linux:man7:`tcp`,
+   TCP_USER_TIMEOUT socket option.
 
-tbon.connect_timeout
+tbon.connect_timeout :ref:`[config] <attr_config>`
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
    waits for a :linux:man2:`connect` attempt to its TBON parent to succeed
    before retrying.  A value of 0 means use the system default.  This
-   attribute may not be changed during runtime.  The broker attribute
-   overrides the :man5:`flux-config-tbon` ``connect_timeout`` value, if
-   configured.
+   attribute may not be changed during runtime.
 
 LOGGING
 =======
@@ -338,34 +343,34 @@ matches log messages of equal and lesser (more severe) value.  There is
 a table of severity names vs numbers in the aforementioned description.
 Negative severity values can be used to indicate "match nothing".
 
-log-ring-size [Updates: C, R]
+log-ring-size :ref:`[runtime] <attr_runtime>`
    The maximum number of log messages that can be stored in the local
    ring buffer.  Default: 1024.
 
-log-forward-level [Updates: C, R]
+log-forward-level :ref:`[runtime] <attr_runtime>`
    Forward matching messages to the leader broker.  This is only helpful when
    :option:`log-stderr-mode` is set to "leader", or :option:`log-filename` is
    defined.  Default: 3 (LOG_ERR).
 
-log-critical-level [Updates: C, R]
+log-critical-level :ref:`[runtime] <attr_runtime>`
    Copy matching log messages to local stderr.  This is intended to ensure
    that important messages are not lost in situations so dire that
    normal logging may be unreliable.  Default: 2 (LOG_CRIT).
 
-log-filename [Updates: C, R]
+log-filename :ref:`[runtime] <attr_runtime>`
    Copy log messages to a file on the leader broker.
    Messages from follower brokers are also captured if they match
    :option:`log-forward-level`.  Default: none.
 
-log-syslog-enable [Updates: C, R]
+log-syslog-enable :ref:`[runtime] <attr_runtime>`
    Copy log messages to syslog if they match :option:`log-syslog-level`.
    Default: 0.
 
-log-syslog-level [Updates: C, R]
+log-syslog-level :ref:`[runtime] <attr_runtime>`
    Sets the severity threshold for syslog, if :option:`log-syslog-enable`
    is set.  Default: 2 (LOG_CRIT).
 
-log-stderr-mode [Updates: C, R]
+log-stderr-mode :ref:`[runtime] <attr_runtime>`
    Set the stderr mode to one of:
 
    leader
@@ -379,23 +384,55 @@ log-stderr-mode [Updates: C, R]
 
    Default: leader.
 
-log-stderr-level (Updates: C, R)
+log-stderr-level :ref:`[runtime] <attr_runtime>`
    Copy matching log messages to stderr.  Default: 3 (LOG_ERR).
 
-log-level (Updates: C, R)
+log-level :ref:`[runtime] <attr_runtime>`
    Allow matching messages to enter the logging system.  Default: 7 (LOG_DEBUG).
 
 CONTENT
 =======
 
-content.backing-module (Updates: C)
+content.backing-module
    The selected backing store module, if any. This attribute is only set
    on rank 0 where the content backing store is active.  Default:
    ``content-sqlite``.
 
-content.hash (Updates: C)
+content.hash
    The selected hash algorithm.  Default ``sha1``.  Other options: ``sha256``.
 
+ATTRIBUTE UPDATE NOTES
+======================
+
+.. _attr_readonly:
+
+readonly
+  This attribute is strictly informational and is not meant to be set by users.
+
+.. _attr_config:
+
+config
+  This attribute overrides a TOML configuration key with a the same name.
+
+.. _attr_runtime:
+
+runtime
+  This attribute may be updated at runtime with :man1:`flux-setattr`.
+
+CAVEATS
+=======
+
+The broker does not detect misspelled attributes, because it doesn't know
+the set of all valid attributes.
+
+The broker does not detect attempts to set some read-only attributes, because
+it doesn't know the rules for all attributes.
+
+There is no mechanism for Flux components outside of the broker to be
+notified when attributes are updated at runtime.
+
+Due to these limitations, TOML configuration is gradually replacing broker
+attributes as the primary way to configure and update non-broker components.
 
 RESOURCES
 =========

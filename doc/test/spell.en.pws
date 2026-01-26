@@ -1040,3 +1040,4 @@ pubkey
 builtins
 ignorefail
 noop
+readonly
