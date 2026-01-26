@@ -289,6 +289,9 @@ tbon.interface-hint [Updates: C, R]
    3. the enclosing Flux instance's value (via the PMI KVS)
    4. the compiled-in default of default-route
 
+   This attribute is inherited by sub-instances.  Changing it at runtime
+   affects new sub-instances, but not the current instance.
+
 tbon.torpid_min [Updates: C]
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
    will allow the connection to its TBON parent to remain idle before sending a
@@ -310,7 +313,7 @@ tbon.torpid_max [Updates: C]
    In older releases, they could be updated using :man1:`flux-setattr`, but
    that is no longer true.
 
-tbon.tcp_user_timeout
+tbon.tcp_user_timeout [Updates: C]
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
    waits for a TBON child connection to acknowledge transmitted TCP data
    before forcibly closing the connection.  A value of 0 means use the system
@@ -320,7 +323,7 @@ tbon.tcp_user_timeout
    the :man5:`flux-config-tbon` ``tcp_user_timeout`` value, if configured.
    See also: :linux:man7:`tcp`, TCP_USER_TIMEOUT socket option.
 
-tbon.connect_timeout
+tbon.connect_timeout [Updates: C]
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
    waits for a :linux:man2:`connect` attempt to its TBON parent to succeed
    before retrying.  A value of 0 means use the system default.  This
