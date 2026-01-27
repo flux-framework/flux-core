@@ -157,4 +157,105 @@ test_expect_success 'job-exec: invalid FSD for barrier-timeout fails' '
 	barrier-timeout = "55p"
 	EOF
 '
+test_expect_success 'job-exec: reload module with max-kill-timeout' '
+	flux module reload job-exec \
+		kill-timeout=0.1s \
+		kill-signal=SIGURG \
+		term-signal=SIGURG \
+		max-kill-timeout=1s
+'
+test_expect_success 'job-exec: submit a job for max-kill-timeout test' '
+	jobid=$(flux submit --wait-event=start -n1 sleep inf)
+'
+test_expect_success 'job-exec: job is listed in flux-module stats' '
+	flux module stats job-exec | jq .jobs.$jobid
+'
+test_expect_success 'job-exec: get sleep PID for later cleanup' '
+	sleep_pid=$(flux job hostpids $jobid | sed s/.*://)
+'
+test_expect_success 'job-exec: cancel test job to start kill timer' '
+	flux dmesg -C &&
+	flux cancel $jobid
+'
+test_expect_success 'job-exec: wait for job terminated by max-kill-timeout' '
+	flux job wait-event -vt 15 $jobid clean &&
+	flux dmesg -H | grep "exceeded max-kill-timeout" &&
+	flux resource drain -no {reason} | grep "unkillable user processes"
+'
+test_expect_success 'job-exec: kill orphan sleep PID' '
+	kill $sleep_pid
+'
+test_expect_success 'job-exec: undrain all ranks' '
+	flux resource undrain $(flux resource drain -no {ranks})
+'
+test_expect_success 'job-exec: max-kill-timeout overrides large max-kill-count' '
+	flux module reload job-exec \
+		kill-timeout=0.1s \
+		kill-signal=SIGURG \
+		term-signal=SIGURG \
+		max-kill-timeout=0.5s \
+		max-kill-count=600 &&
+	jobid=$(flux submit --wait-event=start -n1 sleep inf) &&
+	sleep_pid=$(flux job hostpids $jobid | sed s/.*://) &&
+	flux dmesg -C &&
+	flux cancel $jobid &&
+	flux job wait-event -vt 30 $jobid clean &&
+	flux dmesg -H | grep "exceeded max-kill-timeout" &&
+	kill $sleep_pid &&
+	flux resource undrain $(flux resource drain -no {ranks})
+'
+test_expect_success 'job-exec: max-kill-timeout overrides small max-kill-count' '
+	flux module reload job-exec \
+		kill-timeout=0.1s \
+		kill-signal=SIGURG \
+		term-signal=SIGURG \
+		max-kill-timeout=0.5s \
+		max-kill-count=1 &&
+	jobid=$(flux submit --wait-event=start -n1 sleep inf) &&
+	sleep_pid=$(flux job hostpids $jobid | sed s/.*://) &&
+	flux dmesg -C &&
+	flux cancel $jobid &&
+	flux job wait-event -vt 30 $jobid clean &&
+	flux dmesg -H | grep "exceeded max-kill-timeout" &&
+	kill $sleep_pid &&
+	flux resource undrain $(flux resource drain -no {ranks})
+'
+test_expect_success 'job-exec: reload module without cmdline overrides' '
+	flux module reload job-exec
+'
+test_expect_success 'job-exec: setting an invalid max-kill-timeout fails' '
+	test_expect_code 1 flux config load <<-EOF
+	[exec]
+	max-kill-timeout = 100
+	EOF
+'
+test_expect_success 'job-exec: invalid FSD for max-kill-timeout fails' '
+	test_expect_code 1 flux config load <<-EOF
+	[exec]
+	max-kill-timeout = "55p"
+	EOF
+'
+test_expect_success 'job-exec: max-kill-timeout via config works' '
+	flux config load <<-EOF &&
+	[exec]
+	kill-timeout = "0.1s"
+	kill-signal = "SIGURG"
+	term-signal = "SIGURG"
+	max-kill-timeout = "1s"
+	EOF
+	flux module stats job-exec &&
+	flux module stats job-exec | jq -e ".[\"max-kill-timeout\"] == 1." &&
+	jobid=$(flux submit --wait-event=start -n1 sleep inf) &&
+	sleep_pid=$(flux job hostpids $jobid | sed s/.*://) &&
+	flux dmesg -C &&
+	flux cancel $jobid &&
+	flux job wait-event -vt 15 $jobid clean &&
+	flux dmesg -H | grep "exceeded max-kill-timeout" &&
+	kill $sleep_pid &&
+	flux resource undrain $(flux resource drain -no {ranks})
+'
+test_expect_success 'job-exec: reload module with default settings' '
+	echo {} | flux config load &&
+	flux module reload job-exec
+'
 test_done
