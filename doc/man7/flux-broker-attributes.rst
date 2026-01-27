@@ -95,6 +95,11 @@ jobid :ref:`[readonly] <attr_readonly>`
    The value is obtained from ``PMI_KVS_Get_my_name()`` which may be something
    other than a Flux job ID if Flux was started by another means.
 
+jobid-path :ref:`[readonly] <attr_readonly>`
+   A ``/``-separated list of job IDs representing the Flux instance hierarchy.
+   The top level Flux instance, which has no Flux job ID, is represented
+   as ``/``, similar to UNIX directories.
+
 parent-kvs-namespace :ref:`[readonly] <attr_readonly>`
    The value of the broker's :envvar:`FLUX_KVS_NAMESPACE` environment variable.
    This is the KVS namespace assigned to this Flux instance by its enclosing
@@ -186,7 +191,7 @@ broker.module-nopanic :ref:`[runtime] <attr_runtime>`
 broker.starttime :ref:`[readonly] <attr_readonly>`
    Timestamp of broker startup from :man3:`flux_reactor_now`.
 
-broker.sd-notify :ref:`[readonly] <attr_readonly>`
+broker.sd-notify
    A boolean indicating that the broker should use :linux:man3:`sd_notify`
    to inform systemd of its status.  This is set to 1 in the Flux systemd
    unit file.
@@ -196,6 +201,20 @@ broker.sd-stop-timeout
    broker to extend the systemd stop timeout while it is making progress
    towards shutdown.  This is set to the same value as ``TimeoutStopSec``
    in the Flux systemd unit file.
+
+broker.exit-norestart
+   Set the exit code to be used to indicate to systemd that Flux should
+   not be restarted.  The systemd unit file sets
+   :option:`RestartPreventExitStatus` and :option:`SuccessExitStatus`
+   to this value.
+
+broker.recovery-mode
+   This attribute is set by :option:`flux-start --recovery` as a flag to
+   the system that recovery is in progress.  For example, in recovery mode,
+   rc1 errors are non-fatal and downstream TBON connections are prevented.
+
+broker.uuid :ref:`[readonly] <attr_readonly>`
+   The local broker UUID, used for request/response message routing.
 
 conf.shell_initrc :ref:`[runtime] <attr_runtime>`
    The path to the :man1:`flux-shell` initrc script.  Default:
@@ -210,7 +229,6 @@ config.path
    this Flux instance. This attribute may be set via the :envvar:`FLUX_CONF_DIR`
    environment variable, or the :man1:`flux-broker` ``--config-path``
    command line argument.  Default: none.  See also :man5:`flux-config`.
-
 
 TREE BASED OVERLAY NETWORK
 ==========================
@@ -252,6 +270,9 @@ tbon.level :ref:`[readonly] <attr_readonly>`
 tbon.maxlevel :ref:`[readonly] <attr_readonly>`
    The maximum level number in the tree based overlay network.
    Maxlevel is 0 for a size=1 instance.
+
+tbon.endpoint :ref:`[readonly] <attr_readonly>`
+   The ZeroMQ endpoint of this broker.
 
 tbon.parent-endpoint :ref:`[readonly] <attr_readonly>`
    The ZeroMQ endpoint of this broker's TBON parent.
@@ -405,6 +426,27 @@ content.backing-module
 
 content.hash
    The selected hash algorithm.  Default ``sha1``.  Other options: ``sha256``.
+
+content.dump
+   If set to a file path, the Flux rc3 script performs a KVS dump
+   to that path at Flux shutdown.  If set to ``auto``, a dump file name
+   containing the date is automatically generated.  This file is normally
+   placed in Flux's current working directory; however, if ``statedir`` is
+   defined, the dump goes to ``${statedir}/dump`` and a ``RESTORE`` symbolic
+   link is set to point to it.
+
+content.restore
+   If set to a file path, the Flux rc1 script loads a KVS dump from that
+   path at Flux startup.  If set to ``auto``, the dump file pointed
+   to by ``${statedir}/dump/RESTORE`` is loaded.
+
+CRON
+====
+
+cron.directory
+   If set, the Flux rc1 script loads all crontabs from this directory
+   at Flux startup.
+
 
 ATTRIBUTE UPDATE NOTES
 ======================
