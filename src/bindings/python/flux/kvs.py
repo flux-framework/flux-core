@@ -191,6 +191,22 @@ def put(flux_handle, key, value, _kvstxn=None):
         raise TypeError
 
 
+def put_raw(flux_handle, key, value, _kvstxn=None):
+    """Put raw data into the KVS
+
+    Internally will stage changes until commit() is called.
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        key: key to write to
+        value: value of the key, must be of type "bytes"
+    """
+    if not isinstance(value, bytes):
+        raise TypeError
+    _kvstxn = _get_kvstxn(flux_handle, _kvstxn)
+    RAW.flux_kvs_txn_put_raw(_kvstxn, 0, key, value, len(value))
+
+
 def put_mkdir(flux_handle, key, _kvstxn=None):
     """Create directory in the KVS
 
@@ -435,6 +451,10 @@ class KVSTxn:
     def put(self, key, value):
         """Put key=value in the KVS"""
         put(self.fhdl, self._path + key, value, _kvstxn=self.txn)
+
+    def raw(self, key, value):
+        """Put raw key=value in the KVS, value must be of type "bytes" """
+        put_raw(self.fhdl, self._path + key, value, _kvstxn=self.txn)
 
     def mkdir(self, key):
         """Create a directory in the KVS"""
