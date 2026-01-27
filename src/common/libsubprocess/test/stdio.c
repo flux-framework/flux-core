@@ -1438,13 +1438,23 @@ void credit_output_cb (flux_subprocess_t *p, const char *stream)
     }
     else {
         char cmpbuf[1024];
+        char debugbuf[2048];
+        int i;
 
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
+        /* special temporary debug instrumentation for issue 7311 */
+        memset (debugbuf, '\0', 2048);
+        for (i = 0; i < outputbuf_len; i++) {
+            char tmpbuf[64];
+            sprintf (tmpbuf, "%02X", outputbuf[i]);
+            strcat (debugbuf, tmpbuf);
+        }
+
         sprintf (cmpbuf, "abcdefghijklmnopqrstuvwxyz0123456789\n");
         ok (streq (outputbuf, cmpbuf),
-            "flux_subprocess_read returned correct data: %s", outputbuf);
+            "flux_subprocess_read returned correct data: %s", debugbuf);
         /* 26 (ABCs) + 10 (1-10) + 1 for `\n' */
         ok (outputbuf_len == (26 + 10 + 1),
             "flux_subprocess_read returned correct amount of data: %d",
