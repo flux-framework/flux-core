@@ -161,15 +161,15 @@ test_expect_success 'PMI1 can calculate clique ranks with 128 tasks per node' '
 
 test_expect_success 'flux-pmi barrier works' '
 	flux run --label-io -n2 \
-	    flux pmi barrier
+	    flux pmi barrier --test-timing
 '
-test_expect_success 'flux-pmi barrier --count works' '
+test_expect_success 'flux-pmi barrier --test-count works' '
 	flux run --label-io -n2 \
-	    flux pmi barrier --count=2
+	    flux pmi barrier --test-timing --test-count=2
 '
-test_expect_success 'flux-pmi barrier --abort works' '
+test_expect_success 'flux-pmi barrier --test-abort works' '
 	test_expect_code 143 flux run --label-io -n2 \
-	    flux pmi barrier --abort=1 2>barrier_abort.err &&
+	    flux pmi barrier --test-timing --test-abort=1 2>barrier_abort.err &&
 	grep -i abort barrier_abort.err
 '
 test_expect_success 'flux-pmi exchange works' '
@@ -197,7 +197,7 @@ test_expect_success 'flux-pmi get works with multiple keys' '
 	    flux pmi get flux.instance-level PMI_process_mapping
 '
 test_expect_success 'flux-pmi works outside of job' '
-	flux pmi -v --libpmi-noflux barrier
+	flux pmi -v --libpmi-noflux barrier --test-timing
 '
 test_expect_success 'flux-pmi fails with bad subcommand' '
 	test_must_fail flux run flux pmi notacmd
@@ -217,7 +217,8 @@ test_expect_success 'flux-pmi --method=simple fails outside of job' '
 	test_must_fail flux pmi --method=simple barrier
 '
 test_expect_success 'flux-pmi -v --method=simple works within job' '
-	flux run --label-io -n2 flux pmi -v --method=simple barrier
+	flux run --label-io -n2 \
+	    flux pmi -v --method=simple barrier --test-timing
 '
 test_expect_success 'flux-pmi -opmi=off --method=simple fails' '
 	test_must_fail flux run -o pmi=off \
@@ -233,11 +234,11 @@ test_expect_success 'flux-pmi --method=libpmi:/bad/path fails' '
 '
 test_expect_success 'flux-pmi --method=libpmi barrier works w/ flux libpmi.so' '
 	flux run -n2 bash -c "\
-	    flux pmi -v --method=libpmi:$(cat libpmi) barrier"
+	    flux pmi -v --method=libpmi:$(cat libpmi) barrier --test-timing"
 '
 test_expect_success 'flux-pmi --method=libpmi barrier abort works w/ flux libpmi.so' '
 	test_expect_code 143 flux run -n2 bash -c "\
-	    flux pmi -v --method=libpmi:$(cat libpmi) barrier --abort 1"
+	    flux pmi -v --method=libpmi:$(cat libpmi) barrier --test-abort 1"
 '
 test_expect_success 'flux-pmi --method=libpmi exchange works w/ flux libpmi.so' '
 	flux run -n2 bash -c "\
@@ -272,7 +273,7 @@ test_expect_success 'flux-pmi --method=libpmi2 barrier works w/ flux pmi lib' '
 '
 test_expect_success 'flux-pmi --method=libpmi2 barrier works w/ flux pmi lib' '
 	test_expect_code 143 flux run -n2 bash -c "\
-	    flux pmi -v --method=libpmi2:$(cat libpmi2) barrier --abort 1"
+	    flux pmi -v --method=libpmi2:$(cat libpmi2) barrier --test-abort 1"
 '
 test_expect_success 'flux-pmi --method=libpmi2 exchange works w/ flux pmi lib' '
 	flux run -n2 bash -c "\
@@ -319,5 +320,28 @@ test_expect_success 'flux-pmi --method=single get notakey fails' '
 test_expect_success 'flux-pmi -opmi=off --method=single works' '
 	flux run -o pmi=off \
 	    flux pmi --method=single barrier
+'
+# --timeout
+test_expect_success 'flux-pmi --timeout accepts FSD' '
+	flux run -o pmi=single \
+	    flux pmi --verbose --timeout=43m barrier
+'
+test_expect_success 'flux-pmi --timeout fails with invalid FSD' '
+	test_must_fail flux run \
+	    flux pmi --timeout=zzz barrier
+'
+test_expect_success 'flux-pmi --timeout works' '
+	cat >oneslow.sh <<-EOT &&
+	#!/bin/sh
+	test "\$(flux getattr rank)" = "1" && sleep 30
+	flux pmi --method=simple --verbose --timeout=1s barrier
+	if test $? -ne 0; then
+	    sleep 1
+	    exit 1
+	fi
+	EOT
+	chmod +x oneslow.sh &&
+	test_must_fail_or_be_terminated \
+	    flux run -l -opmi=simple -o exit-timeout=1s -N2 ./oneslow.sh
 '
 test_done

@@ -37,6 +37,13 @@ OPTIONS
    Trace PMI operations.  This is equivalent to setting
    :envvar:`FLUX_PMI_DEBUG` in the broker environment.
 
+.. option:: -t, --timeout=FSD
+
+   Specify a timeout for the requested PMI operation(s) in RFC 23 Flux
+   Standard Duration format, e.g. "0.1s" or "32m".
+   If the timeout expires, the command exits with an error code.
+   Default: no timeout.
+
 .. option:: --method=URI
 
    Specify the PMI method to use, where the scheme portion of the URI specifies
@@ -78,20 +85,23 @@ barrier
 
 .. program:: flux pmi barrier
 
-:program:`flux pmi barrier` does the following:
+:program:`flux pmi barrier` executes a PMI barrier and prints a message
+on rank 0 upon completion.
 
-  #. Execute PMI barrier
-  #. Execute PMI barrier
-  #. Print elapsed time of (2)
+.. option:: --test-timing
 
-.. option:: --count=N
+  First execute a preliminary barrier to ensure all ranks enter the test
+  barrier at the same time, then execute a test barrier and print the elapsed
+  time for the test barrier on rank 0 stdout.
 
-  Execute N barrier (step 2) operations (default 1).
+.. option:: --test-count=N
 
-.. option:: --abort=RANK
+  Execute N barrier operations (default 1).
+
+.. option:: --test-abort=RANK
 
   Instead of entering the barrier, arrange for RANK to call the PMI
-  abort function.
+  abort function.  This option is intended for testing only.
 
 exchange
 --------

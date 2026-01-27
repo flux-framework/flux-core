@@ -14,7 +14,11 @@
 #include "builtin.h"
 
 #include <stdlib.h>
+#include <unistd.h>
 #include <time.h>
+#include <sys/time.h>
+#include <signal.h>
+#include <math.h>
 #include <flux/idset.h>
 
 #include "src/common/libpmi/upmi.h"
@@ -59,8 +63,8 @@ static int internal_cmd_get (optparse_t *p, int argc, char *argv[])
 static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
 {
     int n = optparse_option_index (p);
-    int count = optparse_get_int (p, "count", 1);
-    int abort = optparse_get_int (p, "abort", -1);
+    int count = optparse_get_int (p, "test-count", 1);
+    int test_abort = optparse_get_int (p, "test-abort", -1);
     struct timespec t;
     const char *label;
     flux_error_t error;
@@ -77,12 +81,14 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
         log_msg_exit ("%s", error.text);
 
     // don't let task launch stragglers skew timing
-    if (upmi_barrier (upmi, &error) < 0)
-        log_msg_exit ("barrier: %s", error.text);
+    if (optparse_hasopt (p, "test-timing")) {
+        if (upmi_barrier (upmi, &error) < 0)
+            log_msg_exit ("barrier: %s", error.text);
+    }
 
-    // abort one rank if --abort was specified
-    if (abort != -1) {
-        if (info.rank == abort) {
+    // abort one rank if --test-abort was specified
+    if (test_abort != -1) {
+        if (info.rank == test_abort) {
             flux_error_t e;
             errprintf (&e, "flux-pmi: rank %d is aborting", info.rank);
             if (upmi_abort (upmi, e.text, &error) < 0) {
@@ -93,13 +99,15 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
 
     while (count-- > 0) {
         monotime (&t);
+
         if (upmi_barrier (upmi, &error) < 0)
             log_msg_exit ("barrier: %s", error.text);
+
         if (info.rank == 0) {
-            printf ("%s: completed pmi barrier on %d tasks in %0.3fs.\n",
-                    label,
-                    info.size,
-                    monotime_since (t) / 1000);
+            printf ("%s: completed pmi barrier on %d tasks", label, info.size);
+            if (optparse_hasopt (p, "test-timing"))
+                printf (" in %0.3fs.", monotime_since (t) / 1000);
+            printf ("\n");
             fflush (stdout);
         }
     }
@@ -200,14 +208,41 @@ static void trace (void *arg, const char *text)
     fprintf (stderr, "%s\n", text);
 }
 
+static void sigalrm_handler (int arg)
+{
+    const char *s = "flux-pmi: timeout expired"
+                    " before PMI operation completed\n";
+    (void)!write (STDERR_FILENO, s, strlen (s));
+    _exit (1);
+}
+
 static int cmd_pmi (optparse_t *p, int argc, char *argv[])
 {
     const char *method = optparse_get_str (p, "method", NULL);
     int verbose = optparse_get_int (p, "verbose", 0);
+    double timeout = optparse_get_duration (p, "timeout", -1);
     flux_error_t error;
     int flags = 0;
 
     log_init ("flux-pmi");
+
+    if (timeout >= 0) {
+        struct itimerval it = {
+            .it_value.tv_sec = trunc (timeout),
+            .it_value.tv_usec = (timeout - trunc (timeout)) * 1E6,
+        };
+
+        signal (SIGALRM, sigalrm_handler);
+
+        if (setitimer (ITIMER_REAL, &it, NULL) < 0)
+            log_err_exit ("setitimer");
+
+        if (verbose > 0) {
+            log_msg ("Timer is set to %ju sec %ju usec",
+                     (uintmax_t)it.it_value.tv_sec,
+                     (uintmax_t)it.it_value.tv_usec);
+        }
+    }
 
     if (verbose > 0)
         flags |= UPMI_TRACE;
@@ -227,10 +262,12 @@ static int cmd_pmi (optparse_t *p, int argc, char *argv[])
 }
 
 static struct optparse_option barrier_opts[] = {
-    { .name = "count",      .has_arg = 1, .arginfo = "N",
-       .usage = "Execute N barrier operations (default 1)", },
-    { .name = "abort",      .has_arg = 1, .arginfo = "RANK",
-       .usage = "RANK calls abort instead of barrier", },
+    { .name = "test-count",      .has_arg = 1, .arginfo = "N",
+       .usage = "For testing, execute N barrier operations (default 1)", },
+    { .name = "test-abort",      .has_arg = 1, .arginfo = "RANK",
+       .usage = "For testing, RANK calls abort instead of barrier", },
+    { .name = "test-timing",     .has_arg = 0,
+       .usage = "For testing, synchronize then measure barrier time", },
     OPTPARSE_TABLE_END,
 };
 static struct optparse_option get_opts[] = {
@@ -252,6 +289,9 @@ static struct optparse_option general_opts[] = {
       .usage = "Force-enable libpmi2 cray workarounds for testing", },
     { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
       .usage = "Trace PMI operations", },
+    { .name = "timeout",    .key = 't', .has_arg = 1, .arginfo = "FSD",
+      .usage = "Time out after the specified time in RFC 23"
+              " Flux Standard Duration" },
     OPTPARSE_TABLE_END,
 };
 
