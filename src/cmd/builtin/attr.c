@@ -23,6 +23,7 @@ static int cmd_setattr (optparse_t *p, int ac, char *av[])
     flux_t *h = builtin_get_flux_handle (p);
     const char *name;
     const char *val;
+    flux_error_t error;
 
     log_init ("flux-setattr");
 
@@ -32,8 +33,9 @@ static int cmd_setattr (optparse_t *p, int ac, char *av[])
     }
     name = av[n];
     val = av[n + 1];
-    if (flux_attr_set (h, name, val) < 0)
-        log_err_exit ("flux_attr_set");
+
+    if (flux_attr_set_ex (h, name, val, false, &error) < 0)
+        log_msg_exit ("%s: %s", name, error.text);
 
     flux_close (h);
     return (0);
