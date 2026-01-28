@@ -468,11 +468,11 @@ test_expect_success NO_ASAN 'test_under_flux fails if loaded modules are not unl
 '
 
 test_expect_success 'flux-start -o,--setattr ATTR=VAL can set broker attributes' '
-	ATTR_VAL=`flux start ${ARGS} -o,--setattr=foo-test=42 flux getattr foo-test` &&
+	ATTR_VAL=`flux start ${ARGS} -o,--setattr=test.foo=42 flux getattr test.foo` &&
 	test $ATTR_VAL -eq 42
 '
 test_expect_success 'flux-start --setattr ATTR=VAL can set broker attributes' '
-	ATTR_VAL=`flux start ${ARGS} --setattr=foo-test=42 flux getattr foo-test` &&
+	ATTR_VAL=`flux start ${ARGS} --setattr=test.foo=42 flux getattr test.foo` &&
 	test $ATTR_VAL -eq 42
 '
 test_expect_success 'hostlist attr is set on size 1 instance' '

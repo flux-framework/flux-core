@@ -121,13 +121,13 @@ test_expect_success 'flux getattr allowed for non-owner' '
 '
 
 test_expect_success 'flux setattr allowed for owner' '
-	flux setattr log-stderr-level 7 &&
-	test $(flux getattr log-stderr-level) -eq 7
+	flux setattr test.foo 7 &&
+	test $(flux getattr test.foo) -eq 7
 '
 
 test_expect_success 'flux setattr NOT allowed for non-owner' '
-	! FLUX_HANDLE_ROLEMASK=0x2 flux setattr log-stderr-level 6 &&
-	test $(flux getattr log-stderr-level) -eq 7
+	! FLUX_HANDLE_ROLEMASK=0x2 flux setattr test.foo 6 &&
+	test $(flux getattr test.foo) -eq 7
 '
 
 test_expect_success 'flux logger not allowed for non-owner' '

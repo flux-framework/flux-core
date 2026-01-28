@@ -3,9 +3,9 @@
     "system": {
       "batch": {
         "broker-opts": [
-          "-Stestattr=foo"
+          "-Stest.attr=foo"
         ],
-        "script": "#!/bin/sh\ntest $(flux getattr testattr) = \"foo\"\n"
+        "script": "#!/bin/sh\ntest $(flux getattr test.attr) = \"foo\"\n"
       },
       "cwd": "/tmp",
       "duration": 0,

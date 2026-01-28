@@ -396,11 +396,11 @@ test_expect_success 'modprobe needs_attrs works with attr set to zero' '
 	def first(context):
 	    print("first")
 
-	@task("last", needs_attrs=["zero"], after=["*"])
+	@task("last", needs_attrs=["test.zero"], after=["*"])
 	def last(context):
 	    print("last")
 	EOF
-	flux setattr zero 0 &&
+	flux setattr test.zero 0 &&
 	flux modprobe run test${seq}.py >output${seq} &&
 	test_debug "cat output${seq}" &&
 	cat <<-EOF >test${seq}.expected &&
@@ -418,11 +418,11 @@ test_expect_success 'modprobe needs_attrs works' '
 	def first(context):
 	    print("first")
 
-	@task("last", needs_attrs=["needed"])
+	@task("last", needs_attrs=["test.needed"])
 	def last(context):
 	    print("last")
 	EOF
-	flux setattr needed 1 &&
+	flux setattr test.needed 1 &&
 	flux modprobe run test${seq}.py >output${seq} &&
 	test_debug "cat output${seq}" &&
 	cat <<-EOF >test${seq}.expected &&
@@ -439,7 +439,7 @@ test_expect_success 'modprobe `!` with another attr also prevents task' '
 	def first(context):
 	    print("first")
 
-	@task("last", needs_attrs=["!size", "needed"])
+	@task("last", needs_attrs=["!size", "test.needed"])
 	def last(context):
 	    print("last")
 	EOF

@@ -70,7 +70,7 @@ class TestHandle(unittest.TestCase):
     def test_rpc_null_payload(self):
         """Sending a request that receives a NULL response"""
         resp = self.f.rpc(
-            "attr.set", {"name": "attr-that-doesnt-exist", "value": "foo"}
+            "attr.set", {"name": "test.attr-that-doesnt-exist", "value": "foo"}
         ).get()
         self.assertIsNone(resp)
 
@@ -89,30 +89,30 @@ class TestHandle(unittest.TestCase):
         self.assertEqual(attr_rank, rank)
 
     def test_attr_set(self):
-        self.f.attr_set("foo", "bar")
-        self.assertEqual(self.f.attr_get("foo"), "bar")
+        self.f.attr_set("test.foo", "bar")
+        self.assertEqual(self.f.attr_get("test.foo"), "bar")
 
-        self.f.attr_set("baz", str(1))
-        self.assertEqual(self.f.attr_get("baz"), "1")
+        self.f.attr_set("test.baz", str(1))
+        self.assertEqual(self.f.attr_get("test.baz"), "1")
 
-        self.f.attr_set("utf8-test", "ƒ Φ Ψ Ω Ö")
-        self.assertEqual(self.f.attr_get("utf8-test"), "ƒ Φ Ψ Ω Ö")
+        self.f.attr_set("test.utf8-test", "ƒ Φ Ψ Ω Ö")
+        self.assertEqual(self.f.attr_get("test.utf8-test"), "ƒ Φ Ψ Ω Ö")
 
         with self.assertRaises(OSError):
             self.f.attr_set("local-uri", "foo")
         with self.assertRaises(ValueError):
-            self.f.attr_set("foo", 1)
+            self.f.attr_set("test.foo", 1)
         with self.assertRaises(ValueError):
             self.f.attr_set(42, "foo")
 
     def test_attr_remove(self):
-        self.f.attr_set("testrm", "rm")
-        self.assertEqual(self.f.attr_get("testrm"), "rm")
+        self.f.attr_set("test.rm", "rm")
+        self.assertEqual(self.f.attr_get("test.rm"), "rm")
 
-        self.f.attr_remove("testrm")
+        self.f.attr_remove("test.rm")
 
         with self.assertRaises(OSError):
-            self.f.attr_get("testrm")
+            self.f.attr_get("test.rm")
 
         with self.assertRaises(OSError):
             self.f.attr_remove("local-uri")
