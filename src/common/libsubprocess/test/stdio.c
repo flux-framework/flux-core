@@ -1442,11 +1442,11 @@ void credit_output_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        sprintf (cmpbuf, "abcdefghijklmnopqrstuvwxyz0123456789\n");
+        sprintf (cmpbuf, "abcdefghijklmnopqrstuvwxyz0123456789");
         ok (streq (outputbuf, cmpbuf),
             "flux_subprocess_read returned correct data: %s", outputbuf);
-        /* 26 (ABCs) + 10 (1-10) + 1 for `\n' */
-        ok (outputbuf_len == (26 + 10 + 1),
+        /* 26 (ABCs) + 10 (1-10) */
+        ok (outputbuf_len == (26 + 10),
             "flux_subprocess_read returned correct amount of data: %d",
             outputbuf_len);
     }
@@ -1493,13 +1493,13 @@ out:
 
 void test_on_credit (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O",  NULL };
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O",  "-n", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     int credits = 0;
     int ret;
 
-    ok ((cmd = flux_cmd_create (2, av, environ)) != NULL, "flux_cmd_create");
+    ok ((cmd = flux_cmd_create (3, av, environ)) != NULL, "flux_cmd_create");
     ok (flux_cmd_setopt (cmd, "stdin_BUFSIZE", "8") == 0,
         "set stdin buffer size to 8 bytes");
 
@@ -1543,13 +1543,13 @@ void test_on_credit (flux_reactor_t *r)
  */
 void test_on_credit_borrow_credits (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O",  NULL };
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O",  "-n", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     int credits = 0;
     int ret;
 
-    ok ((cmd = flux_cmd_create (2, av, environ)) != NULL, "flux_cmd_create");
+    ok ((cmd = flux_cmd_create (3, av, environ)) != NULL, "flux_cmd_create");
     ok (flux_cmd_setopt (cmd, "stdin_BUFSIZE", "8") == 0,
         "set stdin buffer size to 8 bytes");
 
