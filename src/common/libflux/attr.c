@@ -19,6 +19,7 @@
 #include "ccan/str/str.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
 
 enum {
     FLUX_ATTRFLAG_IMMUTABLE = 1,
@@ -172,33 +173,40 @@ const char *flux_attr_get (flux_t *h, const char *name)
     return attr_get (h, name);
 }
 
-int flux_attr_set (flux_t *h, const char *name, const char *val)
+int flux_attr_set_ex (flux_t *h,
+                      const char *name,
+                      const char *val,
+                      bool force,
+                      flux_error_t *errp)
 {
-    flux_future_t *f;
+    json_t *obj = NULL;
+    flux_future_t *f = NULL;
 
     if (!h || !name || !val) {
         errno = EINVAL;
-        return -1;
+        goto error;
     }
-    f = flux_rpc_pack (h,
-                       "attr.set",
-                       FLUX_NODEID_ANY,
-                       0,
-                       "{s:s s:s}",
-                       "name", name,
-                       "value", val);
-    if (!f)
-        return -1;
-    if (flux_future_get (f, NULL) < 0) {
-        flux_future_destroy (f);
-        return -1;
+    if (!(obj = json_pack ("{s:s s:s}", "name", name, "value", val))
+        || (force && json_object_set (obj, "force", json_true ()) < 0)) {
+        errno = ENOMEM;
+        goto error;
     }
-    /* N.B. No cache update is necessary.
-     * If immutable, the RPC will fail.
-     * If not immutable, we have to look it up on next access anyway.
-     */
+    if (!(f = flux_rpc_pack (h, "attr.set", FLUX_NODEID_ANY, 0, "O", obj))
+        || flux_rpc_get (f, NULL) < 0)
+        goto error;
     flux_future_destroy (f);
+    json_decref (obj);
     return 0;
+error:
+    errprintf (errp, "%s", future_strerror (f, errno));
+    flux_future_destroy (f);
+    ERRNO_SAFE_WRAP (json_decref, obj);
+    return -1;
+}
+
+int flux_attr_set (flux_t *h, const char *name, const char *val)
+{
+    return flux_attr_set_ex (h, name, val, false, NULL);
 }
 
 int flux_attr_set_cacheonly (flux_t *h, const char *name, const char *val)
