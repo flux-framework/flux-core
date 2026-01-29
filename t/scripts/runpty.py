@@ -159,7 +159,7 @@ def parse_args():
         default="",
     )
     parser.add_argument(
-        "--line-buffer", help="Attempt to line buffer theoutput", action="store_true"
+        "--line-buffer", help="Attempt to line buffer the output", action="store_true"
     )
     parser.add_argument("COMMAND")
     parser.add_argument("ARGS", nargs=argparse.REMAINDER)
