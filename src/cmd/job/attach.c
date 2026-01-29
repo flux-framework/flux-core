@@ -118,6 +118,7 @@ struct attach_ctx {
     bool readonly;
     bool unbuffered;
     bool output_started;
+    bool finished;
     char *stdin_ranks;
     const char *jobid;
     const char *wait_event;
@@ -997,7 +998,8 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
         if (pty_service) {
             if (ctx->readonly)
                 log_msg_exit ("Cannot connect to pty in readonly mode");
-            attach_pty (ctx, pty_service);
+            if (!ctx->finished)
+                attach_pty (ctx, pty_service);
         }
         else
             attach_setup_stdin (ctx);
@@ -1338,12 +1340,25 @@ void attach_event_continuation (flux_future_t *f, void *arg)
             ctx->exit_code = flux_job_waitstatus_to_exitcode (status, &error);
             if (ctx->exit_code != 0)
                 log_msg ("%s", error.text);
+            ctx->finished = true;
 
             /* All shells have exited, so no more MPIR data is expected.
              * Clean up MPIR state now to ensure flux-job attach exits
              * properly when the job completes.
              */
             mpir_shutdown (ctx->h);
+
+            /* If interactive pty attach is in progress but not yet
+             * attached, disconnect it since attachment cannot succeed after
+             * shells exit. This prevents hangs when attaching during the
+             * small window after the shell closes the pty but before it
+             * fully exits.
+             */
+            if (ctx->pty_client
+                && !flux_pty_client_attached (ctx->pty_client)) {
+                flux_pty_client_destroy (ctx->pty_client);
+                ctx->pty_client = NULL;
+            }
         }
     }
 
