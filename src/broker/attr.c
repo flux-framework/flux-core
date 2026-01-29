@@ -19,6 +19,11 @@
 
 #include "attr.h"
 
+struct registered_attr {
+    const char *name;
+    int flags;
+};
+
 struct broker_attr {
     zhash_t *hash;
     flux_msg_handler_t **handlers;
@@ -31,6 +36,96 @@ struct entry {
     attr_set_f set;
     attr_get_f get;
     void *arg;
+};
+
+struct registered_attr attrtab[] = {
+
+    // general
+    { "rank", ATTR_READONLY },
+    { "size", ATTR_READONLY },
+    { "version", ATTR_READONLY },
+    { "rundir", 0 },
+    { "rundir-cleanup", 0 },
+    { "statedir", 0 },
+    { "statedir-cleanup", 0 },
+    { "security.owner", ATTR_READONLY },
+    { "local-uri", 0 },
+    { "parent-uri", ATTR_READONLY },
+    { "instance-level", ATTR_READONLY },
+    { "jobid", ATTR_READONLY },
+    { "jobid-path", ATTR_READONLY },
+    { "parent-kvs-namespace", ATTR_READONLY },
+    { "hostlist", 0 },
+    { "hostname", 0 },
+    { "broker.mapping", ATTR_READONLY },
+    { "broker.critical-ranks", 0 },
+    { "broker.boot-method", 0 },
+    { "broker.pid", ATTR_READONLY },
+    { "broker.quorum", 0 },
+    { "broker.quorum-warn", 0 },
+    { "broker.shutdown-warn", 0 },
+    { "broker.shutdown-timeout", 0 },
+    { "broker.cleanup-timeout", 0 },
+    { "broker.rc1_path", 0 },
+    { "broker.rc3_path", 0 },
+    { "broker.rc2_none", 0 },
+    { "broker.rc2_pgrp", 0 },
+    { "broker.exit-restart", ATTR_RUNTIME },
+    { "broker.module-nopanic", ATTR_RUNTIME },
+    { "broker.starttime", ATTR_READONLY },
+    { "broker.sd-notify", 0 },
+    { "broker.sd-stop-timeout", 0 },
+    { "broker.exit-norestart", 0 },
+    { "broker.recovery-mode", 0 },
+    { "broker.uuid", ATTR_READONLY },
+    { "conf.shell_initrc", ATTR_RUNTIME },
+    { "conf.shell_pluginpath", ATTR_RUNTIME },
+    { "config.path", 0 },
+
+    // tree based overlay network
+    { "tbon.topo", ATTR_CONFIG },
+    { "tbon.descendants", ATTR_READONLY },
+    { "tbon.level", ATTR_READONLY },
+    { "tbon.maxlevel", ATTR_READONLY },
+    { "tbon.endpoint", ATTR_READONLY },
+    { "tbon.parent-endpoint", ATTR_READONLY },
+    { "tbon.zmqdebug", ATTR_CONFIG },
+    { "tbon.zmq_io_threads", ATTR_CONFIG },
+    { "tbon.child_rcvhwm", ATTR_CONFIG },
+    { "tbon.prefertcp", 0 },
+    { "tbon.interface-hint", ATTR_RUNTIME | ATTR_CONFIG },
+    { "tbon.torpid_min", ATTR_CONFIG },
+    { "tbon.torpid_max", ATTR_CONFIG },
+    { "tbon.tcp_user_timeout", ATTR_CONFIG },
+    { "tbon.connect_timeout", ATTR_CONFIG },
+
+    // logging
+    { "log-ring-size", ATTR_RUNTIME },
+    { "log-forward-level", ATTR_RUNTIME },
+    { "log-critical-level", ATTR_RUNTIME },
+    { "log-filename", ATTR_RUNTIME },
+    { "log-syslog-enable", ATTR_RUNTIME },
+    { "log-syslog-level", ATTR_RUNTIME },
+    { "log-stderr-mode", ATTR_RUNTIME },
+    { "log-stderr-level", ATTR_RUNTIME },
+    { "log-level", ATTR_RUNTIME },
+
+    // content
+    { "content.backing-module", 0 },
+    { "content.hash", 0 },
+    { "content.dump", 0 },
+    { "content.restore", 0 },
+
+    // cron
+    { "cron.directory", 0 },
+
+    // for testing
+    { "test.*", ATTR_RUNTIME },
+    { "test-ro.*", ATTR_READONLY },
+
+    // misc undocumented
+    { "vendor.*", ATTR_RUNTIME}, // flux-framework/flux-pmix#109
+    { "tbon.fanout", 0 }, // legacy, replaced by tbon.topo
 };
 
 static void entry_destroy (void *arg)
