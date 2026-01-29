@@ -418,13 +418,32 @@ void setattr_request_cb (flux_t *h,
     attr_t *attrs = arg;
     const char *name;
     const char *val;
+    int force = 0;
+    struct registered_attr *reg;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:s}",
+                             "{s:s s:s s?b}",
                              "name", &name,
-                             "value", &val) < 0)
+                             "value", &val,
+                             "force", &force) < 0)
         goto error;
+    if (!(reg = attrtab_lookup (name))) {
+        errmsg = "unknown attribute";
+        goto error;
+    }
+    /* If name is found in the hash, then this is an update rather
+     * than the initial value.  Don't allow updates without the
+     * ATTR_RUNTIME flag, unless forced.
+     */
+    if (zhash_lookup (attrs->hash, name)) {
+        if (!force && !(reg->flags & ATTR_RUNTIME)) {
+            errmsg = "attribute may not be updated";
+            errno = EINVAL;
+            goto error;
+        }
+    }
     if (attr_set (attrs, name, val) < 0) {
         if (errno != ENOENT)
             goto error;
@@ -435,7 +454,7 @@ void setattr_request_cb (flux_t *h,
         FLUX_LOG_ERROR (h);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         FLUX_LOG_ERROR (h);
 }
 

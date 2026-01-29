@@ -16,7 +16,7 @@
 enum {
     ATTR_IMMUTABLE      = 0x01, // value never changes once set
     ATTR_READONLY       = 0x02, // value is not to be set on cmdline by users
-    ATTR_RUNTIME        = 0x04, // value may be updated by users [unused]
+    ATTR_RUNTIME        = 0x04, // value may be updated by users
     ATTR_CONFIG         = 0x08, // value overrides TOML config [unused]
 };
 
