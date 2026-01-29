@@ -976,6 +976,7 @@ test_expect_success MULTICORE 'fewer cores: strict drains on extra cores' '
 test_expect_success MULTICORE 'fewer cores: allow-extra allows extra cores' '
 	flux alloc -n1 -o cpu-affinity=off \
 		--conf=resource.verify.core=allow-extra \
+		--conf=resource.verify.gpu=ignore \
 		flux resource drain -no {reason} > drain2.out &&
 	test_debug "cat drain2.out" &&
 	test_must_be_empty drain2.out
@@ -984,6 +985,7 @@ test_expect_success MULTICORE 'fewer cores: allow-extra allows extra cores' '
 test_expect_success MULTICORE 'fewer cores: allow-missing drains on extra cores' '
 	flux alloc -n1 -o cpu-affinity=off \
 		--conf=resource.verify.core=allow-missing \
+		--conf=resource.verify.gpu=ignore \
 		flux resource drain -no {reason} > drain3.out &&
 	test_debug "cat drain3.out" &&
 	grep "extra resources.*core" drain3.out
@@ -992,6 +994,7 @@ test_expect_success MULTICORE 'fewer cores: allow-missing drains on extra cores'
 test_expect_success MULTICORE 'fewer cores: ignore allows extra cores' '
 	flux alloc -n1 -o cpu-affinity=off \
 		--conf=resource.verify.core=ignore \
+		--conf=resource.verify.gpu=ignore \
 		flux resource drain -no {reason} > drain4.out &&
 	test_debug "cat drain4.out" &&
 	test_must_be_empty drain4.out
@@ -1006,6 +1009,7 @@ test_expect_success MULTICORE 'fewer cores: verify=false allows extra cores' '
 test_expect_success MULTICORE 'fewer cores: core=allow-extra allows extra' '
 	flux alloc -n1 -o cpu-affinity=off \
 		--conf=resource.verify.core=allow-extra \
+		--conf=resource.verify.gpu=ignore \
 		flux resource drain -no {reason} > drain5.out &&
 	test_debug "cat drain5.out" &&
 	test_must_be_empty drain5.out
