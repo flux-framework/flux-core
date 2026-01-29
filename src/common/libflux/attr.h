@@ -44,6 +44,16 @@ const char *flux_attr_get (flux_t *h, const char *name);
  */
 int flux_attr_set (flux_t *h, const char *name, const char *val);
 
+/* Same as above but with option to force updates on attributes that
+ * are not documented to support runtime update, and to return detailed
+ * error messages.
+ */
+int flux_attr_set_ex (flux_t *h,
+                      const char *name,
+                      const char *val,
+                      bool force,
+                      flux_error_t *errp);
+
 /* hotwire flux_attr_get()'s cache for testing */
 int flux_attr_set_cacheonly (flux_t *h, const char *name, const char *val);
 
