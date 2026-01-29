@@ -14,8 +14,12 @@
 #include <limits.h>
 #include <jansson.h>
 #include <inttypes.h>
+#include <fnmatch.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
+#include "ccan/array_size/array_size.h"
 
 #include "attr.h"
 
@@ -38,7 +42,7 @@ struct entry {
     void *arg;
 };
 
-struct registered_attr attrtab[] = {
+static struct registered_attr attrtab[] = {
 
     // general
     { "rank", ATTR_READONLY },
@@ -128,6 +132,16 @@ struct registered_attr attrtab[] = {
     { "tbon.fanout", 0 }, // legacy, replaced by tbon.topo
 };
 
+static struct registered_attr *attrtab_lookup (const char *name)
+{
+    for (int i = 0; i < ARRAY_SIZE (attrtab); i++) {
+        if (fnmatch (attrtab[i].name, name, 0) == 0)
+            return &attrtab[i];
+    }
+    errno = ENOENT;
+    return NULL;
+}
+
 static void entry_destroy (void *arg)
 {
     struct entry *e = arg;
@@ -182,6 +196,8 @@ int attr_add (attr_t *attrs, const char *name, const char *val, int flags)
         errno = EINVAL;
         return -1;
     }
+    if (!attrtab_lookup (name))
+        return -1;
     if ((e = zhash_lookup (attrs->hash, name))) {
         errno = EEXIST;
         return -1;
@@ -207,6 +223,8 @@ int attr_add_active (attr_t *attrs,
         errno = EINVAL;
         goto done;
     }
+    if (!attrtab_lookup (name))
+        return -1;
     if ((e = zhash_lookup (attrs->hash, name))) {
         if (!set) {
             errno = EEXIST;
