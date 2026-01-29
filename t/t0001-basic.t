@@ -200,6 +200,11 @@ test_expect_success 'flux-start fails with unknown option' "
 test_expect_success 'flux-start fails with --verbose=badopt' "
 	test_must_fail flux start ${ARGS} --verbose=badopt true
 "
+test_expect_success 'flux-start fails with bad SHELL' '
+	( export SHELL=/no/such/path &&
+	  test_expect_code 127  run_timeout 30 flux start flux uptime
+	)
+'
 test_expect_success 'create bad broker shell script' '
 	cat >flux-broker <<-EOT &&
 	#!/badinterp
