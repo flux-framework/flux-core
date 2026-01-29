@@ -6,15 +6,6 @@ test_description='Test resource module verify configuration'
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
-# Note: On some systems RSMI GPU detection may not be influenced by
-# [CUDA|ROCR|HIP]_VISIBLE_DEVICES, which causes some tests below to fail
-# with "extra" GPUs. Since we're not testing GPU detection here, just
-# disable the rsmi component of HWLOC when used to avoid the issue.
-# (This needs to be done before test_under_flux is called)
-if hwloc-ls --of console | grep rsmi >/dev/null 2>&1; then
-    export HWLOC_COMPONENTS=-rsmi
-fi
-
 test_under_flux 1
 
 # check if we have more than one CPU in our affinity mask
@@ -976,6 +967,7 @@ test_expect_success MULTICORE 'fewer cores: strict drains on extra cores' '
 test_expect_success MULTICORE 'fewer cores: allow-extra allows extra cores' '
 	flux alloc -n1 -o cpu-affinity=off \
 		--conf=resource.verify.core=allow-extra \
+		--conf=resource.verify.gpu=ignore \
 		flux resource drain -no {reason} > drain2.out &&
 	test_debug "cat drain2.out" &&
 	test_must_be_empty drain2.out
@@ -984,6 +976,7 @@ test_expect_success MULTICORE 'fewer cores: allow-extra allows extra cores' '
 test_expect_success MULTICORE 'fewer cores: allow-missing drains on extra cores' '
 	flux alloc -n1 -o cpu-affinity=off \
 		--conf=resource.verify.core=allow-missing \
+		--conf=resource.verify.gpu=ignore \
 		flux resource drain -no {reason} > drain3.out &&
 	test_debug "cat drain3.out" &&
 	grep "extra resources.*core" drain3.out
@@ -992,6 +985,7 @@ test_expect_success MULTICORE 'fewer cores: allow-missing drains on extra cores'
 test_expect_success MULTICORE 'fewer cores: ignore allows extra cores' '
 	flux alloc -n1 -o cpu-affinity=off \
 		--conf=resource.verify.core=ignore \
+		--conf=resource.verify.gpu=ignore \
 		flux resource drain -no {reason} > drain4.out &&
 	test_debug "cat drain4.out" &&
 	test_must_be_empty drain4.out
@@ -1006,6 +1000,7 @@ test_expect_success MULTICORE 'fewer cores: verify=false allows extra cores' '
 test_expect_success MULTICORE 'fewer cores: core=allow-extra allows extra' '
 	flux alloc -n1 -o cpu-affinity=off \
 		--conf=resource.verify.core=allow-extra \
+		--conf=resource.verify.gpu=ignore \
 		flux resource drain -no {reason} > drain5.out &&
 	test_debug "cat drain5.out" &&
 	test_must_be_empty drain5.out
