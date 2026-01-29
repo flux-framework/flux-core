@@ -61,6 +61,11 @@ int attr_get (attr_t *attrs, const char *name, const char **val, int *flags);
 
 int attr_set (attr_t *attrs, const char *name, const char *val);
 
+int attr_set_cmdline (attr_t *attrs,
+                      const char *name,
+                      const char *val,
+                      flux_error_t *errp);
+
 /* Set an attribute's flags.
  */
 int attr_set_flags (attr_t *attrs, const char *name, int flags);

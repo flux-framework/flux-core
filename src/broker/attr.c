@@ -209,6 +209,31 @@ int attr_add (attr_t *attrs, const char *name, const char *val, int flags)
     return 0;
 }
 
+int attr_set_cmdline (attr_t *attrs,
+                      const char *name,
+                      const char *val,
+                      flux_error_t *errp)
+{
+    struct registered_attr *reg;
+
+
+    if (!attrs || !name) {
+        errno = EINVAL;
+        return errprintf (errp, "invalid argument");
+    }
+    if (!(reg = attrtab_lookup (name)))
+        return errprintf (errp, "unknown attribute");
+    if ((reg->flags & ATTR_READONLY)) {
+        errno = EINVAL;
+        return errprintf (errp, "attribute may not be set on the command line");
+    }
+    if (attr_add (attrs, name, val, 0) < 0) {
+        if (errno != EEXIST || attr_set (attrs, name, val) < 0)
+            return errprintf (errp, "%s", strerror (errno));
+    }
+    return 0;
+}
+
 int attr_add_active (attr_t *attrs,
                      const char *name,
                      int flags,

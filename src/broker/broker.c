@@ -132,6 +132,18 @@ static struct optparse_option opts[] = {
     OPTPARSE_TABLE_END,
 };
 
+static char *parse_nameval (const char *nameval, const char **valp)
+{
+    char *cpy;
+    char *val;
+    if (!(cpy = strdup (nameval)))
+        return NULL;
+    if ((val = strchr (cpy, '=')))
+        *val++ = '\0';
+    *valp = val;
+    return cpy;
+}
+
 int parse_command_line_arguments (broker_ctx_t *ctx,
                                   int argc,
                                   char *argv[],
@@ -151,23 +163,18 @@ int parse_command_line_arguments (broker_ctx_t *ctx,
     optparse_get_str (ctx->opts, "config-path", NULL);
 
     while ((arg = optparse_getopt_next (ctx->opts, "setattr"))) {
-        char *val, *attr;
-        if (!(attr = strdup (arg)))
-            return errprintf (errp, "out of memory duplicating optarg");
-        if ((val = strchr (attr, '=')))
-            *val++ = '\0';
-        if (attr_add (ctx->attrs, attr, val, 0) < 0) {
-            if (attr_set (ctx->attrs, attr, val) < 0) {
-                errprintf (errp,
-                           "setattr %s=%s: %s",
-                           attr,
-                           val,
-                           strerror (errno));
-                free (attr);
-                return -1;
-            }
+        char *name;
+        const char *val;
+        flux_error_t error;
+
+        if (!(name = parse_nameval (arg, &val)))
+            return errprintf (errp, "error parsing --setattr=%s", arg);
+        if (attr_set_cmdline (ctx->attrs, name, val, &error) < 0) {
+            errprintf (errp, "%s: %s", name, error.text);
+            ERRNO_SAFE_WRAP (free, name);
+            return -1;
         }
-        free (attr);
+        free (name);
     }
 
     if (optindex < argc) {
