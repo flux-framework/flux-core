@@ -546,6 +546,7 @@ test_expect_success 'rexec: server shutdown works with zombie processes' '
 	#!/bin/bash
 	# Start instance with subprocess server
 	cat <<-EOF2 >shutdown-test.sh &&
+		#!/bin/bash
 		# Create zombie processes
 		flux exec -r 0 --bg --waitable --label=z1 sleep 0
 		flux exec -r 0 --bg --waitable --label=z2 sleep 0
