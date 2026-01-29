@@ -533,10 +533,12 @@ test_expect_success 'flux-queue: stop with named queues and --nocheckpoint works
 	[queues.batch]
 	EOT
 	cat >stopqueues.sh <<-EOT &&
+	#!/bin/sh
 	flux queue start --all
 	flux queue stop --all
 	EOT
 	cat >stopqueuesnocheckpoint.sh <<-EOT &&
+	#!/bin/sh
 	flux queue start --all
 	flux queue stop --all --nocheckpoint
 	EOT
