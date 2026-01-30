@@ -746,6 +746,7 @@ static void content_register_backing_request (flux_t *h,
 {
     struct content_cache *cache = arg;
     const char *name;
+    flux_error_t error;
     const char *errstr = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
@@ -767,10 +768,14 @@ static void content_register_backing_request (flux_t *h,
      */
     if (!cache->backing_name) {
         if (!(cache->backing_name = strdup (name))
-            || flux_attr_set (h,
-                              "content.backing-module",
-                              cache->backing_name) < 0)
+            || flux_attr_set_ex (h,
+                                 "content.backing-module",
+                                 cache->backing_name,
+                                 true,
+                                 &error) < 0) {
+            errstr = error.text;
             goto error;
+        }
     }
     if (!streq (cache->backing_name, name)) {
         errno = EINVAL;
