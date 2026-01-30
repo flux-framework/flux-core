@@ -17,6 +17,9 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 # the duration of this test to avoid these failure
 export MAN_DISABLE_SECCOMP=1
 
+# An unexpected umask could affect tests below. Set it explicitly here:
+umask 022
+
 startctl=${SHARNESS_TEST_SRCDIR}/scripts/startctl.py
 path_printenv=$(which printenv)
 
@@ -204,6 +207,42 @@ test_expect_success 'flux-start fails with bad SHELL' '
 	( export SHELL=/no/such/path &&
 	  test_expect_code 127  run_timeout 30 flux start flux uptime
 	)
+'
+test_expect_success 'flux-start fails with non-executable rc2' '
+	cat <<-EOF >no-shebang.sh &&
+	true
+	EOF
+	test_expect_code 126 run_timeout 30 flux start $ARGS ./no-shebang.sh
+'
+test_expect_success 'flux-start fails with invalid shebang in rc2' '
+	chmod +x no-shebang.sh &&
+	test_expect_code 126 run_timeout 30 flux start $ARGS ./no-shebang.sh
+'
+test_expect_success 'flux-start does not use $SHELL -c for a script' '
+	cat <<-EOF >fail.sh &&
+	#!/bin/sh
+	exit 1
+	EOF
+	chmod +x fail.sh &&
+	cat <<-'EOF' >test-script.sh &&
+	#!/bin/sh
+	exit 0
+	EOF
+	chmod +x test-script.sh &&
+	SHELL=$(pwd)/fail.sh flux start $ARGS $(pwd)/test-script.sh
+'
+test_expect_success 'flux-start does use $SHELL -c otherwise' '
+	cat <<-EOF >test-shell.sh &&
+	#!/bin/sh
+	shift # drop -c
+	echo "broker ran \$0 -c \$@"
+	\$@
+	EOF
+	chmod +x test-shell.sh &&
+	SHELL=./test-shell.sh flux start $ARGS "flux dmesg -H" \
+	    >test-shell.log 2>&1 &&
+	test_debug "cat test-shell.log" &&
+	grep "broker ran ./test-shell.sh -c" test-shell.log
 '
 test_expect_success 'create bad broker shell script' '
 	cat >flux-broker <<-EOT &&
