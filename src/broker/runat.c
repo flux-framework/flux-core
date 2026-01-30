@@ -174,6 +174,20 @@ static void completion_cb (flux_subprocess_t *p)
         rc = signum + 128;
         log_command (r->h, entry, rc, elapsed, strsignal (signum));
     }
+    else if (flux_subprocess_state (p) == FLUX_SUBPROCESS_FAILED) {
+        /* exec failure: process never started.
+         *
+         * mimic bash exit code (from bash(1)):
+         *
+         *  If a command is not found, the child process created to execute
+         *  it returns a status of 127. If a command is found but is not
+         *  executable, the return status is 126.
+         */
+        rc = 126;
+        if (flux_subprocess_fail_errno (p) == ENOENT)
+            rc = 127;
+        log_command (r->h, entry, rc, elapsed, flux_subprocess_fail_error (p));
+    }
     else { // ???
         rc = 1;
         log_command (r->h, entry, rc, elapsed, "???");
@@ -258,7 +272,9 @@ static void state_change_cb (flux_subprocess_t *p,
     switch (state) {
         case FLUX_SUBPROCESS_INIT:
         case FLUX_SUBPROCESS_EXITED:
+            break;
         case FLUX_SUBPROCESS_FAILED:
+            completion_cb (p);
             break;
         case FLUX_SUBPROCESS_STOPPED:
             /* STOPPED may arrive before RUNNING due to a protocol race
