@@ -34,6 +34,18 @@ test_expect_success 'flux lsattr -v works' '
 	ATTR_VAL=$(flux lsattr -v | awk "/^rank / { print \$2 }") &&
 	test "${ATTR_VAL}" -eq 0
 '
+test_expect_success 'broker --setattr fails on unknown attribute' '
+	test_must_fail flux start -Sunknownattr=abc true
+'
+test_expect_success 'broker --setattr fails on read-only attribute' '
+	test_must_fail flux start -Stest-ro.foo=bac true
+'
+test_expect_success 'flux setattr fails on unknown attribute' '
+	test_must_fail flux setattr unknown-foo bar
+'
+test_expect_success 'flux getattr fails on unknown attribute' '
+	test_must_fail flux getattr unknown-bar
+'
 test_expect_success 'flux lsattr with extra argument fails' '
 	test_must_fail flux lsattr badarg
 '

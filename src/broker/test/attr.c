@@ -17,6 +17,7 @@
 #include "attr.h"
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 void basic (void)
@@ -197,12 +198,76 @@ void active (void)
     attr_destroy (attrs);
 }
 
+void unknown (void)
+{
+    attr_t *attrs;
+
+    if (!(attrs = attr_create ()))
+        BAIL_OUT ("attr_create failed");
+
+    errno = 0;
+    ok (attr_add (attrs, "unknown", "foo", 0) < 0 && errno == ENOENT,
+        "attr_add of unknown attribute fails with ENOENT");
+
+    errno = 0;
+    ok (attr_add_active (attrs, "unknown", 0, NULL, NULL, NULL) < 0
+        && errno == ENOENT,
+        "attr_add_active of unknown attribute fails with ENOENT");
+
+    attr_destroy (attrs);
+}
+
+void cmdline (void)
+{
+    attr_t *attrs;
+    flux_error_t error;
+    int rc;
+
+    if (!(attrs = attr_create ()))
+        BAIL_OUT ("attr_create failed");
+
+    ok (attr_set_cmdline (attrs, "test.foo", "bar", &error) == 0,
+        "attr_set_cmdline test.foo works");
+
+    errno = 0;
+    err_init (&error);
+    rc = attr_set_cmdline (attrs, "unknown", "foo", &error);
+    ok (rc < 0 && errno == ENOENT,
+        "attr_set_cmdline attr=unknown fails with ENOENT");
+    diag ("%s", error.text);
+
+    errno = 0;
+    err_init (&error);
+    rc = attr_set_cmdline (attrs, "test-ro.foo", "bar", &error);
+    ok (rc < 0 && errno == EINVAL,
+        "attr_set_cmdline attr=test-ro.foo fails with EINVAL");
+    diag ("%s", error.text);
+
+    errno = 0;
+    err_init (&error);
+    rc = attr_set_cmdline (attrs, NULL, "bar", &error);
+    ok (rc < 0 && errno == EINVAL,
+        "attr_set_cmdline attr=NULL fails with EINVAL");
+    diag ("%s", error.text);
+
+    errno = 0;
+    err_init (&error);
+    rc = attr_set_cmdline (NULL, "test.foo", "bar", &error);
+    ok (rc < 0 && errno == EINVAL,
+        "attr_set_cmdline attrs=NULL fails with EINVAL");
+    diag ("%s", error.text);
+
+    attr_destroy (attrs);
+}
+
 int main (int argc, char **argv)
 {
     plan (NO_PLAN);
 
     basic ();
     active ();
+    unknown ();
+    cmdline ();
 
     done_testing ();
     return 0;
