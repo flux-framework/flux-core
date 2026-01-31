@@ -230,7 +230,7 @@ int rundir_create (attr_t *attrs,
     if (attr_get (attrs, key, &val, NULL) == 0 && val)
         do_cleanup = streq (val, "0") ? false : true;
     (void)attr_delete (attrs, key, true);
-    if (attr_add_int (attrs, key, do_cleanup ? 1 : 0, ATTR_IMMUTABLE) < 0)
+    if (attr_add (attrs, key, do_cleanup ? "1" : "0", ATTR_IMMUTABLE) < 0)
         goto error_setattr;
 
     rc = 0;

@@ -132,6 +132,16 @@ static struct optparse_option opts[] = {
     OPTPARSE_TABLE_END,
 };
 
+static int addattr_int (attr_t *attrs, const char *name, int val, int flags)
+{
+    char s[32];
+    if (snprintf (s, sizeof (s), "%d", val) >= sizeof (s)) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    return attr_add (attrs, name, s, flags);
+}
+
 static char *parse_nameval (const char *nameval, const char **valp)
 {
     char *cpy;
@@ -325,7 +335,7 @@ int main (int argc, char *argv[])
             level = LOG_INFO;
         else
             level = LOG_ERR;
-        (void)attr_add_int (ctx.attrs, "log-stderr-level", level, 0);
+        (void)addattr_int (ctx.attrs, "log-stderr-level", level, 0);
     }
 
     /* Set the broker.uuid attribute, used for request/response routing.
@@ -443,14 +453,8 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (attr_add_int (ctx.attrs,
-                      "rank",
-                      ctx.info.rank,
-                      ATTR_IMMUTABLE) < 0
-        || attr_add_int (ctx.attrs,
-                         "size",
-                         ctx.info.size,
-                         ATTR_IMMUTABLE) < 0) {
+    if (addattr_int (ctx.attrs, "rank", ctx.info.rank, ATTR_IMMUTABLE) < 0
+        || addattr_int (ctx.attrs, "size", ctx.info.size, ATTR_IMMUTABLE) < 0) {
         flux_log (ctx.h, LOG_CRIT, "setattr rank/size: %s", strerror (errno));
         goto cleanup;
     }
