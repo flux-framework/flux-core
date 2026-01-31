@@ -118,81 +118,67 @@ void basic (void)
     attr_destroy (attrs);
 }
 
+int active_get (const char *name, const char **val, void *arg)
+{
+    const char **cpp = arg;
+    *val = *cpp;
+    return 0;
+}
+
+int active_set (const char *name, const char *val, void *arg)
+{
+    const char **cpp = arg;
+    *cpp = val;
+    return 0;
+}
+
+
 void active (void)
 {
     attr_t *attrs;
     const char *val;
-    int a, c;
-    uint32_t b;
+    const char *a;
+    const char *b;
 
     if (!(attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
 
-    /* attr_add_active (int helper)
-     */
-    ok (attr_add_active_int (attrs, "test.a", &a, 0) == 0,
-        "attr_add_active_int works");
-    a = 0;
-    ok (attr_get (attrs, "test.a", &val, NULL) == 0 && val && streq (val, "0"),
-        "attr_get on active int tracks val=0");
-    a = 1;
-    ok (attr_get (attrs, "test.a", &val, NULL) == 0 && streq (val, "1"),
-        "attr_get on active int tracks val=1");
-    a = -1;
-    ok (attr_get (attrs, "test.a", &val, NULL) == 0 && streq (val, "-1"),
-        "attr_get on active int tracks val=-1");
-    a = INT_MAX - 1;
-    ok (attr_get (attrs, "test.a", &val, NULL) == 0
-        && strtol (val, NULL, 10) == INT_MAX - 1,
-        "attr_get on active int tracks val=INT_MAX-1");
-    a = INT_MIN + 1;
-    ok (attr_get (attrs, "test.a", &val, NULL) == 0
-        && strtol (val, NULL, 10) == INT_MIN + 1,
-        "attr_get on active int tracks val=INT_MIN+1");
-
-    ok (attr_set (attrs, "test.a", "0") == 0 && a == 0,
-        "attr_set on active int sets val=0");
-    ok (attr_set (attrs, "test.a", "1") == 0 && a == 1,
-        "attr_set on active int sets val=1");
-    ok (attr_set (attrs, "test.a", "-1") == 0 && a == -1,
-        "attr_set on active int sets val=-1");
+    ok (attr_add_active (attrs,
+                         "test.a",
+                         0,
+                         active_get,
+                         active_set,
+                         &a) == 0,
+        "attr_add_active works");
+    a = "x";
+    ok (attr_get (attrs, "test.a", &val, NULL) == 0 && val && streq (val, "x"),
+        "attr_get on active a tracks val=x");
+    a = "y";
+    ok (attr_get (attrs, "test.a", &val, NULL) == 0 && streq (val, "y"),
+        "attr_get on active a tracks val=y");
+    a = NULL;
+    ok (attr_get (attrs, "test.a", &val, NULL) == 0 && val == NULL,
+        "attr_get on active a tracks val=NULL");
     ok (attr_delete (attrs, "test.a", true) == 0,
         "attr_delete (force) works on active attr");
 
-    /* attr_add_active (uint32_t helper)
+    /* immutable active works as expected
      */
-    ok (attr_add_active_uint32 (attrs, "test.b", &b, 0) == 0,
-        "attr_add_active_uint32 works");
-    b = 0;
-    ok (attr_get (attrs, "test.b", &val, NULL) == 0 && val && streq (val, "0"),
-        "attr_get on active uin32_t tracks val=0");
-    b = 1;
-    ok (attr_get (attrs, "test.b", &val, NULL) == 0 && streq (val, "1"),
-        "attr_get on active uint32_t tracks val=1");
-    b = UINT_MAX - 1;
-    ok (attr_get (attrs, "test.b", &val, NULL) == 0
-        && strtoul (val, NULL, 10) == UINT_MAX - 1,
-        "attr_get on active uint32_t tracks val=UINT_MAX-1");
-
-    ok (attr_set (attrs, "test.b", "0") == 0 && b == 0,
-        "attr_set on active uint32_t sets val=0");
-    ok (attr_set (attrs, "test.b", "1") == 0 && b == 1,
-        "attr_set on active uint32_t sets val=1");
-    ok (attr_delete (attrs, "test.b", true) == 0,
-        "attr_delete (force) works on active attr");
-
-    /* immutable active int works as expected
-     */
-    ok (attr_add_active_int (attrs, "test.c", &c, ATTR_IMMUTABLE) == 0,
-        "attr_add_active_int ATTR_IMMUTABLE works");
-    c = 42;
-    ok (attr_get (attrs, "test.c", &val, NULL) == 0 && val && streq (val, "42"),
-        "attr_get returns initial val=42");
-    c = 43;
-    ok (attr_get (attrs, "test.c", &val, NULL) == 0 && val && streq (val, "42"),
+    ok (attr_add_active (attrs,
+                         "test.b",
+                         ATTR_IMMUTABLE,
+                         active_get,
+                         active_set,
+                         &b) == 0,
+        "attr_add_active ATTR_IMMUTABLE works");
+    b = "m";
+    ok (attr_get (attrs, "test.b", &val, NULL) == 0 && val && streq (val, "m"),
+        "attr_get returns initial val=m");
+    b = "n";
+    ok (attr_get (attrs, "test.b", &val, NULL) == 0 && val && streq (val, "m"),
         "attr_get ignores value changes");
     errno = 0;
-    ok (attr_delete (attrs, "test.c", true) < 0 && errno == EPERM,
+    ok (attr_delete (attrs, "test.b", true) < 0 && errno == EPERM,
         "attr_delete (force) fails with EPERM");
 
     attr_destroy (attrs);
