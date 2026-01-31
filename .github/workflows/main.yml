@@ -186,6 +186,14 @@ jobs:
         git fetch -f origin ${{ github.ref }}:${{ github.ref }} ;
         echo git describe now reports $(git describe --always)
 
+    - name: setup python
+      env: ${{matrix.env}}
+      if: matrix.coverage
+      uses: actions/setup-python@v5
+      with:
+        # Use python3.12 to ensure compatbility with coverage tool:
+        python-version: '3.12'
+
     - name: coverage setup
       env: ${{matrix.env}}
       if: matrix.coverage
