@@ -64,6 +64,32 @@ max-kill-count
    drains the node. The default is 8. See :ref:`job_termination` below for
    details.
 
+max-kill-timeout
+   (optional) The maximum amount of time in FSD to wait for a job to terminate
+   before draining nodes with unkillable processes. When set, this overrides
+   ``max-kill-count`` by continuing the kill signal escalation sequence until
+   the specified duration has elapsed since termination began. The default is
+   unset (use ``max-kill-count`` instead). See :ref:`job_termination` below
+   for details.
+
+   Example: ``max-kill-timeout = "30m"`` gives jobs up to 30 minutes to
+   respond to termination signals before affected nodes are drained.
+
+.. note::
+
+  Choosing between max-kill-count and max-kill-timeout:
+
+  Use ``max-kill-timeout`` when you want to specify how long to wait
+  before giving up on a job, such as enforcing a site policy that jobs
+  get 30 minutes to clean up before nodes are drained. This is simpler
+  and more intuitive than calculating the number of kill attempts needed.
+
+  Use ``max-kill-count`` when you want fine-grained control over the
+  number of escalation attempts regardless of timing, or when maintaining
+  backward compatibility with existing configurations.
+
+  When both are set, ``max-kill-timeout`` takes precedence.
+
 term-signal
    (optional) A string specifying an alternate signal to ``SIGTERM`` when
    terminating job tasks. Mainly used for testing.
@@ -157,7 +183,7 @@ JOB TERMINATION
 ===============
 
 When a job is canceled or gets a fatal exception it is terminated using
-the following sequence
+the following sequence:
 
  - The job shells are notified to send ``term-signal`` to job tasks, unless
    the job is being terminated due to a time limit, in which case ``SIGALRM``
@@ -168,9 +194,14 @@ the following sequence
    to sending ``kill-signal`` to the job shells directly.
  - This continues with an exponential backoff starting at ``kill-timeout``,
    with the timeout doubling after each attempt (capped at 300s).
- - After a total of ``max-kill-count`` attempts to signal the job shell,
-   any nodes still running processes are drained with the message: "unkillable
-   user processes for job JOBID."
+ - If ``max-kill-timeout`` is set, the execution system continues sending
+   ``kill-signal`` to job shells until the specified duration has elapsed
+   since termination began. If ``max-kill-timeout`` is not set, the execution
+   system uses ``max-kill-count`` to limit the number of kill attempts instead.
+ - When the limit is reached (either ``max-kill-timeout`` elapsed or
+   ``max-kill-count`` attempts exhausted), any nodes still running processes
+   for the job are drained with the reason: "unkillable user processes for
+   job JOBID."
 
 EXAMPLES
 ========
