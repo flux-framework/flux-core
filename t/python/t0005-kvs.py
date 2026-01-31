@@ -112,31 +112,41 @@ class TestKVS(unittest.TestCase):
         self.assertFalse(flux.kvs.isdir(self.f, "testisdirkey"))
         self.assertFalse(flux.kvs.isdir(self.f, "not_a_key_i_made"))
 
-    def test_api_06_put_mkdir(self):
+    def test_api_06_put_raw_bytes(self):
+        flux.kvs.put(self.f, "txn_raw_bytes", "foobar".encode("utf-8"), raw=True)
+        flux.kvs.commit(self.f)
+        self.assertTrue(flux.kvs.exists(self.f, "txn_raw_bytes"))
+
+    def test_api_07_put_raw_string(self):
+        flux.kvs.put(self.f, "txn_raw_string", "foobar", raw=True)
+        flux.kvs.commit(self.f)
+        self.assertTrue(flux.kvs.exists(self.f, "txn_raw_string"))
+
+    def test_api_08_put_mkdir(self):
         flux.kvs.put_mkdir(self.f, "txn_mkdir")
         flux.kvs.commit(self.f)
         self.assertTrue(flux.kvs.exists(self.f, "txn_mkdir"))
 
-    def test_api_07_put_unlink(self):
+    def test_api_09_put_unlink(self):
         flux.kvs.put(self.f, "txn_unlink", 1)
         flux.kvs.commit(self.f)
         flux.kvs.put_unlink(self.f, "txn_unlink")
         flux.kvs.commit(self.f)
         self.assertFalse(flux.kvs.exists(self.f, "txn_unlink"))
 
-    def test_api_08_put_symlink(self):
+    def test_api_10_put_symlink(self):
         flux.kvs.put_symlink(self.f, "txn_symlink", "txn_target")
         flux.kvs.commit(self.f)
         self.assertFalse(flux.kvs.exists(self.f, "txn_symlink"))
 
-    def test_api_09_commit_flags(self):
+    def test_api_11_commit_flags(self):
         flux.kvs.put(self.f, "flagcheck", 42)
         flux.kvs.commit(self.f, 1)
         self.assertTrue(flux.kvs.exists(self.f, "flagcheck"))
 
     # just testing that passing flags work, these are pitiful KVS
     # changes and the flags don't mean much
-    def test_api_10_commit_flags(self):
+    def test_api_12_commit_flags(self):
         flux.kvs.put(self.f, "commitflags", "foo")
         flux.kvs.commit(self.f, flux.constants.FLUX_KVS_NO_MERGE)
         flux.kvs.put(self.f, "commitflags", "baz")
@@ -145,7 +155,7 @@ class TestKVS(unittest.TestCase):
         flux.kvs.commit(self.f, flux.constants.FLUX_KVS_SYNC)
 
     # try to overwrite root dir, will fail on commit
-    def test_api_11_commit_fail(self):
+    def test_api_13_commit_fail(self):
         with self.assertRaises(OSError) as ctx:
             flux.kvs.put(self.f, ".", "foof")
             flux.kvs.commit(self.f)
@@ -175,13 +185,17 @@ class TestKVS(unittest.TestCase):
     def test_bad_input_05_put_exception(self):
         self.bad_input(flux.kvs.put, self.f, "", "")
 
-    def test_bad_input_06_put_mkdir_exception(self):
+    def test_bad_input_07_put_raw_exception(self):
+        with self.assertRaises(AttributeError):
+            flux.kvs.put(self.f, "legit_key", 1, raw=True)
+
+    def test_bad_input_08_put_mkdir_exception(self):
         self.bad_input(flux.kvs.put_mkdir, self.f, "")
 
-    def test_bad_input_07_put_unlink(self):
+    def test_bad_input_09_put_unlink(self):
         self.bad_input(flux.kvs.put_unlink, self.f, "")
 
-    def test_bad_input_08_put_symlink(self):
+    def test_bad_input_10_put_symlink(self):
         self.bad_input(flux.kvs.put_symlink, self.f, "", "")
 
     def test_kvsdir_01_bad_init(self):
@@ -594,12 +608,16 @@ class TestKVS(unittest.TestCase):
         txn.mkdir("kvstxntestdir")
         txn.put("kvstxntestdir.a", 1)
         txn.put("kvstxntestdir.b", 2)
+        txn.put("kvstxntestdir.c", "foobar".encode("utf-8"), raw=True)
+        txn.put("kvstxntestdir.d", "boobar", raw=True)
         txn.symlink("symlink", "kvstxntestdir.a")
         txn.commit()
 
         self.assertTrue(flux.kvs.isdir(self.f, "kvstxntestdir"))
         self.assertEqual(flux.kvs.get(self.f, "kvstxntestdir.a"), 1)
         self.assertEqual(flux.kvs.get(self.f, "kvstxntestdir.b"), 2)
+        self.assertEqual(flux.kvs.get(self.f, "kvstxntestdir.c"), "foobar")
+        self.assertEqual(flux.kvs.get(self.f, "kvstxntestdir.d"), "boobar")
         self.assertEqual(flux.kvs.get(self.f, "symlink"), 1)
 
         txn.unlink("kvstxntestdir.b")
@@ -609,15 +627,15 @@ class TestKVS(unittest.TestCase):
 
     def test_kvstxn_02_initial_path(self):
         txn = flux.kvs.KVSTxn(self.f, "kvstxntestdir")
-        txn.put("c", 3)
+        txn.put("e", 3)
         txn.commit()
 
-        self.assertEqual(flux.kvs.get(self.f, "kvstxntestdir.c"), 3)
+        self.assertEqual(flux.kvs.get(self.f, "kvstxntestdir.e"), 3)
 
-        txn.unlink("c")
+        txn.unlink("e")
         txn.commit()
 
-        self.assertFalse(flux.kvs.exists(self.f, "kvstxntestdir.c"))
+        self.assertFalse(flux.kvs.exists(self.f, "kvstxntestdir.e"))
 
     def test_kvstxn_03_namespace(self):
         flux.kvs.namespace_create(self.f, "testns")
@@ -631,14 +649,14 @@ class TestKVS(unittest.TestCase):
 
     def test_kvstxn_04_context_manager(self):
         with flux.kvs.KVSTxn(self.f) as txn:
-            txn.put("kvstxntestdir.d", 4)
+            txn.put("kvstxntestdir.f", 4)
 
-        self.assertEqual(flux.kvs.get(self.f, "kvstxntestdir.d"), 4)
+        self.assertEqual(flux.kvs.get(self.f, "kvstxntestdir.f"), 4)
 
         with flux.kvs.KVSTxn(self.f) as txn2:
-            txn2.unlink("kvstxntestdir.d")
+            txn2.unlink("kvstxntestdir.f")
 
-        self.assertFalse(flux.kvs.exists(self.f, "kvstxntestdir.d"))
+        self.assertFalse(flux.kvs.exists(self.f, "kvstxntestdir.f"))
 
     def test_kvstxn_05_pass_to_api(self):
         # N.B. generally user should never do this, testing to ensure
