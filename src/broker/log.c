@@ -568,14 +568,15 @@ void log_early (const char *buf, int len, void *arg)
     attr_t *attrs = arg;
     const char *val;
     int flags = 0;
-    uint32_t level;
+    int level;
     struct stdlog_header hdr;
 
     if (attr_get (attrs, "log-stderr-mode", &val, NULL) == 0
         && streq (val, "local")) {
         flags = LOG_FOR_SYSTEMD;
     }
-    if (attr_get_uint32 (attrs, "log-stderr-level", &level) == 0
+    if (attr_get (attrs, "log-stderr-level", &val, NULL) == 0
+        && set_level (&level, val) == 0
         && stdlog_decode (buf, len, &hdr, NULL, NULL, NULL, NULL) == 0
         && STDLOG_SEVERITY (hdr.pri) > level)
         return;
