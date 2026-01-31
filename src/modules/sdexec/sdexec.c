@@ -198,8 +198,7 @@ static void finalize_exec_request_if_done (struct sdproc *proc)
     if (proc->stop.timed_out) {
         exec_respond_error (proc,
                             EDEADLK,
-                            "Processes did not respond to SIGKILL."
-                            " Abandoning unit as is.");
+                            "SIGKILL timeout, unit may still be active");
     }
     else if (sdexec_unit_state (proc->unit) == STATE_INACTIVE
         && sdexec_unit_substate (proc->unit) == SUBSTATE_DEAD
