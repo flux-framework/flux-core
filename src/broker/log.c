@@ -21,6 +21,7 @@
 #include <syslog.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <jansson.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/wallclock.h"
@@ -773,6 +774,45 @@ static void stats_request_cb (flux_t *h,
         flux_log_error (h, "error responding to log.stats-get");
 }
 
+static void setattr_request_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    logbuf_t *logbuf = arg;
+    const char *errmsg = NULL;
+    json_t *dict;
+    const char *name;
+    json_t *val;
+
+    if (flux_request_unpack (msg, NULL, "o", &dict) < 0)
+        goto error;
+    json_object_foreach (dict, name, val) {
+        if (streq (name, "log-stderr-level")) {
+            const char *level;
+            if (!(level = json_string_value (val))) {
+                errno = EPROTO;
+                goto error;
+            }
+            if (set_level (&logbuf->stderr_level, level) < 0) {
+                errmsg = "invalid level";
+                errno = EINVAL;
+                goto error;
+            }
+        }
+        else {
+            errmsg = "unknown log attribute";
+            errno = EINVAL;
+            goto error;
+        }
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to log.setattr");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to log.setattr");
+}
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "log.append",         append_request_cb, 0 },
@@ -781,6 +821,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "log.disconnect",     disconnect_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.cancel",         cancel_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.stats-get",      stats_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "log.setattr",        setattr_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

@@ -70,6 +70,8 @@ static struct optparse_option dmesg_opts[] = {
       .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
       .usage = "Colorize output when supported; WHEN can be 'always' "
                "(default if omitted), 'never', or 'auto' (default)." },
+    { .name = "stderr-level",  .has_arg = 1, .arginfo = "0-7",
+      .usage = "Set local broker stderr log level", },
     OPTPARSE_TABLE_END,
 };
 
@@ -273,9 +275,25 @@ static int cmd_dmesg (optparse_t *p, int ac, char *av[])
     if ((n = optparse_option_index (p)) != ac)
         log_msg_exit ("flux-dmesg accepts no free arguments");
 
-    dmesg_ctx_init (&ctx, p);
-
     h = builtin_get_flux_handle (p);
+
+    if (optparse_hasopt (p, "stderr-level")) {
+        const char *val = optparse_get_str (p, "stderr-level", NULL);
+        flux_future_t *f;
+
+        if (!(f = flux_rpc_pack (h,
+                                 "log.setattr",
+                                 FLUX_NODEID_ANY,
+                                 FLUX_RPC_STREAMING,
+                                 "{s:s}",
+                                 "log-stderr-level", val))
+            || flux_rpc_get (f, NULL) < 0)
+            log_msg_exit ("%s", future_strerror (f, errno));
+        flux_future_destroy (f);
+        goto done;
+    }
+
+    dmesg_ctx_init (&ctx, p);
 
     if (!optparse_hasopt (p, "clear")) {
         flux_future_t *f;
@@ -308,7 +326,7 @@ static int cmd_dmesg (optparse_t *p, int ac, char *av[])
             log_msg_exit ("log.clear: %s", future_strerror (f, errno));
         flux_future_destroy (f);
     }
-
+done:
     flux_close (h);
     return (0);
 }
