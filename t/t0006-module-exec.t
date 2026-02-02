@@ -11,7 +11,7 @@ legacy=$(realpath ${FLUX_BUILD_DIR}/t/module/.libs/legacy.so)
 rpc_stream=${FLUX_BUILD_DIR}/t/request/rpc_stream
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
-flux setattr log-stderr-level 6
+flux dmesg --stderr-level=6
 
 test_expect_success 'flux-module-exec requires an argument' '
 	test_must_fail flux module-exec 2>nomod.err &&

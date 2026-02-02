@@ -96,9 +96,9 @@ test_expect_success 'stop validator 0' '
 	kill -STOP $valpid
 '
 test_expect_success 'remove job-ingest to trigger cleanup' '
-	flux setattr log-stderr-level 7 &&
+	flux dmesg --stderr-level=7 &&
 	flux module remove job-ingest &&
-	flux setattr log-stderr-level 1
+	flux dmesg --stderr-level=1
 '
 
 test_done

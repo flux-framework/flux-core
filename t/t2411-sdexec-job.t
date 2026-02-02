@@ -32,7 +32,7 @@ EOT
 
 test_under_flux 2 full --config-path=$(pwd)/config
 
-flux exec flux setattr log-stderr-level 7
+flux exec flux dmesg --stderr-level=7
 
 sdexec="flux exec --service sdexec"
 lptest="flux lptest"
@@ -111,6 +111,6 @@ test_expect_success 'cannot load job-exec module' '
 	test_must_fail flux module load job-exec
 '
 
-flux exec flux setattr log-stderr-level 1
+flux exec flux dmesg --stderr-level=1
 
 test_done

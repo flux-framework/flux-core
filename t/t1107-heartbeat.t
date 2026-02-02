@@ -127,7 +127,7 @@ test_expect_success 'reconfig with warn_thresh=10 works' '
 	flux module stats heartbeat | jq -r -e ".warn_thresh == 10"
 '
 test_expect_success 'reload with period=0.1s timeout=infinity warn_thresh=3' '
-	flux exec flux setattr log-stderr-level 4 &&
+	flux exec flux dmesg --stderr-level=4 &&
 	flux exec -r 1 flux dmesg -C &&
 	flux config load <<-EOT &&
 	[heartbeat]

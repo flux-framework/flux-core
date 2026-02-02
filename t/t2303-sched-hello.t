@@ -26,7 +26,7 @@ test_expect_success 'exclude the job node from configuration' '
 	EOT
 '
 test_expect_success 'increase broker stderr log level' '
-	flux setattr log-stderr-level 6
+	flux dmesg --stderr-level=6
 '
 test_expect_success 'load scheduler' '
 	flux module load resource &&
@@ -92,7 +92,7 @@ test_expect_success 'run another job that uses the same resources' '
 	flux run -vv -N1 true
 '
 test_expect_success 'decrease broker stderr log level' '
-	flux setattr log-stderr-level 5
+	flux dmesg --stderr-level=5
 '
 
 test_done

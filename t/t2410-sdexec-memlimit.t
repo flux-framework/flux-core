@@ -63,7 +63,7 @@ fi
 
 test_under_flux 1 full --config-path=$(pwd)/config
 
-flux setattr log-stderr-level 6
+flux dmesg --stderr-level=6
 
 sdexec="flux exec --service sdexec"
 getcg=$(pwd)/getcg.sh
@@ -211,6 +211,6 @@ test_expect_success 'memory.max configuration changed' '
 	test_cmp inf.exp maxupdate.out
 '
 
-flux setattr log-stderr-level 3
+flux dmesg --stderr-level=3
 
 test_done
