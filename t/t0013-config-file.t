@@ -210,7 +210,7 @@ test_expect_success 'create initial program for testing' '
 
 test_expect_success 'start size=2 instance with ipc://' '
 	BINDDIR=$(mktemp -d) &&
-	test_when_finished "rm -rf $BINDIR" &&
+	test_when_finished "rm -rf $BINDDIR" &&
 	mkdir conf8 &&
 	cat <<-EOT >conf8/bootstrap.toml &&
 	[bootstrap]
@@ -232,7 +232,6 @@ test_expect_success 'start size=2 instance with ipc://' '
 	EXP
 	test_cmp ipc.exp ipc.out
 '
-
 test_expect_success 'start size=3 instance with ipc:// and custom topology' '
 	BINDDIR=$(mktemp -d) &&
 	test_when_finished "rm -rf $BINDIR" &&
@@ -284,8 +283,8 @@ test_expect_success NO_CHAIN_LINT 'a warning is printed when upstream URI has un
 	[[bootstrap.hosts]]
 	host = "fake1"
 	EOT
-	FLUX_FAKE_HOSTNAME=fake1 \
-		flux broker -vv -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	flux broker -vv -Sbroker.rc1_path= -Sbroker.rc3_path= \
+		-Shostname=fake1 \
 		--config-path=conf8b 2>warn.err &
 	echo $! >warn.pid &&
 	waitgrep "unable to resolve upstream peer" warn.err 30

@@ -100,9 +100,14 @@ parent-kvs-namespace :ref:`[readonly] <attr_readonly>`
    This is the KVS namespace assigned to this Flux instance by its enclosing
    instance, if it was launched by Flux as a job.
 
-hostlist :ref:`[readonly] <attr_readonly>`
+hostlist
    An RFC 29 hostlist in broker rank order.  This value may be used to
    translate between broker ranks and hostnames.
+
+hostname
+   The system hostname.  This attribute is set on the broker command line by
+   :option:`flux start --test-hosts`, which is useful in certain test
+   scenarios.
 
 broker.mapping :ref:`[readonly] <attr_readonly>`
    A string representing the process mapping of broker ranks in the Flux

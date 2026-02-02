@@ -166,10 +166,10 @@ OPTIONS
 
 .. option:: --test-hosts=HOSTLIST
 
-   Set :envvar:`FLUX_FAKE_HOSTNAME` in the environment of each broker so that
-   the broker can bootstrap from a config file instead of PMI.  HOSTLIST is
-   assumed to be in rank order.  The broker will use the fake hostname to
-   find its entry in the configured bootstrap host array.
+   Set the hostname attribute of each broker so that it can bootstrap from
+   a config file instead of PMI.  HOSTLIST is assumed to be in rank order.
+   The broker will use this hostname to find its entry in the configured
+   bootstrap host array.
 
 .. option:: --test-exit-timeout=FSD
 
