@@ -357,7 +357,8 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
             snprintf (ranks, sizeof (ranks), "%d", rank);
             (void) jobinfo_drain_ranks (job,
                                         ranks,
-                                        "unkillable processes from job %s",
+                                        "sdexec reports %s for job %s",
+                                        flux_subprocess_fail_error (p),
                                         idf58 (job->id));
             bool critical = is_critical_rank (job, shell_rank);
 

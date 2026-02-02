@@ -109,6 +109,7 @@
 
 static double max_start_delay_percent;
 static double kill_timeout;
+static double max_kill_timeout;
 static int max_kill_count;
 static int term_signal;
 static int kill_signal;
@@ -145,6 +146,7 @@ void jobinfo_decref (struct jobinfo *job)
         eventlogger_destroy (job->ev);
         flux_watcher_destroy (job->kill_timer);
         flux_watcher_destroy (job->kill_shell_timer);
+        flux_watcher_destroy (job->max_kill_timer);
         flux_watcher_destroy (job->expiration_timer);
         zhashx_delete (job->ctx->jobs, &job->id);
         if (job->impl && job->impl->exit)
@@ -477,8 +479,12 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
      * If the drain fails (unlikely), then the job stays active and we'll
      * try to kill it again (and drain ranks) the next time the kill timer
      * fires.
+     *
+     * This check is disabled if job->max_kill_timer is active, as this
+     * indicates max-kill-timeout was set and overrides max-kill-count.
      */
-    if (job->kill_shell_count >= max_kill_count
+    if (!job->max_kill_timer
+        && job->kill_shell_count >= max_kill_count
         && job->impl->active_ranks
         && (active_ranks = (*job->impl->active_ranks) (job))) {
         flux_log (job->h,
@@ -492,6 +498,38 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
         }
         idset_destroy (active_ranks);
     }
+}
+
+static void max_kill_timer_cb (flux_reactor_t *r,
+                               flux_watcher_t *w,
+                               int revents,
+                               void *arg)
+{
+    struct jobinfo *job = arg;
+    struct idset *active_ranks;
+
+    flux_log (job->h,
+              LOG_DEBUG,
+              "job %s exceeded max-kill-timeout. Draining active ranks",
+              idf58 (job->id));
+
+    if ((active_ranks = (*job->impl->active_ranks) (job))) {
+        if (drain_active_ranks (job, active_ranks) < 0) {
+            flux_log_error (job->h,
+                            "failed to drain active ranks for %s",
+                            idf58 (job->id));
+        }
+        else {
+            /* Force completion of remaining tasks
+             */
+            jobinfo_tasks_complete (job, active_ranks, 1);
+        }
+        idset_destroy (active_ranks);
+    }
+    else
+        flux_log_error (job->h,
+                        "failed to get active ranks for %s",
+                        idf58 (job->id));
 }
 
 static void kill_timer_cb (flux_reactor_t *r,
@@ -518,29 +556,47 @@ static void kill_timer_cb (flux_reactor_t *r,
     flux_future_destroy (f);
 }
 
+static flux_watcher_t *watcher_create_wrap (struct jobinfo *job,
+                                            const char *name,
+                                            double after,
+                                            double repeat,
+                                            flux_watcher_f cb)
+{
+    flux_watcher_t *w;
+    flux_reactor_t *r = flux_get_reactor (job->h);
+
+    if (!(w = flux_timer_watcher_create (r, after, repeat, cb, job)))
+        flux_log_error (job->h,
+                        "failed to start %s for %s",
+                        name,
+                        idf58 (job->id));
+    else
+        flux_watcher_start (w);
+    return w;
+}
+
 
 static void jobinfo_killtimer_start (struct jobinfo *job, double after)
 {
-    flux_reactor_t *r = flux_get_reactor (job->h);
-
     /* Only start kill timer if not already running */
-    if (job->kill_timer == NULL) {
-        job->kill_timer = flux_timer_watcher_create (r,
-                                                     after,
-                                                     after,
-                                                     kill_timer_cb,
-                                                     job);
-        flux_watcher_start (job->kill_timer);
-    }
-    if (job->kill_shell_timer == NULL) {
-        job->kill_shell_timer = flux_timer_watcher_create (r,
-                                                           after*5,
-                                                           0.,
-                                                           kill_shell_timer_cb,
-                                                           job);
-        flux_watcher_start (job->kill_shell_timer);
-    }
-
+    if (job->kill_timer == NULL)
+        job->kill_timer = watcher_create_wrap (job,
+                                               "kill timer",
+                                               after,
+                                               after,
+                                               kill_timer_cb);
+    if (job->kill_shell_timer == NULL)
+        job->kill_shell_timer = watcher_create_wrap (job,
+                                                     "kill shell timer",
+                                                     after*5,
+                                                     0.,
+                                                     kill_shell_timer_cb);
+    if (max_kill_timeout > 0. && job->max_kill_timer == NULL)
+        job->max_kill_timer = watcher_create_wrap (job,
+                                                   "max kill timer",
+                                                   max_kill_timeout,
+                                                   0.,
+                                                   max_kill_timer_cb);
 }
 
 static void timelimit_cb (flux_reactor_t *r,
@@ -1490,6 +1546,7 @@ static int job_exec_set_config_globals (flux_t *h,
     const char *kto = NULL;
     const char *tsignal = NULL;
     const char *ksignal = NULL;
+    const char *max_timeout = NULL;
     flux_error_t error;
 
     /* Per trws comment in 97421e88987535260b10d6a19551cea625f26ce4
@@ -1503,18 +1560,20 @@ static int job_exec_set_config_globals (flux_t *h,
     max_start_delay_percent = 25.0;
     kill_timeout = 5.0;
     max_kill_count = 8;
+    max_kill_timeout = -1.;
     term_signal = SIGTERM;
     kill_signal = SIGKILL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?F s?s s?s s?s s?i}}",
+                          "{s?{s?F s?s s?s s?s s?i s?s}}",
                           "exec",
                             "max-start-delay-percent", &max_start_delay_percent,
                             "kill-timeout", &kto,
                             "term-signal", &tsignal,
                             "kill-signal", &ksignal,
-                            "max-kill-count", &max_kill_count) < 0)
+                            "max-kill-count", &max_kill_count,
+                            "max-kill-timeout", &max_timeout) < 0)
         return errprintf (errp,
                           "Error reading [exec] table: %s",
                           error.text);
@@ -1529,6 +1588,8 @@ static int job_exec_set_config_globals (flux_t *h,
             tsignal = argv[i] + 12;
         else if (strstarts (argv[i], "max-kill-count="))
             max_kill_count = atoi(argv[i] + 15);
+        else if (strstarts (argv[i], "max-kill-timeout="))
+            max_timeout = argv[i] + 17;
     }
 
     if (kto) {
@@ -1548,6 +1609,13 @@ static int job_exec_set_config_globals (flux_t *h,
     if (tsignal) {
         if ((term_signal = sigutil_signum (tsignal)) < 0) {
             errprintf (errp, "invalid term-signal: %s", tsignal);
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    if (max_timeout) {
+        if (fsd_parse_duration (max_timeout, &max_kill_timeout) < 0) {
+            errprintf (errp, "invalid max-kill-timeout: %s", max_timeout);
             errno = EINVAL;
             return -1;
         }
@@ -1706,11 +1774,12 @@ static void stats_cb (flux_t *h,
     json_t *jobs;
     int i = 0;
 
-    if (!(o = json_pack ("{s:f s:s s:s s:i}",
+    if (!(o = json_pack ("{s:f s:s s:s s:i s:f}",
                          "kill-timeout", kill_timeout,
                          "term-signal", sigutil_signame (term_signal),
                          "kill-signal", sigutil_signame (kill_signal),
-                         "max-kill-count", max_kill_count))) {
+                         "max-kill-count", max_kill_count,
+                         "max-kill-timeout", max_kill_timeout))) {
         errno = ENOMEM;
         goto error;
     }
