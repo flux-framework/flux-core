@@ -10,8 +10,8 @@ cat <<EOF2 >t4182-broker-wrapper.sh
 # Usage: t4182-broker-wrapper.sh hostlist ARGS ...
 
 hostlist=\$1; shift
-FLUX_FAKE_HOSTNAME=\$(flux hostlist --nth=\$FLUX_TASK_RANK "\$hostlist")
-flux broker -Shostlist="\$hostlist" "\$@"
+fake_hostname=\$(flux hostlist --nth=\$FLUX_TASK_RANK "\$hostlist")
+flux broker -Shostlist="\$hostlist" -Shostname="\$fake_hostname" "\$@"
 EOF2
 chmod +x t4182-broker-wrapper.sh
 
@@ -35,7 +35,7 @@ flux dmesg | grep 'sched-simple.*ready'  | tail -1
 flux resource list
 
 #  Disable rlist/hwloc resource verification
-#    --test-hosts set FLUX_FAKE_HOSTNAME but hwloc doesn't know about that
+#    --test-hosts set -Shostname but hwloc doesn't know about that
 echo "resource.noverify = true" >t4182-resource.toml
 
 #  ensure R rerank failure is ignored (i.e. job completes successfully)

@@ -1041,3 +1041,4 @@ builtins
 ignorefail
 noop
 readonly
+gethostbyname

@@ -104,6 +104,11 @@ hostlist :ref:`[readonly] <attr_readonly>`
    An RFC 29 hostlist in broker rank order.  This value may be used to
    translate between broker ranks and hostnames.
 
+hostname
+   The system hostname.  This attribute is set on the broker command line by
+   :option:`flux start --test-hosts`, which is useful in certain test
+   scenarios.
+
 broker.mapping :ref:`[readonly] <attr_readonly>`
    A string representing the process mapping of broker ranks in the Flux
    Task Map format described in RFC 34.  For example, ``[[0,16,1,1]]`` means

@@ -284,8 +284,8 @@ test_expect_success NO_CHAIN_LINT 'a warning is printed when upstream URI has un
 	[[bootstrap.hosts]]
 	host = "fake1"
 	EOT
-	FLUX_FAKE_HOSTNAME=fake1 \
-		flux broker -vv -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	flux broker -vv -Sbroker.rc1_path= -Sbroker.rc3_path= \
+		-Shostname=fake1 \
 		--config-path=conf8b 2>warn.err &
 	echo $! >warn.pid &&
 	waitgrep "unable to resolve upstream peer" warn.err 30

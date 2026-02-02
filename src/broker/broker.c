@@ -232,16 +232,21 @@ int main (int argc, char *argv[])
     if (init_attrs (ctx.attrs, getpid (), &ctx.cred, &error) < 0)
         log_msg_exit ("%s", error.text);
 
-    const char *hostname = getenv ("FLUX_FAKE_HOSTNAME");
-    if (hostname)
-        strlcpy (ctx.hostname, hostname, sizeof (ctx.hostname));
-    else if (gethostname (ctx.hostname, sizeof (ctx.hostname)) < 0)
-        log_err_exit ("gethostname");
-    if (attr_add (ctx.attrs, "hostname", ctx.hostname, ATTR_IMMUTABLE) < 0)
-        log_err_exit ("setattr hostname");
-
     if (parse_command_line_arguments (&ctx, argc, argv, &error) < 0)
         log_msg_exit ("%s", error.text);
+
+    const char *hostname;
+    if (attr_get (ctx.attrs, "hostname", &hostname, NULL) == 0) {
+        strlcpy (ctx.hostname, hostname, sizeof (ctx.hostname));
+        if (attr_set_flags (ctx.attrs, "hostname", ATTR_IMMUTABLE) < 0)
+            log_err_exit ("setattr flags hostname");
+    }
+    else {
+        if (gethostname (ctx.hostname, sizeof (ctx.hostname)) < 0)
+            log_err_exit ("gethostname");
+        if (attr_add (ctx.attrs, "hostname", ctx.hostname, ATTR_IMMUTABLE) < 0)
+            log_err_exit ("setattr hostname");
+    }
 
     /* Block all signals but those that we want to generate core dumps.
      * Save old mask and actions for SIGINT, SIGTERM.

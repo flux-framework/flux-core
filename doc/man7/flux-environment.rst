@@ -383,17 +383,6 @@ components or writing tests.
    code that authorizes actions based on the possession of particular roles.
    This is restricted to the instance owner.
 
-.. envvar:: FLUX_FAKE_HOSTNAME
-
-   When Flux bootstraps from a configuration file as described in
-   :man5:`flux-config-bootstrap`, a :man1:`flux-broker` determines its rank
-   by looking up its own hostname in a ``hosts`` array and using the array
-   index as its rank.  To allow this to be tested on a single node,
-   :envvar:`FLUX_FAKE_HOSTNAME` may be set in the broker's environment to use
-   the specified name instead of the result of :linux:man3:`gethostname`.  Use
-   of this capability in test is simplified by the
-   :option:`flux start --test-hosts` option.
-
 .. envvar:: FLUX_HWLOC_XMLFILE
 
    Flux discovers available resources dynamically using `HWLOC

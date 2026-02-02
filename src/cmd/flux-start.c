@@ -132,7 +132,7 @@ static struct optparse_option opts[] = {
       .usage = "Start a test instance by launching N brokers locally", },
     { .group = 2,
       .name = "test-hosts", .has_arg = 1, .arginfo = "HOSTLIST",
-      .usage = "Set FLUX_FAKE_HOSTNAME in environment of each broker", },
+      .usage = "Set fake hostnames for brokers", },
     { .group = 2,
       .name = "test-exit-timeout", .has_arg = 1, .arginfo = "FSD",
       .usage = "After a broker exits, kill other brokers after timeout", },
@@ -677,6 +677,8 @@ struct client *client_create (const char *broker_path,
         goto fail;
 
     add_argzf (&argz, &argz_len, "--setattr=rundir=%s", rundir);
+    if (hostname)
+        add_argzf (&argz, &argz_len, "--setattr=hostname=%s", hostname);
 
     if (rank == 0 && cmd_argz) /* must be last arg */
         argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len);
@@ -699,13 +701,8 @@ struct client *client_create (const char *broker_path,
                              1,
                              "FLUX_START_URI",
                              "local://%s/start",
-                             rundir) < 0
-        || (hostname && flux_cmd_setenvf (cli->cmd,
-                                          1,
-                                          "FLUX_FAKE_HOSTNAME",
-                                          "%s",
-                                          hostname) < 0))
-            log_err_exit ("error setting up environment for rank %d", rank);
+                             rundir) < 0)
+        log_err_exit ("error setting up environment for rank %d", rank);
     return cli;
 fail:
     ERRNO_SAFE_WRAP (free, argz);
