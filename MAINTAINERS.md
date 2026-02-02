@@ -21,6 +21,11 @@ to this project, please refer to [CONTRIBUTING](CONTRIBUTING.md).
 | Becky Springmeyer  | [springme](https://github.com/springme)               | LLNL        |
 | William Hobbs      | [wihobbs](https://github.com/wihobbs)                 | LLNL        |
 
+_If you'd like to update your name or affiliation across Flux repositories, 
+feel free to open an issue or reach out to our [Organization 
+Administrators](https://github.com/flux-framework/#organization-administrators)
+who are happy to help with this._
+
 ## Maintainers Emeritus
 
 | Maintainer       | GitHub ID                                             | Affiliation |
