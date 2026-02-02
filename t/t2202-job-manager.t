@@ -6,9 +6,7 @@ test_description='Test flux job manager service'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 kvs
-
-flux setattr log-stderr-level 1
+test_under_flux 4 kvs -Slog-stderr-level=1
 
 DRAIN_CANCEL="flux python ${FLUX_SOURCE_DIR}/t/job-manager/drain-cancel.py"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc

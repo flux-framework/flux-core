@@ -22,9 +22,7 @@ if ! busctl status >/dev/null; then
 	test_done
 fi
 
-test_under_flux 1 minimal
-
-flux setattr log-stderr-level 1
+test_under_flux 1 minimal -Slog-stderr-level=1
 
 testname="t2412-$$"
 

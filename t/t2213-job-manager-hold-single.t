@@ -9,9 +9,7 @@ test_description='Test flux job manager job hold (single mode)'
 export TEST_UNDER_FLUX_CORES_PER_RANK=1
 export TEST_UNDER_FLUX_NO_JOB_EXEC=y
 export TEST_UNDER_FLUX_SCHED_SIMPLE_MODE="limited=1"
-test_under_flux 1 job
-
-flux setattr log-stderr-level 1
+test_under_flux 1 job -Slog-stderr-level=1
 
 # N.B. resources = 1 rank, 1 core/rank
 test_expect_success 'job-manager: submit 5 jobs (job 2 held)' '

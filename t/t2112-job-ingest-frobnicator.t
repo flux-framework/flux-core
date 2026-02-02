@@ -10,9 +10,7 @@ cat <<EOF >conf.d/conf.toml
 [policy.jobspec.defaults.system]
 duration = "30m"
 EOF
-test_under_flux 1 job
-
-flux setattr log-stderr-level 1
+test_under_flux 1 job -Slog-stderr-level=1
 
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 Y2J="flux python ${JOBSPEC}/y2j.py"

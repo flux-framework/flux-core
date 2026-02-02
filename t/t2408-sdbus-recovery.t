@@ -24,9 +24,7 @@ cat >config/config.toml <<EOF
 sdbus-debug = true
 EOF
 
-test_under_flux 1 minimal --config-path=$(pwd)/config
-
-flux setattr log-stderr-level 1
+test_under_flux 1 minimal --config-path=$(pwd)/config -Slog-stderr-level=1
 
 # Usage: bus_get_manager_prop property
 bus_get_manager_prop() {

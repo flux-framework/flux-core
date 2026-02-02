@@ -3,9 +3,7 @@ test_description='Test job validator'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 job
-
-flux setattr log-stderr-level 1
+test_under_flux 4 job -Slog-stderr-level=1
 
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 Y2J="flux python ${JOBSPEC}/y2j.py"

@@ -3,9 +3,7 @@ test_description='Test flux queue command'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1 full
-
-flux setattr log-stderr-level 1
+test_under_flux 1 full -Slog-stderr-level=1
 
 LIST_JOBS=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
 

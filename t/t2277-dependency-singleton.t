@@ -7,9 +7,7 @@ test_description='Test job dependency singleton support'
 
 flux version | grep -q libflux-security && test_set_prereq FLUX_SECURITY
 
-test_under_flux 2 job
-
-flux setattr log-stderr-level 1
+test_under_flux 2 job -Slog-stderr-level=1
 
 submit_as_alternate_user()
 {

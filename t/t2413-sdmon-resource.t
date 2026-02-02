@@ -30,9 +30,7 @@ enable = true
 service = "sdexec"
 EOT
 
-test_under_flux 1 full --config-path=$(pwd)/config
-
-flux setattr log-stderr-level 1
+test_under_flux 1 full --config-path=$(pwd)/config -Slog-stderr-level=1
 
 testname="t2412-$$"
 

@@ -7,9 +7,7 @@ test_description='Test flux job manager service with sched-simple (single)'
 . $(dirname $0)/sharness.sh
 
 export TEST_UNDER_FLUX_NO_JOB_EXEC=y
-test_under_flux 2 job
-
-flux setattr log-stderr-level 1
+test_under_flux 2 job -Slog-stderr-level=1
 
 # N.B. we will fake with different resources later on in this file, thus
 # the need to set resources manually instead of through test_under_flux()

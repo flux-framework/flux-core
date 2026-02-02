@@ -4,15 +4,13 @@ test_description='Test flux submit command'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4
+test_under_flux 4 full -Slog-stderr-level=1
 
 NCORES=$(flux resource list -no {ncores})
 test ${NCORES} -gt 4 && test_set_prereq MULTICORE
 
 # Set CLIMain log level to logging.DEBUG (10), to enable stack traces
 export FLUX_PYCLI_LOGLEVEL=10
-
-flux setattr log-stderr-level 1
 
 test_expect_success 'flux submit --dry-run works without Flux instance' '
 	FLUX_URI=/no/such/path \

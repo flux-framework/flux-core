@@ -3,7 +3,7 @@ test_description='Test job manager internal copy of R'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1
+test_under_flux 1 full -Slog-stderr-level=1
 
 # Usage: job_manager_getattr ID ATTR
 job_manager_getattr() {
@@ -17,8 +17,6 @@ json_diff() {
 	jq --sort-keys . $2 >difftmp2 &&
 	diff difftmp1 difftmp2
 }
-
-flux setattr log-stderr-level 1
 
 test_expect_success 'submit job' '
 	flux submit -t 10s --wait-event=clean true | flux job id >jobid

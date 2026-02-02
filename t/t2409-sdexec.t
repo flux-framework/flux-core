@@ -25,9 +25,7 @@ if systemctl --user show dbus | grep -q OOMPolicy=; then
 	test_set_prereq OOMPOLICY
 fi
 
-test_under_flux 2 minimal
-
-flux setattr log-stderr-level 1
+test_under_flux 2 minimal -Slog-stderr-level=1
 
 sdexec="flux exec --service sdexec"
 lptest="flux lptest"

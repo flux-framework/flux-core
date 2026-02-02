@@ -4,12 +4,10 @@ test_description='Test perilog jobtap plugin with per-rank=true'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 full \
+test_under_flux 4 full -Slog-stderr-level=1 \
 	--test-exit-mode=leader
 
 OFFLINE_PLUGIN=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs/offline.so
-
-flux setattr log-stderr-level 1
 
 # In case the testsuite is running as a Flux job
 unset FLUX_JOB_ID

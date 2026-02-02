@@ -7,9 +7,8 @@ if flux job submit --help 2>&1 | grep -q sign-type; then
 	test_set_prereq HAVE_FLUX_SECURITY
 fi
 
-test_under_flux 4 job
+test_under_flux 4 job -Slog-stderr-level=1
 
-flux setattr log-stderr-level 1
 export FLUX_URI_RESOLVE_LOCAL=t
 runas_guest() {
 	local userid=$(($(id -u)+1))

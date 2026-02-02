@@ -4,11 +4,10 @@ test_description='Test alloc-bypass job manager plugin'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 2 job
+test_under_flux 2 job -Slog-stderr-level=1
+
 
 flux version | grep -q libflux-security && test_set_prereq FLUX_SECURITY
-
-flux setattr log-stderr-level 1
 
 submit_as_alternate_user()
 {

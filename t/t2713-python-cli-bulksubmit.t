@@ -7,9 +7,7 @@ test_description='flux bulksubmit specific tests'
 
 # Start an instance with 16 cores across 4 ranks
 export TEST_UNDER_FLUX_CORES_PER_RANK=4
-test_under_flux 4 job
-
-flux setattr log-stderr-level 1
+test_under_flux 4 job -Slog-stderr-level=1
 
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast --line-buffer"
 

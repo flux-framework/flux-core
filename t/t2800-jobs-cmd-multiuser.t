@@ -4,14 +4,13 @@ test_description='Test flux jobs command with multiple user jobs'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 job
+test_under_flux 4 job -Slog-stderr-level=1
+
 
 if ! flux version | grep -q libflux-security; then
     skip_all='libflux-security not built, skipping'
     test_done
 fi
-
-flux setattr log-stderr-level 1
 
 submit_job_altuser()
 {

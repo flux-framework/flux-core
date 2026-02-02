@@ -4,9 +4,7 @@ test_description='Test job constraints'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 job
-
-flux setattr log-stderr-level 1
+test_under_flux 4 job -Slog-stderr-level=1
 
 test_expect_success 'flux run: --requires option works' '
 	flux run --dry-run \

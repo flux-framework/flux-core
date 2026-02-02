@@ -8,9 +8,7 @@ test_description='Test job manager jobtap plugin interface'
 
 mkdir -p config
 
-test_under_flux 4 job --config-path=$(pwd)/config
-
-flux setattr log-stderr-level 1
+test_under_flux 4 job --config-path=$(pwd)/config -Slog-stderr-level=1
 
 PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
 

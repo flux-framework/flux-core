@@ -8,9 +8,8 @@ test_description='Test flux job manager scheduler queue priority ordering (limit
 
 export TEST_UNDER_FLUX_NO_JOB_EXEC=y
 export TEST_UNDER_FLUX_SCHED_SIMPLE_MODE="limited=2"
-test_under_flux 1 job
+test_under_flux 1 job -Slog-stderr-level=1
 
-flux setattr log-stderr-level 1
 
 # N.B. resources = 1 rank, 2 cores/rank
 # flux queue stop/start to ensure no scheduling until after all jobs submitted

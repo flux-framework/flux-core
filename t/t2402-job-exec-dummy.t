@@ -13,9 +13,7 @@ if ! test -f dummy.toml; then
 fi
 
 export FLUX_CONF_DIR=$(pwd)
-test_under_flux 4 job
-
-flux setattr log-stderr-level 1
+test_under_flux 4 job -Slog-stderr-level=1
 
 job_kvsdir()    { flux job id --to=kvs $1; }
 exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; }

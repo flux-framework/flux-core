@@ -4,7 +4,8 @@ test_description='Test flux job manager wait handling'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1
+test_under_flux 1 full -Slog-stderr-level=1
+
 
 list_jobs=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
 SUBMIT_WAIT="flux python ${FLUX_SOURCE_DIR}/t/job-manager/submit-wait.py"
@@ -13,8 +14,6 @@ SUBMIT_SW="flux python ${FLUX_SOURCE_DIR}/t/job-manager/submit-sliding-window.py
 SUBMIT_INTER="flux python ${FLUX_SOURCE_DIR}/t/job-manager/wait-interrupted.py"
 JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 PRINT_CONSTANTS="${FLUX_BUILD_DIR}/t/job-manager/print-constants"
-
-flux setattr log-stderr-level 1
 
 test_job_count() {
     test $(${list_jobs} | wc -l) -eq $1

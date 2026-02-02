@@ -4,9 +4,8 @@ test_description='Test flux job exec hello protocol with multiple providers'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1 job
+test_under_flux 1 job -Slog-stderr-level=1
 
-flux setattr log-stderr-level 1
 execservice=${SHARNESS_TEST_SRCDIR}/job-manager/exec-service.lua
 
 lastevent() { flux job eventlog $1 | awk 'END{print $2}'; }

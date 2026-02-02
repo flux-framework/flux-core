@@ -32,9 +32,7 @@ export FLUX_TEST_DISABLE_TIMEOUT=t
 export LD_PRELOAD=libfaketimeMT.so.1
 export FAKETIME_NO_CACHE=1
 export FAKETIME_TIMESTAMP_FILE=$(pwd)/faketimerc
-test_under_flux ${SIZE} minimal
-
-flux setattr log-stderr-level 1
+test_under_flux ${SIZE} minimal -Slog-stderr-level=1
 
 cron_entry_check() {
     local id=$1

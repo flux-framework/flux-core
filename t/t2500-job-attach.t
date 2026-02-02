@@ -4,9 +4,7 @@ test_description='Test flux job attach'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4
-
-flux setattr log-stderr-level 1
+test_under_flux 4 full -Slog-stderr-level=1
 
 runpty=$SHARNESS_TEST_SRCDIR/scripts/runpty.py
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"

@@ -4,12 +4,10 @@ test_description='Test flux cancel command'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4
+test_under_flux 4 full -Slog-stderr-level=1
 
 # Set CLIMain log level to logging.DEBUG (10), to enable stack traces
 export FLUX_PYCLI_LOGLEVEL=10
-
-flux setattr log-stderr-level 1
 
 runas() {
 	userid=$1 && shift

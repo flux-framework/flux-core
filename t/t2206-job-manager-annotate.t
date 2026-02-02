@@ -7,9 +7,7 @@ test_description='Test flux job manager annotate service'
 . $(dirname $0)/sharness.sh
 
 export TEST_UNDER_FLUX_NO_JOB_EXEC=y
-test_under_flux 1 job
-
-flux setattr log-stderr-level 1
+test_under_flux 1 job -Slog-stderr-level=1
 
 test_expect_success 'job-manager: initially run without scheduler' '
         flux module unload sched-simple

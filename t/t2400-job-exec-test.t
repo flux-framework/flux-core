@@ -4,11 +4,9 @@ test_description='Test flux job execution service in simulated mode'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1 job
+test_under_flux 1 job -Slog-stderr-level=1
 
 flux version | grep -q libflux-security && test_set_prereq FLUX_SECURITY
-
-flux setattr log-stderr-level 1
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
