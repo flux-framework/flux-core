@@ -52,7 +52,9 @@ test_expect_success 'job-exec: ensure cancellation kills job' '
 test_expect_success 'job-exec: reload module with kill/term-signal=SIGURG' '
 	flux module reload job-exec \
 		kill-timeout=0.1s kill-signal=SIGURG term-signal=SIGURG \
-		max-kill-count=20
+		max-kill-count=20 &&
+	flux module stats job-exec | \
+	    jq -e ".[\"effective-max-kill-timeout\"] > 1000"
 '
 test_expect_success 'job-exec: submit a job' '
 	jobid=$(flux submit --wait-event=start -n1 sleep inf)
@@ -94,10 +96,14 @@ test_expect_success 'job-exec: kill test job with SIGKILL' '
        flux job kill -s 9 $jobid &&
        flux job wait-event -vt 15 $jobid clean
 '
+# For the next test kill-timeout=0.1s, max-kill-count=3 implies
+# effective-kill-timeout =~ 0.8s because: (5 * 0.1) + 0.1 + 0.2 = 0.8s
 test_expect_success 'job-exec: reload module with small max-kill-count' '
 	flux module reload job-exec \
 		kill-timeout=0.1s kill-signal=SIGURG term-signal=SIGURG \
-		max-kill-count=3
+		max-kill-count=3 &&
+	flux module stats job-exec | \
+	    jq -e ".[\"effective-max-kill-timeout\"] - 0.8 | fabs | . < 1e-8"
 '
 test_expect_success 'job-exec: submit a job' '
 	jobid=$(flux submit --wait-event=start -n1 sleep inf)
@@ -174,7 +180,9 @@ test_expect_success 'job-exec: reload module with max-kill-timeout' '
 		kill-timeout=0.1s \
 		kill-signal=SIGURG \
 		term-signal=SIGURG \
-		max-kill-timeout=1s
+		max-kill-timeout=1s &&
+	flux module stats job-exec | \
+	    jq -e ".[\"effective-max-kill-timeout\"] == 1.0"
 '
 test_expect_success 'job-exec: submit a job for max-kill-timeout test' '
 	jobid=$(flux submit --wait-event=start -n1 sleep inf)
@@ -207,6 +215,8 @@ test_expect_success 'job-exec: max-kill-timeout overrides large max-kill-count' 
 		term-signal=SIGURG \
 		max-kill-timeout=0.5s \
 		max-kill-count=600 &&
+	flux module stats job-exec | \
+	    jq -e ".[\"effective-max-kill-timeout\"] == 0.5" &&
 	jobid=$(flux submit --wait-event=start -n1 sleep inf) &&
 	sleep_pid=$(flux job hostpids $jobid | sed s/.*://) &&
 	flux dmesg -C &&
@@ -223,6 +233,8 @@ test_expect_success 'job-exec: max-kill-timeout overrides small max-kill-count' 
 		term-signal=SIGURG \
 		max-kill-timeout=0.5s \
 		max-kill-count=1 &&
+	flux module stats job-exec | \
+	    jq -e ".[\"effective-max-kill-timeout\"] == 0.5" &&
 	jobid=$(flux submit --wait-event=start -n1 sleep inf) &&
 	sleep_pid=$(flux job hostpids $jobid | sed s/.*://) &&
 	flux dmesg -C &&
