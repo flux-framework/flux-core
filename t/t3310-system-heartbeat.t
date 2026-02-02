@@ -7,15 +7,12 @@ test_description='Deprive a leaf node of heartbeats and make it sad'
 
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
-test_under_flux 2 system
+test_under_flux 2 system -Slog-stderr-mode=local
 
 test_expect_success 'ensure child is online' '
 	flux overlay status --timeout=0 --wait full
 '
 
-test_expect_success 'tell brokers to log to stderr' '
-	flux exec flux setattr log-stderr-mode local
-'
 test_expect_success 'configure heartbeat' '
 	flux config load <<-EOT
 	[heartbeat]

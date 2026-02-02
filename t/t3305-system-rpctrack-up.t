@@ -15,13 +15,10 @@ commands/RPCs through their paces.
 
 export TEST_UNDER_FLUX_TOPO=kary:2
 
-test_under_flux 15 system
+test_under_flux 15 system -Slog-stderr-mode=local
 
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
-test_expect_success 'tell each broker to log to stderr' '
-	flux exec flux setattr log-stderr-mode local
-'
 test_expect_success 'flux overlay parentof fails with missing RANK' '
 	test_must_fail flux overlay parentof
 '

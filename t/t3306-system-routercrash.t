@@ -20,7 +20,7 @@ export TEST_UNDER_FLUX_TOPO=kary:1
 # before calling test_under_flux():
 ulimit -c 0
 
-test_under_flux 3 system
+test_under_flux 3 system -Slog-stderr-mode=local
 
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 groups="flux python ${SHARNESS_TEST_SRCDIR}/scripts/groups.py"
@@ -43,10 +43,6 @@ test_expect_success 'resource status shows no offline nodes' '
         echo 0 >offline0.exp &&
         flux resource status -s offline -no {nnodes} >offline0.out &&
         test_cmp offline0.exp offline0.out
-'
-
-test_expect_success 'tell each broker to log to stderr' '
-	flux exec flux setattr log-stderr-mode local
 '
 
 test_expect_success 'construct FLUX_URI for rank 2 (child of 1)' '
