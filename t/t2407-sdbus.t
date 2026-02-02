@@ -20,8 +20,6 @@ fi
 
 test_under_flux 2 minimal
 
-flux setattr log-stderr-level 3
-
 #
 # N.B. ListUnitsByPatterns response payload is a 'params' array whose first
 # and only item (".params[0]") is an array of units.  The jq(1) expression
