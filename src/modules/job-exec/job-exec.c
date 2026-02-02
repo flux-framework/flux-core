@@ -133,6 +133,38 @@ struct job_exec_ctx {
     zhashx_t *            jobs;
 };
 
+/* Return an estimate for the maximum time job-exec will wait to terminate
+ * a job before draining nodes.
+ */
+double job_exec_max_kill_timeout (void)
+{
+    double result;
+    double timeout;
+
+    if (max_kill_timeout > 0.)
+        return max_kill_timeout;
+
+    /* Otherwise, create estimate based on max-kill-count and kill-timeout
+     *
+     * 1. delay between job kill and job-shell kill is 5*kill_timeout:
+     */
+    result = kill_timeout * 5;
+
+    /* 2. kill job shell up to max_kill_count times with exponential backoff
+     *    up to 300s between attempts. The timeout ends at the last kill,
+     *    not after it. So if max-kill-count=4 and kill-timeout=1:
+     *    result = ((1 * 5) + 1 + 2 + 4) = 12
+     */
+    timeout = kill_timeout;
+    for (int i = 1; i < max_kill_count; i++) {
+        result += timeout;
+        timeout *= 2;
+        if (timeout > 300.)
+            timeout = 300.;
+    }
+    return result;
+}
+
 void jobinfo_incref (struct jobinfo *job)
 {
     job->refcount++;
@@ -1784,13 +1816,15 @@ static void stats_cb (flux_t *h,
     json_t *o = NULL;
     json_t *jobs;
     int i = 0;
+    double max_kto = job_exec_max_kill_timeout ();
 
-    if (!(o = json_pack ("{s:f s:s s:s s:i s:f}",
+    if (!(o = json_pack ("{s:f s:s s:s s:i s:f s:f}",
                          "kill-timeout", kill_timeout,
                          "term-signal", sigutil_signame (term_signal),
                          "kill-signal", sigutil_signame (kill_signal),
                          "max-kill-count", max_kill_count,
-                         "max-kill-timeout", max_kill_timeout))) {
+                         "max-kill-timeout", max_kill_timeout,
+                         "effective-max-kill-timeout", max_kto))) {
         errno = ENOMEM;
         goto error;
     }
