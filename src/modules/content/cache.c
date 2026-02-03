@@ -1042,15 +1042,16 @@ static int get_hash_name (struct content_cache *cache)
 {
     const char *s;
 
-    if (!(s = flux_attr_get (cache->h, "content.hash")))
+    if (!(s = flux_attr_get (cache->h, "content.hash"))) {
+        if (flux_attr_set (cache->h, "content.hash", default_hash) < 0) {
+            flux_log_error (cache->h, "setattr content.hash");
+            return -1;
+        }
         s = default_hash;
+    }
     if ((content_hash_size = blobref_validate_hashtype (s)) < 0
         || !(cache->hash_name = strdup (s))) {
         flux_log_error (cache->h, "%s: unknown hash type", s);
-        return -1;
-    }
-    if (flux_attr_set (cache->h, "content.hash", cache->hash_name) < 0) {
-        flux_log_error (cache->h, "setattr content.hash");
         return -1;
     }
     return 0;

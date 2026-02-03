@@ -108,6 +108,22 @@ static void process_updates (flux_future_t *f)
         log_msg_exit ("%s", future_strerror (f, errno));
 }
 
+static int rmattr (flux_t *h, const char *name)
+{
+    flux_future_t *f;
+    int rc = 0;
+    if (!(f = flux_rpc_pack (h,
+                             "attr.rm",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s}",
+                             "name", name))
+        || flux_rpc_get (f, NULL) < 0)
+        rc = -1;
+    flux_future_destroy (f);
+    return rc;
+}
+
 static int subcmd (optparse_t *p, int ac, char *av[])
 {
     flux_t *h;
@@ -146,7 +162,7 @@ static int subcmd (optparse_t *p, int ac, char *av[])
         flags &= ~FLUX_RPC_STREAMING;
 
     if (optparse_hasopt (p, "skip-gc")) {
-        if (flux_attr_set (h, "content.dump", "") < 0)
+        if (rmattr (h, "content.dump") < 0)
             log_err_exit ("error clearing content.dump attribute");
     }
 

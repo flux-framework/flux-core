@@ -13,7 +13,6 @@
 #endif
 #include <limits.h>
 #include <jansson.h>
-#include <inttypes.h>
 #include <fnmatch.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -348,124 +347,6 @@ int attr_set_flags (attr_t *attrs, const char *name, int flags)
     rc = 0;
 done:
     return rc;
-}
-
-static int get_int (const char *name, const char **val, void *arg)
-{
-    int *i = arg;
-    static char s[32];
-
-    if (snprintf (s, sizeof (s), "%d", *i) >= sizeof (s)) {
-        errno = EOVERFLOW;
-        return -1;
-    }
-    *val = s;
-    return 0;
-}
-
-static int set_int (const char *name, const char *val, void *arg)
-{
-    int *i = arg;
-    char *endptr;
-    long n;
-
-    if (!val) {
-        errno = EINVAL;
-        return -1;
-    }
-    errno = 0;
-    n = strtol (val, &endptr, 0);
-    if (errno != 0 || *endptr != '\0') {
-        errno = EINVAL;
-        return -1;
-    }
-    if (n <= INT_MIN || n >= INT_MAX) {
-        errno = ERANGE;
-        return -1;
-    }
-    *i = (int)n;
-    return 0;
-}
-
-int attr_add_int (attr_t *attrs, const char *name, int val, int flags)
-{
-    char s[32];
-
-    if (snprintf (s, sizeof (s), "%d", val) >= sizeof (s)) {
-        errno = EOVERFLOW;
-        return -1;
-    }
-    return attr_add (attrs, name, s, flags);
-}
-
-int attr_add_active_int (attr_t *attrs, const char *name, int *val, int flags)
-{
-    return attr_add_active (attrs, name, flags, get_int, set_int, val);
-}
-
-static int get_uint32 (const char *name, const char **val, void *arg)
-{
-    uint32_t *i = arg;
-    static char s[32];
-
-    if (snprintf (s, sizeof (s), "%" PRIu32, *i) >= sizeof (s)) {
-        errno = EOVERFLOW;
-        return -1;
-    }
-    *val = s;
-    return 0;
-}
-
-static int set_uint32 (const char *name, const char *val, void *arg)
-{
-    uint32_t *i = arg;
-    char *endptr;
-    unsigned long n;
-
-    errno = 0;
-    n = strtoul (val, &endptr, 0);
-    if (errno != 0 || *endptr != '\0') {
-        errno = EINVAL;
-        return -1;
-    }
-    *i = n;
-    return 0;
-}
-
-int attr_add_uint32 (attr_t *attrs, const char *name, uint32_t val, int flags)
-{
-    char val_string[32];
-
-    snprintf (val_string, sizeof (val_string), "%"PRIu32, val);
-
-    return attr_add (attrs, name, val_string, flags);
-}
-
-int attr_add_active_uint32 (attr_t *attrs,
-                            const char *name,
-                            uint32_t *val,
-                            int flags)
-{
-    return attr_add_active (attrs, name, flags, get_uint32, set_uint32, val);
-}
-
-int attr_get_uint32 (attr_t *attrs, const char *name, uint32_t *value)
-{
-    const char *s;
-    uint32_t i;
-    char *endptr;
-
-    if (attr_get (attrs, name, &s, NULL) < 0)
-        return -1;
-
-    errno = 0;
-    i = strtoul (s, &endptr, 10);
-    if (errno != 0 || *endptr != '\0') {
-        errno = EINVAL;
-        return -1;
-    }
-    *value = i;
-    return 0;
 }
 
 const char *attr_first (attr_t *attrs)
