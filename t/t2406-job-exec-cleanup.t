@@ -15,6 +15,18 @@ test_expect_success 'job-exec: active_ranks stat works' '
 	flux cancel --all &&
 	flux queue idle
 '
+test_expect_success 'job-exec: invalid kill-timeout=0 fails' '
+	test_expect_code 1 flux config load <<-EOF
+	[exec]
+	kill-timeout = "0s"
+	EOF
+'
+test_expect_success 'job-exec: invalid max-kill-count <= 0 fails' '
+	test_expect_code 1 flux config load <<-EOF
+	[exec]
+	max-kill-count = -1
+	EOF
+'
 test_expect_success 'job-exec: reload module with short kill-timeout' '
 	flux module reload job-exec kill-timeout=0.1s &&
 	flux module stats job-exec
@@ -227,6 +239,12 @@ test_expect_success 'job-exec: setting an invalid max-kill-timeout fails' '
 	test_expect_code 1 flux config load <<-EOF
 	[exec]
 	max-kill-timeout = 100
+	EOF
+'
+test_expect_success 'job-exec: max-kill-timeout=0 fails' '
+	test_expect_code 1 flux config load <<-EOF
+	[exec]
+	max-kill-timeout = "0"
 	EOF
 '
 test_expect_success 'job-exec: invalid FSD for max-kill-timeout fails' '
