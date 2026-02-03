@@ -17,22 +17,34 @@ test_expect_success 'flux getattr rank works' '
 test_expect_success 'flux setattr rank fails (immutable)' '
 	test_must_fail flux setattr rank 42
 '
-test_expect_success 'flux getattr attrtest.nonexist fails' '
-	test_must_fail flux getattr nonexist
+test_expect_success 'flux getattr test.nonexist fails' '
+	test_must_fail flux getattr test.nonexist
 '
 test_expect_success 'flux setattr works' '
-	flux setattr attrtest.foo bar &&
-	ATTR_VAL=`flux getattr attrtest.foo` &&
+	flux setattr test.foo bar &&
+	ATTR_VAL=`flux getattr test.foo` &&
 	test "${ATTR_VAL}" = "bar"
 '
 test_expect_success 'flux lsattr works' '
 	flux lsattr >lsattr_out &&
 	grep -q rank lsattr_out &&
-	grep -q attrtest.foo lsattr_out
+	grep -q test.foo lsattr_out
 '
 test_expect_success 'flux lsattr -v works' '
 	ATTR_VAL=$(flux lsattr -v | awk "/^rank / { print \$2 }") &&
 	test "${ATTR_VAL}" -eq 0
+'
+test_expect_success 'broker --setattr fails on unknown attribute' '
+	test_must_fail flux start -Sunknownattr=abc true
+'
+test_expect_success 'broker --setattr fails on read-only attribute' '
+	test_must_fail flux start -Stest-ro.foo=bac true
+'
+test_expect_success 'flux setattr fails on unknown attribute' '
+	test_must_fail flux setattr unknown-foo bar
+'
+test_expect_success 'flux getattr fails on unknown attribute' '
+	test_must_fail flux getattr unknown-bar
 '
 test_expect_success 'flux lsattr with extra argument fails' '
 	test_must_fail flux lsattr badarg

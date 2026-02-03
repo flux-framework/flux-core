@@ -15,7 +15,10 @@
 #include <flux/core.h>
 
 enum {
-    ATTR_IMMUTABLE = 1,    /* attribute is cacheable */
+    ATTR_IMMUTABLE      = 0x01, // value never changes once set
+    ATTR_READONLY       = 0x02, // value is not to be set on cmdline by users
+    ATTR_RUNTIME        = 0x04, // value may be updated by users [unused]
+    ATTR_CONFIG         = 0x08, // value overrides TOML config [unused]
 };
 
 /* Callbacks for active values.  Return 0 on success, -1 on error with
@@ -57,6 +60,11 @@ int attr_add_uint32 (attr_t *attrs,
 int attr_get (attr_t *attrs, const char *name, const char **val, int *flags);
 
 int attr_set (attr_t *attrs, const char *name, const char *val);
+
+int attr_set_cmdline (attr_t *attrs,
+                      const char *name,
+                      const char *val,
+                      flux_error_t *errp);
 
 /* Set an attribute's flags.
  */
