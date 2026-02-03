@@ -657,6 +657,7 @@ test_expect_success 'flux job: timeleft -H works with time limit' '
 '
 test_expect_success 'flux job: timeleft works under alloc (and job)' '
 	cat <<-EOF >test.sh &&
+	#!/bin/sh
 	flux job timeleft > timeleft3
 	flux run flux job timeleft > timeleft4
 	EOF

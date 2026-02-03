@@ -28,6 +28,7 @@
 #include <sys/un.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
+#include <sys/stat.h>
 #ifdef HAVE_ARGZ_ADD
 #include <argz.h>
 #else
@@ -833,6 +834,50 @@ static bool is_interactive_shell (const char *argz, size_t argz_len)
     return result;
 }
 
+static bool contains_whitespace (const char *arg)
+{
+    for (const char *p = arg; *p != '\0'; p++) {
+        if (isspace (*p))
+            return true;
+    }
+    return false;
+}
+
+/* Return true if cmdline represented by argz, argz_len likely requires
+ * use of `$SHELL -c "cmdline"`.
+ *
+ * If there is a single argument that points to a regular, executable file,
+ * assume it can be executed directly and avoid use of `$SHELL -c`. This
+ * prevents shells like tcsh from remaining the parent of batch scripts or
+ * other initial programs that consist of a single command, and being killed
+ * when SIGUSR1 or other signals meant for the batch script are intercepted.
+ * (See issue #7303)
+ */
+static bool shell_required (const char *argz, int argz_len)
+{
+    struct stat st;
+
+    /* Multiple arguments imply pre-parsed command-line components that
+     * can be directly executed, so no shell required:
+     */
+    if (argz_count (argz, argz_len) != 1)
+        return false;
+
+    /* If the single argument does not contain whitespace and points to a
+     * regular, readable, and executable file, then no shell required.
+     * The broker can directly call the executable.
+     */
+    if (!contains_whitespace (argz)
+       && stat (argz, &st) == 0
+       && S_ISREG (st.st_mode)
+       && access (argz, X_OK | R_OK) == 0)
+        return false;
+
+    /* Otherwise, shell -c required
+     */
+    return true;
+}
+
 static int create_runat_rc2 (struct runat *r,
                              int flags,
                              const char *argz,
@@ -851,7 +896,7 @@ static int create_runat_rc2 (struct runat *r,
         if (runat_push_shell (r, "rc2", argz, flags) < 0)
             goto error;
     }
-    else if (argz_count (argz, argz_len) == 1) { // run shell -c "command"
+    else if (shell_required (argz, argz_len)) { // run shell -c "command"
         if (runat_push_shell_command (r, "rc2", argz, flags) < 0)
             goto error;
     }
