@@ -1592,12 +1592,21 @@ static int job_exec_set_config_globals (flux_t *h,
             max_timeout = argv[i] + 17;
     }
 
+    if (max_kill_count <= 0) {
+        errprintf (errp, "invalid max-kill-count=%d", max_kill_count);
+        errno = EINVAL;
+        /* Reset max_kill_count to default */
+        max_kill_count = 8;
+        return -1;
+    }
     if (kto) {
-        if (fsd_parse_duration (kto, &kill_timeout) < 0) {
+        double val;
+        if (fsd_parse_duration (kto, &val) < 0 || val == 0) {
             errprintf (errp, "invalid kill-timeout: %s", kto);
             errno = EINVAL;
             return -1;
         }
+        kill_timeout = val;
     }
     if (ksignal) {
         if ((kill_signal = sigutil_signum (ksignal)) < 0) {
@@ -1614,11 +1623,13 @@ static int job_exec_set_config_globals (flux_t *h,
         }
     }
     if (max_timeout) {
-        if (fsd_parse_duration (max_timeout, &max_kill_timeout) < 0) {
+        double val;
+        if (fsd_parse_duration (max_timeout, &val) < 0 || val == 0) {
             errprintf (errp, "invalid max-kill-timeout: %s", max_timeout);
             errno = EINVAL;
             return -1;
         }
+        max_kill_timeout = val;
     }
     return 0;
 }
