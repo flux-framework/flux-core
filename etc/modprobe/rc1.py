@@ -141,6 +141,8 @@ def check_clean_shutdown(context):
 #
 # If a dump was restored, we can assume the prior instance was shutdown
 # cleanly.
+#
+# Special case: no fsck in recovery mode
 @task(
     "fsck",
     ranks="0",
@@ -148,6 +150,7 @@ def check_clean_shutdown(context):
     after=["content-backing", "restore"],
     requires=["content-backing"],
     needs=["content-backing"],
+    needs_attrs=["!broker.recovery-mode"],
 )
 def fsck(context):
     try:
