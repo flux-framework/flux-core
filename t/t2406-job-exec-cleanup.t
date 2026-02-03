@@ -288,4 +288,45 @@ test_expect_success 'job-exec: reload module with default settings' '
 	echo {} | flux config load &&
 	flux module reload job-exec
 '
+check_sdexec_stop_timer() {
+	if test -n "$1"; then
+	    flux module stats job-exec |
+	        jq -e ".[\"bulk-exec\"].config.sdexec_stop_timer_sec == $1"
+	else
+	    flux module stats job-exec |
+	        jq -e "
+	            .[\"bulk-exec\"].config.sdexec_stop_timer_sec \
+	             == .[\"effective-max-kill-timeout\"] \
+	        "
+	fi
+}
+test_expect_success 'job-exec: default sdexec_stop_timer = max-kill-timeout' '
+	check_sdexec_stop_timer
+'
+test_expect_success 'job-exec: sdexec_stop_timer with max-kill-timeout set' '
+	echo exec.max-kill-timeout=\"5m\" | flux config load &&
+	check_sdexec_stop_timer
+'
+test_expect_success 'job-exec: sdexec_stop_timer rounds max-kill-timeout up' '
+	echo exec.max-kill-timeout=\"0.5\" | flux config load &&
+	check_sdexec_stop_timer 1
+'
+test_expect_success 'job-exec: default sdexec_stop_timer with max-kill-count' '
+	echo exec.max-kill-count=20 | flux config load &&
+	check_sdexec_stop_timer
+'
+test_expect_success 'job-exec: fractional effective timeout rounds up' '
+	flux module reload job-exec kill-timeout=0.3s max-kill-count=4 &&
+	# Effective: (5*0.3) + 0.3 + 0.6 + 1.2 = 3.59999s → rounds to 4
+	check_sdexec_stop_timer 4
+'
+test_expect_success 'job-exec: default sdexec_stop_timer can be overridden' '
+	flux config load <<-EOF &&
+	[exec]
+	sdexec-stop-timer-sec = 3
+	max-kill-timeout = "5m"
+	EOF
+	test_must_fail check_sdexec_stop_timer &&
+	check_sdexec_stop_timer 3
+'
 test_done
