@@ -13,9 +13,7 @@ cat <<EOF >conf.d/ingest.toml
 disable = true
 EOF
 
-test_under_flux 1 job
-
-flux setattr log-stderr-level 1
+test_under_flux 1 job -Slog-stderr-level=1
 
 SUBMITBENCH="${FLUX_BUILD_DIR}/t/ingest/submitbench"
 dmesg_grep=${SHARNESS_TEST_SRCDIR}/scripts/dmesg-grep.py

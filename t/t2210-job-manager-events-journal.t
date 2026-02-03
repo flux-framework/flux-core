@@ -6,12 +6,10 @@ test_description='Test flux job manager journal service'
 
 export FLUX_CONF_DIR=$(pwd)
 
-test_under_flux 4
+test_under_flux 4 full -Slog-stderr-level=1
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 EVENTS_JOURNAL_STREAM=${FLUX_BUILD_DIR}/t/job-manager/events_journal_stream
-
-flux setattr log-stderr-level 1
 
 test_expect_success 'flux-job: generate jobspec for simple test job' '
 	flux run --dry-run -n1 hostname >basic.json

@@ -10,9 +10,7 @@ specified in RFC 33 for [policy] and [queue.<name>.policy].
 
 mkdir -p config
 
-test_under_flux 1 job
-
-flux setattr log-stderr-level 1
+test_under_flux 1 job -Slog-stderr-level=1
 
 test_expect_success 'unknown policy key fails' '
 	test_must_fail flux config load <<-EOT

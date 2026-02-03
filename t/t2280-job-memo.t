@@ -8,10 +8,7 @@ if flux job submit --help 2>&1 | grep -q sign-type; then
 	test_set_prereq HAVE_FLUX_SECURITY
 fi
 
-test_under_flux 1 job
-
-
-flux setattr log-stderr-level 1
+test_under_flux 1 job -Slog-stderr-level=1
 
 runas() {
         userid=$1 && shift

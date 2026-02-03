@@ -7,9 +7,7 @@ if flux job submit --help 2>&1 | grep -q sign-type; then
 	test_set_prereq HAVE_FLUX_SECURITY
 fi
 
-test_under_flux 4 full
-
-flux setattr log-stderr-level 1
+test_under_flux 4 full -Slog-stderr-level=1
 
 test_expect_success 'config queues and resources' '
 	flux R encode -r 0-3 -p batch:0-2 -p debug:3 \

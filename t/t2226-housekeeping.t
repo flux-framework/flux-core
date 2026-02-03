@@ -3,9 +3,7 @@ test_description='Test job manager housekeeping'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4
-
-flux setattr log-stderr-level 1
+test_under_flux 4 full -Slog-stderr-level=1
 
 # Usage: list_jobs
 list_jobs () {

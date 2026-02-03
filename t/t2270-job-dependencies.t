@@ -9,9 +9,7 @@ test_description='Test job dependencies'
 export FLUX_CONF_DIR=$(pwd)/conf.d
 mkdir -p conf.d
 
-test_under_flux 4 job
-
-flux setattr log-stderr-level 1
+test_under_flux 4 job -Slog-stderr-level=1
 
 PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
 

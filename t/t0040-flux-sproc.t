@@ -4,9 +4,7 @@ test_description='Test flux-sproc command'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 2
-
-flux setattr log-stderr-level 1
+test_under_flux 2 full -Slog-stderr-level=1
 
 # Usage: wait_for_state RANK STATE COUNT
 #

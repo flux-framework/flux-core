@@ -24,9 +24,7 @@ MINJOBID_WORDS="academy-academy-academy--academy-academy-academy"
 MINJOBID_F58="f1"
 MINJOBIDS_LIST="$MINJOBID_DEC $MINJOBID_HEX $MINJOBID_KVS $MINJOBID_DOTHEX $MINJOBID_WORDS $MINJOBID_F58"
 
-test_under_flux 2 job
-
-flux setattr log-stderr-level 1
+test_under_flux 2 job -Slog-stderr-level=1
 
 # Other tests may refer to $(cat inactivejob) for inactive job id
 test_expect_success 'create one inactive job' '

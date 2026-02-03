@@ -4,9 +4,7 @@ test_description='Test flux-shell'
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 4 job
-
-flux setattr log-stderr-level 1
+test_under_flux 4 job -Slog-stderr-level=1
 
 TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
 

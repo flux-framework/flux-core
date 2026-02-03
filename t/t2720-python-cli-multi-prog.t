@@ -6,9 +6,7 @@ test_description='flux multi-prog'
 
 
 # Start an instance with 16 cores across 4 ranks
-test_under_flux 4 job
-
-flux setattr log-stderr-level 1
+test_under_flux 4 job -Slog-stderr-level=1
 
 test_expect_success 'flux-multi-prog prints usage with no args' '
 	test_expect_code 2 flux multi-prog 2>no-args.err &&

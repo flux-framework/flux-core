@@ -4,9 +4,7 @@ test_description='Test flux job manager limit-duration plugin'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 2 full
-
-flux setattr log-stderr-level 1
+test_under_flux 2 full -Slog-stderr-level=1
 
 test_expect_success 'configuring an invalid duration limit fails' '
 	test_must_fail flux config load <<-EOT

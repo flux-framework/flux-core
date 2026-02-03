@@ -5,9 +5,7 @@ test_description='Regression tests for job-manager bugs'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1
-
-flux setattr log-stderr-level 1
+test_under_flux 1 full -Slog-stderr-level=1
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 

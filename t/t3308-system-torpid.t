@@ -6,14 +6,11 @@ test_description='Check torpid broker detection
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 2 system
+test_under_flux 2 system -Slog-stderr-mode=local
 
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 groups="flux python ${SHARNESS_TEST_SRCDIR}/scripts/groups.py"
 
-test_expect_success 'tell brokers to log to stderr' '
-	flux exec flux setattr log-stderr-mode local
-'
 test_expect_success 'load heartbeat module with fast rate for testing' '
         flux module reload heartbeat period=0.5s
 '

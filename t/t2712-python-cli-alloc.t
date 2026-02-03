@@ -8,9 +8,7 @@ test_description='flux alloc specific tests'
 export TEST_UNDER_FLUX_CORES_PER_RANK=4
 # Set local URI resolution for use of flux-proxy below:
 export FLUX_URI_RESOLVE_LOCAL=t
-test_under_flux 4 job
-
-flux setattr log-stderr-level 1
+test_under_flux 4 job -Slog-stderr-level=1
 
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast"
 

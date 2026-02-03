@@ -4,9 +4,7 @@ test_description='Test job begin-time dependencies'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1 job
-
-flux setattr log-stderr-level 1
+test_under_flux 1 job -Slog-stderr-level=1
 
 test_expect_success 'begin-time: submit a job with begin-time +1h' '
 	DELAYED=$(flux submit --begin-time=+1h hostname) &&

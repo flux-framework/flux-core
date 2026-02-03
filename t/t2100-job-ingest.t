@@ -9,9 +9,7 @@ if ${FLUX_BUILD_DIR}/t/ingest/submitbench --help 2>&1 | grep -q sign-type; then
     SUBMITBENCH_OPT_R="--reuse-signature"
 fi
 
-test_under_flux 4 kvs
-
-flux setattr log-stderr-level 1
+test_under_flux 4 kvs -Slog-stderr-level=1
 
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 Y2J="flux python ${JOBSPEC}/y2j.py"

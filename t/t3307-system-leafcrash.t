@@ -23,13 +23,10 @@ if ! test_have_prereq NO_CHAIN_LINT; then
 	test_done
 fi
 
-test_under_flux 2 system
+test_under_flux 2 system -Slog-stderr-mode=local
 
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
-test_expect_success 'tell brokers to log to stderr' '
-	flux exec flux setattr log-stderr-mode local
-'
 
 # Degraded at parent means child was lost
 test_expect_success 'start overlay status wait in the background' '

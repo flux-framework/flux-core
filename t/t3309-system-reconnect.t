@@ -7,7 +7,7 @@ test_description='test handle reconnection
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 2 system
+test_under_flux 2 system -Slog-stderr-mode=local
 
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
@@ -16,10 +16,6 @@ geturi () {
 	local rank=$1
 	echo $FLUX_URI | sed -e "s/local-0/local-$rank/"
 }
-
-test_expect_success 'tell brokers to log to stderr' '
-	flux exec flux setattr log-stderr-mode local
-'
 
 test_expect_success 'flux-proxy works on rank 1 broker' '
 	flux proxy $(geturi 1) flux getattr instance-level

@@ -8,9 +8,7 @@ test_description='Test flux job manager service with sched-simple (limited)'
 
 export TEST_UNDER_FLUX_NO_JOB_EXEC=y
 export TEST_UNDER_FLUX_SCHED_SIMPLE_MODE="limited=2"
-test_under_flux 1 job
-
-flux setattr log-stderr-level 1
+test_under_flux 1 job -Slog-stderr-level=1
 
 test_expect_success 'job-manager: submit 5 jobs' '
         flux submit --log=job{cc}.id --cc="1-5" --flags=debug -n1 \

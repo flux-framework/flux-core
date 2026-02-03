@@ -10,9 +10,7 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 # Size the session to one more than the number of cores, minimum of 4
 SIZE=4
-test_under_flux ${SIZE} minimal
-
-flux setattr log-stderr-level 1
+test_under_flux ${SIZE} minimal -Slog-stderr-level=1
 
 cron_entry_check() {
     local id=$1

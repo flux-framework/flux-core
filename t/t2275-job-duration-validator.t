@@ -4,9 +4,7 @@ test_description='Test job duration validator plugin in job-manager'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1 job
-
-flux setattr log-stderr-level 1
+test_under_flux 1 job -Slog-stderr-level=1
 
 test_expect_success 'duration: no validation when there is no expiration' '
 	flux submit -t 100d true

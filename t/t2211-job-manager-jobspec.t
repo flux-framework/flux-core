@@ -3,7 +3,8 @@ test_description='Checkout job manager redacted jobspec'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1
+test_under_flux 1 full -Slog-stderr-level=1
+
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
@@ -11,8 +12,6 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 job_manager_getattr() {
 	echo '{"id":'$1',"attrs":["'$2'"]}' | ${RPC} job-manager.getattr
 }
-
-flux setattr log-stderr-level 1
 
 test_expect_success 'stop the queue for this test' '
 	flux queue stop
