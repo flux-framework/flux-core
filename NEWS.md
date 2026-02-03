@@ -1,3 +1,88 @@
+flux-core version 0.82.0 - 2026-02-03
+-------------------------------------
+
+## New Features
+ * job-exec: add `max-kill-timeout` parameter (#7298)
+ * flux-pmi: add --timeout option (#7327)
+ * broker: skip `$SHELL -c` wrapper for executable files (#7339)
+ * shell: improve output flow control efficiency (#7321)
+ * broker: fail with a useful message when attribute names are misspelled
+   on the command line (#7348)
+ * config: keep follower broker configuration in sync with leader (#7300)
+ * broker: offload overlay handling to a separate thread (#7260)
+ * libeventlog: cap eventlogger kvs txn ops (#7291)
+ * etc/modprobe: use flux fsck --job-aware in rc1 (#7277)
+ * config: move broker config management to a built-in module and improve
+   error handling (#7265)
+ * flux-config: add subcommands for fine tuning configuration (#7259)
+ * flux-fsck: support --job-aware (#7194)
+ * libpmi: add config bootstrap method (#7249)
+ * support `resource.verify` config for granular resource verification
+   (#7241)
+ * add 5m shutdown timeout on system instance (#7238)
+ * shell: add oom.adjust (#7237)
+ * job-list: stream responses from job-list (#7224)
+ * modprobe: allow multiple tasks with `after=["*"]` (#7231)
+ * python: add functions for kvs raw writes (#7303)
+
+## Fixes
+ * job-exec: improve coordination between sdexec and job-exec job termination
+   timing (#7349)
+ * broker: fix hang on rc exec errors (#7337)
+ * flux-job: fix rare hang in attach with interactive pty (#7335)
+ * shell: fix output flow control bug (#7320)
+ * sdexec: fix false unit not started error (#7317)
+ * broker: fix foreground process handling for interactive rc2 (#7315)
+ * shell: fix stderr flow control bug (#7309)
+ * libeventlog: wait for pending commits to complete (#7271)
+ * avoid potential `flux job attach` hangs with MPIR tools and add graceful
+   job shell rexec server shutdown (#7294)
+ * shell: avoid incorrect core adjustment when specifying nodes and slots
+   with `flux alloc` and `flux batch` (#7288)
+ * broker: avoid unnecessary log message forwarding (#7284)
+ * resource: fix undrain event generation (#7275)
+ * fix lsf resolver for >1 broker per node (#7273)
+ * bug: python validation multiplies string (#7229)
+
+## Cleanup
+ * broker: minor cleanup of attribute usage (#7352)
+ * broker: drop `FLUX_FAKE_HOSTNAME` environment variable (#7344)
+ * libflux: rename internal functions for tracing (#7308)
+ * broker: clean up state machine (#7293)
+ * Tighten const correctness (#7263)
+ * libpmi: improve client config boot error message (#7256)
+ * libpmi: pull in business card classes from the broker (#7247)
+ * job-list: add version to list response (#7239)
+ * broker: split bootstrap into two phases (#7254)
+ * broker: add args param to `topology_create()` (#7246)
+ * libflux: clean up `flux_attr_get()` and related functions (#7240)
+ * broker: assign event seqs in the broker not overlay (#7221)
+
+## Build/CI/Testsuite/Documentation
+ * flux-broker-attributes(7): fix misc errors (#7347)
+ * testsuite: tidy up broker logging configuration (#7346)
+ * ci: update python version for use with coverage tool (#7342)
+ * testsuite: work around hwloc gpu masking issue (#7333)
+ * libsubprocess/test: fix racy credit test output (#7331)
+ * .github: add manually-triggered workflow for rebuilding testenv containers
+   (#7316)
+ * flux-broker-attributes(7): improve updatability marks, add CAVEATS (#7323)
+ * libsubprocess: fix test portability issue on macos (#7318)
+ * libsubprocess/test: add test instrumentation (#7313)
+ * configure: force bash completions to observe `--prefix` (#7304)
+ * testsuite: prevent lstopo window pop-up (#7299)
+ * testsuite: fix t2318-resource-verify.t on non-RSMI system (#7296)
+ * doc: improve man page descriptions of broker logging (#7283)
+ * testsuite: fix non-bourne shell test failure (#7279)
+ * MAINTAINERS: update first name to match GitHub profile (#7270)
+ * doc: update broker internals documentation (#7261)
+ * doc: update migrating from slurm section of admin guide (#7253)
+ * admin guide: break apart, add preface (#7251)
+ * doc: update spack runes (#7250)
+ * add MAINTAINERS.md file (#7245)
+ * t: various test cleanup (#7222)
+ * docker: create manifest for non-multi-arch images on tag (#7226)
+
 flux-core version 0.81.0 - 2025-12-02
 -------------------------------------
 
