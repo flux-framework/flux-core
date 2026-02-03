@@ -16,6 +16,7 @@
 
 #include <jansson.h>
 #include <unistd.h>
+#include <math.h>
 
 #if HAVE_FLUX_SECURITY
 #include <flux/security/version.h>
@@ -85,10 +86,30 @@ json_t *config_get_sdexec_properties (void)
     return exec_conf.sdexec_properties;
 }
 
+static int derive_sdexec_stop_timer_sec (void)
+{
+    int value = exec_conf.sdexec_stop_timer_sec;
+
+    /* If sdexec_stop_timer_sec is not configured, default it to
+     * job-exec's effective max-kill-timeout (rounded up to next integer).
+     * This ensures sdexec waits at least 2*max-kill-timeout before
+     * abandoning the unit: one period before sending SIGKILL to remaining
+     * processes, then another period before abandoning the unit and
+     * draining the node. This gives job-exec's normal termination sequence
+     * (which takes up to max-kill-timeout) time to complete before systemd
+     * intervenes.
+     */
+    if (value < 0)
+        value = ceil (job_exec_max_kill_timeout ());
+
+    return value;
+}
+
+
 const char *config_get_sdexec_stop_timer_sec (void)
 {
     static char buf[32];
-    snprintf (buf, sizeof (buf), "%d", exec_conf.sdexec_stop_timer_sec);
+    snprintf (buf, sizeof (buf), "%d", derive_sdexec_stop_timer_sec ());
     return buf;
 }
 
@@ -118,7 +139,7 @@ int config_get_stats (json_t **config_stats)
                          "default_barrier_timeout",
                          exec_conf.default_barrier_timeout,
                          "sdexec_stop_timer_sec",
-                         exec_conf.sdexec_stop_timer_sec,
+                         derive_sdexec_stop_timer_sec (),
                          "sdexec_stop_timer_signal",
                          exec_conf.sdexec_stop_timer_signal))) {
         errno = ENOMEM;
@@ -149,7 +170,7 @@ static void exec_config_init (struct exec_config *ec)
     ec->exec_service = "rexec";
     ec->exec_service_override = 0;
     ec->sdexec_properties = NULL;
-    ec->sdexec_stop_timer_sec = 30;
+    ec->sdexec_stop_timer_sec = -1;
     ec->sdexec_stop_timer_signal = 10; // SIGUSR1
     ec->default_barrier_timeout = 1800.;
 }

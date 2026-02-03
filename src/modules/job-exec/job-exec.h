@@ -170,6 +170,12 @@ flux_future_t *jobinfo_shell_rpc_pack (struct jobinfo *job,
                                        const char *fmt,
                                        ...);
 
+/* Return the estimated amount of time the job execution system will wait
+ * between first signaling a job (i.e. after an exception) until it gives
+ * up and drains nodes.
+ */
+double job_exec_max_kill_timeout (void);
+
 #endif /* !HAVE_JOB_EXEC_EXEC_H */
 
 /* vi: ts=4 sw=4 expandtab

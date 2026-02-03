@@ -15,6 +15,18 @@ test_expect_success 'job-exec: active_ranks stat works' '
 	flux cancel --all &&
 	flux queue idle
 '
+test_expect_success 'job-exec: invalid kill-timeout=0 fails' '
+	test_expect_code 1 flux config load <<-EOF
+	[exec]
+	kill-timeout = "0s"
+	EOF
+'
+test_expect_success 'job-exec: invalid max-kill-count <= 0 fails' '
+	test_expect_code 1 flux config load <<-EOF
+	[exec]
+	max-kill-count = -1
+	EOF
+'
 test_expect_success 'job-exec: reload module with short kill-timeout' '
 	flux module reload job-exec kill-timeout=0.1s &&
 	flux module stats job-exec
@@ -40,7 +52,9 @@ test_expect_success 'job-exec: ensure cancellation kills job' '
 test_expect_success 'job-exec: reload module with kill/term-signal=SIGURG' '
 	flux module reload job-exec \
 		kill-timeout=0.1s kill-signal=SIGURG term-signal=SIGURG \
-		max-kill-count=20
+		max-kill-count=20 &&
+	flux module stats job-exec | \
+	    jq -e ".[\"effective-max-kill-timeout\"] > 1000"
 '
 test_expect_success 'job-exec: submit a job' '
 	jobid=$(flux submit --wait-event=start -n1 sleep inf)
@@ -82,10 +96,14 @@ test_expect_success 'job-exec: kill test job with SIGKILL' '
        flux job kill -s 9 $jobid &&
        flux job wait-event -vt 15 $jobid clean
 '
+# For the next test kill-timeout=0.1s, max-kill-count=3 implies
+# effective-kill-timeout =~ 0.8s because: (5 * 0.1) + 0.1 + 0.2 = 0.8s
 test_expect_success 'job-exec: reload module with small max-kill-count' '
 	flux module reload job-exec \
 		kill-timeout=0.1s kill-signal=SIGURG term-signal=SIGURG \
-		max-kill-count=3
+		max-kill-count=3 &&
+	flux module stats job-exec | \
+	    jq -e ".[\"effective-max-kill-timeout\"] - 0.8 | fabs | . < 1e-8"
 '
 test_expect_success 'job-exec: submit a job' '
 	jobid=$(flux submit --wait-event=start -n1 sleep inf)
@@ -162,7 +180,9 @@ test_expect_success 'job-exec: reload module with max-kill-timeout' '
 		kill-timeout=0.1s \
 		kill-signal=SIGURG \
 		term-signal=SIGURG \
-		max-kill-timeout=1s
+		max-kill-timeout=1s &&
+	flux module stats job-exec | \
+	    jq -e ".[\"effective-max-kill-timeout\"] == 1.0"
 '
 test_expect_success 'job-exec: submit a job for max-kill-timeout test' '
 	jobid=$(flux submit --wait-event=start -n1 sleep inf)
@@ -195,6 +215,8 @@ test_expect_success 'job-exec: max-kill-timeout overrides large max-kill-count' 
 		term-signal=SIGURG \
 		max-kill-timeout=0.5s \
 		max-kill-count=600 &&
+	flux module stats job-exec | \
+	    jq -e ".[\"effective-max-kill-timeout\"] == 0.5" &&
 	jobid=$(flux submit --wait-event=start -n1 sleep inf) &&
 	sleep_pid=$(flux job hostpids $jobid | sed s/.*://) &&
 	flux dmesg -C &&
@@ -211,6 +233,8 @@ test_expect_success 'job-exec: max-kill-timeout overrides small max-kill-count' 
 		term-signal=SIGURG \
 		max-kill-timeout=0.5s \
 		max-kill-count=1 &&
+	flux module stats job-exec | \
+	    jq -e ".[\"effective-max-kill-timeout\"] == 0.5" &&
 	jobid=$(flux submit --wait-event=start -n1 sleep inf) &&
 	sleep_pid=$(flux job hostpids $jobid | sed s/.*://) &&
 	flux dmesg -C &&
@@ -227,6 +251,12 @@ test_expect_success 'job-exec: setting an invalid max-kill-timeout fails' '
 	test_expect_code 1 flux config load <<-EOF
 	[exec]
 	max-kill-timeout = 100
+	EOF
+'
+test_expect_success 'job-exec: max-kill-timeout=0 fails' '
+	test_expect_code 1 flux config load <<-EOF
+	[exec]
+	max-kill-timeout = "0"
 	EOF
 '
 test_expect_success 'job-exec: invalid FSD for max-kill-timeout fails' '
@@ -257,5 +287,46 @@ test_expect_success 'job-exec: max-kill-timeout via config works' '
 test_expect_success 'job-exec: reload module with default settings' '
 	echo {} | flux config load &&
 	flux module reload job-exec
+'
+check_sdexec_stop_timer() {
+	if test -n "$1"; then
+	    flux module stats job-exec |
+	        jq -e ".[\"bulk-exec\"].config.sdexec_stop_timer_sec == $1"
+	else
+	    flux module stats job-exec |
+	        jq -e "
+	            .[\"bulk-exec\"].config.sdexec_stop_timer_sec \
+	             == .[\"effective-max-kill-timeout\"] \
+	        "
+	fi
+}
+test_expect_success 'job-exec: default sdexec_stop_timer = max-kill-timeout' '
+	check_sdexec_stop_timer
+'
+test_expect_success 'job-exec: sdexec_stop_timer with max-kill-timeout set' '
+	echo exec.max-kill-timeout=\"5m\" | flux config load &&
+	check_sdexec_stop_timer
+'
+test_expect_success 'job-exec: sdexec_stop_timer rounds max-kill-timeout up' '
+	echo exec.max-kill-timeout=\"0.5\" | flux config load &&
+	check_sdexec_stop_timer 1
+'
+test_expect_success 'job-exec: default sdexec_stop_timer with max-kill-count' '
+	echo exec.max-kill-count=20 | flux config load &&
+	check_sdexec_stop_timer
+'
+test_expect_success 'job-exec: fractional effective timeout rounds up' '
+	flux module reload job-exec kill-timeout=0.3s max-kill-count=4 &&
+	# Effective: (5*0.3) + 0.3 + 0.6 + 1.2 = 3.59999s → rounds to 4
+	check_sdexec_stop_timer 4
+'
+test_expect_success 'job-exec: default sdexec_stop_timer can be overridden' '
+	flux config load <<-EOF &&
+	[exec]
+	sdexec-stop-timer-sec = 3
+	max-kill-timeout = "5m"
+	EOF
+	test_must_fail check_sdexec_stop_timer &&
+	check_sdexec_stop_timer 3
 '
 test_done
