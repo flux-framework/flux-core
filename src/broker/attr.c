@@ -22,6 +22,13 @@
 
 #include "attr.h"
 
+enum {
+    ATTR_IMMUTABLE      = 0x01, // value never changes once set
+    ATTR_READONLY       = 0x02, // value is not to be set on cmdline by users
+    ATTR_RUNTIME        = 0x04, // value may be updated by users
+    ATTR_CONFIG         = 0x08, // value overrides TOML config [unused]
+};
+
 struct registered_attr {
     const char *name;
     int flags;
@@ -47,9 +54,9 @@ static struct registered_attr attrtab[] = {
     { "rank", ATTR_READONLY | ATTR_IMMUTABLE },
     { "size", ATTR_READONLY | ATTR_IMMUTABLE },
     { "version", ATTR_READONLY },
-    { "rundir", ATTR_IMMUTABLE },
+    { "rundir", 0 },
     { "rundir-cleanup", ATTR_IMMUTABLE },
-    { "statedir", ATTR_IMMUTABLE },
+    { "statedir", 0 },
     { "statedir-cleanup", ATTR_IMMUTABLE },
     { "security.owner", ATTR_READONLY | ATTR_IMMUTABLE },
     { "local-uri", ATTR_IMMUTABLE },
@@ -126,6 +133,7 @@ static struct registered_attr attrtab[] = {
     { "test.*", ATTR_RUNTIME },
     { "test-ro.*", ATTR_READONLY },
     { "test-nr.*", 0 },
+    { "test-im.*", ATTR_IMMUTABLE },
 
     // misc undocumented
     { "vendor.*", ATTR_RUNTIME | ATTR_IMMUTABLE }, // flux-pmix#109
@@ -188,21 +196,22 @@ done:
     return rc;
 }
 
-int attr_add (attr_t *attrs, const char *name, const char *val, int flags)
+int attr_add (attr_t *attrs, const char *name, const char *val)
 {
+    struct registered_attr *reg;
     struct entry *e;
 
     if (attrs == NULL || name == NULL) {
         errno = EINVAL;
         return -1;
     }
-    if (!attrtab_lookup (name))
+    if (!(reg = attrtab_lookup (name)))
         return -1;
     if ((e = zhash_lookup (attrs->hash, name))) {
         errno = EEXIST;
         return -1;
     }
-    if (!(e = entry_create (name, val, flags)))
+    if (!(e = entry_create (name, val, reg->flags & ATTR_IMMUTABLE)))
         return -1;
     zhash_update (attrs->hash, name, e);
     zhash_freefn (attrs->hash, name, entry_destroy);
@@ -227,7 +236,7 @@ int attr_set_cmdline (attr_t *attrs,
         errno = EINVAL;
         return errprintf (errp, "attribute may not be set on the command line");
     }
-    if (attr_add (attrs, name, val, 0) < 0) {
+    if (attr_add (attrs, name, val) < 0) {
         if (errno != EEXIST || attr_set (attrs, name, val) < 0)
             return errprintf (errp, "%s", strerror (errno));
     }
@@ -236,11 +245,11 @@ int attr_set_cmdline (attr_t *attrs,
 
 int attr_add_active (attr_t *attrs,
                      const char *name,
-                     int flags,
                      attr_get_f get,
                      attr_set_f set,
                      void *arg)
 {
+    struct registered_attr *reg;
     struct entry *e;
     int rc = -1;
 
@@ -248,7 +257,7 @@ int attr_add_active (attr_t *attrs,
         errno = EINVAL;
         goto done;
     }
-    if (!attrtab_lookup (name))
+    if (!(reg = attrtab_lookup (name)))
         return -1;
     if ((e = zhash_lookup (attrs->hash, name))) {
         if (!set) {
@@ -258,7 +267,7 @@ int attr_add_active (attr_t *attrs,
         if (set (name, e->val, arg) < 0)
             goto done;
     }
-    if (!(e = entry_create (name, NULL, flags)))
+    if (!(e = entry_create (name, NULL, reg->flags & ATTR_IMMUTABLE)))
         goto done;
     e->set = set;
     e->get = get;
@@ -270,40 +279,44 @@ done:
     return rc;
 }
 
-int attr_get (attr_t *attrs, const char *name, const char **val, int *flags)
+static struct entry *attr_get_entry (attr_t *attrs, const char *name)
 {
     struct entry *e;
-    int rc = -1;
 
     if (!attrs || !name) {
         errno = EINVAL;
-        goto done;
+        return NULL;
     }
     if (!(e = zhash_lookup (attrs->hash, name))) {
         errno = ENOENT;
-        goto done;
+        return NULL;
     }
     if (e->get) {
         if (!e->val || !(e->flags & ATTR_IMMUTABLE)) {
             const char *tmp;
             if (e->get (name, &tmp, e->arg) < 0)
-                goto done;
+                return NULL;
             free (e->val);
             if (tmp) {
                 if (!(e->val = strdup (tmp)))
-                    goto done;
+                    return NULL;
             }
             else
                 e->val = NULL;
         }
     }
+    return e;
+}
+
+int attr_get (attr_t *attrs, const char *name, const char **val)
+{
+    struct entry *e;
+
+    if (!(e = attr_get_entry (attrs, name)))
+        return -1;
     if (val)
         *val = e->val;
-    if (flags)
-        *flags = e->flags;
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 int attr_set (attr_t *attrs, const char *name, const char *val)
@@ -330,21 +343,6 @@ int attr_set (attr_t *attrs, const char *name, const char *val)
     }
     else
         e->val = NULL;
-    rc = 0;
-done:
-    return rc;
-}
-
-int attr_set_flags (attr_t *attrs, const char *name, int flags)
-{
-    struct entry *e;
-    int rc = -1;
-
-    if (!(e = zhash_lookup (attrs->hash, name))) {
-        errno = ENOENT;
-        goto done;
-    }
-    e->flags = flags;
     rc = 0;
 done:
     return rc;
@@ -388,22 +386,21 @@ void getattr_request_cb (flux_t *h,
 {
     attr_t *attrs = arg;
     const char *name;
-    const char *val;
-    int flags;
+    struct entry *e;
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
-    if (attr_get (attrs, name, &val, &flags) < 0)
+    if (!(e = attr_get_entry (attrs, name)))
         goto error;
-    if (!val) {
+    if (!e->val) {
         errno = ENOENT;
         goto error;
     }
     if (flux_respond_pack (h,
                            msg,
                            "{s:s s:i}",
-                           "value", val,
-                           "flags", flags) < 0)
+                           "value", e->val,
+                           "flags", e->flags) < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
@@ -448,7 +445,7 @@ void setattr_request_cb (flux_t *h,
     if (attr_set (attrs, name, val) < 0) {
         if (errno != ENOENT)
             goto error;
-        if (attr_add (attrs, name, val, 0) < 0)
+        if (attr_add (attrs, name, val) < 0)
             goto error;
     }
     if (flux_respond (h, msg, NULL) < 0)

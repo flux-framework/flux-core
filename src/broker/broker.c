@@ -132,14 +132,14 @@ static struct optparse_option opts[] = {
     OPTPARSE_TABLE_END,
 };
 
-static int addattr_int (attr_t *attrs, const char *name, int val, int flags)
+static int addattr_int (attr_t *attrs, const char *name, int val)
 {
     char s[32];
     if (snprintf (s, sizeof (s), "%d", val) >= sizeof (s)) {
         errno = EOVERFLOW;
         return -1;
     }
-    return attr_add (attrs, name, s, flags);
+    return attr_add (attrs, name, s);
 }
 
 static char *parse_nameval (const char *nameval, const char **valp)
@@ -254,15 +254,13 @@ int main (int argc, char *argv[])
         log_msg_exit ("%s", error.text);
 
     const char *hostname;
-    if (attr_get (ctx.attrs, "hostname", &hostname, NULL) == 0) {
+    if (attr_get (ctx.attrs, "hostname", &hostname) == 0) {
         strlcpy (ctx.hostname, hostname, sizeof (ctx.hostname));
-        if (attr_set_flags (ctx.attrs, "hostname", ATTR_IMMUTABLE) < 0)
-            log_err_exit ("setattr flags hostname");
     }
     else {
         if (gethostname (ctx.hostname, sizeof (ctx.hostname)) < 0)
             log_err_exit ("gethostname");
-        if (attr_add (ctx.attrs, "hostname", ctx.hostname, ATTR_IMMUTABLE) < 0)
+        if (attr_add (ctx.attrs, "hostname", ctx.hostname) < 0)
             log_err_exit ("setattr hostname");
     }
 
@@ -323,11 +321,11 @@ int main (int argc, char *argv[])
      * by --verbose if they weren't explicitly specified on the command line.
      * No fatal errors here - best effort.
      */
-    if (attr_get (ctx.attrs, "log-stderr-mode", NULL, NULL) < 0) {
+    if (attr_get (ctx.attrs, "log-stderr-mode", NULL) < 0) {
         if (ctx.verbose > 0)
-            (void)attr_add (ctx.attrs, "log-stderr-mode", "local", 0);
+            (void)attr_add (ctx.attrs, "log-stderr-mode", "local");
     }
-    if (attr_get (ctx.attrs, "log-stderr-level", NULL, NULL) < 0) {
+    if (attr_get (ctx.attrs, "log-stderr-level", NULL) < 0) {
         int level;
         if (ctx.verbose > 1)
             level = LOG_DEBUG;
@@ -335,7 +333,7 @@ int main (int argc, char *argv[])
             level = LOG_INFO;
         else
             level = LOG_ERR;
-        (void)addattr_int (ctx.attrs, "log-stderr-level", level, 0);
+        (void)addattr_int (ctx.attrs, "log-stderr-level", level);
     }
 
     /* Set the broker.uuid attribute, used for request/response routing.
@@ -352,7 +350,7 @@ int main (int argc, char *argv[])
     }
 
     const char *val;
-    if (attr_get (ctx.attrs, "broker.sd-notify", &val, NULL) == 0
+    if (attr_get (ctx.attrs, "broker.sd-notify", &val) == 0
         && !streq (val, "0")) {
 #if !HAVE_LIBSYSTEMD
         flux_log (ctx.h,
@@ -391,10 +389,7 @@ int main (int argc, char *argv[])
             flux_log (ctx.h, LOG_CRIT, "Error caching config object");
             goto cleanup;
         }
-        if (attr_add (ctx.attrs,
-                      "config.path",
-                      config_path,
-                      ATTR_IMMUTABLE) < 0) {
+        if (attr_add (ctx.attrs, "config.path", config_path) < 0) {
             flux_log (ctx.h,
                       LOG_CRIT,
                       "setattr config.path: %s",
@@ -453,8 +448,8 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (addattr_int (ctx.attrs, "rank", ctx.info.rank, ATTR_IMMUTABLE) < 0
-        || addattr_int (ctx.attrs, "size", ctx.info.size, ATTR_IMMUTABLE) < 0) {
+    if (addattr_int (ctx.attrs, "rank", ctx.info.rank) < 0
+        || addattr_int (ctx.attrs, "size", ctx.info.size) < 0) {
         flux_log (ctx.h, LOG_CRIT, "setattr rank/size: %s", strerror (errno));
         goto cleanup;
     }
@@ -657,7 +652,7 @@ static int init_broker_uuid (struct broker *ctx)
         return -1;
     uuid_generate (uuid);
     uuid_unparse (uuid, uuid_str);
-    if (attr_add (ctx->attrs, "broker.uuid", uuid_str, ATTR_IMMUTABLE) < 0
+    if (attr_add (ctx->attrs, "broker.uuid", uuid_str) < 0
         || flux_aux_set (ctx->h, "flux::uuid", uuid_str, free) < 0) {
         ERRNO_SAFE_WRAP (free, uuid_str);
         return -1;
@@ -671,10 +666,7 @@ static int init_attrs_broker_pid (attr_t *attrs, pid_t pid, flux_error_t *errp)
     char pidval[32];
 
     snprintf (pidval, sizeof (pidval), "%u", pid);
-    if (attr_add (attrs,
-                  attrname,
-                  pidval,
-                  ATTR_IMMUTABLE) < 0)
+    if (attr_add (attrs, attrname, pidval) < 0)
         return errprintf (errp, "attr_add %s: %s", attrname, strerror (errno));
     return 0;
 }
@@ -683,13 +675,11 @@ static int init_attrs_rc_paths (attr_t *attrs, flux_error_t *errp)
 {
     if (attr_add (attrs,
                   "broker.rc1_path",
-                  flux_conf_builtin_get ("rc1_path", FLUX_CONF_AUTO),
-                  0) < 0)
+                  flux_conf_builtin_get ("rc1_path", FLUX_CONF_AUTO)) < 0)
         return errprintf (errp, "attr_add rc1_path: %s", strerror (errno));
     if (attr_add (attrs,
                   "broker.rc3_path",
-                  flux_conf_builtin_get ("rc3_path", FLUX_CONF_AUTO),
-                  0) < 0)
+                  flux_conf_builtin_get ("rc3_path", FLUX_CONF_AUTO)) < 0)
         return errprintf (errp, "attr_add rc3_path: %s", strerror (errno));
     return 0;
 }
@@ -698,16 +688,15 @@ static int init_attrs_shell_paths (attr_t *attrs, flux_error_t *errp)
 {
     if (attr_add (attrs,
                   "conf.shell_pluginpath",
-                  flux_conf_builtin_get ("shell_pluginpath", FLUX_CONF_AUTO),
-                  0) < 0) {
+                  flux_conf_builtin_get ("shell_pluginpath",
+                                         FLUX_CONF_AUTO)) < 0) {
         return errprintf (errp,
                           "attr_add conf.shell_pluginpath: %s",
                           strerror (errno));
     }
     if (attr_add (attrs,
                   "conf.shell_initrc",
-                  flux_conf_builtin_get ("shell_initrc", FLUX_CONF_AUTO),
-                  0) < 0) {
+                  flux_conf_builtin_get ("shell_initrc", FLUX_CONF_AUTO)) < 0) {
         return errprintf (errp,
                           "attr_add conf.shell_initrc: %s",
                           strerror (errno));
@@ -722,7 +711,7 @@ static int init_attrs_starttime (attr_t *attrs,
     char buf[32];
 
     snprintf (buf, sizeof (buf), "%.2f", starttime);
-    if (attr_add (attrs, "broker.starttime", buf, ATTR_IMMUTABLE) < 0) {
+    if (attr_add (attrs, "broker.starttime", buf) < 0) {
         return errprintf (errp,
                           "error setting broker.starttime attribute: %s",
                           strerror (errno));
@@ -744,7 +733,7 @@ static int init_attrs_post_boot (attr_t *attrs, flux_error_t *errp)
      * FLUX_JOB_ID could leak from the calling environment, e.g.
      * `flux run flux start --test-size=2`.
      */
-    instance_is_job = attr_get (attrs, "jobid", NULL, NULL) == 0;
+    instance_is_job = attr_get (attrs, "jobid", NULL) == 0;
 
     /* Set the parent-uri attribute IFF this instance was run as a job
      * in the enclosing instance.  "parent" in this context reflects
@@ -754,7 +743,7 @@ static int init_attrs_post_boot (attr_t *attrs, flux_error_t *errp)
         val = getenv ("FLUX_URI");
     else
         val = NULL;
-    if (attr_add (attrs, "parent-uri", val, ATTR_IMMUTABLE) < 0)
+    if (attr_add (attrs, "parent-uri", val) < 0)
         return errprintf (errp, "setattr parent-uri: %s", strerror (errno));
     unsetenv ("FLUX_URI");
 
@@ -765,7 +754,7 @@ static int init_attrs_post_boot (attr_t *attrs, flux_error_t *errp)
 
     if (instance_is_job) {
         val = getenv ("FLUX_KVS_NAMESPACE");
-        if (attr_add (attrs, "parent-kvs-namespace", val, ATTR_IMMUTABLE) < 0) {
+        if (attr_add (attrs, "parent-kvs-namespace", val) < 0) {
             return errprintf (errp,
                               "setattr parent-kvs-namespace: %s",
                               strerror (errno));
@@ -776,7 +765,7 @@ static int init_attrs_post_boot (attr_t *attrs, flux_error_t *errp)
     val = getenv ("FLUX_JOB_ID_PATH");
     if (!val || !instance_is_job)
         val = "/";
-    if (attr_add (attrs, "jobid-path", val, ATTR_IMMUTABLE) < 0)
+    if (attr_add (attrs, "jobid-path", val) < 0)
         return errprintf (errp, "setattr jobid-path: %s", strerror (errno));
     unsetenv ("FLUX_JOB_ID_PATH");
 
@@ -795,12 +784,12 @@ static int init_attrs (attr_t *attrs,
 
     /* Allow version to be changed by instance owner for testing
      */
-    if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING, 0) < 0)
+    if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING) < 0)
         return errprintf (errp, "attr_add version: %s", strerror (errno));
 
     char tmp[32];
     snprintf (tmp, sizeof (tmp), "%ju", (uintmax_t)cred->userid);
-    if (attr_add (attrs, "security.owner", tmp, ATTR_IMMUTABLE) < 0)
+    if (attr_add (attrs, "security.owner", tmp) < 0)
         return errprintf (errp, "attr_add owner: %s", strerror (errno));
 
     return 0;
@@ -930,15 +919,15 @@ static int create_runat_phases (broker_ctx_t *ctx, flux_error_t *errp)
     bool rc2_nopgrp = false;
 
     /* jobid may be NULL */
-    (void) attr_get (ctx->attrs, "jobid", &jobid, NULL);
+    (void) attr_get (ctx->attrs, "jobid", &jobid);
 
-    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0)
+    if (attr_get (ctx->attrs, "local-uri", &local_uri) < 0)
         return errprintf (errp, "local-uri is not set");
-    if (attr_get (ctx->attrs, "broker.rc1_path", &rc1, NULL) < 0)
+    if (attr_get (ctx->attrs, "broker.rc1_path", &rc1) < 0)
         return errprintf (errp, "broker.rc1_path is not set");
-    if (attr_get (ctx->attrs, "broker.rc3_path", &rc3, NULL) < 0)
+    if (attr_get (ctx->attrs, "broker.rc3_path", &rc3) < 0)
         return errprintf (errp, "broker.rc3_path is not set");
-    if (attr_get (ctx->attrs, "broker.rc2_none", NULL, NULL) == 0)
+    if (attr_get (ctx->attrs, "broker.rc2_none", NULL) == 0)
         rc2_none = true;
 
    /* If the broker is a process group leader and broker.rc2_pgrp was
@@ -950,7 +939,7 @@ static int create_runat_phases (broker_ctx_t *ctx, flux_error_t *errp)
     * call setpgrp(2) themselves to enable job control.
     */
    if (getpgrp() == getpid ()
-       && attr_get (ctx->attrs, "broker.rc2_pgrp", NULL, NULL) != 0)
+       && attr_get (ctx->attrs, "broker.rc2_pgrp", NULL) != 0)
        rc2_nopgrp = true;
 
     if (!(ctx->runat = runat_create (ctx->h,
@@ -1005,18 +994,18 @@ static int init_local_uri_attr (attr_t *attrs,
 {
     const char *uri;
 
-    if (attr_get (attrs, "local-uri", &uri, NULL) < 0) {
+    if (attr_get (attrs, "local-uri", &uri) < 0) {
         const char *rundir;
         char buf[1024];
 
-        if (attr_get (attrs, "rundir", &rundir, NULL) < 0)
+        if (attr_get (attrs, "rundir", &rundir) < 0)
             return errprintf (errp, "rundir attribute is not set");
         if (snprintf (buf,
                       sizeof (buf),
                       "local://%s/local-%d",
                       rundir, rank) >= sizeof (buf))
             return errprintf (errp, "buffer overflow while building local-uri");
-        if (attr_add (attrs, "local-uri", buf, ATTR_IMMUTABLE) < 0)
+        if (attr_add (attrs, "local-uri", buf) < 0)
             return errprintf (errp, "setattr local-uri: %s", strerror (errno));
     }
     else {

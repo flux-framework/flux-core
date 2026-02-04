@@ -321,7 +321,7 @@ static void action_join (struct state_machine *s)
 #if HAVE_LIBSYSTEMD
         if (s->ctx->sd_notify) {
             const char *uri = "?";
-            (void)attr_get (s->ctx->attrs, "tbon.parent-endpoint", &uri, NULL);
+            (void)attr_get (s->ctx->attrs, "tbon.parent-endpoint", &uri);
             sd_notifyf (0, "STATUS=Joining Flux instance via %s", uri);
         }
 #endif
@@ -501,7 +501,7 @@ static void action_run (struct state_machine *s)
     struct broker_attr *attrs = s->ctx->attrs;
 
     if (runat_is_defined (s->ctx->runat, "rc2")) {
-        if (attr_get (attrs, "broker.recovery-mode", NULL, NULL) == 0
+        if (attr_get (attrs, "broker.recovery-mode", NULL) == 0
             && runat_is_interactive (s->ctx->runat, "rc2")) {
             const char *confdir = "unknown";
             const char *rc1_path = "unknown";
@@ -509,11 +509,11 @@ static void action_run (struct state_machine *s)
             const char *statedir = "unknown";
             const char *statedir_cleanup = "unknown";
 
-            (void)attr_get (attrs, "config.path", &confdir, NULL);
-            (void)attr_get (attrs, "broker.rc1_path", &rc1_path, NULL);
-            (void)attr_get (attrs, "broker.rc3_path", &rc3_path, NULL);
-            (void)attr_get (attrs, "statedir", &statedir, NULL);
-            (void)attr_get (attrs, "statedir-cleanup", &statedir_cleanup, NULL);
+            (void)attr_get (attrs, "config.path", &confdir);
+            (void)attr_get (attrs, "broker.rc1_path", &rc1_path);
+            (void)attr_get (attrs, "broker.rc3_path", &rc3_path);
+            (void)attr_get (attrs, "statedir", &statedir);
+            (void)attr_get (attrs, "statedir-cleanup", &statedir_cleanup);
 
             printf ("+-----------------------------------------------------\n"
                     "| Entering Flux recovery mode.\n"
@@ -961,10 +961,7 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
     if (streq (name, "rc1")) {
         if (rc == 0)
             state_machine_post (s, "rc1-success");
-        else if (attr_get (s->ctx->attrs,
-                           "broker.recovery-mode",
-                           NULL,
-                           NULL) == 0)
+        else if (attr_get (s->ctx->attrs, "broker.recovery-mode", NULL) == 0)
             state_machine_post (s, "rc1-ignorefail");
         /* If rc1 fails, it most likely will fail again on restart, so if
          * running under systemd, exit with the broker.exit-norestart value.
@@ -1001,7 +998,7 @@ static void norestart_configure (struct state_machine *s)
 {
     const char *val;
 
-    if (attr_get (s->ctx->attrs, "broker.exit-norestart", &val, NULL) == 0) {
+    if (attr_get (s->ctx->attrs, "broker.exit-norestart", &val) == 0) {
         errno = 0;
         int rc = strtol (val, NULL, 10);
         if (errno == 0 && rc >= 1)
@@ -1152,7 +1149,7 @@ static int quorum_configure (struct state_machine *s,
                              flux_error_t *errp)
 {
     const char *val;
-    if (attr_get (s->ctx->attrs, name, &val, NULL) == 0) {
+    if (attr_get (s->ctx->attrs, name, &val) == 0) {
         if (!quorum_configure_deprecated (s, val)) {
             errno = 0;
             s->quorum.size = strtoul (val, NULL, 10);
@@ -1163,14 +1160,12 @@ static int quorum_configure (struct state_machine *s,
                 return errprintf (errp, "Error parsing %s attribute", name);
             }
         }
-        if (attr_set_flags (s->ctx->attrs, name, ATTR_IMMUTABLE) < 0)
-            return errprintf (errp, "%s: %s", name, strerror (errno));
     }
     else {
         s->quorum.size = s->ctx->info.size;
         char buf[16];
         snprintf (buf, sizeof (buf), "%lu", (unsigned long)s->quorum.size);
-        if (attr_add (s->ctx->attrs, name, buf, ATTR_IMMUTABLE) < 0)
+        if (attr_add (s->ctx->attrs, name, buf) < 0)
             return errprintf (errp, "%s: %s", name, strerror (errno));
     }
     return 0;
@@ -1185,26 +1180,25 @@ static int timeout_configure (struct state_machine *s,
     const char *val;
     char fsd[32];
 
-    if (attr_get (s->ctx->attrs, name, &val, NULL) == 0) {
+    if (attr_get (s->ctx->attrs, name, &val) == 0) {
         if (streq (val, "none"))
             *value = -1;
         else {
             if (fsd_parse_duration (val, value) < 0)
                 return errprintf (errp, "Error parsing %s attribute", name);
         }
-        if (attr_delete (s->ctx->attrs, name) < 0)
-            return errprintf (errp, "%s: %s", name, strerror (errno));
     }
-    else
-        *value = default_value;
-    if (*value == -1)
-        snprintf (fsd, sizeof (fsd), "none");
     else {
-        if (fsd_format_duration (fsd, sizeof (fsd), *value) < 0)
-            return errprintf (errp, "Error parsing %s attribute", name);
+        if (default_value == -1)
+            snprintf (fsd, sizeof (fsd), "none");
+        else {
+            if (fsd_format_duration (fsd, sizeof (fsd), default_value) < 0)
+                return errprintf (errp, "Error parsing %s attribute", name);
+        }
+        if (attr_add (s->ctx->attrs, name, fsd) < 0)
+            return errprintf (errp, "%s: %s", name, strerror (errno));
+        *value = default_value;
     }
-    if (attr_add (s->ctx->attrs, name, fsd, ATTR_IMMUTABLE) < 0)
-        return errprintf (errp, "%s: %s", name, strerror (errno));
     return 0;
 }
 
