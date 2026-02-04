@@ -55,7 +55,7 @@ void basic (void)
 
     /* attr_delete works
      */
-    ok (attr_delete (attrs, "test.foo", false) == 0,
+    ok (attr_delete (attrs, "test.foo") == 0,
         "attr_delete works");
     errno = 0;
     ok (attr_get (attrs, "test.foo", NULL, NULL) < 0 && errno == ENOENT,
@@ -78,11 +78,11 @@ void basic (void)
     ok (attr_set (attrs, "test.foo", "baz")  < 0 && errno == EPERM,
         "attr_set (force) on immutable fails with EPERM");
     errno = 0;
-    ok (attr_delete (attrs, "test.foo", false) < 0 && errno == EPERM,
+    ok (attr_delete (attrs, "test.foo") < 0 && errno == EPERM,
         "attr_delete on immutable attr fails with EPERM");
     errno = 0;
-    ok (attr_delete (attrs, "test.foo", true) < 0 && errno == EPERM,
-        "attr_delete (force) on immutable fails with EPERM");
+    ok (attr_delete (attrs, "test.foo") < 0 && errno == EPERM,
+        "attr_delete on immutable fails with EPERM");
 
     /* Add couple more attributes and exercise iterator.
      * initial hash contents: foo=bar
@@ -159,8 +159,8 @@ void active (void)
     a = NULL;
     ok (attr_get (attrs, "test.a", &val, NULL) == 0 && val == NULL,
         "attr_get on active a tracks val=NULL");
-    ok (attr_delete (attrs, "test.a", true) == 0,
-        "attr_delete (force) works on active attr");
+    ok (attr_delete (attrs, "test.a") == 0,
+        "attr_delete works on active attr");
 
     /* immutable active works as expected
      */
@@ -178,8 +178,8 @@ void active (void)
     ok (attr_get (attrs, "test.b", &val, NULL) == 0 && val && streq (val, "m"),
         "attr_get ignores value changes");
     errno = 0;
-    ok (attr_delete (attrs, "test.b", true) < 0 && errno == EPERM,
-        "attr_delete (force) fails with EPERM");
+    ok (attr_delete (attrs, "test.b") < 0 && errno == EPERM,
+        "attr_delete fails with EPERM");
 
     attr_destroy (attrs);
 }

@@ -516,7 +516,7 @@ int main (int argc, char *argv[])
         }
     }
     else {
-        (void)attr_delete (ctx.attrs, "statedir", true);
+        (void)attr_delete (ctx.attrs, "statedir");
     }
 
     set_proctitle (ctx.info.rank);

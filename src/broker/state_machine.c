@@ -1192,7 +1192,7 @@ static int timeout_configure (struct state_machine *s,
             if (fsd_parse_duration (val, value) < 0)
                 return errprintf (errp, "Error parsing %s attribute", name);
         }
-        if (attr_delete (s->ctx->attrs, name, true) < 0)
+        if (attr_delete (s->ctx->attrs, name) < 0)
             return errprintf (errp, "%s: %s", name, strerror (errno));
     }
     else

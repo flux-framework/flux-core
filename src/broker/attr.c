@@ -171,7 +171,7 @@ cleanup:
     return NULL;
 }
 
-int attr_delete (attr_t *attrs, const char *name, bool force)
+int attr_delete (attr_t *attrs, const char *name)
 {
     struct entry *e;
     int rc = -1;
@@ -469,7 +469,7 @@ void rmattr_request_cb (flux_t *h,
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
-    if (attr_delete (attrs, name, false) < 0)
+    if (attr_delete (attrs, name) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
         FLUX_LOG_ERROR (h);
