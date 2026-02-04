@@ -1165,7 +1165,7 @@ static int quorum_configure (struct state_machine *s,
         s->quorum.size = s->ctx->info.size;
         char buf[16];
         snprintf (buf, sizeof (buf), "%lu", (unsigned long)s->quorum.size);
-        if (attr_add (s->ctx->attrs, name, buf) < 0)
+        if (attr_set (s->ctx->attrs, name, buf) < 0)
             return errprintf (errp, "%s: %s", name, strerror (errno));
     }
     return 0;
@@ -1195,7 +1195,7 @@ static int timeout_configure (struct state_machine *s,
             if (fsd_format_duration (fsd, sizeof (fsd), default_value) < 0)
                 return errprintf (errp, "Error parsing %s attribute", name);
         }
-        if (attr_add (s->ctx->attrs, name, fsd) < 0)
+        if (attr_set (s->ctx->attrs, name, fsd) < 0)
             return errprintf (errp, "%s: %s", name, strerror (errno));
         *value = default_value;
     }

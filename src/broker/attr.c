@@ -196,28 +196,6 @@ done:
     return rc;
 }
 
-int attr_add (attr_t *attrs, const char *name, const char *val)
-{
-    struct registered_attr *reg;
-    struct entry *e;
-
-    if (attrs == NULL || name == NULL) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (!(reg = attrtab_lookup (name)))
-        return -1;
-    if ((e = zhash_lookup (attrs->hash, name))) {
-        errno = EEXIST;
-        return -1;
-    }
-    if (!(e = entry_create (name, val, reg->flags & ATTR_IMMUTABLE)))
-        return -1;
-    zhash_update (attrs->hash, name, e);
-    zhash_freefn (attrs->hash, name, entry_destroy);
-    return 0;
-}
-
 int attr_set_cmdline (attr_t *attrs,
                       const char *name,
                       const char *val,
@@ -236,10 +214,8 @@ int attr_set_cmdline (attr_t *attrs,
         errno = EINVAL;
         return errprintf (errp, "attribute may not be set on the command line");
     }
-    if (attr_add (attrs, name, val) < 0) {
-        if (errno != EEXIST || attr_set (attrs, name, val) < 0)
-            return errprintf (errp, "%s", strerror (errno));
-    }
+    if (attr_set (attrs, name, val) < 0)
+        return errprintf (errp, "%s", strerror (errno));
     return 0;
 }
 
@@ -322,30 +298,32 @@ int attr_get (attr_t *attrs, const char *name, const char **val)
 int attr_set (attr_t *attrs, const char *name, const char *val)
 {
     struct entry *e;
-    int rc = -1;
 
-    if (!(e = zhash_lookup (attrs->hash, name))) {
-        errno = ENOENT;
-        goto done;
+    if ((e = zhash_lookup (attrs->hash, name))) {
+        char *cpy = NULL;
+        if ((e->flags & ATTR_IMMUTABLE)) {
+            errno = EPERM;
+            return -1;
+        }
+        if (val && !(cpy = strdup (val)))
+            return -1;
+        if (e->set && e->set (name, val, e->arg) < 0) {
+            ERRNO_SAFE_WRAP (free, cpy);
+            return -1;
+        }
+        free (e->val);
+        e->val = cpy;
     }
-    if ((e->flags & ATTR_IMMUTABLE)) {
-        errno = EPERM;
-        goto done;
+    else {
+        struct registered_attr *reg;
+        if (!(reg = attrtab_lookup (name)))
+            return -1;
+        if (!(e = entry_create (name, val, reg->flags & ATTR_IMMUTABLE)))
+            return -1;
+        zhash_update (attrs->hash, name, e);
+        zhash_freefn (attrs->hash, name, entry_destroy);
     }
-    if (e->set) {
-        if (e->set (name, val, e->arg) < 0)
-            goto done;
-    }
-    free (e->val);
-    if (val) {
-        if (!(e->val = strdup (val)))
-            goto done;
-    }
-    else
-        e->val = NULL;
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 const char *attr_first (attr_t *attrs)
@@ -442,12 +420,8 @@ void setattr_request_cb (flux_t *h,
             goto error;
         }
     }
-    if (attr_set (attrs, name, val) < 0) {
-        if (errno != ENOENT)
-            goto error;
-        if (attr_add (attrs, name, val) < 0)
-            goto error;
-    }
+    if (attr_set (attrs, name, val) < 0)
+        goto error;
     if (flux_respond (h, msg, NULL) < 0)
         FLUX_LOG_ERROR (h);
     return;

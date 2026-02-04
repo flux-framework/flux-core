@@ -34,10 +34,6 @@ int attr_register_handlers (attr_t *attrs, flux_t *h);
  */
 int attr_delete (attr_t *attrs, const char *name);
 
-/* Add an attribute
- */
-int attr_add (attr_t *attrs, const char *name, const char *val);
-
 /* Get/set an attribute.
  */
 int attr_get (attr_t *attrs, const char *name, const char **val);

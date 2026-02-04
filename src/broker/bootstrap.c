@@ -43,7 +43,7 @@ static int setattr (attr_t *attrs,
     const char *val;
 
     if (attr_get (attrs, key, &val) < 0) {
-        if (attr_add (attrs, key, default_value) < 0) {
+        if (attr_set (attrs, key, default_value) < 0) {
             errprintf (errp, "setattr %s: %s", key, strerror (errno));
             return -1;
         }
