@@ -125,6 +125,7 @@ static struct registered_attr attrtab[] = {
     // for testing
     { "test.*", ATTR_RUNTIME },
     { "test-ro.*", ATTR_READONLY },
+    { "test-nr.*", 0 },
 
     // misc undocumented
     { "vendor.*", ATTR_RUNTIME}, // flux-framework/flux-pmix#109
