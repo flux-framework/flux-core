@@ -229,7 +229,7 @@ int rundir_create (attr_t *attrs,
     (void)snprintf (key, sizeof (key), "%s-cleanup", attr_name);
     if (attr_get (attrs, key, &val, NULL) == 0 && val)
         do_cleanup = streq (val, "0") ? false : true;
-    (void)attr_delete (attrs, key, true);
+    (void)attr_delete (attrs, key);
     if (attr_add (attrs, key, do_cleanup ? "1" : "0", ATTR_IMMUTABLE) < 0)
         goto error_setattr;
 

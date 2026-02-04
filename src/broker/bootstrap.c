@@ -115,7 +115,7 @@ static int setattr_broker_mapping (struct bootstrap *boot, flux_error_t *errp)
             goto error;
         }
     }
-    (void)attr_delete (boot->ctx->attrs, "broker.mapping", true);
+    (void)attr_delete (boot->ctx->attrs, "broker.mapping");
     if (setattr (boot->ctx->attrs, "broker.mapping", val, errp) < 0)
         goto error;
     taskmap_destroy (map);

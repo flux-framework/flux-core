@@ -39,7 +39,7 @@ int attr_register_handlers (attr_t *attrs, flux_t *h);
 
 /* Delete an attribute
  */
-int attr_delete (attr_t *attrs, const char *name, bool force);
+int attr_delete (attr_t *attrs, const char *name);
 
 /* Add an attribute
  */
