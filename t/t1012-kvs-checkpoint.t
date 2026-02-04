@@ -39,6 +39,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: start instance that creates tons of appe
 
 test_expect_success 'kvs: create get checkpoint script' '
 	cat >checkpointget.sh <<-EOT &&
+	#!/bin/sh
 	jq -j -c -n  "{key:\"kvs-primary\"}" | $RPC content.checkpoint-get
 	EOT
 	chmod 700 checkpointget.sh
@@ -50,6 +51,7 @@ test_expect_success 'kvs: make sure there was atleast one checkpoint' '
 
 test_expect_success 'kvs: create get data script' '
 	cat >dataget.sh <<-EOT &&
+	#!/bin/sh
 	N=\$((${THREADS} - 1))
 	for i in \$(seq 0 \${N})
 	do
