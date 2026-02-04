@@ -89,6 +89,12 @@ static void task_completion_cb (struct shell_task *task, void *arg)
     if (flux_shell_remove_completion_ref (shell, "task%d", task->rank) < 0)
         shell_log_errno ("failed to remove task%d completion reference",
                          task->rank);
+
+    /* Once the last task has exited, call shell.finish callbacks
+     */
+    if (++shell->tasks_exited == zlist_size (shell->tasks)
+         && plugstack_call (shell->plugstack, "shell.finish", NULL) < 0)
+        shell_log_errno ("shell.finish");
 }
 
 int flux_shell_setopt (flux_shell_t *shell,

@@ -38,6 +38,7 @@ struct flux_shell {
     struct shell_svc *svc;
     zlist_t *tasks;
     flux_shell_task_t *current_task;
+    int tasks_exited;
     struct mustache_renderer *mr;
 
     struct plugstack *plugstack;
