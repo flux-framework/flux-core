@@ -170,7 +170,7 @@ def _get_kvstxn(flux_handle, _kvstxn):
     return _kvstxn
 
 
-def put(flux_handle, key, value, _kvstxn=None):
+def put(flux_handle, key, value, _kvstxn=None, raw=False):
     """Put data into the KVS
 
     Internally will stage changes until commit() is called.
@@ -179,8 +179,16 @@ def put(flux_handle, key, value, _kvstxn=None):
         flux_handle: A Flux handle obtained from flux.Flux()
         key: key to write to
         value: value of the key
+        raw: if True, write value as raw bytes instead of JSON-encoded data.
+             Value must be bytes or str (will be UTF-8 encoded if str).
     """
     _kvstxn = _get_kvstxn(flux_handle, _kvstxn)
+    if raw:
+        if not isinstance(value, bytes):
+            value = value.encode("utf-8")
+        RAW.flux_kvs_txn_put_raw(_kvstxn, 0, key, value, len(value))
+        return
+
     try:
         json_str = json.dumps(value)
         RAW.flux_kvs_txn_put(_kvstxn, 0, key, json_str)
@@ -432,9 +440,9 @@ class KVSTxn:
         self.clear()
         return Future(future)
 
-    def put(self, key, value):
-        """Put key=value in the KVS"""
-        put(self.fhdl, self._path + key, value, _kvstxn=self.txn)
+    def put(self, key, value, raw=False):
+        """Put key=value in the KVS, set raw=True to write raw values"""
+        put(self.fhdl, self._path + key, value, _kvstxn=self.txn, raw=raw)
 
     def mkdir(self, key):
         """Create a directory in the KVS"""
