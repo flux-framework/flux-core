@@ -49,10 +49,10 @@ struct output_client {
 
 static void client_send_eof (struct output_client *client)
 {
-    /* Note: client should not be instantiated on rank 0, but check here
-     * just in case.
+    /* Note: client should not be instantiated on rank 0, and may be NULL
+     * if already destroyed. Check both conditions before sending EOF.
      */
-    if (client->shell_rank != 0) {
+    if (client && client->shell_rank != 0) {
         flux_future_t *f;
         /* Nonzero shell rank: send EOF to leader shell to notify
          *  that no more messages will be sent to shell.write
