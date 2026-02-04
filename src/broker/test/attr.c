@@ -28,24 +28,19 @@ void basic (void)
     ok ((attrs = attr_create ()) != NULL,
         "attr_create works");
 
-    /* attr_get, attr_set on unknown fails
+    /* attr_get on unknown fails
      */
     errno = 0;
     ok (attr_get (attrs, "test.foo", NULL) < 0 && errno == ENOENT,
         "attr_get on unknown attr fails with errno == ENOENT");
-    errno = 0;
-    ok (attr_set (attrs, "test.foo", "bar") < 0 && errno == ENOENT,
-        "attr_set on unknown attr fails with errno == ENOENT");
 
-    /* attr_add, attr_get works
+    /* attr_set, attr_get works
      */
-    ok ((attr_add (attrs, "test.foo", "bar") == 0),
-        "attr_add works");
+    ok ((attr_set (attrs, "test.foo", "bar") == 0),
+        "attr_set on known, unset attr works");
     errno = 0;
-    ok ((attr_add (attrs, "test.foo", "bar") < 0 && errno == EEXIST),
-        "attr_add on existing attr fails with EEXIST");
     ok (attr_get (attrs, "test.foo", NULL) == 0,
-        "attr_get on new attr works with NULL args");
+        "attr_get val=NULL works");
     val = NULL;
     ok (attr_get (attrs, "test.foo", &val) == 0 && streq (val, "bar"),
         "attr_get on new attr works returns correct val");
@@ -61,8 +56,8 @@ void basic (void)
     /* ATTR_IMMUTABLE protects against update/delete from user;
      * update/delete can NOT be forced on broker.
      */
-    ok (attr_add (attrs, "test-im.foo", "baz") == 0,
-        "attr_add of immutable attribute works");
+    ok (attr_set (attrs, "test-im.foo", "baz") == 0,
+        "attr_set of immutable attribute works when unset");
     val = NULL;
     ok (attr_get (attrs, "test-im.foo", &val) == 0 && streq (val, "baz"),
         "attr_get returns correct value");
@@ -87,11 +82,11 @@ void basic (void)
         "attr_first returned test-im.foo");
     ok (attr_next (attrs) == NULL,
         "attr_next returned NULL");
-    ok (attr_add (attrs, "test.foo1", "42") == 0
-        && attr_add (attrs, "test.foo2", "43") == 0
-        && attr_add (attrs, "test.foo3", "44") == 0
-        && attr_add (attrs, "test.foo4", "44") == 0,
-        "attr_add test.foo[1-4] works");
+    ok (attr_set (attrs, "test.foo1", "42") == 0
+        && attr_set (attrs, "test.foo2", "43") == 0
+        && attr_set (attrs, "test.foo3", "44") == 0
+        && attr_set (attrs, "test.foo4", "44") == 0,
+        "attr_set test.foo[1-4] works");
     val = attr_first (attrs);
     ok (val && strstarts (val, "test"),
         "attr_first returned test-prefixed attr");
@@ -185,8 +180,8 @@ void unknown (void)
         BAIL_OUT ("attr_create failed");
 
     errno = 0;
-    ok (attr_add (attrs, "unknown", "foo") < 0 && errno == ENOENT,
-        "attr_add of unknown attribute fails with ENOENT");
+    ok (attr_set (attrs, "unknown", "foo") < 0 && errno == ENOENT,
+        "attr_set of unknown attribute fails with ENOENT");
 
     errno = 0;
     ok (attr_add_active (attrs, "unknown", NULL, NULL, NULL) < 0

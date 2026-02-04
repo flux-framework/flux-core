@@ -171,7 +171,7 @@ int rundir_create (attr_t *attrs,
     if (attr_get (attrs, attr_name, &dirpath) < 0) {
         if (!(dirpath = rundir_mktemp (path, sizeof (path), tmpdir, error)))
             goto done;
-        if (attr_add (attrs, attr_name, dirpath) < 0)
+        if (attr_set (attrs, attr_name, dirpath) < 0)
             goto error_setattr;
     }
     /*  If attribute is set, but the directory doesn't exist,
@@ -223,7 +223,7 @@ int rundir_create (attr_t *attrs,
     (void)snprintf (key, sizeof (key), "%s-cleanup", attr_name);
     if (attr_get (attrs, key, &val) == 0)
         do_cleanup = (!val || streq (val, "0")) ? false : true;
-    else if (attr_add (attrs, key, do_cleanup ? "1" : "0") < 0)
+    else if (attr_set (attrs, key, do_cleanup ? "1" : "0") < 0)
         goto error_setattr;
 
     rc = 0;
