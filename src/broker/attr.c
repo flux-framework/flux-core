@@ -160,7 +160,7 @@ static struct entry *entry_create (const char *name, const char *val, int flags)
     if (!(e = calloc (1, sizeof (*e))))
         return NULL;
 
-    if (name && !(e->name = strdup (name)))
+    if (!(e->name = strdup (name)))
         goto cleanup;
     if (val && !(e->val = strdup (val)))
         goto cleanup;
