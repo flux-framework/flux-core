@@ -24,7 +24,6 @@ void basic (void)
 {
     attr_t *attrs;
     const char *val;
-    int flags;
 
     ok ((attrs = attr_create ()) != NULL,
         "attr_create works");
@@ -32,7 +31,7 @@ void basic (void)
     /* attr_get, attr_set on unknown fails
      */
     errno = 0;
-    ok (attr_get (attrs, "test.foo", NULL, NULL) < 0 && errno == ENOENT,
+    ok (attr_get (attrs, "test.foo", NULL) < 0 && errno == ENOENT,
         "attr_get on unknown attr fails with errno == ENOENT");
     errno = 0;
     ok (attr_set (attrs, "test.foo", "bar") < 0 && errno == ENOENT,
@@ -40,62 +39,58 @@ void basic (void)
 
     /* attr_add, attr_get works
      */
-    ok ((attr_add (attrs, "test.foo", "bar", 0) == 0),
+    ok ((attr_add (attrs, "test.foo", "bar") == 0),
         "attr_add works");
     errno = 0;
-    ok ((attr_add (attrs, "test.foo", "bar", 0) < 0 && errno == EEXIST),
+    ok ((attr_add (attrs, "test.foo", "bar") < 0 && errno == EEXIST),
         "attr_add on existing attr fails with EEXIST");
-    ok (attr_get (attrs, "test.foo", NULL, NULL) == 0,
+    ok (attr_get (attrs, "test.foo", NULL) == 0,
         "attr_get on new attr works with NULL args");
     val = NULL;
-    flags = 0;
-    ok (attr_get (attrs, "test.foo", &val, &flags) == 0 && streq (val, "bar")
-        && flags == 0,
-        "attr_get on new attr works returns correct val,flags");
+    ok (attr_get (attrs, "test.foo", &val) == 0 && streq (val, "bar"),
+        "attr_get on new attr works returns correct val");
 
     /* attr_delete works
      */
     ok (attr_delete (attrs, "test.foo") == 0,
         "attr_delete works");
     errno = 0;
-    ok (attr_get (attrs, "test.foo", NULL, NULL) < 0 && errno == ENOENT,
+    ok (attr_get (attrs, "test.foo", NULL) < 0 && errno == ENOENT,
         "attr_get on deleted attr fails with errno == ENOENT");
 
     /* ATTR_IMMUTABLE protects against update/delete from user;
      * update/delete can NOT be forced on broker.
      */
-    ok (attr_add (attrs, "test.foo", "baz", ATTR_IMMUTABLE) == 0,
-        "attr_add ATTR_IMMUTABLE works");
-    flags = 0;
+    ok (attr_add (attrs, "test-im.foo", "baz") == 0,
+        "attr_add of immutable attribute works");
     val = NULL;
-    ok (attr_get (attrs, "test.foo", &val, &flags) == 0 && streq (val, "baz")
-        && flags == ATTR_IMMUTABLE,
-        "attr_get returns correct value and flags");
+    ok (attr_get (attrs, "test-im.foo", &val) == 0 && streq (val, "baz"),
+        "attr_get returns correct value");
     errno = 0;
-    ok (attr_set (attrs, "test.foo", "bar") < 0 && errno == EPERM,
+    ok (attr_set (attrs, "test-im.foo", "bar") < 0 && errno == EPERM,
         "attr_set on immutable attr fails with EPERM");
     errno = 0;
-    ok (attr_set (attrs, "test.foo", "baz")  < 0 && errno == EPERM,
+    ok (attr_set (attrs, "test-im.foo", "baz")  < 0 && errno == EPERM,
         "attr_set (force) on immutable fails with EPERM");
     errno = 0;
-    ok (attr_delete (attrs, "test.foo") < 0 && errno == EPERM,
+    ok (attr_delete (attrs, "test-im.foo") < 0 && errno == EPERM,
         "attr_delete on immutable attr fails with EPERM");
     errno = 0;
-    ok (attr_delete (attrs, "test.foo") < 0 && errno == EPERM,
+    ok (attr_delete (attrs, "test-im.foo") < 0 && errno == EPERM,
         "attr_delete on immutable fails with EPERM");
 
     /* Add couple more attributes and exercise iterator.
      * initial hash contents: foo=bar
      */
     val = attr_first (attrs);
-    ok (val && streq (val, "test.foo"),
-        "attr_first returned test.foo");
+    ok (val && streq (val, "test-im.foo"),
+        "attr_first returned test-im.foo");
     ok (attr_next (attrs) == NULL,
         "attr_next returned NULL");
-    ok (attr_add (attrs, "test.foo1", "42", 0) == 0
-        && attr_add (attrs, "test.foo2", "43", 0) == 0
-        && attr_add (attrs, "test.foo3", "44", 0) == 0
-        && attr_add (attrs, "test.foo4", "44", 0) == 0,
+    ok (attr_add (attrs, "test.foo1", "42") == 0
+        && attr_add (attrs, "test.foo2", "43") == 0
+        && attr_add (attrs, "test.foo3", "44") == 0
+        && attr_add (attrs, "test.foo4", "44") == 0,
         "attr_add test.foo[1-4] works");
     val = attr_first (attrs);
     ok (val && strstarts (val, "test"),
@@ -145,19 +140,18 @@ void active (void)
 
     ok (attr_add_active (attrs,
                          "test.a",
-                         0,
                          active_get,
                          active_set,
                          &a) == 0,
         "attr_add_active works");
     a = "x";
-    ok (attr_get (attrs, "test.a", &val, NULL) == 0 && val && streq (val, "x"),
+    ok (attr_get (attrs, "test.a", &val) == 0 && val && streq (val, "x"),
         "attr_get on active a tracks val=x");
     a = "y";
-    ok (attr_get (attrs, "test.a", &val, NULL) == 0 && streq (val, "y"),
+    ok (attr_get (attrs, "test.a", &val) == 0 && streq (val, "y"),
         "attr_get on active a tracks val=y");
     a = NULL;
-    ok (attr_get (attrs, "test.a", &val, NULL) == 0 && val == NULL,
+    ok (attr_get (attrs, "test.a", &val) == 0 && val == NULL,
         "attr_get on active a tracks val=NULL");
     ok (attr_delete (attrs, "test.a") == 0,
         "attr_delete works on active attr");
@@ -165,20 +159,19 @@ void active (void)
     /* immutable active works as expected
      */
     ok (attr_add_active (attrs,
-                         "test.b",
-                         ATTR_IMMUTABLE,
+                         "test-im.b",
                          active_get,
                          active_set,
                          &b) == 0,
-        "attr_add_active ATTR_IMMUTABLE works");
+        "attr_add_active of immutable attr works");
     b = "m";
-    ok (attr_get (attrs, "test.b", &val, NULL) == 0 && val && streq (val, "m"),
+    ok (attr_get (attrs, "test-im.b", &val) == 0 && val && streq (val, "m"),
         "attr_get returns initial val=m");
     b = "n";
-    ok (attr_get (attrs, "test.b", &val, NULL) == 0 && val && streq (val, "m"),
+    ok (attr_get (attrs, "test-im.b", &val) == 0 && val && streq (val, "m"),
         "attr_get ignores value changes");
     errno = 0;
-    ok (attr_delete (attrs, "test.b") < 0 && errno == EPERM,
+    ok (attr_delete (attrs, "test-im.b") < 0 && errno == EPERM,
         "attr_delete fails with EPERM");
 
     attr_destroy (attrs);
@@ -192,11 +185,11 @@ void unknown (void)
         BAIL_OUT ("attr_create failed");
 
     errno = 0;
-    ok (attr_add (attrs, "unknown", "foo", 0) < 0 && errno == ENOENT,
+    ok (attr_add (attrs, "unknown", "foo") < 0 && errno == ENOENT,
         "attr_add of unknown attribute fails with ENOENT");
 
     errno = 0;
-    ok (attr_add_active (attrs, "unknown", 0, NULL, NULL, NULL) < 0
+    ok (attr_add_active (attrs, "unknown", NULL, NULL, NULL) < 0
         && errno == ENOENT,
         "attr_add_active of unknown attribute fails with ENOENT");
 
