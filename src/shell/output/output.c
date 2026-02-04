@@ -333,7 +333,7 @@ static int shell_output_reconnect (flux_plugin_t *p,
                                    flux_plugin_arg_t *args,
                                    void *data)
 {
-    struct shell_output *out = data;
+    struct shell_output *out = flux_plugin_aux_get (p, "builtin.output");
     kvs_output_reconnect (out->kvs);
     return 0;
 }
