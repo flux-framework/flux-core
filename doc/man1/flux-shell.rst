@@ -62,6 +62,7 @@ Once the job shell has successfully gathered job information, the
 :program:`flux shell` then goes through the following general steps to manage
 execution of the job:
 
+ * connect to Flux and call ``shell.connect`` plugin callbacks
  * register service endpoint specific to the job and userid,
    typically ``<userid>-shell-<jobid>``
  * load the system default ``initrc.lua``
@@ -86,8 +87,17 @@ execution of the job:
    - call ``task.exit`` plugin callback
    - collect exit status
 
- * call ``shell.exit`` plugin callback when all tasks have exited.
+ * call ``shell.finish`` plugin callback when all tasks have exited
+ * call ``shell.exit`` plugin callback when the shell has exited the
+   reactor
  * exit with max task exit code
+
+.. note::
+   The ``shell.finish`` callback is called while the reactor is still
+   active, making it suitable for cleanup operations that require an
+   active event loop or time-sensitive execution. The ``shell.exit``
+   callback is called after the reactor has exited and should only be
+   used for final synchronous cleanup.
 
 PLUGINS
 =======
@@ -124,19 +134,27 @@ By default, :program:`flux shell` supports the following plugin callback
 topics:
 
 **taskmap.SCHEME**
-  Called when a taskmap scheme *SCHEME* is requested via the taskmap
-  shell option or corresponding :option:`flux submit --taskmap` option.
-  Plugins that want to offer a different taskmap scheme than the defaults
-  of ``block``, ``cyclic``, ``hostfile``, and ``manual`` can register a
-  ``taskmap.*`` plugin callback and then users can request this mapping
-  with the appropriate :option:`flux submit --taskmap=name`` option.
-  The default block taskmap is passed to the plugin as "taskmap" in the
-  plugin input arguments, and the plugin should return the new taskmap as a
-  string in the output args.  This callback is called before ``shell.init``.
+  Called when a taskmap scheme *SCHEME* is requested via the ``taskmap``
+  shell option or the corresponding :option:`flux submit --taskmap` option.
+  Plugins can register a ``taskmap.*`` callback to provide custom task
+  mapping schemes beyond the built-in ``block``, ``cyclic``, ``hostfile``,
+  and ``manual`` schemes. The callback receives the default block taskmap
+  in the "taskmap" input argument and should return a new taskmap string
+  in the output arguments. This callback is invoked before ``shell.init``.
+
+**mustache.render.TEMPLATE**
+  Called when a mustache template *TEMPLATE* needs to be rendered by the
+  shell. This allows plugins to implement custom mustache templates. For
+  example, the tmpdir plugin renders ``{{tmpdir}}`` by subscribing to
+  ``mustache.render.tmpdir``. This callback is invoked for each task
+  before it starts, for any environment variable containing a mustache
+  template, or when a plugin calls ``flux_shell_mustache_render()``.
 
 **shell.connect**
-  Called just after the shell connects to the local Flux broker. (Only
-  available to builtin shell plugins.)
+  Called immediately after the shell connects to the local Flux broker,
+  before jobspec and resource information are fetched. This callback is
+  only available to builtin shell plugins since it runs before the
+  system initrc is loaded and external plugins can be initialized.
 
 **shell.init**
   Called after the shell has finished fetching and parsing the
@@ -167,6 +185,17 @@ topics:
   Called after all local tasks have been started. The shell "start"
   barrier is called just after this callback returns.
 
+**shell.finish**
+  Called after all local tasks have exited but before the shell exits
+  the reactor. This callback runs while the reactor is still active,
+  making it suitable for cleanup operations or asynchronous work that
+  requires an active event loop.
+
+**shell.exit**
+  Called after all local tasks have exited and the shell has exited
+  the reactor. This is the final callback before the shell process
+  terminates.
+
 **shell.log**
   Called by the shell logging facility when a shell component
   posts a log message.
@@ -175,6 +204,17 @@ topics:
   Called by the shell logging facility when a request to set the
   shell loglevel is made.
 
+**shell.lost**
+  Called by the shell when the job receives a lost-shell exception.
+  The callback context contains the affected shell rank (``shell_rank``)
+  and exception ``severity``.
+
+**shell.resource-update**
+  Called by the shell when the job's resource set **R** is updated.
+
+**shell.reconnect**
+  Called by the shell after reconnecting its handle to the local Flux
+  broker (i.e., due to a broker restart).
 
 Note however, that plugins may also call into the plugin stack to create
 new callbacks at runtime, so more topics than those listed above may be
@@ -248,7 +288,7 @@ plugins include:
 
 .. option:: pty.interactive
 
-  Enable a a pty on rank 0 that is set up for interactive attach by
+  Enable a pty on rank 0 that is set up for interactive attach by
   a front-end program (i.e. :program:`flux job attach`). With no other
   :option:`pty` options, only rank 0 will be assigned a pty and output will not
   be captured. These defaults can be changed by setting other
@@ -369,12 +409,13 @@ plugins include:
   when output is being aggregated on the leader shell.  Output is aggregated
   by default, unless it is redirected to per-rank local files.
 
-  Flow control limits the growth of message backlogs on the leader shell.
-  The option values represent a count of unacknowledged messages sent to the
-  leader shell by the local shell.  When the high watermark is reached,
-  task output handling is stopped, potentially stalling tasks once their
-  local output buffers are exhausted.  When the number of messages drops
-  to the low watermark, task output handling resumes.
+  Flow control limits the growth of message backlogs on the leader shell
+  using a credit-based protocol. Each shell starts with credits equal to
+  the high watermark. When credits drop to the low watermark, the shell
+  requests more credits from the leader. When credits reach zero, task
+  output handling is stopped, potentially stalling tasks once their
+  local output buffers are exhausted. When more credits are received
+  from the leader, task output handling resumes.
 
   The default values of 100 and 1000 should be adequate in most cases.
 
@@ -575,11 +616,12 @@ supported. Job shell specific functions and tables are described below:
 
     plugin.load { file = "test.so", conf = { value = "foo" } }
 
-**plugin.register({name=plugin_name, handlers=handlers_table)**
+**plugin.register({name=plugin_name, handlers=handlers)**
   Register a Lua plugin. Requires a table argument with the plugin ``name``
-  and a set of ``handlers``. ``handlers_table`` is an array of tables, each
-  of which must define ``topic``, a topic glob of shell plugin callbacks to
-  which to subscribe, and ``fn`` a handler function to call for each match
+  and a set of ``handlers``. The ``handlers`` parameter is an array of
+  tables, each of which must define ``topic``, a topic glob of shell plugin
+  callbacks to which to subscribe, and ``fn`` a handler function to call
+  for each match
 
   For example, the following plugin would log the topic string for
   every possible plugin callback (except for callbacks which are made

@@ -27,6 +27,7 @@ struct shell_builtin {
     flux_plugin_f task_fork;
     flux_plugin_f start;
     flux_plugin_f task_exit;
+    flux_plugin_f finish;
     flux_plugin_f exit;
 };
 
