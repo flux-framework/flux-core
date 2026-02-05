@@ -333,8 +333,28 @@ static int shell_output_reconnect (flux_plugin_t *p,
                                    flux_plugin_arg_t *args,
                                    void *data)
 {
-    struct shell_output *out = data;
+    struct shell_output *out = flux_plugin_aux_get (p, "builtin.output");
     kvs_output_reconnect (out->kvs);
+    return 0;
+}
+
+static int shell_output_finish (flux_plugin_t *p,
+                                const char *topic,
+                                flux_plugin_arg_t *args,
+                                void *data)
+{
+    struct shell_output *out = flux_plugin_aux_get (p, "builtin.output");
+
+    /* After all tasks finish, destroy client and send EOF to leader shell
+     * to indicate no more output will be sent from this shell.
+     *
+     * Note: All output has been read and sent to the leader before this
+     * point since tasks complete only after EOF on both stdout and stderr.
+     */
+    if (out->client) {
+        output_client_destroy (out->client);
+        out->client = NULL;
+    }
     return 0;
 }
 
@@ -344,6 +364,7 @@ struct shell_builtin builtin_output = {
     .init = shell_output_init,
     .task_init = shell_output_task_init,
     .task_exit = shell_output_task_exit,
+    .finish = shell_output_finish,
 };
 
 /*

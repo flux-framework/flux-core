@@ -12,13 +12,15 @@
  *
  * When output is to the KVS or a single output file, non-leader
  * shell ranks send output and log data to the rank 0 shell via
- * RPCs.
+ * RPCs using FLUX_RPC_NORESPONSE.
  *
- * Notes:
- *  - Errors from write requests to leader shell are logged.
- *  - Outstanding RPCs at shell exit are waited for synchronously.
- *  - Number of in-flight write RPCs is limited by client->hwm
- *    to avoid matchtag exhaustion.
+ * A credit-based flow control protocol limits the number of
+ * in-flight write requests: each shell starts with credits equal
+ * to client->hwm, and requests more credits from the leader when
+ * credits drop to client->lwm. If credits reach zero, the shell
+ * output plugin stops reading output from local tasks until more
+ * credits are received from the leader.
+ *
  */
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -47,10 +49,10 @@ struct output_client {
 
 static void client_send_eof (struct output_client *client)
 {
-    /* Note: client should not be instantiated on rank 0, but check here
-     * just in case.
+    /* Note: client should not be instantiated on rank 0, and may be NULL
+     * if already destroyed. Check both conditions before sending EOF.
      */
-    if (client->shell_rank != 0) {
+    if (client && client->shell_rank != 0) {
         flux_future_t *f;
         /* Nonzero shell rank: send EOF to leader shell to notify
          *  that no more messages will be sent to shell.write

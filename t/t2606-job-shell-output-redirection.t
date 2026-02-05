@@ -430,4 +430,11 @@ test_expect_success 'job-shell: open of invalid output files fails' '
 	test_must_fail flux run -N4 -n8 \
 		--output=/nosuchdir/output.{{task.id}} hostname
 '
+test_expect_success 'job-shell: slow shell.exit does not prevent rank 0 from exiting reactor' '
+	cat <<-EOF >test-finish.lua &&
+	plugin.searchpath = "${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
+	plugin.load { file = "finish.so" }
+	EOF
+	flux run -N4 -t 3m -o userrc=test-finish.lua true
+'
 test_done

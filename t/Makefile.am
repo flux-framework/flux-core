@@ -519,6 +519,7 @@ check_LTLIBRARIES = \
 	shell/plugins/jobspec-info.la \
 	shell/plugins/taskmap-reverse.la \
 	shell/plugins/fork.la \
+	shell/plugins/finish.la \
 	job-manager/plugins/priority-wait.la \
 	job-manager/plugins/priority-invert.la \
 	job-manager/plugins/args.la \
@@ -928,6 +929,14 @@ shell_plugins_fork_la_LDFLAGS = \
 	$(fluxplugin_ldflags) -module -rpath /nowhere
 shell_plugins_fork_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
+
+shell_plugins_finish_la_SOURCES = shell/plugins/finish.c
+shell_plugins_finish_la_CPPFLAGS = $(test_cppflags)
+shell_plugins_finish_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+shell_plugins_finish_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+
 
 job_manager_plugins_priority_wait_la_SOURCES = \
 	job-manager/plugins/priority-wait.c
