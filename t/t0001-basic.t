@@ -212,7 +212,7 @@ test_expect_success 'flux-start fails with non-executable rc2' '
 	cat <<-EOF >no-shebang.sh &&
 	true
 	EOF
-	test_expect_code 126 run_timeout 30 flux start $ARGS ./no-shebang.sh
+	test_expect_code 126 run_timeout --env=SHELL=/bin/sh 30 flux start $ARGS ./no-shebang.sh
 '
 test_expect_success 'flux-start fails with invalid shebang in rc2' '
 	chmod +x no-shebang.sh &&
