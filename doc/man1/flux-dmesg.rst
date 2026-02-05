@@ -54,6 +54,15 @@ OPTIONS
    or *always*. If *WHEN* is omitted, it defaults to *always*. The default
    value when the :option:`--color` option is not used is *auto*.
 
+.. option:: --stderr-level=LEVEL
+
+   Set the broker stderr log severity level.  Log messages with a severity
+   less than (more severe) or equal to the threshold are printed on the
+   local broker's standard error.  LEVEL should be a numerical syslog level
+   (0-7) or a negative number to disable.  The initial value is 3 (LOG_ERR)
+   unless overridden with the ``log-stderr-level`` broker attribute.
+   For a table of level values, see :man1:`flux-broker`.
+
 EXAMPLES
 ========
 
