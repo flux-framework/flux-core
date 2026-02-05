@@ -153,6 +153,14 @@ static int rexec_init (flux_plugin_t *p,
         rexec_destroy (rexec);
         return -1;
     }
+
+    /* Add completion reference to keep shell in event loop until
+     * subprocess server is successfully shut down:
+     */
+    if (flux_shell_add_completion_ref (rexec->shell, "builtin::rexec") < 0) {
+        shell_log_errno ("failed to add rexec shutdown completion ref");
+        return -1;
+    }
     return 0;
 }
 
@@ -187,18 +195,19 @@ static void shutdown_cb (flux_future_t *f, void *arg)
          */
         shell_warn ("failed to shutdown rexec server cleanly with SIGKILL");
     }
-    flux_reactor_stop (flux_future_get_reactor (f));
     flux_future_destroy (f);
+    if (flux_shell_remove_completion_ref (rexec->shell,
+                                          "builtin::rexec") < 0)
+        shell_log_errno ("failed to remove rexec completion ref");
 }
 
-static int rexec_exit (flux_plugin_t *p,
-                       const char *topic,
-                       flux_plugin_arg_t *arg,
-                       void *data)
+static int rexec_finish (flux_plugin_t *p,
+                         const char *topic,
+                         flux_plugin_arg_t *arg,
+                         void *data)
 {
     struct shell_rexec *rexec = flux_plugin_aux_get (p, "rexec");
     if (rexec) {
-        flux_t *h = flux_shell_get_flux (rexec->shell);
         flux_future_t *f;
 
         /* Send SIGTERM to any subprocesses running in the server and
@@ -221,10 +230,6 @@ static int rexec_exit (flux_plugin_t *p,
             flux_future_destroy (f);
             return -1;
         }
-
-        /* Run reactor until server is shutdown:
-         */
-        flux_reactor_run (flux_get_reactor (h), 0);
     }
     return 0;
 }
@@ -232,7 +237,7 @@ static int rexec_exit (flux_plugin_t *p,
 struct shell_builtin builtin_rexec = {
     .name = FLUX_SHELL_PLUGIN_NAME,
     .init = rexec_init,
-    .exit = rexec_exit,
+    .finish = rexec_finish,
 };
 
 // vi:ts=4 sw=4 expandtab
