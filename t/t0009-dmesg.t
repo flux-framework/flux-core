@@ -256,5 +256,22 @@ test_expect_success 'setting log-forward-level to -1 works' '
 	    flux exec -r 1 flux logger --severity=emerg "smurfs" &&
 	test_must_fail grep "logger.emerg" forward.log
 '
-
+test_expect_success 'flux dmesg --stderr-level=0 works' '
+	echo 0 >stderr.exp &&
+	flux dmesg --stderr-level=0 &&
+	flux getattr log-stderr-level >stderr.out &&
+	test_cmp stderr.exp stderr.out
+'
+test_expect_success 'flux dmesg --stderr-level=-1 works' '
+	echo -1 >stderr2.exp &&
+	flux dmesg --stderr-level=-1 &&
+	flux getattr log-stderr-level >stderr2.out &&
+	test_cmp stderr2.exp stderr2.out
+'
+test_expect_success 'flux dmesg --stderr-level=8 fails' '
+	test_must_fail flux dmesg --stderr-level=8
+'
+test_expect_success 'restore stderr-level to 3 (LOG_ERR)' '
+	flux dmesg --stderr-level=3
+'
 test_done
