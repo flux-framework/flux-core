@@ -226,15 +226,15 @@ OTHER OPTIONS
 SHELL OPTIONS
 =============
 
-Some options that affect the parallel runtime environment are provided by the
-Flux shell.  These options are described in detail in the
-:ref:`SHELL OPTIONS <flux_shell_options>` section of :man1:`flux-shell`.
-A list of the most commonly needed options follows.
+Some options that affect the parallel runtime environment are provided
+by the Flux shell.  These options are described in detail in
+:man7:`flux-shell-options`.  A list of the most commonly needed options
+follows.
 
 Usage: :option:`flux bulksubmit -o NAME[=ARG]`.
 
-.. make :option: references in the included table x-ref to flux-shell(1)
-.. program:: flux shell
+.. make :option: references in the included table x-ref to flux-shell-options(7)
+.. program:: flux shell options
 .. include:: common/job-shell-options.rst
 .. program:: flux bulksubmit
 

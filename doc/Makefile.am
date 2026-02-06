@@ -371,6 +371,7 @@ MAN3_FILES_SECONDARY = \
 MAN5_FILES = $(MAN5_FILES_PRIMARY)
 
 MAN5_FILES_PRIMARY = \
+	man5/flux-shell-initrc.5 \
 	man5/flux-config.5 \
 	man5/flux-config-access.5 \
 	man5/flux-config-bootstrap.5 \
@@ -391,6 +392,8 @@ MAN7_FILES = $(MAN7_FILES_PRIMARY)
 MAN7_FILES_PRIMARY = \
 	man7/flux-broker-attributes.7 \
 	man7/flux-jobtap-plugins.7 \
+	man7/flux-shell-plugins.7 \
+	man7/flux-shell-options.7 \
 	man7/flux-environment.7
 
 

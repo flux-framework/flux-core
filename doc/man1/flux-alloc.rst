@@ -120,16 +120,15 @@ OTHER OPTIONS
 SHELL OPTIONS
 =============
 
-Some options that affect the parallel runtime environment of the Flux instance
-started by :program:`flux alloc` are provided by the Flux shell.
-These options are described in detail in the
-:ref:`SHELL OPTIONS <flux_shell_options>` section of :man1:`flux-shell`.
+Some options that affect the parallel runtime environment of the Flux
+instance started by :program:`flux alloc` are provided by the Flux shell.
+These options are described in detail in :man7:`flux-shell-options`.
 A list of the most commonly needed options follows.
 
 Usage: :option:`flux alloc -o NAME[=ARG]`.
 
-.. make :option: references in the included table x-ref to flux-shell(1)
-.. program:: flux shell
+.. make :option: references in the included table x-ref to flux-shell-options(7)
+.. program:: flux shell options
 .. include:: common/job-shell-options.rst
 .. program:: flux alloc
 
