@@ -14,25 +14,36 @@ DESCRIPTION
 .. program:: flux shell
 
 :program:`flux shell`, the Flux job shell, is the component of Flux which
-manages the startup and execution of user jobs.  :program:`flux shell` runs as
+manages the startup and execution of user jobs. :program:`flux shell` runs as
 the job user, reads the jobspec and assigned resource set R for the job from
 the KVS, and using this data determines what local job tasks to execute. While
 job tasks are running, the job shell acts as the interface between the
 Flux instance and the job by handling standard I/O, signals, and finally
 collecting the exit status of tasks as they complete.
 
-The design of the Flux job shell allows customization through a set of
-builtin and runtime loadable shell plugins. These plugins are used to
-handle standard I/O redirection, PMI, CPU and GPU affinity, debugger
-support and more. Details of the :program:`flux shell` plugin capabilities and
-design can be found in :man7:`flux-shell-plugins`.
+The job shell is designed to be customizable through both configuration and
+extension mechanisms:
 
-:program:`flux shell` also supports configuration via a Lua-based configuration
-file, called the shell ``initrc``, from which shell plugins may be loaded
-or shell options and data examined or set. The :program:`flux shell` initrc may
-even extend the shell itself via simple shell plugins developed directly
-in Lua. See :man5:`flux-shell-initrc` for details of the ``initrc``
-format and features.
+**Configuration**: Runtime behavior can be controlled via shell options
+specified in jobspec. These options control features like CPU affinity,
+output redirection, signal handling, and more. See :man7:`flux-shell-options`
+for a complete list of available options.
+
+**Extension**: The shell supports both builtin and runtime-loadable plugins
+that implement most advanced features. Plugins can be written in C for
+maximum performance, or in Lua for rapid development. See
+:man7:`flux-shell-plugins` for details on the plugin architecture and
+development guide.
+
+**Initialization**: Shell behavior can be customized via a Lua-based
+``initrc`` file which is executed at startup. The initrc can load plugins,
+set options, modify the environment, and even extend the shell with inline
+Lua code. See :man5:`flux-shell-initrc` for the initrc format and API.
+
+The shell runs with restricted Flux service access as a guest user,
+limiting its capabilities to job-specific operations. This security
+boundary ensures job shells cannot interfere with the Flux instance or
+other jobs.
 
 OPTIONS
 =======
@@ -43,71 +54,107 @@ OPTIONS
 
 .. option:: --reconnect
 
-   Attempt to reconnect if broker connection is lost.
+   Attempt to reconnect if broker connection is lost. This option allows
+   the shell to survive broker restarts during job execution.
 
 OPERATION
 =========
 
-When a job has been granted resources by a Flux instance, a
-:program:`flux shell` process is invoked on each broker rank involved in the
-job. The job shell runs as the job user, and will always have
-:envvar:`FLUX_KVS_NAMESPACE` set such that the root of the job shell's
-KVS accesses will be the guest namespace for the job.
+When a job has been granted resources by a Flux instance, a :program:`flux
+shell` process is invoked on each broker rank involved in the job. The job
+shell runs as the job user, and will always have :envvar:`FLUX_KVS_NAMESPACE`
+set such that the root of the job shell's KVS accesses will be the guest
+namespace for the job.
+
+Shell Lifecycle
+---------------
 
 Each :program:`flux shell` connects to the local broker, fetches the jobspec
 and resource set **R** for the job from the job-info module, and uses this
 information to plan which tasks to locally execute.
 
-Once the job shell has successfully gathered job information, the
-:program:`flux shell` then goes through the following general steps to manage
-execution of the job:
+Each shell proceeds through the following lifecycle phases:
 
- * connect to Flux and call ``shell.connect`` plugin callbacks
- * register service endpoint specific to the job and userid,
-   typically ``<userid>-shell-<jobid>``
- * load the system default ``initrc.lua``
-   (``$sysconfdir/flux/shell/initrc.lua``), unless overridden by
-   configuration (See :man7:`flux-shell-options` and :man5:`flux-shell-initrc`)
- * call ``shell.init`` plugin callbacks
- * change working directory to the cwd of the job
- * enter a barrier to ensure shell initialization is complete on all shells
- * emit ``shell.init`` event to exec.eventlog
- * call ``shell.post-init`` plugin callbacks
- * create all local tasks. For each task, the following procedure is used
+**Initialization Phase**
 
-   - call ``task.init`` plugin callback
-   - launch task, call ``task.exec`` plugin callback just before :linux:man2:`execve`
-   - call ``task.fork`` plugin callback
+ * Connect to local Flux broker
+ * Call ``shell.connect`` plugin callbacks (builtin plugins only)
+ * Register job-specific service endpoint: ``<userid>-shell-<jobid>``
+ * Load system default ``initrc.lua`` from ``$sysconfdir/flux/shell/initrc.lua``
+   (See :man7:`flux-shell-options` for override options)
+ * Load user initrc if specified via ``userrc`` option
+ * Call ``shell.init`` plugin callbacks
+ * Change working directory to job's cwd
+ * Enter initialization barrier (wait for all shells)
+ * Emit ``shell.init`` event to exec.eventlog
+ * Call ``shell.post-init`` plugin callbacks
 
- * once all tasks have started, call ``shell.start`` plugin callback
- * enter shell "start" barrier
- * emit ``shell.start`` event, after which all tasks are known running
- * for each exiting task:
+**Task Launch Phase**
 
-   - call ``task.exit`` plugin callback
-   - collect exit status
+For each local task, the shell will:
 
- * call ``shell.finish`` plugin callback when all tasks have exited
- * call ``shell.exit`` plugin callback when the shell has exited the
-   reactor
- * exit with max task exit code
+ * Call ``task.init`` plugin callback
+ * Fork task process
+ * Call ``task.exec`` plugin callback (in child process, pre-exec)
+ * Execute task via :linux:man2:`execve`
+ * Call ``task.fork`` plugin callback (in parent process, post-fork)
 
-.. note::
-   The ``shell.finish`` callback is called while the reactor is still
-   active, making it suitable for cleanup operations that require an
-   active event loop or time-sensitive execution. The ``shell.exit``
-   callback is called after the reactor has exited and should only be
-   used for final synchronous cleanup.
+**Running Phase**
 
+ * Call ``shell.start`` plugin callbacks once all local tasks are started
+ * Enter "start" barrier (wait for all shells)
+ * Emit ``shell.start`` event to exec.eventlog
+ * Monitor running tasks (handle I/O redirection, process signals,
+   respond to job exceptions)
+ * For each exiting task:
+
+   - Collect task wait status
+   - Call ``task.exit`` plugin callback
+
+**Completion Phase**
+
+ * Call ``shell.finish`` plugin callback when all local tasks have exited
+   (reactor still active - suitable for asynchronous cleanup)
+ * Exit reactor
+ * Call ``shell.exit`` plugin callback after reactor has stopped
+   (final synchronous cleanup only)
+ * Exit with maximum task exit code
+
+Barriers and Synchronization
+-----------------------------
+
+The shell uses distributed barriers at key points to ensure coordinated
+execution across all shells in a multi-node job:
+
+**Initialization barrier**: Ensures all shells have completed initialization
+before any tasks start. This allows ``shell.post-init`` callbacks to rely
+on all shells being fully initialized. If a shell fails before this barrier
+then the execution system will raise a start exception for the job. A timeout
+is imposed on the start barrier by the job execution system. See
+:option:`barrier-timeout` in :man5:`flux-config-exec`.
+
+**Start barrier**: Ensures all shells have started their local tasks before
+the ``shell.start`` event is emitted. This guarantees that when a plugin
+or external tool sees the ``shell.start`` event, all tasks are known to be
+running.
+
+These barriers are critical for plugins that need to coordinate actions
+across shells.
+
+EXIT STATUS
+===========
+
+The shell exits with the highest exit code of any task. If any task was
+killed by a signal, the shell exits with 128 + signal number.
 
 RESOURCES
 =========
 
 .. include:: common/resources.rst
 
-
 SEE ALSO
 ========
 
 :man5:`flux-shell-initrc`, :man7:`flux-shell-plugins`,
-:man7:`flux-shell-options`
+:man7:`flux-shell-options`, :man1:`flux-run`, :man1:`flux-submit`,
+:man1:`flux-job`, :man5:`flux-config-exec`
