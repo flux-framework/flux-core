@@ -46,6 +46,18 @@ test_expect_success 'flux setattr fails on unknown attribute' '
 test_expect_success 'flux getattr fails on unknown attribute' '
 	test_must_fail flux getattr unknown-bar
 '
+test_expect_success 'flux setattr refuses to update !runtime attribute' '
+	flux setattr test-nr.foo bar &&
+	test_must_fail flux setattr test-nr.foo baz
+'
+test_expect_success 'but --force works' '
+	flux setattr --force test-nr.foo baz
+'
+test_expect_success 'yep, the value changed' '
+	echo baz >nr.exp &&
+	flux getattr test-nr.foo >nr.out &&
+	test_cmp nr.exp nr.out
+'
 test_expect_success 'flux lsattr with extra argument fails' '
 	test_must_fail flux lsattr badarg
 '
