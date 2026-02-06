@@ -168,10 +168,10 @@ int rundir_create (attr_t *attrs,
 
     /*  If attribute isn't set, then create a temp directory and use that.
      */
-    if (attr_get (attrs, attr_name, &dirpath, NULL) < 0) {
+    if (attr_get (attrs, attr_name, &dirpath) < 0) {
         if (!(dirpath = rundir_mktemp (path, sizeof (path), tmpdir, error)))
             goto done;
-        if (attr_add (attrs, attr_name, dirpath, 0) < 0)
+        if (attr_set (attrs, attr_name, dirpath) < 0)
             goto error_setattr;
     }
     /*  If attribute is set, but the directory doesn't exist,
@@ -214,12 +214,6 @@ int rundir_create (attr_t *attrs,
             goto done;
     }
 
-    /*  dirpath is now fixed, so make the attribute immutable, and
-     * schedule the dir for cleanup at exit if we created it here.
-     */
-    if (attr_set_flags (attrs, attr_name, ATTR_IMMUTABLE) < 0)
-        goto error_setattr;
-
     /*  If attr-cleanup is set on the command line, it overrides default
      * do_cleanup behavior set above.
      */
@@ -227,10 +221,9 @@ int rundir_create (attr_t *attrs,
     const char *val = NULL;
 
     (void)snprintf (key, sizeof (key), "%s-cleanup", attr_name);
-    if (attr_get (attrs, key, &val, NULL) == 0 && val)
-        do_cleanup = streq (val, "0") ? false : true;
-    (void)attr_delete (attrs, key, true);
-    if (attr_add (attrs, key, do_cleanup ? "1" : "0", ATTR_IMMUTABLE) < 0)
+    if (attr_get (attrs, key, &val) == 0)
+        do_cleanup = (!val || streq (val, "0")) ? false : true;
+    else if (attr_set (attrs, key, do_cleanup ? "1" : "0") < 0)
         goto error_setattr;
 
     rc = 0;

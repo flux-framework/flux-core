@@ -207,6 +207,7 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_msg_set_noresponse.3 \
 	man3/flux_get_size.3 \
 	man3/flux_attr_set.3 \
+	man3/flux_attr_set_ex.3 \
 	man3/flux_module_debug_test.3 \
 	man3/flux_module_config_request_decode.3 \
 	man3/flux_set_reactor.3 \

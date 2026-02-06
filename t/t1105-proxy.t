@@ -92,7 +92,7 @@ test_expect_success 'flux-proxy forwards LD_LIBRARY_PATH' '
 
 test_expect_success 'set bogus broker version' '
 	flux getattr version >realversion &&
-	flux setattr version 0.0.0
+	flux setattr -f version 0.0.0
 '
 test_expect_success 'flux-proxy fails with version mismatch' '
 	test_must_fail flux proxy $FLUX_URI true
@@ -101,7 +101,7 @@ test_expect_success 'flux-proxy --force works with version mismatch' '
 	flux proxy --force $FLUX_URI true
 '
 test_expect_success 'restore real broker version' '
-	flux setattr version $(cat realversion)
+	flux setattr -f version $(cat realversion)
 '
 
 test_expect_success 'flux-proxy works with jobid argument' '

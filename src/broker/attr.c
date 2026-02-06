@@ -22,6 +22,13 @@
 
 #include "attr.h"
 
+enum {
+    ATTR_IMMUTABLE      = 0x01, // value never changes once set
+    ATTR_READONLY       = 0x02, // value is not to be set on cmdline by users
+    ATTR_RUNTIME        = 0x04, // value may be updated by users
+    ATTR_CONFIG         = 0x08, // value overrides TOML config [unused]
+};
+
 struct registered_attr {
     const char *name;
     int flags;
@@ -44,30 +51,30 @@ struct entry {
 static struct registered_attr attrtab[] = {
 
     // general
-    { "rank", ATTR_READONLY },
-    { "size", ATTR_READONLY },
+    { "rank", ATTR_READONLY | ATTR_IMMUTABLE },
+    { "size", ATTR_READONLY | ATTR_IMMUTABLE },
     { "version", ATTR_READONLY },
     { "rundir", 0 },
-    { "rundir-cleanup", 0 },
+    { "rundir-cleanup", ATTR_IMMUTABLE },
     { "statedir", 0 },
-    { "statedir-cleanup", 0 },
-    { "security.owner", ATTR_READONLY },
-    { "local-uri", 0 },
-    { "parent-uri", ATTR_READONLY },
-    { "instance-level", ATTR_READONLY },
-    { "jobid", ATTR_READONLY },
-    { "jobid-path", ATTR_READONLY },
-    { "parent-kvs-namespace", ATTR_READONLY },
-    { "hostlist", 0 },
-    { "hostname", 0 },
-    { "broker.mapping", ATTR_READONLY },
-    { "broker.critical-ranks", 0 },
-    { "broker.boot-method", 0 },
-    { "broker.pid", ATTR_READONLY },
-    { "broker.quorum", 0 },
-    { "broker.quorum-warn", 0 },
-    { "broker.shutdown-warn", 0 },
-    { "broker.shutdown-timeout", 0 },
+    { "statedir-cleanup", ATTR_IMMUTABLE },
+    { "security.owner", ATTR_READONLY | ATTR_IMMUTABLE },
+    { "local-uri", ATTR_IMMUTABLE },
+    { "parent-uri", ATTR_READONLY | ATTR_IMMUTABLE },
+    { "instance-level", ATTR_READONLY | ATTR_IMMUTABLE },
+    { "jobid", ATTR_READONLY | ATTR_IMMUTABLE },
+    { "jobid-path", ATTR_READONLY | ATTR_IMMUTABLE },
+    { "parent-kvs-namespace", ATTR_READONLY | ATTR_IMMUTABLE },
+    { "hostlist", ATTR_IMMUTABLE },
+    { "hostname", ATTR_IMMUTABLE },
+    { "broker.mapping", ATTR_READONLY | ATTR_IMMUTABLE },
+    { "broker.critical-ranks", ATTR_IMMUTABLE },
+    { "broker.boot-method", ATTR_IMMUTABLE },
+    { "broker.pid", ATTR_READONLY | ATTR_IMMUTABLE },
+    { "broker.quorum", ATTR_IMMUTABLE },
+    { "broker.quorum-warn", ATTR_IMMUTABLE },
+    { "broker.shutdown-warn", ATTR_IMMUTABLE },
+    { "broker.shutdown-timeout", ATTR_IMMUTABLE },
     { "broker.cleanup-timeout", 0 },
     { "broker.rc1_path", 0 },
     { "broker.rc3_path", 0 },
@@ -75,15 +82,15 @@ static struct registered_attr attrtab[] = {
     { "broker.rc2_pgrp", 0 },
     { "broker.exit-restart", ATTR_RUNTIME },
     { "broker.module-nopanic", ATTR_RUNTIME },
-    { "broker.starttime", ATTR_READONLY },
+    { "broker.starttime", ATTR_READONLY | ATTR_IMMUTABLE },
     { "broker.sd-notify", 0 },
-    { "broker.sd-stop-timeout", 0 },
+    { "broker.sd-stop-timeout", ATTR_IMMUTABLE },
     { "broker.exit-norestart", 0 },
     { "broker.recovery-mode", 0 },
-    { "broker.uuid", ATTR_READONLY },
+    { "broker.uuid", ATTR_READONLY | ATTR_IMMUTABLE },
     { "conf.shell_initrc", ATTR_RUNTIME },
     { "conf.shell_pluginpath", ATTR_RUNTIME },
-    { "config.path", 0 },
+    { "config.path", ATTR_IMMUTABLE },
 
     // tree based overlay network
     { "tbon.topo", ATTR_CONFIG },
@@ -96,7 +103,7 @@ static struct registered_attr attrtab[] = {
     { "tbon.zmq_io_threads", ATTR_CONFIG },
     { "tbon.child_rcvhwm", ATTR_CONFIG },
     { "tbon.prefertcp", 0 },
-    { "tbon.interface-hint", ATTR_RUNTIME | ATTR_CONFIG },
+    { "tbon.interface-hint", ATTR_RUNTIME | ATTR_CONFIG | ATTR_IMMUTABLE },
     { "tbon.torpid_min", ATTR_CONFIG },
     { "tbon.torpid_max", ATTR_CONFIG },
     { "tbon.tcp_user_timeout", ATTR_CONFIG },
@@ -125,9 +132,11 @@ static struct registered_attr attrtab[] = {
     // for testing
     { "test.*", ATTR_RUNTIME },
     { "test-ro.*", ATTR_READONLY },
+    { "test-nr.*", 0 },
+    { "test-im.*", ATTR_IMMUTABLE },
 
     // misc undocumented
-    { "vendor.*", ATTR_RUNTIME}, // flux-framework/flux-pmix#109
+    { "vendor.*", ATTR_RUNTIME | ATTR_IMMUTABLE }, // flux-pmix#109
     { "tbon.fanout", 0 }, // legacy, replaced by tbon.topo
 };
 
@@ -159,7 +168,7 @@ static struct entry *entry_create (const char *name, const char *val, int flags)
     if (!(e = calloc (1, sizeof (*e))))
         return NULL;
 
-    if (name && !(e->name = strdup (name)))
+    if (!(e->name = strdup (name)))
         goto cleanup;
     if (val && !(e->val = strdup (val)))
         goto cleanup;
@@ -170,7 +179,7 @@ cleanup:
     return NULL;
 }
 
-int attr_delete (attr_t *attrs, const char *name, bool force)
+int attr_delete (attr_t *attrs, const char *name)
 {
     struct entry *e;
     int rc = -1;
@@ -185,27 +194,6 @@ int attr_delete (attr_t *attrs, const char *name, bool force)
     rc = 0;
 done:
     return rc;
-}
-
-int attr_add (attr_t *attrs, const char *name, const char *val, int flags)
-{
-    struct entry *e;
-
-    if (attrs == NULL || name == NULL) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (!attrtab_lookup (name))
-        return -1;
-    if ((e = zhash_lookup (attrs->hash, name))) {
-        errno = EEXIST;
-        return -1;
-    }
-    if (!(e = entry_create (name, val, flags)))
-        return -1;
-    zhash_update (attrs->hash, name, e);
-    zhash_freefn (attrs->hash, name, entry_destroy);
-    return 0;
 }
 
 int attr_set_cmdline (attr_t *attrs,
@@ -226,20 +214,18 @@ int attr_set_cmdline (attr_t *attrs,
         errno = EINVAL;
         return errprintf (errp, "attribute may not be set on the command line");
     }
-    if (attr_add (attrs, name, val, 0) < 0) {
-        if (errno != EEXIST || attr_set (attrs, name, val) < 0)
-            return errprintf (errp, "%s", strerror (errno));
-    }
+    if (attr_set (attrs, name, val) < 0)
+        return errprintf (errp, "%s", strerror (errno));
     return 0;
 }
 
 int attr_add_active (attr_t *attrs,
                      const char *name,
-                     int flags,
                      attr_get_f get,
                      attr_set_f set,
                      void *arg)
 {
+    struct registered_attr *reg;
     struct entry *e;
     int rc = -1;
 
@@ -247,7 +233,7 @@ int attr_add_active (attr_t *attrs,
         errno = EINVAL;
         goto done;
     }
-    if (!attrtab_lookup (name))
+    if (!(reg = attrtab_lookup (name)))
         return -1;
     if ((e = zhash_lookup (attrs->hash, name))) {
         if (!set) {
@@ -257,7 +243,7 @@ int attr_add_active (attr_t *attrs,
         if (set (name, e->val, arg) < 0)
             goto done;
     }
-    if (!(e = entry_create (name, NULL, flags)))
+    if (!(e = entry_create (name, NULL, reg->flags & ATTR_IMMUTABLE)))
         goto done;
     e->set = set;
     e->get = get;
@@ -269,84 +255,75 @@ done:
     return rc;
 }
 
-int attr_get (attr_t *attrs, const char *name, const char **val, int *flags)
+static struct entry *attr_get_entry (attr_t *attrs, const char *name)
 {
     struct entry *e;
-    int rc = -1;
 
     if (!attrs || !name) {
         errno = EINVAL;
-        goto done;
+        return NULL;
     }
     if (!(e = zhash_lookup (attrs->hash, name))) {
         errno = ENOENT;
-        goto done;
+        return NULL;
     }
     if (e->get) {
         if (!e->val || !(e->flags & ATTR_IMMUTABLE)) {
             const char *tmp;
             if (e->get (name, &tmp, e->arg) < 0)
-                goto done;
+                return NULL;
             free (e->val);
             if (tmp) {
                 if (!(e->val = strdup (tmp)))
-                    goto done;
+                    return NULL;
             }
             else
                 e->val = NULL;
         }
     }
+    return e;
+}
+
+int attr_get (attr_t *attrs, const char *name, const char **val)
+{
+    struct entry *e;
+
+    if (!(e = attr_get_entry (attrs, name)))
+        return -1;
     if (val)
         *val = e->val;
-    if (flags)
-        *flags = e->flags;
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 int attr_set (attr_t *attrs, const char *name, const char *val)
 {
     struct entry *e;
-    int rc = -1;
 
-    if (!(e = zhash_lookup (attrs->hash, name))) {
-        errno = ENOENT;
-        goto done;
+    if ((e = zhash_lookup (attrs->hash, name))) {
+        char *cpy = NULL;
+        if ((e->flags & ATTR_IMMUTABLE)) {
+            errno = EPERM;
+            return -1;
+        }
+        if (val && !(cpy = strdup (val)))
+            return -1;
+        if (e->set && e->set (name, val, e->arg) < 0) {
+            ERRNO_SAFE_WRAP (free, cpy);
+            return -1;
+        }
+        free (e->val);
+        e->val = cpy;
     }
-    if ((e->flags & ATTR_IMMUTABLE)) {
-        errno = EPERM;
-        goto done;
+    else {
+        struct registered_attr *reg;
+        if (!(reg = attrtab_lookup (name)))
+            return -1;
+        if (!(e = entry_create (name, val, reg->flags & ATTR_IMMUTABLE)))
+            return -1;
+        zhash_update (attrs->hash, name, e);
+        zhash_freefn (attrs->hash, name, entry_destroy);
     }
-    if (e->set) {
-        if (e->set (name, val, e->arg) < 0)
-            goto done;
-    }
-    free (e->val);
-    if (val) {
-        if (!(e->val = strdup (val)))
-            goto done;
-    }
-    else
-        e->val = NULL;
-    rc = 0;
-done:
-    return rc;
-}
-
-int attr_set_flags (attr_t *attrs, const char *name, int flags)
-{
-    struct entry *e;
-    int rc = -1;
-
-    if (!(e = zhash_lookup (attrs->hash, name))) {
-        errno = ENOENT;
-        goto done;
-    }
-    e->flags = flags;
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 const char *attr_first (attr_t *attrs)
@@ -387,22 +364,21 @@ void getattr_request_cb (flux_t *h,
 {
     attr_t *attrs = arg;
     const char *name;
-    const char *val;
-    int flags;
+    struct entry *e;
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
-    if (attr_get (attrs, name, &val, &flags) < 0)
+    if (!(e = attr_get_entry (attrs, name)))
         goto error;
-    if (!val) {
+    if (!e->val) {
         errno = ENOENT;
         goto error;
     }
     if (flux_respond_pack (h,
                            msg,
                            "{s:s s:i}",
-                           "value", val,
-                           "flags", flags) < 0)
+                           "value", e->val,
+                           "flags", e->flags) < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
@@ -418,24 +394,35 @@ void setattr_request_cb (flux_t *h,
     attr_t *attrs = arg;
     const char *name;
     const char *val;
+    int force = 0;
+    struct registered_attr *reg;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:s}",
+                             "{s:s s:s s?b}",
                              "name", &name,
-                             "value", &val) < 0)
+                             "value", &val,
+                             "force", &force) < 0)
         goto error;
-    if (attr_set (attrs, name, val) < 0) {
-        if (errno != ENOENT)
-            goto error;
-        if (attr_add (attrs, name, val, 0) < 0)
-            goto error;
+    if (!(reg = attrtab_lookup (name))) {
+        errmsg = "unknown attribute";
+        goto error;
     }
+    if (zhash_lookup (attrs->hash, name)) {
+        if (!force && !(reg->flags & ATTR_RUNTIME)) {
+            errmsg = "attribute may not be updated";
+            errno = EINVAL;
+            goto error;
+        }
+    }
+    if (attr_set (attrs, name, val) < 0)
+        goto error;
     if (flux_respond (h, msg, NULL) < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         FLUX_LOG_ERROR (h);
 }
 
@@ -449,7 +436,7 @@ void rmattr_request_cb (flux_t *h,
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
-    if (attr_delete (attrs, name, false) < 0)
+    if (attr_delete (attrs, name) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
         FLUX_LOG_ERROR (h);

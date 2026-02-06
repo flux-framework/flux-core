@@ -76,6 +76,7 @@ man_pages = [
     ('man1/flux-modprobe', 'flux-modprobe', 'efficient and extensible task and module manager', [author], 1),
     ('man1/flux-sproc', 'flux-sproc', 'manage flux subprocesses', [author], 1),
     ('man3/flux_attr_get', 'flux_attr_set', 'get/set Flux broker attributes', [author], 3),
+    ('man3/flux_attr_get', 'flux_attr_set_ex', 'get/set Flux broker attributes', [author], 3),
     ('man3/flux_attr_get', 'flux_attr_get', 'get/set Flux broker attributes', [author], 3),
     ('man3/flux_aux_set', 'flux_aux_get', 'get/set auxiliary handle data', [author], 3),
     ('man3/flux_aux_set', 'flux_aux_set', 'get/set auxiliary handle data', [author], 3),

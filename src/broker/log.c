@@ -362,70 +362,60 @@ static int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
     if (logbuf->rank == 0) {
         if (attr_add_active (attrs,
                              "log-filename",
-                             0,
                              attr_get_log,
                              attr_set_log,
                              logbuf) < 0)
             goto done;
     }
     else {
-        (void)attr_delete (attrs, "log-filename", true);
-        if (attr_add (attrs, "log-filename", NULL, ATTR_IMMUTABLE) < 0)
+        (void)attr_delete (attrs, "log-filename");
+        if (attr_set (attrs, "log-filename", NULL) < 0)
             goto done;
     }
-
     if (attr_add_active (attrs,
                          "log-stderr-level",
-                         0,
                          attr_get_log,
                          attr_set_log,
                          logbuf) < 0)
         goto done;
     if (attr_add_active (attrs,
                          "log-stderr-mode",
-                         0,
                          attr_get_log,
                          attr_set_log,
                          logbuf) < 0)
         goto done;
     if (attr_add_active (attrs,
                          "log-level",
-                         0,
                          attr_get_log,
                          attr_set_log,
                          logbuf) < 0)
         goto done;
     if (attr_add_active (attrs,
                          "log-forward-level",
-                         0,
                          attr_get_log,
                          attr_set_log,
                          logbuf) < 0)
         goto done;
     if (attr_add_active (attrs,
                          "log-critical-level",
-                         0,
                          attr_get_log,
                          attr_set_log,
                          logbuf) < 0)
         goto done;
     if (attr_add_active (attrs,
                          "log-ring-size",
-                         0,
                          attr_get_log,
                          attr_set_log,
                          logbuf) < 0)
         goto done;
     if (attr_add_active (attrs,
                          "log-syslog-enable",
-                         0,
                          attr_get_log,
                          attr_set_log,
                          logbuf) < 0)
         goto done;
     if (attr_add_active (attrs,
                          "log-syslog-level",
-                         0,
                          attr_get_log,
                          attr_set_log,
                          logbuf) < 0)
@@ -476,7 +466,7 @@ static void make_syslog_prefix (logbuf_t *logbuf, char *buf, size_t size)
 {
     if (!logbuf->jobid_path) {
         const char *val = NULL;
-        if (attr_get (logbuf->attrs, "jobid-path", &val, NULL) == 0)
+        if (attr_get (logbuf->attrs, "jobid-path", &val) == 0)
             logbuf->jobid_path = strdup (val);
     }
     if (!logbuf->username) {
@@ -571,11 +561,11 @@ void log_early (const char *buf, int len, void *arg)
     int level;
     struct stdlog_header hdr;
 
-    if (attr_get (attrs, "log-stderr-mode", &val, NULL) == 0
+    if (attr_get (attrs, "log-stderr-mode", &val) == 0
         && streq (val, "local")) {
         flags = LOG_FOR_SYSTEMD;
     }
-    if (attr_get (attrs, "log-stderr-level", &val, NULL) == 0
+    if (attr_get (attrs, "log-stderr-level", &val) == 0
         && set_level (&level, val) == 0
         && stdlog_decode (buf, len, &hdr, NULL, NULL, NULL, NULL) == 0
         && STDLOG_SEVERITY (hdr.pri) > level)
