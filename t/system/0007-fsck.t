@@ -138,3 +138,23 @@ test_expect_success 'restart flux' '
 test_expect_success 'wait for flux to finish starting back up' '
 	wait_flux_back_up
 '
+
+test_expect_success 'stop flux cleanly' '
+	sudo systemctl stop flux
+'
+
+test_expect_success 'start flux in recovery mode' '
+	sudo -u flux flux start --recovery "flux dmesg" | grep rc1 > log4.out
+'
+
+test_expect_success 'flux in recovery mode does not run fsck' '
+	test_must_fail grep "Checking integrity" log4.out
+'
+
+test_expect_success 'start flux' '
+	sudo systemctl start flux
+'
+
+test_expect_success 'wait for flux to finish starting back up' '
+	wait_flux_back_up
+'
