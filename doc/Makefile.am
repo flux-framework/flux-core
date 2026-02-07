@@ -582,3 +582,30 @@ check_PROGRAMS = \
 	man3/example/info
 
 check_HEADERS = man3/example/die.h
+
+check_LTLIBRARIES = \
+	man7/example/config-test.la \
+	man7/example/env-plugin.la \
+	man7/example/exit-monitor.la \
+	man7/example/taskmap-reverse.la
+
+man7_example_config_test_la_SOURCES = \
+	man7/example/config-test.c
+man7_example_config_test_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+
+man7_example_env_plugin_la_SOURCES = \
+	man7/example/env-plugin.c
+man7_example_env_plugin_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+
+man7_example_exit_monitor_la_SOURCES = \
+	man7/example/exit-monitor.c
+man7_example_exit_monitor_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+
+man7_example_taskmap_reverse_la_SOURCES = \
+	man7/example/taskmap-reverse.c
+man7_example_taskmap_reverse_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+
