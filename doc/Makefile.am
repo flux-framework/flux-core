@@ -95,6 +95,7 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_shell_task_get_info.3 \
 	man3/flux_shell_task_subprocess.3 \
 	man3/flux_service_register.3 \
+	man3/flux_shell_mustache_render.3 \
 	man3/flux_open.3 \
 	man3/flux_send.3 \
 	man3/flux_recv.3 \
@@ -182,6 +183,8 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_shell_log_setlevel.3 \
 	man3/flux_shell_task_info_unpack.3 \
 	man3/flux_shell_task_cmd.3 \
+	man3/flux_shell_rank_mustache_render.3 \
+	man3/flux_shell_task_mustache_render.3 \
 	man3/flux_service_unregister.3 \
 	man3/flux_send_new.3 \
 	man3/flux_clone.3 \
