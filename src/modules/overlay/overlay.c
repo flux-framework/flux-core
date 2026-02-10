@@ -2411,7 +2411,7 @@ static int overlay_configure_torpid (struct overlay *ov,
                               "tbon.torpid_max must be greater than torpid_min");
         if (fsd_format_duration (fsd, sizeof (fsd), tmax_val) < 0
             || flux_attr_set_ex (ov->h, "tbon.torpid_max", fsd, true, NULL) < 0)
-            return errprintf (errp, "error updating tbon.torpid_min attribute");
+            return errprintf (errp, "error updating tbon.torpid_max attribute");
         ov->torpid_max = tmax_val;
     }
     return 0;
