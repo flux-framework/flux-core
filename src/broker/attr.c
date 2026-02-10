@@ -22,6 +22,35 @@
 
 #include "attr.h"
 
+/* Flags description:
+ *
+ * ATTR_IMMUTABLE
+ *   Once set, this attribute never changes and thus may be cached by
+ *   clients. For example, 'rank' never changes once it is set, so there
+ *   is no need to make an RPC to the broker to fetch it ever again once
+ *   it is cached.
+ *
+ * ATTR_READONLY
+ *   This attribute may NOT be set on the command line.  This flag
+ *   does not imply ATTR_IMMUTABLE, nor anything about runtime updatability.
+ *
+ * ATTR_RUNTIME
+ *   This attribute may be updated at runtime.  However, even without
+ *   this flag, a runtime update may be forced.  The force flag permits
+ *   the owner of an attribute to update it without extending this
+ *   capability to users.  Again, the absence of this flag only imposes
+ *   an advisory limitation, not a mandatory one.
+ *
+ * ATTR_CONFIG
+ *   This attribute overrides a TOML configuration attribute of the same
+ *   name when set on the command line.  The flag is not currently used.
+ *
+ * ATTR_READONLY, ATTR_RUNTIME, and ATTR_CONFIG match the labels associated
+ * with attributes in the flux-broker-attributes(7) manual page.
+ * Only ATTR_IMMUTABLE is exposed by the attr.get RPC so that clients can
+ * determine whether or not an attribute should be cached.
+ */
+
 enum {
     ATTR_IMMUTABLE      = 0x01, // value never changes once set
     ATTR_READONLY       = 0x02, // value is not to be set on cmdline by users
