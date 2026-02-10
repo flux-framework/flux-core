@@ -272,7 +272,7 @@ int attr_add_active (attr_t *attrs,
         if (set (name, e->val, arg) < 0)
             goto done;
     }
-    if (!(e = entry_create (name, NULL, reg->flags & ATTR_IMMUTABLE)))
+    if (!(e = entry_create (name, NULL, reg->flags)))
         goto done;
     e->set = set;
     e->get = get;
@@ -347,7 +347,7 @@ int attr_set (attr_t *attrs, const char *name, const char *val)
         struct registered_attr *reg;
         if (!(reg = attrtab_lookup (name)))
             return -1;
-        if (!(e = entry_create (name, val, reg->flags & ATTR_IMMUTABLE)))
+        if (!(e = entry_create (name, val, reg->flags)))
             return -1;
         zhash_update (attrs->hash, name, e);
         zhash_freefn (attrs->hash, name, entry_destroy);
@@ -407,7 +407,7 @@ void getattr_request_cb (flux_t *h,
                            msg,
                            "{s:s s:i}",
                            "value", e->val,
-                           "flags", e->flags) < 0)
+                           "flags", (e->flags & ATTR_IMMUTABLE)) < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
