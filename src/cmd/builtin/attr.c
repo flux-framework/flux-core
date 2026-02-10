@@ -20,9 +20,11 @@
 static int cmd_setattr (optparse_t *p, int ac, char *av[])
 {
     int n = optparse_option_index (p);
+    int force = optparse_hasopt (p, "force") ? 1 : 0;
     flux_t *h = builtin_get_flux_handle (p);
     const char *name;
     const char *val;
+    flux_error_t error;
 
     log_init ("flux-setattr");
 
@@ -32,12 +34,20 @@ static int cmd_setattr (optparse_t *p, int ac, char *av[])
     }
     name = av[n];
     val = av[n + 1];
-    if (flux_attr_set (h, name, val) < 0)
-        log_err_exit ("flux_attr_set");
+
+    if (flux_attr_set_ex (h, name, val, force, &error) < 0)
+        log_msg_exit ("%s: %s", name, error.text);
 
     flux_close (h);
     return (0);
 }
+
+static struct optparse_option setattr_opts[] = {
+    { .name = "force", .key = 'f', .has_arg = 0,
+      .usage = "force update of attribute that doesn't support runtime changes",
+    },
+    OPTPARSE_TABLE_END
+};
 
 static struct optparse_option lsattr_opts[] = {
     { .name = "values", .key = 'v', .has_arg = 0,
@@ -147,7 +157,7 @@ int subcommand_attr_register (optparse_t *p)
         "name value",
         "Set broker attribute",
         0,
-        NULL);
+        setattr_opts);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 

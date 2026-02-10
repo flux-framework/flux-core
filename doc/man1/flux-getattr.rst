@@ -7,7 +7,7 @@ SYNOPSIS
 ========
 
 | **flux** **getattr** *name*
-| **flux** **setattr** *name* *value*
+| **flux** **setattr** [*--force*] *name* *value*
 | **flux** **lsattr** [*--values*]
 
 
@@ -42,6 +42,12 @@ setattr
 
 :program:`flux setattr` assigns a value to an attribute.  If the attribute
 does not exist, it is created.
+
+.. option:: -f, --force
+
+  Force an attribute to be set, even if it is not documented to respond
+  to runtime updates.
+
 
 lsattr
 ------

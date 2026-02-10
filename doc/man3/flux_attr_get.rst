@@ -15,6 +15,12 @@ SYNOPSIS
 
    int flux_attr_set (flux_t *h, const char *name, const char *val);
 
+   int flux_attr_set_ex (flux_t *h,
+                         const char *name,
+                         const char *val,
+                         bool force,
+                         flux_error_t *error);
+
 Link with :command:`-lflux-core`.
 
 DESCRIPTION
@@ -35,6 +41,11 @@ access and thereafter does not require an RPC to the broker to access.
 If :var:`name` is not currently a valid attribute, it is created.
 If :var:`val` is NULL, the attribute is unset.
 
+:func:`flux_attr_set_ex` is the same as above with extra arguments.  If
+:var:`force` is set, protections against runtime updates of the attribute
+are bypassed.  If :var:`error` is non-NULL, it is filled with a human
+readable error message on failure.
+
 
 RETURN VALUE
 ============
@@ -42,8 +53,8 @@ RETURN VALUE
 :func:`flux_attr_get` returns the requested value on success. On error, NULL
 is returned and :var:`errno` is set appropriately.
 
-:func:`flux_attr_set` returns zero on success. On error, -1 is returned
-and errno is set appropriately.
+:func:`flux_attr_set` and :func:`flux_attr_set_ex` return zero on success.
+On error, -1 is returned and errno is set appropriately.
 
 
 ERRORS
