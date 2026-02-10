@@ -284,7 +284,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
             && module_get_errnum (p) != 0) {
             bool nopanic = false;
             const char *val = NULL;
-            (void)attr_get (ctx->attrs, "broker.module-nopanic", &val, NULL);
+            (void)attr_get (ctx->attrs, "broker.module-nopanic", &val);
             if (val && !streq (val, "0"))
                 nopanic = true;
 
@@ -420,7 +420,7 @@ static module_t *modhash_load_dso (modhash_t *mh,
     mod_main_f mod_main;
     module_t *p;
 
-    if (attr_get (ctx->attrs, "broker.uuid", &broker_uuid, NULL) < 0)
+    if (attr_get (ctx->attrs, "broker.uuid", &broker_uuid) < 0)
         return NULL;
 
     /* Now open the DSO and obtain the mod_main() function pointer
@@ -1040,7 +1040,7 @@ static module_t *modhash_load_builtin (modhash_t *mh,
     module_t *p;
     char *cpy;
 
-    if (attr_get (mh->ctx->attrs, "broker.uuid", &broker_uuid, NULL) < 0)
+    if (attr_get (mh->ctx->attrs, "broker.uuid", &broker_uuid) < 0)
         return NULL;
     if (!(p = module_create_thread (mh->ctx->h,
                                     broker_uuid,
@@ -1182,7 +1182,7 @@ static module_t *modhash_load_exec (modhash_t *mh,
     const char *broker_uuid;
     module_t *p;
 
-    if (attr_get (ctx->attrs, "broker.uuid", &broker_uuid, NULL) < 0)
+    if (attr_get (ctx->attrs, "broker.uuid", &broker_uuid) < 0)
         return NULL;
     if (!(p = module_create_exec (ctx->h,
                                   broker_uuid,

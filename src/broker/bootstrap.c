@@ -40,18 +40,11 @@ static int setattr (attr_t *attrs,
                     const char *default_value,
                     flux_error_t *errp)
 {
-    int flags;
     const char *val;
 
-    if (attr_get (attrs, key, &val, &flags) < 0) {
-        if (attr_add (attrs, key, default_value, ATTR_IMMUTABLE) < 0) {
+    if (attr_get (attrs, key, &val) < 0) {
+        if (attr_set (attrs, key, default_value) < 0) {
             errprintf (errp, "setattr %s: %s", key, strerror (errno));
-            return -1;
-        }
-    }
-    else if (!(flags & ATTR_IMMUTABLE)) {
-        if (attr_set_flags (attrs, key, ATTR_IMMUTABLE) < 0) {
-            errprintf (errp, "setattr-flags %s: %s", key, strerror (errno));
             return -1;
         }
     }
@@ -61,7 +54,7 @@ static int setattr (attr_t *attrs,
 static const char *getattr (attr_t *attrs, const char *key)
 {
     const char *val;
-    if (attr_get (attrs, key, &val, NULL) < 0)
+    if (attr_get (attrs, key, &val) < 0)
         return NULL;
     return val;
 }
@@ -115,7 +108,6 @@ static int setattr_broker_mapping (struct bootstrap *boot, flux_error_t *errp)
             goto error;
         }
     }
-    (void)attr_delete (boot->ctx->attrs, "broker.mapping", true);
     if (setattr (boot->ctx->attrs, "broker.mapping", val, errp) < 0)
         goto error;
     taskmap_destroy (map);
@@ -717,7 +709,7 @@ struct bootstrap *bootstrap_create (struct broker *ctx,
         errprintf (errp, "error preparing upmi_args");
         goto error;
     }
-    (void)attr_get (ctx->attrs, "broker.boot-method", &upmi_method, NULL);
+    (void)attr_get (ctx->attrs, "broker.boot-method", &upmi_method);
     if (!(boot->upmi = upmi_create_ex (upmi_method,
                                        upmi_flags,
                                        upmi_args,
