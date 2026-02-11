@@ -124,6 +124,22 @@ test_expect_success 'flux-python --get-path reports installed path' '
 	flux config builtin --installed python_path >get-path.expected &&
 	test_cmp get-path.expected get-path.out
 '
+test_expect_success 'flux-python --list-versions works' '
+	mkdir pyvertest &&
+	touch pyvertest/flux-python0.0 &&
+	chmod +x pyvertest/flux-python0.0 &&
+	FLUX_EXEC_PATH_PREPEND=./pyvertest \
+	  flux python --list-versions >pyvertest.out &&
+	test_debug "cat pyvertest.out" &&
+	grep python0.0 pyvertest.out
+'
+test_expect_success 'flux-python --list-versions skips non-executables' '
+	touch pyvertest/flux-python0.1 &&
+	FLUX_EXEC_PATH_PREPEND=./pyvertest \
+	  flux python --list-versions >pyvertest2.out &&
+	test_debug "cat pyvertest2.out" &&
+	test_must_fail grep python0.1 pyvertest2.out
+'
 test_expect_success 'flux-python3.x command exists and works' '
 	pycmd=$(basename $(flux python --get-path)) &&
 	test_debug "echo checking flux $pycmd" &&
