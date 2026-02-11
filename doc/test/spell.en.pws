@@ -1084,3 +1084,7 @@ getppid
 ppid
 JobID
 fprintf
+myscript
+prepending
+prepends
+pythonX
