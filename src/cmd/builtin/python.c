@@ -15,6 +15,7 @@
 
 #include "builtin.h"
 #include "src/common/libutil/environment.h"
+#include "ccan/str/str.h"
 
 static void prepare_environment (void)
 {
@@ -29,6 +30,15 @@ static void prepare_environment (void)
 
 static int cmd_python (optparse_t *p, int ac, char *av[])
 {
+    /*  Support `--get-path` as first argument (other args are ignored.
+     *  Print installed python path and exit if found.
+     */
+    if (ac > 1 && streq (av[1], "--get-path")) {
+        printf ("%s\n",
+                flux_conf_builtin_get ("python_path", FLUX_CONF_INSTALLED));
+        exit (0);
+    }
+
     /*
      *  Ensure av[0] matches the full path of the interpreter we're executing.
      *  Other than just being good practice, this ensures that sys.executable
