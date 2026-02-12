@@ -2016,7 +2016,7 @@ test_expect_success 'reload the job-list module' '
 	flux module reload job-list
 '
 
-test_expect_success 'verify task count preserved across restart' '
+test_expect_success 'verify success preserved across restart' '
 	jobid1=`cat success1.id` &&
 	jobid2=`cat success2.id` &&
 	obj=$(flux job list -s inactive | grep ${jobid1}) &&
@@ -2108,7 +2108,7 @@ test_expect_success 'reload the job-list module' '
 	flux module reload job-list
 '
 
-test_expect_success 'verify task count preserved across restart' '
+test_expect_success 'verify exceptions preserved across restart' '
 	jobid1=`cat exceptions1.id` &&
 	jobid2=`cat exceptions2.id` &&
 	jobid3=`cat exceptions3.id` &&
@@ -2158,7 +2158,7 @@ test_expect_success 'reload the job-list module' '
 	flux module reload job-list
 '
 
-test_expect_success 'verify task count preserved across restart' '
+test_expect_success 'verify expiration time preserved across restart' '
 	jobid=`cat expiration.id` &&
 	flux job list -s inactive | grep ${jobid} > expiration2.json &&
 	jq -e ".expiration > now" < expiration2.json
@@ -2180,7 +2180,7 @@ test_expect_success 'reload the job-list module' '
 	flux module reload job-list
 '
 
-test_expect_success 'verify task count preserved across restart' '
+test_expect_success 'verify duration preserved across restart' '
 	jobid=`cat duration.id` &&
 	flux job list -s inactive | grep ${jobid} > duration2.json &&
 	jq -e ".duration == 3600.0" < duration2.json
