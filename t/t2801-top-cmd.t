@@ -178,7 +178,7 @@ test_expect_success 'flux-top JOBID fails when JOBID is not a flux instance' '
 test_expect_success NO_CHAIN_LINT 'flux-top quits on q keypress' '
 	$runpty --quit-char=q --format=asciicast -o keys.log flux top &
 	pid=$! &&
-	sleep 1 &&
+	$waitfile --timeout=30 --pattern="JOBID" keys.log &&
 	kill -USR1 $pid &&
 	wait $pid
 '
