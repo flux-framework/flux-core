@@ -72,8 +72,6 @@ struct entry {
     char *name;
     char *val;
     int flags;
-    attr_set_f set;
-    attr_get_f get;
     void *arg;
 };
 
@@ -255,42 +253,6 @@ int attr_set_cmdline (attr_t *attrs,
     return 0;
 }
 
-int attr_add_active (attr_t *attrs,
-                     const char *name,
-                     attr_get_f get,
-                     attr_set_f set,
-                     void *arg)
-{
-    struct registered_attr *reg;
-    struct entry *e;
-    int rc = -1;
-
-    if (!attrs) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (!(reg = attrtab_lookup (name)))
-        return -1;
-    if ((e = zhash_lookup (attrs->hash, name))) {
-        if (!set) {
-            errno = EEXIST;
-            goto done;
-        }
-        if (set (name, e->val, arg) < 0)
-            goto done;
-    }
-    if (!(e = entry_create (name, NULL, reg->flags)))
-        goto done;
-    e->set = set;
-    e->get = get;
-    e->arg = arg;
-    zhash_update (attrs->hash, name, e);
-    zhash_freefn (attrs->hash, name, entry_destroy);
-    rc = 0;
-done:
-    return rc;
-}
-
 static struct entry *attr_get_entry (attr_t *attrs, const char *name)
 {
     struct entry *e;
@@ -302,20 +264,6 @@ static struct entry *attr_get_entry (attr_t *attrs, const char *name)
     if (!(e = zhashx_lookup (attrs->hash, name))) {
         errno = ENOENT;
         return NULL;
-    }
-    if (e->get) {
-        if (!e->val || !(e->flags & ATTR_IMMUTABLE)) {
-            const char *tmp;
-            if (e->get (name, &tmp, e->arg) < 0)
-                return NULL;
-            free (e->val);
-            if (tmp) {
-                if (!(e->val = strdup (tmp)))
-                    return NULL;
-            }
-            else
-                e->val = NULL;
-        }
     }
     return e;
 }
@@ -343,10 +291,6 @@ int attr_set (attr_t *attrs, const char *name, const char *val)
         }
         if (val && !(cpy = strdup (val)))
             return -1;
-        if (e->set && e->set (name, val, e->arg) < 0) {
-            ERRNO_SAFE_WRAP (free, cpy);
-            return -1;
-        }
         free (e->val);
         e->val = cpy;
     }

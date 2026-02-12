@@ -108,70 +108,6 @@ void basic (void)
     attr_destroy (attrs);
 }
 
-int active_get (const char *name, const char **val, void *arg)
-{
-    const char **cpp = arg;
-    *val = *cpp;
-    return 0;
-}
-
-int active_set (const char *name, const char *val, void *arg)
-{
-    const char **cpp = arg;
-    *cpp = val;
-    return 0;
-}
-
-
-void active (void)
-{
-    attr_t *attrs;
-    const char *val;
-    const char *a;
-    const char *b;
-
-    if (!(attrs = attr_create ()))
-        BAIL_OUT ("attr_create failed");
-
-    ok (attr_add_active (attrs,
-                         "test.a",
-                         active_get,
-                         active_set,
-                         &a) == 0,
-        "attr_add_active works");
-    a = "x";
-    ok (attr_get (attrs, "test.a", &val) == 0 && val && streq (val, "x"),
-        "attr_get on active a tracks val=x");
-    a = "y";
-    ok (attr_get (attrs, "test.a", &val) == 0 && streq (val, "y"),
-        "attr_get on active a tracks val=y");
-    a = NULL;
-    ok (attr_get (attrs, "test.a", &val) == 0 && val == NULL,
-        "attr_get on active a tracks val=NULL");
-    ok (attr_delete (attrs, "test.a") == 0,
-        "attr_delete works on active attr");
-
-    /* immutable active works as expected
-     */
-    ok (attr_add_active (attrs,
-                         "test-im.b",
-                         active_get,
-                         active_set,
-                         &b) == 0,
-        "attr_add_active of immutable attr works");
-    b = "m";
-    ok (attr_get (attrs, "test-im.b", &val) == 0 && val && streq (val, "m"),
-        "attr_get returns initial val=m");
-    b = "n";
-    ok (attr_get (attrs, "test-im.b", &val) == 0 && val && streq (val, "m"),
-        "attr_get ignores value changes");
-    errno = 0;
-    ok (attr_delete (attrs, "test-im.b") < 0 && errno == EPERM,
-        "attr_delete fails with EPERM");
-
-    attr_destroy (attrs);
-}
-
 void unknown (void)
 {
     attr_t *attrs;
@@ -182,11 +118,6 @@ void unknown (void)
     errno = 0;
     ok (attr_set (attrs, "unknown", "foo") < 0 && errno == ENOENT,
         "attr_set of unknown attribute fails with ENOENT");
-
-    errno = 0;
-    ok (attr_add_active (attrs, "unknown", NULL, NULL, NULL) < 0
-        && errno == ENOENT,
-        "attr_add_active of unknown attribute fails with ENOENT");
 
     attr_destroy (attrs);
 }
@@ -239,7 +170,6 @@ int main (int argc, char **argv)
     plan (NO_PLAN);
 
     basic ();
-    active ();
     unknown ();
     cmdline ();
 
