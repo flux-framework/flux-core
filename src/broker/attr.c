@@ -139,15 +139,15 @@ static struct registered_attr attrtab[] = {
     { "tbon.connect_timeout", ATTR_CONFIG },
 
     // logging
-    { "log-ring-size", ATTR_RUNTIME },
-    { "log-forward-level", ATTR_RUNTIME },
-    { "log-critical-level", ATTR_RUNTIME },
-    { "log-filename", ATTR_RUNTIME },
-    { "log-syslog-enable", ATTR_RUNTIME },
-    { "log-syslog-level", ATTR_RUNTIME },
-    { "log-stderr-mode", ATTR_RUNTIME },
+    { "log-ring-size", ATTR_IMMUTABLE },
+    { "log-forward-level", ATTR_IMMUTABLE },
+    { "log-critical-level", ATTR_IMMUTABLE },
+    { "log-filename", 0 },
+    { "log-syslog-enable", ATTR_IMMUTABLE },
+    { "log-syslog-level", ATTR_IMMUTABLE },
+    { "log-stderr-mode", ATTR_IMMUTABLE },
     { "log-stderr-level", ATTR_RUNTIME },
-    { "log-level", ATTR_RUNTIME },
+    { "log-level", ATTR_IMMUTABLE },
 
     // content
     { "content.backing-module", 0 },

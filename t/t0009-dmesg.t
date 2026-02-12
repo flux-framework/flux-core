@@ -7,18 +7,12 @@ test_description='Test broker log ring buffer'
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
-test_under_flux 4 minimal
+test_under_flux 4 minimal -Slog-ring-size=8
 
 test_expect_success 'module stats --parse count log counts log messages' '
 	OLD_VAL=$(flux module stats --parse count log) &&
 	flux logger hello &&
 	NEW_VAL=$(flux module stats --parse count log) &&
-	test "${OLD_VAL}" -lt "${NEW_VAL}"
-'
-test_expect_success 'module stats --parse ring-used log counts log messages' '
-	OLD_VAL=$(flux module stats --parse ring-used log) &&
-	flux logger hello &&
-	NEW_VAL=$(flux module stats --parse ring-used log) &&
 	test "${OLD_VAL}" -lt "${NEW_VAL}"
 '
 test_expect_success 'flux dmesg -C clears ring buffer' '
@@ -27,19 +21,12 @@ test_expect_success 'flux dmesg -C clears ring buffer' '
 	flux dmesg -C &&
 	! flux dmesg | grep -q hello_dmesg
 '
-test_expect_success 'flux setattr log-ring-size trims ring buffer' '
-	OLD_RINGSIZE=`flux getattr log-ring-size` &&
-	flux logger hello1 &&
-	flux logger hello2 &&
-	flux logger hello3 &&
-	flux logger hello4 &&
-	flux logger hello5 &&
-	flux logger hello6 &&
-	flux setattr log-ring-size 4 &&
-	test `flux dmesg | wc -l` -eq 4 &&
-	! flux dmesg | grep -q hello_dmesg1 &&
-	! flux dmesg | grep -q hello_dmesg2 &&
-	flux setattr log-ring-size $OLD_RINGSIZE
+test_expect_success 'module stats --parse ring-used log counts log messages' '
+	flux dmesg -C &&
+	OLD_VAL=$(flux module stats --parse ring-used log) &&
+	flux logger hello &&
+	NEW_VAL=$(flux module stats --parse ring-used log) &&
+	test "${OLD_VAL}" -lt "${NEW_VAL}"
 '
 test_expect_success 'flux dmesg prints, no clear' '
 	flux logger hello_dmesg_pnc &&
@@ -70,13 +57,9 @@ test_expect_success NO_CHAIN_LINT 'flux dmesg -f --new works' '
 	kill $pid
 '
 test_expect_success 'ring buffer wraps over old entries' '
-	OLD_RINGSIZE=`flux getattr log-ring-size` &&
-	flux setattr log-ring-size 2 &&
-	flux logger hello_wrap1 &&
-	flux logger hello_wrap2 &&
-	flux logger hello_wrap3 &&
-	! flux dmesg | grep -q hello_wrap1 &&
-	flux setattr log-ring-size $OLD_RINGSIZE
+	RINGSIZE=`flux getattr log-ring-size` &&
+	for i in $(seq 1 $(($RINGSIZE+1))); do flux logger hello_wrap$i; done &&
+	! flux dmesg | grep -q hello_wrap1
 '
 
 test_expect_success 'multi-line log messages are split' '
@@ -213,10 +196,20 @@ test_expect_success 'setting log-syslog-enable=0 works' '
 	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-enable=0 \
 	    flux getattr log-syslog-enable) -eq 0
 '
-test_expect_success 'setting log-syslog-enable=foo is true' '
+test_expect_success 'setting log-syslog-enable=1 works' '
 	test $(flux start \
-	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-enable=foo \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-enable=1 \
 	    flux getattr log-syslog-enable) -eq 1
+'
+test_expect_success 'setting log-syslog-enable=2 fails' '
+	test_must_fail flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-enable=2 \
+	    true
+'
+test_expect_success 'setting log-syslog-enable fails' '
+	test_must_fail flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Slog-syslog-enable \
+	    true
 '
 test_expect_success 'setting log-syslog-level=7 works' '
 	test $(flux start \
