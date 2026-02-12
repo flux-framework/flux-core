@@ -1,0 +1,25 @@
+#!/bin/sh
+##############################################################
+# Copyright 2026 Lawrence Livermore National Security, LLC
+# (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+#
+# This file is part of the Flux resource manager framework.
+# For details, see https://github.com/flux-framework.
+#
+# SPDX-License-Identifier: LGPL-3.0
+##############################################################
+
+# `flux pythonX.Y` wrapper script:
+#
+# Print path to Flux Python bindings for this Python version if
+# exactly `--get-path` is the first argument. Otherwise, invoke
+# the Python interpreter representing this version.
+#
+
+if test "$1" = "--get-path"; then
+    echo "@X_FLUXPYLINKDIR@"
+    exit 0
+fi
+
+export PYTHONPATH="@X_FLUXPYLINKDIR@:$PYTHONPATH"
+exec @PYTHON@ "$@"

@@ -529,6 +529,8 @@ adl_RECURSIVE_EVAL(["$fluxlibdir/python$PYTHON_VERSION"], [fluxpylinkdir])
 AC_DEFINE_UNQUOTED([FLUXPYLINKDIR], ["$fluxpylinkdir"],
   [The expansion of "$fluxlibdir/python$PYTHON_VERSION"])
 AC_SUBST(fluxpylinkdir)
+adl_RECURSIVE_EVAL(["$fluxpylinkdir"], [X_FLUXPYLINKDIR])
+AC_SUBST([X_FLUXPYLINKDIR])
 
 adl_RECURSIVE_EVAL(["$libdir/flux/modules"], [fluxmoddir])
 AC_DEFINE_UNQUOTED([FLUXMODDIR], ["$fluxmoddir"],
@@ -658,6 +660,7 @@ AC_CONFIG_FILES( \
   etc/flux-epilog@.service \
   src/cmd/flux-run-prolog \
   src/cmd/flux-run-epilog \
+  src/cmd/flux-python${PYTHON_VERSION}:src/cmd/flux-python-version.in \
   doc/Makefile \
   doc/test/Makefile \
   t/Makefile \
@@ -669,6 +672,12 @@ AC_CONFIG_FILES( \
 AC_CONFIG_LINKS([ \
   t/fluxometer.lua:t/fluxometer.lua \
 ])
+
+AC_CONFIG_COMMANDS(
+  [chmod],
+  [chmod +x src/cmd/flux-python${PYTHON_VERSION}],
+  [PYTHON_VERSION=$PYTHON_VERSION]
+)
 
 AC_OUTPUT
 

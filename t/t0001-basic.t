@@ -119,7 +119,38 @@ test_expect_success 'flux-keygen fails with unknown arg' '
 test_expect_success 'flux-python command runs a python that finds flux' '
 	flux python -c "import flux"
 '
-
+test_expect_success 'flux-python --get-path reports installed path' '
+	flux python --get-path >get-path.out &&
+	flux config builtin --installed python_path >get-path.expected &&
+	test_cmp get-path.expected get-path.out
+'
+test_expect_success 'flux-python --list-versions works' '
+	mkdir pyvertest &&
+	touch pyvertest/flux-python0.0 &&
+	chmod +x pyvertest/flux-python0.0 &&
+	FLUX_EXEC_PATH_PREPEND=./pyvertest \
+	  flux python --list-versions >pyvertest.out &&
+	test_debug "cat pyvertest.out" &&
+	grep python0.0 pyvertest.out
+'
+test_expect_success 'flux-python --list-versions skips non-executables' '
+	touch pyvertest/flux-python0.1 &&
+	FLUX_EXEC_PATH_PREPEND=./pyvertest \
+	  flux python --list-versions >pyvertest2.out &&
+	test_debug "cat pyvertest2.out" &&
+	test_must_fail grep python0.1 pyvertest2.out
+'
+test_expect_success 'flux-python3.x command exists and works' '
+	pycmd=$(basename $(flux python --get-path)) &&
+	test_debug "echo checking flux $pycmd" &&
+	flux $pycmd --version  >pyversion.out &&
+	flux python --version >pyversion.expected &&
+	test_cmp pyversion.expected pyversion.out
+'
+test_expect_success 'flux-python3.x command --get-path works' '
+	flux python --get-path >get-pathX.out &&
+	test_cmp get-path.expected get-pathX.out
+'
 test_expect_success 'flux-python command runs the configured python' '
 	define_line=$(grep "^#define PYTHON_INTERPRETER" ${FLUX_BUILD_DIR}/config/config.h) &&
 	pypath=$(echo ${define_line} | sed -E '\''s~.*define PYTHON_INTERPRETER "(.*)"~\1~'\'') &&

@@ -14,7 +14,11 @@
 #include <unistd.h>
 
 #include "builtin.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/environment.h"
+#include "src/common/libutil/basename.h"
+#include "src/common/libutil/dirwalk.h"
+#include "ccan/str/str.h"
 
 static void prepare_environment (void)
 {
@@ -27,8 +31,51 @@ static void prepare_environment (void)
     environment_destroy (env);
 }
 
+static int filter_exe (dirwalk_t *d, void *arg)
+{
+    return (access (dirwalk_path (d), X_OK) == 0);
+}
+
+static void list_versions (void)
+{
+    const char *name;
+    zlist_t *l;
+    if (!(l = dirwalk_find (getenv ("FLUX_EXEC_PATH"),
+                            DIRWALK_NORECURSE,
+                            "flux-python[0-9]*",
+                            -1,
+                            filter_exe,
+                            NULL)))
+        log_err_exit ("Unable to find all flux-python versions");
+
+    name = zlist_first (l);
+    while (name) {
+        /* Print name with flux- prefix removed:
+         */
+        printf ("%s\n", basename_simple (name) + strlen ("flux-"));
+        name = zlist_next (l);
+    }
+    zlist_destroy (&l);
+}
+
 static int cmd_python (optparse_t *p, int ac, char *av[])
 {
+    /*  Support `--get-path` as first argument (other args are ignored.
+     *  Print installed python path and exit if found.
+     */
+    if (ac > 1 && streq (av[1], "--get-path")) {
+        printf ("%s\n",
+                flux_conf_builtin_get ("python_path", FLUX_CONF_INSTALLED));
+        exit (0);
+    }
+    /*  Support `--list-versions` as first argument (other args are ignored.
+     *  Print installed python path and exit if found.
+     */
+    if (ac > 1 && streq (av[1], "--list-versions")) {
+        list_versions ();
+        exit (0);
+    }
+
     /*
      *  Ensure av[0] matches the full path of the interpreter we're executing.
      *  Other than just being good practice, this ensures that sys.executable

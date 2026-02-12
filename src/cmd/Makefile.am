@@ -132,7 +132,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-run-prolog \
 	flux-run-epilog \
 	flux-modprobe.py \
-	flux-sproc.py
+	flux-sproc.py \
+	flux-python$(PYTHON_VERSION)
 
 fluxcmd_PROGRAMS = \
 	flux-terminus \
