@@ -95,10 +95,6 @@ checks_group "Moving $IMAGE from docker to podman" \
   && (podman load -i /tmp/systest-$$.tar || die "podman load failed") \
   && rm -f /tmp/systest-$$.tar
 
-#  Note: There's a bug in podman < 4 which saves an image loaded from
-#  docker save as the wrong name, so we use the image digest instead:
-IMAGE=$(docker images --format {{.ID}} $IMAGE)
-
 checks_group "Building system image for user $USER $(id -u) group=$(id -g)" \
   podman build \
     ${NOCACHE} \
