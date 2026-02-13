@@ -54,6 +54,7 @@ LONGTESTSCRIPTS = \
 	t3202-instance-restart-testexec.t \
 	t3203-instance-recovery.t \
 	t4000-issues-test-driver.t \
+	t2800-jobs-cmd.t \
 	t2801-top-cmd.t \
 	t2808-shutdown-cmd.t \
 	t2712-python-cli-alloc.t \
@@ -242,7 +243,6 @@ TESTSCRIPTS = \
 	t2716-python-cli-batch-conf.t \
 	t2717-python-cli-plugins.t \
 	t2720-python-cli-multi-prog.t \
-	t2800-jobs-cmd.t \
 	t2800-jobs-cmd-multiuser.t \
 	t2800-jobs-recursive.t \
 	t2800-jobs-instance-info.t \
