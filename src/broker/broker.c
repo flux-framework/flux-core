@@ -615,8 +615,6 @@ cleanup:
         || sigaction (SIGTERM, &old_sigact_term, NULL) < 0)
         flux_log_error (ctx.h, "error restoring signal mask");
 
-    /* Unregister builtin services
-     */
     if (modhash_destroy (ctx.modhash) > 0) {
         if (ctx.exit_rc == 0)
             ctx.exit_rc = 1;
