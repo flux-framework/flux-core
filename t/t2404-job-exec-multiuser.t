@@ -113,6 +113,16 @@ test_expect_success 'job-exec: IMP failure on one rank terminates job' '
 	flux job wait-event -vt 20 ${id}  clean &&
 	test_must_fail_or_be_terminated flux job attach -vEX ${id}
 '
-
+test_expect_success 'job-exec: failed rank is drained' '
+	flux resource drain -no "{ranks} {reason}" >drain.out &&
+	test_debug "cat drain.out" &&
+	cat <<-EOF >drain.expected &&
+	0-1 $id terminated before first barrier
+	EOF
+	test_cmp drain.expected drain.out
+'
+test_expect_success 'undrain ranks' '
+	flux resource undrain 0-1
+'
 
 test_done
