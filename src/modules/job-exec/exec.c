@@ -460,6 +460,23 @@ static void exit_cb (struct bulk_exec *exec,
                               hosts ? hosts : "(unknown)",
                               idset_count (ranks) ? "s" : "",
                               ids ? ids : "(unknown)");
+
+        /* If this job was run under the IMP, drain the affected ranks since
+         * this could indicate an unrecoverable node issue (like missing
+         * or incorrect MUNGE key)
+         */
+        if (job->multiuser
+            && jobinfo_drain_ranks (job,
+                                    ids,
+                                    "%s terminated before first barrier",
+                                    idf58 (job->id)) < 0)
+            flux_log_error (job->h,
+                            "failed to drain %s (rank%s %s) for job %s",
+                            hosts ? hosts : "(unknown)",
+                            idset_count (ranks) ? "s" : "",
+                            ids ? ids : "(unknown)",
+                            idf58 (job->id));
+
         free (ids);
         free (hosts);
     }
