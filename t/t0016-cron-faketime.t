@@ -60,8 +60,10 @@ flux_cron() {
 cat >make-faketime.sh <<EOF
 #!/bin/sh
 d="\$@"
-date +"@%Y-%m-%d %H:%M:%S" --date="\${d}" > ${FAKETIME_TIMESTAMP_FILE}
+date +"@%Y-%m-%d %H:%M:%S" --date="\${d}" > ${FAKETIME_TIMESTAMP_FILE}.tmp
 sync
+# Use mv so timestamp file update is atomic
+mv ${FAKETIME_TIMESTAMP_FILE}.tmp ${FAKETIME_TIMESTAMP_FILE}
 echo timestamp file: \$(cat $FAKETIME_TIMESTAMP_FILE): date is now \$(date) >&2
 # Poke flux cron so libev wakes up and reifies time:
 flux cron list >/dev/null 2>&1 || :
