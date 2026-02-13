@@ -386,10 +386,10 @@ int attr_cache_immutables (attr_t *attrs, flux_t *h)
  ** Service
  **/
 
-void getattr_request_cb (flux_t *h,
-                         flux_msg_handler_t *mh,
-                         const flux_msg_t *msg,
-                         void *arg)
+static void getattr_request_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
 {
     attr_t *attrs = arg;
     const char *name;
@@ -415,10 +415,10 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-void setattr_request_cb (flux_t *h,
-                         flux_msg_handler_t *mh,
-                         const flux_msg_t *msg,
-                         void *arg)
+static void setattr_request_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
 {
     attr_t *attrs = arg;
     const char *name;
@@ -459,10 +459,10 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-void rmattr_request_cb (flux_t *h,
-                        flux_msg_handler_t *mh,
-                        const flux_msg_t *msg,
-                        void *arg)
+static void rmattr_request_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     attr_t *attrs = arg;
     const char *name;
@@ -479,10 +479,10 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-void lsattr_request_cb (flux_t *h,
-                        flux_msg_handler_t *mh,
-                        const flux_msg_t *msg,
-                        void *arg)
+static void lsattr_request_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     attr_t *attrs = arg;
     const char *name;
