@@ -64,7 +64,7 @@ struct registered_attr {
 };
 
 struct broker_attr {
-    zhash_t *hash;
+    zhashx_t *hash;
     flux_msg_handler_t **handlers;
 };
 
@@ -179,15 +179,22 @@ static struct registered_attr *attrtab_lookup (const char *name)
     return NULL;
 }
 
-static void entry_destroy (void *arg)
+static void entry_destroy (struct entry *e)
 {
-    struct entry *e = arg;
     if (e) {
         int saved_errno = errno;
         free (e->val);
         free (e->name);
         free (e);
         errno = saved_errno;
+    }
+}
+
+static void entry_destructor (void **item)
+{
+    if (*item) {
+        entry_destroy (*item);
+        *item = NULL;
     }
 }
 
@@ -213,12 +220,12 @@ int attr_delete (attr_t *attrs, const char *name)
     struct entry *e;
     int rc = -1;
 
-    if ((e = zhash_lookup (attrs->hash, name))) {
+    if ((e = zhashx_lookup (attrs->hash, name))) {
         if ((e->flags & ATTR_IMMUTABLE)) {
             errno = EPERM;
             goto done;
         }
-        zhash_delete (attrs->hash, name);
+        zhashx_delete (attrs->hash, name);
     }
     rc = 0;
 done:
@@ -292,7 +299,7 @@ static struct entry *attr_get_entry (attr_t *attrs, const char *name)
         errno = EINVAL;
         return NULL;
     }
-    if (!(e = zhash_lookup (attrs->hash, name))) {
+    if (!(e = zhashx_lookup (attrs->hash, name))) {
         errno = ENOENT;
         return NULL;
     }
@@ -328,7 +335,7 @@ int attr_set (attr_t *attrs, const char *name, const char *val)
 {
     struct entry *e;
 
-    if ((e = zhash_lookup (attrs->hash, name))) {
+    if ((e = zhashx_lookup (attrs->hash, name))) {
         char *cpy = NULL;
         if ((e->flags & ATTR_IMMUTABLE)) {
             errno = EPERM;
@@ -349,21 +356,23 @@ int attr_set (attr_t *attrs, const char *name, const char *val)
             return -1;
         if (!(e = entry_create (name, val, reg->flags)))
             return -1;
-        zhash_update (attrs->hash, name, e);
-        zhash_freefn (attrs->hash, name, entry_destroy);
+        if (zhashx_insert (attrs->hash, e->name, e) < 0) {
+            errno = EEXIST;
+            return -1;
+        }
     }
     return 0;
 }
 
 const char *attr_first (attr_t *attrs)
 {
-    struct entry *e = zhash_first (attrs->hash);
+    struct entry *e = zhashx_first (attrs->hash);
     return e ? e->name : NULL;
 }
 
 const char *attr_next (attr_t *attrs)
 {
-    struct entry *e = zhash_next (attrs->hash);
+    struct entry *e = zhashx_next (attrs->hash);
     return e ? e->name : NULL;
 }
 
@@ -371,13 +380,13 @@ int attr_cache_immutables (attr_t *attrs, flux_t *h)
 {
     struct entry *e;
 
-    e = zhash_first (attrs->hash);
+    e = zhashx_first (attrs->hash);
     while (e) {
         if ((e->flags & ATTR_IMMUTABLE)) {
             if (flux_attr_set_cacheonly (h, e->name, e->val) < 0)
                 return -1;
         }
-        e = zhash_next (attrs->hash);
+        e = zhashx_next (attrs->hash);
     }
     return 0;
 }
@@ -442,7 +451,7 @@ static void setattr_request_cb (flux_t *h,
      * than the initial value.  Don't allow updates without the
      * ATTR_RUNTIME flag, unless forced.
      */
-    if (zhash_lookup (attrs->hash, name)) {
+    if (zhashx_lookup (attrs->hash, name)) {
         if (!force && !(reg->flags & ATTR_RUNTIME)) {
             errmsg = "attribute may not be updated";
             errno = EINVAL;
@@ -542,11 +551,14 @@ attr_t *attr_create (void)
 
     if (!(attrs = calloc (1, sizeof (*attrs))))
         return NULL;
-    if (!(attrs->hash = zhash_new ())) {
+    if (!(attrs->hash = zhashx_new ())) {
         attr_destroy (attrs);
         errno = ENOMEM;
         return NULL;
     }
+    zhashx_set_key_destructor (attrs->hash, NULL);
+    zhashx_set_key_duplicator (attrs->hash, NULL);
+    zhashx_set_destructor (attrs->hash, entry_destructor);
     return attrs;
 }
 
@@ -555,7 +567,7 @@ void attr_destroy (attr_t *attrs)
     if (attrs) {
         int saved_errno = errno;
         flux_msg_handler_delvec (attrs->handlers);
-        zhash_destroy (&attrs->hash);
+        zhashx_destroy (&attrs->hash);
         free (attrs);
         errno = saved_errno;
 
