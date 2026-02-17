@@ -1261,6 +1261,24 @@ test_expect_success 'flux job list job state timing outputs valid (job running)'
 	fj_wait_event $jobid clean >/dev/null
 '
 
+# `flux module reload job-list` does not ensure `job-list` is actually
+# ready to service requests immediately afterwards (i.e. has list
+# service been setup yet).  This checks to make sure `job-list` is
+# really up and ready.
+wait_job_list_ready() {
+	local i=0
+	while ( ! flux job list > /dev/null && [ $i -lt 50 ] )
+	do
+		sleep 0.1
+		i=$((i + 1))
+	done
+	if [ "$i" -eq "50" ]
+	then
+		return 1
+	fi
+	return 0
+}
+
 #
 # job names
 #
@@ -1294,7 +1312,8 @@ test_expect_success 'flux job lists full path for job name if basename fails on 
 '
 
 test_expect_success 'reload the job-list module' '
-	flux module reload job-list
+	flux module reload job-list &&
+	wait_job_list_ready
 '
 
 test_expect_success 'verify job names preserved across restart' '
@@ -1320,7 +1339,8 @@ test_expect_success 'flux job list outputs cwd' '
 	flux job list -s inactive | grep $jobid | jq -e ".cwd == \"${pwd}\""
 '
 test_expect_success 'reload the job-list module' '
-	flux module reload job-list
+	flux module reload job-list &&
+	wait_job_list_ready
 '
 
 test_expect_success 'verify job cwd preserved across restart' '
@@ -1359,7 +1379,8 @@ test_expect_success 'reconfigure with no queues' '
 '
 
 test_expect_success 'reload the job-list module' '
-	flux module reload job-list
+	flux module reload job-list &&
+	wait_job_list_ready
 '
 
 test_expect_success 'verify job queue preserved across restart' '
@@ -1396,7 +1417,8 @@ test_expect_success 'flux job list outputs project and bank if one set' '
 	flux job list -s inactive | grep $jobid | jq -e ".bank == \"bar\""
 '
 test_expect_success 'reload the job-list module' '
-	flux module reload job-list
+	flux module reload job-list &&
+	wait_job_list_ready
 '
 
 test_expect_success 'verify job project and bank preserved across restart' '
@@ -1533,7 +1555,8 @@ test_expect_success 'flux job list outputs ntasks correctly (cores / per-resourc
 '
 
 test_expect_success 'reload the job-list module' '
-	flux module reload job-list
+	flux module reload job-list &&
+	wait_job_list_ready
 '
 
 test_expect_success 'verify task count preserved across restart' '
@@ -1798,7 +1821,8 @@ test_expect_success 'flux job list does not list ncores if pending & nodes exclu
 '
 
 test_expect_success 'reload the job-list module' '
-	flux module reload job-list
+	flux module reload job-list &&
+	wait_job_list_ready
 '
 
 test_expect_success 'verify core count preserved across restart' '
@@ -1933,7 +1957,8 @@ test_expect_success 'flux job list lists nnodes for pending jobs if nodes reques
 '
 
 test_expect_success 'reload the job-list module' '
-	flux module reload job-list
+	flux module reload job-list &&
+	wait_job_list_ready
 '
 
 test_expect_success 'verify nnodes preserved across restart' '
@@ -1976,7 +2001,8 @@ test_expect_success 'flux job list outputs ranks/nodelist correctly (3 nodes)' '
 '
 
 test_expect_success 'reload the job-list module' '
-	flux module reload job-list
+	flux module reload job-list &&
+	wait_job_list_ready
 '
 
 test_expect_success 'verify ranks/nodelist preserved across restart' '
@@ -2013,7 +2039,8 @@ test_expect_success 'flux job list outputs success correctly (false)' '
 '
 
 test_expect_success 'reload the job-list module' '
-	flux module reload job-list
+	flux module reload job-list &&
+	wait_job_list_ready
 '
 
 test_expect_success 'verify success preserved across restart' '
@@ -2105,7 +2132,8 @@ test_expect_success 'flux job list outputs exceptions correctly (user exception)
 '
 
 test_expect_success 'reload the job-list module' '
-	flux module reload job-list
+	flux module reload job-list &&
+	wait_job_list_ready
 '
 
 test_expect_success 'verify exceptions preserved across restart' '
@@ -2155,7 +2183,8 @@ test_expect_success 'flux job list outputs expiration time when set' '
 '
 
 test_expect_success 'reload the job-list module' '
-	flux module reload job-list
+	flux module reload job-list &&
+	wait_job_list_ready
 '
 
 test_expect_success 'verify expiration time preserved across restart' '
@@ -2177,7 +2206,8 @@ test_expect_success 'flux job list outputs duration time when set' '
 '
 
 test_expect_success 'reload the job-list module' '
-	flux module reload job-list
+	flux module reload job-list &&
+	wait_job_list_ready
 '
 
 test_expect_success 'verify duration preserved across restart' '
@@ -2834,7 +2864,8 @@ restart_from_kvs() {
 	flux module reload job-manager
 	flux module reload -f sched-simple
 	flux module reload -f job-exec
-	flux module load job-list
+	flux module load job-list &&
+	wait_job_list_ready
 }
 
 # N.B. we remove annotations from the alloc event in this test, but it could
