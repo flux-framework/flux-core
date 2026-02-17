@@ -454,7 +454,6 @@ static int dependency_after_cb (flux_plugin_t *p,
     if (!(ref = after_ref_create (afterid, l, after))
         || !(l = after_refs_get (p, id))
         || !zlistx_add_end (l, ref)) {
-        after_info_destroy (after);
         after_ref_destroy (ref);
         return flux_jobtap_reject_job (p, args, "failed to create ref");
     }
@@ -465,8 +464,6 @@ static int dependency_after_cb (flux_plugin_t *p,
      */
     if (type == AFTER_START
         && flux_jobtap_job_subscribe (p, afterid) < 0) {
-        after_info_destroy (after);
-        after_ref_destroy (ref);
         return flux_jobtap_reject_job (p, args, "failed to subscribe to %s",
                                        idf58 (id));
     }
