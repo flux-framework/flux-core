@@ -196,8 +196,22 @@ test_expect_success 'shutdown broker rank 1' '
 	$startctl kill 1 15 &&
 	run_timeout 10 flux overlay status --timeout=0 --summary --wait partial
 '
+# there is a race here between when the overlay reports the node down
+# and the resource module marks the node down. Allow a few seconds for
+# the hostlist avail count to reach 1 in the following test:
+
+# Usage: hostlist_avail_wait N MAXSEC
+hostlist_avail_wait() {
+	local value=$1
+	local retry=$(($2*10))
+	while ! test $(flux hostlist --count avail) -eq 1; do
+		sleep 0.1
+		retry=$(($retry-1))
+		test $retry -gt 0 || return 1
+	done
+}
 test_expect_success 'flux-hostlist avail ignores down nodes' '
-	test $(flux hostlist --count avail) -eq 1
+	hostlist_avail_wait 1 15
 '
 test_expect_success 'run broker rank 1' '
 	$startctl run 1
