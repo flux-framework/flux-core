@@ -486,7 +486,7 @@ int restart_from_kvs (struct job_manager *ctx)
     job = zhashx_first (ctx->inactive_jobs);
     while (job) {
         (void)jobtap_call (ctx->jobtap, job, "job.inactive-add", NULL);
-        job = zhashx_next (ctx->active_jobs);
+        job = zhashx_next (ctx->inactive_jobs);
     }
 
     /* Restore misc state.
