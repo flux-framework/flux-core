@@ -820,6 +820,7 @@ static struct perilog_proc *procdesc_run (flux_t *h,
                       "%s: %s: failed to decode ranks from R",
                       idf58 (id),
                       perilog_proc_name (proc));
+            goto error;
     }
     if (flux_cmd_setenvf (pd->cmd, 1, "FLUX_JOB_ID", "%s", idf58 (id)) < 0
         || flux_cmd_setenvf (pd->cmd, 1, "FLUX_JOB_RANKS", "%s", rank_str) < 0
