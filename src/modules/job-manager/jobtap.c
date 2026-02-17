@@ -276,6 +276,7 @@ static int plugin_check_dependencies (struct jobtap *jobtap,
             flux_log (jobtap->ctx->h,
                       LOG_ERR,
                       "plugin_check_dependencies: %s", error);
+            free (error);
         }
     }
     return 0;
@@ -388,7 +389,7 @@ static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
     const char *sort_mode = NULL;
     flux_plugin_t *p = NULL;
     flux_plugin_arg_t *args;
-    zlistx_t *jobs;
+    zlistx_t *jobs = NULL;
     struct job *job;
 
     if (!(p = jobtap_load (jobtap, path, conf, errp)))
@@ -453,6 +454,7 @@ static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
     return p;
 error:
     flux_plugin_destroy (p);
+    ERRNO_SAFE_WRAP (zlistx_destroy, &jobs);
     return NULL;
 }
 
@@ -803,8 +805,11 @@ static int jobtap_stack_call (struct jobtap *jobtap,
         return -1;
     zlistx_set_destructor (l, NULL);
 
-    if (current_job_push (jobtap, job) < 0)
+    if (current_job_push (jobtap, job) < 0) {
+        zlistx_destroy (&l);
         return -1;
+    }
+
     p = zlistx_first (l);
     while (p) {
         int rc = flux_plugin_call (p, topic, args);
@@ -1560,8 +1565,10 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
     }
 
     if (!(p = flux_plugin_create ())
-        || flux_plugin_aux_set (p, "flux::jobtap", jobtap, NULL) < 0)
+        || flux_plugin_aux_set (p, "flux::jobtap", jobtap, NULL) < 0) {
+        free (conf_str);
         goto error;
+    }
     if (conf_str) {
         int rc = flux_plugin_set_conf (p, conf_str);
         free (conf_str);
