@@ -249,5 +249,16 @@ test_expect_success 'setting log-forward-level to -1 works' '
 	    flux exec -r 1 flux logger --severity=emerg "smurfs" &&
 	test_must_fail grep "logger.emerg" forward.log
 '
+test_expect_success 'log-stderr-level can be set to 0 on the fly' '
+	flux setattr log-stderr-level 0 &&
+	test "$(flux getattr log-stderr-level)" = "0"
+'
+test_expect_success 'log-stderr-level can be set to -1 on the fly' '
+	flux setattr log-stderr-level -1 &&
+	test "$(flux getattr log-stderr-level)" = "-1"
+'
+test_expect_success 'log-stderr-level cannot be set to 8 on the fly' '
+	test_must_fail flux setattr log-stderr-level 8
+'
 
 test_done
