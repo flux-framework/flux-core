@@ -17,6 +17,7 @@
 #include "attr.h"
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libtestutil/util.h"
 #include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
@@ -165,13 +166,198 @@ void cmdline (void)
     attr_destroy (attrs);
 }
 
+int test_server_thread (flux_t *h, void *arg)
+{
+    attr_t *attrs;
+    int rc;
+
+    if (!(attrs = attr_create ()))
+        BAIL_OUT ("attr_create failed");
+    if (attr_register_handlers (attrs, h) < 0)
+        BAIL_OUT ("%s: attr_register_handlers: %s", __func__, strerror (errno));
+    if (attr_set (attrs, "test.foo", "bar") < 0)
+        BAIL_OUT ("%s: attr_set test.foo: %s", __func__, strerror (errno));
+    if (attr_set (attrs, "test-nr.baz", "boo") < 0)
+        BAIL_OUT ("%s: attr_set test-nr.baz: %s", __func__, strerror (errno));
+    if (attr_set (attrs, "test-rd.x", "43") < 0)
+        BAIL_OUT ("%s: attr_set test-rd.x: %s", __func__, strerror (errno));
+
+    rc = flux_reactor_run (flux_get_reactor (h), 0);
+    if (rc < 0)
+        diag ("%s: reactor failed: %s", __func__, strerror (errno));
+
+    attr_destroy (attrs);
+
+    return rc;
+}
+
+void handlers (flux_t *h)
+{
+    const char *name;
+    const char *val;
+    flux_error_t error;
+    flux_future_t *f;
+
+    /* Check malformed RPCs
+     */
+    if (!(f = flux_rpc_pack (h, "attr.rm", FLUX_NODEID_ANY, 0, "{}")))
+        BAIL_OUT ("could not send attr.rm request");
+    errno = 0;
+    ok (flux_rpc_get (f, NULL) < 0 && errno == EPROTO,
+        "malformed attr.rm request fails with EPROTO");
+    flux_future_destroy (f);
+    if (!(f = flux_rpc_pack (h, "attr.get", FLUX_NODEID_ANY, 0, "{}")))
+        BAIL_OUT ("could not send attr.get request");
+    errno = 0;
+    ok (flux_rpc_get (f, NULL) < 0 && errno == EPROTO,
+        "malformed attr.get request fails with EPROTO");
+    flux_future_destroy (f);
+    if (!(f = flux_rpc_pack (h, "attr.set", FLUX_NODEID_ANY, 0, "{}")))
+        BAIL_OUT ("could not send attr.set request");
+    errno = 0;
+    ok (flux_rpc_get (f, NULL) < 0 && errno == EPROTO,
+        "malformed attr.set request fails with EPROTO");
+    flux_future_destroy (f);
+
+    /* Check unknown attribute (name does not match the static table)
+     */
+    errno = 0;
+    ok (flux_attr_get (h, "noexist") == NULL && errno == ENOENT,
+        "attr.get noexist fails with ENOENT");
+    errno = 0;
+    ok (flux_attr_set (h, "noexist", "42") < 0 && errno == ENOENT,
+        "attr.set noexist fails with ENOENT");
+    errno = 0;
+    ok (flux_attr_set (h, "noexist", "42") < 0 && errno == ENOENT,
+        "attr.set noexist fails with ENOENT");
+    errno = 0;
+    ok (flux_attr_set_ex (h, "noexist", "42", true, &error) < 0
+        && errno == ENOENT,
+        "the force flag doesn't help");
+    diag ("%s: %s", "noexist", error.text);
+    if (!(f = flux_rpc_pack (h,
+                             "attr.rm",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s}",
+                             "name", "noexist")))
+        BAIL_OUT ("could not send attr.rm request");
+    ok (flux_rpc_get (f, NULL) == 0,
+        "attr.rm noexist works");
+    flux_future_destroy (f);
+
+    /* Check ATTR_RUNTIME
+     */
+    ok ((val = flux_attr_get (h, "test-nr.baz")) != NULL && streq (val, "boo"),
+        "attr.get test-nr.baz works");
+    errno = 0;
+    ok (flux_attr_set_ex (h, "test-nr.baz", "x", false, &error) < 0
+        && errno == EINVAL,
+        "attr.set test-nr.baz fails with EINVAL (no ATTR_RUNTIME flag)");
+    diag ("%s: %s", "test-nr.baz", error.text);
+    ok (flux_attr_set_ex (h, "test-nr.baz", "x", true, NULL) == 0
+        && (val = flux_attr_get (h, "test-nr.baz")) != NULL
+        && streq (val, "x"),
+        "but it works with the force flag");
+    ok ((val = flux_attr_get (h, "test.foo")) != NULL && streq (val, "bar"),
+        "attr.get test.foo works");
+    ok (flux_attr_set (h, "test.foo", "y") == 0
+        && (val = flux_attr_get (h, "test.foo")) != NULL
+        && streq (val, "y"),
+        "attr.set test.foo works (has ATTR_RUNTIME flag)");
+
+    /* Check redirect
+     */
+    ok ((val = flux_attr_get (h, "test-rd.x")) != NULL && streq (val, "43"),
+        "attr.get test-rd.x works");
+    ok (flux_attr_set_ex (h, "test-rd.x", "44", true, &error) == 0
+        && (val = flux_attr_get (h, "test-rd.x")) != NULL
+        && streq (val, "44"),
+        "attr.set test-rd.x (forced) works");
+
+    /* On attr.set test-rd.*, the server tries to send a testrd.setattr
+     * request, but due to the test server plumbing, that will be received
+     * here, in the client.  Therefore to perform setatter we must:
+     * 1) send the attr.set
+     * 2) receive the testrd.setattr request
+     * 3) respond to the testrd.setattr request
+     * 4) receive attr.set response
+     */
+    flux_msg_t *req, *rep;
+    const char *topic;
+    ok ((f = flux_rpc_pack (h,
+                            "attr.set",
+                            FLUX_NODEID_ANY,
+                            0,
+                            "{s:s s:s}",
+                            "name", "test-rd.x",
+                            "value", "45")) != NULL,
+        "sent attr.set test-rd.x request");
+    ok ((req = flux_recv (h, FLUX_MATCH_REQUEST, 0)) != NULL
+        && flux_request_unpack (req,
+                                &topic,
+                                "{s:s s:s}",
+                                "name", &name,
+                                "value", &val) == 0
+        && streq (topic, "testrd.setattr"),
+        "received testrd.setattr request from attr server");
+    ok ((rep = flux_response_derive (req, 0)) != NULL
+        && flux_send (h, rep, 0) == 0,
+        "sent testrd.setattr success response");
+    ok (flux_rpc_get (f, NULL) == 0,
+        "received attr.set success response");
+    flux_msg_decref (rep);
+    flux_msg_decref (req);
+    flux_future_destroy (f);
+
+    /* Do that again but send a testrd.setattr failure response
+     */
+    ok ((f = flux_rpc_pack (h,
+                            "attr.set",
+                            FLUX_NODEID_ANY,
+                            0,
+                            "{s:s s:s}",
+                            "name", "test-rd.x",
+                            "value", "46")) != NULL,
+        "sent attr.set test-rd.x request");
+    ok ((req = flux_recv (h, FLUX_MATCH_REQUEST, 0)) != NULL
+        && flux_request_unpack (req,
+                                &topic,
+                                "{s:s s:s}",
+                                "name", &name,
+                                "value", &val) == 0
+        && streq (topic, "testrd.setattr"),
+        "received testrd.setattr request from attr server");
+    ok ((rep = flux_response_derive (req, EINVAL)) != NULL
+        && flux_send (h, rep, 0) == 0,
+        "sent testrd.setattr failure response");
+    errno = 0;
+    ok (flux_rpc_get (f, NULL) < 0 && errno == EINVAL,
+        "received attr.set failed with EINVAL");
+    flux_msg_decref (rep);
+    flux_msg_decref (req);
+    flux_future_destroy (f);
+}
+
 int main (int argc, char **argv)
 {
+    flux_t *h;
+
     plan (NO_PLAN);
 
     basic ();
     unknown ();
     cmdline ();
+
+    diag ("starting test server");
+    if (!(h = test_server_create (0, test_server_thread, NULL)))
+        BAIL_OUT ("test_server_create failed");
+
+    handlers (h);
+
+    diag ("stopping test server");
+    test_server_stop (h);
+    flux_close (h);
 
     done_testing ();
     return 0;
