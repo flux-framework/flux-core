@@ -152,7 +152,7 @@ static int jobtap_cb (flux_plugin_t *p,
                                 "id", &entry->id,
                                 "t_submit", &entry->t_submit,
                                 "userid", &userid) < 0)
-        return -1;
+        goto error;
     key = userid2key (userid);
     if (streq (topic, "job.inactive-remove")) {
         void *handle;
@@ -165,18 +165,17 @@ static int jobtap_cb (flux_plugin_t *p,
             job_entry_destroy (entry);
             return 0;
         }
-        if (!hola_list_insert (hist->users, key, entry, true)) {
-            job_entry_destroy (entry);
-            return -1;
-        }
+        if (!hola_list_insert (hist->users, key, entry, true))
+            goto error;
     }
     else if (streq (topic, "job.new")) {
-        if (!hola_list_insert (hist->users, key, entry, true)) {
-            job_entry_destroy (entry);
-            return -1;
-        }
+        if (!hola_list_insert (hist->users, key, entry, true))
+            goto error;
     }
     return 0;
+error:
+    job_entry_destroy (entry);
+    return -1;
 }
 
 static int append_int (json_t *a, json_int_t i)
