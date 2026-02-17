@@ -162,7 +162,7 @@ static flux_cmd_t *cmd_from_json (json_t *o)
 
     json_array_foreach (o, index, value) {
         const char *arg = json_string_value (value);
-        if (!value
+        if (!arg
             || flux_cmd_argv_append (cmd, arg) < 0)
             goto fail;
     }
