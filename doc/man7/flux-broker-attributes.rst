@@ -369,34 +369,34 @@ matches log messages of equal and lesser (more severe) value.  There is
 a table of severity names vs numbers in the aforementioned description.
 Negative severity values can be used to indicate "match nothing".
 
-log-ring-size :ref:`[runtime] <attr_runtime>`
+log-ring-size
    The maximum number of log messages that can be stored in the local
    ring buffer.  Default: 1024.
 
-log-forward-level :ref:`[runtime] <attr_runtime>`
+log-forward-level
    Forward matching messages to the leader broker.  This is only helpful when
    :option:`log-stderr-mode` is set to "leader", or :option:`log-filename` is
    defined.  Default: 3 (LOG_ERR).
 
-log-critical-level :ref:`[runtime] <attr_runtime>`
+log-critical-level
    Copy matching log messages to local stderr.  This is intended to ensure
    that important messages are not lost in situations so dire that
    normal logging may be unreliable.  Default: 2 (LOG_CRIT).
 
-log-filename :ref:`[runtime] <attr_runtime>`
+log-filename
    Copy log messages to a file on the leader broker.
    Messages from follower brokers are also captured if they match
    :option:`log-forward-level`.  Default: none.
 
-log-syslog-enable :ref:`[runtime] <attr_runtime>`
+log-syslog-enable
    Copy log messages to syslog if they match :option:`log-syslog-level`.
    Default: 0.
 
-log-syslog-level :ref:`[runtime] <attr_runtime>`
+log-syslog-level
    Sets the severity threshold for syslog, if :option:`log-syslog-enable`
    is set.  Default: 2 (LOG_CRIT).
 
-log-stderr-mode :ref:`[runtime] <attr_runtime>`
+log-stderr-mode
    Set the stderr mode to one of:
 
    leader
@@ -413,7 +413,7 @@ log-stderr-mode :ref:`[runtime] <attr_runtime>`
 log-stderr-level :ref:`[runtime] <attr_runtime>`
    Copy matching log messages to stderr.  Default: 3 (LOG_ERR).
 
-log-level :ref:`[runtime] <attr_runtime>`
+log-level
    Allow matching messages to enter the logging system.  Default: 7 (LOG_DEBUG).
 
 CONTENT
