@@ -63,9 +63,15 @@ struct registered_attr {
     int flags;
 };
 
+struct setattr_redirect {
+    const char *name;
+    const char *topic;
+};
+
 struct broker_attr {
     zhashx_t *hash;
     flux_msg_handler_t **handlers;
+    struct flux_msglist *requests; // redirected setattrs
 };
 
 struct entry {
@@ -161,10 +167,20 @@ static struct registered_attr attrtab[] = {
     { "test-ro.*", ATTR_READONLY },
     { "test-nr.*", 0 },
     { "test-im.*", ATTR_IMMUTABLE },
+    { "test-rd.*", ATTR_RUNTIME },
 
     // misc undocumented
     { "vendor.*", ATTR_RUNTIME | ATTR_IMMUTABLE }, // flux-pmix#109
     { "tbon.fanout", 0 }, // legacy, replaced by tbon.topo
+};
+
+/* Setattr on attributes matching the redirect table are handled elsewhere.
+ * The attr.set RPC handler here makes an RPC to the new topic string.
+ * When that finishes, a response is sent to the original request, and if
+ * the update is approved, the hash value is updated.
+ */
+static struct setattr_redirect redirtab[] = {
+    { "test-rd.*", "testrd.setattr" },
 };
 
 static struct registered_attr *attrtab_lookup (const char *name)
@@ -174,6 +190,15 @@ static struct registered_attr *attrtab_lookup (const char *name)
             return &attrtab[i];
     }
     errno = ENOENT;
+    return NULL;
+}
+
+static const char *setattr_redirect_lookup (const char *name)
+{
+    for (int i = 0; i < ARRAY_SIZE (redirtab); i++) {
+        if (fnmatch (redirtab[i].name, name, 0) == 0)
+            return redirtab[i].topic;
+    }
     return NULL;
 }
 
@@ -335,6 +360,77 @@ int attr_cache_immutables (attr_t *attrs, flux_t *h)
     return 0;
 }
 
+/* Setattr service has responded.  Respond to the original request
+ * and delete it from the request list. N.B. this destroys the future.
+ */
+static void redirect_continuation (flux_future_t *f, void *arg)
+{
+    attr_t *attrs = arg;
+    flux_t *h = flux_future_get_flux (f);
+    const flux_msg_t *msg;
+    flux_error_t error;
+    const char *name;
+    const char *val;
+
+    msg = flux_msglist_first (attrs->requests);
+    while (msg && flux_msg_aux_get (msg, "setattr_future") != f)
+        msg = flux_msglist_next (attrs->requests);
+    /* msg==NULL should not be possible since setattr_redirect() ensures
+     * only requests with "setattr_future" are added to the msglist.
+     */
+    if (!msg)
+        return;
+    if (flux_rpc_get (f, NULL) < 0) {
+        errprintf (&error, "%s", future_strerror (f, errno));
+        goto error;
+    }
+    /* Success: now update the attribute value here.
+     */
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:s}",
+                             "name", &name,
+                             "value", &val) < 0
+        || attr_set (attrs, name, val) < 0) {
+        errprintf (&error, "%s", strerror (errno));
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to attr.set request");
+    flux_msglist_delete (attrs->requests);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, error.text) < 0)
+        flux_log_error (h, "error responding to attr.set request");
+    flux_msglist_delete (attrs->requests);
+}
+
+static int setattr_redirect (attr_t *attrs,
+                             flux_t *h,
+                             const flux_msg_t *msg,
+                             const char *topic,
+                             const char *name,
+                             const char *val)
+{
+    flux_future_t *f;
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s s:s}",
+                             "name", name,
+                             "value", val))
+        || flux_future_then (f, -1, redirect_continuation, attrs) < 0
+        || flux_msg_aux_set (msg,
+                             "setattr_future",
+                             f,
+                             (flux_free_f)flux_future_destroy) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    return flux_msglist_append (attrs->requests, msg);
+}
+
 /**
  ** Service
  **/
@@ -379,6 +475,7 @@ static void setattr_request_cb (flux_t *h,
     int force = 0;
     struct registered_attr *reg;
     const char *errmsg = NULL;
+    const char *redirect;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -402,10 +499,20 @@ static void setattr_request_cb (flux_t *h,
             goto error;
         }
     }
-    if (attr_set (attrs, name, val) < 0)
-        goto error;
-    if (flux_respond (h, msg, NULL) < 0)
-        FLUX_LOG_ERROR (h);
+    /* See note above redirect table.  If this attribute matches a redirect
+     * table entry, we act as a proxy for another service, unless the caller
+     * uses the force to confound us.
+     */
+    if ((redirect = setattr_redirect_lookup (name)) && !force) {
+        if (setattr_redirect (attrs, h, msg, redirect, name, val) < 0)
+            goto error;
+    }
+    else {
+        if (attr_set (attrs, name, val) < 0)
+            goto error;
+        if (flux_respond (h, msg, NULL) < 0)
+            FLUX_LOG_ERROR (h);
+    }
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
@@ -496,14 +603,18 @@ attr_t *attr_create (void)
     if (!(attrs = calloc (1, sizeof (*attrs))))
         return NULL;
     if (!(attrs->hash = zhashx_new ())) {
-        attr_destroy (attrs);
         errno = ENOMEM;
-        return NULL;
+        goto error;
     }
     zhashx_set_key_destructor (attrs->hash, NULL);
     zhashx_set_key_duplicator (attrs->hash, NULL);
     zhashx_set_destructor (attrs->hash, entry_destructor);
+    if (!(attrs->requests = flux_msglist_create ()))
+        goto error;
     return attrs;
+error:
+    attr_destroy (attrs);
+    return NULL;
 }
 
 void attr_destroy (attr_t *attrs)
@@ -512,6 +623,7 @@ void attr_destroy (attr_t *attrs)
         int saved_errno = errno;
         flux_msg_handler_delvec (attrs->handlers);
         zhashx_destroy (&attrs->hash);
+        flux_msglist_destroy (attrs->requests);
         free (attrs);
         errno = saved_errno;
 
