@@ -417,16 +417,15 @@ int restart_from_kvs (struct job_manager *ctx)
     while (job) {
         if (job->state == FLUX_JOB_STATE_NEW
             || job->state == FLUX_JOB_STATE_DEPEND) {
-            char *errmsg = NULL;
+            flux_error_t errmsg;
             if (jobtap_check_dependencies (ctx->jobtap,
                                            job,
                                            true,
                                            &errmsg) < 0) {
                 flux_log (ctx->h, LOG_ERR,
                           "restart: id=%s: dependency check failed: %s",
-                          idf58 (job->id), errmsg);
+                          idf58 (job->id), errmsg.text);
             }
-            free (errmsg);
         }
         /*
          *  On restart, call 'job.create' and 'job.new' plugin callbacks

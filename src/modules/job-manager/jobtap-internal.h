@@ -44,11 +44,11 @@ int jobtap_get_priority (struct jobtap *jobtap,
  */
 int jobtap_validate (struct jobtap *jobtap,
                      struct job *job,
-                     char **errp);
+                     flux_error_t *errp);
 
 int jobtap_call_create (struct jobtap *jobtap,
                         struct job *job,
-                        char **errp);
+                        flux_error_t *errp);
 
 /*  Jobtap call to iterate attributes.system.dependencies dictionary
  *   and call job.dependency.<schema> for each entry.
@@ -61,15 +61,14 @@ int jobtap_call_create (struct jobtap *jobtap,
 int jobtap_check_dependencies (struct jobtap *jobtap,
                                struct job *job,
                                bool raise_exception,
-                               char **errp);
+                               flux_error_t *errp);
 
 /*  Call `job.update.<key>` callback to verify that a jobspec update of
  *  'key' to 'value' is allowed. The flux_msg_cred parameter should be set
  *  to the credentials of the original requestor.
  *
- *  Returns an error with 'errp' (Caller must free) set if no plugin is
- *  registered to handle updates of 'key', or if the callback returned an
- *  error.
+ *  Returns an error with 'errp' set if no plugin is registered to handle
+ *  updates of 'key', or if the callback returned an error.
  *
  *  If the update needs further validation via `job.validate`, then
  *  needs_validation will be set nonzero. The caller should be sure to pass
@@ -88,18 +87,18 @@ int jobtap_job_update (struct jobtap *jobtap,
                        int *needs_validation,
                        int *needs_feasibility,
                        json_t **updates,
-                       char **errp);
+                       flux_error_t *errp);
 
 /*  Call the `job.validate` plugin stack, but using an updated jobspec by
  *  applying 'updates' to 'job'.
  *
  *  If validation fails, then this function will return -1 with the error
- *  set in 'errp' (Caller must free).
+ *  set in 'errp'.
  */
 int jobtap_validate_updates (struct jobtap *jobtap,
                              struct job *job,
                              json_t *updates,
-                             char **errp);
+                             flux_error_t *errp);
 
 /*  Load a new jobtap from `path`. Path may start with `builtin.` to
  *   attempt to load one of the builtin jobtap plugins.

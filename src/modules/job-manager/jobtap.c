@@ -104,7 +104,7 @@ static int jobtap_job_raise (struct jobtap *jobtap,
 
 static int dependencies_unpack (struct jobtap * jobtap,
                                 struct job * job,
-                                char **errp,
+                                flux_error_t *errp,
                                 json_t **resultp);
 
 static int jobtap_check_dependency (struct jobtap *jobtap,
@@ -113,7 +113,7 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
                                     flux_plugin_arg_t *args,
                                     int index,
                                     json_t *entry,
-                                    char **errp);
+                                    flux_error_t *errp);
 
 static struct aux_wrap *aux_wrap_get (flux_plugin_t *p,
                                       struct job *job,
@@ -249,15 +249,14 @@ static int plugin_check_dependencies (struct jobtap *jobtap,
     json_t *dependencies = NULL;
     json_t *entry = NULL;
     size_t index;
-    char *error;
+    flux_error_t error;
 
     if (dependencies_unpack (jobtap, job, &error, &dependencies) < 0) {
         flux_log (jobtap->ctx->h,
                   LOG_ERR,
                   "id=%s: plugin_register_dependencies: %s",
                   idf58 (job->id),
-                  error);
-        free (error);
+                  error.text);
         return -1;
     }
 
@@ -265,7 +264,6 @@ static int plugin_check_dependencies (struct jobtap *jobtap,
         return 0;
 
     json_array_foreach (dependencies, index, entry) {
-        char *error;
         if (jobtap_check_dependency (jobtap,
                                      p,
                                      job,
@@ -275,8 +273,7 @@ static int plugin_check_dependencies (struct jobtap *jobtap,
                                      &error) < 0) {
             flux_log (jobtap->ctx->h,
                       LOG_ERR,
-                      "plugin_check_dependencies: %s", error);
-            free (error);
+                      "plugin_check_dependencies: %s", error.text);
         }
     }
     return 0;
@@ -920,29 +917,13 @@ int jobtap_get_priority (struct jobtap *jobtap,
     return rc;
 }
 
-static void error_asprintf (struct jobtap *jobtap,
-                            struct job *job,
-                            char **errp,
-                            const char *fmt, ...)
-{
-    va_list ap;
-    int saved_errno = errno;
-    va_start (ap, fmt);
-    if (vasprintf (errp, fmt, ap) < 0)
-        flux_log_error (jobtap->ctx->h,
-                        "id=%s: failed to create error string: fmt=%s",
-                        idf58 (job->id), fmt);
-    va_end (ap);
-    errno = saved_errno;
-}
-
 /* Common function for job.create and job.validate.
  * Both can reject a job with textual error for the submit RPC.
  */
 static int jobtap_call_early (struct jobtap *jobtap,
                               struct job *job,
                               const char *topic,
-                              char **errp)
+                              flux_error_t *errp)
 {
     int rc;
     flux_plugin_arg_t *args;
@@ -970,20 +951,22 @@ static int jobtap_call_early (struct jobtap *jobtap,
                                     "{s:s}",
                                     "errmsg", &errmsg) < 0)
                 errmsg = "rejected by job-manager plugin";
-        if ((*errp = strdup (errmsg)) == NULL)
-            flux_log (jobtap->ctx->h, LOG_ERR,
-                      "jobtap: validate failed to capture errmsg");
+        errprintf (errp, "%s", errmsg);
     }
     flux_plugin_arg_destroy (args);
     return rc;
 }
 
-int jobtap_validate (struct jobtap *jobtap, struct job *job, char **errp)
+int jobtap_validate (struct jobtap *jobtap,
+                     struct job *job,
+                     flux_error_t *errp)
 {
     return jobtap_call_early (jobtap, job, "job.validate", errp);
 }
 
-int jobtap_call_create (struct jobtap *jobtap, struct job *job, char **errp)
+int jobtap_call_create (struct jobtap *jobtap,
+                        struct job *job,
+                        flux_error_t *errp)
 {
     return jobtap_call_early (jobtap, job, "job.create", errp);
 }
@@ -995,16 +978,14 @@ static int make_dependency_topic (struct jobtap *jobtap,
                                   const char **schemep,
                                   char *topic,
                                   int topiclen,
-                                  char **errp)
+                                  flux_error_t *errp)
 {
     *schemep = NULL;
     if (json_unpack (entry, "{s:s}", "scheme", schemep) < 0
         || *schemep == NULL) {
-        error_asprintf (jobtap,
-                        job,
-                        errp,
-                        "dependency[%d] missing string scheme",
-                        index);
+        errprintf (errp,
+                   "dependency[%d] missing string scheme",
+                   index);
         return -1;
     }
 
@@ -1012,9 +993,9 @@ static int make_dependency_topic (struct jobtap *jobtap,
                   topiclen,
                   "job.dependency.%s",
                   *schemep) > topiclen) {
-        error_asprintf (jobtap, job, errp,
-                        "rejecting absurdly long dependency scheme: %s",
-                        *schemep);
+        errprintf (errp,
+                   "rejecting absurdly long dependency scheme: %s",
+                   *schemep);
         return -1;
     }
 
@@ -1027,7 +1008,7 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
                                     flux_plugin_arg_t *args,
                                     int index,
                                     json_t *entry,
-                                    char **errp)
+                                    flux_error_t *errp)
 {
     int rc = -1;
     char topic [128];
@@ -1067,11 +1048,9 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
     if (rc == 0) {
         /*  No handler for job.dependency.<scheme>. return an error.
          */
-        error_asprintf (jobtap,
-                        job,
-                        errp,
-                        "dependency scheme \"%s\" not supported",
-                        scheme);
+        errprintf (errp,
+                   "dependency scheme \"%s\" not supported",
+                   scheme);
         rc = -1;
     }
     else if (rc < 0) {
@@ -1087,31 +1066,29 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
                                     "errmsg", &errmsg) < 0) {
                 errmsg = "rejected by job-manager dependency plugin";
         }
-        error_asprintf (jobtap, job, errp, "%s", errmsg);
+        errprintf (errp, "%s", errmsg);
     }
     return rc;
 }
 
 static int dependencies_unpack (struct jobtap * jobtap,
                                 struct job * job,
-                                char **errp,
+                                flux_error_t *errp,
                                 json_t **resultp)
 {
     json_t *dependencies = NULL;
-    json_error_t error;
+    json_error_t jerror;
 
     if (json_unpack_ex (job->jobspec_redacted,
-                        &error,
+                        &jerror,
                         0,
                         "{s:{s?{s?o}}}",
                         "attributes",
                           "system",
                             "dependencies", &dependencies) < 0) {
-        error_asprintf (jobtap,
-                        job,
-                        errp,
-                        "unable to unpack dependencies: %s",
-                        error.text);
+        errprintf (errp,
+                   "unable to unpack dependencies: %s",
+                   jerror.text);
         return -1;
     }
 
@@ -1119,10 +1096,7 @@ static int dependencies_unpack (struct jobtap * jobtap,
         return 0;
 
     if (!json_is_array (dependencies)) {
-        error_asprintf (jobtap,
-                        job,
-                        errp,
-                        "dependencies object must be an array");
+        errprintf (errp, "dependencies object must be an array");
         return -1;
     }
 
@@ -1136,7 +1110,7 @@ static int dependencies_unpack (struct jobtap * jobtap,
 int jobtap_check_dependencies (struct jobtap *jobtap,
                                struct job *job,
                                bool raise_exception,
-                               char **errp)
+                               flux_error_t *errp)
 {
     int rc = -1;
     flux_plugin_arg_t *args = NULL;
@@ -1149,10 +1123,8 @@ int jobtap_check_dependencies (struct jobtap *jobtap,
         return rc;
 
     if (!(args = jobtap_args_create (jobtap, job))) {
-        error_asprintf (jobtap,
-                        job,
-                        errp,
-                        "jobtap_check_dependencies: failed to create args");
+        errprintf (errp,
+                   "jobtap_check_dependencies: failed to create args");
         return -1;
     }
 
@@ -1172,12 +1144,10 @@ int jobtap_check_dependencies (struct jobtap *jobtap,
                                   "dependency",
                                   4, /* LOG_WARNING */
                                   "%s (job may be stuck in DEPEND state)",
-                                  *errp) < 0)
+                                  errp->text) < 0)
                 flux_log_error (jobtap->ctx->h,
                                 "id=%s: failed to raise dependency exception",
                                 idf58 (job->id));
-            free (*errp);
-            *errp = NULL;
         }
     }
     rc = 0;
@@ -2625,7 +2595,7 @@ int jobtap_job_update (struct jobtap *jobtap,
                        int *needs_validation,
                        int *require_feasibility,
                        json_t **additional_updates,
-                       char **errp)
+                       flux_error_t *errp)
 {
     int rc = -1;
     char topic[128];
@@ -2633,8 +2603,7 @@ int jobtap_job_update (struct jobtap *jobtap,
     flux_plugin_arg_t *args = NULL;
 
     if (snprintf (topic, topiclen, "job.update.%s", key) >= topiclen) {
-        error_asprintf (jobtap, job, errp,
-                        "topic string overflow");
+        errprintf (errp, "topic string overflow");
         return -1;
     }
 
@@ -2648,8 +2617,7 @@ int jobtap_job_update (struct jobtap *jobtap,
                                  "key", key,
                                  "value", value) < 0
         || flux_plugin_arg_set (args, FLUX_PLUGIN_ARG_OUT, "{}") < 0) {
-        error_asprintf (jobtap, job, errp,
-                "jobtap_job_update: failed to create args");
+        errprintf (errp, "jobtap_job_update: failed to create args");
         flux_plugin_arg_destroy (args);
         return -1;
     }
@@ -2657,7 +2625,7 @@ int jobtap_job_update (struct jobtap *jobtap,
     if (rc == 0) {
         /* No plugin handles update of this jobspec key, reject the update.
          */
-        error_asprintf (jobtap, job, errp, "update of %s not supported", key);
+        errprintf (errp, "update of %s not supported", key);
         rc = -1;
         errno = EINVAL;
     }
@@ -2670,7 +2638,7 @@ int jobtap_job_update (struct jobtap *jobtap,
                                     "errmsg", &errmsg) < 0) {
             errmsg = "update rejected by job-manager plugin";
         }
-        error_asprintf (jobtap, job, errp, "%s", errmsg);
+        errprintf (errp, "%s", errmsg);
         errno = EINVAL;
     }
     else if (rc > 0) {
@@ -2692,10 +2660,7 @@ int jobtap_job_update (struct jobtap *jobtap,
                                           "validated", &validated,
                                           "feasibility", &feasibility,
                                           "updates", &updates) < 0)) {
-            error_asprintf (jobtap,
-                            job,
-                            errp,
-                            "failed to unpack update flags");
+            errprintf (errp, "failed to unpack update flags");
             return -1;
         }
         if (needs_validation != NULL)
@@ -2706,10 +2671,8 @@ int jobtap_job_update (struct jobtap *jobtap,
             if (*additional_updates == NULL)
                 *additional_updates = json_incref (updates);
             else if (json_object_update (*additional_updates, updates) < 0) {
-                error_asprintf (jobtap,
-                                job,
-                                errp,
-                                "failed to apply required extra job updates");
+                errprintf (errp,
+                           "failed to apply required extra job updates");
                 return -1;
             }
         }
@@ -2721,14 +2684,14 @@ int jobtap_job_update (struct jobtap *jobtap,
 int jobtap_validate_updates (struct jobtap *jobtap,
                              struct job *job,
                              json_t *updates,
-                             char **errp)
+                             flux_error_t *errp)
 {
     int rc = -1;
     json_t *jobspec_updated = NULL;
     flux_plugin_arg_t *args = NULL;
 
     if (!(jobspec_updated = job_jobspec_with_updates (job, updates))) {
-        error_asprintf (jobtap, job, errp, "update: %s", strerror (errno));
+        errprintf (errp, "update: %s", strerror (errno));
         goto error;
     }
 
@@ -2739,8 +2702,8 @@ int jobtap_validate_updates (struct jobtap *jobtap,
                                  FLUX_PLUGIN_ARG_IN,
                                  "{s:O}",
                                  "jobspec", jobspec_updated) < 0) {
-        error_asprintf (jobtap, job, errp, "update: %s",
-                        flux_plugin_arg_strerror (args));
+        errprintf (errp, "update: %s",
+                   flux_plugin_arg_strerror (args));
         goto error;
     }
 
@@ -2764,9 +2727,7 @@ int jobtap_validate_updates (struct jobtap *jobtap,
                                     "{s:s}",
                                     "errmsg", &errmsg) < 0)
                 errmsg = "rejected by job-manager plugin";
-        if ((*errp = strdup (errmsg)) == NULL)
-            flux_log (jobtap->ctx->h, LOG_ERR,
-                      "jobtap: validate failed to capture errmsg");
+        errprintf (errp, "%s", errmsg);
         errno = EINVAL;
     }
 error:

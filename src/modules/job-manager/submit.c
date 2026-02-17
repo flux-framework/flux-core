@@ -80,7 +80,7 @@ static int submit_job (struct job_manager *ctx,
                        json_t *errors)
 {
     flux_error_t e;
-    char *error = NULL;
+    flux_error_t error = {{0}};
 
     if (queue_submit_check (ctx->queue, job->jobspec_redacted, &e) < 0) {
         set_errorf (errors, job->id, "%s", e.text);
@@ -108,8 +108,7 @@ static int submit_job (struct job_manager *ctx,
         set_errorf (errors,
                     job->id,
                     "%s",
-                    error ? error : "rejected by plugin");
-        free (error);
+                    strlen (error.text) > 0 ? error.text : "rejected by plugin");
         goto error_post_invalid;
     }
     /* Call job.new callback now that job is accepted, so plugins
