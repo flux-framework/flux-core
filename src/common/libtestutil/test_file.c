@@ -1,3 +1,17 @@
+/************************************************************\
+ * Copyright 2025 Lawrence Livermore National Security, LLC
+ * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+ *
+ * This file is part of the Flux resource manager framework.
+ * For details, see https://github.com/flux-framework.
+ *
+ * SPDX-License-Identifier: LGPL-3.0
+\************************************************************/
+
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include "test_file.h"
 
 #include <errno.h>
@@ -9,13 +23,12 @@
 #include "src/common/libtap/tap.h"
 
 
-void
-create_test_file (const char *dir,
-                  const char *prefix,
-                  const char *extension,
-                  char *path,
-                  size_t pathlen,
-                  const char *contents)
+void create_test_file (const char *dir,
+                       const char *prefix,
+                       const char *extension,
+                       char *path,
+                       size_t pathlen,
+                       const char *contents)
 {
     int fd;
     const char *ext = extension ? extension : ".txt";
@@ -35,8 +48,7 @@ create_test_file (const char *dir,
         BAIL_OUT ("close %s: %s", path, strerror (errno));
 }
 
-void
-create_test_dir (char *dir, int dirlen)
+void create_test_dir (char *dir, int dirlen)
 {
     const char *tmpdir = getenv ("TMPDIR");
     if (snprintf (dir,
@@ -50,28 +62,28 @@ create_test_dir (char *dir, int dirlen)
 
 static pthread_once_t global_test_dir_once = PTHREAD_ONCE_INIT;
 static char global_test_dir[PATH_MAX];
-static void
-init_global_test_dir ()
+static void init_global_test_dir (void)
 {
-  create_test_dir (global_test_dir, sizeof global_test_dir);
+    create_test_dir (global_test_dir, sizeof global_test_dir);
 }
 
 __attribute__ ((destructor))
-static void
-cleanup_global_test_dir ()
+static void cleanup_global_test_dir (void)
 {
-  // Skip if it was never created
-  if (global_test_dir[0] == 0)
-    return;
-  if (rmdir (global_test_dir) < 0) {
-    fprintf (stderr, "could not cleanup test dir %s: %s\n", global_test_dir, strerror (errno));
-    exit (1);
-  }
+    // Skip if it was never created
+    if (global_test_dir[0] == 0)
+        return;
+    if (rmdir (global_test_dir) < 0) {
+        fprintf (stderr,
+                 "could not cleanup test dir %s: %s\n",
+                 global_test_dir,
+                 strerror (errno));
+        exit (1);
+     }
 }
 
-const char *
-get_test_dir ()
+const char *get_test_dir (void)
 {
-  pthread_once (&global_test_dir_once, init_global_test_dir);
-  return global_test_dir;
+    pthread_once (&global_test_dir_once, init_global_test_dir);
+    return global_test_dir;
 }

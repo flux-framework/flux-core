@@ -15,16 +15,20 @@
 #include "src/common/libtap/tap.h"
 #include "util_rpc.h"
 
-static void reclaim_timeout (flux_reactor_t *r, flux_watcher_t *w,
-                             int revents, void *arg)
+static void reclaim_timeout (flux_reactor_t *r,
+                             flux_watcher_t *w,
+                             int revents,
+                             void *arg)
 {
     int *flag = arg;
     *flag = 1;
     diag ("matchtag_reclaim timed out");
 }
 
-static void reclaim_fake_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void reclaim_fake_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
 }
 
@@ -45,8 +49,11 @@ int reclaim_matchtag (flux_t *h, int count, double timeout)
         BAIL_OUT ("flux_msg_handler_create failed");
     flux_msg_handler_start (mh);
 
-    if (!(timer = flux_timer_watcher_create (r, timeout, 0,
-                                             reclaim_timeout, &expired)))
+    if (!(timer = flux_timer_watcher_create (r,
+                                             timeout,
+                                             0,
+                                             reclaim_timeout,
+                                             &expired)))
         BAIL_OUT ("flux_timer_watcher_create failed");
     flux_watcher_start (timer);
 
