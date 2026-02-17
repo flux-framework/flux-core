@@ -181,6 +181,7 @@ static struct registered_attr attrtab[] = {
  */
 static struct setattr_redirect redirtab[] = {
     { "test-rd.*", "testrd.setattr" },
+    { "log-stderr-level", "log.setattr" },
 };
 
 static struct registered_attr *attrtab_lookup (const char *name)

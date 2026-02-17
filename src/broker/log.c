@@ -591,13 +591,6 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
     int severity = LOG_INFO;
     struct stdlog_header hdr;
 
-    /* Fetch this from the attribute hash again for each log entry,
-     * in case it changed.
-     */
-    (void)getattr_level (logbuf->attrs,
-                         "log-stderr-level",
-                         &logbuf->stderr_level);
-
     stdlog_init (&hdr);
     if (stdlog_decode (buf, len, &hdr, NULL, NULL, NULL, NULL) == 0) {
         rank = strtoul (hdr.hostname, NULL, 10);
@@ -780,6 +773,55 @@ static void stats_request_cb (flux_t *h,
         flux_log_error (h, "error responding to log.stats-get");
 }
 
+static int parse_level (const char *s, int *level)
+{
+    char *endptr;
+    long val;
+
+    errno = 0;
+    val = strtol (s, &endptr, 10);
+    if (errno != 0 || val > LOG_DEBUG) {
+        errno = EINVAL;
+        return -1;
+    }
+    *level = val;
+    return 0;
+}
+
+static void setattr_request_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    logbuf_t *logbuf = arg;
+    const char *errmsg = NULL;
+    const char *name;
+    const char *val;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:s}",
+                             "name", &name,
+                             "value", &val) < 0)
+        goto error;
+    if (streq (name, "log-stderr-level")) {
+        if (parse_level (val, &logbuf->stderr_level) < 0) {
+            errmsg = "invalid level";
+            goto error;
+        }
+    }
+    else {
+        errmsg = "unknown log attribute";
+        errno = EINVAL;
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to log.setattr request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to log.setattr request");
+}
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "log.append",         append_request_cb, 0 },
@@ -788,6 +830,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "log.disconnect",     disconnect_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.cancel",         cancel_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.stats-get",      stats_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "log.setattr",        setattr_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
