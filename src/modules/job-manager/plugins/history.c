@@ -287,6 +287,7 @@ static void history_get_cb (flux_t *h,
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
         flux_log_error (h, "error responding to job-manager.history.get");
     json_decref (jobs);
+    return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "error responding to job-manager.history.get");
