@@ -20,6 +20,8 @@
 #include <unistd.h>
 #include <syslog.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <pwd.h>
 
 #include "src/common/libutil/log.h"
@@ -859,9 +861,15 @@ int logbuf_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
     if (logbuf->syslog_enable)
         openlog ("flux", LOG_NDELAY | LOG_PID, LOG_USER);
     if (logbuf->filename) {
+        int fd;
         FILE *f;
-        if (!(f = fopen (logbuf->filename, "a"))) {
+        if ((fd = open (logbuf->filename,
+                        O_CREAT | O_WRONLY | O_APPEND,
+                        S_IWUSR | S_IRUSR)) < 0
+            || !(f = fdopen (fd, "a"))) {
             flux_log_error (h, "Error opening logfile %s", logbuf->filename);
+            if (fd >= 0)
+                close (fd);
             return -1;
         }
         logbuf->f = f;
