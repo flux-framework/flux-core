@@ -414,7 +414,8 @@ log-stderr-level :ref:`[runtime] <attr_runtime>`
    Copy matching log messages to stderr.  Default: 3 (LOG_ERR).
 
 log-level
-   Allow matching messages to enter the logging system.  Default: 7 (LOG_DEBUG).
+   Allow matching messages to enter the local broker's circular buffer.
+   Default: 7 (LOG_DEBUG).
 
 CONTENT
 =======
