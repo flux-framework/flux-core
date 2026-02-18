@@ -559,6 +559,11 @@ class JobInfo:
             if val is not None:
                 result[attr] = val
 
+        #  Add jobid key with f58 encoded jobid in case dictionary
+        #  is converted to JSON, since some JSON implementations can't
+        #  handle the full range of FLUIDs as integer:
+        result["jobid"] = self.id.f58
+
         #  The following attributes all need special handling to
         #  be converted to a dict:
         result["annotations"] = self.annotations.annotationsDict
