@@ -13,12 +13,6 @@
 
 #include <flux/core.h>
 
-/* Callbacks for active values.  Return 0 on success, -1 on error with
- * errno set.  Errors are propagated to the return of attr_set() and attr_get().
- */
-typedef int (*attr_get_f)(const char *name, const char **val, void *arg);
-typedef int (*attr_set_f)(const char *name, const char *val, void *arg);
-
 typedef struct broker_attr attr_t;
 
 /* Create/destroy attribute cache
@@ -44,14 +38,6 @@ int attr_set_cmdline (attr_t *attrs,
                       const char *name,
                       const char *val,
                       flux_error_t *errp);
-
-/* Add an attribute with callbacks for get/set.
- */
-int attr_add_active (attr_t *attrs,
-                     const char *name,
-                     attr_get_f get,
-                     attr_set_f set,
-                     void *arg);
 
 /* Iterate over attribute names with internal cursor.
  */

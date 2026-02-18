@@ -20,12 +20,15 @@
 #include <unistd.h>
 #include <syslog.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <pwd.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"
 #include "src/common/libutil/timestamp.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 #include "ccan/list/list.h"
 
@@ -40,6 +43,7 @@ static const int default_forward_level = LOG_ERR;
 static const int default_critical_level = LOG_CRIT;
 static const int default_stderr_level = LOG_ERR;
 static const int default_syslog_level = LOG_ERR;
+static const bool default_syslog_enable = false;
 static const stderr_mode_t default_stderr_mode = MODE_LEADER;
 static const int default_level = LOG_DEBUG;
 
@@ -50,7 +54,7 @@ typedef struct {
     uint32_t rank;
     char *filename;
     FILE *f;
-    int syslog_enable;
+    bool syslog_enable;
     int syslog_level;
     char *jobid_path;
     char *username;
@@ -138,13 +142,6 @@ static logbuf_t *logbuf_create (void)
         errno = ENOMEM;
         goto cleanup;
     }
-    logbuf->forward_level = default_forward_level;
-    logbuf->critical_level = default_critical_level;
-    logbuf->syslog_level = default_syslog_level;
-    logbuf->stderr_level = default_stderr_level;
-    logbuf->stderr_mode = default_stderr_mode;
-    logbuf->level = default_level;
-    logbuf->ring_size = default_ring_size;
     list_head_init (&logbuf->ring);
     if (!(logbuf->followers = flux_msglist_create ()))
         goto cleanup;
@@ -172,257 +169,273 @@ void logbuf_destroy (logbuf_t *logbuf)
     }
 }
 
-static int set_level (int *value, const char *val)
+static int getattr_int (attr_t *attrs, const char *name, int *vp)
 {
-    int level;
+    const char *val;
     char *endptr;
-    if (!val)
-        goto error;
-    errno = 0;
-    level = strtol (val, &endptr, 10);
-    if (errno != 0 || *endptr != '\0')
-        goto error;
-    if (level > LOG_DEBUG) {
+    long long v;
+
+    if (attr_get (attrs, name, &val) < 0)
+        return -1;
+    if (!val) {
         errno = EINVAL;
         return -1;
+    }
+    errno = 0;
+    v = strtoll (val, &endptr, 10);
+    if (errno != 0
+        || *endptr != '\0'
+        || endptr == val
+        || v < INT_MIN
+        || v > INT_MAX) {
+        errno = EINVAL;
+        return -1;
+    }
+    *vp = v;
+    return 0;
+}
+
+static int getattr_level (attr_t *attrs, const char *name, int *vp)
+{
+    int v;
+
+    if (getattr_int (attrs, name, &v) < 0)
+        return -1;
+    if (v > LOG_DEBUG) { /* N.B. negative is ok (match nothing) */
+        errno = EINVAL;
+        return -1;
+    }
+    *vp = v;
+    return 0;
+}
+
+static int getattr_mode (attr_t *attrs, const char *name, stderr_mode_t *vp)
+{
+    const char *val;
+    stderr_mode_t mode;
+
+    if (attr_get (attrs, name, &val) < 0)
+        return -1;
+    if (!val) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (streq (val, "local"))
+        mode = MODE_LOCAL;
+    else if (streq (val, "leader"))
+        mode = MODE_LEADER;
+    else {
+        errno = EINVAL;
+        return -1;
+    }
+    *vp = mode;
+    return 0;
+}
+
+static int getattr_size (attr_t *attrs, const char *name, size_t *vp)
+{
+    const char *val;
+    char *endptr;
+    long long v;
+
+    if (attr_get (attrs, name, &val) < 0)
+        return -1;
+    if (!val) {
+        errno = EINVAL;
+        return -1;
+    }
+    errno = 0;
+    v = strtoll (val, &endptr, 10);
+    if (errno != 0
+        || *endptr != '\0'
+        || endptr == val
+        || v < 0
+        || v > SIZE_MAX) {
+        errno = EINVAL;
+        return -1;
+    }
+    *vp = v;
+    return 0;
+}
+
+static int setattr_int (attr_t *attrs, const char *name, long long v)
+{
+    char val[64];
+
+    snprintf (val, sizeof (val), "%lld", v);
+    return attr_set (attrs, name, val);
+}
+
+static int setattr_mode (attr_t *attrs, const char *name, stderr_mode_t mode)
+{
+    const char *val;
+    switch (mode) {
+        case MODE_LEADER:
+            val = "leader";
+            break;
+        case MODE_LOCAL:
+            val = "local";
+            break;
+    }
+    return attr_set (attrs, name, val);
+}
+
+static int register_attr_level (attr_t *attrs,
+                                const char *name,
+                                int *value,
+                                int default_value,
+                                flux_error_t *errp)
+{
+    int level;
+
+    if (getattr_level (attrs, name, &level) < 0) {
+        if (errno != ENOENT)
+            return errprintf (errp, "%s: %s", name, strerror (errno));
+        if (setattr_int (attrs, name, default_value) < 0)
+            return errprintf (errp, "%s: %s", name, strerror (errno));
+        level = default_value;
     }
     *value = level;
     return 0;
-error:
-    errno = EINVAL;
-    return -1;
 }
 
-static int logbuf_set_ring_size (logbuf_t *logbuf, const char *val)
+static int register_attr_size (attr_t *attrs,
+                               const char *name,
+                               size_t *value,
+                               size_t default_value,
+                               flux_error_t *errp)
 {
-    int size;
-    char *endptr;
-    if (!val || strlen (val) == 0)
-        goto error;
-    errno = 0;
-    size = strtol (val, &endptr, 10);
-    if (errno != 0 || *endptr != '\0' || size < 0)
-        goto error;
-    logbuf_trim (logbuf, size);
-    logbuf->ring_size = size;
-    return 0;
-error:
-    errno = EINVAL;
-    return -1;
-}
+    size_t size;
 
-/* Set the log filename (rank 0 only).
- * Allow other ranks to try to set this without effect
- * so that the same broker options can be used across a session.
- */
-static int logbuf_set_filename (logbuf_t *logbuf, const char *destination)
-{
-    char *filename;
-    FILE *f;
-    if (!destination || strlen (destination) == 0) {
-        errno = EINVAL;
-        return -1;
+    if (getattr_size (attrs, name, &size) < 0) {
+        if (errno != ENOENT)
+            return errprintf (errp, "%s: %s", name, strerror (errno));
+        if (setattr_int (attrs, name, default_value) < 0)
+            return errprintf (errp, "%s: %s", name, strerror (errno));
+        size = default_value;
     }
-    if (logbuf->rank > 0)
-        return 0;
-    if (!(f = fopen (destination, "a")))
-        return -1;
-    if (!(filename = strdup (destination))) {
-        fclose (f);
-        return -1;
-    }
-    free (logbuf->filename);
-    if (logbuf->f)
-        fclose (logbuf->f);
-    logbuf->f = f;
-    logbuf->filename = filename;
+    *value = size;
     return 0;
 }
 
-static void logbuf_set_syslog (logbuf_t *logbuf, const char *val)
+static int register_attr_bool (attr_t *attrs,
+                               const char *name,
+                               bool *value,
+                               bool default_value,
+                               flux_error_t *errp)
 {
-    int enable;
+    int val;
+    bool flag;
 
-    if (val && streq (val, "0"))
-        enable = 0;
-    else
-        enable = 1;
-    if (logbuf->syslog_enable && !enable) {
-        closelog ();
-        logbuf->syslog_enable = 0;
+    if (getattr_int (attrs, name, &val) < 0) {
+        if (errno != ENOENT)
+            return errprintf (errp, "getattr %s: %s", name, strerror (errno));
+        if (setattr_int (attrs, name, default_value ? 1 : 0) < 0)
+            return errprintf (errp, "setattr %s: %s", name, strerror (errno));
+        flag = default_value;
     }
-    else if (!logbuf->syslog_enable && enable) {
-        openlog ("flux", LOG_NDELAY | LOG_PID, LOG_USER);
-        logbuf->syslog_enable = 1;
-    }
-}
-
-static const char *int_to_string (int n)
-{
-    static char s[32]; // ample room to avoid overflow
-    (void)snprintf (s, sizeof (s), "%d", n);
-    return s;
-}
-
-static int attr_get_log (const char *name, const char **val, void *arg)
-{
-    logbuf_t *logbuf = arg;
-
-    if (streq (name, "log-forward-level"))
-        *val = int_to_string (logbuf->forward_level);
-    else if (streq (name, "log-critical-level"))
-        *val = int_to_string (logbuf->critical_level);
-    else if (streq (name, "log-stderr-level"))
-        *val = int_to_string (logbuf->stderr_level);
-    else if (streq (name, "log-stderr-mode"))
-        *val = logbuf->stderr_mode == MODE_LEADER ? "leader" : "local";
-    else if (streq (name, "log-ring-size"))
-        *val = int_to_string (logbuf->ring_size);
-    else if (streq (name, "log-filename"))
-        *val = logbuf->filename;
-    else if (streq (name, "log-syslog-enable"))
-        *val = int_to_string (logbuf->syslog_enable);
-    else if (streq (name, "log-syslog-level"))
-        *val = int_to_string (logbuf->syslog_level);
-    else if (streq (name, "log-level"))
-        *val = int_to_string (logbuf->level);
     else {
-        errno = ENOENT;
-        return -1;
-    }
-    return 0;
-}
-
-static int attr_set_log (const char *name, const char *val, void *arg)
-{
-    logbuf_t *logbuf = arg;
-    int rc = -1;
-
-    if (streq (name, "log-forward-level")) {
-        if (set_level (&logbuf->forward_level, val) < 0)
-            goto done;
-    }
-    else if (streq (name, "log-critical-level")) {
-        if (set_level (&logbuf->critical_level, val) < 0)
-            goto done;
-    }
-    else if (streq (name, "log-stderr-level")) {
-        if (set_level (&logbuf->stderr_level, val) < 0)
-            goto done;
-    }
-    else if (streq (name, "log-stderr-mode")) {
-        if (!val) {
-            errno = EINVAL;
-            goto done;
-        }
-        if (streq (val, "leader"))
-            logbuf->stderr_mode = MODE_LEADER;
-        else if (streq (val, "local"))
-            logbuf->stderr_mode = MODE_LOCAL;
+        if (val == 0)
+            flag = false;
+        else if (val == 1)
+            flag = true;
         else {
             errno = EINVAL;
-            goto done;
+            return errprintf (errp, "%s: value must be 0 or 1", name);
         }
     }
-    else if (streq (name, "log-ring-size")) {
-        if (logbuf_set_ring_size (logbuf, val) < 0)
-            goto done;
-    }
-    else if (streq (name, "log-filename")) {
-        if (logbuf_set_filename (logbuf, val) < 0)
-            goto done;
-    }
-    else if (streq (name, "log-syslog-enable")) {
-        logbuf_set_syslog (logbuf, val);
-    }
-    else if (streq (name, "log-syslog-level")) {
-        if (set_level (&logbuf->syslog_level, val) < 0)
-            goto done;
-    }
-    else if (streq (name, "log-level")) {
-        if (set_level (&logbuf->level, val) < 0)
-            goto done;
-    }
-    else {
-        errno = ENOENT;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
+    *value = flag;
+    return 0;
 }
 
-static int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
+static int register_attr_mode (attr_t *attrs,
+                               const char *name,
+                               stderr_mode_t *value,
+                               stderr_mode_t default_value,
+                               flux_error_t *errp)
 {
-    int rc = -1;
+    stderr_mode_t mode;
 
+    if (getattr_mode (attrs, name, &mode) < 0) {
+        if (errno != ENOENT)
+            return errprintf (errp, "getattr %s: %s", name, strerror (errno));
+        if (setattr_mode (attrs, name, default_value) < 0)
+            return errprintf (errp, "setattr %s: %s", name, strerror (errno));
+        mode = default_value;
+    }
+    *value = mode;
+    return 0;
+}
+
+static int logbuf_register_attrs (logbuf_t *logbuf, flux_error_t *errp)
+{
     /* log-filename
      * Only allowed to be set on rank 0 (ignore initial value on rank > 0).
      */
     if (logbuf->rank == 0) {
-        if (attr_add_active (attrs,
-                             "log-filename",
-                             attr_get_log,
-                             attr_set_log,
-                             logbuf) < 0)
-            goto done;
+        const char *path;
+        if (attr_get (logbuf->attrs, "log-filename", &path) == 0) {
+            if (path && !(logbuf->filename = strdup (path)))
+                return errprintf (errp, "Error duplicating logfile name");
+        }
     }
     else {
-        (void)attr_delete (attrs, "log-filename");
-        if (attr_set (attrs, "log-filename", NULL) < 0)
-            goto done;
+        (void)attr_delete (logbuf->attrs, "log-filename");
+        if (attr_set (logbuf->attrs, "log-filename", NULL) < 0) {
+            return errprintf (errp,
+                              "setattr log-filename: %s",
+                              strerror (errno));
+        }
     }
-    if (attr_add_active (attrs,
-                         "log-stderr-level",
-                         attr_get_log,
-                         attr_set_log,
-                         logbuf) < 0)
-        goto done;
-    if (attr_add_active (attrs,
-                         "log-stderr-mode",
-                         attr_get_log,
-                         attr_set_log,
-                         logbuf) < 0)
-        goto done;
-    if (attr_add_active (attrs,
-                         "log-level",
-                         attr_get_log,
-                         attr_set_log,
-                         logbuf) < 0)
-        goto done;
-    if (attr_add_active (attrs,
-                         "log-forward-level",
-                         attr_get_log,
-                         attr_set_log,
-                         logbuf) < 0)
-        goto done;
-    if (attr_add_active (attrs,
-                         "log-critical-level",
-                         attr_get_log,
-                         attr_set_log,
-                         logbuf) < 0)
-        goto done;
-    if (attr_add_active (attrs,
-                         "log-ring-size",
-                         attr_get_log,
-                         attr_set_log,
-                         logbuf) < 0)
-        goto done;
-    if (attr_add_active (attrs,
-                         "log-syslog-enable",
-                         attr_get_log,
-                         attr_set_log,
-                         logbuf) < 0)
-        goto done;
-    if (attr_add_active (attrs,
-                         "log-syslog-level",
-                         attr_get_log,
-                         attr_set_log,
-                         logbuf) < 0)
-        goto done;
-    rc = 0;
-done:
-    return rc;
+    if (register_attr_level (logbuf->attrs,
+                             "log-level",
+                             &logbuf->level,
+                             default_level,
+                             errp) < 0)
+        return -1;
+    if (register_attr_level (logbuf->attrs,
+                             "log-stderr-level",
+                             &logbuf->stderr_level,
+                             default_stderr_level,
+                             errp) < 0)
+        return -1;
+    if (register_attr_level (logbuf->attrs,
+                             "log-forward-level",
+                             &logbuf->forward_level,
+                             default_forward_level,
+                             errp) < 0)
+        return -1;
+    if (register_attr_level (logbuf->attrs,
+                             "log-critical-level",
+                             &logbuf->critical_level,
+                             default_critical_level,
+                             errp) < 0)
+        return -1;
+    if (register_attr_level (logbuf->attrs,
+                             "log-syslog-level",
+                             &logbuf->syslog_level,
+                             default_syslog_level,
+                             errp) < 0)
+        return -1;
+    if (register_attr_size (logbuf->attrs,
+                            "log-ring-size",
+                            &logbuf->ring_size,
+                            default_ring_size,
+                            errp) < 0)
+        return -1;
+    if (register_attr_bool (logbuf->attrs,
+                            "log-syslog-enable",
+                            &logbuf->syslog_enable,
+                            default_syslog_enable,
+                            errp) < 0)
+        return -1;
+    if (register_attr_mode (logbuf->attrs,
+                            "log-stderr-mode",
+                             &logbuf->stderr_mode,
+                             default_stderr_mode,
+                             errp) < 0)
+        return -1;
+    return 0;
 }
 
 static int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
@@ -565,8 +578,7 @@ void log_early (const char *buf, int len, void *arg)
         && streq (val, "local")) {
         flags = LOG_FOR_SYSTEMD;
     }
-    if (attr_get (attrs, "log-stderr-level", &val) == 0
-        && set_level (&level, val) == 0
+    if (getattr_level (attrs, "log-stderr-level", &level) == 0
         && stdlog_decode (buf, len, &hdr, NULL, NULL, NULL, NULL) == 0
         && STDLOG_SEVERITY (hdr.pri) > level)
         return;
@@ -763,6 +775,55 @@ static void stats_request_cb (flux_t *h,
         flux_log_error (h, "error responding to log.stats-get");
 }
 
+static int parse_level (const char *s, int *level)
+{
+    char *endptr;
+    long val;
+
+    errno = 0;
+    val = strtol (s, &endptr, 10);
+    if (errno != 0 || val > LOG_DEBUG) {
+        errno = EINVAL;
+        return -1;
+    }
+    *level = val;
+    return 0;
+}
+
+static void setattr_request_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    logbuf_t *logbuf = arg;
+    const char *errmsg = NULL;
+    const char *name;
+    const char *val;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:s}",
+                             "name", &name,
+                             "value", &val) < 0)
+        goto error;
+    if (streq (name, "log-stderr-level")) {
+        if (parse_level (val, &logbuf->stderr_level) < 0) {
+            errmsg = "invalid level";
+            goto error;
+        }
+    }
+    else {
+        errmsg = "unknown log attribute";
+        errno = EINVAL;
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to log.setattr request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to log.setattr request");
+}
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "log.append",         append_request_cb, 0 },
@@ -771,6 +832,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "log.disconnect",     disconnect_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.cancel",         cancel_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.stats-get",      stats_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "log.setattr",        setattr_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -784,14 +846,34 @@ static void logbuf_finalize (void *arg)
 
 int logbuf_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
 {
+    flux_error_t error;
     logbuf_t *logbuf = logbuf_create ();
+
     if (!logbuf)
         goto error;
     logbuf->h = h;
     logbuf->rank = rank;
     logbuf->attrs = attrs;
-    if (logbuf_register_attrs (logbuf, attrs) < 0)
+    if (logbuf_register_attrs (logbuf, &error) < 0) {
+        flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
+    }
+    if (logbuf->syslog_enable)
+        openlog ("flux", LOG_NDELAY | LOG_PID, LOG_USER);
+    if (logbuf->filename) {
+        int fd;
+        FILE *f;
+        if ((fd = open (logbuf->filename,
+                        O_CREAT | O_WRONLY | O_APPEND,
+                        S_IWUSR | S_IRUSR)) < 0
+            || !(f = fdopen (fd, "a"))) {
+            flux_log_error (h, "Error opening logfile %s", logbuf->filename);
+            if (fd >= 0)
+                close (fd);
+            return -1;
+        }
+        logbuf->f = f;
+    }
     if (flux_msg_handler_addvec (h, htab, logbuf, &logbuf->handlers) < 0)
         goto error;
     flux_log_set_redirect (h, logbuf_append_redirect, logbuf);

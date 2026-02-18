@@ -38,8 +38,10 @@ struct test_server {
     char uuid_str[UUID_STR_LEN];
 };
 
-void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
-                  const flux_msg_t *msg, void *arg)
+void shutdown_cb (flux_t *h,
+                  flux_msg_handler_t *mh,
+                  const flux_msg_t *msg,
+                  void *arg)
 {
     flux_reactor_stop (flux_get_reactor (h));
 }
@@ -76,8 +78,10 @@ int test_server_stop (flux_t *c)
     return rc;
 }
 
-static void diag_cb (flux_t *h, flux_msg_handler_t *mh,
-                     const flux_msg_t *msg, void *arg)
+static void diag_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
 {
     int msgtype;
     const char *topic = NULL;
@@ -88,8 +92,10 @@ static void diag_cb (flux_t *h, flux_msg_handler_t *mh,
         if (flux_msg_get_topic (msg, &topic) < 0)
             goto badmsg;
     }
-    diag ("server: < %s%s%s", flux_msg_typestr (msgtype),
-           topic ? " " : "", topic ? topic : "");
+    diag ("server: < %s%s%s",
+          flux_msg_typestr (msgtype),
+          topic ? " " : "",
+          topic ? topic : "");
     return;
 badmsg:
     diag ("server: malformed message:", flux_strerror (errno));
@@ -157,8 +163,10 @@ flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
      * N.B. this has to go in before shutdown else shutdown will be masked.
      */
     if (!a->cb) {
-        if (!(a->diag_mh = flux_msg_handler_create (a->s, FLUX_MATCH_ANY,
-                                                    diag_cb, a)))
+        if (!(a->diag_mh = flux_msg_handler_create (a->s,
+                                                    FLUX_MATCH_ANY,
+                                                    diag_cb,
+                                                    a)))
             BAIL_OUT ("flux_msg_handler_create");
         flux_msg_handler_start (a->diag_mh);
         a->cb = diag_server;
@@ -168,8 +176,10 @@ flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
      */
     struct flux_match match = FLUX_MATCH_REQUEST;
     match.topic_glob = "shutdown";
-    if (!(a->shutdown_mh = flux_msg_handler_create (a->s, match,
-                                                    shutdown_cb, a)))
+    if (!(a->shutdown_mh = flux_msg_handler_create (a->s,
+                                                    match,
+                                                    shutdown_cb,
+                                                    a)))
         BAIL_OUT ("flux_msg_handler_create");
     flux_msg_handler_start (a->shutdown_mh);
 
@@ -177,7 +187,9 @@ flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
      */
     if ((e = pthread_create (&a->thread, NULL, thread_wrapper, a)) != 0)
         BAIL_OUT ("pthread_create");
-    if (flux_aux_set (a->c, "test_server", a,
+    if (flux_aux_set (a->c,
+                      "test_server",
+                      a,
                       (flux_free_f)test_server_destroy) < 0)
         BAIL_OUT ("flux_aux_set");
     return a->c;

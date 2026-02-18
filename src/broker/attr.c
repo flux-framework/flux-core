@@ -63,17 +63,21 @@ struct registered_attr {
     int flags;
 };
 
+struct setattr_redirect {
+    const char *name;
+    const char *topic;
+};
+
 struct broker_attr {
-    zhash_t *hash;
+    zhashx_t *hash;
     flux_msg_handler_t **handlers;
+    struct flux_msglist *requests; // redirected setattrs
 };
 
 struct entry {
     char *name;
     char *val;
     int flags;
-    attr_set_f set;
-    attr_get_f get;
     void *arg;
 };
 
@@ -139,15 +143,15 @@ static struct registered_attr attrtab[] = {
     { "tbon.connect_timeout", ATTR_CONFIG },
 
     // logging
-    { "log-ring-size", ATTR_RUNTIME },
-    { "log-forward-level", ATTR_RUNTIME },
-    { "log-critical-level", ATTR_RUNTIME },
-    { "log-filename", ATTR_RUNTIME },
-    { "log-syslog-enable", ATTR_RUNTIME },
-    { "log-syslog-level", ATTR_RUNTIME },
-    { "log-stderr-mode", ATTR_RUNTIME },
+    { "log-ring-size", ATTR_IMMUTABLE },
+    { "log-forward-level", ATTR_IMMUTABLE },
+    { "log-critical-level", ATTR_IMMUTABLE },
+    { "log-filename", 0 },
+    { "log-syslog-enable", ATTR_IMMUTABLE },
+    { "log-syslog-level", ATTR_IMMUTABLE },
+    { "log-stderr-mode", ATTR_IMMUTABLE },
     { "log-stderr-level", ATTR_RUNTIME },
-    { "log-level", ATTR_RUNTIME },
+    { "log-level", ATTR_IMMUTABLE },
 
     // content
     { "content.backing-module", 0 },
@@ -163,10 +167,21 @@ static struct registered_attr attrtab[] = {
     { "test-ro.*", ATTR_READONLY },
     { "test-nr.*", 0 },
     { "test-im.*", ATTR_IMMUTABLE },
+    { "test-rd.*", ATTR_RUNTIME },
 
     // misc undocumented
     { "vendor.*", ATTR_RUNTIME | ATTR_IMMUTABLE }, // flux-pmix#109
     { "tbon.fanout", 0 }, // legacy, replaced by tbon.topo
+};
+
+/* Setattr on attributes matching the redirect table are handled elsewhere.
+ * The attr.set RPC handler here makes an RPC to the new topic string.
+ * When that finishes, a response is sent to the original request, and if
+ * the update is approved, the hash value is updated.
+ */
+static struct setattr_redirect redirtab[] = {
+    { "test-rd.*", "testrd.setattr" },
+    { "log-stderr-level", "log.setattr" },
 };
 
 static struct registered_attr *attrtab_lookup (const char *name)
@@ -179,15 +194,31 @@ static struct registered_attr *attrtab_lookup (const char *name)
     return NULL;
 }
 
-static void entry_destroy (void *arg)
+static const char *setattr_redirect_lookup (const char *name)
 {
-    struct entry *e = arg;
+    for (int i = 0; i < ARRAY_SIZE (redirtab); i++) {
+        if (fnmatch (redirtab[i].name, name, 0) == 0)
+            return redirtab[i].topic;
+    }
+    return NULL;
+}
+
+static void entry_destroy (struct entry *e)
+{
     if (e) {
         int saved_errno = errno;
         free (e->val);
         free (e->name);
         free (e);
         errno = saved_errno;
+    }
+}
+
+static void entry_destructor (void **item)
+{
+    if (*item) {
+        entry_destroy (*item);
+        *item = NULL;
     }
 }
 
@@ -213,12 +244,12 @@ int attr_delete (attr_t *attrs, const char *name)
     struct entry *e;
     int rc = -1;
 
-    if ((e = zhash_lookup (attrs->hash, name))) {
+    if ((e = zhashx_lookup (attrs->hash, name))) {
         if ((e->flags & ATTR_IMMUTABLE)) {
             errno = EPERM;
             goto done;
         }
-        zhash_delete (attrs->hash, name);
+        zhashx_delete (attrs->hash, name);
     }
     rc = 0;
 done:
@@ -248,42 +279,6 @@ int attr_set_cmdline (attr_t *attrs,
     return 0;
 }
 
-int attr_add_active (attr_t *attrs,
-                     const char *name,
-                     attr_get_f get,
-                     attr_set_f set,
-                     void *arg)
-{
-    struct registered_attr *reg;
-    struct entry *e;
-    int rc = -1;
-
-    if (!attrs) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (!(reg = attrtab_lookup (name)))
-        return -1;
-    if ((e = zhash_lookup (attrs->hash, name))) {
-        if (!set) {
-            errno = EEXIST;
-            goto done;
-        }
-        if (set (name, e->val, arg) < 0)
-            goto done;
-    }
-    if (!(e = entry_create (name, NULL, reg->flags)))
-        goto done;
-    e->set = set;
-    e->get = get;
-    e->arg = arg;
-    zhash_update (attrs->hash, name, e);
-    zhash_freefn (attrs->hash, name, entry_destroy);
-    rc = 0;
-done:
-    return rc;
-}
-
 static struct entry *attr_get_entry (attr_t *attrs, const char *name)
 {
     struct entry *e;
@@ -292,23 +287,9 @@ static struct entry *attr_get_entry (attr_t *attrs, const char *name)
         errno = EINVAL;
         return NULL;
     }
-    if (!(e = zhash_lookup (attrs->hash, name))) {
+    if (!(e = zhashx_lookup (attrs->hash, name))) {
         errno = ENOENT;
         return NULL;
-    }
-    if (e->get) {
-        if (!e->val || !(e->flags & ATTR_IMMUTABLE)) {
-            const char *tmp;
-            if (e->get (name, &tmp, e->arg) < 0)
-                return NULL;
-            free (e->val);
-            if (tmp) {
-                if (!(e->val = strdup (tmp)))
-                    return NULL;
-            }
-            else
-                e->val = NULL;
-        }
     }
     return e;
 }
@@ -328,7 +309,7 @@ int attr_set (attr_t *attrs, const char *name, const char *val)
 {
     struct entry *e;
 
-    if ((e = zhash_lookup (attrs->hash, name))) {
+    if ((e = zhashx_lookup (attrs->hash, name))) {
         char *cpy = NULL;
         if ((e->flags & ATTR_IMMUTABLE)) {
             errno = EPERM;
@@ -336,10 +317,6 @@ int attr_set (attr_t *attrs, const char *name, const char *val)
         }
         if (val && !(cpy = strdup (val)))
             return -1;
-        if (e->set && e->set (name, val, e->arg) < 0) {
-            ERRNO_SAFE_WRAP (free, cpy);
-            return -1;
-        }
         free (e->val);
         e->val = cpy;
     }
@@ -349,21 +326,23 @@ int attr_set (attr_t *attrs, const char *name, const char *val)
             return -1;
         if (!(e = entry_create (name, val, reg->flags)))
             return -1;
-        zhash_update (attrs->hash, name, e);
-        zhash_freefn (attrs->hash, name, entry_destroy);
+        if (zhashx_insert (attrs->hash, e->name, e) < 0) {
+            errno = EEXIST;
+            return -1;
+        }
     }
     return 0;
 }
 
 const char *attr_first (attr_t *attrs)
 {
-    struct entry *e = zhash_first (attrs->hash);
+    struct entry *e = zhashx_first (attrs->hash);
     return e ? e->name : NULL;
 }
 
 const char *attr_next (attr_t *attrs)
 {
-    struct entry *e = zhash_next (attrs->hash);
+    struct entry *e = zhashx_next (attrs->hash);
     return e ? e->name : NULL;
 }
 
@@ -371,25 +350,96 @@ int attr_cache_immutables (attr_t *attrs, flux_t *h)
 {
     struct entry *e;
 
-    e = zhash_first (attrs->hash);
+    e = zhashx_first (attrs->hash);
     while (e) {
         if ((e->flags & ATTR_IMMUTABLE)) {
             if (flux_attr_set_cacheonly (h, e->name, e->val) < 0)
                 return -1;
         }
-        e = zhash_next (attrs->hash);
+        e = zhashx_next (attrs->hash);
     }
     return 0;
+}
+
+/* Setattr service has responded.  Respond to the original request
+ * and delete it from the request list. N.B. this destroys the future.
+ */
+static void redirect_continuation (flux_future_t *f, void *arg)
+{
+    attr_t *attrs = arg;
+    flux_t *h = flux_future_get_flux (f);
+    const flux_msg_t *msg;
+    flux_error_t error;
+    const char *name;
+    const char *val;
+
+    msg = flux_msglist_first (attrs->requests);
+    while (msg && flux_msg_aux_get (msg, "setattr_future") != f)
+        msg = flux_msglist_next (attrs->requests);
+    /* msg==NULL should not be possible since setattr_redirect() ensures
+     * only requests with "setattr_future" are added to the msglist.
+     */
+    if (!msg)
+        return;
+    if (flux_rpc_get (f, NULL) < 0) {
+        errprintf (&error, "%s", future_strerror (f, errno));
+        goto error;
+    }
+    /* Success: now update the attribute value here.
+     */
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:s}",
+                             "name", &name,
+                             "value", &val) < 0
+        || attr_set (attrs, name, val) < 0) {
+        errprintf (&error, "%s", strerror (errno));
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to attr.set request");
+    flux_msglist_delete (attrs->requests);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, error.text) < 0)
+        flux_log_error (h, "error responding to attr.set request");
+    flux_msglist_delete (attrs->requests);
+}
+
+static int setattr_redirect (attr_t *attrs,
+                             flux_t *h,
+                             const flux_msg_t *msg,
+                             const char *topic,
+                             const char *name,
+                             const char *val)
+{
+    flux_future_t *f;
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s s:s}",
+                             "name", name,
+                             "value", val))
+        || flux_future_then (f, -1, redirect_continuation, attrs) < 0
+        || flux_msg_aux_set (msg,
+                             "setattr_future",
+                             f,
+                             (flux_free_f)flux_future_destroy) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    return flux_msglist_append (attrs->requests, msg);
 }
 
 /**
  ** Service
  **/
 
-void getattr_request_cb (flux_t *h,
-                         flux_msg_handler_t *mh,
-                         const flux_msg_t *msg,
-                         void *arg)
+static void getattr_request_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
 {
     attr_t *attrs = arg;
     const char *name;
@@ -415,10 +465,10 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-void setattr_request_cb (flux_t *h,
-                         flux_msg_handler_t *mh,
-                         const flux_msg_t *msg,
-                         void *arg)
+static void setattr_request_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
 {
     attr_t *attrs = arg;
     const char *name;
@@ -426,6 +476,7 @@ void setattr_request_cb (flux_t *h,
     int force = 0;
     struct registered_attr *reg;
     const char *errmsg = NULL;
+    const char *redirect;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -442,27 +493,37 @@ void setattr_request_cb (flux_t *h,
      * than the initial value.  Don't allow updates without the
      * ATTR_RUNTIME flag, unless forced.
      */
-    if (zhash_lookup (attrs->hash, name)) {
+    if (zhashx_lookup (attrs->hash, name)) {
         if (!force && !(reg->flags & ATTR_RUNTIME)) {
             errmsg = "attribute may not be updated";
             errno = EINVAL;
             goto error;
         }
     }
-    if (attr_set (attrs, name, val) < 0)
-        goto error;
-    if (flux_respond (h, msg, NULL) < 0)
-        FLUX_LOG_ERROR (h);
+    /* See note above redirect table.  If this attribute matches a redirect
+     * table entry, we act as a proxy for another service, unless the caller
+     * uses the force to confound us.
+     */
+    if ((redirect = setattr_redirect_lookup (name)) && !force) {
+        if (setattr_redirect (attrs, h, msg, redirect, name, val) < 0)
+            goto error;
+    }
+    else {
+        if (attr_set (attrs, name, val) < 0)
+            goto error;
+        if (flux_respond (h, msg, NULL) < 0)
+            FLUX_LOG_ERROR (h);
+    }
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         FLUX_LOG_ERROR (h);
 }
 
-void rmattr_request_cb (flux_t *h,
-                        flux_msg_handler_t *mh,
-                        const flux_msg_t *msg,
-                        void *arg)
+static void rmattr_request_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     attr_t *attrs = arg;
     const char *name;
@@ -479,10 +540,10 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-void lsattr_request_cb (flux_t *h,
-                        flux_msg_handler_t *mh,
-                        const flux_msg_t *msg,
-                        void *arg)
+static void lsattr_request_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     attr_t *attrs = arg;
     const char *name;
@@ -542,12 +603,19 @@ attr_t *attr_create (void)
 
     if (!(attrs = calloc (1, sizeof (*attrs))))
         return NULL;
-    if (!(attrs->hash = zhash_new ())) {
-        attr_destroy (attrs);
+    if (!(attrs->hash = zhashx_new ())) {
         errno = ENOMEM;
-        return NULL;
+        goto error;
     }
+    zhashx_set_key_destructor (attrs->hash, NULL);
+    zhashx_set_key_duplicator (attrs->hash, NULL);
+    zhashx_set_destructor (attrs->hash, entry_destructor);
+    if (!(attrs->requests = flux_msglist_create ()))
+        goto error;
     return attrs;
+error:
+    attr_destroy (attrs);
+    return NULL;
 }
 
 void attr_destroy (attr_t *attrs)
@@ -555,7 +623,8 @@ void attr_destroy (attr_t *attrs)
     if (attrs) {
         int saved_errno = errno;
         flux_msg_handler_delvec (attrs->handlers);
-        zhash_destroy (&attrs->hash);
+        zhashx_destroy (&attrs->hash);
+        flux_msglist_destroy (attrs->requests);
         free (attrs);
         errno = saved_errno;
 
