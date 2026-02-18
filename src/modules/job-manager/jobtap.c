@@ -2159,7 +2159,7 @@ int flux_jobtap_job_aux_delete (flux_plugin_t *p,
     if (!(job = jobtap_lookup_jobid (p, id)))
         return -1;
     if ((wrap = aux_wrap_get (p, job, false)))
-        aux_delete (&wrap->aux, val);
+        aux_delete_value (&wrap->aux, val);
     return 0;
 }
 

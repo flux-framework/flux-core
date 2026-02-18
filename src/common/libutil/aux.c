@@ -168,7 +168,7 @@ int aux_set (struct aux_item **head,
     return 0;
 }
 
-void aux_delete (struct aux_item **head, const void *val)
+void aux_delete_value (struct aux_item **head, const void *val)
 {
     struct aux_item *item;
 

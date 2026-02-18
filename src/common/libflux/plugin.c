@@ -271,7 +271,7 @@ void *flux_plugin_aux_get (flux_plugin_t *p, const char *key)
 
 void flux_plugin_aux_delete (flux_plugin_t *p, const void *val)
 {
-    return aux_delete (&p->aux, val);
+    return aux_delete_value (&p->aux, val);
 }
 
 const char *flux_plugin_strerror (flux_plugin_t *p)

@@ -190,25 +190,25 @@ void test_delete (void)
             BAIL_OUT ("aux_set failed on item %d", i);
 
     myfree_count = 0;
-    aux_delete (NULL, "foo");
+    aux_delete_value (NULL, "foo");
     ok (myfree_count == 0,
-        "aux_delete aux=NULL does nothing");
+        "aux_delete_value aux=NULL does nothing");
 
     myfree_count = 0;
-    aux_delete (&aux, NULL);
+    aux_delete_value (&aux, NULL);
     ok (myfree_count == 0,
-        "aux_delete val=NULL does nothing");
+        "aux_delete_value val=NULL does nothing");
 
     myfree_count = 0;
-    aux_delete (&aux, &i);
+    aux_delete_value (&aux, &i);
     ok (myfree_count == 0,
-        "aux_delete val=unknown does nothing");
+        "aux_delete_value val=unknown does nothing");
 
     myfree_count = 0;
     for (i = 0; i < 8; i++)
-        aux_delete (&aux, &items[i]);
+        aux_delete_value (&aux, &items[i]);
     ok (myfree_count == 8,
-        "aux_delete works with valid pointer");
+        "aux_delete_value works with valid pointer");
 }
 
 int main (int argc, char *argv[])
