@@ -447,14 +447,17 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on fake append (
 wait_kvs_value() {
 	key=$1
 	value=$2
-	i=0
-	while [ "$(flux kvs get --watch --count=1 $key 2> /dev/null)" != "$value" ] \
-	      && [ $i -lt ${KVS_WAIT_ITERS} ]
+	local i=0
+	while [ $i -lt ${KVS_WAIT_ITERS} ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    if [ "$(flux kvs get --watch --count=1 $key 2> /dev/null)" = "$value" ]
+	    then
+		return 0
+	    fi
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	return $(loophandlereturn $i)
+	return 1
 }
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/o --full doesnt detect change' '
@@ -478,14 +481,14 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/o --full doesnt detect
 # we are specifically testing against --watch
 wait_kvs_enoent() {
 	key=$1
-	i=0
-	while flux kvs get --watch --count=1 $key 2> /dev/null \
-	      && [ $i -lt ${KVS_WAIT_ITERS} ]
+	local i=0
+	while [ $i -lt ${KVS_WAIT_ITERS} ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    ! flux kvs get --watch --count=1 $key && return 0
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	return $(loophandlereturn $i)
+	return 1
 }
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/o --full doesnt detect ENOENT' '

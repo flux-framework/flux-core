@@ -516,14 +516,17 @@ test_expect_success 'kvs: module commit stats min is updated' '
 
 wait_versionwaiters() {
 	num=$1
-	i=0
-	while [ "$(flux module stats --parse namespace.primary.#versionwaiters kvs 2> /dev/null)" != "${num}" ] \
-	      && [ $i -lt ${KVS_WAIT_ITERS} ]
+	local i=0
+	while [ $i -lt ${KVS_WAIT_ITERS} ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    if [ "$(flux module stats --parse namespace.primary.#versionwaiters kvs 2> /dev/null)" = "${num}" ]
+	    then
+		return 0
+	    fi
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	return $(loophandlereturn $i)
+	return 1
 }
 
 # In order to test, wait for a version that will not happen
