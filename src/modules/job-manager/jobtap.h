@@ -156,9 +156,13 @@ void * flux_jobtap_job_aux_get (flux_plugin_t *p,
  *
  *  If `id` is FLUX_JOBTAP_CURRENT_JOB then the current job will be used.
  */
-int flux_jobtap_job_aux_delete (flux_plugin_t *p,
-                                flux_jobid_t id,
-                                void *val);
+FLUX_DEPRECATED(int flux_jobtap_job_aux_delete (flux_plugin_t *p,
+                                                flux_jobid_t id,
+                                                void *val));
+
+int flux_jobtap_job_aux_delete_value (flux_plugin_t *p,
+                                      flux_jobid_t id,
+                                      void *val);
 
 /*  Set a named flag on job `id`.
  */

@@ -2149,9 +2149,9 @@ void * flux_jobtap_job_aux_get (flux_plugin_t *p,
     return aux_get (wrap->aux, name);
 }
 
-int flux_jobtap_job_aux_delete (flux_plugin_t *p,
-                                flux_jobid_t id,
-                                void *val)
+int flux_jobtap_job_aux_delete_value (flux_plugin_t *p,
+                                      flux_jobid_t id,
+                                      void *val)
 {
     struct job *job;
     struct aux_wrap *wrap;
@@ -2161,6 +2161,14 @@ int flux_jobtap_job_aux_delete (flux_plugin_t *p,
     if ((wrap = aux_wrap_get (p, job, false)))
         aux_delete_value (&wrap->aux, val);
     return 0;
+}
+
+// deprecated
+int flux_jobtap_job_aux_delete (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                void *val)
+{
+    return flux_jobtap_job_aux_delete_value (p, id, val);
 }
 
 int flux_jobtap_job_set_flag (flux_plugin_t *p,
