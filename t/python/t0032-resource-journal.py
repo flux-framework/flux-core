@@ -31,12 +31,15 @@ class TestResourceJournalConsumer(unittest.TestCase):
 
         events = []
         while True:
-            # Read events until we see resource-define
             event = consumer.poll(timeout=5.0)
             events.append(event)
-            if event.name == "resource-define":
+            # The following `since=` test assumes at least 3 events in
+            # the events array. Ensure we've got that and exit this loop:
+            if len(events) == 3:
                 break
         consumer.stop()
+
+        self.assertTrue(len(events) >= 3)
 
         # events are ordered
         self.assertTrue(

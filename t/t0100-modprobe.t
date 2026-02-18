@@ -1013,13 +1013,14 @@ test_expect_success 'modprobe load/remove loads/removes same set of modules' '
 	test_must_fail grep heartbeat load-remove.out
 '
 # Note in the test below: resource, heartbeat may be removed in any order
-# so only the last 4 lines of output are compared, which should include
+# so those two modules are removed from output, leaving only:
 # kvs-watch, kvs, content-sqlite, and content
 test_expect_success 'modprobe load/remove loads/removes same set of modules' '
 	flux start -Sbroker.rc1_path= -Sbroker.rc3_path= \
 	    sh -c "flux modprobe load resource && flux modprobe remove --dry-run resource && flux modprobe remove all" >remove-dry-run.out 2>&1 &&
 	test_debug "cat remove-dry-run.out" &&
-	cat remove-dry-run.out | tail -4 > remove-dry-run-truncated.out &&
+	cat remove-dry-run.out | grep -Ev "heartbeat|resource" \
+	    > remove-dry-run-truncated.out &&
 	cat <<-EOF >remove-dry-run.expected &&
 	remove kvs-watch
 	remove kvs
