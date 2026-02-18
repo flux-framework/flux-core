@@ -474,7 +474,7 @@ static void jobtap_finalize (struct jobtap *jobtap, flux_plugin_t *p)
             struct aux_wrap *wrap;
 
             if ((wrap = aux_wrap_get (p, job, false)))
-                job_aux_delete (job, wrap);
+                job_aux_delete_value (job, wrap);
 
             job = zlistx_next (jobs);
         }

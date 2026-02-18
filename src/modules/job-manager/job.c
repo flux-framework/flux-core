@@ -164,7 +164,7 @@ void *job_aux_get (struct job *job, const char *name)
     return aux_get (job->aux, name);
 }
 
-void job_aux_delete (struct job *job, const void *val)
+void job_aux_delete_value (struct job *job, const void *val)
 {
     aux_delete_value (&job->aux, val);
 }
