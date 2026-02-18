@@ -1445,7 +1445,7 @@ void credit_output_cb (flux_subprocess_t *p, const char *stream)
         sprintf (cmpbuf, "abcdefghijklmnopqrstuvwxyz0123456789");
         ok (streq (outputbuf, cmpbuf),
             "flux_subprocess_read returned correct data: %s", outputbuf);
-        /* 26 (ABCs) + 10 (1-10) */
+        /* 26 (ABCs) + 10 (0-9) */
         ok (outputbuf_len == (26 + 10),
             "flux_subprocess_read returned correct amount of data: %d",
             outputbuf_len);
