@@ -50,13 +50,13 @@ test_expect_success NO_CHAIN_LINT 'kvs-watch stats reports active watcher' '
 # Check that stdin contains an integer on each line that
 # is one more than the integer on the previous line.
 test_monotonicity() {
-        local item
-        local prev=0
-        while read item; do
-                test $prev -gt 0 && test $item -ne $(($prev+1)) && return 1
-                prev=$item
-        done
-        return 0
+	local item
+	local prev=0
+	while read item; do
+		test $prev -gt 0 && test $item -ne $(($prev+1)) && return 1
+		prev=$item
+	done
+	return 0
 }
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch returns commit order' '
@@ -82,7 +82,7 @@ test_expect_success 'flux kvs get --watch fails on nonexistent key' '
 '
 
 test_expect_success 'flux kvs get --watch fails on nonexistent namespace' '
-	test_must_fail flux kvs  \
+	test_must_fail flux kvs	 \
 		get --namespace=noexist --watch --count=1 test.noexist
 '
 
@@ -156,87 +156,87 @@ test_expect_success 'flux kvs get --waitcreate works on existing key' '
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --waitcreate works on non-existent key' '
-        ! flux kvs get test.waitcreate2
-        flux kvs get --waitcreate test.waitcreate2 > waitcreate2.out &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put test.waitcreate2=2 &&
+	! flux kvs get test.waitcreate2
+	flux kvs get --waitcreate test.waitcreate2 > waitcreate2.out &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.waitcreate2=2 &&
 	$waitfile --count=1 --timeout=10 \
 		  --pattern="2" waitcreate2.out >/dev/null &&
-        wait $pid
+	wait $pid
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --waitcreate works on non-existent namespace' '
-        ! flux kvs get --namespace=ns_waitcreate test.waitcreate3
-        flux kvs get --namespace=ns_waitcreate --waitcreate \
-                     test.waitcreate3 > waitcreate3.out &
-        pid=$! &&
-        wait_watcherscount_nonzero ns_waitcreate &&
-        flux kvs namespace create ns_waitcreate &&
-        flux kvs put --namespace=ns_waitcreate test.waitcreate3=3 &&
+	! flux kvs get --namespace=ns_waitcreate test.waitcreate3
+	flux kvs get --namespace=ns_waitcreate --waitcreate \
+		     test.waitcreate3 > waitcreate3.out &
+	pid=$! &&
+	wait_watcherscount_nonzero ns_waitcreate &&
+	flux kvs namespace create ns_waitcreate &&
+	flux kvs put --namespace=ns_waitcreate test.waitcreate3=3 &&
 	$waitfile --count=1 --timeout=10 \
 		  --pattern="3" waitcreate3.out >/dev/null &&
-        wait $pid
+	wait $pid
 '
 
 test_expect_success 'flux_kvs_lookup with waitcreate can be canceled' '
-        $FLUX_BUILD_DIR/t/kvs/waitcreate_cancel test.not_a_key
+	$FLUX_BUILD_DIR/t/kvs/waitcreate_cancel test.not_a_key
 '
 
 # in --watch & --waitcreate tests, call wait_watcherscount_nonzero to
 # ensure background watcher has started, otherwise test can be racy
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get, basic --watch & --waitcreate works' '
-        ! flux kvs get --watch test.create_later
-        flux kvs get --watch --waitcreate --count=1 \
-                     test.create_later > waitcreate.out &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put test.create_later=0 &&
+	! flux kvs get --watch test.create_later
+	flux kvs get --watch --waitcreate --count=1 \
+		     test.create_later > waitcreate.out &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.create_later=0 &&
 	$waitfile --count=1 --timeout=10 \
 		  --pattern="0" waitcreate.out >/dev/null &&
-        wait $pid
+	wait $pid
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate & remove key works' '
-        ! flux kvs get --watch test.create_and_remove
-        flux kvs get --watch --waitcreate --count=2 \
-                     test.create_and_remove > waitcreate2.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put test.create_and_remove=0 &&
+	! flux kvs get --watch test.create_and_remove
+	flux kvs get --watch --waitcreate --count=2 \
+		     test.create_and_remove > waitcreate2.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.create_and_remove=0 &&
 	$waitfile --count=1 --timeout=10 \
 		  --pattern="0" waitcreate2.out >/dev/null &&
-        flux kvs unlink test.create_and_remove &&
-        ! wait $pid &&
-        grep "No such file or directory" waitcreate2.out
+	flux kvs unlink test.create_and_remove &&
+	! wait $pid &&
+	grep "No such file or directory" waitcreate2.out
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, create & remove namespace works' '
-        ! flux kvs get --namespace=ns_create_and_remove --watch test.ns_create_and_remove
-        flux kvs get --namespace=ns_create_and_remove --watch --waitcreate --count=2 \
-                     test.ns_create_and_remove > waitcreate4.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero ns_create_and_remove &&
-        flux kvs namespace create ns_create_and_remove &&
-        flux kvs put --namespace=ns_create_and_remove test.ns_create_and_remove=0 &&
-        $waitfile --count=1 --timeout=10 \
-                  --pattern="0" waitcreate4.out >/dev/null &&
-        flux kvs namespace remove ns_create_and_remove &&
-        ! wait $pid &&
-        grep "$(strerror_symbol ENOTSUP)" waitcreate4.out
+	! flux kvs get --namespace=ns_create_and_remove --watch test.ns_create_and_remove
+	flux kvs get --namespace=ns_create_and_remove --watch --waitcreate --count=2 \
+		     test.ns_create_and_remove > waitcreate4.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero ns_create_and_remove &&
+	flux kvs namespace create ns_create_and_remove &&
+	flux kvs put --namespace=ns_create_and_remove test.ns_create_and_remove=0 &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="0" waitcreate4.out >/dev/null &&
+	flux kvs namespace remove ns_create_and_remove &&
+	! wait $pid &&
+	grep "$(strerror_symbol ENOTSUP)" waitcreate4.out
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, doesnt work on removed namespace' '
-        flux kvs namespace create ns_remove &&
-        ! flux kvs get --namespace=ns_remove --watch test.ns_remove
-        flux kvs get --namespace=ns_remove --watch --waitcreate --count=1 \
-                     test.ns_remove > waitcreate5.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero ns_remove &&
-        flux kvs namespace remove ns_remove &&
-        ! wait $pid &&
-        grep "$(strerror_symbol ENOTSUP)" waitcreate5.out
+	flux kvs namespace create ns_remove &&
+	! flux kvs get --namespace=ns_remove --watch test.ns_remove
+	flux kvs get --namespace=ns_remove --watch --waitcreate --count=1 \
+		     test.ns_remove > waitcreate5.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero ns_remove &&
+	flux kvs namespace remove ns_remove &&
+	! wait $pid &&
+	grep "$(strerror_symbol ENOTSUP)" waitcreate5.out
 '
 
 #
@@ -244,23 +244,23 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, doesnt 
 #
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get: basic --watch & --append works' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.append.test="abc"
-        flux kvs get --watch --append --count=4 \
-                     test.append.test > append1.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put --append test.append.test="d" &&
-        flux kvs put --append test.append.test="e" &&
-        flux kvs put --append test.append.test="f" &&
-        wait $pid &&
+	flux kvs unlink -Rf test &&
+	flux kvs put test.append.test="abc"
+	flux kvs get --watch --append --count=4 \
+		     test.append.test > append1.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put --append test.append.test="d" &&
+	flux kvs put --append test.append.test="e" &&
+	flux kvs put --append test.append.test="f" &&
+	wait $pid &&
 	cat >expected <<-EOF &&
 abc
 d
 e
 f
 	EOF
-        test_cmp expected append1.out
+	test_cmp expected append1.out
 '
 
 # N.B. When the data is small `flux kvs put foo=...` create a "val" treeobj.
@@ -268,76 +268,76 @@ f
 largeval="abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get: basic --watch & --append works (initial valref)' '
-        flux kvs unlink -Rf test &&
-        echo -n ${largeval} | flux kvs put --raw test.append.test=- &&
-        flux kvs get --treeobj test.append.test | grep valref
-        flux kvs get --watch --append --count=4 \
-                     test.append.test > append1.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put --append test.append.test="1" &&
-        flux kvs put --append test.append.test="2" &&
-        flux kvs put --append test.append.test="3" &&
-        wait $pid &&
+	flux kvs unlink -Rf test &&
+	echo -n ${largeval} | flux kvs put --raw test.append.test=- &&
+	flux kvs get --treeobj test.append.test | grep valref
+	flux kvs get --watch --append --count=4 \
+		     test.append.test > append1.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put --append test.append.test="1" &&
+	flux kvs put --append test.append.test="2" &&
+	flux kvs put --append test.append.test="3" &&
+	wait $pid &&
 	cat >expected <<-EOF &&
 abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz
 1
 2
 3
 	EOF
-        test_cmp expected append1.out
+	test_cmp expected append1.out
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works with empty string' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.append.test="abc"
-        flux kvs get --watch --append --count=4 \
-                     test.append.test > append2.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put --append test.append.test="d" &&
-        flux kvs put --append test.append.test="e" &&
-        flux kvs put --append test.append.test= &&
-        wait $pid &&
+	flux kvs unlink -Rf test &&
+	flux kvs put test.append.test="abc"
+	flux kvs get --watch --append --count=4 \
+		     test.append.test > append2.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put --append test.append.test="d" &&
+	flux kvs put --append test.append.test="e" &&
+	flux kvs put --append test.append.test= &&
+	wait $pid &&
 	cat >expected <<-EOF &&
 abc
 d
 e
 	EOF
-        test_cmp expected append2.out
+	test_cmp expected append2.out
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works with --waitcreate' '
-        flux kvs unlink -Rf test
-        flux kvs get --watch --waitcreate --append --count=4 \
-                     test.append.test > append3.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put test.append.test="abc" &&
-        flux kvs put --append test.append.test="d" &&
-        flux kvs put --append test.append.test="e" &&
-        flux kvs put --append test.append.test="f" &&
-        wait $pid &&
+	flux kvs unlink -Rf test
+	flux kvs get --watch --waitcreate --append --count=4 \
+		     test.append.test > append3.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.append.test="abc" &&
+	flux kvs put --append test.append.test="d" &&
+	flux kvs put --append test.append.test="e" &&
+	flux kvs put --append test.append.test="f" &&
+	wait $pid &&
 	cat >expected <<-EOF &&
 abc
 d
 e
 f
 	EOF
-        test_cmp expected append3.out
+	test_cmp expected append3.out
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works with multiple appends in a transaction' '
-        flux kvs unlink -Rf test
-        flux kvs get --watch --waitcreate --append --count=7 \
-                     test.append.test > append4.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put test.append.test="abc" &&
-        flux kvs put --append test.append.test="d" test.append.test="e" &&
-        flux kvs put --append test.append.test="f" test.append.test="g" &&
-        flux kvs put --append test.append.test="h" test.append.test="i" &&
-        wait $pid &&
+	flux kvs unlink -Rf test
+	flux kvs get --watch --waitcreate --append --count=7 \
+		     test.append.test > append4.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.append.test="abc" &&
+	flux kvs put --append test.append.test="d" test.append.test="e" &&
+	flux kvs put --append test.append.test="f" test.append.test="g" &&
+	flux kvs put --append test.append.test="h" test.append.test="i" &&
+	wait $pid &&
 	cat >expected <<-EOF &&
 abc
 d
@@ -347,92 +347,92 @@ g
 h
 i
 	EOF
-        test_cmp expected append4.out
+	test_cmp expected append4.out
 '
 
 test_expect_success 'flux kvs get: --append fails on non-value' '
-        flux kvs unlink -Rf test &&
-        flux kvs mkdir test.append &&
-        ! flux kvs get --watch --append --count=1 test.append
+	flux kvs unlink -Rf test &&
+	flux kvs mkdir test.append &&
+	! flux kvs get --watch --append --count=1 test.append
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get: --append & --waitcreate fails on non-value' '
-        flux kvs unlink -Rf test
-        flux kvs get --watch --waitcreate --append --count=1 test.append &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs mkdir test.append &&
-        ! wait $pid
+	flux kvs unlink -Rf test
+	flux kvs get --watch --waitcreate --append --count=1 test.append &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs mkdir test.append &&
+	! wait $pid
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on removed key' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.append.test="abc"
-        flux kvs get --watch --append --count=4 \
-                     test.append.test > append5.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put --append test.append.test="d" &&
-        flux kvs put --append test.append.test="e" &&
-        flux kvs unlink test.append.test &&
-        ! wait $pid &&
+	flux kvs unlink -Rf test &&
+	flux kvs put test.append.test="abc"
+	flux kvs get --watch --append --count=4 \
+		     test.append.test > append5.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put --append test.append.test="d" &&
+	flux kvs put --append test.append.test="e" &&
+	flux kvs unlink test.append.test &&
+	! wait $pid &&
 	cat >expected <<-EOF &&
 abc
 d
 e
 flux-kvs: test.append.test: No such file or directory
 	EOF
-        test_cmp expected append5.out
+	test_cmp expected append5.out
 '
 
 # N.B. valref treeobj expected, but treeobj is now a dirref
 test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on change to non-value' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.append.test="abc"
-        flux kvs get --watch --append --count=4 \
-                     test.append.test > append6.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put --append test.append.test="d" &&
-        flux kvs put --append test.append.test="e" &&
-        flux kvs mkdir test.append.test &&
-        ! wait $pid &&
+	flux kvs unlink -Rf test &&
+	flux kvs put test.append.test="abc"
+	flux kvs get --watch --append --count=4 \
+		     test.append.test > append6.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put --append test.append.test="d" &&
+	flux kvs put --append test.append.test="e" &&
+	flux kvs mkdir test.append.test &&
+	! wait $pid &&
 	cat >expected <<-EOF &&
 abc
 d
 e
 flux-kvs: test.append.test: Invalid argument
 	EOF
-        test_cmp expected append6.out
+	test_cmp expected append6.out
 '
 
 # N.B. valref treeobj expected, but treeobj is now a val
 test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on fake append' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.append.test="abc"
-        flux kvs get --watch --append --count=4 \
-                     test.append.test > append7.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put --append test.append.test="d" &&
-        flux kvs put --append test.append.test="e" &&
-        flux kvs put test.append.test="abcdef" &&
-        test_must_fail wait $pid
+	flux kvs unlink -Rf test &&
+	flux kvs put test.append.test="abc"
+	flux kvs get --watch --append --count=4 \
+		     test.append.test > append7.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put --append test.append.test="d" &&
+	flux kvs put --append test.append.test="e" &&
+	flux kvs put test.append.test="abcdef" &&
+	test_must_fail wait $pid
 '
 
 # N.B. valref treeobj now has fewer entries
 test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on fake append (valref)' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.append.test="abc"
-        flux kvs get --watch --append --count=4 \
-                     test.append.test > append7.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put --append test.append.test="d" &&
-        flux kvs put --append test.append.test="e" &&
-        echo -n ${largeval} | flux kvs put --raw test.append.test=- &&
-        flux kvs get --treeobj test.append.test | grep valref &&
-        test_must_fail wait $pid
+	flux kvs unlink -Rf test &&
+	flux kvs put test.append.test="abc"
+	flux kvs get --watch --append --count=4 \
+		     test.append.test > append7.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put --append test.append.test="d" &&
+	flux kvs put --append test.append.test="e" &&
+	echo -n ${largeval} | flux kvs put --raw test.append.test=- &&
+	flux kvs get --treeobj test.append.test | grep valref &&
+	test_must_fail wait $pid
 '
 
 # full checks
@@ -445,102 +445,102 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on fake append (
 # --watch.  Note that we can't use waitfile or flux kvs get here, b/c
 # we are specifically testing against --watch.
 wait_kvs_value() {
-        key=$1
-        value=$2
-        i=0
-        while [ "$(flux kvs get --watch --count=1 $key 2> /dev/null)" != "$value" ] \
-              && [ $i -lt ${KVS_WAIT_ITERS} ]
-        do
-                sleep 0.1
-                i=$((i + 1))
-        done
-        return $(loophandlereturn $i)
+	key=$1
+	value=$2
+	i=0
+	while [ "$(flux kvs get --watch --count=1 $key 2> /dev/null)" != "$value" ] \
+	      && [ $i -lt ${KVS_WAIT_ITERS} ]
+	do
+		sleep 0.1
+		i=$((i + 1))
+	done
+	return $(loophandlereturn $i)
 }
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/o --full doesnt detect change' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.dir_orig.a="abc"
-        flux kvs get --watch --count=2 test.dir_orig.a > full1.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put test.dir_new.a="xyz" &&
-        DIRREF=$(flux kvs get --treeobj test.dir_new) &&
-        flux kvs put --treeobj test.dir_orig="${DIRREF}" &&
-        wait_kvs_value test.dir_orig.a xyz &&
-        flux kvs put test.dir_orig.a="def" &&
-        $waitfile --count=1 --timeout=10 \
-                  --pattern="def" full1.out >/dev/null &&
-        wait $pid
+	flux kvs unlink -Rf test &&
+	flux kvs put test.dir_orig.a="abc"
+	flux kvs get --watch --count=2 test.dir_orig.a > full1.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.dir_new.a="xyz" &&
+	DIRREF=$(flux kvs get --treeobj test.dir_new) &&
+	flux kvs put --treeobj test.dir_orig="${DIRREF}" &&
+	wait_kvs_value test.dir_orig.a xyz &&
+	flux kvs put test.dir_orig.a="def" &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="def" full1.out >/dev/null &&
+	wait $pid
 '
 
 # to handle racy issues, wait until ENOENT has been seen by a get
 # --watch.  Note that we can't use waitfile or flux kvs get here, b/c
 # we are specifically testing against --watch
 wait_kvs_enoent() {
-        key=$1
-        i=0
-        while flux kvs get --watch --count=1 $key 2> /dev/null \
-              && [ $i -lt ${KVS_WAIT_ITERS} ]
-        do
-                sleep 0.1
-                i=$((i + 1))
-        done
-        return $(loophandlereturn $i)
+	key=$1
+	i=0
+	while flux kvs get --watch --count=1 $key 2> /dev/null \
+	      && [ $i -lt ${KVS_WAIT_ITERS} ]
+	do
+		sleep 0.1
+		i=$((i + 1))
+	done
+	return $(loophandlereturn $i)
 }
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/o --full doesnt detect ENOENT' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.dir_orig.a="abc"
-        flux kvs get --watch --count=2 test.dir_orig.a > full2.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put test.dir_new.b="xyz" &&
-        DIRREF=$(flux kvs get --treeobj test.dir_new) &&
-        flux kvs put --treeobj test.dir_orig="${DIRREF}" &&
-        wait_kvs_enoent test.dir_orig.a &&
-        flux kvs put test.dir_orig.a="def" &&
-        $waitfile --count=1 --timeout=10 \
-                  --pattern="def" full2.out >/dev/null &&
-        wait $pid
+	flux kvs unlink -Rf test &&
+	flux kvs put test.dir_orig.a="abc"
+	flux kvs get --watch --count=2 test.dir_orig.a > full2.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.dir_new.b="xyz" &&
+	DIRREF=$(flux kvs get --treeobj test.dir_new) &&
+	flux kvs put --treeobj test.dir_orig="${DIRREF}" &&
+	wait_kvs_enoent test.dir_orig.a &&
+	flux kvs put test.dir_orig.a="def" &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="def" full2.out >/dev/null &&
+	wait $pid
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/ --full detects change' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.dir_orig.a="abc"
-        flux kvs get --watch --full --count=2 test.dir_orig.a > full3.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put test.dir_new.a="xyz" &&
-        DIRREF=$(flux kvs get --treeobj test.dir_new) &&
-        flux kvs put --treeobj test.dir_orig="${DIRREF}" &&
-        $waitfile --count=1 --timeout=10 \
-                  --pattern="xyz" full3.out >/dev/null &&
-        wait $pid
+	flux kvs unlink -Rf test &&
+	flux kvs put test.dir_orig.a="abc"
+	flux kvs get --watch --full --count=2 test.dir_orig.a > full3.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.dir_new.a="xyz" &&
+	DIRREF=$(flux kvs get --treeobj test.dir_new) &&
+	flux kvs put --treeobj test.dir_orig="${DIRREF}" &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="xyz" full3.out >/dev/null &&
+	wait $pid
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/ --full detects ENOENT' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.dir_orig.a="abc"
-        flux kvs get --watch --full --count=2 test.dir_orig.a > full4.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put test.dir_new.b="xyz" &&
-        DIRREF=$(flux kvs get --treeobj test.dir_new) &&
-        flux kvs put --treeobj test.dir_orig="${DIRREF}" &&
-        ! wait $pid
+	flux kvs unlink -Rf test &&
+	flux kvs put test.dir_orig.a="abc"
+	flux kvs get --watch --full --count=2 test.dir_orig.a > full4.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.dir_new.b="xyz" &&
+	DIRREF=$(flux kvs get --treeobj test.dir_new) &&
+	flux kvs put --treeobj test.dir_orig="${DIRREF}" &&
+	! wait $pid
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/ --full works with changing data sizes' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.dir.a="abc"
-        flux kvs get --watch --full --count=5 test.dir.a > full5.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put test.dir.a="abcdefghijklmnopqrstuvwxyz" &&
-        flux kvs put test.dir.a="xyz" &&
-        flux kvs put test.dir.a="abcdefghijklmnopqrstuvwxyz" &&
-        flux kvs put test.dir.a="abc" &&
-        wait $pid &&
+	flux kvs unlink -Rf test &&
+	flux kvs put test.dir.a="abc"
+	flux kvs get --watch --full --count=5 test.dir.a > full5.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.dir.a="abcdefghijklmnopqrstuvwxyz" &&
+	flux kvs put test.dir.a="xyz" &&
+	flux kvs put test.dir.a="abcdefghijklmnopqrstuvwxyz" &&
+	flux kvs put test.dir.a="abc" &&
+	wait $pid &&
 	cat >expected <<-EOF &&
 abc
 abcdefghijklmnopqrstuvwxyz
@@ -552,16 +552,16 @@ abc
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/ --full doesnt work with non-changing data' '
-        flux kvs unlink -Rf test &&
-        flux kvs put test.dir.a="abc"
-        flux kvs get --watch --full --count=3 test.dir.a > full6.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put test.dir.a="abc" &&
-        flux kvs put test.dir.a="abcdefghijklmnopqrstuvwxyz" &&
-        flux kvs put test.dir.a="abcdefghijklmnopqrstuvwxyz" &&
-        flux kvs put test.dir.a="xyz" &&
-        wait $pid &&
+	flux kvs unlink -Rf test &&
+	flux kvs put test.dir.a="abc"
+	flux kvs get --watch --full --count=3 test.dir.a > full6.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.dir.a="abc" &&
+	flux kvs put test.dir.a="abcdefghijklmnopqrstuvwxyz" &&
+	flux kvs put test.dir.a="abcdefghijklmnopqrstuvwxyz" &&
+	flux kvs put test.dir.a="xyz" &&
+	wait $pid &&
 	cat >expected <<-EOF &&
 abc
 abcdefghijklmnopqrstuvwxyz
@@ -571,14 +571,14 @@ xyz
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/ --full & --waitcreate works' '
-        flux kvs unlink -Rf test
-        flux kvs get --watch --full --waitcreate --count=3 test.dir.a > full7.out 2>&1 &
-        pid=$! &&
-        wait_watcherscount_nonzero primary &&
-        flux kvs put test.dir.a="abc" &&
-        flux kvs put test.dir.a="def" &&
-        flux kvs put test.dir.a="xyz" &&
-        wait $pid &&
+	flux kvs unlink -Rf test
+	flux kvs get --watch --full --waitcreate --count=3 test.dir.a > full7.out 2>&1 &
+	pid=$! &&
+	wait_watcherscount_nonzero primary &&
+	flux kvs put test.dir.a="abc" &&
+	flux kvs put test.dir.a="def" &&
+	flux kvs put test.dir.a="xyz" &&
+	wait $pid &&
 	cat >expected <<-EOF &&
 abc
 def
@@ -591,15 +591,15 @@ xyz
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch, normalized key matching works ' '
 	flux kvs namespace create testnorm1 &&
-        flux kvs put --namespace=testnorm1 testnormkey1.a=1
-        flux kvs get --namespace=testnorm1 --watch --count=2 \
-                     testnormkey1...a > norm1.out &
-        pid=$! &&
-        wait_watcherscount_nonzero testnorm1 &&
-        flux kvs put --namespace=testnorm1 testnormkey1.....a=2 &&
+	flux kvs put --namespace=testnorm1 testnormkey1.a=1
+	flux kvs get --namespace=testnorm1 --watch --count=2 \
+		     testnormkey1...a > norm1.out &
+	pid=$! &&
+	wait_watcherscount_nonzero testnorm1 &&
+	flux kvs put --namespace=testnorm1 testnormkey1.....a=2 &&
 	$waitfile --count=2 --timeout=10 \
 		  --pattern="[1-2]" norm1.out >/dev/null &&
-        wait $pid
+	wait $pid
 '
 
 #
@@ -679,7 +679,7 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --stream and --waitcreate works 
 	flux kvs put --namespace=ns_stream test.stream.c=44 &&
 	$waitfile --count=1 --timeout=10 \
 		  --pattern="44" stream8.out >/dev/null &&
-        wait $pid
+	wait $pid
 '
 
 test_expect_success 'flux kvs eventlog get --stream works' '
@@ -728,7 +728,7 @@ test_expect_success NO_CHAIN_LINT 'watch-initial-sentinel works' '
 	$waitfile --count=1 --timeout=10 \
 		  --pattern="43" sentinel1.out >/dev/null &&
 	kill -s USR1 $pid &&
-        wait $pid &&
+	wait $pid &&
 	test_debug "cat sentinel1.out" &&
 	echo 1 > sentinel1.exp &&
 	echo 2 >> sentinel1.exp &&
@@ -753,7 +753,7 @@ test_expect_success NO_CHAIN_LINT 'watch-initial-sentinel works w/ WAITCREATE' '
 	$waitfile --count=1 --timeout=10 \
 		  --pattern="42" sentinel2.out >/dev/null &&
 	kill -s USR1 $pid &&
-        wait $pid &&
+	wait $pid &&
 	test_debug "cat sentinel2.out" &&
 	echo sentinel > sentinel2.exp &&
 	echo 1 >> sentinel2.exp &&
@@ -771,7 +771,7 @@ test_expect_success NO_CHAIN_LINT 'watch-initial-sentinel basic works (get_raw)'
 	$waitfile --count=1 --timeout=10 \
 		  --pattern="42" sentinel3.out >/dev/null &&
 	kill -s USR1 $pid &&
-        wait $pid &&
+	wait $pid &&
 	test_debug "cat sentinel3.out" &&
 	echo 1 > sentinel3.exp &&
 	echo sentinel >> sentinel3.exp &&

@@ -501,8 +501,8 @@ test_expect_success NO_CHAIN_LINT 'eventlog-watch-initial-sentinel works w/ WAIT
 	wait_watchers_nonzero "guest_watchers" &&
 	guestns=$(flux job namespace $jobid) &&
 	wait_watcherscount_nonzero $guestns &&
-        flux kvs eventlog append --namespace=${guestns} foobar hello &&
-        flux kvs eventlog append --namespace=${guestns} foobar goodbye &&
+	flux kvs eventlog append --namespace=${guestns} foobar hello &&
+	flux kvs eventlog append --namespace=${guestns} foobar goodbye &&
 	$waitfile --count=1 --timeout=10 \
 		  --pattern="goodbye" sentinel5.out >/dev/null &&
 	test_debug "cat sentinel5.out" &&

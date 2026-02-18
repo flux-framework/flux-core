@@ -486,12 +486,12 @@ test_expect_success 'kvs: 0 pending requests at end of tests before module remov
 #
 
 test_expect_success 'kvs: module stats returns reasonable transaction stats' '
-        commitdata=$(flux module stats -p transaction-opcount.commit kvs) &&
-        echo $commitdata | jq -e ".count > 0" &&
-        echo $commitdata | jq -e ".min > 0" &&
-        echo $commitdata | jq -e ".max > 0" &&
-        echo $commitdata | jq -e ".mean > 0.0" &&
-        echo $commitdata | jq -e ".stddev >= 0.0"
+	commitdata=$(flux module stats -p transaction-opcount.commit kvs) &&
+	echo $commitdata | jq -e ".count > 0" &&
+	echo $commitdata | jq -e ".min > 0" &&
+	echo $commitdata | jq -e ".max > 0" &&
+	echo $commitdata | jq -e ".mean > 0.0" &&
+	echo $commitdata | jq -e ".stddev >= 0.0"
 '
 
 #
@@ -504,8 +504,8 @@ test_expect_success 'kvs: test empty kvs txn works' '
 '
 
 test_expect_success 'kvs: module commit stats min is updated' '
-        commitdata=$(flux module stats -p transaction-opcount.commit kvs) &&
-        echo $commitdata | jq -e ".min == 0"
+	commitdata=$(flux module stats -p transaction-opcount.commit kvs) &&
+	echo $commitdata | jq -e ".min == 0"
 '
 
 #
