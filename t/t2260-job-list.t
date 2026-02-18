@@ -861,7 +861,7 @@ test_expect_success 'job stats lists jobs in correct state (mix)' '
 # Note: these wait-state tests must be before all jobs are canceled below
 test_expect_success 'flux job list-ids works with --wait-state' '
 	id=`head -n 1 pending.ids` &&
-	flux job list-ids --wait-state=sched $id | jq -e ".state == 8"  &&
+	flux job list-ids --wait-state=sched $id | jq -e ".state == 8"	&&
 	id=`head -n 1 running.ids` &&
 	flux job list-ids --wait-state=sched $id > /dev/null &&
 	flux job list-ids --wait-state=run $id | jq -e ".state == 16" &&
@@ -2411,7 +2411,7 @@ wait_id_inactive() {
 }
 
 test_expect_success 'load jobspec-update test plugin' '
-        flux jobtap load --remove=all ${PLUGINPATH}/jobspec-update-job-list.so
+	flux jobtap load --remove=all ${PLUGINPATH}/jobspec-update-job-list.so
 '
 
 test_expect_success 'run job in the default queue' '
@@ -2575,7 +2575,7 @@ test_expect_success 'job-list returns expected resource changes after reload' '
 '
 
 test_expect_success 'remove jobtap plugins' '
-        flux jobtap remove all
+	flux jobtap remove all
 '
 
 #
