@@ -45,19 +45,8 @@ submit_job_wait() {
 
 wait_watchers_nonzero() {
 	local str=$1
-	local i=0
-	while (! flux module stats --parse $str job-info > /dev/null 2>&1 \
-		|| [ "$(flux module stats --parse $str job-info 2> /dev/null)" = "0" ]) \
-		&& [ $i -lt 50 ]
-	do
-		sleep 0.1
-		i=$((i + 1))
-	done
-	if [ "$i" -eq "50" ]
-	then
-		return 1
-	fi
-	return 0
+	test_wait_until "flux module stats --parse $str job-info \
+		&& [ \$(flux module stats --parse $str job-info 2> /dev/null) -ne 0 ]"
 }
 
 get_timestamp_field() {

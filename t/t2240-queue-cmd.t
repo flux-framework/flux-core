@@ -458,18 +458,7 @@ test_expect_success 'jobs may be submitted to either queue' '
 wait_state() {
 	local jobid=$1
 	local state=$2
-	local i=0
-	while [ "$(flux jobs -no {state} ${jobid})" != "${state}" ] \
-		  && [ $i -lt 50 ]
-	do
-		sleep 0.1
-		i=$((i + 1))
-	done
-	if [ "$i" -eq "50" ]
-	then
-	    return 1
-	fi
-	return 0
+	test_wait_until "[ \"\$(flux jobs -no {state} ${jobid})\" = \"${state}\" ]"
 }
 
 test_expect_success 'submitted jobs are not running' '

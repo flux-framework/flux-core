@@ -29,15 +29,11 @@ wait_inactive_count() {
 	local how=$1
 	local target=$2
 	local tries=$3
-	local count
-	while test $tries -gt 0; do
-		count=$(inactive_count $how)
-		echo $count inactive jobs >&2
-		test $count -eq $target && return 0
-		sleep 0.25
-		tries=$(($tries-1))
-	done
-	return 1
+
+	test_wait_until -i $tries -s 0.25 "
+		count=\$(inactive_count $how)
+		test \$count -eq $target
+	"
 }
 
 #

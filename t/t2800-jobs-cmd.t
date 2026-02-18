@@ -1227,18 +1227,7 @@ test_expect_success 'update project and bank in pending jobs' '
 '
 
 wait_project_bank_synced() {
-	local i=0
-	while [ "$(flux jobs -f pending -o {project} | grep foo | wc -l)" != "$(job_list_state_count sched)" ] \
-		   && [ $i -lt 50 ]
-	do
-		sleep 0.1
-		i=$((i + 1))
-	done
-	if [ "$i" -eq "50" ]
-	then
-		return 1
-	fi
-	return 0
+	test_wait_until "[ \$(flux jobs -f pending -o {project} | grep -c foo) -eq \$(job_list_state_count sched) ]"
 }
 
 # can be racy, need to wait until `job-list` module definitely has
