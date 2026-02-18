@@ -122,8 +122,8 @@ void test_invalid_args ()
         "flux_plugin_aux_get (p, NULL) returns EINVAL");
     ok (flux_plugin_aux_get (p, "foo") == NULL && errno == ENOENT,
         "flux_plugin_aux_get (p, 'foo') returns ENOENT");
-    lives_ok ({flux_plugin_aux_delete (p, NULL);},
-        "flux_plugin_aux_delete (p, NULL) doesn't crash");
+    lives_ok ({flux_plugin_aux_delete_value (p, NULL);},
+        "flux_plugin_aux_delete_value (p, NULL) doesn't crash");
 
     ok (flux_plugin_add_handler (NULL, "foo.*", foo, NULL) < 0 && errno == EINVAL,
         "flux_plugin_add_handler (NULL, ...) returns EINVAL");
