@@ -13,6 +13,7 @@
 
 #include <sys/types.h>
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "auth.h"
 
@@ -58,6 +59,8 @@ void usock_server_destroy (struct usock_server *server);
 void usock_server_set_acceptor (struct usock_server *server,
                                 usock_acceptor_f cb,
                                 void *arg);
+
+json_t *usock_server_stats_get (struct usock_server *server);
 
 // accessor for start/stop/ref/unref
 flux_watcher_t *usock_server_listen_watcher (struct usock_server *server);

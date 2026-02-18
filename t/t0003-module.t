@@ -153,57 +153,55 @@ test_expect_success 'flux module debug --clear clears debug flags' '
 '
 
 # test stats
+# Choose a module that doesn't internally override stats-get
+REALMOD_DEFSTATS=config
 
 test_expect_success 'flux module stats gets comms statistics' '
-	flux module stats $REALMOD >comms.stats
+	flux module stats $REALMOD_DEFSTATS >comms.stats
 '
 
-test_expect_success 'flux module stats --parse tx.event counts events' '
-	EVENT_TX=$(flux module stats --parse tx.event $REALMOD) &&
-	flux event pub xyz &&
-	EVENT_TX2=$(flux module stats --parse tx.event $REALMOD) &&
-	test "$EVENT_TX" = $((${EVENT_TX2}-1))
+test_expect_success 'flux module stats --parse rx.request counts requests' '
+	count=$(flux module stats --parse rx.request $REALMOD_DEFSTATS) &&
+	flux ping --count=1 $REALMOD_DEFSTATS &&
+	count2=$(flux module stats --parse rx.request $REALMOD_DEFSTATS) &&
+	test $count2 -gt $count
 '
 
 test_expect_success 'flux module stats --clear works' '
-	flux event pub xyz &&
-	flux module stats --clear $REALMOD &&
-	EVENT_TX2=$(flux module stats --parse tx.event $REALMOD) &&
-	test "$EVENT_TX" = 0
+	count=$(flux module stats --parse rx.request $REALMOD_DEFSTATS) &&
+	flux module stats --clear $REALMOD_DEFSTATS &&
+	count2=$(flux module stats --parse rx.request $REALMOD_DEFSTATS) &&
+	test $count2 -lt $count
 '
 
 test_expect_success 'flux module stats --clear-all works' '
-	flux event pub xyz &&
-	flux module stats --clear-all $REALMOD &&
-	EVENT_TX2=$(flux module stats --parse tx.event $REALMOD) &&
-	test "$EVENT_TX" = 0
+	count=$(flux module stats --parse rx.request $REALMOD_DEFSTATS) &&
+	flux module stats --clear-all $REALMOD_DEFSTATS &&
+	count2=$(flux module stats --parse rx.request $REALMOD_DEFSTATS) &&
+	test $count2 -lt $count
 '
 test_expect_success 'flux module stats --scale works' '
-	flux event pub xyz &&
-	EVENT_TX=$(flux module stats --parse tx.event $REALMOD) &&
-	EVENT_TX2=$(flux module stats --parse tx.event --scale=2 $REALMOD) &&
-	test "$EVENT_TX2" -eq $((${EVENT_TX}*2))
+	flux module stats --parse tx.request --scale=2 $REALMOD_DEFSTATS
 '
-
 test_expect_success 'flux module stats --rusage works' '
-	flux module stats --rusage $REALMOD
+	flux module stats --rusage $REALMOD_DEFSTATS
 '
 test_expect_success 'flux module stats -Rself works' '
-	flux module stats -Rself $REALMOD
+	flux module stats -Rself $REALMOD_DEFSTATS
 '
 test_expect_success 'flux module stats --rusage=children works' '
-	flux module stats --rusage=children $REALMOD
+	flux module stats --rusage=children $REALMOD_DEFSTATS
 '
 # RUSAGE_THREAD is a non-portable GNU extension
 test_expect_success 'flux module stats --rusage=thread might work :-)' '
-	test_might_fail flux module stats --rusage=thread $REALMOD
+	test_might_fail flux module stats --rusage=thread $REALMOD_DEFSTATS
 '
 test_expect_success 'flux module stats --rusage=badopt fails' '
-	test_must_fail flux module stats --rusage=badopt $REALMOD
+	test_must_fail flux module stats --rusage=badopt $REALMOD_DEFSTATS
 '
 
 test_expect_success 'flux module stats --rusage --parse maxrss works' '
-	RSS=$(flux module stats --rusage --parse maxrss $REALMOD)
+	RSS=$(flux module stats --rusage --parse maxrss $REALMOD_DEFSTATS)
 '
 
 test_expect_success 'flux module stats with no args is an error' '
@@ -343,6 +341,10 @@ test_expect_success 'but only logging with broker.module-nopanic=1' '
 		&& while flux module stats testmod; do true; done" \
 	    2>nopanic.err &&
 	grep "module runtime failure" nopanic.err
+'
+
+test_expect_success 'flux module stats connector-local works' '
+	flux module stats connector-local
 '
 
 test_done

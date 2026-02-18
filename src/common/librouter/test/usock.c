@@ -108,6 +108,10 @@ void server_invalid (void)
     ok (usock_server_create (r, NULL, 0666) == NULL && errno == EINVAL,
         "usock_server_create sockpath=NULL fails with EINVAL");
 
+    errno = 0;
+    ok (usock_server_stats_get (NULL) == NULL && errno == EINVAL,
+        "usock_server_stats_get server=NULL fails with EINVAL");
+
     flux_reactor_destroy (r);
 }
 

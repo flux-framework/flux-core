@@ -48,6 +48,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <uuid.h>
+#include <jansson.h>
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -71,6 +72,7 @@ struct usock_server {
     flux_watcher_t *w;
     zlist_t *connections;
     usock_acceptor_f acceptor;
+    int connects;
     void *arg;
 };
 
@@ -82,9 +84,13 @@ struct usock_io {
 
 struct usock_conn {
     struct flux_msg_cred cred;
+    pid_t pid;
     struct usock_io in;
     struct usock_io out;
     zlist_t *outqueue;
+
+    int txcount;
+    int rxcount;
 
     usock_conn_close_f close_cb;
     void *close_arg;
@@ -225,6 +231,7 @@ static void conn_read_cb (flux_reactor_t *r,
             if (conn->recv_cb)
                 conn->recv_cb (conn, msg, conn->recv_arg);
             flux_msg_destroy (msg);
+            conn->txcount++;
         }
     }
     return;
@@ -276,6 +283,7 @@ static void conn_write_cb (flux_reactor_t *r,
                 (void) conn_outqueue_drop (conn);
                 if (zlist_size (conn->outqueue) == 0)
                     flux_watcher_stop (conn->out.w);
+                conn->rxcount++;
             }
         }
     }
@@ -388,7 +396,7 @@ void usock_server_destroy (struct usock_server *server)
     }
 }
 
-static int usock_get_cred (int fd, struct flux_msg_cred *cred)
+static int usock_get_cred (int fd, struct flux_msg_cred *cred, pid_t *pid)
 {
 
     if (fd < 0 || !cred) {
@@ -409,6 +417,8 @@ static int usock_get_cred (int fd, struct flux_msg_cred *cred)
         return -1;
     }
     cred->userid = ucred.uid;
+    if (pid)
+        *pid = ucred.pid;
 #elif defined(LOCAL_PEERCRED)
     struct xucred ucred;
     socklen_t crlen = sizeof (ucred);
@@ -419,6 +429,8 @@ static int usock_get_cred (int fd, struct flux_msg_cred *cred)
         return -1;
     }
     cred->userid = ucred.cr_uid;
+    if (pid)
+        *pid = -1;
 #else
 #error Neither SO_PEERCRED nor LOCAL_PEERCRED are defined
 #endif
@@ -488,7 +500,7 @@ static struct usock_conn *server_accept (struct usock_server *server,
     }
 #endif
     if (!(conn = usock_conn_create (r, cfd, cfd))
-        || usock_get_cred (cfd, &conn->cred) < 0) {
+        || usock_get_cred (cfd, &conn->cred, &conn->pid) < 0) {
         ERRNO_SAFE_WRAP (close, cfd);
         return NULL;
     }
@@ -539,6 +551,7 @@ static void server_cb (flux_reactor_t *r,
             return;
         }
         conn->server = server; // now decref will also delist
+        server->connects++;
 
         /* Acceptor should call (or arrange to later call) either
          * usock_conn_accept() or usock_conn_reject() to complete
@@ -811,6 +824,51 @@ void usock_client_destroy (struct usock_client *client)
         iobuf_clean (&client->out_iobuf);
         ERRNO_SAFE_WRAP (free, client);
     }
+}
+
+static json_t *usock_client_stats_get (struct usock_conn *conn)
+{
+    return json_pack ("{s:s s:i s:i s:i s:i s:i}",
+                      "uuid", conn->uuid_str,
+                      "userid", conn->cred.userid,
+                      "pid", conn->pid,
+                      "txcount", conn->txcount,
+                      "rxcount", conn->rxcount,
+                      "rxbacklog", (int)zlist_size (conn->outqueue));
+}
+
+json_t *usock_server_stats_get (struct usock_server *server)
+{
+    struct usock_conn *conn;
+    json_t *clients;
+    json_t *stats;
+
+    if (!server) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(clients = json_array ()))
+        goto nomem;
+    conn = zlist_first (server->connections);
+    while (conn) {
+        json_t *client;
+        if (!(client = usock_client_stats_get (conn))
+            || json_array_append_new (clients, client) < 0) {
+            json_decref (client);
+            goto nomem;
+        }
+        conn = zlist_next (server->connections);
+    }
+    if (!(stats = json_pack ("{s:O s:i}",
+                             "clients", clients,
+                             "connects", server->connects)))
+        goto nomem;
+    json_decref (clients);
+    return stats;
+nomem:
+    json_decref (clients);
+    errno = ENOMEM;
+    return NULL;
 }
 
 /*

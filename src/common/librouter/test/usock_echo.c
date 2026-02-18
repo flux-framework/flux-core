@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <sys/param.h>
+#include <jansson.h>
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
@@ -81,11 +82,37 @@ static void server_acceptor (struct usock_conn *conn, void *arg)
     usock_conn_accept (conn, cred);
 }
 
+/* Print diagnostics each time through the server reactor loop
+ */
+static void server_prep (flux_reactor_t *r,
+                         flux_watcher_t *w,
+                         int revents,
+                         void *arg)
+{
+    struct usock_server *server = arg;
+    json_t *stats;
+    static int last_connects = 0;
+    int connects;
+
+    if ((stats = usock_server_stats_get (server))
+        && json_unpack (stats, "{s:i}", "connects", &connects) == 0
+        && connects > last_connects) {
+        char *s = NULL;
+
+        if ((s = json_dumps (stats, JSON_COMPACT)))
+            diag ("%s", s);
+        last_connects = connects;
+        free (s);
+    }
+    json_decref (stats);
+}
+
 static int server_cb (flux_t *h, void *arg)
 {
     flux_reactor_t *r = flux_get_reactor (h);
     char sockpath[PATH_MAX + 1];
     struct usock_server *server;
+    flux_watcher_t *w;
 
     if (snprintf (sockpath,
                   sizeof (sockpath),
@@ -100,11 +127,16 @@ static int server_cb (flux_t *h, void *arg)
     }
     usock_server_set_acceptor (server, server_acceptor, NULL);
 
+    if (!(w = flux_prepare_watcher_create (r, server_prep, server)))
+        diag ("error creating server prepare watcher for diagnostic stats");
+    flux_watcher_start (w);
+
     if (flux_reactor_run (r, 0) < 0) {
         diag ("flux_reactor_run failed");
         return -1;
     }
     usock_server_destroy (server);
+    flux_watcher_destroy (w);
     return 0;
 }
 

@@ -10,7 +10,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	-I$(top_srcdir)/src/common/libccan
+	-I$(top_srcdir)/src/common/libccan \
+	$(JANSSON_CFLAGS)
 
 fluxconnector_LTLIBRARIES = \
 	ssh.la
@@ -24,5 +25,6 @@ ssh_la_SOURCES = \
 	ssh/ssh.c
 ssh_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la
+	$(top_builddir)/src/common/libflux-core.la \
+	$(JANSSON_LIBS)
 ssh_la_LDFLAGS = $(connector_ldflags)

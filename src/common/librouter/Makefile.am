@@ -11,6 +11,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
 	-I$(top_srcdir)/src/common/libccan \
+	$(JANSSON_CFLAGS) \
 	$(LIBUUID_CFLAGS)
 
 noinst_LTLIBRARIES = \
@@ -72,7 +73,9 @@ test_ldadd = \
         $(top_builddir)/src/common/libtestutil/libtestutil.la \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libflux-internal.la \
-        $(top_builddir)/src/common/libtap/libtap.la
+        $(top_builddir)/src/common/libtap/libtap.la \
+        $(JANSSON_LIBS) \
+        $(LIBUUID_LIBS)
 
 test_cppflags = \
         $(AM_CPPFLAGS) \
