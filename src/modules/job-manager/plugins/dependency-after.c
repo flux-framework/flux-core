@@ -579,8 +579,10 @@ static void release_dependency_references (flux_plugin_t *p)
 
     /*  Destroy this job's dependency reference list.
      */
-    if (flux_jobtap_job_aux_delete (p, FLUX_JOBTAP_CURRENT_JOB, l) < 0)
-        flux_log_error (h, "release_references: flux_jobtap_job_aux_delete");
+    if (flux_jobtap_job_aux_delete_value (p, FLUX_JOBTAP_CURRENT_JOB, l) < 0) {
+        flux_log_error (h,
+                        "release_references: flux_jobtap_job_aux_delete_value");
+    }
 }
 
 static int release_dependent_jobs (flux_plugin_t *p,
@@ -646,9 +648,12 @@ static int priority_cb (flux_plugin_t *p,
          *  be used, and we don't need to attempt deref of dependencies
          *  (see bottom of inactive_cb()).
          */
-        if (flux_jobtap_job_aux_delete (p, FLUX_JOBTAP_CURRENT_JOB, l) < 0) {
+        if (flux_jobtap_job_aux_delete_value (p,
+                                              FLUX_JOBTAP_CURRENT_JOB,
+                                              l) < 0) {
             flux_log_error (flux_jobtap_get_flux (p),
-                            "dependency-after: flux_jobtap_job_aux_delete");
+                            "dependency-after:"
+                            " flux_jobtap_job_aux_delete_value");
         }
     }
     return 0;

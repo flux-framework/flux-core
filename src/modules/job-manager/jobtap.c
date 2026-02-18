@@ -474,7 +474,7 @@ static void jobtap_finalize (struct jobtap *jobtap, flux_plugin_t *p)
             struct aux_wrap *wrap;
 
             if ((wrap = aux_wrap_get (p, job, false)))
-                job_aux_delete (job, wrap);
+                job_aux_delete_value (job, wrap);
 
             job = zlistx_next (jobs);
         }
@@ -2149,9 +2149,9 @@ void * flux_jobtap_job_aux_get (flux_plugin_t *p,
     return aux_get (wrap->aux, name);
 }
 
-int flux_jobtap_job_aux_delete (flux_plugin_t *p,
-                                flux_jobid_t id,
-                                void *val)
+int flux_jobtap_job_aux_delete_value (flux_plugin_t *p,
+                                      flux_jobid_t id,
+                                      void *val)
 {
     struct job *job;
     struct aux_wrap *wrap;
@@ -2159,8 +2159,16 @@ int flux_jobtap_job_aux_delete (flux_plugin_t *p,
     if (!(job = jobtap_lookup_jobid (p, id)))
         return -1;
     if ((wrap = aux_wrap_get (p, job, false)))
-        aux_delete (&wrap->aux, val);
+        aux_delete_value (&wrap->aux, val);
     return 0;
+}
+
+// deprecated
+int flux_jobtap_job_aux_delete (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                void *val)
+{
+    return flux_jobtap_job_aux_delete_value (p, id, val);
 }
 
 int flux_jobtap_job_set_flag (flux_plugin_t *p,

@@ -269,9 +269,15 @@ void *flux_plugin_aux_get (flux_plugin_t *p, const char *key)
     return aux_get (p->aux, key);
 }
 
+void flux_plugin_aux_delete_value (flux_plugin_t *p, const void *val)
+{
+    return aux_delete_value (&p->aux, val);
+}
+
+// deprecated
 void flux_plugin_aux_delete (flux_plugin_t *p, const void *val)
 {
-    return aux_delete (&p->aux, val);
+    return flux_plugin_aux_delete_value (p, val);
 }
 
 const char *flux_plugin_strerror (flux_plugin_t *p)

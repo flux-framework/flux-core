@@ -84,7 +84,7 @@ int job_aux_set (struct job *job,
                  void *val,
                  flux_free_f destroy);
 void *job_aux_get (struct job *job, const char *name);
-void job_aux_delete (struct job *job, const void *val);
+void job_aux_delete_value (struct job *job, const void *val);
 void job_aux_destroy (struct job *job);
 
 /* Helpers for maintaining czmq containers of 'struct job'.

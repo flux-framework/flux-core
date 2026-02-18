@@ -66,8 +66,8 @@ static void begin_time_cb (flux_reactor_t *r,
     flux_t *h = flux_jobtap_get_flux (b->p);
     if (flux_jobtap_dependency_remove (b->p, b->id, b->desc) < 0)
         flux_log_error (h, "begin-time: flux_jobtap_dependency_remove");
-    if (flux_jobtap_job_aux_delete (b->p, b->id, b) < 0)
-        flux_log_error (h, "begin-time: flux_jobtap_job_aux_delete");
+    if (flux_jobtap_job_aux_delete_value (b->p, b->id, b) < 0)
+        flux_log_error (h, "begin-time: flux_jobtap_job_aux_delete_value");
 }
 
 

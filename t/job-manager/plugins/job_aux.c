@@ -47,11 +47,12 @@ static int depend_cb (flux_plugin_t *p,
                                             "flux_jobtap_aux_get failed: %s",
                                             strerror (errno));
 
-    rc = flux_jobtap_job_aux_delete (p, id, val);
+    rc = flux_jobtap_job_aux_delete_value (p, id, val);
     if (rc < 0)
         return flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
                                             "test", 0,
-                                            "flux_jobtap_aux_delete failed: %s",
+                                            "flux_jobtap_aux_delete_value"
+                                            " failed: %s",
                                             strerror (errno));
 
     if (flux_jobtap_job_aux_get (p, id, "foo"))
@@ -114,10 +115,11 @@ static int validate_cb (flux_plugin_t *p,
                                        "flux_jobtap_aux_get() failed: %s",
                                        strerror (errno));
 
-    rc = flux_jobtap_job_aux_delete (p, FLUX_JOBTAP_CURRENT_JOB, val);
+    rc = flux_jobtap_job_aux_delete_value (p, FLUX_JOBTAP_CURRENT_JOB, val);
     if (rc < 0)
         return flux_jobtap_reject_job (p, args,
-                                       "flux_jobtap_aux_delete() failed: %s",
+                                       "flux_jobtap_aux_delete_value() failed:"
+                                       " %s",
                                        strerror (errno));
 
     if (flux_jobtap_job_aux_get (p, FLUX_JOBTAP_CURRENT_JOB, "foo"))
