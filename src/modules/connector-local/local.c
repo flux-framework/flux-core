@@ -274,6 +274,32 @@ error:
         flux_log_error (h, "error responding to %s request", topic);
 }
 
+static void stats_get_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
+{
+    struct connector_local *ctx = arg;
+    json_t *clients;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (!(clients = usock_server_stats_get (ctx->server)))
+        goto error;
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:O s:b s:b}",
+                           "server", clients,
+                           "allow_guest_user", ctx->allow_guest_user,
+                           "allow_root_owner", ctx->allow_root_owner) < 0)
+        flux_log_error (h, "error responding to stats.get request");
+    json_decref (clients);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to stats.get request");
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -285,6 +311,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "connector-local.config-sync",
         reload_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "connector-local.stats-get",
+        stats_get_cb,
         0
     },
     FLUX_MSGHANDLER_TABLE_END,
