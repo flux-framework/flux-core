@@ -25,18 +25,17 @@ wait_update_watchers() {
 	local count=$1
 	local i=0
 	echo "waiting for $count watchers"
-	while (! flux module stats --parse "update_watchers" job-info \
-		|| [ "$(flux module stats --parse "update_watchers" job-info 2> /dev/null)" != "${count}" ]) \
-		&& [ $i -lt 50 ]
+	while [ $i -lt 50 ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    if flux module stats --parse "update_watchers" job-info \
+	       && [ "$(flux module stats --parse "update_watchers" job-info 2> /dev/null)" = "${count}" ]
+	    then
+		return 0
+	    fi
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	if [ "$i" -eq "50" ]
-	then
-		return 1
-	fi
-	return 0
+	return 1
 }
 
 # Usage: expiration_add JOBID N
@@ -59,17 +58,16 @@ check_expiration() {
 	local jobid=$1
 	local value=$2
 	local i=0
-	while (! ${INFO_LOOKUP} -c ${jobid} R | jq -e ".execution.expiration == ${value}" \
-		&& [ $i -lt 200 ] )
+	while [ $i -lt 200 ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    if ${INFO_LOOKUP} -c ${jobid} R | jq -e ".execution.expiration == ${value}"
+	    then
+		return 0
+	    fi
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	if [ "$i" -eq "200" ]
-	then
-		return 1
-	fi
-	return 0
+	return 1
 }
 
 # Usage: check_expiration_legacy jobid VALUE
@@ -79,17 +77,16 @@ check_expiration_legacy() {
 	local jobid=$1
 	local value=$2
 	local i=0
-	while (! ${UPDATE_LOOKUP} ${jobid} R | jq -e ".execution.expiration == ${value}" \
-		&& [ $i -lt 200 ] )
+	while [ $i -lt 200 ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    if ${UPDATE_LOOKUP} ${jobid} R | jq -e ".execution.expiration == ${value}"
+	    then
+		return 0
+	    fi
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	if [ "$i" -eq "200" ]
-	then
-		return 1
-	fi
-	return 0
+	return 1
 }
 
 test_expect_success 'job-info: lookup current with no update events works (job active)' '
@@ -320,17 +317,16 @@ check_duration() {
        local jobid=$1
        local value=$2
        local i=0
-       while (! ${INFO_LOOKUP} -c ${jobid} jobspec | jq -e ".attributes.system.duration == ${value}" \
-	       && [ $i -lt 200 ] )
+       while [ $i -lt 200 ]
        do
-	       sleep 0.1
-	       i=$((i + 1))
+	   if ${INFO_LOOKUP} -c ${jobid} jobspec | jq -e ".attributes.system.duration == ${value}"
+	   then
+	       return 0
+	   fi
+	   sleep 0.1
+	   i=$((i + 1))
        done
-       if [ "$i" -eq "200" ]
-       then
-	       return 1
-       fi
-       return 0
+       return 1
 }
 
 test_expect_success 'job-info: lookup current works with jobspec' '

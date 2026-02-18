@@ -8,15 +8,6 @@
 
 KVS_WAIT_ITERS=50
 
-loophandlereturn() {
-    index=$1
-    if [ "$index" -eq "${KVS_WAIT_ITERS}" ]
-    then
-	return 1
-    fi
-    return 0
-}
-
 # arg1 - key to retrieve
 # arg2 - expected value
 test_kvs_key() {
@@ -37,13 +28,16 @@ test_kvs_key_namespace() {
 # arg1 - namespace
 wait_watcherscount_nonzero() {
 	ns=$1
-	i=0
-	while (! flux module stats --parse namespaces.${ns}.watchers kvs-watch > /dev/null 2>&1 \
-	       || [ "$(flux module stats --parse namespaces.${ns}.watchers kvs-watch 2> /dev/null)" = "0" ]) \
-	      && [ $i -lt ${KVS_WAIT_ITERS} ]
+	local i=0
+	while [ $i -lt ${KVS_WAIT_ITERS} ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    if flux module stats --parse namespaces.${ns}.watchers kvs-watch > /dev/null 2>&1 \
+	       && [ "$(flux module stats --parse namespaces.${ns}.watchers kvs-watch 2> /dev/null)" != "0" ]
+	    then
+		return 0
+	    fi
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	return $(loophandlereturn $i)
+	return 1
 }

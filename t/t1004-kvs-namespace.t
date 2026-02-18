@@ -30,47 +30,51 @@ NAMESPACEORDER=namespaceorder
 NAMESPACEROOTREF=namespacerootref
 
 namespace_create_loop() {
-	i=0
-	while ! flux kvs namespace create $1 && [ $i -lt ${KVS_WAIT_ITERS} ]
+	local i=0
+	while [ $i -lt ${KVS_WAIT_ITERS} ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    flux kvs namespace create $1 && return 0
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	return $(loophandlereturn $i)
+	return 1
 }
 
 get_kvs_namespace_all_ranks_loop() {
-	i=0
-	while ! flux exec -n sh -c "flux kvs get --namespace=$1 $2" \
-	      && [ $i -lt ${KVS_WAIT_ITERS} ]
+	local i=0
+	while [ $i -lt ${KVS_WAIT_ITERS} ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    flux exec -n sh -c "flux kvs get --namespace=$1 $2" && return 0
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	return $(loophandlereturn $i)
+	return 1
 }
 
 get_kvs_namespace_fails_all_ranks_loop() {
-	i=0
-	while ! flux exec -n sh -c "! flux kvs get --namespace=$1 $2" \
-	      && [ $i -lt ${KVS_WAIT_ITERS} ]
+	local i=0
+	while [ $i -lt ${KVS_WAIT_ITERS} ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    flux exec -n sh -c "! flux kvs get --namespace=$1 $2" && return 0
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	return $(loophandlereturn $i)
+	return 1
 }
 
 wait_versionwaiters_nonzero() {
-	i=0
-	while (! flux module stats --parse namespace.$1.#versionwaiters kvs > /dev/null 2>&1 \
-	       || [ "$(flux module stats --parse namespace.$1.#versionwaiters kvs 2> /dev/null)" = "0" ]) \
-	      && [ $i -lt ${KVS_WAIT_ITERS} ]
+	local i=0
+	while [ $i -lt ${KVS_WAIT_ITERS} ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    if flux module stats --parse namespace.$1.#versionwaiters kvs > /dev/null 2>&1 \
+	       && [ "$(flux module stats --parse namespace.$1.#versionwaiters kvs 2> /dev/null)" != "0" ]
+	    then
+		return 0
+	    fi
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	return $(loophandlereturn $i)
+	return 1
 }
 
 #
