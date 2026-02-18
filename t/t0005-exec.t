@@ -201,8 +201,17 @@ test_expect_success 'I/O -- long lines' '
 	test_cmp output expected
 '
 
+# The version of stdbuf(1) in older versions of uutils/coreutils does
+# not exec() its argument but instead remains the parent and collects
+# exit status. This version does not forward signals to children, so
+# it breaks the test below. Detect versions of stdbuf that don't exec
+# their arguments and skip the test if found.
+if test $(stdbuf --output=L sh -c 'ps -q $PPID -o comm=') != "stdbuf"; then
+    test_set_prereq WORKING_STDBUF
+fi
+
 waitfile=$SHARNESS_TEST_SRCDIR/scripts/waitfile.lua
-test_expect_success 'signal forwarding works' '
+test_expect_success WORKING_STDBUF 'signal forwarding works' '
 	cat >test_signal.sh <<-EOF &&
 	#!/bin/bash
 	sig=\${1-INT}
