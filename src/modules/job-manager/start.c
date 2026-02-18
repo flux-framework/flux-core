@@ -370,7 +370,7 @@ static void expiration_update_cb (flux_future_t *f, void *arg)
                                     note) < 0)
             flux_log_error (ctx->h, "expiration_update: raise_job_exception");
     }
-    job_aux_delete (job, "job-manager::R-update");
+    job_aux_set (job, "job-manager::R-update", NULL, NULL);
 }
 
 /* Send <exec_service>.expiration request to adjust job expiration
@@ -398,7 +398,7 @@ int start_send_expiration_update (struct start *start,
         || flux_future_then (f, -1., expiration_update_cb, job) < 0
         || flux_future_aux_set (f, "job-manager::ctx", ctx, NULL) < 0) {
         int saved_errno = errno;
-        (void) job_aux_delete (job, "job-manager::R-update");
+        (void) job_aux_set (job, "job-manager::R-update", NULL, NULL);
         flux_future_destroy (f);
         errno = saved_errno;
         return -1;

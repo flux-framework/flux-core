@@ -121,6 +121,22 @@ static struct singleton *singleton_list_pop (struct singleton_ctx *sctx,
     return s;
 }
 
+static void singleton_list_remove_id (struct singleton_ctx *sctx,
+                                      const char *key,
+                                      flux_jobid_t id)
+{
+    struct singleton *s = hola_list_first (sctx->singletons, key);
+    while (s) {
+        if (s->id == id) {
+            hola_list_delete (sctx->singletons,
+                              key,
+                              hola_list_cursor (sctx->singletons, key));
+            return;
+        }
+        s = hola_list_next (sctx->singletons, key);
+    }
+}
+
 static size_t singleton_list_count (struct singleton_ctx *sctx,
                                     const char *key)
 {
@@ -179,6 +195,13 @@ static int singleton_count_update (struct singleton_ctx *sctx,
 
     if (singleton_key_create (key, sizeof (key), userid, name) < 0)
         return -1;
+
+    /* If a singleton job goes inactive, remove it from the singleton list
+     * to avoid a use-after-free when the job is later destroyed and the
+     * aux destructor frees the struct singleton.
+     */
+    if (value < 0)
+        singleton_list_remove_id (sctx, key, id);
 
     count = get_current_active_count (sctx, key) + value;
     if (count == singleton_list_count (sctx, key)

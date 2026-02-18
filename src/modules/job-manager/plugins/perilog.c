@@ -162,7 +162,7 @@ static flux_cmd_t *cmd_from_json (json_t *o)
 
     json_array_foreach (o, index, value) {
         const char *arg = json_string_value (value);
-        if (!value
+        if (!arg
             || flux_cmd_argv_append (cmd, arg) < 0)
             goto fail;
     }
@@ -702,23 +702,24 @@ static void error_cb (struct bulk_exec *bulk_exec,
                       flux_subprocess_t *p,
                       void *arg)
 {
-    struct perilog_proc *proc = bulk_exec_aux_get (bulk_exec, "perilog_proc");
-    flux_t *h = flux_jobtap_get_flux (proc->p);
-    int rank = flux_subprocess_rank (p);
-    const char *hostname = flux_get_hostbyrank (h, rank);
-    const char *error = flux_subprocess_fail_error (p);
+    struct perilog_proc *proc;
+    int rank;
+    flux_t *h;
 
-    if (!proc)
+    if (!(proc = bulk_exec_aux_get (bulk_exec, "perilog_proc"))
+        || !(h = flux_jobtap_get_flux (proc->p)))
         return;
+
+    rank = flux_subprocess_rank (p);
 
     flux_log (h,
               LOG_ERR,
               "%s: %s: %s (rank %d): %s",
               idf58 (proc->id),
               perilog_proc_name (proc),
-              hostname,
+              flux_get_hostbyrank (h, rank),
               rank,
-              error);
+              flux_subprocess_fail_error (p));
 }
 
 static bool perilog_log_ignore (struct perilog_conf *conf, const char *s)
@@ -819,6 +820,7 @@ static struct perilog_proc *procdesc_run (flux_t *h,
                       "%s: %s: failed to decode ranks from R",
                       idf58 (id),
                       perilog_proc_name (proc));
+            goto error;
     }
     if (flux_cmd_setenvf (pd->cmd, 1, "FLUX_JOB_ID", "%s", idf58 (id)) < 0
         || flux_cmd_setenvf (pd->cmd, 1, "FLUX_JOB_RANKS", "%s", rank_str) < 0

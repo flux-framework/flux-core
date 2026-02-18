@@ -166,9 +166,12 @@ static void allocation_destructor (void **item)
 static char *get_rlist_ranks (struct rlist *rl)
 {
     struct idset *ids;
+    char *ranks;
     if (!(ids = rlist_ranks (rl)))
         return NULL;
-    return idset_encode (ids, IDSET_FLAG_RANGE);
+    ranks = idset_encode (ids, IDSET_FLAG_RANGE);
+    idset_destroy (ids);
+    return ranks;
 }
 
 static int update_cmd_env (flux_cmd_t *cmd,
@@ -177,15 +180,16 @@ static int update_cmd_env (flux_cmd_t *cmd,
                            struct rlist *rl)
 {
     char *ranks;
+    int rc = 0;
 
     if (!(ranks = get_rlist_ranks (rl))
         || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_ID", "%ju", (uintmax_t)id) < 0
         || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_USERID", "%u", userid) < 0
         || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_RANKS", "%s", ranks) < 0)
-        return -1;
+        rc = -1;
 
     free (ranks);
-    return 0;
+    return rc;
 }
 
 static struct allocation *allocation_create (struct housekeeping *hk,

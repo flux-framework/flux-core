@@ -43,6 +43,7 @@ static void post_event_cb (flux_t *h,
             goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to job-manager.post-event");
+    return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "error responding to job-manager.post-event");

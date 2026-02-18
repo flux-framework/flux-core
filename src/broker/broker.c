@@ -1652,6 +1652,7 @@ static bool signal_is_deadly (int signum)
 static void killall_cb (flux_future_t *f, void *arg)
 {
     broker_ctx_t *ctx = arg;
+    int signum = (int) ptr2int (flux_future_aux_get (f, "signum"));
     int count = 0;
     if (flux_rpc_get_unpack (f, "{s:i}", "count", &count) < 0) {
         flux_log_error (ctx->h,
@@ -1663,7 +1664,7 @@ static void killall_cb (flux_future_t *f, void *arg)
         flux_log (ctx->h,
                   LOG_INFO,
                   "forwarded signal %d to %d jobs",
-                  (int) ptr2int (flux_future_aux_get (f, "signal")),
+                  signum,
                   count);
     }
 }

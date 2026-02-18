@@ -439,7 +439,7 @@ static int event_release_context_decode (json_t *context,
 {
     *final = 0;
 
-    if (json_unpack (context, "{ s:b }", "final", &final) < 0) {
+    if (json_unpack (context, "{ s:b }", "final", final) < 0) {
         errno = EPROTO;
         return -1;
     }

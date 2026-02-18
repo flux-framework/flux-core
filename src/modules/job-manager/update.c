@@ -435,7 +435,8 @@ static void update_job (struct update *update,
                         struct job *job,
                         json_t *updates)
 {
-    char *error = NULL;
+    const char *errmsg = NULL;
+    flux_error_t error = {{0}};
     const char *key;
     json_t *value;
     int validate = 0; /* validation of result necessary */
@@ -476,7 +477,7 @@ static void update_job (struct update *update,
     }
     if (additional_updates
         && json_object_update (updates, additional_updates) < 0) {
-        error = strdup ("unable to apply additional required updates");
+        errprintf (&error, "unable to apply additional required updates");
         goto error;
     }
     if (validate
@@ -490,15 +491,13 @@ static void update_job (struct update *update,
         update_feasibility_check (update, msg, cred, job, updates, validate);
     else if (job->state & FLUX_JOB_STATE_RUNNING
              && json_object_get (updates, "attributes.system.duration")) {
-        flux_error_t ferror;
         if (sched_expiration_check (update,
-                                    &ferror,
+                                    &error,
                                     msg,
                                     cred,
                                     job,
                                     updates,
                                     validate) < 0) {
-            error = strdup (ferror.text);
             goto error;
         }
     }
@@ -508,10 +507,11 @@ static void update_job (struct update *update,
     json_decref (additional_updates);
     return;
 error:
-    if (flux_respond_error (ctx->h, msg, EINVAL, error) < 0)
+    if (strlen (error.text) != 0)
+        errmsg = error.text;
+    if (flux_respond_error (ctx->h, msg, EINVAL, errmsg) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (additional_updates);
-    free (error);
 }
 
 static void update_handle_request (flux_t *h,

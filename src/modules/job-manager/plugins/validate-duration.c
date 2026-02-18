@@ -78,12 +78,12 @@ static int validate_duration (flux_plugin_t *p,
 static void kvs_lookup_cb (flux_future_t *f, void *arg)
 {
     flux_t *h = flux_future_get_flux (f);
-    double val;
+    double val = expiration;
     if (flux_kvs_lookup_get_unpack (f,
                                     "{s:{s:F}}",
                                     "execution",
                                       "expiration", &val) < 0) {
-        flux_log_error (h, "flux_kvs_lookup_unpack");
+        flux_log_error (h, "Failed to extract expiration from R update");
     }
     flux_future_reset (f);
     if (fabs (val - expiration) < 1.e-5)

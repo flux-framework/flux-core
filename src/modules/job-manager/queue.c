@@ -94,6 +94,7 @@ static void queue_destroy (struct queue *q)
         json_decref (q->requires);
         free (q->name);
         free (q->disable_reason);
+        free (q->stop_reason);
         free (q);
         errno = saved_errno;
     }
