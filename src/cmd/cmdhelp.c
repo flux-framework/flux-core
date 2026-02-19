@@ -58,7 +58,9 @@ static void command_list_print (FILE *fp, const char *path)
         json_t *cmd;
         json_error_t error;
 
-        if (json_unpack_ex (entry, &error, 0,
+        if (json_unpack_ex (entry,
+                            &error,
+                            0,
                             "{s:s s:o}",
                             "description", &description,
                             "commands", &commands) < 0) {
@@ -69,7 +71,9 @@ static void command_list_print (FILE *fp, const char *path)
         json_array_foreach (commands, i, cmd) {
             const char *name = NULL;
             const char *desc = NULL;
-            if (json_unpack_ex (cmd, &error, 0,
+            if (json_unpack_ex (cmd,
+                                &error,
+                                0,
                                 "{s:s s:s}",
                                 "name", &name,
                                 "description", &desc) < 0) {
