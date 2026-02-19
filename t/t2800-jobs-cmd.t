@@ -1450,6 +1450,14 @@ test_expect_success 'flux-jobs: --json option works' '
 	jq -e ".jobs[0] | .exception.occurred == false" < jobs.json
 '
 
+#  flux jobs --json output should have a string "jobid" key
+test_expect_success 'flux-jobs: --json includes string jobid key' '
+	jq -e ".jobs[0].jobid | type == \"string\"" < jobs.json &&
+	jobid=$(jq .jobs[0].id < jobs.json | flux job id --to=f58) &&
+	test_debug "echo jobid=$jobid" &&
+	jq -e ".jobs[0].jobid == \"${jobid}\"" < jobs.json
+'
+
 #  Ensure single jobid argument returns single JSON object
 test_expect_success 'flux-jobs: --json option works with one jobid' '
 	testid=$(cat active.ids | head -1 | flux job id) &&
