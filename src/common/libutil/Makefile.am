@@ -109,7 +109,9 @@ libutil_la_SOURCES = \
 	basename.c \
 	ansi_color.h \
 	cgroup.h \
-	cgroup.c
+	cgroup.c \
+	levenshtein.h \
+	levenshtein.c
 
 libutil_la_LDFLAGS = \
         $(AM_LDFLAGS) \
@@ -149,7 +151,8 @@ TESTS = test_sha1.t \
 	test_basemoji.t \
 	test_sigutil.t \
 	test_parse_size.t \
-	test_cgroup.t
+	test_cgroup.t \
+	test_levenshtein.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -317,3 +320,7 @@ test_parse_size_t_LDADD = $(test_ldadd)
 test_cgroup_t_SOURCES = test/cgroup.c
 test_cgroup_t_CPPFLAGS = $(test_cppflags)
 test_cgroup_t_LDADD = $(test_ldadd)
+
+test_levenshtein_t_SOURCES = test/levenshtein.c
+test_levenshtein_t_CPPFLAGS = $(test_cppflags)
+test_levenshtein_t_LDADD = $(test_ldadd)
