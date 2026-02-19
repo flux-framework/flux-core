@@ -915,8 +915,18 @@ error:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "resource.reload",  resource_reload, 0 },
-    { FLUX_MSGTYPE_REQUEST, "resource.get",  resource_get, 0 },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "resource.reload",
+        resource_reload,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "resource.get",
+        resource_get,
+        0
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
