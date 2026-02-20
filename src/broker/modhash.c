@@ -1186,6 +1186,7 @@ static module_t *modhash_load_exec (modhash_t *mh,
         return NULL;
     if (!(p = module_create_exec (ctx->h,
                                   broker_uuid,
+                                  "module-exec",
                                   name,
                                   path,
                                   args,

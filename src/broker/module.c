@@ -224,6 +224,7 @@ cleanup:
 
 module_t *module_create_exec (flux_t *h,
                               const char *parent_uuid,
+                              const char *module_loader,
                               const char *name,
                               const char *path,
                               json_t *mod_args,
@@ -234,7 +235,7 @@ module_t *module_create_exec (flux_t *h,
         return NULL;
     p->is_exec = true;
 
-    const char *av[] = { "flux", "module-exec", path, NULL };
+    const char *av[] = { "flux", module_loader, path, NULL };
     int ac = 3;
     if (!(p->exec.cmd = flux_cmd_create (ac, (char **)av, environ))
         || flux_cmd_add_message_channel (p->exec.cmd,

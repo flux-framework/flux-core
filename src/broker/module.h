@@ -48,6 +48,7 @@ module_t *module_create_thread (flux_t *h,
                                 flux_error_t *error);
 module_t *module_create_exec (flux_t *h,
                               const char *parent_uuid,
+                              const char *module_loader,
                               const char *name,
                               const char *path,
                               json_t *args,
