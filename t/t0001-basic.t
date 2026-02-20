@@ -845,6 +845,21 @@ test_expect_success 'command --help works outside of flux instance' '
 	test_kvs_subcmd_help
 '
 
+# cover a builtin command, a c binary, and a python script
+test_expect_success 'typoed commands are given suggestions on correct commands' '
+	test_must_fail flux dmsg > invalid1.out 2>&1 &&
+	grep "similar" invalid1.out | grep "dmesg" &&
+	test_must_fail flux modole > invalid2.out 2>&1 &&
+	grep "similar" invalid2.out | grep "module" &&
+	test_must_fail flux resourcce > invalid3.out 2>&1 &&
+	grep "similar" invalid3.out | grep "resource"
+'
+
+test_expect_success 'really typoed commands are not given suggestions' '
+	test_must_fail flux resouurrccee > invalidbad.out 2>&1 &&
+	test_must_fail grep "similar" invalidbad.out
+'
+
 # Note: flux-start auto-removes rundir
 
 test_done

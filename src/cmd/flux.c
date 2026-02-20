@@ -28,6 +28,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/environment.h"
 #include "src/common/libutil/intree.h"
+#include "src/common/libutil/levenshtein.h"
 
 #include "cmdhelp.h"
 #include "builtin.h"
@@ -417,6 +418,76 @@ void exec_subcommand_dir (bool vopt,
     free (path);
 }
 
+static void find_similar_command (const char *searchpath, const char *argv0)
+{
+    extern struct builtin_cmd builtin_cmds[];
+    struct builtin_cmd *builtin_cmd = &builtin_cmds[0];
+    int min = INT_MAX;
+    char *min_cmd = NULL;
+    char *searchpathcpy;
+    char *dir, *saveptr = NULL, *a1;
+
+    /* first check out builtins */
+    while (builtin_cmd->name) {
+        int distance = levenshtein_distance (builtin_cmd->name, argv0);
+        if (distance > 0 && distance < min) {
+            min = distance;
+            free (min_cmd);
+            min_cmd = xstrdup (builtin_cmd->name);
+        }
+        builtin_cmd++;
+    }
+
+    /* now check commands in search paths */
+    searchpathcpy = xstrdup (searchpath);
+    a1 = searchpathcpy;
+    while ((dir = strtok_r (a1, ":", &saveptr))) {
+        glob_t gl;
+        char *pattern;
+
+        pattern = xasprintf ("%s/flux-*", dir);
+        if (glob (pattern, GLOB_NOSORT, NULL, &gl) == 0) {
+            for (int i = 0; i < gl.gl_pathc; i++) {
+                char *pathcpy = xstrdup (gl.gl_pathv[i]);
+                char *ptr = strrchr (pathcpy, '/');
+                char *name = ptr + 6; /* +6 to get past '/flux-' */
+                int distance, len = strlen (name);
+
+                if (len > 3) {
+                    /* strip off ".py" if necessary */
+                    if (strcmp (name + (len - 3), ".py") == 0) {
+                        char *tmp = strrchr (name, '.');
+                        *tmp = '\0';
+                    }
+                }
+
+                distance = levenshtein_distance (name, argv0);
+                if (distance > 0 && distance < min) {
+                    min = distance;
+                    free (min_cmd);
+                    min_cmd = xstrdup (name);
+                }
+                free (pathcpy);
+            }
+            globfree (&gl);
+        }
+        free (pattern);
+        a1 = NULL;
+    }
+    free (searchpathcpy);
+
+    /* only output if command is similar enough, we'll go with a
+     * distance of at most 3.
+     *
+     * e.g. "resourcccce" will be similar to "resource", but not
+     * "resourccccce".
+     */
+    if (min <= 3)
+        log_msg ("The most similar command is `%s`", min_cmd);
+
+    free (min_cmd);
+}
+
 void exec_subcommand (const char *searchpath, bool vopt, int argc, char *argv[])
 {
     if (strchr (argv[0], '/')) {
@@ -435,8 +506,9 @@ void exec_subcommand (const char *searchpath, bool vopt, int argc, char *argv[])
             a1 = NULL;
         }
         free (cpy);
-        log_msg_exit ("`%s' is not a flux command.  See 'flux --help'",
-                      argv[0]);
+        log_msg ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
+        find_similar_command (searchpath, argv[0]);
+        exit (1);
     }
 }
 
