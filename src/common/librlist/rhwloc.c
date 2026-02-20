@@ -203,9 +203,23 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
      *  If loading from the XML file fails for any reason, fall back
      *  to normal topology load.
      */
-    if ((xml = getenv ("FLUX_HWLOC_XMLFILE"))
-        && (topo = rhwloc_xml_topology_load_file (xml, flags)))
-        return topo;
+    if ((xml = getenv ("FLUX_HWLOC_XMLFILE"))) {
+        int xml_flags = flags;
+
+        /* If FLUX_HWLOC_XMLFILE_NOT_THISSYSTEM is set, use RHWLOC_NO_RESTRICT
+         * to skip both hwloc_topology_restrict() and the setting of
+         * HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM, neither of which is appropriate
+         * for a topology loaded from a different system.
+         */
+        if (getenv ("FLUX_HWLOC_XMLFILE_NOT_THISSYSTEM"))
+            xml_flags |= RHWLOC_NO_RESTRICT;
+
+        /*  If load is successful, return topo immediately so no further
+         *  processing is done.
+         */
+        if ((topo = rhwloc_xml_topology_load_file (xml, xml_flags)))
+            return topo;
+    }
 
     if (topo_init_common (&topo, 0) < 0)
         goto err;
