@@ -319,6 +319,7 @@ TESTSCRIPTS = \
 	python/t0034-queuelist.py \
 	python/t0035-kvs-no-checkpoint.py \
 	python/t0036-subprocess.py \
+	python/t0037-slurm.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY
@@ -349,6 +350,7 @@ EXTRA_DIST= \
 	scripts/run_timeout.py \
 	scripts/startctl.py \
 	scripts/groups.py \
+	scripts/squeue \
 	jobspec \
 	resource \
 	marshall \
