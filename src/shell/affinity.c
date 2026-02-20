@@ -294,7 +294,8 @@ static void shell_affinity_destroy (void *arg)
 /*  Initialize topology object for affinity processing.
  */
 static int shell_affinity_topology_init (flux_shell_t *shell,
-                                         struct shell_affinity *sa)
+                                         struct shell_affinity *sa,
+                                         bool dry_run)
 {
     const char *xml;
 
@@ -311,10 +312,11 @@ static int shell_affinity_topology_init (flux_shell_t *shell,
         return shell_log_errno ("hwloc_topology_set_xmlbuffer");
 
     /*  Tell hwloc that our XML loaded topology is from this system,
-     *   O/w hwloc CPU binding will not work.
+     *   O/w hwloc CPU binding will not work (skip if dry-run)
      */
-    if (hwloc_topology_set_flags (sa->topo,
-                                  HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM) < 0)
+    if (!dry_run
+        && hwloc_topology_set_flags (sa->topo,
+                                     HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM) < 0)
         return shell_log_errno ("hwloc_topology_set_flags");
 
     if (hwloc_topology_load (sa->topo) < 0)
@@ -326,12 +328,13 @@ static int shell_affinity_topology_init (flux_shell_t *shell,
  *   topology, gathering number of local tasks and assigned core list,
  *   and getting the resulting cpuset for the entire shell.
  */
-static struct shell_affinity *shell_affinity_create (flux_shell_t *shell)
+static struct shell_affinity *shell_affinity_create (flux_shell_t *shell,
+                                                     bool dry_run)
 {
     struct shell_affinity *sa = calloc (1, sizeof (*sa));
     if (!sa)
         return NULL;
-    if (shell_affinity_topology_init (shell, sa) < 0)
+    if (shell_affinity_topology_init (shell, sa, dry_run) < 0)
         goto err;
     if (flux_shell_rank_info_unpack (shell,
                                      -1,
@@ -461,7 +464,7 @@ static int affinity_init (flux_plugin_t *p,
         shell_debug ("disabling affinity due to cpu-affinity=off");
         return 0;
     }
-    if (!(sa = shell_affinity_create (shell)))
+    if (!(sa = shell_affinity_create (shell, dry_run)))
         return shell_log_errno ("shell_affinity_create");
 
     /*  Attempt to get cpuset union of all allocated cores. If this
