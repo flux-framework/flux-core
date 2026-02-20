@@ -391,9 +391,28 @@ components or writing tests.
    parallel testing.  Flux may be directed to read topology from an XML file
    instead by setting :envvar:`FLUX_HWLOC_XMLFILE` to the file path.
 
+   .. note::
+      When using this option, Flux assumes the topology in the XML file is
+      from the current system. If this is not the case, for example when
+      loading a topology from another system for testing purposes, set
+      :envvar:`FLUX_HWLOC_XMLFILE_NOT_THISSYSTEM` to any non-empty value
+      to avoid unexpected behavior.
+
    :program:`flux resource reload` offers a related mechanism for loading a
    set of HWLOC xml files directly into the instance resource inventory
    for test scenarios.
+
+.. envvar:: FLUX_HWLOC_XMLFILE_NOT_THISSYSTEM
+
+   When used with :envvar:`FLUX_HWLOC_XMLFILE`, declares that the XML
+   does not come from this system (assumed by default). When set, Flux
+   omits the ``HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM`` flag and skips the
+   ``hwloc_topology_restrict()`` call that would otherwise restrict the
+   loaded topology to the currently available cpuset. Without this
+   variable, using an XML file from another system may cause unexpected
+   behavior such as missing resources. This variable may be set to any
+   non-empty value and is ignored if :envvar:`FLUX_HWLOC_XMLFILE` is
+   not set.
 
 .. envvar:: FLUX_URI_RESOLVE_LOCAL
 
