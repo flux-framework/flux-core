@@ -455,6 +455,33 @@ static void inventory_put_update_cb (flux_future_t *f, void *arg)
     inv->put_f = NULL;
 }
 
+/*  Update local inventory and send expiration update to scheduler,
+ *   then put new R in KVS and schedule post of resource-update event.
+ */
+static int update_expiration (struct inventory *inv, double expiration)
+{
+    /*  Update local inventory and send expiration update to scheduler
+     *  (logs error on failure)
+     */
+    if (inventory_update_expiration (inv, expiration) < 0)
+        return -1;
+
+    /*  Update R in KVS, post resource-update event when commit is complete.
+     */
+    if (!(inv->put_f = inventory_put_R (inv))
+        || flux_future_then (inv->put_f,
+                             -1.,
+                             inventory_put_update_cb,
+                             inv) < 0) {
+        flux_log_error (inv->ctx->h, "failed to update R in kvs");
+        flux_future_destroy (inv->put_f);
+        inv->put_f = NULL;
+        return -1;
+    }
+
+    return 0;
+}
+
 /*  Handle updates to R from parent instance. Currently, the only supported
  *  update is an adjustment to expiration.
  */
@@ -472,22 +499,8 @@ static void R_update_cb (flux_future_t *f, void *arg)
         flux_log_error (h, "failed to unpack updated R expiration");
         goto out;
     }
-    /*  Update local inventory and send expiration update to scheduler
-     */
-    if (inventory_update_expiration (inv, expiration) < 0)
-        goto out;
 
-    /*  Update R in KVS, post resource-update event when commit is complete.
-     */
-    if (!(inv->put_f = inventory_put_R (inv))
-        || flux_future_then (inv->put_f,
-                             -1.,
-                             inventory_put_update_cb,
-                             inv) < 0) {
-        flux_future_destroy (inv->put_f);
-        inv->put_f = NULL;
-        goto out;
-    }
+    (void) update_expiration (inv, expiration);
 out:
     flux_future_reset (f);
 }
@@ -914,6 +927,34 @@ error:
     json_decref (xml);
 }
 
+static void resource_expiration_update (flux_t *h,
+                                        flux_msg_handler_t *mh,
+                                        const flux_msg_t *msg,
+                                        void *arg)
+{
+    struct inventory *inv = arg;
+    double expiration;
+    const char *errstr = NULL;
+
+    if (inv->ctx->rank != 0) {
+        errno = ENOSYS;
+        errstr = "resource.expiration-update is only available on rank 0";
+        goto error;
+    }
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:F}",
+                             "expiration", &expiration) < 0
+        || update_expiration (inv, expiration) < 0)
+        goto error;
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to expiration-update request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to expiration-update request");
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -925,6 +966,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "resource.get",
         resource_get,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "resource.expiration-update",
+        resource_expiration_update,
         0
     },
     FLUX_MSGHANDLER_TABLE_END,
