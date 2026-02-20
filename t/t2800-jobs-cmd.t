@@ -447,9 +447,9 @@ test_expect_success 'flux-jobs --count works' '
 
 test_expect_success 'flux-jobs outputs message if results limit reached' '
 	count=`flux jobs --no-header -a --count=0 | wc -l` &&
-        flux jobs -a --count=${count} 2> limit1.out &&
+	flux jobs -a --count=${count} 2> limit1.out &&
 	test_must_fail grep -i "output truncated" limit1.out &&
-        flux jobs -a --count=8 2> limit2.out &&
+	flux jobs -a --count=8 2> limit2.out &&
 	grep -i "output truncated" limit2.out
 '
 
@@ -1228,17 +1228,16 @@ test_expect_success 'update project and bank in pending jobs' '
 
 wait_project_bank_synced() {
 	local i=0
-	while [ "$(flux jobs -f pending -o {project} | grep foo | wc -l)" != "$(job_list_state_count sched)" ] \
-		   && [ $i -lt 50 ]
+	while [ $i -lt 50 ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    if [ "$(flux jobs -f pending -o {project} | grep foo | wc -l)" = "$(job_list_state_count sched)" ]
+	    then
+		return 0
+	    fi
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	if [ "$i" -eq "50" ]
-	then
-		return 1
-	fi
-	return 0
+	return 1
 }
 
 # can be racy, need to wait until `job-list` module definitely has

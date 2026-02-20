@@ -12,18 +12,14 @@ test_expect_success 'restart flux' '
 '
 
 wait_flux_back_up() {
-	i=0
-	while ! flux resource list > /dev/null 2>&1 \
-	      && [ $i -lt 100 ]
+	local i=0
+	while [ $i -lt 100 ]
 	do
+		flux resource list > /dev/null 2>&1 && return 0
 		sleep 1
 		i=$((i + 1))
 	done
-	if [ "$i" -eq "100" ]
-	then
-		return 1
-	fi
-	return 0
+	return 1
 }
 
 test_expect_success 'wait for flux to finish starting up' '
@@ -73,18 +69,17 @@ test_expect_success 'kill flux broker' '
 '
 
 wait_fsck_fail() {
-	i=0
-	while ! sudo journalctl --since "$(cat fscktime.out)" | grep "missing blobref" > /dev/null 2>&1 \
-	      && [ $i -lt 100 ]
+	local i=0
+	while [ $i -lt 100 ]
 	do
+		if sudo journalctl --since "$(cat fscktime.out)" | grep "missing blobref" > /dev/null 2>&1
+		then
+			return 0
+		fi
 		sleep 1
 		i=$((i + 1))
 	done
-	if [ "$i" -eq "100" ]
-	then
-		return 1
-	fi
-	return 0
+	return 1
 }
 
 # system instance for flux will auto restart in about 30 seconds
@@ -93,18 +88,14 @@ test_expect_success 'wait for flux to restart and fail fsck' '
 '
 
 wait_flux_stopped() {
-	i=0
-	while sudo systemctl status flux > /dev/null 2>&1 \
-	      && [ $i -lt 100 ]
+	local i=0
+	while [ $i -lt 100 ]
 	do
+		! sudo systemctl status flux > /dev/null 2>&1 && return 0
 		sleep 1
 		i=$((i + 1))
 	done
-	if [ "$i" -eq "100" ]
-	then
-		return 1
-	fi
-	return 0
+	return 1
 }
 
 test_expect_success 'flux system instance is not running' '

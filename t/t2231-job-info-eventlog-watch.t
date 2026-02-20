@@ -46,18 +46,17 @@ submit_job_wait() {
 wait_watchers_nonzero() {
 	local str=$1
 	local i=0
-	while (! flux module stats --parse $str job-info > /dev/null 2>&1 \
-		|| [ "$(flux module stats --parse $str job-info 2> /dev/null)" = "0" ]) \
-		&& [ $i -lt 50 ]
+	while [ $i -lt 50 ]
 	do
-		sleep 0.1
-		i=$((i + 1))
+	    if flux module stats --parse $str job-info > /dev/null 2>&1 \
+	       && [ "$(flux module stats --parse $str job-info 2> /dev/null)" != "0" ]
+	    then
+		return 0
+	    fi
+	    sleep 0.1
+	    i=$((i + 1))
 	done
-	if [ "$i" -eq "50" ]
-	then
-		return 1
-	fi
-	return 0
+	return 1
 }
 
 get_timestamp_field() {
@@ -501,8 +500,8 @@ test_expect_success NO_CHAIN_LINT 'eventlog-watch-initial-sentinel works w/ WAIT
 	wait_watchers_nonzero "guest_watchers" &&
 	guestns=$(flux job namespace $jobid) &&
 	wait_watcherscount_nonzero $guestns &&
-        flux kvs eventlog append --namespace=${guestns} foobar hello &&
-        flux kvs eventlog append --namespace=${guestns} foobar goodbye &&
+	flux kvs eventlog append --namespace=${guestns} foobar hello &&
+	flux kvs eventlog append --namespace=${guestns} foobar goodbye &&
 	$waitfile --count=1 --timeout=10 \
 		  --pattern="goodbye" sentinel5.out >/dev/null &&
 	test_debug "cat sentinel5.out" &&
