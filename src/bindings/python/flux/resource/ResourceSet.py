@@ -274,3 +274,19 @@ class ResourceSet:
     @property
     def properties(self):
         return ",".join(json.loads(self.get_properties()).keys())
+
+    @property
+    def expiration(self):
+        return self.impl.get_expiration()
+
+    @expiration.setter
+    def expiration(self, expiration):
+        return self.impl.set_expiration(expiration)
+
+    @property
+    def starttime(self):
+        return self.impl.get_starttime()
+
+    @starttime.setter
+    def starttime(self, starttime):
+        return self.impl.set_starttime(starttime)
