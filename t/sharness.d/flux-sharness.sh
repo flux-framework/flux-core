@@ -339,6 +339,93 @@ test_flux_security_version() {
     test $major -ge $req_major -a $minor -ge $req_minor -a $patch -ge $req_patch
 }
 
+# Default number of iterations for test_wait_until() (can be
+# overridden)
+TEST_WAIT_UNTIL_DEFAULT_ITERS=50
+
+# Default sleep time in seconds between iterations for
+# test_wait_until() (can be overridden)
+TEST_WAIT_UNTIL_DEFAULT_SLEEP=0.1
+
+# Default verbosity for test_wait_until() (can be overridden)
+TEST_WAIT_UNTIL_DEFAULT_VERBOSE=0
+
+#
+# Common utility function to wait for a condition to be met
+# The condition is provided as a command to execute
+#
+# Usage: test_wait_until [OPTIONS] "COMMAND [ARGS...]"
+#
+# Options:
+#   -i, --iterations N   Maximum iterations to wait (default: $TEST_WAIT_UNTIL_DEFAULT_ITERS)
+#   -s, --sleep S        Sleep time between iterations (default: $TEST_WAIT_UNTIL_DEFAULT_SLEEP)
+#   -v, --verbose        Print diagnostic messages during waiting
+#
+# Example usage:
+#   test_wait_until "flux kvs get mykey" # Wait until command succeeds
+#   test_wait_until "test -f myfile"     # Wait until file exists
+#   test_wait_until "grep pattern file"  # Wait until pattern appears in file
+#   test_wait_until -i 100 -s 0.5 "custom_check_command arg1 arg2"
+#
+test_wait_until() {
+    local iterations=$TEST_WAIT_UNTIL_DEFAULT_ITERS
+    local sleep_time=$TEST_WAIT_UNTIL_DEFAULT_SLEEP
+    local verbose=$TEST_WAIT_UNTIL_DEFAULT_VERBOSE
+
+    # Process options
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -i|--iterations)
+                iterations=$2
+                shift 2
+                ;;
+            -s|--sleep)
+                sleep_time=$2
+                shift 2
+                ;;
+            -v|--verbose)
+                verbose=1
+                shift
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
+    # Ensure we have a command to run
+    if [ $# -eq 0 ]; then
+        echo "Error: test_wait_until requires a command to execute" >&2
+        return 1
+    fi
+
+    # The remaining arguments form the command to execute
+    local cmd="$1"
+    [ $verbose -eq 1 ] && echo "test_wait_until: running $cmd"
+
+    local i=0
+    while [ $i -lt $iterations ]
+    do
+        if [ $verbose -eq 1 ]; then
+            if eval "$cmd"; then
+                echo "test_wait_until: condition met after $i iterations"
+                return 0
+            fi
+        else
+            if eval "$cmd" >/dev/null 2>&1; then
+                return 0
+            fi
+        fi
+
+        [ $verbose -eq 1 ] && echo "test_wait_until: waiting... ($i/$iterations)"
+        sleep $sleep_time
+        i=$((i + 1))
+    done
+
+    [ $verbose -eq 1 ] && echo "test_wait_until: timeout after $iterations iterations"
+    return 1
+}
+
 #  Export a shorter name for this test
 TEST_NAME=$SHARNESS_TEST_NAME
 export TEST_NAME
