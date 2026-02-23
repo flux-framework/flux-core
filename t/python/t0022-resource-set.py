@@ -288,6 +288,145 @@ class TestRSet(unittest.TestCase):
         with self.assertRaises(ValueError):
             rset.copy_constraint({"properties": [42]})
 
+    def test_count(self):
+        rset = ResourceSet(self.R_input)
+        self.assertEqual(rset.count("core"), 16)
+        self.assertEqual(rset.count("gpu"), 4)
+        # unknown resource type returns 0
+        self.assertEqual(rset.count("notaresource"), 0)
+
+    def test_rlist(self):
+        rset = ResourceSet(self.R_input)
+        self.assertEqual(rset.rlist, str(rset))
+        self.assertEqual(rset.rlist, "rank[0-3]/core[0-3],gpu0")
+
+    def test_copy(self):
+        rset = ResourceSet(self.R_input)
+        rset.state = "up"
+        cp = rset.copy()
+        self.assertIsInstance(cp, ResourceSet)
+        self.assertEqual(str(cp), str(rset))
+        self.assertEqual(cp.state, "up")
+        # Verify it's a real copy (modifications don't affect original)
+        cp.remove_ranks("0")
+        self.assertEqual(str(rset), "rank[0-3]/core[0-3],gpu0")
+
+    def test_copy_ranks(self):
+        rset = ResourceSet(self.R_input)
+        rset.state = "up"
+
+        # copy single rank
+        cp = rset.copy_ranks("0")
+        self.assertIsInstance(cp, ResourceSet)
+        self.assertEqual(str(cp), "rank0/core[0-3],gpu0")
+        self.assertEqual(cp.state, "up")
+
+        # copy multiple ranks as string
+        cp = rset.copy_ranks("1-2")
+        self.assertEqual(str(cp), "rank[1-2]/core[0-3],gpu0")
+
+        # copy via IDset
+        cp = rset.copy_ranks(IDset("0,3"))
+        self.assertEqual(str(cp), "rank[0,3]/core[0-3],gpu0")
+
+    def test_remove_ranks(self):
+        rset = ResourceSet(self.R_input)
+        rset.remove_ranks("0-1")
+        self.assertEqual(str(rset), "rank[2-3]/core[0-3],gpu0")
+        self.assertEqual(rset.nnodes, 2)
+
+        # remove via IDset
+        rset = ResourceSet(self.R_input)
+        rset.remove_ranks(IDset("0,3"))
+        self.assertEqual(str(rset), "rank[1-2]/core[0-3],gpu0")
+
+    def test_get_properties(self):
+        rset = ResourceSet(self.R_input)
+        rset.set_property("foo", "0-1")
+        rset.set_property("bar", "2-3")
+        props = json.loads(rset.get_properties())
+        self.assertIsInstance(props, dict)
+        self.assertIn("foo", props)
+        self.assertIn("bar", props)
+
+    def test_properties_attribute(self):
+        rset = ResourceSet(self.R_input)
+        # no properties set
+        self.assertEqual(rset.properties, "")
+
+        rset.set_property("foo", "0-1")
+        rset.set_property("bar", "2-3")
+        prop_list = rset.properties.split(",")
+        self.assertIn("foo", prop_list)
+        self.assertIn("bar", prop_list)
+
+    def test_set_property_all_ranks(self):
+        rset = ResourceSet(self.R_input)
+        # set property on all ranks (no ranks arg)
+        rset.set_property("all")
+        result = rset.copy_constraint({"properties": ["all"]})
+        self.assertEqual(str(result), str(rset))
+
+    def test_expiration(self):
+        rset = ResourceSet(self.R_input)
+        # default expiration from R_input is 0
+        self.assertEqual(rset.expiration, 0.0)
+
+        rset.expiration = 12345.0
+        self.assertEqual(rset.expiration, 12345.0)
+
+        # round-trip through encode/decode preserves expiration
+        rset2 = ResourceSet(rset.encode())
+        self.assertEqual(rset2.expiration, 12345.0)
+
+    def test_starttime(self):
+        rset = ResourceSet(self.R_input)
+        # default starttime from R_input is 0
+        self.assertEqual(rset.starttime, 0.0)
+
+        rset.starttime = 9999.0
+        self.assertEqual(rset.starttime, 9999.0)
+
+        # round-trip through encode/decode preserves starttime
+        rset2 = ResourceSet(rset.encode())
+        self.assertEqual(rset2.starttime, 9999.0)
+
+    def test_starttime_expiration_together(self):
+        rset = ResourceSet(self.R_input)
+        rset.starttime = 1000.0
+        rset.expiration = 2000.0
+        self.assertEqual(rset.starttime, 1000.0)
+        self.assertEqual(rset.expiration, 2000.0)
+
+        rset2 = ResourceSet(rset.encode())
+        self.assertEqual(rset2.starttime, 1000.0)
+        self.assertEqual(rset2.expiration, 2000.0)
+
+    def test_multi_arg_ops(self):
+        rset = ResourceSet(self.R_input)  # ranks 0-3
+        r2 = ResourceSet(self.R2)  # ranks 10-13
+        extra = ResourceSet(Rlist().add_rank(5, cores="0-1"))
+
+        # multi-arg union
+        result = rset.union(r2, extra)
+        self.assertIn("5", str(result.ranks))
+        self.assertIn("10", str(result.ranks))
+        self.assertIn("0", str(result.ranks))
+
+        # multi-arg diff
+        rset_copy = ResourceSet(self.R_input)
+        r_01 = rset_copy.copy_ranks("0-1")
+        r_23 = rset_copy.copy_ranks("2-3")
+        result = rset_copy.diff(r_01, r_23)
+        self.assertEqual(str(result), "")
+
+        # multi-arg intersect
+        rset_copy = ResourceSet(self.R_input)
+        r_0_2 = rset_copy.copy_ranks("0-2")
+        r_1_3 = rset_copy.copy_ranks("1-3")
+        result = rset_copy.intersect(r_0_2, r_1_3)
+        self.assertEqual(str(result.ranks), "1-2")
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=TAPTestRunner())
