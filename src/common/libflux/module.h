@@ -43,6 +43,17 @@ int flux_module_set_running (flux_t *h);
 int flux_module_config_request_decode (const flux_msg_t *msg,
                                        flux_conf_t **conf);
 
+/* Register module management handlers:
+ * - add a prepare watcher that calls flux_module_set_running(), only once
+ * - add a shutdown handler that calls flux_reactor_stop()
+ * - add the default methods calling flux_register_default_methods()
+ * - subscribe to stats-clear events
+ * Handlers are stopped/destroyed on flux_close(3), when the handle's
+ * aux container is destroyed.
+ * Returns 0 on success, -1 on error with 'error' filled if non-NULL.
+ */
+int flux_module_register_handlers (flux_t *h, flux_error_t *error);
+
 #ifdef __cplusplus
 }
 #endif

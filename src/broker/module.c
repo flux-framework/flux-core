@@ -33,7 +33,6 @@
 #include "ccan/str/str.h"
 
 #include "module.h"
-#include "modservice.h"
 
 struct broker_module_thread {
     struct module_args args;/* passed to module thread via (void *) param */

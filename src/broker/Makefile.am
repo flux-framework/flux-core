@@ -31,8 +31,6 @@ libbroker_la_SOURCES = \
 	module_thread.c \
 	modhash.c \
 	modhash.h \
-	modservice.c \
-	modservice.h \
 	service.h \
 	service.c \
 	attr.h \

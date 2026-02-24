@@ -46,7 +46,6 @@
 
 #include "module.h"
 #include "module_dso.h"
-#include "modservice.h"
 
 struct modexec {
     optparse_t *opts;
@@ -296,6 +295,7 @@ int main (int argc, char *argv[])
     const char *uri;
     bool test_mode = true;
     int mod_main_errno = 0;
+    flux_error_t error;
 
     log_init ((char *)cmdname);
 
@@ -325,7 +325,6 @@ int main (int argc, char *argv[])
             log_msg_exit ("FLUX_MODULE_URI and --name are incompatible");
     }
 
-    flux_error_t error;
     if (!(me.h = flux_open_ex (uri, 0, &error)))
         log_msg_exit ("flux_open: %s", error.text);
     if (test_mode) {
@@ -348,8 +347,8 @@ int main (int argc, char *argv[])
 
     /* Register standard module services
      */
-    if (modservice_register (me.h) < 0)
-        log_err_exit ("error registering internal services");
+    if (flux_module_register_handlers (me.h, &error) < 0)
+        log_err_exit ("error registering internal services: %s", error.text);
 
     /* Load the DSO and set me->path
      */

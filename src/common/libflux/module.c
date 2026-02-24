@@ -19,6 +19,8 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/dirwalk.h"
+#include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/broker/module.h"
 
 bool flux_module_debug_test (flux_t *h, int flag, bool clear)
@@ -63,6 +65,117 @@ int flux_module_config_request_decode (const flux_msg_t *msg,
     return 0;
 }
 
+/* Stop the module reactor so the module can be unloaded.
+ */
+static void module_shutdown_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    flux_reactor_stop (flux_get_reactor (h));
+}
+
+/* Notify broker that module is running (just once)
+ */
+static void module_prepare_cb (flux_reactor_t *r,
+                               flux_watcher_t *w,
+                               int revents,
+                               void *arg)
+{
+    flux_t *h = arg;
+    if (flux_module_set_running (h) < 0)
+        flux_log_error (h, "error setting module status to running");
+    flux_watcher_stop (w);
+}
+
+static struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,
+      "shutdown",
+      module_shutdown_cb,
+      0
+    },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+struct module_ctx {
+    flux_msg_handler_t **handlers_default;
+    flux_msg_handler_t **handlers;
+    flux_watcher_t *w_prepare;
+};
+
+static void module_ctx_destroy (struct module_ctx *ctx)
+{
+    if (ctx) {
+        int saved_errno = errno;
+        flux_watcher_destroy (ctx->w_prepare);
+        flux_msg_handler_delvec (ctx->handlers);
+        flux_msg_handler_delvec (ctx->handlers_default);
+        free (ctx);
+        errno = saved_errno;
+    }
+}
+
+static flux_watcher_t *register_prepare (flux_t *h, flux_error_t *errp)
+{
+    flux_watcher_t *w;
+    if (!(w = flux_prepare_watcher_create (flux_get_reactor (h),
+                                           module_prepare_cb,
+                                           h))) {
+        errprintf (errp, "error creating prepare watcher");
+        return NULL;
+    }
+    flux_watcher_start (w);
+    return w;
+}
+
+static int subscribe_events (flux_t *h, const char *name, flux_error_t *errp)
+{
+    char *topic = NULL;
+    if (asprintf (&topic, "%s.stats-clear", name) < 0
+        || flux_event_subscribe (h, topic) < 0) {
+        errprintf (errp,
+                   "error subscribing to stats-clear event: %s",
+                   strerror (errno));
+        ERRNO_SAFE_WRAP (free, topic);
+        return -1;
+    }
+    free (topic);
+    return 0;
+}
+
+int flux_module_register_handlers (flux_t *h, flux_error_t *error)
+{
+    struct module_ctx *ctx;
+    const char *name;
+
+    if (!h || !(name = flux_aux_get (h, "flux::name"))) {
+        errno = EINVAL;
+        return errprintf (error, "invalid argument");
+    }
+    if (!(ctx = calloc (1, sizeof (*ctx)))
+        || flux_aux_set (h, NULL, ctx, (flux_free_f)module_ctx_destroy) < 0) {
+        module_ctx_destroy (ctx);
+        return -1;
+    }
+    if (!(ctx->w_prepare = register_prepare (h, error))
+        || subscribe_events (h, name, error) < 0)
+        goto error;
+    if (flux_register_default_methods (h, name, &ctx->handlers_default) < 0) {
+        errprintf (error,
+                   "error registering default service methods: %s",
+                   strerror (errno));
+        goto error;
+    }
+    if (flux_msg_handler_addvec_ex (h, name, htab, NULL, &ctx->handlers) < 0) {
+        errprintf (error,
+                   "error registering additional default service methods: %s",
+                   strerror (errno));
+        goto error;
+    }
+    return 0;
+error:
+    return -1;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

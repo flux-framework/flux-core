@@ -27,7 +27,6 @@
 #include "ccan/str/str.h"
 
 #include "module.h"
-#include "modservice.h"
 
 struct module_ctx {
     flux_t *h;
@@ -172,6 +171,7 @@ void *module_thread (void *arg)
         .matchtag = FLUX_MATCHTAG_NONE,
         .topic_glob = "welcome",
     };
+    flux_error_t error;
 
     memset (&ctx, 0, sizeof (ctx));
     pthread_cleanup_push (module_thread_cleanup, &ctx);
@@ -207,8 +207,10 @@ void *module_thread (void *arg)
 
     /* Register services
      */
-    if (modservice_register (ctx.h) < 0) {
-        flux_log_error (ctx.h, "error registering internal services");
+    if (flux_module_register_handlers (ctx.h, &error) < 0) {
+        flux_log_error (ctx.h,
+                        "error registering internal services: %s",
+                        error.text);
         goto done;
     }
 
