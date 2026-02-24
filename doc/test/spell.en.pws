@@ -1090,3 +1090,6 @@ prepends
 pythonX
 THISSYSTEM
 topologies
+blocklist
+OSError
+ValueError
