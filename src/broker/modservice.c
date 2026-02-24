@@ -23,6 +23,7 @@
 typedef struct {
     flux_t *h;
     flux_watcher_t *w_prepare;
+    flux_msg_handler_t **handlers_default;
     flux_msg_handler_t **handlers;
 } modservice_ctx_t;
 
@@ -30,6 +31,7 @@ static void freectx (void *arg)
 {
     modservice_ctx_t *ctx = arg;
     flux_msg_handler_delvec (ctx->handlers);
+    flux_msg_handler_delvec (ctx->handlers_default);
     flux_watcher_destroy (ctx->w_prepare);
     free (ctx);
 }
@@ -55,46 +57,6 @@ static void shutdown_cb (flux_t *h,
     flux_reactor_stop (flux_get_reactor (h));
 }
 
-static void debug_cb (flux_t *h,
-                      flux_msg_handler_t *mh,
-                      const flux_msg_t *msg,
-                      void *arg)
-{
-    int flags;
-    int *debug_flags;
-    const char *op;
-
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{s:s s:i}",
-                             "op", &op,
-                             "flags", &flags) < 0)
-        goto error;
-    if (!(debug_flags = flux_aux_get (h, "flux::debug_flags"))) {
-        if (!(debug_flags = calloc (1, sizeof (*debug_flags))))
-            goto error;
-        flux_aux_set (h, "flux::debug_flags", debug_flags, free);
-    }
-    if (streq (op, "setbit"))
-        *debug_flags |= flags;
-    else if (streq (op, "clrbit"))
-        *debug_flags &= ~flags;
-    else if (streq (op, "set"))
-        *debug_flags = flags;
-    else if (streq (op, "clr"))
-        *debug_flags = 0;
-    else {
-        errno = EPROTO;
-        goto error;
-    }
-    if (flux_respond_pack (h, msg, "{s:i}", "flags", *debug_flags) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-}
-
 /* Reactor loop is about to block.
  * Notify broker that module is running, then disable the prepare watcher.
  */
@@ -116,41 +78,6 @@ static struct flux_msg_handler_spec htab[] = {
       "shutdown",
       shutdown_cb,
       0
-    },
-    { FLUX_MSGTYPE_REQUEST,
-      "stats-get",
-      method_stats_get_cb,
-      FLUX_ROLE_ALL,
-    },
-    { FLUX_MSGTYPE_REQUEST,
-      "stats-clear",
-      method_stats_clear_cb,
-      0,
-    },
-    { FLUX_MSGTYPE_EVENT,
-      "stats-clear",
-      method_stats_clear_event_cb,
-      0,
-    },
-    { FLUX_MSGTYPE_REQUEST,
-      "config-reload",
-      method_config_reload_cb,
-      0,
-    },
-    { FLUX_MSGTYPE_REQUEST,
-      "debug",
-      debug_cb,
-      0,
-    },
-    { FLUX_MSGTYPE_REQUEST,
-      "rusage",
-      method_rusage_cb,
-      FLUX_ROLE_USER,
-    },
-    { FLUX_MSGTYPE_REQUEST,
-      "ping",
-      method_ping_cb,
-      FLUX_ROLE_USER,
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -177,7 +104,8 @@ int modservice_register (flux_t *h)
     if (!ctx || !r)
         return -1;
 
-    if (flux_msg_handler_addvec_ex (h, name, htab, ctx, &ctx->handlers) < 0)
+    if (flux_register_default_methods (h, name, &ctx->handlers_default) < 0
+        || flux_msg_handler_addvec_ex (h, name, htab, ctx, &ctx->handlers) < 0)
         return -1;
 
     if (mod_subscribe (h, name, "stats-clear") < 0)

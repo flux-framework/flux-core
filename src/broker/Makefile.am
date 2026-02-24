@@ -33,8 +33,6 @@ libbroker_la_SOURCES = \
 	modhash.h \
 	modservice.c \
 	modservice.h \
-	method.c \
-	method.h \
 	service.h \
 	service.c \
 	attr.h \

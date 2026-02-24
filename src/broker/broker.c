@@ -69,7 +69,6 @@
 
 #include "module.h"
 #include "modhash.h"
-#include "method.h"
 #include "service.h"
 #include "attr.h"
 #include "log.h"
@@ -227,6 +226,7 @@ int main (int argc, char *argv[])
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
     flux_msg_handler_t **handlers = NULL;
+    flux_msg_handler_t **handlers_default = NULL;
 
     setlocale (LC_ALL, "");
 
@@ -538,6 +538,15 @@ int main (int argc, char *argv[])
                   strerror (errno));
         goto cleanup;
     }
+    if (flux_register_default_methods (ctx.h,
+                                       "broker",
+                                       &handlers_default) < 0) {
+        flux_log (ctx.h,
+                  LOG_CRIT,
+                  "error registering default service methods: %s",
+                  strerror (errno));
+        goto cleanup;
+    }
     if (!(handlers = broker_add_services (&ctx, &error))) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
@@ -627,6 +636,7 @@ cleanup:
     flux_close (ctx.h_overlay);
     service_switch_destroy (ctx.services);
     flux_msg_handler_delvec (handlers);
+    flux_msg_handler_delvec (handlers_default);
     bootstrap_destroy (ctx.boot);
     runat_destroy (ctx.runat);
     flux_watcher_destroy (ctx.w_internal);
@@ -1509,18 +1519,6 @@ error:
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
-        "broker.rusage",
-        method_rusage_cb,
-        FLUX_ROLE_USER
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "broker.ping",
-        method_ping_cb,
-        FLUX_ROLE_USER
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
         "broker.getenv",
         broker_getenv_cb,
         0
@@ -1529,18 +1527,6 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "broker.setenv",
         broker_setenv_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "broker.config-reload",
-        method_config_reload_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "broker.config-sync",
-        method_config_reload_cb,
         0
     },
     {
