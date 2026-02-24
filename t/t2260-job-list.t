@@ -2,6 +2,8 @@
 
 test_description='Test flux job list services'
 
+. $(dirname $0)/util/wait-util.sh
+
 . $(dirname $0)/job-list/job-list-helper.sh
 
 . $(dirname $0)/sharness.sh
@@ -891,17 +893,7 @@ test_expect_success 'cleanup job listing jobs ' '
 '
 
 wait_inactive() {
-	local i=0
-	while [ $i -lt 50 ]
-	do
-	    if [ "$(flux job list --states=inactive | wc -l)" = "$(job_list_state_count all)" ]
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "[ \"\$(flux job list --states=inactive | wc -l)\" = \"\$(job_list_state_count all)\" ]"
 }
 
 # Note: annotations are not part of the following comparison
@@ -1058,18 +1050,8 @@ test_expect_success 'flux job list-ids fails with one bad ID out of several' '
 
 wait_idsync() {
 	local num=$1
-	local i=0
-	while [ $i -lt 50 ]
-	do
-	    if flux module stats --parse idsync.waits job-list > /dev/null 2>&1 \
-	       && [ "$(flux module stats --parse idsync.waits job-list 2> /dev/null)" = "$num" ]
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "flux module stats --parse idsync.waits job-list > /dev/null 2>&1 \
+		&& [ \"\$(flux module stats --parse idsync.waits job-list 2> /dev/null)\" = \"$num\" ]"
 }
 
 test_expect_success NO_CHAIN_LINT 'flux job list-ids waits for job ids (one id)' '
@@ -1264,14 +1246,7 @@ test_expect_success 'flux job list job state timing outputs valid (job running)'
 # service been setup yet).  This checks to make sure `job-list` is
 # really up and ready.
 wait_job_list_ready() {
-	local i=0
-	while [ $i -lt 50 ]
-	do
-	    flux job list > /dev/null && return 0
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "flux job list > /dev/null"
 }
 
 #
@@ -2342,17 +2317,7 @@ test_expect_success 'flux job list works' '
 
 wait_jobid() {
 	local jobid="$1"
-	local i=0
-	while [ $i -lt 50 ]
-	do
-	    if flux job list --states=sched | grep $jobid > /dev/null
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "flux job list --states=sched | grep $jobid > /dev/null"
 }
 
 # to ensure jobs are still in PENDING state, stop queue before
@@ -2390,17 +2355,7 @@ test_expect_success 'configure update queues' '
 
 wait_id_inactive() {
 	id=$1
-	local i=0
-	while [ $i -lt 50 ]
-	do
-	    if flux job list --states=inactive | grep ${id} > /dev/null
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "flux job list --states=inactive | grep ${id} > /dev/null"
 }
 
 test_expect_success 'load jobspec-update test plugin' '
@@ -2649,17 +2604,7 @@ test_expect_success 'list-attrs works' '
 #
 
 wait_jobs_finish() {
-	local i=0
-	while [ $i -lt 1000 ]
-	do
-	    if [ "$(flux job list | wc -l)" = "0" ]
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util -i 1000 "[ \"\$(flux job list | wc -l)\" = \"0\" ]"
 }
 
 test_expect_success LONGTEST 'stress job-list.list-id' '
@@ -2768,17 +2713,7 @@ test_expect_success 'job stats in each queue correct after reload' '
 
 wait_total() {
 	total=$1
-	local i=0
-	while [ $i -lt 50 ]
-	do
-	    if flux job stats | jq -e ".job_states.total == ${total}"
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "flux job stats | jq -e \".job_states.total == ${total}\""
 }
 
 # purge all jobs except two, the remaining two should be the failed

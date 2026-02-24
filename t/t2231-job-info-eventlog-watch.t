@@ -2,6 +2,8 @@
 
 test_description='Test flux job info service eventlog watch'
 
+. `dirname $0`/util/wait-util.sh
+
 . `dirname $0`/kvs/kvs-helper.sh
 
 . $(dirname $0)/sharness.sh
@@ -45,18 +47,8 @@ submit_job_wait() {
 
 wait_watchers_nonzero() {
 	local str=$1
-	local i=0
-	while [ $i -lt 50 ]
-	do
-	    if flux module stats --parse $str job-info > /dev/null 2>&1 \
-	       && [ "$(flux module stats --parse $str job-info 2> /dev/null)" != "0" ]
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "flux module stats --parse $str job-info > /dev/null 2>&1 \
+		&& [ \"\$(flux module stats --parse $str job-info 2> /dev/null)\" != \"0\" ]"
 }
 
 get_timestamp_field() {

@@ -9,6 +9,8 @@ will generally cover non-obvious issues/features that a general user
 would be unaware of.
 '
 
+. `dirname $0`/util/wait-util.sh
+
 . `dirname $0`/kvs/kvs-helper.sh
 
 . `dirname $0`/sharness.sh
@@ -516,17 +518,7 @@ test_expect_success 'kvs: module commit stats min is updated' '
 
 wait_versionwaiters() {
 	num=$1
-	local i=0
-	while [ $i -lt ${KVS_WAIT_ITERS} ]
-	do
-	    if [ "$(flux module stats --parse namespace.primary.#versionwaiters kvs 2> /dev/null)" = "${num}" ]
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "[ \"\$(flux module stats --parse namespace.primary.#versionwaiters kvs 2> /dev/null)\" = \"${num}\" ]"
 }
 
 # In order to test, wait for a version that will not happen

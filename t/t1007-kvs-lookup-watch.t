@@ -2,6 +2,8 @@
 
 test_description='Test KVS get --watch && --waitcreate && --stream'
 
+. `dirname $0`/util/wait-util.sh
+
 . `dirname $0`/kvs/kvs-helper.sh
 
 . `dirname $0`/sharness.sh
@@ -444,20 +446,11 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on fake append (
 # to handle racy issues, wait until a value has been seen by a get
 # --watch.  Note that we can't use waitfile or flux kvs get here, b/c
 # we are specifically testing against --watch.
+
 wait_kvs_value() {
 	key=$1
 	value=$2
-	local i=0
-	while [ $i -lt ${KVS_WAIT_ITERS} ]
-	do
-	    if [ "$(flux kvs get --watch --count=1 $key 2> /dev/null)" = "$value" ]
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "[ \"\$(flux kvs get --watch --count=1 $key 2> /dev/null)\" = \"$value\" ]"
 }
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/o --full doesnt detect change' '
@@ -481,14 +474,7 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/o --full doesnt detect
 # we are specifically testing against --watch
 wait_kvs_enoent() {
 	key=$1
-	local i=0
-	while [ $i -lt ${KVS_WAIT_ITERS} ]
-	do
-	    ! flux kvs get --watch --count=1 $key && return 0
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "! flux kvs get --watch --count=1 $key"
 }
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/o --full doesnt detect ENOENT' '

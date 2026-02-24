@@ -2,6 +2,8 @@
 
 test_description='Test flux jobs command'
 
+. $(dirname $0)/util/wait-util.sh
+
 . $(dirname $0)/job-list/job-list-helper.sh
 
 . $(dirname $0)/sharness.sh
@@ -1227,17 +1229,7 @@ test_expect_success 'update project and bank in pending jobs' '
 '
 
 wait_project_bank_synced() {
-	local i=0
-	while [ $i -lt 50 ]
-	do
-	    if [ "$(flux jobs -f pending -o {project} | grep foo | wc -l)" = "$(job_list_state_count sched)" ]
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "[ \"\$(flux jobs -f pending -o {project} | grep foo | wc -l)\" = \"\$(job_list_state_count sched)\" ]"
 }
 
 # can be racy, need to wait until `job-list` module definitely has

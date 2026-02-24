@@ -1,6 +1,8 @@
 #!/bin/sh
 test_description='Test flux queue command'
 
+. $(dirname $0)/util/wait-util.sh
+
 . $(dirname $0)/sharness.sh
 
 test_under_flux 1 full -Slog-stderr-level=1
@@ -458,17 +460,7 @@ test_expect_success 'jobs may be submitted to either queue' '
 wait_state() {
 	local jobid=$1
 	local state=$2
-	local i=0
-	while [ $i -lt 50 ]
-	do
-	    if [ "$(flux jobs -no {state} ${jobid})" = "${state}" ]
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "[ \"\$(flux jobs -no {state} ${jobid})\" = \"${state}\" ]"
 }
 
 test_expect_success 'submitted jobs are not running' '

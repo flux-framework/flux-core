@@ -5,6 +5,8 @@ test_description='Test flux-kvs and kvs in flux session
 These are tests for ensuring multiple namespaces work.
 '
 
+. `dirname $0`/util/wait-util.sh
+
 . `dirname $0`/kvs/kvs-helper.sh
 
 . `dirname $0`/sharness.sh
@@ -30,51 +32,20 @@ NAMESPACEORDER=namespaceorder
 NAMESPACEROOTREF=namespacerootref
 
 namespace_create_loop() {
-	local i=0
-	while [ $i -lt ${KVS_WAIT_ITERS} ]
-	do
-	    flux kvs namespace create $1 && return 0
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "flux kvs namespace create $1"
 }
 
 get_kvs_namespace_all_ranks_loop() {
-	local i=0
-	while [ $i -lt ${KVS_WAIT_ITERS} ]
-	do
-	    flux exec -n sh -c "flux kvs get --namespace=$1 $2" && return 0
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "flux exec -n sh -c \"flux kvs get --namespace=$1 $2\""
 }
 
 get_kvs_namespace_fails_all_ranks_loop() {
-	local i=0
-	while [ $i -lt ${KVS_WAIT_ITERS} ]
-	do
-	    flux exec -n sh -c "! flux kvs get --namespace=$1 $2" && return 0
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "flux exec -n sh -c \"! flux kvs get --namespace=$1 $2\""
 }
 
 wait_versionwaiters_nonzero() {
-	local i=0
-	while [ $i -lt ${KVS_WAIT_ITERS} ]
-	do
-	    if flux module stats --parse namespace.$1.#versionwaiters kvs > /dev/null 2>&1 \
-	       && [ "$(flux module stats --parse namespace.$1.#versionwaiters kvs 2> /dev/null)" != "0" ]
-	    then
-		return 0
-	    fi
-	    sleep 0.1
-	    i=$((i + 1))
-	done
-	return 1
+	wait_util "flux module stats --parse namespace.$1.#versionwaiters kvs > /dev/null 2>&1 \
+		&& [ \"\$(flux module stats --parse namespace.$1.#versionwaiters kvs 2> /dev/null)\" != \"0\" ]"
 }
 
 #
