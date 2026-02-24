@@ -146,6 +146,13 @@ subinstance_get_R() {
 subinstance_get_expiration() {
 	subinstance_get_R $1 | jq .execution.expiration
 }
+# Compare R expiration in resource.R vs `flux resource R`
+subinstance_check_R() {
+	exp=$(subinstance_get_expiration $1)
+	test_debug "echo checking that flux-resource R has expiration = $exp"
+	flux proxy $1 flux resource R \
+		| jq -e ".execution.expiration - $exp | fabs | . < 1e-5"
+}
 # Usage: subinstance_get_duration ID JOBID
 subinstance_get_job_duration() {
 	flux proxy $1 job_manager_get_R $2 |
@@ -184,6 +191,7 @@ test_expect_success "${label}expiration update is detected by subinstance" '
 	id=$(flux alloc --bg -t5m -n4 $conf_arg) &&
 	exp1=$(subinstance_get_expiration $id) &&
 	test_debug "echo instance expiration is $exp1" &&
+	subinstance_check_R $id &&
 	id1=$(flux proxy $id flux submit sleep 300) &&
 	id2=$(flux proxy $id flux submit -t4m sleep 300) &&
 	tleft1=$(flux proxy $id flux job timeleft $id1) &&
@@ -204,7 +212,8 @@ test_expect_success "${label}expiration update is detected by subinstance" '
 	exp2=$(subinstance_get_expiration $id) &&
 	subinstance_get_R $id &&
 	test_debug "echo expiration updated from $exp1 to $exp2" &&
-	echo $exp2 | jq -e ". == $exp1 + 300"
+	echo $exp2 | jq -e ". == $exp1 + 300" &&
+	subinstance_check_R $id
 '
 #
 #  9. Submit job to previous instance and ensure its expiration matches
@@ -226,7 +235,8 @@ test_expect_success "${label}instance expiration update propagates to jobs" '
 	duration1=$(subinstance_get_job_duration $id $id1) &&
 	test_debug "echo timeleft of job submitted extended to $tleft1" &&
 	test_debug "echo duration of job submitted extended to $duration1" &&
-	echo $duration1 | jq -e ". > 300"
+	echo $duration1 | jq -e ". > 300" &&
+	subinstance_check_R $id
 '
 #
 # 13. Check that expiration of job submitted with a duration is untouched.
@@ -248,6 +258,7 @@ test_expect_success "${label}instance expiration can be updated to unlimited" '
 	test_debug "echo waiting for second job resource-update event" &&
 	flux proxy $id flux job wait-event -c 2 -vt 20 \
 		$id1 resource-update &&
+	subinstance_check_R $id &&
 	exp=$(subinstance_get_job_expiration $id $id1) &&
 	test_debug "echo job1 expiration is now $exp" &&
 	echo $exp | jq -e ". == 0" &&
@@ -263,6 +274,7 @@ test_expect_success "${label}instance expiration can be decreased from unlimited
 	test_debug "echo waiting for third job resource-update event" &&
 	flux proxy $id flux job wait-event -c 3 -vt 20 \
 		$id1 resource-update &&
+	subinstance_check_R $id &&
 	duration=$(subinstance_get_job_duration $id $id1) &&
 	test_debug "echo job1 duration is now $duration" &&
 	echo $duration | jq -e ". < 3600 and . > 0" &&
@@ -278,6 +290,7 @@ test_expect_success "${label}instance expiration can be decreased again" '
 	test_debug "echo waiting for fourth job resource-update event" &&
 	flux proxy $id flux job wait-event -c 4 -vt 20 \
 		$id1 resource-update &&
+	subinstance_check_R $id &&
 	duration=$(subinstance_get_job_duration $id $id1) &&
 	test_debug "echo job1 duration is now $duration" &&
 	echo $duration | jq -e ". < 1800 and . > 0" &&

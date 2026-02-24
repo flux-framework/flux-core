@@ -143,3 +143,15 @@ class Rlist(WrapperPimpl):
                 "copy_constraint: " + ffi.string(error.text).decode("utf-8")
             ) from exc
         return Rlist(handle=handle)
+
+    def set_expiration(self, expiration):
+        self.pimpl.handle.expiration = expiration
+
+    def get_expiration(self):
+        return self.pimpl.handle.expiration
+
+    def set_starttime(self, starttime):
+        self.pimpl.handle.starttime = starttime
+
+    def get_starttime(self):
+        return self.pimpl.handle.starttime

@@ -90,3 +90,23 @@ class ResourceSetImplementation(ABC):  # pragma: no cover
     def remove_ranks(self, ranks):
         """Remove an IDset of ranks from a resource set"""
         raise NotImplementedError
+
+    @abstractmethod
+    def get_expiration(self):
+        """Get the expiration time from a resource set"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_expiration(self, expiration):
+        """Set the expiration time from a resource set"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_starttime(self):
+        """Get the starttime time from a resource set"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_starttime(self, starttime):
+        """Set the starttime time from a resource set"""
+        raise NotImplementedError

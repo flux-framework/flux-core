@@ -723,6 +723,8 @@ def emit_R(args):
     resources, config = get_resource_list(args)
 
     rset = ResourceSet()
+    rset.starttime = resources["all"].starttime
+    rset.expiration = resources["all"].expiration
     for state in args.states:
         try:
             rset.add(resources[state])

@@ -471,7 +471,7 @@ error:
  * resource-define
  *   could be called in test from 'flux resource reload'
  * resource-update
- *   expiration only at this time - ignore
+ *   expiration has updated, invalidate cache
  * online, offline, drain, undrain
  *   invalidate R_down only
  */
@@ -493,6 +493,8 @@ static void reslog_cb (struct reslog *reslog,
     }
     else if (status->shrink_down_ranks
         && streq (name, "offline"))
+        invalidate_cache (&status->cache, true);
+    else if (streq (name, "resource-update"))
         invalidate_cache (&status->cache, true);
     else if (streq (name, "online")
         || streq (name, "offline")
