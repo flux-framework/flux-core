@@ -558,6 +558,183 @@ test_expect_success 'modprobe needs_config with `!` works' '
 	test_cmp test${seq}.expected output${seq}
 '
 seq=$((seq=seq+1))
+test_expect_success 'modprobe needs_env prevents task from running' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+	@task("first")
+	def first(context):
+	    print("first")
+
+	@task("last", needs_env=["MODPROBE_TEST_NOEXIST"])
+	def last(context):
+	    print("last")
+	EOF
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	first
+	EOF
+	test_cmp test${seq}.expected output${seq}
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe needs_env works' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first", before=["*"])
+	def first(context):
+	    print("first")
+
+	@task("last", needs_env=["MODPROBE_TEST_VAR"])
+	def last(context):
+	    print("last")
+	EOF
+	MODPROBE_TEST_VAR=1 flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	first
+	last
+	EOF
+	test_cmp test${seq}.expected output${seq}
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe needs_env with `!` prevents task from running' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+	@task("first")
+	def first(context):
+	    print("first")
+
+	@task("last", needs_env=["!HOME"])
+	def last(context):
+	    print("last")
+	EOF
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	first
+	EOF
+	test_cmp test${seq}.expected output${seq}
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe needs_env with `!` works' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first", before=["*"])
+	def first(context):
+	    print("first")
+
+	@task("last", needs_env=["!MODPROBE_TEST_NOEXIST"])
+	def last(context):
+	    print("last")
+	EOF
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	cat <<-EOF >test${seq}.expected &&
+	first
+	last
+	EOF
+	test_cmp test${seq}.expected output${seq}
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe context.getenv() returns local env var' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first")
+	def first(context):
+	    print(context.getenv("MODPROBE_TEST_VAR"))
+	EOF
+	MODPROBE_TEST_VAR=testvalue flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	grep "testvalue" output${seq}
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe context.getenv() falls back to broker env' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first")
+	def first(context):
+	    val = context.getenv("HOME")
+	    print("found" if val else "not found")
+	EOF
+	env -u HOME flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	grep "found" output${seq}
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe context.setenv() targets visible to initial program' '
+	mkdir -p test${seq}/modprobe/rc1.d &&
+	cat <<-EOF >test${seq}/modprobe/rc1.d/rc1.py &&
+	from flux.modprobe import task
+
+	@task("first")
+	def first(context):
+	    context.setenv("MODPROBE_SETENV_VAR", "setvalue")
+	EOF
+	FLUX_MODPROBE_PATH_APPEND=$(pwd)/test${seq}/modprobe \
+	    flux start env >output${seq} &&
+	test_debug "grep MODPROBE_SETENV output${seq}" &&
+	grep "MODPROBE_SETENV_VAR=setvalue" output${seq}
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe context.setenv() invalidates getenv cache' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first")
+	def first(context):
+	    _ = context.getenv("MODPROBE_CACHE_VAR")
+	    context.setenv("MODPROBE_CACHE_VAR", "newvalue")
+	    result = context.getenv("MODPROBE_CACHE_VAR")
+	    if result != "newvalue":
+	        raise RuntimeError(f"CACHE_VAR={result}, expected newvalue")
+	    context.setenv("MODPROBE_CACHE_VAR", None)
+
+	@task("next", after=["first"])
+	def next(context):
+	    result = context.getenv("MODPROBE_CACHE_VAR")
+	    if result is not None:
+	        raise RuntimeError(f"CACHE_VAR={result}, expected None")
+	EOF
+	MODPROBE_CACHE_VAR=oldvalue flux modprobe run test${seq}.py
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe context.setenv() can set multiple variables at once' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first")
+	def first(context):
+	    context.setenv({"MODPROBE_MULTI1": "foo", "MODPROBE_MULTI2": "bar"})
+	    print(context.getenv("MODPROBE_MULTI1"))
+	    print(context.getenv("MODPROBE_MULTI2"))
+	EOF
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	grep "foo" output${seq} &&
+	grep "bar" output${seq}
+'
+seq=$((seq=seq+1))
+test_expect_success 'modprobe context.setenv() raises ValueError for non-string value' '
+	cat <<-EOF >test${seq}.py &&
+	from flux.modprobe import task
+
+	@task("first")
+	def first(context):
+	    try:
+	        context.setenv("MODPROBE_BAD", 42)
+	        print("no exception")
+	    except ValueError:
+	        print("ValueError raised")
+	EOF
+	flux modprobe run test${seq}.py >output${seq} &&
+	test_debug "cat output${seq}" &&
+	grep "ValueError raised" output${seq}
+'
+seq=$((seq=seq+1))
 test_expect_success 'modprobe ranks detects bad input' '
 	cat <<-EOF >test${seq}.py &&
 	from flux.modprobe import task
