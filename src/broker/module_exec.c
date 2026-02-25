@@ -13,12 +13,12 @@
  * There are two modes:
  *
  * broker mode
- * Usage: flux module-exec MODULE
+ * Usage: flux module-exec PATH
  * This mode is used when 'flux module load --exec MODULE' is run.
  * FLUX_MODULE_URI will be set to the module's handle.
  *
  * test mode
- * Usage: flux module-exec [--name=NAME] MODULE [args...]
+ * Usage: flux module-exec [--name=NAME] PATH [args...]
  * This mode can be used to manually set up broker modules for debugging.
  */
 
@@ -62,7 +62,7 @@ struct modexec {
 };
 
 static const char *cmdname = "flux-module-exec";
-static const char *cmdusage = "[OPTIONS] MODULE ARGS...";
+static const char *cmdusage = "[OPTIONS] PATH ARGS...";
 
 static struct optparse_option cmdopts[] = {
     {
@@ -178,7 +178,7 @@ static int fake_the_uuid (flux_t *h)
 }
 
 static void test_mode_init (struct modexec *me,
-                            const char *module,
+                            const char *path,
                             int argc,
                             char **argv)
 {
@@ -191,7 +191,7 @@ static void test_mode_init (struct modexec *me,
             log_err_exit ("error duplicating module name");
     }
     else  {
-        if (!(name = module_dso_name (module)))
+        if (!(name = module_dso_name (path)))
             log_err_exit ("error determining module name");
     }
     if (flux_aux_set (me->h, "flux::name", name, (flux_free_f)free) < 0)
@@ -214,24 +214,14 @@ static void test_mode_init (struct modexec *me,
     flux_future_destroy (f);
 }
 
-static void modexec_load (struct modexec *me, const char *module)
+static void modexec_load (struct modexec *me, const char *path)
 {
+    const char *name = flux_aux_get (me->h, "flux::name");
     flux_error_t error;
 
-    if (strchr (module, '/')) {
-        if (!(me->path = strdup (module)))
-            log_err_exit ("error duplicating path");
-    }
-    else {
-        const char *searchpath = getenv ("FLUX_MODULE_PATH");
-        if (!searchpath)
-            log_msg_exit ("FLUX_MODULE_PATH is not set in the environment");
-        if (!(me->path = module_dso_search (module, searchpath, &error)))
-            log_msg_exit ("%s: %s", module, error.text);
-    }
-    const char *name = flux_aux_get (me->h, "flux::name");
-    me->dso = module_dso_open (me->path, name, &me->mod_main, &error);
-    if (!me->dso)
+    if (!(me->path = strdup (path)))
+        log_err_exit ("error duplicating path");
+    if (!(me->dso = module_dso_open (me->path, name, &me->mod_main, &error)))
         log_err_exit ("%s", error.text);
 }
 
@@ -239,7 +229,7 @@ int main (int argc, char *argv[])
 {
     struct modexec me = { 0 };
     int optindex;
-    const char *module;
+    const char *path;
     const char *uri;
     bool test_mode = true;
     int mod_main_errno = 0;
@@ -257,7 +247,7 @@ int main (int argc, char *argv[])
         optparse_print_usage (me.opts);
         exit (1);
     }
-    module = argv[optindex++];
+    path = argv[optindex++];
 
     /* If the broker is starting this program as a sub-process, it will
      * set FLUX_MODULE_URI in the environment  Otherwise, assume "test mode"
@@ -277,7 +267,7 @@ int main (int argc, char *argv[])
         log_msg_exit ("flux_open: %s", error.text);
     if (test_mode) {
         log_msg ("loading module in test mode");
-        test_mode_init (&me, module, argc - optindex, argv + optindex);
+        test_mode_init (&me, path, argc - optindex, argv + optindex);
     }
     else {
         char *modargs;
@@ -302,7 +292,7 @@ int main (int argc, char *argv[])
 
     /* Load the DSO and set me->path
      */
-    modexec_load (&me, module);
+    modexec_load (&me, path);
 
     /* Run the DSO mod_main()
      */

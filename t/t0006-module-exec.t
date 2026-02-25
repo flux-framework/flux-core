@@ -7,6 +7,7 @@ test_description='Test flux-module-exec'
 test_under_flux 1 minimal
 
 testmod=$(realpath ${FLUX_BUILD_DIR}/t/module/.libs/testmod.so)
+heartbeatmod=$(realpath ${FLUX_BUILD_DIR}/src/modules/.libs/heartbeat.so)
 legacy=$(realpath ${FLUX_BUILD_DIR}/t/module/.libs/legacy.so)
 rpc_stream=${FLUX_BUILD_DIR}/t/request/rpc_stream
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
@@ -37,9 +38,9 @@ test_expect_success 'FLUX_MODULE_URI and free args fail when used together' '
 ##
 
 test_expect_success 'flux-module-exec fails on unknown module' '
-	test_must_fail flux module-exec badmod 2>badmod.err &&
-	grep "module not found in search path" badmod.err
+	test_must_fail flux module-exec /badmod.so
 '
+
 test_expect_success 'simulated module failure causes command failure' '
 	test_must_fail flux module-exec \
 	    $testmod --init-failure 2>modfail.err &&
@@ -91,7 +92,7 @@ shutdown_mod() {
 }
 
 test_expect_success NO_CHAIN_LINT 'start heartbeat in the background' '
-	flux module-exec heartbeat &
+	flux module-exec $heartbeatmod &
 	echo $! >heartbeat.pid
 '
 test_expect_success NO_CHAIN_LINT 'ping heartbeat works' '
