@@ -137,29 +137,6 @@ error:
     return -1;
 }
 
-/*  Synchronize the FINALIZING state with the broker, so the broker
- *   can stop messages to this module until we're fully shutdown.
- */
-static int module_finalizing (flux_t *h, double timeout)
-{
-    flux_future_t *f;
-
-    if (!(f = flux_rpc_pack (h,
-                             "module.status",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:i}",
-                             "status", FLUX_MODSTATE_FINALIZING))
-        || flux_future_wait_for (f, timeout) < 0
-        || flux_rpc_get (f, NULL)) {
-        flux_log_error (h, "module.status FINALIZING error");
-        flux_future_destroy (f);
-        return -1;
-    }
-    flux_future_destroy (f);
-    return 0;
-}
-
 void *module_thread (void *arg)
 {
     struct module_args *args = arg;
@@ -249,46 +226,15 @@ done:
 static void module_thread_cleanup (void *arg)
 {
     struct module_ctx *ctx = arg;
-    flux_msg_t *msg;
-    flux_future_t *f;
+    flux_error_t error;
 
     if (ctx->mod_main_failed) {
         if (ctx->mod_main_errno == 0)
             ctx->mod_main_errno = ECONNRESET;
         flux_log (ctx->h, LOG_CRIT, "module exiting abnormally");
     }
-
-    /* Before processing unhandled requests, ensure that this module
-     * is "muted" in the broker. This ensures the broker won't try to
-     * feed a message to this module after we've closed the handle,
-     * which could cause the broker to block.
-     */
-    if (module_finalizing (ctx->h, 1.0) < 0)
-        flux_log_error (ctx->h, "failed to set module state to finalizing");
-
-    /* If any unhandled requests were received during shutdown,
-     * respond to them now with ENOSYS.
-     */
-    while ((msg = flux_recv (ctx->h, FLUX_MATCH_REQUEST, FLUX_O_NONBLOCK))) {
-        const char *topic = "unknown";
-        (void)flux_msg_get_topic (msg, &topic);
-        flux_log (ctx->h, LOG_DEBUG, "responding to post-shutdown %s", topic);
-        if (flux_respond_error (ctx->h, msg, ENOSYS, NULL) < 0)
-            flux_log_error (ctx->h, "responding to post-shutdown %s", topic);
-        flux_msg_destroy (msg);
-    }
-    if (!(f = flux_rpc_pack (ctx->h,
-                             "module.status",
-                             FLUX_NODEID_ANY,
-                             FLUX_RPC_NORESPONSE,
-                             "{s:i s:i}",
-                             "status", FLUX_MODSTATE_EXITED,
-                             "errnum", ctx->mod_main_errno))) {
-        flux_log_error (ctx->h, "module.status EXITED error");
-        goto done;
-    }
-    flux_future_destroy (f);
-done:
+    if (flux_module_finalize (ctx->h, ctx->mod_main_errno, &error) < 0)
+        flux_log_error (ctx->h, "error finalizing module: %s", error.text);
     flux_close (ctx->h);
     free (ctx->argz);
     free (ctx->argv);

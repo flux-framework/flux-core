@@ -54,6 +54,15 @@ int flux_module_config_request_decode (const flux_msg_t *msg,
  */
 int flux_module_register_handlers (flux_t *h, flux_error_t *error);
 
+/* Finalize module state with the broker:
+ * - set module state to FINALIZING (prevents new requests)
+ * - respond with ENOSYS to unanswered requests in the message queue
+ * - set the module state to EXITED, reporting 'errnum'
+ * Errnum should be set to zero on success or a POSIX errno value on failure.
+ * Returns 0 on success, -1 on error with 'error' filled if non-NULL.
+ */
+int flux_module_finalize (flux_t *h, int errnum, flux_error_t *error);
+
 #ifdef __cplusplus
 }
 #endif

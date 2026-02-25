@@ -61,8 +61,6 @@ struct modexec {
     char *uuid;
 };
 
-static const double status_timeout = 10.;
-
 static const char *cmdname = "flux-module-exec";
 static const char *cmdusage = "[OPTIONS] MODULE ARGS...";
 
@@ -367,46 +365,8 @@ int main (int argc, char *argv[])
     }
 
     if (!test_mode) {
-        flux_future_t *f;
-        flux_msg_t *msg;
-
-        // set FINALIZING state (mutes module)
-        if (!(f = flux_rpc_pack (me.h,
-                                 "module.status",
-                                 FLUX_NODEID_ANY,
-                                 0,
-                                 "{s:i}",
-                                 "status", FLUX_MODSTATE_FINALIZING))
-            || flux_future_wait_for (f, status_timeout) < 0
-            || flux_rpc_get (f, NULL) < 0) {
-            log_msg_exit ("module status (FINALIZING): %s",
-                          future_strerror (f, errno));
-        }
-        flux_future_destroy (f);
-
-        // respond to unhandled requests
-        while ((msg = flux_recv (me.h, FLUX_MATCH_REQUEST, FLUX_O_NONBLOCK))) {
-            const char *topic = "unknown";
-            (void)flux_msg_get_topic (msg, &topic);
-            flux_log (me.h,
-                      LOG_DEBUG,
-                      "responding to post-shutdown %s",
-                      topic);
-            if (flux_respond_error (me.h, msg, ENOSYS, NULL) < 0)
-                flux_log_error (me.h, "responding to post-shutdown %s", topic);
-            flux_msg_destroy (msg);
-        }
-
-        // set EXITED status (fire and forget due to mute above)
-        if (!(f = flux_rpc_pack (me.h,
-                                 "module.status",
-                                 FLUX_NODEID_ANY,
-                                 FLUX_RPC_NORESPONSE,
-                                 "{s:i s:i}",
-                                 "status", FLUX_MODSTATE_EXITED,
-                                 "errnum", mod_main_errno)))
-            log_err_exit ("module.status (EXITED)");
-        flux_future_destroy (f);
+        if (flux_module_finalize (me.h, mod_main_errno, &error) < 0)
+            log_msg_exit ("error finalizing module: %s", error.text);
     }
 
     free (me.uuid);

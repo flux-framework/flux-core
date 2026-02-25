@@ -49,6 +49,47 @@ int flux_module_set_running (flux_t *h)
     return 0;
 }
 
+static int module_set_finalizing (flux_t *h,
+                                  double timeout,
+                                  flux_error_t *errp)
+{
+    flux_future_t *f;
+    if (!(f = flux_rpc_pack (h,
+                             "module.status",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:i}",
+                             "status", FLUX_MODSTATE_FINALIZING))
+        || flux_future_wait_for (f, timeout) < 0
+        || flux_rpc_get (f, NULL) < 0) {
+        errprintf (errp,
+                   "module status (FINALIZING): %s",
+                   future_strerror (f, errno));
+        flux_future_destroy (f);
+        return -1;
+    }
+    flux_future_destroy (f);
+    return 0;
+}
+
+static int module_set_exited (flux_t *h, int errnum, flux_error_t *errp)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_rpc_pack (h,
+                             "module.status",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_NORESPONSE,
+                             "{s:i s:i}",
+                             "status", FLUX_MODSTATE_EXITED,
+                             "errnum", errnum))) {
+        errprintf (errp, "module.status (EXITED): %s", strerror (errno));
+        return -1;
+    }
+    flux_future_destroy (f);
+    return 0;
+}
+
 int flux_module_config_request_decode (const flux_msg_t *msg,
                                        flux_conf_t **confp)
 {
@@ -175,6 +216,38 @@ int flux_module_register_handlers (flux_t *h, flux_error_t *error)
     return 0;
 error:
     return -1;
+}
+
+/* Respond with ENOSYS to any requests still in the module's message queue
+ * after transitioning to FINALIZING, which ensures the broker won't add
+ * any new ones.
+ */
+static void respond_to_unhandled (flux_t *h)
+{
+    flux_msg_t *msg;
+
+    while ((msg = flux_recv (h, FLUX_MATCH_REQUEST, FLUX_O_NONBLOCK))) {
+        const char *topic = "unknown";
+        (void)flux_msg_get_topic (msg, &topic);
+        flux_log (h, LOG_DEBUG, "responding to post-shutdown %s", topic);
+        if (flux_respond_error (h, msg, ENOSYS, NULL) < 0)
+            flux_log_error (h, "responding to post-shutdown %s", topic);
+        flux_msg_destroy (msg);
+    }
+}
+
+int flux_module_finalize (flux_t *h, int errnum, flux_error_t *error)
+{
+    if (!h) {
+        errno = EINVAL;
+        return errprintf (error, "invalid argument");
+    }
+    if (module_set_finalizing (h, 10., error) < 0)
+        return -1;
+    respond_to_unhandled (h);
+    if (module_set_exited (h, errnum, error) < 0)
+        return -1;
+    return 0;
 }
 
 /*
