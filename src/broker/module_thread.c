@@ -36,8 +36,7 @@ struct module_ctx {
     char **argv;
     size_t argz_len;
     char *argz;
-    char *name;
-    char *uuid;
+    char *modargs;
 };
 
 static void module_thread_cleanup (void *arg);
@@ -63,78 +62,25 @@ static int setup_module_profiling (const char *name)
     return (0);
 }
 
-static int attr_cache_from_json (flux_t *h, json_t *cache)
-{
-    const char *name;
-    json_t *o;
-
-    json_object_foreach (cache, name, o) {
-        const char *val = json_string_value (o);
-        if (flux_attr_set_cacheonly (h, name, val) < 0)
-            return -1;
-    }
-    return 0;
-}
-
-/* Decode welcome message and
- * - set ctx->name, ctx->uuid
- * - set ctx->argc, ctx->argv
- * - populate the broker attr cache in ctx->h
+/* Module arguments are provided by flux_module_initialize() as a
+ * space-delimited string, or NULL if there are no arguments.
+ * Translate to argz vector, stored in 'me'.
  */
-static int welcome_decode_new (struct module_ctx *ctx, flux_msg_t **msg)
+static int parse_modargs (struct module_ctx *ctx, const char *s)
 {
-    json_t *args;
-    json_t *attrs;
-    json_t *conf;
-    const char *name;
-    const char *uuid;
+    if (s) {
+        error_t e;
 
-    if (flux_request_unpack (*msg,
-                             NULL,
-                             "{s:o s:o s:o s:s s:s}",
-                             "args", &args,
-                             "attrs", &attrs,
-                             "conf", &conf,
-                             "name", &name,
-                             "uuid", &uuid) < 0)
-        return -1;
-
-    if (!(ctx->name = strdup (name))
-        || !(ctx->uuid = strdup (uuid)))
-        goto error;
-
-    if (attr_cache_from_json (ctx->h, attrs) < 0)
-        goto error;
-
-    flux_conf_t *cf;
-    if (!(cf = flux_conf_pack ("O", conf))
-        || flux_set_conf_new (ctx->h, cf) < 0) {
-        flux_conf_decref (cf);
-        goto error;
-    }
-
-    if (!json_is_null (args)) {
-        size_t index;
-        json_t *entry;
-
-        json_array_foreach (args, index, entry) {
-            const char *s = json_string_value (entry);
-            if (s && (argz_add (&ctx->argz, &ctx->argz_len, s) != 0)) {
-                errno = ENOMEM;
-                goto error;
-            }
+        if ((e = argz_create_sep (s, ' ', &ctx->argz, &ctx->argz_len)) != 0) {
+            errno = e;
+            return -1;
         }
+        ctx->argc = argz_count (ctx->argz, ctx->argz_len);
+        if (!(ctx->argv = calloc (1, sizeof (ctx->argv[0]) * (ctx->argc + 1))))
+            return -1;
+        argz_extract (ctx->argz, ctx->argz_len, ctx->argv);
     }
-    ctx->argc = argz_count (ctx->argz, ctx->argz_len);
-    if (!(ctx->argv = calloc (1, sizeof (ctx->argv[0]) * (ctx->argc + 1))))
-        goto error;
-    argz_extract (ctx->argz, ctx->argz_len, ctx->argv);
-
-    flux_msg_decref (*msg);
-    *msg = NULL;
     return 0;
-error:
-    return -1;
 }
 
 void *module_thread (void *arg)
@@ -143,11 +89,6 @@ void *module_thread (void *arg)
     sigset_t signal_set;
     int errnum;
     struct module_ctx ctx;
-    struct flux_match match = {
-        .typemask = FLUX_MSGTYPE_REQUEST,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .topic_glob = "welcome",
-    };
     flux_error_t error;
 
     memset (&ctx, 0, sizeof (ctx));
@@ -161,24 +102,19 @@ void *module_thread (void *arg)
     }
 
     /* Receive welcome message
-     * ctx.name and ctx.uuid may be used after this.
+     * This sets flux::name and flux::uuid, among other things.
      */
-    flux_msg_t *msg;
-    if (!(msg = flux_recv (ctx.h, match, 0))
-        || welcome_decode_new (&ctx, (flux_msg_t **)&msg) < 0) {
-        flux_msg_decref (msg);
-        flux_log (ctx.h, LOG_ERR, "welcome failure");
+    if (flux_module_initialize (ctx.h, &ctx.modargs, &error) < 0) {
+        flux_log (ctx.h, LOG_ERR, "%s", error.text);
         goto done;
     }
 
-    flux_log_set_appname (ctx.h, ctx.name);
-    setup_module_profiling (ctx.name);
+    const char *name = flux_aux_get (ctx.h, "flux::name");
+    flux_log_set_appname (ctx.h, name);
+    setup_module_profiling (name);
 
-    /* Set flux::uuid and flux::name per RFC 5
-     */
-    if (flux_aux_set (ctx.h, "flux::uuid", (char *)ctx.uuid, NULL) < 0
-        || flux_aux_set (ctx.h, "flux::name", ctx.name, NULL) < 0) {
-        flux_log_error (ctx.h, "error setting flux:: attributes");
+    if (parse_modargs (&ctx, ctx.modargs) < 0) {
+        flux_log_error (ctx.h, "error parsing module arguments");
         goto done;
     }
 
@@ -238,8 +174,7 @@ static void module_thread_cleanup (void *arg)
     flux_close (ctx->h);
     free (ctx->argz);
     free (ctx->argv);
-    free (ctx->name);
-    free (ctx->uuid);
+    free (ctx->modargs);
 }
 
 // vi:ts=4 sw=4 expandtab

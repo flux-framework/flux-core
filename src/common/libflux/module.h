@@ -43,10 +43,30 @@ int flux_module_set_running (flux_t *h);
 int flux_module_config_request_decode (const flux_msg_t *msg,
                                        flux_conf_t **conf);
 
+/* Module loader helpers
+ *
+ * Module loaders are broker co-processes that implement the broker/module
+ * message based interface described in RFC 5.  Loaders can be written to
+ * support broker modules in interpreted languages or other environments
+ * that cannot produce ABI compliant shared objects.
+ */
+
+/* Receive the module welcome message on 'h' and do the following:
+ * - cache initial configuration object with flux_set_conf_new()
+ * - cache immutable broker attributes
+ * - add flux::uuid, flux::name to flux_t aux container
+ * - decode module arguments (from flux module load NAME ARGS...)
+ * If 'args' is non-NULL, it is assigned a space-delimited module argument
+ * string which should be released with free(3).  If there are no arguments,
+ * NULL is assigned.
+ * Returns 0 on success, -1 on error with 'error' filled if non-NULL.
+ */
+int flux_module_initialize (flux_t *h, char **args, flux_error_t *error);
+
 /* Register module management handlers:
  * - add a prepare watcher that calls flux_module_set_running(), only once
  * - add a shutdown handler that calls flux_reactor_stop()
- * - add the default methods calling flux_register_default_methods()
+ * - add the default methods by calling flux_register_default_methods()
  * - subscribe to stats-clear events
  * Handlers are stopped/destroyed on flux_close(3), when the handle's
  * aux container is destroyed.

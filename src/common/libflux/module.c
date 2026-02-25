@@ -16,6 +16,11 @@
 #include <sys/stat.h>
 #include <jansson.h>
 #include <flux/core.h>
+#ifdef HAVE_ARGZ_ADD
+#include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/dirwalk.h"
@@ -104,6 +109,128 @@ int flux_module_config_request_decode (const flux_msg_t *msg,
     else
         flux_conf_decref (conf);
     return 0;
+}
+
+/* Serialize module arguments received in the RFC 5 welcome message
+ * as a space delimited string for portability.
+ */
+static int encode_module_arguments (json_t *args, char **ap, flux_error_t *errp)
+{
+    size_t index;
+    json_t *entry;
+    char *argz = NULL;
+    size_t argz_len = 0;
+    error_t e;
+
+    json_array_foreach (args, index, entry) {
+        const char *s;
+        if ((s = json_string_value (entry))) {
+            if ((e = argz_add (&argz, &argz_len, s)) != 0) {
+                errno = e;
+                goto error;
+            }
+        }
+    }
+    argz_stringify (argz, argz_len, ' ');
+    *ap = argz;
+    return 0;
+error:
+    ERRNO_SAFE_WRAP (free, argz);
+    return -1;
+}
+
+/* Set a string in the aux container, making a copy first.
+ */
+static int set_aux_strdup (flux_t *h,
+                           const char *name,
+                           const char *val,
+                           flux_error_t *errp)
+{
+    char *cpy;
+
+    if (!(cpy = strdup (val))
+        || flux_aux_set (h, name, cpy, (flux_free_f)free) < 0) {
+        errprintf (errp, "error setting %s: %s", name, strerror (errno));
+        ERRNO_SAFE_WRAP (free, cpy);
+        return -1;
+    }
+    return 0;
+}
+
+/* Cache TOML config received in the RFC 5 welcome message.
+ */
+static int cache_config (flux_t *h, json_t *conf, flux_error_t *errp)
+{
+    flux_conf_t *cf;
+
+    if (!(cf = flux_conf_pack ("O", conf))
+        || flux_set_conf_new (h, cf) < 0) {
+        flux_conf_decref (cf);
+        errprintf (errp, "error caching config object: %s", strerror (errno));
+        return -1;
+    }
+    return 0;
+}
+
+/* Cache immutable broker attributes received in the RFC 5 welcome message.
+ */
+static int cache_attributes (flux_t *h, json_t *attrs, flux_error_t *errp)
+{
+    const char *name;
+    json_t *o;
+
+    json_object_foreach (attrs, name, o) {
+        const char *val = json_string_value (o);
+        if (flux_attr_set_cacheonly (h, name, val) < 0) {
+            errprintf (errp, "setattr cache %s: %s", name, strerror (errno));
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int flux_module_initialize (flux_t *h, char **ap, flux_error_t *error)
+{
+    flux_msg_t *msg;
+    json_t *args;
+    json_t *attrs;
+    json_t *conf;
+    const char *name;
+    const char *uuid;
+    int rc = -1;
+
+    if (!h) {
+        errno = EINVAL;
+        return errprintf (error, "invalid argument");
+    }
+    if (!(msg = flux_recv (h, FLUX_MATCH_REQUEST, 0))) {
+        errprintf (error, "welcome receive failure: %s", strerror (errno));
+        return -1;
+    }
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:o s:o s:o s:s s:s}",
+                             "args", &args,
+                             "attrs", &attrs,
+                             "conf", &conf,
+                             "name", &name,
+                             "uuid", &uuid) < 0) {
+        errprintf (error, "welcome decode failure: %s", strerror (errno));
+        goto done;
+    }
+    if (cache_config (h, conf, error) < 0
+        || cache_attributes (h, attrs, error) < 0
+        || set_aux_strdup (h, "flux::name", name, error) < 0
+        || set_aux_strdup (h, "flux::uuid", uuid, error) < 0)
+        goto done;
+    if (ap) {
+        if (encode_module_arguments (args, ap, error) < 0)
+            goto done;
+    }
+    rc = 0;
+done:
+    flux_msg_decref (msg);
+    return rc;
 }
 
 /* Stop the module reactor so the module can be unloaded.

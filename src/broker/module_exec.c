@@ -43,6 +43,7 @@
 #include <flux/optparse.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "module.h"
 #include "module_dso.h"
@@ -57,8 +58,7 @@ struct modexec {
     char **argv;
     size_t argz_len;
     char *argz;
-    char *name;
-    char *uuid;
+    char *modargs;
 };
 
 static const char *cmdname = "flux-module-exec";
@@ -74,89 +74,25 @@ static struct optparse_option cmdopts[] = {
     OPTPARSE_TABLE_END
 };
 
-static int attr_cache_from_json (flux_t *h, json_t *cache)
-{
-    const char *name;
-    json_t *o;
-
-    json_object_foreach (cache, name, o) {
-        const char *val = json_string_value (o);
-        if (flux_attr_set_cacheonly (h, name, val) < 0)
-            return -1;
-    }
-    return 0;
-}
-
-static int config_cache_from_json (flux_t *h, json_t *conf)
-{
-    flux_conf_t *cf;
-
-    if (!(cf = flux_conf_pack ("O", conf))
-        || flux_set_conf_new (h, cf) < 0) {
-        flux_conf_decref (cf);
-        return -1;
-    }
-    return 0;
-}
-
-static int args_from_json (struct modexec *me, json_t *args)
-{
-    if (!json_is_null (args)) {
-        size_t index;
-        json_t *entry;
-
-        json_array_foreach (args, index, entry) {
-            const char *s = json_string_value (entry);
-            if (s && (argz_add (&me->argz, &me->argz_len, s) != 0)) {
-                errno = ENOMEM;
-                return -1;
-            }
-        }
-    }
-    me->argc = argz_count (me->argz, me->argz_len);
-    if (!(me->argv = calloc (me->argc + 1, sizeof (me->argv[0]))))
-        return -1;
-    argz_extract (me->argz, me->argz_len, me->argv);
-    return 0;
-}
-
-/* Decode welcome message and
- * - set me->name, me->uuid
- * - set me->argc, me->argv
- * - populate the broker attr cache in me->h
+/* Module arguments are provided by flux_module_initialize() as a
+ * space-delimited string, or NULL if there are no arguments.
+ * Translate to argz vector, stored in 'me'.
  */
-static void broker_mode_init (struct modexec *me)
+static int parse_modargs (struct modexec *me, const char *s)
 {
-    flux_msg_t *msg;
-    json_t *args;
-    json_t *attrs;
-    json_t *conf;
-    const char *name;
-    const char *uuid;
+    if (s) {
+        error_t e;
 
-    struct flux_match match = {
-        .typemask = FLUX_MSGTYPE_REQUEST,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .topic_glob = "welcome",
-    };
-    if (!(msg = flux_recv (me->h, match, 0)))
-        log_err_exit ("welcome receive failure");
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{s:o s:o s:o s:s s:s}",
-                             "args", &args,
-                             "attrs", &attrs,
-                             "conf", &conf,
-                             "name", &name,
-                             "uuid", &uuid) < 0)
-        log_err_exit ("welcome decode failure");
-    if (!(me->name = strdup (name))
-        || !(me->uuid = strdup (uuid))
-        || attr_cache_from_json (me->h, attrs) < 0
-        || config_cache_from_json (me->h, conf) < 0
-        || args_from_json (me, args) < 0)
-        log_err_exit ("welcome failed");
-    flux_msg_decref (msg);
+        if ((e = argz_create_sep (s, ' ', &me->argz, &me->argz_len)) != 0) {
+            errno = e;
+            return -1;
+        }
+        me->argc = argz_count (me->argz, me->argz_len);
+        if (!(me->argv = calloc (1, sizeof (me->argv[0]) * (me->argc + 1))))
+            return -1;
+        argz_extract (me->argz, me->argz_len, me->argv);
+    }
+    return 0;
 }
 
 /* Slightly silly - this is just to massage argc, argv into expected form
@@ -179,11 +115,14 @@ static int config_cache_from_broker (struct modexec *me)
 {
     flux_future_t *f;
     json_t *conf;
+    flux_conf_t *cf = NULL;
     int rc = -1;
 
     if (!(f = flux_rpc (me->h, "config.get", NULL, FLUX_NODEID_ANY, 0))
         || flux_rpc_get_unpack (f, "o", &conf) < 0
-        || config_cache_from_json (me->h, conf) < 0) {
+        || !(cf = flux_conf_pack ("O", conf))
+        || flux_set_conf_new (me->h, cf) < 0) {
+        flux_conf_decref (cf);
         goto done;
     }
     rc = 0;
@@ -221,16 +160,20 @@ static int attr_cache_from_broker (struct modexec *me)
  * N.B. I'm not sure what the fallout of this may be.  Possibly at this
  * point, only that flux-ping(1) may display the wrong endpoint uuid.
  */
-static int fake_the_uuid (struct modexec *me)
+static int fake_the_uuid (flux_t *h)
 {
     uuid_t uuid;
     char uuid_str[UUID_STR_LEN];
+    char *cpy;
 
     uuid_generate (uuid);
     uuid_unparse (uuid, uuid_str);
 
-    if (!(me->uuid = strdup (uuid_str)))
+    if (!(cpy = strdup (uuid_str))
+        || flux_aux_set (h, "flux::uuid", cpy, (flux_free_f)free) < 0) {
+        ERRNO_SAFE_WRAP (free, cpy);
         return -1;
+    }
     return 0;
 }
 
@@ -240,26 +183,32 @@ static void test_mode_init (struct modexec *me,
                             char **argv)
 {
     // use --name=NAME or heuristic based on MODULE argument
-    const char *name = optparse_get_str (me->opts, "name", NULL);
-    if (name)
-        me->name = strdup (name);
-    else
-        me->name = module_dso_name (module);
-    if (!me->name)
-        log_err_exit ("error duplicating module name");
+    const char *nameopt = optparse_get_str (me->opts, "name", NULL);
+    char *name = NULL;
+
+    if (nameopt) {
+        if (!(name = strdup (nameopt)))
+            log_err_exit ("error duplicating module name");
+    }
+    else  {
+        if (!(name = module_dso_name (module)))
+            log_err_exit ("error determining module name");
+    }
+    if (flux_aux_set (me->h, "flux::name", name, (flux_free_f)free) < 0)
+        log_err_exit ("error setting flux::name");
 
     if (args_from_argv (me, argc, argv) < 0
         || config_cache_from_broker (me) < 0
         || attr_cache_from_broker (me) < 0
-        || fake_the_uuid (me) < 0)
+        || fake_the_uuid (me->h) < 0)
         log_err_exit ("test mode initialization failed");
 
-    // register me->name as a service
+    // register name as a service
     flux_future_t *f;
-    if (!(f = flux_service_register (me->h, me->name))
+    if (!(f = flux_service_register (me->h, name))
         || flux_rpc_get (f, NULL) < 0) {
         log_msg_exit ("error registering %s service: %s",
-                      me->name,
+                      name,
                       future_strerror (f, errno));
     }
     flux_future_destroy (f);
@@ -280,7 +229,8 @@ static void modexec_load (struct modexec *me, const char *module)
         if (!(me->path = module_dso_search (module, searchpath, &error)))
             log_msg_exit ("%s: %s", module, error.text);
     }
-    me->dso = module_dso_open (me->path, me->name, &me->mod_main, &error);
+    const char *name = flux_aux_get (me->h, "flux::name");
+    me->dso = module_dso_open (me->path, name, &me->mod_main, &error);
     if (!me->dso)
         log_err_exit ("%s", error.text);
 }
@@ -330,18 +280,20 @@ int main (int argc, char *argv[])
         test_mode_init (&me, module, argc - optindex, argv + optindex);
     }
     else {
-        broker_mode_init (&me);
-        flux_log_set_appname (me.h, me.name);
+        char *modargs;
+        const char *name;
+        if (flux_module_initialize (me.h, &modargs, &error) < 0)
+            log_msg_exit ("initialize error: %s", error.text);
+        if (parse_modargs (&me, modargs) < 0)
+            log_err_exit ("error parsing module arguments");
+        free (modargs);
+
+        name = flux_aux_get (me.h, "flux::name");
+        flux_log_set_appname (me.h, name);
 #ifdef PR_SET_NAME
-        (void)prctl (PR_SET_NAME, me.name, 0, 0, 0);
+        (void)prctl (PR_SET_NAME, name, 0, 0, 0);
 #endif
     }
-
-    /* Set flux::uuid and flux::name per RFC 5
-     */
-    if (flux_aux_set (me.h, "flux::uuid", me.uuid, NULL) < 0
-        || flux_aux_set (me.h, "flux::name", me.name, NULL) < 0)
-        log_err_exit ("error setting flux:: attributes");
 
     /* Register standard module services
      */
@@ -369,10 +321,9 @@ int main (int argc, char *argv[])
             log_msg_exit ("error finalizing module: %s", error.text);
     }
 
-    free (me.uuid);
-    free (me.name);
     free (me.argv);
     free (me.argz);
+    free (me.modargs);
     flux_close (me.h);
     module_dso_close (me.dso);
     free (me.path);
