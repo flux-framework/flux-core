@@ -110,16 +110,4 @@ error:
     return NULL;
 }
 
-char *module_dso_name (const char *path)
-{
-    const char *name;
-    const char *cp;
-
-    name = basename_simple (path);
-    // if path ends in .so or .so.VERSION, strip it off
-    if ((cp = strstr (name, ".so")))
-        return strndup (name, cp - name);
-    return strdup (name);
-}
-
 // vi:ts=4 sw=4 expandtab

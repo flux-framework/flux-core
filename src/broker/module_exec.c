@@ -191,7 +191,7 @@ static void test_mode_init (struct modexec *me,
             log_err_exit ("error duplicating module name");
     }
     else  {
-        if (!(name = module_dso_name (path)))
+        if (!(name = module_name_frompath (path)))
             log_err_exit ("error determining module name");
     }
     if (flux_aux_set (me->h, "flux::name", name, (flux_free_f)free) < 0)

@@ -38,11 +38,6 @@ void *module_dso_open (const char *path,
  */
 void module_dso_close (void *dso);
 
-/* Guess the broker module's name based on its path.
- * Caller must free the returned string.
- */
-char *module_dso_name (const char *path);
-
 #endif /* !BROKER_MODULE_DSO_H */
 
 // vi:ts=4 sw=4 expandtab

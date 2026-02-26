@@ -134,6 +134,11 @@ ssize_t module_get_recv_queue_count (module_t *p);
 bool module_is_exec (module_t *p);
 pid_t module_get_pid (module_t *p);
 
+/* Guess the broker module's name based on its path.
+ * Caller must free the returned string.
+ */
+char *module_name_frompath (const char *path);
+
 #endif /* !BROKER_MODULE_H */
 
 /*

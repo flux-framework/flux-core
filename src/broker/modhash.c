@@ -395,10 +395,10 @@ static int modhash_resolve_dso (const char *name_or_null,
     if (name_or_null)
         name = strdup (name_or_null);
     else
-        name = module_dso_name (path);
+        name = module_name_frompath (path);
     if (!name) {
         errprintf (error,
-                   "error duplicating module name: %s",
+                   "error determining/duplicating module name: %s",
                    strerror (errno));
         ERRNO_SAFE_WRAP (free, path);
         return -1;
