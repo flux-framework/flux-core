@@ -9,6 +9,7 @@
 ##############################################################
 
 import os
+import re
 import sys
 import time
 from collections import Counter
@@ -16,6 +17,24 @@ from collections import Counter
 import flux
 from flux.job import output_watch_async
 from flux.progress import ProgressBar
+
+# Strip VT100/ANSI sequences that manipulate cursor position, the scroll
+# region, alternate screen, or screen contents from job output when a progress
+# bar is active.  Replaying these codes through the terminal corrupts the
+# Bottombar/ProgressBar scroll region setup.  SGR sequences (colors/styles,
+# ending in 'm') are deliberately left intact.
+_TERMINAL_ESCAPE_RE = re.compile(
+    r"\033\[[\d;]*r"  # set/reset scroll region: ESC [ ... r
+    r"|\033\[[\d;]*[HJf]"  # cursor position / erase in display / move
+    r"|\033\[[\d;]*[ABCD]"  # cursor movement: up/down/forward/backward
+    r"|\033\[[\d;]*t"  # window manipulation: ESC [ ... t
+    r"|\033\[\?[\d;]*[hl]"  # DEC private mode set/reset (incl. alt screen)
+    r"|\0337"  # save cursor: ESC 7
+    r"|\0338"  # restore cursor: ESC 8
+    r"|\033D"  # index (scroll down): ESC D
+    r"|\033M"  # reverse index (scroll up): ESC M
+    r"|\033c"  # full terminal reset: ESC c
+)
 
 
 class JobStatus:
@@ -582,6 +601,8 @@ class JobWatcher:
         stream, data = future.get_output()
         if stream is not None:
             output_stream = getattr(job, stream)
+            if self.show_progress:
+                data = _TERMINAL_ESCAPE_RE.sub("", data)
             if self.labelio:
                 for line in data.splitlines(keepends=True):
                     output_stream.write(f"{job.id}: {line}")
