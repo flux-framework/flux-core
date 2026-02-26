@@ -607,7 +607,7 @@ static void server_exec_cb (flux_t *h,
      * environment.
      */
     if (env[0] == NULL) {
-        if (cmd_set_env (cmd, environ) < 0) {
+        if (flux_cmd_env_replace (cmd, environ) < 0) {
             errmsg = "error setting up command environment";
             goto error;
         }

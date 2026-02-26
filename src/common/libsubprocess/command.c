@@ -1012,7 +1012,7 @@ char **cmd_argv_expand (flux_cmd_t *cmd)
     return expand_argz (cmd->argz, cmd->argz_len);
 }
 
-int cmd_set_env (flux_cmd_t *cmd, char **env)
+int flux_cmd_env_replace (flux_cmd_t *cmd, char **env)
 {
     size_t new_envz_len = 0;
     char *new_envz = NULL;

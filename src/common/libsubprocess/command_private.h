@@ -50,11 +50,6 @@ char **cmd_env_expand (flux_cmd_t *cmd);
 char **cmd_argv_expand (flux_cmd_t *cmd);
 
 /*
- *  Set an entirely new environment, discarding internal one.
- */
-int cmd_set_env (flux_cmd_t *cmd, char **env);
-
-/*
  *  Return list of channels.  Should not be destroyed by caller.
  */
 zlist_t *cmd_channel_list (flux_cmd_t *cmd);
