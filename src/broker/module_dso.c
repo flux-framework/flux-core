@@ -19,47 +19,12 @@
 #include <dlfcn.h>
 
 #include "src/common/libflux/plugin_private.h" // for plugin_deepbind()
-#include "src/common/libutil/dirwalk.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/basename.h"
 #include "ccan/str/str.h"
 
 #include "module_dso.h"
-
-char *module_dso_search (const char *name,
-                         const char *searchpath,
-                         flux_error_t *error)
-{
-    char *pattern;
-    zlist_t *files = NULL;
-    char *path;
-
-    if (asprintf (&pattern, "%s.so*", name) < 0) {
-        errprintf (error, "out of memory");
-        return NULL;
-    }
-    if (!(files = dirwalk_find (searchpath,
-                                DIRWALK_REALPATH | DIRWALK_NORECURSE,
-                                pattern,
-                                1,
-                                NULL,
-                                NULL))
-        || zlist_size (files) == 0) {
-        errprintf (error, "module not found in search path");
-        errno = ENOENT;
-        goto error;
-    }
-    if (!(path = strdup (zlist_first (files))))
-        goto error;
-    zlist_destroy (&files);
-    free (pattern);
-    return path;
-error:
-    ERRNO_SAFE_WRAP (zlist_destroy, &files);
-    ERRNO_SAFE_WRAP (free, pattern);
-    return NULL;
-};
 
 void module_dso_close (void *dso)
 {

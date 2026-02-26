@@ -15,14 +15,6 @@
 
 #include "module.h"
 
-/* Search 'searchpath', a colon-separated list of directories, for a file
- * whose path matches the pattern "name.so*".  Return its full path (caller
- * must free).
- */
-char *module_dso_search (const char *name,
-                         const char *searchpath,
-                         flux_error_t *error);
-
 /* dlopen(3) the DSO at path and fetch a pointer to a symbol named 'mod_main'.
  * Optional:  if name is set and 'mod_name' is defined in the dso, fail if
  * they do not match.  This is a sanity check that modules still using the

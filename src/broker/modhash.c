@@ -15,6 +15,7 @@
 #include <jansson.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/dirwalk.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
@@ -360,6 +361,40 @@ static int modhash_load_finalize (struct modhash *mh,
     return 0;
 }
 
+static char *modhash_dso_search (const char *name,
+                                 const char *searchpath,
+                                 flux_error_t *error)
+{
+    char *pattern;
+    zlist_t *files = NULL;
+    char *path;
+
+    if (asprintf (&pattern, "%s.so*", name) < 0) {
+        errprintf (error, "out of memory");
+        return NULL;
+    }
+    if (!(files = dirwalk_find (searchpath,
+                                DIRWALK_REALPATH | DIRWALK_NORECURSE,
+                                pattern,
+                                1,
+                                NULL,
+                                NULL))
+        || zlist_size (files) == 0) {
+        errprintf (error, "module not found in search path");
+        errno = ENOENT;
+        goto error;
+    }
+    if (!(path = strdup (zlist_first (files))))
+        goto error;
+    zlist_destroy (&files);
+    free (pattern);
+    return path;
+error:
+    ERRNO_SAFE_WRAP (zlist_destroy, &files);
+    ERRNO_SAFE_WRAP (free, pattern);
+    return NULL;
+};
+
 static int modhash_resolve_dso (const char *name_or_null,
                                 const char *path_or_name,
                                 char **namep,
@@ -385,7 +420,7 @@ static int modhash_resolve_dso (const char *name_or_null,
             errno = EINVAL;
             return -1;
         }
-        if (!(path = module_dso_search (path_or_name, searchpath, error)))
+        if (!(path = modhash_dso_search (path_or_name, searchpath, error)))
             return -1;
     }
     /* If the name is not specified, derive it from the module path.
