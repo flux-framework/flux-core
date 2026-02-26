@@ -233,7 +233,7 @@ class JournalConsumerBase(ABC):
 
     @property
     def request_payload(self):
-        """Approprioate request payload for this journal RPC"""
+        """Appropriate request payload for this journal RPC"""
         return {}
 
     def start(self):
