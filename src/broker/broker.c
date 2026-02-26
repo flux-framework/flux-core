@@ -1096,6 +1096,59 @@ static void broker_disconnect_cb (flux_t *h,
 {
 }
 
+static bool invalid_env_name (const char *name)
+{
+    return name[0] == '\0' || strchr (name, '=') != NULL;
+}
+
+static bool invalid_env_value (json_t *value)
+{
+    return !(json_is_string (value) || json_is_null (value));
+}
+
+static void broker_setenv_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
+{
+    json_t *env = NULL;
+    const char *name;
+    json_t *value;
+
+    if (flux_request_unpack (msg, NULL, "{s:o}", "env", &env) < 0)
+        goto error;
+    if (!json_is_object (env)) {
+        errno = EPROTO;
+        goto error;
+    }
+    /* Validate variables and values
+     */
+    json_object_foreach (env, name, value) {
+        if (invalid_env_name (name) || invalid_env_value (value)) {
+            errno = EPROTO;
+            goto error;
+        }
+    }
+    json_object_foreach (env, name, value) {
+        const char *val;
+
+        /* Note: value is either string or null as tested above
+         */
+        if ((val = json_string_value (value))) {
+            if (setenv (name, val, 1) < 0)
+                goto error;
+        }
+        else if (json_is_null (value))
+            (void) unsetenv (name);
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "broker.setenv: flux_respond");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "broker.setenv: flux_respond_error");
+}
+
 static void broker_getenv_cb (flux_t *h,
                               flux_msg_handler_t *mh,
                               const flux_msg_t *msg,
@@ -1470,6 +1523,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "broker.getenv",
         broker_getenv_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "broker.setenv",
+        broker_setenv_cb,
         0
     },
     {
