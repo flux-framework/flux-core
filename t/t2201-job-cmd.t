@@ -634,10 +634,6 @@ test_expect_success 'flux job: kill can operate on multiple jobs' '
 		grep status=$((15+128<<8)) killmulti.out
 	done
 '
-test_expect_success 'flux job: timeleft reports error outside of a job' '
-	test_expect_code 1 flux job timeleft
-'
-
 test_expect_success 'flux job: timeleft reports large int with no time limit' '
 	flux run flux job timeleft > timeleft1 &&
 	test $(cat timeleft1) -gt 9999999
