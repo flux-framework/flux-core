@@ -12,6 +12,7 @@ import argparse
 import errno
 import json
 import logging
+import math
 import os.path
 import sys
 from itertools import combinations
@@ -848,9 +849,67 @@ def eventlog(args):
             break
         if targets.match(event):
             print(evf.format(event))
-            if args.wait and event.name == args.wait:
+            if (
+                args.wait
+                and event.name == args.wait
+                and args.match_context.match(event.context)
+            ):
                 break
     consumer.stop()
+
+
+class KVArgs:
+    def __init__(self):
+        self._kv = {}
+
+    def append(self, arg):
+        try:
+            key, val = arg.split("=", 1)
+        except ValueError:
+            raise argparse.ArgumentTypeError(
+                f"invalid KEY=VAL argument: {arg!r} (missing '=')"
+            )
+        if not key:
+            raise argparse.ArgumentTypeError(
+                f"invalid KEY=VAL argument: {arg!r} (empty key)"
+            )
+        try:
+            self._kv[key] = json.loads(val)
+        except json.decoder.JSONDecodeError:
+            self._kv[key] = val
+
+    def match(self, other_dict: dict) -> bool:
+        """
+        Return True if all key/value pairs match `other` (empty matches all).
+        Note: floats are matched using an absolute tolerance of 1e-5
+        """
+        for key, val in self._kv.items():
+            other = other_dict.get(key)
+            if isinstance(other, float):
+                try:
+                    val = float(val)
+                    if not math.isclose(val, other, rel_tol=0, abs_tol=1e-5):
+                        return False
+                except (ValueError, TypeError):
+                    return False
+            else:
+                if other != val:
+                    return False
+        return True
+
+    def __repr__(self):
+        return f"KVArgs({self._kv!r})"
+
+
+class KVArgsAction(argparse.Action):
+    def __init__(self, option_strings, dest, **kwargs):
+        kwargs.setdefault("default", KVArgs())
+        kwargs.setdefault("metavar", "KEY=VAL")
+        kwargs["type"] = str
+        super().__init__(option_strings, dest, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        getattr(namespace, self.dest).append(values)
 
 
 LOGGER = logging.getLogger("flux-resource")
@@ -1196,6 +1255,12 @@ def main():
         "--wait",
         metavar="EVENT",
         help="Display events until EVENT is posted",
+    )
+    eventlog_parser.add_argument(
+        "-m",
+        "--match-context",
+        action=KVArgsAction,
+        help="With --wait, match KEY=VAL in context of EVENT",
     )
     eventlog_parser.add_argument(
         "-i",
