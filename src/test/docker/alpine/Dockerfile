@@ -32,7 +32,6 @@ RUN apk add \
     jansson-dev \
     hwloc-dev \
     lz4-dev \
-    sqlite-dev \
     ncurses-dev \
     libarchive-dev \
     libsodium-dev \

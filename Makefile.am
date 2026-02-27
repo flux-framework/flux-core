@@ -39,6 +39,7 @@ CODE_COVERAGE_IGNORE_PATTERN = \
 	"*/common/libyuarel/*" \
 	"*/common/libczmqcontainers/*" \
 	"*/common/libccan/*" \
+	"*/common/libsqlite3/*" \
 	"*/common/libmissing/*"
 
 # ignore lcov errors to avoid merge mismatch issue since lcov < 2 doesn't offer

@@ -13,7 +13,6 @@ apt install \
   liblz4-dev \
   libarchive-dev \
   libhwloc-dev \
-  libsqlite3-dev \
   lua5.1 \
   liblua5.1-dev \
   lua-posix \
