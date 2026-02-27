@@ -833,6 +833,8 @@ def eventlog(args):
         args.time_format = "human"
     if args.color is None:
         args.color = "auto"
+    if args.wait:
+        args.follow = True
 
     h = flux.Flux()
     targets = Targets(h, args.include)
