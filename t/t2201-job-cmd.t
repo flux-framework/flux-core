@@ -638,9 +638,17 @@ test_expect_success 'flux job: timeleft reports large int with no time limit' '
 	flux run flux job timeleft > timeleft1 &&
 	test $(cat timeleft1) -gt 9999999
 '
+test_expect_success 'flux job: timeleft also works from initial program' '
+	flux job timeleft > timeleft1a &&
+	test $(cat timeleft1a) -gt 9999999
+'
 test_expect_success 'flux job: timeleft -H reports infinity with no time limit' '
 	flux run flux job timeleft -H > timeleft1H &&
 	grep infinity timeleft1H
+'
+test_expect_success 'flux job: timeleft -H reports infinity for instance' '
+	flux job timeleft -H > timeleft1Ha &&
+	grep infinity timeleft1Ha
 '
 test_expect_success 'flux job: timeleft works with time limit' '
 	flux run -t 1m flux job timeleft >timeleft2 &&
@@ -692,6 +700,21 @@ test_expect_success 'flux job: timeleft fails for pending job' '
 test_expect_success 'flux job: timeleft fails for invalid jobids' '
 	test_expect_code 1 flux job timeleft f1234 &&
 	test_expect_code 1 flux job timeleft x1234
+'
+expiration_update() {
+	flux python -c \
+	    "import flux; flux.Flux().rpc(\"resource.expiration-update\",{\"expiration\": $1},nodeid=0).get()"
+	flux resource eventlog -HFw resource-update \
+	    --match-context="expiration=$1" \
+	    --timeout=30
+}
+test_expect_success 'flux job: timeleft works for an instance with an expiration' '
+	expiration=$(( $(date +%s) + 3600)) &&
+	expiration_update ${expiration} &&
+	flux job timeleft >timeleft9 &&
+	test_debug "flux job timeleft -H" &&
+	test $(cat timeleft9) -gt 3000 &&
+	test $(cat timeleft9) -lt 3700
 '
 test_expect_success 'flux job: hostpids fails for invalid jobid' '
 	test_expect_code 1 flux job hostpids oof
