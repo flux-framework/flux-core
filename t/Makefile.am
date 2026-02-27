@@ -446,7 +446,8 @@ dist_check_SCRIPTS = \
 	job-exec/imp-fail.sh \
 	job-list/list-id.py \
 	job-list/job-list-helper.sh \
-	ingest/bad-validate.py
+	ingest/bad-validate.py \
+	util/wait-util.sh
 
 check_PROGRAMS = \
 	content/content_validate \

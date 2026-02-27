@@ -2,6 +2,8 @@
 
 test_description='Test kvs eventlog get|append'
 
+. `dirname $0`/util/wait-util.sh
+
 . `dirname $0`/kvs/kvs-helper.sh
 
 . `dirname $0`/sharness.sh
