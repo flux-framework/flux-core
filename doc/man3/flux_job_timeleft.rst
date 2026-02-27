@@ -20,23 +20,26 @@ Link with :command:`-lflux-core`.
 DESCRIPTION
 ===========
 
-The :func:`flux_job_timeleft` function determines if the calling process
-is executing within the context of a Flux job (either a parallel job or
-a Flux instance running as a job), then handles querying the appropriate
-service for the remaining time in the job.
+The :func:`flux_job_timeleft` function returns the remaining time available
+to the calling process.  If the ``FLUX_JOB_ID`` environment variable is set,
+the process is assumed to be part of a Flux job and the remaining time is
+determined by querying the job's expiration from the job-list service.
+Otherwise, the expiration is determined from the instance's resource set (R)
+via the ``resource.status`` RPC, which works for any enclosing Flux instance
+regardless of how it was launched, including instances started under a foreign
+resource manager.
 
 RETURN VALUE
 ============
 
 :func:`flux_job_timeleft` returns 0 on success with the remaining time in
-floating point seconds stored in :var:`timeleft`. If the job does not have
-an established time limit, then :var:`timeleft` is set to ``inf``. If the job
-time limit has expired or the job is no longer running, then :var:`timeleft`
-is set to ``0``.
+floating point seconds stored in :var:`timeleft`.  If the enclosing job or
+instance does not have an established time limit, then :var:`timeleft` is set
+to ``inf``.  If the time limit has expired or the job is no longer running,
+then :var:`timeleft` is set to ``0``.
 
-If the current process is not part of an active job or instance, or another
-error occurs, then this function returns ``-1`` with an error string set in
-``error->text``.
+If an error occurs, then this function returns ``-1`` with an error string
+set in ``error->text``.
 
 RESOURCES
 =========
