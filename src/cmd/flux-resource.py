@@ -15,6 +15,7 @@ import logging
 import math
 import os.path
 import sys
+import time
 from itertools import combinations
 
 import flux
@@ -30,7 +31,13 @@ from flux.resource import (
     resource_status,
 )
 from flux.rpc import RPC
-from flux.util import AltField, Deduplicator, FilterActionSetUpdate, UtilConfig
+from flux.util import (
+    AltField,
+    Deduplicator,
+    FilterActionSetUpdate,
+    UtilConfig,
+    parse_fsd,
+)
 
 
 class FluxResourceConfig(UtilConfig):
@@ -828,6 +835,7 @@ class Targets:
 
 def eventlog(args):
     """Show the resource eventlog"""
+    timeout = -1.0
     if args.human:
         args.format = "text"
         args.time_format = "human"
@@ -835,6 +843,8 @@ def eventlog(args):
         args.color = "auto"
     if args.wait:
         args.follow = True
+    if args.timeout:
+        timeout = parse_fsd(args.timeout) + time.time()
 
     h = flux.Flux()
     targets = Targets(h, args.include)
@@ -846,7 +856,10 @@ def eventlog(args):
     sentinel = not args.follow
     consumer = ResourceJournalConsumer(h, include_sentinel=sentinel).start()
     while True:
-        event = consumer.poll()
+        # Note: timeout=-1.0 if args.timeout not specified, this sets
+        # consumer.poll() timeout < 0., which means unlimited
+        #
+        event = consumer.poll(timeout=timeout - time.time())
         if event is None or event.is_empty():
             break
         if targets.match(event):
@@ -1251,6 +1264,12 @@ def main():
         "--follow",
         action="store_true",
         help="Display new events as they are posted",
+    )
+    eventlog_parser.add_argument(
+        "-t",
+        "--timeout",
+        metavar="TIME",
+        help="With --follow or --wait, timeout after TIME has elapsed",
     )
     eventlog_parser.add_argument(
         "-w",
