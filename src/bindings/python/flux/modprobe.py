@@ -176,6 +176,7 @@ class Task:
         "after": [],
         "needs_attrs": [],
         "needs_config": [],
+        "needs_env": [],
         "disabled": False,
         "priority": 100,
     }
@@ -253,6 +254,9 @@ class Task:
         for attr in self.needs_attrs:
             if not self._check_spec(attr, context.attr_get):
                 return False
+        for var in self.needs_env:
+            if not self._check_spec(var, context.getenv):
+                return False
         return True
 
     def runtask(self, context):
@@ -320,6 +324,7 @@ class Module(Task):
         "after",
         "needs-attrs",
         "needs-config",
+        "needs-env",
         "priority",
         "disabled",
         "exec",
@@ -532,6 +537,10 @@ def task(name, **kwargs):
         needs_config (optional, list): A list of config keys on which this
             task depends. If any of the specified config keys are not set,
             then this task will not be run.
+        needs_env (optional, list): A list of environment variables on which
+            this task depends. If any of the specified environment variables
+            are not set in the current environment, then this task will not
+            be run.
 
     Example:
     ::
@@ -566,6 +575,7 @@ class Context:
         self._data = {}
         self.module_args = defaultdict(list)
         self.module_args_overwrite = {}
+        self._broker_env_cache = {}
 
     def print(self, *args):
         """Print message if modprobe is in verbose output mode"""
@@ -601,6 +611,69 @@ class Context:
     def conf_get(self, key, default=None):
         """Get config key with optional default"""
         return self.handle.conf_get(key, default=default)
+
+    def _broker_getenv(self, var):
+        """Get environment variable value from local broker. Cache result"""
+        if var not in self._broker_env_cache:
+            value = None
+            try:
+                result = self.handle.rpc("broker.getenv", {"names": [var]})
+                value = result.get()["env"].get(var)
+            except OSError:
+                # treat error as envvar unset
+                pass
+            self._broker_env_cache[var] = value
+        return self._broker_env_cache[var]
+
+    def getenv(self, var, default=None):
+        """Get env var value locally or from local broker"""
+        value = os.environ.get(var)
+        if value is None:
+            value = self._broker_getenv(var)
+        if value is None:
+            return default
+        return value
+
+    def setenv(self, name_or_env, value=None):
+        """Set or unset environment variables in the current process and broker.
+
+        Variables set via this method that are not in the broker's env
+        blocklist will be inherited by rc2 and rc3.  A value of None
+        causes the named variable to be unset.
+
+        Note: concurrent calls from unrelated tasks running in parallel are
+        safe in CPython since os.environ operations are serialized by the
+        GIL.
+
+        Args:
+            name_or_env: a variable name string, or a dict mapping names
+                to values.  Values may be strings or None to unset.
+            value: the value to set, when name_or_env is a string.
+
+        Raises:
+            ValueError: if any value is not a string or None.
+            OSError: if the RPC fails.
+        """
+        if isinstance(name_or_env, dict):
+            env = name_or_env
+        else:
+            env = {name_or_env: value}
+        for name, val in env.items():
+            if val is not None and not isinstance(val, str):
+                raise ValueError(f"{name}: value must be a string or None")
+        self.rpc("broker.setenv", {"env": env}).get()
+        for name, val in env.items():
+            # Note: old values of these variables may still be cached in
+            # _broker_env_cache, but since getenv() checks the local
+            # environment first, variables set here will always take
+            # precedence over any cached broker values.
+            if val is None:
+                os.environ.pop(name, None)
+                # Cache None as a negative entry so getenv() does not fall
+                # back to a stale broker env value for this variable.
+                self._broker_env_cache[name] = None
+            else:
+                os.environ[name] = val
 
     def rpc(self, topic, *args, **kwargs):
         """Convenience function to call context.handle.rpc()"""

@@ -102,6 +102,12 @@ void flux_cmd_unsetenv (flux_cmd_t *cmd, const char *name);
 const char *flux_cmd_getenv (const flux_cmd_t *cmd, const char *name);
 
 /*
+ *  Replace environment for `cmd` with `env`, discarding any previous
+ *   environment.
+ */
+int flux_cmd_env_replace (flux_cmd_t *cmd, char **env);
+
+/*
  *  Set/get the working directory for the command `cmd`.
  */
 int flux_cmd_setcwd (flux_cmd_t *cmd, const char *cwd);

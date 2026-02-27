@@ -329,6 +329,40 @@ static void stdio_cb (flux_subprocess_t *p, const char *stream)
     }
 }
 
+/* Set runat command environment before execution.
+ * 1. copy current broker environment
+ * 2. Unset blocklisted variables in command environment.
+ * 3. Set FLUX_ENCLOSING_ID if "jobid" is non-NULL.
+ * 4. Set FLUX_URI if local_uri is non-NULL.
+ */
+static int runat_command_setenv (struct runat_command *cmd,
+                                 const char **blocklist,
+                                 const char *local_uri,
+                                 const char *jobid)
+{
+    if (flux_cmd_env_replace (cmd->cmd, environ) < 0)
+        return -1;
+    if (blocklist) {
+        int i;
+        for (i = 0; blocklist[i] != NULL; i++)
+            flux_cmd_unsetenv (cmd->cmd, blocklist[i]);
+    }
+    if (local_uri) {
+        if (flux_cmd_setenvf (cmd->cmd, 1, "FLUX_URI", "%s", local_uri) < 0)
+            return -1;
+    }
+    if (jobid) {
+        if (flux_cmd_setenvf (cmd->cmd,
+                              1,
+                              "FLUX_ENCLOSING_ID",
+                              "%s",
+                              jobid) < 0)
+            return -1;
+    }
+    return 0;
+}
+
+
 /* Start one command.
  */
 static flux_subprocess_t *start_command (struct runat *r,
@@ -343,6 +377,9 @@ static flux_subprocess_t *start_command (struct runat *r,
         .on_stdout = NULL,
         .on_stderr = NULL,
     };
+
+    if (runat_command_setenv (cmd, env_blocklist, r->local_uri, r->jobid) < 0)
+        return NULL;
     if (!(cmd->flags & FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH)) {
         ops.on_stdout = stdio_cb;
         ops.on_stderr = stdio_cb;
@@ -431,7 +468,7 @@ static void runat_command_destroy (struct runat_command *cmd)
     }
 }
 
-static struct runat_command *runat_command_create (char **env, int flags)
+static struct runat_command *runat_command_create (int flags)
 {
     struct runat_command *cmd;
 
@@ -448,7 +485,7 @@ static struct runat_command *runat_command_create (char **env, int flags)
      * process group and flux_subprocess_kill() will use killpg(2).
      * Otherwise, cmd shares a process group with the broker.
      */
-    if (!(cmd->cmd = flux_cmd_create (0, NULL, env)))
+    if (!(cmd->cmd = flux_cmd_create (0, NULL, NULL)))
         goto error;
     return cmd;
 error:
@@ -456,34 +493,6 @@ error:
     return NULL;
 }
 
-/* Unset blocklisted variables in command environment.
- * Set FLUX_ENCLOSING_ID if "jobid" is non-NULL.
- * Set FLUX_URI if local_uri is non-NULL.
- */
-static int runat_command_modenv (struct runat_command *cmd,
-                                 const char **blocklist,
-                                 const char *local_uri,
-                                 const char *jobid)
-{
-    if (blocklist) {
-        int i;
-        for (i = 0; blocklist[i] != NULL; i++)
-            flux_cmd_unsetenv (cmd->cmd, blocklist[i]);
-    }
-    if (local_uri) {
-        if (flux_cmd_setenvf (cmd->cmd, 1, "FLUX_URI", "%s", local_uri) < 0)
-            return -1;
-    }
-    if (jobid) {
-        if (flux_cmd_setenvf (cmd->cmd,
-                              1,
-                              "FLUX_ENCLOSING_ID",
-                              "%s",
-                              jobid) < 0)
-            return -1;
-    }
-    return 0;
-}
 
 static int runat_command_set_argz (struct runat_command *cmd,
                                    const char *argz,
@@ -593,11 +602,9 @@ int runat_push_shell_command (struct runat *r,
         errno = EINVAL;
         return -1;
     }
-    if (!(cmd = runat_command_create (environ, flags)))
+    if (!(cmd = runat_command_create (flags)))
         return -1;
     if (runat_command_set_cmdline (cmd, NULL, cmdline) < 0)
-        goto error;
-    if (runat_command_modenv (cmd, env_blocklist, r->local_uri, r->jobid) < 0)
         goto error;
     if (runat_push (r, name, cmd, false) < 0)
         goto error;
@@ -618,11 +625,9 @@ int runat_push_shell (struct runat *r,
         errno = EINVAL;
         return -1;
     }
-    if (!(cmd = runat_command_create (environ, flags)))
+    if (!(cmd = runat_command_create (flags)))
         return -1;
     if (runat_command_set_cmdline (cmd, shell, NULL) < 0)
-        goto error;
-    if (runat_command_modenv (cmd, env_blocklist, r->local_uri, r->jobid) < 0)
         goto error;
     if (runat_push (r, name, cmd, true) < 0)
         goto error;
@@ -644,11 +649,9 @@ int runat_push_command (struct runat *r,
         errno = EINVAL;
         return -1;
     }
-    if (!(cmd = runat_command_create (environ, flags)))
+    if (!(cmd = runat_command_create (flags)))
         return -1;
     if (runat_command_set_argz (cmd, argz, argz_len) < 0)
-        goto error;
-    if (runat_command_modenv (cmd, env_blocklist, r->local_uri, r->jobid) < 0)
         goto error;
     if (runat_push (r, name, cmd, false) < 0)
         goto error;

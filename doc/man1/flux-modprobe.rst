@@ -274,6 +274,14 @@ Each entry in the ``modules`` array supports the following keys:
    (optional, array of string) An array of broker attributes which are required
    to be set for this module to be loaded.
 
+**needs-env**
+   (optional, array of string) An array of environment variables which are
+   required to be set for this module to be loaded. That is, if any of the
+   specified environment variables are not set, then the module is disabled.
+   Note that the broker environment is checked if a variable is not found in
+   the local environment, since the rc1 environment may differ from the broker
+   environment.
+
 The ``modprobe.toml`` config file also supports the following keys:
 
 **alternatives**
@@ -403,6 +411,13 @@ following optional arguments:
    key is prefixed with the character ``!``, then this task will only be
    enabled if that config key is not set.
 
+**needs_env**
+   (optional, list) A list of environment variables on which this task depends.
+   If a variable is prefixed with the character ``!``, then this task will only
+   be enabled if that environment variable is not set. Note that the broker
+   environment is checked if a variable is not found in the local environment,
+   since the rc1 environment may differ from the broker environment.
+
 Example
 
 .. code:: python
@@ -487,6 +502,34 @@ broker configuration and attributes, and even run shell commands.
   Force enable a module, service, or task, overriding all conditionals that
   may cause it to currently be disabled. Note: This will not also enable
   dependencies of ``name``.
+
+**context.getenv(var, default=None)**
+   Return the value of environment variable *var*, or *default* if not set.
+   The local environment is checked first, falling back to the broker
+   environment via the ``broker.getenv`` RPC if necessary. This is useful
+   because the broker may filter some variables from the rc1 and rc3
+   environments, such as those set by foreign resource managers or
+   launchers. Broker environment results are cached so the RPC is only
+   issued once per variable.
+
+**context.setenv(name_or_env, value=None)**
+   Set or unset one or more environment variables in both the local process
+   and the broker. Variables set via this method that are not in the
+   broker's env blocklist will be inherited by rc2 and rc3.
+
+   *name_or_env* may be a string variable name, in which case *value* is
+   the string value to set, or a ``dict`` mapping variable names to
+   values for setting multiple variables at once. A value of ``None``
+   causes the named variable to be unset.
+
+   Raises ``ValueError`` if any *value* is not a string or ``None``.
+   Raises ``OSError`` if the ``broker.setenv`` RPC fails, for example if
+   a variable name is empty or contains ``=``.
+
+   .. note::
+      If the variable only needs to be visible within the current process
+      and does not need to propagate to rc2 or rc3, use ``os.environ``
+      directly instead.
 
 
 RESOURCES

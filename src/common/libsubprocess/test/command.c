@@ -111,7 +111,7 @@ void set_cmd_attributes2 (flux_cmd_t *cmd)
 {
     char *env[] = { "PATH=/bin:/usr/bin", NULL };
 
-    ok (cmd_set_env (cmd, env) == 0,
+    ok (flux_cmd_env_replace (cmd, env) == 0,
         "cmd_set_env");
 }
 
