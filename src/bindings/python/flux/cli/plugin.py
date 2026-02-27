@@ -10,10 +10,10 @@
 
 import glob
 import inspect
+import os
 import sys
 import termios
 from abc import ABC
-from os import getenv
 from pydoc import ttypager
 
 from flux.conf_builtin import conf_builtin_get
@@ -57,6 +57,7 @@ class CLIPlugin(ABC):  # pragma no cover
         self.prog = prog
         if prog.startswith("flux "):
             self.prog = prog[5:]
+        self._load_path = None
         self.prefix = prefix
         self.version = version
         self.options = []
@@ -79,6 +80,14 @@ class CLIPlugin(ABC):  # pragma no cover
             ttypager(docstring)
         except termios.error:
             sys.stdout.write(docstring + "\n")
+
+    def set_path(self, path):
+        """Log where a plugin was loaded from"""
+        self._load_path = path
+
+    def get_path(self):
+        """Return where a plugin was loaded from"""
+        return self._load_path
 
     def add_option(self, name, **kwargs):
         """Allow plugin to register options in its dictionary
@@ -143,13 +152,7 @@ class CLIPluginRegistry:
     def __init__(self, prog):
         self.prog = prog
         self.plugins = []
-        etc = conf_builtin_get("confdir")
-        if getenv("FLUX_CLI_PLUGINPATH"):
-            self.plugindir = getenv("FLUX_CLI_PLUGINPATH")
-        else:
-            if etc is None:
-                raise ValueError("failed to get builtin confdir")
-            self.plugindir = f"{etc}/cli/plugins"
+        self.plugindirs = self._get_searchpath()
         self._load_plugins(self.prog)
 
     def print_help(self, name):
@@ -167,7 +170,25 @@ class CLIPluginRegistry:
                     sys.exit(0)
         raise ValueError(f"--help: no such option {name}")
 
-    def _add_plugins(self, module, program):
+    def _get_searchpath(self):
+        """
+        Return list of dirs in ``FLUX_CLI_PLUGINPATH`` if set, plus the
+        default CLI plugin search path.
+        """
+        if "FLUX_CLI_PLUGINPATH" in os.environ:
+            paths = filter(
+                lambda s: s and not s.isspace(),
+                os.environ["FLUX_CLI_PLUGINPATH"].split(":"),
+            )
+            searchpath = [path for path in paths]
+        else:
+            builtindir = conf_builtin_get("libexecdir")
+            sysdir = conf_builtin_get("confdir")
+            searchpath = [f"{builtindir}/cli/plugins", f"{sysdir}/cli/plugins"]
+        return searchpath
+
+    def _add_plugins(self, path, program):
+        module = import_path(path)
         entries = [
             getattr(module, attr) for attr in dir(module) if not attr.startswith("_")
         ]
@@ -180,24 +201,34 @@ class CLIPluginRegistry:
                 and entry != CLIPlugin
             ):
                 self.plugins.append(entry(program))
+                # using a setter instead of another argument prevents us from
+                # breaking currently used plugins
+                self.plugins[-1].set_path(path)
+
+    def print_plugins(self):
+        """Print all of the plugins loaded by _load_plugins."""
+        print("Options provided by plugins: \n")
+        for plugin in self.plugins:
+            print(f"{plugin}: ")
+            print(f"Loaded from: {plugin.get_path()}")
+            for option in plugin.options:
+                print(f"{option.name:<20}  {option.kwargs['help']}")
+            print()
 
     def _load_plugins(self, program):
         """Load all cli plugins from the standard path"""
-        for path in glob.glob(f"{self.plugindir}/*.py"):
-            self._add_plugins(import_path(path), program)
+        for plugindir in self.plugindirs:
+            for path in glob.glob(f"{plugindir}/*.py"):
+                self._add_plugins(path, program)
         option_dests = {}
-        self.options = []
-        for plugin in self.plugins:
-            for option in plugin.options:
-                if option.kwargs["dest"] in option_dests:
-                    raise ValueError(
-                        f"{option.name} conflicts with another option (or its `dest`)"
-                    )
-                else:
-                    self.options.append(option)
-                    ## keep a temporary list of "dests" to ensure no conflicts
-                    option_dests[option.kwargs["dest"]] = 1
-        return self  ## possibly unnecessary now
+        for plugin in self.plugins[:]:
+            if any(opt.kwargs["dest"] in option_dests for opt in plugin.options):
+                self.plugins.remove(plugin)
+            else:
+                for opt in plugin.options:
+                    option_dests[opt.kwargs["dest"]] = opt
+        self.options = list(option_dests.values())
+        return self
 
     def preinit(self, args):
         """Call all plugin ``preinit`` callbacks"""
