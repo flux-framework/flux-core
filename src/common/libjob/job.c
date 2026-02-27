@@ -101,50 +101,34 @@ flux_future_t *flux_job_set_urgency (flux_t *h, flux_jobid_t id, int urgency)
     return f;
 }
 
-int flux_job_timeleft (flux_t *h, flux_error_t *errp, double *timeleft)
+/*  Return the expiration of the current instance from the resource.status
+ *  RPC. Returns a nonzero expiration timestamp, 0. if there is no expiration
+ *  (unlimited), or -1. on error.
+ */
+static double get_instance_expiration (flux_t *h, flux_error_t *errp)
+{
+    double expiration = 0.;
+    flux_future_t *f;
+
+    if (!(f = flux_rpc (h, "resource.status", NULL, 0, 0))
+        || flux_rpc_get_unpack (f,
+                                "{s:{s:{s?F}}}",
+                                "R",
+                                 "execution",
+                                  "expiration", &expiration) < 0) {
+        errprintf (errp, "failed to get instance expiration");
+        expiration = -1.;
+    }
+    flux_future_destroy (f);
+    return expiration;
+}
+
+static double get_job_expiration (flux_t *h, const char *s, flux_error_t *errp)
 {
     flux_jobid_t id;
     flux_job_state_t state;
-    const char *s;
-    double expiration = 0.;
+    double expiration = -1.;
     flux_future_t *f = NULL;
-    flux_t *parent_h = NULL;
-    int rc = -1;
-
-    if (!h || !timeleft) {
-        errno = EINVAL;
-        return errprintf (errp, "Invalid argument");
-    }
-
-    /*  Check for FLUX_JOB_ID environment variable. If set, this process
-     *  is part of a job in the current instance. If not, then check to
-     *  see if this process is part of an "initial program".
-     */
-    if (!(s = getenv ("FLUX_JOB_ID"))) {
-        const char *uri;
-
-        /*  Check if we're in "initial program" context.
-         *  If not, then this instance may be the system instance, or
-         *  may be a job in a foreign RM. Either way we cannot provide
-         *  a remaining time, so return an error.
-         */
-        if (!(s = flux_attr_get (h, "jobid"))) {
-            errprintf (errp,
-                       "unable to associate this process with a Flux jobid");
-            return -1;
-        }
-
-        /* This is an initial program. Switch the handle to the parent */
-        if (!(uri = flux_attr_get (h, "parent-uri")))
-            return errprintf (errp,
-                              "failed to get parent-uri attribute: %s",
-                              strerror (errno));
-        if (!(parent_h = flux_open (uri, 0)))
-            return errprintf (errp,
-                              "failed to connect to parent instance: %s",
-                              strerror (errno));
-        h = parent_h;
-    }
 
     /*  Parse jobid and lookup expiration
      */
@@ -153,7 +137,7 @@ int flux_job_timeleft (flux_t *h, flux_error_t *errp, double *timeleft)
         goto out;
     }
 
-    /*  Fetch job expiration from this or parent's job-list service
+    /*  Fetch job expiration from job-list service
      */
     if (!(f = flux_job_list_id (h, id, "[\"expiration\", \"state\"]"))) {
         errprintf (errp, "flux_job_list_id: %s: %s", s, strerror (errno));
@@ -182,10 +166,39 @@ int flux_job_timeleft (flux_t *h, flux_error_t *errp, double *timeleft)
     }
     else if (state != FLUX_JOB_STATE_RUN) {
         /*  Only jobs in RUN state have any time left.
-         *  Return 0 for jobs in any other state besides RUN.
+         *  We can't return 0. directly from here since that indicates
+         *  an unlimited time limit. Therefore return 1 such that
+         *  expiration - now is negative, which is then adjusted to 0
+         *  by the caller, indicating an amount of time left of zero.
          */
-        *timeleft = 0.;
+        expiration = 1.;
     }
+out:
+    flux_future_destroy (f);
+    return expiration;
+}
+
+int flux_job_timeleft (flux_t *h, flux_error_t *errp, double *timeleft)
+{
+    const char *s;
+    double expiration = 0.;
+
+    if (!h || !timeleft) {
+        errno = EINVAL;
+        return errprintf (errp, "Invalid argument");
+    }
+
+    /*  Check for FLUX_JOB_ID environment variable. If set, this process
+     *  is part of a job in the current instance. If not, then try to get
+     *  expiration from R via resource.status RPC.
+     */
+    if ((s = getenv ("FLUX_JOB_ID")))
+        expiration = get_job_expiration (h, s, errp);
+    else
+        expiration = get_instance_expiration (h, errp);
+
+    if (expiration < 0)
+        return -1;
     else if (expiration == 0.) {
         /*  If expiration is 0. then job time left is unlimited.
          *  Return INFINITY.
@@ -200,11 +213,7 @@ int flux_job_timeleft (flux_t *h, flux_error_t *errp, double *timeleft)
         if (*timeleft < 0.)
             *timeleft = 0.;
     }
-    rc = 0;
-out:
-    flux_future_destroy (f);
-    flux_close (parent_h);
-    return rc;
+    return 0;
 }
 
 int flux_job_waitstatus_to_exitcode (int waitstatus, flux_error_t *errp)
