@@ -281,6 +281,7 @@ TESTSCRIPTS = \
 	t3310-system-heartbeat.t \
 	t3400-overlay-trace.t \
 	t3401-module-trace.t \
+	t4100-slurm-expiration-sync.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
@@ -319,6 +320,7 @@ TESTSCRIPTS = \
 	python/t0034-queuelist.py \
 	python/t0035-kvs-no-checkpoint.py \
 	python/t0036-subprocess.py \
+	python/t0037-slurm.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY
@@ -349,6 +351,7 @@ EXTRA_DIST= \
 	scripts/run_timeout.py \
 	scripts/startctl.py \
 	scripts/groups.py \
+	scripts/squeue \
 	jobspec \
 	resource \
 	marshall \

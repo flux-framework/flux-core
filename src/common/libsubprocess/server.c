@@ -493,11 +493,13 @@ static void proc_output_cb (flux_subprocess_t *p, const char *stream)
     else if (len) {
         /* background process: log output (ignore EOF) */
 
-        const char *command = basename_simple (flux_cmd_arg (p->cmd, 0));
+        const char *label = flux_cmd_get_label (p->cmd);
+        if (!label)
+            label = basename_simple (flux_cmd_arg (p->cmd, 0));
         if (streq (stream, "stderr"))
-            llog_error (s, "%s[%d]: %s", command, (int)p->pid, buf);
+            llog_error (s, "%s[%d]: %s", label, (int)p->pid, buf);
         else
-            llog_info (s, "%s[%d]: %s", command, (int)p->pid, buf);
+            llog_info (s, "%s[%d]: %s", label, (int)p->pid, buf);
     }
     return;
 

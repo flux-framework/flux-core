@@ -192,6 +192,33 @@ test_expect_success 'resource.status RPC fails on rank > 0' '
 	grep "only works on rank 0" status.err
 '
 
+update_onrank() {
+	flux python -c "import flux; print(flux.Flux().rpc(\"resource.expiration-update\",{\"expiration\": $2},nodeid=$1).get())"
+}
+
+test_expect_success 'resource.expiration-update RPC fails on rank > 0' '
+	test_must_fail update_onrank 1 0. 2>update.err &&
+	test_debug "cat update.err" &&
+	grep "only available on rank 0" update.err
+'
+
+update_invalid() {
+	flux python -c "import flux; print(flux.Flux().rpc(\"resource.expiration-update\").get())"
+}
+
+test_expect_success 'resource.expiration-update RPC fails with bad payload' '
+	test_must_fail update_invalid 2>update-invalid.err &&
+	test_debug "cat update-invalid.err" &&
+	grep "Protocol error" update-invalid.err
+'
+
+test_expect_success 'resource.expiration-update RPC works' '
+	update_onrank 0 1234. &&
+	flux resource eventlog -H --wait=resource-update &&
+	flux resource R > updated-R.json &&
+	jq -e ".execution.expiration - 1234 | fabs | . < 1.e-5" < updated-R.json
+'
+
 test_expect_success 'unload resource module' '
 	flux exec -r all flux module remove resource
 '

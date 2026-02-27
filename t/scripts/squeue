@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+###############################################################
+# Copyright 2026 Lawrence Livermore National Security, LLC
+# (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+#
+# This file is part of the Flux resource manager framework.
+# For details, see https://github.com/flux-framework.
+#
+# SPDX-License-Identifier: LGPL-3.0
+###############################################################
+
+"""Mock squeue for testing flux.slurm.slurm_timeleft()
+
+Reads an expiration timestamp from FLUX_SLURM_MOCK_EXPIRATION_FILE,
+computes remaining time, and emits it in Slurm %L format.
+
+The expiration file should contain a Unix timestamp (float), e.g.:
+    echo $(date -d '+1 hour' +%s) > /tmp/expiration
+    FLUX_SLURM_MOCK_EXPIRATION_FILE=/tmp/expiration squeue ...
+
+A value < 0 is treated as the special case "UNLIMITED"
+
+The file can be overwritten at any time to simulate dynamic time limit
+changes.
+"""
+
+import os
+import sys
+import time
+
+
+def seconds_to_slurm_time(seconds):
+    """Convert integer seconds to Slurm %L time string."""
+
+    # Special case: -1 is unlimited, return UNLIMITED
+    if seconds < 0:
+        return "UNLIMITED"
+    seconds = max(0, int(seconds))
+    minutes, s = divmod(seconds, 60)
+    hours, m = divmod(minutes, 60)
+    days, h = divmod(hours, 24)
+    if days > 0:
+        return f"{days}-{h:02d}:{m:02d}:{s:02d}"
+    if h > 0:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
+def main():
+    mock_file = os.environ.get("FLUX_SLURM_MOCK_EXPIRATION_FILE")
+    if mock_file is None:
+        print("mock squeue: FLUX_SLURM_MOCK_EXPIRATION_FILE not set", file=sys.stderr)
+        sys.exit(1)
+    try:
+        with open(mock_file) as f:
+            expiration = float(f.read().strip())
+    except (OSError, ValueError) as e:
+        print(f"mock squeue: {mock_file}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    timeleft = expiration - time.time()
+    print(seconds_to_slurm_time(timeleft))
+
+
+if __name__ == "__main__":
+    main()
+

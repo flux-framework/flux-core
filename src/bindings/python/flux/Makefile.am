@@ -68,6 +68,7 @@ nobase_fluxpy_PYTHON = \
 	queue.py \
 	modprobe.py \
 	subprocess.py \
+	slurm.py \
 	uri/uri.py \
 	uri/__init__.py \
 	uri/resolvers/jobid.py \
