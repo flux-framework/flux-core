@@ -192,6 +192,63 @@ test_expect_success 'flux resource eventlog --include works with hostlist' '
 		> include-host.out &&
 	test_must_fail test_must_be_empty include-host.out
 '
+test_expect_success '--match-context=BADARG raises error' '
+	test_must_fail flux resource eventlog --match-context=noequals
+'
+test_expect_success '--match-context=BADARG with empty key raises error' '
+	test_must_fail flux resource eventlog --match-context==val
+'
+test_expect_success '--match-context matches a single key/value pair' '
+	flux resource eventlog -f json \
+		--wait=resource-define \
+		--match-context=method=kvs \
+		--timeout=10 > tmp.out &&
+	tail -1 tmp.out | tee mc.out &&
+	jq -e ".name == \"resource-define\"" mc.out &&
+	jq -e ".context.method == \"kvs\"" mc.out
+'
+test_expect_success '--match-context matches multiple key/value pairs' '
+	flux resource drain 0 testing &&
+	flux resource undrain 0 &&
+	flux resource eventlog -f json \
+		--wait=drain \
+		--match-context=idset=\"0\" \
+		--match-context=reason=testing > tmp.out &&
+	tail -1 tmp.out | tee mc2.out &&
+	jq -e ".name == \"drain\"" mc2.out &&
+	jq -e ".context.idset == \"0\"" mc2.out &&
+	jq -e ".context.reason == \"testing\"" mc2.out
+'
+update_expiration() {
+	flux python -c "import flux; flux.Flux().rpc(\"resource.expiration-update\",{\"expiration\": $1},nodeid=0).get()"
+}
+test_expect_success '--match-context matches floats with some tolerance' '
+	# Add two resource-update events, one that wont match and one that will
+	update_expiration 0. &&
+	ts=$(( $(date +%s) + 3600)) &&
+	update_expiration $ts &&
+	flux resource eventlog -f json \
+		--wait=resource-update \
+		--match-context=expiration=${ts}.000001 > tmp.out &&
+	tail -1 tmp.out | tee mc3.out &&
+	jq -e ".name == \"resource-update\"" mc3.out &&
+	jq -e ".context.expiration == $ts" mc3.out
+'
+test_expect_success '--timeout works when wait condition is never met' '
+	test_must_fail flux resource eventlog \
+		--wait=drain \
+		--match-context=reason=nonexistent \
+		--timeout=0.5
+'
+test_expect_success '--timeout does not fire if event is found in time' '
+	flux resource eventlog \
+		--wait=resource-define \
+		--match-context=method=kvs \
+		--timeout=30
+'
+test_expect_success '--timeout=BADARG raises error' '
+	test_must_fail flux resource eventlog --timeout=notanumber
+'
 # Truncation tests follow:
 test_expect_success 'capture eventlog before truncation' '
 	flux resource eventlog -H &&

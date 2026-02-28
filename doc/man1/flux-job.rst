@@ -380,9 +380,13 @@ left in the current or specified job time limit. If the job has expired or is
 complete, then this command reports ``0``. If the job does not have a time
 limit, then a large number (``UINT_MAX``) is reported.
 
-If :program:`flux job timeleft` is called outside the context of a Flux job, or
-an invalid or pending job is targeted, then this command will exit with
-an error and diagnostic message.
+If :program:`flux job timeleft` is called outside the context of a Flux job,
+the remaining time is determined from the expiration of the enclosing Flux
+instance, if any. If the instance has no expiration, a large number
+(``UINT_MAX`` or ``infinity`` with :option:`-H`) is reported.
+
+If an invalid or pending job is targeted, or another error occurs, then this
+command will exit with an error and diagnostic message.
 
 Options:
 
