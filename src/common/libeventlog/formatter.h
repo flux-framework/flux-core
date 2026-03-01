@@ -19,11 +19,6 @@
 struct eventlog_formatter *eventlog_formatter_create (void);
 void eventlog_formatter_destroy (struct eventlog_formatter *evf);
 
-/*  Set color: when can be "always", "never", or "auto":
- */
-int eventlog_formatter_colors_init (struct eventlog_formatter *evf,
-                                    const char *when);
-
 /*  Enable color if color=1, disable if color=0.
  *  Returns -1 with EINVAL if color is not 0 or 1.
  */

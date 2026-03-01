@@ -170,8 +170,8 @@ static void test_basic ()
             BAIL_OUT ("failed to load JSON input '%s'", test->input);
 
         /* Disable color for tests */
-        ok (eventlog_formatter_colors_init (evf, "never") == 0,
-            "eventlog_formatter_colors_init (never)");
+        ok (eventlog_formatter_set_color (evf, 0) == 0,
+            "eventlog_formatter_set_color (0)");
 
         /* 1. Test unformatted, should equal input
          */
@@ -229,8 +229,8 @@ static void test_basic ()
 
         /* 5. Test "reltime"/"human" timestamp with color
          */
-        ok (eventlog_formatter_colors_init (evf, "always") == 0,
-            "eventlog_formatter_colors_init (always)");
+        ok (eventlog_formatter_set_color (evf, 1) == 0,
+            "eventlog_formatter_set_color (1)");
         ok (eventlog_formatter_set_timestamp_format (evf, "human") == 0,
             "eventlog_formatter_set_timestamp_format human works");
         ok ((result = eventlog_entry_dumps (evf, &error, entry)) != NULL,
@@ -275,13 +275,6 @@ static void test_invalid ()
         "eventlog_formatter_set_format (NULL, \"text\") returns EINVAL");
     ok (eventlog_formatter_set_format (evf, "foo") < 0 && errno == EINVAL,
         "eventlog_formatter_set_format (evf, \"foo\") returns EINVAL");
-
-    ok (eventlog_formatter_colors_init (NULL, "auto") < 0 && errno == EINVAL,
-        "eventlog_formatter_colors_init (NULL, \"auto\") returns EINVAL");
-    ok (eventlog_formatter_colors_init (evf, NULL) < 0 && errno == EINVAL,
-        "eventlog_formatter_colors_init (evf, NULL) returns EINVAL");
-    ok (eventlog_formatter_colors_init (evf, "foo") < 0 && errno == EINVAL,
-        "eventlog_formatter_colors_init (evf, \"foo\") returns EINVAL");
 
     ok (eventlog_formatter_set_color (NULL, 1) < 0 && errno == EINVAL,
         "eventlog_formatter_set_color (NULL, 1) returns EINVAL");
