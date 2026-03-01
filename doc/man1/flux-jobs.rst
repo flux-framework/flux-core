@@ -138,9 +138,7 @@ OPTIONS
 
 .. option:: --color[=WHEN]
 
-   Control output coloring.  The optional argument *WHEN* can be
-   *auto*, *never*, or *always*.  If *WHEN* is omitted, it defaults to
-   *always*.  Otherwise the default is *auto*.
+  .. include:: common/color.rst
 
 .. option:: --stats
 
