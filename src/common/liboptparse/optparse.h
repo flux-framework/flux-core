@@ -424,6 +424,22 @@ const char *optparse_get_str (optparse_t *p,
                               const char *default_value);
 
 /*
+ *  Check option 'name' (typically "color") for standard color-enablement
+ *  arguments, returning 1 if color should be enabled or 0 if not.
+ *  Supported arguments are:
+ *
+ *   "auto"   enable color if stdout is connected to a tty (default)
+ *   "always" force enable color
+ *   "never"  force disable color
+ *
+ *  If the option is provided without an argument, "always" is assumed.
+ *
+ *  Calls the fatal error function if 'name' is unknown or if the argument
+ *  is not one of the supported values above.
+ */
+int optparse_get_color (optparse_t *p, const char *name);
+
+/*
  *   Return option index from previous call to optparse_parse_args ().
  *    Returns -1 if args have not yet been parsed, and thus option index is
  *    not valid.
