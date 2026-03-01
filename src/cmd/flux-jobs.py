@@ -22,6 +22,7 @@ from flux.idset import IDset
 from flux.job import JobID, JobInfo, JobInfoFormat, JobList, job_fields_to_attrs
 from flux.job.stats import JobStats
 from flux.util import (
+    ColorAction,
     FilterAction,
     FilterActionSetUpdate,
     FilterActionUser,
@@ -123,7 +124,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
 
     attrs = job_fields_to_attrs(fields)
 
-    if args.color == "always" or args.color == "auto":
+    if args.color.enabled:
         attrs.update(job_fields_to_attrs(["result", "annotations"]))
     if args.recursive:
         attrs.update(job_fields_to_attrs(["annotations", "status", "userid"]))
@@ -336,16 +337,7 @@ def parse_args():
         action="store_true",
         help="Output jobs in JSON instead of formatted output",
     )
-    parser.add_argument(
-        "--color",
-        type=str,
-        metavar="WHEN",
-        choices=["never", "always", "auto"],
-        nargs="?",
-        const="always",
-        default="auto",
-        help="Colorize output; WHEN can be 'never', 'always', or 'auto' (default)",
-    )
+    parser.add_argument("--color", action=ColorAction)
     parser.add_argument(
         "-R",
         "--recursive",
@@ -397,7 +389,7 @@ def parse_args():
 
 
 def color_setup(args, job):
-    if args.color == "always" or (args.color == "auto" and sys.stdout.isatty()):
+    if args.color.enabled:
         if job.result:
             if job.result == "COMPLETED":
                 sys.stdout.write("\033[01;32m")

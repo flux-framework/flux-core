@@ -714,20 +714,7 @@ static bool validate_wait (const char *wait)
 // N.B. used by both status and trace subcommands
 static int status_use_color (optparse_t *p)
 {
-    const char *when;
-    int color;
-
-    if (!(when = optparse_get_str (p, "color", "auto")))
-        when = "always";
-    if (streq (when, "always"))
-        color = 1;
-    else if (streq (when, "never"))
-        color = 0;
-    else if (streq (when, "auto"))
-        color = isatty (STDOUT_FILENO) ? 1 : 0;
-    else
-        log_msg_exit ("Invalid argument to --color: '%s'", when);
-    return color;
+    return optparse_get_color (p, "color");
 }
 
 static struct idset *highlight_ranks (struct status *ctx, optparse_t *p)

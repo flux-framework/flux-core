@@ -233,27 +233,11 @@ void dmesg_print (struct dmesg_ctx *ctx,
     fflush (stdout);
 }
 
-static void dmesg_colors_init (struct dmesg_ctx *ctx)
-{
-    const char *when;
-
-    if (!(when = optparse_get_str (ctx->p, "color", "auto")))
-        when = "always";
-    if (streq (when, "always"))
-        ctx->color = 1;
-    else if (streq (when, "never"))
-        ctx->color = 0;
-    else if (streq (when, "auto"))
-        ctx->color = isatty (STDOUT_FILENO) ? 1 : 0;
-    else
-        log_msg_exit ("Invalid argument to --color: '%s'", when);
-}
-
 static void dmesg_ctx_init (struct dmesg_ctx *ctx, optparse_t *p)
 {
     memset (ctx, 0, sizeof (*ctx));
     ctx->p = p;
-    dmesg_colors_init (ctx);
+    ctx->color = optparse_get_color (ctx->p, "color");
     if (optparse_hasopt (p, "delta")) {
         if (!optparse_hasopt (p, "human"))
             log_msg_exit ("--delta can only be used with --human");

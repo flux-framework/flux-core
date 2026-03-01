@@ -507,9 +507,7 @@ Display the contents of an RFC 18 KVS eventlog referred to by *key*.
 
 .. option:: -L, --color[=WHEN]
 
-  Control output colorization. The optional argument *WHEN* can be one of
-  'auto', 'never', or 'always'. The default value of *WHEN* if omitted is
-  'always'. The default is 'auto' if the option is unused.
+  .. include:: common/color.rst
 
 .. option:: -S, --stream
 
@@ -566,10 +564,7 @@ referred to by *key*.
 
 .. option:: -L, --color[=WHEN]
 
-  Control output colorization. The optional argument *WHEN* can be one of
-  'auto', 'never', or 'always'. The default value of *WHEN* if omitted is
-  'always'. The default is 'auto' if the option is unused.
-
+  .. include:: common/color.rst
 
 
 RESOURCES
