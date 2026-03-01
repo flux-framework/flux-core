@@ -358,6 +358,24 @@ Usage: test-help [OPTIONS]...\n\
     optparse_destroy (p);
 }
 
+/* Helper function to run optparse_get_color() without a tty on stdout
+ */
+static int get_color_no_tty (optparse_t *p, const char *name)
+{
+    int saved_stdout = dup (STDOUT_FILENO);
+    int pfd[2];
+    int color;
+    if (pipe (pfd) < 0
+        || dup2 (pfd[1], STDOUT_FILENO) < 0)
+        BAIL_OUT ("Failed to redirect stdout away from tty!");
+    color = optparse_get_color (p, name);
+    dup2 (saved_stdout, STDOUT_FILENO);
+    close (saved_stdout);
+    close (pfd[0]);
+    close (pfd[1]);
+    return color;
+}
+
 void test_convenience_accessors (void)
 {
     struct optparse_option opts [] = {
@@ -372,12 +390,13 @@ void test_convenience_accessors (void)
 { .name = "dur", .key = 9, .has_arg = 1, .arginfo = "", .usage = "" },
 { .name = "size", .key = 10, .has_arg = 1, .arginfo = "", .usage = "" },
 { .name = "sizeint", .key = 11, .has_arg = 1, .arginfo = "", .usage = "" },
+{ .name = "color", .key = 12, .has_arg = 2, .arginfo = "", .usage = "" },
         OPTPARSE_TABLE_END,
     };
 
     char *av[] = { "test", "--foo", "--baz=hello", "--mnf=7", "--neg=-4",
                    "--dub=5.7", "--ndb=-3.2", "--dur=1.5m", "--size=4G",
-                   "--sizeint=1.25G", NULL };
+                   "--sizeint=1.25G", "--color=always", NULL };
     int ac = ARRAY_SIZE (av) - 1;
     int rc, optindex;
 
@@ -536,6 +555,68 @@ void test_convenience_accessors (void)
             "get_str returns default argument when arg not present");
     like (optparse_get_str (p, "baz", NULL), "^hello$",
             "get_str returns arg when present");
+
+    /* get_color
+     */
+    dies_ok ({optparse_get_color (p, "no-exist"); },
+        "get_color exits on unknown arg");
+    ok (optparse_get_color (p, "color"),
+        "get_color returns 1 for --color=always");
+
+    setenv ("NO_COLOR", "1", 1);
+    ok (optparse_get_color (p, "color") == 1,
+        "get_color --color=always overrides NO_COLOR");
+    unsetenv ("NO_COLOR");
+
+    {
+        char *av_never[] = { "test", "--color=never", NULL };
+        char *av_auto[]  = { "test", NULL };
+        char *av_noarg[] = { "test", "--color", NULL };
+        char *av_bad[]   = { "test", "--color=bogus", NULL };
+        optparse_t *p2 = optparse_create ("test");
+
+        ok (p2 != NULL, "create object for get_color tests");
+        ok (optparse_add_option_table (p2, opts) == OPTPARSE_SUCCESS,
+            "register options for get_color tests");
+
+        /* --color=never test:
+         */
+        optparse_parse_args (p2, ARRAY_SIZE (av_never) - 1, av_never);
+        ok (optparse_get_color (p2, "color") == 0,
+            "get_color returns 0 for --color=never");
+
+        /* auto tests: no --color option specified:
+         */
+        optparse_reset (p2);
+        optparse_parse_args (p2, ARRAY_SIZE (av_auto) - 1, av_auto);
+        ok (get_color_no_tty (p2, "color") == 0,
+            "get_color returns 0 in auto mode when not a tty");
+
+        setenv ("NO_COLOR", "", 1);
+        ok (get_color_no_tty (p2, "color") == 0,
+            "get_color ignores empty NO_COLOR, returns 0 when not a tty");
+        unsetenv ("NO_COLOR");
+
+        setenv ("NO_COLOR", "1", 1);
+        ok (optparse_get_color (p2, "color") == 0,
+            "get_color returns 0 when NO_COLOR is set and --color not used");
+        unsetenv ("NO_COLOR");
+
+        /* --color (no argument) tests:
+         */
+        optparse_reset (p2);
+        optparse_parse_args (p2, ARRAY_SIZE (av_noarg) - 1, av_noarg);
+        ok (optparse_get_color (p2, "color"),
+            "get_color returns 1 for --color with no argument");
+
+        /* --color=bogus tests:
+         */
+        optparse_parse_args (p2, ARRAY_SIZE (av_bad) - 1, av_bad);
+        dies_ok ({optparse_get_color (p2, "color"); },
+            "get_color exits on invalid argument");
+
+        optparse_destroy (p2);
+    }
 
     /* fatalerr
      */
@@ -1463,7 +1544,7 @@ static void test_issue5732 ()
 
 int main (int argc, char *argv[])
 {
-    plan (324);
+    plan (335);
 
     test_convenience_accessors (); /* 60 tests */
     test_usage_output (); /* 46 tests */
