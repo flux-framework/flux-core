@@ -10,14 +10,18 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import argparse
 import os
+import sys
 import time
 import unittest
 from collections import namedtuple
 from datetime import datetime
+from unittest.mock import patch
 
 import subflux  # noqa: F401 - To set up PYTHONPATH
 from flux.util import (
+    ColorAction,
     OutputFormat,
     UtilDatetime,
     del_treedict,
@@ -320,6 +324,75 @@ class TestOutputFormat(unittest.TestCase):
         set_treedict(d, "a.b.c", 42)
         with self.assertRaises(KeyError):
             del_treedict(d, "a.b.d")
+
+
+class TestColorAction(unittest.TestCase):
+
+    def make_parser(self):
+        p = argparse.ArgumentParser()
+        p.add_argument("--color", action=ColorAction, metavar="WHEN")
+        return p
+
+    def parse(self, args):
+        return self.make_parser().parse_args(args)
+
+    def test_default_is_auto(self):
+        args = self.parse([])
+        self.assertEqual(args.color, "auto")
+
+    def test_default_no_color(self):
+        with patch.dict(os.environ, {"NO_COLOR": "1"}):
+            args = self.parse([])
+        self.assertEqual(args.color, "never")
+
+    def test_default_no_color_empty_ignored(self):
+        with patch.dict(os.environ, {"NO_COLOR": ""}):
+            args = self.parse([])
+        self.assertEqual(args.color, "auto")
+
+    def test_always(self):
+        args = self.parse(["--color=always"])
+        self.assertEqual(args.color, "always")
+        self.assertTrue(args.color.enabled)
+
+    def test_never(self):
+        args = self.parse(["--color=never"])
+        self.assertEqual(args.color, "never")
+        self.assertFalse(args.color.enabled)
+
+    def test_no_argument_implies_always(self):
+        args = self.parse(["--color"])
+        self.assertEqual(args.color, "always")
+        self.assertTrue(args.color.enabled)
+
+    def test_always_overrides_no_color(self):
+        with patch.dict(os.environ, {"NO_COLOR": "1"}):
+            args = self.parse(["--color=always"])
+        self.assertTrue(args.color.enabled)
+
+    def test_auto_tty(self):
+        with patch.object(sys.stdout, "isatty", return_value=True):
+            args = self.parse(["--color=auto"])
+            self.assertTrue(args.color.enabled)
+
+    def test_auto_no_tty(self):
+        with patch.object(sys.stdout, "isatty", return_value=False):
+            args = self.parse(["--color=auto"])
+            self.assertFalse(args.color.enabled)
+
+    def test_default_auto_tty(self):
+        with patch.object(sys.stdout, "isatty", return_value=True):
+            args = self.parse([])
+            self.assertTrue(args.color.enabled)
+
+    def test_default_auto_no_tty(self):
+        with patch.object(sys.stdout, "isatty", return_value=False):
+            args = self.parse([])
+            self.assertFalse(args.color.enabled)
+
+    def test_invalid_argument(self):
+        with self.assertRaises(SystemExit):
+            self.parse(["--color=bogus"])
 
 
 if __name__ == "__main__":
