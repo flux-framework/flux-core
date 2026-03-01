@@ -554,6 +554,7 @@ check_LTLIBRARIES = \
 dist_check_DATA = \
 	hwloc-data/sierra.xml \
 	hwloc-data/corona.xml \
+	hwloc-data/elcap.xml \
 	valgrind/valgrind.supp
 
 test_ldadd = \
