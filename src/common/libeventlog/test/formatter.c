@@ -283,6 +283,13 @@ static void test_invalid ()
     ok (eventlog_formatter_colors_init (evf, "foo") < 0 && errno == EINVAL,
         "eventlog_formatter_colors_init (evf, \"foo\") returns EINVAL");
 
+    ok (eventlog_formatter_set_color (NULL, 1) < 0 && errno == EINVAL,
+        "eventlog_formatter_set_color (NULL, 1) returns EINVAL");
+    ok (eventlog_formatter_set_color (evf, -1) < 0 && errno == EINVAL,
+        "eventlog_formatter_set_color (evf, -1) returns EINVAL");
+    ok (eventlog_formatter_set_color (evf, 2) < 0 && errno == EINVAL,
+        "eventlog_formatter_set_color (evf, 2) returns EINVAL");
+
     if (!(good = json_pack ("{s:f s:s s:{s:s}}",
                             "timestamp", 1699995759.0,
                             "name", "good",
