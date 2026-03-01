@@ -1077,6 +1077,13 @@ const char *optparse_get_str (optparse_t *p,
 int optparse_get_color (optparse_t *p, const char *name)
 {
     const char *when = "auto";
+    const char *no_color = getenv ("NO_COLOR");
+
+    /* If NO_COLOR set to a non-empty value, set default to 'never'
+     * (See no-color.org)
+     */
+    if (no_color && no_color[0] != '\0')
+        when = "never";
 
     /* Option used without an argument (optparse_get_str() returns NULL)
      * implies "always":
