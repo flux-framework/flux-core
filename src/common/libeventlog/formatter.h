@@ -24,6 +24,11 @@ void eventlog_formatter_destroy (struct eventlog_formatter *evf);
 int eventlog_formatter_colors_init (struct eventlog_formatter *evf,
                                     const char *when);
 
+/*  Enable color if color=1, disable if color=0.
+ *  Returns -1 with EINVAL if color is not 0 or 1.
+ */
+int eventlog_formatter_set_color (struct eventlog_formatter *evf, int color);
+
 /*  Reset an eventlog formatter. (Clear t0 timestamp).
  *  Formatting options remain unchanged.
  */
