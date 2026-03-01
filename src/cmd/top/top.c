@@ -311,24 +311,6 @@ fail:
     return NULL;
 }
 
-static int color_optparse (optparse_t *opts)
-{
-    const char *when;
-    int color = 0;
-
-    if (!(when = optparse_get_str (opts, "color", "auto")))
-        when = "always";
-    if (streq (when, "always"))
-        color = 1;
-    else if (streq (when, "never"))
-        color = 0;
-    else if (streq (when, "auto"))
-        color = isatty (STDOUT_FILENO) ? 1 : 0;
-    else
-        fatal (0, "Invalid argument to --color: '%s'", when);
-    return color;
-}
-
 static struct optparse_option cmdopts[] = {
     { .name = "test-exit", .has_arg = 0, .flags = OPTPARSE_OPT_HIDDEN,
       .usage = "Exit after screen initialization, for testing",
@@ -376,7 +358,7 @@ int main (int argc, char *argv[])
     }
     if (!isatty (STDIN_FILENO))
         fatal (0, "stdin is not a terminal");
-    initialize_curses (color_optparse (opts));
+    initialize_curses (optparse_get_color (opts, "color"));
 
     if (!(top = top_create (target,
                             NULL,
