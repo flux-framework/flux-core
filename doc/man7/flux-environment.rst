@@ -560,6 +560,12 @@ MISCELLANEOUS
    configured to launch jobs with systemd, as described in
    :man5:`flux-config-exec`.
 
+.. envvar:: NO_COLOR
+
+   If set to a non-empty value, Flux utilities that support the
+   :option:`--color` option default to "never" instead of "auto", disabling
+   color output unless :option:`--color` is explicitly passed on the command
+   line.  See `no-color.org <https://no-color.org>`_ for details.
 
 .. _sub_command_environment:
 
