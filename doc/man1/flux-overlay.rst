@@ -67,10 +67,9 @@ below.
    Do not fill in presumed state of nodes that are inaccessible behind
    offline/lost overlay parents.
 
-.. option:: -L, --color=WHEN
+.. option:: -L, --color[=WHEN]
 
-   Colorize output when supported; WHEN can be 'always' (default if omitted),
-   'never', or 'auto' (default).
+  .. include:: common/color.rst
 
 .. option:: -H, --highlight=TARGET
 
@@ -145,10 +144,7 @@ argument.
    Filter output by message type, a comma-separated list.  Valid types are
    ``request``, ``response``, ``event``, or ``control``.
 
-.. option:: -L, --color=WHEN
-
-   Colorize output when supported; WHEN can be ``always`` (default if omitted),
-   ``never``, or ``auto`` (default).
+.. include:: common/color.rst
 
 .. option:: -H, --human
 

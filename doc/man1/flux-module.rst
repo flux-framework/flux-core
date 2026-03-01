@@ -189,10 +189,9 @@ named modules, or all modules if none are named.
    Filter output by message type, a comma-separated list.  Valid types are
    ``request``, ``response``, ``event``, or ``control``.
 
-.. option:: -L, --color=WHEN
+.. option:: -L, --color[=WHEN]
 
-   Colorize output when supported; WHEN can be ``always`` (default if omitted),
-   ``never``, or ``auto`` (default).
+  .. include:: common/color.rst
 
 .. option:: -H, --human
 

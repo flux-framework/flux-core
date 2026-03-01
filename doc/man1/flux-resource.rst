@@ -388,9 +388,7 @@ Watch the resource journal, which is described in RFC 44.
 
 .. option:: -L, --color[=WHEN]
 
-  Control color output. The optional argument *WHEN* can be one of *auto*,
-  *never*, or *always*. If *WHEN* is omitted, it defaults to *always*.
-  Otherwise the default is *auto*.
+  .. include:: common/color.rst
 
 .. option:: -F, --follow
 
