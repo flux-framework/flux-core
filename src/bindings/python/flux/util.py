@@ -323,6 +323,67 @@ class YesNoAction(argparse.Action):
         setattr(namespace, self.dest, value == "yes")
 
 
+class ColorAction(argparse.Action):
+    """Argparse action for a standard --color[=WHEN] option.
+
+    Supports "always", "never", and "auto" as arguments.  If --color is
+    specified without an argument, "always" is assumed.  If the option is
+    not used, "auto" is assumed unless NO_COLOR is set to a non-empty value
+    in the environment, in which case color is disabled.
+
+    The resolved value is stored as a ColorWhen string, which supports
+    direct string comparison and an 'enabled' property:
+
+      parser.add_argument("--color", action=ColorAction, metavar="WHEN")
+      args = parser.parse_args()
+      if args.color.enabled:
+          ...
+      if args.color == "never":
+          ...
+    """
+
+    class ColorWhen(str):
+        @property
+        def enabled(self):
+            if self == "always":
+                return True
+            if self == "never":
+                return False
+            # "auto": only reached if --color=auto explicitly passed on command
+            # line, NO_COLOR handling has already been applied to the default
+            return sys.stdout.isatty()
+
+    def __init__(
+        self,
+        option_strings,
+        dest,
+        nargs="?",
+        default="auto",
+        metavar="WHEN",
+        help="Use color; WHEN can be 'never', 'always' or 'auto' (default)",
+        **kwargs,
+    ):
+        if default == "auto":
+            default = "never" if os.environ.get("NO_COLOR") else "auto"
+        super().__init__(
+            option_strings,
+            dest,
+            nargs=nargs,
+            default=ColorAction.ColorWhen(default),
+            metavar=metavar,
+            help=help,
+            **kwargs,
+        )
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        # --color with no argument: treat as --color=always
+        if values is None:
+            values = "always"
+        if values not in ("auto", "always", "never"):
+            parser.error(f"Invalid argument to --color: '{values}'")
+        setattr(namespace, self.dest, ColorAction.ColorWhen(values))
+
+
 class CLIMain(object):
     def __init__(self, logger=None):
         if logger is None:
