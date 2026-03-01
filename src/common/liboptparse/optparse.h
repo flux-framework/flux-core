@@ -434,6 +434,9 @@ const char *optparse_get_str (optparse_t *p,
  *
  *  If the option is provided without an argument, "always" is assumed.
  *
+ *  If NO_COLOR is set to a non-empty value in the environment, the default
+ *  is "never" instead of "auto", but an explicit option argument overrides it.
+ *
  *  Calls the fatal error function if 'name' is unknown or if the argument
  *  is not one of the supported values above.
  */
