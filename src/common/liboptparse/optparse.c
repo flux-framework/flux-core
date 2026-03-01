@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -1071,6 +1072,28 @@ const char *optparse_get_str (optparse_t *p,
     if (n == 0)
         return default_value;
     return s;
+}
+
+int optparse_get_color (optparse_t *p, const char *name)
+{
+    const char *when = "auto";
+
+    /* Option used without an argument (optparse_get_str() returns NULL)
+     * implies "always":
+     */
+    when = optparse_get_str (p, name, when);
+    if (when == NULL)
+        when = "always";
+
+    if (streq (when, "always"))
+        return 1;
+    if (streq (when, "never"))
+        return 0;
+    if (streq (when, "auto"))
+        return isatty (STDOUT_FILENO) ? 1 : 0;
+
+    optparse_fatalmsg (p, 1, "Invalid argument to --%s: '%s'", name, when);
+    return -1;
 }
 
 const char *optparse_getopt_next (optparse_t *p, const char *name)
