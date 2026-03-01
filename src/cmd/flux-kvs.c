@@ -1960,11 +1960,12 @@ struct eventlog_wait_event_ctx {
 static struct eventlog_formatter *formatter_create (optparse_t *p)
 {
     struct eventlog_formatter *evf;
-    const char *color = optparse_get_str (p, "color", "auto");
+    int color = optparse_get_color (p, "color");
     bool human = optparse_hasopt (p, "human");
     bool unformatted = optparse_hasopt (p, "unformatted");
 
-    if (unformatted && (human || streq (color, "always"))) {
+    if (unformatted
+        && (human || streq (optparse_get_str (p, "color", ""), "always"))) {
         log_msg ("Do not specify --unformatted with --human or --color=always");
         return NULL;
     }
@@ -1980,10 +1981,7 @@ static struct eventlog_formatter *formatter_create (optparse_t *p)
         log_err ("failed to set human timestamp format");
         goto error;
     }
-    if (eventlog_formatter_colors_init (evf, color ? color : "always") < 0) {
-        log_err ("invalid value: --color=%s", color);
-        goto error;
-    }
+    (void) eventlog_formatter_set_color (evf, color);
     return evf;
 error:
     eventlog_formatter_destroy (evf);
