@@ -33,6 +33,7 @@ from flux.resource import (
 from flux.rpc import RPC
 from flux.util import (
     AltField,
+    ColorAction,
     Deduplicator,
     FilterActionSetUpdate,
     UtilConfig,
@@ -451,7 +452,7 @@ def status(args):
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
     # Remove any `{color*}` fields if color is off
-    if args.color == "never" or (args.color == "auto" and not sys.stdout.isatty()):
+    if not args.color.enabled:
         formatter = formatter.copy(except_fields=["color_up", "color_off"])
 
     #  Skip empty lines unless --states or --skip-empty
@@ -994,13 +995,7 @@ def main():
     drain_parser.add_argument(
         "-L",
         "--color",
-        type=str,
-        metavar="WHEN",
-        choices=["never", "always", "auto"],
-        nargs="?",
-        const="always",
-        default="auto",
-        help="Use color; WHEN can be 'never', 'always', or 'auto' (default)",
+        action=ColorAction,
     )
     drain_parser.add_argument(
         "targets", nargs="?", help="List of targets to drain (IDSET or HOSTLIST)"
@@ -1069,13 +1064,7 @@ def main():
     status_parser.add_argument(
         "-L",
         "--color",
-        type=str,
-        metavar="WHEN",
-        choices=["never", "always", "auto"],
-        nargs="?",
-        const="always",
-        default="auto",
-        help="Use color; WHEN can be 'never', 'always', or 'auto' (default)",
+        action=ColorAction,
     )
     status_parser.add_argument(
         "--from-stdin", action="store_true", help=argparse.SUPPRESS
@@ -1251,13 +1240,7 @@ def main():
     eventlog_parser.add_argument(
         "-L",
         "--color",
-        type=str,
-        metavar="WHEN",
-        choices=["never", "always", "auto"],
-        nargs="?",
-        const="always",
-        default="auto",
-        help="Use color; WHEN can be 'never', 'always', or 'auto' (default)",
+        action=ColorAction,
     )
     eventlog_parser.add_argument(
         "-F",
