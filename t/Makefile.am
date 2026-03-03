@@ -490,7 +490,8 @@ check_PROGRAMS = \
 	shell/mpir \
 	debug/stall \
 	util/jobspec1-validate \
-	util/marshall
+	util/marshall \
+	module/testloader
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -1176,6 +1177,11 @@ util_marshall_SOURCES = util/marshall.c
 util_marshall_CPPFLAGS = $(test_cppflags)
 util_marshall_LDADD = $(test_ldadd)
 util_marshall_LDFLAGS = $(test_ldflags)
+
+module_testloader_SOURCES = module/testloader.c
+module_testloader_CPPFLAGS = $(test_cppflags)
+module_testloader_LDADD = $(test_ldadd)
+module_testloader_LDFLAGS = $(test_ldflags)
 
 stats_stats_basic_la_SOURCES = stats/stats-basic.c
 stats_stats_basic_la_CPPFLAGS = $(test_cppflags)
