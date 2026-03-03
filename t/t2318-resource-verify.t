@@ -46,12 +46,12 @@ drain_reason_matches() {
 }
 
 test_expect_success 'load test R with unlikely core, GPU count' '
-	flux R encode -r 0 -c 0-1048 -g 0-7 >R.test &&
+	flux R encode -r 0 -c 0-1047 -g 0-127 >R.test &&
 	flux kvs put resource.R="$(cat R.test)"
 '
 
 # Test default behavior with implicit config
-# Expected R has 1048 cores, 8 GPUs - actual system (likely!) has fewer
+# Expected R has 1048 cores, 128 GPUs - actual system (likely!) has fewer
 # With default config (allow-extra cores, strict hostname, ignore GPUs),
 # missing cores will drain since allow-extra only allows EXTRA, not missing
 test_expect_success 'default config drains on missing cores' '

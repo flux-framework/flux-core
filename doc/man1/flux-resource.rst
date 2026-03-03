@@ -403,6 +403,19 @@ Watch the resource journal, which is described in RFC 44.
   The current set of valid events events is *restart*, *resource-define*,
   *online*, *offline*, *drain*, *undrain*, *torpid*, and *lively*.
 
+.. option:: -m, --match-context=KEY=VAL
+
+  When used with :option:`--wait`, skip events whose context does not
+  contain a matching KEY=VAL pair. This option may be repeated to
+  require multiple pairs to match. Floating point values are compared
+  within an absolute tolerance of 1e-5 rather than exactly.
+
+.. option:: -t, --timeout=FSD
+
+  When used with :option:`--wait`, exit with an error if the expected
+  event is not received within the specified duration in RFC 23 Flux
+  Standard Duration form (e.g. ``1.5``, ``5s``, ``1.5m``).
+
 .. option:: -i, --include=TARGETS
 
   Filter events to only include those that apply to  *TARGETS*, which is
