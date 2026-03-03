@@ -385,7 +385,7 @@ def main():
         ofile = formatter(args.output, width=width, height=height)
         buf = TTYBuffer(fd, linebuffer=args.line_buffer)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.new_event_loop()
 
         if args.input and args.input == "none":
 

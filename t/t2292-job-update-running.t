@@ -188,7 +188,7 @@ fi
 # 8. Ensure new expiration is 300s greater than old expiration
 #
 test_expect_success "${label}expiration update is detected by subinstance" '
-	id=$(flux alloc --bg -t5m -n4 $conf_arg) &&
+	id=$(flux alloc --bg -t5m -N4 $conf_arg) &&
 	exp1=$(subinstance_get_expiration $id) &&
 	test_debug "echo instance expiration is $exp1" &&
 	subinstance_check_R $id &&
