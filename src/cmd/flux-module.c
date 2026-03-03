@@ -88,6 +88,9 @@ static struct optparse_option reload_opts[] =  {
     { .name = "exec", .has_arg = 0,
       .usage = "Load module as a separate process",
     },
+    { .name = "loader", .has_arg = 1, .arginfo = "PATH",
+      .usage = "Use the specified loader program",
+    },
     OPTPARSE_TABLE_END,
 };
 
@@ -97,6 +100,9 @@ static struct optparse_option load_opts[] =  {
     },
     { .name = "exec", .has_arg = 0,
       .usage = "Load module as a separate process",
+    },
+    { .name = "loader", .has_arg = 1, .arginfo = "PATH",
+      .usage = "Use the specified loader program",
     },
     OPTPARSE_TABLE_END,
 };
@@ -327,6 +333,7 @@ static void module_load (flux_t *h,
                          char **argv)
 {
     const char *name = optparse_get_str (p, "name", NULL);
+    const char *loader = optparse_get_str (p, "loader", NULL);
     char *fullpath = NULL;
     flux_future_t *f;
     json_t *args;
@@ -339,7 +346,8 @@ static void module_load (flux_t *h,
                                   "path", fullpath ? fullpath : path,
                                   "args", args,
                                   "exec", optparse_hasopt (p, "exec") ? 1 : 0))
-        || (name && set_string (payload, "name", name) < 0))
+        || (name && set_string (payload, "name", name) < 0)
+        || (loader && set_string (payload, "loader", loader) < 0))
         log_msg_exit ("failed to create module.load payload");
     if (!(f = flux_rpc_pack (h,
                              "module.load",
