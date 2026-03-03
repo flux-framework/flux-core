@@ -69,6 +69,7 @@ struct broker_module {
     char *name;
     int status;
     int errnum;
+    flux_error_t error;
     bool muted;             /* module is under directive 42, no new messages */
     bool module_unload_requested;
     struct aux_item *aux;
@@ -657,6 +658,28 @@ void module_set_errnum (module_t *p, int errnum)
 int module_get_errnum (module_t *p)
 {
     return p->errnum;
+}
+
+int module_errprintf (module_t *p, const char *fmt, ...)
+{
+    va_list ap;
+    int rc = 0;
+
+    va_start (ap, fmt);
+    if (p)
+        rc = verrprintf (&p->error, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
+const char *module_strerror (module_t *p)
+{
+    if (p) {
+        if (p->errnum != 0 && strlen (p->error.text) > 0)
+            return p->error.text;
+        return strerror (p->errnum);
+    }
+    return "Unknown";
 }
 
 int module_subscribe (module_t *p, const char *topic)

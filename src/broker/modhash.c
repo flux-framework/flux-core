@@ -223,7 +223,7 @@ static int module_insmod_respond (flux_t *h, module_t *p)
     if (errnum == 0)
         rc = flux_respond (h, msg, NULL);
     else
-        rc = flux_respond_error (h, msg, errnum, NULL);
+        rc = flux_respond_error (h, msg, errnum, module_strerror (p));
 
     module_aux_set (p, "insmod", NULL, NULL);
     return rc;
@@ -372,6 +372,8 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
      */
     if (status == FLUX_MODSTATE_EXITED) {
         flux_log (ctx->h, LOG_DEBUG, "module %s exited", name);
+        if (module_get_errnum (p) != 0)
+            flux_log (ctx->h, LOG_ERR, "%s: %s", name, module_strerror (p));
         service_remove_byuuid (ctx->services, module_get_uuid (p));
 
         if (!module_unload_requested (p)

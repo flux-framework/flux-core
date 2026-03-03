@@ -97,6 +97,10 @@ void module_set_status_cb (module_t *p, module_status_cb_f cb, void *arg);
 int module_get_errnum (module_t *p);
 void module_set_errnum (module_t *p, int errnum);
 
+int module_errprintf (module_t *p, const char *fmt, ...)
+     __attribute__ ((format (printf, 2, 3)));
+const char *module_strerror (module_t *p);
+
 /* Start module thread.
  */
 int module_start (module_t *p);
