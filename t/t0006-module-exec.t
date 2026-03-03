@@ -164,7 +164,7 @@ test_expect_success 'simulated module segfault causes module to exit' '
 	flux dmesg >segfault.out
 '
 test_expect_success 'segfault is reported' '
-	grep "testmod: killed by Segmentation fault" segfault.out
+	grep "killed by Segmentation fault" segfault.out
 '
 test_expect_success 'broker treats this the same as spurious module exit' '
 	grep "module runtime failure" segfault.out

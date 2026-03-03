@@ -505,50 +505,73 @@ int module_set_defer (module_t *p, bool flag)
 static void exec_completion_cb (flux_subprocess_t *proc)
 {
     module_t *p = flux_subprocess_aux_get (proc, "module");
+    const char *loader;
     int rc;
-    bool failed = true;
+
+    if (!(loader = flux_cmd_arg (p->exec.cmd, 1)))
+        loader = "unknown";
+
     if ((rc = flux_subprocess_exit_code (proc)) >= 0) {
-        if (rc == 0)
-            failed = false;
-        else
-            flux_log (p->h, LOG_ERR, "%s: exited with rc=%d", p->name, rc);
+        if (rc == 0 && p->status != FLUX_MODSTATE_EXITED) {
+            module_errprintf (p,
+                              "loader (%s) exited with exit code 0"
+                              " but did not report module status",
+                              loader);
+            module_set_errnum (p, EINVAL);
+        }
+        else if (rc != 0) {
+            module_errprintf (p,
+                              "loader (%s) exited with exit code %d",
+                              loader,
+                              rc);
+            module_set_errnum (p, EINVAL);
+        }
     }
-    else if ((rc = flux_subprocess_signaled (proc)) >= 0)
-        flux_log (p->h, LOG_ERR, "%s: killed by %s", p->name, strsignal (rc));
-    else
-        flux_log (p->h, LOG_ERR, "%s: completed (not signal or exit)", p->name);
-    if (p->status != FLUX_MODSTATE_EXITED) {
-        if (failed)
-            module_set_errnum (p, ECHILD);
+    else if ((rc = flux_subprocess_signaled (proc)) >= 0) {
+        module_errprintf (p,
+                          "loader (%s) killed by %s",
+                          loader,
+                          strsignal (rc));
+        module_set_errnum (p, EINVAL);
+    }
+    else {
+        module_errprintf (p,
+                          "loader (%s) completed with unknown status",
+                          loader);
+        module_set_errnum (p, EINVAL);
+    }
+
+    if (p->status != FLUX_MODSTATE_EXITED)
         module_set_status (p, FLUX_MODSTATE_EXITED);
-    }
 }
 
 static void exec_state_cb (flux_subprocess_t *proc,
                            flux_subprocess_state_t state)
 {
     module_t *p = flux_subprocess_aux_get (proc, "module");
+    const char *loader;
+
+    if (!(loader = flux_cmd_arg (p->exec.cmd, 1)))
+        loader = "unknown";
+
     switch (state) {
         case FLUX_SUBPROCESS_RUNNING:
             break;
         case FLUX_SUBPROCESS_FAILED:
-            flux_log (p->h,
-                      LOG_ERR,
-                      "%s: %s failed: %s",
-                      p->name,
-                      flux_subprocess_state_string (state),
-                      strerror (flux_subprocess_fail_errno (proc)));
-            if (p->status != FLUX_MODSTATE_EXITED) {
-                module_set_errnum (p, ECHILD);
+            module_errprintf (p,
+                              "loader (%s) %s failed: %s",
+                              loader,
+                              flux_subprocess_state_string (state),
+                              flux_subprocess_fail_error (proc));
+            module_set_errnum (p, flux_subprocess_fail_errno (proc));
+            if (p->status != FLUX_MODSTATE_EXITED)
                 module_set_status (p, FLUX_MODSTATE_EXITED);
-            }
             break;
         case FLUX_SUBPROCESS_EXITED:
         case FLUX_SUBPROCESS_INIT:
         case FLUX_SUBPROCESS_STOPPED:
             break; // ignore
     }
-
 }
 
 int module_start (module_t *p)
