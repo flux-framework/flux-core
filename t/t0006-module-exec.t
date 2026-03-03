@@ -11,6 +11,7 @@ heartbeatmod=$(realpath ${FLUX_BUILD_DIR}/src/modules/.libs/heartbeat.so)
 legacy=$(realpath ${FLUX_BUILD_DIR}/t/module/.libs/legacy.so)
 rpc_stream=${FLUX_BUILD_DIR}/t/request/rpc_stream
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
+testloader="${FLUX_BUILD_DIR}/t/module/testloader"
 
 flux setattr log-stderr-level 6
 
@@ -178,6 +179,31 @@ test_expect_success NO_CHAIN_LINT 'broker responded with module disconnect' '
 '
 test_expect_success 'legacy module cannot be loaded under new name' '
         test_must_fail flux module load --exec --name=newname $legacy
+'
+
+##
+# special loaders
+##
+
+test_expect_success 'module loader can be explicitly set' '
+	flux module load --loader=module-exec $heartbeatmod &&
+	flux module unload heartbeat
+'
+test_expect_success 'faux module loader works' '
+	flux module load --loader=$testloader $heartbeatmod args &&
+	flux module unload heartbeat
+'
+test_expect_success 'module loader cannot be specified with non-path module' '
+	test_must_fail flux module load --loader=module-exec heartbeat
+'
+test_expect_success 'the false command fails gracefully as a module loader' '
+	test_must_fail flux module load --loader=$(which false) $heartbeatmod
+'
+test_expect_success 'the true command fails gracefully as a module loader' '
+	test_must_fail flux module load --loader=$(which true) $heartbeatmod
+'
+test_expect_success 'a nonexistent module loader fails gracefully' '
+	test_must_fail flux module load --loader=/noexist $heartbeatmod
 '
 
 test_done
