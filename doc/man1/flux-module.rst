@@ -22,7 +22,43 @@ DESCRIPTION
 .. program:: flux module
 
 :program:`flux module` manages dynamically loadable :man1:`flux-broker` modules.
+Modules are automatically loaded at Flux instance start up (rc1) and unloaded
+at Flux instance shutdown (rc3) using :man1:`flux-modprobe`, which is
+configured to be aware of module dependencies.  :program:`flux module` is
+more often used in test or debugging situations.
 
+Broker modules are loaded under a *name* that is automatically registered
+as a service endpoint. The name may be derived from the module file name
+or overridden on the command line.  The same module may be loaded multiple
+times under different names, although not all modules support this.  Once
+loaded, the name is used as a handle for the loaded module instance by the
+other sub-commands.
+
+Broker modules communicate with other Flux components solely with messages
+and utilize reactive (event loop) programming for concurrency, which presents
+challenges for traditional debugging techniques.  Therefore
+:program:`flux module` provides sub-commands for introspection and message
+tracing.
+
+Broker modules are often implemented as dynamic shared objects loaded
+into broker threads, but they may also be loaded into separate processes.
+This may be necessary for isolation, or to support incompatible programming
+runtime environments.  A *module loader* process assists with loading modules
+as separate processes, establishing communication with the broker, loading
+and executing the module, and communicating with the broker's module
+management framework.  The loader may be inferred from the module file name
+suffix, or specified on the command line.  The following module loaders are
+provided by flux-core:
+
+module-exec (.so*)
+  An alternate way to load traditional dynamic shared objects, with more
+  isolation than direct broker loading.
+
+A small number of modules that are integral to the broker are automatically
+loaded early in broker start-up.  Although hard-wired to a particular name
+and compiled into the broker executable, these modules otherwise behave
+like regular broker modules and may be reloaded, traced, and introspected as
+usual.
 
 COMMANDS
 ========
@@ -41,12 +77,16 @@ entered the running state (see LIST OUTPUT below).
 
 .. option:: -n, --name=NAME
 
-  Override the default module name.  A single shared object file may be
-  loaded multiple times under different names.
+  Override the default module name.
 
 .. option:: --exec
 
-  Load the module in a separate process, e.g. for isolation or debugging.
+  Force the module to be loaded as a separate process.
+
+.. option:: --loader=PATH
+
+  Specify a module loader path.  This option implies
+  :option:`--exec` and only works when *module* is a path.
 
 reload
 ------
@@ -66,7 +106,13 @@ Reload module *name*. This is equivalent to running
 
 .. option:: --exec
 
-  Load the module in a separate process, e.g. for isolation or debugging.
+  Load the module in a separate process.
+
+.. option:: --loader=PATH
+
+  Specify a module loader path.  This option implies
+  :option:`--exec` and only works when *module* is a path.
+
 
 remove
 ------
@@ -81,12 +127,15 @@ Remove module *name*.
 
 .. option:: --cancel
 
-  Use :linux:man3:`pthread_cancel` to remove an unresponsive module.
-  This may be useful if the module is not able to respond to the module
-  shutdown request because it has not returned control to its reactor loop.
-  However, broker module threads are created with *deferred* cancellability,
-  so this is only effective if the module thread calls one of the functions
-  listed as a cancellation point in :linux:man7:`pthreads`.
+  Call :linux:man3:`pthread_cancel` on a thread or send :const:`SIGKILL`
+  to a process as appropriate to force a module to terminate.  This may be
+  useful if the module is not able to respond to the module shutdown request
+  because it has not returned control to its reactor loop.
+
+  Note that broker modules running as threads are created with *deferred*
+  cancellability.  This means that cancellation is only effective if the
+  module thread calls one of the functions listed as a cancellation point
+  in :linux:man7:`pthreads`.
 
 list
 ----
