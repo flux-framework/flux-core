@@ -356,9 +356,13 @@ static void respond_to_unhandled (flux_t *h)
     while ((msg = flux_recv (h, FLUX_MATCH_REQUEST, FLUX_O_NONBLOCK))) {
         const char *topic = "unknown";
         (void)flux_msg_get_topic (msg, &topic);
-        flux_log (h, LOG_DEBUG, "responding to post-shutdown %s", topic);
-        if (flux_respond_error (h, msg, ENOSYS, NULL) < 0)
-            flux_log_error (h, "responding to post-shutdown %s", topic);
+        if (flux_msg_is_noresponse (msg))
+            flux_log (h, LOG_DEBUG, "discarding post-shutdown %s", topic);
+        else {
+            flux_log (h, LOG_DEBUG, "responding to post-shutdown %s", topic);
+            if (flux_respond_error (h, msg, ENOSYS, NULL) < 0)
+                flux_log_error (h, "responding to post-shutdown %s", topic);
+        }
         flux_msg_destroy (msg);
     }
 }
