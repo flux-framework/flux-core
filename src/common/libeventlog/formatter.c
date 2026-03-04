@@ -105,27 +105,17 @@ struct eventlog_formatter *eventlog_formatter_create ()
     return evf;
 }
 
-int eventlog_formatter_colors_init (struct eventlog_formatter *evf,
-                                    const char *when)
+int eventlog_formatter_set_color (struct eventlog_formatter *evf, int color)
 {
-    if (!evf || !when) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (streq (when, "always"))
-        evf->color = 1;
-    else if (streq (when, "never"))
-        evf->color = 0;
-    else if (streq (when, "auto"))
-        evf->color = isatty (STDOUT_FILENO) ? 1 : 0;
-    else {
+    if (!evf || color < 0 || color > 1) {
         errno = EINVAL;
         return -1;
     }
     /* For now, always enable context colorization if evf->color is set:
      * (This is a separate variable to allow for future possible disablement)
      */
-    evf->context_color = evf->color;
+    evf->color = color;
+    evf->context_color = color;
     return 0;
 }
 

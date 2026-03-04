@@ -141,7 +141,7 @@ static void formatter_parse_options (optparse_t *p,
 {
     const char *format = optparse_get_str (p, "format", "text");
     const char *time_format = optparse_get_str (p, "time-format", "raw");
-    const char *when = optparse_get_str (p, "color", "auto");
+    int color = optparse_get_color (p, "color");
 
     if (optparse_hasopt (p, "human")) {
         format = "text",
@@ -152,8 +152,7 @@ static void formatter_parse_options (optparse_t *p,
         log_msg_exit ("invalid format type '%s'", format);
     if (eventlog_formatter_set_timestamp_format (evf, time_format) < 0)
         log_msg_exit ("invalid time-format type '%s'", time_format);
-    if (eventlog_formatter_colors_init (evf, when ? when : "always") < 0)
-        log_msg_exit ("invalid value: --color=%s", when);
+    (void) eventlog_formatter_set_color (evf, color);
 }
 
 static void eventlog_continuation (flux_future_t *f, void *arg)

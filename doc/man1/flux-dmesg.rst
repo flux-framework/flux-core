@@ -50,9 +50,7 @@ OPTIONS
 
 .. option:: -L, --color[=WHEN]
 
-   Colorize output. The optional argument *WHEN* can be *auto*, *never*,
-   or *always*. If *WHEN* is omitted, it defaults to *always*. The default
-   value when the :option:`--color` option is not used is *auto*.
+   .. include:: common/color.rst
 
 EXAMPLES
 ========

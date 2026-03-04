@@ -947,24 +947,6 @@ static void trace_print (struct trace_ctx *ctx,
             trace_color_reset (ctx));
 }
 
-static int trace_use_color (optparse_t *p)
-{
-    const char *when;
-    int color;
-
-    if (!(when = optparse_get_str (p, "color", "auto")))
-        when = "always";
-    if (streq (when, "always"))
-        color = 1;
-    else if (streq (when, "never"))
-        color = 0;
-    else if (streq (when, "auto"))
-        color = isatty (STDOUT_FILENO) ? 1 : 0;
-    else
-        log_msg_exit ("Invalid argument to --color: '%s'", when);
-    return color;
-}
-
 static int parse_name_list (json_t **result, int ac, char **av)
 {
     json_t *a;
@@ -1010,7 +992,7 @@ static void trace_ctx_init (struct trace_ctx *ctx,
     }
     ctx->match = FLUX_MATCH_ANY;
     ctx->match.topic_glob = optparse_get_str (p, "topic", "*");
-    ctx->color = trace_use_color (p); // borrowed from status subcommand
+    ctx->color = optparse_get_color (p, "color");
     if (optparse_hasopt (p, "type")) {
         const char *arg;
 
