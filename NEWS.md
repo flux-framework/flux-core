@@ -1,3 +1,51 @@
+flux-core version 0.83.0 - 2026-02-04
+-------------------------------------
+
+## New Features
+ * track job time time limit when Flux is run as a Slurm job (#7405)
+ * libjob: fix `flux_job_timeleft()` under foreign resource managers (#7411)
+ * flux-resource: eventlog: add `--match-context` and `--timeout` options
+   (#7410)
+ * modprobe: allow rc1 tasks to manipulate environment of rc2 and rc3 (#7409)
+ * python: add F58 encoded jobid to `JobInfo.to_dict()` output (#7398)
+ * libflux: rename/deprecate public functions based on `aux_delete()` (#7397)
+ * broker: add connector-local introspection (#7395)
+ * broker: strengthen support for runtime attribute updates (#7389)
+ * drain nodes with "terminated before first barrier" exception (multiuser
+   jobs only) (#7387)
+ * enhance `flux-python` for multi-version support, add `flux-pythonX.Y`
+   convenience scripts (#7381)
+ * broker: restrict runtime updates on some attributes (#7356)
+ * shell: send EOF to write service immediately after tasks finish (#7363)
+ * shell: add `shell.finish` callback (#7362)
+
+## Fixes
+ * protect job `--progress`  bar from terminal escape codes with `--watch`
+   (#7413)
+ * ensure starttime and expiration appear in resource set returned from
+   `flux resource R` (#7404)
+ * add `FLUX_HWLOC_XMLFILE_NOT_THISSYSTEM`, fix cpu-affinity=dry-run with
+   non-local topology (#7402)
+ * fix assorted bugs in broker and job-manager (#7393)
+ * rc1: do not run fsck in recovery mode (#7366)
+ * shell: shut down rexec server in `shell.finish` callback (#7365)
+ * broker: simplify internal attribute interface (#7358)
+
+## Build/CI/Testsuite/Documentation
+ * journal: fix spelling mistake in function docstring (#7408)
+ * t: fix potential job-list reload race (#7391)
+ * t: add test with empty kvs txn (#7388)
+ * testsuite: fix several flaky tests (#7392)
+ * testsuite: make faketime timestamp file updates atomic (#7386)
+ * t: fix racy flux-top test (#7384)
+ * ci: fix podman build failure in docker-run-systest.sh (#7385)
+ * doc: update and expand flux-shell documentation (#7369)
+ * t: fix incorrectly running job list sort tests (#7371)
+ * flux-shell(1): split into multiple pages (#7367)
+ * t: fix non-bourne shell test failure (#7361)
+ * t: add missing shebang to kvs checkpoint tests (#7360)
+
+
 flux-core version 0.82.0 - 2026-02-03
 -------------------------------------
 
