@@ -109,6 +109,26 @@ class Message(WrapperPimpl):
     def type_str(self):
         return msg_typestr(self.type)
 
+    @property
+    def userid(self):
+        userid = ffi.new("uint32_t [1]")
+        self.pimpl.get_userid(userid)
+        return userid[0]
+
+    @userid.setter
+    def userid(self, userid):
+        self.pimpl.set_userid(userid)
+
+    @property
+    def rolemask(self):
+        rolemask = ffi.new("uint32_t [1]")
+        self.pimpl.get_rolemask(rolemask)
+        return rolemask[0]
+
+    @rolemask.setter
+    def rolemask(self, rolemask):
+        self.pimpl.set_rolemask(rolemask)
+
     def decode(self):
         """Decode a message
 
