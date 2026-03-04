@@ -11,6 +11,7 @@
 ###############################################################
 
 import json
+import os
 import unittest
 
 import flux
@@ -68,6 +69,10 @@ class TestMessage(unittest.TestCase):
         m.type = flux.constants.FLUX_MSGTYPE_RESPONSE
         self.assertEqual(m.type, flux.constants.FLUX_MSGTYPE_RESPONSE)
 
+        # proto block getters work
+        self.assertEqual(m.userid, flux.constants.FLUX_USERID_UNKNOWN)
+        self.assertEqual(m.rolemask, 0)
+
     def test_basic_response(self):
         m = Message(flux.constants.FLUX_MSGTYPE_RESPONSE)
         self.assertIsNotNone(m)
@@ -82,8 +87,11 @@ class TestMessage(unittest.TestCase):
         self.assertEqual(topic, "test")
         self.assertIsNone(payload_str)
 
-    def test_baseic_event(self):
+    def test_basic_event(self):
         m = Message(flux.constants.FLUX_MSGTYPE_EVENT)
+        m.rolemask = flux.constants.FLUX_ROLE_USER
+        m.userid = os.getuid()
+
         self.assertIsNotNone(m)
         self.assertEqual(m.type, flux.constants.FLUX_MSGTYPE_EVENT)
         self.assertEqual(m.type_str, "event")
@@ -96,6 +104,9 @@ class TestMessage(unittest.TestCase):
         self.assertEqual(topic, "event.test")
         self.assertIsNone(payload_str)
 
+        self.assertEqual(m.userid, os.getuid())
+        self.assertEqual(m.rolemask, flux.constants.FLUX_ROLE_USER)
+
     def test_send(self):
         payload = {"test": "foo"}
         cb_called = [False]
@@ -106,6 +117,11 @@ class TestMessage(unittest.TestCase):
             self.assertEqual(msgtype, flux.constants.FLUX_MSGTYPE_RESPONSE)
             self.assertEqual(topic, "test.foo")
             self.assertIsNone(payload)
+            self.assertEqual(msg.userid, os.getuid())
+            self.assertEqual(
+                msg.rolemask,
+                flux.constants.FLUX_ROLE_OWNER | flux.constants.FLUX_ROLE_LOCAL,
+            )
             handle.reactor_stop()
 
         watcher = self.f.msg_watcher_create(
