@@ -22,6 +22,9 @@
 
 #include <flux/core.h>
 #include <jansson.h>
+#if HAVE_FLUX_SECURITY
+#include <flux/security/sign.h>
+#endif
 
 #include "src/common/libsubprocess/server.h"
 #include "src/common/libutil/errprintf.h"
@@ -40,6 +43,9 @@ struct shell_rexec {
     char *name;
     bool parent_is_trusted;
     double shutdown_timeout;
+#if HAVE_FLUX_SECURITY
+    flux_security_t *sec;
+#endif
 };
 
 static void rexec_destroy (struct shell_rexec *rexec)
@@ -47,6 +53,9 @@ static void rexec_destroy (struct shell_rexec *rexec)
     if (rexec) {
         int saved_errno = errno;
         subprocess_server_destroy (rexec->server);
+#if HAVE_FLUX_SECURITY
+        flux_security_destroy (rexec->sec);
+#endif
         free (rexec->name);
         free (rexec);
         errno = saved_errno;
@@ -126,6 +135,21 @@ static struct shell_rexec *rexec_create (flux_shell_t *shell)
                                                     shell_llog,
                                                     NULL)))
         goto error;
+#if HAVE_FLUX_SECURITY
+    if (!rexec->parent_is_trusted) {
+        if (!(rexec->sec = flux_security_create (0))) {
+            shell_log_errno ("flux_security_create");
+            goto error;
+        }
+        if (flux_security_configure (rexec->sec, NULL) < 0) {
+            shell_log_errno ("flux_security_configure");
+            goto error;
+        }
+        subprocess_server_set_security (rexec->server,
+                                        rexec->sec,
+                                        true);
+    }
+#endif
     subprocess_server_set_auth_cb (rexec->server,
                                    rexec_auth_cb,
                                    rexec);
