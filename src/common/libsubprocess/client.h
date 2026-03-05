@@ -19,6 +19,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <jansson.h>
 #include <flux/core.h>
 #include "subprocess.h"
 
