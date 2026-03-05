@@ -15,6 +15,9 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <flux/core.h>
+#if HAVE_FLUX_SECURITY
+#include <flux/security/sign.h>
+#endif
 
 #include "ccan/str/str.h"
 #include "ccan/array_size/array_size.h"
@@ -48,6 +51,7 @@ struct rexec_ctx {
     uint32_t matchtag;
     uint32_t rank;
     char *service_name;
+    bool sign;
 };
 
 static void rexec_response_clear (struct rexec_response *resp)
@@ -103,6 +107,134 @@ error:
     return NULL;
 }
 
+#if HAVE_FLUX_SECURITY
+flux_security_t *subprocess_get_security (flux_t *h)
+{
+    flux_security_t *sec;
+
+    if (!(sec = flux_aux_get (h, "flux::subprocess::sign"))) {
+        if (!(sec = flux_security_create (0))
+            || flux_security_configure (sec, NULL) < 0
+            || flux_aux_set (h,
+                             "flux::subprocess::sign",
+                             sec,
+                             (flux_free_f)flux_security_destroy) < 0) {
+            flux_security_destroy (sec);
+            return NULL;
+        }
+    }
+    return sec;
+}
+
+/* Sign a JSON payload and send the request as {"signature": token}.
+ * On success payload is modified with signature field.
+ * Returns a new future on success, NULL on error.
+ */
+static flux_future_t *rpc_send_signed (flux_t *h,
+                                       const char *topic,
+                                       uint32_t rank,
+                                       int flags,
+                                       int signature_only,
+                                       json_t *payload)
+{
+    flux_security_t *sec;
+    char *s = NULL;
+    const char *signature;
+    flux_future_t *f = NULL;
+    json_t *o = NULL;
+
+    if (!(o = json_string (topic))
+        || json_object_set_new (payload, "topic", o) < 0) {
+        json_decref (o);
+        errno = ENOMEM;
+        goto out;
+    }
+    if (!(s = json_dumps (payload, JSON_COMPACT))) {
+        errno = ENOMEM;
+        goto out;
+    }
+    if (!(sec = subprocess_get_security (h)))
+        goto out;
+    if (!(signature = flux_sign_wrap (sec, s, strlen (s), NULL, 0))) {
+        errno = flux_security_last_errnum (sec);
+        goto out;
+    }
+    if (signature_only)
+        f = flux_rpc_pack (h,
+                           topic,
+                           rank,
+                           flags,
+                           "{s:s}",
+                           "signature", signature);
+    else {
+        json_t *osig = NULL;
+        (void) json_object_del (payload, "topic");
+        if (!(osig = json_string (signature))
+            || json_object_set_new (payload, "signature", osig) < 0) {
+            json_decref (osig);
+            errno = ENOMEM;
+            goto out;
+        }
+        f = flux_rpc_pack (h, topic, rank, flags, "O", payload);
+    }
+out:
+    if (!f) {
+        /* On failure, delete keys that may have been added to payload.
+         */
+        (void) json_object_del (payload, "topic");
+        (void) json_object_del (payload, "signature");
+    }
+    ERRNO_SAFE_WRAP (free, s);
+    return f;
+}
+
+#endif /* HAVE_FLUX_SECURITY */
+
+/* Wrapper for flux_rpc_pack() which sends signed request if flux-security
+ * is available and sign == true.
+ */
+static flux_future_t *rpc_pack_signed (flux_t *h,
+                                       int sign,
+                                       const char *topic,
+                                       uint32_t rank,
+                                       int flags,
+                                       int signature_only,
+                                       const char *fmt,
+                                       ...)
+{
+    va_list ap;
+    flux_future_t *f;
+
+#if HAVE_FLUX_SECURITY
+    if (sign) {
+        json_t *payload;
+
+        va_start (ap, fmt);
+        payload = json_vpack_ex (NULL, 0, fmt, ap);
+        va_end (ap);
+        if (!payload) {
+            errno = EINVAL;
+            return NULL;
+        }
+        f = rpc_send_signed (h, topic, rank, flags, signature_only, payload);
+        ERRNO_SAFE_WRAP (json_decref, payload);
+        return f;
+    }
+#else /* !HAVE_FLUX_SECURITY */
+    if (sign) {
+        errno = ENOTSUP;
+        return NULL;
+    }
+#endif /* HAVE_FLUX_SECURITY */
+
+    va_start (ap, fmt);
+    f = flux_rpc_vpack (h, topic, rank, flags, fmt, ap);
+    va_end (ap);
+
+    return f;
+}
+
+
 flux_future_t *subprocess_rexec (flux_t *h,
                                  const char *service_name,
                                  uint32_t rank,
@@ -122,14 +254,23 @@ flux_future_t *subprocess_rexec (flux_t *h,
         return NULL;
     if (!(ctx = rexec_ctx_create (cmd, service_name, rank, flags)))
         goto error;
-    if (!(f = flux_rpc_pack (h,
-                             topic,
-                             rank,
-                             FLUX_RPC_STREAMING,
-                             "{s:O s:i s:i}",
-                             "cmd", ctx->cmd,
-                             "flags", ctx->flags,
-                             "local_flags", local_flags))
+#if HAVE_FLUX_SECURITY
+    if (local_flags & FLUX_SUBPROCESS_FLAGS_SIGN) {
+        local_flags &= ~FLUX_SUBPROCESS_FLAGS_SIGN;
+        ctx->sign = true;
+    }
+#endif
+    f = rpc_pack_signed (h,
+                         ctx->sign,
+                         topic,
+                         rank,
+                         FLUX_RPC_STREAMING,
+                         false,
+                         "{s:O s:i s:i}",
+                         "cmd", ctx->cmd,
+                         "flags", ctx->flags,
+                         "local_flags", local_flags);
+    if (!f
         || flux_future_aux_set (f,
                                 "flux::rexec",
                                 ctx,
@@ -157,6 +298,8 @@ flux_future_t *subprocess_rexec_bg (flux_t *h,
     char *topic = NULL;
     int flags = 0;
 
+    bool sign = false;
+
     /* FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF is not allowed with background
      * execution, raise error if set:
      */
@@ -170,6 +313,12 @@ flux_future_t *subprocess_rexec_bg (flux_t *h,
         local_flags &= ~FLUX_SUBPROCESS_FLAGS_WAITABLE;
         flags |= SUBPROCESS_REXEC_WAITABLE;
     }
+#if HAVE_FLUX_SECURITY
+    if (local_flags & FLUX_SUBPROCESS_FLAGS_SIGN) {
+        local_flags &= ~FLUX_SUBPROCESS_FLAGS_SIGN;
+        sign = true;
+    }
+#endif
 
     if (service_name == NULL)
         service_name = "rexec";
@@ -178,14 +327,16 @@ flux_future_t *subprocess_rexec_bg (flux_t *h,
         || !(ocmd = cmd_tojson (cmd)))
         goto out;
 
-    f = flux_rpc_pack (h,
-                       topic,
-                       rank,
-                       0,
-                       "{s:O s:i s:i}",
-                       "cmd", ocmd,
-                       "flags", flags,
-                       "local_flags", local_flags);
+    f = rpc_pack_signed (h,
+                         sign,
+                         topic,
+                         rank,
+                         0,
+                         false,
+                         "{s:O s:i s:i}",
+                         "cmd", ocmd,
+                         "flags", flags,
+                         "local_flags", local_flags);
 out:
     ERRNO_SAFE_WRAP (free, topic);
     ERRNO_SAFE_WRAP (json_decref, ocmd);
@@ -324,7 +475,7 @@ int subprocess_write (flux_future_t *f_exec,
     struct rexec_ctx *ctx = flux_future_aux_get (f_exec, "flux::rexec");
     flux_t *h = flux_future_get_flux (f_exec);
     flux_future_t *f = NULL;
-    json_t *io;
+    json_t *io = NULL;
     char *topic;
     int rc = -1;
 
@@ -335,13 +486,15 @@ int subprocess_write (flux_future_t *f_exec,
     if (asprintf (&topic, "%s.write", ctx->service_name) < 0)
         return -1;
     if (!(io = ioencode (stream, "0", data, len, eof))
-        || !(f = flux_rpc_pack (h,
-                                topic,
-                                ctx->rank,
-                                FLUX_RPC_NORESPONSE,
-                                "{s:i s:O}",
-                                "matchtag", ctx->matchtag,
-                                "io", io)))
+        || !(f = rpc_pack_signed (h,
+                                  ctx->sign,
+                                  topic,
+                                  ctx->rank,
+                                  FLUX_RPC_NORESPONSE,
+                                  true,
+                                  "{s:i s:O}",
+                                  "matchtag", ctx->matchtag,
+                                  "io", io)))
         goto out;
     rc = 0;
 out:
@@ -355,7 +508,8 @@ flux_future_t *subprocess_kill (flux_t *h,
                                 const char *service_name,
                                 uint32_t rank,
                                 pid_t pid,
-                                int signum)
+                                int signum,
+                                bool sign)
 {
     flux_future_t *f;
     char *topic;
@@ -366,13 +520,15 @@ flux_future_t *subprocess_kill (flux_t *h,
     }
     if (asprintf (&topic, "%s.kill", service_name) < 0)
         return NULL;
-    if (!(f = flux_rpc_pack (h,
-                             topic,
-                             rank,
-                             0,
-                             "{s:i s:i}",
-                             "pid", pid,
-                             "signum", signum))) {
+    if (!(f = rpc_pack_signed (h,
+                               sign,
+                               topic,
+                               rank,
+                               0,
+                               false,
+                               "{s:i s:i}",
+                               "pid", pid,
+                               "signum", signum))) {
         ERRNO_SAFE_WRAP (free, topic);
         return NULL;
     }

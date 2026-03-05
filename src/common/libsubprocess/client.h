@@ -11,12 +11,27 @@
 #ifndef _SUBPROCESS_CLIENT_H
 #define _SUBPROCESS_CLIENT_H
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <sys/types.h>
 #include <stdbool.h>
 #include <stdint.h>
 
 #include <flux/core.h>
 #include "subprocess.h"
+
+#if HAVE_FLUX_SECURITY
+#include <flux/security/sign.h>
+
+/* Get (or lazily create) a flux_security_t context cached in the flux handle.
+ * Returns NULL on error with errno set.
+ */
+flux_security_t *subprocess_get_security (flux_t *h);
+#else
+typedef void flux_security_t;
+#endif
 
 enum {
     SUBPROCESS_REXEC_STDOUT = 1,
@@ -60,7 +75,8 @@ flux_future_t *subprocess_kill (flux_t *h,
                                 const char *service_name,
                                 uint32_t rank,
                                 pid_t pid,
-                                int signum);
+                                int signum,
+                                bool sign);
 
 
 #endif /* !_SUBPROCESS_CLIENT_H */

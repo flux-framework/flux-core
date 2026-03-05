@@ -77,6 +77,10 @@ enum {
      * for this subprocess
      */
     FLUX_SUBPROCESS_FLAGS_WAITABLE = 16,
+    /* flux_rexec() and flux_rexec_bg() only: sign requests with
+     * RFC 42 signature to authenticate to the subprocess server
+     */
+    FLUX_SUBPROCESS_FLAGS_SIGN = 32,
 };
 
 /*
