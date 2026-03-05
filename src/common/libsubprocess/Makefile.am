@@ -13,7 +13,8 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	-DLLOG_ENABLE_DEBUG=1 \
 	$(JANSSON_CFLAGS) \
-	$(LIBUUID_CFLAGS)
+	$(LIBUUID_CFLAGS) \
+	$(FLUX_SECURITY_CFLAGS)
 
 noinst_LTLIBRARIES = \
 	libsubprocess.la
