@@ -27,7 +27,6 @@
 #include "ccan/str/str.h"
 
 #include "module.h"
-#include "modservice.h"
 
 struct module_ctx {
     flux_t *h;
@@ -37,8 +36,7 @@ struct module_ctx {
     char **argv;
     size_t argz_len;
     char *argz;
-    char *name;
-    char *uuid;
+    char *modargs;
 };
 
 static void module_thread_cleanup (void *arg);
@@ -64,100 +62,24 @@ static int setup_module_profiling (const char *name)
     return (0);
 }
 
-static int attr_cache_from_json (flux_t *h, json_t *cache)
+/* Module arguments are provided by flux_module_initialize() as a
+ * space-delimited string, or NULL if there are no arguments.
+ * Translate to argz vector, stored in 'me'.
+ */
+static int parse_modargs (struct module_ctx *ctx, const char *s)
 {
-    const char *name;
-    json_t *o;
+    if (s) {
+        error_t e;
 
-    json_object_foreach (cache, name, o) {
-        const char *val = json_string_value (o);
-        if (flux_attr_set_cacheonly (h, name, val) < 0)
+        if ((e = argz_create_sep (s, ' ', &ctx->argz, &ctx->argz_len)) != 0) {
+            errno = e;
             return -1;
-    }
-    return 0;
-}
-
-/* Decode welcome message and
- * - set ctx->name, ctx->uuid
- * - set ctx->argc, ctx->argv
- * - populate the broker attr cache in ctx->h
- */
-static int welcome_decode_new (struct module_ctx *ctx, flux_msg_t **msg)
-{
-    json_t *args;
-    json_t *attrs;
-    json_t *conf;
-    const char *name;
-    const char *uuid;
-
-    if (flux_request_unpack (*msg,
-                             NULL,
-                             "{s:o s:o s:o s:s s:s}",
-                             "args", &args,
-                             "attrs", &attrs,
-                             "conf", &conf,
-                             "name", &name,
-                             "uuid", &uuid) < 0)
-        return -1;
-
-    if (!(ctx->name = strdup (name))
-        || !(ctx->uuid = strdup (uuid)))
-        goto error;
-
-    if (attr_cache_from_json (ctx->h, attrs) < 0)
-        goto error;
-
-    flux_conf_t *cf;
-    if (!(cf = flux_conf_pack ("O", conf))
-        || flux_set_conf_new (ctx->h, cf) < 0) {
-        flux_conf_decref (cf);
-        goto error;
-    }
-
-    if (!json_is_null (args)) {
-        size_t index;
-        json_t *entry;
-
-        json_array_foreach (args, index, entry) {
-            const char *s = json_string_value (entry);
-            if (s && (argz_add (&ctx->argz, &ctx->argz_len, s) != 0)) {
-                errno = ENOMEM;
-                goto error;
-            }
         }
+        ctx->argc = argz_count (ctx->argz, ctx->argz_len);
+        if (!(ctx->argv = calloc (1, sizeof (ctx->argv[0]) * (ctx->argc + 1))))
+            return -1;
+        argz_extract (ctx->argz, ctx->argz_len, ctx->argv);
     }
-    ctx->argc = argz_count (ctx->argz, ctx->argz_len);
-    if (!(ctx->argv = calloc (1, sizeof (ctx->argv[0]) * (ctx->argc + 1))))
-        goto error;
-    argz_extract (ctx->argz, ctx->argz_len, ctx->argv);
-
-    flux_msg_decref (*msg);
-    *msg = NULL;
-    return 0;
-error:
-    return -1;
-}
-
-/*  Synchronize the FINALIZING state with the broker, so the broker
- *   can stop messages to this module until we're fully shutdown.
- */
-static int module_finalizing (flux_t *h, double timeout)
-{
-    flux_future_t *f;
-
-    if (!(f = flux_rpc_pack (h,
-                             "module.status",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:i}",
-                             "status", FLUX_MODSTATE_FINALIZING))
-        || flux_future_wait_for (f, timeout) < 0
-        || flux_rpc_get (f, NULL)) {
-        flux_log_error (h, "module.status FINALIZING error");
-        flux_future_destroy (f);
-        return -1;
-    }
-    flux_future_destroy (f);
     return 0;
 }
 
@@ -167,11 +89,7 @@ void *module_thread (void *arg)
     sigset_t signal_set;
     int errnum;
     struct module_ctx ctx;
-    struct flux_match match = {
-        .typemask = FLUX_MSGTYPE_REQUEST,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .topic_glob = "welcome",
-    };
+    flux_error_t error;
 
     memset (&ctx, 0, sizeof (ctx));
     pthread_cleanup_push (module_thread_cleanup, &ctx);
@@ -184,31 +102,28 @@ void *module_thread (void *arg)
     }
 
     /* Receive welcome message
-     * ctx.name and ctx.uuid may be used after this.
+     * This sets flux::name and flux::uuid, among other things.
      */
-    flux_msg_t *msg;
-    if (!(msg = flux_recv (ctx.h, match, 0))
-        || welcome_decode_new (&ctx, (flux_msg_t **)&msg) < 0) {
-        flux_msg_decref (msg);
-        flux_log (ctx.h, LOG_ERR, "welcome failure");
+    if (flux_module_initialize (ctx.h, &ctx.modargs, &error) < 0) {
+        flux_log (ctx.h, LOG_ERR, "%s", error.text);
         goto done;
     }
 
-    flux_log_set_appname (ctx.h, ctx.name);
-    setup_module_profiling (ctx.name);
+    const char *name = flux_aux_get (ctx.h, "flux::name");
+    flux_log_set_appname (ctx.h, name);
+    setup_module_profiling (name);
 
-    /* Set flux::uuid and flux::name per RFC 5
-     */
-    if (flux_aux_set (ctx.h, "flux::uuid", (char *)ctx.uuid, NULL) < 0
-        || flux_aux_set (ctx.h, "flux::name", ctx.name, NULL) < 0) {
-        flux_log_error (ctx.h, "error setting flux:: attributes");
+    if (parse_modargs (&ctx, ctx.modargs) < 0) {
+        flux_log_error (ctx.h, "error parsing module arguments");
         goto done;
     }
 
     /* Register services
      */
-    if (modservice_register (ctx.h) < 0) {
-        flux_log_error (ctx.h, "error registering internal services");
+    if (flux_module_register_handlers (ctx.h, &error) < 0) {
+        flux_log_error (ctx.h,
+                        "error registering internal services: %s",
+                        error.text);
         goto done;
     }
 
@@ -247,51 +162,19 @@ done:
 static void module_thread_cleanup (void *arg)
 {
     struct module_ctx *ctx = arg;
-    flux_msg_t *msg;
-    flux_future_t *f;
+    flux_error_t error;
 
     if (ctx->mod_main_failed) {
         if (ctx->mod_main_errno == 0)
             ctx->mod_main_errno = ECONNRESET;
         flux_log (ctx->h, LOG_CRIT, "module exiting abnormally");
     }
-
-    /* Before processing unhandled requests, ensure that this module
-     * is "muted" in the broker. This ensures the broker won't try to
-     * feed a message to this module after we've closed the handle,
-     * which could cause the broker to block.
-     */
-    if (module_finalizing (ctx->h, 1.0) < 0)
-        flux_log_error (ctx->h, "failed to set module state to finalizing");
-
-    /* If any unhandled requests were received during shutdown,
-     * respond to them now with ENOSYS.
-     */
-    while ((msg = flux_recv (ctx->h, FLUX_MATCH_REQUEST, FLUX_O_NONBLOCK))) {
-        const char *topic = "unknown";
-        (void)flux_msg_get_topic (msg, &topic);
-        flux_log (ctx->h, LOG_DEBUG, "responding to post-shutdown %s", topic);
-        if (flux_respond_error (ctx->h, msg, ENOSYS, NULL) < 0)
-            flux_log_error (ctx->h, "responding to post-shutdown %s", topic);
-        flux_msg_destroy (msg);
-    }
-    if (!(f = flux_rpc_pack (ctx->h,
-                             "module.status",
-                             FLUX_NODEID_ANY,
-                             FLUX_RPC_NORESPONSE,
-                             "{s:i s:i}",
-                             "status", FLUX_MODSTATE_EXITED,
-                             "errnum", ctx->mod_main_errno))) {
-        flux_log_error (ctx->h, "module.status EXITED error");
-        goto done;
-    }
-    flux_future_destroy (f);
-done:
+    if (flux_module_finalize (ctx->h, ctx->mod_main_errno, &error) < 0)
+        flux_log_error (ctx->h, "error finalizing module: %s", error.text);
     flux_close (ctx->h);
     free (ctx->argz);
     free (ctx->argv);
-    free (ctx->name);
-    free (ctx->uuid);
+    free (ctx->modargs);
 }
 
 // vi:ts=4 sw=4 expandtab

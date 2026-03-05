@@ -77,10 +77,10 @@ static const char *get_uuid (flux_t *h)
     return uuid;
 }
 
-void method_ping_cb (flux_t *h,
-                     flux_msg_handler_t *mh,
-                     const flux_msg_t *msg,
-                     void *arg)
+static void method_ping_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     const char *uuid;
     const char *json_str;
@@ -121,10 +121,50 @@ error:
     free (resp_str);
 }
 
-void method_rusage_cb (flux_t *h,
-                       flux_msg_handler_t *mh,
-                       const flux_msg_t *msg,
-                       void *arg)
+static void method_debug_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
+{
+    int flags;
+    int *debug_flags;
+    const char *op;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:i}",
+                             "op", &op,
+                             "flags", &flags) < 0)
+        goto error;
+    if (!(debug_flags = flux_aux_get (h, "flux::debug_flags"))) {
+        if (!(debug_flags = calloc (1, sizeof (*debug_flags))))
+            goto error;
+        flux_aux_set (h, "flux::debug_flags", debug_flags, free);
+    }
+    if (streq (op, "setbit"))
+        *debug_flags |= flags;
+    else if (streq (op, "clrbit"))
+        *debug_flags &= ~flags;
+    else if (streq (op, "set"))
+        *debug_flags = flags;
+    else if (streq (op, "clr"))
+        *debug_flags = 0;
+    else {
+        errno = EPROTO;
+        goto error;
+    }
+    if (flux_respond_pack (h, msg, "{s:i}", "flags", *debug_flags) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+static void method_rusage_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
     struct rusage ru;
     const char *s = NULL;
@@ -176,10 +216,10 @@ error:
         flux_log_error (h, "error responding to rusage request");
 }
 
-void method_stats_get_cb (flux_t *h,
-                          flux_msg_handler_t *mh,
-                          const flux_msg_t *msg,
-                          void *arg)
+static void method_stats_get_cb (flux_t *h,
+                                 flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg,
+                                 void *arg)
 {
     flux_msgcounters_t mcs;
 
@@ -206,10 +246,10 @@ error:
         flux_log_error (h, "error responding to stats-get request");
 }
 
-void method_stats_clear_cb (flux_t *h,
-                            flux_msg_handler_t *mh,
-                            const flux_msg_t *msg,
-                            void *arg)
+static void method_stats_clear_cb (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
@@ -222,19 +262,19 @@ error:
         flux_log_error (h, "error responding to stats-clear request");
 }
 
-void method_stats_clear_event_cb (flux_t *h,
-                                  flux_msg_handler_t *mh,
-                                  const flux_msg_t *msg,
-                                  void *arg)
+static void method_stats_clear_event_cb (flux_t *h,
+                                         flux_msg_handler_t *mh,
+                                         const flux_msg_t *msg,
+                                         void *arg)
 {
     if (flux_event_decode (msg, NULL, NULL) == 0)
         flux_clr_msgcounters (h);
 }
 
-void method_config_reload_cb (flux_t *h,
-                              flux_msg_handler_t *mh,
-                              const flux_msg_t *msg,
-                              void *arg)
+static void method_config_reload_cb (flux_t *h,
+                                     flux_msg_handler_t *mh,
+                                     const flux_msg_t *msg,
+                                     void *arg)
 {
     const char *topic = "unknown";
     flux_error_t error;
@@ -257,6 +297,61 @@ error_decref:
 error:
     if (flux_respond_error (h, msg, errno, error.text) < 0)
         flux_log_error (h, "error responding to %s request", topic);
+}
+
+static struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,
+      "stats-get",
+      method_stats_get_cb,
+      FLUX_ROLE_ALL,
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "stats-clear",
+      method_stats_clear_cb,
+      0,
+    },
+    { FLUX_MSGTYPE_EVENT,
+      "stats-clear",
+      method_stats_clear_event_cb,
+      0,
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "config-reload",
+      method_config_reload_cb,
+      0,
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "config-update",
+      method_config_reload_cb,
+      0,
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "debug",
+      method_debug_cb,
+      0,
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "rusage",
+      method_rusage_cb,
+      FLUX_ROLE_USER,
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "ping",
+      method_ping_cb,
+      FLUX_ROLE_USER,
+    },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+int flux_register_default_methods (flux_t *h,
+                                   const char *service_name,
+                                   flux_msg_handler_t **msg_handlers[])
+{
+    return flux_msg_handler_addvec_ex (h,
+                                       service_name,
+                                       htab,
+                                       NULL,
+                                       msg_handlers);
 }
 
 // vi:ts=4 sw=4 expandtab

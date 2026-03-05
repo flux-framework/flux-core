@@ -39,6 +39,7 @@ fluxcoreinclude_HEADERS = \
 	rpc.h \
 	event.h \
 	module.h \
+	method.h \
 	attr.h \
 	hosts.h \
 	flog.h \
@@ -89,6 +90,7 @@ libflux_la_SOURCES = \
 	rpc.c \
 	event.c \
 	module.c \
+	method.c \
 	conf_private.h \
 	conf.c \
 	conf_builtin.c \
