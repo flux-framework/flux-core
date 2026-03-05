@@ -75,6 +75,7 @@ static struct module_builtin *builtins[] = {
  */
 static const struct modloader loaders[] = {
     { .glob = ".so*", .cmd = "module-exec" },
+    { .glob = ".py", .cmd = "module-python-exec" },
 };
 
 static json_t *modhash_get_modlist (modhash_t *mh,
