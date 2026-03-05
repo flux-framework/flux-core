@@ -72,6 +72,7 @@ TESTSCRIPTS = \
 	t0005-rexec.t \
 	t0005-exec-jobid.t \
 	t0006-module-exec.t \
+	t0028-module-python-exec.t \
 	t0007-ping.t \
 	t0008-attr.t \
 	t0009-dmesg.t \
@@ -357,7 +358,8 @@ EXTRA_DIST= \
 	marshall \
 	batch \
 	job-manager/dumps \
-	flux-resource
+	flux-resource \
+	module/testmod.py
 
 dist_check_SCRIPTS = \
 	$(TESTSCRIPTS) \
