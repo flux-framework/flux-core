@@ -6,8 +6,8 @@ test_expect_success 'start a long-running guest job' '
         flux submit -n1 --wait-event=start sleep inf &&
 	jobid=$(flux job last)
 '
-test_expect_success 'flux exec --jobid fails as guest' '
-	test_must_fail flux exec --jobid=$jobid true
+test_expect_success 'flux exec --jobid works as guest' '
+	flux exec --jobid=$jobid true
 '
 test_expect_success 'flux exec --jobid fails as instance owner' '
 	test_must_fail sudo -u flux flux exec --jobid=$jobid true

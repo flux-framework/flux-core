@@ -866,7 +866,20 @@ int main (int argc, char *argv[])
     /* Get input ranks from --jobid if given:
      */
     if (optparse_getopt (opts, "jobid", &optargp) > 0) {
+        unsigned long owner_uid;
+        char *endptr;
+
         get_jobid_rexec_info (h, optargp, &job_service, &targets);
+
+        /* If the instance owner differs from the current user, the shell
+         * subprocess server requires RFC 42 signed requests.
+         */
+        errno = 0;
+        owner_uid = strtoul (security_owner, &endptr, 10);
+        if (errno == 0
+            && *endptr == '\0'
+            && owner_uid != (unsigned long)getuid ())
+            flags |= FLUX_SUBPROCESS_FLAGS_SIGN;
     }
     else {
         if (!(targets = idset_create (0, IDSET_FLAG_AUTOGROW)))
