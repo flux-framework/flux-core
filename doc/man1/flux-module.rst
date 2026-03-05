@@ -21,7 +21,7 @@ DESCRIPTION
 
 .. program:: flux module
 
-:program:`flux module` manages dynamically loadable :man1:`flux-broker` modules.
+:program:`flux module` manages :man1:`flux-broker` modules.
 Modules are automatically loaded at Flux instance start up (rc1) and unloaded
 at Flux instance shutdown (rc3) using :man1:`flux-modprobe`, which is
 configured to be aware of module dependencies.  :program:`flux module` is
@@ -42,17 +42,24 @@ tracing.
 
 Broker modules are often implemented as dynamic shared objects loaded
 into broker threads, but they may also be loaded into separate processes.
-This may be necessary for isolation, or to support incompatible programming
-runtime environments.  A *module loader* process assists with loading modules
-as separate processes, establishing communication with the broker, loading
-and executing the module, and communicating with the broker's module
-management framework.  The loader may be inferred from the module file name
-suffix, or specified on the command line.  The following module loaders are
-provided by flux-core:
+This may be necessary for isolation, or to support modules written in
+languages with their own runtime, such as Python.  A *module loader*
+process assists with loading such modules, establishing communication with
+the broker, executing the module, and reporting completion back to the
+broker's module management framework.  The loader is inferred from the
+module file name suffix, or may be specified on the command line.  The
+following module loaders are provided by flux-core:
 
 module-exec (.so*)
-  An alternate way to load traditional dynamic shared objects, with more
-  isolation than direct broker loading.
+  Loads a dynamic shared object as a separate process, providing more
+  isolation than direct broker thread loading.
+
+module-python-exec (.py)
+  Loads Python broker modules.  The Python file must define either a
+  :func:`mod_main` function or a single
+  :class:`~flux.brokermod.BrokerModule` subclass (see `MODULE ENTRY POINT`_).
+  The :class:`~flux.brokermod.BrokerModule` base class simplifies writing
+  Python broker modules with decorator-based handler registration.
 
 A small number of modules that are integral to the broker are automatically
 loaded early in broker start-up.  Although hard-wired to a particular name
@@ -68,9 +75,10 @@ load
 
 .. program:: flux module load
 
-Load *module*, which may be either the path to a shared object file, including
-the ``.so`` suffix, or the basename of a shared object file on the
-:envvar:`FLUX_MODULE_PATH`, without the suffix.
+Load *module*, which may be the path to a shared object file (including the
+``.so`` suffix), the path to a Python file (including the ``.py`` suffix),
+or the basename of either on the :envvar:`FLUX_MODULE_PATH`, without the
+suffix.
 
 When :program:`flux module load` completes successfully, the new module has
 entered the running state (see LIST OUTPUT below).
@@ -288,7 +296,7 @@ The *list* command displays one line for each unique (as determined by
 SHA1 hash) loaded module.
 
 **Module**
-   The value of the **mod_name** symbol for this module.
+   The module name.
 
 **Idle**
    Idle times are defined as the number of seconds since the module last sent
@@ -305,20 +313,30 @@ SHA1 hash) loaded module.
    displayed in a comma-separated list.
 
 **Path**
-   The full path to the broker module shared object file (only shown with
+   The full path to the broker module file (only shown with
    the **-l, --long** option).
 
 
-MODULE SYMBOLS
-==============
+MODULE ENTRY POINT
+==================
 
-All Flux modules define the following global symbols:
-
-**const char \*mod_name;**
-   A null-terminated string defining the module name.
+C broker modules define the following entry point:
 
 **int mod_main (void \*context, int argc, char \**argv);**
    An entry function.
+
+Python broker modules may define one of the following entry points:
+
+**mod_main (h, \*args)**
+   An entry function called with a :class:`flux.Flux` handle and any
+   module arguments.
+
+**class MyModule(BrokerModule)**
+   As a shortcut, a Python module that defines a single
+   :class:`~flux.brokermod.BrokerModule` subclass and no :func:`mod_main`
+   has its entry point synthesized automatically as
+   ``MyModule(h, *args).run()``.  If multiple subclasses are present,
+   :func:`mod_main` must be defined explicitly to resolve the ambiguity.
 
 
 RESOURCES

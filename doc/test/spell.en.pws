@@ -1093,3 +1093,6 @@ topologies
 blocklist
 OSError
 ValueError
+BrokerModule
+MyModule
+subclasses
