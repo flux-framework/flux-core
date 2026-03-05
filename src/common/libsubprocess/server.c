@@ -98,6 +98,9 @@
 #include <signal.h>
 #include <errno.h>
 #include <flux/core.h>
+#if HAVE_FLUX_SECURITY
+#include <flux/security/sign.h>
+#endif
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
@@ -141,9 +144,156 @@ struct subprocess_server {
     //  and fulfilled once subprocesses list becomes empty.
     flux_future_t *shutdown;
     bool has_sigchld_ctx;
+#if HAVE_FLUX_SECURITY
+    flux_security_t *sec;   /* security context (borrowed), or NULL */
+#endif
+    bool require_sign;      /* require signature on all requests */
 };
 
 static void server_kill (flux_subprocess_t *p, int signum);
+
+#if HAVE_FLUX_SECURITY
+static int server_unpack_signed (subprocess_server_t *s,
+                                 const flux_msg_t *msg,
+                                 const char *topic,
+                                 json_t *signature,
+                                 json_t **payloadp,
+                                 flux_error_t *errp)
+{
+    const char *signed_topic;
+    const void *payload;
+    const char *mech_type;
+    int payloadsz;
+    int64_t sign_userid;
+    uint32_t userid;
+    json_t *verified;
+
+    if (!json_is_string (signature)) {
+        errno = EPROTO;
+        return errprintf (errp, "signature field is not a string");
+    }
+    if (!s->sec) {
+        errno = EPERM;
+        return errprintf (errp, "signature verification not available");
+    }
+    if (flux_sign_unwrap_anymech (s->sec,
+                                  json_string_value (signature),
+                                  &payload,
+                                  &payloadsz,
+                                  &mech_type,
+                                  &sign_userid,
+                                  0) < 0) {
+        errno = EPERM;
+        return errprintf (errp, "signature verification failed");
+    }
+    if (flux_msg_get_userid (msg, &userid) < 0
+        || (uint32_t)sign_userid != userid) {
+        errno = EPERM;
+        return errprintf (errp, "signing userid does not match requestor");
+    }
+    if ((uid_t)sign_userid != getuid ()) {
+        errno = EPERM;
+        return errprintf (errp, "signing userid does not match server userid");
+    }
+    /* Copy payload before making any further flux_sign_unwrap() calls,
+     * as the returned pointer is valid only until the next call on sec.
+     */
+    if (!(verified = json_loadb (payload, payloadsz, 0, NULL))) {
+        errno = EPROTO;
+        return errprintf (errp, "could not parse signed payload");
+    }
+    if (json_unpack (verified, "{s:s}", "topic", &signed_topic) < 0
+        || !streq (signed_topic, topic)) {
+        json_decref (verified);
+        errno = EPERM;
+        return errprintf (errp, "topic mismatch in signed payload");
+    }
+    *payloadp = verified;  /* owned by caller */
+    return 0;
+}
+#endif /* HAVE_FLUX_SECURITY */
+
+/* Unpack request payload, verify signature if present, then authorize.
+ * fmt follows jansson unpack conventions; pass NULL if the endpoint has
+ * no parameters (e.g. list).
+ * Returns 0 on success, -1 with errno set and errp populated on failure.
+ */
+static int server_auth_unpack (subprocess_server_t *s,
+                               const flux_msg_t *msg,
+                               flux_error_t *errp,
+                               const char *fmt,
+                               ...)
+{
+    const char *topic = NULL;
+    json_t *o = NULL;
+    json_t *payload = NULL;
+    json_t *signature;
+    json_error_t jerror;
+    va_list ap;
+    int rc;
+
+    /* Topic is always required for signature verification.
+     * Payload is optional if fmt == NULL (some endpoints have no payload)
+     */
+    if (flux_request_unpack (msg, &topic, "o", &o) < 0 && fmt != NULL)
+        return errprintf (errp,
+                          "failed to unpack request: %s",
+                          strerror (errno));
+
+    if (o && (signature = json_object_get (o, "signature"))) {
+#if HAVE_FLUX_SECURITY
+        /* Unpack signed and verified JSON object as payload. Stash it
+         * in the msg aux container to tie its lifetime to the msg itself.
+         */
+        if (server_unpack_signed (s,
+                                  msg,
+                                  topic,
+                                  signature,
+                                  &payload,
+                                  errp) < 0)
+            return -1;
+        if (flux_msg_aux_set (msg,
+                              NULL,
+                              payload,
+                              (flux_free_f) json_decref) < 0) {
+            json_decref (payload);
+            return errprintf (errp, "internal error saving verified payload");
+        }
+#else /* !HAVE_FLUX_SECURITY */
+        /* If not compiled with flux-security, signature can't be verified
+         */
+        errno = EPERM;
+        return errprintf (errp, "flux-security support not available");
+#endif /* HAVE_FLUX_SECURITY */
+    }
+    else if (s->require_sign) {
+        /* Signature required, but no signature in payload. Return EPERM.
+         */
+        errno = EPERM;
+        return errprintf (errp, "request signature required");
+    }
+    else {
+        /* No signature required or provided, use message payload.
+         */
+        payload = o;
+    }
+
+    if (fmt) {
+        va_start (ap, fmt);
+        rc = json_vunpack_ex (payload, &jerror, 0, fmt, ap);
+        va_end (ap);
+        if (rc < 0) {
+            errno = EPROTO;
+            errprintf (errp, "invalid request payload: %s", jerror.text);
+            return rc;
+        }
+    }
+    if (s->auth_cb && (*s->auth_cb) (msg, s->arg, errp) < 0) {
+        errno = EPERM;
+        return -1;
+    }
+    return 0;
+}
 
 static inline bool is_waitable (flux_subprocess_t *p)
 {
@@ -559,21 +709,19 @@ static void server_exec_cb (flux_t *h,
      */
     bool background = !flux_msg_is_streaming (msg);
 
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{s:o s:i s?i}",
-                             "cmd", &cmd_obj,
-                             "flags", &flags,
-                             "local_flags", &local_flags) < 0)
+    if (server_auth_unpack (s,
+                            msg,
+                            &error,
+                            "{s:o s:i s?i}",
+                            "cmd", &cmd_obj,
+                            "flags", &flags,
+                            "local_flags", &local_flags) < 0) {
+        errmsg = error.text;
         goto error;
+    }
     if (s->shutdown) {
         errmsg = "subprocess server is shutting down";
         errno = ENOSYS;
-        goto error;
-    }
-    if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
-        errmsg = error.text;
-        errno = EPERM;
         goto error;
     }
     if (!(flags & SUBPROCESS_REXEC_CHANNEL))
@@ -694,20 +842,19 @@ static void server_write_cb (flux_t *h,
     json_t *io = NULL;
     flux_error_t error;
 
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{ s:i s:o }",
-                             "matchtag", &matchtag,
-                             "io", &io) < 0
+    err_init (&error);
+    if (server_auth_unpack (s,
+                            msg,
+                            &error,
+                            "{s:i s:o}",
+                            "matchtag", &matchtag,
+                            "io", &io) < 0
         || iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
+        const char *err = error.text[0] != '\0' ? error.text : strerror (errno);
         llog_error (s,
                     "Error decoding %s.write request: %s",
                     s->service_name,
-                    strerror (errno));
-        goto out;
-    }
-    if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
-        llog_error (s, "%s.write: %s", s->service_name, error.text);
+                    err);
         goto out;
     }
 
@@ -780,16 +927,14 @@ static void server_kill_cb (flux_t *h,
     flux_subprocess_t *p;
     flux_future_t *f = NULL;
 
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{ s:i s:i s?s }",
-                             "pid", &pid,
-                             "signum", &signum,
-                             "label", &label) < 0)
-        goto error;
-    if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
+    if (server_auth_unpack (s,
+                            msg,
+                            &error,
+                            "{s:i s:i s?s}",
+                            "pid", &pid,
+                            "signum", &signum,
+                            "label", &label) < 0) {
         errmsg = error.text;
-        errno = EPERM;
         goto error;
     }
     if (!(p = proc_find (s, pid, label, &error))) {
@@ -859,9 +1004,8 @@ static void server_list_cb (flux_t *h,
     flux_error_t error;
     const char *errmsg = NULL;
 
-    if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
+    if (server_auth_unpack (s, msg, &error, NULL) < 0) {
         errmsg = error.text;
-        errno = EPERM;
         goto error;
     }
     if (!(procs = json_array ()))
@@ -936,12 +1080,15 @@ static void server_wait_cb (flux_t *h,
     pid_t pid;
     const char *label = NULL;
 
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{ s:i s?s }",
-                             "pid", &pid,
-                             "label", &label) < 0)
+    if (server_auth_unpack (s,
+                            msg,
+                            &error,
+                            "{s:i s?s}",
+                            "pid", &pid,
+                            "label", &label) < 0) {
+        errmsg = error.text;
         goto error;
+    }
     if (!(p = proc_find (s, pid, label, &error))) {
         errmsg = error.text;
         goto error;
@@ -1127,6 +1274,16 @@ void subprocess_server_set_auth_cb (subprocess_server_t *s,
     s->auth_cb = fn;
     s->arg = arg;
 }
+
+#if HAVE_FLUX_SECURITY
+void subprocess_server_set_security (subprocess_server_t *s,
+                                     flux_security_t *sec,
+                                     bool require_sign)
+{
+    s->sec = sec;
+    s->require_sign = require_sign;
+}
+#endif
 
 static void shutdown_future_invalidate (void *arg)
 {

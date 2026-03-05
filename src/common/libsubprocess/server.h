@@ -11,6 +11,13 @@
 #ifndef _SUBPROCESS_SERVER_H
 #define _SUBPROCESS_SERVER_H
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
+#if HAVE_FLUX_SECURITY
+#include <flux/security/sign.h>
+#endif
+
 #include "subprocess.h"
 
 typedef struct subprocess_server subprocess_server_t;
@@ -57,6 +64,18 @@ void subprocess_server_destroy (subprocess_server_t *s);
  * The caller owns the returned future and should eventually destroy it.
  */
 flux_future_t *subprocess_server_shutdown (subprocess_server_t *s, int signum);
+
+#if HAVE_FLUX_SECURITY
+
+/* Associate a flux_security_t context with the server.
+ * If require_sign is true, all exec/write/kill/wait requests must carry
+ * a valid RFC 42 signature; unsigned requests are rejected with EPERM.
+ * The caller retains ownership of sec; it must outlive the server.
+ */
+void subprocess_server_set_security (subprocess_server_t *s,
+                                     flux_security_t *sec,
+                                     bool require_sign);
+#endif
 
 #endif /* !_SUBPROCESS_SERVER_H */
 
