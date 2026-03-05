@@ -127,6 +127,7 @@ static struct shell_rexec *rexec_create (flux_shell_t *shell)
 {
     struct shell_rexec *rexec;
     const char *timeout = NULL;
+    int sign_required = 0;
 
     if (!(rexec = calloc (1, sizeof (*rexec))))
         return NULL;
@@ -139,6 +140,16 @@ static struct shell_rexec *rexec_create (flux_shell_t *shell)
     pid_t ppid = getppid (); // 0 =  parent is in a different pid namespace
     if (ppid > 0 && kill (ppid, 0) == 0)
         rexec->parent_is_trusted = true;
+
+    /* For testing, allow rexec.sign-required to force parent_is_trusted=false
+     * Errors unpacking shell option result in no-op.
+     */
+    (void) flux_shell_getopt_unpack (shell,
+                                     "rexec",
+                                     "{s?i}",
+                                     "sign-required", &sign_required);
+    if (sign_required)
+        rexec->parent_is_trusted = false;
 
     rexec->shutdown_timeout = default_shutdown_timeout;
 
