@@ -65,14 +65,20 @@ static void rexec_destroy (struct shell_rexec *rexec)
 /* The embedded subprocess server restricts access based on FLUX_ROLE_OWNER,
  * but this shell cannot trust message credentials if they are passing through
  * a Flux instance running as a different user (e.g. the "flux" user in a
- * system instance).  If that user were compromised, they could run arbitrary
- * commands as any user that currently has a job running.  Therefore, this
- * additional check ensures that we only trust an instance running as the same
- * user.
+ * system instance). If that user were compromised, they could run arbitrary
+ * commands as any user that currently has a job running.
  *
- * For good measure, check that the shell userid matches the credential
- * userid. After the above check, this could only fail in test where the
- * owner can be mocked.
+ * Behavior depends on the value of rexec->parent_is_trusted, which is set to
+ * true only if the enclosing instance shares this process' userid:
+ *
+ * - If trusted, message credentials are reliable. Validate that msg userid
+ *   equals getuid(), which would only fail if credentials are manipulated
+ *   during testing.
+ *
+ * - If untrusted, the subprocess server requires RFC 42 signed requests
+ *   when flux-security is available, and the signature has already been
+ *   verified and signing user compared to getuid() before this callback is
+ *   reached. Without flux-security, all access is denied as a failsafe.
  */
 static int rexec_auth_cb (const flux_msg_t *msg,
                           void *arg,
@@ -81,8 +87,35 @@ static int rexec_auth_cb (const flux_msg_t *msg,
     struct shell_rexec *rexec = arg;
     uint32_t userid;
 
-    if (!rexec->parent_is_trusted
-        || flux_msg_get_userid (msg, &userid) < 0
+    if (!rexec->parent_is_trusted) {
+#if HAVE_FLUX_SECURITY
+
+        /* This subprocess server has been set to require signed requests
+         * per RFC 42. Request signature has already been verified by the
+         * subprocess server code, which confirmed sign_uid == getuid().
+         * The message credential userid is from an untrusted broker and is
+         * not checked here. Return success since server verification is
+         * sufficient.
+         */
+        return 0;
+#else /* !HAVE_FLUX_SECURITY */
+
+        /* Without flux-security, signed requests cannot be verified. Since
+         * parent is not trusted, reject request immediately. Most likely
+         * the request has already been rejected before we get here, but this
+         * remains as a failsafe.
+         */
+        errno = EPERM;
+        return errprintf (errp, "Access denied");
+#endif /* HAVE_FLUX_SECURITY */
+    }
+
+    /* Parent is trusted: instance is running as same user as the shell, so
+     * credentials are reliable. Verify the credential userid matches the
+     * shell userid. This will only fail in testing where the instance owner
+     * or request userid is mocked.
+     */
+    if (flux_msg_get_userid (msg, &userid) < 0
         || userid != getuid ()) {
         errno = EPERM;
         return errprintf (errp, "Access denied");
