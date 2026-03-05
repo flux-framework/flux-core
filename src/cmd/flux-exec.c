@@ -120,6 +120,11 @@ static struct optparse_option cmdopts[] = {
       .usage = "Set target ranks to nodes assigned to JOBID and  "
                "service name to job shell exec service"
     },
+    { .name = "sign",
+      .has_arg = 0,
+      .flags = OPTPARSE_OPT_HIDDEN,
+      .usage = "Force signing of request messages",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -822,6 +827,11 @@ int main (int argc, char *argv[])
             free (name);
         }
     }
+
+    /* Always set SIGN flag if --sign was used (mainly for testing)
+     */
+    if (optparse_hasopt (opts, "sign"))
+        flags |= FLUX_SUBPROCESS_FLAGS_SIGN;
 
     if (!(flux_handle = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
