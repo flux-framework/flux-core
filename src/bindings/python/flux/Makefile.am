@@ -13,6 +13,7 @@ nobase_fluxpy_PYTHON = \
 	importer.py \
 	eventlog.py \
 	conf_builtin.py \
+	brokermod.py \
 	cli/__init__.py \
 	cli/base.py \
 	cli/alloc.py \
