@@ -410,22 +410,25 @@ static flux_subprocess_t *proc_find_bypid (subprocess_server_t *s, pid_t pid)
     return NULL;
 }
 
-/* Find a <service>.exec message with the same sender as msg and matchtag as
- * specified in the request matchtag field.
- * N.B. flux_cancel_match() happens to be helpful because RFC 42 subprocess
- * write works like RFC 6 cancel.
+/* Find a <service>.exec message with the same sender as msg and matchtag.
+ * N.B. flux_disconnect_match() happens to be helpful because RFC 42 subprocess
+ * write works like a disconnect.
  */
 static flux_subprocess_t *proc_find_byclient (subprocess_server_t *s,
-                                              const flux_msg_t *request)
+                                              const flux_msg_t *request,
+                                              int matchtag)
 {
     flux_subprocess_t *p;
 
     p = zlistx_first (s->subprocesses);
     while (p) {
         const flux_msg_t *msg;
+        uint32_t tag;
 
         if ((msg = flux_subprocess_aux_get (p, msgkey))
-            && flux_cancel_match (request, msg))
+            && flux_disconnect_match (request, msg)
+            && flux_msg_get_matchtag (msg, &tag) == 0
+            && tag == (uint32_t)matchtag)
             return p;
         p = zlistx_next (s->subprocesses);
     }
@@ -863,7 +866,7 @@ static void server_write_cb (flux_t *h,
      * in flight, and is not necessarily an error, and can be common enough
      * that the log messages end up being a nuisance.
      */
-    if (!(p = proc_find_byclient (s, msg))
+    if (!(p = proc_find_byclient (s, msg, matchtag))
         || p->state == FLUX_SUBPROCESS_FAILED
         || p->state == FLUX_SUBPROCESS_EXITED)
         goto out;
