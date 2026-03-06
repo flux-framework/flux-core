@@ -486,12 +486,12 @@ test_expect_success 'kvs: 0 pending requests at end of tests before module remov
 #
 
 test_expect_success 'kvs: module stats returns reasonable transaction stats' '
-        commitdata=$(flux module stats -p transaction-opcount.commit kvs) &&
-        echo $commitdata | jq -e ".count > 0" &&
-        echo $commitdata | jq -e ".min > 0" &&
-        echo $commitdata | jq -e ".max > 0" &&
-        echo $commitdata | jq -e ".mean > 0.0" &&
-        echo $commitdata | jq -e ".stddev >= 0.0"
+	commitdata=$(flux module stats -p transaction-opcount.commit kvs) &&
+	echo $commitdata | jq -e ".count > 0" &&
+	echo $commitdata | jq -e ".min > 0" &&
+	echo $commitdata | jq -e ".max > 0" &&
+	echo $commitdata | jq -e ".mean > 0.0" &&
+	echo $commitdata | jq -e ".stddev >= 0.0"
 '
 
 #
@@ -504,8 +504,8 @@ test_expect_success 'kvs: test empty kvs txn works' '
 '
 
 test_expect_success 'kvs: module commit stats min is updated' '
-        commitdata=$(flux module stats -p transaction-opcount.commit kvs) &&
-        echo $commitdata | jq -e ".min == 0"
+	commitdata=$(flux module stats -p transaction-opcount.commit kvs) &&
+	echo $commitdata | jq -e ".min == 0"
 '
 
 #
@@ -516,14 +516,7 @@ test_expect_success 'kvs: module commit stats min is updated' '
 
 wait_versionwaiters() {
 	num=$1
-	i=0
-	while [ "$(flux module stats --parse namespace.primary.#versionwaiters kvs 2> /dev/null)" != "${num}" ] \
-	      && [ $i -lt ${KVS_WAIT_ITERS} ]
-	do
-		sleep 0.1
-		i=$((i + 1))
-	done
-	return $(loophandlereturn $i)
+	test_wait_until "[ \$(flux module stats --parse namespace.primary.#versionwaiters kvs 2> /dev/null) -eq ${num} ]"
 }
 
 # In order to test, wait for a version that will not happen
