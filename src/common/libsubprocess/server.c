@@ -1288,6 +1288,16 @@ void subprocess_server_set_security (subprocess_server_t *s,
 }
 #endif
 
+void subprocess_server_allow_rolemask (subprocess_server_t *s,
+                                       uint32_t rolemask)
+{
+    /* handlers[] is NULL-terminated (invariant maintained by
+     * flux_msg_handler_addvec / flux_msg_handler_delvec).
+     */
+    for (int i = 0; s->handlers[i] != NULL; i++)
+        flux_msg_handler_allow_rolemask (s->handlers[i], rolemask);
+}
+
 static void shutdown_future_invalidate (void *arg)
 {
     subprocess_server_t *s = arg;

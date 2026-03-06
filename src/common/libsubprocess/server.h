@@ -77,6 +77,12 @@ void subprocess_server_set_security (subprocess_server_t *s,
                                      bool require_sign);
 #endif
 
+/* By default, a subprocess server only accepts requests with FLUX_ROLE_OWNER.
+ * Use this function to add to the allowed rolemask.
+ */
+void subprocess_server_allow_rolemask (subprocess_server_t *s,
+                                       uint32_t rolemask);
+
 #endif /* !_SUBPROCESS_SERVER_H */
 
 // vi: ts=4 sw=4 expandtab
