@@ -181,6 +181,7 @@ static struct shell_rexec *rexec_create (flux_shell_t *shell)
         subprocess_server_set_security (rexec->server,
                                         rexec->sec,
                                         true);
+        subprocess_server_allow_rolemask (rexec->server, FLUX_ROLE_USER);
     }
 #endif
     subprocess_server_set_auth_cb (rexec->server,
