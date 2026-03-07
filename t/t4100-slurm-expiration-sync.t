@@ -82,13 +82,6 @@ test_expect_success 'flux slurm-expiration-sync fails if squeue fails' '
 	test_must_fail flux slurm-expiration-sync --jobid=4 2>squeue-fail.err &&
 	grep "squeue failed" squeue-fail.err
 '
-test_expect_success 'flux slurm-expiration-sync works with unlimited' '
-	echo -1 > $EXPIRATION_FILE &&
-	FLUX_SLURM_MOCK_EXPIRATION_FILE=$EXPIRATION_FILE \
-	    flux slurm-expiration-sync --jobid=1234 2>unlimited.err &&
-	test_debug "cat unlimited.err" &&
-	grep -i "exiting" unlimited.err
-'
 #
 # Full flux start tests with SLURM_JOB_ID set and mock squeue
 #
@@ -114,7 +107,7 @@ test_expect_success 'flux start with 1 hour Slurm time limit' '
 	test_debug "cat $EXPIRATION_FILE" &&
 	SLURM_JOB_ID=1234 \
 	  FLUX_SLURM_MOCK_EXPIRATION_FILE=$EXPIRATION_FILE \
-	  flux start flux resource R > R-1h.json &&
+	  flux start -s2 flux resource R > R-1h.json &&
 	test_debug "cat R-1h.json" &&
 	check_expiration R-1h.json
 '
@@ -122,14 +115,14 @@ test_expect_success 'flux start with 2 hour Slurm time limit' '
 	future_time 7200 > $EXPIRATION_FILE &&
 	SLURM_JOB_ID=1234 \
 	  FLUX_SLURM_MOCK_EXPIRATION_FILE=$EXPIRATION_FILE \
-	  flux start flux resource R > R-2h.json &&
+	  flux start -s2 flux resource R > R-2h.json &&
 	check_expiration R-2h.json
 '
 test_expect_success 'Slurm time limit is propagated to jobs' '
 	future_time 3600 > $EXPIRATION_FILE &&
 	SLURM_JOB_ID=1234 \
 	  FLUX_SLURM_MOCK_EXPIRATION_FILE=$EXPIRATION_FILE \
-	  flux start flux run flux job timeleft > timeleft.out &&
+	  flux start -s2 flux run flux job timeleft > timeleft.out &&
 	timeleft=$(cat timeleft.out) &&
 	test "$timeleft" -gt 3500 &&
 	test "$timeleft" -le 3600
@@ -158,6 +151,18 @@ test_expect_success 'initial expiration is ~1 hour' '
 '
 test_expect_success 'update expiration file to ~2 hours and wait for poll' '
 	future_time 7200 > $EXPIRATION_FILE &&
+	flux python wait-expiration.py $(cat $EXPIRATION_FILE) &&
+	flux resource R > R-poll-updated.json &&
+	check_expiration R-poll-updated.json
+'
+test_expect_success 'update expiration file to unlimited and wait for poll' '
+	echo 0 > $EXPIRATION_FILE &&
+	flux python wait-expiration.py $(cat $EXPIRATION_FILE) &&
+	flux resource R > R-poll-updated.json &&
+	check_expiration R-poll-updated.json
+'
+test_expect_success 'update expiration to ~1 hour again and wait for poll' '
+	future_time 3600 > $EXPIRATION_FILE &&
 	flux python wait-expiration.py $(cat $EXPIRATION_FILE) &&
 	flux resource R > R-poll-updated.json &&
 	check_expiration R-poll-updated.json
