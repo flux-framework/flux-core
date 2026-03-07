@@ -1,4 +1,20 @@
-flux-core version 0.83.0 - 2026-02-04
+flux-core version 0.83.1 - 2026-03-07
+-------------------------------------
+
+## New Features
+ * Support `NO_COLOR` environment variable in Flux utilities with `--color`
+   option (#7412)
+ * python: add userid, rolemask getters for Flux messages and testing (#7423)
+ * libflux: add module loader helpers (#7417)
+
+## Fixes
+ * fix slurm-expiration-sync rc1 task for multi-node Slurm jobs (#7428)
+
+## Build/CI/Testsuite/Documentation
+ * t: cleanup waiting functions (#7399)
+
+
+flux-core version 0.83.0 - 2026-03-04
 -------------------------------------
 
 ## New Features
