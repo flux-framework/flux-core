@@ -115,7 +115,7 @@ def rexec_bg(
         "flags": SUBPROCESS_REXEC_WAITABLE if waitable else 0,
     }
     return SubprocessBackgroundRexecRPC(
-        handle, topic=f"{service}.exec", nodeid=nodeid, payload=payload
+        handle, topic=f"{service}.exec", nodeid=int(nodeid), payload=payload
     )
 
 
@@ -151,7 +151,7 @@ def kill(
     else:
         payload = {"pid": -1, "label": label, "signum": int(signum)}
 
-    return handle.rpc(topic=f"{service}.kill", nodeid=nodeid, payload=payload)
+    return handle.rpc(topic=f"{service}.kill", nodeid=int(nodeid), payload=payload)
 
 
 class SubprocessWaitRPC(RPC):
@@ -194,7 +194,7 @@ def wait(handle, pid=None, label=None, service="rexec", nodeid=FLUX_NODEID_ANY):
     else:
         payload = {"pid": -1, "label": label}
     return SubprocessWaitRPC(
-        handle, topic=f"{service}.wait", nodeid=nodeid, payload=payload
+        handle, topic=f"{service}.wait", nodeid=int(nodeid), payload=payload
     )
 
 
@@ -239,7 +239,7 @@ def list(handle, service="rexec", nodeid=FLUX_NODEID_ANY):
     Returns:
         :obj:`SubprocessListRPC`
     """
-    return SubprocessListRPC(handle, topic=f"{service}.list", nodeid=nodeid)
+    return SubprocessListRPC(handle, topic=f"{service}.list", nodeid=int(nodeid))
 
 
 # vi: ts=4 sw=4 expandtab
