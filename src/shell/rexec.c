@@ -95,7 +95,7 @@ static struct shell_rexec *rexec_create (flux_shell_t *shell)
      * shell is flux-imp(1), kill(2) of the parent pid should fail for guests.
      */
     pid_t ppid = getppid (); // 0 =  parent is in a different pid namespace
-    if (ppid > 0 && kill (getppid (), 0) == 0)
+    if (ppid > 0 && kill (ppid, 0) == 0)
         rexec->parent_is_trusted = true;
 
     rexec->shutdown_timeout = default_shutdown_timeout;
