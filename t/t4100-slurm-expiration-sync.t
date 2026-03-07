@@ -82,13 +82,6 @@ test_expect_success 'flux slurm-expiration-sync fails if squeue fails' '
 	test_must_fail flux slurm-expiration-sync --jobid=4 2>squeue-fail.err &&
 	grep "squeue failed" squeue-fail.err
 '
-test_expect_success 'flux slurm-expiration-sync works with unlimited' '
-	echo -1 > $EXPIRATION_FILE &&
-	FLUX_SLURM_MOCK_EXPIRATION_FILE=$EXPIRATION_FILE \
-	    flux slurm-expiration-sync --jobid=1234 2>unlimited.err &&
-	test_debug "cat unlimited.err" &&
-	grep -i "exiting" unlimited.err
-'
 #
 # Full flux start tests with SLURM_JOB_ID set and mock squeue
 #

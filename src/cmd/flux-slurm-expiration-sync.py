@@ -25,6 +25,7 @@ import time
 
 import flux
 import flux.slurm as slurm
+from flux.resource import ResourceJournalConsumer
 from flux.util import fsd
 
 POLL_INTERVAL_DEFAULT = 60  # seconds
@@ -53,22 +54,31 @@ def make_poll_cb(jobid, fh):
 
     def poll_and_update(fh, watcher, revents, _args):
         timeleft = slurm.slurm_timeleft(jobid)
-        if timeleft is None:
-            return
-
-        expiration = time.time() + timeleft
+        expiration = 0.0 if timeleft is None else time.time() + timeleft
         last = last_expiration[0]
 
         if last is None or abs(expiration - last) > CHANGE_THRESHOLD:
             LOGGER.debug(
                 "Slurm timeleft changed: %s remaining, expiration=%.3f",
-                fsd(timeleft),
+                "unlimited" if timeleft is None else fsd(timeleft),
                 expiration,
             )
             send_expiration_update(fh, expiration)
             last_expiration[0] = expiration
 
     return poll_and_update
+
+
+def wait_for_resource_define(fh):
+    consumer = ResourceJournalConsumer(fh).start()
+    while True:
+        try:
+            event = consumer.poll(timeout=5.0)
+            if event.name == "resource-define":
+                return
+        except OSError:
+            LOGGER.error("Timed out waiting for resource-define event")
+            sys.exit(1)
 
 
 @flux.util.CLIMain(LOGGER)
@@ -100,17 +110,9 @@ def main():
 
     fh = flux.Flux()
 
-    # Probe once at startup to confirm squeue is reachable and we have a
-    # valid time limit before entering the poll loop.
-    timeleft = slurm.slurm_timeleft(jobid)
-    if timeleft is None:
-        LOGGER.info("No Slurm time limit detected (unlimited or error), exiting")
-        # Update expiration to 0 (unlimited) so that the resource module will
-        # post a resource-update event allowing rc1 task to exit.
-        send_expiration_update(fh, 0.0)
-        sys.exit(0)
-
-    LOGGER.debug("Slurm job %d detected, %s remaining at startup", jobid, fsd(timeleft))
+    # Wait for resource-define event so resource module is ready to receive
+    # expiration updates:
+    wait_for_resource_define(fh)
 
     poll_cb = make_poll_cb(jobid, fh)
 

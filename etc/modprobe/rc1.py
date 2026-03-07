@@ -17,7 +17,6 @@ from subprocess import Popen
 import flux.kvs
 import flux.subprocess as sp
 from flux.modprobe import run_all_rc_scripts, task
-from flux.resource import ResourceJournalConsumer
 
 
 def setup(context):
@@ -208,11 +207,7 @@ def push_cleanup(context):
 
 
 @task(
-    "slurm-expiration-sync",
-    ranks="0",
-    needs_env=["SLURM_JOB_ID"],
-    before=["sched"],
-    after=["resource"],
+    "slurm-expiration-sync", ranks="0", needs_env=["SLURM_JOB_ID"], after=["resource"]
 )
 def slurm_expiration_sync(context):
     # Check for valid SLURM_JOB_ID before proceeding:
@@ -225,24 +220,12 @@ def slurm_expiration_sync(context):
     # Force libyogrt backend to flux
     context.setenv("YOGRT_BACKEND", "flux")
 
-    consumer = ResourceJournalConsumer(context.handle).start()
-    while True:
-        event = consumer.poll(timeout=5.0)
-        if event.name == "resource-define":
-            # Once resources are defined launch Slurm time limit sync helper:
-            sp.rexec_bg(
-                context.handle,
-                ["flux", "slurm-expiration-sync", f"--jobid={jobid}"],
-                label="slurm-expiration-sync",
-            )
-        elif event.name == "resource-update":
-            # The resource-update event is posted by the resource module after
-            # flux-slurm-expiration-sync updates the expiration in R. Breaking
-            # here ensures the scheduler does not start until the expiration is
-            # up to date. Note: This task could exit early if there is another
-            # mechanism for updating the resource set in play. This case is not
-            # handled at this time.
-            break
+    # Launch helper
+    sp.rexec_bg(
+        context.handle,
+        ["flux", "slurm-expiration-sync", f"--jobid={jobid}"],
+        label="slurm-sync",
+    )
 
 
 @task("run-all-rc1", after=["*"])
