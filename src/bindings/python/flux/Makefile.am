@@ -3,6 +3,7 @@ nobase_fluxpy_PYTHON = \
 	kvs.py \
 	wrapper.py \
 	rpc.py \
+	scheduler.py \
 	message.py \
 	constants.py \
 	util.py \
