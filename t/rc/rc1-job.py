@@ -65,17 +65,15 @@ def sched_simple_setdebug(context):
 def set_fake_resources(context):
 
     cores = int(os.environ.get("TEST_UNDER_FLUX_CORES_PER_RANK", 2))
+    gpus = int(os.environ.get("TEST_UNDER_FLUX_GPUS_PER_RANK", 0))
     size = int(context.attr_get("size"))
     core_idset = IDset().set(0, cores - 1)
     rank_idset = IDset().set(0, size - 1)
-    R = (
-        subprocess.run(
-            ["flux", "R", "encode", f"-r{rank_idset}", f"-c{core_idset}"],
-            stdout=subprocess.PIPE,
-        )
-        .stdout.decode("utf-8")
-        .rstrip()
-    )
+    cmd = ["flux", "R", "encode", f"-r{rank_idset}", f"-c{core_idset}"]
+    if gpus > 0:
+        gpu_idset = IDset().set(0, gpus - 1)
+        cmd += [f"-g{gpu_idset}"]
+    R = subprocess.run(cmd, stdout=subprocess.PIPE).stdout.decode("utf-8").rstrip()
     flux.kvs.put(context.handle, "resource.R", json.loads(R))
     print(f"setting fake resources {R}")
     flux.kvs.commit(context.handle)
