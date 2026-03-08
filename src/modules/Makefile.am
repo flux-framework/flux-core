@@ -35,6 +35,9 @@ libmodule_builtins_la_LIBADD = \
 	$(builddir)/overlay/liboverlay.la
 libmodule_builtins_la_LDFLAGS = $(san_ld_zdef_flag)
 
+dist_fluxmod_SCRIPTS = \
+	sched-fifo.py
+
 fluxmod_LTLIBRARIES = \
 	content.la \
 	content-files.la \
