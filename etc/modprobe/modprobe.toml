@@ -167,3 +167,11 @@ after = ["job-manager", "resource"]
 requires = ["job-manager", "resource"]
 ranks = "0"
 priority = 40
+
+[[modules]]
+name = "sched-backfill"
+provides = ["sched", "feasibility"]
+after = ["job-manager", "resource"]
+requires = ["job-manager", "resource"]
+ranks = "0"
+priority = 40

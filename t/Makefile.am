@@ -184,6 +184,7 @@ TESTSCRIPTS = \
 	t2304-sched-simple-alloc-check.t \
 	t2305-sched-slow.t \
 	t2306-sched-fifo.t \
+	t2307-sched-backfill.t \
 	t2310-resource-module.t \
 	t2311-resource-drain.t \
 	t2312-resource-exclude.t \
