@@ -15,7 +15,14 @@ from contextlib import contextmanager
 from _flux._core import ffi, lib
 from flux.constants import FLUX_POLLERR, FLUX_POLLIN, FLUX_POLLOUT
 from flux.core.inner import raw
-from flux.core.watchers import FDWatcher, SignalWatcher, TimerWatcher
+from flux.core.watchers import (
+    CheckWatcher,
+    FDWatcher,
+    IdleWatcher,
+    PrepareWatcher,
+    SignalWatcher,
+    TimerWatcher,
+)
 from flux.future import Future
 from flux.message import Message, MessageWatcher
 from flux.rpc import RPC
@@ -265,6 +272,15 @@ class Flux(Wrapper):
 
     def timer_watcher_create(self, after, callback, repeat=0.0, args=None):
         return TimerWatcher(self, after, callback, repeat=repeat, args=args)
+
+    def prepare_watcher_create(self, callback, args=None):
+        return PrepareWatcher(self, callback, args=args)
+
+    def check_watcher_create(self, callback, args=None):
+        return CheckWatcher(self, callback, args=args)
+
+    def idle_watcher_create(self, callback=None, args=None):
+        return IdleWatcher(self, callback, args=args)
 
     def signal_watcher_create(self, signum, callback, args=None):
         return SignalWatcher(self, signum, callback, args)
