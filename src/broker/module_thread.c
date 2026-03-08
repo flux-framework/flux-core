@@ -110,7 +110,6 @@ void *module_thread (void *arg)
     }
 
     const char *name = flux_aux_get (ctx.h, "flux::name");
-    flux_log_set_appname (ctx.h, name);
     setup_module_profiling (name);
 
     if (parse_modargs (&ctx, ctx.modargs) < 0) {

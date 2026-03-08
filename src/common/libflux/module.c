@@ -218,6 +218,7 @@ int flux_module_initialize (flux_t *h, char **ap, flux_error_t *error)
         errprintf (error, "welcome decode failure: %s", strerror (errno));
         goto done;
     }
+    flux_log_set_appname (h, name);
     if (cache_config (h, conf, error) < 0
         || cache_attributes (h, attrs, error) < 0
         || set_aux_strdup (h, "flux::name", name, error) < 0

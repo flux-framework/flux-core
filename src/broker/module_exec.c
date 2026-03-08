@@ -271,16 +271,15 @@ int main (int argc, char *argv[])
     }
     else {
         char *modargs;
-        const char *name;
         if (flux_module_initialize (me.h, &modargs, &error) < 0)
             log_msg_exit ("initialize error: %s", error.text);
         if (parse_modargs (&me, modargs) < 0)
             log_err_exit ("error parsing module arguments");
         free (modargs);
 
-        name = flux_aux_get (me.h, "flux::name");
-        flux_log_set_appname (me.h, name);
 #ifdef PR_SET_NAME
+        const char *name;
+        name = flux_aux_get (me.h, "flux::name");
         (void)prctl (PR_SET_NAME, name, 0, 0, 0);
 #endif
     }
