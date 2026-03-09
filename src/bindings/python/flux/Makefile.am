@@ -62,6 +62,7 @@ nobase_fluxpy_PYTHON = \
 	resource/ResourceSet.py \
 	resource/ResourcePool.py \
 	resource/ResourcePoolImplementation.py \
+	resource/Rv1Pool.py \
 	resource/list.py \
 	resource/status.py \
 	resource/journal.py \

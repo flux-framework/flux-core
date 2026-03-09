@@ -13,6 +13,7 @@ from flux.resource.ResourceSet import ResourceSet
 from flux.resource.list import resource_list, SchedResourceList
 from flux.resource.status import resource_status, ResourceStatus
 from flux.resource.journal import ResourceJournalConsumer
+from flux.resource.Rv1Pool import Rv1Pool
 from flux.resource.ResourcePool import ResourcePool
 
 InsufficientResources = ResourcePool.InsufficientResources
