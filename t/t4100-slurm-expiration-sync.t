@@ -161,8 +161,8 @@ test_expect_success 'update expiration file to unlimited and wait for poll' '
 	flux resource R > R-poll-updated.json &&
 	check_expiration R-poll-updated.json
 '
-test_expect_success 'update expiration to ~1 hour again and wait for poll' '
-	future_time 3600 > $EXPIRATION_FILE &&
+test_expect_success 'update expiration to ~40 min and wait for poll' '
+	future_time 2400 > $EXPIRATION_FILE &&
 	flux python wait-expiration.py $(cat $EXPIRATION_FILE) &&
 	flux resource R > R-poll-updated.json &&
 	check_expiration R-poll-updated.json
