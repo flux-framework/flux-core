@@ -13,7 +13,8 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	-DLLOG_ENABLE_DEBUG=1 \
 	$(JANSSON_CFLAGS) \
-	$(LIBUUID_CFLAGS)
+	$(LIBUUID_CFLAGS) \
+	$(FLUX_SECURITY_CFLAGS)
 
 noinst_LTLIBRARIES = \
 	libsubprocess.la
@@ -65,7 +66,8 @@ TESTS = \
 	test_fbuf_watcher.t \
 	test_bulk-exec-einval.t \
 	test_msgchan.t \
-	test_message_channel.t
+	test_message_channel.t \
+	test_sign.t
 
 check_PROGRAMS = \
 	$(TESTS) \
@@ -202,3 +204,10 @@ test_fork_sleep_SOURCES = test/test_fork_sleep.c
 test_echomsg_SOURCES = test/echomsg.c
 test_echomsg_CPPFLAGS = $(test_cppflags)
 test_echomsg_LDADD = $(test_ldadd)
+
+test_sign_t_SOURCES = test/sign.c
+test_sign_t_CPPFLAGS = $(test_cppflags)
+test_sign_t_LDADD = \
+	$(test_ldadd) \
+	$(FLUX_SECURITY_LIBS)
+test_sign_t_LDFLAGS = $(test_ldflags)

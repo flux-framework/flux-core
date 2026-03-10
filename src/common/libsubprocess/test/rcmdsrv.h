@@ -16,6 +16,12 @@
  */
 flux_t *rcmdsrv_create (const char *service_name);
 
+#if HAVE_FLUX_SECURITY
+/* Variant that requires RFC 42 signed requests.
+ */
+flux_t *rcmdsrv_create_secure (const char *service_name);
+#endif /* HAVE_FLUX_SECURITY */
+
 /* llog-compatible logger
  */
 void tap_logger (void *arg,

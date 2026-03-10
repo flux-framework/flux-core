@@ -29,6 +29,17 @@ import flux.subprocess as subprocess
 from flux.constants import FLUX_NODEID_ANY
 from subflux import rerun_under_flux
 
+HAVE_FLUX_SECURITY = False
+if subprocess._have_security:
+    from flux.security import SecurityContext
+
+    try:
+        SecurityContext().sign_wrap("test")
+        HAVE_FLUX_SECURITY = True
+    except OSError:
+        # no working sign_wrap()
+        pass
+
 
 def __flux_size():
     return 2
@@ -457,6 +468,109 @@ class TestSubprocessDataclass(unittest.TestCase):
             pid=123, rank=0, state="Z", label="zombie", cmd="sleep 0"
         )
         self.assertEqual(proc.state, "Z")
+
+
+class TestSubprocessSigning(unittest.TestCase):
+    """Tests for RFC 42 request signing (sign parameter)"""
+
+    def test_sign_false_rexec(self):
+        """sign=False disables signing; rexec_bg runs normally"""
+        h = flux.Flux()
+        self.assertIn("pid", subprocess.rexec_bg(h, ["true"], sign=False).get())
+
+    def test_sign_none_single_user(self):
+        """sign=None does not sign in a single-user instance (owner == uid)"""
+        # security.owner == getuid() in a single-user instance, so sign=None
+        # resolves to False and the request is sent unsigned.
+        h = flux.Flux()
+        self.assertIn("pid", subprocess.rexec_bg(h, ["true"], sign=None).get())
+
+    @unittest.skipUnless(HAVE_FLUX_SECURITY, "flux-security not available")
+    def test_sign_true_rexec_unsigned_server(self):
+        """sign=True to unsigned server returns EPERM"""
+        # The default rexec server has no security context, so signed requests
+        # are rejected with "signature verification not available".
+        h = flux.Flux()
+        with self.assertRaises(OSError) as ctx:
+            subprocess.rexec_bg(h, ["true"], sign=True).get()
+        self.assertEqual(ctx.exception.errno, errno.EPERM)
+
+    @unittest.skipUnless(HAVE_FLUX_SECURITY, "flux-security not available")
+    def test_sign_true_kill_unsigned_server(self):
+        """sign=True kill to unsigned server returns EPERM"""
+        # Signature check fires before process lookup, so a dummy pid is fine.
+        h = flux.Flux()
+        with self.assertRaises(OSError) as ctx:
+            subprocess.kill(h, pid=999999, sign=True).get()
+        self.assertEqual(ctx.exception.errno, errno.EPERM)
+
+    @unittest.skipUnless(HAVE_FLUX_SECURITY, "flux-security not available")
+    def test_sign_true_wait_unsigned_server(self):
+        """sign=True wait to unsigned server returns EPERM"""
+        # Signature check fires before process lookup, so a dummy pid is fine.
+        h = flux.Flux()
+        with self.assertRaises(OSError) as ctx:
+            subprocess.wait(h, pid=999999, sign=True).get()
+        self.assertEqual(ctx.exception.errno, errno.EPERM)
+
+    def test_sign_false_kill(self):
+        """sign=False disables signing; kill works normally"""
+        h = flux.Flux()
+        rpc = subprocess.rexec_bg(h, ["sleep", "300"], waitable=True, sign=False)
+        pid = rpc.get_pid()
+        subprocess.kill(h, pid=pid, sign=False).get()
+        status = subprocess.wait(h, pid=pid).get_status()
+        self.assertEqual(os.WTERMSIG(status), signal.SIGTERM)
+
+    def test_sign_false_wait(self):
+        """sign=False disables signing; wait works normally"""
+        h = flux.Flux()
+        rpc = subprocess.rexec_bg(h, ["true"], waitable=True, sign=False)
+        pid = rpc.get_pid()
+        status = subprocess.wait(h, pid=pid, sign=False).get_status()
+        self.assertEqual(os.WEXITSTATUS(status), 0)
+
+    def test_sign_none_kill(self):
+        """sign=None does not sign in single-user instance; kill works normally"""
+        # security.owner == getuid() so sign=None resolves to False.
+        h = flux.Flux()
+        rpc = subprocess.rexec_bg(h, ["sleep", "300"], waitable=True, sign=None)
+        pid = rpc.get_pid()
+        subprocess.kill(h, pid=pid, sign=None).get()
+        status = subprocess.wait(h, pid=pid).get_status()
+        self.assertEqual(os.WTERMSIG(status), signal.SIGTERM)
+
+    def test_sign_none_wait(self):
+        """sign=None does not sign in single-user instance; wait works normally"""
+        # security.owner == getuid() so sign=None resolves to False.
+        h = flux.Flux()
+        rpc = subprocess.rexec_bg(h, ["true"], waitable=True, sign=None)
+        pid = rpc.get_pid()
+        status = subprocess.wait(h, pid=pid, sign=None).get_status()
+        self.assertEqual(os.WEXITSTATUS(status), 0)
+
+    @unittest.skipUnless(HAVE_FLUX_SECURITY, "flux-security not available")
+    def test_sign_true_list_unsigned_server(self):
+        """sign=True list to unsigned server returns EPERM"""
+        # The default rexec server has no security context, so signed requests
+        # are rejected with "signature verification not available".
+        h = flux.Flux()
+        with self.assertRaises(OSError) as ctx:
+            subprocess.list(h, sign=True).get()
+        self.assertEqual(ctx.exception.errno, errno.EPERM)
+
+    def test_sign_false_list(self):
+        """sign=False disables signing; list works normally"""
+        h = flux.Flux()
+        procs = subprocess.list(h, sign=False).get_processes()
+        self.assertIsInstance(procs, type([]))
+
+    def test_sign_none_list(self):
+        """sign=None does not sign in single-user instance; list works normally"""
+        # security.owner == getuid() so sign=None resolves to False.
+        h = flux.Flux()
+        procs = subprocess.list(h, sign=None).get_processes()
+        self.assertIsInstance(procs, type([]))
 
 
 class TestSubprocessConstants(unittest.TestCase):

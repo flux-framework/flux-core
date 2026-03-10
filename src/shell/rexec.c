@@ -22,6 +22,9 @@
 
 #include <flux/core.h>
 #include <jansson.h>
+#if HAVE_FLUX_SECURITY
+#include <flux/security/sign.h>
+#endif
 
 #include "src/common/libsubprocess/server.h"
 #include "src/common/libutil/errprintf.h"
@@ -40,6 +43,9 @@ struct shell_rexec {
     char *name;
     bool parent_is_trusted;
     double shutdown_timeout;
+#if HAVE_FLUX_SECURITY
+    flux_security_t *sec;
+#endif
 };
 
 static void rexec_destroy (struct shell_rexec *rexec)
@@ -47,6 +53,9 @@ static void rexec_destroy (struct shell_rexec *rexec)
     if (rexec) {
         int saved_errno = errno;
         subprocess_server_destroy (rexec->server);
+#if HAVE_FLUX_SECURITY
+        flux_security_destroy (rexec->sec);
+#endif
         free (rexec->name);
         free (rexec);
         errno = saved_errno;
@@ -56,14 +65,20 @@ static void rexec_destroy (struct shell_rexec *rexec)
 /* The embedded subprocess server restricts access based on FLUX_ROLE_OWNER,
  * but this shell cannot trust message credentials if they are passing through
  * a Flux instance running as a different user (e.g. the "flux" user in a
- * system instance).  If that user were compromised, they could run arbitrary
- * commands as any user that currently has a job running.  Therefore, this
- * additional check ensures that we only trust an instance running as the same
- * user.
+ * system instance). If that user were compromised, they could run arbitrary
+ * commands as any user that currently has a job running.
  *
- * For good measure, check that the shell userid matches the credential
- * userid. After the above check, this could only fail in test where the
- * owner can be mocked.
+ * Behavior depends on the value of rexec->parent_is_trusted, which is set to
+ * true only if the enclosing instance shares this process' userid:
+ *
+ * - If trusted, message credentials are reliable. Validate that msg userid
+ *   equals getuid(), which would only fail if credentials are manipulated
+ *   during testing.
+ *
+ * - If untrusted, the subprocess server requires RFC 42 signed requests
+ *   when flux-security is available, and the signature has already been
+ *   verified and signing user compared to getuid() before this callback is
+ *   reached. Without flux-security, all access is denied as a failsafe.
  */
 static int rexec_auth_cb (const flux_msg_t *msg,
                           void *arg,
@@ -72,8 +87,35 @@ static int rexec_auth_cb (const flux_msg_t *msg,
     struct shell_rexec *rexec = arg;
     uint32_t userid;
 
-    if (!rexec->parent_is_trusted
-        || flux_msg_get_userid (msg, &userid) < 0
+    if (!rexec->parent_is_trusted) {
+#if HAVE_FLUX_SECURITY
+
+        /* This subprocess server has been set to require signed requests
+         * per RFC 42. Request signature has already been verified by the
+         * subprocess server code, which confirmed sign_uid == getuid().
+         * The message credential userid is from an untrusted broker and is
+         * not checked here. Return success since server verification is
+         * sufficient.
+         */
+        return 0;
+#else /* !HAVE_FLUX_SECURITY */
+
+        /* Without flux-security, signed requests cannot be verified. Since
+         * parent is not trusted, reject request immediately. Most likely
+         * the request has already been rejected before we get here, but this
+         * remains as a failsafe.
+         */
+        errno = EPERM;
+        return errprintf (errp, "Access denied");
+#endif /* HAVE_FLUX_SECURITY */
+    }
+
+    /* Parent is trusted: instance is running as same user as the shell, so
+     * credentials are reliable. Verify the credential userid matches the
+     * shell userid. This will only fail in testing where the instance owner
+     * or request userid is mocked.
+     */
+    if (flux_msg_get_userid (msg, &userid) < 0
         || userid != getuid ()) {
         errno = EPERM;
         return errprintf (errp, "Access denied");
@@ -85,6 +127,7 @@ static struct shell_rexec *rexec_create (flux_shell_t *shell)
 {
     struct shell_rexec *rexec;
     const char *timeout = NULL;
+    int sign_required = 0;
 
     if (!(rexec = calloc (1, sizeof (*rexec))))
         return NULL;
@@ -95,8 +138,18 @@ static struct shell_rexec *rexec_create (flux_shell_t *shell)
      * shell is flux-imp(1), kill(2) of the parent pid should fail for guests.
      */
     pid_t ppid = getppid (); // 0 =  parent is in a different pid namespace
-    if (ppid > 0 && kill (getppid (), 0) == 0)
+    if (ppid > 0 && kill (ppid, 0) == 0)
         rexec->parent_is_trusted = true;
+
+    /* For testing, allow rexec.sign-required to force parent_is_trusted=false
+     * Errors unpacking shell option result in no-op.
+     */
+    (void) flux_shell_getopt_unpack (shell,
+                                     "rexec",
+                                     "{s?i}",
+                                     "sign-required", &sign_required);
+    if (sign_required)
+        rexec->parent_is_trusted = false;
 
     rexec->shutdown_timeout = default_shutdown_timeout;
 
@@ -126,6 +179,22 @@ static struct shell_rexec *rexec_create (flux_shell_t *shell)
                                                     shell_llog,
                                                     NULL)))
         goto error;
+#if HAVE_FLUX_SECURITY
+    if (!rexec->parent_is_trusted) {
+        if (!(rexec->sec = flux_security_create (0))) {
+            shell_log_errno ("flux_security_create");
+            goto error;
+        }
+        if (flux_security_configure (rexec->sec, NULL) < 0) {
+            shell_log_errno ("flux_security_configure");
+            goto error;
+        }
+        subprocess_server_set_security (rexec->server,
+                                        rexec->sec,
+                                        true);
+        subprocess_server_allow_rolemask (rexec->server, FLUX_ROLE_USER);
+    }
+#endif
     subprocess_server_set_auth_cb (rexec->server,
                                    rexec_auth_cb,
                                    rexec);

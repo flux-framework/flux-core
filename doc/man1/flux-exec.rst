@@ -80,8 +80,10 @@ OPTIONS
    :option:`flux exec -j ID -x 0` will run on all nodes assigned to *JOBID*
    except the first node.
 
-   This option is only available when the job owner is the same as the Flux
-   instance owner.
+   When this option is used in a multi-user instance where the instance owner
+   differs from the current user, :program:`flux exec` automatically signs
+   its requests as dictated by RFC 42, allowing the job shell's subprocess
+   server to authenticate them.
 
 .. option:: -v, --verbose
 
@@ -153,3 +155,5 @@ FLUX RFC
 ========
 
 :doc:`rfc:spec_22`
+
+:doc:`rfc:spec_42`

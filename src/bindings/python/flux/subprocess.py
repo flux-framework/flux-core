@@ -8,7 +8,9 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import json
 import os
+import threading
 
 try:
     from dataclasses import dataclass  # novermin
@@ -20,6 +22,50 @@ from flux.rpc import RPC
 
 # Subprocess waitable flag:
 SUBPROCESS_REXEC_WAITABLE = 16
+
+try:
+    from flux.security import SecurityContext as _SecurityContext
+
+    _have_security = True
+except ImportError:
+    _have_security = False
+
+# Thread-local storage for per-thread SecurityContext cache.
+_security_tls = threading.local()
+
+
+def _get_security():
+    """Return a SecurityContext for the current thread, creating it if needed."""
+    if not hasattr(_security_tls, "context"):
+        if not _have_security:
+            raise OSError("flux-security is not available")
+        _security_tls.context = _SecurityContext()
+    return _security_tls.context
+
+
+def _maybe_sign(handle, sign, topic, payload):
+    """Return a signed version of payload if signing is needed.
+
+    If sign is None, auto-detect by comparing the security.owner broker
+    attribute to the current userid: sign if they differ.  If sign is
+    True or False, that value is used directly.
+
+    When signing, the RFC 42 signature token is added to the payload as
+    the "signature" field alongside any other payload fields.
+    """
+    if sign is None:
+        try:
+            sign = int(handle.attr_get("security.owner")) != os.getuid()
+        except (OSError, ValueError):
+            sign = False
+    if not sign:
+        return payload
+    token = (
+        _get_security()
+        .sign_wrap(json.dumps({**payload, "topic": topic}, separators=(",", ":")))
+        .decode("utf-8")
+    )
+    return {**payload, "signature": token}
 
 
 def command_create(command, label=None, cwd=None, env=None, opts=None):
@@ -87,6 +133,7 @@ def rexec_bg(
     waitable=False,
     service="rexec",
     nodeid=FLUX_NODEID_ANY,
+    sign=None,
 ):
     """Run a process in the background
 
@@ -102,6 +149,9 @@ def rexec_bg(
             Allows use of :func:`wait` function.
         service (str): Use an alternate service (default: ``rexec``)
         nodeid (int): Target a different node (default: FLUX_NODEID_ANY)
+        sign (bool or None): Sign the request with RFC 42 credentials. If None
+            (default), signing is enabled automatically when the instance
+            owner differs from the current userid.
 
     Returns:
         :obj:`SubprocessBackgroundRexecRPC`: RPC object with get_pid()
@@ -110,17 +160,25 @@ def rexec_bg(
     Raises:
         :obj:`OSError`: on failure to invoke remote process
     """
+    topic = f"{service}.exec"
     payload = {
         "cmd": command_create(command, label=label, cwd=cwd, env=env),
         "flags": SUBPROCESS_REXEC_WAITABLE if waitable else 0,
     }
+    payload = _maybe_sign(handle, sign, topic, payload)
     return SubprocessBackgroundRexecRPC(
-        handle, topic=f"{service}.exec", nodeid=nodeid, payload=payload
+        handle, topic=topic, nodeid=int(nodeid), payload=payload
     )
 
 
 def kill(
-    handle, signum=15, pid=None, label=None, service="rexec", nodeid=FLUX_NODEID_ANY
+    handle,
+    signum=15,
+    pid=None,
+    label=None,
+    service="rexec",
+    nodeid=FLUX_NODEID_ANY,
+    sign=None,
 ):
     """Kill a subprocess
 
@@ -134,6 +192,9 @@ def kill(
         label (str): remote process label
         service (str): remote service to use (default: "rexec")
         nodeid (int): remote nodeid (default: FLUX_NODEID_ANY)
+        sign (bool or None): Sign the request with RFC 42 credentials. If None
+            (default), signing is enabled automatically when the instance
+            owner differs from the current userid.
 
     Returns:
         :obj:`flux.rpc.RPC`
@@ -150,8 +211,9 @@ def kill(
         payload = {"pid": int(pid), "signum": int(signum)}
     else:
         payload = {"pid": -1, "label": label, "signum": int(signum)}
-
-    return handle.rpc(topic=f"{service}.kill", nodeid=nodeid, payload=payload)
+    topic = f"{service}.kill"
+    payload = _maybe_sign(handle, sign, topic, payload)
+    return handle.rpc(topic=topic, nodeid=int(nodeid), payload=payload)
 
 
 class SubprocessWaitRPC(RPC):
@@ -168,7 +230,9 @@ class SubprocessWaitRPC(RPC):
         return self.get()["status"]
 
 
-def wait(handle, pid=None, label=None, service="rexec", nodeid=FLUX_NODEID_ANY):
+def wait(
+    handle, pid=None, label=None, service="rexec", nodeid=FLUX_NODEID_ANY, sign=None
+):
     """Wait on a remote waitable process
 
     Args:
@@ -177,6 +241,9 @@ def wait(handle, pid=None, label=None, service="rexec", nodeid=FLUX_NODEID_ANY):
         label (str): remote process label
         service (str): remote service to use (default: "rexec")
         nodeid (int): remote nodeid (default: FLUX_NODEID_ANY)
+        sign (bool or None): Sign the request with RFC 42 credentials. If None
+            (default), signing is enabled automatically when the instance
+            owner differs from the current userid.
 
     Returns:
         :obj:`SubprocessWaitRPC`
@@ -193,9 +260,9 @@ def wait(handle, pid=None, label=None, service="rexec", nodeid=FLUX_NODEID_ANY):
         payload = {"pid": int(pid)}
     else:
         payload = {"pid": -1, "label": label}
-    return SubprocessWaitRPC(
-        handle, topic=f"{service}.wait", nodeid=nodeid, payload=payload
-    )
+    topic = f"{service}.wait"
+    payload = _maybe_sign(handle, sign, topic, payload)
+    return SubprocessWaitRPC(handle, topic=topic, nodeid=int(nodeid), payload=payload)
 
 
 @dataclass
@@ -228,18 +295,23 @@ class SubprocessListRPC(RPC):
         return [Subprocess(**x, rank=resp["rank"]) for x in resp["procs"]]
 
 
-def list(handle, service="rexec", nodeid=FLUX_NODEID_ANY):
+def list(handle, service="rexec", nodeid=FLUX_NODEID_ANY, sign=None):
     """Get current subprocess list from a remote rank
 
     Args:
         handle (:obj:`flux.Flux`): Flux handle
         service (str): rexec service to use (default: "rexec")
         nodeid (int): nodeid to target (default: FLUX_NODEID_ANY)
+        sign (bool or None): Sign the request with RFC 42 credentials. If None
+            (default), signing is enabled automatically when the instance
+            owner differs from the current userid.
 
     Returns:
         :obj:`SubprocessListRPC`
     """
-    return SubprocessListRPC(handle, topic=f"{service}.list", nodeid=nodeid)
+    topic = f"{service}.list"
+    payload = _maybe_sign(handle, sign, topic, {})
+    return SubprocessListRPC(handle, topic=topic, nodeid=int(nodeid), payload=payload)
 
 
 # vi: ts=4 sw=4 expandtab

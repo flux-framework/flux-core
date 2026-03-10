@@ -614,7 +614,17 @@ int remote_exec (flux_subprocess_t *p)
 
 flux_future_t *remote_kill (flux_subprocess_t *p, int signum)
 {
-    return subprocess_kill (p->h, p->service_name, p->rank, p->pid, signum);
+    bool sign = false;
+#if HAVE_FLUX_SECURITY
+    if (p->flags & FLUX_SUBPROCESS_FLAGS_SIGN)
+        sign = true;
+#endif
+    return subprocess_kill (p->h,
+                            p->service_name,
+                            p->rank,
+                            p->pid,
+                            signum,
+                            sign);
 }
 
 static void remote_kill_nowait (flux_subprocess_t *p, int signum)

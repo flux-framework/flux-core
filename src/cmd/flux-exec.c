@@ -40,43 +40,91 @@
 #define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
 
 static struct optparse_option cmdopts[] = {
-    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "IDSET",
-      .usage = "Specify target ranks.  Default is \"all\"" },
-    { .name = "exclude", .key = 'x', .has_arg = 1, .arginfo = "IDSET",
-      .usage = "Exclude ranks from target." },
-    { .name = "bg", .has_arg = 0,
+    { .name = "rank",
+      .key = 'r',
+      .has_arg = 1,
+      .arginfo = "IDSET",
+      .usage = "Specify target ranks.  Default is \"all\""
+    },
+    { .name = "exclude",
+      .key = 'x',
+      .has_arg = 1,
+      .arginfo = "IDSET",
+      .usage = "Exclude ranks from target."
+    },
+    { .name = "bg",
+      .has_arg = 0,
       .usage = "Run process in background and exit",
     },
-    { .name = "waitable", .has_arg = 0,
+    { .name = "waitable",
+      .has_arg = 0,
       .usage = "Process remains a zombie until exit status is collected",
     },
-    { .name = "label", .has_arg = 1, .arginfo = "LABEL",
+    { .name = "label",
+      .has_arg = 1,
+      .arginfo = "LABEL",
       .usage = "Set a remote process label.",
     },
-    { .name = "dir", .key = 'd', .has_arg = 1, .arginfo = "PATH",
-      .usage = "Set the working directory to PATH" },
-    { .name = "label-io", .key = 'l', .has_arg = 0,
-      .usage = "Label lines of output with the source RANK" },
-    { .name = "noinput", .key = 'n', .has_arg = 0,
-      .usage = "Redirect stdin from /dev/null" },
-    { .name = "verbose", .key = 'v', .has_arg = 0,
-      .usage = "Run with more verbosity." },
-    { .name = "quiet", .key = 'q', .has_arg = 0,
-      .usage = "Suppress extraneous output." },
-    { .name = "service", .has_arg = 1, .arginfo = "NAME",
+    { .name = "dir",
+      .key = 'd',
+      .has_arg = 1,
+      .arginfo = "PATH",
+      .usage = "Set the working directory to PATH"
+    },
+    { .name = "label-io",
+      .key = 'l',
+      .has_arg = 0,
+      .usage = "Label lines of output with the source RANK"
+    },
+    { .name = "noinput",
+      .key = 'n',
+      .has_arg = 0,
+      .usage = "Redirect stdin from /dev/null"
+    },
+    { .name = "verbose",
+      .key = 'v',
+      .has_arg = 0,
+      .usage = "Run with more verbosity."
+    },
+    { .name = "quiet",
+      .key = 'q',
+      .has_arg = 0,
+      .usage = "Suppress extraneous output."
+    },
+    { .name = "service",
+      .has_arg = 1,
+      .arginfo = "NAME",
       .flags = OPTPARSE_OPT_HIDDEN,
-      .usage = "Override service name (default: rexec)." },
-    { .name = "setopt", .has_arg = 1, .arginfo = "NAME=VALUE",
+      .usage = "Override service name (default: rexec)."
+    },
+    { .name = "setopt",
+      .has_arg = 1,
+      .arginfo = "NAME=VALUE",
       .flags = OPTPARSE_OPT_HIDDEN,
-      .usage = "Set subprocess option NAME to VALUE (multiple use ok)" },
-    { .name = "stdin-flow", .has_arg = 1, .arginfo = "on|off",
+      .usage = "Set subprocess option NAME to VALUE (multiple use ok)"
+    },
+    { .name = "stdin-flow",
+      .has_arg = 1,
+      .arginfo = "on|off",
       .flags = OPTPARSE_OPT_HIDDEN,
-      .usage = "Forcibly enable or disable stdin flow control" },
-    { .name = "with-imp", .has_arg = 0,
-      .usage = "Run args under 'flux-imp run'" },
-    { .name = "jobid", .key = 'j', .has_arg = 1, .arginfo = "JOBID",
+      .usage = "Forcibly enable or disable stdin flow control"
+    },
+    { .name = "with-imp",
+      .has_arg = 0,
+      .usage = "Run args under 'flux-imp run'"
+    },
+    { .name = "jobid",
+      .key = 'j',
+      .has_arg = 1,
+      .arginfo = "JOBID",
       .usage = "Set target ranks to nodes assigned to JOBID and  "
-               "service name to job shell exec service" },
+               "service name to job shell exec service"
+    },
+    { .name = "sign",
+      .has_arg = 0,
+      .flags = OPTPARSE_OPT_HIDDEN,
+      .usage = "Force signing of request messages",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -780,6 +828,11 @@ int main (int argc, char *argv[])
         }
     }
 
+    /* Always set SIGN flag if --sign was used (mainly for testing)
+     */
+    if (optparse_hasopt (opts, "sign"))
+        flags |= FLUX_SUBPROCESS_FLAGS_SIGN;
+
     if (!(flux_handle = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
@@ -823,7 +876,20 @@ int main (int argc, char *argv[])
     /* Get input ranks from --jobid if given:
      */
     if (optparse_getopt (opts, "jobid", &optargp) > 0) {
+        unsigned long owner_uid;
+        char *endptr;
+
         get_jobid_rexec_info (h, optargp, &job_service, &targets);
+
+        /* If the instance owner differs from the current user, the shell
+         * subprocess server requires RFC 42 signed requests.
+         */
+        errno = 0;
+        owner_uid = strtoul (security_owner, &endptr, 10);
+        if (errno == 0
+            && *endptr == '\0'
+            && owner_uid != (unsigned long)getuid ())
+            flags |= FLUX_SUBPROCESS_FLAGS_SIGN;
     }
     else {
         if (!(targets = idset_create (0, IDSET_FLAG_AUTOGROW)))
