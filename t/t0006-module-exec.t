@@ -7,9 +7,11 @@ test_description='Test flux-module-exec'
 test_under_flux 1 minimal
 
 testmod=$(realpath ${FLUX_BUILD_DIR}/t/module/.libs/testmod.so)
+heartbeatmod=$(realpath ${FLUX_BUILD_DIR}/src/modules/.libs/heartbeat.so)
 legacy=$(realpath ${FLUX_BUILD_DIR}/t/module/.libs/legacy.so)
 rpc_stream=${FLUX_BUILD_DIR}/t/request/rpc_stream
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
+testloader="${FLUX_BUILD_DIR}/t/module/testloader"
 
 flux setattr log-stderr-level 6
 
@@ -37,9 +39,9 @@ test_expect_success 'FLUX_MODULE_URI and free args fail when used together' '
 ##
 
 test_expect_success 'flux-module-exec fails on unknown module' '
-	test_must_fail flux module-exec badmod 2>badmod.err &&
-	grep "module not found in search path" badmod.err
+	test_must_fail flux module-exec /badmod.so
 '
+
 test_expect_success 'simulated module failure causes command failure' '
 	test_must_fail flux module-exec \
 	    $testmod --init-failure 2>modfail.err &&
@@ -91,7 +93,7 @@ shutdown_mod() {
 }
 
 test_expect_success NO_CHAIN_LINT 'start heartbeat in the background' '
-	flux module-exec heartbeat &
+	flux module-exec $heartbeatmod &
 	echo $! >heartbeat.pid
 '
 test_expect_success NO_CHAIN_LINT 'ping heartbeat works' '
@@ -163,7 +165,7 @@ test_expect_success 'simulated module segfault causes module to exit' '
 	flux dmesg >segfault.out
 '
 test_expect_success 'segfault is reported' '
-	grep "testmod: killed by Segmentation fault" segfault.out
+	grep "killed by Segmentation fault" segfault.out
 '
 test_expect_success 'broker treats this the same as spurious module exit' '
 	grep "module runtime failure" segfault.out
@@ -177,6 +179,31 @@ test_expect_success NO_CHAIN_LINT 'broker responded with module disconnect' '
 '
 test_expect_success 'legacy module cannot be loaded under new name' '
         test_must_fail flux module load --exec --name=newname $legacy
+'
+
+##
+# special loaders
+##
+
+test_expect_success 'module loader can be explicitly set' '
+	flux module load --loader=module-exec $heartbeatmod &&
+	flux module unload heartbeat
+'
+test_expect_success 'faux module loader works' '
+	flux module load --loader=$testloader $heartbeatmod args &&
+	flux module unload heartbeat
+'
+test_expect_success 'module loader cannot be specified with non-path module' '
+	test_must_fail flux module load --loader=module-exec heartbeat
+'
+test_expect_success 'the false command fails gracefully as a module loader' '
+	test_must_fail flux module load --loader=$(which false) $heartbeatmod
+'
+test_expect_success 'the true command fails gracefully as a module loader' '
+	test_must_fail flux module load --loader=$(which true) $heartbeatmod
+'
+test_expect_success 'a nonexistent module loader fails gracefully' '
+	test_must_fail flux module load --loader=/noexist $heartbeatmod
 '
 
 test_done

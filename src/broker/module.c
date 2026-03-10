@@ -69,6 +69,7 @@ struct broker_module {
     char *name;
     int status;
     int errnum;
+    flux_error_t error;
     bool muted;             /* module is under directive 42, no new messages */
     bool module_unload_requested;
     struct aux_item *aux;
@@ -224,6 +225,7 @@ cleanup:
 
 module_t *module_create_exec (flux_t *h,
                               const char *parent_uuid,
+                              const char *module_loader,
                               const char *name,
                               const char *path,
                               json_t *mod_args,
@@ -234,7 +236,7 @@ module_t *module_create_exec (flux_t *h,
         return NULL;
     p->is_exec = true;
 
-    const char *av[] = { "flux", "module-exec", path, NULL };
+    const char *av[] = { "flux", module_loader, path, NULL };
     int ac = 3;
     if (!(p->exec.cmd = flux_cmd_create (ac, (char **)av, environ))
         || flux_cmd_add_message_channel (p->exec.cmd,
@@ -503,50 +505,73 @@ int module_set_defer (module_t *p, bool flag)
 static void exec_completion_cb (flux_subprocess_t *proc)
 {
     module_t *p = flux_subprocess_aux_get (proc, "module");
+    const char *loader;
     int rc;
-    bool failed = true;
+
+    if (!(loader = flux_cmd_arg (p->exec.cmd, 1)))
+        loader = "unknown";
+
     if ((rc = flux_subprocess_exit_code (proc)) >= 0) {
-        if (rc == 0)
-            failed = false;
-        else
-            flux_log (p->h, LOG_ERR, "%s: exited with rc=%d", p->name, rc);
+        if (rc == 0 && p->status != FLUX_MODSTATE_EXITED) {
+            module_errprintf (p,
+                              "loader (%s) exited with exit code 0"
+                              " but did not report module status",
+                              loader);
+            module_set_errnum (p, EINVAL);
+        }
+        else if (rc != 0) {
+            module_errprintf (p,
+                              "loader (%s) exited with exit code %d",
+                              loader,
+                              rc);
+            module_set_errnum (p, EINVAL);
+        }
     }
-    else if ((rc = flux_subprocess_signaled (proc)) >= 0)
-        flux_log (p->h, LOG_ERR, "%s: killed by %s", p->name, strsignal (rc));
-    else
-        flux_log (p->h, LOG_ERR, "%s: completed (not signal or exit)", p->name);
-    if (p->status != FLUX_MODSTATE_EXITED) {
-        if (failed)
-            module_set_errnum (p, ECHILD);
+    else if ((rc = flux_subprocess_signaled (proc)) >= 0) {
+        module_errprintf (p,
+                          "loader (%s) killed by %s",
+                          loader,
+                          strsignal (rc));
+        module_set_errnum (p, EINVAL);
+    }
+    else {
+        module_errprintf (p,
+                          "loader (%s) completed with unknown status",
+                          loader);
+        module_set_errnum (p, EINVAL);
+    }
+
+    if (p->status != FLUX_MODSTATE_EXITED)
         module_set_status (p, FLUX_MODSTATE_EXITED);
-    }
 }
 
 static void exec_state_cb (flux_subprocess_t *proc,
                            flux_subprocess_state_t state)
 {
     module_t *p = flux_subprocess_aux_get (proc, "module");
+    const char *loader;
+
+    if (!(loader = flux_cmd_arg (p->exec.cmd, 1)))
+        loader = "unknown";
+
     switch (state) {
         case FLUX_SUBPROCESS_RUNNING:
             break;
         case FLUX_SUBPROCESS_FAILED:
-            flux_log (p->h,
-                      LOG_ERR,
-                      "%s: %s failed: %s",
-                      p->name,
-                      flux_subprocess_state_string (state),
-                      strerror (flux_subprocess_fail_errno (proc)));
-            if (p->status != FLUX_MODSTATE_EXITED) {
-                module_set_errnum (p, ECHILD);
+            module_errprintf (p,
+                              "loader (%s) %s failed: %s",
+                              loader,
+                              flux_subprocess_state_string (state),
+                              flux_subprocess_fail_error (proc));
+            module_set_errnum (p, flux_subprocess_fail_errno (proc));
+            if (p->status != FLUX_MODSTATE_EXITED)
                 module_set_status (p, FLUX_MODSTATE_EXITED);
-            }
             break;
         case FLUX_SUBPROCESS_EXITED:
         case FLUX_SUBPROCESS_INIT:
         case FLUX_SUBPROCESS_STOPPED:
             break; // ignore
     }
-
 }
 
 int module_start (module_t *p)
@@ -658,6 +683,28 @@ int module_get_errnum (module_t *p)
     return p->errnum;
 }
 
+int module_errprintf (module_t *p, const char *fmt, ...)
+{
+    va_list ap;
+    int rc = 0;
+
+    va_start (ap, fmt);
+    if (p)
+        rc = verrprintf (&p->error, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
+const char *module_strerror (module_t *p)
+{
+    if (p) {
+        if (p->errnum != 0 && strlen (p->error.text) > 0)
+            return p->error.text;
+        return strerror (p->errnum);
+    }
+    return "Unknown";
+}
+
 int module_subscribe (module_t *p, const char *topic)
 {
     return subhash_subscribe (p->sub, topic);
@@ -708,6 +755,17 @@ pid_t module_get_pid (module_t *p)
     if (!p || !p->is_exec)
         return -1;
     return flux_subprocess_pid (p->exec.p);
+}
+
+char *module_name_frompath (const char *path)
+{
+    const char *name;
+    const char *cp;
+
+    name = basename_simple (path);
+    if (!(cp = strchr (name, '.')))
+        return strdup (name);
+    return strndup (name, cp - name);
 }
 
 /*

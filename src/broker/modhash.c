@@ -13,8 +13,10 @@
 #endif
 #include <flux/core.h>
 #include <jansson.h>
+#include <fnmatch.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/dirwalk.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
@@ -36,6 +38,21 @@ struct modhash {
     flux_future_t *f_builtins_unload;
 };
 
+struct modloader {
+    const char *glob;
+    const char *cmd;
+};
+
+/* The info needed to load a module.  This struct is filled by
+ * modhash_resolve_byname() and modhash_resolve_bypath().
+ * Its dynamically allocated members are released by modinfo_release().
+ */
+struct modinfo {
+    char *path;
+    char *name;
+    char *loader;
+};
+
 extern struct module_builtin builtin_config;
 extern struct module_builtin builtin_connector_local;
 extern struct module_builtin builtin_groups;
@@ -53,6 +70,13 @@ static struct module_builtin *builtins[] = {
     &builtin_overlay,
 };
 
+/* New broker module types can be supported by adding a module
+ * loader command and mapping it to a file extension in this table.
+ */
+static const struct modloader loaders[] = {
+    { .glob = ".so*", .cmd = "module-exec" },
+};
+
 static json_t *modhash_get_modlist (modhash_t *mh,
                                     double now,
                                     struct service_switch *sw);
@@ -66,10 +90,81 @@ static module_t *modhash_load_builtin (modhash_t *mh,
                                       json_t *args,
                                       flux_error_t *error);
 static module_t *modhash_load_exec (modhash_t *mh,
-                                    const char *name,
-                                    char *path,
+                                    const struct modinfo *info,
                                     json_t *args,
                                     flux_error_t *error);
+
+static void modinfo_release (struct modinfo *info)
+{
+    if (info) {
+        int saved_errno = errno;
+        free (info->name);
+        free (info->path);
+        free (info->loader);
+        memset (info, 0, sizeof (*info));
+        errno = saved_errno;
+    }
+}
+
+/* Find a module loader whose suffix glob matches the suffix of 'path'.
+ */
+static const struct modloader *modloader_find_bysuffix (const char *path)
+{
+    const struct modloader *ld = NULL;
+
+    for (int i = 0; ld == NULL && i < ARRAY_SIZE (loaders); i++) {
+        char *pattern;
+
+        if (asprintf (&pattern, "*%s", loaders[i].glob) < 0)
+            return NULL;
+        if (fnmatch (pattern, path, 0) == 0)
+            ld = &loaders[i];
+        free (pattern);
+    }
+    if (!ld)
+        errno = ENOENT;
+    return ld;
+}
+
+/* Given a module name, look for a file on the search path whose suffix
+ * matches a module loader.  Return the module loader and the file path
+ * (caller must free the latter).
+ */
+static const struct modloader *modloader_find_byname (const char *name,
+                                                      const char *searchpath,
+                                                      char **pathp)
+{
+    const struct modloader *ld = NULL;
+    char *path = NULL;
+
+    for (int i = 0; ld == NULL && i < ARRAY_SIZE (loaders); i++) {
+        char *pattern;
+        zlist_t *files;
+
+        if (asprintf (&pattern, "%s%s", name, loaders[i].glob) < 0)
+            return NULL;
+        if ((files = dirwalk_find (searchpath,
+                                   DIRWALK_REALPATH | DIRWALK_NORECURSE,
+                                   pattern,
+                                   1,
+                                   NULL,
+                                   NULL))
+            && zlist_size (files) > 0) {
+            ld = &loaders[i];
+            path = strdup (zlist_first (files));
+        }
+        ERRNO_SAFE_WRAP (zlist_destroy, &files);
+        ERRNO_SAFE_WRAP (free, pattern);
+    }
+    if (!ld) {
+        errno = ENOENT;
+        return NULL;
+    }
+    if (!path)
+        return NULL;
+    *pathp = path;
+    return ld;
+}
 
 int modhash_response_sendmsg_new (modhash_t *mh, flux_msg_t **msg)
 {
@@ -128,7 +223,7 @@ static int module_insmod_respond (flux_t *h, module_t *p)
     if (errnum == 0)
         rc = flux_respond (h, msg, NULL);
     else
-        rc = flux_respond_error (h, msg, errnum, NULL);
+        rc = flux_respond_error (h, msg, errnum, module_strerror (p));
 
     module_aux_set (p, "insmod", NULL, NULL);
     return rc;
@@ -277,6 +372,8 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
      */
     if (status == FLUX_MODSTATE_EXITED) {
         flux_log (ctx->h, LOG_DEBUG, "module %s exited", name);
+        if (module_get_errnum (p) != 0)
+            flux_log (ctx->h, LOG_ERR, "%s: %s", name, module_strerror (p));
         service_remove_byuuid (ctx->services, module_get_uuid (p));
 
         if (!module_unload_requested (p)
@@ -360,57 +457,87 @@ static int modhash_load_finalize (struct modhash *mh,
     return 0;
 }
 
-static int modhash_resolve_dso (const char *name_or_null,
-                                const char *path_or_name,
-                                char **namep,
-                                char **pathp,
-                                flux_error_t *error)
+/* Find a module that matches the specified target, which is a module name
+ * (file basename minus extension).  Search FLUX_MODULE_PATH for the
+ * module with known extensions.
+ * On success, fill 'infop' (caller must call modinfo_release()) and return 0.
+ * On failure, fill errp and return -1.
+ */
+static int modhash_resolve_byname (const char *target,
+                                   const char *name_override, // may be NULL
+                                   struct modinfo *infop,
+                                   flux_error_t *errp)
 {
-    char *path = NULL;
-    char *name = NULL;
+    const char *searchpath = getenv ("FLUX_MODULE_PATH");
+    struct modinfo info = { 0 };
+    const struct modloader *ld;
 
-    /* Handle 'flux module load /path/to/foo.dso' or 'flux module load foo'.
-     * In the latter case, search FLUX_MODULE_PATH for foo.dso.
-     */
-    if (strchr (path_or_name, '/')) {
-        if (!(path = strdup (path_or_name))) {
-            errprintf (error, "error duplicating module path");
-            return -1;
-        }
+    if (!searchpath) {
+        errno = EINVAL;
+        return errprintf (errp,
+                          "FLUX_MODULE_PATH is not set in the environment");
     }
-    else {
-        const char *searchpath = getenv ("FLUX_MODULE_PATH");
-        if (!searchpath) {
-            errprintf (error, "FLUX_MODULE_PATH is not set in the environment");
-            errno = EINVAL;
-            return -1;
-        }
-        if (!(path = module_dso_search (path_or_name, searchpath, error)))
-            return -1;
+    if (!(ld = modloader_find_byname (target, searchpath, &info.path))) {
+        return errprintf (errp,
+                          "module not found in search path%s%s",
+                          errno == ENOENT ? "" : ": ",
+                          errno == ENOENT ? "" : strerror (errno));
     }
-    /* If the name is not specified, derive it from the module path.
-     * E.g. the path '/path/to/foo.dso' suggests a module name of 'foo'.
-     * This doesn't have to be true if the name is specified.
-     */
-    if (name_or_null)
-        name = strdup (name_or_null);
+    if (!(info.name = strdup (name_override ? name_override : target))
+        || !(info.loader = strdup (ld->cmd))) {
+        modinfo_release (&info);
+        return errprintf (errp, "failed to duplicate module info");
+    }
+    *infop = info;
+    return 0;
+};
+
+/* Assume that target is a (possibly relative) file path.
+ * On success, fill 'infop' (caller must call modinfo_release()) and return 0.
+ * On failure, fill errp and return -1.
+ * N.B. The loader is responsible to make sure the file exists and conforms
+ * to RFC 5, not this function.
+ */
+static int modhash_resolve_bypath (const char *target,
+                                   const char *name_override, // may be NULL
+                                   const char *loader_override, // may be NULL
+                                   struct modinfo *infop,
+                                   flux_error_t *errp)
+{
+    struct modinfo info = { 0 };
+
+    if (name_override)
+        info.name = strdup (name_override);
     else
-        name = module_dso_name (path);
-    if (!name) {
-        errprintf (error,
-                   "error duplicating module name: %s",
-                   strerror (errno));
-        ERRNO_SAFE_WRAP (free, path);
-        return -1;
+        info.name = module_name_frompath (target);
+    if (!info.name)
+        return errprintf (errp, "error determining/duplicating module name");
+    if (!(info.path = strdup (target))) {
+        modinfo_release (&info);
+        return errprintf (errp, "could not duplicate module path");
     }
-    *namep = name;
-    *pathp = path;
+    if (loader_override)
+        info.loader = strdup (loader_override);
+    else {
+        const struct modloader *ld;
+
+        if (!(ld = modloader_find_bysuffix (target))) {
+            modinfo_release (&info);
+            return errprintf (errp,
+                   "could not determine loader from path suffix");
+        }
+        info.loader = strdup (ld->cmd);
+    }
+    if (!info.loader) {
+        modinfo_release (&info);
+        return errprintf (errp, "could not duplicate loader command");
+    }
+    *infop = info;
     return 0;
 }
 
 static module_t *modhash_load_dso (modhash_t *mh,
-                                   const char *name,
-                                   char *path, // stolen
+                                   const struct modinfo *info,
                                    json_t *args,
                                    flux_error_t *error)
 {
@@ -419,6 +546,7 @@ static module_t *modhash_load_dso (modhash_t *mh,
     void *dso;
     mod_main_f mod_main;
     module_t *p;
+    char *cpy;
 
     if (attr_get (ctx->attrs, "broker.uuid", &broker_uuid) < 0)
         return NULL;
@@ -428,14 +556,14 @@ static module_t *modhash_load_dso (modhash_t *mh,
      * The name is only passed to this function so the deprecated mod_name
      * symbol can be sanity checked, if defined.
      */
-    if (!(dso = module_dso_open (path, name, &mod_main, error)))
+    if (!(dso = module_dso_open (info->path, info->name, &mod_main, error)))
         return NULL;
 
     /* Create the module object.
      */
     if (!(p = module_create_thread (ctx->h,
                                     broker_uuid,
-                                    name,
+                                    info->name,
                                     mod_main,
                                     args,
                                     error))
@@ -443,7 +571,9 @@ static module_t *modhash_load_dso (modhash_t *mh,
         module_dso_close (dso);
         goto error;
     }
-    if (module_aux_set (p, "path", path, (flux_free_f)free) < 0) {
+    if (!(cpy = strdup (info->path))
+        || module_aux_set (p, "path", cpy, (flux_free_f)free) < 0) {
+        ERRNO_SAFE_WRAP (free, cpy);
         errprintf (error,
                    "error stashing module path in aux container: %s",
                    strerror (errno));
@@ -473,8 +603,9 @@ static void load_cb (flux_t *h,
                      void *arg)
 {
     broker_ctx_t *ctx = arg;
-    const char *name_or_null = NULL;
-    const char *path_or_name;
+    const char *name_override = NULL;
+    const char *loader_override = NULL;
+    const char *target;
     int exec = 0;
     json_t *args;
     flux_error_t error;
@@ -484,52 +615,81 @@ static void load_cb (flux_t *h,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s?s s:s s:o s?b}",
-                             "name", &name_or_null,
-                             "path", &path_or_name,
+                             "{s:s s?s s?s s:o s?b}",
+                             "path", &target,
+                             "name", &name_override,
+                             "loader", &loader_override,
                              "args", &args,
                              "exec", &exec) < 0)
         goto error;
 
-    if ((builtin = builtins_find (ctx->modhash, path_or_name))) {
-        if (exec) {
+    /* Modules that are built-in are compiled with the broker and are
+     * looked up in a table.  The "target" should be the canonical module name
+     * (which can be overridden at load time with name_override).
+     */
+    if ((builtin = builtins_find (ctx->modhash, target))) {
+        if (exec || loader_override) {
             errno = EINVAL;
             errmsg = "built-in modules cannot execute in a separate process";
             goto error;
         }
-        p = modhash_load_builtin (ctx->modhash,
-                                  builtin,
-                                  name_or_null,
-                                  args,
-                                  &error);
-        if (!p) {
+        if (!(p = modhash_load_builtin (ctx->modhash,
+                                        builtin,
+                                        name_override,
+                                        args,
+                                        &error))) {
             errmsg = error.text;
             goto error;
         }
     }
-    else {
-        char *name = NULL;
-        char *path = NULL;
-        if (modhash_resolve_dso (name_or_null,
-                                 path_or_name,
-                                 &name,
-                                 &path,
-                                 &error) < 0) {
-            errmsg = error.text;
-            goto error;
+    /* Other modules may be loaded directly into the broker address space
+     * or indirectly wired up to the broker via an external loader process.
+     * Below, "resolving" the module means filling a modinfo struct with
+     * the info needed to load it, namely a filename, a module name (either
+     * the canonical one or an override), and a loader command.
+     */
+    else { // target looks like a usable filename e.g. "./kvs.so"
+        struct modinfo info = { 0 };
+
+        if (strchr (target, '/')) {
+            if (modhash_resolve_bypath (target,
+                                        name_override,
+                                        loader_override,
+                                        &info,
+                                        &error) < 0) {
+                errmsg = error.text;
+                goto error;
+            }
         }
-        if (exec)
-            p = modhash_load_exec (ctx->modhash, name, path, args, &error);
+        else { // target is a module name like "kvs"
+            if (loader_override) {
+                errno = EINVAL;
+                errmsg = "module loader may only be specified with module path";
+                goto error;
+            }
+            if (modhash_resolve_byname (target,
+                                        name_override,
+                                        &info,
+                                        &error) < 0) {
+                errmsg = error.text;
+                goto error;
+            }
+        }
+        /* By default, modules ending in .so* are loaded directly into the
+         * broker address space, unless the exec flag is set, then via a
+         * module loader.  All other modules types are expected to need us
+         * to exec a loader on their behalf.
+         */
+        if (fnmatch ("*.so*", info.path, 0) == 0 && !exec && !loader_override)
+            p = modhash_load_dso (ctx->modhash, &info, args, &error);
         else
-            p = modhash_load_dso (ctx->modhash, name, path, args, &error);
+            p = modhash_load_exec (ctx->modhash, &info, args, &error);
         if (!p) {
-            ERRNO_SAFE_WRAP (free, name);
-            ERRNO_SAFE_WRAP (free, path);
+            modinfo_release (&info);
             errmsg = error.text;
             goto error;
         }
-        free (name);
-        // N.B. path is stolen by modhash_load_*() on success
+        modinfo_release (&info);
     }
     /* Register service, start module thread, and insert into modhash.
      */
@@ -1173,26 +1333,28 @@ flux_future_t *modhash_unload_builtins (modhash_t *mh)
 }
 
 static module_t *modhash_load_exec (modhash_t *mh,
-                                    const char *name,
-                                    char *path, // stolen
+                                    const struct modinfo *info,
                                     json_t *args,
                                     flux_error_t *error)
 {
     broker_ctx_t *ctx = mh->ctx;
     const char *broker_uuid;
     module_t *p;
+    char *cpy;
 
     if (attr_get (ctx->attrs, "broker.uuid", &broker_uuid) < 0)
         return NULL;
     if (!(p = module_create_exec (ctx->h,
                                   broker_uuid,
-                                  name,
-                                  path,
+                                  info->loader,
+                                  info->name,
+                                  info->path,
                                   args,
                                   error)))
         goto error;
-    if (module_aux_set (p, "path", path, (flux_free_f)free) < 0) {
-        ERRNO_SAFE_WRAP (free, path);
+    if (!(cpy = strdup (info->path))
+        || module_aux_set (p, "path", cpy, (flux_free_f)free) < 0) {
+        ERRNO_SAFE_WRAP (free, cpy);
         errprintf (error,
                    "error stashing module path in aux container: %s",
                    strerror (errno));

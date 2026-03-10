@@ -48,6 +48,7 @@ module_t *module_create_thread (flux_t *h,
                                 flux_error_t *error);
 module_t *module_create_exec (flux_t *h,
                               const char *parent_uuid,
+                              const char *module_loader,
                               const char *name,
                               const char *path,
                               json_t *args,
@@ -96,6 +97,10 @@ void module_set_status_cb (module_t *p, module_status_cb_f cb, void *arg);
 int module_get_errnum (module_t *p);
 void module_set_errnum (module_t *p, int errnum);
 
+int module_errprintf (module_t *p, const char *fmt, ...)
+     __attribute__ ((format (printf, 2, 3)));
+const char *module_strerror (module_t *p);
+
 /* Start module thread.
  */
 int module_start (module_t *p);
@@ -132,6 +137,11 @@ ssize_t module_get_recv_queue_count (module_t *p);
 
 bool module_is_exec (module_t *p);
 pid_t module_get_pid (module_t *p);
+
+/* Guess the broker module's name based on its path.
+ * Caller must free the returned string.
+ */
+char *module_name_frompath (const char *path);
 
 #endif /* !BROKER_MODULE_H */
 
