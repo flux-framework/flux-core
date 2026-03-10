@@ -127,9 +127,10 @@ static const struct modloader *modloader_find_bysuffix (const char *path)
     return ld;
 }
 
-/* Given a module name, look for a file on the search path whose suffix
- * matches a module loader.  Return the module loader and the file path
- * (caller must free the latter).
+/* Given a module name, search 'searchpath', a colon-separated list of
+ * directories, for a file whose filename suffix matches one of the patterns
+ * in the loaders[] array.  Return the matching loaders[] entry and the
+ * file path (caller must free the latter).
  */
 static const struct modloader *modloader_find_byname (const char *name,
                                                       const char *searchpath,
