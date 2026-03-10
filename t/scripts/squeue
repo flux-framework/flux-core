@@ -51,11 +51,18 @@ def main():
     if mock_file is None:
         print("mock squeue: FLUX_SLURM_MOCK_EXPIRATION_FILE not set", file=sys.stderr)
         sys.exit(1)
-    try:
-        with open(mock_file) as f:
-            expiration = float(f.read().strip())
-    except (OSError, ValueError) as e:
-        print(f"mock squeue: {mock_file}: {e}", file=sys.stderr)
+    for _ in range(5):
+        try:
+            with open(mock_file) as f:
+                expiration = float(f.read().strip())
+            break
+        except OSError as e:
+            print(f"mock squeue: {mock_file}: {e}", file=sys.stderr)
+            sys.exit(1)
+        except ValueError:
+            time.sleep(0.05)
+    else:
+        print(f"mock squeue: {mock_file}: could not parse expiration", file=sys.stderr)
         sys.exit(1)
 
     timeleft = expiration - time.time()
