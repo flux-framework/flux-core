@@ -845,6 +845,39 @@ test_expect_success 'command --help works outside of flux instance' '
 	test_kvs_subcmd_help
 '
 
+# cover a builtin command, a c binary, and a python script
+test_expect_success 'typoed commands are given suggestions on correct commands' '
+	test_must_fail flux dmsg > invalid1.out 2>&1 &&
+	grep "dmesg" invalid1.out &&
+	test_must_fail flux modole > invalid2.out 2>&1 &&
+	grep "module" invalid2.out &&
+	test_must_fail flux resourcce > invalid3.out 2>&1 &&
+	grep "resource" invalid3.out
+'
+
+test_expect_success 'multiple equally similar commands are output' '
+	test_must_fail flux mom > invalid4.out 2>&1 &&
+	grep "job" invalid4.out &&
+	grep "top" invalid4.out
+'
+
+test_expect_success 'at most 3 suggested similar commands are output' '
+	TEMPDIR=$(mktemp -d) &&
+	touch $TEMPDIR/flux-mama &&
+	touch $TEMPDIR/flux-dada &&
+	touch $TEMPDIR/flux-baba &&
+	touch $TEMPDIR/flux-lala &&
+	chmod +x $TEMPDIR/flux-* &&
+	test_must_fail sh -c "FLUX_EXEC_PATH=$TEMPDIR flux fafa > invalidmax.out 2>&1" &&
+	count=$(grep -oE "mama|dada|baba|lala" invalidmax.out | wc -l) &&
+	test $count -eq 3
+'
+
+test_expect_success 'really bad typoed commands are not given suggestions' '
+	test_must_fail flux resouurrccee > invalidbad.out 2>&1 &&
+	test_must_fail grep "similar" invalidbad.out
+'
+
 # Note: flux-start auto-removes rundir
 
 test_done

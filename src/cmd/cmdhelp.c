@@ -42,15 +42,14 @@ static json_t *command_list_file_read (const char *path)
     return (o);
 }
 
-static int command_list_print (FILE *fp, const char *path)
+static void command_list_print (FILE *fp, const char *path)
 {
-    int rc = 0;
     size_t index;
     json_t *o = NULL;
     json_t *entry;
 
     if (!(o = command_list_file_read (path)))
-        goto out;
+        return;
 
     json_array_foreach (o, index, entry) {
         size_t i;
@@ -59,7 +58,9 @@ static int command_list_print (FILE *fp, const char *path)
         json_t *cmd;
         json_error_t error;
 
-        if (json_unpack_ex (entry, &error, 0,
+        if (json_unpack_ex (entry,
+                            &error,
+                            0,
                             "{s:s s:o}",
                             "description", &description,
                             "commands", &commands) < 0) {
@@ -70,7 +71,9 @@ static int command_list_print (FILE *fp, const char *path)
         json_array_foreach (commands, i, cmd) {
             const char *name = NULL;
             const char *desc = NULL;
-            if (json_unpack_ex (cmd, &error, 0,
+            if (json_unpack_ex (cmd,
+                                &error,
+                                0,
                                 "{s:s s:s}",
                                 "name", &name,
                                 "description", &desc) < 0) {
@@ -80,12 +83,8 @@ static int command_list_print (FILE *fp, const char *path)
             fprintf (fp, "   %-18s %s\n", name, desc);
         }
     }
-    rc = 0;
-
 out:
     json_decref (o);
-    return (rc);
-
 }
 
 static void emit_command_help_from_pattern (FILE *fp, const char *pattern)
@@ -109,8 +108,7 @@ static void emit_command_help_from_pattern (FILE *fp, const char *pattern)
 
     for (i = 0; i < gl.gl_pathc; i++) {
         const char *file = gl.gl_pathv[i];
-        if (command_list_print (fp, file) < 0)
-            log_err_exit ("%s: failed to read content\n", file);
+        command_list_print (fp, file);
     }
     globfree (&gl);
 }

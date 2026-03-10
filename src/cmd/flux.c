@@ -28,6 +28,8 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/environment.h"
 #include "src/common/libutil/intree.h"
+#include "src/common/libutil/levenshtein.h"
+#include "src/common/libutil/dirwalk.h"
 
 #include "cmdhelp.h"
 #include "builtin.h"
@@ -417,6 +419,109 @@ void exec_subcommand_dir (bool vopt,
     free (path);
 }
 
+struct similar_cmds {
+    int min;
+    zlist_t *cmds;
+    int cmdsstrlen;
+    const char *argv0;
+};
+
+static void similar_check (struct similar_cmds *similar,
+                           const char *cmd)
+{
+    int distance = levenshtein_distance (cmd, similar->argv0);
+    if (distance > 0 && distance <= similar->min) {
+        char *cpy = xstrdup (cmd);
+        if (distance < similar->min) {
+            zlist_purge (similar->cmds);
+            similar->cmdsstrlen = 0;
+        }
+        similar->min = distance;
+        zlist_append (similar->cmds, cpy);
+        zlist_freefn (similar->cmds, cpy, free, true);
+        similar->cmdsstrlen += strlen (cpy);
+    }
+}
+
+static int similar_filter (dirwalk_t *d, void *arg)
+{
+    struct similar_cmds *similar = arg;
+    const char *path = dirwalk_path (d);
+    const char *name = dirwalk_name (d);
+    char *cmdname;
+
+    if (!strstarts (name, "flux-"))
+        return 0;
+
+    if (access (path, X_OK) < 0)
+        return 0;
+
+    /* +5 to get past "flux-" */
+    cmdname = xstrdup (name + 5);
+
+    /* strip off ".py" if necessary */
+    if (strends (cmdname, ".py")) {
+        char *tmp = strrchr (cmdname, '.');
+        *tmp = '\0';
+    }
+
+    similar_check (similar, cmdname);
+    free (cmdname);
+    return 0;
+}
+
+static void find_similar_command (const char *searchpath, const char *argv0)
+{
+    extern struct builtin_cmd builtin_cmds[];
+    struct builtin_cmd *builtin_cmd = &builtin_cmds[0];
+    struct similar_cmds similar = {INT_MAX, NULL, 0, argv0};
+    char *searchpathcpy;
+    char *dir, *saveptr = NULL, *a1;
+
+    similar.min = INT_MAX;
+    if (!(similar.cmds = zlist_new ()))
+        log_err_exit ("failed to create cmds list");
+    similar.argv0 = argv0;
+
+    /* first check out builtins */
+    while (builtin_cmd->name) {
+        similar_check (&similar, builtin_cmd->name);
+        builtin_cmd++;
+    }
+
+    /* now check commands in search paths */
+    searchpathcpy = xstrdup (searchpath);
+    a1 = searchpathcpy;
+    while ((dir = strtok_r (a1, ":", &saveptr))) {
+        (void)dirwalk (dir, DIRWALK_NORECURSE, similar_filter, &similar);
+        a1 = NULL;
+    }
+    free (searchpathcpy);
+
+    /* only output if command is similar enough, we'll go with a
+     * distance of at most 3.
+     *
+     * e.g. "resourcccce" will be similar to "resource", but not
+     * "resourccccce".
+     */
+    if (similar.min <= 3) {
+        char *str;
+        int i = 3;
+
+        log_msg ("The most similar command%s",
+                 zlist_size (similar.cmds) > 1 ? "s are" : " is");
+
+        /* output at most 3 commands */
+        str = zlist_first (similar.cmds);
+        while (str && i-- > 0) {
+            log_msg ("\t%s", str);
+            str = zlist_next (similar.cmds);
+        }
+    }
+
+    zlist_destroy (&similar.cmds);
+}
+
 void exec_subcommand (const char *searchpath, bool vopt, int argc, char *argv[])
 {
     if (strchr (argv[0], '/')) {
@@ -435,8 +540,9 @@ void exec_subcommand (const char *searchpath, bool vopt, int argc, char *argv[])
             a1 = NULL;
         }
         free (cpy);
-        log_msg_exit ("`%s' is not a flux command.  See 'flux --help'",
-                      argv[0]);
+        log_msg ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
+        find_similar_command (searchpath, argv[0]);
+        exit (1);
     }
 }
 
