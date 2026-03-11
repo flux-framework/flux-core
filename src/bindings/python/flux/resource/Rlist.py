@@ -92,6 +92,10 @@ class Rlist(WrapperPimpl):
         self.pimpl.add(arg)
         return self
 
+    def clone(self):
+        """Return a full copy preserving allocation state."""
+        return Rlist(handle=lib.rlist_copy(self.handle))
+
     def copy(self):
         return Rlist(handle=self.pimpl.copy_empty())
 
@@ -150,8 +154,58 @@ class Rlist(WrapperPimpl):
     def get_expiration(self):
         return self.pimpl.handle.expiration
 
+    @property
+    def expiration(self):
+        return self.pimpl.handle.expiration
+
+    @expiration.setter
+    def expiration(self, value):
+        self.pimpl.handle.expiration = value
+
     def set_starttime(self, starttime):
         self.pimpl.handle.starttime = starttime
 
     def get_starttime(self):
         return self.pimpl.handle.starttime
+
+    def mark_up(self, ids):
+        """Mark resources identified by idset string (or "all") as up."""
+        if isinstance(ids, str):
+            ids = ids.encode("utf-8")
+        if lib.rlist_mark_up(self.handle, ids) < 0:
+            raise OSError("rlist_mark_up failed")
+
+    def mark_down(self, ids):
+        """Mark resources identified by idset string (or "all") as down."""
+        if isinstance(ids, str):
+            ids = ids.encode("utf-8")
+        if lib.rlist_mark_down(self.handle, ids) < 0:
+            raise OSError("rlist_mark_down failed")
+
+    def set_allocated(self, alloc):
+        """Mark resources in *alloc* as allocated in this rlist."""
+        if isinstance(alloc, Rlist):
+            alloc = alloc.handle
+        if lib.rlist_set_allocated(self.handle, alloc) < 0:
+            raise OSError("rlist_set_allocated failed")
+
+    def free_tolerant(self, alloc):
+        """Return resources in *alloc* to this rlist, ignoring missing resources."""
+        if isinstance(alloc, Rlist):
+            alloc = alloc.handle
+        if lib.rlist_free_tolerant(self.handle, alloc) < 0:
+            raise OSError("rlist_free_tolerant failed")
+
+    def copy_down(self):
+        """Return a copy containing only the down (not schedulable) resources."""
+        handle = lib.rlist_copy_down(self.handle)
+        if handle == ffi.NULL:
+            raise OSError("rlist_copy_down failed")
+        return Rlist(handle=handle)
+
+    def copy_allocated(self):
+        """Return a copy containing only the allocated resources."""
+        handle = lib.rlist_copy_allocated(self.handle)
+        if handle == ffi.NULL:
+            raise OSError("rlist_copy_allocated failed")
+        return Rlist(handle=handle)
