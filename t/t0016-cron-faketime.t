@@ -139,7 +139,7 @@ test_expect_success 'flux-cron tab works for day of month' '
     cron_entry_check ${id} stopped false &&
     cron_entry_check ${id} typedata.next_wakeup ${next} &&
     ${event_trace} t.cron t.cron.complete \
-        $set_faketime Jun 30 00:00 &&
+        $set_faketime Jun 30 00:00 2016 &&
     cron_entry_check ${id} stats.count 1 &&
     flux cron delete ${id}
 '
@@ -151,7 +151,7 @@ test_expect_success 'flux-cron tab works for month' '
     cron_entry_check ${id} stopped false &&
     cron_entry_check ${id} typedata.next_wakeup ${next} &&
     ${event_trace} t.cron t.cron.complete \
-        $set_faketime Dec 30 00:00 &&
+        $set_faketime Dec 30 00:00 2016 &&
     cron_entry_check ${id} stats.count 1 &&
     flux cron delete ${id}
 '
