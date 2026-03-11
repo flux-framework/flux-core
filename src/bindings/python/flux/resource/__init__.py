@@ -8,8 +8,14 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+# isort: skip_file
+# Import order matters here: later entries depend on earlier ones being
+# registered in the package namespace before they are imported.
 from flux.resource.Rlist import Rlist
 from flux.resource.ResourceSet import ResourceSet
 from flux.resource.list import resource_list, SchedResourceList
 from flux.resource.status import resource_status, ResourceStatus
 from flux.resource.journal import ResourceJournalConsumer
+from flux.resource.ResourcePool import ResourcePool
+from flux.resource.Rv1Pool import Rv1Pool
+from flux.resource.Rv1RlistPool import Rv1RlistPool
