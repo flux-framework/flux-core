@@ -5,7 +5,7 @@ test_description='Test resource shrink when not using resource configuration'
 . `dirname $0`/sharness.sh
 
 SIZE=4
-test_under_flux $SIZE full --test-exit-mode=leader
+test_under_flux $SIZE full --test-exit-mode=leader --test-exit-timeout=0.25
 export FLUX_URI_RESOLVE_LOCAL=t
 # set bourne-shell to protect against non-bourne shells being executed by
 # flux proxy in tests
@@ -52,14 +52,15 @@ test_expect_success 'subinstance did not shrink due to lively->torpid->lively' '
 	flux proxy $jobid flux resource list &&
 	test $(flux proxy $jobid flux resource list -s all -no {nnodes}) -eq 4
 '
-test_expect_success 'restore tbon.torpid max/min values in subinstance' '
+test_expect_success 'disable torpid detection in subinstance for remainder of test' '
 	flux proxy $jobid flux config get \
-	    | jq ".tbon.torpid_min = \"5s\"" \
-	    | jq ".tbon.torpid_max = \"30s\"" \
+	    | jq ".tbon.torpid_min = \"1h\"" \
+	    | jq ".tbon.torpid_max = \"2h\"" \
 	    | flux proxy $jobid flux config load
 '
 test_expect_success 'disconnect rank 3' '
-	flux overlay disconnect 3
+	flux overlay disconnect 3 &&
+	waitup 3
 '
 test_expect_success 'there are now only 3 nodes' '
 	flux resource list -s all &&
@@ -79,7 +80,7 @@ test_expect_success 'subinstance shows the same' '
 	test $(flux proxy $jobid flux resource list -s all -no {nnodes}) -eq 3
 '
 test_expect_success 'running a 3 node job in subinstance works' '
-	flux proxy $jobid flux run -N3 hostname
+	run_timeout 30 flux proxy $jobid flux run -N3 hostname
 '
 test_expect_success 'a 4 node job is now unsatisfiable' '
 	test_must_fail flux run -N4 hostname 2>submit.err &&
