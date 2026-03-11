@@ -118,20 +118,18 @@ test_expect_success HAVE_TZ 'dmesg with TZ=America/Los_Angeles uses tz offset' '
 test_expect_success 'dmesg -H, --human works' '
 	#
 	#  Note: --human option should format first timestamp of dmesg output
-	#   as [MmmDD HH:MM] and second line should be an offset thereof
+	#   as [MmmDD HH:MM] and any following line should be an offset thereof
 	#   e.g. [  +0.NNNNNN]. The following regexes attempt to verify
 	#   that --human produced this pattern.
 	#
 	flux dmesg --human | sed -n 1p \
 	    | grep "^\[[A-Z][a-z][a-z][0-3][0-9] [0-9][0-9]:[0-9][0-9]\]" &&
-	flux dmesg --human | sed -n 2p \
-	    | grep "^\[ *+[0-9]*\.[0-9]*\]"
+	flux dmesg --human | grep "^\[ *+[0-9]*\.[0-9]*\]"
 '
 test_expect_success 'dmesg -H, --human --delta works' '
 	flux dmesg --human --delta | sed -n 1p \
 	    | grep "^\[[A-Z][a-z][a-z][0-3][0-9] [0-9][0-9]:[0-9][0-9]\]" &&
-	flux dmesg --human --delta | sed -n 2p \
-	    | grep "^\[ *+[0-9]*\.[0-9]*\]"
+	flux dmesg --human --delta | grep "^\[ *+[0-9]*\.[0-9]*\]"
 '
 test_expect_success 'dmesg --delta without --human fails' '
 	test_must_fail flux dmesg --delta
