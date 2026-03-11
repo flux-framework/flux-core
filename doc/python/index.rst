@@ -12,6 +12,7 @@ command line are possible in Python as well via the ``flux`` package.
 
    basics
    job_submission
+   broker_modules
    complete_api
    developer
 

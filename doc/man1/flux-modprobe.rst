@@ -221,7 +221,9 @@ Each entry in the ``modules`` array supports the following keys:
    then the last entry loaded will be used.
 
 **module**
-   (optional, string) The module to load if different from *name*
+   (optional, string) The module to load if different from *name*. May be a
+   path to a shared object (``.so``) or Python (``.py``) file, or a bare
+   module name resolved via :envvar:`FLUX_MODULE_PATH`.
 
 **provides**
    (optional, array of string) List of service names this module provides,

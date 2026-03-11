@@ -137,4 +137,7 @@ test_runat_t_CPPFLAGS = $(test_cppflags)
 test_runat_t_LDADD = $(test_ldadd)
 test_runat_t_LDFLAGS = $(test_ldflags)
 
+dist_fluxcmd_SCRIPTS = \
+	flux-module-python-exec.py
+
 EXTRA_DIST = README.md

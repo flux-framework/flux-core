@@ -9,6 +9,8 @@
 #            then the last one loaded will be used.
 #
 #   module   (optional) The module to load if different from name.
+#            May be a path to a shared object (.so) or Python (.py) file,
+#            or a bare module name resolved via FLUX_MODULE_PATH.
 #
 #   provides (optional) List of services this module provides, e.g. "sched".
 #             If multiple modules provide the same service name, the last one

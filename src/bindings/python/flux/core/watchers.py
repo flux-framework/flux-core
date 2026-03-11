@@ -14,7 +14,7 @@ import signal
 
 from flux.core.inner import ffi, lib, raw
 
-__all__ = ["TimerWatcher", "FDWatcher", "SignalWatcher"]
+__all__ = ["TimerWatcher", "FDWatcher", "SignalWatcher", "CheckWatcher", "IdleWatcher"]
 
 
 class Watcher(object):
@@ -99,6 +99,19 @@ class TimerWatcher(Watcher):
             ),
         )
 
+    def reset(self, after=None, repeat=None):
+        """Reset the timer and restart it.
+
+        Updates the timer values and re-arms it from scratch, even if it is
+        already running.  Parameters default to the values passed at creation.
+        """
+        if after is None:
+            after = self.after
+        if repeat is None:
+            repeat = self.repeat
+        raw.flux_timer_watcher_reset(self.handle, float(after), float(repeat))
+        self.start()
+
 
 @ffi.def_extern()
 def fd_handler_wrapper(unused1, unused2, revents, opaque_handle):
@@ -143,6 +156,80 @@ def signal_handler_wrapper(_unused1, _unused2, _unused3, opaque_handle):
     except Exception as exc:
         type(watcher.flux_handle).set_exception(exc)
         watcher.flux_handle.reactor_stop_error()
+
+
+class PrepareWatcher(Watcher):
+    """Watcher that fires once per reactor iteration, before blocking.
+
+    Fires just before the event loop calls ``backend_poll``.  Typically
+    paired with an :class:`IdleWatcher` (no callback) and a
+    :class:`CheckWatcher`: if work is pending, ``prepare_cb`` starts the
+    idle watcher to prevent blocking; ``check_cb`` does the work and stops
+    the idle watcher.
+    """
+
+    def __init__(self, flux_handle, callback, args=None):
+        self.callback = callback
+        self.args = args
+        self.handle = None
+        self.wargs = ffi.new_handle(self)
+        super(PrepareWatcher, self).__init__(
+            flux_handle,
+            raw.flux_prepare_watcher_create(
+                raw.flux_get_reactor(flux_handle),
+                lib.timeout_handler_wrapper,
+                self.wargs,
+            ),
+        )
+
+
+class CheckWatcher(Watcher):
+    """Watcher that fires once per reactor iteration, after blocking.
+
+    Fires just after the event loop returns from ``backend_poll``, before
+    I/O callbacks from the current poll are dispatched.  Typically paired
+    with a :class:`PrepareWatcher` and an :class:`IdleWatcher`; see
+    :class:`PrepareWatcher` for the pattern.
+    """
+
+    def __init__(self, flux_handle, callback, args=None):
+        self.callback = callback
+        self.args = args
+        self.handle = None
+        self.wargs = ffi.new_handle(self)
+        super(CheckWatcher, self).__init__(
+            flux_handle,
+            raw.flux_check_watcher_create(
+                raw.flux_get_reactor(flux_handle),
+                lib.timeout_handler_wrapper,
+                self.wargs,
+            ),
+        )
+
+
+class IdleWatcher(Watcher):
+    """Watcher that prevents the event loop from blocking.
+
+    When active, keeps ``backend_poll`` from sleeping so that the loop
+    spins without waiting for I/O.  Typically used without a callback (pass
+    ``callback=None``) as part of the prepare/idle/check pattern: the
+    prepare watcher starts this watcher when there is work pending, and the
+    check watcher stops it after the work is done.
+    """
+
+    def __init__(self, flux_handle, callback=None, args=None):
+        self.callback = callback
+        self.args = args
+        self.handle = None
+        self.wargs = ffi.new_handle(self) if callback is not None else ffi.NULL
+        super(IdleWatcher, self).__init__(
+            flux_handle,
+            raw.flux_idle_watcher_create(
+                raw.flux_get_reactor(flux_handle),
+                lib.timeout_handler_wrapper if callback is not None else ffi.NULL,
+                self.wargs,
+            ),
+        )
 
 
 class SignalWatcher(Watcher):
