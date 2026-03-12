@@ -48,18 +48,19 @@ test_expect_success 'flux-pgrep default override w/ named format works' '
 	grep "INFO" default_override_named.out
 '
 test_expect_success 'flux-pkill works' '
-	flux pkill ^test &&
+	flux pkill --wait ^test &&
 	test_expect_code 1 flux pkill ^test &&
 	flux pkill foo
 '
 test_expect_success 'flux-pgrep works with jobid ranges' '
 	flux submit --bcc=1-6 sleep 60 >ids &&
 	flux submit --bcc=1-6 sleep 60 >ids2 &&
+	test_wait_until -v "test \$(flux jobs -no {id} | wc -l) -eq 12" &&
 	flux pgrep $(head -n 1 ids)..$(tail -n1 ids) >pgrep.ids &&
 	test $(wc -l <pgrep.ids) -eq 6 &&
 	flux pgrep $(head -n 1 ids)..$(tail -n1 ids2) >pgrep2.ids &&
 	test $(wc -l <pgrep2.ids) -eq 12 &&
-	flux pkill $(head -n1 ids)..$(tail -n1 ids) &&
+	flux pkill --wait $(head -n1 ids)..$(tail -n1 ids) &&
 	flux pgrep $(head -n 1 ids)..$(tail -n1 ids2) >pgrep3.ids &&
 	test $(wc -l <pgrep3.ids) -eq 6 &&
 	flux pgrep -a $(head -n 1 ids)..$(tail -n1 ids2) >pgrep4.ids &&
