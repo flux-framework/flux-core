@@ -426,7 +426,7 @@ static int watch (struct info_ctx *ctx,
         if ((ret = eventlog_allow_lru (w->ctx,
                                        w->msg,
                                        w->id)) < 0)
-            return -1;
+            goto error;
 
         if (ret)
             w->allow = true;

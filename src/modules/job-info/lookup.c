@@ -647,6 +647,7 @@ void update_lookup_cb (flux_t *h,
         errmsg = error.text;
         goto error;
     }
+    json_decref (keys);
     return;
 
 error:
