@@ -169,8 +169,11 @@ static int heartbeat_timeout_adjust (struct heartbeat *hb, double timeout)
     if (hb->sync) {
         flux_future_t *f;
         if (!(f = flux_sync_create (hb->h, 0.))
-            || flux_future_then (f, timeout, sync_cb, hb) < 0)
+            || flux_future_then (f, timeout, sync_cb, hb) < 0) {
+            flux_future_destroy (f);
             return -1;
+        }
+        flux_future_destroy (hb->sync);
         hb->sync = f;
     }
     return 0;
