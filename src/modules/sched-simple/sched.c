@@ -719,10 +719,12 @@ static void feasibility_cb (flux_t *h,
         goto err;
     }
     rlist_destroy (alloc);
+    jjc_destroy (&jj);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "feasibility_cb: flux_respond_pack");
     return;
 err:
+    jjc_destroy (&jj);
     rlist_destroy (alloc);
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "feasibility_cb: flux_respond_error");
