@@ -112,14 +112,14 @@ struct count *count_create (json_t *json_count,
     count->isrange = true;
     return count;
 error:
-    free (count);
+    count_destroy (count);
     return NULL;
 }
 
 void count_destroy (struct count *count)
 {
     if (count) {
-        free (count->idset);
+        idset_destroy (count->idset);
         free (count);
     }
 }
@@ -191,7 +191,7 @@ struct count *count_decode (const char *s)
         goto success;
     }
     // decoding as an idset failed or was invalid, so try as an RFC14 range
-    free (count->idset);
+    idset_destroy (count->idset);
     count->isrange = true;
     count->operator = '+';
     count->operand = 1;
@@ -242,7 +242,7 @@ success:
 error_inval:
     errno = EINVAL;
 error:
-    free (count);
+    count_destroy (count);
     free (cpy);
     return NULL;
 }
