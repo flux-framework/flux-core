@@ -68,7 +68,10 @@ static int jjc_read_vertex (json_t *o, int level, struct jjc_counts *jj, int nod
         jj->slot_size = count;
     else if (streq (type, "gpu"))
         jj->slot_gpus = count;
-    // ignore unknown resources
+    else if (!streq (type, "node")) {
+        // ignore unknown resources
+        count_destroy (count);
+    }
     if (with)
         return jjc_read_level (with, level+1, jj, nodefactor);
     return 0;
