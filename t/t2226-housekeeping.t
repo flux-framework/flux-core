@@ -212,7 +212,8 @@ test_expect_success 'run a job and ensure error was logged' '
 	wait_for_running 0 &&
 	flux run true &&
 	wait_for_running 0 &&
-	flux dmesg | grep "error launching process"
+	# Note: under valgrind error is "nonzero exit code" not "error launching..."
+	flux dmesg | grep -e "error launching process" -e "nonzero exit code"
 '
 test_expect_success 'create housekeeping script with one failing rank (3)' '
 	cat >housekeeping3.sh <<-EOT &&
