@@ -19,6 +19,13 @@ class TestMod(BrokerModule):
     def hello(self, msg):
         self.handle.respond(msg, {"name": self.name})
 
+    @request_handler("debug_check")
+    def debug_check(self, msg):
+        """Return whether the debug bit *flag* is set, optionally clearing it."""
+        flag = msg.payload.get("flag", 0)
+        clear = msg.payload.get("clear", False)
+        self.handle.respond(msg, {"set": self.debug_test(flag, clear=clear)})
+
     @request_handler("die")
     def die(self, msg):
         raise RuntimeError("die handler raised per test request")
