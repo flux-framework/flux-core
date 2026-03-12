@@ -10,7 +10,7 @@
 import signal
 from typing import Optional, Union
 
-from _flux._core import ffi
+from _flux._core import ffi, lib
 from flux.core.handle import Flux  # for typing
 from flux.future import Future
 from flux.job._wrapper import _RAW as RAW
@@ -22,12 +22,13 @@ def kill_async(
 ):
     """Send a signal to a running job asynchronously
 
-    :param flux_handle: handle for Flux broker from flux.Flux()
-    :type flux_handle: Flux
-    :param jobid: the job ID of the job to kill
-    :param signum: signal to send (default SIGTERM)
-    :returns: a Future
-    :rtype: Future
+    Args:
+        flux_handle: handle for Flux broker from flux.Flux()
+        jobid: the job ID of the job to kill
+        signum: signal to send (default SIGTERM)
+
+    Returns:
+        Future: a future fulfilled when the signal is delivered
     """
     if not signum:
         signum = signal.SIGTERM
@@ -37,10 +38,10 @@ def kill_async(
 def kill(flux_handle: Flux, jobid: Union[JobID, int], signum: Optional[int] = None):
     """Send a signal to a running job.
 
-    :param flux_handle: handle for Flux broker from flux.Flux()
-    :type flux_handle: Flux
-    :param jobid: the job ID of the job to kill
-    :param signum: signal to send (default SIGTERM)
+    Args:
+        flux_handle: handle for Flux broker from flux.Flux()
+        jobid: the job ID of the job to kill
+        signum: signal to send (default SIGTERM)
     """
     return kill_async(flux_handle, jobid, signum).get()
 
@@ -72,3 +73,49 @@ def cancel(flux_handle: Flux, jobid: Union[JobID, int], reason: Optional[str] = 
         reason: the textual reason associated with the cancelation
     """
     return cancel_async(flux_handle, jobid, reason).get()
+
+
+def job_raise_async(
+    flux_handle: Flux,
+    jobid: Union[JobID, int],
+    exc_type: str,
+    severity: int = 0,
+    note: Optional[str] = None,
+):
+    """Raise a job exception asynchronously.
+
+    Args:
+        flux_handle: handle for Flux broker from flux.Flux()
+        jobid: the job ID of the job
+        exc_type: exception type string (e.g. ``"scheduler-restart"``)
+        severity: severity level; 0 causes the job to abort
+        note: optional human-readable message
+
+    Returns:
+        Future: a future fulfilled when the exception is raised
+    """
+    note_enc = note.encode() if note else ffi.NULL
+    return Future(
+        lib.flux_job_raise(
+            flux_handle.handle, int(jobid), exc_type.encode(), severity, note_enc
+        )
+    )
+
+
+def job_raise(
+    flux_handle: Flux,
+    jobid: Union[JobID, int],
+    exc_type: str,
+    severity: int = 0,
+    note: Optional[str] = None,
+):
+    """Raise a job exception.
+
+    Args:
+        flux_handle: handle for Flux broker from flux.Flux()
+        jobid: the job ID of the job
+        exc_type: exception type string (e.g. ``"scheduler-restart"``)
+        severity: severity level; 0 causes the job to abort
+        note: optional human-readable message
+    """
+    return job_raise_async(flux_handle, jobid, exc_type, severity, note).get()
