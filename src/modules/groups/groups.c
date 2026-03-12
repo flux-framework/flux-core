@@ -653,7 +653,7 @@ static void stats_get_request_cb (flux_t *h,
         errmsg = "error building groups object";
         goto error;
     }
-    if (flux_respond_pack (h, msg, "{s:o}", "subtree", obj) < 0)
+    if (flux_respond_pack (h, msg, "{s:O}", "subtree", obj) < 0)
         flux_log_error (h, "error responding to groups.stats-get");
     json_decref (obj);
     return;
