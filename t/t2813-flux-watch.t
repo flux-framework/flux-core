@@ -131,7 +131,7 @@ test_expect_success 'flux-watch: --filter works' '
 	grep "Watching ${nfailed} job" failed.out
 '
 test_expect_success 'flux-watch: handles binary data' '
-	id=$(flux submit dd if=/dev/urandom count=1) &&
+	id=$(flux submit --wait-event=start dd if=/dev/urandom count=1) &&
 	test_debug "flux job eventlog -p guest.output -HL $id" &&
 	flux job attach $id >binary.expected &&
 	flux watch $id >binary.output &&
