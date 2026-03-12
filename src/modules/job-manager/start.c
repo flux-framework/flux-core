@@ -168,7 +168,9 @@ static void interface_teardown (struct start *start, char *s, int errnum)
                   flux_strerror (errnum));
 
         free (start->topic);
+        free (start->update_topic);
         start->topic = NULL;
+        start->update_topic = NULL;
 
         job = zhashx_first (ctx->active_jobs);
         while (job) {
