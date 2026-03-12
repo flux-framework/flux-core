@@ -95,6 +95,11 @@ def main():
         # User-facing argument errors: print message only, no traceback
         print(f"{os.path.basename(path)}: {exc}", file=sys.stderr)
         errnum = errno_mod.EINVAL
+    except OSError as exc:
+        # Module exited with error already logged via the broker log.
+        # Propagate the original errno if available so the caller sees a
+        # meaningful error code (e.g. EEXIST for service already registered).
+        errnum = exc.errno if exc.errno else errno_mod.ECONNRESET
     except Exception:  # pylint: disable=broad-except
         traceback.print_exc()
         errnum = errno_mod.ECONNRESET

@@ -114,6 +114,10 @@ test_expect_success 'debug_test: remove testmod' '
 	flux module remove testmod
 '
 
+test_expect_success 'OSError errno is propagated on module init failure' '
+	test_must_fail flux module load $testmod --oserror-failure 2>oserr.err &&
+	grep -i "File exists" oserr.err
+'
 test_expect_success 'flux module load testmod.py under alternate name works' '
 	flux module load --name altmod $testmod &&
 	flux ping -c 1 altmod &&

@@ -10,6 +10,8 @@
 
 # testmod.py - minimal Python broker module for testing flux-module-python-exec
 
+import errno
+
 from flux.brokermod import BrokerModule, event_handler, request_handler
 
 
@@ -39,6 +41,8 @@ def mod_main(h, *args):
     for arg in args:
         if arg == "--init-failure":
             raise RuntimeError("init failure per test request")
+        if arg == "--oserror-failure":
+            raise OSError(errno.EEXIST, "service already registered")
     TestMod(h, *args).run()
 
 
