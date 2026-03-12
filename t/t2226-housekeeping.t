@@ -54,6 +54,9 @@ wait_for_straggler_count () {
 		sleep 0.1
 	done
 }
+test_expect_success 'reload sched-simple with log-level=debug' '
+	flux module reload sched-simple log-level=debug
+'
 
 test_expect_success 'flux-housekeeping utility exists' '
 	flux housekeeping list --help &&
@@ -119,10 +122,10 @@ test_expect_success 'housekeeping script ran on ranks 0-3' '
 '
 test_expect_success 'nodes were returned to scheduler separately' '
 	flux dmesg -H | grep sched-simple >sched.log &&
-	grep "free: rank0" sched.log &&
-	grep "free: rank1" sched.log &&
-	grep "free: rank2" sched.log &&
-	grep "free: rank3" sched.log &&
+	grep "free:.*rank0" sched.log &&
+	grep "free:.*rank1" sched.log &&
+	grep "free:.*rank2" sched.log &&
+	grep "free:.*rank3" sched.log &&
 	test $(grep final sched.log | wc -l) -eq 1
 '
 test_expect_success 'create housekeeping script with one 10s straggler' '
@@ -160,8 +163,8 @@ test_expect_success 'housekeeping script ran on ranks 0-3' '
 '
 test_expect_success 'there was one alloc and two frees to the scheduler' '
 	flux dmesg -H | grep sched-simple >sched2.log &&
-	grep "free: rank\[0-2\]" sched2.log &&
-	grep "free: rank3.*(final)" sched2.log
+	grep "free:.*rank\[0-2\]" sched2.log &&
+	grep "free:.*rank3.*(final)" sched2.log
 '
 test_expect_success 'configuring housekeeping with bad key fails' '
 	test_must_fail flux config load 2>load.err <<-EOT &&
