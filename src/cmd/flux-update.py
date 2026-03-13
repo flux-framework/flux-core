@@ -13,10 +13,12 @@ import json
 import logging
 import math
 import sys
+import time
 
 import flux
 import flux.job
 import flux.util
+from flux.job import event_watch
 
 LOGGER = logging.getLogger("flux-update")
 
@@ -42,6 +44,7 @@ class JobspecUpdates:
         self.jobid = jobid
         self.updates = None
         self.jobspec = None
+        self.t0 = time.time()
 
     @property
     def flux_handle(self):
@@ -148,6 +151,21 @@ class JobspecUpdates:
         payload = {"id": self.jobid, "updates": self.updates}
         return self.flux_handle.rpc("job-manager.update", payload)
 
+    def wait(self):
+        """
+        Wait for expected jobspec-update event to be posted to the job
+        eventlog. To avoid matching a prior duplicate, only consider
+        events that were posted after this invocation of flux-update(1)
+        started.
+        """
+        for event in event_watch(self.flux_handle, self.jobid):
+            if (
+                event.name == "jobspec-update"
+                and event.timestamp > self.t0
+                and self.items() <= event.context.items()
+            ):
+                return
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -165,6 +183,11 @@ def parse_args():
         action="store_true",
         default=0,
         help="Be more verbose. Log updated items after success.",
+    )
+    parser.add_argument(
+        "--wait",
+        action="store_true",
+        help="Wait for updates to appear in job eventlog before exiting",
     )
     parser.add_argument(
         "jobid",
@@ -204,6 +227,8 @@ def main():
         sys.exit(0)
 
     updates.send_rpc().get()
+    if args.wait:
+        updates.wait()
     if args.verbose:
         for key, value in updates.items():
             LOGGER.info(f"updated {key} to {value}")
