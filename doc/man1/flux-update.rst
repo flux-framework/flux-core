@@ -68,6 +68,10 @@ OPTIONS
 
   Print updated keys on success.
 
+.. option:: --wait
+
+  Wait until associated updates are posted to the target job's eventlog.
+
 SPECIAL KEYS
 ============
 
