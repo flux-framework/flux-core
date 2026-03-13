@@ -63,7 +63,7 @@ test_expect_success 'update to same queue fails' '
 	test_must_fail flux update $jobid queue=debug
 '
 test_expect_success 'update to batch queue works' '
-	flux update $jobid queue=batch &&
+	flux update --wait $jobid queue=batch &&
 	test_debug "flux job eventlog $jobid" &&
 	flux job eventlog $jobid \
 	  | grep jobspec-update \
@@ -81,7 +81,7 @@ test_expect_success 'update to queue with lower duration limit fails' '
 	grep "duration.*exceeds policy limit" queue.err
 '
 test_expect_success 'update of duration allows queue update' '
-	flux update $jobid queue=debug duration=1m  &&
+	flux update --wait $jobid queue=debug duration=1m  &&
 	test_debug "flux job eventlog $jobid" &&
 	flux job eventlog $jobid \
 	  | grep jobspec-update \
@@ -113,7 +113,7 @@ test_expect_success 'update of queue for job with other constraints fails' '
 '
 test_expect_success 'update from queue with no constraints works' '
 	jobid=$(flux submit -t 1m --urgency=hold -q other hostname) &&
-	flux update $jobid queue=debug &&
+	flux update --wait $jobid queue=debug &&
 	test_debug "flux job eventlog $jobid" &&
 	flux job eventlog $jobid \
 	  | grep jobspec-update \
@@ -123,7 +123,7 @@ test_expect_success 'update from queue with no constraints works' '
 '
 test_expect_success 'update to queue with no constraints works' '
 	jobid=$(flux submit --urgency=hold -q debug hostname) &&
-	flux update $jobid queue=other &&
+	flux update --wait $jobid queue=other &&
 	test_debug "flux job eventlog $jobid" &&
 	flux job eventlog $jobid \
 	  | grep jobspec-update \

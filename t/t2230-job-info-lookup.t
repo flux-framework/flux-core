@@ -91,7 +91,7 @@ test_expect_success 'flux job info applies jobspec updates' '
 	jobid=$(flux submit --urgency=hold true) &&
 	echo $jobid > updated_jobspec.id &&
 	flux job info $jobid jobspec | jq -e ".attributes.system.duration == 0" &&
-	flux update $jobid duration=100s &&
+	flux update --wait $jobid duration=100s &&
 	flux job info $jobid jobspec | jq -e ".attributes.system.duration == 100.0" &&
 	flux cancel $jobid
 '
@@ -111,7 +111,7 @@ test_expect_success 'flux job info applies resource updates' '
 	jobid=$(flux submit --wait-event=start sleep 300) &&
 	echo $jobid > updated_R.id &&
 	flux job info $jobid R | jq -e ".execution.expiration == 0.0" &&
-	flux update $jobid duration=300 &&
+	flux update --wait $jobid duration=300 &&
 	flux job info $jobid R | jq -e ".execution.expiration > 0.0" &&
 	flux job info $jobid eventlog &&
 	flux cancel $jobid
