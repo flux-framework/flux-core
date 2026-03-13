@@ -69,6 +69,9 @@ int rlist_mark_down (struct rlist *rl, const char *ids);
  */
 int rlist_mark_up (struct rlist *rl, const char *ids);
 
+/*  Create a full copy of rlist rl preserving allocation state */
+struct rlist *rlist_copy (const struct rlist *rl);
+
 /*  Create a copy of rlist rl with all cores available */
 struct rlist *rlist_copy_empty (const struct rlist *rl);
 

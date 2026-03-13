@@ -254,6 +254,16 @@ fail:
     return NULL;
 }
 
+static struct rnode *copy_full (const struct rnode *rnode, void *arg)
+{
+    return rnode_copy (rnode);
+}
+
+struct rlist *rlist_copy (const struct rlist *orig)
+{
+    return rlist_copy_internal (orig, copy_full, NULL);
+}
+
 static struct rnode *copy_empty (const struct rnode *rnode, void *arg)
 {
     return rnode_copy_empty (rnode);
