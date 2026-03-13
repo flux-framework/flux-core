@@ -25,6 +25,11 @@ def setup(context):
     if backing_module is not None:
         context.set_alternative("content-backing", backing_module)
 
+    sched_module = context.attr_get("sched.module")
+    if sched_module is not None:
+        context.set_alternative("sched", sched_module)
+        context.set_alternative("feasibility", sched_module)
+
     context.load_modules(
         [
             "content",
