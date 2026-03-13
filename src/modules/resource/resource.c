@@ -82,6 +82,7 @@ static void resource_config_deinit (struct resource_config *config)
 {
     if (config) {
         int saved_errno = errno;
+        json_decref (config->R);
         rlist_verify_config_destroy (config->verify);
         config->verify = NULL;
         errno = saved_errno;
@@ -499,7 +500,6 @@ int mod_main (flux_t *h, int argc, char **argv)
     resource_config_deinit (&config);
     resource_ctx_destroy (ctx);
     json_decref (eventlog);
-    json_decref (config.R);
     return 0;
 error:
     resource_config_deinit (&config);

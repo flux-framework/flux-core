@@ -80,7 +80,7 @@ test_expect_success 'ping to rank 2 fails' '
 '
 
 test_expect_success 'wait for overlay status to be degraded' '
-	run_timeout 10 flux overlay status --summary --wait degraded
+	run_timeout 10 flux overlay status --timeout=0 --summary --wait degraded
 '
 
 test_expect_success 'run broker rank=2' '
@@ -88,7 +88,7 @@ test_expect_success 'run broker rank=2' '
 '
 
 test_expect_success 'wait for subtree to be full' '
-	run_timeout 10 flux overlay status --summary --wait full
+	run_timeout 10 flux overlay status --timeout=0 --summary --wait full
 '
 
 test_expect_success 'run broker rank=2 again fails' '

@@ -2575,7 +2575,7 @@ static void overlay_config_reload_cb (flux_t *h,
     struct overlay *ov = arg;
     const char *topic = "unknown";
     flux_error_t error;
-    flux_conf_t *conf;
+    flux_conf_t *conf = NULL;
     bool initialize = false;
 
     if (flux_request_decode (msg, &topic, NULL) < 0
@@ -2589,14 +2589,13 @@ static void overlay_config_reload_cb (flux_t *h,
         goto error;
     if (flux_set_conf_new (h, conf) < 0) {
         errprintf (&error, "Failed to update config");
-        goto error_decref;
+        goto error;
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to %s request", topic);
     return;
-error_decref:
-    flux_conf_decref (conf);
 error:
+    flux_conf_decref (conf);
     if (flux_respond_error (h, msg, errno, error.text) < 0)
         flux_log_error (h, "error responding to %s request", topic);
 }

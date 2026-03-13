@@ -719,10 +719,12 @@ static void feasibility_cb (flux_t *h,
         goto err;
     }
     rlist_destroy (alloc);
+    jjc_destroy (&jj);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "feasibility_cb: flux_respond_pack");
     return;
 err:
+    jjc_destroy (&jj);
     rlist_destroy (alloc);
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "feasibility_cb: flux_respond_error");
@@ -1029,7 +1031,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
 
     if (process_args (h, ss, argc, argv) < 0)
-        return -1;
+        goto done;
 
     ss->util_ctx = schedutil_create (h, ss->schedutil_flags, &ops, ss);
     if (ss->util_ctx == NULL) {

@@ -71,9 +71,8 @@ test_expect_success 'update request with invalid duration type fails' '
 '
 test_expect_success 'update of duration of pending job works' '
 	flux update $jobid duration=1m &&
-	flux job eventlog $jobid \
-		| grep jobspec-update \
-		| grep duration=60
+	flux job wait-event -vHt 30 \
+	    -m attributes.system.duration=60.0 $jobid jobspec-update
 '
 test_expect_success 'update of duration accepts relative values' '
 	flux update --dry-run $jobid duration=+1m \
@@ -104,31 +103,25 @@ test_expect_success 'add a duration limit and submit a held job' '
 '
 test_expect_success 'instance owner can adjust duration past limits' '
 	flux update $jobid duration=1h &&
-	flux job eventlog $jobid \
-		| grep jobspec-update \
-		| grep duration=3600
+	flux job wait-event -Ht 30 \
+	    -m attributes.system.duration=3600.0 $jobid jobspec-update
 '
 test_expect_success FLUX_SECURITY 'guest update of their own job works' '
 	guest_jobid=$(submit_held_job_as_guest 1m) &&
 	runas_guest flux update -v $guest_jobid duration=1m  &&
-	flux job eventlog $guest_jobid \
-		| grep jobspec-update \
-		| grep duration=60
+	flux job wait-event -Ht 30 -m duration=60 $jobid jobspec-update
 '
 test_expect_success FLUX_SECURITY 'guest cannot update job duration past limit' '
 	test_expect_code 1 runas_guest flux update -v $guest_jobid duration=1h
 '
 test_expect_success 'instance owner can adjust duration past limits' '
 	flux update $jobid duration=1h &&
-	flux job eventlog $jobid \
-		| grep jobspec-update \
-		| grep duration=3600
+	flux job wait-event -Ht 30 \
+	    -m attributes.system.duration=3600.0 $jobid jobspec-update
 '
 test_expect_success FLUX_SECURITY 'instance owner can adjust guest job duration past limits' '
 	flux update $guest_jobid duration=1h &&
-	flux job eventlog $guest_jobid \
-		| grep jobspec-update \
-		| grep duration=3600
+	flux job wait-event -Ht 30 -m duration=3600 $jobid jobspec-update
 '
 test_expect_success FLUX_SECURITY 'guest job is now immutable' '
 	test_expect_code 1 runas_guest \
@@ -164,9 +157,8 @@ test_expect_success 'load update-test jobtap plugin' '
 '
 test_expect_success 'now update of attributes.system.test works' '
 	flux update $jobid test=foo-update &&
-	flux job eventlog $jobid \
-		| grep jobspec-update \
-		| grep foo-update
+	flux job wait-event -Ht 30 \
+	    -m attributes.system.test=foo-update $jobid jobspec-update
 '
 test_expect_success 'update-test plugin can reject updates' '
 	test_expect_code 1 flux update $jobid test=fail-test 2>fail-test.err &&
@@ -175,9 +167,9 @@ test_expect_success 'update-test plugin can reject updates' '
 '
 test_expect_success 'multiple keys can be updated successfully' '
 	flux update -v $jobid test=ok test2=ok2 &&
-	flux job eventlog $jobid &&
-	flux job eventlog $jobid \
-		| grep jobspec-update \
-		| grep "test=\"ok\" attributes.system.test2=\"ok2\""
+	flux job wait-event -vHt 30 \
+	    -m attributes.system.test=ok $jobid jobspec-update &&
+	flux job wait-event -Ht 30 \
+	    -m attributes.system.test2=ok2 $jobid jobspec-update
 '
 test_done
