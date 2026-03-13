@@ -70,9 +70,10 @@ test_expect_success 'update request with invalid duration type fails' '
 	    | ${FLUX_BUILD_DIR}/t/request/rpc job-manager.update 71 # EPROTO
 '
 test_expect_success 'update of duration of pending job works' '
-	flux update $jobid duration=1m &&
-	flux job wait-event -vHt 30 \
-	    -m attributes.system.duration=60.0 $jobid jobspec-update
+	flux update --wait $jobid duration=1m &&
+	flux job eventlog $jobid \
+		| grep jobspec-update \
+		| grep duration=60
 '
 test_expect_success 'update of duration accepts relative values' '
 	flux update --dry-run $jobid duration=+1m \
@@ -108,8 +109,10 @@ test_expect_success 'instance owner can adjust duration past limits' '
 '
 test_expect_success FLUX_SECURITY 'guest update of their own job works' '
 	guest_jobid=$(submit_held_job_as_guest 1m) &&
-	runas_guest flux update -v $guest_jobid duration=1m  &&
-	flux job wait-event -Ht 30 -m duration=60 $jobid jobspec-update
+	runas_guest flux update --wait -v $guest_jobid duration=1m  &&
+	flux job eventlog $guest_jobid \
+		| grep jobspec-update \
+		| grep duration=60
 '
 test_expect_success FLUX_SECURITY 'guest cannot update job duration past limit' '
 	test_expect_code 1 runas_guest flux update -v $guest_jobid duration=1h
@@ -125,13 +128,13 @@ test_expect_success FLUX_SECURITY 'instance owner can adjust guest job duration 
 '
 test_expect_success FLUX_SECURITY 'guest job is now immutable' '
 	test_expect_code 1 runas_guest \
-		flux update -v $guest_jobid duration=1m \
+		flux update --wait -v $guest_jobid duration=1m \
 			2>immutable.err &&
 	test_debug "cat immutable.err" &&
 	grep immutable immutable.err
 '
 test_expect_success 'adjust duration so future tests pass validation' '
-	flux update $jobid duration=1m
+	flux update --wait $jobid duration=1m
 '
 test_expect_success 'reload update-duration plugin with owner-allow-any=0' '
 	flux jobtap remove .update-duration &&
