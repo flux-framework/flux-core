@@ -106,6 +106,7 @@ TESTSCRIPTS = \
 	t0026-flux-R.t \
 	t0090-content-enospc.t \
 	t0100-modprobe.t \
+	t0800-completion.t \
 	t1000-kvs.t \
 	t1001-kvs-internals.t \
 	t1003-kvs-stress.t \
