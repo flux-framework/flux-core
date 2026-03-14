@@ -115,6 +115,15 @@ class BrokerModule:
         if lib.flux_module_set_running(self._h.handle) < 0:
             raise OSError("flux_module_set_running failed")
 
+    def debug_test(self, flag, clear=False):
+        """Test a module debug bit, optionally clearing it.
+
+        Returns True if the bit identified by *flag* is set.  If *clear* is
+        True the bit is atomically cleared after being read.  Bits are set
+        externally via ``flux module debug --setbit N <module-name>``.
+        """
+        return lib.flux_module_debug_test(self._h.handle, flag, clear)
+
     def stop(self):
         """Stop the reactor and exit :meth:`run` normally."""
         self._h.reactor_stop()

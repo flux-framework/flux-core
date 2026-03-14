@@ -10,6 +10,8 @@
 
 # testmod.py - minimal Python broker module for testing flux-module-python-exec
 
+import errno
+
 from flux.brokermod import BrokerModule, event_handler, request_handler
 
 
@@ -18,6 +20,13 @@ class TestMod(BrokerModule):
     @request_handler("hello")
     def hello(self, msg):
         self.handle.respond(msg, {"name": self.name})
+
+    @request_handler("debug_check")
+    def debug_check(self, msg):
+        """Return whether the debug bit *flag* is set, optionally clearing it."""
+        flag = msg.payload.get("flag", 0)
+        clear = msg.payload.get("clear", False)
+        self.handle.respond(msg, {"set": self.debug_test(flag, clear=clear)})
 
     @request_handler("die")
     def die(self, msg):
@@ -32,6 +41,8 @@ def mod_main(h, *args):
     for arg in args:
         if arg == "--init-failure":
             raise RuntimeError("init failure per test request")
+        if arg == "--oserror-failure":
+            raise OSError(errno.EEXIST, "service already registered")
     TestMod(h, *args).run()
 
 

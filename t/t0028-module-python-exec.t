@@ -20,6 +20,19 @@ if result.get('name') != '$1':
 "
 }
 
+# check_debug NAME FLAG [clear] - return true if debug bit FLAG is set in NAME
+# Passes clear=True if a third argument is given.
+check_debug() {
+	local name="$1" flag="$2"
+	local clear="False"; [ $# -ge 3 ] && clear="True"
+	flux python -c "
+import flux, sys
+h = flux.Flux()
+result = h.rpc('$name.debug_check', {'flag': $flag, 'clear': $clear}).get()
+sys.exit(0 if result.get('set') else 1)
+"
+}
+
 # trigger_die NAME - send a die RPC to NAME.die (no response expected)
 trigger_die() {
 	flux python -c "
@@ -77,6 +90,33 @@ test_expect_success 'flux module load testmod.py with args works' '
 '
 test_expect_success 'flux module load testmod.py --init-failure fails' '
 	test_must_fail flux module load $testmod --init-failure
+'
+
+##
+# BrokerModule.debug_test()
+##
+
+test_expect_success 'debug_test: load testmod' '
+	flux module load $testmod
+'
+test_expect_success 'debug_test: bit is clear before setbit' '
+	test_must_fail check_debug testmod 1
+'
+test_expect_success 'debug_test: bit is set after flux module debug --setbit' '
+	flux module debug --setbit 1 testmod &&
+	check_debug testmod 1
+'
+test_expect_success 'debug_test: clear=True reads and clears the bit atomically' '
+	check_debug testmod 1 true &&
+	test_must_fail check_debug testmod 1
+'
+test_expect_success 'debug_test: remove testmod' '
+	flux module remove testmod
+'
+
+test_expect_success 'OSError errno is propagated on module init failure' '
+	test_must_fail flux module load $testmod --oserror-failure 2>oserr.err &&
+	grep -i "File exists" oserr.err
 '
 test_expect_success 'flux module load testmod.py under alternate name works' '
 	flux module load --name altmod $testmod &&
