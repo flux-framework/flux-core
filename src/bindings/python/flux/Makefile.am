@@ -3,6 +3,7 @@ nobase_fluxpy_PYTHON = \
 	kvs.py \
 	wrapper.py \
 	rpc.py \
+	scheduler.py \
 	message.py \
 	constants.py \
 	util.py \
@@ -56,10 +57,13 @@ nobase_fluxpy_PYTHON = \
 	job/frobnicator/frobnicator.py \
 	job/frobnicator/plugins/defaults.py \
 	job/frobnicator/plugins/constraints.py \
+	resource/Rv1Pool.py \
 	resource/Rlist.py \
 	resource/__init__.py \
 	resource/ResourceSetImplementation.py \
 	resource/ResourceSet.py \
+	resource/Rv1RlistPool.py \
+	resource/ResourcePool.py \
 	resource/list.py \
 	resource/status.py \
 	resource/journal.py \

@@ -159,6 +159,9 @@ static struct registered_attr attrtab[] = {
     { "content.dump", 0 },
     { "content.restore", 0 },
 
+    // scheduler
+    { "sched.module", ATTR_IMMUTABLE },
+
     // cron
     { "cron.directory", 0 },
 

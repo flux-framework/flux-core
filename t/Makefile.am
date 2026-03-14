@@ -183,6 +183,8 @@ TESTSCRIPTS = \
 	t2303-sched-hello.t \
 	t2304-sched-simple-alloc-check.t \
 	t2305-sched-slow.t \
+	t2306-sched-fifo.t \
+	t2307-sched-backfill.t \
 	t2310-resource-module.t \
 	t2311-resource-drain.t \
 	t2312-resource-exclude.t \
@@ -323,6 +325,7 @@ TESTSCRIPTS = \
 	python/t0036-subprocess.py \
 	python/t0037-slurm.py \
 	python/t0038-brokermod.py \
+	python/t0039-rv1pool.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY
