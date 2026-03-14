@@ -460,7 +460,7 @@ class TaskDB:
             self.tasks[name].pop(to_remove)
             self.add(task, index=entry.index)
 
-    def set_alternative(self, service, name):
+    def set_alternative(self, service, name, propagate=True):
         """Select a specific alternative 'name' for service"""
         lst = self.tasks[service]
         try:
@@ -476,6 +476,11 @@ class TaskDB:
         entry = lst.pop(index)
         priority = lst[-1].priority
         lst.append(self.TaskEntry(priority + 1, entry.index, entry.task))
+
+        # now do the same for any other provides in this module
+        if propagate:
+            for provides in set(entry.task.provides) - {service}:
+                self.set_alternative(provides, name, propagate=False)
 
     def disable(self, service):
         """disable task/module/service with name 'service'"""
