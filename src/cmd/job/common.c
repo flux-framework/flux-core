@@ -55,7 +55,7 @@ unsigned long long parse_arg_unsigned (const char *s, const char *name)
 }
 
 /* Parse free arguments into a space-delimited message.
- * On error, exit complaning about parsing 'name'.
+ * On error, exit complaining about parsing 'name'.
  * Caller must free the resulting string
  */
 char *parse_arg_message (char **argv, const char *name)

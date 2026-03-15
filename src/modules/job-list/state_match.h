@@ -21,7 +21,7 @@
 #include "job_data.h"
 
 /*  Similar to list_constraint_create() but only cares about
- *  "states" operation and the potential for a consraint to
+ *  "states" operation and the potential for a constraint to
  *  return true given a job state..
  */
 struct state_constraint *state_constraint_create (json_t *constraint,
