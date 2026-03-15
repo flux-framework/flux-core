@@ -1358,6 +1358,32 @@ test_expect_success 'modprobe: set_alternative() detects invalid module' '
 	test_debug "cat badalt.out" &&
 	grep "no module foo provides sched" badalt.out
 '
+test_expect_success 'modprobe: set_alternative() propagates to other provides' '
+	FLUX_MODPROBE_PATH=$(pwd) \
+	    flux modprobe show --set-alternative=sched=basic-scheduler \
+	        feasibility > feas.prop.json &&
+	test_debug "cat feas.prop.json" &&
+	cat feas.prop.json | jq -e ".name == \"basic-scheduler\""
+'
+test_expect_success 'modprobe: set_alternative() propagation is symmetric' '
+	FLUX_MODPROBE_PATH=$(pwd) \
+	    flux modprobe show --set-alternative=feasibility=basic-scheduler \
+	        sched > sched.sym.json &&
+	test_debug "cat sched.sym.json" &&
+	cat sched.sym.json | jq -e ".name == \"basic-scheduler\""
+'
+test_expect_success 'modprobe: alternatives config propagates to other provides' '
+	cat <<-EOF | flux config load &&
+	[modules.alternatives]
+	sched = "basic-scheduler"
+	EOF
+	flux config get | jq &&
+	test_when_finished "echo {} | flux config load" &&
+	FLUX_MODPROBE_PATH=$(pwd) \
+	    flux modprobe show feasibility > feas.conf.prop.json &&
+	test_debug "cat feas.conf.prop.json" &&
+	cat feas.conf.prop.json | jq -e ".name == \"basic-scheduler\""
+'
 test_expect_success 'remove temporary configuration' '
 	rm -rf modprobe.d
 '
