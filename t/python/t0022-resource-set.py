@@ -15,7 +15,7 @@ import unittest
 import subflux  # noqa: F401 - for PYTHONPATH
 from flux.hostlist import Hostlist
 from flux.idset import IDset
-from flux.resource import ResourceSet, Rlist
+from flux.resource import ResourceSet
 from pycotap import TAPTestRunner
 
 
@@ -62,6 +62,34 @@ class TestRSet(unittest.TestCase):
       }
     }
     """
+    # Small R dicts used in place of Rlist()-based construction
+    R_rank0_2c_1g = {
+        "version": 1,
+        "execution": {
+            "R_lite": [{"rank": "0", "children": {"core": "0-1", "gpu": "0"}}],
+            "starttime": 0,
+            "expiration": 0,
+            "nodelist": ["node0"],
+        },
+    }
+    R_rank4_4c_1g = {
+        "version": 1,
+        "execution": {
+            "R_lite": [{"rank": "4", "children": {"core": "0-3", "gpu": "0"}}],
+            "starttime": 0,
+            "expiration": 0,
+            "nodelist": [],
+        },
+    }
+    R_rank5_2c = {
+        "version": 1,
+        "execution": {
+            "R_lite": [{"rank": "5", "children": {"core": "0-1"}}],
+            "starttime": 0,
+            "expiration": 0,
+            "nodelist": [],
+        },
+    }
 
     def test_init_string(self):
         #  init by string
@@ -92,9 +120,8 @@ class TestRSet(unittest.TestCase):
         self.assertEqual(rset.nnodes, 4)
 
     def test_init_implementation(self):
-        #  init by resource set implementation
-        rlist = Rlist().add_rank(0, cores="0-1").add_child(0, "gpu", "0")
-        rset = ResourceSet(rlist)
+        #  init by R JSON dict (rank 0, 2 cores, 1 gpu)
+        rset = ResourceSet(self.R_rank0_2c_1g)
         self.assertEqual(str(rset), "rank0/core[0-1],gpu0")
         self.assertEqual(rset.ncores, 2)
         self.assertEqual(rset.ngpus, 1)
@@ -166,17 +193,17 @@ class TestRSet(unittest.TestCase):
 
     def test_append(self):
         rset = ResourceSet(self.R_input)
-        rset2 = ResourceSet(Rlist().add_rank(4, cores="0-3").add_child(4, "gpu", "0"))
+        rset2 = ResourceSet(self.R_rank4_4c_1g)
         rset.append(rset2)
         self.assertEqual(str(rset), "rank[0-4]/core[0-3],gpu0")
 
     def test_add(self):
         rset = ResourceSet(self.R_input)
-        rset2 = ResourceSet(Rlist().add_rank(4, cores="0-3").add_child(4, "gpu", "0"))
+        rset2 = ResourceSet(self.R_rank4_4c_1g)
         rset.add(rset2)
         self.assertEqual(str(rset), "rank[0-4]/core[0-3],gpu0")
         # adding same resources allowed
-        rset2 = ResourceSet(Rlist().add_rank(4, cores="0-3").add_child(4, "gpu", "0"))
+        rset2 = ResourceSet(self.R_rank4_4c_1g)
         rset.add(rset2)
         self.assertEqual(str(rset), "rank[0-4]/core[0-3],gpu0")
 
@@ -405,7 +432,7 @@ class TestRSet(unittest.TestCase):
     def test_multi_arg_ops(self):
         rset = ResourceSet(self.R_input)  # ranks 0-3
         r2 = ResourceSet(self.R2)  # ranks 10-13
-        extra = ResourceSet(Rlist().add_rank(5, cores="0-1"))
+        extra = ResourceSet(self.R_rank5_2c)
 
         # multi-arg union
         result = rset.union(r2, extra)
