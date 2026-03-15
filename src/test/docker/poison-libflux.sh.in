@@ -94,9 +94,15 @@ done
 printf " Installing poison flux commands...\n"
 mkdir -p -m 0755 $CMDDIR
 for cmd in \
-	terminus ping keygen logger event module kvs start job queue exec \
-	cron mini jobs resource admin jobtap job-validator \
-	job-exec-override uri pstree; do
+      admin job-frobnicator queue alloc jobs archive jobtap R batch \
+      job-validator relay broker keygen resource bulksubmit kvs restore \
+      cancel logger cgroup lptest run config lsattr setattr content modprobe \
+      shutdown cron module slurm-expiration-sync dmesg module-exec sproc \
+      dump module-python-exec start env multi-prog startlog event overlay \
+      submit exec terminus fortune top fsck pgrep update getattr ping uptime \
+      heaptrace pkill uri help pmi hostlist post-job-event housekeeping \
+      proxy imp-exec-helper pstree job python version job-exec-override watch
+    do
 	cat <<-EOF >${CMDDIR}/flux-${cmd}
 	#!/bin/sh
 	printf "Error: running poison command $0\n"

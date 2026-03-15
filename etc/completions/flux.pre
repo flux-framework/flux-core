@@ -99,7 +99,13 @@ __get_flux_subcommands() {
         for op in $dir/flux-*; do
             if [[ -x $op  ]]; then
                 op="${op##*flux-}"
-                subcommands+="${op%.*} "
+                # skip .in template files; strip .py but preserve version
+                # suffixes like the .minor in flux-pythonX.Y
+                case "$op" in
+                    *.in) continue ;;
+                    *.py) op="${op%.py}" ;;
+                esac
+                subcommands+="$op "
             fi
         done
     done
@@ -197,6 +203,7 @@ _flux_update()
     local cmd=$1
     OPTS="\
         -v --verbose \
+        --wait \
         -n --dry-run \
     "
     if [[ $cur != -* ]]; then
@@ -395,6 +402,7 @@ _flux_submit_commands()
         -l --label-io \
         --flags= \
         --dry-run \
+        --quiet \
         -h --help \
         --cwd= \
         --signal= \
@@ -420,6 +428,7 @@ _flux_submit_commands()
         -N --nodes= \
         --dump= \
         --conf= \
+        --broker-opts= \
         -x --exclusive \
     "
     local SUBMITBULK_OPTIONS="\
@@ -876,6 +885,8 @@ _flux_queue()
         -h --help \
         -q --queue= \
         -a --all \
+        --quiet \
+        -v --verbose \
     "
     local disable_OPTS="\
         -h --help \
@@ -884,18 +895,22 @@ _flux_queue()
         --quiet \
         -v --verbose \
         --nocheckpoint \
+        -m --message= \
     "
     local start_OPTS="\
         -h --help \
         -q --queue= \
+        -a --all \
         -v --verbose \
         --quiet \
     "
     local stop_OPTS="\
         -h --help \
         -q --queue= \
+        -a --all \
         -v --verbose \
         --quiet \
+        -m --message= \
     "
     local status_OPTS="\
         -h --help \
@@ -905,6 +920,11 @@ _flux_queue()
     local drain_OPTS="\
         -h --help \
         -t --timeout= \
+    "
+    local idle_OPTS="\
+        -h --help \
+        -t --timeout= \
+        --quiet \
     "
     local list_OPTS="\
         -q --queue= \
@@ -923,6 +943,9 @@ _flux_queue()
             return
             ;;
         --timeout | -!(-*)t)
+            return
+            ;;
+        --message | -!(-*)m)
             return
             ;;
     esac
@@ -1199,7 +1222,11 @@ _flux_overlay()
     "
     _flux_split_longopt && split=true
     case $prev in
-        -!(-*)[rtwH])
+        --wait | -!(-*)w)
+            COMPREPLY=( $(compgen -W 'full partial offline degraded lost' -- "$cur") )
+            return
+            ;;
+        -!(-*)[rtH])
             return
             ;;
     esac
@@ -1456,6 +1483,11 @@ _flux_jobs()
             _flux_complete_format_name flux jobs
             return
             ;;
+        --user | -!(-*)u)
+            active_users=$(flux jobs -Ano {username} | uniq)
+            COMPREPLY=( $(compgen -W "$active_users" -- "$cur") )
+            return
+            ;;
         --sort | -!(-*)[Lcf])
             return
             ;;
@@ -1532,6 +1564,7 @@ _flux_pkill()
         -f --filter= \
         -u --user= \
         -q --queue= \
+        --wait \
     "
     _flux_split_longopt && split=true
     case $prev in
@@ -1595,6 +1628,11 @@ _flux_pstree()
     esac
     $split && return
 
+    if [[ $cur != -* ]]; then
+        active_jobs=$(flux jobs -no $(_flux_id_fmt $cur))
+        COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
+        return 0
+    fi
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
@@ -1617,7 +1655,7 @@ _flux_watch()
         --since= \
         --progress \
         --jps \
-        --verbose
+        -v --verbose
     "
     if [[ $cur != -* ]]; then
         #  Attempt to substitute an active jobid
@@ -1707,6 +1745,72 @@ _flux_top()
     COMPREPLY=( $(compgen -W "${OPTS} $jobs" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
+# flux-logger(1) completions
+_flux_logger()
+{
+    local severity_levels="emerg alert crit err warning notice info debug"
+    OPTS="\
+        -s --severity= \
+        -n --appname= \
+    "
+    case "$prev" in
+        --severity|-s)
+            COMPREPLY=( $(compgen -W "$severity_levels" -- "$cur") )
+            return
+            ;;
+    esac
+    if [[ $cur == --severity=* ]]; then
+        COMPREPLY=( $(compgen -W "$severity_levels" -- "${cur#--severity=}") )
+        COMPREPLY=( "${COMPREPLY[@]/#/--severity=}" )
+        return
+    fi
+    if [[ $cur == --*= ]]; then
+        COMPREPLY=()
+        return
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        compopt -o nospace
+    fi
+    return 0
+}
+
+# flux-post-job-event(1) completions
+_flux_post_job_event()
+{
+    # Count non-option words after 'post-job-event' to determine position
+    local npos=0 i
+    for ((i = 1; i < COMP_CWORD; ++i)); do
+        [[ ${COMP_WORDS[i]} != -* ]] && ((npos++))
+    done
+    # npos==1: completing jobid, npos>=2: name or context (no completions)
+    if ((npos == 1)); then
+        active_jobs=$(flux jobs -no $(_flux_id_fmt $cur))
+        COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
+        return 0
+    fi
+    return 0
+}
+
+# flux-keygen(1) completions
+_flux_keygen()
+{
+    OPTS="\
+        -n --name= \
+        --meta= \
+    "
+    if [[ $cur == --*= ]]; then
+        compopt -o default
+        COMPREPLY=()
+        return
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
         compopt -o nospace
     fi
     return 0
@@ -1854,6 +1958,7 @@ _flux_R()
         -c --cores= \
         -g --gpus= \
         -H --hosts= \
+        -p --property= \
         -l --local \
         -f --xml \
     "
@@ -1875,7 +1980,7 @@ _flux_R()
 
         _flux_split_longopt && split=true
         case $prev in
-            -!(-*)[ixcgH])
+            -!(-*)[ixcgHp])
                 return
                 ;;
         esac
@@ -1937,10 +2042,17 @@ _flux_exec()
         --label= \
         --bg \
         --waitable \
+        --with-imp \
+        -j --jobid= \
     "
 
     _flux_split_longopt && split=true
     case $prev in
+        --jobid | -!(-*)j)
+            active_jobs=$(flux jobs -no $(_flux_id_fmt $cur))
+            COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
+            return
+            ;;
         --dir | -!(-*)d)
             compopt -o filenames
             COMPREPLY=( $(compgen -d -- "$cur") )
@@ -1971,7 +2083,7 @@ _flux_attr()
         -v --values \
     "
     if [[ $cmd != "flux" ]]; then
-        if [[ $cur != -* && $cmd == "getattr" ]]; then
+        if [[ $cur != -* && ( $cmd == "getattr" || $cmd == "setattr" ) ]]; then
             COMPREPLY=( $(compgen -W "$(flux lsattr)" -- "$cur") )
             return 0
         fi
@@ -2251,6 +2363,115 @@ _flux_sproc()
     return 0
 }
 
+# flux-fsck(1) completions
+_flux_fsck()
+{
+    local cmd=$1
+    local split=false
+    local OPTS="\
+        -v --verbose \
+        -q --quiet \
+        -r --rootref= \
+        -R --repair \
+        -j --job-aware \
+    "
+    _flux_split_longopt && split=true
+    case $prev in
+        --rootref | -!(-*)r)
+            return
+            ;;
+    esac
+    $split && return
+
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        compopt -o nospace
+    fi
+    return 0
+}
+
+# flux-startlog(1) completions
+_flux_startlog()
+{
+    local cmd=$1
+    local OPTS="\
+        --check \
+        --quiet \
+        -v --show-version \
+    "
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    return 0
+}
+
+# flux-pmi(1) completions
+_flux_pmi()
+{
+    local cmd=$1
+    local subcmds="barrier get exchange"
+    local split=false
+
+    local general_OPTS="\
+        --method= \
+        --libpmi-noflux \
+        --libpmi2-cray \
+        -v --verbose= \
+        -t --timeout= \
+    "
+    local barrier_OPTS="\
+        --test-count= \
+        --test-abort= \
+        --test-timing \
+    "
+    local get_OPTS="\
+        --ranks= \
+    "
+    local exchange_OPTS="\
+        --count= \
+    "
+
+    _flux_split_longopt && split=true
+    case $prev in
+        --method | --timeout | --test-count | --test-abort | --count | \
+            --ranks | -!(-*)[vt])
+            return
+            ;;
+    esac
+    $split && return
+
+    if [[ $cur == --*= ]]; then
+        COMPREPLY=()
+        return 0
+    fi
+    if [[ $cmd != "pmi" ]]; then
+        var="${cmd//-/_}_OPTS"
+        COMPREPLY=( $(compgen -W "${!var} -h --help" -- "$cur") )
+    else
+        COMPREPLY=( $(compgen -W "${general_OPTS} ${subcmds} -h --help" -- "$cur") )
+    fi
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        compopt -o nospace
+    fi
+    return 0
+}
+
+# flux-pythonX.Y(1) and flux-python-version(1) completions
+# Both are versioned python wrappers that accept --get-path
+_flux_python3()
+{
+    local split=false
+    _flux_split_longopt && split=true
+    case $prev in
+        --get-path) return ;;
+    esac
+    $split && return
+    if [[ $cur != -* ]]; then
+        compopt -o default -o bashdefault
+        return 0
+    fi
+    COMPREPLY=( $(compgen -W "--get-path -h --help" -- "$cur") )
+    return 0
+}
+
 _flux_core()
 {
     FLUX_OPTS="-v --verbose -V --version -p --parent -r --root"
@@ -2330,6 +2551,24 @@ _flux_core()
     dmesg)
         _flux_dmesg $subcmd
         ;;
+    keygen)
+        _flux_keygen $subcmd
+        ;;
+    logger)
+        _flux_logger $subcmd
+        ;;
+    post-job-event)
+        _flux_post_job_event
+        ;;
+    fsck)
+        _flux_fsck $subcmd
+        ;;
+    startlog)
+        _flux_startlog $subcmd
+        ;;
+    pmi)
+        _flux_pmi $subcmd
+        ;;
     ping)
         _flux_ping $subcmd
         ;;
@@ -2373,6 +2612,9 @@ _flux_core()
         # reset to defaults and let readline take over
         compopt -o default
         COMPREPLY=()
+        ;;
+    python[0-9]*.[0-9]*|python-version)
+        _flux_python3 $subcmd
         ;;
     housekeeping)
         _flux_housekeeping $subcmd
