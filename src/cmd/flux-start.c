@@ -106,6 +106,8 @@ static struct optparse_option opts[] = {
       .usage = "Set broker attribute", },
     { .name = "config-path",.key = 'c', .has_arg = 1, .arginfo = "PATH",
       .usage = "Set broker config from PATH (default: none)", },
+    { .name = "conf",       .has_arg = 1, .arginfo = "VALUE",
+      .usage = "Update broker config from VALUE", },
     { .name = "recovery",   .key = 'r', .has_arg = 2, .arginfo = "[TARGET]",
       .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
       .usage = "Start instance in recovery mode with dump file or statedir", },
@@ -614,6 +616,7 @@ int add_args_common (char **argz,
     }
     if (config_path)
         add_argzf (argz, argz_len, "-c%s", config_path);
+    add_args_list (argz, argz_len, ctx.opts, "conf", "--conf=");
 
     return 0;
 }
