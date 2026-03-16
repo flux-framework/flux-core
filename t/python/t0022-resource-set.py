@@ -482,7 +482,6 @@ class TestRSet(unittest.TestCase):
         result = rset_copy.intersect(r_0_2, r_1_3)
         self.assertEqual(str(result.ranks), "1-2")
 
-
     def test_add_propagates_properties(self):
         """add() must carry properties from the new ranks into the merged set."""
         rset = ResourceSet(self.R_with_props)  # ranks 0-1, props foo/bar

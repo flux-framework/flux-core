@@ -56,7 +56,6 @@ nobase_fluxpy_PYTHON = \
 	job/frobnicator/frobnicator.py \
 	job/frobnicator/plugins/defaults.py \
 	job/frobnicator/plugins/constraints.py \
-	resource/Rlist.py \
 	resource/__init__.py \
 	resource/ResourceSetImplementation.py \
 	resource/Rv1Set.py \
