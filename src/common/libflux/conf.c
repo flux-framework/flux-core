@@ -154,6 +154,11 @@ static int conf_update_json (flux_conf_t *conf,
         errprintf (error, "%s:%d: %s", filename, err.line, err.text);
         goto error;
     }
+    if (!json_is_object (obj)) {
+        errprintf (error, "%s: JSON must be an object", filename);
+        errno = EINVAL;
+        goto error;
+    }
     if (conf_update_obj (conf, filename, obj, error) < 0)
         goto error;
     json_decref (obj);
