@@ -31,6 +31,17 @@ void flux_conf_decref (const flux_conf_t *conf);
  */
 flux_conf_t *flux_conf_parse (const char *path, flux_error_t *error);
 
+/* Update conf in-place from 'value', which may be:
+ *   - KEY=VAL         - set dotted key path to JSON or string value
+ *   - inline string   - inline TOML or JSON object (starts with '{' or contains newline)
+ *   - <path>.json     - path to a JSON file
+ *   Otherwise, fall back to parsing as a TOML file
+ * Returns 0 on success, -1 on failure with errno and error set.
+ */
+int flux_conf_update (flux_conf_t *conf,
+                      const char *value,
+                      flux_error_t *error);
+
 /* Access config object.
  * If error is non-NULL, it is filled with error details on failure.
  */

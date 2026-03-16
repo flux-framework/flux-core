@@ -28,6 +28,7 @@
 #include "src/common/libtomlc99/toml.h"
 #include "src/common/libutil/tomltk.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/jpath.h"
 #include "ccan/str/str.h"
 
 #include "conf_private.h"
@@ -178,6 +179,153 @@ static int conf_update (flux_conf_t *conf,
     if (streq (ext, "json"))
         return conf_update_json (conf, filename, error);
     return conf_update_toml (conf, filename, error);
+}
+
+/* Parse s as a JSON object string and merge into conf.
+ */
+static int conf_update_inline_json (flux_conf_t *conf,
+                                    const char *s,
+                                    flux_error_t *error)
+{
+    json_error_t j_error;
+    json_t *obj;
+    int rc = -1;
+
+    if (!(obj = json_loads (s, 0, &j_error))) {
+        errprintf (error, "inline JSON: %s", j_error.text);
+        errno = EINVAL;
+        return -1;
+    }
+    /* Both conf->obj (always a json_object()) and obj (from json_loads()
+     * on '{'-prefixed input) are guaranteed to be JSON objects, so this
+     * should not fail.
+     */
+    if (json_object_update_recursive (conf->obj, obj) < 0) {
+        errprintf (error, "merging inline JSON: internal error");
+        errno = EINVAL;
+        goto done;
+    }
+    rc = 0;
+done:
+    ERRNO_SAFE_WRAP (json_decref, obj);
+    return rc;
+}
+
+/* Parse inline string (must contain a newline) and merge into conf.
+ * If s starts with '{' (ignoring leading whitespace), parse as JSON;
+ * otherwise parse as TOML.
+ */
+static int conf_update_inline (flux_conf_t *conf,
+                               const char *s,
+                               flux_error_t *error)
+{
+    struct tomltk_error toml_error;
+    toml_table_t *tab = NULL;
+    json_t *obj = NULL;
+    int rc = -1;
+
+    /* If value starts with '{' (possibly after leading whitespace e.g. from
+     * a Python triple-quoted string), parse specifically as JSON.
+     */
+    if (s[strspn (s, " \t\n\r")] == '{')
+        return conf_update_inline_json (conf, s, error);
+
+    /* Fall back to TOML */
+    if (!(tab = tomltk_parse (s, strlen (s), &toml_error))) {
+        if (toml_error.lineno == -1)
+            errprintf (error, "%s", toml_error.errbuf);
+        else
+            errprintf (error,
+                       "line %d: %s",
+                       toml_error.lineno,
+                       toml_error.errbuf);
+        errno = EINVAL;
+        goto done;
+    }
+    if (!(obj = tomltk_table_to_json (tab))) {
+        errprintf (error,
+                   "converting inline TOML to JSON: %s",
+                   strerror (errno));
+        goto done;
+    }
+    /* Both conf->obj (always a json_object()) and obj (from
+     * tomltk_table_to_json() on a TOML table) are guaranteed to be
+     * JSON objects, so this should not fail.
+     */
+    if (json_object_update_recursive (conf->obj, obj) < 0) {
+        errprintf (error, "merging inline TOML: internal error");
+        errno = EINVAL;
+        goto done;
+    }
+    rc = 0;
+done:
+    ERRNO_SAFE_WRAP (json_decref, obj);
+    ERRNO_SAFE_WRAP (toml_free, tab);
+    return rc;
+}
+
+/* Parse s as KEY=VAL where KEY is a dotted path and VAL is a JSON scalar or
+ * a bare string. Apply to conf.
+ */
+static int conf_update_keyval (flux_conf_t *conf,
+                               const char *s,
+                               flux_error_t *error)
+{
+    const char *eq;
+    char *key = NULL;
+    json_t *val = NULL;
+    int rc = -1;
+
+    /* Note: `=` in `s` should already be guaranteed by caller.
+     * Error message returned to caller reflects this
+     */
+    if (!(eq = strchr (s, '=')) || eq == s) {
+        errprintf (error, "value must have a key in KEY=VAL");
+        errno = EINVAL;
+        goto done;
+    }
+    if (!(key = strndup (s, eq - s))) {
+        errprintf (error, "%s", strerror (errno));
+        goto done;
+    }
+
+    /* Try to parse value as JSON (includes true/false, numbers, strings):
+     * Otherwise, fallback to parsing as a string.
+     */
+    if (!(val = json_loads (eq + 1, JSON_DECODE_ANY, NULL))) {
+        if (!(val = json_string (eq + 1))) {
+            errprintf (error, "out of memory");
+            errno = ENOMEM;
+            goto done;
+        }
+    }
+    if (jpath_set (conf->obj, key, val) < 0) {
+        errprintf (error, "setting %s: %s", key, strerror (errno));
+        goto done;
+    }
+    rc = 0;
+done:
+    free (key);
+    json_decref (val);
+    return rc;
+}
+
+int flux_conf_update (flux_conf_t *conf,
+                      const char *value,
+                      flux_error_t *error)
+{
+    if (!conf || !value) {
+        errno = EINVAL;
+        errprintf (error, "%s", strerror (errno));
+        return -1;
+    }
+    if (strchr (value, '\n'))
+        return conf_update_inline (conf, value, error);
+    if (value[0] == '{')
+        return conf_update_inline_json (conf, value, error);
+    if (strchr (value, '='))
+        return conf_update_keyval (conf, value, error);
+    return conf_update (conf, value, error);
 }
 
 struct globerr {
