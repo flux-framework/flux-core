@@ -218,6 +218,42 @@ static void sighup_handler (int signum)
     signal (SIGHUP, SIG_DFL);
 }
 
+/* Parse config if specified in -c, --config-path or FLUX_CONF_DIR.
+ * Set new config in handle `ctx.h` on success.
+ * Return -1 on error with error logged at LOG_CRIT.
+ */
+static int parse_config (broker_ctx_t *ctx)
+{
+    flux_conf_t *conf = NULL;
+    flux_error_t error;
+    const char *config_path = optparse_get_str (ctx->opts, "config-path", NULL);
+
+    if (!config_path)
+        config_path = getenv ("FLUX_CONF_DIR");
+    if (config_path) {
+        if (!(conf = flux_conf_parse (config_path, &error))) {
+            flux_log (ctx->h, LOG_CRIT, "Config file error: %s", error.text);
+            return -1;
+        }
+        if (attr_set (ctx->attrs, "config.path", config_path) < 0) {
+            flux_conf_decref (conf);
+            flux_log (ctx->h,
+                      LOG_CRIT,
+                      "setattr config.path: %s",
+                      strerror (errno));
+            return -1;
+        }
+    }
+    if (conf) {
+        if (flux_set_conf_new (ctx->h, conf) < 0) {
+            flux_conf_decref (conf);
+            flux_log (ctx->h, LOG_CRIT, "Error caching config object");
+            return -1;
+        }
+    }
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     broker_ctx_t ctx;
@@ -375,28 +411,8 @@ int main (int argc, char *argv[])
 
     /* Parse config.
      */
-    const char *config_path = optparse_get_str (ctx.opts, "config-path", NULL);
-    if (!config_path)
-        config_path = getenv ("FLUX_CONF_DIR");
-    if (config_path) {
-        flux_conf_t *conf;
-        if (!(conf = flux_conf_parse (config_path, &error))) {
-            flux_log (ctx.h, LOG_CRIT, "Config file error: %s", error.text);
-            goto cleanup;
-        }
-        if (flux_set_conf_new (ctx.h, conf) < 0) {
-            flux_conf_decref (conf);
-            flux_log (ctx.h, LOG_CRIT, "Error caching config object");
-            goto cleanup;
-        }
-        if (attr_set (ctx.attrs, "config.path", config_path) < 0) {
-            flux_log (ctx.h,
-                      LOG_CRIT,
-                      "setattr config.path: %s",
-                      strerror (errno));
-            goto cleanup;
-        }
-    }
+    if (parse_config (&ctx) < 0)
+        goto cleanup;
 
     if (increase_rlimits () < 0) {
         flux_log (ctx.h,
