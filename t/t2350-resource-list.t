@@ -371,17 +371,21 @@ test_expect_success 'create test input with properties' '
 test_expect_success 'flux resource list -no {properties} works' '
 	flux resource list -no {properties} \
 		--from-stdin <properties-test.in >properties.out &&
-	test $(cat properties.out) = "xx,foo"
+	test_debug "cat properties.out" &&
+	test "$(cat properties.out | tr , "\n" | sort | tr "\n" , | sed s/,$//)" \
+		= "foo,xx"
 '
 test_expect_success 'flux resource list -no {properties:>4.4+} works' '
 	flux resource list -no "{properties:>5.5+}" \
 		--from-stdin <properties-test.in >properties-trunc.out &&
 	test_debug "cat properties-trunc.out" &&
-	test $(cat properties-trunc.out) = "xx,f+" &&
+	test "$(awk "{print length}" properties-trunc.out)" -eq 5 &&
+	grep -q "+$" properties-trunc.out &&
 	flux resource list -no "{properties:>5.5h+}" \
 		--from-stdin <properties-test.in >properties-trunc+h.out &&
 	test_debug "cat properties-trunc+h.out" &&
-	test $(cat properties-trunc.out) = "xx,f+"
+	test "$(awk "{print length}" properties-trunc+h.out)" -eq 5 &&
+	grep -q "+$" properties-trunc+h.out
 '
 test_expect_success 'flux resource list -o rlist works' '
 	flux resource list -o rlist \

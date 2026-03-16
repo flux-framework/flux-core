@@ -13,7 +13,7 @@ from collections.abc import Mapping
 
 from flux.hostlist import Hostlist
 from flux.idset import IDset
-from flux.resource import Rlist
+from flux.resource import Rv1Set
 from flux.resource.ResourceSetImplementation import ResourceSetImplementation
 
 
@@ -65,7 +65,7 @@ class ResourceSet:
         #  note: only version 1 supported for now
         if version == 1:
             self.version = 1
-            self.impl = Rlist(arg)
+            self.impl = Rv1Set(arg)
         else:
             raise ValueError(f"R version {version} not supported")
 
