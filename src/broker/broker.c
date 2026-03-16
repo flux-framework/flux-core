@@ -128,6 +128,8 @@ static struct optparse_option opts[] = {
       .usage = "Set broker attribute", },
     { .name = "config-path",.key = 'c', .has_arg = 1, .arginfo = "PATH",
       .usage = "Set broker config from PATH (default: none)", },
+    { .name = "conf",       .key = 0,   .has_arg = 1, .arginfo = "VALUE",
+      .usage = "Update broker config from VALUE", },
     OPTPARSE_TABLE_END,
 };
 
@@ -226,6 +228,7 @@ static int parse_config (broker_ctx_t *ctx)
 {
     flux_conf_t *conf = NULL;
     flux_error_t error;
+    const char *value;
     const char *config_path = optparse_get_str (ctx->opts, "config-path", NULL);
 
     if (!config_path)
@@ -241,6 +244,23 @@ static int parse_config (broker_ctx_t *ctx)
                       LOG_CRIT,
                       "setattr config.path: %s",
                       strerror (errno));
+            return -1;
+        }
+    }
+    /* Update config with all --conf= options, creating an empty config if
+     * necessary.
+     */
+    while ((value = optparse_getopt_next (ctx->opts, "conf"))) {
+        if (!conf && !(conf = flux_conf_create ())) {
+            flux_log (ctx->h,
+                      LOG_CRIT,
+                      "error creating config object: %s",
+                      strerror (errno));
+            return -1;
+        }
+        if (flux_conf_update (conf, value, &error) < 0) {
+            flux_conf_decref (conf);
+            flux_log (ctx->h, LOG_CRIT, "--conf: %s", error.text);
             return -1;
         }
     }
