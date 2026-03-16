@@ -132,6 +132,13 @@ OPTIONS
    Set the *PATH* for broker configuration. See :man1:`flux-broker` for
    option details. This is equivalent to :option:`-o,-cPATH`.
 
+.. option:: --conf=VALUE
+
+   Update the broker configuration from VALUE after loading any config file
+   specified with :option:`--config-path` or :envvar:`FLUX_CONF_DIR`.  This
+   option may be specified multiple times. See :man1:`flux-broker` for
+   VALUE format details. This is equivalent to :option:`-o,--conf=VALUE`.
+
 .. option:: -o, --broker-opts=OPTIONS
 
    Add options to the message broker daemon, separated by commas.
