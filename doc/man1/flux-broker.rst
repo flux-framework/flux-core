@@ -56,6 +56,45 @@ OPTIONS
    configuration as JSON if the file extension is ``.json``, otherwise
    load the file as TOML.
 
+.. option:: --conf=VALUE
+
+   Update the broker configuration from VALUE after any configuration
+   file specified with :option:`--config-path` (or :envvar:`FLUX_CONF_DIR`)
+   is loaded. This option may be specified multiple times and values are
+   applied in order. The format of VALUE is determined as follows:
+
+   ``KEY=VAL``
+     If VALUE contains ``=``, set the configuration key at dotted path
+     KEY to VAL. VAL is parsed as JSON; if it is not valid JSON it is
+     treated as a string. Note: file paths containing ``=`` are
+     interpreted as KEY=VAL rather than as file names.
+
+   inline JSON object
+     If VALUE starts with ``{``, it is parsed as an inline JSON object
+     and merged into the configuration.
+
+   inline TOML string
+     If VALUE contains a newline (and does not start with ``{``), it is
+     parsed as an inline TOML string and merged into the configuration.
+     Note: shell command substitution (``$()``) strips trailing newlines,
+     so inline TOML strings should have an embedded newline, as TOML
+     naturally does.
+
+   path ending in ``.json``
+     Parse the file as JSON and merge the result into the configuration.
+
+   any other string
+     Treated as a path to a TOML file.
+
+   .. note::
+
+      When a broker is started with :option:`--conf`, that configuration is
+      in-memory only and is not written to files. If :option:`--config-path`
+      or :envvar:`FLUX_CONF_DIR` is also set, running :command:`flux config
+      reload` within that instance will overwrite any configuration applied
+      via :option:`--conf`, since reload reads from files only. (If no
+      config path is set, :command:`flux config reload` is a no-op.)
+
 .. _broker_logging:
 
 LOGGING
