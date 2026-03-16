@@ -59,7 +59,7 @@ void check_msglist (void)
         "flux_msglist_last is msg2");
 
     ok (flux_msglist_first (l) == msg1,
-        "flux_msglist_last is msg1 (assigning curosr to msg1)");
+        "flux_msglist_last is msg1 (assigning cursor to msg1)");
     flux_msglist_delete (l);
     ok (flux_msglist_count (l) == 1,
         "flux_msglist_count is 1 after delete");
