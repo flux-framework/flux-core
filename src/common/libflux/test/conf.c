@@ -439,6 +439,235 @@ void test_globerr (void)
         "conf_globerr pat=oops rc=666 sets errno and error as expected");
 }
 
+void test_update (void)
+{
+    char toml_path[PATH_MAX + 1];
+    char json_path[PATH_MAX + 1];
+    char array_json_path[PATH_MAX + 1];
+    flux_conf_t *conf;
+    flux_error_t error;
+    int i;
+    const char *s;
+
+    if (!(conf = flux_conf_create ()))
+        BAIL_OUT ("flux_conf_create failed");
+
+    /* KEY=VAL: integer */
+    ok (flux_conf_update (conf, "foo=42", &error) == 0,
+        "flux_conf_update foo=42 works");
+    i = 0;
+    ok (flux_conf_unpack (conf, NULL, "{s:i}", "foo", &i) == 0 && i == 42,
+        "flux_conf_update foo=42 set expected value");
+
+    /* KEY=VAL: string */
+    ok (flux_conf_update (conf, "bar=hello", &error) == 0,
+        "flux_conf_update bar=hello works");
+    s = NULL;
+    ok (flux_conf_unpack (conf, NULL, "{s:s}", "bar", &s) == 0
+        && s != NULL && streq (s, "hello"),
+        "flux_conf_update bar=hello set expected value");
+
+    /* KEY=VAL: boolean */
+    ok (flux_conf_update (conf, "baz=true", &error) == 0,
+        "flux_conf_update baz=true works");
+    i = 0;
+    ok (flux_conf_unpack (conf, NULL, "{s:b}", "baz", &i) == 0 && i == 1,
+        "flux_conf_update baz=true set expected value");
+
+    /* KEY=VAL: empty value sets key to empty string */
+    ok (flux_conf_update (conf, "empty=", &error) == 0,
+        "flux_conf_update empty= works");
+    s = NULL;
+    ok (flux_conf_unpack (conf, NULL, "{s:s}", "empty", &s) == 0
+        && s != NULL && streq (s, ""),
+        "flux_conf_update empty= set expected value");
+
+    /* KEY=VAL: dotted key creates nested object */
+    ok (flux_conf_update (conf, "a.b.c=99", &error) == 0,
+        "flux_conf_update a.b.c=99 works");
+    i = 0;
+    ok (flux_conf_unpack (conf, NULL, "{s:{s:{s:i}}}", "a", "b", "c", &i) == 0
+        && i == 99,
+        "flux_conf_update a.b.c=99 set expected value");
+
+    /* KEY=VAL: update existing nested key, others preserved */
+    ok (flux_conf_update (conf, "a.b.c=100", &error) == 0,
+        "flux_conf_update a.b.c=100 works");
+    i = 0;
+    ok (flux_conf_unpack (conf, NULL, "{s:{s:{s:i}}}", "a", "b", "c", &i) == 0
+        && i == 100,
+        "flux_conf_update a.b.c=100 updated expected value");
+
+    /* Inline TOML (with newline) */
+    ok (flux_conf_update (conf,
+                          "[modules.alternatives]\nsched = \"sched-simple\"\n",
+                          &error) == 0,
+        "flux_conf_update inline TOML works");
+    s = NULL;
+    ok (flux_conf_unpack (conf,
+                          NULL,
+                          "{s:{s:{s:s}}}",
+                          "modules",
+                          "alternatives",
+                          "sched",
+                          &s) == 0
+        && s != NULL
+        && streq (s, "sched-simple"),
+        "flux_conf_update inline TOML set expected value");
+
+    /* Inline JSON (with newline) */
+    ok (flux_conf_update (conf,
+                          "{\"resource\":{\"noverify\":true}}\n",
+                          &error) == 0,
+        "flux_conf_update inline JSON with newline works");
+    i = 0;
+    ok (flux_conf_unpack (conf,
+                          NULL,
+                          "{s:{s:b}}",
+                          "resource",
+                          "noverify",
+                          &i) == 0 && i == 1,
+        "flux_conf_update inline JSON with newline set expected value");
+
+    /* Inline JSON (leading newline before '{', e.g. Python triple-quoted string) */
+    ok (flux_conf_update (conf,
+                          "\n{\n  \"resource\": {\"noverify\": false}\n}\n",
+                          &error) == 0,
+        "flux_conf_update inline JSON with leading \\n works");
+    i = 1;
+    ok (flux_conf_unpack (conf,
+                          NULL,
+                          "{s:{s:b}}",
+                          "resource",
+                          "noverify",
+                          &i) == 0 && i == 0,
+        "flux_conf_update inline JSON with leading \\n set expected value");
+
+    /* Inline JSON (multiple leading newlines) */
+    ok (flux_conf_update (conf,
+                          "\n\n{\n  \"resource\": {\"noverify\": true}\n}\n",
+                          &error) == 0,
+        "flux_conf_update inline JSON with leading \\n\\n works");
+    i = 0;
+    ok (flux_conf_unpack (conf,
+                          NULL,
+                          "{s:{s:b}}",
+                          "resource",
+                          "noverify",
+                          &i) == 0 && i == 1,
+        "flux_conf_update inline JSON with leading \\n\\n set expected value");
+
+    /* Inline JSON (leading newline + spaces, e.g. indented heredoc) */
+    ok (flux_conf_update (conf,
+                          "\n  {\n  \"resource\": {\"noverify\": false}\n}\n",
+                          &error) == 0,
+        "flux_conf_update inline JSON with leading \\n+spaces works");
+    i = 1;
+    ok (flux_conf_unpack (conf,
+                          NULL,
+                          "{s:{s:b}}",
+                          "resource",
+                          "noverify",
+                          &i) == 0 && i == 0,
+        "flux_conf_update inline JSON with leading \\n+spaces set expected value");
+
+    /* Inline JSON (no newline, starts with '{') */
+    ok (flux_conf_update (conf,
+                          "{\"resource\":{\"noverify\":false}}",
+                          &error) == 0,
+        "flux_conf_update inline JSON without newline works");
+    i = 1;
+    ok (flux_conf_unpack (conf,
+                          NULL,
+                          "{s:{s:b}}",
+                          "resource",
+                          "noverify",
+                          &i) == 0 && i == 0,
+        "flux_conf_update inline JSON without newline set expected value");
+
+    /* File: TOML */
+    create_test_file (NULL,
+                      "update_toml",
+                      "toml",
+                      toml_path,
+                      sizeof (toml_path),
+                      "[tab5]\nval = 55\n");
+    ok (flux_conf_update (conf, toml_path, &error) == 0,
+        "flux_conf_update .toml file works");
+    i = 0;
+    ok (flux_conf_unpack (conf, NULL, "{s:{s:i}}", "tab5", "val", &i) == 0
+        && i == 55,
+        "flux_conf_update .toml file set expected value");
+
+    /* File: JSON */
+    create_test_file (NULL,
+                      "update_json",
+                      "json",
+                      json_path,
+                      sizeof (json_path),
+                      "{\"tab6\":{\"val\":66}}");
+    ok (flux_conf_update (conf, json_path, &error) == 0,
+        "flux_conf_update .json file works");
+    i = 0;
+    ok (flux_conf_unpack (conf, NULL, "{s:{s:i}}", "tab6", "val", &i) == 0
+        && i == 66,
+        "flux_conf_update .json file set expected value");
+
+    /* Error: NULL args */
+    errno = 0;
+    ok (flux_conf_update (NULL, "x=1", &error) < 0 && errno == EINVAL,
+        "flux_conf_update conf=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_conf_update (conf, NULL, &error) < 0 && errno == EINVAL,
+        "flux_conf_update value=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_conf_update (conf, "notafile", &error) < 0 && errno == ENOENT,
+        "flux_conf_update value with nonexisting file fails with ENOENT");
+    diag ("%s", error.text);
+
+    /* Error: KEY=VAL with empty key */
+    errno = 0;
+    ok (flux_conf_update (conf, "=foo", &error) < 0 && errno == EINVAL,
+        "flux_conf_update =foo fails with EINVAL");
+    diag ("%s", error.text);
+
+    /* Error: bad inline TOML */
+    errno = 0;
+    ok (flux_conf_update (conf, "bad = \n", &error) < 0,
+        "flux_conf_update bad inline TOML fails");
+    diag ("%s", error.text);
+
+    /* Error: inline value with newline that is not '{'-prefixed fails as TOML */
+    errno = 0;
+    ok (flux_conf_update (conf, "[1,2,3]\n", &error) < 0 && errno == EINVAL,
+        "flux_conf_update inline non-'{' value with newline fails as TOML");
+    diag ("%s", error.text);
+
+    /* Error: starts with '{' but invalid JSON */
+    errno = 0;
+    ok (flux_conf_update (conf, "{bad json}", &error) < 0 && errno == EINVAL,
+        "flux_conf_update invalid inline JSON fails with EINVAL");
+    diag ("%s", error.text);
+
+    /* Error: JSON file that is not an object */
+    create_test_file (NULL,
+                      "update_array",
+                      "json",
+                      array_json_path,
+                      sizeof (array_json_path),
+                      "[1,2,3]");
+    errno = 0;
+    ok (flux_conf_update (conf, array_json_path, &error) < 0 && errno == EINVAL,
+        "flux_conf_update .json file containing array fails with EINVAL");
+    diag ("%s", error.text);
+
+    unlink (toml_path);
+    unlink (json_path);
+    unlink (array_json_path);
+    flux_conf_decref (conf);
+}
+
 void test_pack (void)
 {
     flux_conf_t *conf;
@@ -467,7 +696,8 @@ int main (int argc, char *argv[])
     test_basic (); // flux_conf_parse(), flux_conf_decref(), flux_conf_unpack()
     test_in_handle ();
     test_globerr ();
-    test_pack();
+    test_pack ();
+    test_update ();
 
     done_testing ();
 }
