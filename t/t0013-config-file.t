@@ -696,4 +696,110 @@ test_expect_success CONNTO 'tbon.connect_timeout attr can be set to 0' '
 	test_cmp connto_0.exp connto_attr_0.out
 '
 
+#
+# test --conf option
+#
+test_expect_success '--conf KEY=VAL integer sets broker config' '
+	cat <<-EOF >conf_keyval.exp &&
+	1
+	EOF
+	flux broker ${ARGS} \
+		--conf=tbon.zmqdebug=1 \
+		flux getattr tbon.zmqdebug >conf_keyval.out &&
+	test_cmp conf_keyval.exp conf_keyval.out
+'
+test_expect_success '--conf inline TOML sets broker config' '
+	cat <<-EOF >conf_toml.exp &&
+	1
+	EOF
+	flux broker ${ARGS} \
+		--conf="$(printf "[tbon]\nzmqdebug = 1\n")" \
+		flux getattr tbon.zmqdebug >conf_toml.out &&
+	test_cmp conf_toml.exp conf_toml.out
+'
+test_expect_success '--conf may be specified multiple times' '
+	cat <<-EOF >conf_multi.exp &&
+	1
+	EOF
+	flux broker ${ARGS} \
+		--conf=tbon.zmqdebug=1 \
+		--conf=tbon.zmq_io_threads=1 \
+		flux getattr tbon.zmqdebug >conf_multi.out &&
+	test_cmp conf_multi.exp conf_multi.out
+'
+test_expect_success '--conf overrides --config-path value' '
+	mkdir conf_override &&
+	cat <<-EOF >conf_override/tbon.toml &&
+	[tbon]
+	zmqdebug = 0
+	EOF
+	cat <<-EOF >conf_override.exp &&
+	1
+	EOF
+	flux broker ${ARGS} \
+		-c conf_override \
+		--conf=tbon.zmqdebug=1 \
+		flux getattr tbon.zmqdebug >conf_override.out &&
+	test_cmp conf_override.exp conf_override.out
+'
+test_expect_success '--conf inline JSON sets broker config' '
+	cat <<-EOF >conf_json.exp &&
+	1
+	EOF
+	flux broker ${ARGS} \
+		--conf="{\"tbon\":{\"zmqdebug\":1}}" \
+		flux getattr tbon.zmqdebug >conf_json.out &&
+	test_cmp conf_json.exp conf_json.out
+'
+test_expect_success '--conf TOML file sets broker config' '
+	cat <<-EOF >conf_file.toml &&
+	[tbon]
+	zmqdebug = 1
+	EOF
+	cat <<-EOF >conf_file.exp &&
+	1
+	EOF
+	flux broker ${ARGS} \
+		--conf=conf_file.toml \
+		flux getattr tbon.zmqdebug >conf_file.out &&
+	test_cmp conf_file.exp conf_file.out
+'
+test_expect_success '--conf JSON file sets broker config' '
+	cat <<-EOF >conf_file.json &&
+	{"tbon":{"zmqdebug":1}}
+	EOF
+	cat <<-EOF >conf_json_file.exp &&
+	1
+	EOF
+	flux broker ${ARGS} \
+		--conf=conf_file.json \
+		flux getattr tbon.zmqdebug >conf_json_file.out &&
+	test_cmp conf_json_file.exp conf_json_file.out
+'
+test_expect_success '--conf with invalid value fails' '
+	test_must_fail flux broker ${ARGS} --conf=notafile true
+'
+
+#
+# test flux start passes --conf option through to broker
+#
+test_expect_success 'flux start --conf passes single option to broker' '
+	cat <<-EOF >start_conf.exp &&
+	1
+	EOF
+	flux start ${ARGS} --conf=tbon.zmqdebug=1 \
+		flux getattr tbon.zmqdebug >start_conf.out &&
+	test_cmp start_conf.exp start_conf.out
+'
+test_expect_success 'flux start --conf passes multiple options to broker' '
+	cat <<-EOF >start_conf_multi.exp &&
+	1
+	1
+	EOF
+	flux start ${ARGS} --conf=tbon.zmqdebug=1 --conf=tbon.zmq_io_threads=1 \
+		sh -c "flux getattr tbon.zmqdebug; \
+		       flux getattr tbon.zmq_io_threads" >start_conf_multi.out &&
+	test_cmp start_conf_multi.exp start_conf_multi.out
+'
+
 test_done
