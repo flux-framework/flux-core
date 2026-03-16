@@ -28,6 +28,7 @@ SUBDIRS = \
 	libtaskmap \
 	libfilemap \
 	libsdexec \
+	libsqlite3 \
 	libmissing
 if INTERNAL_LIBEV
 SUBDIRS += libev

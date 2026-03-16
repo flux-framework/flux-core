@@ -17,12 +17,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/statvfs.h>
-#include <sqlite3.h>
 #include <lz4.h>
 #include <flux/core.h>
 #include <jansson.h>
 #include <assert.h>
 
+#include "src/common/libsqlite3/sqlite3.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
