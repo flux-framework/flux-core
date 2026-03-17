@@ -3,6 +3,7 @@ nobase_fluxpy_PYTHON = \
 	kvs.py \
 	wrapper.py \
 	rpc.py \
+	scheduler.py \
 	message.py \
 	constants.py \
 	util.py \
@@ -60,6 +61,9 @@ nobase_fluxpy_PYTHON = \
 	resource/ResourceSetImplementation.py \
 	resource/Rv1Set.py \
 	resource/ResourceSet.py \
+	resource/ResourcePool.py \
+	resource/ResourcePoolImplementation.py \
+	resource/Rv1Pool.py \
 	resource/list.py \
 	resource/status.py \
 	resource/journal.py \
