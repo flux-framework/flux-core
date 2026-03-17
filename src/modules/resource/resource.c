@@ -505,7 +505,6 @@ error:
     resource_config_deinit (&config);
     resource_ctx_destroy (ctx);
     ERRNO_SAFE_WRAP (json_decref, eventlog);
-    ERRNO_SAFE_WRAP (json_decref, config.R);
     return -1;
 }
 
