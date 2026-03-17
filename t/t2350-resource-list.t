@@ -480,6 +480,12 @@ test_expect_success 'flux resource lists no properties in propertiesx (multi)' '
 	flux resource list -o "{state} {nnodes} {propertiesx}" > listpropx_multi.out &&
 	grep "free 4" listpropx_multi.out
 '
+test_expect_success 'flux resource list -q shows only requested queue when node is in multiple queues' '
+	flux resource list -q batch -o "{state} {nnodes} {queue}" >listqueue_multi_q.out &&
+	test_debug "cat listqueue_multi_q.out" &&
+	grep "free 2 batch" listqueue_multi_q.out &&
+	test_must_fail grep -w "all" listqueue_multi_q.out
+'
 test_expect_success 'configure queues and resource with extra property' '
 	flux R encode -r 0-3 -p batch:0-1 -p debug:2-3 -p foo:0-3\
 	   | tr -d "\n" \
