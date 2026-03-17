@@ -35,7 +35,6 @@ ignore_missing_imports = true
     "_flux._security",
     "_flux._hostlist",
     "_flux._idset",
-    "_flux._rlist",
     "_flux.cffi",
     "setuptools",
     "flux.utils",
