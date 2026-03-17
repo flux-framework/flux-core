@@ -499,9 +499,12 @@ def drain_list(args):
 
 
 class ResourceSetExtra(ResourceSet):
-    def __init__(self, arg=None, version=1, flux_config=None, queue=None):
+    def __init__(
+        self, arg=None, version=1, flux_config=None, queue=None, queue_filter=None
+    ):
         self.flux_config = flux_config
         self._queue = queue
+        self._queue_filter = queue_filter
         if isinstance(arg, ResourceSet):
             self._rset = arg
             if arg.state:
@@ -515,12 +518,11 @@ class ResourceSetExtra(ResourceSet):
     @property
     def propertiesx(self):
         properties = json.loads(self.get_properties())
-        queues = self.queue
-        if self.queue:
-            queues = queues.split(",")
-            for q in queues:
-                if q in properties:
-                    properties.pop(q)
+        #  Strip all configured queue names from properties, so that
+        #  properties used only for queue membership are not displayed.
+        if self.flux_config and "queues" in self.flux_config:
+            for q in self.flux_config["queues"]:
+                properties.pop(q, None)
         return ",".join(properties.keys())
 
     @property
@@ -538,6 +540,8 @@ class ResourceSetExtra(ResourceSet):
                 return ""
             properties = json.loads(self.get_properties())
             for key, value in self.flux_config["queues"].items():
+                if self._queue_filter and key not in self._queue_filter:
+                    continue
                 if "requires" not in value or set(value["requires"]).issubset(
                     set(properties)
                 ):
@@ -598,6 +602,12 @@ def resources_uniq_lines(resources, states, formatter, config, queues=None):
 
     fmt = flux.util.OutputFormat(uniq_fmt, headings=formatter.headings)
 
+    #  If specific queues were requested, save them as a filter for
+    #  ResourceSetExtra.queue before expanding 'queues' to the full
+    #  configured queue list below. propertiesx always strips all
+    #  configured queue names regardless of the filter.
+    queue_filter = set(queues) if queues else None
+
     #  Get a list of configured queues if a specific list of queues
     #  was not supplied by the caller. If no queues are configured then
     #  one "anonymous" queue is simulated with [None]
@@ -630,7 +640,7 @@ def resources_uniq_lines(resources, states, formatter, config, queues=None):
             if not rset.ranks:
                 continue
             rset.state = state
-            rset = ResourceSetExtra(rset, flux_config=config)
+            rset = ResourceSetExtra(rset, flux_config=config, queue_filter=queue_filter)
             key = fmt.format(rset)
 
             if key not in lines:

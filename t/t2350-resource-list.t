@@ -553,12 +553,11 @@ test_expect_success 'flux resource lists expected queues in states (every)' '
 '
 test_expect_success 'flux resource list --queue works for a queue with no constraints' '
 	flux resource list --queue=every -o "{state} {nnodes} {queue}" >queue-every.out &&
-	test $(grep "free 1" queue-every.out | grep -c batch) -eq 1 &&
-	test $(grep "free 1" queue-every.out | grep -c debug) -eq 1 &&
-	test $(grep "free 1" queue-every.out | grep -c every) -eq 2 &&
-	test $(grep "allocated 1" queue-every.out | grep -c batch) -eq 1 &&
-	test $(grep "allocated 1" queue-every.out | grep -c debug) -eq 1 &&
-	test $(grep "allocated 1" queue-every.out | grep -c every) -eq 2
+	test_debug "cat queue-every.out" &&
+	grep "free 2 every" queue-every.out &&
+	grep "allocated 2 every" queue-every.out &&
+	test_must_fail grep batch queue-every.out &&
+	test_must_fail grep debug queue-every.out
 '
 test_expect_success 'flux resource list includes queue names for empty sets' '
 	# There are no nodes in 'down' state in this test, so use that:
