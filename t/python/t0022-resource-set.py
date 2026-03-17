@@ -626,6 +626,42 @@ class TestRSet(unittest.TestCase):
         self.assertEqual(result.ngpus, 1)
         self.assertEqual(str(result), "rank0/core[0-3],gpu0")
 
+    def test_to_dict_matches_encode(self):
+        """to_dict() must produce the same result as json.loads(encode())."""
+        rset = ResourceSet(self.R_input)
+        self.assertEqual(rset.to_dict(), json.loads(rset.encode()))
+
+    def test_to_dict_round_trips(self):
+        """ResourceSet constructed from to_dict() must equal the original."""
+        rset = ResourceSet(self.R_input)
+        rset2 = ResourceSet(rset.to_dict())
+        self.assertEqual(str(rset), str(rset2))
+
+    def test_to_dict_round_trips_properties(self):
+        """Properties must survive to_dict() → ResourceSet() round-trip."""
+        rset = ResourceSet(self.R_with_props)
+        rset2 = ResourceSet(rset.to_dict())
+        props = json.loads(rset2.get_properties())
+        self.assertIn("foo", props)
+        self.assertIn("bar", props)
+        self.assertEqual(props["foo"], "0-1")
+        self.assertEqual(props["bar"], "1")
+
+    def test_to_dict_round_trips_nodelist(self):
+        """Nodelist must survive to_dict() → ResourceSet() round-trip."""
+        rset = ResourceSet(self.R_with_props)
+        rset2 = ResourceSet(rset.to_dict())
+        self.assertEqual(str(rset2.nodelist), "node[0-1]")
+
+    def test_to_dict_returns_dict(self):
+        """to_dict() must return a plain Python dict."""
+        rset = ResourceSet(self.R_input)
+        d = rset.to_dict()
+        self.assertIsInstance(d, dict)
+        self.assertEqual(d["version"], 1)
+        self.assertIn("execution", d)
+        self.assertIn("R_lite", d["execution"])
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=TAPTestRunner())

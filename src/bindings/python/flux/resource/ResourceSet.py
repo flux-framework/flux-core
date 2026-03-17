@@ -275,6 +275,10 @@ class ResourceSet:
     def properties(self):
         return ",".join(json.loads(self.get_properties()).keys())
 
+    def to_dict(self):
+        """Return the resource set as a parsed R JSON dict."""
+        return self.impl.to_dict()
+
     @property
     def expiration(self):
         return self.impl.get_expiration()
