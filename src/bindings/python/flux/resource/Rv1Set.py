@@ -525,16 +525,25 @@ class Rv1Set(ResourceSetImplementation):
             return rank in IDset(constraint["ranks"])
 
         if "and" in constraint:
-            return all(
-                self._matches_constraint(rank, info, c) for c in constraint["and"]
-            )
+            ops = constraint["and"]
+            if not isinstance(ops, list):
+                raise ValueError(
+                    f"'and' operand must be a list, got {type(ops).__name__}"
+                )
+            return all(self._matches_constraint(rank, info, c) for c in ops)
 
         if "or" in constraint:
-            return any(
-                self._matches_constraint(rank, info, c) for c in constraint["or"]
-            )
+            ops = constraint["or"]
+            if not isinstance(ops, list):
+                raise ValueError(
+                    f"'or' operand must be a list, got {type(ops).__name__}"
+                )
+            return any(self._matches_constraint(rank, info, c) for c in ops)
 
         if "not" in constraint:
-            return not self._matches_constraint(rank, info, constraint["not"][0])
+            ops = constraint["not"]
+            if not isinstance(ops, list) or len(ops) < 1:
+                raise ValueError(f"'not' operand must be a non-empty list, got {ops!r}")
+            return not self._matches_constraint(rank, info, ops[0])
 
         return True  # unreachable given the known-ops check above

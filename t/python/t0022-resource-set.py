@@ -663,6 +663,105 @@ class TestRSet(unittest.TestCase):
         self.assertIn("R_lite", d["execution"])
 
 
+class TestConstraints(unittest.TestCase):
+    """Tests for RFC 31 constraint matching via copy_constraint().
+
+    Fixture: R_with_props has 2 ranks.
+      rank 0 (node0): property "foo"
+      rank 1 (node1): properties "foo" and "bar"
+    """
+
+    def setUp(self):
+        self.rset = ResourceSet(TestRSet.R_with_props)
+
+    # ------------------------------------------------------------------
+    # Valid constraints
+    # ------------------------------------------------------------------
+
+    def test_properties_match(self):
+        # Both ranks have "foo"; result should contain both.
+        r = self.rset.copy_constraint({"properties": ["foo"]})
+        self.assertEqual(r.nnodes, 2)
+
+    def test_properties_subset(self):
+        # Only rank 1 has "bar".
+        r = self.rset.copy_constraint({"properties": ["bar"]})
+        self.assertEqual(r.nnodes, 1)
+
+    def test_properties_negation(self):
+        # "^bar" means NOT bar — only rank 0 qualifies.
+        r = self.rset.copy_constraint({"properties": ["^bar"]})
+        self.assertEqual(r.nnodes, 1)
+
+    def test_properties_unknown_returns_empty(self):
+        # No rank has property "zzz"; result is empty.
+        r = self.rset.copy_constraint({"properties": ["zzz"]})
+        self.assertEqual(r.nnodes, 0)
+
+    def test_and_constraint(self):
+        # Both "foo" AND "bar" — only rank 1 qualifies.
+        r = self.rset.copy_constraint(
+            {"and": [{"properties": ["foo"]}, {"properties": ["bar"]}]}
+        )
+        self.assertEqual(r.nnodes, 1)
+
+    def test_or_constraint(self):
+        # "foo" OR "bar" — both ranks qualify (rank 0 via foo, rank 1 via both).
+        r = self.rset.copy_constraint(
+            {"or": [{"properties": ["foo"]}, {"properties": ["bar"]}]}
+        )
+        self.assertEqual(r.nnodes, 2)
+
+    def test_not_constraint(self):
+        # NOT "bar" — only rank 0 qualifies.
+        r = self.rset.copy_constraint({"not": [{"properties": ["bar"]}]})
+        self.assertEqual(r.nnodes, 1)
+
+    def test_hostlist_constraint(self):
+        r = self.rset.copy_constraint({"hostlist": "node0"})
+        self.assertEqual(r.nnodes, 1)
+
+    def test_ranks_constraint(self):
+        r = self.rset.copy_constraint({"ranks": "1"})
+        self.assertEqual(r.nnodes, 1)
+
+    def test_constraint_as_json_string(self):
+        # copy_constraint() accepts a JSON string as well as a dict.
+        r = self.rset.copy_constraint('{"properties": ["bar"]}')
+        self.assertEqual(r.nnodes, 1)
+
+    # ------------------------------------------------------------------
+    # Invalid constraint operators
+    # ------------------------------------------------------------------
+
+    def test_unknown_operator_raises(self):
+        # "foo" is not a recognised RFC 31 operator.
+        with self.assertRaises(ValueError):
+            self.rset.copy_constraint({"foo": []})
+
+    # ------------------------------------------------------------------
+    # Invalid operand types for logical operators
+    # ------------------------------------------------------------------
+
+    def test_and_non_list_raises(self):
+        # "and" must be a list; passing a dict must raise ValueError so the
+        # feasibility check rejects the job rather than silently matching all.
+        with self.assertRaises(ValueError):
+            self.rset.copy_constraint({"and": {}})
+
+    def test_or_non_list_raises(self):
+        with self.assertRaises(ValueError):
+            self.rset.copy_constraint({"or": {}})
+
+    def test_not_non_list_raises(self):
+        with self.assertRaises(ValueError):
+            self.rset.copy_constraint({"not": {}})
+
+    def test_not_empty_list_raises(self):
+        with self.assertRaises(ValueError):
+            self.rset.copy_constraint({"not": []})
+
+
 if __name__ == "__main__":
     unittest.main(testRunner=TAPTestRunner())
 
