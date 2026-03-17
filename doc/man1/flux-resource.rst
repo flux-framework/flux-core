@@ -98,7 +98,9 @@ all
 .. option:: -q, --queue=QUEUE,...
 
   Filter results to only include resources in the specified *QUEUE*. Multiple
-  queues may be separated by a comma.
+  queues may be separated by a comma. When this option is used, the
+  ``{queue}`` output field reflects only the specified queues, even if
+  resources belong to additional queues.
 
 .. option:: -i, --include=TARGETS
 
@@ -488,7 +490,8 @@ The following field names can be specified for the **list** subcommand:
    State of node(s): "up", "down", "allocated", "free", "all"
 
 **queue**
-   queue(s) associated with resources.
+   Queue(s) associated with resources. When ``-q, --queue`` is used,
+   only the specified queues are shown.
 
 **properties**
    Properties associated with resources.
