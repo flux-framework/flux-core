@@ -132,6 +132,10 @@ class ResourceRequest:
                 gpu_per_slot = child.get("count", 1)
 
         exclusive = bool(top.get("exclusive", False))
+        # Exclusive allocation is per-node; if nnodes was not specified
+        # (slot-only jobspec), each slot occupies one exclusive node.
+        if exclusive and nnodes == 0:
+            nnodes = nslots
         # RFC 25: in jobspec V1, attributes.system and duration are required.
         system = jobspec.get("attributes", {}).get("system")
         if jobspec.get("version") == 1:
@@ -467,11 +471,6 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             reverse=True,
         )
 
-        # Raise EOVERFLOW for structurally infeasible requests
-        self._check_feasibility(
-            nnodes, nslots, slot_size, exclusive, constraint, gpu_per_slot
-        )
-
         # Greedy selection — each entry is (rank, info, alloc_cores, alloc_gpus)
         selected: List[Tuple[int, dict, frozenset, frozenset]] = []
 
@@ -494,6 +493,9 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                     alloc_gpus = frozenset(sorted(free_gpus)[:need_gpus])
                 selected.append((rank, info, alloc_cores, alloc_gpus))
             if len(selected) < nnodes:
+                self._check_feasibility(
+                    nnodes, nslots, slot_size, exclusive, constraint, gpu_per_slot
+                )
                 raise InsufficientResources("insufficient resources")
         else:
             remaining_slots = nslots
@@ -515,6 +517,9 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                     selected.append((rank, info, alloc_cores, alloc_gpus))
                     remaining_slots -= take
             if remaining_slots > 0:
+                self._check_feasibility(
+                    nnodes, nslots, slot_size, exclusive, constraint, gpu_per_slot
+                )
                 raise InsufficientResources("insufficient resources")
 
         # Build result pool and update allocation state on self

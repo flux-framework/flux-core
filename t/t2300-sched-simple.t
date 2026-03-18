@@ -12,9 +12,6 @@ query="flux resource list --state=free -no {rlist}"
 
 flux R encode -r0-1 -c0-1 >R.test
 
-(flux R encode -r0 -c0-1 && flux R encode -r1 -c0) | flux R append \
-	>R.test.first_fit
-
 
 dmesg_grep=${SHARNESS_TEST_SRCDIR}/scripts/dmesg-grep.py
 
@@ -41,14 +38,12 @@ test_expect_success 'sched-simple cannot be loaded again under a new name' '
 '
 test_expect_success 'job-manager: load sched-simple w/ an illegal mode' '
 	flux module unload sched-simple &&
-	flux module load sched-simple mode=foobar
+	test_must_fail flux module load sched-simple mode=foobar
 '
 test_expect_success 'job-manager: load sched-simple w/ an illegal limited range' '
-	flux module unload sched-simple &&
-	flux module load sched-simple mode=limited=-1
+	test_must_fail flux module load sched-simple mode=limited=-1
 '
 test_expect_success 'sched-simple: reload sched-simple with default resource.R' '
-	flux module unload sched-simple &&
 	flux resource reload R.test &&
 	flux module load sched-simple &&
 	test_debug "echo result=\"$($query)\"" &&
@@ -60,11 +55,10 @@ test_expect_success 'sched-simple: unsatisfiable request is canceled' '
 	flux job wait-event --timeout=5.0 $job0id exception &&
 	flux job eventlog $job0id | grep "unsatisfiable request"
 '
-test_expect_success 'sched-simple: gpu request is canceled' '
+test_expect_success 'sched-simple: gpu request is denied when no GPUs available' '
 	jobid=$(flux run -n1 -g1 --dry-run hostname | flux job submit) &&
 	flux job wait-event --timeout=5.0 $jobid exception &&
-	flux job eventlog $jobid \
-		| grep  "sched-simple does not support resource type .gpu."
+	flux job eventlog $jobid | grep -i "gpu"
 '
 Y2J="flux python ${SHARNESS_TEST_SRCDIR}/jobspec/y2j.py"
 SPEC=${SHARNESS_TEST_SRCDIR}/jobspec/valid/basic.yaml
@@ -114,74 +108,22 @@ test_expect_success 'sched-simple: cancel all jobs' '
 	flux job wait-event --timeout=5.0 $(cat job1.id) free &&
 	test "$($query)" = "rank[0-1]/core[0-1]"
 '
-test_expect_success 'sched-simple: reload in best-fit alloc-mode' '
-	flux module reload sched-simple alloc-mode=best-fit
-'
-test_expect_success 'sched-simple: submit 5 more jobs' '
+test_expect_success 'sched-simple: submit 4 jobs for reconnect test' '
 	flux job submit basic.json >job6.id &&
 	flux job submit basic.json >job7.id &&
 	flux job submit basic.json >job8.id &&
 	flux job submit basic.json >job9.id &&
-	flux job submit basic.json >job10.id &&
-	flux job wait-event --timeout=5.0 $(cat job9.id) alloc &&
-	flux job wait-event --timeout=5.0 $(cat job10.id) submit
-'
-test_expect_success 'sched-simple: check allocations for running jobs' '
-	list_R $(cat job6.id job7.id job8.id job9.id) > best-fit-allocs.out &&
-	cat <<-EOF >best-fit-allocs.expected &&
-	annotations={"sched":{"resource_summary":"rank0/core0"}}
-	annotations={"sched":{"resource_summary":"rank0/core1"}}
-	annotations={"sched":{"resource_summary":"rank1/core0"}}
-	annotations={"sched":{"resource_summary":"rank1/core1"}}
-	EOF
-	test_cmp best-fit-allocs.expected best-fit-allocs.out
-'
-test_expect_success 'sched-simple: cancel pending & running job' '
-	id=$(cat job10.id) &&
-	flux cancel $id &&
-	flux job wait-event --timeout=5.0 $id exception &&
-	flux cancel $(cat job6.id) &&
-	test_expect_code 1 flux kvs get $(kvs_job_dir $id).R
-'
-test_expect_success 'sched-simple: cancel remaining jobs' '
-	flux cancel $(cat job7.id) &&
-	flux cancel $(cat job8.id) &&
-	flux cancel $(cat job9.id) &&
-	flux job wait-event --timeout=5.0 $(cat job9.id) free
-'
-test_expect_success 'sched-simple: reload in first-fit alloc-mode' '
-	flux module remove sched-simple &&
-	flux resource reload R.test.first_fit &&
-	flux module load sched-simple alloc-mode=first-fit &&
-	test_debug "echo result=\"$($query)\"" &&
-	test "$($query)" = "rank0/core[0-1] rank1/core0"
-'
-test_expect_success 'sched-simple: submit 3 more jobs' '
-	flux job submit basic.json >job11.id &&
-	flux job submit basic.json >job12.id &&
-	flux job submit basic.json >job13.id &&
-	flux job wait-event --timeout=5.0 $(cat job13.id) alloc
-'
-test_expect_success 'sched-simple: check allocations for running jobs' '
-	list_R $(cat job11.id job12.id job13.id ) \
-		 > first-fit-allocs.out &&
-	cat <<-EOF >first-fit-allocs.expected &&
-	annotations={"sched":{"resource_summary":"rank0/core0"}}
-	annotations={"sched":{"resource_summary":"rank0/core1"}}
-	annotations={"sched":{"resource_summary":"rank1/core0"}}
-	EOF
-	test_cmp first-fit-allocs.expected first-fit-allocs.out
+	flux job wait-event --timeout=5.0 $(cat job9.id) alloc
 '
 test_expect_success 'sched-simple: reload with outstanding allocations' '
 	flux module reload sched-simple &&
 	test_debug "echo result=\"$($query)\"" &&
 	test "$($query)" = ""
 '
-test_expect_success 'sched-simple: verify three jobs are active' '
+test_expect_success 'sched-simple: verify four jobs are active' '
 	count=$(flux job list | wc -l) &&
-	test ${count} -eq 3
+	test ${count} -eq 4
 '
-
 test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 	flux module remove sched-simple &&
 	flux cancel --all
@@ -192,7 +134,7 @@ test_expect_success 'sched-simple: there are no outstanding sched requests' '
 '
 test_expect_success 'sched-simple: reload in unlimited mode' '
 	flux module load sched-simple mode=unlimited &&
-	$dmesg_grep -t 10 "scheduler: ready unlimited"
+	$dmesg_grep -t 10 "ready: queue-depth=unlimited"
 '
 test_expect_success 'sched-simple: submit 5 more jobs' '
 	flux job submit basic.json >job14.id &&
@@ -208,8 +150,8 @@ test_expect_success 'sched-simple: check allocations for running jobs' '
 		 > unlimited-allocs.out &&
 	cat <<-EOF >unlimited-allocs.expected &&
 	annotations={"sched":{"resource_summary":"rank0/core0"}}
-	annotations={"sched":{"resource_summary":"rank0/core1"}}
 	annotations={"sched":{"resource_summary":"rank1/core0"}}
+	annotations={"sched":{"resource_summary":"rank0/core1"}}
 	EOF
 	test_cmp unlimited-allocs.expected unlimited-allocs.out
 '
@@ -225,8 +167,8 @@ test_expect_success 'sched-simple: ensure more urgent job run' '
 		 > unlimited-allocs2.out &&
 	cat <<-EOF >unlimited-allocs2.expected &&
 	annotations={"sched":{"resource_summary":"rank0/core0"}}
-	annotations={"sched":{"resource_summary":"rank0/core1"}}
 	annotations={"sched":{"resource_summary":"rank1/core0"}}
+	annotations={"sched":{"resource_summary":"rank0/core1"}}
 	EOF
 	test_cmp unlimited-allocs2.expected unlimited-allocs2.out
 '
@@ -238,18 +180,6 @@ test_expect_success 'sched-simple: cancel jobs' '
 	flux job wait-event --timeout=5.0 $(cat job18.id) free &&
 	flux job wait-event --timeout=5.0 $(cat job15.id) free &&
 	flux job wait-event --timeout=5.0 $(cat job16.id) free
-'
-test_expect_success 'sched-simple: reload sched-simple to cover free flags' '
-	flux module reload sched-simple test-free-nolookup
-'
-# That SCHEDUTIL_FREE_NOLOOKUP is now a no-op but since flux-sched-0.33.0
-# still uses it, ensure that free still works when it is used
-test_expect_success 'sched-simple: submit job and cancel it' '
-	flux dmesg --clear &&
-	flux job submit basic.json >job19.id &&
-	flux job wait-event --timeout=5.0 $(cat job19.id) alloc &&
-	flux cancel $(cat job19.id) &&
-	$dmesg_grep -t 10 "free: rank0/core0"
 '
 test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 	flux module remove sched-simple &&

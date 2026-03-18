@@ -37,7 +37,8 @@ libmodule_builtins_la_LDFLAGS = $(san_ld_zdef_flag)
 
 dist_fluxmod_SCRIPTS = \
 	sched-fifo.py \
-	sched-backfill.py
+	sched-backfill.py \
+	sched-simple.py
 
 fluxmod_LTLIBRARIES = \
 	content.la \
@@ -53,7 +54,6 @@ fluxmod_LTLIBRARIES = \
 	kvs.la \
 	kvs-watch.la \
 	resource.la \
-	sched-simple.la \
 	sdmon.la \
 	sdexec.la \
 	sdbus.la
@@ -235,21 +235,6 @@ resource_la_LIBADD = \
 	$(JANSSON_LIBS) \
 	$(HWLOC_LIBS)
 resource_la_LDFLAGS = $(fluxmod_ldflags) -module
-
-sched_simple_la_SOURCES = \
-	sched-simple/sched.c
-sched_simple_la_CPPFLAGS = \
-	$(AM_CPPFLAGS) \
-	$(HWLOC_CFLAGS)
-sched_simple_la_LIBADD = \
-	$(top_builddir)/src/common/librlist/librlist.la \
-	$(top_builddir)/src/common/libschedutil/libschedutil.la \
-	$(top_builddir)/src/common/libjob/libjob.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux-optparse.la \
-	$(JANSSON_LIBS)
-sched_simple_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 sdmon_la_SOURCES = \
 	sdmon/sdmon.c

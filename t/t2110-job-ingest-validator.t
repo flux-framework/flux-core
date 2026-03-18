@@ -143,7 +143,7 @@ test_expect_success 'job-ingest: feasibility check succeeds with ENOSYS' '
 test_expect_success 'job-ingest: infeasible jobs are now rejected' '
 	test_must_fail flux submit -g 1 hostname 2>infeasible1.err &&
 	test_debug "cat infeasible1.err" &&
-	grep -i "unsupported resource type" infeasible1.err &&
+	grep -i "unsatisfiable request" infeasible1.err &&
 	test_must_fail flux submit -n 10000 hostname 2>infeasible2.err &&
 	test_debug "cat infeasible2.err" &&
 	grep "unsatisfiable request" infeasible2.err &&
