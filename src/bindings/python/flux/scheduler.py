@@ -790,7 +790,7 @@ class Scheduler(BrokerModule):
             self._sched_ready()
         except OSError as exc:
             self.log(syslog.LOG_ERR, f"initialization failed: {exc}")
-            return
+            raise
         super().run()
 
     # ------------------------------------------------------------------
