@@ -132,6 +132,10 @@ class ResourceRequest:
                 gpu_per_slot = child.get("count", 1)
 
         exclusive = bool(top.get("exclusive", False))
+        # Exclusive allocation is per-node; if nnodes was not specified
+        # (slot-only jobspec), each slot occupies one exclusive node.
+        if exclusive and nnodes == 0:
+            nnodes = nslots
         # RFC 25: in jobspec V1, attributes.system and duration are required.
         system = jobspec.get("attributes", {}).get("system")
         if jobspec.get("version") == 1:

@@ -874,6 +874,27 @@ class TestFromJobspec(unittest.TestCase):
                 rr = pool.parse_resource_request(self.NON_V1_NO_SYSTEM)
                 self.assertAlmostEqual(rr.duration, 0.0)
 
+    def test_exclusive_slot_jobspec_normalizes_nnodes(self):
+        """slot-only jobspec with exclusive=True → nnodes set to nslots."""
+        jobspec = {
+            "version": 1,
+            "resources": [
+                {
+                    "type": "slot",
+                    "count": 3,
+                    "exclusive": True,
+                    "with": [{"type": "core", "count": 1}],
+                }
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 60.0}},
+        }
+        for pool in self._pools():
+            with self.subTest(pool=type(pool).__name__):
+                req = pool.parse_resource_request(jobspec)
+                self.assertEqual(req.nnodes, req.nslots)
+                self.assertTrue(req.exclusive)
+
     def test_empty_constraints_dict_treated_as_none(self):
         """Empty constraints dict {} (sent by queue-update plugin) → constraint=None."""
         jobspec = {
