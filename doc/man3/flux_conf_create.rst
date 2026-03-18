@@ -28,6 +28,10 @@ SYNOPSIS
 
   flux_conf_t *flux_conf_parse (const char *path, flux_error_t *error);
 
+  int flux_conf_update (flux_conf_t *conf,
+                        const char *value,
+                        flux_error_t *error);
+
 Link with :command:`-lflux-core`.
 
 DESCRIPTION
@@ -53,6 +57,30 @@ and destroys it when the count reaches zero.
 :func:`flux_conf_parse` parse a TOML configuration file at :var:`path`
 and creates a config object that contains the result.
 
+:func:`flux_conf_update` updates :var:`conf` in place from :var:`value`.
+The format of :var:`value` is determined as follows:
+
+``KEY=VAL``
+  If :var:`value` contains ``=``, set the configuration key at the dotted
+  path :var:`KEY` to :var:`VAL`. :var:`VAL` is parsed as JSON; if it is
+  not valid JSON, it is treated as a plain string. Note: file paths
+  containing ``=`` are interpreted as KEY=VAL rather than as file names.
+
+inline JSON object
+  If :var:`value` starts with ``{``, it is parsed as an inline JSON object
+  and merged into :var:`conf`.
+
+inline TOML string
+  If :var:`value` contains a newline (and does not start with ``{``), it is
+  parsed as an inline TOML string and merged into :var:`conf`.
+
+path ending in ``.json``
+  Parse the file at :var:`value` as JSON and merge the result into
+  :var:`conf`.
+
+any other string
+  Treated as a path to a TOML file.
+
 ENCODING JSON PAYLOADS
 ======================
 
@@ -73,8 +101,12 @@ On error, NULL is returned, and :var:`errno` is set.
 :func:`flux_conf_unpack` returns 0 on success, or -1 on failure with
 :var:`errno` set.
 
-:func:`flux_conf_parse` returns 0 on success.  On error, it returns -1,
-:var:`errno` set, and if :var:`error` is non-NULL, it is filled with
+:func:`flux_conf_parse` returns a :type:`flux_conf_t` object on success.
+On error, NULL is returned, :var:`errno` is set, and if :var:`error` is
+non-NULL, it is filled with a human readable error message.
+
+:func:`flux_conf_update` returns 0 on success.  On error, it returns -1,
+:var:`errno` is set, and if :var:`error` is non-NULL, it is filled with
 a human readable error message.
 
 ERRORS
