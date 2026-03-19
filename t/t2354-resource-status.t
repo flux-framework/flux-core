@@ -76,4 +76,20 @@ test_expect_success 'flux-resource status works after partial release' '
 test_expect_success 'stop housekeeping tasks' '
 	flux housekeeping kill --all
 '
+# issue#7465:
+get_resource_status() {
+        flux python -c "import flux; import json; print(json.dumps(flux.Flux().rpc(\"resource.status\").get()))"
+}
+test_expect_success 'add the optional Rv1 scheduling key to R' "
+	flux module unload sched-simple &&
+	flux kvs get resource.R | jq  '.scheduling = {foo:42}' >R_scheduling &&
+	flux resource reload R_scheduling &&
+	flux module load sched-simple &&
+	flux kvs get resource.R | jq -e '.scheduling'
+"
+test_expect_success 'resource.status RPC filters out R.scheduling' "
+	get_resource_status | jq -e '.R' >R.out &&
+	test_must_fail jq -e '.scheduling' R.out
+"
+
 test_done
