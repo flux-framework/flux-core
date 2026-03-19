@@ -92,6 +92,7 @@ struct jobinfo {
 
     int                   reattach;      /* job-manager reattach attempt */
     int                   wait_status;
+    int                   exception_wait_status; /* from exception event, or -1 */
 
     struct eventlogger *  ev;           /* event batcher */
 

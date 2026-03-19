@@ -90,6 +90,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/wait.h>
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -198,6 +199,7 @@ static struct jobinfo * jobinfo_new (void)
 {
     struct jobinfo *job = calloc (1, sizeof (*job));
     job->refcount = 1;
+    job->exception_wait_status = -1;
     return job;
 }
 
@@ -391,8 +393,12 @@ static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
     flux_t *h = job->ctx->h;
     job->running = 0;
 
-    if (job->exception_in_progress && job->wait_status == 0)
-        job->wait_status = 1<<8;
+    if (job->exception_in_progress) {
+        if (job->exception_wait_status >= 0)
+            job->wait_status = job->exception_wait_status;
+        else if (job->wait_status == 0)
+            job->wait_status = 1<<8;
+    }
 
     if (h && job->req) {
         jobinfo_emit_event_pack_nowait (job, "complete",
@@ -1411,15 +1417,17 @@ static void exception_cb (flux_t *h,
     struct job_exec_ctx *ctx = arg;
     flux_jobid_t id;
     int severity = 0;
+    int wait_status = -1;
     const char *type = NULL;
     struct jobinfo *job = NULL;
 
     if (flux_event_unpack (msg,
                            NULL,
-                           "{s:I s:s s:i}",
+                           "{s:I s:s s:i s?i}",
                            "id", &id,
                            "type", &type,
-                           "severity", &severity) < 0) {
+                           "severity", &severity,
+                           "wait_status", &wait_status) < 0) {
         flux_log_error (h, "job-exception event");
         return;
     }
@@ -1437,6 +1445,17 @@ static void exception_cb (flux_t *h,
          *   doesn't dump a duplicate exception into the eventlog.
          */
         job->exception_in_progress = 1;
+        /*  If the exception includes a task wait_status, convert it to
+         *  shell exit status form and record it for use in jobinfo_complete().
+         */
+        if (wait_status >= 0) {
+            int exit_code;
+            if (WIFSIGNALED (wait_status))
+                exit_code = 128 + WTERMSIG (wait_status);
+            else
+                exit_code = WEXITSTATUS (wait_status);
+            job->exception_wait_status = exit_code << 8;
+        }
         flux_log (h, LOG_DEBUG, "exec aborted: id=%s", idf58 (id));
         jobinfo_fatal_error (job, 0, "aborted due to exception type=%s", type);
     }
