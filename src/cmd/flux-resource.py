@@ -506,7 +506,7 @@ def drain_list(args):
 
 
 class ResourceSetExtra(ResourceSet):
-    def __init__(
+    def __init__(  # lgtm[py/missing-call-to-init]
         self,
         arg=None,
         version=1,
