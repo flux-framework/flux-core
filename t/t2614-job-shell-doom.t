@@ -59,6 +59,22 @@ test_expect_success 'flux-shell: exit-on-error catches lost shell' '
 	test_must_fail run_timeout 30 flux run \
 		-n2 -N2 -o exit-on-error ./test2.sh
 '
+test_expect_success 'flux-shell: create script - rank 1 kills itself with SIGSEGV' '
+	cat >sigtest.sh <<-"EOT" &&
+	#!/bin/sh
+	test $FLUX_TASK_RANK -eq 1 && kill -SEGV $$
+	sleep 30
+	EOT
+	chmod +x sigtest.sh
+'
+test_expect_success 'flux-shell: exit-on-error preserves failing task signal in finish status' '
+	jobid=$(flux submit -n2 -o exit-on-error ./sigtest.sh) &&
+	flux job wait-event -t 30 $jobid finish | grep "status=35584"
+'
+test_expect_success 'flux-shell: exit-timeout preserves failing task signal in finish status' '
+	jobid=$(flux submit -n2 -o exit-timeout=1s ./sigtest.sh) &&
+	flux job wait-event -t 30 $jobid finish | grep "status=35584"
+'
 test_expect_success 'flux-shell: exit-timeout=aaa is rejected' '
 	test_must_fail flux run -o exit-timeout=aaa true
 '
