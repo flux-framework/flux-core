@@ -522,11 +522,18 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                 )
                 raise InsufficientResources("insufficient resources")
 
+        # Compute actual allocated slot count for storage in R.
+        if nnodes > 0:
+            actual_nslots = slots_per_node * len(selected)
+        else:
+            actual_nslots = allocated_slots
+
         # Build result pool and update allocation state on self
         result = object.__new__(Rv1Pool)
         result._expiration = 0.0
         result._starttime = 0.0
         result._has_nodelist = True
+        result._nslots = actual_nslots
         result._properties = {}
         result._ranks = {}
         result._job_state = {}

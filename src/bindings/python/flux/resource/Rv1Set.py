@@ -113,6 +113,7 @@ class Rv1Set(ResourceSetImplementation):
         execution = arg.get("execution", {})
         self._expiration = float(execution.get("expiration") or 0.0)
         self._starttime = float(execution.get("starttime") or 0.0)
+        self._nslots: int = int(execution.get("nslots") or 0)
 
         # Track whether the input included a nodelist so _build_dict can
         # round-trip it faithfully (nodelist is a Flux extension, not in RFC 20).
@@ -451,6 +452,8 @@ class Rv1Set(ResourceSetImplementation):
             "starttime": self._starttime,
             "expiration": self._expiration,
         }
+        if getattr(self, "_nslots", 0) > 0:
+            execution["nslots"] = self._nslots
 
         if getattr(self, "_has_nodelist", False):
             hostnames = [info["hostname"] for _, info in sorted(self._ranks.items())]
