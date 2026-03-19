@@ -56,6 +56,22 @@ static void invalidate_cache (struct status_cache *cache, bool all)
     cache->R_down = NULL;
 }
 
+/* Make a thin copy of 'o' without top level 'key'.
+ * The caller must free, but since it is a thin copy of a const object,
+ * the caller must not modify deep keys.
+ */
+static json_t *thin_copy_del (const json_t *o, const char *key)
+{
+    json_t *cpy;
+
+    if (!(cpy = json_copy ((json_t *)o))) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    (void)json_object_del (cpy, key);
+    return cpy;
+}
+
 static json_t *prepare_status_payload (struct status *status)
 {
     struct resource_ctx *ctx = status->ctx;
@@ -63,13 +79,15 @@ static json_t *prepare_status_payload (struct status *status)
     const struct idset *torpid = monitor_get_torpid (ctx->monitor);
     const struct idset *exclude = exclude_get (ctx->exclude);
     const json_t *R;
+    json_t *R_cpy = NULL;
     json_t *o = NULL;
     json_t *drain_info = NULL;
 
     if (!(R = inventory_get (ctx->inventory))
+        || !(R_cpy = thin_copy_del (R, "scheduling"))
         || !(drain_info = drain_get_info (ctx->drain)))
         goto error;
-    if (!(o = json_pack ("{s:O s:O}", "R", R, "drain", drain_info))) {
+    if (!(o = json_pack ("{s:O s:O}", "R", R_cpy, "drain", drain_info))) {
         errno = ENOMEM;
         goto error;
     }
@@ -78,9 +96,11 @@ static json_t *prepare_status_payload (struct status *status)
         || rutil_set_json_idset (o, "exclude", exclude) < 0
         || rutil_set_json_idset (o, "torpid", torpid) < 0)
         goto error;
+    json_decref (R_cpy);
     json_decref (drain_info);
     return o;
 error:
+    ERRNO_SAFE_WRAP (json_decref, R_cpy);
     ERRNO_SAFE_WRAP (json_decref, o);
     ERRNO_SAFE_WRAP (json_decref, drain_info);
     return NULL;
@@ -290,12 +310,8 @@ static struct rlist *create_rlist (const json_t *R,
     json_t *cpy;
     struct rlist *rl;
 
-    if (!(cpy = json_copy ((json_t *)R))) { // thin copy - to del top level key
-        errno = ENOMEM;
+    if (!(cpy = thin_copy_del (R, "scheduling")))
         return NULL;
-    }
-    (void)json_object_del (cpy, "scheduling");
-
     if (!(rl = rlist_from_json (cpy, NULL)))
         goto error;
 
