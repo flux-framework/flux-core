@@ -202,4 +202,15 @@ test_expect_success FLUX_SECURITY \
 	flux job wait-event -vHt 15s $jobid clean &&
 	flux job status -vvv $jobid
 '
+test_expect_success 'job-exec: exception wait_status overrides finish status' '
+	jobid=$(flux submit \
+	    --setattr=system.exec.test.run_duration=30s hostname) &&
+	flux job wait-event -t 5 $jobid start &&
+	jid=$(flux job id --to=dec $jobid) &&
+	printf "{\"id\":%s,\"severity\":0,\"type\":\"test\",\"wait_status\":11}" $jid |
+	    ${RPC} job-manager.raise &&
+	flux job wait-event -t 5 $jobid finish | grep status=35584 &&
+	flux job wait-event -t 5 $jobid clean
+'
+
 test_done
