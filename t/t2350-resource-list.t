@@ -633,6 +633,54 @@ test_expect_success 'flux resource list rejects invalid hidden-queues config' '
 	test_debug "cat bad-config.err" &&
 	grep "hidden-queues" bad-config.err
 '
+test_expect_success 'setup config with hidden-queues and custom format in same file' '
+	mkdir -p combo-config/flux &&
+	cat <<-EOF >combo-config/flux/flux-resource.toml
+	[list]
+	hidden-queues = ["every"]
+	[list.formats.myformat]
+	description = "test format"
+	format = "{state} {nnodes} {queue}"
+	EOF
+'
+test_expect_success 'list.hidden-queues and list.formats can coexist in same config file' '
+	XDG_CONFIG_HOME=$(pwd)/combo-config \
+		flux resource list -o "{state} {nnodes} {queue}" \
+		>combo-hidden.out &&
+	test_debug "cat combo-hidden.out" &&
+	test_must_fail grep -w every combo-hidden.out &&
+	XDG_CONFIG_HOME=$(pwd)/combo-config \
+		flux resource list -o myformat \
+		>combo-format.out &&
+	test_debug "cat combo-format.out" &&
+	grep batch combo-format.out
+'
+test_expect_success 'setup split config: hidden-queues in one file, format in another' '
+	mkdir -p split-hidden-config/flux split-format-config/flux &&
+	cat <<-EOF >split-hidden-config/flux/flux-resource.toml &&
+	[list]
+	hidden-queues = ["every"]
+	EOF
+	cat <<-EOF >split-format-config/flux/flux-resource.toml
+	[list.formats.myformat2]
+	description = "test format 2"
+	format = "{state} {nnodes} {queue}"
+	EOF
+'
+test_expect_success 'list.hidden-queues not overwritten when format added in separate config' '
+	XDG_CONFIG_HOME=$(pwd)/split-format-config \
+	XDG_CONFIG_DIRS=$(pwd)/split-hidden-config \
+		flux resource list -o "{state} {nnodes} {queue}" \
+		>split-hidden.out &&
+	test_debug "cat split-hidden.out" &&
+	test_must_fail grep -w every split-hidden.out &&
+	XDG_CONFIG_HOME=$(pwd)/split-format-config \
+	XDG_CONFIG_DIRS=$(pwd)/split-hidden-config \
+		flux resource list -o myformat2 \
+		>split-format.out &&
+	test_debug "cat split-format.out" &&
+	grep batch split-format.out
+'
 test_expect_success 'cleanup jobs' '
 	flux cancel $(cat job2A.id) $(cat job2B.id)
 '
