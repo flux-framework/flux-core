@@ -59,6 +59,7 @@ struct shell_doom {
     bool exit_on_error;
     int exit_rc;
     int exit_rank;
+    int exit_wait_status; // raw POSIX wait_status of failing task, -1 if unknown
     bool lost_shell;
 };
 
@@ -104,6 +105,21 @@ static const char *get_jobspec_command_arg0 (struct shell_doom *doom)
     return basename_simple (json_string_value (s));
 }
 
+static void doom_fatal (struct shell_doom *doom, const char *fmt, ...)
+    __attribute__ ((format (printf, 2, 3)));
+
+static void doom_fatal (struct shell_doom *doom, const char *fmt, ...)
+{
+    char note [4096];
+    va_list ap;
+
+    va_start (ap, fmt);
+    vsnprintf (note, sizeof (note), fmt, ap);
+    va_end (ap);
+    flux_shell_raise_exit_status (doom->exit_wait_status, "%s", note);
+    shell_die (doom->exit_rc, "%s", note);
+}
+
 static void doom_check (struct shell_doom *doom,
                         int rank,
                         int exitcode,
@@ -125,12 +141,12 @@ static void doom_check (struct shell_doom *doom,
     doom->hl = hostlist_copy (flux_shell_get_hostlist (doom->shell));
 
     if (doom->exit_on_error && doom->exit_rc != 0) {
-        shell_die (doom->exit_rc,
-                   "%s: %s rank %d on host %s failed and exit-on-error is set",
-                   get_jobspec_command_arg0 (doom),
-                   doom->lost_shell ? "shell" : "task",
-                   doom->exit_rank,
-                   doom_exit_host (doom));
+        doom_fatal (doom,
+                    "%s: %s rank %d on host %s failed and exit-on-error is set",
+                    get_jobspec_command_arg0 (doom),
+                    doom->lost_shell ? "shell" : "task",
+                    doom->exit_rank,
+                    doom_exit_host (doom));
     }
     else if (doom->timeout != TIMEOUT_NONE)
         flux_watcher_start (doom->timer);
@@ -158,6 +174,8 @@ static void doom_post (struct shell_doom *doom, json_t *task_info)
         || !(f = flux_kvs_commit (doom->shell->h, NULL, 0, txn)))
         shell_log_errno ("error posting task-exit eventlog entry");
 
+    if (json_unpack (task_info, "{s:i}", "wait_status", &doom->exit_wait_status) < 0)
+        doom->exit_wait_status = -1;
     doom_check (doom,
                 get_exit_rank (task_info),
                 get_exit_code (task_info),
@@ -214,13 +232,13 @@ static void doom_timeout (flux_reactor_t *r,
     char fsd[64];
 
     fsd_format_duration (fsd, sizeof (fsd), doom->timeout);
-    shell_die (doom->exit_rc,
-               "%s: %s rank %d on host %s exited and exit-timeout=%s has expired",
-               get_jobspec_command_arg0 (doom),
-               doom->lost_shell ? "shell" : "task",
-               doom->exit_rank,
-               doom_exit_host (doom),
-               fsd);
+    doom_fatal (doom,
+                "%s: %s rank %d on host %s exited and exit-timeout=%s has expired",
+                get_jobspec_command_arg0 (doom),
+                doom->lost_shell ? "shell" : "task",
+                doom->exit_rank,
+                doom_exit_host (doom),
+                fsd);
 }
 
 static int doom_task_exit (flux_plugin_t *p,
@@ -321,6 +339,7 @@ static struct shell_doom *doom_create (flux_shell_t *shell)
         return NULL;
     doom->shell = shell;
     doom->timeout = default_timeout;
+    doom->exit_wait_status = -1;
     if (parse_args (shell, &doom->timeout, &doom->exit_on_error) < 0)
         goto error;
     if (shell->info->shell_rank == 0) {
