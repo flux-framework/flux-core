@@ -52,6 +52,10 @@ from flux.resource.ResourcePoolImplementation import (
 )
 from flux.resource.Rv1Set import Rv1Set
 
+# Sentinel meaning "nnodes_max / nslots_max not given — same as min (fixed count)".
+# Callers that want an unbounded range pass None explicitly.
+_NO_MAX = object()
+
 
 class ResourceRequest:
     """Parsed resource request extracted from a V1 jobspec.
@@ -63,7 +67,13 @@ class ResourceRequest:
 
     Attributes:
         nnodes (int): Minimum node count; 0 means any layout.
-        nslots (int): Total slot count.
+        nnodes_max (int | None): Maximum node count for RFC 14 range requests.
+            Equal to *nnodes* for a fixed count; greater for a bounded range
+            ``[nnodes, nnodes_max]``; ``None`` for an unbounded range (take as
+            many as are available, subject to *nnodes* minimum).
+        nslots (int): Minimum total slot count.
+        nslots_max (int | None): Maximum total slot count; same semantics as
+            *nnodes_max*.  Used only when *nnodes* is 0 (slot-only layout).
         slot_size (int): Cores per slot.
         gpu_per_slot (int): GPUs per slot.
         duration (float): Walltime in seconds; 0.0 means unlimited.
@@ -73,7 +83,9 @@ class ResourceRequest:
 
     __slots__ = (
         "nnodes",
+        "nnodes_max",
         "nslots",
+        "nslots_max",
         "slot_size",
         "gpu_per_slot",
         "duration",
@@ -82,15 +94,54 @@ class ResourceRequest:
     )
 
     def __init__(
-        self, nnodes, nslots, slot_size, gpu_per_slot, duration, constraint, exclusive
+        self,
+        nnodes,
+        nslots,
+        slot_size,
+        gpu_per_slot,
+        duration,
+        constraint,
+        exclusive,
+        nnodes_max=_NO_MAX,
+        nslots_max=_NO_MAX,
     ):
         self.nnodes = nnodes
+        self.nnodes_max = nnodes if nnodes_max is _NO_MAX else nnodes_max
         self.nslots = nslots
+        self.nslots_max = nslots if nslots_max is _NO_MAX else nslots_max
         self.slot_size = slot_size
         self.gpu_per_slot = gpu_per_slot
         self.duration = duration
         self.constraint = constraint
         self.exclusive = exclusive
+
+    @staticmethod
+    def _parse_count(v, default=1):
+        """Parse an RFC 14 count value and return ``(min_val, max_val)``.
+
+        *max_val* equals *min_val* for a fixed count, is greater for a bounded
+        range, or is ``None`` for an unbounded range.
+
+        Supported forms (as received from a JSON-parsed jobspec):
+
+        - Integer: ``4`` → ``(4, 4)``
+        - Range dict: ``{"min": 2, "max": 8}`` → ``(2, 8)``
+        - Unbounded dict: ``{"min": 2}`` → ``(2, None)``
+        """
+        if isinstance(v, int):
+            return v, v
+        if isinstance(v, dict):
+            operator = v.get("operator", "+")
+            operand = int(v.get("operand", 1))
+            if operator != "+" or operand != 1:
+                raise ValueError(
+                    f"RFC 14 range operator={operator!r} operand={operand}"
+                    " is not yet supported"
+                )
+            mn = int(v.get("min", default))
+            mx = v.get("max")
+            return mn, (int(mx) if mx is not None else None)
+        return default, default
 
     @classmethod
     def from_jobspec(cls, jobspec):
@@ -100,6 +151,10 @@ class ResourceRequest:
 
         - ``node → slot → core[+gpu]``  (``flux submit -N<n> ...``)
         - ``slot → core[+gpu]``          (``flux submit -n<n> ...``)
+
+        RFC 14 range counts (``{"min": M, "max": N}``) on the
+        top-level resource are fully supported: the scheduler allocates as many
+        resources as available up to the maximum.
 
         Raises:
             ValueError: If the jobspec cannot be parsed.
@@ -111,14 +166,19 @@ class ResourceRequest:
         top = resources[0]
         rtype = top.get("type")
         if rtype == "node":
-            nnodes = top.get("count", 1)
+            nnodes, nnodes_max = cls._parse_count(top.get("count", 1))
             slot = top["with"][0]
-            nslots_per_node = slot.get("count", 1)
+            nslots_per_node, _ = cls._parse_count(slot.get("count", 1))
             nslots = nslots_per_node * nnodes
+            # nslots_max scales with nnodes_max; unbounded nnodes → unbounded nslots
+            nslots_max = (
+                nslots_per_node * nnodes_max if nnodes_max is not None else None
+            )
             slot_children = slot["with"]
         elif rtype == "slot":
             nnodes = 0
-            nslots = top.get("count", 1)
+            nnodes_max = 0  # fixed (slot-only form has no node count)
+            nslots, nslots_max = cls._parse_count(top.get("count", 1))
             slot_children = top["with"]
         else:
             raise ValueError(f"unsupported top-level resource type: {rtype!r}")
@@ -127,15 +187,17 @@ class ResourceRequest:
         gpu_per_slot = 0
         for child in slot_children:
             if child.get("type") == "core":
-                slot_size = child.get("count", 1)
+                slot_size, _ = cls._parse_count(child.get("count", 1))
             elif child.get("type") == "gpu":
-                gpu_per_slot = child.get("count", 1)
+                gpu_per_slot, _ = cls._parse_count(child.get("count", 1))
 
         exclusive = bool(top.get("exclusive", False))
         # Exclusive allocation is per-node; if nnodes was not specified
         # (slot-only jobspec), each slot occupies one exclusive node.
         if exclusive and nnodes == 0:
             nnodes = nslots
+            nnodes_max = nslots_max
+            nslots_max = nslots  # nslots is fixed; range is expressed via nnodes_max
         # RFC 25: in jobspec V1, attributes.system and duration are required.
         system = jobspec.get("attributes", {}).get("system")
         if jobspec.get("version") == 1:
@@ -154,6 +216,8 @@ class ResourceRequest:
             float(duration),
             constraint,
             exclusive,
+            nnodes_max=nnodes_max if nnodes_max != nnodes else _NO_MAX,
+            nslots_max=nslots_max if nslots_max != nslots else _NO_MAX,
         )
 
     @property
@@ -475,9 +539,12 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
         selected: List[Tuple[int, dict, frozenset, frozenset]] = []
 
         if nnodes > 0:
-            slots_per_node = nslots // nnodes
+            nnodes_min = nnodes
+            # nnodes_max: same as min → fixed; larger → bounded range; None → unbounded
+            nnodes_target = request.nnodes_max
+            slots_per_node = nslots // nnodes_min
             for rank, info, free_cores, free_gpus in candidates:
-                if len(selected) >= nnodes:
+                if nnodes_target is not None and len(selected) >= nnodes_target:
                     break
                 if exclusive:
                     if len(free_cores) < len(info["cores"]):
@@ -492,15 +559,17 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                     alloc_cores = frozenset(sorted(free_cores)[:need_cores])
                     alloc_gpus = frozenset(sorted(free_gpus)[:need_gpus])
                 selected.append((rank, info, alloc_cores, alloc_gpus))
-            if len(selected) < nnodes:
+            if len(selected) < nnodes_min:
                 self._check_feasibility(
-                    nnodes, nslots, slot_size, exclusive, constraint, gpu_per_slot
+                    nnodes_min, nslots, slot_size, exclusive, constraint, gpu_per_slot
                 )
                 raise InsufficientResources("insufficient resources")
         else:
-            remaining_slots = nslots
+            nslots_min = nslots
+            nslots_target = request.nslots_max  # None → unbounded
+            allocated_slots = 0
             for rank, info, free_cores, free_gpus in candidates:
-                if remaining_slots <= 0:
+                if nslots_target is not None and allocated_slots >= nslots_target:
                     break
                 free_core_slots = len(free_cores) // slot_size
                 if gpu_per_slot > 0:
@@ -508,17 +577,20 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                     free_slots = min(free_core_slots, free_gpu_slots)
                 else:
                     free_slots = free_core_slots
-                take = min(free_slots, remaining_slots)
+                if nslots_target is not None:
+                    take = min(free_slots, nslots_target - allocated_slots)
+                else:
+                    take = free_slots  # unbounded: take all available on this node
                 if take > 0:
                     ncores_take = take * slot_size
                     ngpus_take = take * gpu_per_slot
                     alloc_cores = frozenset(sorted(free_cores)[:ncores_take])
                     alloc_gpus = frozenset(sorted(free_gpus)[:ngpus_take])
                     selected.append((rank, info, alloc_cores, alloc_gpus))
-                    remaining_slots -= take
-            if remaining_slots > 0:
+                    allocated_slots += take
+            if allocated_slots < nslots_min:
                 self._check_feasibility(
-                    nnodes, nslots, slot_size, exclusive, constraint, gpu_per_slot
+                    nnodes, nslots_min, slot_size, exclusive, constraint, gpu_per_slot
                 )
                 raise InsufficientResources("insufficient resources")
 
