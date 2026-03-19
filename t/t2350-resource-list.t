@@ -597,6 +597,42 @@ test_expect_success 'flux resource list includes queue names for empty sets (mul
 	grep "debug down 0" queue-batch,debug-down.out &&
 	grep "batch down 0" queue-batch,debug-down.out
 '
+test_expect_success 'setup hidden-queues config' '
+	mkdir -p hidden-config/flux &&
+	cat <<-EOF >hidden-config/flux/flux-resource.toml
+	[list]
+	hidden-queues = ["every"]
+	EOF
+'
+test_expect_success 'flux resource list hidden-queues suppresses queue' '
+	XDG_CONFIG_HOME=$(pwd)/hidden-config \
+		flux resource list -o "{state} {nnodes} {queue}" \
+		>hidden-queues.out &&
+	test_debug "cat hidden-queues.out" &&
+	test_must_fail grep -w every hidden-queues.out &&
+	grep batch hidden-queues.out &&
+	grep debug hidden-queues.out
+'
+test_expect_success 'flux resource list -q shows hidden queue when explicitly requested' '
+	XDG_CONFIG_HOME=$(pwd)/hidden-config \
+		flux resource list -q every \
+		-o "{state} {nnodes} {queue}" >hidden-q-every.out &&
+	test_debug "cat hidden-q-every.out" &&
+	grep -w every hidden-q-every.out &&
+	test_must_fail grep -w batch hidden-q-every.out &&
+	test_must_fail grep -w debug hidden-q-every.out
+'
+test_expect_success 'flux resource list rejects invalid hidden-queues config' '
+	mkdir -p bad-config/flux &&
+	cat <<-EOF >bad-config/flux/flux-resource.toml &&
+	[list]
+	hidden-queues = "not-a-list"
+	EOF
+	test_must_fail env XDG_CONFIG_HOME=$(pwd)/bad-config \
+		flux resource list 2>bad-config.err &&
+	test_debug "cat bad-config.err" &&
+	grep "hidden-queues" bad-config.err
+'
 test_expect_success 'cleanup jobs' '
 	flux cancel $(cat job2A.id) $(cat job2B.id)
 '
