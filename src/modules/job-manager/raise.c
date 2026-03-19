@@ -65,16 +65,18 @@ int raise_check_severity (int severity)
     return 0;
 }
 
-int raise_job_exception (struct job_manager *ctx,
-                         struct job *job,
-                         const char *type,
-                         int severity,
-                         uint32_t userid,
-                         const char *note)
+static int raise_job_exception_ex (struct job_manager *ctx,
+                                    struct job *job,
+                                    const char *type,
+                                    int severity,
+                                    uint32_t userid,
+                                    const char *note,
+                                    int wait_status)
 {
     flux_jobid_t id = job->id;
     flux_future_t *f;
     json_t *evctx;
+    json_t *pub;
 
     // if no note specified, set to empty string per RFC21
     if (!note)
@@ -94,18 +96,42 @@ int raise_job_exception (struct job_manager *ctx,
             goto nomem;
         }
     }
+    // add optional wait_status key
+    if (wait_status >= 0) {
+        json_t *val;
+        if (!(val = json_integer (wait_status))
+            || json_object_set_new (evctx, "wait_status", val) < 0) {
+            json_decref (val);
+            goto nomem;
+        }
+    }
     // post exception to job eventlog
     if (event_job_post_pack (ctx->event, job, "exception", 0, "O", evctx) < 0)
         goto error;
     // publish job-exception event
+    if (!(pub = json_pack ("{s:I s:s s:i}",
+                           "id", id,
+                           "type", type,
+                           "severity", severity)))
+        goto nomem;
+    if (wait_status >= 0) {
+        json_t *val;
+        if (!(val = json_integer (wait_status))
+            || json_object_set_new (pub, "wait_status", val) < 0) {
+            json_decref (val);
+            json_decref (pub);
+            goto nomem;
+        }
+    }
     if (!(f = flux_event_publish_pack (ctx->h,
                                        "job-exception",
                                        FLUX_MSGFLAG_PRIVATE,
-                                       "{s:I s:s s:i}",
-                                       "id", id,
-                                       "type", type,
-                                       "severity", severity)))
+                                       "O",
+                                       pub))) {
+        json_decref (pub);
         goto error;
+    }
+    json_decref (pub);
     flux_future_destroy (f);
     json_decref (evctx);
     return 0;
@@ -114,6 +140,16 @@ nomem:
 error:
     ERRNO_SAFE_WRAP (json_decref, evctx);
     return -1;
+}
+
+int raise_job_exception (struct job_manager *ctx,
+                         struct job *job,
+                         const char *type,
+                         int severity,
+                         uint32_t userid,
+                         const char *note)
+{
+    return raise_job_exception_ex (ctx, job, type, severity, userid, note, -1);
 }
 
 void raise_handle_request (flux_t *h,
@@ -129,14 +165,16 @@ void raise_handle_request (flux_t *h,
     const char *type;
     const char *note = NULL;
     const char *errstr = NULL;
+    int wait_status = -1;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:I s:i s:s s?s}",
+                             "{s:I s:i s:s s?s s?i}",
                              "id", &id,
                              "severity", &severity,
                              "type", &type,
-                             "note", &note) < 0
+                             "note", &note,
+                             "wait_status", &wait_status) < 0
         || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (raise_check_severity (severity)) {
@@ -161,7 +199,7 @@ void raise_handle_request (flux_t *h,
         errstr = "guests can only raise exceptions on their own jobs";
         goto error;
     }
-    if (raise_job_exception (ctx, job, type, severity, cred.userid, note) < 0)
+    if (raise_job_exception_ex (ctx, job, type, severity, cred.userid, note, wait_status) < 0)
         goto error;
     /* NB: job object may be destroyed in event_job_post_pack().
      * Do not reference the object after this point:
