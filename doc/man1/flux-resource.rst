@@ -497,7 +497,8 @@ The following field names can be specified for the **list** subcommand:
    Properties associated with resources.
 
 **propertiesx**
-   Properties associated with resources, but with queue names removed.
+   Properties associated with resources, but with all configured queue names
+   removed, regardless of any ``-q, --queue`` filter in effect.
 
 **nnodes**
    number of nodes
