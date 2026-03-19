@@ -794,6 +794,24 @@ class TestRv1PoolEncode(unittest.TestCase):
         self.assertAlmostEqual(d["execution"]["starttime"], 100.0)
         self.assertAlmostEqual(d["execution"]["expiration"], 200.0)
 
+    def test_nslots_in_alloc_R(self):
+        """nslots is stored in R execution dict after alloc (regression of #6632)."""
+        p = Rv1Pool(R_4x4)
+        a = p.alloc(1, rr(0, 4, 1))
+        self.assertEqual(a.to_dict()["execution"]["nslots"], 4)
+
+    def test_nslots_absent_without_alloc(self):
+        """Pool not produced by alloc() has no nslots in R."""
+        p = Rv1Pool(R_4x4)
+        self.assertNotIn("nslots", p.to_dict()["execution"])
+
+    def test_nslots_round_trip(self):
+        """nslots survives to_dict() → Rv1Pool() round-trip."""
+        p = Rv1Pool(R_4x4)
+        a = p.alloc(1, rr(0, 4, 1))
+        p2 = Rv1Pool(a.to_dict())
+        self.assertEqual(p2.to_dict()["execution"]["nslots"], 4)
+
 
 class TestRv1PoolDumps(unittest.TestCase):
     def test_single_rank(self):
@@ -969,6 +987,12 @@ class TestRangeAlloc(unittest.TestCase):
         pool = Rv1Pool(R_4x4)
         result = pool.alloc(1, rr(nnodes=2, nslots=2, nnodes_max=4))
         self.assertEqual(len(result._ranks), 4)
+
+    def test_nslots_stored_in_R(self):
+        """Actual allocated slot count is stored in R execution dict."""
+        pool = Rv1Pool(R_4x4)
+        result = pool.alloc(1, rr(nnodes=2, nslots=2, nnodes_max=4))
+        self.assertEqual(result.to_dict()["execution"]["nslots"], 4)
 
     def test_nnodes_bounded_range_capped_at_max(self):
         """Request 2-3 nodes on 4-node pool → allocates exactly 3."""
