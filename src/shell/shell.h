@@ -404,6 +404,14 @@ void flux_shell_fatal (const char *component,
 
 void flux_shell_raise (const char *type, int severity, const char *fmt, ...);
 
+/* Raise a fatal exec exception with severity=0, and optionally set the
+ * job wait_status to wait_status (if >= 0) so that job-exec uses the
+ * provided exit status for the job finish event rather than the largest
+ * shell exit status. Sets exception_logged to prevent a second raise.
+ */
+void flux_shell_raise_exit_status (int wait_status, const char *fmt, ...)
+    __attribute__ ((format (printf, 2, 3)));
+
 /*  Set default severity of logging destination 'dest' to level.
  *   If dest == NULL then set the internal log dispatch level --
  *   (i.e. no messages above severity level will be logged to any
