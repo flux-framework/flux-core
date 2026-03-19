@@ -979,6 +979,113 @@ class TestParseCount(unittest.TestCase):
             )
 
 
+class TestFromJobspecNonV1(unittest.TestCase):
+    """Tests for from_jobspec() with non-V1 resource hierarchies (regression of #6632).
+
+    Expected nnodes/nslots values are cross-checked against the jjc-reader
+    output in t/t0024-jjc-reader.t for the corresponding use_case YAML files.
+    """
+
+    def test_nonv1_version_accepted(self):
+        """version != 1 is accepted (no duration check); slot→core parsed correctly.
+
+        Equivalent to use_case_2.5 (version: 999, slot(10)→core(1)).
+        jjc-reader: nodefactor=0 nnodes=0 nslots=10 slot_size=1
+        """
+        jobspec = {
+            "version": 999,
+            "resources": [
+                {
+                    "type": "slot",
+                    "count": 10,
+                    "with": [{"type": "core", "count": 1}],
+                }
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 3600.0}},
+        }
+        req = ResourceRequest.from_jobspec(jobspec)
+        self.assertEqual(req.nnodes, 0)
+        self.assertEqual(req.nslots, 10)
+        self.assertEqual(req.slot_size, 1)
+
+    def test_unknown_toplevel_type_skipped(self):
+        """Unknown top-level resource type is skipped; node found as sibling.
+
+        Equivalent to use_case_1.9 (version: 1, ssd + node(1)→slot(1)→core(1)).
+        jjc-reader: nodefactor=1 nnodes=1 nslots=1 slot_size=1
+        """
+        jobspec = {
+            "version": 1,
+            "resources": [
+                {"type": "ssd", "count": 100000, "exclusive": True},
+                {
+                    "type": "node",
+                    "count": 1,
+                    "exclusive": False,
+                    "with": [
+                        {
+                            "type": "slot",
+                            "count": 1,
+                            "with": [{"type": "core", "count": 1}],
+                        }
+                    ],
+                },
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 3600.0}},
+        }
+        req = ResourceRequest.from_jobspec(jobspec)
+        self.assertEqual(req.nnodes, 1)
+        self.assertEqual(req.nslots, 1)
+        self.assertEqual(req.slot_size, 1)
+
+    def test_complex_hierarchy_nodefactor(self):
+        """Counts from non-node types above node accumulate into nodefactor.
+
+        Equivalent to use_case_1.10 shape: rack(5)→slot(2)→node(1)→slot(1)→core(2)
+        jjc-reader: nodefactor=10 nnodes=1 nslots=1 slot_size=2 exclusive=true
+        Old sched-simple: nnodes=10, nslots=10, slot_size=2
+        """
+        jobspec = {
+            "version": 1,
+            "resources": [
+                {
+                    "type": "rack",
+                    "count": 5,
+                    "with": [
+                        {
+                            "type": "slot",
+                            "count": 2,
+                            "with": [
+                                {
+                                    "type": "node",
+                                    "count": 1,
+                                    "exclusive": True,
+                                    "with": [
+                                        {
+                                            "type": "slot",
+                                            "count": 1,
+                                            "with": [{"type": "core", "count": 2}],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 3600.0}},
+        }
+        req = ResourceRequest.from_jobspec(jobspec)
+        # nodefactor=5*2=10, nnodes=10*1=10, nslots=1*10=10, slot_size=2
+        self.assertEqual(req.nnodes, 10)
+        self.assertEqual(req.nslots, 10)
+        self.assertEqual(req.slot_size, 2)
+        self.assertTrue(req.exclusive)
+
+
 class TestRangeAlloc(unittest.TestCase):
     """Tests for RFC 14 range count support in alloc()."""
 

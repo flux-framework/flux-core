@@ -145,15 +145,15 @@ class ResourceRequest:
 
     @classmethod
     def from_jobspec(cls, jobspec):
-        """Parse a V1 jobspec dict and return a :class:`ResourceRequest`.
+        """Parse a jobspec dict and return a :class:`ResourceRequest`.
 
-        Handles the two common V1 layouts:
+        Walks the resource graph recursively, like libjjc, to support both
+        RFC 25 V1 jobspecs and jobspecs with non-V1 resource hierarchies.
+        Unknown resource types are skipped but their ``with`` children are
+        still traversed.  The version key value is not checked (see #6682).
 
-        - ``node → slot → core[+gpu]``  (``flux submit -N<n> ...``)
-        - ``slot → core[+gpu]``          (``flux submit -n<n> ...``)
-
-        RFC 14 range counts (``{"min": M, "max": N}``) on the
-        top-level resource are fully supported: the scheduler allocates as many
+        RFC 14 range counts (``{"min": M, "max": N}``) on the node or slot
+        resource are fully supported: the scheduler allocates as many
         resources as available up to the maximum.
 
         Raises:
@@ -163,56 +163,96 @@ class ResourceRequest:
         resources = jobspec.get("resources", [])
         if not resources:
             raise ValueError("jobspec has no resources")
-        top = resources[0]
-        rtype = top.get("type")
-        if rtype == "node":
-            nnodes, nnodes_max = cls._parse_count(top.get("count", 1))
-            slot = top["with"][0]
-            nslots_per_node, _ = cls._parse_count(slot.get("count", 1))
-            nslots = nslots_per_node * nnodes
-            # nslots_max scales with nnodes_max; unbounded nnodes → unbounded nslots
-            nslots_max = (
-                nslots_per_node * nnodes_max if nnodes_max is not None else None
-            )
-            slot_children = slot["with"]
-        elif rtype == "slot":
-            nnodes = 0
-            nnodes_max = 0  # fixed (slot-only form has no node count)
-            nslots, nslots_max = cls._parse_count(top.get("count", 1))
-            slot_children = top["with"]
-        else:
-            raise ValueError(f"unsupported top-level resource type: {rtype!r}")
 
-        slot_size = 1
-        gpu_per_slot = 0
-        for child in slot_children:
-            if child.get("type") == "core":
-                slot_size, _ = cls._parse_count(child.get("count", 1))
-            elif child.get("type") == "gpu":
-                gpu_per_slot, _ = cls._parse_count(child.get("count", 1))
+        # State accumulated during the recursive walk (last-write-wins,
+        # matching libjjc behavior).
+        state = {
+            "nnodes": None,  # (min, max) or None if no node vertex found
+            "nslots": None,  # (min, max) or None if no slot vertex found
+            "slot_size": None,  # None until a core vertex is found
+            "gpu_per_slot": 0,
+            "exclusive": False,
+            "nodefactor": 1,  # product of non-node counts above node level
+        }
 
-        exclusive = bool(top.get("exclusive", False))
-        # Exclusive allocation is per-node; if nnodes was not specified
-        # (slot-only jobspec), each slot occupies one exclusive node.
-        if exclusive and nnodes == 0:
-            nnodes = nslots
-            nnodes_max = nslots_max
-            nslots_max = nslots  # nslots is fixed; range is expressed via nnodes_max
+        def walk(res_list, nodefactor):
+            for vertex in res_list:
+                rtype = vertex.get("type", "")
+                mn, mx = cls._parse_count(vertex.get("count", 1))
+                children = vertex.get("with", [])
+                if rtype == "node":
+                    state["nnodes"] = (mn, mx)
+                    state["nodefactor"] = nodefactor
+                    if vertex.get("exclusive", False):
+                        state["exclusive"] = True
+                    if children:
+                        walk(children, nodefactor)
+                else:
+                    # Non-node: accumulate nodefactor (use min for ranges),
+                    # then record known types and recurse.
+                    new_nf = nodefactor * mn
+                    if rtype == "slot":
+                        state["nslots"] = (mn, mx)
+                        if vertex.get("exclusive", False):
+                            state["exclusive"] = True
+                    elif rtype == "core":
+                        state["slot_size"] = mn
+                    elif rtype == "gpu":
+                        state["gpu_per_slot"] = mn
+                    # else: unknown type — ignore, continue recursing
+                    if children:
+                        walk(children, new_nf)
+
+        walk(resources, 1)
+
         # RFC 25: in jobspec V1, attributes.system and duration are required.
+        # Check this before validating the resource structure so that the error
+        # message matches what the C jj/jjc parsers produce for V1 jobspecs.
         system = jobspec.get("attributes", {}).get("system")
         if jobspec.get("version") == 1:
             if system is None:
                 raise ValueError("getting duration: Object item not found: system")
             if system.get("duration") is None:
                 raise ValueError("getting duration: Object item not found: duration")
+
+        if state["nslots"] is None:
+            raise ValueError("Unable to determine slot count")
+        if state["slot_size"] is None:
+            raise ValueError("Unable to determine slot size")
+
+        nslots_mn, nslots_mx = state["nslots"]
+        nf = state["nodefactor"]
+
+        if state["nnodes"] is not None:
+            nnodes_mn, nnodes_mx = state["nnodes"]
+            nnodes = nf * nnodes_mn
+            nnodes_max = nf * nnodes_mx if nnodes_mx is not None else None
+            nslots = nslots_mn * nnodes
+            if nnodes_max is None or nslots_mx is None:
+                nslots_max = None
+            else:
+                nslots_max = nslots_mx * nnodes_max
+        else:
+            nnodes = 0
+            nnodes_max = 0
+            nslots = nslots_mn
+            nslots_max = nslots_mx
+
+        exclusive = state["exclusive"]
+        # Exclusive allocation is per-node; if nnodes was not specified
+        # (slot-only jobspec), each slot occupies one exclusive node.
+        if exclusive and nnodes == 0:
+            nnodes = nslots
+            nnodes_max = nslots_max
+            nslots_max = nslots  # nslots is fixed; range is expressed via nnodes_max
         attrs = system or {}
         duration = attrs.get("duration") or 0.0
         constraint = attrs.get("constraints") or None
         return cls(
             nnodes,
             nslots,
-            slot_size,
-            gpu_per_slot,
+            state["slot_size"],
+            state["gpu_per_slot"],
             float(duration),
             constraint,
             exclusive,
