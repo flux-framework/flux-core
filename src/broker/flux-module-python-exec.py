@@ -32,8 +32,11 @@
 #
 # Usage: flux module-python-exec PATH
 
+import ctypes
+import ctypes.util
 import errno as errno_mod
 import os
+import platform
 import sys
 import traceback
 
@@ -41,6 +44,22 @@ from _flux._core import ffi, lib
 from flux.brokermod import resolve_entry_point
 from flux.core.handle import Flux
 from flux.importer import import_path
+
+
+def set_proctitle(name):
+    """Set the process name shown in top, ps, and /proc/self/comm.
+
+    Uses prctl(PR_SET_NAME) on Linux, matching the mechanism used by the
+    Flux broker itself. The kernel silently truncates the name to 15
+    characters. On non-Linux platforms this is a no-op.
+    """
+    if platform.system() != "Linux":
+        return
+    try:
+        libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+        libc.prctl(15, name.encode(), 0, 0, 0)  # 15 == PR_SET_NAME
+    except Exception:  # pylint: disable=broad-except
+        pass
 
 
 def die(msg):
@@ -75,6 +94,10 @@ def main():
     if args_p[0] != ffi.NULL:
         modargs = ffi.string(args_p[0]).decode("utf-8")
         lib.free(args_p[0])
+
+    name_p = ffi.cast("char *", lib.flux_aux_get(h.handle, b"flux::name"))
+    if name_p != ffi.NULL:
+        set_proctitle(ffi.string(name_p).decode())
 
     if lib.flux_module_register_handlers(h.handle, error) < 0:
         die_error("flux_module_register_handlers", error[0])
