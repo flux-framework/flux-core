@@ -425,17 +425,33 @@ struct similar_cmds {
     const char *argv0;
 };
 
+/* return true if no dups */
+static bool similar_dupcheck (struct similar_cmds *similar,
+                              const char *cmd)
+{
+    char *str = zlist_first (similar->cmds);
+    while (str) {
+        if (streq (str, cmd))
+            return false;
+        str = zlist_next (similar->cmds);
+    }
+    return true;
+}
+
 static void similar_check (struct similar_cmds *similar,
                            const char *cmd)
 {
     int distance = levenshtein_distance (cmd, similar->argv0);
     if (distance > 0 && distance <= similar->min) {
-        char *cpy = xstrdup (cmd);
-        if (distance < similar->min)
+        if (distance < similar->min) {
             zlist_purge (similar->cmds);
-        similar->min = distance;
-        zlist_append (similar->cmds, cpy);
-        zlist_freefn (similar->cmds, cpy, free, true);
+            similar->min = distance;
+        }
+        if (similar_dupcheck (similar, cmd)) {
+            char *cpy = xstrdup (cmd);
+            zlist_append (similar->cmds, cpy);
+            zlist_freefn (similar->cmds, cpy, free, true);
+        }
     }
 }
 
