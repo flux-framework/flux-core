@@ -50,6 +50,7 @@ test_expect_success 'rc2 failure if stdin not a tty' '
 
 test_expect_success 'rc3 failure causes instance failure' '
 	test_expect_code 1 flux start \
+		-Sbroker.rc1_path= \
 		-Sbroker.rc3_path=false \
 		-Slog-stderr-level=6 \
 		true 2>rc3_failure.log
