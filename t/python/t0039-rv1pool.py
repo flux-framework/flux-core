@@ -15,7 +15,7 @@ import unittest
 
 import subflux  # noqa: F401 - for PYTHONPATH
 from flux.resource import InfeasibleRequest, InsufficientResources
-from flux.resource.Rv1Pool import ResourceRequest, Rv1Pool
+from flux.resource.Rv1Pool import _NO_MAX, ResourceRequest, Rv1Pool
 from pycotap import TAPTestRunner
 
 
@@ -27,10 +27,24 @@ def rr(
     duration=0.0,
     constraint=None,
     exclusive=False,
+    nnodes_max=_NO_MAX,
+    nslots_max=_NO_MAX,
 ):
-    """Convenience wrapper to build a ResourceRequest for tests."""
+    """Convenience wrapper to build a ResourceRequest for tests.
+
+    Pass ``nnodes_max=None`` for an unbounded node range; omit it (or pass
+    ``_NO_MAX``) for a fixed count.  Same for ``nslots_max``.
+    """
     return ResourceRequest(
-        nnodes, nslots, slot_size, gpu_per_slot, duration, constraint, exclusive
+        nnodes,
+        nslots,
+        slot_size,
+        gpu_per_slot,
+        duration,
+        constraint,
+        exclusive,
+        nnodes_max=nnodes_max,
+        nslots_max=nslots_max,
     )
 
 
@@ -780,6 +794,24 @@ class TestRv1PoolEncode(unittest.TestCase):
         self.assertAlmostEqual(d["execution"]["starttime"], 100.0)
         self.assertAlmostEqual(d["execution"]["expiration"], 200.0)
 
+    def test_nslots_in_alloc_R(self):
+        """nslots is stored in R execution dict after alloc (regression of #6632)."""
+        p = Rv1Pool(R_4x4)
+        a = p.alloc(1, rr(0, 4, 1))
+        self.assertEqual(a.to_dict()["execution"]["nslots"], 4)
+
+    def test_nslots_absent_without_alloc(self):
+        """Pool not produced by alloc() has no nslots in R."""
+        p = Rv1Pool(R_4x4)
+        self.assertNotIn("nslots", p.to_dict()["execution"])
+
+    def test_nslots_round_trip(self):
+        """nslots survives to_dict() → Rv1Pool() round-trip."""
+        p = Rv1Pool(R_4x4)
+        a = p.alloc(1, rr(0, 4, 1))
+        p2 = Rv1Pool(a.to_dict())
+        self.assertEqual(p2.to_dict()["execution"]["nslots"], 4)
+
 
 class TestRv1PoolDumps(unittest.TestCase):
     def test_single_rank(self):
@@ -909,6 +941,299 @@ class TestFromJobspec(unittest.TestCase):
             with self.subTest(pool=type(pool).__name__):
                 rr = pool.parse_resource_request(jobspec)
                 self.assertIsNone(rr.constraint)
+
+
+class TestParseCount(unittest.TestCase):
+    """Tests for ResourceRequest._parse_count."""
+
+    def test_integer(self):
+        self.assertEqual(ResourceRequest._parse_count(4), (4, 4))
+
+    def test_dict_bounded(self):
+        self.assertEqual(ResourceRequest._parse_count({"min": 2, "max": 8}), (2, 8))
+
+    def test_dict_unbounded(self):
+        self.assertEqual(ResourceRequest._parse_count({"min": 2}), (2, None))
+
+    def test_dict_explicit_default_operator_accepted(self):
+        """Explicit operator='+' operand=1 is the implied default — accepted."""
+        self.assertEqual(
+            ResourceRequest._parse_count(
+                {"min": 2, "max": 8, "operator": "+", "operand": 1}
+            ),
+            (2, 8),
+        )
+
+    def test_dict_unsupported_operator_raises(self):
+        """operator='*' is not yet supported — raises ValueError."""
+        with self.assertRaises(ValueError):
+            ResourceRequest._parse_count(
+                {"min": 2, "max": 8, "operator": "*", "operand": 2}
+            )
+
+    def test_dict_nonunit_operand_raises(self):
+        """operator='+' with operand≠1 is not yet supported — raises ValueError."""
+        with self.assertRaises(ValueError):
+            ResourceRequest._parse_count(
+                {"min": 2, "max": 8, "operator": "+", "operand": 4}
+            )
+
+
+class TestFromJobspecNonV1(unittest.TestCase):
+    """Tests for from_jobspec() with non-V1 resource hierarchies (regression of #6632).
+
+    Expected nnodes/nslots values are cross-checked against the jjc-reader
+    output in t/t0024-jjc-reader.t for the corresponding use_case YAML files.
+    """
+
+    def test_nonv1_version_accepted(self):
+        """version != 1 is accepted (no duration check); slot→core parsed correctly.
+
+        Equivalent to use_case_2.5 (version: 999, slot(10)→core(1)).
+        jjc-reader: nodefactor=0 nnodes=0 nslots=10 slot_size=1
+        """
+        jobspec = {
+            "version": 999,
+            "resources": [
+                {
+                    "type": "slot",
+                    "count": 10,
+                    "with": [{"type": "core", "count": 1}],
+                }
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 3600.0}},
+        }
+        req = ResourceRequest.from_jobspec(jobspec)
+        self.assertEqual(req.nnodes, 0)
+        self.assertEqual(req.nslots, 10)
+        self.assertEqual(req.slot_size, 1)
+
+    def test_unknown_toplevel_type_skipped(self):
+        """Unknown top-level resource type is skipped; node found as sibling.
+
+        Equivalent to use_case_1.9 (version: 1, ssd + node(1)→slot(1)→core(1)).
+        jjc-reader: nodefactor=1 nnodes=1 nslots=1 slot_size=1
+        """
+        jobspec = {
+            "version": 1,
+            "resources": [
+                {"type": "ssd", "count": 100000, "exclusive": True},
+                {
+                    "type": "node",
+                    "count": 1,
+                    "exclusive": False,
+                    "with": [
+                        {
+                            "type": "slot",
+                            "count": 1,
+                            "with": [{"type": "core", "count": 1}],
+                        }
+                    ],
+                },
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 3600.0}},
+        }
+        req = ResourceRequest.from_jobspec(jobspec)
+        self.assertEqual(req.nnodes, 1)
+        self.assertEqual(req.nslots, 1)
+        self.assertEqual(req.slot_size, 1)
+
+    def test_complex_hierarchy_nodefactor(self):
+        """Counts from non-node types above node accumulate into nodefactor.
+
+        Equivalent to use_case_1.10 shape: rack(5)→slot(2)→node(1)→slot(1)→core(2)
+        jjc-reader: nodefactor=10 nnodes=1 nslots=1 slot_size=2 exclusive=true
+        Old sched-simple: nnodes=10, nslots=10, slot_size=2
+        """
+        jobspec = {
+            "version": 1,
+            "resources": [
+                {
+                    "type": "rack",
+                    "count": 5,
+                    "with": [
+                        {
+                            "type": "slot",
+                            "count": 2,
+                            "with": [
+                                {
+                                    "type": "node",
+                                    "count": 1,
+                                    "exclusive": True,
+                                    "with": [
+                                        {
+                                            "type": "slot",
+                                            "count": 1,
+                                            "with": [{"type": "core", "count": 2}],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 3600.0}},
+        }
+        req = ResourceRequest.from_jobspec(jobspec)
+        # nodefactor=5*2=10, nnodes=10*1=10, nslots=1*10=10, slot_size=2
+        self.assertEqual(req.nnodes, 10)
+        self.assertEqual(req.nslots, 10)
+        self.assertEqual(req.slot_size, 2)
+        self.assertTrue(req.exclusive)
+
+
+class TestRangeAlloc(unittest.TestCase):
+    """Tests for RFC 14 range count support in alloc()."""
+
+    def test_nnodes_bounded_range_takes_max(self):
+        """Request 2-4 nodes on 4-node pool → allocates all 4."""
+        pool = Rv1Pool(R_4x4)
+        result = pool.alloc(1, rr(nnodes=2, nslots=2, nnodes_max=4))
+        self.assertEqual(len(result._ranks), 4)
+
+    def test_nslots_stored_in_R(self):
+        """Actual allocated slot count is stored in R execution dict."""
+        pool = Rv1Pool(R_4x4)
+        result = pool.alloc(1, rr(nnodes=2, nslots=2, nnodes_max=4))
+        self.assertEqual(result.to_dict()["execution"]["nslots"], 4)
+
+    def test_nnodes_bounded_range_capped_at_max(self):
+        """Request 2-3 nodes on 4-node pool → allocates exactly 3."""
+        pool = Rv1Pool(R_4x4)
+        result = pool.alloc(1, rr(nnodes=2, nslots=2, nnodes_max=3))
+        self.assertEqual(len(result._ranks), 3)
+
+    def test_nnodes_bounded_range_min_satisfied(self):
+        """Request 2-4 nodes, only 2 up → allocates 2 (minimum)."""
+        pool = Rv1Pool(R_4x4)
+        pool.mark_down("2-3")
+        result = pool.alloc(1, rr(nnodes=2, nslots=2, nnodes_max=4))
+        self.assertEqual(len(result._ranks), 2)
+
+    def test_nnodes_bounded_range_below_min_raises(self):
+        """Request 3-4 nodes, only 2 up → InsufficientResources."""
+        pool = Rv1Pool(R_4x4)
+        pool.mark_down("2-3")
+        with self.assertRaises(InsufficientResources):
+            pool.alloc(1, rr(nnodes=3, nslots=3, nnodes_max=4))
+
+    def test_nnodes_range_max_exceeds_pool_is_feasible(self):
+        """Range min=2 max=8 on 4-node pool → allocates 4 (max capped at pool size)."""
+        pool = Rv1Pool(R_4x4)
+        result = pool.alloc(1, rr(nnodes=2, nslots=2, nnodes_max=8))
+        self.assertEqual(len(result._ranks), 4)
+
+    def test_nnodes_unbounded_takes_all(self):
+        """Unbounded nnodes_max (None) → allocates all available nodes."""
+        pool = Rv1Pool(R_4x4)
+        pool.mark_down("3")
+        result = pool.alloc(1, rr(nnodes=1, nslots=1, nnodes_max=None))
+        self.assertEqual(len(result._ranks), 3)
+
+    def test_nslots_bounded_range_takes_max(self):
+        """Request 2-8 slots on pool with 4 nodes × 4 cores → gets 16 slots."""
+        pool = Rv1Pool(R_4x4)
+        result = pool.alloc(1, rr(nnodes=0, nslots=2, nslots_max=16))
+        total = sum(len(r["cores"]) for r in result._ranks.values())
+        self.assertEqual(total, 16)
+
+    def test_nslots_bounded_range_capped_at_max(self):
+        """Request 2-6 slots on 16-slot pool → gets exactly 6."""
+        pool = Rv1Pool(R_4x4)
+        result = pool.alloc(1, rr(nnodes=0, nslots=2, nslots_max=6))
+        total = sum(len(r["cores"]) for r in result._ranks.values())
+        self.assertEqual(total, 6)
+
+    def test_nslots_unbounded_takes_all(self):
+        """Unbounded nslots_max (None) → drains all free slots."""
+        pool = Rv1Pool(R_4x4)
+        result = pool.alloc(1, rr(nnodes=0, nslots=1, nslots_max=None))
+        total = sum(len(r["cores"]) for r in result._ranks.values())
+        self.assertEqual(total, 16)  # 4 nodes × 4 cores
+
+    def test_from_jobspec_range_dict(self):
+        """from_jobspec with range dict sets nnodes/nnodes_max correctly."""
+        jobspec = {
+            "version": 1,
+            "resources": [
+                {
+                    "type": "node",
+                    "count": {"min": 2, "max": 4},
+                    "with": [
+                        {
+                            "type": "slot",
+                            "count": 1,
+                            "with": [{"type": "core", "count": 2}],
+                        }
+                    ],
+                }
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 60.0}},
+        }
+        pool = Rv1Pool(R_4x4)
+        req = pool.parse_resource_request(jobspec)
+        self.assertEqual(req.nnodes, 2)
+        self.assertEqual(req.nnodes_max, 4)
+        self.assertEqual(req.nslots, 2)  # 1 slot/node × 2 min nodes
+        self.assertEqual(req.nslots_max, 4)  # 1 slot/node × 4 max nodes
+
+    def test_from_jobspec_unbounded_range(self):
+        """from_jobspec with min-only count → nnodes_max is None (unbounded)."""
+        jobspec = {
+            "version": 1,
+            "resources": [
+                {
+                    "type": "node",
+                    "count": {"min": 1},
+                    "with": [
+                        {
+                            "type": "slot",
+                            "count": 1,
+                            "with": [{"type": "core", "count": 1}],
+                        }
+                    ],
+                }
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 60.0}},
+        }
+        pool = Rv1Pool(R_4x4)
+        req = pool.parse_resource_request(jobspec)
+        self.assertEqual(req.nnodes, 1)
+        self.assertIsNone(req.nnodes_max)
+        result = pool.alloc(1, req)
+        self.assertEqual(len(result._ranks), 4)
+
+    def test_fixed_count_nnodes_max_equals_nnodes(self):
+        """Fixed integer count → nnodes_max == nnodes (no range)."""
+        pool = Rv1Pool(R_4x4)
+        req = pool.parse_resource_request(
+            {
+                "version": 1,
+                "resources": [
+                    {
+                        "type": "node",
+                        "count": 2,
+                        "with": [
+                            {
+                                "type": "slot",
+                                "count": 1,
+                                "with": [{"type": "core", "count": 1}],
+                            }
+                        ],
+                    }
+                ],
+                "tasks": [],
+                "attributes": {"system": {"duration": 60.0}},
+            }
+        )
+        self.assertEqual(req.nnodes, 2)
+        self.assertEqual(req.nnodes_max, 2)
 
 
 if __name__ == "__main__":
