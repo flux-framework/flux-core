@@ -240,28 +240,39 @@ int flux_shell_err (const char *component,
     return -1;
 }
 
-void flux_shell_raise (const char *type,
-                      int severity,
-                      const char *fmt, ...)
+static void shell_raise_ex (const char *type,
+                            int severity,
+                            int wait_status,
+                            const char *note)
 {
     flux_shell_t *shell = logger.shell;
     flux_future_t *f;
-    char buf [4096];
-    va_list ap;
 
     if (!shell || !shell->h || !shell->info || logger.exception_logged)
         return;
 
-    va_start (ap, fmt);
-    msgfmt (buf, sizeof (buf), 0, fmt, ap);
-    va_end (ap);
-
-    if (!(f = flux_job_raise (shell->h,
-                              shell->info->jobid,
-                              "exec",
-                              0,
-                              buf))
-       || flux_future_get (f, NULL) < 0) {
+    if (wait_status >= 0)
+        f = flux_rpc_pack (shell->h,
+                           "job-manager.raise",
+                           FLUX_NODEID_ANY,
+                           0,
+                           "{s:I s:s s:i s:s s:i}",
+                           "id", shell->info->jobid,
+                           "type", type,
+                           "severity", severity,
+                           "note", note,
+                           "wait_status", wait_status);
+    else
+        f = flux_rpc_pack (shell->h,
+                           "job-manager.raise",
+                           FLUX_NODEID_ANY,
+                           0,
+                           "{s:I s:s s:i s:s}",
+                           "id", shell->info->jobid,
+                           "type", type,
+                           "severity", severity,
+                           "note", note);
+    if (!f || flux_future_get (f, NULL) < 0) {
         fprintf (stderr,
                  "flux-shell: failed to raise job exception: %s\n",
                  flux_future_error_string (f));
@@ -269,6 +280,32 @@ void flux_shell_raise (const char *type,
     else
         shell_log_set_exception_logged ();
     flux_future_destroy (f);
+}
+
+void flux_shell_raise (const char *type,
+                      int severity,
+                      const char *fmt, ...)
+{
+    char buf [4096];
+    va_list ap;
+
+    va_start (ap, fmt);
+    msgfmt (buf, sizeof (buf), 0, fmt, ap);
+    va_end (ap);
+
+    shell_raise_ex (type, severity, -1, buf);
+}
+
+void flux_shell_raise_exit_status (int wait_status, const char *fmt, ...)
+{
+    char buf [4096];
+    va_list ap;
+
+    va_start (ap, fmt);
+    msgfmt (buf, sizeof (buf), 0, fmt, ap);
+    va_end (ap);
+
+    shell_raise_ex ("exec", 0, wait_status, buf);
 }
 
 void flux_shell_fatal (const char *component,

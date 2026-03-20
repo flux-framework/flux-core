@@ -39,6 +39,10 @@ SYNOPSIS
                           const char *fmt,
                           ...);
 
+   void flux_shell_raise_exit_status (int wait_status,
+                                      const char *fmt,
+                                      ...);
+
    int flux_shell_log_setlevel (int level, const char *dest);
 
 Link with :command:`-lflux-core`.
@@ -109,6 +113,19 @@ note that the choices of :var:`errnum` are either 0 or :var:`errno`.
 :func:`flux_shell_raise` explicitly raises an exception for the current
 job of the given :var:`type` and :var:`severity`. Exceptions of severity 0
 will result in termination of the job by the execution system.
+
+:func:`flux_shell_raise_exit_status` raises a fatal exec exception
+(type ``exec``, severity 0) for the current job, and additionally
+records :var:`wait_status` as the job's exit status when it is >= 0.
+The :var:`wait_status` should be the raw POSIX wait status (as returned
+by :linux:man2:`waitpid`) of the failing task, so that the job exit
+status reflects the actual task failure rather than the status of tasks
+subsequently killed during job termination. If :var:`wait_status` is < 0,
+the function behaves like :func:`flux_shell_raise` with type ``exec``
+and severity 0.  In either case, once an exception has been successfully
+raised, the function sets an internal flag to prevent a duplicate
+exception from being raised by a subsequent call to :func:`flux_shell_fatal`
+or :func:`flux_shell_raise`.
 
 :func:`flux_shell_log_setlevel` sets default severity of logging
 destination :var:`dest` to :var:`level`. If :var:`dest` is NULL then the

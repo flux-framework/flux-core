@@ -351,6 +351,27 @@ test_expect_success 'job-manager: drain unblocks when last job is canceled' '
 	run_timeout 5 ${DRAIN_CANCEL} ${jobid}
 '
 
+test_expect_success 'job-manager: raise with wait_status includes it in exception event' '
+	jobid=$(flux job submit basic.json) &&
+	jid=$(flux job id --to=dec $jobid) &&
+	printf "{\"id\":%s,\"severity\":1,\"type\":\"ws-test\",\"wait_status\":11}" $jid |
+	    ${RPC} job-manager.raise &&
+	flux job wait-event --timeout=5.0 --match-context=type=ws-test $jobid exception &&
+	flux job eventlog $jobid | grep exception | grep wait_status=11 &&
+	flux cancel $jobid
+'
+
+test_expect_success 'job-manager: raise without wait_status omits it from exception event' '
+	jobid=$(flux job submit basic.json) &&
+	jid=$(flux job id --to=dec $jobid) &&
+	printf "{\"id\":%s,\"severity\":1,\"type\":\"no-ws-test\"}" $jid |
+	    ${RPC} job-manager.raise &&
+	flux job wait-event --timeout=5.0 --match-context=type=no-ws-test $jobid exception &&
+	flux job eventlog $jobid | grep exception | grep "no-ws-test" >no_ws.out &&
+	test_must_fail grep wait_status no_ws.out &&
+	flux cancel $jobid
+'
+
 test_expect_success 'list request with empty payload fails with EPROTO(71)' '
 	${RPC} job-manager.list 71 </dev/null
 '

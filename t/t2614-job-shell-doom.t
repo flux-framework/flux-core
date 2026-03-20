@@ -24,13 +24,13 @@ test_expect_success 'flux-shell: create 30s sleep script - rank 1 exits early' '
 test_expect_success 'flux-shell: run script with 2 tasks and 1s timeout' '
 	test_must_fail run_timeout 30 flux run \
 		-n2 -o exit-timeout=1s ./testscript.sh 2>tmout.err &&
-	grep "exception.*timeout" tmout.err
+	grep "exception.*Exit 200.*timeout" tmout.err
 '
 
 test_expect_success 'flux-shell: run script with 2 nodes and 1s timeout' '
 	test_must_fail run_timeout 30 flux run \
 		-n2 -N2 -o exit-timeout=1s ./testscript.sh 2>tmout2.err &&
-	grep "exception.*timeout" tmout2.err
+	grep "exception.*Exit 200.*timeout" tmout2.err
 '
 
 test_expect_success 'flux-shell: run script with 2 tasks and exit-on-error' '
@@ -58,6 +58,24 @@ test_expect_success 'flux-shell: exit-timeout catches lost shell' '
 test_expect_success 'flux-shell: exit-on-error catches lost shell' '
 	test_must_fail run_timeout 30 flux run \
 		-n2 -N2 -o exit-on-error ./test2.sh
+'
+test_expect_success 'flux-shell: create script - rank 1 kills itself with SIGSEGV' '
+	cat >sigtest.sh <<-"EOT" &&
+	#!/bin/sh
+	test $FLUX_TASK_RANK -eq 1 && kill -SEGV $$
+	sleep 30
+	EOT
+	chmod +x sigtest.sh
+'
+test_expect_success 'flux-shell: exit-on-error preserves failing task signal in finish status' '
+	jobid=$(flux submit -n2 -o exit-on-error ./sigtest.sh) &&
+	flux job wait-event -t 30 $jobid finish | grep "status=35584" &&
+	flux job eventlog $jobid | grep exception | grep "Segmentation fault"
+'
+test_expect_success 'flux-shell: exit-timeout preserves failing task signal in finish status' '
+	jobid=$(flux submit -n2 -o exit-timeout=1s ./sigtest.sh) &&
+	flux job wait-event -t 30 $jobid finish | grep "status=35584" &&
+	flux job eventlog $jobid | grep exception | grep "Segmentation fault"
 '
 test_expect_success 'flux-shell: exit-timeout=aaa is rejected' '
 	test_must_fail flux run -o exit-timeout=aaa true
