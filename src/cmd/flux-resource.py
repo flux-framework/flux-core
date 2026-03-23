@@ -106,6 +106,13 @@ class FluxResourceConfig(UtilConfig):
                 for key2, val2 in value.items():
                     if key2 == "formats":
                         self.validate_formats(path, val2)
+                    elif key == "list" and key2 == "hidden-queues":
+                        if not isinstance(val2, list) or not all(
+                            isinstance(q, str) for q in val2
+                        ):
+                            raise ValueError(
+                                f"{path}: list.hidden-queues must be a list of strings"
+                            )
                     else:
                         raise ValueError(f"{path}: invalid key {key}.{key2}")
             else:
@@ -499,9 +506,19 @@ def drain_list(args):
 
 
 class ResourceSetExtra(ResourceSet):
-    def __init__(self, arg=None, version=1, flux_config=None, queue=None):
+    def __init__(  # lgtm[py/missing-call-to-init]
+        self,
+        arg=None,
+        version=1,
+        flux_config=None,
+        queue=None,
+        queue_filter=None,
+        hidden_queues=None,
+    ):
         self.flux_config = flux_config
         self._queue = queue
+        self._queue_filter = queue_filter
+        self._hidden_queues = hidden_queues or set()
         if isinstance(arg, ResourceSet):
             self._rset = arg
             if arg.state:
@@ -515,12 +532,11 @@ class ResourceSetExtra(ResourceSet):
     @property
     def propertiesx(self):
         properties = json.loads(self.get_properties())
-        queues = self.queue
-        if self.queue:
-            queues = queues.split(",")
-            for q in queues:
-                if q in properties:
-                    properties.pop(q)
+        #  Strip all configured queue names from properties, so that
+        #  properties used only for queue membership are not displayed.
+        if self.flux_config and "queues" in self.flux_config:
+            for q in self.flux_config["queues"]:
+                properties.pop(q, None)
         return ",".join(properties.keys())
 
     @property
@@ -538,6 +554,11 @@ class ResourceSetExtra(ResourceSet):
                 return ""
             properties = json.loads(self.get_properties())
             for key, value in self.flux_config["queues"].items():
+                if self._queue_filter:
+                    if key not in self._queue_filter:
+                        continue
+                elif key in self._hidden_queues:
+                    continue
                 if "requires" not in value or set(value["requires"]).issubset(
                     set(properties)
                 ):
@@ -573,11 +594,14 @@ def split_by_property_combinations(rset):
     return [rset.copy_constraint(x) for x in constraint_combinations(rset)]
 
 
-def resources_uniq_lines(resources, states, formatter, config, queues=None):
+def resources_uniq_lines(
+    resources, states, formatter, config, queues=None, hidden_queues=None
+):
     """
     Generate a set of resource sets that would produce unique lines given
     the ResourceSet formatter argument. Include only the provided states
     """
+    hidden_queues = hidden_queues or set()
     #  uniq_fields are the fields on which to combine like results
     uniq_fields = ["state", "properties", "propertiesx", "queue"]
 
@@ -598,12 +622,22 @@ def resources_uniq_lines(resources, states, formatter, config, queues=None):
 
     fmt = flux.util.OutputFormat(uniq_fmt, headings=formatter.headings)
 
+    #  If specific queues were requested, save them as a filter for
+    #  ResourceSetExtra.queue before expanding 'queues' to the full
+    #  configured queue list below. propertiesx always strips all
+    #  configured queue names regardless of the filter.
+    queue_filter = queues if queues else None
+
     #  Get a list of configured queues if a specific list of queues
-    #  was not supplied by the caller. If no queues are configured then
-    #  one "anonymous" queue is simulated with [None]
+    #  was not supplied by the caller. Hidden queues are excluded from the
+    #  default list but are still visible when explicitly requested via -q.
+    #  If no queues are configured then one "anonymous" queue is simulated
+    #  with [None].
     if not queues:
         if config and "queues" in config:
-            queues = config["queues"].keys()
+            queues = [q for q in config["queues"] if q not in hidden_queues]
+            if not queues:
+                queues = [None]
         else:
             queues = [None]
 
@@ -630,7 +664,12 @@ def resources_uniq_lines(resources, states, formatter, config, queues=None):
             if not rset.ranks:
                 continue
             rset.state = state
-            rset = ResourceSetExtra(rset, flux_config=config)
+            rset = ResourceSetExtra(
+                rset,
+                flux_config=config,
+                queue_filter=queue_filter,
+                hidden_queues=hidden_queues,
+            )
             key = fmt.format(rset)
 
             if key not in lines:
@@ -706,11 +745,18 @@ def list_handler(args):
     }
     resources, config = get_resource_list(args)
 
-    fmt = FluxResourceConfig("list").load().get_format_string(args.format)
+    list_config = FluxResourceConfig("list").load()
+    fmt = list_config.get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
+    hidden_queues = set(list_config.config.get("hidden-queues", []))
 
     lines = resources_uniq_lines(
-        resources, args.states, formatter, config, queues=args.queue
+        resources,
+        args.states,
+        formatter,
+        config,
+        queues=args.queue,
+        hidden_queues=hidden_queues,
     )
     items = sort_output(args, lines.values())
     if args.skip_empty or (args.include and not args.no_skip_empty):

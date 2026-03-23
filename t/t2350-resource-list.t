@@ -480,6 +480,18 @@ test_expect_success 'flux resource lists no properties in propertiesx (multi)' '
 	flux resource list -o "{state} {nnodes} {propertiesx}" > listpropx_multi.out &&
 	grep "free 4" listpropx_multi.out
 '
+test_expect_success 'flux resource list -q shows only requested queue when node is in multiple queues' '
+	flux resource list -q batch -o "{state} {nnodes} {queue}" >listqueue_multi_q.out &&
+	test_debug "cat listqueue_multi_q.out" &&
+	grep "free 2 batch" listqueue_multi_q.out &&
+	test_must_fail grep -w "all" listqueue_multi_q.out
+'
+test_expect_success 'flux resource list -q strips all queue names from propertiesx' '
+	flux resource list -q batch -o "{state} {nnodes} {propertiesx}" \
+		>listpropx_multi_q.out &&
+	test_debug "cat listpropx_multi_q.out" &&
+	grep "free 2 $" listpropx_multi_q.out
+'
 test_expect_success 'configure queues and resource with extra property' '
 	flux R encode -r 0-3 -p batch:0-1 -p debug:2-3 -p foo:0-3\
 	   | tr -d "\n" \
@@ -553,12 +565,11 @@ test_expect_success 'flux resource lists expected queues in states (every)' '
 '
 test_expect_success 'flux resource list --queue works for a queue with no constraints' '
 	flux resource list --queue=every -o "{state} {nnodes} {queue}" >queue-every.out &&
-	test $(grep "free 1" queue-every.out | grep -c batch) -eq 1 &&
-	test $(grep "free 1" queue-every.out | grep -c debug) -eq 1 &&
-	test $(grep "free 1" queue-every.out | grep -c every) -eq 2 &&
-	test $(grep "allocated 1" queue-every.out | grep -c batch) -eq 1 &&
-	test $(grep "allocated 1" queue-every.out | grep -c debug) -eq 1 &&
-	test $(grep "allocated 1" queue-every.out | grep -c every) -eq 2
+	test_debug "cat queue-every.out" &&
+	grep "free 2 every" queue-every.out &&
+	grep "allocated 2 every" queue-every.out &&
+	test_must_fail grep batch queue-every.out &&
+	test_must_fail grep debug queue-every.out
 '
 test_expect_success 'flux resource list includes queue names for empty sets' '
 	# There are no nodes in 'down' state in this test, so use that:
@@ -585,6 +596,90 @@ test_expect_success 'flux resource list includes queue names for empty sets (mul
 		>queue-batch,debug-down.out &&
 	grep "debug down 0" queue-batch,debug-down.out &&
 	grep "batch down 0" queue-batch,debug-down.out
+'
+test_expect_success 'setup hidden-queues config' '
+	mkdir -p hidden-config/flux &&
+	cat <<-EOF >hidden-config/flux/flux-resource.toml
+	[list]
+	hidden-queues = ["every"]
+	EOF
+'
+test_expect_success 'flux resource list hidden-queues suppresses queue' '
+	XDG_CONFIG_HOME=$(pwd)/hidden-config \
+		flux resource list -o "{state} {nnodes} {queue}" \
+		>hidden-queues.out &&
+	test_debug "cat hidden-queues.out" &&
+	test_must_fail grep -w every hidden-queues.out &&
+	grep batch hidden-queues.out &&
+	grep debug hidden-queues.out
+'
+test_expect_success 'flux resource list -q shows hidden queue when explicitly requested' '
+	XDG_CONFIG_HOME=$(pwd)/hidden-config \
+		flux resource list -q every \
+		-o "{state} {nnodes} {queue}" >hidden-q-every.out &&
+	test_debug "cat hidden-q-every.out" &&
+	grep -w every hidden-q-every.out &&
+	test_must_fail grep -w batch hidden-q-every.out &&
+	test_must_fail grep -w debug hidden-q-every.out
+'
+test_expect_success 'flux resource list rejects invalid hidden-queues config' '
+	mkdir -p bad-config/flux &&
+	cat <<-EOF >bad-config/flux/flux-resource.toml &&
+	[list]
+	hidden-queues = "not-a-list"
+	EOF
+	test_must_fail env XDG_CONFIG_HOME=$(pwd)/bad-config \
+		flux resource list 2>bad-config.err &&
+	test_debug "cat bad-config.err" &&
+	grep "hidden-queues" bad-config.err
+'
+test_expect_success 'setup config with hidden-queues and custom format in same file' '
+	mkdir -p combo-config/flux &&
+	cat <<-EOF >combo-config/flux/flux-resource.toml
+	[list]
+	hidden-queues = ["every"]
+	[list.formats.myformat]
+	description = "test format"
+	format = "{state} {nnodes} {queue}"
+	EOF
+'
+test_expect_success 'list.hidden-queues and list.formats can coexist in same config file' '
+	XDG_CONFIG_HOME=$(pwd)/combo-config \
+		flux resource list -o "{state} {nnodes} {queue}" \
+		>combo-hidden.out &&
+	test_debug "cat combo-hidden.out" &&
+	test_must_fail grep -w every combo-hidden.out &&
+	XDG_CONFIG_HOME=$(pwd)/combo-config \
+		flux resource list -o myformat \
+		>combo-format.out &&
+	test_debug "cat combo-format.out" &&
+	grep batch combo-format.out
+'
+test_expect_success 'setup split config: hidden-queues in one file, format in another' '
+	mkdir -p split-hidden-config/flux split-format-config/flux &&
+	cat <<-EOF >split-hidden-config/flux/flux-resource.toml &&
+	[list]
+	hidden-queues = ["every"]
+	EOF
+	cat <<-EOF >split-format-config/flux/flux-resource.toml
+	[list.formats.myformat2]
+	description = "test format 2"
+	format = "{state} {nnodes} {queue}"
+	EOF
+'
+test_expect_success 'list.hidden-queues not overwritten when format added in separate config' '
+	XDG_CONFIG_HOME=$(pwd)/split-format-config \
+	XDG_CONFIG_DIRS=$(pwd)/split-hidden-config \
+		flux resource list -o "{state} {nnodes} {queue}" \
+		>split-hidden.out &&
+	test_debug "cat split-hidden.out" &&
+	test_must_fail grep -w every split-hidden.out &&
+	XDG_CONFIG_HOME=$(pwd)/split-format-config \
+	XDG_CONFIG_DIRS=$(pwd)/split-hidden-config \
+		flux resource list -o myformat2 \
+		>split-format.out &&
+	test_debug "cat split-format.out" &&
+	grep batch split-format.out
 '
 test_expect_success 'cleanup jobs' '
 	flux cancel $(cat job2A.id) $(cat job2B.id)

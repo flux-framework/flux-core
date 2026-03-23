@@ -98,7 +98,9 @@ all
 .. option:: -q, --queue=QUEUE,...
 
   Filter results to only include resources in the specified *QUEUE*. Multiple
-  queues may be separated by a comma.
+  queues may be separated by a comma. When this option is used, the
+  ``{queue}`` output field reflects only the specified queues, even if
+  resources belong to additional queues.
 
 .. option:: -i, --include=TARGETS
 
@@ -488,13 +490,15 @@ The following field names can be specified for the **list** subcommand:
    State of node(s): "up", "down", "allocated", "free", "all"
 
 **queue**
-   queue(s) associated with resources.
+   Queue(s) associated with resources. When ``-q, --queue`` is used,
+   only the specified queues are shown.
 
 **properties**
    Properties associated with resources.
 
 **propertiesx**
-   Properties associated with resources, but with queue names removed.
+   Properties associated with resources, but with all configured queue names
+   removed, regardless of any ``-q, --queue`` filter in effect.
 
 **nnodes**
    number of nodes
@@ -521,7 +525,8 @@ CONFIGURATION
 Similar to :man1:`flux-jobs`, the :program:`flux resource` command supports
 loading a set of config files for customizing utility output formats. Currently
 this can be used to register named format strings for the ``status``,
-``list``, and ``drain`` subcommands.
+``list``, and ``drain`` subcommands, or to suppress certain queues from the
+default output of :program:`flux resource list`.
 
 Configuration for each :program:`flux resource` subcommand is defined in a
 separate table, so to add a new format ``myformat`` for ``flux resource list``,
@@ -531,6 +536,17 @@ the following config file could be used::
   [list.formats.myformat]
   description = "My flux resource list format"
   format = "{state} {nodelist}"
+
+The ``[list]`` table also supports a ``hidden-queues`` option, which is a
+list of queue names to suppress from the ``{queue}`` output field in
+``flux resource list`` by default. Queues listed in ``hidden-queues`` are
+still shown when explicitly requested via ``-q, --queue``. This is useful
+for hiding catch-all queues (e.g. a queue that contains all nodes) that
+would otherwise clutter the default output::
+
+  # /etc/xdg/flux/flux-resource.toml
+  [list]
+  hidden-queues = ["all", "pall"]
 
 See :man1:`flux-jobs` :ref:`flux_jobs_configuration` section for more
 information about the order of precedence for loading these config files.
