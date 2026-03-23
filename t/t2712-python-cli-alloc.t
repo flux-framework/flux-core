@@ -60,9 +60,10 @@ test_expect_success 'flux alloc works without tty' '
 	test "$(cat notty.out)" = "rank0/core0"
 '
 test_expect_success 'flux alloc runs one broker per node by default' '
-	$runpty -o multi.out flux alloc -n5 flux lsattr -v &&
-	test_debug "cat multi.out" &&
-	grep "size  *2" multi.out
+	flux alloc -n5 flux getattr size >multi.out &&
+	test_debug "echo got size $(cat multi.out)" &&
+	test_debug "flux jobs $(flux job last)" &&
+	test "$(cat multi.out)" -eq $(flux jobs -no {nnodes} $(flux job last))
 '
 test_expect_success 'flux alloc -v prints jobid on stderr' '
 	$runpty -o verbose.out flux alloc -n1 -v flux lsattr -v &&
