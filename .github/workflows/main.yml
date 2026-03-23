@@ -234,7 +234,7 @@ jobs:
       if: success() && matrix.coverage
       env:
         DOCKER_REPO:
-      uses: codecov/codecov-action@v5.5.2
+      uses: codecov/codecov-action@v5.5.3
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         flags: ${{matrix.coverage_flags}}
