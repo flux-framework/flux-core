@@ -49,16 +49,26 @@ test_expect_success 'flux alloc fails if N > n' '
 	test_expect_code 1 flux alloc -N2 -n1 --dry-run hostname
 '
 test_expect_success 'flux alloc works' '
-	$runpty -o single.out flux alloc -n1 flux resource list -s up -no {rlist} && grep "rank0/core0" single.out
+	$runpty -o single.out flux alloc -n1 \
+		flux resource list -s up -no {rlist} &&
+	grep "rank0/core0" single.out
 '
 test_expect_success 'flux alloc works without tty' '
-	flux alloc -n1 flux resource list -s up -no {rlist} </dev/null >notty.out && test_debug "echo notty: $(cat notty.out)" && test "$(cat notty.out)" = "rank0/core0"
+	flux alloc -n1 flux resource list -s up -no {rlist} \
+		</dev/null >notty.out &&
+	test_debug "echo notty: $(cat notty.out)" &&
+	test "$(cat notty.out)" = "rank0/core0"
 '
 test_expect_success 'flux alloc runs one broker per node by default' '
-	$runpty -o multi.out flux alloc -n5 flux lsattr -v && test_debug "cat multi.out" && grep "size  *2" multi.out
+	flux alloc -n5 flux getattr size >multi.out &&
+	test_debug "echo got size $(cat multi.out)" &&
+	test_debug "flux jobs $(flux job last)" &&
+	test "$(cat multi.out)" -eq $(flux jobs -no {nnodes} $(flux job last))
 '
 test_expect_success 'flux alloc -v prints jobid on stderr' '
-$runpty -o verbose.out flux alloc -n1 -v flux lsattr -v && test_debug "cat verbose.out" && grep "jobid: " verbose.out
+	$runpty -o verbose.out flux alloc -n1 -v flux lsattr -v &&
+	test_debug "cat verbose.out" &&
+	grep "jobid: " verbose.out
 '
 test_expect_success 'flux alloc --bg option works' '
 	jobid=$(flux alloc -n1 -v --bg) &&
@@ -146,22 +156,22 @@ test_expect_success 'flux alloc: MPI vars are not set in initial program' '
 	test_must_fail grep OMPI_MCA_pmix envtest.out
 '
 test_expect_success 'flux alloc: --dump works' '
-        jobid=$(flux alloc -N1 --bg --dump) &&
+	jobid=$(flux alloc -N1 --bg --dump) &&
 	flux shutdown $jobid &&
 	flux job wait-event $jobid clean &&
-        tar tvf flux-${jobid}-dump.tgz
+	tar tvf flux-${jobid}-dump.tgz
 '
 test_expect_success 'flux alloc: --dump=FILE works' '
-        jobid=$(flux alloc -N1 --bg --dump=testdump.tgz) &&
+	jobid=$(flux alloc -N1 --bg --dump=testdump.tgz) &&
 	flux shutdown $jobid &&
 	flux job wait-event $jobid clean &&
-        tar tvf testdump.tgz
+	tar tvf testdump.tgz
 '
 test_expect_success 'flux alloc: --dump=FILE works with mustache' '
-        jobid=$(flux alloc -N1 --bg --dump=testdump-{{id}}.tgz) &&
+	jobid=$(flux alloc -N1 --bg --dump=testdump-{{id}}.tgz) &&
 	flux shutdown $jobid &&
 	flux job wait-event $jobid clean &&
-        tar tvf testdump-${jobid}.tgz
+	tar tvf testdump-${jobid}.tgz
 '
 test_expect_success 'flux alloc: does not suppress log messages' '
 	$runpty -o logmsgs.out flux alloc -n1 --cwd=/noexist pwd &&
