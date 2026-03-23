@@ -8,6 +8,7 @@ EXTRA_DIST = \
 	NOTICE.LLNS \
 	LICENSE \
 	README.md \
+	AGENTS.md \
 	vscode.md \
 	NEWS.md \
 	CONTRIBUTING.md \
