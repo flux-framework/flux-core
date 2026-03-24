@@ -89,6 +89,7 @@ TESTSCRIPTS = \
 	t0036-broker-rundir.t \
 	t0037-content-files-checkpoint.t \
 	t0038-rreq-reader.t \
+	t0039-shape-parser.t \
 	t0025-broker-state-machine.t \
 	t0027-broker-groups.t \
 	t0040-flux-sproc.t \
