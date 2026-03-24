@@ -41,6 +41,7 @@ from _flux._core import ffi, lib
 from flux.brokermod import resolve_entry_point
 from flux.core.handle import Flux
 from flux.importer import import_path
+from flux.proctitle import set_proctitle
 
 
 def die(msg):
@@ -75,6 +76,10 @@ def main():
     if args_p[0] != ffi.NULL:
         modargs = ffi.string(args_p[0]).decode("utf-8")
         lib.free(args_p[0])
+
+    name_p = ffi.cast("char *", lib.flux_aux_get(h.handle, b"flux::name"))
+    if name_p != ffi.NULL:
+        set_proctitle(ffi.string(name_p).decode())
 
     if lib.flux_module_register_handlers(h.handle, error) < 0:
         die_error("flux_module_register_handlers", error[0])

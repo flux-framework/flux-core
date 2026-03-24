@@ -17,6 +17,7 @@ import sys
 import flux
 from flux.job import Jobspec
 from flux.job.frobnicator import JobFrobnicator
+from flux.proctitle import set_proctitle
 
 LOGGER = logging.getLogger("flux-job-frobnicator")
 
@@ -49,6 +50,8 @@ class HelpAction(argparse.Action):
 
 @flux.util.CLIMain(LOGGER)
 def main():
+
+    set_proctitle("job-frobnicator")
 
     parser = argparse.ArgumentParser(
         prog="flux-job-frobnicator",

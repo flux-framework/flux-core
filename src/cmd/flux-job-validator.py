@@ -16,6 +16,7 @@ import sys
 
 import flux
 from flux.job.validator import JobValidator
+from flux.proctitle import set_proctitle
 
 LOGGER = logging.getLogger("flux-job-validator")
 
@@ -48,6 +49,8 @@ class HelpAction(argparse.Action):
 
 @flux.util.CLIMain(LOGGER)
 def main():
+
+    set_proctitle("job-validator")
 
     parser = argparse.ArgumentParser(
         prog="flux-job-validator",

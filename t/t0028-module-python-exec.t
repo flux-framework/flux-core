@@ -46,6 +46,37 @@ except Exception:
 }
 
 ##
+# flux.proctitle unit tests
+##
+
+test_expect_success 'set_proctitle sets /proc/self/comm on Linux' '
+	flux python -c "
+import platform, sys
+from flux.proctitle import set_proctitle
+set_proctitle(\"flux-test-proc\")
+if platform.system() == \"Linux\":
+    with open(\"/proc/self/comm\") as f:
+        comm = f.read().strip()
+    if comm != \"flux-test-proc\":
+        print(f\"expected flux-test-proc, got {comm!r}\", file=sys.stderr)
+        sys.exit(1)
+"
+'
+test_expect_success 'set_proctitle truncates long names to 15 chars' '
+	flux python -c "
+import platform, sys
+from flux.proctitle import set_proctitle
+set_proctitle(\"flux-this-name-is-too-long\")
+if platform.system() == \"Linux\":
+    with open(\"/proc/self/comm\") as f:
+        comm = f.read().strip()
+    if len(comm) > 15:
+        print(f\"expected truncation to 15 chars, got {comm!r}\", file=sys.stderr)
+        sys.exit(1)
+"
+'
+
+##
 # Error cases (direct invocation without FLUX_MODULE_URI)
 ##
 
