@@ -15,8 +15,12 @@ import unittest
 
 import subflux  # noqa: F401 - for PYTHONPATH
 from flux.resource import InfeasibleRequest, InsufficientResources
+from flux.resource.ResourceCount import ResourceCount
 from flux.resource.Rv1Pool import ResourceRequest, Rv1Pool
 from pycotap import TAPTestRunner
+
+# Sentinel for "not provided" — distinguishes omitted from None (unbounded).
+_UNSET = object()
 
 
 def rr(
@@ -27,10 +31,31 @@ def rr(
     duration=0.0,
     constraint=None,
     exclusive=False,
+    nnodes_max=_UNSET,
+    nslots_max=_UNSET,
 ):
-    """Convenience wrapper to build a ResourceRequest for tests."""
+    """Convenience wrapper to build a ResourceRequest for tests.
+
+    Constructs :class:`ResourceCount` objects from flat parameters.  For node-based
+    layouts the per-node slot count is derived as ``nslots // nnodes``.
+    Pass ``nnodes_max=None`` for an unbounded node range; omit it for a
+    fixed count equal to *nnodes*.  Same semantics for ``nslots_max``.
+    """
+    if nnodes_max is _UNSET:
+        nnodes_max = nnodes
+    if nslots_max is _UNSET:
+        nslots_max = nslots
+
+    if nnodes > 0:
+        spn = nslots // nnodes  # slots per node (fixed)
+        node_count = ResourceCount(nnodes, nnodes_max)
+        slot_count = ResourceCount(spn, spn)
+    else:
+        node_count = None
+        slot_count = ResourceCount(nslots, nslots_max)
+
     return ResourceRequest(
-        nnodes, nslots, slot_size, gpu_per_slot, duration, constraint, exclusive
+        node_count, slot_count, slot_size, gpu_per_slot, duration, constraint, exclusive
     )
 
 
@@ -515,6 +540,40 @@ class TestRv1PoolCheckFeasibility(unittest.TestCase):
         with self.assertRaises(InsufficientResources):
             self.pool.alloc(2, rr(0, 9, 1))
 
+    def test_stepped_node_count_raises(self):
+        """Stepped node count (e.g. powers-of-two) is rejected immediately."""
+        jobspec = {
+            "version": 1,
+            "resources": [
+                {
+                    "type": "node",
+                    "count": {"min": 1, "max": 4, "operator": "*", "operand": 2},
+                    "with": [
+                        {
+                            "type": "slot",
+                            "count": 1,
+                            "with": [{"type": "core", "count": 1}],
+                        }
+                    ],
+                }
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 60.0}},
+        }
+        req = self.pool.parse_resource_request(jobspec)
+        with self.assertRaises(InfeasibleRequest):
+            self.pool.check_feasibility(req)
+
+    def test_stepped_slot_count_raises(self):
+        """Stepped slot count is rejected immediately."""
+        from flux.idset import IDset
+
+        req = ResourceRequest(
+            None, ResourceCount(2, 8, IDset("2,4,8")), 1, 0, 60.0, None, False
+        )
+        with self.assertRaises(InfeasibleRequest):
+            self.pool.check_feasibility(req)
+
 
 class TestRv1PoolCopy(unittest.TestCase):
     def setUp(self):
@@ -929,40 +988,111 @@ class TestFromJobspec(unittest.TestCase):
                 self.assertIsNone(rr.constraint)
 
 
-class TestParseCount(unittest.TestCase):
-    """Tests for ResourceRequest._parse_count."""
+class TestFromJobspecNonV1(unittest.TestCase):
+    """Tests for from_jobspec() with non-V1 resource hierarchies (regression of #6632).
 
-    def test_integer(self):
-        self.assertEqual(ResourceRequest._parse_count(4), (4, 4))
+    Expected nnodes/nslots values are cross-checked against the jjc-reader
+    output in t/t0024-jjc-reader.t for the corresponding use_case YAML files.
+    """
 
-    def test_dict_bounded(self):
-        self.assertEqual(ResourceRequest._parse_count({"min": 2, "max": 8}), (2, 8))
+    def test_nonv1_version_accepted(self):
+        """version != 1 is accepted (no duration check); slot→core parsed correctly.
 
-    def test_dict_unbounded(self):
-        self.assertEqual(ResourceRequest._parse_count({"min": 2}), (2, None))
+        Equivalent to use_case_2.5 (version: 999, slot(10)→core(1)).
+        jjc-reader: nodefactor=0 nnodes=0 nslots=10 slot_size=1
+        """
+        jobspec = {
+            "version": 999,
+            "resources": [
+                {
+                    "type": "slot",
+                    "count": 10,
+                    "with": [{"type": "core", "count": 1}],
+                }
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 3600.0}},
+        }
+        req = ResourceRequest.from_jobspec(jobspec)
+        self.assertEqual(req.nnodes, 0)
+        self.assertEqual(req.nslots, 10)
+        self.assertEqual(req.slot_size, 1)
 
-    def test_dict_explicit_default_operator_accepted(self):
-        """Explicit operator='+' operand=1 is the implied default — accepted."""
-        self.assertEqual(
-            ResourceRequest._parse_count(
-                {"min": 2, "max": 8, "operator": "+", "operand": 1}
-            ),
-            (2, 8),
-        )
+    def test_unknown_toplevel_type_skipped(self):
+        """Unknown top-level resource type is skipped; node found as sibling.
 
-    def test_dict_unsupported_operator_raises(self):
-        """operator='*' is not yet supported — raises ValueError."""
-        with self.assertRaises(ValueError):
-            ResourceRequest._parse_count(
-                {"min": 2, "max": 8, "operator": "*", "operand": 2}
-            )
+        Equivalent to use_case_1.9 (version: 1, ssd + node(1)→slot(1)→core(1)).
+        jjc-reader: nodefactor=1 nnodes=1 nslots=1 slot_size=1
+        """
+        jobspec = {
+            "version": 1,
+            "resources": [
+                {"type": "ssd", "count": 100000, "exclusive": True},
+                {
+                    "type": "node",
+                    "count": 1,
+                    "exclusive": False,
+                    "with": [
+                        {
+                            "type": "slot",
+                            "count": 1,
+                            "with": [{"type": "core", "count": 1}],
+                        }
+                    ],
+                },
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 3600.0}},
+        }
+        req = ResourceRequest.from_jobspec(jobspec)
+        self.assertEqual(req.nnodes, 1)
+        self.assertEqual(req.nslots, 1)
+        self.assertEqual(req.slot_size, 1)
 
-    def test_dict_nonunit_operand_raises(self):
-        """operator='+' with operand≠1 is not yet supported — raises ValueError."""
-        with self.assertRaises(ValueError):
-            ResourceRequest._parse_count(
-                {"min": 2, "max": 8, "operator": "+", "operand": 4}
-            )
+    def test_complex_hierarchy_nodefactor(self):
+        """Counts from non-node types above node accumulate into nodefactor.
+
+        Equivalent to use_case_1.10 shape: rack(5)→slot(2)→node(1)→slot(1)→core(2)
+        jjc-reader: nodefactor=10 nnodes=1 nslots=1 slot_size=2 exclusive=true
+        Old sched-simple: nnodes=10, nslots=10, slot_size=2
+        """
+        jobspec = {
+            "version": 1,
+            "resources": [
+                {
+                    "type": "rack",
+                    "count": 5,
+                    "with": [
+                        {
+                            "type": "slot",
+                            "count": 2,
+                            "with": [
+                                {
+                                    "type": "node",
+                                    "count": 1,
+                                    "exclusive": True,
+                                    "with": [
+                                        {
+                                            "type": "slot",
+                                            "count": 1,
+                                            "with": [{"type": "core", "count": 2}],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 3600.0}},
+        }
+        req = ResourceRequest.from_jobspec(jobspec)
+        # nodefactor=5*2=10, nnodes=10*1=10, nslots=1*10=10, slot_size=2
+        self.assertEqual(req.nnodes, 10)
+        self.assertEqual(req.nslots, 10)
+        self.assertEqual(req.slot_size, 2)
+        self.assertTrue(req.exclusive)
 
 
 class TestRangeAlloc(unittest.TestCase):
@@ -1113,7 +1243,6 @@ class TestRangeAlloc(unittest.TestCase):
         )
         self.assertEqual(req.nnodes, 2)
         self.assertEqual(req.nnodes_max, 2)
-
 
 
 if __name__ == "__main__":
