@@ -1373,7 +1373,6 @@ test_expect_success 'flux job list outputs no project and bank by default' '
 	flux job list -s inactive | grep $jobid | jq -e ".project == null" &&
 	flux job list -s inactive | grep $jobid | jq -e ".bank == null"
 '
-# initially put job on hold, jobspec-updates don't matter after the job is running
 test_expect_success 'flux job list outputs project and bank if one set' '
 	jobid=`flux submit --urgency=hold true | flux job id` &&
 	echo $jobid > jobprojectbank2.id &&
