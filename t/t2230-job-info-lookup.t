@@ -105,8 +105,6 @@ test_expect_success 'flux job info jobspec fails on bad id' '
 	test_must_fail flux job info 12345 jobspec
 '
 
-# N.B. In future may wish to update expiration via `flux update` tool
-# when feature is available
 test_expect_success 'flux job info applies resource updates' '
 	jobid=$(flux submit --wait-event=start sleep 300) &&
 	echo $jobid > updated_R.id &&
