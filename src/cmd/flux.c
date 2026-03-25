@@ -422,24 +422,36 @@ void exec_subcommand_dir (bool vopt,
 struct similar_cmds {
     int min;
     zlist_t *cmds;
-    int cmdsstrlen;
     const char *argv0;
 };
+
+/* return true if no dups */
+static bool similar_dupcheck (struct similar_cmds *similar,
+                              const char *cmd)
+{
+    char *str = zlist_first (similar->cmds);
+    while (str) {
+        if (streq (str, cmd))
+            return false;
+        str = zlist_next (similar->cmds);
+    }
+    return true;
+}
 
 static void similar_check (struct similar_cmds *similar,
                            const char *cmd)
 {
     int distance = levenshtein_distance (cmd, similar->argv0);
     if (distance > 0 && distance <= similar->min) {
-        char *cpy = xstrdup (cmd);
         if (distance < similar->min) {
             zlist_purge (similar->cmds);
-            similar->cmdsstrlen = 0;
+            similar->min = distance;
         }
-        similar->min = distance;
-        zlist_append (similar->cmds, cpy);
-        zlist_freefn (similar->cmds, cpy, free, true);
-        similar->cmdsstrlen += strlen (cpy);
+        if (similar_dupcheck (similar, cmd)) {
+            char *cpy = xstrdup (cmd);
+            zlist_append (similar->cmds, cpy);
+            zlist_freefn (similar->cmds, cpy, free, true);
+        }
     }
 }
 
@@ -474,7 +486,7 @@ static void find_similar_command (const char *searchpath, const char *argv0)
 {
     extern struct builtin_cmd builtin_cmds[];
     struct builtin_cmd *builtin_cmd = &builtin_cmds[0];
-    struct similar_cmds similar = {INT_MAX, NULL, 0, argv0};
+    struct similar_cmds similar = {INT_MAX, NULL, argv0};
     char *searchpathcpy;
     char *dir, *saveptr = NULL, *a1;
 

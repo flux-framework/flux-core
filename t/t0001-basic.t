@@ -861,6 +861,18 @@ test_expect_success 'multiple equally similar commands are output' '
 	grep "top" invalid4.out
 '
 
+test_expect_success 'duplicate commands are not output' '
+	TEMPDIR1=$(mktemp -d) &&
+	TEMPDIR2=$(mktemp -d) &&
+	touch $TEMPDIR1/flux-beef &&
+	chmod +x $TEMPDIR1/flux-beef &&
+	touch $TEMPDIR2/flux-beef &&
+	chmod +x $TEMPDIR2/flux-beef &&
+	test_must_fail sh -c "FLUX_EXEC_PATH=$TEMPDIR1:$TEMPDIR2 flux peef > invalid5.out 2>&1" &&
+	count=$(grep -o beef invalid5.out | wc -l) &&
+	test $count -eq 1
+'
+
 test_expect_success 'at most 3 suggested similar commands are output' '
 	TEMPDIR=$(mktemp -d) &&
 	touch $TEMPDIR/flux-mama &&
