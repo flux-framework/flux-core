@@ -88,6 +88,7 @@ TESTSCRIPTS = \
 	t0035-content-sqlite-checkpoint.t \
 	t0036-broker-rundir.t \
 	t0037-content-files-checkpoint.t \
+	t0038-rreq-reader.t \
 	t0025-broker-state-machine.t \
 	t0027-broker-groups.t \
 	t0040-flux-sproc.t \
@@ -429,6 +430,7 @@ dist_check_SCRIPTS = \
 	scripts/sqlite-query.py \
 	scripts/sqlite-write.py \
 	scripts/pipe.py \
+	scripts/rreq-reader.py \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
 	valgrind/workload.d/job-info \
