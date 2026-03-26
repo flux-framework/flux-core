@@ -146,6 +146,28 @@ class TestRv1PoolConstruct(unittest.TestCase):
         p = Rv1Pool(R)
         self.assertAlmostEqual(p.expiration, 1234.5)
 
+    def test_scheduling_stored(self):
+        """R.scheduling is stored and round-trips through to_dict."""
+        sched = {"graph": {"nodes": [], "edges": []}}
+        R = dict(R_4x4, scheduling=sched)
+        p = Rv1Pool(R)
+        self.assertEqual(p._scheduling, sched)
+        self.assertEqual(p.to_dict()["scheduling"], sched)
+
+    def test_scheduling_propagates_to_alloc(self):
+        """R.scheduling rides along into the allocation R per RFC 20."""
+        sched = {"graph": {"nodes": [], "edges": []}}
+        R = dict(R_4x4, scheduling=sched)
+        pool = Rv1Pool(R)
+        result = pool.alloc(1, rr(nslots=1, slot_size=1))
+        self.assertEqual(result._scheduling, sched)
+        self.assertEqual(result.to_dict()["scheduling"], sched)
+
+    def test_no_scheduling_absent_from_to_dict(self):
+        """to_dict omits scheduling key when R.scheduling is not set."""
+        p = Rv1Pool(R_4x4)
+        self.assertNotIn("scheduling", p.to_dict())
+
 
 class TestRv1PoolUpDown(unittest.TestCase):
     def setUp(self):

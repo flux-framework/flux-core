@@ -281,8 +281,10 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
         if R is not None and not isinstance(R, (str, Mapping)):
             raise TypeError(f"Rv1Pool: expected str or Mapping, got {type(R)!r}")
 
-        # Rv1Set.__init__ parses the core resource structure.
-        super().__init__(R)
+        # Rv1Set.__init__ parses the core resource structure.  Pass
+        # keep_scheduling=True so R.scheduling is retained for propagation
+        # to allocations per RFC 20 §scheduling, without a second JSON parse.
+        super().__init__(R, keep_scheduling=True)
 
         # Add pool-specific fields to each rank entry.
         for info in self._ranks.values():
@@ -320,6 +322,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             for rank in rank_set
             if rank in self._ranks
         }
+        new._scheduling = getattr(self, "_scheduling", None)
         new._job_state = {}
         new.log = self.log
         return new
@@ -660,6 +663,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             for prop, ranks in self._properties.items()
             if ranks & selected_ranks
         }
+        result._scheduling = getattr(self, "_scheduling", None)
         result._ranks = {}
         result._job_state = {}
         result.log = self.log
@@ -687,6 +691,13 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
         self.log(syslog.LOG_DEBUG, f"alloc: {JobID(jobid).f58}: {result.dumps()}")
         return result
 
+    def to_dict(self) -> dict:
+        """Return R as a parsed JSON dict, including R.scheduling if present."""
+        d = super().to_dict()
+        if self._scheduling:
+            d["scheduling"] = self._scheduling
+        return d
+
     # ------------------------------------------------------------------
     # ResourcePoolImplementation — structural copies
     # ------------------------------------------------------------------
@@ -704,6 +715,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             new._ranks[rank] = dict(info)
             new._ranks[rank]["allocated_cores"] = set(info["allocated_cores"])
             new._ranks[rank]["allocated_gpus"] = set(info["allocated_gpus"])
+        new._scheduling = getattr(self, "_scheduling", None)
         new._job_state = dict(self._job_state)
         # Do not copy self.log: copies are used for simulation (forecast /
         # shadow-time) and their alloc/free calls must not emit log lines.
