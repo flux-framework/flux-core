@@ -89,13 +89,22 @@ class Rv1Set(ResourceSetImplementation):
 
     version = 1
 
-    def __init__(self, arg=None):
-        """Construct from an R JSON string, dict, or ``None`` (empty)."""
+    def __init__(self, arg=None, keep_scheduling: bool = False):
+        """Construct from an R JSON string, dict, or ``None`` (empty).
+
+        Args:
+            arg: R as a JSON string, parsed dict, or ``None`` for empty.
+            keep_scheduling: If True, store the opaque ``R.scheduling`` key
+                so it can be propagated to allocations.  Non-scheduler
+                components should leave this False (the default) to avoid
+                retaining potentially large scheduler-private data.
+        """
         self._expiration: float = 0.0
         self._starttime: float = 0.0
         self._has_nodelist: bool = False
         self._ranks: Dict[int, dict] = {}
         self._properties: Dict[str, Set[int]] = {}
+        self._scheduling = None
 
         if arg is None:
             return
@@ -109,6 +118,9 @@ class Rv1Set(ResourceSetImplementation):
         version = arg["version"]  # KeyError if missing
         if version != 1:
             raise ValueError(f"R version {version} not supported")
+
+        if keep_scheduling:
+            self._scheduling = arg.get("scheduling")
 
         execution = arg.get("execution", {})
         self._expiration = float(execution.get("expiration") or 0.0)

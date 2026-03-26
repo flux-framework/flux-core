@@ -146,6 +146,28 @@ class TestRv1PoolConstruct(unittest.TestCase):
         p = Rv1Pool(R)
         self.assertAlmostEqual(p.expiration, 1234.5)
 
+    def test_scheduling_stored(self):
+        """R.scheduling is stored and round-trips through to_dict."""
+        sched = {"graph": {"nodes": [], "edges": []}}
+        R = dict(R_4x4, scheduling=sched)
+        p = Rv1Pool(R)
+        self.assertEqual(p._scheduling, sched)
+        self.assertEqual(p.to_dict()["scheduling"], sched)
+
+    def test_scheduling_propagates_to_alloc(self):
+        """R.scheduling rides along into the allocation R per RFC 20."""
+        sched = {"graph": {"nodes": [], "edges": []}}
+        R = dict(R_4x4, scheduling=sched)
+        pool = Rv1Pool(R)
+        result = pool.alloc(1, rr(nslots=1, slot_size=1))
+        self.assertEqual(result._scheduling, sched)
+        self.assertEqual(result.to_dict()["scheduling"], sched)
+
+    def test_no_scheduling_absent_from_to_dict(self):
+        """to_dict omits scheduling key when R.scheduling is not set."""
+        p = Rv1Pool(R_4x4)
+        self.assertNotIn("scheduling", p.to_dict())
+
 
 class TestRv1PoolUpDown(unittest.TestCase):
     def setUp(self):
@@ -302,6 +324,21 @@ class TestRv1PoolAlloc(unittest.TestCase):
         d = a.to_dict()
         self.assertIn("nodelist", d["execution"])
         self.assertTrue(d["execution"]["nodelist"])
+
+    def test_alloc_propagates_properties(self):
+        # Properties on allocated ranks should appear in the allocated R so
+        # that consumers (e.g. schedulers on reconnect) can read them back.
+        pool = Rv1Pool(R_props)  # ranks 0-1: "fast", ranks 2-3: "slow"
+        a = pool.alloc(1, rr(0, 1, 1, constraint={"properties": ["fast"]}))
+        self.assertIn("fast", a._properties)
+        self.assertNotIn("slow", a._properties)
+
+    def test_alloc_excludes_unmatched_properties(self):
+        # Properties that belong to ranks not in the allocation must not appear.
+        pool = Rv1Pool(R_props)
+        a = pool.alloc(1, rr(0, 1, 1, constraint={"properties": ["slow"]}))
+        self.assertIn("slow", a._properties)
+        self.assertNotIn("fast", a._properties)
 
 
 class TestRv1PoolWorstFit(unittest.TestCase):
