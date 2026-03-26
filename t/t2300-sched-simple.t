@@ -24,6 +24,23 @@ list_R() {
 	done
 }
 
+test_expect_success 'sched-simple: reload resource with properties and R.scheduling' '
+	flux module unload sched-simple &&
+	flux kvs put resource.R="$(flux kvs get resource.R |
+		flux R set-property xx:0-1 |
+		jq ".+{scheduling:{test:\"data\"}}")" &&
+	flux module reload resource noverify &&
+	flux module load sched-simple
+'
+test_expect_success 'sched-simple: allocated R contains execution.properties' '
+	flux run -n1 --requires=xx hostname &&
+	flux job info $(flux job last) R | jq -e ".execution.properties.xx"
+'
+test_expect_success 'sched-simple: allocated R contains R.scheduling' '
+	flux run -n1 hostname &&
+	flux job info $(flux job last) R | jq -e ".scheduling.test == \"data\""
+'
+
 test_expect_success 'unload job-exec module to prevent job execution' '
 	flux module remove job-exec
 '
