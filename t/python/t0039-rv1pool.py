@@ -303,6 +303,21 @@ class TestRv1PoolAlloc(unittest.TestCase):
         self.assertIn("nodelist", d["execution"])
         self.assertTrue(d["execution"]["nodelist"])
 
+    def test_alloc_propagates_properties(self):
+        # Properties on allocated ranks should appear in the allocated R so
+        # that consumers (e.g. schedulers on reconnect) can read them back.
+        pool = Rv1Pool(R_props)  # ranks 0-1: "fast", ranks 2-3: "slow"
+        a = pool.alloc(1, rr(0, 1, 1, constraint={"properties": ["fast"]}))
+        self.assertIn("fast", a._properties)
+        self.assertNotIn("slow", a._properties)
+
+    def test_alloc_excludes_unmatched_properties(self):
+        # Properties that belong to ranks not in the allocation must not appear.
+        pool = Rv1Pool(R_props)
+        a = pool.alloc(1, rr(0, 1, 1, constraint={"properties": ["slow"]}))
+        self.assertIn("slow", a._properties)
+        self.assertNotIn("fast", a._properties)
+
 
 class TestRv1PoolWorstFit(unittest.TestCase):
     """Verify worst-fit picks the node with the most free cores."""

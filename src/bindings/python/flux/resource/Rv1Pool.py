@@ -648,12 +648,18 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             actual_nslots = allocated_slots
 
         # Build result pool and update allocation state on self
+        selected_ranks = {rank for rank, _, _, _ in selected}
+
         result = object.__new__(Rv1Pool)
         result._expiration = 0.0
         result._starttime = 0.0
         result._has_nodelist = True
         result._nslots = actual_nslots
-        result._properties = {}
+        result._properties = {
+            prop: ranks & selected_ranks
+            for prop, ranks in self._properties.items()
+            if ranks & selected_ranks
+        }
         result._ranks = {}
         result._job_state = {}
         result.log = self.log
