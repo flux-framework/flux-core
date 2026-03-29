@@ -62,6 +62,7 @@ universe size); and performs *first* and *last* operations in constant time.
 :func:`idset_create` creates an idset. :var:`size` specifies the universe
 size, which is the maximum *id* it can hold, plus one. The universe size is
 fixed unless :var:`flags` specify otherwise (see FLAGS below).
+The universe size must not exceed IDSET_MAX_UNIVERSE.
 
 :func:`idset_destroy` destroys an idset.
 
@@ -143,6 +144,9 @@ EINVAL
 
 ENOMEM
    Out of memory.
+
+ERANGE
+   Set would exceed IDSET_MAX_UNIVERSE.
 
 
 RESOURCES
