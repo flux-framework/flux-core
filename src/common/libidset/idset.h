@@ -38,6 +38,7 @@ typedef struct {
 } idset_error_t;
 
 #define IDSET_INVALID_ID    (UINT_MAX - 1)
+#define IDSET_MAX_UNIVERSE  ((size_t)(INT_MAX) + 1)
 
 /* Create/destroy an idset.
  * Set the initial universe size to 'size' (0 means implementation uses a

@@ -83,6 +83,9 @@ EINVAL
 ENOMEM
    Out of memory.
 
+ERANGE
+   Set would exceed IDSET_MAX_UNIVERSE.
+
 
 RESOURCES
 =========
