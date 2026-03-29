@@ -43,6 +43,10 @@ struct idset *idset_create (size_t size, int flags)
         return NULL;
     if (size == 0)
         size = IDSET_DEFAULT_SIZE;
+    if (size > IDSET_MAX_UNIVERSE) {
+        errno = ERANGE;
+        return NULL;
+    }
     if (!(idset = malloc (sizeof (*idset))))
         return NULL;
     if ((flags & IDSET_FLAG_INITFULL))
@@ -134,7 +138,12 @@ static int idset_grow (struct idset *idset, size_t size)
 
     while (newsize < size)
         newsize <<= 1;
-
+    if (newsize > IDSET_MAX_UNIVERSE)
+        newsize = IDSET_MAX_UNIVERSE;
+    if (newsize < size) {
+        errno = ERANGE;
+        return -1;
+    }
     if (newsize > idset->T.M) {
         if (!(idset->flags & IDSET_FLAG_AUTOGROW)) {
             errno = EINVAL;
