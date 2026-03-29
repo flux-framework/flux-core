@@ -129,6 +129,9 @@ EINVAL
 ENOMEM
    Out of memory.
 
+ERANGE
+   Set would exceed MAX_UNIVERSE_SIZE.
+
 
 RESOURCES
 =========
