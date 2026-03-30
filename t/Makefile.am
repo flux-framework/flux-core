@@ -334,6 +334,7 @@ TESTSCRIPTS = \
 	python/t0039-rv1pool.py \
 	python/t0040-proctitle.py \
 	python/t0041-resource-count.py \
+	python/t0042-job-shape-parser.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY
