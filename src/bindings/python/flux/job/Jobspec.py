@@ -16,10 +16,24 @@ import math
 import numbers
 import os
 import threading
+from types import SimpleNamespace
 
 import yaml
 from _flux._core import ffi
 from flux import Flux, hostlist, idset
+from flux.cli.plugin import CLIPluginRegistry
+from flux.constraint.parser import ConstraintSyntaxError
+from flux.job._utils import (
+    MiniConstraintParser,
+    URIArg,
+    decode_duration,
+    dependency_array_create,
+    get_filtered_environment,
+    get_filtered_rlimits,
+    jobspec_add_file,
+    parse_jobspec_keyval,
+    parse_signal_option,
+)
 from flux.util import Fileref, del_treedict, parse_fsd, set_treedict
 
 # thread local storage to support shared and cached validation data
@@ -1322,3 +1336,302 @@ class JobspecV1(Jobspec):
         if conf is not None:
             jobspec.add_file("conf.json", conf)
         return jobspec
+
+    def apply_options(
+        self,
+        args=None,
+        *,
+        prog=None,
+        _preinit=True,
+        env=None,
+        rlimit=None,
+        signal=None,
+        taskmap=None,
+        dependency=None,
+        requires=None,
+        shell_options=None,
+        time_limit=None,
+        attributes=None,
+        add_file=None,
+        **kwargs,
+    ):
+        """Apply submission options to this jobspec.
+
+        Modifies the jobspec in-place and returns *self* for method chaining.
+        Options may be passed as explicit keyword arguments, via *args* (an
+        :class:`argparse.Namespace` or any object with matching attributes),
+        or both — keyword arguments take precedence over *args* attributes.
+        All options are optional; absent options are silently ignored.
+
+        The options correspond to ``flux submit`` command-line flags; see
+        :linux:man1:`flux-submit` or run ``flux submit --help`` for general
+        option semantics. Options with non-obvious Python-specific behavior
+        are described in full below.
+
+        Note:
+            ``env`` and ``rlimit`` are only applied when explicitly passed
+            as keyword arguments, or when *args* is provided (the CLI path).
+            Pass ``env=[]`` or ``rlimit=[]`` to propagate the full environment
+            or the default resource-limit set without any filtering rules. To
+            suppress env propagation entirely, pass ``env=["-*"]``.
+
+        Note:
+            ``shell_options`` and ``attributes`` accept plain Python dicts.
+            The CLI-compatible string forms ``setopt`` and ``setattr`` are
+            supported when passed via an *args* namespace (for use by the
+            CLI internally), but are not accepted as keyword arguments.
+            Python code should use ``shell_options`` and ``attributes``, or
+            use :meth:`Jobspec.setattr_shell_option`, :meth:`Jobspec.setattr`.
+
+        Args:
+            args: Optional namespace object (e.g. :class:`argparse.Namespace`)
+                whose attributes supply option values. Explicit keyword
+                arguments override any same-named attribute in *args*. This
+                parameter is mainly used internally by the CLI; most Python
+                code should use keyword arguments directly.
+            prog (str): CLI plugin context name — ``"submit"``, ``"run"``,
+                ``"batch"``, or ``"alloc"``. When set, plugins registered for
+                that command are loaded and their ``modify_jobspec`` hooks are
+                invoked. Defaults to ``None`` (no plugin processing).
+            env (list[str]): Environment filter rules applied to the
+                submitter's environment. Each rule is one of:
+
+                * ``"VAR=VALUE"`` — set *VAR* to *VALUE* in the job
+                  environment, expanding ``$VAR`` references against the
+                  environment built so far.
+                * ``"VAR"`` — import *VAR* from the submitter's environment
+                  (glob patterns are accepted, e.g. ``"SLURM_*"``).
+                * ``"-PATTERN"`` — remove variables matching the glob
+                  *PATTERN*, e.g. ``"-LD_*"``.
+                * ``"^/path/to/file"`` — read additional rules from a file.
+
+                Values containing ``{{…}}`` (e.g. ``"MY_RANK={{rank}}"``)
+                are stored as mustache templates and expanded by the job
+                shell at startup, not at submission time.
+            rlimit (list[str]): Resource-limit propagation rules. Each rule
+                is one of:
+
+                * ``"NAME"`` — propagate ``RLIMIT_NAME`` at its current
+                  value (glob patterns accepted, e.g. ``"*"``).
+                * ``"NAME=VALUE"`` — set ``RLIMIT_NAME`` to *VALUE*; use
+                  ``"unlimited"`` or ``"infinity"`` for ``RLIM_INFINITY``.
+                * ``"-NAME"`` — remove ``RLIMIT_NAME`` from propagation.
+
+                Pass ``rlimit=[]`` to propagate the default set of rlimits
+                (``stack``, ``cpu``, ``fsize``, etc.) without any filtering
+                rules. When *rlimit* is omitted and no *args* namespace is
+                provided, no rlimits are applied (see the Note above).
+            signal (str): Send a signal to the job before its time limit
+                expires. Format: ``"[SIG][@TIME]"`` where *SIG* is a signal
+                name or number (default ``SIGUSR1``) and *TIME* is a duration
+                in Flux Standard Duration (default ``60s``). Examples:
+                ``"USR1@30s"``, ``"TERM@2m"``, ``"@2m"`` (SIGUSR1, 2-minute
+                warning).
+            time_limit (str or float): Job wall-clock limit as a Flux
+                Standard Duration string (e.g. ``"30s"``, ``"1.5h"``,
+                ``"2d"``) or a plain ``float`` number of seconds. See
+                :linux:man7:`flux-standard-duration`. A value of ``0`` means
+                no limit.
+            taskmap (str): Task-to-node mapping scheme, e.g. ``"block"``
+                (default) or ``"cyclic"``. Corresponds to ``--taskmap``.
+            dependency (list[str]): Job dependency URIs, e.g.
+                ``["afterok:f1234abcd", "afterany:f5678ef01"]``. Corresponds
+                to ``--dependency``.
+            requires (list[str]): Node constraint expressions, e.g.
+                ``["host:node1", "rank:0"]``. Multiple entries are
+                AND-combined. Corresponds to ``--requires``.
+            shell_options (dict): Job-shell options as a plain Python dict,
+                e.g. ``{"verbose": 1, "pty": 1}``. Keys and values must be
+                JSON-serializable.
+            attributes (dict): Jobspec attributes as a plain Python dict.
+                Keys may be fully qualified (e.g. ``"system.foo"``) or bare
+                (e.g. ``"foo"``), in which case the ``system.`` namespace is
+                implied. A leading ``"."`` addresses the ``attributes.`` root
+                directly (e.g. ``".user.comment"`` sets
+                ``attributes.user.comment``).
+            add_file (list[str]): Files to attach to the job. Each entry
+                uses one of the following forms:
+
+                * ``"/path/to/file"`` — attach a file from the filesystem;
+                  the name in the jobspec is the basename of the path.
+                * ``"name=/path/to/file"`` — attach a file with an explicit
+                  name.
+                * ``"name=line1\\nline2\\n"`` — attach inline text content
+                  (use ``"\\n"`` for newlines in the string).
+                * ``"name:0755=/path/to/script"`` — attach a file with
+                  explicit octal permissions.
+
+                Corresponds to ``--add-file``.
+
+        Returns:
+            self, to allow method chaining.
+
+        Example:
+
+            Build a jobspec and apply several options at once::
+
+                from flux.job import JobspecV1
+
+                jobspec = JobspecV1.from_command(
+                    ["myapp", "--input", "data.h5"],
+                    num_tasks=16,
+                    cores_per_task=4,
+                ).apply_options(
+                    time_limit="2h",
+                    env=["-LD_PRELOAD", "MY_RANK={{rank}}"],
+                    dependency=["afterok:f1234abcd"],
+                    shell_options={"verbose": 1},
+                    attributes={"system.queue": "gpu"},
+                )
+
+            Attach a helper script and set resource limits::
+
+                jobspec.apply_options(
+                    add_file=["setup.sh=/path/to/setup.sh"],
+                    rlimit=["-*", "nofile=65536"],
+                )
+        """
+        # Collect all named parameters into all_options using locals().
+        #
+        # WHY locals(): every named parameter here corresponds to a supported
+        # option.  Using locals() means adding a new option only requires a new
+        # named parameter — there is no separate list to keep in sync.
+        #
+        # CONSTRAINT: locals() must be called before any other local variable
+        # is assigned.  Any variable introduced above this line is captured and
+        # will appear as an unexpected option key, most likely triggering an
+        # unknown-kwarg error in tests.  New guard variables or temporaries
+        # that must live near the top of the function belong AFTER locals()
+        # (see _env_was_set / _rlimit_was_set below as examples).
+        #
+        # Meta-parameters (self, args, prog, _preinit) are excluded via
+        # _skip; **kwargs is expanded separately to include plugin-defined
+        # option dests.
+        _params = locals()
+        _skip = frozenset({"self", "args", "prog", "_preinit", "kwargs"})
+        all_options = {k: v for k, v in _params.items() if k not in _skip}
+        all_options.update(kwargs)
+
+        # Load plugin registry once — used for kwarg validation and plugins
+        registry = CLIPluginRegistry(prog) if prog else None
+
+        # Validate **kwargs: built-in options are validated by Python itself
+        # (explicit named parameters above)
+        # Only plugin-defined dests reach here:
+        if kwargs:
+            known_plugin_dests = (
+                {opt.dest for opt in registry.options} if registry else set()
+            )
+            unknown = set(kwargs) - known_plugin_dests
+            if unknown:
+                raise TypeError(
+                    "apply_options() got unexpected keyword argument(s): "
+                    + ", ".join(repr(k) for k in sorted(unknown))
+                )
+
+        # Build a unified namespace with three layers of precedence:
+        #   defaults — None for every known key, so merged.key always works
+        #              without getattr fallbacks throughout the body below.
+        #   base     — args namespace values override the None defaults.
+        #   explicit — non-None kwargs override the namespace, ensuring that
+        #              explicitly passed keyword arguments always take priority.
+        base = vars(args) if args is not None else {}
+        defaults = {k: None for k in all_options}
+        explicit = {k: v for k, v in all_options.items() if v is not None}
+        merged = SimpleNamespace(**{**defaults, **base, **explicit})
+
+        # Normalize list-typed parameters: Python callers may pass a bare string
+        # where the CLI always produces a list (argparse nargs="*"). Wrap strings
+        # so downstream code can safely iterate without splitting on characters.
+        for _p in ("requires", "dependency", "env", "rlimit"):
+            if isinstance(getattr(merged, _p, None), str):
+                setattr(merged, _p, [getattr(merged, _p)])
+
+        # Determine if env/rlimit were explicitly provided.  Defined after
+        # locals() so they are not captured in all_options.
+        # - non-None value in all_options: caller passed env= or rlimit= explicitly
+        # - args is not None: CLI path — always propagate using args.env/rlimit
+        _env_was_set = all_options.get("env") is not None or args is not None
+        _rlimit_was_set = all_options.get("rlimit") is not None or args is not None
+
+        # Environment — only applied when explicitly requested (see Note above)
+        if _env_was_set:
+            self.environment, env_expand = get_filtered_environment(merged.env)
+            if env_expand:
+                self.setattr_shell_option("env-expand", env_expand)
+
+        # rlimits — only applied when explicitly requested (see Note above)
+        if _rlimit_was_set:
+            rlimits = get_filtered_rlimits(merged.rlimit)
+            if rlimits:
+                self.setattr_shell_option("rlimit", rlimits)
+
+        # signal
+        if merged.signal:
+            self.setattr_shell_option("signal", parse_signal_option(merged.signal))
+
+        # taskmap
+        if merged.taskmap is not None:
+            self.setattr_shell_option(
+                "taskmap", URIArg(merged.taskmap, "taskmap").entry
+            )
+
+        # dependencies
+        if merged.dependency is not None:
+            self.setattr(
+                "system.dependencies", dependency_array_create(merged.dependency)
+            )
+
+        # constraints
+        if merged.requires is not None:
+            constraint = " ".join(merged.requires)
+            try:
+                self.setattr(
+                    "system.constraints", MiniConstraintParser().parse(constraint)
+                )
+            except ConstraintSyntaxError as exc:
+                raise ValueError(f"--requires='{constraint}': {exc}")
+
+        # setopt strings (namespace-only, CLI path) then shell_options dict
+        for keyval in getattr(merged, "setopt", None) or []:
+            key, val = parse_jobspec_keyval("--setopt", keyval)
+            self.setattr_shell_option(key, val)
+        for key, val in (merged.shell_options or {}).items():
+            self.setattr_shell_option(key, val)
+
+        # time limit
+        if merged.time_limit is not None:
+            self.duration = decode_duration(merged.time_limit)
+
+        # setattr strings (namespace-only, CLI path) then attributes dict
+        for keyval in getattr(merged, "setattr", None) or []:
+            key, val = parse_jobspec_keyval("--setattr", keyval)
+            # No prefix → system. implied; leading '.' → attributes.
+            if not key.startswith((".", "attributes.", "user.", "system.")):
+                key = "system." + key
+            elif key.startswith("."):
+                key = "attributes" + key
+            self.setattr(key, val)
+        for key, val in (merged.attributes or {}).items():
+            if not key.startswith((".", "attributes.", "user.", "system.")):
+                key = "system." + key
+            elif key.startswith("."):
+                key = "attributes" + key
+            self.setattr(key, val)
+
+        # add-file attachments
+        for arg in merged.add_file or []:
+            jobspec_add_file(self, arg)
+
+        # plugins
+        if registry:
+            if _preinit:
+                # Seed missing plugin option defaults (mirrors argparse behavior)
+                for opt in registry.options:
+                    dest = opt.dest
+                    if dest not in merged.__dict__:
+                        merged.__dict__[dest] = opt.kwargs.get("default")
+                registry.preinit(merged)
+            registry.modify_jobspec(merged, self)
+
+        return self

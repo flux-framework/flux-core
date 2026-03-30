@@ -437,6 +437,34 @@ class BatchConfig:
         return get_treedict(self.config or {}, key, default=default)
 
 
+def jobspec_add_file(jobspec, arg):
+    """Process a single --add-file=ARG argument and attach it to jobspec."""
+    perms = None
+    #  Note: Replace any newline escaped by the shell with literal '\n'
+    #  so that newline detection below works for file data passed on
+    #  the command line:
+    name, _, data = arg.replace("\\n", "\n").partition("=")
+    if not data:
+        # No '=' implies path-only argument (no multiline allowed)
+        if "\n" in name:
+            raise ValueError("--add-file: file name missing")
+        data = name
+        name = os.path.basename(data)
+    else:
+        # Check if name specifies permissions after ':'
+        tmpname, _, permstr = name.partition(":")
+        try:
+            perms = int(permstr, base=8)
+            name = tmpname
+        except ValueError:
+            # assume ':' was part of name
+            pass
+    try:
+        jobspec.add_file(name, data, perms=perms)
+    except (TypeError, ValueError, OSError) as exc:
+        raise ValueError(f"--add-file={arg}: {exc}") from None
+
+
 def parse_jobspec_keyval(label, keyval):
     """Parse a key[=value] option as used with --setopt and --setattr
 

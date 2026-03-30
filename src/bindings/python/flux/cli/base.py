@@ -1030,34 +1030,6 @@ class MiniCmd:
         """
         raise NotImplementedError()
 
-    def handle_add_file_arg(self, jobspec, arg):
-        """Process a single argument to --add-file=ARG."""
-        perms = None
-        #  Note: Replace any newline escaped by the shell with literal '\n'
-        #  so that newline detection below works for file data passed on
-        #  on the command line:
-        name, _, data = arg.replace("\\n", "\n").partition("=")
-        if not data:
-            # No '=' implies path-only argument (no multiline allowed)
-            if "\n" in name:
-                raise ValueError("--add-file: file name missing")
-            data = name
-            name = basename(data)
-        else:
-            # Check if name specifies permissions after ':'
-            tmpname, _, permstr = name.partition(":")
-            try:
-                perms = int(permstr, base=8)
-                name = tmpname
-            except ValueError:
-                # assume ':' was part of name
-                pass
-        try:
-            jobspec.add_file(name, data, perms=perms)
-        except (TypeError, ValueError, OSError) as exc:
-            raise ValueError(f"--add-file={arg}: {exc}") from None
-
-    # pylint: disable=too-many-branches,too-many-statements
     def jobspec_create(self, args):
         """
         Create a jobspec from args and return it to caller
