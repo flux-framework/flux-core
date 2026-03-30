@@ -762,6 +762,57 @@ class TestConstraints(unittest.TestCase):
             self.rset.copy_constraint({"not": []})
 
 
+class TestScheduling(unittest.TestCase):
+    """Test R.scheduling key handling in Rv1Set base class."""
+
+    R_with_sched = {
+        "version": 1,
+        "execution": {
+            "R_lite": [{"rank": "0-1", "children": {"core": "0-3"}}],
+            "starttime": 0,
+            "expiration": 0,
+        },
+        "scheduling": {"graph": {"nodes": [], "edges": []}},
+    }
+
+    def test_scheduling_dropped_by_default(self):
+        """By default, R.scheduling is not stored (keep_scheduling=False)."""
+        rset = ResourceSet(self.R_with_sched)
+        self.assertIsNone(rset.impl.scheduling)
+        self.assertNotIn("scheduling", json.loads(rset.encode()))
+
+    def test_scheduling_preserved_with_keep_scheduling(self):
+        """With keep_scheduling=True, R.scheduling is preserved."""
+        rset = ResourceSet(self.R_with_sched, keep_scheduling=True)
+        self.assertEqual(rset.impl.scheduling, {"graph": {"nodes": [], "edges": []}})
+        encoded = json.loads(rset.encode())
+        self.assertIn("scheduling", encoded)
+        self.assertEqual(encoded["scheduling"], {"graph": {"nodes": [], "edges": []}})
+
+    def test_scheduling_property_setter(self):
+        """scheduling property setter works and propagates to encode()."""
+        rset = ResourceSet()
+        rset.impl.scheduling = {"test": "data"}
+        self.assertEqual(rset.impl.scheduling, {"test": "data"})
+        encoded = json.loads(rset.encode())
+        self.assertIn("scheduling", encoded)
+        self.assertEqual(encoded["scheduling"], {"test": "data"})
+
+    def test_scheduling_property_getter_none_when_unset(self):
+        """scheduling property returns None when not set."""
+        rset = ResourceSet()
+        self.assertIsNone(rset.impl.scheduling)
+
+    def test_scheduling_roundtrip(self):
+        """R.scheduling round-trips through encode/decode with keep_scheduling."""
+        sched = {"foo": "bar", "baz": [1, 2, 3]}
+        R = dict(self.R_with_sched, scheduling=sched)
+        rset1 = ResourceSet(R, keep_scheduling=True)
+        encoded = rset1.encode()
+        rset2 = ResourceSet(encoded, keep_scheduling=True)
+        self.assertEqual(rset2.impl.scheduling, sched)
+
+
 if __name__ == "__main__":
     unittest.main(testRunner=TAPTestRunner())
 
