@@ -17,7 +17,7 @@ from collections import deque
 
 import flux
 import flux.kvs
-from flux.cli.base import list_split
+from flux.job._utils import list_split
 from flux.modprobe import Modprobe
 from flux.util import CLIMain, Tree, help_formatter
 
