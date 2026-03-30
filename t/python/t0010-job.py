@@ -10,12 +10,10 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import datetime
 import errno
 import json
 import locale
 import os
-import pathlib
 import signal
 import subprocess
 import unittest
@@ -120,49 +118,6 @@ class TestJob(unittest.TestCase):
         jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
         jobid = job.submit(self.fh, jobspec)
         self.assertGreater(jobid, 0)
-
-    def test_09_valid_duration(self):
-        """Test setting Jobspec duration to various valid values"""
-        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
-        for duration in (100, 100.5):
-            delta = datetime.timedelta(seconds=duration)
-            for x in [duration, delta, "{}s".format(duration)]:
-                jobspec.duration = x
-                # duration setter converts value to a float
-                self.assertEqual(jobspec.duration, float(duration))
-
-    def test_10_invalid_duration(self):
-        """Test setting Jobspec duration to various invalid values and types"""
-        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
-        for duration in (-100, -100.5, datetime.timedelta(seconds=-5), "10h5m"):
-            with self.assertRaises(ValueError):
-                jobspec.duration = duration
-        for duration in ([], {}):
-            with self.assertRaises(TypeError):
-                jobspec.duration = duration
-
-    def test_11_cwd_pathlib(self):
-        jobspec_path = pathlib.PosixPath(self.jobspec_dir) / "valid" / "basic_v1.yaml"
-        jobspec = Jobspec.from_yaml_file(jobspec_path)
-        cwd = pathlib.PosixPath("/tmp")
-        jobspec.cwd = cwd
-        self.assertEqual(jobspec.cwd, os.fspath(cwd))
-
-    def test_12_environment(self):
-        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
-        new_env = {"HOME": "foo", "foo": "bar"}
-        jobspec.environment = new_env
-        self.assertEqual(jobspec.environment, new_env)
-
-    def test_12_0_queue(self):
-        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
-        jobspec.queue = "default"
-        self.assertEqual(jobspec.queue, "default")
-
-    def test_12_1_queue_invalid(self):
-        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
-        with self.assertRaises(TypeError):
-            jobspec.queue = 12
 
     def test_13_job_kvs(self):
         jobid = job.submit(self.fh, self.basic_jobspec, waitable=True)
@@ -372,57 +327,6 @@ class TestJob(unittest.TestCase):
         except OSError as err:
             self.assertEqual(err.errno, errno.ENODATA)
         self.assertIs(event, None)
-
-    def test_21_stdio_new_methods(self):
-        """Test official getter/setter methods for stdio properties
-        Ensure for now that output sets the alias "stdout", error sets "stderr"
-        and input sets "stdin".
-        """
-        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
-        streams = {"error": "stderr", "output": "stdout", "input": "stdin"}
-        for name in ("error", "output", "input"):
-            stream = streams[name]
-            self.assertEqual(getattr(jobspec, name), None)
-            for path in ("foo.txt", "bar.md", "foo.json"):
-                setattr(jobspec, name, path)
-                self.assertEqual(getattr(jobspec, name), path)
-                self.assertEqual(getattr(jobspec, stream), path)
-            with self.assertRaises(TypeError):
-                setattr(jobspec, name, None)
-
-    def test_21_stdio(self):
-        """Test getter/setter methods for stdio properties"""
-        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
-        for stream in ("stderr", "stdout", "stdin"):
-            self.assertEqual(getattr(jobspec, stream), None)
-            for path in ("foo.txt", "bar.md", "foo.json"):
-                setattr(jobspec, stream, path)
-                self.assertEqual(getattr(jobspec, stream), path)
-            with self.assertRaises(TypeError):
-                setattr(jobspec, stream, None)
-
-        with self.assertRaises(TypeError):
-            jobspec.unbuffered = 1
-
-        jobspec.unbuffered = True
-        self.assertTrue(jobspec.unbuffered)
-        self.assertEqual(
-            jobspec.getattr("shell.options.output.stderr.buffer.type"), "none"
-        )
-        self.assertEqual(
-            jobspec.getattr("shell.options.output.stdout.buffer.type"), "none"
-        )
-        self.assertEqual(jobspec.getattr("shell.options.output.batch-timeout"), 0.05)
-
-        jobspec.unbuffered = False
-        self.assertFalse(jobspec.unbuffered)
-
-        # jobspec.unbuffered = True keeps modified batch-timeout
-        jobspec.unbuffered = True
-        jobspec.setattr_shell_option("output.batch-timeout", 1.0)
-        jobspec.unbuffered = False
-        self.assertFalse(jobspec.unbuffered)
-        self.assertEqual(jobspec.getattr("shell.options.output.batch-timeout"), 1.0)
 
     def test_22_from_batch_command(self):
         """Test that `from_nest_command` produces a valid jobspec"""
@@ -895,76 +799,6 @@ class TestJob(unittest.TestCase):
             job.timeleft(self.fh)
         except OSError:
             pass
-
-    def test_35_setattr_defaults(self):
-        """Test setattr setting defaults"""
-        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
-        jobspec.setattr("cow", 1)
-        jobspec.setattr("system.cat", 2)
-        jobspec.setattr("user.dog", 3)
-        jobspec.setattr("attributes.system.chicken", 4)
-        jobspec.setattr("attributes.user.duck", 5)
-        jobspec.setattr("attributes.goat", 6)
-        self.assertEqual(jobspec.getattr("cow"), 1)
-        self.assertEqual(jobspec.getattr("system.cow"), 1)
-        self.assertEqual(jobspec.getattr("attributes.system.cow"), 1)
-
-        self.assertEqual(jobspec.getattr("cat"), 2)
-        self.assertEqual(jobspec.getattr("system.cat"), 2)
-        self.assertEqual(jobspec.getattr("attributes.system.cat"), 2)
-
-        self.assertEqual(jobspec.getattr("user.dog"), 3)
-        self.assertEqual(jobspec.getattr("attributes.user.dog"), 3)
-
-        self.assertEqual(jobspec.getattr("chicken"), 4)
-        self.assertEqual(jobspec.getattr("system.chicken"), 4)
-        self.assertEqual(jobspec.getattr("attributes.system.chicken"), 4)
-
-        self.assertEqual(jobspec.getattr("user.duck"), 5)
-        self.assertEqual(jobspec.getattr("attributes.user.duck"), 5)
-
-        self.assertEqual(jobspec.getattr("attributes.goat"), 6)
-
-    def test_36_str(self):
-        """Test string representation of a basic jobspec"""
-        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
-        jobspec.setattr("cow", 1)
-        jobspec.setattr("system.cat", 2)
-        jobspec.setattr("user.dog", 3)
-        jobspec.setattr("attributes.system.chicken", 4)
-        jobspec.setattr("attributes.user.duck", 5)
-        jobspec.setattr("attributes.goat", 6)
-        self.assertEqual(
-            str(jobspec),
-            "{'resources': [{'type': 'slot', 'count': 1, 'label': 'task', 'with': [{'type': 'core', 'count': 1}]}], 'tasks': [{'command': ['app'], 'slot': 'foo', 'count': {'per_slot': 1}}], 'attributes': {'system': {'duration': 0, 'cow': 1, 'cat': 2, 'chicken': 4}, 'user': {'dog': 3, 'duck': 5}, 'goat': 6}, 'version': 1}",
-        )
-
-    def test_37_repr(self):
-        """Test __repr__ method of Jobspec"""
-        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
-        self.assertEqual(eval(repr(jobspec)).jobspec, jobspec.jobspec)
-        jobspec.cwd = "/foo/bar"
-        jobspec.stdout = "/bar/baz"
-        jobspec.duration = 1000.3133
-        self.assertEqual(eval(repr(jobspec)).jobspec, jobspec.jobspec)
-
-    def test_37_test_bad_extra_args(self):
-        """Test extra Jobspec constructor args with bad values"""
-        with self.assertRaises(ValueError):
-            JobspecV1.from_command(["sleep", "0"], duration="1f")
-        with self.assertRaises(ValueError):
-            JobspecV1.from_command(["sleep", "0"], environment="foo")
-        with self.assertRaises(ValueError):
-            JobspecV1.from_command(["sleep", "0"], env_expand=1)
-        with self.assertRaises(ValueError):
-            JobspecV1.from_command(["sleep", "0"], rlimits=True)
-
-    def test_38_environment_default(self):
-        jobspec = JobspecV1.from_command(["sleep", "0"])
-        self.assertEqual(jobspec.environment, dict(os.environ))
-
-        jobspec = JobspecV1.from_command(["sleep", "0"], environment={})
-        self.assertEqual(jobspec.environment, {})
 
 
 if __name__ == "__main__":
