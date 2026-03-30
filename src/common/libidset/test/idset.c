@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -86,6 +87,14 @@ struct inout test_inputs[] = {
 
     { NULL, 0, NULL },
 };
+
+bool is_bigmem (void)
+{
+    const char *s = getenv ("TEST_BIGMEM");
+    if (s && streq (s, "t"))
+        return true;
+    return false;
+}
 
 void test_basic (void)
 {
@@ -1219,6 +1228,94 @@ void test_decode_addsub (void)
     idset_destroy (idset);
 }
 
+/* Idset must avoid internal veb assert failure by enforcing IDSET_MAX_UNIVERSE.
+ * Note: when run with TEST_BIGMEM=t, valgrind may complain
+ * "Warning: set address range perms: large range".
+ */
+void test_issue7494 (void)
+{
+    struct idset *idset;
+    int rc;
+    int saved_errno;
+    idset_error_t error;
+    char s[64];
+
+    /* static size too big
+     */
+    idset = idset_create (IDSET_MAX_UNIVERSE + 1, 0);
+    saved_errno = errno;
+    ok (idset == NULL && saved_errno == ERANGE,
+        "idset_create failed with size=IDSET_MAX_UNIVERSE + 1");
+    if (!idset)
+        diag ("%s", strerror (saved_errno));
+    idset_destroy (idset);
+
+    /* grown size too big
+     */
+    if (!(idset = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        BAIL_OUT ("idset_create failed");
+    errno = 0;
+    rc = idset_set (idset, IDSET_MAX_UNIVERSE);
+    saved_errno = errno;
+    ok (rc < 0 && saved_errno == ERANGE,
+        "idset_set id=IDSET_MAX_UNIVERSE failed");
+    if (rc < 0)
+        diag ("%s", strerror (saved_errno));
+    idset_destroy (idset);
+
+    /* The following two sets of tests require a large memory allocation
+     * which might not work in CI, so skip them unless TEST_BIGMEM=t.
+     */
+    skip (is_bigmem () == false, 7, "TEST_BIGMEM=t is not set");
+
+    /* static size = max works
+     */
+    ok ((idset = idset_create (IDSET_MAX_UNIVERSE, 0)) != NULL,
+        "created max static size idset");
+    ok ((idset_destroy (idset), true),
+        "idset destroyed");
+
+    /* growth doesn't blindly request headroom that exceeds maximum size.
+     */
+    size_t maxsize = IDSET_MAX_UNIVERSE;
+    size_t univsize;
+    ok ((idset = idset_create (maxsize/2 + 1, IDSET_FLAG_AUTOGROW)) != NULL,
+        "created autogrow idset that, when doubled, would exceed max size");
+    ok ((univsize = idset_universe_size (idset)) * 2 > maxsize,
+        "got universe size that is in bounds for the test");
+    ok (idset_set (idset, univsize) == 0,
+        "idset_set id=universe_size works");
+    ok (idset_universe_size (idset) > univsize,
+        "and set did grow");
+    ok ((idset_destroy (idset), true),
+        "idset destroyed");
+
+    end_skip;
+
+    /* decode fails on too big id (size=-1, flags=0)
+     */
+    (void)snprintf (s, sizeof (s), "%zu", IDSET_MAX_UNIVERSE);
+    errno = 0;
+    idset = idset_decode_ex (s, -1, -1, 0, &error);
+    ok (idset == NULL && errno == ERANGE,
+        "idset_decode_ex size=-1 flags=0 fails on id=IDSET_MAX_UNIVERSE");
+    if (!idset)
+        diag ("%s", error.text);
+    idset_destroy (idset);
+
+    /* decode fails on too big id (size=0, flags=AUTOGROW)
+     */
+    (void)snprintf (s, sizeof (s), "%zu", IDSET_MAX_UNIVERSE);
+    errno = 0;
+    idset = idset_decode_ex (s, -1, 0, IDSET_FLAG_AUTOGROW, &error);
+    ok (idset == NULL && errno == ERANGE,
+        "idset_decode_ex with size=0 flags=AUTOGROW"
+        " fails on id=IDSET_MAX_UNIVERSE");
+    if (!idset)
+        diag ("%s", error.text);
+    idset_destroy (idset);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1252,6 +1349,7 @@ int main (int argc, char *argv[])
     test_decode_empty ();
     test_decode_info ();
     test_decode_addsub ();
+    test_issue7494 ();
 
     done_testing ();
 }

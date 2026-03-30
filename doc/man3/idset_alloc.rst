@@ -65,6 +65,9 @@ EINVAL
 ENOMEM
    Out of memory.
 
+ERANGE
+   Set would exceed IDSET_MAX_UNIVERSE.
+
 EEXIST
    :func:`idset_free_check` was called on an id that is already in the
    idset.

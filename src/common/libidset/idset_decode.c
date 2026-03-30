@@ -48,6 +48,13 @@ static int errprintf (idset_error_t *errp, const char *fmt, ...)
     return -1;
 }
 
+static const char *errdecode (int errnum)
+{
+    if (errnum == ERANGE)
+        return "set universe size would exceed maximum";
+    return strerror (errnum);
+}
+
 /* strtoul() with result parameter, assumed base=10.
  * Fail if no digits, leading non-digits, or leading zero.
  * Returns 0 on success, -1 on failure.
@@ -122,7 +129,7 @@ static int append_element (struct idset *idset,
         goto inval;
     }
     if (idset && idset_range_set (idset, lo, hi) < 0) {
-        errprintf (error, "error appending '%s': %s", s, strerror (errno));
+        errprintf (error, "error appending '%s': %s", s, errdecode (errno));
         goto error;
     }
     *count += hi - lo + 1;
@@ -153,7 +160,7 @@ static int remove_element (struct idset *idset,
         goto inval;
     }
     if (idset && idset_range_clear (idset, lo, hi) < 0) {
-        errprintf (error, "error clearing '%s': %s", s, strerror (errno));
+        errprintf (error, "error clearing '%s': %s", s, errdecode (errno));
         goto error;
     }
     *maxid = hi;
@@ -230,6 +237,11 @@ static int decode_and_set_with_info (struct idset *idset,
         a1 = NULL;
     }
     free (cpy);
+    if (maxid != IDSET_INVALID_ID && maxid >= IDSET_MAX_UNIVERSE) {
+        errno = ERANGE;
+        errprintf (error, "%s", errdecode (errno));
+        return -1;
+    }
     if (countp)
         *countp = count;
     if (maxidp)
@@ -265,7 +277,7 @@ struct idset *idset_decode_ex (const char *str,
         }
     }
     if (!(idset = idset_create (size, flags))) {
-        errprintf (error, "error creating idset object: %s", strerror (errno));
+        errprintf (error, "error creating idset object: %s", errdecode (errno));
         return NULL;
     }
     if (decode_and_set_with_info (idset, str, len, NULL, NULL, error) < 0) {
