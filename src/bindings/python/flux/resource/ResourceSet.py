@@ -29,6 +29,10 @@ class ResourceSet:
 
     :param version: R specification version
 
+    :param kwargs: Additional keyword arguments are forwarded to the
+                   implementation constructor (e.g., ``keep_scheduling=True``
+                   for Rv1Set)
+
     :raises TypeError: A ResourceSet cannot be instantiated from arg
     :raises ValueError: Invalid R version, or invalid R encoding
     :raises KeyError: arg was a dict without a 'version' key
@@ -38,7 +42,7 @@ class ResourceSet:
     empty, version 1 ResourceSet object.
     """
 
-    def __init__(self, arg=None, version=1):
+    def __init__(self, arg=None, version=1, **kwargs):
         self._state = None
 
         if isinstance(arg, ResourceSetImplementation):
@@ -65,7 +69,7 @@ class ResourceSet:
         #  note: only version 1 supported for now
         if version == 1:
             self.version = 1
-            self.impl = Rv1Set(arg)
+            self.impl = Rv1Set(arg, **kwargs)
         else:
             raise ValueError(f"R version {version} not supported")
 
