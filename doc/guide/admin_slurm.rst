@@ -50,11 +50,11 @@ Reservations
   Arrangements for dedicated application time currently
   require manual/scripted actions by system administrators.
 
-Flux graph-based scheduling scalability
-  Efforts to optimize the Fluxion scheduler graph-based resource
-  representation for storage space efficiency are ongoing.  Meanwhile a
-  flat resource model similar to Slurm's that scales well but is limited
-  in capability is typically used on large systems.
+Improve graph-based scheduling serialization efficiency
+  Resource serialization inefficiency prevents Flux's graph-based
+  scheduling advantages from being utilized on large systems. Efforts
+  to optimize the Fluxion scheduler resource graph serialization are
+  ongoing.
 
 Preservation of job step information
   Slurm's smallest unit of work is the job step.  Slurm keeps metadata
