@@ -513,14 +513,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                 "slot count specifies discrete valid values that this scheduler "
                 "does not support; use a simple min-max range instead"
             )
-        self._check_feasibility(
-            request.nnodes,
-            request.nslots,
-            request.slot_size,
-            request.exclusive,
-            request.constraint,
-            request.gpu_per_slot,
-        )
+        self._check_feasibility(request)
 
     def alloc(self, jobid: int, request) -> "Rv1Pool":
         """Allocate resources for *jobid* matching *request*.
@@ -610,9 +603,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                     alloc_gpus = frozenset(sorted(free_gpus)[:need_gpus])
                 selected.append((rank, info, alloc_cores, alloc_gpus))
             if len(selected) < nnodes_min:
-                self._check_feasibility(
-                    nnodes, nslots, slot_size, exclusive, constraint, gpu_per_slot
-                )
+                self._check_feasibility(request)
                 raise InsufficientResources("insufficient resources")
         else:
             nslots_min = nslots
@@ -639,9 +630,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                     selected.append((rank, info, alloc_cores, alloc_gpus))
                     allocated_slots += take
             if allocated_slots < nslots_min:
-                self._check_feasibility(
-                    nnodes, nslots, slot_size, exclusive, constraint, gpu_per_slot
-                )
+                self._check_feasibility(request)
                 raise InsufficientResources("insufficient resources")
 
         # Compute actual allocated slot count for storage in R.
@@ -791,16 +780,23 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                 self._ranks[rank]["allocated_cores"] |= oinfo["cores"]
                 self._ranks[rank]["allocated_gpus"] |= oinfo["gpus"]
 
-    def _check_feasibility(
-        self,
-        nnodes: int,
-        nslots: int,
-        slot_size: int,
-        exclusive: bool,
-        constraint,
-        gpu_per_slot: int,
-    ) -> None:
-        """Raise EOVERFLOW if the request can structurally never be satisfied."""
+    def _check_feasibility(self, request) -> None:
+        """Raise :exc:`InfeasibleRequest` if *request* can structurally never
+        be satisfied by this pool.
+
+        Subclasses may override to add topology-aware feasibility checks on
+        top of the base size and constraint checks.  Call
+        ``super()._check_feasibility(request)`` first to run the base checks,
+        then add subclass-specific checks.
+        """
+        nnodes = request.nnodes
+        nslots = request.nslots
+        slot_size = request.slot_size
+        exclusive = request.exclusive
+        gpu_per_slot = request.gpu_per_slot
+        constraint = request.constraint
+        if constraint is not None and isinstance(constraint, str):
+            constraint = json.loads(constraint)
         all_candidates = list(self._ranks.items())
         if constraint is not None:
             all_candidates = [

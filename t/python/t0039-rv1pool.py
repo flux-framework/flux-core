@@ -671,6 +671,39 @@ class TestRv1PoolCheckFeasibility(unittest.TestCase):
         with self.assertRaises(InfeasibleRequest):
             self.pool.check_feasibility(req)
 
+    def test_constraint_as_json_string(self):
+        """Constraint passed as a JSON string is parsed correctly."""
+        import json
+
+        pool = Rv1Pool(R_props)
+        # "fast" nodes have 4 cores total; 10 is infeasible.
+        # Pass the constraint as a JSON string rather than a dict to exercise
+        # the json.loads() path in _check_feasibility.
+        req = ResourceRequest(
+            None,
+            ResourceCount(10, 10),
+            1,
+            0,
+            60.0,
+            json.dumps({"properties": ["fast"]}),
+            False,
+        )
+        with self.assertRaises(InfeasibleRequest):
+            pool.check_feasibility(req)
+
+    def test_subclass_can_extend_check_feasibility(self):
+        """Subclass can add checks via super()._check_feasibility(request)."""
+
+        class StrictPool(Rv1Pool):
+            def _check_feasibility(self, request):
+                super()._check_feasibility(request)
+                if request.nnodes > 2:
+                    raise InfeasibleRequest("at most 2 nodes allowed")
+
+        StrictPool(R_4x4).check_feasibility(rr(2, 2, 1))  # should pass
+        with self.assertRaises(InfeasibleRequest):
+            StrictPool(R_4x4).check_feasibility(rr(3, 3, 1))  # subclass rejects
+
 
 class TestRv1PoolCopy(unittest.TestCase):
     def setUp(self):
