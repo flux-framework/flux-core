@@ -428,6 +428,57 @@ class TestRv1PoolWorstFit(unittest.TestCase):
         self.assertNotIn(1, a._ranks)
 
 
+class TestRv1PoolSelectResourcesOverride(unittest.TestCase):
+    """_select_resources is an overridable hook."""
+
+    R_uneven = {
+        "version": 1,
+        "execution": {
+            "R_lite": [
+                {"rank": "0", "children": {"core": "0-3"}},
+                {"rank": "1", "children": {"core": "0-1"}},
+            ],
+            "starttime": 0,
+            "expiration": 0,
+            "nodelist": ["big", "small"],
+        },
+    }
+
+    def test_override_controls_resource_selection(self):
+        """Subclass can reverse candidate order to implement best-fit."""
+
+        class BestFitPool(Rv1Pool):
+            def _select_resources(self, candidates, request):
+                return super()._select_resources(list(reversed(candidates)), request)
+
+        pool = BestFitPool(self.R_uneven)
+        # Default (worst-fit) picks rank0; best-fit should pick rank1 (smaller)
+        a = pool.alloc(1, rr(0, 1, 1))
+        self.assertIn(1, a._ranks)
+        self.assertNotIn(0, a._ranks)
+
+    def test_override_can_raise_insufficient(self):
+        """Override may raise InsufficientResources to block an allocation."""
+
+        class NoSmallPool(Rv1Pool):
+            def _select_resources(self, candidates, request):
+                # Reject any candidate with fewer than 4 cores
+                filtered = [
+                    (r, i, fc, fg)
+                    for r, i, fc, fg in candidates
+                    if len(i["cores"]) >= 4
+                ]
+                return super()._select_resources(filtered, request)
+
+        pool = NoSmallPool(self.R_uneven)
+        # rank1 has only 2 cores and is filtered out; rank0 satisfies the request
+        a = pool.alloc(1, rr(0, 1, 1))
+        self.assertIn(0, a._ranks)
+        # Requesting 2 nodes fails — only one has enough cores
+        with self.assertRaises(InsufficientResources):
+            pool.alloc(2, rr(2, 2, 1))
+
+
 class TestRv1PoolExclusive(unittest.TestCase):
     def setUp(self):
         self.pool = Rv1Pool(R_4x4)
