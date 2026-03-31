@@ -435,6 +435,129 @@ class TestRv1PoolWorstFit(unittest.TestCase):
         self.assertNotIn(1, a._ranks)
 
 
+class TestRv1PoolSelectResourcesOverride(unittest.TestCase):
+    """_select_resources is an overridable hook."""
+
+    R_uneven = {
+        "version": 1,
+        "execution": {
+            "R_lite": [
+                {"rank": "0", "children": {"core": "0-3"}},
+                {"rank": "1", "children": {"core": "0-1"}},
+            ],
+            "starttime": 0,
+            "expiration": 0,
+            "nodelist": ["big", "small"],
+        },
+    }
+
+    def test_override_controls_resource_selection(self):
+        """Subclass can reverse candidate order to implement best-fit."""
+
+        class BestFitPool(Rv1Pool):
+            def _select_resources(self, candidates, request):
+                return super()._select_resources(list(reversed(candidates)), request)
+
+        pool = BestFitPool(self.R_uneven)
+        # Default (worst-fit) picks rank0; best-fit should pick rank1 (smaller)
+        a = pool.alloc(1, rr(0, 1, 1))
+        self.assertIn(1, a._ranks)
+        self.assertNotIn(0, a._ranks)
+
+    def test_override_can_raise_insufficient(self):
+        """Override may raise InsufficientResources to block an allocation."""
+
+        class NoSmallPool(Rv1Pool):
+            def _select_resources(self, candidates, request):
+                # Reject any candidate with fewer than 4 cores
+                filtered = [
+                    (r, i, fc, fg)
+                    for r, i, fc, fg in candidates
+                    if len(i["cores"]) >= 4
+                ]
+                return super()._select_resources(filtered, request)
+
+        pool = NoSmallPool(self.R_uneven)
+        # rank1 has only 2 cores and is filtered out; rank0 satisfies the request
+        a = pool.alloc(1, rr(0, 1, 1))
+        self.assertIn(0, a._ranks)
+        # Requesting 2 nodes fails — only one has enough cores
+        with self.assertRaises(InsufficientResources):
+            pool.alloc(2, rr(2, 2, 1))
+
+
+class _RecordingPool(Rv1Pool):
+    """Rv1Pool subclass that records the candidates list on each _select_resources call."""
+
+    def __init__(self, R, *args, **kwargs):
+        super().__init__(R, *args, **kwargs)
+        self.last_candidates = None
+
+    def _select_resources(self, candidates, request):
+        self.last_candidates = list(candidates)
+        return super()._select_resources(candidates, request)
+
+
+class TestSelectResourcesAvailability(unittest.TestCase):
+    """_select_resources candidates reflect current availability state."""
+
+    def _alloc_or_try(self, pool, req):
+        """Attempt alloc, tolerating InsufficientResources (candidates still recorded)."""
+        try:
+            pool.alloc(1, req)
+        except InsufficientResources:
+            pass
+
+    def test_mark_down_excludes_rank_from_candidates(self):
+        pool = _RecordingPool(R_4x4)
+        pool.mark_down("0")
+        self._alloc_or_try(pool, rr(1, 1, 1))
+        candidate_ranks = {c[0] for c in pool.last_candidates}
+        self.assertNotIn(0, candidate_ranks)
+
+    def test_mark_down_all_yields_empty_candidates(self):
+        pool = _RecordingPool(R_4x4)
+        pool.mark_down("all")
+        self._alloc_or_try(pool, rr(1, 1, 1))
+        self.assertEqual(pool.last_candidates, [])
+
+    def test_mark_up_restores_rank_to_candidates(self):
+        pool = _RecordingPool(R_4x4)
+        pool.mark_down("0")
+        pool.mark_up("0")
+        self._alloc_or_try(pool, rr(1, 1, 1))
+        candidate_ranks = {c[0] for c in pool.last_candidates}
+        self.assertIn(0, candidate_ranks)
+
+    def test_remove_ranks_excludes_rank_from_candidates(self):
+        from flux.idset import IDset
+
+        pool = _RecordingPool(R_4x4)
+        pool.remove_ranks(IDset("0"))
+        self._alloc_or_try(pool, rr(1, 1, 1))
+        candidate_ranks = {c[0] for c in pool.last_candidates}
+        self.assertNotIn(0, candidate_ranks)
+
+    def test_candidates_info_is_read_only(self):
+        """info proxy in candidates raises TypeError on mutation attempt."""
+        mutated = []
+
+        class MutatingPool(Rv1Pool):
+            def _select_resources(self, candidates, request):
+                for _rank, info, _fc, _fg in candidates:
+                    try:
+                        info["up"] = False
+                        mutated.append(True)
+                    except TypeError:
+                        mutated.append(False)
+                return super()._select_resources(candidates, request)
+
+        pool = MutatingPool(R_4x4)
+        pool.alloc(1, rr(1, 1, 1))
+        self.assertTrue(mutated)
+        self.assertFalse(any(mutated))
+
+
 class TestRv1PoolExclusive(unittest.TestCase):
     def setUp(self):
         self.pool = Rv1Pool(R_4x4)
@@ -677,6 +800,39 @@ class TestRv1PoolCheckFeasibility(unittest.TestCase):
         )
         with self.assertRaises(InfeasibleRequest):
             self.pool.check_feasibility(req)
+
+    def test_constraint_as_json_string(self):
+        """Constraint passed as a JSON string is parsed correctly."""
+        import json
+
+        pool = Rv1Pool(R_props)
+        # "fast" nodes have 4 cores total; 10 is infeasible.
+        # Pass the constraint as a JSON string rather than a dict to exercise
+        # the json.loads() path in _check_feasibility.
+        req = ResourceRequest(
+            None,
+            ResourceCount(10, 10),
+            1,
+            0,
+            60.0,
+            json.dumps({"properties": ["fast"]}),
+            False,
+        )
+        with self.assertRaises(InfeasibleRequest):
+            pool.check_feasibility(req)
+
+    def test_subclass_can_extend_check_feasibility(self):
+        """Subclass can add checks via super()._check_feasibility(request)."""
+
+        class StrictPool(Rv1Pool):
+            def _check_feasibility(self, request):
+                super()._check_feasibility(request)
+                if request.nnodes > 2:
+                    raise InfeasibleRequest("at most 2 nodes allowed")
+
+        StrictPool(R_4x4).check_feasibility(rr(2, 2, 1))  # should pass
+        with self.assertRaises(InfeasibleRequest):
+            StrictPool(R_4x4).check_feasibility(rr(3, 3, 1))  # subclass rejects
 
 
 class TestRv1PoolCopy(unittest.TestCase):
