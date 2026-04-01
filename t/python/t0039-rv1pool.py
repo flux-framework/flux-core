@@ -55,7 +55,13 @@ def rr(
         slot_count = ResourceCount(nslots, nslots_max)
 
     return ResourceRequest(
-        node_count, slot_count, slot_size, gpu_per_slot, duration, constraint, exclusive,
+        node_count,
+        slot_count,
+        slot_size,
+        gpu_per_slot,
+        duration,
+        constraint,
+        exclusive,
         None,
     )
 
@@ -1169,6 +1175,32 @@ class TestFromJobspec(unittest.TestCase):
             with self.subTest(pool=type(pool).__name__):
                 rr = pool.parse_resource_request(jobspec)
                 self.assertIsNone(rr.constraint)
+
+    def test_jobspec_stored_on_request(self):
+        """request.jobspec is the original jobspec dict."""
+        for pool in self._pools():
+            with self.subTest(pool=type(pool).__name__):
+                rr = pool.parse_resource_request(self.VALID_V1)
+                self.assertIs(rr.jobspec, self.VALID_V1)
+
+    def test_jobspec_system_attr_accessible(self):
+        """Site-specific attributes.system hints are accessible via request.jobspec."""
+        jobspec = {
+            "version": 1,
+            "resources": [
+                {"type": "slot", "count": 1, "with": [{"type": "core", "count": 1}]}
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 60.0, "rack_exclusive": True}},
+        }
+        for pool in self._pools():
+            with self.subTest(pool=type(pool).__name__):
+                rr = pool.parse_resource_request(jobspec)
+                self.assertTrue(
+                    rr.jobspec.get("attributes", {})
+                    .get("system", {})
+                    .get("rack_exclusive")
+                )
 
 
 class TestFromJobspecNonV1(unittest.TestCase):
