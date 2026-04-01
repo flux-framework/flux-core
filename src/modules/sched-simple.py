@@ -91,8 +91,9 @@ class SimpleScheduler(FIFOScheduler):
                         }
                     }
                 )
+                yield
             return
-        super().forecast()
+        yield from super().forecast()
 
     def expiration(self, msg, jobid, expiration):
         if self.debug_test(DEBUG_EXPIRATION_UPDATE_DENY):
