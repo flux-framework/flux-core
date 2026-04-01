@@ -94,7 +94,8 @@ to :meth:`~Scheduler.alloc`:
 Allocating resources
 ~~~~~~~~~~~~~~~~~~~~
 
-Pass the jobid and resource request to :meth:`~flux.resource.ResourcePool.alloc`:
+Pass the jobid and resource request to
+:meth:`~flux.resource.ResourcePool.alloc`:
 
 .. code-block:: python
 
@@ -120,10 +121,10 @@ pool object containing only the allocated resources.  Pass it directly to
 
    request.success(alloc)
 
-The pool also records the job's expected expiration (derived from ``request.duration``)
-internally; :meth:`~flux.resource.ResourcePool.free` and start-time
-simulation (via :meth:`~flux.resource.ResourcePool.copy` and
-:meth:`~flux.resource.ResourcePool.job_end_times`) use this state.
+The pool also records the job's expected expiration (derived from
+``request.duration``) internally; :meth:`~flux.resource.ResourcePool.free`
+and start-time simulation (via :meth:`~flux.resource.ResourcePool.copy`
+and :meth:`~flux.resource.ResourcePool.job_end_times`) use this state.
 
 Releasing resources
 ~~~~~~~~~~~~~~~~~~~
@@ -163,8 +164,8 @@ distinct objects are created and stored together on the
 - ``job.resource_request`` — a pool-specific object describing *what the job
   needs*.  Created once from jobspec by
   :meth:`~flux.resource.ResourcePool.parse_resource_request` when the alloc
-  arrives.  For the built-in pools this carries fields for node count, slot count,
-  cores and GPUs per slot, duration, constraints, and exclusivity.
+  arrives.  For the built-in pools this carries fields for node count,
+  slot count, cores and GPUs per slot, duration, constraints, and exclusivity.
   Used by the scheduler during each :meth:`~Scheduler.schedule`
   pass to decide whether resources can be satisfied.  Persists for the
   lifetime of the pending job.
@@ -203,8 +204,8 @@ calling one of:
        Cancelling an alloc request is **not** the same as cancelling the job.
        Job-manager may withdraw an alloc request — for example, to shrink the
        outstanding request count back within the configured ``queue-depth`` —
-       while leaving the job itself in the pending queue.  The job will receive
-       a fresh alloc request when a slot opens up.
+       while leaving the job itself in the pending queue.  The job
+       will receive a fresh alloc request when a slot opens up.
 
 :meth:`request.annotate(annotations) <AllocRequest.annotate>`
     Send an intermediate annotation update while the job is pending.  May be
@@ -287,6 +288,15 @@ following methods:
     necessary; see `Scheduling deferral`_ for details.
     The default implementation is a no-op.
 
+    If :meth:`~Scheduler.schedule` returns a generator the base class
+    advances it **one yield per reactor iteration**, allowing other events
+    to be handled between yields.
+    When a new scheduling event arrives while a generator pass is in progress
+    the base class closes it and starts a fresh pass after the settling delay,
+    ensuring that a newly submitted job or freed resource is considered from
+    the top of the queue without waiting for the current pass to finish.
+    Non-generator implementations remain fully supported.
+
     Example::
 
         def schedule(self):
@@ -301,6 +311,16 @@ following methods:
                 else:
                     job.request.success(alloc)
                 heapq.heappop(self._queue)
+                yield   # let the reactor handle other events between jobs
+
+:meth:`start_schedule(self) <Scheduler.start_schedule>`
+    Called by :meth:`~Scheduler._request_schedule` after updating the
+    interval EWMA.  The default implementation aborts any in-progress
+    generator and arms the one-shot scheduling timer.  Override this
+    method (not :meth:`~Scheduler._request_schedule`) to replace the
+    generator driver — for example, to launch an RPC-based allocation
+    request — while still preserving the ``_sched_pending`` guard that
+    coalesces concurrent scheduling events into a single pass.
 
 :meth:`resource_update(self) <Scheduler.resource_update>`
     Called after each resource state update.  For queue-based schedulers
@@ -323,9 +343,16 @@ following methods:
     jobs with forward-looking estimates such as ``sched.t_estimate``.  The
     base class implementation is a no-op.  Override to post start-time
     estimates (or other planning metadata) without impacting scheduling
-    throughput — :meth:`~Scheduler.forecast` is rate-limited to at most
-    once per :attr:`~Scheduler.FORECAST_PERIOD` seconds so that annotation
-    work is kept off the critical scheduling path during bursts.
+    throughput.
+
+    Supports the same generator protocol as :meth:`~Scheduler.schedule`:
+    add ``yield`` at each desired reactor handoff point — typically after each
+    annotated job — to return control to the reactor between annotations.
+    Unlike the schedule generator, a running forecast generator is **not**
+    aborted when a new scheduling event arrives — it runs to completion.
+    A slightly stale ``t_estimate`` is more useful than none at all, and
+    the simulation snapshot taken at pass start remains internally
+    consistent regardless of real-pool changes mid-pass.
 
     Example (annotating the head-of-queue job with its estimated start time):
 
@@ -401,6 +428,14 @@ The timer uses an adaptive delay tuned automatically at runtime:
   pass per cycle.  A ``DEBUG`` log message is emitted when the delay changes.
 - Once events slow down again the delay resets to zero immediately.
 
+.. note::
+
+   When :meth:`~Scheduler.schedule` is a generator the EWMA duration is
+   **not** updated, so ``sched_delay`` remains 0 and the timer fires on
+   the next reactor iteration with no burst-coalescing window.  Events
+   that arrive while the timer is already armed are still coalesced by
+   the ``_sched_pending`` guard, but there is no adaptive settling period.
+
 Two class attributes control the behaviour and can be overridden on the
 subclass:
 
@@ -434,37 +469,19 @@ submission bursts.
 Forecast deferral
 -----------------
 
-:meth:`~Scheduler.forecast` is triggered after every
-:meth:`~Scheduler.schedule` call, but rate-limited by a separate one-shot
-timer so that annotation work does not accumulate on the critical path during
-scheduling bursts.
+:meth:`~Scheduler.forecast` is called immediately after each
+:meth:`~Scheduler.schedule` pass completes.  Because
+:meth:`~Scheduler.forecast` supports the same generator protocol as
+:meth:`~Scheduler.schedule`, annotation work may be spread across multiple
+reactor iterations to avoid blocking the critical scheduling path.
 
-The mechanism is simpler than the adaptive scheduling timer: after each
-:meth:`~Scheduler.schedule` call the base class calls
-:meth:`~Scheduler._request_forecast`.  If the forecast timer is not already
-armed it is set to fire after :attr:`~Scheduler.FORECAST_PERIOD` seconds
-(default ``1.0``).  Subsequent :meth:`~Scheduler._request_forecast` calls
-while the timer is armed are no-ops, so a burst of N scheduling events
-results in exactly one :meth:`~Scheduler.forecast` call roughly one second
-after the burst begins.
-
-The period can be tuned per-instance at load time::
-
-    flux module load sched-fifo forecast-period=0.5
-
-or overridden on the subclass:
-
-.. code-block:: python
-
-   class MyScheduler(Scheduler):
-       FORECAST_PERIOD = 2.0   # run forecast() at most once every 2 seconds
-
-Because :meth:`~Scheduler.forecast` runs asynchronously after
-:meth:`~Scheduler.schedule`, the data it reads from ``self._queue`` and
-``self.resources`` reflects the state at the time the timer fires, not the
-time the triggering scheduling event occurred.  This is correct: annotations
-should reflect the *current* queue state, not a stale snapshot from a burst
-that has since been partially resolved.
+If a new scheduling event arrives while a forecast generator is in progress,
+the base class leaves it running to completion.  Forecast estimates are
+approximate by design, and a slightly stale ``t_estimate`` is more useful
+than none at all.  The simulation snapshot is taken once at pass start
+(a deep copy of the pool), so it remains internally consistent regardless
+of real-pool changes mid-pass.  A fresh forecast pass is triggered after
+the next :meth:`~Scheduler.schedule` pass completes.
 
 
 Module arguments
@@ -475,7 +492,7 @@ in :func:`mod_main` and are forwarded to ``__init__``:
 
 .. code-block:: console
 
-   $ flux module load my-sched.py queue-depth=8 log-level=debug forecast-period=2.0
+   $ flux module load my-sched.py queue-depth=8 log-level=debug
 
 The base class automatically handles three built-in arguments:
 
@@ -489,14 +506,11 @@ log-level=LEVEL
     ``crit``, ``err``, ``warning``, ``notice``, ``info``, or ``debug``
     (default ``info``).
 
-forecast-period=SECONDS
-    Sets :attr:`~Scheduler.FORECAST_PERIOD` on the instance (default 1.0).
-
-Any argument not consumed by the subclass or the base class is rejected with
-an error at load time, so a typo like ``log_level=debug`` (underscore instead
-of hyphen) is caught immediately.  Subclasses parse their own arguments before
-calling ``super().__init__``, which consumes the built-in ones and then rejects
-whatever remains:
+Any argument not consumed by the subclass or the base class is rejected
+with an error at load time, so a typo like ``log_level=debug`` (underscore
+instead of hyphen) is caught immediately.  Subclasses parse their own
+arguments before calling ``super().__init__``, which consumes the built-in
+ones and then rejects whatever remains:
 
 .. code-block:: python
 
@@ -508,7 +522,7 @@ whatever remains:
                self._my_option = arg[10:]
            else:
                remaining.append(arg)
-       super().__init__(h, *remaining)   # handles queue-depth=, log-level=, forecast-period=
+       super().__init__(h, *remaining)   # handles queue-depth=, log-level=
 
 
 
@@ -541,6 +555,50 @@ Pool implementations receive the same ``self.log`` method and should call it
 unconditionally — no ``None`` check is needed.
 
 Log messages appear in :man1:`flux-dmesg` and the broker's stderr.
+
+
+Statistics
+----------
+
+The base class registers a ``<module-name>.stats-get`` RPC handler that
+calls :meth:`~Scheduler.stats_get` and responds with the returned dict.
+Use :man1:`flux-module` to query it:
+
+.. code-block:: console
+
+   $ flux module stats my-sched
+
+Standard fields reported by the base class:
+
+``sched_passes``
+    Number of completed :meth:`~Scheduler.schedule` passes.
+``sched_yields``
+    Total yields across all :meth:`~Scheduler.schedule` generator passes
+    (always 0 for synchronous schedulers).
+``forecast_passes``, ``forecast_yields``
+    Equivalent counters for :meth:`~Scheduler.forecast` passes
+    (``forecast_yields`` always 0 for synchronous schedulers).
+``sched_delay``
+    Current adaptive burst-coalescing delay in seconds.
+    Always 0 for generator-based schedulers.
+``sched_duration_ewma``
+    EWMA of :meth:`~Scheduler.schedule` wall-clock duration in seconds.
+    Always 0 for generator-based schedulers.
+``sched_interval_ewma``
+    EWMA of time between scheduling requests in seconds.  Tracked for all
+    schedulers but does not affect ``sched_delay`` for generator-based
+    schedulers.
+``pending_jobs``
+    Current number of pending alloc requests in the scheduler queue.
+
+Subclasses can extend the response by overriding :meth:`~Scheduler.stats_get`:
+
+.. code-block:: python
+
+   def stats_get(self):
+       stats = super().stats_get()
+       stats["my_counter"] = self._my_counter
+       return stats
 
 
 Testing
