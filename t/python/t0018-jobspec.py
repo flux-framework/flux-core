@@ -717,5 +717,246 @@ class TestApplyOptionsWithPlugin(unittest.TestCase):
         # ntasks should still be 1 — preinit mutation was ignored
         self.assertEqual(slot["count"], 1)
 
+
+class TestFromRun(unittest.TestCase):
+    """Tests for JobspecV1.from_submit()."""
+
+    def test_01_basic(self):
+        js = JobspecV1.from_submit(["hostname"])
+        self.assertEqual(js.jobspec["tasks"][0]["command"], ["hostname"])
+
+    def test_02_ntasks(self):
+        js = JobspecV1.from_submit(["myapp"], ntasks=4)
+        # 4 tasks → slot count of 4
+        resources = js.jobspec["resources"]
+        slot = resources[0]
+        self.assertEqual(slot["count"], 4)
+
+    def test_03_time_limit_applied(self):
+        js = JobspecV1.from_submit(["sleep", "1"], time_limit="1h")
+        self.assertEqual(js.duration, 3600.0)
+
+    def test_04_env_applied(self):
+        js = JobspecV1.from_submit(["env"], env=["-PATH"])
+        self.assertNotIn("PATH", js.environment)
+
+    def test_05_dependency_applied(self):
+        js = JobspecV1.from_submit(["app"], dependency=["afterok:f1234"])
+        deps = js.jobspec["attributes"]["system"]["dependencies"]
+        self.assertEqual(deps[0]["scheme"], "afterok")
+
+    def test_06_requires_applied(self):
+        js = JobspecV1.from_submit(["app"], requires=["gpu"])
+        self.assertIn("properties", js.jobspec["attributes"]["system"]["constraints"])
+
+    def test_07_name_set(self):
+        js = JobspecV1.from_submit(["app"], name="myjob")
+        self.assertEqual(js.jobspec["attributes"]["system"]["job"]["name"], "myjob")
+
+    def test_08_nodes_and_ntasks(self):
+        js = JobspecV1.from_submit(["app"], ntasks=8, nodes=2)
+        # node-level resource should appear
+        resources = js.jobspec["resources"]
+        self.assertEqual(resources[0]["type"], "node")
+        self.assertEqual(resources[0]["count"], 2)
+
+    def test_09_returns_jobspecv1(self):
+        js = JobspecV1.from_submit(["app"])
+        self.assertIsInstance(js, JobspecV1)
+
+    def test_10_env_propagated_by_default(self):
+        # from_submit() without env= must still propagate the full environment
+        js = JobspecV1.from_submit(["myapp"])
+        self.assertIsNotNone(js.environment)
+        self.assertIn("PATH", js.environment)
+
+
+class TestFromAlloc(unittest.TestCase):
+    """Tests for JobspecV1.from_alloc()."""
+
+    def test_01_basic(self):
+        js = JobspecV1.from_alloc(nslots=4)
+        # flux broker appears in command
+        command = js.jobspec["tasks"][0]["command"]
+        self.assertIn("flux", command)
+        self.assertIn("broker", command)
+
+    def test_02_nslots_defaults_to_nodes(self):
+        js = JobspecV1.from_alloc(nodes=4)
+        # nslots was set to nodes (4 tasks in the slot)
+        resources = js.jobspec["resources"]
+        self.assertEqual(resources[0]["type"], "node")
+        self.assertEqual(resources[0]["count"], 4)
+
+    def test_03_no_nslots_no_nodes_raises(self):
+        with self.assertRaises(ValueError):
+            JobspecV1.from_alloc()
+
+    def test_04_time_limit_applied(self):
+        js = JobspecV1.from_alloc(nslots=2, time_limit="30m")
+        self.assertEqual(js.duration, 1800.0)
+
+    def test_05_conf_str_embedded(self):
+        js = JobspecV1.from_alloc(nslots=2, conf="resource.noverify=true")
+        files = js.jobspec["attributes"]["system"]["files"]
+        self.assertIn("conf.json", files)
+
+    def test_06_conf_dict_embedded(self):
+        js = JobspecV1.from_alloc(nslots=2, conf={"resource": {"noverify": True}})
+        files = js.jobspec["attributes"]["system"]["files"]
+        self.assertIn("conf.json", files)
+
+    def test_07_bg_sets_rc2_none(self):
+        js = JobspecV1.from_alloc(nslots=4, bg=True)
+        command = js.jobspec["tasks"][0]["command"]
+        self.assertTrue(any("rc2_none" in c for c in command))
+
+    def test_08_bg_sets_pty_capture(self):
+        js = JobspecV1.from_alloc(nslots=4, bg=True)
+        opts = js.jobspec["attributes"]["system"]["shell"]["options"]
+        self.assertEqual(opts["pty"]["capture"], 1)
+
+    def test_09_broker_opts_not_mutated(self):
+        bopts = ["-Sfoo"]
+        JobspecV1.from_alloc(
+            nslots=4, broker_opts=bopts, conf={"resource": {"noverify": True}}
+        )
+        self.assertEqual(bopts, ["-Sfoo"])
+
+    def test_10_cwd_defaults_to_getcwd(self):
+        js = JobspecV1.from_alloc(nslots=1)
+        self.assertEqual(js.cwd, os.getcwd())
+
+    def test_11_dependency_applied(self):
+        js = JobspecV1.from_alloc(nslots=2, dependency=["afterok:f1234"])
+        deps = js.jobspec["attributes"]["system"]["dependencies"]
+        self.assertEqual(deps[0]["scheme"], "afterok")
+
+    def test_12_returns_jobspecv1(self):
+        js = JobspecV1.from_alloc(nslots=1)
+        self.assertIsInstance(js, JobspecV1)
+
+
+class TestFromBatch(unittest.TestCase):
+    """Tests for JobspecV1.from_batch()."""
+
+    SCRIPT = "#!/bin/bash\necho hello\n"
+
+    def test_01_inline_content(self):
+        js = JobspecV1.from_batch(content=self.SCRIPT, nslots=2)
+        files = js.jobspec["attributes"]["system"]["files"]
+        self.assertIn("script", files)
+
+    def test_02_script_from_path(self):
+        with tempfile.NamedTemporaryFile(
+            suffix=".sh", mode="w", delete=False, dir="."
+        ) as f:
+            f.write(self.SCRIPT)
+            fpath = f.name
+        try:
+            js = JobspecV1.from_batch(fpath, nslots=2)
+            self.assertEqual(
+                js.jobspec["attributes"]["system"]["job"]["name"],
+                os.path.basename(fpath),
+            )
+        finally:
+            os.unlink(fpath)
+
+    def test_03_script_from_pathlib(self):
+        with tempfile.NamedTemporaryFile(
+            suffix=".sh", mode="w", delete=False, dir="."
+        ) as f:
+            f.write(self.SCRIPT)
+            fpath = pathlib.Path(f.name)
+        try:
+            js = JobspecV1.from_batch(fpath, nslots=2)
+            self.assertIn("script", js.jobspec["attributes"]["system"]["files"])
+        finally:
+            fpath.unlink()
+
+    def test_04_wrap_prepends_shebang(self):
+        js = JobspecV1.from_batch(content="echo hello\n", nslots=1, wrap=True)
+        data = js.jobspec["attributes"]["system"]["files"]["script"]["data"]
+        self.assertTrue(data.startswith("#!/bin/sh\n"))
+
+    def test_05_no_shebang_raises(self):
+        with self.assertRaises(ValueError):
+            JobspecV1.from_batch(content="echo hello\necho world\n", nslots=1)
+
+    def test_06_output_default(self):
+        js = JobspecV1.from_batch(content=self.SCRIPT, nslots=1)
+        opts = js.jobspec["attributes"]["system"]["shell"]["options"]
+        self.assertEqual(opts["output"]["stdout"]["path"], "flux-{{id}}.out")
+
+    def test_07_cwd_default(self):
+        js = JobspecV1.from_batch(content=self.SCRIPT, nslots=1)
+        self.assertEqual(js.cwd, os.getcwd())
+
+    def test_08_name_defaults_to_batch_for_inline(self):
+        js = JobspecV1.from_batch(content=self.SCRIPT, nslots=1)
+        self.assertEqual(js.jobspec["attributes"]["system"]["job"]["name"], "batch")
+
+    def test_09_nodes_sets_nslots_and_exclusive(self):
+        js = JobspecV1.from_batch(content=self.SCRIPT, nodes=4)
+        resources = js.jobspec["resources"]
+        self.assertEqual(resources[0]["type"], "node")
+        self.assertEqual(resources[0]["count"], 4)
+
+    def test_10_default_nslots_is_one(self):
+        js = JobspecV1.from_batch(content=self.SCRIPT)
+        # With no nslots/nodes, nslots=1: a single slot in resources
+        resources = js.jobspec["resources"]
+        self.assertEqual(resources[0]["count"], 1)
+
+    def test_11_time_limit_applied(self):
+        js = JobspecV1.from_batch(content=self.SCRIPT, nslots=2, time_limit="2h")
+        self.assertEqual(js.duration, 7200.0)
+
+    def test_12_broker_opts_not_mutated(self):
+        bopts = ["-Sfoo"]
+        JobspecV1.from_batch(
+            content=self.SCRIPT,
+            nslots=2,
+            broker_opts=bopts,
+            conf={"resource": {"noverify": True}},
+        )
+        self.assertEqual(bopts, ["-Sfoo"])
+
+    def test_13_dependency_applied(self):
+        js = JobspecV1.from_batch(
+            content=self.SCRIPT, nslots=2, dependency=["afterok:f1234"]
+        )
+        deps = js.jobspec["attributes"]["system"]["dependencies"]
+        self.assertEqual(deps[0]["scheme"], "afterok")
+
+    def test_14_returns_jobspecv1(self):
+        js = JobspecV1.from_batch(content=self.SCRIPT)
+        self.assertIsInstance(js, JobspecV1)
+
+    def test_15_both_script_and_content_raises(self):
+        with self.assertRaises(TypeError):
+            JobspecV1.from_batch("/some/path.sh", content=self.SCRIPT)
+
+    def test_16_neither_script_nor_content_raises(self):
+        with self.assertRaises(TypeError):
+            JobspecV1.from_batch()
+
+    def test_17_name_defaults_to_batch_for_content(self):
+        js = JobspecV1.from_batch(content=self.SCRIPT)
+        self.assertEqual(js.jobspec["attributes"]["system"]["job"]["name"], "batch")
+
+
+class TestFromNestCommand(unittest.TestCase):
+    def test_01_broker_opts_not_mutated(self):
+        bopts = ["-Sfoo"]
+        JobspecV1.from_nest_command(
+            ["myapp"],
+            num_slots=2,
+            broker_opts=bopts,
+            conf={"resource": {"noverify": True}},
+        )
+        self.assertEqual(bopts, ["-Sfoo"])
+
+
 if __name__ == "__main__":
     unittest.main(testRunner=TAPTestRunner())
