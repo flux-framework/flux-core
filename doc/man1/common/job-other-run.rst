@@ -23,6 +23,15 @@
     the hostfile.  If there are less hosts in the hostfile than tasks
     in the job, then the list of hosts will be reused.
 
+    .. note::
+
+      The ``hostfile`` option controls task placement only — it does
+      not influence which hosts are allocated to the job.  It is most
+      useful within an existing allocation where the allocated hosts
+      are known in advance. If the hosts are not known beforehand, use
+      :option:`--requires=host:HOSTLIST` to constrain the allocation to
+      match the hostfile, though this may delay scheduling.
+
    However, shell plugins may provide other task mapping schemes, so
    check the current job shell configuration for a full list of supported
    taskmap schemes.
