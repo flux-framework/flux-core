@@ -437,6 +437,23 @@ class BatchConfig:
         return get_treedict(self.config or {}, key, default=default)
 
 
+def normalize_conf(conf):
+    """Normalize *conf* to a dict for :meth:`from_nest_command`.
+
+    Accepts a plain :class:`dict`, a :class:`~flux.job.BatchConfig`
+    instance, or a string in any form accepted by
+    :meth:`BatchConfig.update` (key=val, JSON, TOML, or a file path).
+    Returns ``None`` when *conf* is ``None``.
+    """
+    if conf is None:
+        return None
+    if isinstance(conf, dict):
+        return conf
+    if isinstance(conf, BatchConfig):
+        return conf.config
+    return BatchConfig().update(str(conf)).config
+
+
 def jobspec_add_file(jobspec, arg):
     """Process a single --add-file=ARG argument and attach it to jobspec."""
     perms = None

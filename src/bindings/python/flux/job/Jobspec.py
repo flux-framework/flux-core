@@ -15,6 +15,7 @@ import json
 import math
 import numbers
 import os
+import pathlib
 import threading
 from types import SimpleNamespace
 
@@ -31,6 +32,7 @@ from flux.job._utils import (
     get_filtered_environment,
     get_filtered_rlimits,
     jobspec_add_file,
+    normalize_conf,
     parse_jobspec_keyval,
     parse_signal_option,
 )
@@ -1147,6 +1149,14 @@ class JobspecV1(Jobspec):
                 practical.
             queue (str): Set the queue for the job.
             bank (str): Set the bank for the job.
+
+        Note:
+            This method is a low-level factory function which builds a
+            minimum RFC 14 jobspec directly. See :meth:`from_submit` for
+            a more full-featured alternative which wraps this method and
+            :meth:`apply_options` in a single call, and therefore supports
+            most options offered by the :man1:`flux-submit` CLI utility,
+            including options provided by configured CLI plugins.
         """
         if not isinstance(num_tasks, int) or num_tasks < 1:
             raise ValueError("task count must be a integer >= 1")
@@ -1252,6 +1262,13 @@ class JobspecV1(Jobspec):
                 broker command line.
             **kwargs: Extra named arguments as accepted in
                 :func:`~JobspecV1.from_command`
+
+        Note:
+            This is a low-level builder. For most Python code, :meth:`from_batch`
+            is preferred — it wraps this method and :meth:`apply_options`
+            in a single call and accepts a file path or inline script
+            content directly.
+
         """
         if not script.startswith("#!"):
             raise ValueError(f"{jobname} does not appear to start with '#!'")
@@ -1316,6 +1333,12 @@ class JobspecV1(Jobspec):
                 broker command line.
             **kwargs: Extra named arguments as accepted in
                 :func:`~JobspecV1.from_command`
+
+        Note:
+            This is a low-level builder. For most Python code, :meth:`from_alloc`
+            is preferred — it wraps this method and :meth:`apply_options`
+            in a single call, and therefore supports most :man1:`flux-alloc`
+            options include options provided by configured CLI plugins.
         """
         broker_opts = list(broker_opts) if broker_opts is not None else []
         if conf is not None:
@@ -1336,6 +1359,430 @@ class JobspecV1(Jobspec):
         if conf is not None:
             jobspec.add_file("conf.json", conf)
         return jobspec
+
+    @classmethod
+    def from_submit(
+        cls,
+        command,
+        *,
+        ntasks=1,
+        nodes=None,
+        cores_per_task=1,
+        gpus_per_task=None,
+        exclusive=False,
+        name=None,
+        queue=None,
+        bank=None,
+        cwd=None,
+        output=None,
+        error=None,
+        input=None,
+        label_io=False,
+        unbuffered=False,
+        **kwargs,
+    ):
+        """Create a jobspec for a command job with options applied.
+
+        Equivalent to :meth:`from_command` followed by
+        :meth:`apply_options` with ``prog="submit"``. Resource layout
+        and basic job arguments are listed below; all
+        :meth:`apply_options` keyword arguments (``env``, ``rlimit``,
+        ``time_limit``, ``dependency``, etc.) and CLI plugin option
+        dests are forwarded via ``**kwargs``.
+
+        Args:
+            command (list[str]): Command to execute.
+            ntasks (int): Number of tasks. Default ``1``.
+            nodes (int): Number of nodes to distribute tasks across.
+            cores_per_task (int): Cores per task. Default ``1``.
+            gpus_per_task (int): GPUs per task.
+            exclusive (bool): Allocate nodes exclusively.
+            name (str): Job name.
+            queue (str): Target queue.
+            bank (str): Target bank.
+            cwd (str): Working directory.
+            output (str): Path for standard output.
+            error (str): Path for standard error.
+            input (str): Path for standard input.
+            label_io (bool): Label output lines with task IDs.
+            unbuffered (bool): Disable output buffering.
+            **kwargs: Forwarded to :meth:`apply_options`.
+
+        Returns:
+            :class:`JobspecV1`
+
+        Note:
+            CLI plugin ``preinit()`` callbacks are invoked (via
+            :meth:`apply_options`) after the jobspec structure is built.
+            Mutations to resource-sizing attributes such as *ntasks* or
+            *nodes* inside ``preinit()`` are therefore ignored; use
+            ``modify_jobspec()`` for structural changes.
+
+        Example:
+
+            Build and submit a 16-task job with shell options and attributes::
+
+                import flux
+                import flux.job
+                from flux.job import JobspecV1
+
+                js = JobspecV1.from_submit(
+                    ["myapp", "--input", "data.h5"],
+                    ntasks=16,
+                    cores_per_task=4,
+                    time_limit="2h",
+                    shell_options={"verbose": 1},
+                    attributes={"system.queue": "gpu"},
+                    dependency=["afterok:f1234abcd"],
+                )
+                jobid = flux.job.submit(flux.Flux(), js)
+
+            Pass options registered by CLI plugins using their prefixed dest
+            name.  Run ``flux submit --help`` to see what plugins are loaded;
+            plugin options appear under "Options provided by plugins". The dest
+            for each option is the flag name with the leading ``--`` removed and
+            dashes replaced by underscores (e.g. ``--amd-gpumode`` →
+            ``amd_gpumode``)::
+
+                # --amd-gpumode is listed in "flux submit --help" output
+                js = JobspecV1.from_submit(["myapp"], ntasks=8, amd_gpumode="TPX")
+
+            For programmatic discovery of installed plugin option dests::
+
+                from flux.cli.plugin import CLIPluginRegistry
+
+                for opt in CLIPluginRegistry("submit").options:
+                    print(f"{opt.name} -> dest: {opt.dest}")
+
+            See :meth:`apply_options` for a full description of all accepted
+            keyword arguments.
+        """
+        js = cls.from_command(
+            command,
+            num_tasks=ntasks,
+            cores_per_task=cores_per_task,
+            gpus_per_task=gpus_per_task,
+            num_nodes=nodes,
+            exclusive=exclusive,
+            name=name,
+            queue=queue,
+            bank=bank,
+            cwd=cwd,
+            output=output,
+            error=error,
+            input=input,
+            label_io=label_io,
+            unbuffered=unbuffered,
+        )
+        # Pass env and rlimit explicitly so apply_options() propagates the
+        # caller's environment and default resource limits even when neither
+        # was specified. apply_options() only applies env/rlimit when they
+        # are passed as explicit keyword arguments (or when an args namespace
+        # is provided); without this, a bare apply_options(**kwargs) call
+        # would skip propagation when the caller omits env= and rlimit=.
+        # An empty list triggers full propagation with defaults (same as
+        # passing no rules on the CLI).
+        return js.apply_options(
+            prog="submit",
+            env=kwargs.pop("env", []),
+            rlimit=kwargs.pop("rlimit", []),
+            **kwargs,
+        )
+
+    @classmethod
+    def from_alloc(
+        cls,
+        *,
+        nslots=None,
+        nodes=None,
+        cores_per_slot=1,
+        gpus_per_slot=None,
+        exclusive=False,
+        broker_opts=None,
+        conf=None,
+        bg=False,
+        name=None,
+        queue=None,
+        bank=None,
+        cwd=None,
+        output=None,
+        error=None,
+        input=None,
+        label_io=False,
+        unbuffered=False,
+        **kwargs,
+    ):
+        """Create a jobspec for a nested Flux instance with options applied.
+
+        Equivalent to :meth:`from_nest_command` followed by
+        :meth:`apply_options` with ``prog="alloc"``. Either *nslots* or
+        *nodes* must be provided; if only *nodes* is given, *nslots*
+        defaults to *nodes* and *exclusive* is forced ``True``.
+
+        Args:
+            nslots (int): Number of resource slots.
+            nodes (int): Number of nodes. Sets *nslots* when *nslots*
+                is not given and forces *exclusive* ``True``.
+            cores_per_slot (int): Cores per slot. Default ``1``.
+            gpus_per_slot (int): GPUs per slot.
+            exclusive (bool): Allocate nodes exclusively.
+            broker_opts (list[str]): Options passed to the child broker.
+            conf: Broker configuration as a :class:`dict`,
+                :class:`~flux.job.BatchConfig`, or a string accepted by
+                :meth:`BatchConfig.update` (key=val, JSON, TOML, file path).
+            bg (bool): Start instance in the background without
+                attaching. Appends ``-Sbroker.rc2_none=1`` to
+                *broker_opts* and sets the ``pty.capture`` shell option.
+            name (str): Job name.
+            queue (str): Target queue.
+            bank (str): Target bank.
+            cwd (str): Working directory. Defaults to ``os.getcwd()``.
+            output (str): Path for standard output.
+            error (str): Path for standard error.
+            input (str): Path for standard input.
+            label_io (bool): Label output lines with task IDs.
+            unbuffered (bool): Disable output buffering.
+            **kwargs: Forwarded to :meth:`apply_options`.
+
+        Returns:
+            :class:`JobspecV1`
+
+        Note:
+            CLI plugin ``preinit()`` callbacks are invoked (via
+            :meth:`apply_options`) after the jobspec structure is built.
+            Mutations to resource-sizing attributes such as *nslots* or
+            *nodes* inside ``preinit()`` are therefore ignored; use
+            ``modify_jobspec()`` for structural changes.
+
+        Example:
+
+            Start a nested Flux instance on four nodes with a broker config::
+
+                import flux
+                import flux.job
+                from flux.job import JobspecV1
+
+                js = JobspecV1.from_alloc(
+                    nodes=4,
+                    time_limit="1h",
+                    conf={"resource": {"noverify": True}},
+                    shell_options={"verbose": 1},
+                )
+                jobid = flux.job.submit(flux.Flux(), js)
+
+            See :meth:`apply_options` for a full description of all accepted
+            keyword arguments, including CLI plugin options.
+        """
+        if nslots is None:
+            if nodes is not None:
+                nslots = nodes
+                exclusive = True
+            else:
+                raise ValueError("from_alloc() requires nslots or nodes")
+        if cwd is None:
+            cwd = os.getcwd()
+
+        if bg:
+            broker_opts = list(broker_opts or [])
+            broker_opts.append("-Sbroker.rc2_none=1")
+
+        js = cls.from_nest_command(
+            command=[],
+            num_slots=nslots,
+            cores_per_slot=cores_per_slot,
+            gpus_per_slot=gpus_per_slot,
+            num_nodes=nodes,
+            broker_opts=broker_opts,
+            exclusive=exclusive,
+            conf=normalize_conf(conf),
+            name=name,
+            queue=queue,
+            bank=bank,
+            cwd=cwd,
+            output=output,
+            error=error,
+            input=input,
+            label_io=label_io,
+            unbuffered=unbuffered,
+        )
+        if bg:
+            js.setattr_shell_option("pty.capture", 1)
+        # See from_submit() for why env= and rlimit= are passed explicitly.
+        return js.apply_options(
+            prog="alloc",
+            env=kwargs.pop("env", []),
+            rlimit=kwargs.pop("rlimit", []),
+            **kwargs,
+        )
+
+    @classmethod
+    def from_batch(
+        cls,
+        script=None,
+        *,
+        content=None,
+        nslots=None,
+        nodes=None,
+        cores_per_slot=1,
+        gpus_per_slot=None,
+        exclusive=False,
+        broker_opts=None,
+        conf=None,
+        wrap=False,
+        name=None,
+        queue=None,
+        bank=None,
+        cwd=None,
+        output=None,
+        error=None,
+        input=None,
+        label_io=False,
+        unbuffered=False,
+        **kwargs,
+    ):
+        """Create a jobspec for a batch script job with options applied.
+
+        Equivalent to :meth:`from_batch_command` followed by
+        :meth:`apply_options` with ``prog="batch"``. The script may be
+        supplied as a file path via *script* or as inline string content
+        via *content*; exactly one must be provided.
+
+        If neither *nslots* nor *nodes* is provided, *nslots* defaults
+        to ``1``. If only *nodes* is given, *nslots* defaults to *nodes*
+        and *exclusive* is forced ``True``.
+
+        Args:
+            script (str or os.PathLike): Path to the batch script file.
+                The file is read and *name* defaults to the filename.
+                Mutually exclusive with *content*.
+            content (str): Inline script content. *name* defaults to
+                ``"batch"``. Mutually exclusive with *script*.
+            nslots (int): Number of resource slots. Default ``1``.
+            nodes (int): Number of nodes. Sets *nslots* when *nslots*
+                is not given and forces *exclusive* ``True``.
+            cores_per_slot (int): Cores per slot. Default ``1``.
+            gpus_per_slot (int): GPUs per slot.
+            exclusive (bool): Allocate nodes exclusively.
+            broker_opts (list[str]): Options passed to the child broker.
+            conf: Broker configuration — see :meth:`from_alloc`.
+            wrap (bool): If ``True`` and the script has no shebang,
+                prepend ``#!/bin/sh``.
+            name (str): Job name. Defaults to the script filename when
+                *script* is given, otherwise ``"batch"``.
+            queue (str): Target queue.
+            bank (str): Target bank.
+            cwd (str): Working directory. Defaults to ``os.getcwd()``.
+            output (str): Path for standard output. Defaults to
+                ``"flux-{{id}}.out"``.
+            error (str): Path for standard error.
+            input (str): Path for standard input.
+            label_io (bool): Label output lines with task IDs.
+            unbuffered (bool): Disable output buffering.
+            **kwargs: Forwarded to :meth:`apply_options`.
+
+        Returns:
+            :class:`JobspecV1`
+
+        Raises:
+            TypeError: If both *script* and *content* are given, or
+                neither is given.
+
+        Note:
+            CLI plugin ``preinit()`` callbacks are invoked (via
+            :meth:`apply_options`) after the jobspec structure is built.
+            Mutations to resource-sizing attributes such as *nslots* or
+            *nodes* inside ``preinit()`` are therefore ignored; use
+            ``modify_jobspec()`` for structural changes.
+
+        Example:
+
+            Submit a batch script from a file::
+
+                import flux
+                import flux.job
+                from flux.job import JobspecV1
+
+                js = JobspecV1.from_batch(
+                    "/path/to/script.sh",
+                    nodes=4,
+                    time_limit="2h",
+                    attributes={"system.queue": "batch"},
+                )
+                jobid = flux.job.submit(flux.Flux(), js)
+
+            Submit an inline script::
+
+                js = JobspecV1.from_batch(
+                    content="#!/bin/bash\nflux run -n8 myapp\n",
+                    nslots=8,
+                    output="myapp-{{id}}.out",
+                    error="myapp-{{id}}.err",
+                )
+                jobid = flux.job.submit(flux.Flux(), js)
+
+            See :meth:`apply_options` for a full description of all accepted
+            keyword arguments, including how to discover and use CLI plugin
+            options.
+        """
+        if script is not None and content is not None:
+            raise TypeError("from_batch() accepts 'script' or 'content', not both")
+        if script is None and content is None:
+            raise TypeError(
+                "from_batch() requires 'script' (file path) or 'content' (inline script)"
+            )
+
+        if content is not None:
+            script = content
+        else:
+            script_path = pathlib.Path(script)
+            if name is None:
+                name = script_path.name
+            script = script_path.read_text(encoding="utf-8")
+
+        if wrap and not script.startswith("#!"):
+            script = "#!/bin/sh\n" + script
+
+        # nslots/nodes defaulting
+        if nslots is None:
+            if nodes is not None:
+                nslots = nodes
+                exclusive = True
+            else:
+                nslots = 1
+
+        if name is None:
+            name = "batch"
+        if cwd is None:
+            cwd = os.getcwd()
+        if output is None:
+            output = "flux-{{id}}.out"
+
+        js = cls.from_batch_command(
+            script=script,
+            jobname=name,
+            num_slots=nslots,
+            cores_per_slot=cores_per_slot,
+            gpus_per_slot=gpus_per_slot,
+            num_nodes=nodes,
+            broker_opts=broker_opts,
+            exclusive=exclusive,
+            conf=normalize_conf(conf),
+            cwd=cwd,
+            output=output,
+            error=error,
+            input=input,
+            label_io=label_io,
+            unbuffered=unbuffered,
+            queue=queue,
+            bank=bank,
+        )
+        # See from_submit() for why env= and rlimit= are passed explicitly.
+        return js.apply_options(
+            prog="batch",
+            env=kwargs.pop("env", []),
+            rlimit=kwargs.pop("rlimit", []),
+            **kwargs,
+        )
 
     def apply_options(
         self,
