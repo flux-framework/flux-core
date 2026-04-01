@@ -20,6 +20,7 @@ to this project, please refer to [CONTRIBUTING](CONTRIBUTING.md).
 | Vanessa Sochat     | [vsoch](https://github.com/vsoch)                     | LLNL        |
 | Becky Springmeyer  | [springme](https://github.com/springme)               | LLNL        |
 | William Hobbs      | [wihobbs](https://github.com/wihobbs)                 | LLNL        |
+| Sam Maloney        | [sam-maloney](https://github.com/sam-maloney)         | FZJ-JSC         |
 
 ## Maintainers Emeritus
 
