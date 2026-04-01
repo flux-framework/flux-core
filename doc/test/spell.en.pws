@@ -1096,3 +1096,5 @@ ValueError
 BrokerModule
 MyModule
 subclasses
+CLI
+cli
