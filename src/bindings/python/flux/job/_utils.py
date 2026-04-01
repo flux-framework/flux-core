@@ -13,7 +13,6 @@
 
 import fnmatch
 import json
-import logging
 import os
 import pathlib
 import re
@@ -32,8 +31,6 @@ except ModuleNotFoundError:
 from flux import util
 from flux.constraint.parser import ConstraintParser
 from flux.util import dict_merge, get_treedict, set_treedict
-
-LOGGER = logging.getLogger("flux")
 
 
 def decode_signal(val):
@@ -279,10 +276,13 @@ def get_filtered_environment(rules, environ=None):
         #
         elif rule.startswith("^"):
             filename = os.path.expanduser(rule[1:])
-            with open(filename) as envfile:
-                lines = [line.strip() for line in envfile]
-                environ, envx = get_filtered_environment(lines, environ=environ)
-                env_expand.update(envx)
+            try:
+                with open(filename) as envfile:
+                    lines = [line.strip() for line in envfile]
+            except OSError as exc:
+                raise ValueError(f"--env: {exc}") from None
+            environ, envx = get_filtered_environment(lines, environ=environ)
+            env_expand.update(envx)
         #
         #  Otherwise, the rule is an explicit variable assignment
         #   VAR=VAL. If =VAL is not provided then VAL refers to the
@@ -317,10 +317,9 @@ def get_filtered_environment(rules, environ=None):
                 try:
                     environ[var] = Template(rest[0]).substitute(lookup)
                 except ValueError:
-                    LOGGER.error("--env: Unable to substitute %s", rule)
-                    raise
+                    raise ValueError(f"--env: Unable to substitute {rule}")
                 except KeyError as ex:
-                    raise Exception(f"--env: Variable {ex} not found in {rule}")
+                    raise ValueError(f"--env: Variable {ex} not found in {rule}")
     return environ, env_expand
 
 
