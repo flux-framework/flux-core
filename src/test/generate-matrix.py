@@ -214,6 +214,14 @@ matrix.add_multiarch_build(
     ),
 )
 matrix.add_multiarch_build(
+    name="el10",
+    default_suffix=" - test-install",
+    args=common_args,
+    env=dict(
+        TEST_INSTALL="t",
+    ),
+)
+matrix.add_multiarch_build(
     name="alpine",
     default_suffix=" - test-install",
     args=common_args,
