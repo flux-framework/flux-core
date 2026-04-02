@@ -18,14 +18,37 @@ on:
         - noble
 name: rebuild testenv containers using docker buildx
 jobs:
+  setup:
+    name: Determine distros to rebuild
+    runs-on: ubuntu-latest
+    outputs:
+      distros: ${{ steps.get-distros.outputs.distros }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 2
+      - id: get-distros
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo 'distros=["${{ inputs.distro }}"]' >> $GITHUB_OUTPUT
+          else
+            DISTROS=$(git diff --name-only HEAD~1 HEAD \
+              -- 'src/test/docker/*/Dockerfile' \
+              | sed 's|src/test/docker/||; s|/Dockerfile||' \
+              | jq -Rsc '[split("\n")[] | select(. != "")]')
+            echo "distros=${DISTROS}" >> $GITHUB_OUTPUT
+          fi
+
   build-amd64-container:
     name: build new testenv container for amd64
+    needs: [setup]
+    strategy:
+      matrix:
+        distro: ${{ fromJson(needs.setup.outputs.distros) }}
     timeout-minutes: 90
     runs-on: ubuntu-latest
     env:
       DOCKERHUB_REPO: fluxrm
-    outputs:
-      image_digest: ${{ steps.digest.outputs.digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -34,30 +57,31 @@ jobs:
         uses: docker/setup-buildx-action@v4.0.0
 
       - name: Build and tar amd64 image
-        id: build
         run: |
           mkdir -p out
           docker buildx build \
-            -o type=docker,dest=out/testenv-${{ inputs.distro }}-amd64.tar \
+            -o type=docker,dest=out/testenv-${{ matrix.distro }}-amd64.tar \
             --platform=linux/amd64 \
-            --tag $DOCKERHUB_REPO/testenv:${{ inputs.distro }}-amd64 \
-            -f src/test/docker/${{ inputs.distro }}/Dockerfile .
+            --tag $DOCKERHUB_REPO/testenv:${{ matrix.distro }}-amd64 \
+            -f src/test/docker/${{ matrix.distro }}/Dockerfile .
 
       - name: Upload amd64 container tarball
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: testenv-${{ inputs.distro }}-amd64
-          path: out/testenv-${{ inputs.distro }}-amd64.tar
+          name: testenv-${{ matrix.distro }}-amd64
+          path: out/testenv-${{ matrix.distro }}-amd64.tar
           if-no-files-found: error
 
   build-arm64-container:
     name: build new testenv container for arm64
+    needs: [setup]
+    strategy:
+      matrix:
+        distro: ${{ fromJson(needs.setup.outputs.distros) }}
     timeout-minutes: 90
     runs-on: ubuntu-24.04-arm
     env:
       DOCKERHUB_REPO: fluxrm
-    outputs:
-      image_digest: ${{ steps.digest.outputs.digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -66,24 +90,28 @@ jobs:
         uses: docker/setup-buildx-action@v4.0.0
 
       - name: Build and tar arm64 image
-        id: build
         run: |
           mkdir -p out
           docker buildx build \
-            -o type=docker,dest=out/testenv-${{ inputs.distro }}-arm64.tar \
+            -o type=docker,dest=out/testenv-${{ matrix.distro }}-arm64.tar \
             --platform=linux/arm64 \
-            --tag $DOCKERHUB_REPO/testenv:${{ inputs.distro }}-arm64 \
-            -f src/test/docker/${{ inputs.distro }}/Dockerfile .
+            --tag $DOCKERHUB_REPO/testenv:${{ matrix.distro }}-arm64 \
+            -f src/test/docker/${{ matrix.distro }}/Dockerfile .
 
       - name: Upload arm64 container tarball
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: testenv-${{ inputs.distro }}-arm64
-          path: out/testenv-${{ inputs.distro }}-arm64.tar
+          name: testenv-${{ matrix.distro }}-arm64
+          path: out/testenv-${{ matrix.distro }}-arm64.tar
           if-no-files-found: error
 
   build-386-container:
     name: build new testenv container for 386
+    needs: [setup]
+    if: contains(needs.setup.outputs.distros, 'bookworm')
+    strategy:
+      matrix:
+        distro: ${{ fromJson(needs.setup.outputs.distros) }}
     timeout-minutes: 90
     runs-on: ubuntu-latest
     env:
@@ -93,35 +121,37 @@ jobs:
         uses: actions/checkout@v6.0.2
 
       - name: Set up QEMU
-        if: inputs.distro == 'bookworm'
+        if: matrix.distro == 'bookworm'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: inputs.distro == 'bookworm'
+        if: matrix.distro == 'bookworm'
         uses: docker/setup-buildx-action@v4.0.0
 
       - name: Build and tar 386 image
-        if: inputs.distro == 'bookworm'
+        if: matrix.distro == 'bookworm'
         run: |
           mkdir -p out
           docker buildx build \
-            -o type=docker,dest=out/testenv-${{ inputs.distro }}-386.tar \
+            -o type=docker,dest=out/testenv-${{ matrix.distro }}-386.tar \
             --platform=linux/386 \
-            --tag $DOCKERHUB_REPO/testenv:${{ inputs.distro }}-386 \
-            -f src/test/docker/${{ inputs.distro }}/Dockerfile .
+            --tag $DOCKERHUB_REPO/testenv:${{ matrix.distro }}-386 \
+            -f src/test/docker/${{ matrix.distro }}/Dockerfile .
 
       - name: Upload 386 container tarball
-        if: inputs.distro == 'bookworm'
+        if: matrix.distro == 'bookworm'
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: testenv-${{ inputs.distro }}-386
-          path: out/testenv-${{ inputs.distro }}-386.tar
+          name: testenv-${{ matrix.distro }}-386
+          path: out/testenv-${{ matrix.distro }}-386.tar
           if-no-files-found: error
 
   test-amd64-container:
     name: Test newly-built amd64 container
-    needs:
-      - build-amd64-container
+    needs: [setup, build-amd64-container]
+    strategy:
+      matrix:
+        distro: ${{ fromJson(needs.setup.outputs.distros) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -132,18 +162,18 @@ jobs:
       - name: Download amd64 artifact
         uses: actions/download-artifact@v8.0.1
         with:
-          name: testenv-${{ inputs.distro }}-amd64
+          name: testenv-${{ matrix.distro }}-amd64
           path: artifacts
 
       - name: Load images from tarballs
         run: |
           set -euo pipefail
-          docker load -i artifacts/testenv-${{ inputs.distro }}-amd64.tar
+          docker load -i artifacts/testenv-${{ matrix.distro }}-amd64.tar
           docker images | head -n 50
 
       - name: run docker-run-checks
         run: |
-          src/test/docker/docker-run-checks.sh -i ${{ inputs.distro }}-amd64 -j 4 --recheck --
+          src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-amd64 -j 4 --recheck --
 
       - name: tmate debug
         if: ${{ !cancelled() && runner.debug }}
@@ -151,8 +181,10 @@ jobs:
 
   test-arm64-container:
     name: Test newly-built arm64 container
-    needs:
-      - build-arm64-container
+    needs: [setup, build-arm64-container]
+    strategy:
+      matrix:
+        distro: ${{ fromJson(needs.setup.outputs.distros) }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
     env:
@@ -163,18 +195,18 @@ jobs:
       - name: Download arm64 artifact
         uses: actions/download-artifact@v8.0.1
         with:
-          name: testenv-${{ inputs.distro }}-arm64
+          name: testenv-${{ matrix.distro }}-arm64
           path: artifacts
 
       - name: Load images from tarballs
         run: |
           set -euo pipefail
-          docker load -i artifacts/testenv-${{ inputs.distro }}-arm64.tar
+          docker load -i artifacts/testenv-${{ matrix.distro }}-arm64.tar
           docker images | head -n 50
 
       - name: run docker-run-checks
         run: |
-          src/test/docker/docker-run-checks.sh -i ${{ inputs.distro }}-arm64 -j 4 --recheck --
+          src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-arm64 -j 4 --recheck --
 
       - name: tmate debug
         if: ${{ !cancelled() && runner.debug }}
@@ -182,8 +214,11 @@ jobs:
 
   test-386-container:
     name: Test newly-built 386 container
-    needs:
-      - build-386-container
+    needs: [setup, build-386-container]
+    if: contains(needs.setup.outputs.distros, 'bookworm')
+    strategy:
+      matrix:
+        distro: ${{ fromJson(needs.setup.outputs.distros) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -196,17 +231,17 @@ jobs:
         uses: docker/setup-qemu-action@v3
 
       - name: Download 386 artifact
-        if: inputs.distro == 'bookworm'
+        if: matrix.distro == 'bookworm'
         uses: actions/download-artifact@v8.0.1
         with:
-          name: testenv-${{ inputs.distro }}-386
+          name: testenv-${{ matrix.distro }}-386
           path: artifacts
 
       - name: Load images from tarballs
-        if: inputs.distro == 'bookworm'
+        if: matrix.distro == 'bookworm'
         run: |
           set -euo pipefail
-          docker load -i artifacts/testenv-${{ inputs.distro }}-386.tar
+          docker load -i artifacts/testenv-${{ matrix.distro }}-386.tar
           docker images | head -n 50
 
       - name: Verify 386 image architecture
@@ -220,7 +255,7 @@ jobs:
             || { echo "ERROR: expected i386, got ${ARCH}"; exit 1; }
 
       - name: run docker-run-checks
-        if: inputs.distro == 'bookworm'
+        if: matrix.distro == 'bookworm'
         run: |
           src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-386 \
             --platform linux/386 -j 4 --recheck --
@@ -233,9 +268,19 @@ jobs:
     name: Push images + publish multi-arch manifest
     timeout-minutes: 30
     needs:
+      - setup
       - test-amd64-container
       - test-arm64-container
       - test-386-container
+    if: >
+      always() &&
+      needs.test-amd64-container.result == 'success' &&
+      needs.test-arm64-container.result == 'success' &&
+      (needs.test-386-container.result == 'success' ||
+       needs.test-386-container.result == 'skipped')
+    strategy:
+      matrix:
+        distro: ${{ fromJson(needs.setup.outputs.distros) }}
     runs-on: ubuntu-latest
     env:
       DOCKERHUB_REPO: fluxrm
@@ -254,52 +299,52 @@ jobs:
       - name: Download amd64 artifact
         uses: actions/download-artifact@v8.0.1
         with:
-          name: testenv-${{ inputs.distro }}-amd64
+          name: testenv-${{ matrix.distro }}-amd64
           path: artifacts
 
       - name: Download arm64 artifact
         uses: actions/download-artifact@v8.0.1
         with:
-          name: testenv-${{ inputs.distro }}-arm64
+          name: testenv-${{ matrix.distro }}-arm64
           path: artifacts
 
       - name: Download 386 artifact
-        if: inputs.distro == 'bookworm'
+        if: matrix.distro == 'bookworm'
         uses: actions/download-artifact@v8.0.1
         with:
-          name: testenv-${{ inputs.distro }}-386
+          name: testenv-${{ matrix.distro }}-386
           path: artifacts
 
       - name: Load images from tarballs
         run: |
           set -euo pipefail
-          docker load -i artifacts/testenv-${{ inputs.distro }}-amd64.tar
-          docker load -i artifacts/testenv-${{ inputs.distro }}-arm64.tar
-          if [ "${{ inputs.distro }}" = "bookworm" ]; then
-            docker load -i artifacts/testenv-${{ inputs.distro }}-386.tar
+          docker load -i artifacts/testenv-${{ matrix.distro }}-amd64.tar
+          docker load -i artifacts/testenv-${{ matrix.distro }}-arm64.tar
+          if [ "${{ matrix.distro }}" = "bookworm" ]; then
+            docker load -i artifacts/testenv-${{ matrix.distro }}-386.tar
           fi
           docker images | head -n 50
 
       # Push arch-specific tags first
       - name: Push per-arch tags
         run: |
-          docker push "${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-amd64"
-          docker push "${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-arm64"
-          if [ "${{ inputs.distro }}" = "bookworm" ]; then
-            docker push "${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-386"
+          docker push "${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-amd64"
+          docker push "${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-arm64"
+          if [ "${{ matrix.distro }}" = "bookworm" ]; then
+            docker push "${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-386"
           fi
 
       # Then create the multi-arch manifest that points at the per-arch tags
       - name: Create and push manifest
         run: |
-          IMAGE="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}"
-          TAGS="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-amd64"
-          TAGS+=" ${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-arm64"
-          if [ "${{ inputs.distro }}" = "bookworm" ]; then
-            TAGS+=" ${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-386"
+          IMAGE="${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}"
+          TAGS="${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-amd64"
+          TAGS+=" ${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-arm64"
+          if [ "${{ matrix.distro }}" = "bookworm" ]; then
+            TAGS+=" ${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-386"
           fi
           docker buildx imagetools create --tag "${IMAGE}" ${TAGS}
 
       - name: Inspect published manifest
-        run: docker buildx imagetools inspect ${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}
+        run: docker buildx imagetools inspect ${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}
 # vim: set shiftwidth=2 tabstop=2 softtabstop=2 expandtab:
