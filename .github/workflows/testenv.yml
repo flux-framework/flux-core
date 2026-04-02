@@ -166,6 +166,9 @@ jobs:
       DOCKERHUB_REPO: fluxrm
     steps:
       - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+      - run: git fetch --tags || true
 
       - name: Download amd64 artifact
         uses: actions/download-artifact@v8.0.1
@@ -199,6 +202,9 @@ jobs:
       DOCKERHUB_REPO: fluxrm
     steps:
       - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+      - run: git fetch --tags || true
 
       - name: Download arm64 artifact
         uses: actions/download-artifact@v8.0.1
@@ -233,6 +239,9 @@ jobs:
       DOCKERHUB_REPO: fluxrm
     steps:
       - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+      - run: git fetch --tags || true
 
       - name: Set up QEMU
         if: matrix.distro == 'bookworm'
