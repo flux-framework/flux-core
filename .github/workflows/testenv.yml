@@ -106,7 +106,6 @@ jobs:
 
       - name: run docker-run-checks
         run: |
-          cd /home/runner/work/flux-core/flux-core
           src/test/docker/docker-run-checks.sh -i ${{ inputs.distro }}-amd64 -j 4 --recheck --
 
       - name: tmate debug
@@ -137,7 +136,6 @@ jobs:
 
       - name: run docker-run-checks
         run: |
-          cd /home/runner/work/flux-core/flux-core
           src/test/docker/docker-run-checks.sh -i ${{ inputs.distro }}-arm64 -j 4 --recheck --
 
       - name: tmate debug
