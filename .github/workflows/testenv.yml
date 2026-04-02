@@ -1,4 +1,9 @@
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'src/test/docker/*/Dockerfile'
   workflow_dispatch:
     inputs:
       distro:
