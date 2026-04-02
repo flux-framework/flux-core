@@ -1373,7 +1373,6 @@ test_expect_success 'flux job list outputs no project and bank by default' '
 	flux job list -s inactive | grep $jobid | jq -e ".project == null" &&
 	flux job list -s inactive | grep $jobid | jq -e ".bank == null"
 '
-# initially put job on hold, jobspec-updates don't matter after the job is running
 test_expect_success 'flux job list outputs project and bank if one set' '
 	jobid=`flux submit --urgency=hold true | flux job id` &&
 	echo $jobid > jobprojectbank2.id &&
@@ -2522,6 +2521,40 @@ test_expect_success 'job-list returns expected resource changes after reload' '
 
 test_expect_success 'remove jobtap plugins' '
 	flux jobtap remove all
+'
+
+#
+# jobspec-update and resource-update update on a running job (issue 7487)
+#
+
+test_expect_success 'run a job' '
+	flux submit --time-limit=10m --wait-event=start sleep 600 | flux job id > runupdate.id
+'
+
+# expiration should be 10m out, just make sure it is > 2m out
+test_expect_success 'duration and expiration expected values' '
+	flux job list -s active | grep $(cat runupdate.id) | jq -e ".duration == 600.0" &&
+	current=$(date +%s) &&
+	testexp=`expr $current + 2 \* 60` &&
+	echo $testexp > test_expiration2.out &&
+	flux job list -s active | grep $(cat runupdate.id) | jq -e ".expiration > $(cat test_expiration2.out)"
+'
+
+test_expect_success 'update job duration' '
+	flux update --wait $(cat runupdate.id) duration=+100m
+'
+
+test_expect_success 'cancel job' '
+	flux cancel $(cat runupdate.id)
+'
+
+# expiration should be 110m out, just make sure it is > 100m out
+test_expect_success 'duration and expiration updated as expected' '
+	flux job list -s inactive | grep $(cat runupdate.id) | jq -e ".duration == 6600.0" &&
+	current=$(date +%s) &&
+	testexp=`expr $current + 100 \* 60` &&
+	echo $testexp > test_expiration3.out &&
+	flux job list -s inactive | grep $(cat runupdate.id) | jq -e ".expiration > $(cat test_expiration3.out)"
 '
 
 #

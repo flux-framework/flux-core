@@ -799,16 +799,11 @@ static int journal_jobspec_update_event (struct job_state_ctx *jsctx,
         errno = EPROTO;
         return -1;
     }
-    /* Generally speaking, after a job is running, jobspec-update
-     * events should have no effect.  Note that in some cases,
-     * such as job duration, jobspec-updates can alter a job's
-     * behavior, but it is via an update to R.  In this case, we
-     * elect to not update the job duration seen by the user in
-     * the jobspec.  The effect will be seen changes in R (in this
-     * example, via the job expiration time in R).
+    /* Discounting testing scenarios, jobspec-update events usually go
+     * through job-manager and passed feasibility checks.  Honor the
+     * jobspec-update events, regardless of job state.
      */
-    if (job->state < FLUX_JOB_STATE_RUN)
-        update_jobspec (jsctx, job, context, true);
+    update_jobspec (jsctx, job, context, true);
     return 0;
 }
 
@@ -823,10 +818,11 @@ static int journal_resource_update_event (struct job_state_ctx *jsctx,
         errno = EPROTO;
         return -1;
     }
-    /* Generally speaking, resource-update events only have an effect
-     * when a job is running. */
-    if (job->state == FLUX_JOB_STATE_RUN)
-        update_resource (jsctx, job, context);
+    /* Discounting testing scenarios, resource-update events usually go
+     * through job-manager and passed feasibility checks.  Honor the
+     * resource-update events, regardless of job state.
+     */
+    update_resource (jsctx, job, context);
     return 0;
 }
 
