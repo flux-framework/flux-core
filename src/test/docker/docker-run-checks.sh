@@ -140,6 +140,38 @@ CONFIGURE_ARGS="$@"
 
 . ${TOP}/src/test/checks-lib.sh
 
+# Determine if the testenv base image needs to be built locally.
+# Two cases require a local build:
+#  1. The testenv Dockerfile was added or modified in this branch.
+#     Use the most recent merge commit as the base for the diff: since
+#     flux always uses merge commits on master, this is the master state
+#     the branch was cut from, with no dependency on remote refs.
+#  2. The image cannot be pulled from DockerHub (e.g. a newly added image
+#     that has never been published yet).
+TESTENV_DOCKERFILE="${TOP}/src/test/docker/${IMAGE}/Dockerfile"
+if [[ -f "$TESTENV_DOCKERFILE" ]]; then
+    BUILD_TESTENV_REASON=""
+    LAST_MERGE=$(git -C "${TOP}" log --merges -n1 --format=%H HEAD 2>/dev/null || true)
+    if [[ -n "$LAST_MERGE" ]] && \
+       git -C "${TOP}" diff --name-only "${LAST_MERGE}" HEAD \
+           -- "src/test/docker/${IMAGE}/Dockerfile" 2>/dev/null | grep -q .; then
+        BUILD_TESTENV_REASON="Dockerfile modified in this branch"
+    fi
+    if [[ -z "$BUILD_TESTENV_REASON" ]]; then
+        docker pull "${BASE_DOCKER_REPO}:${IMAGE}" >/dev/null 2>&1 \
+            || BUILD_TESTENV_REASON="image not found on DockerHub"
+    fi
+    if [[ -n "$BUILD_TESTENV_REASON" ]]; then
+        checks_group_start \
+            "Building testenv image ${IMAGE} locally (${BUILD_TESTENV_REASON})"
+        docker build \
+            --tag "${BASE_DOCKER_REPO}:${IMAGE}" \
+            -f "${TESTENV_DOCKERFILE}" \
+            "${TOP}" || die "failed to build testenv image ${IMAGE}"
+        checks_group_end
+    fi
+fi
+
 #  NOTE: BASE_IMAGE, IMAGESRC, FLUX_SECURITY_VERSION are ignored
 #   unless in flux-core repo
 #
