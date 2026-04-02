@@ -13,13 +13,30 @@ or a tagged version of flux-core.
 
 #### fluxrm/testenv Docker images
 
-The Dockerfiles `jammy/Dockerfile`, `focal/Dockerfile`,
-`el7/Dockerfile`, and `el8/Dockerfile` describe the images built
-under the `fluxrm/testenv:jammy`, `fluxrm/testenv:focal`,
-`fluxrm/testenv:el7`, and `fluxrm/testenv:el8` respectively, and
-include the base dependencies required to build flux-core. These images
-are updated manually by flux-core maintainers, but the Dockerfiles should
-be kept up to date for a single point of management.
+The following Dockerfiles each describe a `fluxrm/testenv` base image
+containing the dependencies required to build and test flux-core:
+
+| Directory   | DockerHub tag              |
+|-------------|----------------------------|
+| `alpine`    | `fluxrm/testenv:alpine`    |
+| `bookworm`  | `fluxrm/testenv:bookworm`  |
+| `el8`       | `fluxrm/testenv:el8`       |
+| `el9`       | `fluxrm/testenv:el9`       |
+| `el10`      | `fluxrm/testenv:el10`      |
+| `fedora40`  | `fluxrm/testenv:fedora40`  |
+| `focal`     | `fluxrm/testenv:focal`     |
+| `jammy`     | `fluxrm/testenv:jammy`     |
+| `noble`     | `fluxrm/testenv:noble`     |
+
+All images are published as multi-arch manifests covering `linux/amd64`
+and `linux/arm64`. The `bookworm` image additionally includes a
+`linux/386` variant.
+
+Images are rebuilt and pushed to DockerHub automatically by the
+`testenv.yml` GitHub Actions workflow whenever a Dockerfile under
+`src/test/docker/` changes on the master branch. A maintainer can also
+trigger a rebuild for a specific image manually via the workflow_dispatch
+UI in the GitHub Actions tab.
 
 #### The "checks" build Dockerfile
 
@@ -35,47 +52,26 @@ Docker images.
 
 #### Adding a new dependency
 
-When constructing a PR that adds new dependency, the dependency should
-be added (for both rh/el and Ubuntu) in `checks/Dockerfile`. This will
-result in a temporary docker image being created during testing of the
-PR with the dependency installed.
+When constructing a PR that adds a new dependency, add it to
+`checks/Dockerfile` first. This causes a temporary build of the
+checks image with the new dependency for the duration of the PR, without
+requiring a published `fluxrm/testenv` update before the PR can pass CI.
 
-Later, a flux-core maintainer can move the dependency into the `testenv`
-Docker images `jammy/Dockerfile` and `el7/Dockerfile`.
-These docker images should then be built by hand and manually
-pushed to DockerHub at `fluxrm/testenv:jammy` and
-`fluxrm/testenv:el7`. Be sure to test that the `docker-run-test.sh`
-script still runs against the new `testenv` images, e.g.:
+Once the PR is merged, move the dependency into the appropriate
+`src/test/docker/<distro>/Dockerfile` files. When that change lands on
+master, `testenv.yml` will automatically detect the modified Dockerfile(s)
+and rebuild and push the updated `fluxrm/testenv` images to DockerHub.
 
-```
-$ for i in focal el7 el8 fedora33 fedora34 fedora35 fedora38; do
-    make clean &&
-    docker build --no-cache -t fluxrm/testenv:$i src/test/docker/$i &&
-    src/test/docker/docker-run-checks.sh -j 4 --image=$i &&
-    docker push fluxrm/testenv:$i
-  done
-```
-
-#### Bookworm and Jammy multiarch images
-
-Building the images for linux/amd64, linux/arm64 and linux/386 requires the
-Docker buildx extensions, see
-
- https://www.docker.com/blog/multi-arch-build-and-images-the-simple-way/
-
-and run
-```
-$  docker buildx build --push --platform=linux/arm64,linux/amd64 --tag fluxrm/testenv:jammy -f src/test/docker/jammy/Dockerfile .
-$  docker buildx build --push --platform=linux/386,linux/amd64,linux/arm64 --tag fluxrm/testenv:bookworm -f src/test/docker/bookworm/Dockerfile .
-```
-
-to build and push images to docker hub.
+Note: if a PR modifies a testenv Dockerfile directly (rather than going
+through `checks/Dockerfile`), `docker-run-checks.sh` will detect the
+change and build the base image locally for that CI run so tests are not
+blocked waiting for a published image update.
 
 #### Local Testing
 
-Developers can test the docker images themselves. If new dependencies are needed,
-they can update the `$image` Dockerfiles manually (where `$image` is one of jammy, el7, el8, or focal).
-To create a local Docker image, run the command:
+Developers can test the docker images themselves. If new dependencies are
+needed, update the relevant Dockerfile(s) under `src/test/docker/`. To
+create a local Docker image, run:
 
 ```
 docker build -t fluxrm/testenv:$image src/test/docker/$image
@@ -86,3 +82,7 @@ To test the locally created image, run:
 ```
 src/test/docker/docker-run-checks.sh -i $image [options] -- [arguments]
 ```
+
+If the testenv Dockerfile for `$image` has been modified in the current
+branch, `docker-run-checks.sh` will build the base image locally
+automatically before running checks.
