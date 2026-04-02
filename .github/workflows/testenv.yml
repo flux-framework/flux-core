@@ -4,6 +4,7 @@ on:
       - master
     paths:
       - 'src/test/docker/*/*'
+      - 'scripts/*'
   workflow_dispatch:
     inputs:
       distro:
@@ -38,11 +39,7 @@ jobs:
             echo 'distros=["${{ inputs.distro }}"]' >> $GITHUB_OUTPUT
           else
             DISTROS=$(git diff --name-only HEAD~1 HEAD \
-              -- 'src/test/docker/*/*' \
-              | sed 's|src/test/docker/||; s|/.*||' \
-              | sort -u \
-              | grep -v '^checks$' \
-              | grep -v '^fluxorama$' \
+              | src/test/docker/testenv-affected-distros.sh \
               | jq -Rsc '[split("\n")[] | select(. != "")]')
             echo "distros=${DISTROS}" >> $GITHUB_OUTPUT
           fi

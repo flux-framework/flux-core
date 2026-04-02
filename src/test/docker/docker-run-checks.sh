@@ -142,10 +142,12 @@ CONFIGURE_ARGS="$@"
 
 # Determine if the testenv base image needs to be built locally.
 # Two cases require a local build:
-#  1. The testenv Dockerfile was added or modified in this branch.
-#     Use the most recent merge commit as the base for the diff: since
-#     flux always uses merge commits on master, this is the master state
-#     the branch was cut from, with no dependency on remote refs.
+#  1. The testenv Dockerfile (or a script it COPYs) was added or modified
+#     in this branch.  Use the most recent merge commit as the base for
+#     the diff: since flux always uses merge commits on master, this is
+#     the master state the branch was cut from, with no dependency on
+#     remote refs.  testenv-affected-distros.sh handles both Dockerfile
+#     and scripts/* changes.
 #  2. The image cannot be pulled from DockerHub (e.g. a newly added image
 #     that has never been published yet).
 TESTENV_DOCKERFILE="${TOP}/src/test/docker/${IMAGE}/Dockerfile"
@@ -153,9 +155,10 @@ if [[ -f "$TESTENV_DOCKERFILE" ]]; then
     BUILD_TESTENV_REASON=""
     LAST_MERGE=$(git -C "${TOP}" log --merges -n1 --format=%H HEAD 2>/dev/null || true)
     if [[ -n "$LAST_MERGE" ]] && \
-       git -C "${TOP}" diff --name-only "${LAST_MERGE}" HEAD \
-           -- "src/test/docker/${IMAGE}/Dockerfile" 2>/dev/null | grep -q .; then
-        BUILD_TESTENV_REASON="Dockerfile modified in this branch"
+       git -C "${TOP}" diff --name-only "${LAST_MERGE}" HEAD 2>/dev/null \
+           | "${TOP}/src/test/docker/testenv-affected-distros.sh" \
+           | grep -qx "${IMAGE}"; then
+        BUILD_TESTENV_REASON="Dockerfile or dependent script modified in this branch"
     fi
     if [[ -z "$BUILD_TESTENV_REASON" ]]; then
         docker pull "${BASE_DOCKER_REPO}:${IMAGE}" >/dev/null 2>&1 \
