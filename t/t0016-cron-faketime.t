@@ -27,6 +27,29 @@ if test "$t" != "123456789" ; then
     test_done
 fi
 
+# Skip tests if libfaketime < 0.9.10 (known working version)
+have_faketime_min_version() {
+    python3 -c "
+import subprocess, re, sys
+try:
+    out = subprocess.check_output(['faketime', '--version'],
+                                  stderr=subprocess.STDOUT,
+                                  text=True)
+    m = re.search(r'[0-9]+\.[0-9]+\.[0-9]+', out)
+    if not m:
+        sys.exit(1)
+    ver = tuple(int(x) for x in m.group().split('.'))
+    sys.exit(0 if ver >= (0, 9, 10) else 1)
+except (FileNotFoundError, subprocess.CalledProcessError):
+    sys.exit(1)
+" 2>/dev/null
+}
+if ! have_faketime_min_version; then
+    skip_all='libfaketime < v0.9.10. Skipping faketime tests'
+    test_done
+fi
+
+
 SIZE=1
 export FLUX_TEST_DISABLE_TIMEOUT=t
 export LD_PRELOAD=libfaketimeMT.so.1
