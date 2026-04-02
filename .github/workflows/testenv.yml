@@ -1,4 +1,4 @@
-on: 
+on:
   workflow_dispatch:
     inputs:
       distro:
@@ -8,7 +8,7 @@ on:
         type: choice
         options:
         - alpine
-#        - bookworm # reason: workflow doesn't yet support 32-bit
+        - bookworm
         - el8
         - el9
         - el10
@@ -22,7 +22,7 @@ jobs:
     name: build new testenv container for amd64
     timeout-minutes: 90
     runs-on: ubuntu-latest
-    env: 
+    env:
       DOCKERHUB_REPO: fluxrm
     outputs:
       image_digest: ${{ steps.digest.outputs.digest }}
@@ -32,7 +32,7 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.0.0
-      
+
       - name: Build and tar amd64 image
         id: build
         run: |
@@ -49,12 +49,12 @@ jobs:
           name: testenv-${{ inputs.distro }}-amd64
           path: out/testenv-${{ inputs.distro }}-amd64.tar
           if-no-files-found: error
-  
+
   build-arm64-container:
     name: build new testenv container for arm64
     timeout-minutes: 90
     runs-on: ubuntu-24.04-arm
-    env: 
+    env:
       DOCKERHUB_REPO: fluxrm
     outputs:
       image_digest: ${{ steps.digest.outputs.digest }}
@@ -64,7 +64,7 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.0.0
-      
+
       - name: Build and tar arm64 image
         id: build
         run: |
@@ -80,6 +80,42 @@ jobs:
         with:
           name: testenv-${{ inputs.distro }}-arm64
           path: out/testenv-${{ inputs.distro }}-arm64.tar
+          if-no-files-found: error
+
+  build-386-container:
+    name: build new testenv container for 386
+    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_REPO: fluxrm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up QEMU
+        if: inputs.distro == 'bookworm'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: inputs.distro == 'bookworm'
+        uses: docker/setup-buildx-action@v4.0.0
+
+      - name: Build and tar 386 image
+        if: inputs.distro == 'bookworm'
+        run: |
+          mkdir -p out
+          docker buildx build \
+            -o type=docker,dest=out/testenv-${{ inputs.distro }}-386.tar \
+            --platform=linux/386 \
+            --tag $DOCKERHUB_REPO/testenv:${{ inputs.distro }}-386 \
+            -f src/test/docker/${{ inputs.distro }}/Dockerfile .
+
+      - name: Upload 386 container tarball
+        if: inputs.distro == 'bookworm'
+        uses: actions/upload-artifact@v7.0.0
+        with:
+          name: testenv-${{ inputs.distro }}-386
+          path: out/testenv-${{ inputs.distro }}-386.tar
           if-no-files-found: error
 
   test-amd64-container:
@@ -144,12 +180,62 @@ jobs:
         if: ${{ !cancelled() && runner.debug }}
         uses: mxschmitt/action-tmate@v3.23
 
+  test-386-container:
+    name: Test newly-built 386 container
+    needs:
+      - build-386-container
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      DOCKERHUB_REPO: fluxrm
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Set up QEMU
+        if: matrix.distro == 'bookworm'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Download 386 artifact
+        if: inputs.distro == 'bookworm'
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: testenv-${{ inputs.distro }}-386
+          path: artifacts
+
+      - name: Load images from tarballs
+        if: inputs.distro == 'bookworm'
+        run: |
+          set -euo pipefail
+          docker load -i artifacts/testenv-${{ inputs.distro }}-386.tar
+          docker images | head -n 50
+
+      - name: Verify 386 image architecture
+        if: matrix.distro == 'bookworm'
+        run: |
+          ARCH=$(docker run --rm \
+            ${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-386 \
+            dpkg --print-architecture)
+          echo "Image architecture: ${ARCH}"
+          test "${ARCH}" = "i386" \
+            || { echo "ERROR: expected i386, got ${ARCH}"; exit 1; }
+
+      - name: run docker-run-checks
+        if: inputs.distro == 'bookworm'
+        run: |
+          src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-386 \
+            --platform linux/386 -j 4 --recheck --
+
+      - name: tmate debug
+        if: ${{ !cancelled() && runner.debug }}
+        uses: mxschmitt/action-tmate@v3.23
+
   publish-manifest:
     name: Push images + publish multi-arch manifest
     timeout-minutes: 30
     needs:
       - test-amd64-container
       - test-arm64-container
+      - test-386-container
     runs-on: ubuntu-latest
     env:
       DOCKERHUB_REPO: fluxrm
@@ -177,32 +263,42 @@ jobs:
           name: testenv-${{ inputs.distro }}-arm64
           path: artifacts
 
+      - name: Download 386 artifact
+        if: inputs.distro == 'bookworm'
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: testenv-${{ inputs.distro }}-386
+          path: artifacts
+
       - name: Load images from tarballs
         run: |
+          set -euo pipefail
           docker load -i artifacts/testenv-${{ inputs.distro }}-amd64.tar
           docker load -i artifacts/testenv-${{ inputs.distro }}-arm64.tar
+          if [ "${{ inputs.distro }}" = "bookworm" ]; then
+            docker load -i artifacts/testenv-${{ inputs.distro }}-386.tar
+          fi
           docker images | head -n 50
 
       # Push arch-specific tags first
       - name: Push per-arch tags
         run: |
-          AMD_TAG="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-amd64"
-          ARM_TAG="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-arm64"
-
-          docker push "${AMD_TAG}"
-          docker push "${ARM_TAG}"
+          docker push "${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-amd64"
+          docker push "${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-arm64"
+          if [ "${{ inputs.distro }}" = "bookworm" ]; then
+            docker push "${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-386"
+          fi
 
       # Then create the multi-arch manifest that points at the per-arch tags
       - name: Create and push manifest
         run: |
           IMAGE="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}"
-          AMD_TAG="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-amd64"
-          ARM_TAG="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-arm64"
-
-          docker buildx imagetools create \
-            --tag "${IMAGE}" \
-            "${AMD_TAG}" \
-            "${ARM_TAG}"
+          TAGS="${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-amd64"
+          TAGS+=" ${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-arm64"
+          if [ "${{ inputs.distro }}" = "bookworm" ]; then
+            TAGS+=" ${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}-386"
+          fi
+          docker buildx imagetools create --tag "${IMAGE}" ${TAGS}
 
       - name: Inspect published manifest
         run: docker buildx imagetools inspect ${DOCKERHUB_REPO}/testenv:${{ inputs.distro }}
