@@ -27,6 +27,29 @@ if test "$t" != "123456789" ; then
     test_done
 fi
 
+# Skip tests if libfaketime < 0.9.10 (known working version)
+have_faketime_min_version() {
+    python3 -c "
+import subprocess, re, sys
+try:
+    out = subprocess.check_output(['faketime', '--version'],
+                                  stderr=subprocess.STDOUT,
+                                  text=True)
+    m = re.search(r'[0-9]+\.[0-9]+\.[0-9]+', out)
+    if not m:
+        sys.exit(1)
+    ver = tuple(int(x) for x in m.group().split('.'))
+    sys.exit(0 if ver >= (0, 9, 10) else 1)
+except (FileNotFoundError, subprocess.CalledProcessError):
+    sys.exit(1)
+" 2>/dev/null
+}
+if ! have_faketime_min_version; then
+    skip_all='libfaketime < v0.9.10. Skipping faketime tests'
+    test_done
+fi
+
+
 SIZE=1
 export FLUX_TEST_DISABLE_TIMEOUT=t
 export LD_PRELOAD=libfaketimeMT.so.1
@@ -92,49 +115,50 @@ test_expect_success 'libfaketime works' '
     echo $now > ${FAKETIME_TIMESTAMP_FILE}
 '
 test_expect_success 'load cron module' '
+    $set_faketime Jun 1 15:00 2016 &&
     flux module load cron
 '
 test_expect_success 'flux-cron tab works for set minute' '
-    $set_faketime today 15:30 &&
+    $set_faketime Jun 1 15:30 2016 &&
     id=$(echo "15 * * * * flux event pub t.cron.complete" | flux_cron tab) &&
-    next=$(date +%s --date="today 16:15") &&
+    next=$(date +%s --date="Jun 1 16:15 2016") &&
     cron_entry_check ${id} type datetime &&
     cron_entry_check ${id} stopped false &&
     cron_entry_check ${id} typedata.next_wakeup ${next} &&
     echo sleeping at $(date) &&
     ${event_trace} t.cron t.cron.complete \
-        $set_faketime today 16:15 &&
+        $set_faketime Jun 1 16:15 2016 &&
     echo done at $(date) &&
     cron_entry_check ${id} stats.count 1 &&
     flux cron delete ${id}
 '
 test_expect_success 'flux-cron tab works for any day midnight' '
     id=$(echo "0 0 * * * flux event pub t.cron.complete" | flux_cron tab) &&
-    next=$(date +%s --date="tomorrow 00:00") &&
+    next=$(date +%s --date="Jun 2 00:00 2016") &&
     cron_entry_check ${id} type datetime &&
     cron_entry_check ${id} stopped false &&
     cron_entry_check ${id} typedata.next_wakeup ${next} &&
     ${event_trace} t.cron t.cron.complete \
-        $set_faketime tomorrow 00:00 &&
+        $set_faketime Jun 2 00:00 2016 &&
     cron_entry_check ${id} stats.count 1 &&
     flux cron delete ${id}
 '
 test_expect_success 'flux-cron tab works for Mondays, midnight' '
     $set_faketime Jun 4 15:45 2016 &&
     id=$(echo "0 0 * * Mon flux event pub t.cron.complete" | flux_cron tab) &&
-    next=$(date +%s --date="Monday 00:00") &&
+    next=$(date +%s --date="Jun 6 00:00 2016") &&
     cron_entry_check ${id} type datetime &&
     cron_entry_check ${id} stopped false &&
     cron_entry_check ${id} typedata.next_wakeup ${next} &&
     ${event_trace} t.cron t.cron.complete \
-        $set_faketime Monday 00:00 &&
+        $set_faketime Jun 6 00:00 2016 &&
     cron_entry_check ${id} stats.count 1 &&
     flux cron delete ${id}
 '
 test_expect_success 'flux-cron tab works for day of month' '
     $set_faketime Jun 5 15:45 2016 &&
     id=$(echo "0 0 30 * * flux event pub t.cron.complete" | flux_cron tab) &&
-    next=$(date +%s --date="Jun 30 00:00") &&
+    next=$(date +%s --date="Jun 30 00:00 2016") &&
     cron_entry_check ${id} type datetime &&
     cron_entry_check ${id} stopped false &&
     cron_entry_check ${id} typedata.next_wakeup ${next} &&
@@ -146,7 +170,7 @@ test_expect_success 'flux-cron tab works for day of month' '
 test_expect_success 'flux-cron tab works for month' '
     $set_faketime Jun 5 15:45 2016 &&
     id=$(echo "0 0 30 Dec * flux event pub t.cron.complete" | flux_cron tab) &&
-    next=$(date +%s --date="Dec 30 00:00") &&
+    next=$(date +%s --date="Dec 30 00:00 2016") &&
     cron_entry_check ${id} type datetime &&
     cron_entry_check ${id} stopped false &&
     cron_entry_check ${id} typedata.next_wakeup ${next} &&
