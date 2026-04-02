@@ -131,6 +131,7 @@ jobs:
 
       - name: Load images from tarballs
         run: |
+          set -euo pipefail
           docker load -i artifacts/testenv-${{ inputs.distro }}-arm64.tar
           docker images | head -n 50
 
