@@ -91,25 +91,7 @@ jobs:
       DOCKERHUB_REPO: fluxrm
     steps:
       - uses: actions/checkout@v6.0.2
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-  
-      - name: fetch annotated tag
-        if: >
-          (matrix.create_release || matrix.docker_tag) &&
-          github.ref != 'refs/heads/master'
-        run: |
-          # Ensure git-describe works on a tag.
-          #  (checkout@v4 action may have left current tag as
-          #   lightweight instead of annotated. See
-          #   https://github.com/actions/checkout/issues/290)
-          #
-          echo github.ref == ${{ github.ref }} ;
-          git fetch -f origin ${{ github.ref }}:${{ github.ref }} ;
-          echo git describe now reports $(git describe --always)
-  
-  
+
       - name: Download amd64 artifact
         uses: actions/download-artifact@v8.0.1
         with:
@@ -141,25 +123,7 @@ jobs:
       DOCKERHUB_REPO: fluxrm
     steps:
       - uses: actions/checkout@v6.0.2
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-  
-      - name: fetch annotated tag
-        if: >
-          (matrix.create_release || matrix.docker_tag) &&
-          github.ref != 'refs/heads/master'
-        run: |
-          # Ensure git-describe works on a tag.
-          #  (checkout@v4 action may have left current tag as
-          #   lightweight instead of annotated. See
-          #   https://github.com/actions/checkout/issues/290)
-          #
-          echo github.ref == ${{ github.ref }} ;
-          git fetch -f origin ${{ github.ref }}:${{ github.ref }} ;
-          echo git describe now reports $(git describe --always)
-  
-  
+
       - name: Download arm64 artifact
         uses: actions/download-artifact@v8.0.1
         with:
