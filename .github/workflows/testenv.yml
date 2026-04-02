@@ -3,7 +3,7 @@ on:
     branches:
       - master
     paths:
-      - 'src/test/docker/*/Dockerfile'
+      - 'src/test/docker/*/*'
   workflow_dispatch:
     inputs:
       distro:
@@ -38,8 +38,11 @@ jobs:
             echo 'distros=["${{ inputs.distro }}"]' >> $GITHUB_OUTPUT
           else
             DISTROS=$(git diff --name-only HEAD~1 HEAD \
-              -- 'src/test/docker/*/Dockerfile' \
-              | sed 's|src/test/docker/||; s|/Dockerfile||' \
+              -- 'src/test/docker/*/*' \
+              | sed 's|src/test/docker/||; s|/.*||' \
+              | sort -u \
+              | grep -v '^checks$' \
+              | grep -v '^fluxorama$' \
               | jq -Rsc '[split("\n")[] | select(. != "")]')
             echo "distros=${DISTROS}" >> $GITHUB_OUTPUT
           fi
