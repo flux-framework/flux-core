@@ -78,6 +78,7 @@ RUN apt-get update \
         sudo $PY -m pip install --upgrade --ignore-installed \
         --break-system-packages \
 	    "markupsafe==2.0.0" \
+            "typing_extensions>=4.1" \
             coverage cffi ply six pyyaml "jsonschema>=2.6,<4.0" \
             sphinx sphinx-rtd-theme sphinxcontrib-spelling; \
 	sudo mkdir -p /usr/lib/${PY}/dist-packages; \
