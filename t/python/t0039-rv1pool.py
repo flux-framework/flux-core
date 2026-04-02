@@ -55,7 +55,8 @@ def rr(
         slot_count = ResourceCount(nslots, nslots_max)
 
     return ResourceRequest(
-        node_count, slot_count, slot_size, gpu_per_slot, duration, constraint, exclusive
+        node_count, slot_count, slot_size, gpu_per_slot, duration, constraint, exclusive,
+        None,
     )
 
 
@@ -717,7 +718,7 @@ class TestRv1PoolCheckFeasibility(unittest.TestCase):
         from flux.idset import IDset
 
         req = ResourceRequest(
-            None, ResourceCount(2, 8, IDset("2,4,8")), 1, 0, 60.0, None, False
+            None, ResourceCount(2, 8, IDset("2,4,8")), 1, 0, 60.0, None, False, None
         )
         with self.assertRaises(InfeasibleRequest):
             self.pool.check_feasibility(req)
@@ -738,6 +739,7 @@ class TestRv1PoolCheckFeasibility(unittest.TestCase):
             60.0,
             json.dumps({"properties": ["fast"]}),
             False,
+            None,
         )
         with self.assertRaises(InfeasibleRequest):
             pool.check_feasibility(req)
