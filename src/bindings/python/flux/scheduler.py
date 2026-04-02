@@ -138,13 +138,14 @@ class AllocRequest:
         jobid (int): The job ID for this allocation request.
     """
 
-    __slots__ = ("_scheduler", "_msg", "jobid", "_annotated_sched_keys")
+    __slots__ = ("_scheduler", "_msg", "jobid", "_annotated_sched_keys", "_finalized")
 
     def __init__(self, scheduler, msg):
         self._scheduler = scheduler
         self._msg = msg
         self.jobid = msg.payload["id"]
         self._annotated_sched_keys = set()
+        self._finalized = False
 
     def success(self, R, annotations=None, clear=True):
         """Finalize the request with a successful allocation.
@@ -161,6 +162,7 @@ class AllocRequest:
                 (e.g. ``reason_pending``, ``t_estimate``) are cleaned up
                 without each scheduler needing to track and clear them manually.
         """
+        self._finalized = True
         if not isinstance(R, dict):
             R = R.to_dict()
         if clear and self._annotated_sched_keys:
@@ -177,10 +179,12 @@ class AllocRequest:
         Args:
             note (str, optional): Human-readable reason for the denial.
         """
+        self._finalized = True
         self._scheduler.alloc_deny(self._msg, note)
 
     def cancel(self):
         """Finalize the request indicating it was cancelled."""
+        self._finalized = True
         self._scheduler.alloc_cancel(self._msg)
 
     def annotate(self, annotations):
@@ -188,11 +192,15 @@ class AllocRequest:
 
         May be called any number of times before the request is finalized.
         Keys set here are tracked so that :meth:`success` can automatically
-        clear them.
+        clear them.  Calls after the request is finalized are silently
+        ignored to prevent stale annotations from a still-running forecast
+        generator reaching the job-manager after a cancel.
 
         Args:
             annotations (dict): Annotation dict to attach to the job.
         """
+        if self._finalized:
+            return
         self._annotated_sched_keys.update((annotations or {}).get("sched", {}).keys())
         self._scheduler.alloc_annotate(self._msg, annotations)
 
@@ -351,7 +359,10 @@ class Scheduler(BrokerModule):
         # _forecast_generator: active generator, or None when idle.
         # _forecast_idle: keeps the reactor spinning while a pass is active.
         # _forecast_check: fires each reactor iteration to advance the generator.
+        # _forecast_pending: True if a schedule pass completed while a forecast
+        #   was running; causes _on_forecast_check to restart forecast on finish.
         self._forecast_generator = None
+        self._forecast_pending = False
         self._forecast_idle = h.idle_watcher_create()
         self._forecast_check = h.check_watcher_create(self._on_forecast_check)
         # Scheduling statistics, exposed via the stats-get RPC.
@@ -473,29 +484,29 @@ class Scheduler(BrokerModule):
 
         The default implementation:
 
-        1. Closes any in-progress :meth:`schedule` or :meth:`forecast`
-           generator and stops its yield watchers (resource state is about to
-           change so in-progress results are stale).
+        1. Closes any in-progress :meth:`schedule` generator and stops its
+           yield watchers (queue or resource state is about to change so
+           in-progress allocations are stale).  An in-progress
+           :meth:`forecast` generator is left running to completion: forecast
+           estimates are approximate by nature and a slightly stale
+           ``t_estimate`` is more useful than none at all.
         2. Arms the one-shot scheduling timer with the current adaptive delay
            if it is not already pending.  Subsequent calls while the timer is
            armed are no-ops, coalescing all events in the window into a single
            :meth:`schedule` invocation.
         """
-        # If a schedule or forecast generator pass is in progress, abort it:
-        # close the generator and stop the step watchers.  Resource state is
-        # about to change so any in-progress estimates are stale anyway.
+        # Abort the in-progress schedule generator: queue or resource state is
+        # about to change so any in-progress allocations are stale.
         # The schedule timer will be re-armed below with the adaptive settling
         # delay so the new pass starts cleanly.
+        # The forecast generator (if any) is intentionally left running: its
+        # simulation snapshot was taken at pass start and remains internally
+        # consistent, and a slightly stale t_estimate is better than none.
         if self._sched_generator is not None:
             self._sched_generator.close()
             self._sched_generator = None
             self._sched_idle.stop()
             self._sched_check.stop()
-        if self._forecast_generator is not None:
-            self._forecast_generator.close()
-            self._forecast_generator = None
-            self._forecast_idle.stop()
-            self._forecast_check.stop()
         if not self._sched_pending:
             self._sched_pending = True
             self._sched_timer.reset(after=self._sched_delay)
@@ -575,15 +586,17 @@ class Scheduler(BrokerModule):
     def _request_forecast(self):
         """Start a forecast pass immediately after a schedule() pass completes.
 
-        If a forecast generator is already in progress it is left running;
-        the existing pass already reflects the current state.  A running
-        forecast is aborted by :meth:`_request_schedule` when resource state
-        changes, so stale results are never committed.
+        If a forecast generator is already in progress it is left running to
+        completion; ``_forecast_pending`` is set so that ``_on_forecast_check``
+        will restart the forecast with the updated queue once the current pass
+        finishes.
         """
         if not self._queue:
             return
         if self._forecast_generator is not None:
-            return  # already running — let it finish
+            self._forecast_pending = True  # restart after current pass finishes
+            return
+        self._forecast_pending = False
         result = self.forecast()
         # Same style consistency applies to forecast(): generator or
         # synchronous, but not mixed within a single scheduler.
@@ -602,6 +615,8 @@ class Scheduler(BrokerModule):
             self._forecast_generator = None
             self._forecast_idle.stop()
             self._forecast_check.stop()
+            if self._forecast_pending:
+                self._request_forecast()
 
     # ------------------------------------------------------------------
     # Alloc response implementation (called via AllocRequest)
@@ -825,16 +840,15 @@ class Scheduler(BrokerModule):
         implementation is a no-op.
 
         Triggered automatically after each :meth:`schedule` call completes.
-        If a forecast pass is already in progress it is left running; it will
-        be aborted (and restarted after the next :meth:`schedule` completion)
-        if a scheduling event arrives in the meantime.
+        If a forecast pass is already in progress when a new scheduling event
+        arrives, it is left running to completion; the next forecast pass
+        starts after the current one finishes and the next :meth:`schedule`
+        pass completes.  Forecast estimates are approximate by design, so a
+        slightly stale ``t_estimate`` is preferable to having none at all.
 
         Supports the same **generator protocol** as :meth:`schedule`: add
         ``yield`` at each desired reactor handoff point — typically after each
         annotated job — to return control to the reactor between annotations.
-        If a new scheduling event arrives while a forecast generator is in
-        progress, the base class closes it and discards the partial results —
-        the next :meth:`schedule` completion will trigger a fresh forecast pass.
         """
 
     def expiration(self, msg, jobid, expiration):
