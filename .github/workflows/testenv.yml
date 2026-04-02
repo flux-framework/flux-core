@@ -11,6 +11,7 @@ on:
 #        - bookworm # reason: workflow doesn't yet support 32-bit
         - el8
         - el9
+        - el10
         - fedora40
         - focal
         - jammy
