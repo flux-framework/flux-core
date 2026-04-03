@@ -49,15 +49,6 @@ struct rlist {
     json_t *scheduling;
 };
 
-struct rlist_alloc_info {
-    int nnodes;
-    int slot_size;
-    int nslots;
-    const char *mode;
-    bool exclusive;
-    json_t *constraints;
-};
-
 /*  Create an empty rlist object */
 struct rlist *rlist_create (void);
 
@@ -75,13 +66,8 @@ struct rlist *rlist_copy_empty (const struct rlist *rl);
 /*  Create a copy of rl including only down resources */
 struct rlist *rlist_copy_down (const struct rlist *orig);
 
-/*  Create a copy of rl including only allocated resources */
-struct rlist *rlist_copy_allocated (const struct rlist *orig);
-
 /*  Create a copy of rl including only the ranks in 'ranks' idset */
 struct rlist *rlist_copy_ranks (const struct rlist *rl, struct idset *ranks);
-
-struct rlist *rlist_copy_cores (const struct rlist *rl);
 
 /*  Create a copy of rl constrained by an RFC 31 constraint object
  *
@@ -95,12 +81,6 @@ struct rlist *rlist_copy_cores (const struct rlist *rl);
 struct rlist *rlist_copy_constraint (const struct rlist *rl,
                                      json_t *constraint,
                                      flux_error_t *errp);
-
-/*  Same as above, but takes a JSON string instead of json_t object.
- */
-struct rlist *rlist_copy_constraint_string (const struct rlist *orig,
-                                            const char *constraint,
-                                            flux_error_t *errp);
 
 /*  Delete ranks in idset 'ranks' from rlist 'rl'
  */
@@ -252,36 +232,6 @@ int rlist_verify_ex (flux_error_t *error,
                      const struct rlist *expected,
                      const struct rlist *actual,
                      struct rlist_verify_config *config);
-
-/*  Attempt to allocate nslots of slot_size across optional nnodes
- *   from the resource list `rl` using algorithm `mode`.
- *
- *  Valid modes (nnodes == 0 only):
- *   NULL or "worst-fit" - allocate from least-used nodes first
- *   "best-fit"          - allocate from most-used nodes first
- *   "first-fit"         - allocate first free slots found in rank order
- *
- *  Returns a new rlist representing the allocation on success,
- *   NULL on failure with errno set.
- *
- *   ENOSPC - unable to fulfill allocation.
- *   EINVAL - An argument was invalid.
- */
-struct rlist * rlist_alloc (struct rlist *rl,
-                            const struct rlist_alloc_info *ai,
-                            flux_error_t *errp);
-
-/*  Mark rlist "alloc" as allocated in rlist "rl".
- */
-int rlist_set_allocated (struct rlist *rl, struct rlist *alloc);
-
-/*  Free resource list `to_free` from resource list `rl`
- */
-int rlist_free (struct rlist *rl, struct rlist *to_free);
-
-/*  Same as rlist_free(), but ignore missing resources in `rl`
- */
-int rlist_free_tolerant (struct rlist *rl, struct rlist *to_free);
 
 /*  Assign a single property 'name' to ranks in 'targets'
  */
