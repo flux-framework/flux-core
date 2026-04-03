@@ -116,7 +116,7 @@ jobs:
     if: contains(needs.setup.outputs.distros, 'bookworm')
     strategy:
       matrix:
-        distro: ${{ fromJson(needs.setup.outputs.distros) }}
+        distro: ['bookworm']
     timeout-minutes: 90
     runs-on: ubuntu-latest
     env:
@@ -126,15 +126,12 @@ jobs:
         uses: actions/checkout@v6.0.2
 
       - name: Set up QEMU
-        if: matrix.distro == 'bookworm'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: matrix.distro == 'bookworm'
         uses: docker/setup-buildx-action@v4.0.0
 
       - name: Build and tar 386 image
-        if: matrix.distro == 'bookworm'
         run: |
           mkdir -p out
           docker buildx build \
@@ -144,7 +141,6 @@ jobs:
             -f src/test/docker/${{ matrix.distro }}/Dockerfile .
 
       - name: Upload 386 container tarball
-        if: matrix.distro == 'bookworm'
         uses: actions/upload-artifact@v7.0.0
         with:
           name: testenv-${{ matrix.distro }}-386
@@ -229,7 +225,7 @@ jobs:
     if: contains(needs.setup.outputs.distros, 'bookworm')
     strategy:
       matrix:
-        distro: ${{ fromJson(needs.setup.outputs.distros) }}
+        distro: ['bookworm']
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -241,25 +237,21 @@ jobs:
       - run: git fetch --tags || true
 
       - name: Set up QEMU
-        if: matrix.distro == 'bookworm'
         uses: docker/setup-qemu-action@v3
 
       - name: Download 386 artifact
-        if: matrix.distro == 'bookworm'
         uses: actions/download-artifact@v8.0.1
         with:
           name: testenv-${{ matrix.distro }}-386
           path: artifacts
 
       - name: Load images from tarballs
-        if: matrix.distro == 'bookworm'
         run: |
           set -euo pipefail
           docker load -i artifacts/testenv-${{ matrix.distro }}-386.tar
           docker images | head -n 50
 
       - name: Verify 386 image architecture
-        if: matrix.distro == 'bookworm'
         run: |
           ARCH=$(docker run --rm \
             ${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-386 \
@@ -269,7 +261,6 @@ jobs:
             || { echo "ERROR: expected i386, got ${ARCH}"; exit 1; }
 
       - name: run docker-run-checks
-        if: matrix.distro == 'bookworm'
         run: |
           src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-386 \
             --platform linux/386 -j 4 --recheck --
@@ -286,10 +277,13 @@ jobs:
       - test-amd64-container
       - test-arm64-container
       - test-386-container
+      - build-386-container
     if: >
       always() &&
       needs.test-amd64-container.result == 'success' &&
       needs.test-arm64-container.result == 'success' &&
+      (needs.build-386-container.result == 'success' ||
+       needs.build-386-container.result == 'skipped') &&
       (needs.test-386-container.result == 'success' ||
        needs.test-386-container.result == 'skipped')
     strategy:
