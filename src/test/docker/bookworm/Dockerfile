@@ -76,8 +76,8 @@ RUN apt-get update \
 # mapped into the container and contains the same libraries
  ;  for PY in python3.11 ; do \
         sudo $PY -m pip install --upgrade --ignore-installed \
-        --break-system-packages \
-	    "markupsafe==2.0.0" \
+            --break-system-packages \
+	        "markupsafe==2.0.0" \
             "typing_extensions>=4.1" \
             coverage cffi ply six pyyaml "jsonschema>=2.6,<4.0" \
             sphinx sphinx-rtd-theme sphinxcontrib-spelling; \

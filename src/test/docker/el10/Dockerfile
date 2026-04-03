@@ -92,6 +92,7 @@ COPY src/test/docker/el10/config.site /usr/share/config.site
 # use non-local connectors on a system with virtual NICs, since we're in a
 # docker container, prevent this
 ENV PSM3_HAL=loopback
+
 # hwloc tries to look for opengl devices  by connecting to a port that might
 # sometimes be an x11 port, but more often for us is munge, turn it off
 ENV HWLOC_COMPONENTS=-gl
