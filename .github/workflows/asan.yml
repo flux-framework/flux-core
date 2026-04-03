@@ -23,7 +23,7 @@ jobs:
         TAP_DRIVER_QUIET: t
       run: >
         src/test/docker/docker-run-checks.sh \
-          --image=fedora36 --unit-test-only -j4 \
+          --image=fedora40 --unit-test-only -j4 \
           -- --with-flux-security --enable-sanitizer=address
 
     - name: after failure
