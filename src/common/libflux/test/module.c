@@ -350,8 +350,15 @@ void test_module_register_handlers (void)
     flux_close (h);
 }
 
+struct server2_result {
+    bool exited_received;
+    int exited_status;
+    int exited_errnum;
+};
+
 int server2_cb (flux_t *h, void *arg)
 {
+    struct server2_result *result = arg;
     struct flux_match match;
     flux_msg_t *req, *rep;
     int status;
@@ -388,16 +395,21 @@ int server2_cb (flux_t *h, void *arg)
         "client sent ENOSYS response to straggler request");
     flux_msg_decref (rep);
 
-    /* receive module.status request (EXITED) */
+    /* receive module.status request (EXITED) -- store result for main thread
+     * to check after test_server_stop() joins this thread, avoiding a race
+     * between this ok() and the main thread's ok() for flux_module_finalize
+     * (which uses FLUX_RPC_NORESPONSE so returns before we receive EXITED).
+     */
     match = FLUX_MATCH_REQUEST;
     match.topic_glob = "module.status";
     req = flux_recv (h, match, 0);
-    ok (req != NULL
+    if (req != NULL
         && flux_msg_unpack (req, "{s:i}", "status", &status) == 0
-        && status == FLUX_MODSTATE_EXITED
-        && flux_msg_unpack (req, "{s:i}", "errnum", &errnum) == 0
-        && errnum == 42,
-        "client sent module.status status=EXITED errnum=42 request");
+        && flux_msg_unpack (req, "{s:i}", "errnum", &errnum) == 0) {
+        result->exited_received = true;
+        result->exited_status = status;
+        result->exited_errnum = errnum;
+    }
     flux_msg_decref (req);
 
     return 0;
@@ -408,6 +420,7 @@ void test_module_finalize (void)
     flux_error_t error;
     int rc;
     flux_t *h;
+    struct server2_result result = { 0 };
 
     errno = 0;
     err_init (&error);
@@ -417,7 +430,7 @@ void test_module_finalize (void)
     if (rc < 0)
         diag ("%s", error.text);
 
-    if (!(h = test_server_create (0, server2_cb, NULL)))
+    if (!(h = test_server_create (0, server2_cb, &result)))
         BAIL_OUT ("could not create test server");
 
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
@@ -428,6 +441,15 @@ void test_module_finalize (void)
         "flux_module_finalize works");
 
     test_server_stop (h);
+
+    /* Check the EXITED status after the server thread has been joined to
+     * avoid a race: module_set_exited() uses FLUX_RPC_NORESPONSE so
+     * flux_module_finalize() returns before the server receives EXITED.
+     */
+    ok (result.exited_received
+        && result.exited_status == FLUX_MODSTATE_EXITED
+        && result.exited_errnum == 42,
+        "client sent module.status status=EXITED errnum=42 request");
 
     flux_close (h);
 }
