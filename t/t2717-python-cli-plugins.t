@@ -78,4 +78,9 @@ test_expect_success 'flux-alloc: new plugin with the same name, diff dest/prefix
 	grep -e "I am a valid plugin" \
 	     -e "Option for setting AMD SMI compute partitioning" help1.out
 '
+test_expect_success 'flux-alloc: plugins with different prefixes and same option name coexist' '
+	FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/sameoption \
+		flux run --help > out6.out &&
+	grep -e "--ex-gpumode" -e "--amd-gpumode" out6.out
+'
 test_done
