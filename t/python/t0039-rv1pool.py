@@ -341,6 +341,66 @@ class TestRv1PoolAlloc(unittest.TestCase):
         self.assertNotIn("fast", a._properties)
 
 
+class TestRv1PoolIssue2473(unittest.TestCase):
+    """Regression: nnodes=N must spread across N distinct nodes.
+
+    The original bug (issue2473) caused rlist_alloc() to satisfy an nnodes=3
+    request by placing all slots on a single node that had enough cores, rather
+    than distributing one slot across each of the three requested nodes.  The
+    pool is intentionally heterogeneous (rank0 has more cores than rank1-2) to
+    reproduce the conditions that triggered the bug.
+    """
+
+    # rank0: 4 cores, rank1-2: 2 cores each — mirrors the C regression fixture
+    R_issue2473 = {
+        "version": 1,
+        "execution": {
+            "R_lite": [
+                {"rank": "0", "children": {"core": "0-3"}},
+                {"rank": "1-2", "children": {"core": "0-1"}},
+            ],
+            "starttime": 0,
+            "expiration": 0,
+            "nodelist": ["node0", "node1", "node2"],
+        },
+    }
+
+    def setUp(self):
+        self.pool = Rv1Pool(self.R_issue2473)
+
+    def test_nnodes_spreads_across_nodes(self):
+        """nnodes=3 nslots=3 slot_size=1 must touch all three nodes."""
+        a = self.pool.alloc(1, rr(3, 3, 1))
+        self.assertEqual(len(a._ranks), 3)
+        self.assertEqual(a.count("core"), 3)
+        # The bug placed 3 cores on one node; verify exactly one core per node.
+        self.assertEqual(a.dumps(), "rank[0-2]/core0")
+
+    def test_nnodes_larger_slot_count(self):
+        """nnodes=3 nslots=6 slot_size=1 satisfiable with 2 cores per node."""
+        a = self.pool.alloc(1, rr(3, 6, 1))
+        self.assertEqual(len(a._ranks), 3)
+        self.assertEqual(a.count("core"), 6)
+
+    def test_nnodes_free_restores_pool(self):
+        """Freeing an nnodes=3 allocation fully restores the pool."""
+        before = self.pool.count("core")
+        self.pool.alloc(1, rr(3, 3, 1))
+        self.pool.free(1)
+        self.assertEqual(self.pool.count("core"), before)
+
+    def test_nnodes_reuses_partially_filled_node(self):
+        """nnodes=2 after partial alloc reuses the partially-filled node.
+
+        After allocating 1 core on rank0 (worst-fit picks it first since it
+        has the most free cores), a subsequent nnodes=2 request should pick
+        rank0 (still most free: 3) and rank1, not start fresh on rank[1-2].
+        """
+        self.pool.alloc(1, rr(1, 1, 1))  # grabs rank0/core0
+        a2 = self.pool.alloc(2, rr(2, 2, 1))
+        self.assertEqual(a2.dumps(), "rank0/core1 rank1/core0")
+
+
 class TestRv1PoolWorstFit(unittest.TestCase):
     """Verify worst-fit picks the node with the most free cores."""
 
