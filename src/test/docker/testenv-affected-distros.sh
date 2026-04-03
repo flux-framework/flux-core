@@ -22,7 +22,12 @@ while IFS= read -r path; do
         distro=${distro%%/*}
         case "$distro" in
           checks|fluxorama) ;;
-          *) echo "$distro" ;;
+          *)
+            # Skip distros whose Dockerfile no longer exists (e.g. deleted)
+            if [ -f "${SCRIPT_DIR}/${distro}/Dockerfile" ]; then
+              echo "$distro"
+            fi
+            ;;
         esac
         ;;
       scripts/*)
