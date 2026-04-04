@@ -17,16 +17,32 @@ Job submission
 
 Job submission is performed by creating a ``flux.job.Jobspec`` object,
 populating it with attributes, and then passing it to one of the submission
-functions, e.g. :ref:`flux.job.submit <python_flux_job_submit_func>`. Jobspec
-objects define everything
-about a job, including the job's resources, executable, working directory,
-environment, and stdio streams.
+functions, e.g. :ref:`flux.job.submit <python_flux_job_submit_func>`.
+Jobspec objects define everything about a job, including the job's
+resources, executable, working directory, environment, and stdio streams.
 
-Basic Jobspec creation is generally done with the
-``JobspecV1.from_command`` class method and its
-variants ``from_batch_command`` and ``from_nest_command``, which are helper
-methods replicating the jobspecs created by the
-job submission command-line utilities.
+``JobspecV1`` provides two layers of factory methods. The low-level
+methods — :meth:`~flux.job.JobspecV1.from_command`,
+:meth:`~flux.job.JobspecV1.from_batch_command`, and
+:meth:`~flux.job.JobspecV1.from_nest_command` — build the RFC 14 jobspec
+structure directly, accepting raw values for environment, resource limits,
+and duration. Further customization of the resulting jobspec is done via
+various setters, getters, and methods of :meth:`~flux.job.JobspecV1`, or
+further processing by :meth:`~flux.job.JobspecV1.apply_options`, which is
+a convenience method used by command-line tools to process common options
+and CLI plugin arguments.
+
+High-level methods -- :meth:`~flux.job.JobspecV1.from_submit`,
+:meth:`~flux.job.JobspecV1.from_alloc`, and :meth:`~flux.job.JobspecV1.from_batch`
+are also available which give callers full access to the same options
+available in the command-line tools :man1:`flux-submit`, :man1:`flux-alloc`,
+and :man1:`flux-batch` respectively.  These methods are equivalent to calling
+a low-level method and :meth:`~flux.job.JobspecV1.apply_options`
+with the appropriate ``prog`` in a single step. They use command-line flag
+aligned parameter names (``ntasks``, ``nodes``, ``time_limit``) and pass any
+remaining keyword arguments to :meth:`~flux.job.JobspecV1.apply_options`. The
+result is a jobspec equivalent to what ``flux submit``, ``flux alloc``, or
+``flux batch`` would produce.
 
 
 .. autoclass:: flux.job.Jobspec
@@ -36,6 +52,155 @@ job submission command-line utilities.
 	:show-inheritance:
 	:members:
 
+
+High-level factory methods
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:meth:`~flux.job.JobspecV1.from_submit`,
+:meth:`~flux.job.JobspecV1.from_alloc`, and
+:meth:`~flux.job.JobspecV1.from_batch` are the recommended starting
+point for most Python code. Each wraps the corresponding low-level
+method and calls :meth:`~flux.job.JobspecV1.apply_options` internally,
+so all :meth:`~flux.job.JobspecV1.apply_options` keyword arguments
+(``env``, ``rlimit``, ``time_limit``, ``dependency``, ``shell_options``,
+``attributes``, and more) can be passed directly, as can any CLI plugin
+option dests. The resulting jobspec is passed to :func:`~flux.job.submit`
+or :func:`~flux.job.submit_async` to actually run the job.
+
+Build a jobspec for a 16-task command and submit it:
+
+.. code-block:: python
+
+    import flux
+    import flux.job
+    from flux.job import JobspecV1
+
+    js = JobspecV1.from_submit(
+        ["myapp", "--input", "data.h5"],
+        ntasks=16,
+        cores_per_task=4,
+        time_limit="2h",
+        dependency=["afterok:f1234abcd"],
+        shell_options={"verbose": 1},
+        attributes={"system.queue": "gpu"},
+    )
+    jobid = flux.job.submit(flux.Flux(), js)
+
+Build a jobspec for a nested Flux instance on four nodes:
+
+.. code-block:: python
+
+    js = JobspecV1.from_alloc(
+        nodes=4,
+        time_limit="1h",
+        conf={"resource": {"noverify": True}},
+    )
+    jobid = flux.job.submit(flux.Flux(), js)
+
+Build a jobspec for a batch script from a file or inline content:
+
+.. code-block:: python
+
+    # From a file — job name defaults to the filename
+    js = JobspecV1.from_batch("/path/to/script.sh", nodes=4)
+
+    # Inline script content — use the content= keyword argument
+    js = JobspecV1.from_batch(
+        content="#!/bin/bash\nflux run -n8 myapp\n",
+        nslots=8,
+        time_limit="30m",
+        output="job-{{id}}.out",
+    )
+    jobid = flux.job.submit(flux.Flux(), js)
+
+See `Applying options to jobspecs`_ below for details on passing shell
+options, jobspec attributes, environment rules, resource limits, and CLI
+plugin options through these methods.
+
+
+Applying options to jobspecs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:meth:`~flux.job.JobspecV1.apply_options` can be called on any jobspec,
+including those created with the lower-level factory methods. It modifies
+the jobspec in-place and returns *self* so calls can be chained.
+
+**Shell options and jobspec attributes**
+
+``shell_options`` sets job-shell options; ``attributes`` sets jobspec
+attributes. Both accept plain Python dicts.
+
+.. code-block:: python
+
+    from flux.job import JobspecV1
+
+    js = JobspecV1.from_command(["hostname"]).apply_options(
+        shell_options={"verbose": 1},
+        attributes={"system.queue": "batch", ".user.comment": "my job"},
+    )
+
+Note that the above is equivalent to:
+
+.. code-block:: python
+
+    from flux.job import JobspecV1
+
+    js = JobspecV1.from_submit(
+        ["hostname"],
+        shell_options={"verbose": 1},
+        attributes={"system.queue": "batch", ".user.comment": "my job"},
+    )
+
+
+**Environment and resource limits**
+
+``env`` accepts filter rules applied to the submitter's environment.
+``rlimit`` propagates resource limits. The high-level factory methods
+(:meth:`~flux.job.JobspecV1.from_submit`,
+:meth:`~flux.job.JobspecV1.from_alloc`,
+:meth:`~flux.job.JobspecV1.from_batch`) always propagate the full environment
+and default resource limits even when neither is specified — matching CLI
+behavior. When calling :meth:`~flux.job.JobspecV1.apply_options` directly,
+``env`` and ``rlimit`` are only applied when explicitly passed; a call that
+omits both leaves any previously set environment and rlimits unchanged.
+
+.. code-block:: python
+
+    js.apply_options(
+        env=["MY_RANK={{rank}}", "-LD_PRELOAD", "IMPORTANT_VAR"],
+        rlimit=["-*", "nofile=65536"],
+    )
+
+**Using CLI plugin options**
+
+When ``prog`` is set, CLI plugins registered for that command are loaded
+and their ``modify_jobspec()`` hooks are invoked. Run ``flux <cmd> --help``
+to see what plugins are loaded — their options appear under "Options provided
+by plugins". The kwarg dest for each option is the flag name with the leading
+``--`` removed and dashes replaced by underscores (e.g. ``--amd-gpumode`` →
+``amd_gpumode``):
+
+.. code-block:: python
+
+    # --amd-gpumode is listed under "Options provided by plugins" in
+    # "flux submit --help" output; its dest is amd_gpumode
+    js = JobspecV1.from_submit(
+        ["myapp"],
+        ntasks=8,
+        amd_gpumode="TPX",
+    )
+
+    # Or apply to an existing jobspec:
+    js.apply_options(prog="submit", amd_gpumode="TPX")
+
+For programmatic discovery of available plugin option dests:
+
+.. code-block:: python
+
+    from flux.cli.plugin import CLIPluginRegistry
+
+    for opt in CLIPluginRegistry("submit").options:
+        print(f"{opt.name} -> dest: {opt.dest}")
 
 
 Job manipulation
