@@ -5,6 +5,8 @@
 
 # add scripts directory to path
 export PATH="${SHARNESS_TEST_SRCDIR}/scripts:$PATH"
+# ensure no builddir plugins are picked up globally
+export FLUX_CLI_PLUGINPATH_OVERRIDE=""
 
 #
 #  Extra functions for Flux testsuite
