@@ -20,6 +20,42 @@ from flux.conf_builtin import conf_builtin_get
 from flux.importer import import_path
 
 
+class PluginArgsProxy:
+    """Per-plugin proxy for the args namespace passed to plugin callbacks.
+
+    Translates attribute access using an unprefixed dest name (e.g.
+    ``my_option``) to the current prefixed dest (e.g. ``site_my_option``),
+    so that existing plugin callback code continues to work after the dest
+    was changed to include the prefix.
+
+    Attributes not in the alias map (i.e. from builtin options such as ``conf``
+    and ``env``) pass through to the underlying namespace unchanged.
+    """
+
+    __slots__ = ("_ns", "_alias")
+
+    def __init__(self, args, alias):
+        # Use object.__setattr__ to write our own slots directly, bypassing
+        # the custom __setattr__ below. O/w, Using self._ns = ... would call
+        # __setattr__, which could read _alias before it has been assigned.
+        object.__setattr__(self, "_ns", args)
+        object.__setattr__(self, "_alias", alias)
+
+    def __getattr__(self, name):
+        # Use object.__getattribute__ to read our own slots directly,
+        # bypassing any subclass overrides and making clear we are accessing
+        # proxy internals rather than forwarding to the wrapped namespace.
+        alias = object.__getattribute__(self, "_alias")
+        ns = object.__getattribute__(self, "_ns")
+        return getattr(ns, alias.get(name, name))
+
+    def __setattr__(self, name, value):
+        # Same reasoning as __getattr__: read our own slots directly.
+        alias = object.__getattribute__(self, "_alias")
+        ns = object.__getattribute__(self, "_ns")
+        setattr(ns, alias.get(name, name), value)
+
+
 class CLIPluginOption:
     """Wrap Argparse's add_argument method with a class"""
 
@@ -32,9 +68,16 @@ class CLIPluginOption:
         else:
             self.name = name
         if "dest" not in kwargs:
-            ## if dest is unspecified, give a dest with the name without
-            ## the prefix, with underscores instead of dashes as argparse would
-            kwargs["dest"] = name[2:].replace("-", "_")
+            # Derive dest from the prefixed CLI flag so it matches what
+            # callers see in --help output and no inadvertent conflicts
+            # with builtin options dest occur. Store the unprefixed form
+            # so PluginArgsProxy can alias transparently.
+            self._unprefixed_dest = name[2:].replace("-", "_")
+            kwargs["dest"] = self.name[2:].replace("-", "_")
+        else:
+            # Explicit dest= means the plugin author chose the name
+            # deliberately; no backward-compatibility alias is needed.
+            self._unprefixed_dest = None
         self.kwargs = kwargs
 
 
@@ -87,9 +130,14 @@ class CLIPlugin(ABC):  # pragma no cover
             name (str): Long option string being added (must begin with ``--``).
 
         Other keyword arguments, except ``dest=`` are passed along to
-        ``ArgumentParser.add_argument`` unchanged. ``dest=`` is a special case,
-        where dashes are replaced with underscores, and the prefix is _not_
-        prepended.
+        ``ArgumentParser.add_argument`` unchanged. When ``dest=`` is not
+        given it is derived from the full prefixed CLI flag name
+        (e.g. ``--site-my-option`` = ``site_my_option``) so that the
+        kwarg name matches what callers see in ``--help`` output. An explicit
+        ``dest=`` is used as-is and no backward-compatibility alias is
+        constructed. As a convenience, within plugin callbacks accesses to
+        ``args.my_option`` are automatically proxied for plugins to
+        ``args.<prefix>_my_option``.
 
         Plugins use:
         >>> self.add_option("--longopt", action="store_true", help="Help.")
@@ -199,15 +247,30 @@ class CLIPluginRegistry:
                     option_dests[option.kwargs["dest"]] = 1
         return self  ## possibly unnecessary now
 
+    def _make_alias(self, plugin):
+        """Return {unprefixed_dest: prefixed_dest} alias map for *plugin*.
+
+        Only options whose dest was auto-derived (no explicit ``dest=``)
+        and whose unprefixed and prefixed forms differ get an entry.
+        """
+        return {
+            opt._unprefixed_dest: opt.kwargs["dest"]
+            for opt in plugin.options
+            if opt._unprefixed_dest is not None
+            and opt._unprefixed_dest != opt.kwargs["dest"]
+        }
+
     def preinit(self, args):
         """Call all plugin ``preinit`` callbacks"""
         for plugin in self.plugins:
-            plugin.preinit(args)
+            plugin.preinit(PluginArgsProxy(args, self._make_alias(plugin)))
 
     def modify_jobspec(self, args, jobspec):
         """Call all plugin ``modify_jobspec`` callbacks"""
         for plugin in self.plugins:
-            plugin.modify_jobspec(args, jobspec)
+            plugin.modify_jobspec(
+                PluginArgsProxy(args, self._make_alias(plugin)), jobspec
+            )
 
     def validate(self, jobspec):
         """Call any plugin validate callback"""
