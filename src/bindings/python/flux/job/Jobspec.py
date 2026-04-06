@@ -1234,8 +1234,8 @@ class JobspecV1(Jobspec):
             conf (dict): optional broker configuration to pass to the
                 child instance brokers. If set, `conf` will be set in the
                 jobspec 'files' (RFC 37 File Archive) attribute as `conf.json`,
-                and broker_opts will be extended to add
-                `-c{{tmpdir}}/conf.json`
+                and a `-c{{tmpdir}}/conf.json` entry is appended to the
+                broker command line.
             **kwargs: Extra named arguments as accepted in
                 :func:`~JobspecV1.from_command`
         """
@@ -1298,12 +1298,12 @@ class JobspecV1(Jobspec):
             conf (dict): optional broker configuration to pass to the
                 child instance brokers. If set, `conf` will be set in the
                 jobspec 'files' (RFC 37 File Archive) attribute as `conf.json`,
-                and broker_opts will be extended to add
-                `-c{{tmpdir}}/conf.json`
+                and a `-c{{tmpdir}}/conf.json` entry is appended to the
+                broker command line.
             **kwargs: Extra named arguments as accepted in
                 :func:`~JobspecV1.from_command`
         """
-        broker_opts = [] if broker_opts is None else broker_opts
+        broker_opts = list(broker_opts) if broker_opts is not None else []
         if conf is not None:
             broker_opts.append("-c{{tmpdir}}/conf.json")
         jobspec = cls.from_command(
