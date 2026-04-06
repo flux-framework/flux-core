@@ -55,6 +55,17 @@ export FLUX_TEST_DISABLE_TIMEOUT=t
 export LD_PRELOAD=libfaketimeMT.so.1
 export FAKETIME_NO_CACHE=1
 export FAKETIME_TIMESTAMP_FILE=$(pwd)/faketimerc
+# Pre-create faketimerc before the broker starts so libfaketime has a valid
+# timestamp from the first gettimeofday() call in the broker.  The initial
+# time is set to 1 second before the time used in the first test so the
+# broker never experiences a backward time jump.  Without this the broker
+# starts in real time (~current year) and then jumps backward to 1991 when
+# test 1 runs set_faketime, which can confuse libev.
+# Only write this outside the broker context (TEST_UNDER_FLUX_ACTIVE is set
+# when the test script is re-invoked inside flux-start).
+if test -z "$TEST_UNDER_FLUX_ACTIVE" ; then
+    echo '@1991-06-04 00:00:00' > ${FAKETIME_TIMESTAMP_FILE}
+fi
 test_under_flux ${SIZE} minimal -Slog-stderr-level=1
 
 cron_entry_check() {
@@ -83,7 +94,13 @@ flux_cron() {
 cat >make-faketime.sh <<EOF
 #!/bin/sh
 d="\$@"
-date +"@%Y-%m-%d %H:%M:%S" --date="\${d}" > ${FAKETIME_TIMESTAMP_FILE}.tmp
+# Capture date output first so that a failed date(1) call does not
+# silently empty FAKETIME_TIMESTAMP_FILE via the output redirection.
+ts=\$(date +"@%Y-%m-%d %H:%M:%S" --date="\${d}") || {
+    echo "make-faketime: date failed for '\${d}'" >&2
+    exit 1
+}
+printf '%s\n' "\${ts}" > ${FAKETIME_TIMESTAMP_FILE}.tmp
 sync
 # Use mv so timestamp file update is atomic
 mv ${FAKETIME_TIMESTAMP_FILE}.tmp ${FAKETIME_TIMESTAMP_FILE}
@@ -106,13 +123,11 @@ within_two() {
 
 #  Why does date need to be set 1s in the future??
 test_expect_success 'libfaketime works' '
-    now=$(date +"@%Y-%m-%d %H:%M:%S") &&
     $set_faketime Jun 4 1991 00:00:01 &&
     flux logger "libfaketime-test" &&
     within_two "$(date +%s)" $(date +%s --date="Jun 4 1991 00:00:00") &&
     date +%s &&
-    flux dmesg | grep libfaketime-test &&
-    echo $now > ${FAKETIME_TIMESTAMP_FILE}
+    flux dmesg | grep libfaketime-test
 '
 test_expect_success 'load cron module' '
     $set_faketime Jun 1 15:00 2016 &&
