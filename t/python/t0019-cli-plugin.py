@@ -206,7 +206,7 @@ class TestConflictDetection(unittest.TestCase):
         else:
             os.environ["FLUX_CLI_PLUGINPATH"] = self._saved
 
-    def test_01_same_prefix_same_name_raises(self):
+    def test_01_same_prefix_same_name_first_wins(self):
         # two plugins with the same prefix and option produce identical dests
         with tempfile.TemporaryDirectory() as d:
             with open(os.path.join(d, "a.py"), "w") as f:
@@ -214,8 +214,8 @@ class TestConflictDetection(unittest.TestCase):
             with open(os.path.join(d, "b.py"), "w") as f:
                 f.write(self.PLUGIN_SITE2)
             os.environ["FLUX_CLI_PLUGINPATH"] = d
-            with self.assertRaises(ValueError):
-                CLIPluginRegistry("submit")
+            registry = CLIPluginRegistry("submit")
+            self.assertEqual(len(registry.plugins), 1)
 
     def test_02_different_prefix_same_name_coexists(self):
         # two plugins with different prefixes get distinct dests and load cleanly

@@ -10,10 +10,10 @@
 
 import glob
 import inspect
+import os
 import sys
 import termios
 from abc import ABC
-from os import getenv
 from pydoc import ttypager
 
 from flux.conf_builtin import conf_builtin_get
@@ -104,6 +104,7 @@ class CLIPlugin(ABC):  # pragma no cover
         self.prog = prog
         if prog.startswith("flux "):
             self.prog = prog[5:]
+        self.path = None
         self.prefix = prefix
         self.version = version
         self.options = []
@@ -195,13 +196,7 @@ class CLIPluginRegistry:
     def __init__(self, prog):
         self.prog = prog
         self.plugins = []
-        etc = conf_builtin_get("confdir")
-        if getenv("FLUX_CLI_PLUGINPATH"):
-            self.plugindir = getenv("FLUX_CLI_PLUGINPATH")
-        else:
-            if etc is None:
-                raise ValueError("failed to get builtin confdir")
-            self.plugindir = f"{etc}/cli/plugins"
+        self.plugindirs = self._get_searchpath()
         self._load_plugins(self.prog)
 
     def print_help(self, name):
@@ -219,7 +214,37 @@ class CLIPluginRegistry:
                     sys.exit(0)
         raise ValueError(f"--help: no such option {name}")
 
-    def _add_plugins(self, module, program):
+    def _get_searchpath(self):
+        """
+        Return list of dirs to search for CLI plugins.
+
+        If ``FLUX_CLI_PLUGINPATH_OVERRIDE`` is set, return only those
+        paths (system defaults are suppressed entirely).
+
+        Otherwise, prepend any paths from ``FLUX_CLI_PLUGINPATH`` to the
+        system default search path.
+        """
+        sysdir = conf_builtin_get("confdir")
+        builtindir = conf_builtin_get("libexecdir")
+        builtin_paths = [f"{sysdir}/cli/plugins", f"{builtindir}/cli/plugins"]
+
+        if "FLUX_CLI_PLUGINPATH_OVERRIDE" in os.environ:
+            raw = os.environ["FLUX_CLI_PLUGINPATH_OVERRIDE"]
+            return [s for s in raw.split(":") if s and not s.isspace()]
+
+        paths = list(builtin_paths)
+        if "FLUX_CLI_PLUGINPATH" in os.environ:
+            extra = [
+                s
+                for s in os.environ["FLUX_CLI_PLUGINPATH"].split(":")
+                if s and not s.isspace()
+            ]
+            paths = extra + paths
+
+        return paths
+
+    def _add_plugins(self, path, program):
+        module = import_path(path)
         entries = [
             getattr(module, attr) for attr in dir(module) if not attr.startswith("_")
         ]
@@ -231,25 +256,42 @@ class CLIPluginRegistry:
                 and issubclass(entry, CLIPlugin)
                 and entry != CLIPlugin
             ):
-                self.plugins.append(entry(program))
+                plugin = entry(program)
+                plugin.path = path
+                self.plugins.append(plugin)
+
+    def print_plugins(self):
+        """Print all of the plugins loaded by _load_plugins."""
+        print("Options provided by plugins:")
+        print(f"  Search path: {':'.join(self.plugindirs)}\n")
+        for plugin in self.plugins:
+            print(f"{type(plugin).__name__} loaded from {plugin.path}")
+            for option in plugin.options:
+                print(f"  {option.name:<20}  {option.kwargs['help']}")
+            print()
 
     def _load_plugins(self, program):
         """Load all cli plugins from the standard path"""
-        for path in glob.glob(f"{self.plugindir}/*.py"):
-            self._add_plugins(import_path(path), program)
+        for plugindir in self.plugindirs:
+            for path in glob.glob(f"{plugindir}/*.py"):
+                self._add_plugins(path, program)
+        # keep a dictionary of options:plugin so that conflicts can be checked
         option_dests = {}
-        self.options = []
-        for plugin in self.plugins:
-            for option in plugin.options:
-                if option.dest in option_dests:
-                    raise ValueError(
-                        f"{option.name} conflicts with another option (or its `dest`)"
-                    )
-                else:
-                    self.options.append(option)
-                    ## keep a temporary list of "dests" to ensure no conflicts
-                    option_dests[option.dest] = 1
-        return self  ## possibly unnecessary now
+        # because the plugin list can change due to conflicting options, iterate
+        # over a copy, not the list itself
+        for plugin in self.plugins[:]:
+            if any(opt.dest in option_dests for opt in plugin.options):
+                # remove the current plugin if any of the options conflict (since
+                # it would have come after the 'primary' plugin observed in the
+                # PATH)
+                self.plugins.remove(plugin)
+            else:
+                for opt in plugin.options:
+                    option_dests[opt.dest] = opt
+        # finalize all of this by passing a list of argparse arguments (options)
+        # to the registry
+        self.options = list(option_dests.values())
+        return self
 
     def _make_alias(self, plugin):
         """Return {unprefixed_dest: prefixed_dest} alias map for *plugin*.

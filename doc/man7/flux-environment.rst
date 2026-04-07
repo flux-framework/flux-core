@@ -567,6 +567,24 @@ MISCELLANEOUS
    color output unless :option:`--color` is explicitly passed on the command
    line.  See `no-color.org <https://no-color.org>`_ for details.
 
+.. envvar:: FLUX_CLI_PLUGINPATH
+
+   Prepend additional search paths (colon delimited) for command-line
+   plugins to base submission commands such as :man1:`flux-alloc`. The
+   system default search paths will continue to be searched, but after
+   all search paths provided to ``FLUX_CLI_PLUGINPATH``. The default
+   system search path is::
+
+     $sysconfdir/cli/plugins:$libexecdir/cli/plugins
+
+.. envvar:: FLUX_CLI_PLUGINPATH_OVERRIDE
+
+   Override the entire search path for command-line plugins, including
+   ``$sysconfdir/cli/plugins`` and ``$libexecdir/cli/plugins``. Only a
+   colon-delimited list of paths passed to this variable will be
+   observed when this variable is set.
+
+
 .. _sub_command_environment:
 
 SUB-COMMAND ENVIRONMENT
