@@ -1,3 +1,73 @@
+flux-core version 0.84.0 - 2026-04-07
+-------------------------------------
+
+## New Features
+ * python: add `JobspecV1.apply_options()` and `from_submit`/`alloc`/`batch()`
+   factory methods (#7501)
+ * broker: support python broker modules (#7424)
+ * broker: support module loaders other than the built-in DSO one (#7422)
+ * python: add toy scheduler framework (#7451)
+ * python: add pure python ResourceSet implementation (#7457)
+ * sched-simple: replace with python version (#7461)
+ * scheduler: add support for generator yield in schedule/forecast loops
+   (#7507)
+ * scheduler: support RFC 14 range counts (#7470)
+ * python: add `set_proctitle()` and use it in python modules, job validator
+   and frobnicator (#7475)
+ * python: improve broker module error propagation and test integration
+   (#7447)
+ * flux-resource: add queue display filtering and hidden-queues config to
+   simplify output of `flux resource list` (#7473)
+ * flux-update: add `--wait` option and use it as necessary in testsuite
+   (#7446)
+ * Support `--conf` option in `flux start` and `flux broker` (#7458)
+ * enable `flux exec --jobid` in multi-user instance via RFC 42 signing
+   (#7430)
+ * libidset: define and enforce `IDSET_MAX_UNIVERSE` (#7497)
+ * cmd/flux: output similar commands on invalid input (#7403)
+ * modprobe: propagate alternatives selection to all module `provides`
+   (#7455)
+ * update FLUX_CLI_PLUGINPATH to support a colon-delimited path (multiple
+   paths) (#7244)
+
+## Fixes
+ * sched-simple: fix property and scheduling key propagation in allocations
+   (#7492)
+ * avoid masking the exit status of the task that triggered an
+   `exit-timeout` or `exit-on-error` job exception (#7474)
+ * fix resource leaks and flaky tests found when running the testsuite
+   under valgrind (#7445)
+ * job-info: fix resource leaks (#7441)
+ * resource: drop scheduling key from resource.status (#7469)
+ * cmd/flux: remove duplicate command suggestions (#7484)
+ * job-list: honor job updates in all job states (#7493)
+ * python: store `CLIPlugin` options with prefix by default (#7514)
+
+## Cleanup
+ * python: remove librlist bindings (#7460)
+ * librlist: remove unused `rlist_alloc()` code (#7510)
+
+## Build/CI/Testsuite/Documentation
+ * ci: add el10 build, fix testenv workflow bugs, and enable automated
+   image builds (#7506)
+ * etc: update bash completions and add testing (#7454)
+ * doc: update description of Flux scheduling scalability (#7439)
+ * doc: add caveat for `--taskmap=hostfile` (#7503)
+ * MAINTAINERS: add Sam Maloney (#7502)
+ * testsuite: add python version of librlist test (#7513)
+ * testsuite: improve reliability of multi-node `flux alloc` test (#7479)
+ * testsuite: improve reliability of some tests (#7438)
+ * testsuite: avoid potential hang in t0014-runlevel.t (#7477)
+ * testsuite: fix racy tests in `t4100-slurm-expiration-sync.t` (#7433)
+ * testsuite: fix races cron faketime test (#7504, #7515)
+ * test: fix race in `libflux/test_module.t` (#7512)
+ * github: fix testenv workflow on merge (#7511)
+ * github: tweak dependabot commit title prefix and update action versions
+   to latest (#7456)
+ * github: bump the github-actions group with 2 updates (#7485, #7498)
+ * ci: pin macos lua version to 5.4 (#7468)
+
+
 flux-core version 0.83.1 - 2026-03-07
 -------------------------------------
 
