@@ -345,6 +345,9 @@ class MiniCmd:
             sys.exit(0)
         elif args.help is not None:
             self.plugins.print_help(args.help)
+        if args.list_plugins:
+            self.plugins.print_plugins()
+            sys.exit(0)
 
         self.main(args)
 
@@ -568,6 +571,11 @@ class MiniCmd:
             "--quiet",
             action="store_true",
             help="Do not print jobid to stdout on submission",
+        )
+        parser.add_argument(
+            "--list-plugins",
+            action="store_true",
+            help="Print all command-line plugins that are loaded and exit",
         )
         parser.add_argument(
             "--debug-emulate", action="store_true", help=argparse.SUPPRESS
