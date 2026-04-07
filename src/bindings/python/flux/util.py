@@ -12,6 +12,7 @@ import argparse
 import base64
 import copy
 import errno
+import functools
 import glob
 import json
 import logging
@@ -665,6 +666,139 @@ class AltField:
         return str(self).__format__(fmt)
 
 
+@functools.total_ordering
+class DisplayValue:
+    """Comparable wrapper for display-formatted values in OutputFormat sorting.
+
+    This class exists to handle the common case in Flux CLI tools where
+    optional fields are formatted as empty strings (""), hyphens ("-"), or
+    None for display purposes, but need to sort sensibly alongside numeric
+    and string values.
+
+    For example, in ``flux jobs`` output, the ``nnodes`` field may be:
+    - An integer like 4 (for allocated jobs)
+    - An empty string "" (for jobs that haven't been allocated yet)
+    - A hyphen "-" (explicitly showing "not applicable")
+
+    When sorting such fields, Python 3's strict type checking prevents
+    comparing strings directly with integers. This class solves that by
+    normalizing values into a comparable form with a clear, documented
+    sort order.
+
+    Sort Order:
+        1. None, empty strings (""), and hyphens ("-") - all treated as "unset"
+        2. Numbers (int, float, bool, and numeric strings like "100")
+        3. Non-numeric strings
+
+    Design Rationale:
+        - **Treat None/""/"-" identically**: From a user's perspective,
+          these all mean "field is unset" and should group together at the
+          start of sorted output (or end, if reverse sorted).
+
+        - **Treat bools as numbers**: Python's semantics where False==0
+          and True==1 make this intuitive. Alternative (bools as separate
+          category) would mean False < True < 0 < 1 < 2, which is surprising.
+
+        - **Parse numeric strings**: Strings that can be parsed as floats
+          are treated as numeric for sorting. This ensures "10" and 100
+          compare numerically (10 < 100), not by type precedence where
+          all numbers would sort before all strings (100 < "10").
+
+        - **Pre-compute type order**: The type_order and sort_value are
+          computed once in __init__ rather than on every comparison,
+          trading memory for speed.
+
+    Performance:
+        - Uses __slots__ to avoid per-instance dict overhead
+        - No exception handling in hot path (type checks are deterministic)
+        - Works with Python's stable sort for predictable ordering
+
+    Example:
+        >>> items = [Item(nnodes=100), Item(nnodes=""), Item(nnodes="5")]
+        >>> sorted(items, key=lambda x: DisplayValue(x.nnodes))
+        [Item(nnodes=""), Item(nnodes="5"), Item(nnodes=100)]
+        # Note: "5" is parsed as numeric and compares with 100 numerically
+
+        >>> DisplayValue(None) < DisplayValue(0)
+        True
+        >>> DisplayValue("10") < DisplayValue(100)  # "10" parsed as 10.0
+        True
+        >>> DisplayValue(5) < DisplayValue("foo")  # "foo" is non-numeric string
+        True
+    """
+
+    __slots__ = ("value", "_type_order", "_sort_value")
+
+    EMPTY = 0  # None, "", "-" - all unset values
+    NUMERIC = 1  # int, float, bool, numeric strings
+    STRING = 2  # non-numeric strings
+
+    def __init__(self, value):
+        """Initialize a DisplayValue wrapper for sorting.
+
+        Args:
+            value: The raw value to wrap (can be None, str, int, float,
+            bool, etc.)
+        """
+        self.value = value
+
+        # Classify value into one of three type categories for sorting
+        # Category 0: Unset/empty values (sort first)
+        if value is None or value == "" or value == "-":
+            self._type_order = self.EMPTY
+            # Placeholder; not actually compared within category
+            self._sort_value = 0
+
+        # Category 1: Numeric values (including booleans)
+        # Note: Check bool first since bool is a subclass of int in Python
+        elif isinstance(value, (bool, int, float)):
+            self._type_order = self.NUMERIC
+            self._sort_value = float(value)
+
+        # Category 2: Other types - try to parse as numeric first
+        # This ensures "10" and 10 compare numerically, not by type precedence
+        else:
+            # Attempt numeric conversion for types like Decimal,
+            # numpy types, or strings
+            try:
+                # Try direct conversion first (faster for numeric types)
+                numeric_value = float(value)
+                self._type_order = self.NUMERIC
+                self._sort_value = numeric_value
+            except (ValueError, TypeError):
+                # Direct conversion failed, try string conversion
+                try:
+                    numeric_value = float(str(value))
+                    self._type_order = self.NUMERIC
+                    self._sort_value = numeric_value
+                except (ValueError, TypeError):
+                    # Not a number - use string comparison
+                    self._type_order = self.STRING
+                    self._sort_value = str(value)
+
+    def __eq__(self, other):
+        """Test equality by comparing type_order and sort_value."""
+        return (self._type_order, self._sort_value) == (
+            other._type_order,
+            other._sort_value,
+        )
+
+    def __lt__(self, other):
+        """Test less-than by comparing type_order first, then sort_value."""
+        return (self._type_order, self._sort_value) < (
+            other._type_order,
+            other._sort_value,
+        )
+
+    def __repr__(self):
+        """Return readable representation for debugging."""
+        return (
+            f"DisplayValue({self.value!r}, "
+            f"type_order={self._type_order}, "
+            f"sort_value={self._sort_value!r})"
+        )
+
+
 class OutputFormat:
     """Extended output format container class for Flux utilities.
 
@@ -1194,9 +1328,20 @@ class OutputFormat:
             items (list): list of items to sort. Note that the list is
                 sorted in place and then returned.
         """
+
+        def make_sort_key(attr_name):
+            """Create a sort key that wraps values in DisplayValue for mixed-type sorting.
+
+            DisplayValue handles the common case where display-formatted fields contain
+            mixed types (None, empty strings, numbers, booleans, strings) by normalizing
+            them into a comparable form. See DisplayValue docstring for sort order details.
+            """
+            getter = attrgetter(attr_name)
+            return lambda item: DisplayValue(getter(item))
+
         # Apply any requested sort:
         for key, reverse in reversed(self.sort_keys):
-            items.sort(key=attrgetter(key), reverse=reverse)
+            items.sort(key=make_sort_key(key), reverse=reverse)
         return items
 
     def print_items(self, items, no_header=False, width=-1, pre=None, post=None):
