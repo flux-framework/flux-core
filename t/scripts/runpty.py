@@ -19,7 +19,7 @@ import time
 from signal import SIGALRM, SIGINT, SIGTERM, SIGUSR1, SIGWINCH, alarm, signal
 
 from flux import util
-from flux.cli.base import decode_duration, decode_signal
+from flux.job._utils import decode_duration, decode_signal
 
 
 def setwinsize(fd, rows, cols):

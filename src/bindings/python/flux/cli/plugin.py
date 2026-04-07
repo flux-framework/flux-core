@@ -80,6 +80,10 @@ class CLIPluginOption:
             self._unprefixed_dest = None
         self.kwargs = kwargs
 
+    @property
+    def dest(self):
+        return self.kwargs["dest"]
+
 
 class CLIPlugin(ABC):  # pragma no cover
     """Base class for a CLI submission plugin
@@ -237,14 +241,14 @@ class CLIPluginRegistry:
         self.options = []
         for plugin in self.plugins:
             for option in plugin.options:
-                if option.kwargs["dest"] in option_dests:
+                if option.dest in option_dests:
                     raise ValueError(
                         f"{option.name} conflicts with another option (or its `dest`)"
                     )
                 else:
                     self.options.append(option)
                     ## keep a temporary list of "dests" to ensure no conflicts
-                    option_dests[option.kwargs["dest"]] = 1
+                    option_dests[option.dest] = 1
         return self  ## possibly unnecessary now
 
     def _make_alias(self, plugin):
@@ -254,10 +258,9 @@ class CLIPluginRegistry:
         and whose unprefixed and prefixed forms differ get an entry.
         """
         return {
-            opt._unprefixed_dest: opt.kwargs["dest"]
+            opt._unprefixed_dest: opt.dest
             for opt in plugin.options
-            if opt._unprefixed_dest is not None
-            and opt._unprefixed_dest != opt.kwargs["dest"]
+            if opt._unprefixed_dest is not None and opt._unprefixed_dest != opt.dest
         }
 
     def preinit(self, args):

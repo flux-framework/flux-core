@@ -309,6 +309,8 @@ TESTSCRIPTS = \
 	python/t0014-job-kvslookup.py \
 	python/t0015-job-output.py \
 	python/t0016-job-validate.py \
+	python/t0017-job-utils.py \
+	python/t0018-jobspec.py \
 	python/t0019-cli-plugin.py \
 	python/t0020-hostlist.py \
 	python/t0021-idset.py \

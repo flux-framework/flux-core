@@ -39,7 +39,7 @@ class TestCLIPluginOption(unittest.TestCase):
         # dest is derived from the full prefixed CLI flag name
         opt = CLIPluginOption("--my-option", prefix="site")
         self.assertEqual(opt.name, "--site-my-option")
-        self.assertEqual(opt.kwargs["dest"], "site_my_option")
+        self.assertEqual(opt.dest, "site_my_option")
 
     def test_02_unprefixed_dest_stored_for_alias(self):
         # _unprefixed_dest holds the pre-prefix form for proxy aliasing
@@ -50,19 +50,19 @@ class TestCLIPluginOption(unittest.TestCase):
         # without a prefix, dest and _unprefixed_dest are identical
         opt = CLIPluginOption("--my-option", prefix=None)
         self.assertEqual(opt.name, "--my-option")
-        self.assertEqual(opt.kwargs["dest"], "my_option")
+        self.assertEqual(opt.dest, "my_option")
         self.assertEqual(opt._unprefixed_dest, "my_option")
 
     def test_04_auto_dest_dashes_to_underscores(self):
         # dashes in the prefixed flag name are converted to underscores in dest
         opt = CLIPluginOption("--long-option-name", prefix="site")
-        self.assertEqual(opt.kwargs["dest"], "site_long_option_name")
+        self.assertEqual(opt.dest, "site_long_option_name")
         self.assertEqual(opt._unprefixed_dest, "long_option_name")
 
     def test_05_explicit_dest_used_as_is(self):
         # explicit dest= is accepted unchanged
         opt = CLIPluginOption("--my-option", prefix="site", dest="custom_dest")
-        self.assertEqual(opt.kwargs["dest"], "custom_dest")
+        self.assertEqual(opt.dest, "custom_dest")
 
     def test_06_explicit_dest_no_alias(self):
         # explicit dest= sets _unprefixed_dest to None — no compat alias needed
@@ -226,7 +226,7 @@ class TestConflictDetection(unittest.TestCase):
                 f.write(self.PLUGIN_VENDOR)
             os.environ["FLUX_CLI_PLUGINPATH"] = d
             registry = CLIPluginRegistry("submit")
-            dests = {opt.kwargs["dest"] for opt in registry.options}
+            dests = {opt.dest for opt in registry.options}
             self.assertIn("site_my_option", dests)
             self.assertIn("vendor_my_option", dests)
 

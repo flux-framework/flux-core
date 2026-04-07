@@ -16,6 +16,7 @@ import sys
 import flux
 import flux.job
 from flux.cli import base
+from flux.job._utils import list_split
 from flux.job.directives import DirectiveParser
 
 LOGGER = logging.getLogger("flux-batch")
@@ -111,9 +112,9 @@ class BatchCmd(base.BatchAllocCmd):
             cores_per_slot=args.cores_per_slot,
             gpus_per_slot=args.gpus_per_slot,
             num_nodes=args.nodes,
-            broker_opts=base.list_split(args.broker_opts),
+            broker_opts=list_split(args.broker_opts),
             exclusive=args.exclusive,
-            conf=args.conf.config,
+            conf=args.conf.config if args.conf else None,
             duration=args.time_limit,
             cwd=args.cwd if args.cwd is not None else os.getcwd(),
             input=args.input,
