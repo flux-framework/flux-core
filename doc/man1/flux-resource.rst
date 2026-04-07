@@ -437,6 +437,8 @@ existing named format may be generated with :option:`--format=get-config=NAME`.
 See :man1:`flux-jobs` :ref:`flux_jobs_output_format` section for a detailed
 description of this syntax.
 
+.. include:: common/format-sort.rst
+
 Resources are combined into a single line of output when possible depending on
 the supplied output format.  Resource counts are not included in the
 determination of uniqueness.  Therefore, certain output formats will alter the

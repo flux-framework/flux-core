@@ -93,6 +93,8 @@ The :option:`--format` option can be used to specify an output format using
 Python's string format syntax or a defined format by name. For a list of
 built-in and configured formats use :option:`-o help`.
 
+.. include:: common/format-sort.rst
+
 The following field names can be specified for
 :command:`flux housekeeping list`:
 
