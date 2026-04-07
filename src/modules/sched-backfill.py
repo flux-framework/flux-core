@@ -248,7 +248,7 @@ class BackfillScheduler(Scheduler):
 
         if self._try_alloc(head):
             heapq.heappop(self._queue)
-            self.schedule()  # new head may also be immediately schedulable
+            yield from self.schedule()  # chain generator so reactor stays live during recursion
             return
 
         # Head is blocked — compute its shadow time (EASY reservation).
@@ -269,6 +269,7 @@ class BackfillScheduler(Scheduler):
                 )
             else:
                 kept.append(job)
+            yield
 
         self._queue = kept
         heapq.heapify(self._queue)

@@ -81,6 +81,7 @@ class FIFOScheduler(Scheduler):
             if not self._try_alloc(job):
                 break  # head blocked — stop to preserve FIFO ordering
             heapq.heappop(self._queue)
+            yield
 
     def _sim_alloc(self, sim, jobid, rr, t_floor):
         """Allocate a resource request in a simulation pool.
@@ -170,6 +171,7 @@ class FIFOScheduler(Scheduler):
                     if job._last_annotation != t_est:
                         job._last_annotation = t_est
                         job.request.annotate({"sched": {"t_estimate": t_est}})
+                    yield
                     continue
                 # Map sim time 0 (no advancement needed) to current wall clock.
                 t_est = max(t, _time.time()) if t is not None else None
@@ -183,6 +185,7 @@ class FIFOScheduler(Scheduler):
 
             if not can_estimate or t is None:
                 can_estimate = False
+                yield
                 continue
 
             # Advance the FIFO floor: the next job cannot start before this one.
@@ -192,6 +195,7 @@ class FIFOScheduler(Scheduler):
                 t_prev = t
             else:
                 can_estimate = False  # unknown end time — cannot chain further
+            yield
 
     def _try_alloc(self, job):
         """Attempt to allocate resources for a job.

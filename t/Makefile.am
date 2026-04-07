@@ -187,6 +187,7 @@ TESTSCRIPTS = \
 	t2305-sched-slow.t \
 	t2306-sched-fifo.t \
 	t2307-sched-backfill.t \
+	t2308-sched-generator.t \
 	t2310-resource-module.t \
 	t2311-resource-drain.t \
 	t2312-resource-exclude.t \
@@ -368,7 +369,8 @@ EXTRA_DIST= \
 	batch \
 	job-manager/dumps \
 	flux-resource \
-	module/testmod.py
+	module/testmod.py \
+	scheduler/sched-slowgen.py
 
 dist_check_SCRIPTS = \
 	$(TESTSCRIPTS) \
