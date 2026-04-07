@@ -4,6 +4,8 @@ test_description='Test command line plugin interface'
 
 . $(dirname $0)/sharness.sh
 
+unset FLUX_CLI_PLUGINPATH_OVERRIDE
+
 export FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/
 
 test_under_flux 1 job
@@ -71,12 +73,34 @@ test_expect_success 'flux-run: validate-only plugins are properly validated' '
 	test_must_fail flux run -o verbose=blekh hostname 2> out5.err &&
 	grep "shell.options.verbose: expected integer, got <class" out5.err
 '
-
+test_expect_success 'flux-alloc: first plugin in FLUX_CLI_PLUGINPATH is honored in name collisions' '
+	FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/:$FLUX_CLI_PLUGINPATH \
+		flux run --help > out6.out &&
+	grep -e "First plugin in path" out6.out
+'
 test_expect_success 'flux-alloc: new plugin with the same name, diff dest/prefix is accepted' '
-	FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/success \
+	FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/:$FLUX_CLI_PLUGINPATH \
 		flux run --help >> help1.out &&
 	grep -e "I am a valid plugin" \
-	     -e "Option for setting AMD SMI compute partitioning" help1.out
+	     -e "Option for setting AMD SMI compute" help1.out
+'
+test_expect_success 'flux-batch: --list-plugins shows only plugins with no option conflicts' '
+	flux batch --list-plugins >> tmp_help_real.out &&
+	grep "loaded from" tmp_help_real.out | wc -l | grep -qx 5
+'
+test_expect_success 'flux-batch: FLUX_CLI_PLUGINPATH_OVERRIDE wins a fight against FLUX_CLI_PLUGINPATH' '
+	FLUX_CLI_PLUGINPATH_OVERRIDE= FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/ \
+		flux batch --list-plugins >> tmp_help_real2.out &&
+	test_must_fail grep -q "cli-plugins/extras" tmp_help_real2.out
+'
+test_expect_success 'flux-batch: --list-plugins observes FLUX_CLI_PLUGINPATH_OVERRIDE' '
+	FLUX_CLI_PLUGINPATH_OVERRIDE= flux batch --list-plugins >> tmp_help_real3.out &&
+	test_must_fail grep -q "etc" tmp_help_real3.out
+'
+test_expect_success 'flux-alloc: default (system) search path shows no plugins by default' '
+	unset FLUX_CLI_PLUGINPATH && 
+	flux run --help >> help2.out &&
+	test_must_fail grep "Options provided by plugins: " help2.out
 '
 test_expect_success 'flux-alloc: plugins with different prefixes and same option name coexist' '
 	FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/sameoption \
