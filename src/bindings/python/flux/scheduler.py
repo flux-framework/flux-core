@@ -42,6 +42,7 @@ to override :meth:`schedule`::
                 else:
                     job.request.success(alloc)
                 heapq.heappop(self._queue)
+                yield   # hand control to the reactor
 
     def mod_main(h, *args):
         MyScheduler(h, *args).run()
@@ -50,6 +51,7 @@ to override :meth:`schedule`::
 import errno
 import functools
 import heapq
+import inspect
 import syslog
 import time
 
@@ -224,9 +226,6 @@ class Scheduler(BrokerModule):
       (e.g. ``8``) for limited mode, or the string ``"unlimited"`` (default).
       The base class translates this to the wire format automatically.
       End users may override at load time with ``queue-depth=N|unlimited``.
-    - ``FORECAST_PERIOD`` — minimum seconds between :meth:`forecast` calls
-      (default 1.0); end users may override at load time with
-      ``forecast-period=N``.
 
     Alloc requests are represented by :class:`AllocRequest` objects passed
     to :meth:`alloc`.  Call ``request.success(R)``, ``request.deny(note)``,
@@ -258,13 +257,6 @@ class Scheduler(BrokerModule):
     #: burst rate and scheduling cost; lower values are more stable.
     #: 0.25 converges in roughly 4 samples.
     SCHED_EWMA_ALPHA = 0.25
-
-    #: Minimum interval in seconds between :meth:`forecast` calls.  During
-    #: scheduling bursts :meth:`forecast` is deferred and coalesced so that
-    #: annotation work runs at most once per ``FORECAST_PERIOD`` seconds,
-    #: keeping it off the critical path of job dispatch.  End users may
-    #: override at load time with ``forecast-period=N``.
-    FORECAST_PERIOD = 1.0
 
     #: If True (the default), send ``partial-ok: True`` in the hello RPC so
     #: that job-manager may report partially-freed ranks for running jobs.
@@ -343,12 +335,30 @@ class Scheduler(BrokerModule):
         self._sched_interval_ewma = 0.0
         self._sched_last_request = None
         self._sched_timer = h.timer_watcher_create(0.0, self._on_sched_timer)
-        # Forecast timer: defers forecast() calls to keep annotation work off
-        # the critical scheduling path.  _forecast_pending is True while the
-        # one-shot timer is armed; subsequent _request_forecast() calls while
-        # it is armed are no-ops, coalescing the burst into a single call.
-        self._forecast_pending = False
-        self._forecast_timer = h.timer_watcher_create(0.0, self._on_forecast_timer)
+        # Generator-based scheduling: when schedule() returns a generator,
+        # the base class steps through it one yield at a time so other reactor
+        # events are handled between yields.
+        # _sched_generator: active generator, or None when idle.
+        # _sched_idle: keeps the reactor spinning while a pass is active.
+        # _sched_check: fires each reactor iteration to advance the generator.
+        self._sched_generator = None
+        self._sched_idle = h.idle_watcher_create()
+        self._sched_check = h.check_watcher_create(self._on_sched_check)
+        # Generator-based forecast: runs immediately after each schedule() pass.
+        # With forecast() as a generator the reactor remains live between
+        # annotations, and a new scheduling event aborts any in-progress pass,
+        # so no separate rate-limiting timer is needed.
+        # _forecast_generator: active generator, or None when idle.
+        # _forecast_idle: keeps the reactor spinning while a pass is active.
+        # _forecast_check: fires each reactor iteration to advance the generator.
+        self._forecast_generator = None
+        self._forecast_idle = h.idle_watcher_create()
+        self._forecast_check = h.check_watcher_create(self._on_forecast_check)
+        # Scheduling statistics, exposed via the stats-get RPC.
+        self._sched_passes = 0
+        self._sched_yields = 0
+        self._forecast_passes = 0
+        self._forecast_yields = 0
         self._pending_args = []
         for arg in args:
             if arg.startswith("queue-depth="):
@@ -387,17 +397,6 @@ class Scheduler(BrokerModule):
                         f"expected one of {', '.join(self._LOG_LEVEL_NAMES)}"
                     )
                 self.log_level = self._LOG_LEVEL_NAMES[name]
-            elif arg.startswith("forecast-period="):
-                val = arg[16:]
-                try:
-                    v = float(val)
-                    if v <= 0:
-                        raise ValueError
-                    self.FORECAST_PERIOD = v
-                except ValueError:
-                    raise ValueError(
-                        f"forecast-period must be a positive number, got {val!r}"
-                    )
             else:
                 self._pending_args.append(arg)
 
@@ -410,7 +409,7 @@ class Scheduler(BrokerModule):
         if self._pending_args:
             raise ValueError(
                 f"unknown argument {self._pending_args[0]!r}: "
-                f"built-in options are queue-depth, log-level, forecast-period"
+                f"built-in options are queue-depth, log-level"
             )
 
     # ------------------------------------------------------------------
@@ -443,20 +442,16 @@ class Scheduler(BrokerModule):
         """Request a scheduling pass, coalescing bursts via an adaptive timer.
 
         Records the time of the request and updates the inter-request interval
-        exponential moving average.  Arms the one-shot scheduling timer if it
-        is not already pending; subsequent calls while the timer is armed are
-        recorded for moving-average purposes but do not re-arm the timer,
-        coalescing all requests in the window into a single :meth:`schedule`
-        call.
+        exponential moving average, then delegates to :meth:`start_schedule`.
 
-        The timer delay starts at zero (fires on the next reactor iteration,
-        same as the previous prepare/check/idle behaviour) and adjusts
-        automatically: when alloc requests arrive faster than :meth:`schedule`
-        can process them, the delay grows toward the measured schedule
-        duration (capped at :attr:`SCHED_DELAY_MAX`) to coalesce the burst.
-        When requests become infrequent again the delay resets to zero,
-        preserving low latency for normal operation.
+        Subclasses that want to replace the generator-based scheduling driver
+        should override :meth:`start_schedule` rather than this method.
+        Overriding :meth:`start_schedule` preserves the EWMA interval tracking
+        done here, which is needed for accurate burst-coalescing delay
+        computation.
         """
+        if not self._queue:
+            return
         now = time.monotonic()
         if self._sched_last_request is not None:
             interval = now - self._sched_last_request
@@ -465,17 +460,85 @@ class Scheduler(BrokerModule):
                 a * interval + (1 - a) * self._sched_interval_ewma
             )
         self._sched_last_request = now
+        self.start_schedule()
+
+    def start_schedule(self):
+        """Arm the scheduling timer, aborting any in-progress generator pass.
+
+        Called by :meth:`_request_schedule` after the EWMA interval update.
+        Override this method (not :meth:`_request_schedule`) to replace the
+        generator-based scheduling loop with an alternative driver, while still
+        benefiting from the burst-coalescing delay computed in
+        :meth:`_request_schedule`.
+
+        The default implementation:
+
+        1. Closes any in-progress :meth:`schedule` or :meth:`forecast`
+           generator and stops its yield watchers (resource state is about to
+           change so in-progress results are stale).
+        2. Arms the one-shot scheduling timer with the current adaptive delay
+           if it is not already pending.  Subsequent calls while the timer is
+           armed are no-ops, coalescing all events in the window into a single
+           :meth:`schedule` invocation.
+        """
+        # If a schedule or forecast generator pass is in progress, abort it:
+        # close the generator and stop the step watchers.  Resource state is
+        # about to change so any in-progress estimates are stale anyway.
+        # The schedule timer will be re-armed below with the adaptive settling
+        # delay so the new pass starts cleanly.
+        if self._sched_generator is not None:
+            self._sched_generator.close()
+            self._sched_generator = None
+            self._sched_idle.stop()
+            self._sched_check.stop()
+        if self._forecast_generator is not None:
+            self._forecast_generator.close()
+            self._forecast_generator = None
+            self._forecast_idle.stop()
+            self._forecast_check.stop()
         if not self._sched_pending:
             self._sched_pending = True
             self._sched_timer.reset(after=self._sched_delay)
 
     def _on_sched_timer(self, *_):
-        """Timer callback: run schedule() and update the adaptive delay."""
+        """Timer callback: invoke schedule() and dispatch the result.
+
+        If ``schedule()`` returns a generator the base class advances it one
+        yield per reactor iteration via the idle/check watcher pair so that
+        other events are handled between yields.  If it returns ``None``
+        (non-generator subclasses) the call completes synchronously as before.
+        """
         self._sched_pending = False
         t0 = time.monotonic()
-        self.schedule()
-        duration = time.monotonic() - t0
+        result = self.schedule()
+        # A scheduler implementation uses one style consistently: either
+        # generator-based (schedule() returns a generator) or synchronous
+        # (returns None).  The check is per-call for convenience; mixing
+        # the two styles within a single scheduler is not supported.
+        if inspect.isgenerator(result):
+            # Hand off to the yield watchers.
+            self._sched_generator = result
+            self._sched_idle.start()
+            self._sched_check.start()
+        else:
+            # Non-generator (old-style) schedule(): update EWMA synchronously.
+            self._update_sched_ewma(time.monotonic() - t0)
+            self._request_forecast()
 
+    def _on_sched_check(self, *_):
+        """Check-watcher callback: advance the generator by one yield."""
+        try:
+            next(self._sched_generator)
+        except StopIteration:
+            self._sched_generator = None
+            self._sched_idle.stop()
+            self._sched_check.stop()
+            # EWMA is not updated for generator-based schedulers: burst-coalescing
+            # delay remains 0 and the timer fires on the next reactor iteration.
+            self._request_forecast()
+
+    def _update_sched_ewma(self, duration):
+        """Update the adaptive scheduling delay from a completed pass duration."""
         a = self.SCHED_EWMA_ALPHA
         self._sched_duration_ewma = a * duration + (1 - a) * self._sched_duration_ewma
 
@@ -502,28 +565,38 @@ class Scheduler(BrokerModule):
             else:
                 self.log(syslog.LOG_DEBUG, "sched: burst ended, delay=0")
 
-        self._request_forecast()
-
     # ------------------------------------------------------------------
-    # Forecast timer
+    # Forecast
     # ------------------------------------------------------------------
 
     def _request_forecast(self):
-        """Request a forecast pass, rate-limited to :attr:`FORECAST_PERIOD`.
+        """Start a forecast pass immediately after a schedule() pass completes.
 
-        Arms the one-shot forecast timer if it is not already pending.
-        Subsequent calls while the timer is armed are no-ops, so a burst of
-        :meth:`schedule` calls results in a single :meth:`forecast` call
-        :attr:`FORECAST_PERIOD` seconds after the first request in the burst.
+        If a forecast generator is already in progress it is left running;
+        the existing pass already reflects the current state.  A running
+        forecast is aborted by :meth:`_request_schedule` when resource state
+        changes, so stale results are never committed.
         """
-        if not self._forecast_pending:
-            self._forecast_pending = True
-            self._forecast_timer.reset(after=self.FORECAST_PERIOD)
+        if not self._queue:
+            return
+        if self._forecast_generator is not None:
+            return  # already running — let it finish
+        result = self.forecast()
+        # Same style consistency applies to forecast(): generator or
+        # synchronous, but not mixed within a single scheduler.
+        if inspect.isgenerator(result):
+            self._forecast_generator = result
+            self._forecast_idle.start()
+            self._forecast_check.start()
 
-    def _on_forecast_timer(self, *_):
-        """Timer callback: run forecast()."""
-        self._forecast_pending = False
-        self.forecast()
+    def _on_forecast_check(self, *_):
+        """Check-watcher callback: advance the forecast generator by one yield."""
+        try:
+            next(self._forecast_generator)
+        except StopIteration:
+            self._forecast_generator = None
+            self._forecast_idle.stop()
+            self._forecast_check.stop()
 
     # ------------------------------------------------------------------
     # Alloc response implementation (called via AllocRequest)
@@ -618,6 +691,38 @@ class Scheduler(BrokerModule):
         events arrive in rapid bursts the timer delay grows to coalesce them
         into fewer :meth:`schedule` calls; when events are infrequent the
         delay returns to zero so that each event is processed promptly.
+
+        **Generator protocol** — if this method returns a generator
+        the base class advances it one yield per reactor iteration, allowing
+        other events (new jobs, free responses, RPCs) to be handled between
+        yields.
+        Yield at each point where reactor responsiveness is desired — typically
+        after each dispatched or denied job, but also when blocking on
+        resources::
+
+            def schedule(self):
+                while self._queue:
+                    job = self._queue[0]
+                    try:
+                        alloc = self.resources.alloc(job.jobid, job.resource_request)
+                    except InsufficientResources:
+                        break
+                    except InfeasibleRequest as exc:
+                        job.request.deny(str(exc))
+                    else:
+                        job.request.success(alloc)
+                    heapq.heappop(self._queue)
+                    yield  # hand control back to the reactor
+
+        When a new scheduling event arrives while a generator pass is in
+        progress the base class closes the generator (triggering any
+        ``finally`` blocks) and starts a fresh pass after the settling delay.
+        This ensures a newly submitted high-priority job or a freed resource
+        is considered from the top of the queue without waiting for the
+        current pass to finish.
+
+        Non-generator ``schedule()`` implementations (no ``yield``) behave
+        exactly as before and remain fully supported.
         """
 
     def hello(self, jobid, priority, userid, t_submit, R):
@@ -714,11 +819,17 @@ class Scheduler(BrokerModule):
         forward-looking annotations) on pending jobs.  The base class
         implementation is a no-op.
 
-        Triggered automatically after each :meth:`schedule` call, but
-        rate-limited to at most once per :attr:`FORECAST_PERIOD` seconds so
-        that annotation work is kept off the critical scheduling path during
-        bursts.  End users may tune the rate with ``forecast-period=N`` at
-        module load time.
+        Triggered automatically after each :meth:`schedule` call completes.
+        If a forecast pass is already in progress it is left running; it will
+        be aborted (and restarted after the next :meth:`schedule` completion)
+        if a scheduling event arrives in the meantime.
+
+        Supports the same **generator protocol** as :meth:`schedule`: add
+        ``yield`` at each desired reactor handoff point — typically after each
+        annotated job — to return control to the reactor between annotations.
+        If a new scheduling event arrives while a forecast generator is in
+        progress, the base class closes it and discards the partial results —
+        the next :meth:`schedule` completion will trigger a fresh forecast pass.
         """
 
     def expiration(self, msg, jobid, expiration):
