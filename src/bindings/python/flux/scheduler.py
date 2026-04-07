@@ -522,6 +522,7 @@ class Scheduler(BrokerModule):
             self._sched_check.start()
         else:
             # Non-generator (old-style) schedule(): update EWMA synchronously.
+            self._sched_passes += 1
             self._update_sched_ewma(time.monotonic() - t0)
             self._request_forecast()
 
@@ -529,7 +530,9 @@ class Scheduler(BrokerModule):
         """Check-watcher callback: advance the generator by one yield."""
         try:
             next(self._sched_generator)
+            self._sched_yields += 1
         except StopIteration:
+            self._sched_passes += 1
             self._sched_generator = None
             self._sched_idle.stop()
             self._sched_check.stop()
@@ -593,7 +596,9 @@ class Scheduler(BrokerModule):
         """Check-watcher callback: advance the forecast generator by one yield."""
         try:
             next(self._forecast_generator)
+            self._forecast_yields += 1
         except StopIteration:
+            self._forecast_passes += 1
             self._forecast_generator = None
             self._forecast_idle.stop()
             self._forecast_check.stop()
@@ -1001,6 +1006,60 @@ class Scheduler(BrokerModule):
                 < 0
             ):
                 self.stop_error()
+
+    @request_handler("stats-get")
+    def _handle_stats_get(self, msg):
+        self.handle.respond(msg, self.stats_get())
+
+    def stats_get(self):
+        """Return a dict of scheduler statistics for the stats-get RPC.
+
+        Called by the built-in ``<module-name>.stats-get`` handler.
+        Subclasses may override to add extra fields; call ``super().stats_get()``
+        and update the returned dict:
+
+        .. code-block:: python
+
+            def stats_get(self):
+                stats = super().stats_get()
+                stats["my_counter"] = self._my_counter
+                return stats
+
+        Standard fields:
+
+        ``sched_passes``
+            Number of completed :meth:`schedule` passes.
+        ``sched_yields``
+            Total yields across all :meth:`schedule` generator passes
+            (always 0 for synchronous schedulers).
+        ``forecast_passes``
+            Number of completed :meth:`forecast` passes.
+        ``forecast_yields``
+            Total yields across all :meth:`forecast` generator passes
+            (always 0 for synchronous schedulers).
+        ``sched_delay``
+            Current adaptive burst-coalescing delay in seconds (0 = immediate).
+            Always 0 for generator-based schedulers.
+        ``sched_duration_ewma``
+            EWMA of :meth:`schedule` wall-clock duration in seconds.
+            Always 0 for generator-based schedulers.
+        ``sched_interval_ewma``
+            EWMA of time between :meth:`_request_schedule` calls in seconds.
+            Tracked for all schedulers but does not affect ``sched_delay``
+            for generator-based schedulers.
+        ``pending_jobs``
+            Current number of pending alloc requests in the scheduler queue.
+        """
+        return {
+            "sched_passes": self._sched_passes,
+            "sched_yields": self._sched_yields,
+            "forecast_passes": self._forecast_passes,
+            "forecast_yields": self._forecast_yields,
+            "sched_delay": self._sched_delay,
+            "sched_duration_ewma": self._sched_duration_ewma,
+            "sched_interval_ewma": self._sched_interval_ewma,
+            "pending_jobs": len(self._queue),
+        }
 
     # ------------------------------------------------------------------
     # Internal: RFC 27 initialization helpers
