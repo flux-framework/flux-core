@@ -1273,6 +1273,26 @@ test_expect_success 'flux-jobs invalid sort key throws exception' '
 	test_must_fail flux jobs -a --sort=foo 2>sort.error &&
 	grep "Invalid sort key: foo" sort.error
 '
+# The following tests are reproducers for issue #7517 where sorting fields
+# with mixed types (empty strings and numeric values) caused command failure.
+# These tests verify the command succeeds without crashing.
+test_expect_success 'flux-jobs can sort by nnodes with mixed empty values (issue #7517)' '
+	flux jobs -a -o "sort:nnodes {id.f58} {nnodes}" >sort-nnodes.out &&
+	test_debug "cat sort-nnodes.out"
+'
+test_expect_success 'flux-jobs can sort by ntasks with mixed empty values (issue #7517)' '
+	flux jobs -a -o "sort:ntasks {id.f58} {ntasks}" >sort-ntasks.out &&
+	test_debug "cat sort-ntasks.out"
+'
+test_expect_success 'flux-jobs can reverse sort mixed-type fields (issue #7517)' '
+	flux jobs -a -o "sort:-nnodes {id.f58} {nnodes}" >sort-nnodes-rev.out &&
+	test_debug "cat sort-nnodes-rev.out"
+'
+test_expect_success 'empty values sort before numeric values' '
+	flux jobs -ano "sort:nnodes {nnodes:h}" >sort-nnodes-order.out &&
+	head -1 sort-nnodes-order.out | grep -q "^-$" &&
+	tail -1 sort-nnodes-order.out | grep -q "^[0-9]"
+'
 
 #
 # format header tests.

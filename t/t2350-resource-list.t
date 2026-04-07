@@ -684,4 +684,14 @@ test_expect_success 'list.hidden-queues not overwritten when format added in sep
 test_expect_success 'cleanup jobs' '
 	flux cancel $(cat job2A.id) $(cat job2B.id)
 '
+test_expect_success 'flux resource list: can sort by nnodes (issue #7517)' '
+	flux resource list -o "sort:nnodes {nnodes} {state}" \
+		>list-sort-nnodes.out &&
+	test_debug "cat list-sort-nnodes.out"
+'
+test_expect_success 'flux resource list: can reverse sort by nnodes (issue #7517)' '
+	flux resource list -o "sort:-nnodes {nnodes} {state}" \
+		>list-sort-nnodes-rev.out &&
+	test_debug "cat list-sort-nnodes-rev.out"
+'
 test_done
