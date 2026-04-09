@@ -4,9 +4,7 @@ test_description='Test command line plugin interface'
 
 . $(dirname $0)/sharness.sh
 
-unset FLUX_CLI_PLUGINPATH_OVERRIDE
-
-export FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/
+export FLUX_CLI_PLUGINPATH_OVERRIDE=${SHARNESS_TEST_SRCDIR}/cli-plugins/
 
 test_under_flux 1 job
 
@@ -73,13 +71,13 @@ test_expect_success 'flux-run: validate-only plugins are properly validated' '
 	test_must_fail flux run -o verbose=blekh hostname 2> out5.err &&
 	grep "shell.options.verbose: expected integer, got <class" out5.err
 '
-test_expect_success 'flux-alloc: first plugin in FLUX_CLI_PLUGINPATH is honored in name collisions' '
-	FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/:$FLUX_CLI_PLUGINPATH \
+test_expect_success 'flux-run: first plugin in FLUX_CLI_PLUGINPATH is honored in name collisions' '
+	FLUX_CLI_PLUGINPATH_OVERRIDE=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/:$FLUX_CLI_PLUGINPATH_OVERRIDE \
 		flux run --help > out6.out &&
 	grep -e "First plugin in path" out6.out
 '
-test_expect_success 'flux-alloc: new plugin with the same name, diff dest/prefix is accepted' '
-	FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/:$FLUX_CLI_PLUGINPATH \
+test_expect_success 'flux-run: new plugin with the same name, diff dest/prefix is accepted' '
+	FLUX_CLI_PLUGINPATH_OVERRIDE=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/:$FLUX_CLI_PLUGINPATH_OVERRIDE \
 		flux run --help >> help1.out &&
 	grep -e "I am a valid plugin" \
 	     -e "Option for setting AMD SMI compute" help1.out
@@ -97,13 +95,12 @@ test_expect_success 'flux-batch: --list-plugins observes FLUX_CLI_PLUGINPATH_OVE
 	FLUX_CLI_PLUGINPATH_OVERRIDE= flux batch --list-plugins >> tmp_help_real3.out &&
 	test_must_fail grep -q "etc" tmp_help_real3.out
 '
-test_expect_success 'flux-alloc: default (system) search path shows no plugins by default' '
-	unset FLUX_CLI_PLUGINPATH && 
-	flux run --help >> help2.out &&
+test_expect_success 'flux-run: empty search path shows no plugins by default' '
+	FLUX_CLI_PLUGINPATH_OVERRIDE="" flux run --help >> help2.out &&
 	test_must_fail grep "Options provided by plugins: " help2.out
 '
-test_expect_success 'flux-alloc: plugins with different prefixes and same option name coexist' '
-	FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/sameoption \
+test_expect_success 'flux-run: plugins with different prefixes and same option name coexist' '
+	FLUX_CLI_PLUGINPATH_OVERRIDE=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/sameoption:$FLUX_CLI_PLUGINPATH_OVERRIDE \
 		flux run --help > out6.out &&
 	grep -e "--ex-gpumode" -e "--amd-gpumode" out6.out
 '

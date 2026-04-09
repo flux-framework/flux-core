@@ -121,16 +121,16 @@ class TestMakeAlias(unittest.TestCase):
         # Empty plugin dir so the registry loads no plugins from disk;
         # plugins are constructed inline in each test.
         self._plugin_dir = tempfile.mkdtemp()
-        self._saved = os.environ.get("FLUX_CLI_PLUGINPATH")
-        os.environ["FLUX_CLI_PLUGINPATH"] = self._plugin_dir
+        self._saved = os.environ.get("FLUX_CLI_PLUGINPATH_OVERRIDE")
+        os.environ["FLUX_CLI_PLUGINPATH_OVERRIDE"] = self._plugin_dir
         self._registry = CLIPluginRegistry("submit")
 
     def tearDown(self):
         shutil.rmtree(self._plugin_dir)
         if self._saved is None:
-            os.environ.pop("FLUX_CLI_PLUGINPATH", None)
+            os.environ.pop("FLUX_CLI_PLUGINPATH_OVERRIDE", None)
         else:
-            os.environ["FLUX_CLI_PLUGINPATH"] = self._saved
+            os.environ["FLUX_CLI_PLUGINPATH_OVERRIDE"] = self._saved
 
     def test_01_prefixed_plugin_alias_maps_old_to_new(self):
         # a plugin with a prefix gets an alias from unprefixed to prefixed dest
@@ -198,13 +198,13 @@ class TestConflictDetection(unittest.TestCase):
     )
 
     def setUp(self):
-        self._saved = os.environ.get("FLUX_CLI_PLUGINPATH")
+        self._saved = os.environ.get("FLUX_CLI_PLUGINPATH_OVERRIDE")
 
     def tearDown(self):
         if self._saved is None:
-            os.environ.pop("FLUX_CLI_PLUGINPATH", None)
+            os.environ.pop("FLUX_CLI_PLUGINPATH_OVERRIDE", None)
         else:
-            os.environ["FLUX_CLI_PLUGINPATH"] = self._saved
+            os.environ["FLUX_CLI_PLUGINPATH_OVERRIDE"] = self._saved
 
     def test_01_same_prefix_same_name_first_wins(self):
         # two plugins with the same prefix and option produce identical dests
@@ -213,7 +213,7 @@ class TestConflictDetection(unittest.TestCase):
                 f.write(self.PLUGIN_SITE)
             with open(os.path.join(d, "b.py"), "w") as f:
                 f.write(self.PLUGIN_SITE2)
-            os.environ["FLUX_CLI_PLUGINPATH"] = d
+            os.environ["FLUX_CLI_PLUGINPATH_OVERRIDE"] = d
             registry = CLIPluginRegistry("submit")
             self.assertEqual(len(registry.plugins), 1)
 
@@ -224,7 +224,7 @@ class TestConflictDetection(unittest.TestCase):
                 f.write(self.PLUGIN_SITE)
             with open(os.path.join(d, "b.py"), "w") as f:
                 f.write(self.PLUGIN_VENDOR)
-            os.environ["FLUX_CLI_PLUGINPATH"] = d
+            os.environ["FLUX_CLI_PLUGINPATH_OVERRIDE"] = d
             registry = CLIPluginRegistry("submit")
             dests = {opt.dest for opt in registry.options}
             self.assertIn("site_my_option", dests)
