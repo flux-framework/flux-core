@@ -45,6 +45,8 @@ List active and zombie subprocesses.
    field names include **pid**, **state**, **label**, **rank**, and **cmd**.
    The default format is ``{pid:>9} {state:<2} {label:<12} {cmd}``.
 
+   .. include:: common/format-sort.rst
+
 .. option:: -n, --no-header
 
    Suppress printing of header line.

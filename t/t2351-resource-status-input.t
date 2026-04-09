@@ -271,4 +271,24 @@ test_expect_success 'flux-resource status: all torpid ranks shown without drain 
 	EOF
 	test_cmp torpid-only.expected torpid-only.out
 '
+test_expect_success 'flux-resource status: can sort by nnodes (issue #7517)' '
+	INPUT=${INPUTDIR}/drain.json &&
+	flux resource status --from-stdin -o "sort:nnodes {nnodes} {state}" \
+		< $INPUT >sort-nnodes.out 2>&1 &&
+	test_debug "cat sort-nnodes.out"
+'
+test_expect_success 'flux-resource status: can sort by timestamp (issue #7517)' '
+	INPUT=${INPUTDIR}/drain.json &&
+	flux resource status --from-stdin \
+		-o "sort:timestamp {timestamp!d:%b%d} {nnodes} {state}" \
+		< $INPUT >sort-timestamp.out 2>&1 &&
+	test_debug "cat sort-timestamp.out"
+'
+test_expect_success 'flux-resource status: can reverse sort by nnodes (issue #7517)' '
+	INPUT=${INPUTDIR}/drain.json &&
+	flux resource status --from-stdin \
+		-o "sort:-nnodes {nnodes} {state}" \
+		< $INPUT >sort-nnodes-rev.out 2>&1 &&
+	test_debug "cat sort-nnodes-rev.out"
+'
 test_done

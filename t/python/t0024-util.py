@@ -22,6 +22,7 @@ from unittest.mock import patch
 import subflux  # noqa: F401 - To set up PYTHONPATH
 from flux.util import (
     ColorAction,
+    DisplayValue,
     OutputFormat,
     UtilDatetime,
     del_treedict,
@@ -265,6 +266,130 @@ class TestOutputFormat(unittest.TestCase):
         formatter.set_sort_keys("f")
         formatter.sort_items(items)
         self.assertListEqual(items, [z, d, a])
+
+    def test_sort_mixed_types(self):
+        """Test sorting fields with mixed types (issue #7517)"""
+        # Create items with mixed types - some fields are empty strings,
+        # others are numbers
+        a = Item("a", "", 2.2)  # empty int
+        b = Item("b", 10, "")  # empty float
+        c = Item("c", 5, 1.5)  # both set
+        d = Item("d", "", "")  # both empty
+
+        # Sort by integer field with mixed types (empty strings and ints)
+        items = [c, a, b, d]
+        formatter = OutputFormat("{s}:{i}:{f}", headings=self.headings)
+        formatter.set_sort_keys("i")
+        formatter.sort_items(items)
+        # Empty strings should sort before numbers
+        self.assertListEqual(items, [a, d, c, b])
+
+        # Sort by float field with mixed types (empty strings and floats)
+        items = [c, a, b, d]
+        formatter.set_sort_keys("f")
+        formatter.sort_items(items)
+        # Empty strings should sort before numbers
+        self.assertListEqual(items, [b, d, c, a])
+
+        # Reverse sort with mixed types
+        items = [c, a, b, d]
+        formatter.set_sort_keys("-i")
+        formatter.sort_items(items)
+        # Numbers (reversed) should sort before empty strings
+        # Empty strings with equal keys maintain input order (stable sort)
+        self.assertListEqual(items, [b, c, a, d])
+
+        # Test with booleans in the mix
+        e = Item("e", True, 3.3)
+        f = Item("f", False, 4.4)
+        g = Item("g", 1, 5.5)
+        items = [g, e, a, f, c]
+        formatter.set_sort_keys("i")
+        formatter.sort_items(items)
+        # Order: empty < False(0) < True(1) == 1 < 5
+        # True and 1 are numerically equal, so stable sort preserves input
+        # order (g before e)
+        self.assertListEqual(items, [a, f, g, e, c])
+
+        # Test with string types - numeric strings parse as numbers
+        h = Item("h", "100", 6.6)  # string that looks like number
+        i = Item("i", "abc", 7.7)  # regular string
+        j = Item("j", "10", 8.8)  # another numeric string
+        items = [i, c, h, a, j]
+        formatter.set_sort_keys("i")
+        formatter.sort_items(items)
+        # Order: empty < numbers (5 < 10 < 100, parsed from strings) < non-numeric strings
+        self.assertListEqual(items, [a, c, j, h, i])
+
+        # Test None, hyphen, and unset values
+        k = Item("k", None, 9.9)  # None value
+        hyphen = Item("l", "-", 10.0)  # hyphen (also treated as unset)
+        items = [c, k, a, hyphen]
+        formatter.set_sort_keys("i")
+        formatter.sort_items(items)
+        # Order: None/empty/hyphen all sort first, then numbers
+        # Within unset values, stable sort maintains input order
+        self.assertListEqual(items, [k, a, hyphen, c])
+
+        # Test negative numbers (int and string)
+        m = Item("m", -5, 11.0)  # negative int
+        n = Item("n", "-10", 12.0)  # negative numeric string
+        items = [c, m, n, a]
+        formatter.set_sort_keys("i")
+        formatter.sort_items(items)
+        # Order: empty < -10 < -5 < 5
+        self.assertListEqual(items, [a, n, m, c])
+
+        # Test float strings
+        o = Item("o", "3.14", 13.0)  # float string
+        p = Item("p", "2.5", 14.0)  # another float string
+        items = [c, o, p]
+        formatter.set_sort_keys("i")
+        formatter.sort_items(items)
+        # Order: 2.5 < 3.14 < 5
+        self.assertListEqual(items, [p, o, c])
+
+    def test_display_value(self):
+        """Test DisplayValue class corner cases directly"""
+        # Partially numeric strings should fall back to string comparison
+        # "10abc" cannot be parsed as float, so sorts as string after numbers
+        self.assertTrue(DisplayValue(100) < DisplayValue("10abc"))
+        self.assertTrue(DisplayValue("10abc") < DisplayValue("abc"))
+
+        # Scientific notation should parse as numeric
+        self.assertTrue(DisplayValue("1e5") < DisplayValue(1000000))
+        self.assertEqual(
+            DisplayValue("1e5")._type_order, DisplayValue.NUMERIC
+        )  # numeric type
+        self.assertAlmostEqual(DisplayValue("1e5")._sort_value, 100000.0)
+
+        # Equality: numeric string should equal numeric value
+        self.assertEqual(DisplayValue("10"), DisplayValue(10))
+        self.assertEqual(DisplayValue("10.0"), DisplayValue(10.0))
+        self.assertEqual(DisplayValue(True), DisplayValue(1))
+
+        # All unset values should be equal
+        self.assertEqual(DisplayValue(None), DisplayValue(""))
+        self.assertEqual(DisplayValue(""), DisplayValue("-"))
+        self.assertEqual(DisplayValue(None), DisplayValue("-"))
+
+        # Type order verification
+        self.assertEqual(DisplayValue(None)._type_order, DisplayValue.EMPTY)  # unset
+        self.assertEqual(DisplayValue("")._type_order, DisplayValue.EMPTY)  # unset
+        self.assertEqual(DisplayValue("-")._type_order, DisplayValue.EMPTY)  # unset
+        self.assertEqual(DisplayValue(5)._type_order, DisplayValue.NUMERIC)  # numeric
+        self.assertEqual(
+            DisplayValue("10")._type_order, DisplayValue.NUMERIC
+        )  # parsed numeric
+        self.assertEqual(DisplayValue("abc")._type_order, DisplayValue.STRING)  # string
+
+        # Negative numbers
+        self.assertTrue(DisplayValue("-10") < DisplayValue("10"))
+        self.assertTrue(DisplayValue("-10") < DisplayValue(0))
+
+        # Float vs int - should compare numerically
+        self.assertEqual(DisplayValue(5), DisplayValue(5.0))
+        self.assertEqual(DisplayValue("5"), DisplayValue(5.0))
 
     def test_issue6530(self):
         a = Item("1234567890", 0, 2.2)

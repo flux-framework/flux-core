@@ -115,7 +115,8 @@ OPTIONS
    Sort jobs based on a list of comma separated keys. If a KEY is preceded
    by a dash ``-``, then the sort order is reversed. Supported keys match
    output field names, e.g. ``id``, ``t_run``, etc. This option overrides
-   any ``sort:`` prefix specified in the current format.
+   any ``sort:`` prefix specified in the current format. See `OUTPUT FORMAT`_
+   for more information on sort keys.
 
 .. option:: --json
 
@@ -272,11 +273,10 @@ following is the format used for the default format:
    {status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} \
    {contextual_time!F:>8h} {contextual_info}
 
-If the format string begins with ``sort:k1[,k2,...]``, then ``k1[,k2,...]``
-will be taken to be a comma-separated list of keys on which to sort
-the displayed output. If a sort key starts with ``-``, then the key
-will be sorted in reverse order. The sort order embedded in the format
- may be overridden on the command line by the :option:`--sort` option.
+.. include:: common/format-sort.rst
+
+The sort order embedded in the format may be overridden on the command line
+by the :option:`--sort` option.
 
 If a format field is preceded by the special string ``?:`` this will
 cause the field to be removed entirely from output if the result would

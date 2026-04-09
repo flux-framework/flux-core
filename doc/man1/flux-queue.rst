@@ -213,6 +213,8 @@ A configuration snippet for an existing named format may be
 generated with :option:`--format=get-config=NAME`.  See :man1:`flux-jobs`
 *OUTPUT FORMAT* section for a detailed description of this syntax.
 
+.. include:: common/format-sort.rst
+
 The following field names can be specified:
 
 **queue**

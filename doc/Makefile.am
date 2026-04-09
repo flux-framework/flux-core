@@ -432,6 +432,7 @@ $(RST_FILES): \
 	man1/common/job-shell-options.rst \
 	man1/common/job-mustache-templates.rst \
 	man1/common/color.rst \
+	man1/common/format-sort.rst \
 	man3/common/resources.rst \
 	man3/common/experimental.rst \
 	man3/common/json_pack.rst \
@@ -537,6 +538,7 @@ EXTRA_DIST = \
 	man1/common/job-shell-options.rst \
 	man1/common/job-mustache-templates.rst \
 	man1/common/color.rst \
+	man1/common/format-sort.rst \
 	man3/common/resources.rst \
 	man3/common/experimental.rst \
 	man3/index.rst \
