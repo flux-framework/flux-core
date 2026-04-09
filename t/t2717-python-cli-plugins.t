@@ -104,4 +104,9 @@ test_expect_success 'flux-run: plugins with different prefixes and same option n
 		flux run --help > out6.out &&
 	grep -e "--ex-gpumode" -e "--amd-gpumode" out6.out
 '
+test_expect_success 'flux-run: plugins cannot override our base cli long options' '
+	(export FLUX_CLI_PLUGINPATH_OVERRIDE=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/nodes:$FLUX_CLI_PLUGINPATH_OVERRIDE &&
+	test_must_fail flux run --help 2> out6.out) &&
+	grep "conflicting option string" out6.out
+'
 test_done
