@@ -27,6 +27,7 @@ fluxlibexec_SCRIPTS = \
 
 # Install empty modprobe/*.d directories after rc1.py and rc3.py are installed
 # Install empty fluxlibexecdir/{prolog,epilog,housekeeping}.d directories
+# Install empty fluxlibexecdir/cli/plugins directory
 install-data-hook:
 	for dir in $(fluxconfdir) $(fluxdatadir); do \
 	  $(MKDIR_P) $(DESTDIR)$$dir/modprobe/modprobe.d; \
@@ -35,7 +36,7 @@ install-data-hook:
 	  $(MKDIR_P) $(DESTDIR)$$dir/modprobe/rc1.d; \
 	  $(MKDIR_P) $(DESTDIR)$$dir/modprobe/rc3.d; \
 	done
-	for dir in prolog.d epilog.d housekeeping.d; do \
+	for dir in prolog.d epilog.d housekeeping.d cli/plugins; do \
 	  $(MKDIR_P) $(DESTDIR)$(fluxlibexecdir)/$$dir; \
 	done
 
