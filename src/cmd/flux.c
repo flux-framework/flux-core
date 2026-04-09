@@ -442,15 +442,30 @@ static void similar_check (struct similar_cmds *similar,
                            const char *cmd)
 {
     int distance = levenshtein_distance (cmd, similar->argv0);
-    if (distance > 0 && distance <= similar->min) {
-        if (distance < similar->min) {
-            zlist_purge (similar->cmds);
-            similar->min = distance;
+    if (distance > 0) {
+        /* Heuristic: If the invalid command perfectly prefixes the
+         * valid command, we give it a bonus by removing 1 from the
+         * distance.
+         *
+         * If the prefix match is pretty long, they get an extra bonus
+         * and the distance is declared to be 0.
+         */
+        if (strstarts (cmd, similar->argv0)) {
+            if (strlen (similar->argv0) >= 5)
+                distance = 0;
+            else
+                distance--;
         }
-        if (similar_dupcheck (similar, cmd)) {
-            char *cpy = xstrdup (cmd);
-            zlist_append (similar->cmds, cpy);
-            zlist_freefn (similar->cmds, cpy, free, true);
+        if (distance <= similar->min) {
+            if (distance < similar->min) {
+                zlist_purge (similar->cmds);
+                similar->min = distance;
+            }
+            if (similar_dupcheck (similar, cmd)) {
+                char *cpy = xstrdup (cmd);
+                zlist_append (similar->cmds, cpy);
+                zlist_freefn (similar->cmds, cpy, free, true);
+            }
         }
     }
 }
