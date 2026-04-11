@@ -53,8 +53,10 @@ import functools
 import heapq
 import importlib.util
 import inspect
+import json
 import syslog
 import time
+import urllib.parse
 
 from _flux._core import ffi, lib
 from flux.brokermod import BrokerModule, request_handler
@@ -419,6 +421,9 @@ class Scheduler(BrokerModule):
                         f"expected one of {', '.join(self._LOG_LEVEL_NAMES)}"
                     )
                 self.log_level = self._LOG_LEVEL_NAMES[name]
+            elif arg.startswith("pool-class="):
+                uri = arg[len("pool-class=") :]
+                self.pool_class = self._pool_class_from_uri(uri)
             else:
                 self._pending_args.append(arg)
 
@@ -1094,18 +1099,97 @@ class Scheduler(BrokerModule):
         """Register a dynamic service by name (synchronous)."""
         self.handle.service_register(name).get()
 
+    def _pool_class_from_writer(self, R):
+        """Return a pool class derived from R.scheduling.writer, or None.
+
+        Per RFC 20, an absent ``scheduling`` key means no custom pool is
+        needed (returns ``None``).  An absent ``writer`` within a present
+        ``scheduling`` key defaults to ``"fluxion"``.
+
+        Supports two URI forms:
+
+        ``file:///path/to/Pool.py``
+            Load the pool class from the given file.  The class name is
+            derived from the filename stem (e.g. ``RackPool.py`` →
+            ``RackPool``).  An optional ``#ClassName`` fragment overrides
+            the stem-derived name.
+
+        ``scheme`` or ``scheme:path``
+            Import the module named by the scheme (hyphens converted to
+            underscores).  If a path component is present it is used as the
+            literal class name (e.g. ``fluxion:rv1shorthand`` →
+            ``getattr(fluxion, "rv1shorthand")``).  If absent, the module's
+            ``pool_class`` attribute is used as the default
+            (e.g. ``fluxion`` → ``fluxion.pool_class``).
+
+        Returns ``None`` when the ``scheduling`` key is absent or when the
+        module cannot be imported.
+        """
+        if isinstance(R, str):
+            R = json.loads(R)
+        if not isinstance(R, dict):
+            return None
+        scheduling = R.get("scheduling")
+        if scheduling is None:
+            return None
+        writer = scheduling.get("writer", "fluxion")
+        return self._pool_class_from_uri(writer)
+
+    def _pool_class_from_uri(self, uri):
+        """Load and return a pool class from a URI string.
+
+        ``file:///path/to/Pool.py``
+            Load the pool class from the given file.  The class name is
+            derived from the filename stem (e.g. ``RackPool.py`` →
+            ``RackPool``).  An optional ``#ClassName`` fragment overrides
+            the stem-derived name.
+
+        ``scheme`` or ``scheme:path``
+            Import the module named by the scheme (hyphens converted to
+            underscores).  If a path component is present it is used as the
+            literal class name (e.g. ``fluxion:rv1shorthand`` →
+            ``getattr(fluxion, "rv1shorthand")``).  If absent, the module's
+            ``pool_class`` attribute is used as the default
+            (e.g. ``fluxion`` → ``fluxion.pool_class``).
+        """
+        parsed = urllib.parse.urlparse(uri)
+        if parsed.scheme == "file":
+            file_path = parsed.path
+            cls_name = parsed.fragment or file_path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+            spec = importlib.util.spec_from_file_location("_pool_plugin", file_path)
+            if spec is None:
+                raise ValueError(
+                    f"pool-class URI {uri!r}: cannot load module from {file_path!r}"
+                )
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return getattr(mod, cls_name)
+        else:
+            module_name = (parsed.scheme or parsed.path).replace("-", "_")
+            cls_name = parsed.path if parsed.scheme else None
+            try:
+                mod = importlib.import_module(module_name)
+                return getattr(mod, cls_name) if cls_name else mod.pool_class
+            except (ImportError, AttributeError):
+                return None
+
     def _make_pool(self, R):
         """Construct a resource pool from an R dict or JSON string.
 
-        When :attr:`pool_class` is set on the subclass, instantiates it
-        directly.  :attr:`pool_class` must be a
-        :class:`~flux.resource.ResourcePool.ResourcePool` subclass whose
-        constructor accepts ``(R, log=log)``.  Otherwise delegates to
-        :class:`~flux.resource.ResourcePool.ResourcePool`'s built-in
-        version dispatch.
+        Checks, in order:
+
+        1. :attr:`pool_class` set explicitly (e.g. via ``pool-class=`` argument
+           or subclass definition) — instantiated directly.
+        2. ``R.scheduling.writer`` URI — parsed by
+           :meth:`_pool_class_from_writer` to derive the pool class.
+        3. Default :class:`~flux.resource.ResourcePool.ResourcePool` version
+           dispatch.
         """
         if self.pool_class is not None:
             return self.pool_class(R, log=self.log)
+        pool_class = self._pool_class_from_writer(R)
+        if pool_class is not None:
+            return pool_class(R, log=self.log)
         return ResourcePool(R, log=self.log, **self.pool_kwargs)
 
     def _acquire_resources(self):
