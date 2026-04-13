@@ -186,8 +186,14 @@ void test_module_initialize (void)
     flux_close (h);
 }
 
+struct server_result {
+    bool register_handlers_success;
+};
+
 int server_cb (flux_t *h, void *arg)
 {
+    struct server_result *result = arg;
+
     diag ("test server starting");
 
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
@@ -197,8 +203,8 @@ int server_cb (flux_t *h, void *arg)
     if (flux_aux_set (h, "flux::uuid", "test-uuid", NULL) < 0)
         BAIL_OUT ("could not set flux::uuid aux item");
 
-    ok (flux_module_register_handlers (h, NULL) == 0,
-        "flux_module_register_handlers works");
+    result->register_handlers_success =
+        (flux_module_register_handlers (h, NULL) == 0);
 
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         return -1;
@@ -215,6 +221,7 @@ void test_module_register_handlers (void)
     flux_future_t *f;
     const char *val;
     int flags;
+    struct server_result result = { 0 };
 
     errno = 0;
     err_init (&error);
@@ -225,7 +232,7 @@ void test_module_register_handlers (void)
         diag ("%s", error.text);
 
     /* answer subscribe request (o/w server will block) */
-    if (!(h = test_server_create (0, server_cb, NULL)))
+    if (!(h = test_server_create (0, server_cb, &result)))
         BAIL_OUT ("could not create test server");
     req = flux_recv (h, FLUX_MATCH_REQUEST, 0);
     ok (req != NULL,
@@ -347,10 +354,20 @@ void test_module_register_handlers (void)
 
     test_server_stop (h);
 
+    /* Check the register_handlers result after the server thread has been
+     * joined to avoid a race between this ok() and the ok() calls above.
+     */
+    ok (result.register_handlers_success,
+        "flux_module_register_handlers works");
+
     flux_close (h);
 }
 
 struct server2_result {
+    bool finalizing_received;
+    int finalizing_status;
+    bool enosys_received;
+    int enosys_errnum;
     bool exited_received;
     int exited_status;
     int exited_errnum;
@@ -375,10 +392,11 @@ int server2_cb (flux_t *h, void *arg)
     match = FLUX_MATCH_REQUEST;
     match.topic_glob = "module.status";
     req = flux_recv (h, match, 0);
-    ok (req != NULL
-        && flux_msg_unpack (req, "{s:i}", "status", &status) == 0
-        && status == FLUX_MODSTATE_FINALIZING,
-        "client sent module.status status=FINALIZING request");
+    if (req != NULL
+        && flux_msg_unpack (req, "{s:i}", "status", &status) == 0) {
+        result->finalizing_received = true;
+        result->finalizing_status = status;
+    }
     if (!(rep = flux_response_derive (req, 0))
         || flux_send (h, rep, 0) < 0)
         BAIL_OUT ("error sending module.status response");
@@ -389,10 +407,11 @@ int server2_cb (flux_t *h, void *arg)
     match = FLUX_MATCH_RESPONSE;
     match.topic_glob = "testmod.straggler";
     rep = flux_recv (h, match, 0);
-    ok (rep != NULL
-        && flux_msg_get_errnum (rep, &errnum) == 0
-        && errnum == ENOSYS,
-        "client sent ENOSYS response to straggler request");
+    if (rep != NULL
+        && flux_msg_get_errnum (rep, &errnum) == 0) {
+        result->enosys_received = true;
+        result->enosys_errnum = errnum;
+    }
     flux_msg_decref (rep);
 
     /* receive module.status request (EXITED) -- store result for main thread
@@ -442,10 +461,18 @@ void test_module_finalize (void)
 
     test_server_stop (h);
 
-    /* Check the EXITED status after the server thread has been joined to
-     * avoid a race: module_set_exited() uses FLUX_RPC_NORESPONSE so
-     * flux_module_finalize() returns before the server receives EXITED.
+    /* Check the FINALIZING, ENOSYS, and EXITED results after the server
+     * thread has been joined to avoid a race: ok() calls in the thread can
+     * interleave with the main thread's ok() calls above, and
+     * module_set_exited() uses FLUX_RPC_NORESPONSE so flux_module_finalize()
+     * returns before the server receives EXITED.
      */
+    ok (result.finalizing_received
+        && result.finalizing_status == FLUX_MODSTATE_FINALIZING,
+        "client sent module.status status=FINALIZING request");
+    ok (result.enosys_received
+        && result.enosys_errnum == ENOSYS,
+        "client sent ENOSYS response to straggler request");
     ok (result.exited_received
         && result.exited_status == FLUX_MODSTATE_EXITED
         && result.exited_errnum == 42,
