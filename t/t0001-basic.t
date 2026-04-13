@@ -873,6 +873,28 @@ test_expect_success 'duplicate commands are not output' '
 	test $count -eq 1
 '
 
+test_expect_success 'commands prefixed with the invalid command are favored' '
+	TEMPDIR1=$(mktemp -d) &&
+	touch $TEMPDIR1/flux-beef &&
+	chmod +x $TEMPDIR1/flux-beef &&
+	touch $TEMPDIR1/flux-mee &&
+	chmod +x $TEMPDIR1/flux-mee &&
+	test_must_fail sh -c "FLUX_EXEC_PATH=$TEMPDIR1 flux bee > invalid6.out 2>&1" &&
+	grep "beef" invalid6.out &&
+	test_must_fail grep "mee" invalid6.out
+'
+
+test_expect_success 'commands with longer prefixes get special treatment' '
+	TEMPDIR1=$(mktemp -d) &&
+	touch $TEMPDIR1/flux-python3.12 &&
+	chmod +x $TEMPDIR1/flux-python3.12 &&
+	touch $TEMPDIR1/flux-python3.157 &&
+	chmod +x $TEMPDIR1/flux-python3.157 &&
+	test_must_fail sh -c "FLUX_EXEC_PATH=$TEMPDIR1 flux python3 > invalid7.out 2>&1" &&
+	grep "python3.12" invalid7.out &&
+	grep "python3.157" invalid7.out
+'
+
 test_expect_success 'at most 3 suggested similar commands are output' '
 	TEMPDIR=$(mktemp -d) &&
 	touch $TEMPDIR/flux-mama &&
