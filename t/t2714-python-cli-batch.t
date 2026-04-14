@@ -110,7 +110,7 @@ test_expect_success NO_ASAN 'flux batch: job results are expected' '
 	grep "size=2 nodes=2" flux-${id4}.out &&
 	grep "size=2 nodes=2" flux-${id5}.out
 '
-test_expect_success MULTICORE 'flux batch: exclusive flag worked' '
+test_expect_success NO_ASAN,MULTICORE 'flux batch: exclusive flag worked' '
 	test $(flux job info ${id4} R | flux R decode --count=core) -gt 2 &&
 	test $(flux job info ${id5} R | flux R decode --count=core) -gt 2
 '
