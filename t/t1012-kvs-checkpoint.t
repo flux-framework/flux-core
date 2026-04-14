@@ -1,6 +1,9 @@
 #!/bin/sh
 #
 
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
+
 test_description='Test kvs checkpointing works'
 
 . `dirname $0`/kvs/kvs-helper.sh

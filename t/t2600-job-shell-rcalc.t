@@ -1,6 +1,9 @@
 #!/bin/sh
 #
 
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
+
 test_description='Test shell resource calculator (rcalc) functionality'
 
 . `dirname $0`/sharness.sh

@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
+
 test_description='Test python flux.constraint.parser standalone operation'
 
 . `dirname $0`/sharness.sh
