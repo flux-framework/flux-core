@@ -40,12 +40,28 @@ test_expect_success 'job-exec: run test program that blocks SIGTERM' '
 	pid=$(flux kvs get -WN ${ns} ${dir}.pid) &&
 	test_debug "echo script running as pid=$pid"
 '
+
+# N.B. The 'ps' command in test below hangs under ASAN.  Disable
+# LD_PRELOAD if ASAN is enabled.
+
+no_asan_ps() {
+    local rc
+    SAVE_LD_PRELOAD=${LD_PRELOAD}
+    if test_have_prereq ASAN; then
+        LD_PRELOAD=""
+    fi
+    ps "$@"
+    rc=$?
+    LD_PRELOAD=${SAVE_LD_PRELOAD}
+    return "$rc"
+}
+
 test_expect_success 'job-exec: ensure cancellation kills job' '
 	test_debug "echo Canceling $id" &&
 	flux cancel $id &&
 	test_debug "flux job attach -vEX $id || :" &&
 	test_expect_code 137 flux job status $id &&
-	test_must_fail ps -q $pid
+	test_must_fail no_asan_ps -q $pid
 '
 # Note: increase max-kill-count here to ensure job doesn't disappear from
 # job-exec while we're testing kill-timeout:
