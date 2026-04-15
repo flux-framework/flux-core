@@ -33,6 +33,9 @@ RUN dnf -y install 'dnf-command(config-manager)' \
 	gcc-c++ \
 	clang \
 	clang-tools-extra \
+	libasan \
+	libtsan \
+	libubsan \
 	make \
 	ninja-build \
 	cmake \
