@@ -164,7 +164,8 @@ test_expect_success 'simulated module segfault causes module to exit' '
 	sh -c "while flux module stats testmod; do true; done" &&
 	flux dmesg >segfault.out
 '
-test_expect_success 'segfault is reported' '
+# N.B. skip under ASAN, as it may capture segfault signal and report differently
+test_expect_success NO_ASAN 'segfault is reported' '
 	grep "killed by Segmentation fault" segfault.out
 '
 test_expect_success 'broker treats this the same as spurious module exit' '

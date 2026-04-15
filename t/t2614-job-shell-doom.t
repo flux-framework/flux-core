@@ -59,7 +59,8 @@ test_expect_success 'flux-shell: exit-on-error catches lost shell' '
 	test_must_fail run_timeout 30 flux run \
 		-n2 -N2 -o exit-on-error ./test2.sh
 '
-test_expect_success 'flux-shell: create script - rank 1 kills itself with SIGSEGV' '
+# N.B. skip under ASAN, as it may capture segfault signal and report differently
+test_expect_success NO_ASAN 'flux-shell: create script - rank 1 kills itself with SIGSEGV' '
 	cat >sigtest.sh <<-"EOT" &&
 	#!/bin/sh
 	test $FLUX_TASK_RANK -eq 1 && kill -SEGV $$
@@ -67,12 +68,12 @@ test_expect_success 'flux-shell: create script - rank 1 kills itself with SIGSEG
 	EOT
 	chmod +x sigtest.sh
 '
-test_expect_success 'flux-shell: exit-on-error preserves failing task signal in finish status' '
+test_expect_success NO_ASAN 'flux-shell: exit-on-error preserves failing task signal in finish status' '
 	jobid=$(flux submit -n2 -o exit-on-error ./sigtest.sh) &&
 	flux job wait-event -t 30 $jobid finish | grep "status=35584" &&
 	flux job eventlog $jobid | grep exception | grep "Segmentation fault"
 '
-test_expect_success 'flux-shell: exit-timeout preserves failing task signal in finish status' '
+test_expect_success NO_ASAN 'flux-shell: exit-timeout preserves failing task signal in finish status' '
 	jobid=$(flux submit -n2 -o exit-timeout=1s ./sigtest.sh) &&
 	flux job wait-event -t 30 $jobid finish | grep "status=35584" &&
 	flux job eventlog $jobid | grep exception | grep "Segmentation fault"
