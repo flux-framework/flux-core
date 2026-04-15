@@ -506,8 +506,8 @@ static void pty_read (flux_reactor_t *r,
         if (errno == EIO) {
             flux_watcher_stop (pty->fdw);
             pty->wait_on_close = false;
-            check_pty_complete (pty);
             pty_client_monitor_send_eof (pty);
+            check_pty_complete (pty);
             return;
         }
         llog_error (pty, "read: %s", strerror (errno));
