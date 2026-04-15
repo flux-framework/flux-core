@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
+
 test_description='Test offline KVS garbage collection'
 
 . $(dirname $0)/sharness.sh

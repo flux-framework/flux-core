@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
+
 test_description='Test flux job manager restart'
 
 . $(dirname $0)/sharness.sh
