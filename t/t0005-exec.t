@@ -11,6 +11,7 @@ Test exec functionality
 SIZE=4
 test_under_flux ${SIZE} minimal
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 rkill="flux sproc kill"
 rps="flux sproc ps"
 rwait="flux sproc wait"
@@ -208,7 +209,7 @@ test_expect_success 'I/O -- long lines' '
 # exit status. This version does not forward signals to children, so
 # it breaks the test below. Detect versions of stdbuf that don't exec
 # their arguments and skip the test if found.
-if test $(stdbuf --output=L sh -c 'ps -q $PPID -o comm=') != "stdbuf"; then
+if test $(stdbuf --output=L sh -c '$NOASAN ps -q $PPID -o comm=') != "stdbuf"; then
     test_set_prereq WORKING_STDBUF
 fi
 
