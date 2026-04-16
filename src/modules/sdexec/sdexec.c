@@ -48,6 +48,7 @@
 #include "src/common/libsdexec/channel.h"
 #include "src/common/libsdexec/unit.h"
 #include "src/common/libsdexec/property.h"
+#include "src/common/librlist/rhwloc.h"
 
 #define MODULE_NAME "sdexec"
 
@@ -58,6 +59,7 @@ struct sdexec_ctx {
     flux_msg_handler_t **handlers;
     struct flux_msglist *requests; // each exec request "owns" an sdproc
     struct flux_msglist *kills;
+    hwloc_topology_t topo;         // local topology for core->CPU expansion
 };
 
 enum stop_timer_state {
@@ -1271,11 +1273,36 @@ static struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END
 };
 
+/* Fetch hwloc XML from the local broker's resource module and load a topology
+ * from it.  This avoids the cost of local topology rediscovery since the
+ * resource module has already done it.  Returns NULL on failure (non-fatal).
+ */
+static hwloc_topology_t sdexec_load_topo (flux_t *h)
+{
+    flux_future_t *f;
+    const char *xml;
+    hwloc_topology_t topo = NULL;
+
+    if (!(f = flux_rpc (h, "resource.topo-get", NULL, FLUX_NODEID_ANY, 0))
+        || flux_rpc_get (f, &xml) < 0
+        || !(topo = rhwloc_xml_topology_load (xml, RHWLOC_NO_RESTRICT))) {
+        flux_log (h,
+                  LOG_WARNING,
+                  "sdexec: could not fetch hwloc topology from resource "
+                  "module: %s; AllowedCPUs core expansion unavailable",
+                  future_strerror (f, errno));
+    }
+    flux_future_destroy (f);
+    return topo;
+}
+
 static void sdexec_ctx_destroy (struct sdexec_ctx *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
+        if (ctx->topo)
+            hwloc_topology_destroy (ctx->topo);
         if (ctx->requests) {
             const flux_msg_t *msg;
             msg = flux_msglist_first (ctx->requests);
@@ -1310,6 +1337,7 @@ static struct sdexec_ctx *sdexec_ctx_create (flux_t *h)
     if (!(ctx->requests = flux_msglist_create ())
         || !(ctx->kills = flux_msglist_create ()))
         goto error;
+    ctx->topo = sdexec_load_topo (h); // NULL is non-fatal
     return ctx;
 error:
     sdexec_ctx_destroy (ctx);
