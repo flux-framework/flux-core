@@ -31,6 +31,12 @@ uint32_t resource_set_nth_rank (struct resource_set *r, int n);
 
 uint32_t resource_set_rank_index (struct resource_set *r, uint32_t rank);
 
+/* Return the core idset string for broker rank `rank` from R_lite, or NULL
+ * if the rank is not found or has no core assignment.  The returned pointer
+ * is owned by the resource_set and is valid for the lifetime of `r`.
+ */
+const char *resource_set_rank_cores (struct resource_set *r, unsigned int rank);
+
 double resource_set_starttime (struct resource_set *rset);
 
 double resource_set_expiration (struct resource_set *rset);

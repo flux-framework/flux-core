@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <errno.h>
+#include <stdbool.h>
 #include "src/common/libutil/errno_safe.h"
 #include "rset.h"
 
@@ -157,6 +158,37 @@ struct resource_set *resource_set_create (const char *R, json_error_t *errp)
 const struct idset *resource_set_ranks (struct resource_set *r)
 {
     return r->ranks;
+}
+
+const char *resource_set_rank_cores (struct resource_set *r, unsigned int rank)
+{
+    int i;
+    json_t *entry;
+
+    if (!r || !r->R_lite) {
+        errno = EINVAL;
+        return NULL;
+    }
+    json_array_foreach (r->R_lite, i, entry) {
+        const char *ranks_str;
+        const char *cores_str;
+        struct idset *ranks;
+
+        if (json_unpack (entry,
+                         "{s:s s:{s:s}}",
+                         "rank", &ranks_str,
+                         "children",
+                           "core", &cores_str) < 0)
+            continue;
+        if (!(ranks = idset_decode (ranks_str)))
+            continue;
+        bool found = idset_test (ranks, rank);
+        idset_destroy (ranks);
+        if (found)
+            return cores_str;
+    }
+    errno = ENOENT;
+    return NULL;
 }
 
 double resource_set_starttime (struct resource_set *r)
