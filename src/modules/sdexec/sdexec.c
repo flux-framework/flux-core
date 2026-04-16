@@ -49,6 +49,7 @@
 #include "src/common/libsdexec/unit.h"
 #include "src/common/libsdexec/property.h"
 #include "src/common/librlist/rhwloc.h"
+#include "src/common/libidset/idset.h"
 
 #define MODULE_NAME "sdexec"
 
@@ -684,6 +685,66 @@ static struct channel *create_out_channel (flux_t *h,
                                          arg);
 }
 
+/* Expand a Flux core idset string (logical core indices) to an OS CPU idset
+ * string (hwloc PU indices) using the supplied topology.  Handles
+ * hyperthreading: each logical core may cover multiple OS CPUs.
+ * Returns a heap-allocated string the caller must free(), or NULL on error.
+ */
+static char *cores_to_cpus (hwloc_topology_t topo, const char *cores)
+{
+    hwloc_cpuset_t cpuset = rhwloc_cores_to_cpuset (topo, cores);
+    struct idset *result = idset_create (0, IDSET_FLAG_AUTOGROW);
+    char *out = NULL;
+    int i;
+
+    if (!cpuset || !result)
+        goto done;
+    i = hwloc_bitmap_first (cpuset);
+    while (i >= 0) {
+        idset_set (result, i);
+        i = hwloc_bitmap_next (cpuset, i);
+    }
+    out = idset_encode (result, IDSET_FLAG_RANGE);
+done:
+    hwloc_bitmap_free (cpuset);
+    idset_destroy (result);
+    return out;
+}
+
+/* Translate any SDEXEC_CORES set in proc->cmd to AllowedCPUs using
+ * local hwloc topology.
+ */
+static int sdproc_set_allowed_cpus (struct sdexec_ctx *ctx, struct sdproc *proc)
+{
+    const char *cores;
+    char *allowed_cpus = NULL;
+    int rc = -1;
+
+    if (get_dict (proc->cmd, "opts", "SDEXEC_CORES", &cores) == 0) {
+        if (ctx->topo)
+            allowed_cpus = cores_to_cpus (ctx->topo, cores);
+        if (!allowed_cpus) {
+            flux_log (ctx->h,
+                      LOG_WARNING,
+                      "sdexec: AllowedCPUs core expansion failed for "
+                      "\"%s\"; using core IDs directly",
+                      cores);
+            allowed_cpus = strdup (cores);
+        }
+        if (!allowed_cpus
+            || set_dict (proc->cmd,
+                         "opts",
+                         "SDEXEC_PROP_AllowedCPUs",
+                         allowed_cpus) < 0) {
+            goto out;
+        }
+    }
+    rc = 0;
+out:
+    ERRNO_SAFE_WRAP (free, allowed_cpus);
+    return rc;
+}
+
 static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
                                      json_t *cmd,
                                      int flags)
@@ -714,6 +775,14 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
         errno = ENOMEM;
         goto error;
     }
+    /* If SDEXEC_CORES is set, expand the logical core idset to OS CPU IDs
+     * using the local hwloc topology and set SDEXEC_PROP_AllowedCPUs so
+     * start.c will apply the restriction to the transient unit.
+     * Falls back to using core IDs directly if topology is unavailable.
+     */
+    if (sdproc_set_allowed_cpus (ctx, proc) < 0)
+        goto error;
+
     /* Enable the stop timer by setting the SDEXEC_STOP_TIMER_SEC option to
      * a value in seconds.  The stop timer is disabled by default.
      * sOptionally set SDEXEC_STOP_TIMER_SIGNAL to a numerical signal
