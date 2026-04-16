@@ -17,7 +17,8 @@ dist_cron_DATA = \
 
 nobase_dist_fluxlibexec_SCRIPTS = \
 	modprobe/rc1.py \
-	modprobe/rc3.py
+	modprobe/rc3.py \
+	cli/plugins/shape.py
 
 nobase_dist_fluxdata_DATA = \
 	modprobe/modprobe.toml
@@ -27,6 +28,7 @@ fluxlibexec_SCRIPTS = \
 
 # Install empty modprobe/*.d directories after rc1.py and rc3.py are installed
 # Install empty fluxlibexecdir/{prolog,epilog,housekeeping}.d directories
+# Install empty fluxlibexecdir/cli/plugin directory
 install-data-hook:
 	for dir in $(fluxconfdir) $(fluxdatadir); do \
 	  $(MKDIR_P) $(DESTDIR)$$dir/modprobe/modprobe.d; \
@@ -35,8 +37,11 @@ install-data-hook:
 	  $(MKDIR_P) $(DESTDIR)$$dir/modprobe/rc1.d; \
 	  $(MKDIR_P) $(DESTDIR)$$dir/modprobe/rc3.d; \
 	done
-	for dir in prolog.d epilog.d housekeeping.d; do \
+	for dir in prolog.d epilog.d housekeeping.d cli; do \
 	  $(MKDIR_P) $(DESTDIR)$(fluxlibexecdir)/$$dir; \
+	done
+	for dir in plugins; do \
+	  $(MKDIR_P) $(DESTDIR)$(fluxlibexecdir)/cli/$$dir; \
 	done
 
 # Remove empty modprobe/{prolog,epilog,housekeeping}.d directories on uninstall
