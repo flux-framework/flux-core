@@ -163,6 +163,12 @@ Example file installed path: ``/etc/flux/system/conf.d/system.toml``
  # Run jobs in a systemd user instance
  service = "sdexec"
 
+ # Restrict each job to its allocated cores.  Required when node sharing
+ # (also known as non-exclusive scheduling) is in use, i.e. when multiple
+ # jobs may run concurrently on the same node.
+ # sdexec expands logical core IDs to OS CPU IDs, handling hyperthreading.
+ sdexec-constrain-cores = true
+
  # Limit jobs to a percentage of physical memory
  [exec.sdexec-properties]
  MemoryMax = "95%"
@@ -237,8 +243,9 @@ Example file installed path: ``/etc/flux/system/conf.d/system.toml``
  job-size.max.ncores = 32
 
  # Configure the flux-sched (fluxion) scheduler policies
- # The 'lonodex' match policy selects node-exclusive scheduling, and can be
- # commented out if jobs may share nodes.
+ # The 'lonodex' match policy selects node-exclusive scheduling.  Remove or
+ # comment it out to enable node sharing (non-exclusive scheduling), where
+ # multiple jobs may run concurrently on the same node.
  [sched-fluxion-qmanager]
  queue-policy = "easy"
  [sched-fluxion-resource]
