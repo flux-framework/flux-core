@@ -160,6 +160,19 @@ sdexec-stop-timer-signal
    (optional) Configure the signal used by the stop timer.  By default,
    10 (SIGUSR1, the IMP proxy for SIGKILL) is used.
 
+sdexec-constrain-cores
+   (optional) When set to ``true``, job-exec passes each rank's allocated
+   core idset to sdexec so that the transient systemd unit for each rank is
+   restricted to those cores via the ``AllowedCPUs`` unit property.  This
+   enforces CPU isolation between co-located jobs when node sharing is in use.
+   On hyperthreaded systems, sdexec expands the logical core indices in the
+   allocation to the full set of OS CPU (PU) indices that belong to those
+   cores.  (Default: ``false``).
+
+sdexec-stop-timer-signal
+   (optional) Configure the signal used by the stop timer.  By default,
+   10 (SIGUSR1, the IMP proxy for SIGKILL) is used.
+
 
 .. _sdexec_properties:
 
@@ -204,6 +217,12 @@ added to ``sdexec-properties``: AllowedCPUs, AllowedMemoryNodes,
 Description, Environment, ExecStart, KillMode, RemainAfterExit,
 SendSIGKILL, StandardInputFileDescriptor, StandardOutputFileDescriptor,
 StandardErrorFileDescriptor, TimeoutStopUSec, Type, WorkingDirectory.
+
+.. note::
+   ``AllowedCPUs`` is set automatically by sdexec when
+   ``sdexec-constrain-cores`` is enabled.  Setting it manually in
+   ``sdexec-properties`` would override the per-rank CPU assignment and
+   apply the same fixed CPU mask to every job, which is rarely correct.
 
 
 .. _testexec:
@@ -480,6 +499,14 @@ EXAMPLES
    max-kill-timeout = "15m"
    # Override the default if jobs need even more time for cleanup
    sdexec-stop-timer-sec = 1800  # 30 minutes instead of 15
+
+::
+
+   [exec]
+   service = "sdexec"
+   sdexec-constrain-cores = true
+   [exec.sdexec-properties]
+   MemoryMax = "90%"
 
 ::
 
