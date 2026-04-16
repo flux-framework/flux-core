@@ -8,3 +8,4 @@ Resources for Flux Developers
    debug
    kvs
    broker
+   systemd
