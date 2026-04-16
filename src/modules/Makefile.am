@@ -253,13 +253,17 @@ sdexec_la_SOURCES = \
 	sdexec/sdexec.c
 sdexec_la_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
-	$(LIBUUID_CFLAGS)
+	$(LIBUUID_CFLAGS) \
+	$(HWLOC_CFLAGS)
 sdexec_la_LIBADD = \
 	$(top_builddir)/src/common/libsdexec/libsdexec.la \
+	$(top_builddir)/src/common/librlist/librlist-hwloc.la \
+	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(LIBUUID_LIBS) \
-	$(JANSSON_LIBS)
+	$(JANSSON_LIBS) \
+	$(HWLOC_LIBS)
 sdexec_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 sdbus_la_SOURCES =
