@@ -39,6 +39,7 @@ struct exec_config {
     json_t *sdexec_properties;
     int sdexec_stop_timer_sec;
     int sdexec_stop_timer_signal;
+    int sdexec_constrain_cores;
     double default_barrier_timeout;
 };
 
@@ -86,6 +87,11 @@ json_t *config_get_sdexec_properties (void)
     return exec_conf.sdexec_properties;
 }
 
+bool config_get_sdexec_constrain_cores (void)
+{
+    return exec_conf.sdexec_constrain_cores ? true : false;
+}
+
 static int derive_sdexec_stop_timer_sec (void)
 {
     int value = exec_conf.sdexec_stop_timer_sec;
@@ -129,7 +135,7 @@ int config_get_stats (json_t **config_stats)
 {
     json_t *o = NULL;
 
-    if (!(o = json_pack ("{s:s? s:s? s:s? s:s? s:i s:f s:i s:i}",
+    if (!(o = json_pack ("{s:s? s:s? s:s? s:s? s:i s:f s:i s:i s:i}",
                          "default_cwd", default_cwd,
                          "default_job_shell", exec_conf.default_job_shell,
                          "flux_imp_path", exec_conf.flux_imp_path,
@@ -141,7 +147,9 @@ int config_get_stats (json_t **config_stats)
                          "sdexec_stop_timer_sec",
                          derive_sdexec_stop_timer_sec (),
                          "sdexec_stop_timer_signal",
-                         exec_conf.sdexec_stop_timer_signal))) {
+                         exec_conf.sdexec_stop_timer_signal,
+                         "sdexec_constrain_cores",
+                         exec_conf.sdexec_constrain_cores))) {
         errno = ENOMEM;
         return -1;
     }
@@ -172,6 +180,7 @@ static void exec_config_init (struct exec_config *ec)
     ec->sdexec_properties = NULL;
     ec->sdexec_stop_timer_sec = -1;
     ec->sdexec_stop_timer_signal = 10; // SIGUSR1
+    ec->sdexec_constrain_cores = 0;
     ec->default_barrier_timeout = 1800.;
 }
 
@@ -266,6 +275,19 @@ int config_setup (flux_t *h,
                 return -1;
             }
         }
+    }
+
+    /*  Check configuration for exec.sdexec-constrain-cores */
+    if (flux_conf_unpack (conf,
+                          &err,
+                          "{s?{s?b}}",
+                          "exec",
+                            "sdexec-constrain-cores",
+                              &tmpconf.sdexec_constrain_cores) < 0) {
+        errprintf (errp,
+                   "error reading config value exec.sdexec-constrain-cores: %s",
+                   err.text);
+        return -1;
     }
 
     /*  Check configuration for exec.stop-timer-* */
