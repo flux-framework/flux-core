@@ -79,6 +79,13 @@ const struct tab_bitmap btab[] = {
     { "0",              { 1, 0, 0, 0 },     1, true },
     { "0-2,8",          { 7, 1, 0, 0 },     2, true },
     { "8-15,16-23",     { 0, 255, 255, 0 }, 3, true },
+    // HT-style CPU sets produced by cores_to_cpus() expansion:
+    // 4-core system with SMT=2, siblings at +4 offset (e.g. cores 0-3
+    // map to CPUs 0-3 and 4-7)
+    { "0,4",            { 0x11, 0, 0, 0 },  1, true },
+    { "0-3,4-7",        { 0xff, 0, 0, 0 },  1, true },
+    // siblings at +16 offset (common on larger NUMA systems)
+    { "0-3,16-19",      { 0x0f, 0, 0x0f, 0 },  3, true },
 };
 
 void test_bitmap (void)
