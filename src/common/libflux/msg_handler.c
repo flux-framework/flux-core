@@ -195,10 +195,10 @@ static void dispatch_usecount_decr (struct dispatch *d)
 {
     if (d && --d->usecount == 0) {
         int saved_errno = errno;
-        if (flux_flags_get (d->h) & FLUX_O_CLONE) {
+        if (d->h && flux_flags_get (d->h) & FLUX_O_CLONE)
             dispatch_requeue (d);
+        if (d->unmatched)
             zlist_destroy (&d->unmatched);
-        }
         if (d->handlers) {
             assert (zlist_size (d->handlers) == 0);
             zlist_destroy (&d->handlers);
@@ -224,6 +224,18 @@ static void dispatch_usecount_incr (struct dispatch *d)
 static void dispatch_destroy (void *arg)
 {
     struct dispatch *d = arg;
+    /* The dispatch struct is stored as a part of the flux handle's aux
+     * storage.  So when this destroy function is called, that means
+     * the flux handle is being destroyed.
+     *
+     * If the flux handle is destroyed before the msg handler, we do
+     * not want the message handler to use the flux handle anymore.
+     * Clear the flux handle and destroy handle / reactor associated
+     * data structures.
+     */
+    flux_watcher_destroy (d->w);
+    d->w = NULL;
+    d->h = NULL;
     dispatch_usecount_decr (d);
 }
 
