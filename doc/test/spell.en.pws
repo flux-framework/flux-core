@@ -1168,3 +1168,6 @@ delegatable
 eBPF
 hyperthreading
 hyperthreaded
+EIO
+ini
+NUMA
