@@ -909,7 +909,7 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
 
     /* Enable the stop timer by setting the SDEXEC_STOP_TIMER_SEC option to
      * a value in seconds.  The stop timer is disabled by default.
-     * sOptionally set SDEXEC_STOP_TIMER_SIGNAL to a numerical signal
+     * Optionally set SDEXEC_STOP_TIMER_SIGNAL to a numerical signal
      * value to use instead of SIGKILL.
      */
     if (get_dict_int (proc->cmd,
