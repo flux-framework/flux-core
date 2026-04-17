@@ -26,6 +26,11 @@
  *                               subprocesses: "rexec" or "sdexec".
  *    "barrier-timeout":F      - Specify timeout for start barrier in floating
  *                               point seconds.
+ *    "sdexec-test-expected-cpus":s
+ *                             - Override the expected CPU idset used by the
+ *                               sdexec post-start AllowedCPUs check.  Requires
+ *                               sdexec-debug = true.  Intended for testing the
+ *                               constraint-failure detection path.
  * }
  *
  */
@@ -59,6 +64,7 @@ struct exec_ctx {
     struct jobinfo *job;
 
     const char * mock_exception;   /* fake exception */
+    const char *sdexec_test_expected_cpus; /* override for post-start check */
     struct idset *barrier_pending_ranks;
     int barrier_enter_count;
     int barrier_completion_count;
@@ -137,13 +143,15 @@ static struct exec_ctx *exec_ctx_create (struct jobinfo *job,
     if (json_unpack_ex (job->jobspec,
                         &error,
                         0,
-                        "{s?{s?{s?{s?{s?s s?s s?F !}}}}}",
+                        "{s?{s?{s?{s?{s?s s?s s?s s?F !}}}}}",
                         "attributes",
                           "system",
                             "exec",
                               "bulkexec",
                                 "service", &service,
                                 "mock_exception", &ctx->mock_exception,
+                                "sdexec-test-expected-cpus",
+                                    &ctx->sdexec_test_expected_cpus,
                                 "barrier-timeout", &barrier_timeout) < 0) {
         errprintf (errp,
                    "failed to unpack system.exec.bulkexec for %s: %s",
@@ -614,13 +622,19 @@ static struct bulk_exec_ops exec_ops = {
  * indices using the physical topology.  This is not currently an issue
  * because sdexec is only used at the top-level instance.
  */
-static int sdexec_cmd_set_rank_opts (struct jobinfo *job,
+static int sdexec_cmd_set_rank_opts (struct exec_ctx *ctx,
                                      flux_cmd_t *cmd,
                                      unsigned int r)
 {
     if (config_get_sdexec_constrain_cores ()) {
-        const char *cores = resource_set_rank_cores (job->R, r);
+        const char *cores = resource_set_rank_cores (ctx->job->R, r);
         if (cores && flux_cmd_setopt (cmd, "SDEXEC_CORES", cores) < 0)
+            return -1;
+    }
+    if (ctx->sdexec_test_expected_cpus) {
+        if (flux_cmd_setopt (cmd,
+                             "SDEXEC_TEST_EXPECTED_CPUS",
+                             ctx->sdexec_test_expected_cpus) < 0)
             return -1;
     }
     return 0;
@@ -630,20 +644,21 @@ static int sdexec_cmd_set_rank_opts (struct jobinfo *job,
  * When true, exec_init() pushes one cmd per rank instead of one for all ranks.
  * Update this predicate when adding new per-rank sdexec options.
  */
-static bool sdexec_needs_per_rank_cmds (void)
+static bool sdexec_needs_per_rank_cmds (struct exec_ctx *ctx)
 {
-    return config_get_sdexec_constrain_cores ();
+    return config_get_sdexec_constrain_cores ()
+        || ctx->sdexec_test_expected_cpus != NULL;
 }
 
 /* Push one bulk_exec cmd per rank, each with rank-specific sdexec options.
  * Used in place of a single bulk_exec_push_cmd() call when per-rank options
  * need to be set.  Returns 0 on success, -1 on error.
  */
-static int sdexec_push_per_rank_cmds (struct jobinfo *job,
-                                      struct bulk_exec *exec,
+static int sdexec_push_per_rank_cmds (struct bulk_exec *exec,
                                       const struct idset *ranks,
                                       flux_cmd_t *cmd)
 {
+    struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
     unsigned int r = idset_first (ranks);
     while (r != IDSET_INVALID_ID) {
         flux_cmd_t *rcmd = NULL;
@@ -653,7 +668,7 @@ static int sdexec_push_per_rank_cmds (struct jobinfo *job,
         if (!(rcmd = flux_cmd_copy (cmd))
             || !(rset = idset_create (0, IDSET_FLAG_AUTOGROW))
             || idset_set (rset, r) < 0
-            || sdexec_cmd_set_rank_opts (job, rcmd, r) < 0) {
+            || sdexec_cmd_set_rank_opts (ctx, rcmd, r) < 0) {
             flux_cmd_destroy (rcmd);
             idset_destroy (rset);
             return -1;
@@ -785,8 +800,8 @@ static int exec_init (struct jobinfo *job)
      * each transient unit can be configured for its own allocation.
      * Otherwise push a single command covering all ranks (the common case).
      */
-    if (streq (service, "sdexec") && sdexec_needs_per_rank_cmds ()) {
-        if (sdexec_push_per_rank_cmds (job, exec, ranks, cmd) < 0) {
+    if (streq (service, "sdexec") && sdexec_needs_per_rank_cmds (ctx)) {
+        if (sdexec_push_per_rank_cmds (exec, ranks, cmd) < 0) {
             flux_log_error (job->h, "exec_init: sdexec per-rank cmd setup");
             goto err;
         }
