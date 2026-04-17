@@ -872,6 +872,21 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
     if (sdproc_set_allowed_cpus (ctx, proc) < 0)
         goto error;
 
+    /* SDEXEC_TEST_EXPECTED_CPUS overrides the expected CPU idset used by the
+     * post-start AllowedCPUs check.  Only available when sdexec-debug is true
+     * so it cannot be set in production.  Used by the test suite to inject a
+     * deliberate mismatch and verify that constraint failures are detected.
+     */
+    if (sdexec_debug) {
+        const char *test_cpus;
+        if (get_dict (proc->cmd, "opts", "SDEXEC_TEST_EXPECTED_CPUS",
+                      &test_cpus) == 0) {
+            free (proc->expected_cpus);
+            if (!(proc->expected_cpus = strdup (test_cpus)))
+                goto error;
+        }
+    }
+
     /* Enable the stop timer by setting the SDEXEC_STOP_TIMER_SEC option to
      * a value in seconds.  The stop timer is disabled by default.
      * sOptionally set SDEXEC_STOP_TIMER_SIGNAL to a numerical signal
