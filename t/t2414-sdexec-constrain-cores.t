@@ -133,6 +133,27 @@ test_expect_success MULTICORE 'all-cores job cpuset covers all system CPUs' '
 '
 
 #
+# Sad path: post-start AllowedCPUs check failure drains rank
+#
+# SDEXEC_TEST_EXPECTED_CPUS injects a wrong expected CPU idset (requires
+# sdexec-debug = true, which is set in the test config).  The mismatch
+# triggers the post-start check to fail, causing job-exec to drain the rank.
+# The drained rank is undrained at the end so later tests can still run.
+#
+test_expect_success 'AllowedCPUs check failure drains rank with useful message' '
+	test_when_finished "flux resource drain -no {ranks} | xargs -r flux resource undrain" &&
+	flux submit -n1 -c1 \
+	    --setattr=exec.bulkexec.sdexec-test-expected-cpus=9998-9999 \
+	    hostname &&
+	flux job wait-event -vt 60 $(flux job last) exception &&
+	flux job wait-event -t 60 $(flux job last) clean &&
+	drained=$(flux resource drain -no {ranks}) &&
+	test_debug "flux resource drain" &&
+	test -n "$drained" &&
+	flux resource drain -i $drained -no {reason} | grep AllowedCPUs
+'
+
+#
 # Reload config: disable sdexec-constrain-cores, verify constraint removed
 #
 # N.B. do these tests last as they alter the job-exec module config
