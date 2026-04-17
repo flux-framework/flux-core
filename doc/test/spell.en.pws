@@ -1155,3 +1155,8 @@ libioencode
 memlimit
 observability
 sdproc
+busctl
+DeviceAllow
+nvidia
+nvidiactl
+rw

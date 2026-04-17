@@ -93,6 +93,11 @@ variant arrays.
    * - array of basic type
      - aX
      - JSON array, e.g. ``[1, 2, 3]`` for ``ai``
+   * - array of string pairs
+     - a(ss)
+     - JSON array of two-element string arrays,
+       e.g. ``[["/dev/nvidiactl", "rw"], ["/dev/nvidia0", "rw"]]``
+       for ``DeviceAllow`` (device specifier, permissions)
    * - property dictionary
      - a{sv}
      - object, e.g. ``{"ActiveState": ["s", "active"]}``
@@ -125,7 +130,7 @@ extending ``message.c`` and registering the new signature in ``interface.c``.
    * - Property dictionary (a{sv})
      - yes
      - no
-   * - a(sv), a(sasb)
+   * - a(sv), a(sasb), a(ss)
      - no
      - yes
    * - Arbitrary struct (...)
@@ -196,6 +201,28 @@ RPC Interface
       Signal parameters as a JSON array.
 
 
+Exploring the D-Bus Interface
+=============================
+
+The systemd D-Bus object hierarchy can be browsed live with :linux:man1:`busctl`.
+Use ``tree`` to list object paths under the systemd service::
+
+   busctl tree org.freedesktop.systemd1
+
+To list all properties of a running unit with their D-Bus type signatures, use
+``introspect``.  Unit names are encoded as D-Bus object paths by replacing
+special characters with their hex escape (e.g. ``.`` becomes ``_2e``)::
+
+   busctl introspect org.freedesktop.systemd1 \
+       /org/freedesktop/systemd1/unit/some_2eservice \
+       org.freedesktop.systemd1.Service
+
+The same information is available statically in the D-Bus introspection XML
+files installed by the ``systemd-dev`` package under
+``/usr/share/dbus-1/interfaces/``, one file per interface.  These files are
+the authoritative source for property type signatures used in
+``StartTransientUnit`` calls.
+
 ******************
 External Resources
 ******************
@@ -203,3 +230,4 @@ External Resources
 - `D-Bus specification <https://dbus.freedesktop.org/doc/dbus-specification.html>`_
 - `The new sd-bus API of systemd <https://0pointer.net/blog/the-new-sd-bus-api-of-systemd.html>`_
 - `org.freedesktop.systemd1 D-Bus interface <https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.systemd1.html>`_
+- :linux:man5:`systemd.resource-control` — resource control properties including ``DeviceAllow``
