@@ -52,7 +52,8 @@ test_expect_success 'construct FLUX_URI for rank 2 (child of 1)' '
 
 # Choice of signal 11 (SIGSEGV) is deliberate here.
 # The broker should not trap this signal - see flux-framework/flux-core#4230.
-test_expect_success 'kill -11 broker 1' '
+# N.B. skip under ASAN, as it may capture segfault signal and report differently
+test_expect_success NO_ASAN 'kill -11 broker 1' '
 	$startctl kill 1 11 &&
 	test_expect_code 139 $startctl wait 1
 '
