@@ -27,6 +27,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/parse_size.h"
+#include "src/common/libutil/strstrip.h"
 
 #include "parse.h"
 #include "start.h"
@@ -243,6 +244,57 @@ static int prop_add_bytearray (json_t *prop,
     return 0;
 }
 
+/* Parse comma-separated "specifier perms" pairs such as "/dev/nvidiactl rw"
+ * and add a property of D-Bus type a(ss), as used by DeviceAllow.
+ * See systemd.resource-control(5) for specifier and perms syntax.
+ */
+static int prop_add_str_pair_array (json_t *prop,
+                                    const char *name,
+                                    const char *val)
+{
+    json_t *pairs = NULL;
+    json_t *o = NULL;
+    char *buf = NULL;
+    char *saveptr;
+    char *entry;
+    int rc = -1;
+
+    if (!(pairs = json_array ()))
+        return -1;
+    if (!(buf = strdup (val)))
+        goto out;
+    entry = strtok_r (buf, ",", &saveptr);
+    while (entry) {
+        char *sp;
+        entry = strstrip (entry);
+        if (!(sp = strchr (entry, ' ')))
+            goto out;
+        *sp++ = '\0';
+        sp = strstrip (sp);
+        if (strlen (entry) == 0 || strlen (sp) == 0)
+            goto out;
+        json_t *pair;
+        if (!(pair = json_pack ("[ss]", entry, sp))
+            || json_array_append_new (pairs, pair) < 0) {
+            json_decref (pair);
+            goto out;
+        }
+        entry = strtok_r (NULL, ",", &saveptr);
+    }
+    if (json_array_size (pairs) == 0)
+        goto out;
+    if (!(o = json_pack ("[s[sO]]", name, "a(ss)", pairs))
+        || json_array_append_new (prop, o) < 0) {
+        json_decref (o);
+        goto out;
+    }
+    rc = 0;
+out:
+    free (buf);
+    json_decref (pairs);
+    return rc;
+}
+
 /* Set a property by name. By default, values are strings  Those that are
  * not require explicit conversion from string.
  */
@@ -287,6 +339,10 @@ static int prop_add (json_t *prop, const char *name, const char *val)
             return -1;
         }
         free (bitmap);
+    }
+    else if (streq (name, "DeviceAllow")) {
+        if (prop_add_str_pair_array (prop, name, val) < 0)
+            return -1;
     }
     else if (streq (name, "SendSIGKILL")) {
         bool value;

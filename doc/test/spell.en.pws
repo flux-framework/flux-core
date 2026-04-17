@@ -1160,3 +1160,6 @@ DeviceAllow
 nvidia
 nvidiactl
 rw
+BPF
+delegatable
+eBPF
