@@ -173,6 +173,9 @@ Starting Units
         - a(ss)
         - Comma-separated "specifier perms" pairs,
           e.g. "/dev/nvidiactl rw,/dev/nvidia0 rw"
+      * - DevicePolicy
+        - s (string)
+        - "auto", "closed", or "strict"
 
    See :linux:man5:`systemd.resource-control` for property semantics.
 

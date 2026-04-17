@@ -1157,6 +1157,7 @@ observability
 sdproc
 busctl
 DeviceAllow
+DevicePolicy
 nvidia
 nvidiactl
 rw
