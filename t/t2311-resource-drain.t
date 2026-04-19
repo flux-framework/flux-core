@@ -518,6 +518,21 @@ test_expect_success 'a malformed undrain context in the eventlog fails' '
 	EOT
 	test_must_fail flux module load resource noverify
 '
+test_expect_success 'drain works when fake resources outnumber actual brokers' '
+	cat <<-EOF >test-drain.sh &&
+	#!/bin/sh
+    flux module remove sched-simple &&
+    flux module remove resource &&
+	flux R encode -r 0-99 -c 0-3 -g 0 -H fake[0-99] \
+		| flux kvs put --raw resource.R=- &&
+	flux module load resource &&
+	flux resource drain 98 test drain &&
+	flux resource drain &&
+	flux resource drain | grep test
+	EOF
+	chmod +x test-drain.sh &&
+	flux start --test-size=1 -Shostlist=fake[0-99] ./test-drain.sh
+'
 test_expect_success '' '
 	flux module remove -f resource &&
 	flux kvs unlink resource.eventlog &&
