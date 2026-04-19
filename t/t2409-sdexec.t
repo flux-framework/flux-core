@@ -334,6 +334,15 @@ test_expect_success 'sdexec can set unit DeviceAllow with multiple entries' '
 	sort deviceallow2.out >deviceallow2.out.sorted &&
 	test_cmp deviceallow2.exp.sorted deviceallow2.out.sorted
 '
+test_expect_success 'sdexec can set unit DevicePolicy property' '
+	echo "DevicePolicy=closed" >devicepolicy.exp &&
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-devicepolicy.service" \
+	    --setopt=SDEXEC_PROP_DevicePolicy="closed" \
+	    $systemctl --user show --property DevicePolicy \
+	        t2409-devicepolicy.service >devicepolicy.out &&
+	test_cmp devicepolicy.exp devicepolicy.out
+'
 test_expect_success 'sdexec can set unit OOMScoreAdjust' '
 	echo "OOMScoreAdjust=100" >oomscoreadjust.exp &&
 	$sdexec -r 0 \
