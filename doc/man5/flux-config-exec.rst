@@ -169,9 +169,19 @@ sdexec-constrain-cores
    allocation to the full set of OS CPU (PU) indices that belong to those
    cores.  (Default: ``false``).
 
-sdexec-stop-timer-signal
-   (optional) Configure the signal used by the stop timer.  By default,
-   10 (SIGUSR1, the IMP proxy for SIGKILL) is used.
+   After each job unit starts, Flux verifies that the expected CPU set is
+   enforced.  This check is necessary because systemd may silently accept
+   ``AllowedCPUs`` without enforcing it if the ``cpuset`` controller is not
+   properly delegated.  If the check fails, Flux drains the node as a likely
+   misconfiguration that would affect all subsequent jobs.
+
+   .. note::
+
+      This feature requires cgroup v2 (unified hierarchy) and the ``cpuset``
+      cgroup controller to be delegated to the Flux user instance.  See the
+      *Systemd and cgroup unified hierarchy* section of the Flux
+      Administrator's Guide for the required systemd override file
+      configuration.
 
 
 .. _sdexec_properties:
