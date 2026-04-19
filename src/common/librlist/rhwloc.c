@@ -262,6 +262,47 @@ const char * rhwloc_hostname (hwloc_topology_t topo)
     return NULL;
 }
 
+/*  Return the union of cpusets for the cores in idset string `cores`.
+ *  Returns heap-allocated hwloc_cpuset_t, or NULL on error.
+ *  Caller must free with hwloc_bitmap_free().
+ */
+hwloc_cpuset_t rhwloc_cores_to_cpuset (hwloc_topology_t topo, const char *cores)
+{
+    hwloc_cpuset_t coreset = NULL;
+    hwloc_cpuset_t cpuset = NULL;
+    int depth;
+    int i;
+
+    if (!topo || !cores)
+        return NULL;
+
+    if (!(coreset = hwloc_bitmap_alloc ())
+        || !(cpuset = hwloc_bitmap_alloc ()))
+        goto err;
+
+    if (hwloc_bitmap_list_sscanf (coreset, cores) < 0)
+        goto err;
+
+    depth = hwloc_get_type_depth (topo, HWLOC_OBJ_CORE);
+    if (depth == HWLOC_TYPE_DEPTH_UNKNOWN || depth == HWLOC_TYPE_DEPTH_MULTIPLE)
+        goto err;
+
+    i = hwloc_bitmap_first (coreset);
+    while (i >= 0) {
+        hwloc_obj_t core = hwloc_get_obj_by_depth (topo, depth, i);
+        if (!core || !core->cpuset)
+            goto err;
+        hwloc_bitmap_or (cpuset, cpuset, core->cpuset);
+        i = hwloc_bitmap_next (coreset, i);
+    }
+    hwloc_bitmap_free (coreset);
+    return cpuset;
+err:
+    hwloc_bitmap_free (coreset);
+    hwloc_bitmap_free (cpuset);
+    return NULL;
+}
+
 /*  Generate a cpuset string for all cores in the current topology
  */
 char *rhwloc_core_idset_string (hwloc_topology_t topo)

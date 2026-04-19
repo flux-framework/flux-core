@@ -40,6 +40,13 @@ char *rhwloc_topology_xml_restrict (const char *xml);
  */
 const char *rhwloc_hostname (hwloc_topology_t topo);
 
+/*  Return the union of cpusets for the cores in idset string `cores`.
+ *  Returns heap-allocated hwloc_cpuset_t, or NULL on error.
+ *  Caller must free with hwloc_bitmap_free().
+ */
+hwloc_cpuset_t rhwloc_cores_to_cpuset (hwloc_topology_t topo,
+                                        const char *cores);
+
 /*  Return idset string for all cores in hwloc topology object
  */
 char * rhwloc_core_idset_string (hwloc_topology_t topo);

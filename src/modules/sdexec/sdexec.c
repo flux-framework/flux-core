@@ -36,6 +36,7 @@
 
 #include "src/common/libsubprocess/client.h"
 #include "src/common/libioencode/ioencode.h"
+#include "src/common/libutil/cgroup.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/fdutils.h"
@@ -48,6 +49,8 @@
 #include "src/common/libsdexec/channel.h"
 #include "src/common/libsdexec/unit.h"
 #include "src/common/libsdexec/property.h"
+#include "src/common/librlist/rhwloc.h"
+#include "src/common/libidset/idset.h"
 
 #define MODULE_NAME "sdexec"
 
@@ -58,6 +61,7 @@ struct sdexec_ctx {
     flux_msg_handler_t **handlers;
     struct flux_msglist *requests; // each exec request "owns" an sdproc
     struct flux_msglist *kills;
+    hwloc_topology_t topo;         // local topology for core->CPU expansion
 };
 
 enum stop_timer_state {
@@ -96,6 +100,8 @@ struct sdproc {
     int errnum;
     const char *errstr;
     flux_error_t error;
+
+    char *expected_cpus;  /* expected AllowedCPUs idset string, or NULL */
 
     struct sdexec_ctx *ctx;
 };
@@ -305,6 +311,79 @@ static void reset_continuation (flux_future_t *f, void *arg)
     }
 }
 
+/* Verify that cpuset.cpus in the unit's cgroup matches
+ * the expected AllowedCPUs idset.  Returns 0 on success, -1 with errp set
+ * if the constraint was not applied (controller not delegated, or mismatch).
+ */
+static int sdproc_check_allowed_cpus (struct sdproc *proc, flux_error_t *errp)
+{
+    struct cgroup_info cg;
+    char buf[PATH_MAX];
+    FILE *fp;
+    const char *fpath;
+    struct idset *expected = NULL;
+    struct idset *actual = NULL;
+    int rc = -1;
+
+    if (cgroup_info_init_pid (&cg, sdexec_unit_pid (proc->unit)) < 0) {
+        errprintf (errp,
+                   "AllowedCPUs: cannot read cgroup for pid %d: %s",
+                   (int)sdexec_unit_pid (proc->unit),
+                   strerror (errno));
+        return -1;
+    }
+    if (!(fpath = cgroup_path_to (&cg, "cpuset.cpus"))) {
+        errprintf (errp, "AllowedCPUs: cgroup path too long");
+        return -1;
+    }
+    if (!(fp = fopen (fpath, "r"))) {
+        errprintf (errp,
+                   "AllowedCPUs not enforced: %s unavailable "
+                   "(is cpuset controller delegated to the user instance?)",
+                   fpath);
+        return -1;
+    }
+    if (!fgets (buf, sizeof (buf), fp)) {
+        errprintf (errp, "AllowedCPUs: failed to read %s", fpath);
+        fclose (fp);
+        return -1;
+    }
+    fclose (fp);
+    buf[strcspn (buf, "\n")] = '\0';
+
+    if (!(expected = idset_decode (proc->expected_cpus))
+        || !(actual = idset_decode (buf))) {
+        errprintf (errp, "AllowedCPUs: failed to parse cpuset");
+        goto done;
+    }
+    if (!idset_equal (expected, actual)) {
+        errprintf (errp,
+                   "AllowedCPUs not enforced: expected %s got %s "
+                   "(is cpuset controller delegated to the user instance?)",
+                   proc->expected_cpus,
+                   buf);
+        goto done;
+    }
+    rc = 0;
+done:
+    idset_destroy (expected);
+    idset_destroy (actual);
+    return rc;
+}
+
+/* Run post-start checks once the unit has entered the running state.
+ * Returns 0 if all checks pass, -1 with errp set if any check fails.
+ * Add new post-start checks here (e.g. sdproc_check_allowed_devices()).
+ */
+static int sdproc_post_start_checks (struct sdproc *proc, flux_error_t *errp)
+{
+    if (proc->expected_cpus) {
+        if (sdproc_check_allowed_cpus (proc, errp) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 /* sdbus.subscribe sent a PropertiesChanged response for a particular unit.
  * Advance the proc->unit state accordingly and send exec responses as needed.
  * call finalize_exec_request_if_done() in case this update is the last thing
@@ -337,6 +416,16 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
      */
     if (!proc->started_response_sent) {
         if (sdexec_unit_has_started (proc->unit)) {
+            flux_error_t check_error;
+            if (sdproc_post_start_checks (proc, &check_error) < 0) {
+                flux_log (h,
+                          LOG_ERR,
+                          "%s: post-start check failed: %s",
+                          sdexec_unit_name (proc->unit),
+                          check_error.text);
+                exec_respond_error (proc, EIO, check_error.text);
+                return;
+            }
             if (flux_respond_pack (h,
                                    proc->msg,
                                    "{s:s s:I}",
@@ -541,6 +630,7 @@ static void sdproc_destroy (struct sdproc *proc)
         flux_watcher_destroy (proc->stop.timer);
         json_decref (proc->cmd);
         flux_msglist_destroy (proc->write_requests);
+        free (proc->expected_cpus);
         free (proc);
         errno = saved_errno;
     }
@@ -682,6 +772,68 @@ static struct channel *create_out_channel (flux_t *h,
                                          arg);
 }
 
+/* Expand a Flux core idset string (logical core indices) to an OS CPU idset
+ * string (hwloc PU indices) using the supplied topology.  Handles
+ * hyperthreading: each logical core may cover multiple OS CPUs.
+ * Returns a heap-allocated string the caller must free(), or NULL on error.
+ */
+static char *cores_to_cpus (hwloc_topology_t topo, const char *cores)
+{
+    hwloc_cpuset_t cpuset = rhwloc_cores_to_cpuset (topo, cores);
+    struct idset *result = idset_create (0, IDSET_FLAG_AUTOGROW);
+    char *out = NULL;
+    int i;
+
+    if (!cpuset || !result)
+        goto done;
+    i = hwloc_bitmap_first (cpuset);
+    while (i >= 0) {
+        idset_set (result, i);
+        i = hwloc_bitmap_next (cpuset, i);
+    }
+    out = idset_encode (result, IDSET_FLAG_RANGE);
+done:
+    hwloc_bitmap_free (cpuset);
+    idset_destroy (result);
+    return out;
+}
+
+/* Translate any SDEXEC_CORES set in proc->cmd to AllowedCPUs using
+ * local hwloc topology.
+ */
+static int sdproc_set_allowed_cpus (struct sdexec_ctx *ctx, struct sdproc *proc)
+{
+    const char *cores;
+    char *allowed_cpus = NULL;
+    int rc = -1;
+
+    if (get_dict (proc->cmd, "opts", "SDEXEC_CORES", &cores) == 0) {
+        if (ctx->topo)
+            allowed_cpus = cores_to_cpus (ctx->topo, cores);
+        if (!allowed_cpus) {
+            flux_log (ctx->h,
+                      LOG_WARNING,
+                      "sdexec: AllowedCPUs core expansion failed for "
+                      "\"%s\"; using core IDs directly",
+                      cores);
+            allowed_cpus = strdup (cores);
+        }
+        if (!allowed_cpus
+            || set_dict (proc->cmd,
+                         "opts",
+                         "SDEXEC_PROP_AllowedCPUs",
+                         allowed_cpus) < 0) {
+            goto out;
+        }
+        if (!(proc->expected_cpus = strdup (allowed_cpus)))
+            goto out;
+    }
+    rc = 0;
+out:
+    ERRNO_SAFE_WRAP (free, allowed_cpus);
+    return rc;
+}
+
 static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
                                      json_t *cmd,
                                      int flags)
@@ -712,9 +864,32 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
         errno = ENOMEM;
         goto error;
     }
+    /* If SDEXEC_CORES is set, expand the logical core idset to OS CPU IDs
+     * using the local hwloc topology and set SDEXEC_PROP_AllowedCPUs so
+     * start.c will apply the restriction to the transient unit.
+     * Falls back to using core IDs directly if topology is unavailable.
+     */
+    if (sdproc_set_allowed_cpus (ctx, proc) < 0)
+        goto error;
+
+    /* SDEXEC_TEST_EXPECTED_CPUS overrides the expected CPU idset used by the
+     * post-start AllowedCPUs check.  Only available when sdexec-debug is true
+     * so it cannot be set in production.  Used by the test suite to inject a
+     * deliberate mismatch and verify that constraint failures are detected.
+     */
+    if (sdexec_debug) {
+        const char *test_cpus;
+        if (get_dict (proc->cmd, "opts", "SDEXEC_TEST_EXPECTED_CPUS",
+                      &test_cpus) == 0) {
+            free (proc->expected_cpus);
+            if (!(proc->expected_cpus = strdup (test_cpus)))
+                goto error;
+        }
+    }
+
     /* Enable the stop timer by setting the SDEXEC_STOP_TIMER_SEC option to
      * a value in seconds.  The stop timer is disabled by default.
-     * sOptionally set SDEXEC_STOP_TIMER_SIGNAL to a numerical signal
+     * Optionally set SDEXEC_STOP_TIMER_SIGNAL to a numerical signal
      * value to use instead of SIGKILL.
      */
     if (get_dict_int (proc->cmd,
@@ -1271,11 +1446,36 @@ static struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END
 };
 
+/* Fetch hwloc XML from the local broker's resource module and load a topology
+ * from it.  This avoids the cost of local topology rediscovery since the
+ * resource module has already done it.  Returns NULL on failure (non-fatal).
+ */
+static hwloc_topology_t sdexec_load_topo (flux_t *h)
+{
+    flux_future_t *f;
+    const char *xml;
+    hwloc_topology_t topo = NULL;
+
+    if (!(f = flux_rpc (h, "resource.topo-get", NULL, FLUX_NODEID_ANY, 0))
+        || flux_rpc_get (f, &xml) < 0
+        || !(topo = rhwloc_xml_topology_load (xml, RHWLOC_NO_RESTRICT))) {
+        flux_log (h,
+                  LOG_WARNING,
+                  "sdexec: could not fetch hwloc topology from resource "
+                  "module: %s; AllowedCPUs core expansion unavailable",
+                  future_strerror (f, errno));
+    }
+    flux_future_destroy (f);
+    return topo;
+}
+
 static void sdexec_ctx_destroy (struct sdexec_ctx *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
+        if (ctx->topo)
+            hwloc_topology_destroy (ctx->topo);
         if (ctx->requests) {
             const flux_msg_t *msg;
             msg = flux_msglist_first (ctx->requests);
@@ -1310,6 +1510,7 @@ static struct sdexec_ctx *sdexec_ctx_create (flux_t *h)
     if (!(ctx->requests = flux_msglist_create ())
         || !(ctx->kills = flux_msglist_create ()))
         goto error;
+    ctx->topo = sdexec_load_topo (h); // NULL is non-fatal
     return ctx;
 error:
     sdexec_ctx_destroy (ctx);

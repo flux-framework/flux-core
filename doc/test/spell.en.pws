@@ -1155,3 +1155,7 @@ libioencode
 memlimit
 observability
 sdproc
+hyperthreading
+hyperthreaded
+EIO
+ini

@@ -110,6 +110,83 @@ struct resource_set_test tests[] = {
     RESOURCE_SET_TEST_END
 };
 
+/* R with two R_lite entries so we can verify per-group core lookup */
+#define MULTI_ENTRY_R \
+    "{ \"version\": 1," \
+    "  \"execution\": { " \
+    "    \"R_lite\": " \
+    "       [ {\"rank\": \"0-1\", " \
+    "          \"children\": { \"core\": \"0-3\" } " \
+    "         }," \
+    "         {\"rank\": \"2-3\", " \
+    "          \"children\": { \"core\": \"4-7\" } " \
+    "         } " \
+    "       ] " \
+    "    } " \
+    "}"
+
+void test_rank_cores ()
+{
+    json_error_t err;
+    struct resource_set *r;
+    const char *cores;
+
+    /* NULL resource_set */
+    ok (resource_set_rank_cores (NULL, 0) == NULL && errno == EINVAL,
+        "resource_set_rank_cores (NULL, 0) returns EINVAL");
+
+    /* Single-entry R: all ranks in range map to the same cores */
+    r = resource_set_create (BASIC_R, &err);
+    if (r == NULL)
+        BAIL_OUT ("resource_set_create: %s", err.text);
+
+    cores = resource_set_rank_cores (r, 0);
+    is (cores, "0-3", "rank_cores: rank 0 -> \"0-3\" in single-entry R");
+
+    cores = resource_set_rank_cores (r, 2);
+    is (cores, "0-3", "rank_cores: rank 2 -> \"0-3\" in single-entry R");
+
+    ok (resource_set_rank_cores (r, 5) == NULL && errno == ENOENT,
+        "rank_cores: rank not in R returns NULL/ENOENT");
+
+    resource_set_destroy (r);
+
+    /* Multi-entry R: each rank group returns its own cores */
+    r = resource_set_create (MULTI_ENTRY_R, &err);
+    if (r == NULL)
+        BAIL_OUT ("resource_set_create: %s", err.text);
+
+    cores = resource_set_rank_cores (r, 0);
+    is (cores, "0-3", "rank_cores: rank 0 -> \"0-3\" in multi-entry R");
+
+    cores = resource_set_rank_cores (r, 1);
+    is (cores, "0-3", "rank_cores: rank 1 -> \"0-3\" in multi-entry R");
+
+    cores = resource_set_rank_cores (r, 2);
+    is (cores, "4-7", "rank_cores: rank 2 -> \"4-7\" in multi-entry R");
+
+    cores = resource_set_rank_cores (r, 3);
+    is (cores, "4-7", "rank_cores: rank 3 -> \"4-7\" in multi-entry R");
+
+    ok (resource_set_rank_cores (r, 99) == NULL && errno == ENOENT,
+        "rank_cores: rank not in multi-entry R returns NULL/ENOENT");
+
+    resource_set_destroy (r);
+
+    /* Alternate (non-contiguous) ranks */
+    r = resource_set_create (BASIC_ALT_RANKS, &err);
+    if (r == NULL)
+        BAIL_OUT ("resource_set_create: %s", err.text);
+
+    cores = resource_set_rank_cores (r, 14);
+    is (cores, "0-3", "rank_cores: rank 14 -> \"0-3\" in alt-ranks R");
+
+    ok (resource_set_rank_cores (r, 1) == NULL && errno == ENOENT,
+        "rank_cores: rank 1 not in alt-ranks R returns NULL/ENOENT");
+
+    resource_set_destroy (r);
+}
+
 void test_rank_conversions ()
 {
     json_error_t err;
@@ -194,6 +271,7 @@ int main (int ac, char *av[])
     }
 
     test_rank_conversions ();
+    test_rank_cores ();
 
     done_testing ();
 }

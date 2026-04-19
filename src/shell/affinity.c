@@ -21,6 +21,7 @@
 #include <flux/shell.h>
 
 #include "ccan/str/str.h"
+#include "src/common/librlist/rhwloc.h"
 
 #include "builtins.h"
 
@@ -195,56 +196,10 @@ static hwloc_cpuset_t *distribute_tasks (hwloc_topology_t topo,
 static hwloc_cpuset_t shell_affinity_get_cpuset (struct shell_affinity *sa,
                                                  const char *cores)
 {
-    int depth, i;
-    hwloc_cpuset_t coreset = NULL;
-    hwloc_cpuset_t resultset = NULL;
-
-    if (!(coreset = hwloc_bitmap_alloc ())
-        || !(resultset = hwloc_bitmap_alloc ())) {
-        shell_log_errno ("hwloc_bitmap_alloc");
-        goto err;
-    }
-
-    /*  Parse cpus as bitmap list
-     */
-    if (hwloc_bitmap_list_sscanf (coreset, cores) < 0) {
-        shell_log_error ("affinity: failed to read core list: %s", cores);
-        goto err;
-    }
-
-    /*  Find depth of type core in this topology:
-     */
-    depth = hwloc_get_type_depth (sa->topo, HWLOC_OBJ_CORE);
-    if (depth == HWLOC_TYPE_DEPTH_UNKNOWN
-        || depth == HWLOC_TYPE_DEPTH_MULTIPLE) {
-        shell_log_error ("hwloc_get_type_depth (CORE) returned nonsense");
-        goto err;
-    }
-
-    /*  Get the union of all allocated cores' cpusets into sa->cpuset
-     */
-    i = hwloc_bitmap_first (coreset);
-    while (i >= 0) {
-        hwloc_obj_t core = hwloc_get_obj_by_depth (sa->topo, depth, i);
-        if (!core) {
-            shell_log_error ("affinity: core%d not in topology", i);
-            goto err;
-        }
-        if (!core->cpuset) {
-            shell_log_error ("affinity: core%d cpuset is null", i);
-            goto err;
-        }
-        hwloc_bitmap_or (resultset, resultset, core->cpuset);
-        i = hwloc_bitmap_next (coreset, i);
-    }
-    hwloc_bitmap_free (coreset);
-    return resultset;
-err:
-    if (coreset)
-        hwloc_bitmap_free (coreset);
-    if (resultset)
-        hwloc_bitmap_free (resultset);
-    return NULL;
+    hwloc_cpuset_t cpuset = rhwloc_cores_to_cpuset (sa->topo, cores);
+    if (!cpuset)
+        shell_log_error ("affinity: failed to get cpuset for cores: %s", cores);
+    return cpuset;
 }
 
 static char *cpuset_to_string (hwloc_cpuset_t cpuset)

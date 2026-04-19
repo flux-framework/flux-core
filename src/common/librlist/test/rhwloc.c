@@ -811,6 +811,50 @@ void test_xml ()
     free (xml);
 }
 
+void test_cores_to_cpuset (void)
+{
+    hwloc_topology_t topo;
+    hwloc_cpuset_t cpuset;
+    char *cores;
+
+    topo = rhwloc_local_topology_load (RHWLOC_NO_RESTRICT);
+    if (!topo)
+        BAIL_OUT ("rhwloc_local_topology_load failed");
+
+    /* NULL inputs */
+    ok (rhwloc_cores_to_cpuset (NULL, "0") == NULL,
+        "rhwloc_cores_to_cpuset topo=NULL returns NULL");
+    ok (rhwloc_cores_to_cpuset (topo, NULL) == NULL,
+        "rhwloc_cores_to_cpuset cores=NULL returns NULL");
+
+    /* Invalid core string */
+    ok (rhwloc_cores_to_cpuset (topo, "x") == NULL,
+        "rhwloc_cores_to_cpuset cores=invalid returns NULL");
+
+    /* Core 0 always exists; cpuset must be non-empty and include PU 0
+     * (i.e. physical CPU 0 is always in core 0's cpuset) */
+    cpuset = rhwloc_cores_to_cpuset (topo, "0");
+    ok (cpuset != NULL && !hwloc_bitmap_iszero (cpuset),
+        "rhwloc_cores_to_cpuset cores=0 returns non-empty cpuset");
+    ok (cpuset != NULL && hwloc_bitmap_isset (cpuset, 0),
+        "rhwloc_cores_to_cpuset cores=0 cpuset includes PU 0");
+    hwloc_bitmap_free (cpuset);
+
+    /* All cores: cpuset must equal full topology cpuset */
+    cores = rhwloc_core_idset_string (topo);
+    if (!cores)
+        BAIL_OUT ("rhwloc_core_idset_string failed");
+    cpuset = rhwloc_cores_to_cpuset (topo, cores);
+    ok (cpuset != NULL
+        && hwloc_bitmap_isequal (cpuset,
+                                 hwloc_topology_get_allowed_cpuset (topo)),
+        "rhwloc_cores_to_cpuset all cores cpuset matches topology cpuset");
+    hwloc_bitmap_free (cpuset);
+    free (cores);
+
+    hwloc_topology_destroy (topo);
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
@@ -818,6 +862,7 @@ int main (int ac, char *av[])
     test_hwloc (NULL);
     test_hwloc (xml1);
     test_xml ();
+    test_cores_to_cpuset ();
 
     done_testing ();
 }
