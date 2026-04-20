@@ -166,8 +166,8 @@ Starting Units
       * - MemoryHigh, MemoryMax, MemoryLow, MemoryMin
         - t (uint64)
         - "infinity", "98%", or quantity with K/M/G/T suffix
-      * - AllowedCPUs
-        - s (string)
+      * - AllowedCPUs, AllowedMemoryNodes
+        - ay (byte array)
         - Flux idset notation, e.g. "0,2-4,7"
       * - DeviceAllow
         - a(ss)

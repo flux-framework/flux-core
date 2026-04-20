@@ -200,10 +200,10 @@ OOMScoreAdjust
    systemd instance.
 
 The following unit properties are reserved for use by Flux and should not be
-added to ``sdexec-properties``: AllowedCPUs, Description, Environment,
-ExecStart, KillMode, RemainAfterExit, SendSIGKILL, StandardInputFileDescriptor,
-StandardOutputFileDescriptor, StandardErrorFileDescriptor, TimeoutStopUSec,
-Type, WorkingDirectory.
+added to ``sdexec-properties``: AllowedCPUs, AllowedMemoryNodes,
+Description, Environment, ExecStart, KillMode, RemainAfterExit,
+SendSIGKILL, StandardInputFileDescriptor, StandardOutputFileDescriptor,
+StandardErrorFileDescriptor, TimeoutStopUSec, Type, WorkingDirectory.
 
 
 .. _testexec:

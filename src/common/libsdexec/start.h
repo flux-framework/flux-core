@@ -41,6 +41,11 @@
  *   a list of CPU indices.
  *   See also: systemd.resource-control(5).
  *
+ * AllowedMemoryNodes
+ *   Restrict execution to specific NUMA memory nodes. Value is a Flux idset
+ *   representing a list of NUMA node indices.
+ *   See also: systemd.resource-control(5).
+ *
  * DeviceAllow
  *   Control access to device nodes. Value is a comma-separated list of
  *   "specifier perms" pairs, e.g. "/dev/nvidiactl rw,/dev/nvidia0 rw".
