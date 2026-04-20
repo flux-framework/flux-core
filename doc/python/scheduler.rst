@@ -81,9 +81,8 @@ type and fields of this object are defined by the pool; scheduler policy code
 treats it as opaque and passes it directly to
 :meth:`~flux.resource.ResourcePool.alloc`.
 
-If you need the raw jobspec dict — for instance, to inspect job attributes in
-an :meth:`~Scheduler.alloc` override — it is passed as the *jobspec* parameter
-to :meth:`~Scheduler.alloc`:
+If you need the raw jobspec dict — for instance, to inspect job attributes,
+it is passed as the *jobspec* parameter to :meth:`~Scheduler.alloc`:
 
 .. code-block:: python
 
@@ -166,6 +165,11 @@ distinct objects are created and stored together on the
   :meth:`~flux.resource.ResourcePool.parse_resource_request` when the alloc
   arrives.  For the built-in pools this carries fields for node count,
   slot count, cores and GPUs per slot, duration, constraints, and exclusivity.
+  The raw jobspec dict is also available as ``job.resource_request.jobspec``,
+  which is useful for reading site-specific hints from
+  ``attributes.system`` that the standard parser does not extract —
+  for example, ``job.resource_request.jobspec.get("attributes",
+  {}).get("system", {}).get("rack_exclusive", False)``.
   Used by the scheduler during each :meth:`~Scheduler.schedule`
   pass to decide whether resources can be satisfied.  Persists for the
   lifetime of the pending job.
@@ -494,7 +498,7 @@ in :func:`mod_main` and are forwarded to ``__init__``:
 
    $ flux module load my-sched.py queue-depth=8 log-level=debug
 
-The base class automatically handles three built-in arguments:
+The base class automatically handles four built-in arguments:
 
 queue-depth=N|unlimited
     Maximum number of concurrent outstanding alloc requests (default 8, or
@@ -505,6 +509,15 @@ log-level=LEVEL
     Minimum log severity to emit.  *LEVEL* is one of ``emerg``, ``alert``,
     ``crit``, ``err``, ``warning``, ``notice``, ``info``, or ``debug``
     (default ``info``).
+
+pool-class=URI
+    Select a custom resource pool class at load time.  *URI* is resolved
+    by :meth:`~Scheduler._pool_class_from_uri`: a ``file://`` URI loads the
+    named Python file and uses the class whose name matches the file stem
+    (or an explicit ``#fragment``); other URI schemes import a Python module
+    and read its ``pool_class`` attribute.  Equivalent to setting
+    :attr:`~Scheduler.pool_class` on the subclass, but applied at load time
+    without subclassing.  See `Pool class hook (pool_class)`_.
 
 Any argument not consumed by the subclass or the base class is rejected
 with an error at load time, so a typo like ``log_level=debug`` (underscore
@@ -638,19 +651,259 @@ example covering annotations, priority, cancel, drain/undrain, and the
 hello/reload protocol.
 
 
+Customizing the resource pool
+-----------------------------
+
+The built-in :class:`~flux.resource.Rv1Pool` pool implementation exposes
+two override points that let a scheduler enforce topology-aware allocation
+policies without replacing the entire pool.  A third hook lets the scheduler
+inject a custom pool class without overriding
+:meth:`~Scheduler._acquire_resources`.
+
+Pool-level selection hook
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Override :meth:`~flux.resource.Rv1Pool.Rv1Pool._select_resources` to control
+which candidates are chosen during each allocation.  The base class calls
+this method with a worst-fit-sorted list of
+``(rank, info, free_cores, free_gpus)`` tuples that already pass
+availability and constraint filters:
+
+.. code-block:: python
+
+   from flux.resource import InsufficientResources
+   from flux.resource.Rv1Pool import Rv1Pool
+
+   class _RackPoolV1(Rv1Pool):
+
+       def _select_resources(self, candidates, request):
+           # Group candidates by rack, then try the fullest rack first.
+           racks = {}
+           for entry in candidates:
+               rack_id = self._rack_map.get(entry[0])
+               if rack_id is not None:
+                   racks.setdefault(rack_id, []).append(entry)
+           for _count, rack_candidates in sorted(
+               ((len(v), v) for v in racks.values()), reverse=True
+           ):
+               try:
+                   return super()._select_resources(rack_candidates, request)
+               except InsufficientResources:
+                   continue
+           raise InsufficientResources("no single rack has sufficient resources")
+
+The method must return ``(selected, actual_nslots)`` on success, or raise
+:exc:`~flux.resource.InsufficientResources` if the candidates cannot satisfy
+the request.  Calling ``super()._select_resources(candidates, request)``
+delegates to the base greedy loop for the candidate subset.
+
+Pool-level feasibility hook
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Override :meth:`~flux.resource.Rv1Pool.Rv1Pool._check_feasibility` to add
+topology-aware permanent-denial logic.  The base class call must come first
+so that basic structural checks (node count, cores, GPUs, constraints) are
+enforced before the topology check:
+
+.. code-block:: python
+
+   from flux.resource import InfeasibleRequest
+   from flux.resource.Rv1Pool import Rv1Pool
+
+   class _RackPoolV1(Rv1Pool):
+
+       def _check_feasibility(self, request):
+           super()._check_feasibility(request)   # base structural checks first
+
+           if not self._rack_map or request.nnodes == 0:
+               return
+           max_rack_nodes = max(
+               sum(1 for r in self._ranks if self._rack_map.get(r) == rid)
+               for rid in set(self._rack_map.values())
+           )
+           if max_rack_nodes < request.nnodes:
+               raise InfeasibleRequest(
+                   f"rack-local request for {request.nnodes} node(s) cannot be "
+                   f"satisfied: largest rack has {max_rack_nodes} node(s)"
+               )
+
+Raising :exc:`~flux.resource.InfeasibleRequest` causes the scheduler to
+permanently deny the job via :meth:`~AllocRequest.deny`.  Returning
+normally indicates the request is structurally satisfiable; the scheduler
+will keep it pending and retry allocation when resources become available.
+
+Both hooks receive the full :class:`~flux.resource.Rv1Pool.ResourceRequest`
+object — the same object stored as ``job.resource_request`` on the
+:class:`PendingJob`.  This includes ``request.jobspec`` for reading
+site-specific ``attributes.system`` hints beyond the standard parsed fields.
+
+Pool class hook (pool_class)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There are three ways to bind a custom pool class to a scheduler:
+
+1. **Class attribute** — set :attr:`~Scheduler.pool_class` on the subclass:
+
+   .. code-block:: python
+
+      from flux.scheduler import Scheduler
+
+      class RackScheduler(Scheduler):
+          pool_class = RackPool
+          # must also override schedule() to allocate jobs
+
+2. **Module argument** — pass ``pool-class=URI`` at load time (no subclassing
+   required):
+
+   .. code-block:: console
+
+      $ flux module load sched-simple pool-class=file:///path/to/RackPool.py
+
+3. **Writer auto-discovery** — if the system R carries a ``scheduling.writer``
+   URI pointing to a pool implementation, the scheduler loads it automatically
+   without any explicit argument.  See `Writer identification`_.
+
+In all three cases :attr:`~Scheduler.pool_class` must be a
+:class:`~flux.resource.ResourcePool.ResourcePool` subclass.  The scheduler's
+:meth:`~Scheduler._make_pool` helper checks :attr:`~Scheduler.pool_class`
+first (highest priority), then ``scheduling.writer`` auto-discovery, and
+finally falls back to the default :class:`~flux.resource.ResourcePool.ResourcePool`.
+
+The pool subclass is responsible for its own version dispatch, which keeps the
+logic together with the implementation.  The pattern is to map version
+integers to version-specific implementation classes in an ``_impl_map`` and
+construct the right one in ``__init__`` before calling
+``super().__init__(impl_instance)``:
+
+.. code-block:: python
+
+   class RackPool(ResourcePool):
+       _impl_map = {1: _RackPoolV1}   # extend here to add Rv2 support
+
+       def __init__(self, R, log=None):
+           version = R.get("version", 1) if isinstance(R, Mapping) else 1
+           impl_class = self._impl_map.get(version)
+           if impl_class is None:
+               raise ValueError(f"R version {version} not supported by RackPool")
+           super().__init__(impl_class(R, log=log))
+
+The complete worked example of all three hooks — selection, feasibility, and
+pool class — is
+`t/scheduler/RackPool.py <https://github.com/flux-framework/flux-core/blob/master/t/scheduler/RackPool.py>`__
+in the source tree.
+`t/scheduler/sched-rack-subclass.py <https://github.com/flux-framework/flux-core/blob/master/t/scheduler/sched-rack-subclass.py>`__
+shows the class-attribute binding pattern.
+
+
+The R.scheduling key
+--------------------
+
+R may carry a ``scheduling`` key in its top-level JSON object containing
+scheduler-specific topology metadata.  Schedulers use this key to encode
+information that is not captured in the standard R execution section — for
+example, rack or chassis membership, network topology, or fabric locality.
+
+:class:`~flux.resource.Rv1Pool` propagates the ``scheduling`` key to every
+allocated R by default, making it available to downstream consumers.
+Schedulers that store rank-indexed data in the key should override
+:meth:`~flux.resource.Rv1Pool.Rv1Pool.alloc` to filter it down to the
+allocated ranks before returning.
+
+Writer identification
+~~~~~~~~~~~~~~~~~~~~~
+
+The ``scheduling`` key is defined by :doc:`rfc:spec_20`.  By convention it
+includes a ``writer`` URI identifying the scheduler that created it; a missing
+``writer`` implies ``fluxion``.
+
+When a scheduler starts and finds a ``scheduling.writer`` URI in the system R,
+:meth:`~Scheduler._pool_class_from_writer` resolves the URI to a pool class
+and :meth:`~Scheduler._make_pool` instantiates it automatically.  This enables
+a sub-instance scheduler to load the same pool class as the parent without any
+explicit configuration — the parent bakes the URI into every allocated R, and
+the sub-instance picks it up on startup.
+
+For the auto-discovery to work end-to-end, the pool's
+:meth:`~flux.resource.Rv1Pool.Rv1Pool.alloc` override must preserve the
+``writer`` key in the trimmed ``scheduling`` it attaches to allocated R.
+Keeping the full ``scheduling`` dict (minus trimmed topology entries) is
+sufficient — the ``writer`` key is carried along automatically.
+
+
+Sub-instance resource pools
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In Flux, the R allocated to a job becomes the resource inventory of any
+sub-instance that starts inside that job.  A scheduler loaded in the
+sub-instance therefore initialises its pool from the allocated R.
+
+The sub-instance's resource module re-ranks the allocated nodes from zero:
+if the parent allocated original ranks ``{2, 3}``, the sub-instance sees
+them as ranks ``{0, 1}``.  The ``execution.R_lite`` section is updated
+automatically, but the ``scheduling`` key is not — its rank references still
+use the parent's numbering.  Two invariants must hold for the pool to be
+consistent:
+
+1. **Only allocated ranks appear in** ``scheduling``.  Override
+   :meth:`~flux.resource.Rv1Pool.Rv1Pool.alloc` to trim the key before the
+   result is returned, so each nesting level sees only its own topology:
+
+   .. code-block:: python
+
+      def alloc(self, jobid, request):
+          result = super().alloc(jobid, request)
+          if result.scheduling:
+              result.scheduling = dict(result.scheduling)
+              result.scheduling["racks"] = _filter_racks(
+                  result.scheduling.get("racks", []), set(result._ranks)
+              )
+          return result
+
+2. **Ranks in** ``scheduling`` **are re-mapped to match the pool.**
+   The sub-instance resource module always re-ranks allocated nodes from zero,
+   so pool ranks are always 0..N-1.  After trimming, the n-th rank in
+   ``scheduling`` (sorted ascending) corresponds to pool rank ``n``.  Apply
+   the sorted-zip unconditionally; when ranks already match it is a no-op:
+
+   .. code-block:: python
+
+      sorted_orig = sorted(rack_map)               # e.g. [2, 3]
+      rank_remap = dict(zip(sorted_orig, range(len(self._ranks))))
+      rack_map = {rank_remap[o]: rid for o, rid in rack_map.items()}
+      scheduling["racks"] = _rerank_racks(scheduling.get("racks", []), rank_remap)
+
+.. note::
+
+   The sorted-zip re-ranking assumes that the n-th node in the parent's
+   allocated R (ascending rank order) becomes broker rank ``n`` in the
+   sub-instance.  This holds for the typical case of one broker per physical
+   node with the default block taskmap.  It can break when a non-default
+   taskmap reorders task assignment across nodes (the broker's PMI rank —
+   which becomes its broker rank — equals its task rank).  Using hostnames
+   to correlate ``scheduling`` entries with pool entries is more robust in
+   principle, but does not work when multiple brokers share a node (as in
+   test instances), where each host appears more than once.
+
+`t/scheduler/RackPool.py <https://github.com/flux-framework/flux-core/blob/master/t/scheduler/RackPool.py>`__ demonstrates both steps.
+
+
 API reference
 -------------
 
 .. autoclass:: flux.scheduler.Scheduler
    :members:
    :undoc-members:
+   :noindex:
 
 
 .. autoclass:: flux.scheduler.AllocRequest
    :members:
+   :noindex:
 
 .. autoclass:: flux.scheduler.PendingJob
    :members:
+   :noindex:
 
 .. autoclass:: flux.resource.ResourcePool.ResourcePool
    :members:
+   :noindex:

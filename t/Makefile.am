@@ -188,6 +188,7 @@ TESTSCRIPTS = \
 	t2306-sched-fifo.t \
 	t2307-sched-backfill.t \
 	t2308-sched-generator.t \
+	t2309-sched-rack.t \
 	t2310-resource-module.t \
 	t2311-resource-drain.t \
 	t2312-resource-exclude.t \
@@ -456,6 +457,8 @@ dist_check_SCRIPTS = \
 	job-manager/wait-interrupted.py \
 	job-manager/sched-helper.sh \
 	job-manager/job-conv.py \
+	scheduler/RackPool.py \
+	scheduler/sched-rack-subclass.py \
 	job-attach/outputsleep.sh \
 	job-exec/dummy.sh \
 	job-exec/imp.sh \

@@ -55,7 +55,14 @@ def rr(
         slot_count = ResourceCount(nslots, nslots_max)
 
     return ResourceRequest(
-        node_count, slot_count, slot_size, gpu_per_slot, duration, constraint, exclusive
+        node_count,
+        slot_count,
+        slot_size,
+        gpu_per_slot,
+        duration,
+        constraint,
+        exclusive,
+        None,
     )
 
 
@@ -428,6 +435,57 @@ class TestRv1PoolWorstFit(unittest.TestCase):
         self.assertNotIn(1, a._ranks)
 
 
+class TestRv1PoolSelectResourcesOverride(unittest.TestCase):
+    """_select_resources is an overridable hook."""
+
+    R_uneven = {
+        "version": 1,
+        "execution": {
+            "R_lite": [
+                {"rank": "0", "children": {"core": "0-3"}},
+                {"rank": "1", "children": {"core": "0-1"}},
+            ],
+            "starttime": 0,
+            "expiration": 0,
+            "nodelist": ["big", "small"],
+        },
+    }
+
+    def test_override_controls_resource_selection(self):
+        """Subclass can reverse candidate order to implement best-fit."""
+
+        class BestFitPool(Rv1Pool):
+            def _select_resources(self, candidates, request):
+                return super()._select_resources(list(reversed(candidates)), request)
+
+        pool = BestFitPool(self.R_uneven)
+        # Default (worst-fit) picks rank0; best-fit should pick rank1 (smaller)
+        a = pool.alloc(1, rr(0, 1, 1))
+        self.assertIn(1, a._ranks)
+        self.assertNotIn(0, a._ranks)
+
+    def test_override_can_raise_insufficient(self):
+        """Override may raise InsufficientResources to block an allocation."""
+
+        class NoSmallPool(Rv1Pool):
+            def _select_resources(self, candidates, request):
+                # Reject any candidate with fewer than 4 cores
+                filtered = [
+                    (r, i, fc, fg)
+                    for r, i, fc, fg in candidates
+                    if len(i["cores"]) >= 4
+                ]
+                return super()._select_resources(filtered, request)
+
+        pool = NoSmallPool(self.R_uneven)
+        # rank1 has only 2 cores and is filtered out; rank0 satisfies the request
+        a = pool.alloc(1, rr(0, 1, 1))
+        self.assertIn(0, a._ranks)
+        # Requesting 2 nodes fails — only one has enough cores
+        with self.assertRaises(InsufficientResources):
+            pool.alloc(2, rr(2, 2, 1))
+
+
 class TestRv1PoolExclusive(unittest.TestCase):
     def setUp(self):
         self.pool = Rv1Pool(R_4x4)
@@ -666,10 +724,44 @@ class TestRv1PoolCheckFeasibility(unittest.TestCase):
         from flux.idset import IDset
 
         req = ResourceRequest(
-            None, ResourceCount(2, 8, IDset("2,4,8")), 1, 0, 60.0, None, False
+            None, ResourceCount(2, 8, IDset("2,4,8")), 1, 0, 60.0, None, False, None
         )
         with self.assertRaises(InfeasibleRequest):
             self.pool.check_feasibility(req)
+
+    def test_constraint_as_json_string(self):
+        """Constraint passed as a JSON string is parsed correctly."""
+        import json
+
+        pool = Rv1Pool(R_props)
+        # "fast" nodes have 4 cores total; 10 is infeasible.
+        # Pass the constraint as a JSON string rather than a dict to exercise
+        # the json.loads() path in _check_feasibility.
+        req = ResourceRequest(
+            None,
+            ResourceCount(10, 10),
+            1,
+            0,
+            60.0,
+            json.dumps({"properties": ["fast"]}),
+            False,
+            None,
+        )
+        with self.assertRaises(InfeasibleRequest):
+            pool.check_feasibility(req)
+
+    def test_subclass_can_extend_check_feasibility(self):
+        """Subclass can add checks via super()._check_feasibility(request)."""
+
+        class StrictPool(Rv1Pool):
+            def _check_feasibility(self, request):
+                super()._check_feasibility(request)
+                if request.nnodes > 2:
+                    raise InfeasibleRequest("at most 2 nodes allowed")
+
+        StrictPool(R_4x4).check_feasibility(rr(2, 2, 1))  # should pass
+        with self.assertRaises(InfeasibleRequest):
+            StrictPool(R_4x4).check_feasibility(rr(3, 3, 1))  # subclass rejects
 
 
 class TestRv1PoolCopy(unittest.TestCase):
@@ -1083,6 +1175,32 @@ class TestFromJobspec(unittest.TestCase):
             with self.subTest(pool=type(pool).__name__):
                 rr = pool.parse_resource_request(jobspec)
                 self.assertIsNone(rr.constraint)
+
+    def test_jobspec_stored_on_request(self):
+        """request.jobspec is the original jobspec dict."""
+        for pool in self._pools():
+            with self.subTest(pool=type(pool).__name__):
+                rr = pool.parse_resource_request(self.VALID_V1)
+                self.assertIs(rr.jobspec, self.VALID_V1)
+
+    def test_jobspec_system_attr_accessible(self):
+        """Site-specific attributes.system hints are accessible via request.jobspec."""
+        jobspec = {
+            "version": 1,
+            "resources": [
+                {"type": "slot", "count": 1, "with": [{"type": "core", "count": 1}]}
+            ],
+            "tasks": [],
+            "attributes": {"system": {"duration": 60.0, "rack_exclusive": True}},
+        }
+        for pool in self._pools():
+            with self.subTest(pool=type(pool).__name__):
+                rr = pool.parse_resource_request(jobspec)
+                self.assertTrue(
+                    rr.jobspec.get("attributes", {})
+                    .get("system", {})
+                    .get("rack_exclusive")
+                )
 
 
 class TestFromJobspecNonV1(unittest.TestCase):

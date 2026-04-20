@@ -49,6 +49,15 @@ class ResourcePool:
     InfeasibleRequest = InfeasibleRequest
 
     def __init__(self, arg=None, version=1, log=None, **kwargs):
+        """Construct a ResourcePool from an R dict, JSON string, or implementation.
+
+        Args:
+            arg: R as a JSON string, parsed dict, a
+                :class:`ResourcePoolImplementation` instance, or ``None``.
+            version: R version to use when *arg* does not carry one.
+            log: Callable for diagnostic messages; receives ``(level, msg)``.
+            **kwargs: Forwarded to the implementation constructor.
+        """
         if isinstance(arg, ResourcePoolImplementation):
             self.impl = arg
             self.version = getattr(arg, "version", version)

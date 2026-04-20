@@ -51,9 +51,12 @@ to override :meth:`schedule`::
 import errno
 import functools
 import heapq
+import importlib.util
 import inspect
+import json
 import syslog
 import time
+import urllib.parse
 
 from _flux._core import ffi, lib
 from flux.brokermod import BrokerModule, request_handler
@@ -272,11 +275,21 @@ class Scheduler(BrokerModule):
     #: subclasses that support it) to disable partial-ok behaviour.
     hello_partial_ok = True
 
+    #: Custom pool class.  When set to a
+    #: :class:`~flux.resource.ResourcePool.ResourcePool` subclass,
+    #: :meth:`_make_pool` instantiates it directly instead of using the default
+    #: :class:`~flux.resource.ResourcePool.ResourcePool` version dispatch.
+    #: The subclass is responsible for its own version dispatch (e.g. via an
+    #: ``_impl_map``).  This is the preferred way to inject a custom pool::
+    #:
+    #:     class MyScheduler(Scheduler):
+    #:         pool_class = MyPool
+    pool_class: type = None
+
     #: Extra keyword arguments forwarded to :class:`~flux.resource.ResourcePool`
-    #: (and on to the pool implementation) at construction time.  Subclasses
-    #: that accept pool-specific load-time options should parse them in
-    #: ``__init__`` and store the result here, e.g.
-    #: ``self.pool_kwargs = {"opt": value}``.
+    #: (and on to the pool implementation) at construction time.  Not used when
+    #: :attr:`pool_class` is set, since :meth:`_make_pool` calls the pool class
+    #: directly without extra kwargs.
     pool_kwargs: dict = {}
 
     #: Minimum syslog priority level emitted by :meth:`log`.  Messages with a
@@ -408,6 +421,9 @@ class Scheduler(BrokerModule):
                         f"expected one of {', '.join(self._LOG_LEVEL_NAMES)}"
                     )
                 self.log_level = self._LOG_LEVEL_NAMES[name]
+            elif arg.startswith("pool-class="):
+                uri = arg[len("pool-class=") :]
+                self.pool_class = self._pool_class_from_uri(uri)
             else:
                 self._pending_args.append(arg)
 
@@ -1083,6 +1099,99 @@ class Scheduler(BrokerModule):
         """Register a dynamic service by name (synchronous)."""
         self.handle.service_register(name).get()
 
+    def _pool_class_from_writer(self, R):
+        """Return a pool class derived from R.scheduling.writer, or None.
+
+        Per RFC 20, an absent ``scheduling`` key means no custom pool is
+        needed (returns ``None``).  An absent ``writer`` within a present
+        ``scheduling`` key defaults to ``"fluxion"``.
+
+        Supports two URI forms:
+
+        ``file:///path/to/Pool.py``
+            Load the pool class from the given file.  The class name is
+            derived from the filename stem (e.g. ``RackPool.py`` →
+            ``RackPool``).  An optional ``#ClassName`` fragment overrides
+            the stem-derived name.
+
+        ``scheme`` or ``scheme:path``
+            Import the module named by the scheme (hyphens converted to
+            underscores).  If a path component is present it is used as the
+            literal class name (e.g. ``fluxion:rv1shorthand`` →
+            ``getattr(fluxion, "rv1shorthand")``).  If absent, the module's
+            ``pool_class`` attribute is used as the default
+            (e.g. ``fluxion`` → ``fluxion.pool_class``).
+
+        Returns ``None`` when the ``scheduling`` key is absent or when the
+        module cannot be imported.
+        """
+        if isinstance(R, str):
+            R = json.loads(R)
+        if not isinstance(R, dict):
+            return None
+        scheduling = R.get("scheduling")
+        if scheduling is None:
+            return None
+        writer = scheduling.get("writer", "fluxion")
+        return self._pool_class_from_uri(writer)
+
+    def _pool_class_from_uri(self, uri):
+        """Load and return a pool class from a URI string.
+
+        ``file:///path/to/Pool.py``
+            Load the pool class from the given file.  The class name is
+            derived from the filename stem (e.g. ``RackPool.py`` →
+            ``RackPool``).  An optional ``#ClassName`` fragment overrides
+            the stem-derived name.
+
+        ``scheme`` or ``scheme:path``
+            Import the module named by the scheme (hyphens converted to
+            underscores).  If a path component is present it is used as the
+            literal class name (e.g. ``fluxion:rv1shorthand`` →
+            ``getattr(fluxion, "rv1shorthand")``).  If absent, the module's
+            ``pool_class`` attribute is used as the default
+            (e.g. ``fluxion`` → ``fluxion.pool_class``).
+        """
+        parsed = urllib.parse.urlparse(uri)
+        if parsed.scheme == "file":
+            file_path = parsed.path
+            cls_name = parsed.fragment or file_path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+            spec = importlib.util.spec_from_file_location("_pool_plugin", file_path)
+            if spec is None:
+                raise ValueError(
+                    f"pool-class URI {uri!r}: cannot load module from {file_path!r}"
+                )
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return getattr(mod, cls_name)
+        else:
+            module_name = (parsed.scheme or parsed.path).replace("-", "_")
+            cls_name = parsed.path if parsed.scheme else None
+            try:
+                mod = importlib.import_module(module_name)
+                return getattr(mod, cls_name) if cls_name else mod.pool_class
+            except (ImportError, AttributeError):
+                return None
+
+    def _make_pool(self, R):
+        """Construct a resource pool from an R dict or JSON string.
+
+        Checks, in order:
+
+        1. :attr:`pool_class` set explicitly (e.g. via ``pool-class=`` argument
+           or subclass definition) — instantiated directly.
+        2. ``R.scheduling.writer`` URI — parsed by
+           :meth:`_pool_class_from_writer` to derive the pool class.
+        3. Default :class:`~flux.resource.ResourcePool.ResourcePool` version
+           dispatch.
+        """
+        if self.pool_class is not None:
+            return self.pool_class(R, log=self.log)
+        pool_class = self._pool_class_from_writer(R)
+        if pool_class is not None:
+            return pool_class(R, log=self.log)
+        return ResourcePool(R, log=self.log, **self.pool_kwargs)
+
     def _acquire_resources(self):
         """Issue resource.acquire, process first response synchronously."""
         f = self.handle.rpc("resource.acquire", flags=FLUX_RPC_STREAMING)
@@ -1095,7 +1204,7 @@ class Scheduler(BrokerModule):
         R = data.get("resources")
         if R is None:
             raise OSError("resource.acquire: missing 'resources' field")
-        self._resources = ResourcePool(R, log=self.log, **self.pool_kwargs)
+        self._resources = self._make_pool(R)
 
         # Warn once about any pool_kwargs not recognised by this pool
         # implementation, then prune them so subsequent pool constructions
@@ -1198,12 +1307,12 @@ class Scheduler(BrokerModule):
             if free_ranks:
                 from flux.idset import IDset
 
-                rset = ResourcePool(R_dict, log=self.log, **self.pool_kwargs)
+                rset = self._make_pool(R_dict)
                 rset.remove_ranks(IDset(free_ranks))
                 R_dict = rset.to_dict()
 
             try:
-                R = ResourcePool(R_dict, log=self.log, **self.pool_kwargs)
+                R = self._make_pool(R_dict)
                 self.hello(
                     jobid,
                     data["priority"],

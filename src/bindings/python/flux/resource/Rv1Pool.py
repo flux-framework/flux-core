@@ -76,6 +76,10 @@ class ResourceRequest:
         duration (float): Walltime in seconds; 0.0 means unlimited.
         constraint: RFC 31 constraint expression (dict) or None.
         exclusive (bool): Whole-node exclusive allocation.
+        jobspec (dict): The raw jobspec dict from which this request was parsed.
+            Available for schedulers that need to inspect attributes beyond
+            the fields above, or forward the full jobspec to an external
+            resource service.
         nnodes (int): Minimum node count; derived from *node_count*.
         nnodes_max (int | None): Maximum node count; ``None`` for unbounded.
         nslots (int): Minimum total slot count; derived from *slot_count* and
@@ -91,6 +95,7 @@ class ResourceRequest:
         "duration",
         "constraint",
         "exclusive",
+        "jobspec",
     )
 
     def __init__(
@@ -102,6 +107,7 @@ class ResourceRequest:
         duration,
         constraint,
         exclusive,
+        jobspec,
     ):
         self.node_count = node_count
         self.slot_count = slot_count
@@ -110,6 +116,7 @@ class ResourceRequest:
         self.duration = duration
         self.constraint = constraint
         self.exclusive = exclusive
+        self.jobspec = jobspec
 
     @property
     def nnodes(self):
@@ -241,6 +248,7 @@ class ResourceRequest:
             float(duration),
             constraint,
             exclusive,
+            jobspec,
         )
 
     @property
@@ -513,14 +521,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                 "slot count specifies discrete valid values that this scheduler "
                 "does not support; use a simple min-max range instead"
             )
-        self._check_feasibility(
-            request.nnodes,
-            request.nslots,
-            request.slot_size,
-            request.exclusive,
-            request.constraint,
-            request.gpu_per_slot,
-        )
+        self._check_feasibility(request)
 
     def alloc(self, jobid: int, request) -> "Rv1Pool":
         """Allocate resources for *jobid* matching *request*.
@@ -547,8 +548,6 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                 "slot count specifies discrete valid values that this scheduler "
                 "does not support; use a simple min-max range instead"
             )
-        nnodes = request.nnodes
-        nslots = request.nslots
         slot_size = request.slot_size
         gpu_per_slot = request.gpu_per_slot
         exclusive = request.exclusive
@@ -585,70 +584,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             reverse=True,
         )
 
-        # Greedy selection — each entry is (rank, info, alloc_cores, alloc_gpus)
-        selected: List[Tuple[int, dict, frozenset, frozenset]] = []
-
-        if nnodes > 0:
-            nnodes_min = nnodes
-            # nnodes_max: same as min → fixed; larger → bounded range; None → unbounded
-            nnodes_target = request.nnodes_max
-            slots_per_node = nslots // nnodes_min
-            for rank, info, free_cores, free_gpus in candidates:
-                if nnodes_target is not None and len(selected) >= nnodes_target:
-                    break
-                if exclusive:
-                    if len(free_cores) < len(info["cores"]):
-                        continue
-                    alloc_cores = frozenset(free_cores)
-                    alloc_gpus = frozenset(free_gpus)
-                else:
-                    need_cores = slots_per_node * slot_size
-                    need_gpus = slots_per_node * gpu_per_slot
-                    if len(free_cores) < need_cores or len(free_gpus) < need_gpus:
-                        continue
-                    alloc_cores = frozenset(sorted(free_cores)[:need_cores])
-                    alloc_gpus = frozenset(sorted(free_gpus)[:need_gpus])
-                selected.append((rank, info, alloc_cores, alloc_gpus))
-            if len(selected) < nnodes_min:
-                self._check_feasibility(
-                    nnodes, nslots, slot_size, exclusive, constraint, gpu_per_slot
-                )
-                raise InsufficientResources("insufficient resources")
-        else:
-            nslots_min = nslots
-            nslots_target = request.nslots_max  # None → unbounded
-            allocated_slots = 0
-            for rank, info, free_cores, free_gpus in candidates:
-                if nslots_target is not None and allocated_slots >= nslots_target:
-                    break
-                free_core_slots = len(free_cores) // slot_size
-                if gpu_per_slot > 0:
-                    free_gpu_slots = len(free_gpus) // gpu_per_slot
-                    free_slots = min(free_core_slots, free_gpu_slots)
-                else:
-                    free_slots = free_core_slots
-                if nslots_target is not None:
-                    take = min(free_slots, nslots_target - allocated_slots)
-                else:
-                    take = free_slots  # unbounded: take all available on this node
-                if take > 0:
-                    ncores_take = take * slot_size
-                    ngpus_take = take * gpu_per_slot
-                    alloc_cores = frozenset(sorted(free_cores)[:ncores_take])
-                    alloc_gpus = frozenset(sorted(free_gpus)[:ngpus_take])
-                    selected.append((rank, info, alloc_cores, alloc_gpus))
-                    allocated_slots += take
-            if allocated_slots < nslots_min:
-                self._check_feasibility(
-                    nnodes, nslots, slot_size, exclusive, constraint, gpu_per_slot
-                )
-                raise InsufficientResources("insufficient resources")
-
-        # Compute actual allocated slot count for storage in R.
-        if nnodes > 0:
-            actual_nslots = slots_per_node * len(selected)
-        else:
-            actual_nslots = allocated_slots
+        selected, actual_nslots = self._select_resources(candidates, request)
 
         # Build result pool and update allocation state on self
         selected_ranks = {rank for rank, _, _, _ in selected}
@@ -791,16 +727,100 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                 self._ranks[rank]["allocated_cores"] |= oinfo["cores"]
                 self._ranks[rank]["allocated_gpus"] |= oinfo["gpus"]
 
-    def _check_feasibility(
-        self,
-        nnodes: int,
-        nslots: int,
-        slot_size: int,
-        exclusive: bool,
-        constraint,
-        gpu_per_slot: int,
-    ) -> None:
-        """Raise EOVERFLOW if the request can structurally never be satisfied."""
+    def _select_resources(self, candidates: list, request) -> tuple:
+        """Select resources from *candidates* to satisfy *request*.
+
+        *candidates* is a list of ``(rank, info, free_cores, free_gpus)``
+        tuples, already filtered for availability and sorted worst-fit by the
+        caller.  Returns ``(selected, actual_nslots)`` where *selected* is a
+        list of ``(rank, info, alloc_cores, alloc_gpus)`` tuples.
+
+        Subclasses may override this method to implement topology-aware
+        selection policies (e.g. locality or exclusivity within a chassis or
+        rack).  The override receives the full candidate list with constraint
+        filtering already applied; it must raise
+        :exc:`~flux.resource.ResourcePoolImplementation.InsufficientResources`
+        if the request cannot be satisfied from the candidates provided.
+        """
+        nnodes = request.nnodes
+        nslots = request.nslots
+        slot_size = request.slot_size
+        gpu_per_slot = request.gpu_per_slot
+        exclusive = request.exclusive
+        selected: List[Tuple[int, dict, frozenset, frozenset]] = []
+
+        if nnodes > 0:
+            nnodes_min = nnodes
+            nnodes_target = request.nnodes_max
+            slots_per_node = nslots // nnodes_min
+            for rank, info, free_cores, free_gpus in candidates:
+                if nnodes_target is not None and len(selected) >= nnodes_target:
+                    break
+                if exclusive:
+                    if len(free_cores) < len(info["cores"]):
+                        continue
+                    alloc_cores = frozenset(free_cores)
+                    alloc_gpus = frozenset(free_gpus)
+                else:
+                    need_cores = slots_per_node * slot_size
+                    need_gpus = slots_per_node * gpu_per_slot
+                    if len(free_cores) < need_cores or len(free_gpus) < need_gpus:
+                        continue
+                    alloc_cores = frozenset(sorted(free_cores)[:need_cores])
+                    alloc_gpus = frozenset(sorted(free_gpus)[:need_gpus])
+                selected.append((rank, info, alloc_cores, alloc_gpus))
+            if len(selected) < nnodes_min:
+                self._check_feasibility(request)
+                raise InsufficientResources("insufficient resources")
+            actual_nslots = slots_per_node * len(selected)
+        else:
+            nslots_min = nslots
+            nslots_target = request.nslots_max
+            allocated_slots = 0
+            for rank, info, free_cores, free_gpus in candidates:
+                if nslots_target is not None and allocated_slots >= nslots_target:
+                    break
+                free_core_slots = len(free_cores) // slot_size
+                if gpu_per_slot > 0:
+                    free_gpu_slots = len(free_gpus) // gpu_per_slot
+                    free_slots = min(free_core_slots, free_gpu_slots)
+                else:
+                    free_slots = free_core_slots
+                if nslots_target is not None:
+                    take = min(free_slots, nslots_target - allocated_slots)
+                else:
+                    take = free_slots
+                if take > 0:
+                    ncores_take = take * slot_size
+                    ngpus_take = take * gpu_per_slot
+                    alloc_cores = frozenset(sorted(free_cores)[:ncores_take])
+                    alloc_gpus = frozenset(sorted(free_gpus)[:ngpus_take])
+                    selected.append((rank, info, alloc_cores, alloc_gpus))
+                    allocated_slots += take
+            if allocated_slots < nslots_min:
+                self._check_feasibility(request)
+                raise InsufficientResources("insufficient resources")
+            actual_nslots = allocated_slots
+
+        return selected, actual_nslots
+
+    def _check_feasibility(self, request) -> None:
+        """Raise :exc:`InfeasibleRequest` if *request* can structurally never
+        be satisfied by this pool.
+
+        Subclasses may override to add topology-aware feasibility checks on
+        top of the base size and constraint checks.  Call
+        ``super()._check_feasibility(request)`` first to run the base checks,
+        then add subclass-specific checks.
+        """
+        nnodes = request.nnodes
+        nslots = request.nslots
+        slot_size = request.slot_size
+        exclusive = request.exclusive
+        gpu_per_slot = request.gpu_per_slot
+        constraint = request.constraint
+        if constraint is not None and isinstance(constraint, str):
+            constraint = json.loads(constraint)
         all_candidates = list(self._ranks.items())
         if constraint is not None:
             all_candidates = [
