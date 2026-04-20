@@ -328,7 +328,8 @@ static int prop_add (json_t *prop, const char *name, const char *val)
         else
             return -1;
     }
-    else if (streq (name, "AllowedCPUs")) {
+    else if (streq (name, "AllowedCPUs")
+        || streq (name, "AllowedMemoryNodes")) {
         uint8_t *bitmap;
         size_t size;
 
