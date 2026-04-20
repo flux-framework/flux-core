@@ -176,9 +176,10 @@ class TestResourceJournalConsumer(unittest.TestCase):
     def test_poll_cb_set_before_start(self):
 
         def cb(event):
+            if event is None:
+                self.fh.reactor_stop()
             if event.is_empty():
                 consumer.stop()
-                self.fh.reactor_stop()
 
         consumer = ResourceJournalConsumer(self.fh, include_sentinel=True)
         consumer.set_callback(cb)
