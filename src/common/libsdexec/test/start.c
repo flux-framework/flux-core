@@ -52,6 +52,14 @@ void test_inval (void)
         || jpath_set_new (cmd_o_badprop, "opts.SDEXEC_PROP_MemoryMax", o) < 0)
         BAIL_OUT ("error preparing test command with bad property");
 
+    /* bad AllowedMemoryNodes: invalid idset */
+    json_t *cmd_o_badnodes;
+    if (!(cmd_o_badnodes = json_deep_copy (cmd_o))
+        || !(o = json_string ("badvalue"))
+        || jpath_set_new (cmd_o_badnodes,
+                          "opts.SDEXEC_PROP_AllowedMemoryNodes", o) < 0)
+        BAIL_OUT ("error preparing test command with bad AllowedMemoryNodes");
+
     /* bad DeviceAllow: missing perms field */
     json_t *cmd_o_baddevice;
     if (!(cmd_o_baddevice = json_deep_copy (cmd_o))
@@ -132,9 +140,22 @@ void test_inval (void)
     diag ("%s", error.text);
 
     errno = 0;
+    error.text[0] = '\0';
+    ok (sdexec_start_transient_unit (h,         // h
+                                     0,         // rank
+                                     "fail",    // mode
+                                     cmd_o_badnodes, // cmd
+                                     -1, -1, -1, // *_fd
+                                     &error) == NULL
+        && errno == EINVAL,
+        "sdexec_start_transient_unit with bad AllowedMemoryNodes fails with EINVAL");
+    diag ("%s", error.text);
+
+    errno = 0;
     ok (sdexec_start_transient_unit_get (NULL, NULL) < 0 && errno == EINVAL,
         "sdexec_start_transient_unit_get f=NULL fails with EINVAL");
 
+    json_decref (cmd_o_badnodes);
     json_decref (cmd_o_baddevice);
     json_decref (cmd_o_badprop);
     json_decref (cmd_o_noname);
@@ -200,6 +221,20 @@ void test_deviceallow (void)
         "sdexec_start_transient_unit with whitespace-padded DeviceAllow works");
     flux_future_destroy (f);
     json_decref (cmd_o_ws);
+
+    /* AllowedMemoryNodes uses the same bitmap encoding as AllowedCPUs */
+    json_t *cmd_o_nodes = json_deep_copy (cmd_o);
+    if (!cmd_o_nodes
+        || jpath_set_new (cmd_o_nodes,
+                          "opts.SDEXEC_PROP_AllowedMemoryNodes",
+                          json_string ("0-1")) < 0)
+        BAIL_OUT ("error preparing AllowedMemoryNodes command");
+    f = sdexec_start_transient_unit (h, 0, "fail", cmd_o_nodes,
+                                     -1, -1, -1, &error);
+    ok (f != NULL,
+        "sdexec_start_transient_unit with AllowedMemoryNodes works");
+    flux_future_destroy (f);
+    json_decref (cmd_o_nodes);
 
     json_decref (cmd_o);
     flux_cmd_destroy (cmd);

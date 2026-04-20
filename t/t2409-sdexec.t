@@ -309,6 +309,28 @@ test_expect_success 'sdexec can set unit AllowedCPUs to an empty bitmask' '
 	        t2409-allowedcpus2.service >allowedcpus2.out &&
 	test_cmp allowedcpus2.exp allowedcpus2.out
 '
+test_expect_success 'sdexec can set unit AllowedMemoryNodes property' '
+	cat >allowedmemorynodes.exp <<-EOT &&
+	AllowedMemoryNodes=0
+	EOT
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-allowedmemorynodes.service" \
+	    --setopt=SDEXEC_PROP_AllowedMemoryNodes="0" \
+	    $systemctl --user show --property AllowedMemoryNodes \
+	        t2409-allowedmemorynodes.service >allowedmemorynodes.out &&
+	test_cmp allowedmemorynodes.exp allowedmemorynodes.out
+'
+test_expect_success 'sdexec can set unit AllowedMemoryNodes to an empty bitmask' '
+	cat >allowedmemorynodes2.exp <<-EOT &&
+	AllowedMemoryNodes=
+	EOT
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-allowedmemorynodes2.service" \
+	    --setopt=SDEXEC_PROP_AllowedMemoryNodes="" \
+	    $systemctl --user show --property AllowedMemoryNodes \
+	        t2409-allowedmemorynodes2.service >allowedmemorynodes2.out &&
+	test_cmp allowedmemorynodes2.exp allowedmemorynodes2.out
+'
 test_expect_success 'sdexec can set unit DeviceAllow property' '
 	cat >deviceallow.exp <<-EOT &&
 	DeviceAllow=/dev/null rw
