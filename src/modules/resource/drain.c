@@ -69,6 +69,7 @@ struct draininfo {
 
 struct drain {
     struct resource_ctx *ctx;
+    int size;             // max(broker size, R rank count) — see drain_create()
     struct draininfo *info; // rank-indexed array [0:size-1]
     flux_msg_handler_t **handlers;
 };
@@ -89,7 +90,7 @@ static int get_timestamp_now (double *timestamp)
 
 static int draininfo_undrain_rank (struct drain *drain, unsigned int rank)
 {
-    if (rank >= drain->ctx->size) {
+    if (rank >= drain->size) {
         errno = EINVAL;
         return -1;
     }
@@ -120,7 +121,7 @@ static int draininfo_drain_rank (struct drain *drain,
 {
     char *cpy = NULL;
 
-    if (rank >= drain->ctx->size) {
+    if (rank >= drain->size) {
         errno = EINVAL;
         return -1;
     }
@@ -239,7 +240,7 @@ json_t *drain_get_info (struct drain *drain)
     struct drainset *ds = drainset_create ();
     if (!ds)
         goto error;
-    for (unsigned int rank = 0; rank < drain->ctx->size; rank++) {
+    for (unsigned int rank = 0; rank < drain->size; rank++) {
         if (drain->info[rank].drained) {
             if (drainset_drain_rank (ds,
                                      rank,
@@ -259,9 +260,9 @@ struct idset *drain_get (struct drain *drain)
     unsigned int rank;
     struct idset *ids;
 
-    if (!(ids = idset_create (drain->ctx->size, 0)))
+    if (!(ids = idset_create (drain->size, 0)))
         return NULL;
-    for (rank = 0; rank < drain->ctx->size; rank++) {
+    for (rank = 0; rank < drain->size; rank++) {
         if (drain->info[rank].drained) {
             if (idset_set (ids, rank) < 0) {
                 idset_destroy (ids);
@@ -291,7 +292,7 @@ static struct idset *drain_targets_decode (struct drain *drain,
         errno = EINVAL;
         goto error;
     }
-    if (idset_last (idset) >= drain->ctx->size) {
+    if (idset_last (idset) >= drain->size) {
         errprintf (errp, "idset is out of range");
         errno = EINVAL;
         goto error;
@@ -420,7 +421,7 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
     char *nodelist = NULL;
     int rc = -1;
 
-    if (rank >= drain->ctx->size || !reason) {
+    if (rank >= drain->size || !reason) {
         errno = EINVAL;
         return -1;
     }
@@ -462,7 +463,7 @@ static int undrain_idset_check (struct drain *drain,
 {
     int error_count = 0;
     unsigned int rank;
-    struct idset *errids = idset_create (drain->ctx->size, 0);
+    struct idset *errids = idset_create (drain->size, 0);
 
     rank = idset_first (idset);
     while (rank != IDSET_INVALID_ID) {
@@ -639,7 +640,7 @@ static struct idset *decode_targets (struct drain *drain,
 
     if (!(ids = idset_decode (ranks))
         || !(nl = hostlist_decode (nodelist))
-        || !(newids = idset_create (drain->ctx->size, 0)))
+        || !(newids = idset_create (drain->size, 0)))
         goto done;
 
     index = 0;
@@ -813,7 +814,7 @@ void drain_destroy (struct drain *drain)
         flux_msg_handler_delvec (drain->handlers);
         if (drain->info) {
             unsigned int rank;
-            for (rank = 0; rank < drain->ctx->size; rank++)
+            for (rank = 0; rank < drain->size; rank++)
                 free (drain->info[rank].reason);
             free (drain->info);
         }
@@ -830,7 +831,11 @@ struct drain *drain_create (struct resource_ctx *ctx, const json_t *eventlog)
     if (!(drain = calloc (1, sizeof (*drain))))
         return NULL;
     drain->ctx = ctx;
-    if (!(drain->info = calloc (ctx->size, sizeof (drain->info[0]))))
+    drain->size = ctx->size;
+    int rsize = inventory_get_size (ctx->inventory);
+    if (rsize > drain->size)
+        drain->size = rsize;
+    if (!(drain->info = calloc (drain->size, sizeof (drain->info[0]))))
         goto error;
     if (replay_eventlog (drain, eventlog, &error) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: %s", RESLOG_KEY, error.text);
