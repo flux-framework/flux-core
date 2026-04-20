@@ -91,6 +91,7 @@ test_expect_success 'flux batch --exclusive works' '
 		jq -S ".resources[0]" | \
 		jq -e ".type == \"node\" and .exclusive"
 '
+# N.B. slow under ASAN, skip
 test_expect_success NO_ASAN 'flux batch: submit a series of jobs' '
 	id1=$(flux batch --flags=waitable -n1 batch-script.sh) &&
 	id2=$(flux batch --flags=waitable -n4 batch-script.sh) &&
