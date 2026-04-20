@@ -1161,6 +1161,8 @@ DevicePolicy
 nvidia
 nvidiactl
 rw
+AllowedMemoryNodes
+ay
 BPF
 delegatable
 eBPF
