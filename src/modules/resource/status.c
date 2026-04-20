@@ -39,6 +39,7 @@ struct status {
     struct resource_ctx *ctx;
     flux_msg_handler_t **handlers;
     struct flux_msglist *requests;
+    flux_future_t *pending_status_rpc;
     struct status_cache cache;
     json_t *R_empty;
     bool shrink_down_ranks; // lost ranks are removed from resource set
@@ -384,35 +385,23 @@ error:
     return NULL;
 }
 
-static void remove_request (struct flux_msglist *ml, const flux_msg_t *msg)
-{
-    const flux_msg_t *m;
-
-    m = flux_msglist_first (ml);
-    while (m) {
-        if (m == msg) {
-            flux_msglist_delete (ml); // delete @cursor
-            break;
-        }
-        m = flux_msglist_next (ml);
-    }
-}
-
 /* The job-manager.resource-status RPC has completed.
- * Finish handling resource.sched-status.  Notes:
+ * Build the sched-status payload once and answer all queued requests.
+ * Notes:
  * - Treat ENOSYS from job-manager.resource-status as the empty set.  This
  *   could happen IRL because the resource module loads before job-manager.
- * - Both the future and the message are unreferenced/destroyed
- *   when msg is removed from the status->requests list.
+ * - Multiple concurrent resource.sched-status requests are coalesced: only
+ *   one job-manager RPC is in flight at a time; all queued requests are
+ *   answered here when it completes.
  */
 static void sched_status_continuation (flux_future_t *f, void *arg)
 {
-    const flux_msg_t *msg = flux_future_aux_get (f, "flux::request");
     struct status *status = arg;
     flux_t *h = status->ctx->h;
     flux_error_t error;
     json_t *allocated = NULL;
     json_t *o = NULL;
+    const flux_msg_t *msg;
 
     if (flux_rpc_get_unpack (f, "{s:o}", "allocated", &allocated) < 0
         && errno != ENOSYS) {
@@ -425,22 +414,29 @@ static void sched_status_continuation (flux_future_t *f, void *arg)
         errprintf (&error, "error preparing response: %s", strerror (errno));
         goto error;
     }
-    if (flux_respond_pack (h, msg, "O", o) < 0)
-        flux_log_error (h, "error responding to resource.sched-status");
+    while ((msg = flux_msglist_first (status->requests))) {
+        if (flux_respond_pack (h, msg, "O", o) < 0)
+            flux_log_error (h, "error responding to resource.sched-status");
+        flux_msglist_delete (status->requests);
+    }
     json_decref (o);
-    remove_request (status->requests, msg);
-    return;
+    goto done;
 error:
-    if (flux_respond_error (h, msg, EINVAL, error.text) < 0)
-        flux_log_error (h, "error responding to resource.sched-status");
-    json_decref (o);
-    remove_request (status->requests, msg);
+    while ((msg = flux_msglist_first (status->requests))) {
+        if (flux_respond_error (h, msg, EINVAL, error.text) < 0)
+            flux_log_error (h, "error responding to resource.sched-status");
+        flux_msglist_delete (status->requests);
+    }
+done:
+    flux_future_destroy (f);
+    status->pending_status_rpc = NULL;
 }
 
 /* To answer this query, an RPC must be sent to the job manager to get
- * the set of allocated resources.  Get that started, then place the request
- * on status->requests and continue answering in the RPC continuation.
- * The rest of the information required is local.
+ * the set of allocated resources.  Start a job-manager RPC if one is not
+ * already in flight, then place the request on status->requests.  Concurrent
+ * requests are coalesced: all queued requests are answered together when the
+ * single in-flight RPC completes.
  */
 static void sched_status_cb (flux_t *h,
                              flux_msg_handler_t *mh,
@@ -448,7 +444,6 @@ static void sched_status_cb (flux_t *h,
                              void *arg)
 {
     struct status *status = arg;
-    flux_future_t *f;
     flux_error_t error;
 
     if (flux_request_decode (msg, NULL, NULL) < 0) {
@@ -460,21 +455,20 @@ static void sched_status_cb (flux_t *h,
         errno = EPROTO;
         goto error;
     }
-    if (!(f = flux_rpc (h, "job-manager.resource-status", NULL, 0, 0))
-        || flux_future_then (f, -1, sched_status_continuation, status) < 0
-        || flux_future_aux_set (f, "flux::request", (void *)msg, NULL) < 0
-        || flux_msg_aux_set (msg,
-                             NULL,
-                             f,
-                             (flux_free_f)flux_future_destroy) < 0) {
-        errprintf (&error,
-                   "error sending job-manager.resource-status request: %s",
-                   strerror (errno));
-        flux_future_destroy (f);
-        goto error;
+    if (!status->pending_status_rpc) {
+        flux_future_t *f;
+        if (!(f = flux_rpc (h, "job-manager.resource-status", NULL, 0, 0))
+            || flux_future_then (f, -1, sched_status_continuation, status) < 0) {
+            errprintf (&error,
+                       "error sending job-manager.resource-status request: %s",
+                       strerror (errno));
+            flux_future_destroy (f);
+            goto error;
+        }
+        status->pending_status_rpc = f;
     }
     if (flux_msglist_append (status->requests, msg) < 0) {
-        errprintf (&error, "error saving request mesg: %s", strerror (errno));
+        errprintf (&error, "error saving request: %s", strerror (errno));
         goto error;
     }
     return;
@@ -551,6 +545,7 @@ void status_destroy (struct status *status)
         int saved_errno = errno;
         flux_msg_handler_delvec (status->handlers);
         flux_msglist_destroy (status->requests);
+        flux_future_destroy (status->pending_status_rpc);
         reslog_remove_callback (status->ctx->reslog, reslog_cb, status);
         invalidate_cache (&status->cache, true);
         json_decref (status->R_empty);
