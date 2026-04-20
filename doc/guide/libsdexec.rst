@@ -169,8 +169,27 @@ Starting Units
       * - AllowedCPUs
         - s (string)
         - Flux idset notation, e.g. "0,2-4,7"
+      * - DeviceAllow
+        - a(ss)
+        - Comma-separated "specifier perms" pairs,
+          e.g. "/dev/nvidiactl rw,/dev/nvidia0 rw"
+      * - DevicePolicy
+        - s (string)
+        - "auto", "closed", or "strict"
 
    See :linux:man5:`systemd.resource-control` for property semantics.
+
+   .. note::
+
+      ``DeviceAllow`` and ``DevicePolicy`` are accepted by
+      ``StartTransientUnit`` but are not enforced in the Flux user
+      systemd instance.  Systemd implements device containment via eBPF
+      ``BPF_CGROUP_DEVICE`` programs, which require ``CAP_BPF`` or
+      ``CAP_SYS_ADMIN`` — capabilities the unprivileged Flux user
+      instance does not hold and that cannot be delegated via cgroup
+      ownership.  Per-job device containment will be implemented through
+      the IMP until systemd makes device restriction delegatable without
+      elevated privileges.
 
    Returns a :type:`flux_future_t`.  On error, returns NULL with
    *error* set if non-NULL.

@@ -309,6 +309,40 @@ test_expect_success 'sdexec can set unit AllowedCPUs to an empty bitmask' '
 	        t2409-allowedcpus2.service >allowedcpus2.out &&
 	test_cmp allowedcpus2.exp allowedcpus2.out
 '
+test_expect_success 'sdexec can set unit DeviceAllow property' '
+	cat >deviceallow.exp <<-EOT &&
+	DeviceAllow=/dev/null rw
+	EOT
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-deviceallow.service" \
+	    --setopt=SDEXEC_PROP_DeviceAllow="/dev/null rw" \
+	    $systemctl --user show --property DeviceAllow \
+	        t2409-deviceallow.service >deviceallow.out &&
+	test_cmp deviceallow.exp deviceallow.out
+'
+test_expect_success 'sdexec can set unit DeviceAllow with multiple entries' '
+	cat >deviceallow2.exp <<-EOT &&
+	DeviceAllow=/dev/null rw
+	DeviceAllow=/dev/zero r
+	EOT
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-deviceallow2.service" \
+	    --setopt=SDEXEC_PROP_DeviceAllow="/dev/null rw,/dev/zero r" \
+	    $systemctl --user show --property DeviceAllow \
+	        t2409-deviceallow2.service >deviceallow2.out &&
+	sort deviceallow2.exp >deviceallow2.exp.sorted &&
+	sort deviceallow2.out >deviceallow2.out.sorted &&
+	test_cmp deviceallow2.exp.sorted deviceallow2.out.sorted
+'
+test_expect_success 'sdexec can set unit DevicePolicy property' '
+	echo "DevicePolicy=closed" >devicepolicy.exp &&
+	$sdexec -r 0 \
+	    --setopt=SDEXEC_NAME="t2409-devicepolicy.service" \
+	    --setopt=SDEXEC_PROP_DevicePolicy="closed" \
+	    $systemctl --user show --property DevicePolicy \
+	        t2409-devicepolicy.service >devicepolicy.out &&
+	test_cmp devicepolicy.exp devicepolicy.out
+'
 test_expect_success 'sdexec can set unit OOMScoreAdjust' '
 	echo "OOMScoreAdjust=100" >oomscoreadjust.exp &&
 	$sdexec -r 0 \

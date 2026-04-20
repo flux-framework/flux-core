@@ -457,6 +457,64 @@ void test_property_array (sd_bus *bus)
     sd_bus_message_unref (m);
 }
 
+void test_str_pair_array (sd_bus *bus)
+{
+    json_t *o;
+    json_error_t error;
+    sd_bus_message *m;
+    const char *fmt = "a(sv)";
+    const char *key;
+    const char *path1, *perms1;
+    const char *path2, *perms2;
+
+    /* Encode a property with value type a(ss): array of (path, perms) pairs,
+     * as used by the systemd DeviceAllow property.
+     */
+    if (!(o = json_pack_ex (&error,
+                            0,
+                            "[[s[s[[ss][ss]]]]]",
+                            "DeviceAllow",
+                            "a(ss)",
+                            "/dev/nvidiactl", "rw",
+                            "/dev/nvidia0", "r")))
+        BAIL_OUT ("error creating a(ss) property object: %s", error.text);
+    diagjson (o);
+
+    if (sd_bus_message_new (bus, &m, SD_BUS_MESSAGE_METHOD_CALL) < 0)
+        BAIL_OUT ("could not create message");
+    ok (sdmsg_put (m, fmt, o) == 0,
+        "sdmsg_put of a(ss) property works");
+    if (sd_bus_message_seal (m, 42, 0) < 0
+        || sd_bus_message_rewind (m, true) < 0)
+        BAIL_OUT ("could not finalize message");
+    diagmsg (m);
+
+    ok (sd_bus_message_enter_container (m, 'a', "(sv)") > 0
+        && sd_bus_message_enter_container (m, 'r', "sv") > 0
+        && sd_bus_message_read (m, "s", &key) > 0
+        && streq (key, "DeviceAllow")
+        && sd_bus_message_enter_container (m, 'v', "a(ss)") > 0
+        && sd_bus_message_enter_container (m, 'a', "(ss)") > 0
+        && sd_bus_message_enter_container (m, 'r', "ss") > 0
+        && sd_bus_message_read (m, "ss", &path1, &perms1) > 0
+        && streq (path1, "/dev/nvidiactl")
+        && streq (perms1, "rw")
+        && sd_bus_message_exit_container (m) > 0
+        && sd_bus_message_enter_container (m, 'r', "ss") > 0
+        && sd_bus_message_read (m, "ss", &path2, &perms2) > 0
+        && streq (path2, "/dev/nvidia0")
+        && streq (perms2, "r")
+        && sd_bus_message_exit_container (m) > 0
+        && sd_bus_message_exit_container (m) > 0
+        && sd_bus_message_exit_container (m) > 0
+        && sd_bus_message_exit_container (m) > 0
+        && sd_bus_message_exit_container (m) > 0,
+        "successfully read back a(ss) DeviceAllow property");
+
+    json_decref (o);
+    sd_bus_message_unref (m);
+}
+
 int main (int argc, char **argv)
 {
     sd_bus *bus;
@@ -481,6 +539,7 @@ int main (int argc, char **argv)
     test_variant_as (bus);
     test_variant_unknown (bus);
     test_property_array (bus);
+    test_str_pair_array (bus);
 
     sd_bus_flush (bus);
     sd_bus_close (bus);

@@ -1155,3 +1155,12 @@ libioencode
 memlimit
 observability
 sdproc
+busctl
+DeviceAllow
+DevicePolicy
+nvidia
+nvidiactl
+rw
+BPF
+delegatable
+eBPF

@@ -41,6 +41,19 @@
  *   a list of CPU indices.
  *   See also: systemd.resource-control(5).
  *
+ * DeviceAllow
+ *   Control access to device nodes. Value is a comma-separated list of
+ *   "specifier perms" pairs, e.g. "/dev/nvidiactl rw,/dev/nvidia0 rw".
+ *   Specifier is a device path or "char-X"/"block-X" glob; perms is r, w, m,
+ *   or a combination. Typically paired with DevicePolicy=closed or strict.
+ *   See also: systemd.resource-control(5).
+ *
+ * DevicePolicy
+ *   Control the default policy for device access. Value is one of "auto",
+ *   "closed", or "strict". Use "closed" or "strict" with DeviceAllow to
+ *   restrict access to only the listed devices.
+ *   See also: systemd.resource-control(5).
+ *
  * Other service unit properties are assumed to be of type string and are
  * set without conversion.  For example, Description may be set to a string
  * that is shown in list-units output.

@@ -52,6 +52,13 @@ void test_inval (void)
         || jpath_set_new (cmd_o_badprop, "opts.SDEXEC_PROP_MemoryMax", o) < 0)
         BAIL_OUT ("error preparing test command with bad property");
 
+    /* bad DeviceAllow: missing perms field */
+    json_t *cmd_o_baddevice;
+    if (!(cmd_o_baddevice = json_deep_copy (cmd_o))
+        || !(o = json_string ("/dev/nvidiactl"))
+        || jpath_set_new (cmd_o_baddevice, "opts.SDEXEC_PROP_DeviceAllow", o) < 0)
+        BAIL_OUT ("error preparing test command with bad DeviceAllow");
+
     errno = 0;
     error.text[0] = '\0';
     ok (sdexec_start_transient_unit (NULL,      // h
@@ -113,9 +120,22 @@ void test_inval (void)
     diag ("%s", error.text);
 
     errno = 0;
+    error.text[0] = '\0';
+    ok (sdexec_start_transient_unit (h,         // h
+                                     0,         // rank
+                                     "fail",    // mode
+                                     cmd_o_baddevice, // cmd
+                                     -1, -1, -1, // *_fd
+                                     &error) == NULL
+        && errno == EINVAL,
+        "sdexec_start_transient_unit with bad DeviceAllow fails with EINVAL");
+    diag ("%s", error.text);
+
+    errno = 0;
     ok (sdexec_start_transient_unit_get (NULL, NULL) < 0 && errno == EINVAL,
         "sdexec_start_transient_unit_get f=NULL fails with EINVAL");
 
+    json_decref (cmd_o_baddevice);
     json_decref (cmd_o_badprop);
     json_decref (cmd_o_noname);
     json_decref (cmd_o);
@@ -124,11 +144,74 @@ void test_inval (void)
     flux_close (h);
 }
 
+void test_deviceallow (void)
+{
+    char *av[] = { "/bin/ls", NULL };
+    int ac = 1;
+    flux_t *h;
+    flux_future_t *f;
+    flux_cmd_t *cmd;
+    json_t *cmd_o = NULL;
+    flux_error_t error;
+
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop flux_t handle for testing");
+    if (!(cmd = flux_cmd_create (ac, av, environ))
+        || flux_cmd_setopt (cmd, "SDEXEC_NAME", "foo.service") < 0
+        || !(cmd_o = cmd_tojson (cmd)))
+        BAIL_OUT ("could not create command object for testing");
+
+    /* single entry */
+    json_t *cmd_o_single = json_deep_copy (cmd_o);
+    if (!cmd_o_single
+        || jpath_set_new (cmd_o_single,
+                          "opts.SDEXEC_PROP_DeviceAllow",
+                          json_string ("/dev/null rw")) < 0)
+        BAIL_OUT ("error preparing single DeviceAllow command");
+    f = sdexec_start_transient_unit (h, 0, "fail", cmd_o_single,
+                                     -1, -1, -1, &error);
+    ok (f != NULL, "sdexec_start_transient_unit with single DeviceAllow works");
+    flux_future_destroy (f);
+    json_decref (cmd_o_single);
+
+    /* multiple entries */
+    json_t *cmd_o_multi = json_deep_copy (cmd_o);
+    if (!cmd_o_multi
+        || jpath_set_new (cmd_o_multi,
+                          "opts.SDEXEC_PROP_DeviceAllow",
+                          json_string ("/dev/null rw,/dev/zero r")) < 0)
+        BAIL_OUT ("error preparing multi DeviceAllow command");
+    f = sdexec_start_transient_unit (h, 0, "fail", cmd_o_multi,
+                                     -1, -1, -1, &error);
+    ok (f != NULL, "sdexec_start_transient_unit with multiple DeviceAllow works");
+    flux_future_destroy (f);
+    json_decref (cmd_o_multi);
+
+    /* whitespace padding around entries and perms */
+    json_t *cmd_o_ws = json_deep_copy (cmd_o);
+    if (!cmd_o_ws
+        || jpath_set_new (cmd_o_ws,
+                          "opts.SDEXEC_PROP_DeviceAllow",
+                          json_string (" /dev/null  rw , /dev/zero  r ")) < 0)
+        BAIL_OUT ("error preparing whitespace DeviceAllow command");
+    f = sdexec_start_transient_unit (h, 0, "fail", cmd_o_ws,
+                                     -1, -1, -1, &error);
+    ok (f != NULL,
+        "sdexec_start_transient_unit with whitespace-padded DeviceAllow works");
+    flux_future_destroy (f);
+    json_decref (cmd_o_ws);
+
+    json_decref (cmd_o);
+    flux_cmd_destroy (cmd);
+    flux_close (h);
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
 
     test_inval ();
+    test_deviceallow ();
 
     done_testing ();
 }

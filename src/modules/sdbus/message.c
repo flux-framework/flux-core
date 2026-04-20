@@ -195,10 +195,14 @@ int sdmsg_put (sd_bus_message *m, const char *fmt, json_t *o)
         e = sdmsg_put_array (m, "(sasb)", o);
     else if (fmt[0] == 'a' && strlen (fmt) == 2)
         e = sdmsg_put_array (m, &fmt[1], o);
+    else if (streq (fmt, "a(ss)"))
+        e = sdmsg_put_array (m, "(ss)", o);
     else if (streq (fmt, "(sv)"))
         e = sdmsg_put_struct (m, "sv", o);
     else if (streq (fmt, "(sasb)"))
         e = sdmsg_put_struct (m, "sasb", o);
+    else if (streq (fmt, "(ss)"))
+        e = sdmsg_put_struct (m, "ss", o);
     else if (streq (fmt, "v"))
         e = sdmsg_put_variant (m, o);
     else if (strlen (fmt) == 1)
@@ -225,6 +229,8 @@ int sdmsg_write (sd_bus_message *m, const char *fmt, json_t *o)
         if (strstarts (&fmt[i], "a(sasb)"))
             efmt = strndup (&fmt[i], 7);
         else if (strstarts (&fmt[i], "a(sv)"))
+            efmt = strndup (&fmt[i], 5);
+        else if (strstarts (&fmt[i], "a(ss)"))
             efmt = strndup (&fmt[i], 5);
         else if (fmt[i] == 'a' && strlen (&fmt[i]) > 1)
             efmt = strndup (&fmt[i], 2);
