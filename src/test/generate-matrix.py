@@ -159,7 +159,7 @@ class BuildMatrix:
                     docker_tag=docker_tag,
                     image=image if image is not None else name,
                     command_args=args.get("command_args", ""),
-                    timeout_minutes=args.get("timeout_minutes", 30),
+                    timeout_minutes=args.get("timeout_minutes"),
                     runner=args["runner"],
                     **kwargs,
                 )
