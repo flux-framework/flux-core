@@ -1771,6 +1771,7 @@ json_t *rlist_to_R (const struct rlist *rl)
 fail:
     json_decref (R);
     json_decref (nodelist);
+    json_decref (properties);
     return NULL;
 }
 
