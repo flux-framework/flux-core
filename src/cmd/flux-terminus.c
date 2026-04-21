@@ -396,7 +396,7 @@ static json_t *build_cmd (optparse_t *p, int argc, char **argv)
         if (o == NULL)
             goto err;
         if (json_array_append_new (cmd, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto err;
         }
     }

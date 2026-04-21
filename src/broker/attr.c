@@ -560,7 +560,7 @@ static void lsattr_request_cb (flux_t *h,
         if (!(js = json_string (name)))
             goto nomem;
         if (json_array_append_new (names, js) < 0) {
-            json_decref (js);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
         name = attr_next (attrs);

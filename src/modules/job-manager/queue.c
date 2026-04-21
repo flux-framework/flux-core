@@ -277,7 +277,7 @@ static int set_string (json_t *o, const char *key, const char *val)
 {
     json_t *s = json_string (val);
     if (!s || json_object_set_new (o, key, s) < 0) {
-        json_decref (s);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         return -1;
     }
@@ -587,7 +587,7 @@ static void queue_list_cb (flux_t *h,
             json_t *o;
             if (!(o = json_string (q->name))
                 || json_array_append_new (a, o) < 0) {
-                json_decref (o);
+                // jansson decrefs the new object on failure
                 errno = ENOMEM;
                 goto error;
             }

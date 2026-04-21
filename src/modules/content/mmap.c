@@ -544,14 +544,14 @@ json_t *content_mmap_get_stats (struct content_mmap *mm)
             json_t *s;
             if (!(s = json_string (reg->fullpath))
                 || json_array_append_new (a, s) < 0) {
-                json_decref (s);
+                // jansson decrefs the new object on failure
                 json_decref (a);
                 goto nomem;
             }
             reg = hola_list_next (mm->tags, key);
         }
         if (json_object_set_new (o, key, a) < 0) {
-            json_decref (a);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
         key = hola_hash_next (mm->tags);

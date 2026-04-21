@@ -524,7 +524,7 @@ int job_event_enqueue (struct job *job, int flags, json_t *entry)
                             "flags", flags,
                             "entry", entry))
         || json_array_append_new (job->event_queue, wrap) < 0) {
-        json_decref (wrap);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         return -1;
     }

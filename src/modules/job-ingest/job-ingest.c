@@ -497,7 +497,7 @@ static int batch_add_job (struct batch *batch, struct job *job)
                                 "jobspec", job->jobspec)))
         goto nomem;
     if (json_array_append_new (batch->joblist, jobentry) < 0) {
-        json_decref (jobentry);
+        // jansson decrefs the new object on failure
         goto nomem;
     }
     return 0;

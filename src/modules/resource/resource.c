@@ -209,7 +209,7 @@ static int parse_config (struct resource_ctx *ctx,
         if (json_object_set_new (o, "scheduling", scheduling) < 0) {
             errprintf (errp, "failed to set scheduling key in R");
             json_decref (o);
-            json_decref (scheduling);
+            // jansson decrefs the new object on failure
             return -1;
         }
     }

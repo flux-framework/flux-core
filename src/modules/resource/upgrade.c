@@ -108,7 +108,7 @@ static int upgrade_drain_context (const char *name,
                       idset,
                       timebuf,
                       reason ? reason : "");
-            json_decref (o);
+            // jansson decrefs the new object on failure
             free (nl);
             return -1;
         }
@@ -160,7 +160,7 @@ static int upgrade_insert_drain_event (json_t *eventlog,
     if (!entry)
         return -1;
     if (json_array_insert_new (eventlog, index, entry) < 0) {
-        json_decref (entry);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         return -1;
     }

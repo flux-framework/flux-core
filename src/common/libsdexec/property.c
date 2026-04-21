@@ -104,7 +104,7 @@ flux_future_t *sdexec_property_changed (flux_t *h,
     if (path) {
         json_t *val = json_string (path);
         if (!val || json_object_set_new (o, "path", val) < 0) {
-            json_decref (val);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }

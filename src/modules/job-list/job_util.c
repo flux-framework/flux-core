@@ -218,7 +218,7 @@ out:
         return -1;
     }
     if (json_object_set_new (o, attr, val) < 0) {
-        json_decref (val);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         return -1;
     }
@@ -263,7 +263,7 @@ json_t *job_to_json (struct job *job, json_t *attrs, flux_error_t *errp)
     if (!(val = json_integer (job->id)))
         goto error_nomem;
     if (json_object_set_new (o, "id", val) < 0) {
-        json_decref (val);
+        // jansson decrefs the new object on failure
         goto error_nomem;
     }
     json_array_foreach (attrs, index, value) {

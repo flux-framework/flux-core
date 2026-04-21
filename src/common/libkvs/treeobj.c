@@ -401,7 +401,7 @@ json_t *treeobj_copy (json_t *obj)
         }
         if (json_object_set_new (cpy, "data", datacpy) < 0) {
             save_errno = errno;
-            json_decref (datacpy);
+            // jansson decrefs the new object on failure
             json_decref (cpy);
             errno = save_errno;
             return NULL;
@@ -437,7 +437,7 @@ int treeobj_append_blobref (json_t *obj, const char *blobref)
         goto done;
     }
     if (json_array_append_new (data, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         goto done;
     }

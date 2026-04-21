@@ -238,7 +238,7 @@ static int object_set_integer (json_t *o,
 {
     json_t *val = json_integer (n);
     if (!val || json_object_set_new (o, key, val) < 0) {
-        json_decref (val);
+        // jansson decrefs the new object on failure
         return -1;
     }
     return 0;
@@ -287,7 +287,7 @@ static json_t *stats_encode (struct job_stats *stats, const char *name)
     if (name) {
         json_t *no = json_string (name);
         if (!no || json_object_set_new (o, "name", no) < 0) {
-            json_decref (no);
+            // jansson decrefs the new object on failure
             json_decref (o);
             errno = ENOMEM;
             return NULL;
@@ -317,7 +317,7 @@ static json_t *queue_stats_encode (struct job_stats_ctx *statsctx)
             return NULL;
         }
         if (json_array_append_new (queues, qo) < 0) {
-            json_decref (qo);
+            // jansson decrefs the new object on failure
             json_decref (queues);
             errno = ENOMEM;
             return NULL;
@@ -344,7 +344,7 @@ static json_t *job_stats_encode (struct job_stats_ctx *statsctx)
     }
 
     if (json_object_set_new (o, "queues", queues) < 0) {
-        json_decref (queues);
+        // jansson decrefs the new object on failure
         json_decref (o);
         errno = ENOMEM;
         return NULL;

@@ -1919,12 +1919,11 @@ static int overlay_health_respond (struct overlay *ov, const flux_msg_t *msg)
             json_t *o;
             if (!(o = json_string (child->error.text))
                 || json_object_set_new (entry, "error", o) < 0) {
-                json_decref (o);
-                // if this fails (unlikely), soldier on
+                // jansson decrefs the new object on failure; soldier on
             }
         }
         if (json_array_append_new (array, entry) < 0) {
-            json_decref (entry);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }

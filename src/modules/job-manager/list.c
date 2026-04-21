@@ -68,7 +68,7 @@ int list_append_job (json_t *jobs, struct job *job)
         }
     }
     if (json_array_append_new (jobs, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         return -1;
     }

@@ -1813,7 +1813,7 @@ static json_t *running_job_stats (struct job_exec_ctx *ctx)
         }
         json_decref (impl_stats);
         if (json_object_set_new (o, idf58 (job->id), entry) < 0) {
-            json_decref (entry);
+            // jansson decrefs the new object on failure
             errno = ENOMEM;
             goto error;
         }
@@ -1849,7 +1849,7 @@ static void stats_cb (flux_t *h,
     }
     if (!(jobs = running_job_stats (ctx))
         || json_object_set_new (o, "jobs", jobs)) {
-        json_decref (jobs);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         goto error;
     }
@@ -1857,7 +1857,7 @@ static void stats_cb (flux_t *h,
         json_t *stats = NULL;
         if (impl->stats && (stats = (*impl->stats) (NULL))) {
             if (json_object_set_new (o, impl->name, stats) < 0) {
-                json_decref (stats);
+                // jansson decrefs the new object on failure
                 errno = ENOMEM;
                 goto error;
             }

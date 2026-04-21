@@ -181,6 +181,7 @@ static int append_compact (struct compact_key *ck, json_t *ops_new)
         goto error;
 
     if (json_array_set_new (ops_new, ck->index, op) < 0) {
+        op = NULL; // jansson decrefs the new object on failure
         errno = ENOMEM;
         goto error;
     }
@@ -264,7 +265,7 @@ int txn_compact (flux_kvs_txn_t *txn)
                     goto error;
                 }
                 if (json_array_append_new (ops_new, cpy) < 0) {
-                    json_decref (cpy);
+                    // jansson decrefs the new object on failure
                     errno = ENOMEM;
                     goto error;
                 }

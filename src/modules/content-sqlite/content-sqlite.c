@@ -484,7 +484,7 @@ void checkpoint_get_cb (flux_t *h,
         }
 
         if (json_array_append_new (a, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             errno = ENOMEM;
             goto error;
         }
@@ -606,7 +606,7 @@ static json_t *stats_checkpoints (struct content_sqlite *ctx)
                              "value", value))
             || json_array_append_new (checkpts, o) < 0) {
             json_decref (value);
-            json_decref (o);
+            // jansson decrefs the new object on failure
             errno = ENOMEM;
             goto error;
         }

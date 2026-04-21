@@ -410,7 +410,7 @@ static int upmi_preinit (struct upmi *upmi,
         json_t *o;
         if (!(o = json_string (path))
             || json_object_set_new (payload, "path", o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }

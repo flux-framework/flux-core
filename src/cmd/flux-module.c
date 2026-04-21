@@ -306,7 +306,7 @@ static json_t *args_create (int argc, char **argv)
     for (int i = 0; i < argc; i++) {
         json_t *s = json_string (argv[i]);
         if (!s || json_array_append_new (args, s) < 0) {
-            json_decref (s);
+            // jansson decrefs the new object on failure
             goto error;
         }
     }
@@ -320,7 +320,7 @@ static int set_string (json_t *o, const char *key, const char *val)
 {
     json_t *s = json_string (val);
     if (!s || json_object_set_new (o, key, s) < 0) {
-        json_decref (s);
+        // jansson decrefs the new object on failure
         return -1;
     }
     return 0;
@@ -966,7 +966,7 @@ static int parse_name_list (json_t **result, int ac, char **av)
         json_t *o;
         if (!(o = json_string (av[i]))
             || json_array_append_new (a, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
         size_t len = strlen (av[i]);

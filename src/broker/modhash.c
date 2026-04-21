@@ -1072,7 +1072,7 @@ static json_t *modhash_get_modlist (modhash_t *mh,
 
         if (!(entry = modhash_entry_tojson (p, now, sw))
             || json_array_append_new (mods, entry) < 0) {
-            json_decref (entry);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
         p = zhash_next (mh->zh_byuuid);

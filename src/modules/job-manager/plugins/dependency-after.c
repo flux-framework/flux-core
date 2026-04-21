@@ -726,7 +726,7 @@ static json_t *deps_to_json (flux_plugin_t *p)
                                      "type", after_typestr (info->type),
                                      "description", info->description))
                 || json_array_append_new (o, entry) < 0) {
-                json_decref (entry);
+                // jansson decrefs the new object on failure
                 goto error;
             }
             ref = zlistx_next (l);

@@ -216,7 +216,7 @@ static json_t * argz_tojson (const char *argz, size_t argz_len)
     while ((arg = argz_next (argz, argz_len, arg))) {
         json_t *val = json_string (arg);
         if (!val || json_array_append_new (o, val)) {
-            json_decref (val);
+            // jansson decrefs the new object on failure
             goto err;
         }
     }
@@ -271,7 +271,7 @@ static json_t * envz_tojson (const char *envz, size_t envz_len)
         if (!(value = env_entry_value (entry)))
             continue;
         if (!(v = json_string (value)) || json_object_set_new (o, name, v)) {
-            json_decref (v);
+            // jansson decrefs the new object on failure
             goto err;
         }
     }
@@ -321,7 +321,7 @@ static json_t * zhash_tojson (zhash_t *h)
     while (val) {
         json_t *v = json_string (val);
         if (!v || json_object_set_new (o, zhash_cursor (h), v)) {
-            json_decref (v);
+            // jansson decrefs the new object on failure
             goto err;
         }
         val = zhash_next (h);
@@ -406,7 +406,7 @@ static json_t *channels_tojson (zlist_t *l)
     while (s) {
         json_t *val = json_string (s);
         if (!val || json_array_append_new (o, val)) {
-            json_decref (val);
+            // jansson decrefs the new object on failure
             goto err;
         }
         s = zlist_next (l);
@@ -481,7 +481,7 @@ static json_t *msgchans_tojson (zlist_t *l)
     while (cm) {
         json_t *val = json_pack ("{s:s s:s}", "name", cm->name, "uri", cm->uri);
         if (!val || json_array_append_new (o, val) < 0) {
-            json_decref (val);
+            // jansson decrefs the new object on failure
             goto err;
         }
         cm = zlist_next (l);
@@ -938,7 +938,7 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
         if (!(a = json_string (cmd->cwd)))
             goto err;
         if (json_object_set_new (o, "cwd", a) != 0) {
-            json_decref (a);
+            // jansson decrefs the new object on failure
             goto err;
         }
     }
@@ -948,7 +948,7 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
         if (!(a = json_string (cmd->label)))
             goto err;
         if (json_object_set_new (o, "label", a) != 0) {
-            json_decref (a);
+            // jansson decrefs the new object on failure
             goto err;
         }
     }
@@ -958,7 +958,7 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
         if (!(a = argz_tojson (cmd->argz, cmd->argz_len)))
             goto err;
         if (json_object_set_new (o, "cmdline", a) != 0) {
-            json_decref (a);
+            // jansson decrefs the new object on failure
             goto err;
         }
     }
@@ -968,7 +968,7 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
         if (!(a = envz_tojson (cmd->envz, cmd->envz_len)))
             goto err;
         if (json_object_set_new (o, "env", a) != 0) {
-            json_decref (a);
+            // jansson decrefs the new object on failure
             goto err;
         }
     }
@@ -977,7 +977,7 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
     if (!(a = zhash_tojson (cmd->opts)))
         goto err;
     if (json_object_set_new (o, "opts", a) != 0) {
-        json_decref (a);
+        // jansson decrefs the new object on failure
         goto err;
     }
 
@@ -985,7 +985,7 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
     if (!(a = channels_tojson (cmd->channels)))
         goto err;
     if (json_object_set_new (o, "channels", a) != 0) {
-        json_decref (a);
+        // jansson decrefs the new object on failure
         goto err;
     }
 
@@ -993,7 +993,7 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
     if (!(a = msgchans_tojson (cmd->msgchans)))
         goto err;
     if (json_object_set_new (o, "msgchan", a) != 0) {
-        json_decref (a);
+        // jansson decrefs the new object on failure
         goto err;
     }
     return o;

@@ -88,7 +88,7 @@ static int list_units_tojson (sd_bus_message *m,
             goto out;
         }
         if (json_array_append_new (a, entry) < 0) {
-            json_decref (entry);
+            // jansson decrefs the new object on failure
             e = -ENOMEM;
             goto out;
         }
@@ -98,6 +98,7 @@ static int list_units_tojson (sd_bus_message *m,
     if (e < 0 || (e = sd_bus_message_exit_container (m)) < 0)
         goto out;
     if (json_array_append_new (params, a) < 0) {
+        a = NULL; // jansson decrefs the new object on failure
         e = -ENOMEM;
         goto out;
     }

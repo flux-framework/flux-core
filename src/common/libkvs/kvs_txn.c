@@ -80,21 +80,16 @@ static int append_op_to_txn (flux_kvs_txn_t *txn,
                              const char *key,
                              json_t *dirent)
 {
-    json_t *op = NULL;
-    int saved_errno;
+    json_t *op;
 
     if (txn_encode_op (key, flags, dirent, &op) < 0)
-        goto error;
+        return -1;
     if (json_array_append_new (txn->ops, op) < 0) {
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
-        goto error;
+        return -1;
     }
     return 0;
-error:
-    saved_errno = errno;
-    json_decref (op);
-    errno = saved_errno;
-    return -1;
 }
 
 int flux_kvs_txn_put_raw (flux_kvs_txn_t *txn,

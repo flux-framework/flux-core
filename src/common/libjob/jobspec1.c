@@ -38,7 +38,7 @@ static json_t *argv_to_json (int argc, char **argv)
         goto nomem;
     for (i = 0; i < argc; i++) {
         if (!(o = json_string (argv[i])) || json_array_append_new (a, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }

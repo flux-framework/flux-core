@@ -1372,7 +1372,7 @@ static json_t * rlist_compressed (const struct rlist *rl)
         if (rnode_avail_total (mrn->rnode) > 0) {
             json_t *entry = multi_rnode_tojson (mrn);
             if (!entry || json_array_append_new (o, entry) != 0) {
-                json_decref (entry);
+                // jansson decrefs the new object on failure
                 goto fail;
             }
         }
@@ -1679,7 +1679,7 @@ static int rlist_json_properties (const struct rlist *rl, json_t **result)
             || !(val = json_string (s))
             || json_object_set_new (o, name, val) < 0) {
             free (s);
-            json_decref (val);
+            // jansson decrefs the new object on failure
             errno = ENOMEM;
             goto out;
         }
@@ -1747,14 +1747,24 @@ json_t *rlist_to_R (const struct rlist *rl)
                            "starttime", rl->starttime,
                            "expiration", rl->expiration)))
         goto fail;
-    if (nodelist
-        && json_object_set_new (json_object_get (R, "execution"),
-                                "nodelist", nodelist) < 0)
-        goto fail;
-    if (properties
-        && json_object_set_new (json_object_get (R, "execution"),
-                                "properties", properties) < 0)
-        goto fail;
+    if (nodelist) {
+        if (json_object_set_new (json_object_get (R, "execution"),
+                                 "nodelist",
+                                 nodelist) < 0) {
+            nodelist = NULL; // jansson decrefs the new object on failure
+            goto fail;
+        }
+        nodelist = NULL; // now owned by R
+    }
+    if (properties) {
+        if (json_object_set_new (json_object_get (R, "execution"),
+                                 "properties",
+                                 properties) < 0) {
+            properties = NULL; // jansson decrefs the new object on failure
+            goto fail;
+        }
+        properties = NULL; // now owned by R
+    }
     if (rl->scheduling
         && json_object_set (R, "scheduling", rl->scheduling) < 0)
         goto fail;
@@ -1763,6 +1773,7 @@ json_t *rlist_to_R (const struct rlist *rl)
 fail:
     json_decref (R);
     json_decref (nodelist);
+    json_decref (properties);
     return NULL;
 }
 

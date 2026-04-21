@@ -272,7 +272,7 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
         || !(tmp = json_integer (l->id))
         || json_object_set_new (o, "id", tmp) < 0) {
         errprintf (&error, "error creating response object");
-        json_decref (tmp);
+        // jansson decrefs the new object on failure
         goto enomem;
     }
 
@@ -327,7 +327,7 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
         else
             val = json_string (s);
         if (!val || json_object_set_new (o, keystr, val) < 0) {
-            json_decref (val);
+            // jansson decrefs the new object on failure
             errprintf (&error, "%s: error adding value to response", keystr);
             goto enomem;
         }

@@ -63,7 +63,7 @@ static int op_put (flux_plugin_t *p,
         return upmi_seterror (p, args, "error unpacking put arguments");
     if (!(o = json_string (value))
         || json_object_set_new (ctx->kvs, key, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         return upmi_seterror (p, args, "dictionary update error");
     }
     return 0;

@@ -143,7 +143,7 @@ static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
         if (!(s = json_string (name)))
             goto error_enomem;
         if (json_array_append_new (kt->names, s) < 0) {
-            json_decref (s);
+            // jansson decrefs the new object on failure
             goto error_enomem;
         }
     }
@@ -425,7 +425,7 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
             if (!(ktmp = treeobj_create_dirref (ref)))
                 return -1;
             if (json_object_iter_set_new (dir, iter, ktmp) < 0) {
-                json_decref (ktmp);
+                // jansson decrefs the new object on failure
                 errno = ENOMEM;
                 return -1;
             }
@@ -450,7 +450,7 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
                 if (!(ktmp = treeobj_create_valref (ref)))
                     return -1;
                 if (json_object_iter_set_new (dir, iter, ktmp) < 0) {
-                    json_decref (ktmp);
+                    // jansson decrefs the new object on failure
                     errno = ENOMEM;
                     return -1;
                 }

@@ -23,6 +23,24 @@ jobs:
     - name: Check Spelling
       uses: crate-ci/typos@v1.44.0
 
+  coccinelle:
+    name: coccinelle
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - name: install coccinelle
+      run: sudo apt update; sudo apt install -y coccinelle
+    - name: run coccinelle checks
+      run: |
+        rc=0
+        for f in t/cocci/*.cocci; do
+          echo "checking $f ..."
+          spatch --sp-file $f --dir src/ --very-quiet >spatch.out 2>&1
+          cat spatch.out
+          test ! -s spatch.out || rc=1
+        done
+        exit $rc
+
   python-lint:
     name: python linting
     runs-on: ubuntu-latest

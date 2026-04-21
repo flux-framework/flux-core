@@ -97,7 +97,7 @@ static int attr_cache_to_json (flux_t *h, json_t **cachep)
     while (name) {
         json_t *val = json_string (flux_attr_get (h, name));
         if (!val || json_object_set_new (cache, name, val) < 0) {
-            json_decref (val);
+            // jansson decrefs the new object on failure
             goto error;
         }
         name = flux_attr_cache_next (h);

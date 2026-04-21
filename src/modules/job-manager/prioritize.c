@@ -234,7 +234,7 @@ int reprioritize_all (struct job_manager *ctx)
             if (job->priority > FLUX_JOB_PRIORITY_MIN) {
                 json_t *entry = json_pack ("[II]", job->id, job->priority);
                 if (!entry || json_array_append_new (priorities, entry) < 0) {
-                    json_decref (entry);
+                    // jansson decrefs the new object on failure
                     flux_log (h, LOG_ERR,
                               "reprioritize: json_pack/append failed");
                         goto error;

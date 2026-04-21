@@ -373,7 +373,8 @@ EXTRA_DIST= \
 	job-manager/dumps \
 	flux-resource \
 	module/testmod.py \
-	scheduler/sched-slowgen.py
+	scheduler/sched-slowgen.py \
+	cocci/json_set_new_decref.cocci
 
 dist_check_SCRIPTS = \
 	$(TESTSCRIPTS) \
