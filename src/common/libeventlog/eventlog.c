@@ -60,7 +60,7 @@ static int eventlog_entry_append (json_t *a, const char *event)
         return -1;
 
     if (json_array_append_new (a, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         return -1;
     }

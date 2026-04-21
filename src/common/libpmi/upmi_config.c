@@ -97,7 +97,7 @@ static int set_string (json_t *o, const char *key, const char *s)
 
     if (!(val = json_string (s))
         || json_object_set_new (o, key, val) < 0) {
-        json_decref (val);
+        // jansson decrefs the new object on failure
         return -1;
     }
     return 0;

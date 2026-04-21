@@ -570,13 +570,13 @@ static int set_dict (json_t *o,
     if (!(dict = json_object_get (o, name))) {
         if (!(dict = json_object ())
             || json_object_set_new (o, name, dict) < 0) {
-            json_decref (dict);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }
     if (!(vo = json_string (v))
         || json_object_set_new (dict, k, vo) < 0) {
-        json_decref (vo);
+        // jansson decrefs the new object on failure
         goto nomem;
     }
     return 0;
@@ -1046,7 +1046,7 @@ static void list_cb (flux_t *h,
                                "label", "",
                                "state", "R"))) {
             if (json_array_append_new (procs, o) < 0) {
-                json_decref (o);
+                // jansson decrefs the new object on failure
                 goto nomem;
             }
         }
@@ -1124,11 +1124,12 @@ static void stats_cb (flux_t *h,
         json_t *entry = NULL;
 
         if (!(proc = flux_msg_aux_get (m, "sdproc"))
-            || !(entry = get_proc_stats (proc))
-            || json_object_set_new (procs,
-                                    sdexec_unit_name (proc->unit),
-                                    entry) < 0) {
-            json_decref (entry);
+            || !(entry = get_proc_stats (proc)))
+            goto nomem;
+        if (json_object_set_new (procs,
+                                 sdexec_unit_name (proc->unit),
+                                 entry) < 0) {
+            // jansson decrefs the new object on failure
             goto nomem;
         }
         m = flux_msglist_next (ctx->requests);

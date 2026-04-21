@@ -422,7 +422,7 @@ static int sdmsg_get_property_dict (sd_bus_message *m, json_t **op)
             || (e = sdmsg_get_variant (m, &val)) <= 0)
             goto out;
         if (json_object_set_new (dict, key, val) < 0) {
-            json_decref (val);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
         if ((e = sd_bus_message_exit_container (m)) < 0)
@@ -480,7 +480,7 @@ int sdmsg_read (sd_bus_message *m, const char *fmt, json_t *o)
         }
         if (json_array_append_new (o, entry) < 0) {
             free (efmt);
-            json_decref (entry);
+            // jansson decrefs the new object on failure
             return -ENOMEM;
         }
         i += strlen (efmt);

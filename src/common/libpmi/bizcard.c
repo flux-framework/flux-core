@@ -94,7 +94,7 @@ struct bizcard *bizcard_create (const char *hostname, const char *pubkey)
     if (pubkey) {
         json_t *o = json_string (pubkey);
         if (!o || json_object_set_new (bc->obj, "pubkey", o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }
@@ -165,7 +165,7 @@ int bizcard_uri_append (struct bizcard *bc, const char *uri)
         return -1;
     }
     if (!(o = json_string (uri)) || json_array_append_new (a, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         return -1;
     }

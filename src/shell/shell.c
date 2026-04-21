@@ -378,7 +378,7 @@ static int object_set_string (json_t *dict, const char *name, const char *val)
     if (!(o = json_string (val)))
         goto nomem;
     if (json_object_set_new (dict, name, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         goto nomem;
     }
     return 0;

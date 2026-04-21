@@ -51,7 +51,7 @@ static int blobvec_append (json_t *blobvec,
         return -1;
     if (!(o = json_pack ("[I,I,s]", offsetj, blobsizej, blobref))
         || json_array_append_new (blobvec, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         return -1;
     }

@@ -76,7 +76,7 @@ int get_jobs_from_list (json_t *jobs,
             if (!(o = job_to_json (job, attrs, errp)))
                 return -1;
             if (json_array_append_new (jobs, o) < 0) {
-                json_decref (o);
+                // jansson decrefs the new object on failure
                 errno = ENOMEM;
                 return -1;
             }
@@ -201,7 +201,7 @@ static int legacy_list_rpc (flux_t *h,
     if (userid != FLUX_USERID_UNKNOWN) {
         o = json_pack ("{s:[i]}", "userid", userid);
         if (!o || json_array_append_new (a, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto error;
         }
     }
@@ -209,7 +209,7 @@ static int legacy_list_rpc (flux_t *h,
     if (name) {
         o = json_pack ("{s:[s]}", "name", name);
         if (!o || json_array_append_new (a, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto error;
         }
     }
@@ -217,7 +217,7 @@ static int legacy_list_rpc (flux_t *h,
     if (queue) {
         o = json_pack ("{s:[s]}", "queue", queue);
         if (!o || json_array_append_new (a, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto error;
         }
     }
@@ -227,7 +227,7 @@ static int legacy_list_rpc (flux_t *h,
     if (states) {
         o = json_pack ("{s:[i]}", "states", states);
         if (!o || json_array_append_new (a, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto error;
         }
     }
@@ -237,7 +237,7 @@ static int legacy_list_rpc (flux_t *h,
     if (results) {
         o = json_pack ("{s:[i]}", "results", results);
         if (!o || json_array_append_new (a, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto error;
         }
     }
@@ -609,7 +609,7 @@ static int list_attrs_append (json_t *a, const char *attr)
         return -1;
     }
     if (json_array_append_new (a, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         return -1;
     }

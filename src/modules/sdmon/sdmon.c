@@ -150,7 +150,7 @@ static int add_units (json_t *units, struct sdmon_bus *bus)
                              "name", sdexec_unit_name (unit),
                              "state", state))
             || json_array_append_new (units, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             errno = ENOMEM;
             return -1;
         }

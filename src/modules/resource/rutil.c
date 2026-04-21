@@ -95,7 +95,7 @@ int rutil_set_json_idset (json_t *o, const char *key, const struct idset *ids)
 nomem:
     errno = ENOMEM;
     ERRNO_SAFE_WRAP (free, s);
-    ERRNO_SAFE_WRAP (json_decref, val);
+    // jansson decrefs the new object on failure
     return -1;
 }
 
@@ -136,7 +136,7 @@ static int set_string (json_t *o, const char *key, const char *val)
     if (!(oval = json_string (val)))
         goto nomem;
     if (json_object_set_new (o, key, oval) < 0) {
-        json_decref (oval);
+        // jansson decrefs the new object on failure
         goto nomem;
     }
     return 0;

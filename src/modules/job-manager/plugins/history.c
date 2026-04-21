@@ -183,7 +183,7 @@ static int append_int (json_t *a, json_int_t i)
     json_t *o;
     if (!(o = json_integer (i))
         || json_array_append_new (a, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         return -1;
     }
     return 0;

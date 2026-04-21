@@ -192,7 +192,7 @@ json_t *drainset_to_json (struct drainset *ds)
             goto nomem;
         }
         if (json_object_set_new (o, s, val) < 0) {
-            ERRNO_SAFE_WRAP (json_decref, val);
+            // jansson decrefs the new object on failure
             ERRNO_SAFE_WRAP (free, s);
             goto error;
         }

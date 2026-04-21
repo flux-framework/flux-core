@@ -94,7 +94,7 @@ int grudgeset_add (struct grudgeset **gsetp, const char *val)
     }
     if (!(o = json_string (val))
         || json_array_append_new ((*gsetp)->set, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         return -1;
     }

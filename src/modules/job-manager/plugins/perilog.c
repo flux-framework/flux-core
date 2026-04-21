@@ -1360,7 +1360,7 @@ static json_t *cmdline_tojson (flux_cmd_t *cmd)
         json_t *arg;
         if ((!(arg = json_string (flux_cmd_arg (cmd, i))))
             || json_array_append_new (o, arg) < 0) {
-            json_decref (arg);
+            // jansson decrefs the new object on failure
             goto error;
         }
     }
@@ -1421,9 +1421,10 @@ static json_t *procs_to_json (zhashx_t *processes)
     proc = zhashx_first (processes);
     while (proc) {
         json_t *entry;
-        if (!(entry = proc_to_json (proc))
-            || json_object_set_new (o, idf58 (proc->id), entry) < 0) {
-            json_decref (entry);
+        if (!(entry = proc_to_json (proc)))
+            goto error;
+        if (json_object_set_new (o, idf58 (proc->id), entry) < 0) {
+            // jansson decrefs the new object on failure
             goto error;
         }
         proc = zhashx_next (processes);

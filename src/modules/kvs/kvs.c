@@ -2067,7 +2067,7 @@ static void stats_get_cb (flux_t *h,
             goto nomem;
 
         if (json_object_set_new (nsstats, KVS_PRIMARY_NAMESPACE, s) < 0) {
-            json_decref (s);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }

@@ -507,7 +507,7 @@ static int set_idset_string (json_t *obj, const char *key, struct idset *ids)
     if (!(s = idset_encode (ids, IDSET_FLAG_RANGE))
         || !(o = json_string (s))
         || json_object_set_new (obj, key, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         free (s);
         return -1;
     }
@@ -654,7 +654,7 @@ json_t *housekeeping_get_stats (struct housekeeping *hk)
         json_t *job;
         if (!(job = housekeeping_get_stats_job (a))
             || json_object_set_new (running, idf58 (a->id), job) < 0) {
-            json_decref (job);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
         a = zlistx_next (hk->allocations);

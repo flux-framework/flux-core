@@ -68,7 +68,7 @@ json_t *parse_names (const char *s, const char *default_value)
         while ((entry = argz_next (argz, argz_len, entry))) {
             if (!(o = json_string (entry))
                 || json_array_append_new (a, o) < 0) {
-                json_decref (o);
+                // jansson decrefs the new object on failure
                 goto error;
             }
         }
@@ -76,7 +76,7 @@ json_t *parse_names (const char *s, const char *default_value)
     if (json_array_size (a) == 0 && default_value) {
         if (!(o = json_string (default_value))
             || json_array_append_new (a, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto error;
         }
     }

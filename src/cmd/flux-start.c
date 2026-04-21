@@ -854,7 +854,7 @@ void status_cb (flux_t *h,
                                  "pid", flux_subprocess_pid (cli->p))))
             goto nomem;
         if (json_array_append_new (procs, entry) < 0) {
-            json_decref (entry);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
         cli = zlist_next (ctx.clients);

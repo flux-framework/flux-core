@@ -1018,7 +1018,7 @@ static void server_list_cb (flux_t *h,
         json_t *o = NULL;
         if (!(o = process_info (p))
             || json_array_append_new (procs, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
         p = zlistx_next (s->subprocesses);

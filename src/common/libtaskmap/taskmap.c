@@ -780,7 +780,7 @@ json_t *taskmap_encode_json (const struct taskmap *map, int flags)
         if (!o)
             goto error;
         if (json_array_append_new (blocks, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto error;
         }
         block = zlistx_next (map->blocklist);

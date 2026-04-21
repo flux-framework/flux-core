@@ -92,7 +92,7 @@ static int raise_job_exception_ex (struct job_manager *ctx,
         json_t *val;
         if (!(val = json_integer (userid))
             || json_object_set_new (evctx, "userid", val) < 0) {
-            json_decref (val);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }
@@ -101,7 +101,7 @@ static int raise_job_exception_ex (struct job_manager *ctx,
         json_t *val;
         if (!(val = json_integer (wait_status))
             || json_object_set_new (evctx, "wait_status", val) < 0) {
-            json_decref (val);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }
@@ -118,7 +118,7 @@ static int raise_job_exception_ex (struct job_manager *ctx,
         json_t *val;
         if (!(val = json_integer (wait_status))
             || json_object_set_new (pub, "wait_status", val) < 0) {
-            json_decref (val);
+            // jansson decrefs the new object on failure
             json_decref (pub);
             goto nomem;
         }

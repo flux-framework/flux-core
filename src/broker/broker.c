@@ -1219,7 +1219,7 @@ static void broker_getenv_cb (flux_t *h,
             json_t *o;
             if (!(o = json_string (val))
                 || json_object_set_new (env, name, o) < 0) {
-                json_decref (o);
+                // jansson decrefs the new object on failure
                 errno = ENOMEM;
                 goto error;
             }

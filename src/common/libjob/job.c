@@ -41,7 +41,7 @@ flux_future_t *flux_job_raise (flux_t *h,
     if (note) {
         json_t *o_note = json_string (note);
         if (!o_note || json_object_set_new (o, "note", o_note) < 0) {
-            json_decref (o_note);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }

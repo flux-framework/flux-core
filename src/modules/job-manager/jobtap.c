@@ -1632,7 +1632,7 @@ static json_t *jobtap_plugin_list (struct jobtap *jobtap)
         if (o == NULL)
             goto error;
         if (json_array_append_new (result, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto error;
         }
         p = zlistx_next (jobtap->plugins);

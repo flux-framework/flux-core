@@ -139,7 +139,7 @@ static int process_job_purge (struct purge *purge,
 
     json_t *o = json_integer (job->id);
     if (!o || json_array_append_new (jobs, o)) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         return -1;
     }

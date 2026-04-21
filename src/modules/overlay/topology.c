@@ -341,7 +341,7 @@ json_t *topology_get_json_subtree_at (struct topology *topo, int rank)
         if (!(child = topology_get_json_subtree_at (topo, child_ranks[i])))
             goto error;
         if (json_array_append_new (children, child) < 0) {
-            json_decref (child);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }

@@ -191,7 +191,7 @@ json_t *proctable_to_json (struct proctable *p)
         || json_object_set_new (o, "pids", x) < 0
         || !(x = rangelist_to_json (p->ranks))
         || json_object_set_new (o, "ranks", x) < 0) {
-        json_decref (x);
+        // jansson decrefs the new object on failure; x may be NULL
         json_decref (o);
         return NULL;
     }

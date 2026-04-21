@@ -70,7 +70,7 @@ static void set_errorf (json_t *errors,
     va_end (ap);
     if (!(o = json_pack ("[Is]", id, buf))
         || json_array_append_new (errors, o)) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         return;
     }
 }

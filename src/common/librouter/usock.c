@@ -854,7 +854,7 @@ json_t *usock_server_stats_get (struct usock_server *server)
         json_t *client;
         if (!(client = usock_client_stats_get (conn))
             || json_array_append_new (clients, client) < 0) {
-            json_decref (client);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
         conn = zlist_next (server->connections);

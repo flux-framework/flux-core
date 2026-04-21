@@ -33,7 +33,7 @@ static int update_object_recursive (json_t *orig, json_t *val)
                 json_t *o = json_object ();
                 if (!o || json_object_set_new (orig, key, o) < 0) {
                     errno = ENOMEM;
-                    json_decref (o);
+                    // jansson decrefs the new object on failure
                     return -1;
                 }
                 orig_value = o;
@@ -67,7 +67,7 @@ static int jpath_set_destructive (json_t *o,
             if (!(dir = json_object ()))
                 goto nomem;
             if (json_object_set_new (o, path, dir) < 0) {
-                json_decref (dir);
+                // jansson decrefs the new object on failure
                 goto nomem;
             }
         }

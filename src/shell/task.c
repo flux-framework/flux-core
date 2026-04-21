@@ -310,7 +310,7 @@ static int add_process_info_to_json (flux_subprocess_t *p, json_t *o)
     }
     return 0;
 error:
-    json_decref (obj);
+    // jansson decrefs the new object on failure; obj need not be freed here
     return -1;
 }
 

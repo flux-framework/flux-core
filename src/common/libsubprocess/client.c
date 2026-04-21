@@ -145,7 +145,7 @@ static flux_future_t *rpc_send_signed (flux_t *h,
 
     if (!(o = json_string (topic))
         || json_object_set_new (payload, "topic", o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         goto out;
     }
@@ -171,7 +171,7 @@ static flux_future_t *rpc_send_signed (flux_t *h,
         (void) json_object_del (payload, "topic");
         if (!(osig = json_string (signature))
             || json_object_set_new (payload, "signature", osig) < 0) {
-            json_decref (osig);
+            // jansson decrefs the new object on failure
             errno = ENOMEM;
             goto out;
         }

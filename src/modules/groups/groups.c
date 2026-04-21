@@ -251,7 +251,7 @@ static int batch_append (struct groups *g, const char *name, json_t *update)
     if (!(a = json_object_get (g->batch, name))) {
         if (!(a = json_array ())
             || json_object_set_new (g->batch, name, a) < 0) {
-            json_decref (a);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }
@@ -626,7 +626,7 @@ static json_t *make_groups_object (struct groups *g)
         json_t *o;
         if (!(o = obj_from_idset (group->members))
             || json_object_set_new (obj, group->name, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto error;
         }
         group = zhashx_next (g->groups);

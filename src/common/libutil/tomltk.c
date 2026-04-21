@@ -209,7 +209,7 @@ static int array_to_json (toml_array_t *arr, json_t **op)
         else
             break;
         if (json_array_append_new (obj, val) < 0) {
-            json_decref (val);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }
@@ -256,7 +256,7 @@ static int table_to_json (toml_table_t *tab, json_t **op)
                 goto error;
         }
         if (json_object_set_new (obj, key, val) < 0) {
-            json_decref (val);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
     }

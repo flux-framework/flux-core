@@ -103,7 +103,7 @@ json_t *service_list_byuuid (struct service_switch *sw, const char *uuid)
             if (!name)
                 goto error;
             if (json_array_append_new (svcs, name) < 0) {
-                json_decref (name);
+                // jansson decrefs the new object on failure
                 goto error;
             }
         }

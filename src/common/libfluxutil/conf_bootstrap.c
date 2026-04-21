@@ -191,7 +191,7 @@ static int set_string (json_t *o, const char *key, const char *s)
 
     if (!(val = json_string (s))
         || json_object_set_new (o, key, val) < 0) {
-        json_decref (val);
+        // jansson decrefs the new object on failure
         return -1;
     }
     return 0;
@@ -269,7 +269,7 @@ static json_t *rehost_entry (json_t *entry, const char *host)
     if (!(cpy = json_deep_copy (entry))
         || !(o = json_string (host))
         || json_object_set_new (cpy, "host", o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         json_decref (cpy);
         return NULL;
     }
@@ -306,7 +306,7 @@ static int dedup_hosts_entry (struct bootstrap_info *binfo,
         else {
             if (!(obj = rehost_entry (entry, host))
                 || json_object_set_new (hobj, host, obj) < 0) {
-                json_decref (obj);
+                // jansson decrefs the new object on failure
                 goto nomem;
             }
             if (json_array_append (binfo->xhosts, obj) < 0)
@@ -344,7 +344,7 @@ static int parse_hosts (json_t *hosts,
     if (!hosts || json_array_size (hosts) == 0) {
         if (!(entry = json_pack ("{s:s}", "host", hostname))
             || json_array_append_new (binfo->xhosts, entry) < 0) {
-            json_decref (entry);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
         return 1;

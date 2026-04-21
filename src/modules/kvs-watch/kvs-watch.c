@@ -1549,7 +1549,7 @@ static void stats_cb (flux_t *h,
         if (!o)
             goto nomem;
         if (json_object_set_new (stats, nsm->ns_name, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             goto nomem;
         }
         watchers += zlistx_size (nsm->watchers);

@@ -51,7 +51,7 @@ static int prop_add_execstart (json_t *prop, const char *name, json_t *cmdline)
     if (json_unpack (cmdline, "[s]", &arg0) < 0
         || !(o = json_pack ("[s[s[[sOb]]]]", name, "a(sasb)", arg0, cmdline, 0))
         || json_array_append_new (prop, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         return -1;
     }
     return 0;
@@ -95,7 +95,7 @@ static int prop_add_env (json_t *prop, const char *name, json_t *dict)
             if (asprintf (&kv, "%s=%s", k, v) < 0
                 || !(kvo = json_string (kv))
                 || json_array_append_new (a, kvo) < 0) {
-                json_decref (kvo);
+                // jansson decrefs the new object on failure
                 free (kv);
                 goto out;
             }
@@ -104,7 +104,7 @@ static int prop_add_env (json_t *prop, const char *name, json_t *dict)
     }
     if (!(env = json_pack ("[s[sO]]", name, "as", a))
         || json_array_append_new (prop, env) < 0) {
-        json_decref (env);
+        // jansson decrefs the new object on failure
         goto out;
     }
     rc = 0;
@@ -120,7 +120,7 @@ static int prop_add_string (json_t *prop, const char *name, const char *val)
     if (val) {
         if (!(o = json_pack ("[s[ss]]", name, "s", val))
             || json_array_append_new (prop, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             return -1;
         }
     }
@@ -137,7 +137,7 @@ static int prop_add_fd (json_t *prop, const char *name, int val)
     if (val >= 0) {
         if (!(o = json_pack ("[s[si]]", name, "h", val))
             || json_array_append_new (prop, o) < 0) {
-            json_decref (o);
+            // jansson decrefs the new object on failure
             return -1;
         }
     }
@@ -150,7 +150,7 @@ static int prop_add_bool (json_t *prop, const char *name, int val)
 
     if (!(o = json_pack ("[s[sb]]", name, "b", val))
         || json_array_append_new (prop, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         return -1;
     }
     return 0;
@@ -183,7 +183,7 @@ static int prop_add_i32 (json_t *prop, const char *name, int32_t val)
 
     if (!(o = json_pack ("[s[sI]]", name, "i", i))
         || json_array_append_new (prop, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         return -1;
     }
     return 0;
@@ -196,7 +196,7 @@ static int prop_add_u32 (json_t *prop, const char *name, uint32_t val)
 
     if (!(o = json_pack ("[s[sI]]", name, "u", i))
         || json_array_append_new (prop, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         return -1;
     }
     return 0;
@@ -209,7 +209,7 @@ static int prop_add_u64 (json_t *prop, const char *name, uint64_t val)
 
     if (!(o = json_pack ("[s[sI]]", name, "t", i))
         || json_array_append_new (prop, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         return -1;
     }
     return 0;
@@ -229,14 +229,14 @@ static int prop_add_bytearray (json_t *prop,
         json_t *vo;
         if (!(vo = json_integer (bytearray[i]))
             || json_array_append_new (a, vo) < 0) {
-            json_decref (vo);
+            // jansson decrefs the new object on failure
             json_decref (a);
             return -1;
         }
     }
     if (!(o = json_pack ("[s[sO]]", name, "ay", a))
         || json_array_append_new (prop, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         json_decref (a);
         return -1;
     }
@@ -276,7 +276,7 @@ static int prop_add_str_pair_array (json_t *prop,
         json_t *pair;
         if (!(pair = json_pack ("[ss]", entry, sp))
             || json_array_append_new (pairs, pair) < 0) {
-            json_decref (pair);
+            // jansson decrefs the new object on failure
             goto out;
         }
         entry = strtok_r (NULL, ",", &saveptr);
@@ -285,7 +285,7 @@ static int prop_add_str_pair_array (json_t *prop,
         goto out;
     if (!(o = json_pack ("[s[sO]]", name, "a(ss)", pairs))
         || json_array_append_new (prop, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         goto out;
     }
     rc = 0;

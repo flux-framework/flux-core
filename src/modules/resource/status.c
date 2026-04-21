@@ -376,7 +376,7 @@ static json_t *prepare_sched_status_payload (struct status *status,
     else
         o = json_incref (status->R_empty);
     if (!o || json_object_set_new (result, "allocated", o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         goto error;
     }
     return result;

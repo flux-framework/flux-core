@@ -304,7 +304,7 @@ static json_t *singleton_list_to_json (const char *key)
     while (s) {
         json_t *id = json_integer (s->id);
         if (!id || json_array_append_new (o, id)) {
-            json_decref (id);
+            // jansson decrefs the new object on failure
             goto error;
         }
         s = zlistx_next (l);
@@ -336,7 +336,7 @@ static json_t *singletons_to_json (void)
                                     "count", count,
                                     "singletons", singletons))
             || json_object_set_new (o, key, entry) < 0) {
-            json_decref (entry);
+            // jansson decrefs the new object on failure
             json_decref (singletons);
             goto error;
         }

@@ -620,7 +620,7 @@ static int list_append_session (json_t *l, struct terminus_session *s)
         return -1;
     }
     if (json_array_append_new (l, o) < 0) {
-        json_decref (o);
+        // jansson decrefs the new object on failure
         errno = ENOMEM;
         return -1;
     }

@@ -252,7 +252,7 @@ json_t *range_to_json (struct range *r, int64_t base)
             || !(val = json_integer (r->is_rle ? -range : range))
             || json_array_append_new (o, val) < 0) {
         json_decref (o);
-        json_decref (val);
+        // jansson decrefs the new object on failure; val may be NULL
         return NULL;
     }
     return o;
@@ -286,7 +286,7 @@ static int increment_range_repeat (json_t *range)
         goto error;
     return 0;
 error:
-    json_decref (val);
+    // jansson decrefs the new object on failure; val may be NULL
     return -1;
 }
 
@@ -321,7 +321,7 @@ json_t *rangelist_to_json (struct rangelist *rl)
         if (check_previous_repeat (result, range))
             json_decref (range);
         else if (json_array_append_new (result, range) < 0) {
-            json_decref (range);
+            // jansson decrefs the new object on failure
             goto error;
         }
         base = range_max (r);
