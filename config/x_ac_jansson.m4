@@ -11,7 +11,7 @@
 #
 AC_DEFUN([X_AC_JANSSON], [
 
-    PKG_CHECK_MODULES([JANSSON], [jansson >= 2.9], [], [])
+    PKG_CHECK_MODULES([JANSSON], [jansson >= 2.11], [], [])
 
     ac_save_LIBS="$LIBS"
     LIBS="$LIBS $JANSSON_LIBS"
