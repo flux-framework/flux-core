@@ -40,41 +40,34 @@ UI in the GitHub Actions tab.
 
 #### The "checks" build Dockerfile
 
-A secondary Dockerfile exists under `./checks/Dockerfile` which is used
-to customize the `fluxrm/testenv` before building. Without this secondary
-`docker build` stage, there would be no way for PRs on GitHub to add
-new dependencies for users that are not core maintainers (or the "base"
-images would need to be completely rebuilt on each CI run). For now,
-`flux-security` is also built manually within the `checks/Dockerfile`
-because it is assumed that package will be rapidly changing, and it
-would not make sense to be constantly updating the base `fluxrm/testenv`
-Docker images.
+A secondary Dockerfile exists under `./checks/Dockerfile` which builds
+on top of `fluxrm/testenv` to produce the image used for CI test runs.
+It installs `flux-security` from source, creates the test user account
+with sudo access, and sets up MUNGE.
 
 #### Adding a new dependency
 
-When constructing a PR that adds a new dependency, add it to
-`checks/Dockerfile` first. This causes a temporary build of the
-checks image with the new dependency for the duration of the PR, without
-requiring a published `fluxrm/testenv` update before the PR can pass CI.
+Add the dependency directly to the appropriate
+`src/test/docker/<distro>/Dockerfile` file(s). When `docker-run-checks.sh`
+detects that a testenv Dockerfile was modified in the current branch
+(by comparing against the most recent merge commit), it builds
+`fluxrm/testenv:<distro>` locally before proceeding. This means
+a PR can modify a testenv Dockerfile and pass CI without waiting
+for a published image update.
 
-Once the PR is merged, move the dependency into the appropriate
-`src/test/docker/<distro>/Dockerfile` files. When that change lands on
-master, `testenv.yml` will automatically detect the modified Dockerfile(s)
-and rebuild and push the updated `fluxrm/testenv` images to DockerHub.
-
-Note: if a PR modifies a testenv Dockerfile directly (rather than going
-through `checks/Dockerfile`), `docker-run-checks.sh` will detect the
-change and build the base image locally for that CI run so tests are not
-blocked waiting for a published image update.
+Once the PR is merged to master, `testenv.yml` automatically detects
+which Dockerfile(s) changed, builds and tests the new images for each
+supported architecture, and publishes updated multi-arch manifests to
+DockerHub.
 
 #### Local Testing
 
 Developers can test the docker images themselves. If new dependencies are
 needed, update the relevant Dockerfile(s) under `src/test/docker/`. To
-create a local Docker image, run:
+create a local Docker image, run from the repository root:
 
 ```
-docker build -t fluxrm/testenv:$image src/test/docker/$image
+docker build -t fluxrm/testenv:$image -f src/test/docker/$image/Dockerfile .
 ```
 
 To test the locally created image, run:
@@ -82,7 +75,3 @@ To test the locally created image, run:
 ```
 src/test/docker/docker-run-checks.sh -i $image [options] -- [arguments]
 ```
-
-If the testenv Dockerfile for `$image` has been modified in the current
-branch, `docker-run-checks.sh` will build the base image locally
-automatically before running checks.
