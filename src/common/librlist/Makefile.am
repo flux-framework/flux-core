@@ -31,7 +31,9 @@ librlist_la_SOURCES = \
 
 librlist_hwloc_la_SOURCES = \
 	rhwloc.c \
-	rhwloc.h
+	rhwloc.h \
+	rhwloc_map.c \
+	rhwloc_map.h
 
 test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
