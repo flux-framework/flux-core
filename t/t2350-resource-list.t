@@ -42,7 +42,16 @@ test_expect_success 'flux resource list works on follower ranks' '
 test_expect_success 'results are the same as before' '
 	test_cmp default.out follower.out
 '
-
+test_expect_success 'resource.sched-status: concurrent requests all succeed' '
+	cat <<-"EOF" >concurrent.py &&
+	import flux
+	fh = flux.Flux()
+	futures = [fh.rpc("resource.sched-status") for _ in range(5)]
+	results = [f.get() for f in futures]
+	assert all(r == results[0] for r in results), "concurrent results differ"
+	EOF
+	flux python concurrent.py
+'
 test_expect_success 'flux resource list: FLUX_RESOURCE_LIST_FORMAT_DEFAULT works' '
 	FLUX_RESOURCE_LIST_FORMAT_DEFAULT="{nodelist} {nodelist}" \
 		flux resource list > default_override.out &&

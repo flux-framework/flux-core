@@ -76,6 +76,35 @@ test_expect_success 'flux-resource status works after partial release' '
 test_expect_success 'stop housekeeping tasks' '
 	flux housekeeping kill --all
 '
+get_jm_allocated_nnodes() {
+	flux python -c "
+import flux
+from flux.resource import ResourceSet
+r = flux.Flux().rpc('job-manager.resource-status').get()
+print(ResourceSet(r['allocated']).nnodes)
+"
+}
+test_expect_success 'job-manager resource-status cache: configure housekeeping' '
+	flux config load <<-EOF
+	[job-manager.housekeeping]
+	release-after = "0"
+	command = [ "sleep", "inf" ]
+	EOF
+'
+test_expect_success 'job-manager resource-status cache: populate with empty set' '
+	test $(get_jm_allocated_nnodes) -eq 0
+'
+test_expect_success 'job-manager resource-status cache: correct while job is in housekeeping' '
+	flux run -N1 hostname &&
+	test_debug "flux housekeeping list" &&
+	test $(get_jm_allocated_nnodes) -eq 1 &&
+	test $(get_jm_allocated_nnodes) -eq 1
+'
+test_expect_success 'job-manager resource-status cache: invalidated when housekeeping ends' '
+	flux housekeeping kill --all &&
+	test $(get_jm_allocated_nnodes) -eq 0 &&
+	test $(get_jm_allocated_nnodes) -eq 0
+'
 # issue#7465:
 get_resource_status() {
         flux python -c "import flux; import json; print(json.dumps(flux.Flux().rpc(\"resource.status\").get()))"

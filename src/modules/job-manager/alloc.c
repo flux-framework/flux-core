@@ -49,7 +49,10 @@ struct alloc {
     flux_watcher_t *idle;
     unsigned int alloc_limit;   // will have a value of 0 in mode=unlimited
     char *sched_sender;         // scheduler uuid for disconnect processing
+    json_t *resource_status_cache;
 };
+
+static void alloc_resource_status_invalidate (struct alloc *alloc);
 
 static void requeue_pending (struct alloc *alloc, struct job *job)
 {
@@ -198,6 +201,7 @@ static void alloc_response_cb (flux_t *h,
             goto teardown;
         }
         job->R_redacted = json_incref (R);
+        alloc_resource_status_invalidate (alloc);
         if (annotations_update_and_publish (ctx, job, annotations) < 0)
             flux_log_error (h, "annotations_update: id=%s", idf58 (id));
 
@@ -341,6 +345,12 @@ static void hello_cb (flux_t *h,
     }
     if (housekeeping_hello_respond (ctx->housekeeping, msg, partial_ok) < 0)
         goto error;
+
+    /* Housekeeping may have let go of partial allocations. Invalidate
+     * cached resource-status response just in case.
+     */
+    alloc_resource_status_invalidate (ctx->alloc);
+
     if (flux_respond_error (h, msg, ENODATA, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     return;
@@ -500,6 +510,7 @@ int alloc_send_free_request (struct alloc *alloc,
                              flux_jobid_t id,
                              bool final)
 {
+    alloc_resource_status_invalidate (alloc);
     if (alloc->scheduler_is_online) {
         if (free_request (alloc, id, R, final) < 0)
             return -1;
@@ -663,19 +674,27 @@ static void resource_status_cb (flux_t *h,
 {
     struct job_manager *ctx = arg;
     struct alloc *alloc = ctx->alloc;
-    struct rlist *rl;
+    struct rlist *rl = NULL;
     json_t *R = NULL;
     flux_error_t error;
     struct job *job;
 
+    if (alloc->resource_status_cache) {
+        if (flux_respond_pack (h,
+                               msg,
+                               "{s:O}",
+                               "allocated",
+                               alloc->resource_status_cache) < 0)
+            flux_log_error (h, "error responding to resource-status request");
+        return;
+    }
     if (!(rl = rlist_create ())) {
         errprintf (&error, "error creating rlist object");
         goto error;
     }
     job = zhashx_first (alloc->ctx->active_jobs);
     while (job) {
-        if ((job->has_resources && !job->free_posted)
-            && job->R_redacted && !job->alloc_bypass) {
+        if (job->R_redacted && !job->free_posted && !job->alloc_bypass) {
             struct rlist *rl2;
             json_error_t jerror;
 
@@ -701,6 +720,7 @@ static void resource_status_cb (flux_t *h,
         errprintf (&error, "error converting rlist to JSON");
         goto error;
     }
+    alloc->resource_status_cache = json_incref (R);
     if (flux_respond_pack (h, msg, "{s:O}", "allocated", R) < 0)
         flux_log_error (h, "error responding to resource-status request");
     json_decref (R);
@@ -729,6 +749,12 @@ void alloc_disconnect_rpc (flux_t *h,
     }
 }
 
+static void alloc_resource_status_invalidate (struct alloc *alloc)
+{
+    json_decref (alloc->resource_status_cache);
+    alloc->resource_status_cache = NULL;
+}
+
 void alloc_ctx_destroy (struct alloc *alloc)
 {
     if (alloc) {
@@ -740,6 +766,7 @@ void alloc_ctx_destroy (struct alloc *alloc)
         zlistx_destroy (&alloc->queue);
         zlistx_destroy (&alloc->sent);
         free (alloc->sched_sender);
+        json_decref (alloc->resource_status_cache);
         free (alloc);
         errno = saved_errno;
     }

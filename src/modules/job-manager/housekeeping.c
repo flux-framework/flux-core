@@ -485,6 +485,15 @@ int housekeeping_start (struct housekeeping *hk,
         allocation_destroy (a);
         goto skip;
     }
+    /* Note: Though resources have transitioned from a job allocation to
+     * housekeeping, no job-manager.resource-status cache invalidation is
+     * needed here (alloc_resource_status_invalidate()): hk->allocations is
+     * updated synchronously above, and the caller sets job->free_posted=1
+     * in the same reactor loop.
+     *
+     * Therefore, the allocated resource set is unchanged until housekeeping
+     * releases its first resources via alloc_send_free_request().
+     */
     return 0;
 skip:
     return alloc_send_free_request (hk->ctx->alloc, R, id, true);
