@@ -64,10 +64,10 @@ DockerHub.
 
 Developers can test the docker images themselves. If new dependencies are
 needed, update the relevant Dockerfile(s) under `src/test/docker/`. To
-create a local Docker image, run:
+create a local Docker image, run from the repository root:
 
 ```
-docker build -t fluxrm/testenv:$image src/test/docker/$image
+docker build -t fluxrm/testenv:$image -f src/test/docker/$image/Dockerfile .
 ```
 
 To test the locally created image, run:
@@ -75,7 +75,3 @@ To test the locally created image, run:
 ```
 src/test/docker/docker-run-checks.sh -i $image [options] -- [arguments]
 ```
-
-If the testenv Dockerfile for `$image` has been modified in the current
-branch, `docker-run-checks.sh` will build the base image locally
-automatically before running checks.
