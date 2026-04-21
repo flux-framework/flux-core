@@ -694,8 +694,7 @@ static void resource_status_cb (flux_t *h,
     }
     job = zhashx_first (alloc->ctx->active_jobs);
     while (job) {
-        if ((job->has_resources && !job->free_posted)
-            && job->R_redacted && !job->alloc_bypass) {
+        if (job->R_redacted && !job->free_posted && !job->alloc_bypass) {
             struct rlist *rl2;
             json_error_t jerror;
 
