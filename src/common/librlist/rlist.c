@@ -1754,6 +1754,7 @@ json_t *rlist_to_R (const struct rlist *rl)
             nodelist = NULL; // jansson decrefs the new object on failure
             goto fail;
         }
+        nodelist = NULL; // now owned by R
     }
     if (properties) {
         if (json_object_set_new (json_object_get (R, "execution"),
@@ -1762,6 +1763,7 @@ json_t *rlist_to_R (const struct rlist *rl)
             properties = NULL; // jansson decrefs the new object on failure
             goto fail;
         }
+        properties = NULL; // now owned by R
     }
     if (rl->scheduling
         && json_object_set (R, "scheduling", rl->scheduling) < 0)
