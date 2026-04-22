@@ -38,6 +38,8 @@ double resource_set_expiration (struct resource_set *rset);
 void resource_set_update_expiration (struct resource_set *rset,
                                      double expiration);
 
+char *resource_set_R_local (struct resource_set *rset, unsigned int rank);
+
 #endif /* !HAVE_JOB_EXEC_RSET_H */
 
 

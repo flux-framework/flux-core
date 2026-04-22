@@ -13,6 +13,7 @@
 #endif
 #include <errno.h>
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/librlist/rlist.h"
 #include "rset.h"
 
 struct resource_set {
@@ -173,6 +174,37 @@ void resource_set_update_expiration (struct resource_set *r,
                                      double expiration)
 {
     r->expiration = expiration;
+}
+
+char *resource_set_R_local (struct resource_set *rs, unsigned int rank)
+{
+    struct rlist *rl = NULL;
+    struct rlist *rank_rl = NULL;
+    struct idset *rset = NULL;
+    char *result = NULL;
+
+    if (rs == NULL || rs->R == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (!(rl = rlist_from_json (rs->R, NULL))
+        || !(rset = idset_create (0, IDSET_FLAG_AUTOGROW))
+        || idset_set (rset, rank) < 0
+        || !(rank_rl = rlist_copy_ranks (rl, rset)))
+        goto done;
+    if (rlist_nnodes (rank_rl) == 0) {
+        errno = ENOENT;
+        goto done;
+    }
+    rank_rl->starttime = rl->starttime;
+    rank_rl->expiration = rl->expiration;
+    result = rlist_encode (rank_rl);
+done:
+    rlist_destroy (rl);
+    rlist_destroy (rank_rl);
+    idset_destroy (rset);
+    return result;
 }
 
 uint32_t resource_set_nth_rank (struct resource_set *r, int n)
