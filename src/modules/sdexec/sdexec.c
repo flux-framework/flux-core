@@ -78,6 +78,7 @@ struct sdproc {
     const flux_msg_t *msg;
     json_t *cmd;
     int flags;
+    flux_future_t *f_map;
     flux_future_t *f_watch;
     flux_future_t *f_start;
     flux_future_t *f_stop;
@@ -535,6 +536,7 @@ static void sdproc_destroy (struct sdproc *proc)
             flux_future_destroy (f);
             flux_future_destroy (proc->f_watch);
         }
+        flux_future_destroy (proc->f_map);
         flux_future_destroy (proc->f_start);
         flux_future_destroy (proc->f_stop);
         sdexec_unit_destroy (proc->unit);
@@ -775,6 +777,138 @@ error:
     return NULL;
 }
 
+static int sdproc_apply_property_map (struct sdproc *proc, json_t *map)
+{
+    int rc = -1;
+    const char *key;
+    json_t *value;
+
+    json_object_foreach (map, key, value) {
+        char name[64];
+        if (!json_is_string (value)) {
+            flux_log (proc->ctx->h,
+                      LOG_ERR,
+                      "%s value is not a string",
+                      key);
+            goto out;
+        }
+        if (snprintf (name,
+                      sizeof (name),
+                      "SDEXEC_PROP_%s", key) >= sizeof (name)
+            || set_dict (proc->cmd,
+                         "opts",
+                         name,
+                         json_string_value (value)) < 0) {
+            flux_log (proc->ctx->h,
+                      LOG_ERR,
+                      "Failed to set %s to %s",
+                      key,
+                      json_string_value (value));
+            goto out;
+        }
+    }
+    rc = 0;
+out:
+    return rc;
+}
+
+/*
+ * Resource mapping is complete. Set systemd properties as encoded by
+ * key in the response payload, then start the transient unit.
+ */
+static void map_continuation (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+    struct sdproc *proc = arg;
+    struct sdexec_ctx *ctx = proc->ctx;
+    json_t *map;
+    flux_error_t error;
+    const char *errstr = NULL;
+
+    /* Unpack and apply any systemd properties from map response:
+     */
+    if (flux_rpc_get_unpack (f, "o", &map) < 0) {
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "sdexec-mapper.lookup: %s", future_strerror (f, errno));
+        errstr = "sdexec-mapper.lookup failed";
+        goto error;
+    }
+    if (sdproc_apply_property_map (proc, map) < 0) {
+        errstr = "unable to apply systemd properties set in resource map";
+        goto error;
+    }
+
+    sdexec_log_debug (h, "watch %s", sdexec_unit_name (proc->unit));
+    if (!(proc->f_watch = sdexec_property_changed (h,
+                                               "sdbus",
+                                               ctx->rank,
+                                               sdexec_unit_path (proc->unit)))
+        || flux_future_then (proc->f_watch,
+                             -1,
+                             property_changed_continuation,
+                             proc) < 0) {
+        errstr = "sdbus watch operation failed";
+        goto error;
+    }
+
+    sdexec_log_debug (h, "start %s", sdexec_unit_name (proc->unit));
+    if (!(proc->f_start = sdexec_start_transient_unit (h,
+                                             ctx->rank,
+                                             "fail", // mode
+                                             proc->cmd,
+                                             sdexec_channel_get_fd (proc->in),
+                                             sdexec_channel_get_fd (proc->out),
+                                             sdexec_channel_get_fd (proc->err),
+                                             &error))) {
+        errstr = error.text;
+        goto error;
+    }
+    if (flux_future_then (proc->f_start, -1, start_continuation, ctx) < 0
+        || flux_future_aux_set (proc->f_start,
+                                "request",
+                                (void *)proc->msg,
+                                NULL) < 0)
+        goto error;
+    return;
+error:
+    exec_respond_error (proc, errno, errstr);
+}
+
+/* If SDEXEC_R_LOCAL is set in options then send the contents to
+ * sdexec-mapper service, which returns a set of systemd properties to
+ * set in order to constrain resources in R_local. If SDEXEC_R_LOCAL
+ * is not set, then fulfill with an empty payload.
+ */
+static flux_future_t *sdexec_request_map (flux_t *h, struct sdproc *proc)
+{
+    const char *R_local;
+    if (get_dict (proc->cmd, "opts", "SDEXEC_R_LOCAL", &R_local) < 0) {
+        flux_future_t *f;
+        flux_msg_t *msg;
+
+        /* No R_local found. Fulfill future immediately using message with
+         * empty payload so continuation code can be the same for RPC vs no
+         * RPC case:
+         */
+        if (!(msg = flux_msg_create (FLUX_MSGTYPE_RESPONSE))
+            || flux_msg_pack (msg, "{}") < 0
+            || !(f = flux_future_create (NULL, NULL))) {
+            flux_msg_destroy (msg);
+            return NULL;
+        }
+        flux_future_set_flux (f, h);
+        flux_future_fulfill (f, msg, (flux_free_f) flux_msg_destroy);
+        return f;
+    }
+    return flux_rpc_pack (h,
+                          "sdexec-mapper.lookup",
+                          FLUX_NODEID_ANY,
+                          0,
+                          "{s:s}",
+                          "R", R_local);
+}
+
 static int authorize_request (const flux_msg_t *msg,
                               uint32_t rank,
                               flux_error_t *error)
@@ -787,7 +921,13 @@ static int authorize_request (const flux_msg_t *msg,
 }
 
 /* Start a process as a systemd transient unit.  This is a streaming request.
- * It triggers two sdbus RPCs:
+ * It first triggers a request to the sdexec-mapper service to map resources
+ * to systemd properties for containment. If there is no SDEXEC_R_LOCAL opt
+ * set in the sdexec cmd, then the sdexec-mapper future is fulfilled immediately
+ * with an empty set.
+ *
+ * When the map is available (map_continuation() callback is called), two
+ * sdbus RPCs will then be triggered:
  * 1) sdbus.subscribe (streaming) for updates to this unit's properties
  * 2) sdbus.call StartTransientUnit to launch the transient unit.
  * Responses to those are handled in property_changed_continuation()
@@ -834,35 +974,21 @@ static void exec_cb (flux_t *h,
         goto error;
     }
     proc->msg = msg;
-    sdexec_log_debug (h, "watch %s", sdexec_unit_name (proc->unit));
-    if (!(proc->f_watch = sdexec_property_changed (h,
-                                               "sdbus",
-                                               ctx->rank,
-                                               sdexec_unit_path (proc->unit)))
-        || flux_future_then (proc->f_watch,
-                             -1,
-                             property_changed_continuation,
-                             proc) < 0)
+    sdexec_log_debug (h, "sdexec-mapper %s", sdexec_unit_name (proc->unit));
+    if (!(proc->f_map = sdexec_request_map (h, proc)))
         goto error;
-    sdexec_log_debug (h, "start %s", sdexec_unit_name (proc->unit));
-    if (!(proc->f_start = sdexec_start_transient_unit (h,
-                                             ctx->rank,
-                                             "fail", // mode
-                                             proc->cmd,
-                                             sdexec_channel_get_fd (proc->in),
-                                             sdexec_channel_get_fd (proc->out),
-                                             sdexec_channel_get_fd (proc->err),
-                                             &error))) {
-        errstr = error.text;
+    if (flux_future_then (proc->f_map,
+                          -1.,
+                          map_continuation,
+                          proc) < 0)
         goto error;
-    }
-    if (flux_future_then (proc->f_start, -1, start_continuation, ctx) < 0
-        || flux_future_aux_set (proc->f_start,
-                                "request",
-                                (void *)msg,
-                                NULL) < 0)
-        goto error;
-    if (flux_msglist_append (ctx->requests, msg) < 0)
+
+    /* N.B. msg owns sdproc (by virtue of flux_msg_aux_set() above), so take
+     * an extra reference on msg by placing on the requests msglist before
+     * leaving this function. Otherwise, msg and sdproc will be destroyed
+     * (as occurs with any `goto error`).
+     */
+    if (flux_msglist_append (ctx->requests, proc->msg) < 0)
         goto error;
     return; // response occurs later
 error:
