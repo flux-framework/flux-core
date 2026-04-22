@@ -405,6 +405,29 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
                                      hostname,
                                      rank);
         }
+        else if (errnum == EIO) {
+            /*  EIO from sdexec indicates a post-start constraint check failed
+             *  (e.g. AllowedCPUs not enforced by the kernel).  Drain the rank
+             *  since the node is likely misconfigured and all subsequent jobs
+             *  would also run unconstrained.
+             */
+            char ranks[16];
+            snprintf (ranks, sizeof (ranks), "%d", rank);
+            (void) jobinfo_drain_ranks (job,
+                                        ranks,
+                                        "sdexec constraint check failed "
+                                        "on %s for job %s: %s",
+                                        hostname,
+                                        idf58 (job->id),
+                                        flux_subprocess_fail_error (p));
+            jobinfo_fatal_error (job,
+                                 0,
+                                 "sdexec constraint check failed "
+                                 "on %s (rank %d): %s",
+                                 hostname,
+                                 rank,
+                                 flux_subprocess_fail_error (p));
+        }
         else if (errnum == ENOSYS) {
             jobinfo_fatal_error (job,
                                  0,
