@@ -875,7 +875,21 @@ static int sdproc_set_allowed_cpus (struct sdproc *proc, json_t *map)
 {
     const char *allowed_cpus;
 
-    if (json_unpack (map, "{s:s}", "AllowedCPUs", &allowed_cpus) == 0) {
+    /* SDEXEC_TEST_EXPECTED_CPUS overrides the expected CPU idset used by the
+     * post-start AllowedCPUs check.  Only available when sdexec-debug is true
+     * so it cannot be set in production.  Used by the test suite to inject a
+     * deliberate mismatch and verify that constraint failures are detected.
+     */
+    if (sdexec_debug
+        && get_dict (proc->cmd,
+                     "opts",
+                     "SDEXEC_TEST_EXPECTED_CPUS",
+                     &allowed_cpus) == 0) {
+        if (!(proc->expected_cpus = strdup (allowed_cpus)))
+            return -1;
+        return 0;
+    }
+    else if (json_unpack (map, "{s:s}", "AllowedCPUs", &allowed_cpus) == 0) {
         if (!(proc->expected_cpus = strdup (allowed_cpus)))
             return -1;
     }
