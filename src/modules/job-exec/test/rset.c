@@ -144,6 +144,74 @@ void test_rank_conversions ()
         "resource_set_rank_index works");
 }
 
+void test_R_local (void)
+{
+    json_error_t err;
+    struct resource_set *r = resource_set_create (BASIC_R, &err);
+    struct resource_set *local = NULL;
+    char *s = NULL;
+
+    if (r == NULL)
+        BAIL_OUT ("resource_set_create: %s", err.text);
+
+    ok (resource_set_R_local (NULL, 0) == NULL && errno == EINVAL,
+        "resource_set_R_local(NULL, 0) fails with EINVAL");
+
+    /* rank in the middle of the idset range */
+    ok ((s = resource_set_R_local (r, 1)) != NULL,
+        "resource_set_R_local rank 1 returns non-NULL");
+    if (s) {
+        local = resource_set_create (s, &err);
+        if (local == NULL)
+            fail ("resource_set_R_local rank 1: result is invalid R: %s",
+                  err.text);
+        else {
+            const struct idset *ids = resource_set_ranks (local);
+            char *ranks = ids ? idset_encode (ids, IDSET_FLAG_RANGE) : NULL;
+            is (ranks, "1",
+                "resource_set_R_local rank 1: result contains only rank 1");
+            ok (resource_set_starttime (local) == 12345.,
+                "resource_set_R_local preserves starttime");
+            ok (resource_set_expiration (local) == 12445.,
+                "resource_set_R_local preserves expiration");
+            free (ranks);
+            resource_set_destroy (local);
+        }
+        free (s);
+    }
+
+    /* rank not in the resource set */
+    ok (resource_set_R_local (r, 99) == NULL,
+        "resource_set_R_local with rank not in R returns NULL");
+
+    resource_set_destroy (r);
+
+    /* alt ranks: non-contiguous - verify correct rank is extracted */
+    r = resource_set_create (BASIC_ALT_RANKS, &err);
+    if (r == NULL)
+        BAIL_OUT ("resource_set_create BASIC_ALT_RANKS: %s", err.text);
+
+    ok ((s = resource_set_R_local (r, 14)) != NULL,
+        "resource_set_R_local rank 14 (alt ranks) returns non-NULL");
+    if (s) {
+        local = resource_set_create (s, &err);
+        if (local == NULL)
+            fail ("resource_set_R_local rank 14: result is invalid R: %s",
+                  err.text);
+        else {
+            const struct idset *ids = resource_set_ranks (local);
+            char *ranks = ids ? idset_encode (ids, IDSET_FLAG_RANGE) : NULL;
+            is (ranks, "14",
+                "resource_set_R_local rank 14: result contains only rank 14");
+            free (ranks);
+            resource_set_destroy (local);
+        }
+        free (s);
+    }
+
+    resource_set_destroy (r);
+}
+
 int main (int ac, char *av[])
 {
     struct resource_set_test *e = NULL;
@@ -194,6 +262,7 @@ int main (int ac, char *av[])
     }
 
     test_rank_conversions ();
+    test_R_local ();
 
     done_testing ();
 }
