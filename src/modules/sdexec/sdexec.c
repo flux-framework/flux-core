@@ -36,11 +36,14 @@
 
 #include "src/common/libsubprocess/client.h"
 #include "src/common/libioencode/ioencode.h"
+#include "src/common/libutil/cgroup.h"
+#include <flux/idset.h>
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/parse_size.h"
+#include "src/common/libutil/strstrip.h"
 #include "ccan/str/str.h"
 
 #include "src/common/libsdexec/stop.h"
@@ -97,6 +100,8 @@ struct sdproc {
     int errnum;
     const char *errstr;
     flux_error_t error;
+
+    char *expected_cpus;  /* expected AllowedCPUs idset string, or NULL */
 
     struct sdexec_ctx *ctx;
 };
@@ -306,6 +311,82 @@ static void reset_continuation (flux_future_t *f, void *arg)
     }
 }
 
+/* Verify that cpuset.cpus in the unit's cgroup matches
+ * the expected AllowedCPUs idset. Returns 0 on success, -1 with errp set
+ * if the constraint was not applied (controller not delegated, or mismatch).
+ */
+static int sdproc_check_allowed_cpus (struct sdproc *proc, flux_error_t *errp)
+{
+    struct cgroup_info cg;
+    char *cpuset;
+    FILE *fp;
+    const char *fpath;
+    struct idset *expected = NULL;
+    struct idset *actual = NULL;
+    int rc = -1;
+
+    /* 2048 bytes easily fits worst-case cpu_list on a system with 1000 cores */
+    char line[2048];
+
+    if (cgroup_info_init_pid (&cg, sdexec_unit_pid (proc->unit)) < 0) {
+        errprintf (errp,
+                   "AllowedCPUs: cannot read cgroup for pid %d: %s",
+                   (int)sdexec_unit_pid (proc->unit),
+                   strerror (errno));
+        return -1;
+    }
+    if (!(fpath = cgroup_path_to (&cg, "cpuset.cpus"))) {
+        errprintf (errp, "AllowedCPUs: cgroup path too long");
+        return -1;
+    }
+    if (!(fp = fopen (fpath, "r"))) {
+        errprintf (errp,
+                   "AllowedCPUs not enforced: %s unavailable "
+                   "(is cpuset controller delegated to the user instance?)",
+                   fpath);
+        return -1;
+    }
+    if (!fgets (line, sizeof (line), fp)) {
+        errprintf (errp, "AllowedCPUs: failed to read %s", fpath);
+        fclose (fp);
+        return -1;
+    }
+    fclose (fp);
+    cpuset = strstrip (line);
+
+    if (!(expected = idset_decode (proc->expected_cpus))
+        || !(actual = idset_decode (cpuset))) {
+        errprintf (errp, "AllowedCPUs: failed to parse cpuset");
+        goto done;
+    }
+    if (!idset_equal (expected, actual)) {
+        errprintf (errp,
+                   "AllowedCPUs not enforced: expected %s got %s "
+                   "(is cpuset controller delegated to the user instance?)",
+                   proc->expected_cpus,
+                   cpuset);
+        goto done;
+    }
+    rc = 0;
+done:
+    idset_destroy (expected);
+    idset_destroy (actual);
+    return rc;
+}
+
+/* Run post-start checks once the unit has entered the running state.
+ * Returns 0 if all checks pass, -1 with errp set if any check fails.
+ * Add new post-start checks here (e.g. sdproc_check_allowed_devices()).
+ */
+static int sdproc_post_start_checks (struct sdproc *proc, flux_error_t *errp)
+{
+    if (proc->expected_cpus) {
+        if (sdproc_check_allowed_cpus (proc, errp) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 /* sdbus.subscribe sent a PropertiesChanged response for a particular unit.
  * Advance the proc->unit state accordingly and send exec responses as needed.
  * call finalize_exec_request_if_done() in case this update is the last thing
@@ -338,6 +419,16 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
      */
     if (!proc->started_response_sent) {
         if (sdexec_unit_has_started (proc->unit)) {
+            flux_error_t check_error;
+            if (sdproc_post_start_checks (proc, &check_error) < 0) {
+                flux_log (h,
+                          LOG_ERR,
+                          "%s: post-start check failed: %s",
+                          sdexec_unit_name (proc->unit),
+                          check_error.text);
+                exec_respond_error (proc, EIO, check_error.text);
+                return;
+            }
             if (flux_respond_pack (h,
                                    proc->msg,
                                    "{s:s s:I}",
@@ -543,6 +634,7 @@ static void sdproc_destroy (struct sdproc *proc)
         flux_watcher_destroy (proc->stop.timer);
         json_decref (proc->cmd);
         flux_msglist_destroy (proc->write_requests);
+        free (proc->expected_cpus);
         free (proc);
         errno = saved_errno;
     }
@@ -777,6 +869,19 @@ error:
     return NULL;
 }
 
+/*  Capture AllowedCPUs from the map response for post-start verification.
+ */
+static int sdproc_set_allowed_cpus (struct sdproc *proc, json_t *map)
+{
+    const char *allowed_cpus;
+
+    if (json_unpack (map, "{s:s}", "AllowedCPUs", &allowed_cpus) == 0) {
+        if (!(proc->expected_cpus = strdup (allowed_cpus)))
+            return -1;
+    }
+    return 0;
+}
+
 static int sdproc_apply_property_map (struct sdproc *proc, json_t *map)
 {
     int rc = -1;
@@ -807,7 +912,7 @@ static int sdproc_apply_property_map (struct sdproc *proc, json_t *map)
             goto out;
         }
     }
-    rc = 0;
+    return sdproc_set_allowed_cpus (proc, map);
 out:
     return rc;
 }
