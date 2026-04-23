@@ -26,8 +26,13 @@ gc-threshold
    (optional) Sets the number of KVS commits (distinct root snapshots)
    after which offline garbage collection is performed by
    :man1:`flux-shutdown`. A value of 100000 may be a good starting
-   point. (Default: garbage collection must be manually requested with
-   `flux-shutdown --gc`).
+   point.
+
+.. note::
+   In a system instance, when brokers are started with systemd, garbage
+   collection is automatic and a configured threshold has no effect.
+   If ``gc-threshold`` is not configured in an instance started another way,
+   it may be manually requested with :option:`flux-shutdown --gc`.
 
 
 EXAMPLE

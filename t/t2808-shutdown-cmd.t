@@ -330,5 +330,24 @@ test_expect_success 'shutdown --skip-gc does not produce dump' '
 	FLUX_URI=$(flux uri --local $(cat jobid8)) flux shutdown --skip-gc &&
 	test_must_fail tar tvf dump/RESTORE
 '
+test_expect_success 'clean up dump files from previous tests' '
+	rm -f dump.tgz &&
+	rm -f dump/RESTORE
+'
+test_expect_success 'submit batch with dump=auto and wait for it to start (9)' '
+	cat >batch.sh <<-EOT &&
+	#!/bin/sh
+	touch job9-has-started
+	flux run sleep 300
+	EOT
+	chmod +x batch.sh &&
+	flux batch -t30m -n1 \
+	    --broker-opts=-Scontent.dump=auto batch.sh >jobid9 &&
+	$waitfile job9-has-started
+'
+test_expect_success 'shutdown --gc does not fail and dump is produced' '
+	FLUX_URI=$(flux uri --local $(cat jobid9)) flux shutdown --gc &&
+	tar tvf dump/RESTORE
+'
 
 test_done

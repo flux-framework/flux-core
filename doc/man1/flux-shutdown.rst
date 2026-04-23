@@ -40,6 +40,14 @@ deleted KVS content and purged job directories, which accrue over time and
 increase storage overhead and restart time.  It is recommended that the
 :option:`--gc` option be used on a routine basis to optimize Flux.
 
+.. note::
+  In flux-core 0.61.0, garbage collection was made automatic for Flux
+  system instances by setting the ``content.dump`` broker attribute to
+  ``auto`` in the systemd unit file.  A dump occurs each time Flux is
+  stopped, including when :option:`systemctl stop` is used.  When it is known
+  that garbage collection is not needed for a given shutdown, it can be
+  suppressed using :option:`flux shutdown --skip-gc`.
+
 
 OPTIONS
 =======
@@ -81,6 +89,8 @@ OPTIONS
    on instance startup, the content database is truncated and recreated from
    the dump, and the link is removed.  :linux:man8:`systemd-tmpfiles`
    automatically cleans up dump files in ``/var/lib/flux/dump`` after 30 days.
+   This is option is a no-op if the ``content.dump`` broker attribute is
+   already set to ``auto``.
 
 .. option:: --skip-gc
 
