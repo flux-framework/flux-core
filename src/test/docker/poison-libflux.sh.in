@@ -101,7 +101,7 @@ for cmd in \
       dump module-python-exec start env multi-prog startlog event overlay \
       submit exec terminus fortune top fsck pgrep update getattr ping uptime \
       heaptrace pkill uri help pmi hostlist post-job-event housekeeping \
-      proxy imp-exec-helper pstree job python version job-exec-override watch
+      proxy imp_exec_helper pstree job python version job-exec-override watch
     do
 	cat <<-EOF >${CMDDIR}/flux-${cmd}
 	#!/bin/sh

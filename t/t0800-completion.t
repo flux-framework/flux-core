@@ -489,7 +489,7 @@ test_expect_success 'completion coverage: all commands covered or explicitly exc
         job-validator       \
         multi-prog          \
         slurm-expiration-sync \
-        imp-exec-helper     \
+        imp_exec_helper     \
         run-epilog          \
         run-prolog          \
         run-housekeeping    \
