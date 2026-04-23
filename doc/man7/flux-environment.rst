@@ -577,13 +577,18 @@ MISCELLANEOUS
 
      $sysconfdir/cli/plugins:$libexecdir/cli/plugins
 
+   Non-conflicting plugins are loaded from the ``flux.cli.plugins`` namespace
+   after all plugins in the search path are loaded.
+
 .. envvar:: FLUX_CLI_PLUGINPATH_OVERRIDE
 
    Override the entire search path for command-line plugins, including
-   ``$sysconfdir/cli/plugins`` and ``$libexecdir/cli/plugins``. Only a
-   colon-delimited list of paths passed to this variable will be
-   observed when this variable is set.
-
+   ``$sysconfdir/cli/plugins`` and ``$libexecdir/cli/plugins``. Plugins are
+   always loaded from a `flux.cli.plugins` namespace. Setting this variable
+   to the empty string will load plugins _only_ from the built-in namespace,
+   while providing a colon-delimited list of paths to this variable loads
+   plugins from those paths, with plugins in the ``flux.cli.plugins``
+   namespace loaded last.
 
 .. _sub_command_environment:
 
