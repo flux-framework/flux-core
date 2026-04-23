@@ -202,6 +202,74 @@ RPC Interface
       Signal parameters as a JSON array.
 
 
+Supported Methods
+=================
+
+The following ``(interface, member)`` pairs are registered in ``interface.c``
+and may be called via ``sdbus.call``.  Signatures use D-Bus notation; ``o``
+is an object path, ``ay`` is a byte array.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 45 27 10 10
+
+   * - Interface
+     - Member
+     - In
+     - Out
+   * - org.freedesktop.systemd1.Manager
+     - Subscribe
+     -
+     -
+   * - org.freedesktop.systemd1.Manager
+     - Unsubscribe
+     -
+     -
+   * - org.freedesktop.systemd1.Manager
+     - ListUnitsByPatterns
+     - asas
+     - a(ssssssouso)
+   * - org.freedesktop.systemd1.Manager
+     - KillUnit
+     - ssi
+     -
+   * - org.freedesktop.systemd1.Manager
+     - StopUnit
+     - ss
+     - o
+   * - org.freedesktop.systemd1.Manager
+     - ResetFailedUnit
+     - s
+     -
+   * - org.freedesktop.systemd1.Manager
+     - StartTransientUnit
+     - ssa(sv)a(sa(sv))
+     - o
+   * - org.freedesktop.systemd1.Manager
+     - GetUnitByInvocationID
+     - ay
+     - o
+   * - org.freedesktop.DBus
+     - AddMatch
+     - s
+     -
+   * - org.freedesktop.DBus
+     - RemoveMatch
+     - s
+     -
+   * - org.freedesktop.DBus.Properties
+     - GetAll
+     - s
+     - a{sv}
+   * - org.freedesktop.DBus.Properties
+     - Get
+     - ss
+     - v
+   * - org.freedesktop.DBus.Properties
+     - PropertiesChanged (signal)
+     -
+     - sa{sv}as
+
 Exploring the D-Bus Interface
 =============================
 

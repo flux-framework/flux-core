@@ -1116,6 +1116,7 @@ ExecMainStatus
 freedesktop
 frominfo
 GetAll
+GetUnitByInvocationID
 ioencode
 KillUnit
 libsdexec
@@ -1124,6 +1125,7 @@ LINEBUF
 ListUnitsByPatterns
 objpath
 PropertiesChanged
+RemoveMatch
 ResetFailedUnit
 sa
 sdbus's
