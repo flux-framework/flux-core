@@ -169,8 +169,25 @@ static void configure_kvs_dump (flux_t *h, optparse_t *p)
             content_dump = "auto";
         }
     }
-    if (content_dump)
-        log_msg ("shutdown will dump KVS (this may take some time)");
+    /* See the etc/modprobe/rc3.py content-dump task.
+     * This replicates a bit of logic from there in order to give the user
+     * of this tool some useful output.
+     */
+    if (content_dump) {
+        char buf[1024];
+
+        if (streq (content_dump, "auto")) {
+            const char *cleanup = flux_attr_get (h, "statedir-cleanup");
+            const char *dir = ".";
+
+            if (!cleanup || streq (cleanup, "0"))
+                dir = flux_attr_get (h, "statedir");
+            snprintf (buf, sizeof (buf), "%s/dump/", dir);
+            content_dump = buf;
+        }
+        log_msg ("shutdown will dump KVS to %s (this may take some time)",
+                 content_dump);
+    }
 }
 
 static int subcmd (optparse_t *p, int ac, char *av[])
