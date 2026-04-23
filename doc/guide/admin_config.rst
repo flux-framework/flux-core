@@ -123,8 +123,9 @@ Systemd and cgroup unified hierarchy
 
 The flux systemd unit launches a systemd user instance as the flux user.
 It is recommended to use this to run user jobs, as it provides cgroups
-containment and the ability to enforce memory limits.  To do this, Flux
-requires the cgroup version 2 unified hierarchy:
+containment and the ability to enforce resource limits such as memory caps
+and CPU isolation.  To do this, Flux requires the cgroup version 2 unified
+hierarchy:
 
 - The cgroup2 file system must be mounted on  ``/sys/fs/cgroup``
 
@@ -134,9 +135,48 @@ requires the cgroup version 2 unified hierarchy:
 - On some systems, add ``cgroup_enable=memory`` to the kernel command line
   (debian 12).
 
+The cgroup controllers needed for resource containment must also be
+delegated to the Flux systemd user instance. Create or update the following
+override files:
+
+``/etc/systemd/system/flux.service.d/override.conf``:
+
+.. code-block:: ini
+
+   [Service]
+   Delegate=cpu cpuset io memory pids
+
+``/etc/systemd/system/user@<flux-uid>.service.d/override.conf``
+(where ``<flux-uid>`` is the numeric UID of the ``flux`` user, e.g. from
+``id -u flux``):
+
+.. code-block:: ini
+
+   [Service]
+   Delegate=cpu cpuset io memory pids
+
+.. note::
+
+   ``cpuset`` delegation is required for ``sdexec-constrain-resources``
+   (``AllowedCPUs`` enforcement), and ``memory`` is required for memory
+   limits (``MemoryMax``).  The remaining controllers (``cpu``, ``io``,
+   ``pids``) are not required but may be useful via ``sdexec-properties``
+   or in future Flux releases.
+
+After creating or modifying these files, reload systemd and restart the
+Flux user instance::
+
+   systemctl daemon-reload
+   systemctl restart user@$(id -u flux).service
+
 The configuration that follows presumes jobs will be launched through systemd,
 although it is not strictly required if your system cannot meet these
 prerequisites.
+
+When using systemd for job execution, consider enabling resource containment
+via ``exec.sdexec-constrain-resources`` to restrict jobs to their allocated
+CPUs, GPUs, and devices. See :man5:`flux-config-exec` for details on
+configuring resource containment and customizing the resource mapping behavior.
 
 .. _config-flux:
 
@@ -162,6 +202,9 @@ Example file installed path: ``/etc/flux/system/conf.d/system.toml``
 
  # Run jobs in a systemd user instance
  service = "sdexec"
+
+ # Constrain jobs to allocated resources (CPUs, GPUs, devices)
+ sdexec-constrain-resources = true
 
  # Limit jobs to a percentage of physical memory
  [exec.sdexec-properties]
