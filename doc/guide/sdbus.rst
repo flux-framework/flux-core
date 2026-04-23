@@ -89,7 +89,8 @@ variant arrays.
      - integer
    * - variant
      - v
-     - ``["type", value]``, e.g. ``["s", "active"]``
+     - ``["type", value]``, e.g. ``["s", "active"]``;
+       ``a(ss)`` variants are also supported
    * - array of basic type
      - aX
      - JSON array, e.g. ``[1, 2, 3]`` for ``ai``
@@ -118,10 +119,10 @@ extending ``message.c`` and registering the new signature in ``interface.c``.
    * - Basic types (y, b, n, q, i, u, x, t, h, d, s, g, o)
      - yes
      - yes
-   * - Variant (v) with basic or simple array content
+   * - Variant (v) with basic or simple array content, or a(ss) content
      - yes
      - yes
-   * - Variant (v) with complex content
+   * - Variant (v) with other complex content
      - null
      - yes
    * - Array of basic type (aX)
@@ -130,7 +131,7 @@ extending ``message.c`` and registering the new signature in ``interface.c``.
    * - Property dictionary (a{sv})
      - yes
      - no
-   * - a(sv), a(sasb), a(ss)
+   * - a(sv), a(sasb)
      - no
      - yes
    * - Arbitrary struct (...)

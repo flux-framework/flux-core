@@ -304,6 +304,57 @@ void test_variant_as (sd_bus *bus)
     sd_bus_message_unref (m);
 }
 
+/* Convert an a(ss) variant (e.g. DeviceAllow property) from dbus->json.
+ * Verify that each (ss) pair is decoded as a two-element JSON array.
+ */
+void test_variant_ass (sd_bus *bus)
+{
+    sd_bus_message *m;
+    json_t *out;
+    const char *fmt = "v";
+    int rc;
+
+    if (sd_bus_message_new (bus, &m, SD_BUS_MESSAGE_METHOD_RETURN) < 0
+        || sd_bus_message_open_container (m, 'v', "a(ss)") < 0
+        || sd_bus_message_open_container (m, 'a', "(ss)") < 0
+        || sd_bus_message_open_container (m, 'r', "ss") < 0
+        || sd_bus_message_append (m, "ss", "/dev/nvidiactl", "rw") < 0
+        || sd_bus_message_close_container (m) < 0
+        || sd_bus_message_open_container (m, 'r', "ss") < 0
+        || sd_bus_message_append (m, "ss", "/dev/nvidia0", "r") < 0
+        || sd_bus_message_close_container (m) < 0
+        || sd_bus_message_close_container (m) < 0
+        || sd_bus_message_close_container (m) < 0
+        || sd_bus_message_seal (m, 42, 0) < 0
+        || sd_bus_message_rewind (m, true) < 0)
+        BAIL_OUT ("could not create a(ss) variant message");
+    diagmsg (m);
+
+    if (!(out = json_array ()))
+        BAIL_OUT ("could not create json array");
+    rc = sdmsg_read (m, fmt, out);
+    diag ("sdmsg_read returned %d", rc);
+    ok (rc == 1,
+        "sdmsg_read works on a(ss) variant");
+    diagjson (out);
+
+    const char *type, *path1, *perms1, *path2, *perms2;
+    ok (json_unpack (out,
+                     "[[s[[ss][ss]]]]",
+                     &type,
+                     &path1, &perms1,
+                     &path2, &perms2) == 0
+        && streq (type, "a(ss)")
+        && streq (path1, "/dev/nvidiactl")
+        && streq (perms1, "rw")
+        && streq (path2, "/dev/nvidia0")
+        && streq (perms2, "r"),
+        "a(ss) variant decoded as expected");
+
+    json_decref (out);
+    sd_bus_message_unref (m);
+}
+
 /* In property dicts (e.g. GetAll) we don't know how to decode all values yet.
  * It seems most sane to decode keys with a JSON null value rather than omit
  * those keys.  Create an sdbus message containing complex variants, then
@@ -537,6 +588,7 @@ int main (int argc, char **argv)
     test_struct_sasb (bus);
     test_variant (bus);
     test_variant_as (bus);
+    test_variant_ass (bus);
     test_variant_unknown (bus);
     test_property_array (bus);
     test_str_pair_array (bus);
