@@ -156,8 +156,8 @@ static struct registered_attr attrtab[] = {
     // content
     { "content.backing-module", 0 },
     { "content.hash", 0 },
-    { "content.dump", 0 },
-    { "content.restore", 0 },
+    { "content.dump", ATTR_RUNTIME },
+    { "content.restore", ATTR_RUNTIME },
 
     // cron
     { "cron.directory", 0 },
