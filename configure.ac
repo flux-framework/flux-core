@@ -157,7 +157,7 @@ if test "x$san_enabled" != "xno" || test "x$has_deepbind" = "xno" ; then
             [deepbind is unsupported with asan, musl and so-forth])
 else
   AC_DEFINE([FLUX_DEEPBIND], [RTLD_DEEPBIND],
-            [deepbind is unsupported with asan, musl and so-forth])
+            [RTLD_DEEPBIND supported])
 fi
 
 # N.B. /usr/bin/rsh is a symlink to preferred remote shell on some systems
