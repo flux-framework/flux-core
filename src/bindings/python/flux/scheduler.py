@@ -52,11 +52,10 @@ import errno
 import functools
 import heapq
 import inspect
-import syslog
 import time
 
 from _flux._core import ffi, lib
-from flux.brokermod import BrokerModule, request_handler
+from flux.brokermod import BrokerLogger, BrokerModule, request_handler
 from flux.constants import FLUX_RPC_STREAMING
 from flux.job import JobID, job_raise_async
 from flux.kvs import KVSTxn
@@ -279,25 +278,6 @@ class Scheduler(BrokerModule):
     #: ``self.pool_kwargs = {"opt": value}``.
     pool_kwargs: dict = {}
 
-    #: Minimum syslog priority level emitted by :meth:`log`.  Messages with a
-    #: numerically higher level (lower priority) are silently dropped.
-    #: Defaults to ``LOG_ERR``; set ``log-level=debug`` at load time for
-    #: verbose pool and scheduler diagnostics.
-    log_level: int = syslog.LOG_INFO
-
-    #: Map of level name strings to syslog priority constants, used when
-    #: parsing the ``log-level=`` module argument.
-    _LOG_LEVEL_NAMES: dict = {
-        "emerg": syslog.LOG_EMERG,
-        "alert": syslog.LOG_ALERT,
-        "crit": syslog.LOG_CRIT,
-        "err": syslog.LOG_ERR,
-        "warning": syslog.LOG_WARNING,
-        "notice": syslog.LOG_NOTICE,
-        "info": syslog.LOG_INFO,
-        "debug": syslog.LOG_DEBUG,
-    }
-
     def __init_subclass__(cls, **kwargs):
         # Automatically call _reject_unknown_args() after each subclass
         # __init__ returns, so that unrecognised module arguments are caught
@@ -328,6 +308,7 @@ class Scheduler(BrokerModule):
 
     def __init__(self, h, *args):
         super().__init__(h, *args)
+        self.log.level = "info"
         self._resources = None
         self._acquire_rpc = None
         self._queue = []  # heapq of PendingJob, ordered by PendingJob.__lt__
@@ -402,12 +383,13 @@ class Scheduler(BrokerModule):
                     )
             elif arg.startswith("log-level="):
                 name = arg[10:].lower()
-                if name not in self._LOG_LEVEL_NAMES:
+                try:
+                    self.log.level = name
+                except ValueError:
                     raise ValueError(
                         f"log-level={name!r} is invalid: "
-                        f"expected one of {', '.join(self._LOG_LEVEL_NAMES)}"
+                        f"expected one of {', '.join(BrokerLogger.LEVEL_NAMES)}"
                     )
-                self.log_level = self._LOG_LEVEL_NAMES[name]
             else:
                 self._pending_args.append(arg)
 
@@ -422,19 +404,6 @@ class Scheduler(BrokerModule):
                 f"unknown argument {self._pending_args[0]!r}: "
                 f"built-in options are queue-depth, log-level"
             )
-
-    # ------------------------------------------------------------------
-    # Logging
-    # ------------------------------------------------------------------
-
-    def log(self, level: int, msg: str) -> None:
-        """Emit *msg* via ``handle.log`` if *level* is at or above :attr:`log_level`.
-
-        Pool implementations receive this method as their ``log`` callable so
-        that both scheduler and pool diagnostics share the same threshold.
-        """
-        if level <= self.log_level:
-            self.handle.log(level, msg)
 
     # ------------------------------------------------------------------
     # Public interface: resource state
@@ -571,13 +540,12 @@ class Scheduler(BrokerModule):
 
         if self._sched_delay != old_delay:
             if self._sched_delay > 0:
-                self.log(
-                    syslog.LOG_DEBUG,
+                self.log.debug(
                     f"sched: burst detected, coalescing delay="
                     f"{self._sched_delay * 1000:.1f}ms",
                 )
             else:
-                self.log(syslog.LOG_DEBUG, "sched: burst ended, delay=0")
+                self.log.debug("sched: burst ended, delay=0")
 
     # ------------------------------------------------------------------
     # Forecast
@@ -653,7 +621,7 @@ class Scheduler(BrokerModule):
         try:
             future.get()
         except OSError as exc:
-            self.log(syslog.LOG_ERR, f"alloc: KVS commit failed: {exc}")
+            self.log.error(f"alloc: KVS commit failed: {exc}")
             self.stop_error()
             return
         resp = {"id": msg.payload["id"], "type": _ALLOC_SUCCESS, "R": R_dict}
@@ -919,7 +887,7 @@ class Scheduler(BrokerModule):
             self._sched_hello()
             self._sched_ready()
         except OSError as exc:
-            self.log(syslog.LOG_ERR, f"initialization failed: {exc}")
+            self.log.error(f"initialization failed: {exc}")
             raise
         super().run()
 
@@ -942,7 +910,7 @@ class Scheduler(BrokerModule):
             )
             self._request_schedule()
         except Exception as exc:
-            self.log(syslog.LOG_ERR, f"alloc callback raised: {exc}")
+            self.log.error(f"alloc callback raised: {exc}")
             self.stop_error()
 
     @request_handler("sched.free", prefix=False)
@@ -953,7 +921,7 @@ class Scheduler(BrokerModule):
             self.free(p["id"], R, final=p.get("final", False))
             self._request_schedule()
         except Exception as exc:
-            self.log(syslog.LOG_ERR, f"free callback raised: {exc}")
+            self.log.error(f"free callback raised: {exc}")
             self.stop_error()
 
     @request_handler("sched.cancel", prefix=False)
@@ -962,7 +930,7 @@ class Scheduler(BrokerModule):
             self.cancel(msg.payload["id"])
             self._request_schedule()
         except Exception as exc:
-            self.log(syslog.LOG_ERR, f"cancel callback raised: {exc}")
+            self.log.error(f"cancel callback raised: {exc}")
             self.stop_error()
 
     @request_handler("sched.prioritize", prefix=False)
@@ -971,7 +939,7 @@ class Scheduler(BrokerModule):
             self.prioritize(msg.payload.get("jobs", []))
             self._request_schedule()
         except Exception as exc:
-            self.log(syslog.LOG_ERR, f"prioritize callback raised: {exc}")
+            self.log.error(f"prioritize callback raised: {exc}")
             self.stop_error()
 
     @request_handler("sched.resource-status", prefix=False)
@@ -985,7 +953,7 @@ class Scheduler(BrokerModule):
             }
             self.handle.respond(msg, resp)
         except Exception as exc:
-            self.log(syslog.LOG_ERR, f"resource-status failed: {exc}")
+            self.log.error(f"resource-status failed: {exc}")
             lib.flux_respond_error(
                 self.handle.handle, msg.handle, errno.EINVAL, str(exc).encode()
             )
@@ -1001,7 +969,7 @@ class Scheduler(BrokerModule):
             self.expiration(msg, jobid, exp)
             self._request_schedule()
         except Exception as exc:
-            self.log(syslog.LOG_ERR, f"expiration callback raised: {exc}")
+            self.log.error(f"expiration callback raised: {exc}")
             lib.flux_respond_error(
                 self.handle.handle, msg.handle, errno.EINVAL, str(exc).encode()
             )
@@ -1011,7 +979,7 @@ class Scheduler(BrokerModule):
         try:
             self.feasibility_check(msg, msg.payload.get("jobspec", {}))
         except Exception as exc:
-            self.log(syslog.LOG_ERR, f"feasibility callback raised: {exc}")
+            self.log.error(f"feasibility callback raised: {exc}")
             errmsg = str(exc).encode()
             if (
                 lib.flux_respond_error(
@@ -1102,7 +1070,7 @@ class Scheduler(BrokerModule):
         # (e.g. during the hello loop) don't repeat the warning.
         known = getattr(self._resources.impl, "known_options", frozenset())
         for key in [k for k in self.pool_kwargs if k not in known]:
-            self.log(syslog.LOG_WARNING, f"pool: ignoring unknown option {key!r}")
+            self.log.warning(f"pool: ignoring unknown option {key!r}")
             del self.pool_kwargs[key]
 
         # All resources start down; first update brings some up
@@ -1121,7 +1089,7 @@ class Scheduler(BrokerModule):
         try:
             data = future.get()
         except OSError as exc:
-            self.log(syslog.LOG_ERR, f"exiting due to resource update failure: {exc}")
+            self.log.error(f"exiting due to resource update failure: {exc}")
             self.stop()
             return
         self._apply_resource_update(data)
@@ -1135,9 +1103,8 @@ class Scheduler(BrokerModule):
             self._resources.mark_down(data["down"])
         if "expiration" in data and data["expiration"] >= 0:
             self._resources.expiration = data["expiration"]
-            self.log(
-                syslog.LOG_INFO,
-                f"resource expiration updated to " f"{data['expiration']:.2f}",
+            self.log.info(
+                f"resource expiration updated to {data['expiration']:.2f}",
             )
         if "shrink" in data:
             from flux.idset import IDset
@@ -1151,10 +1118,7 @@ class Scheduler(BrokerModule):
         try:
             future.get()
         except OSError as exc:
-            self.log(
-                syslog.LOG_ERR,
-                f"error raising fatal exception on {jobid.f58}: {exc}",
-            )
+            self.log.error(f"error raising fatal exception on {jobid.f58}: {exc}")
 
     def _sched_hello(self):
         """Synchronous hello protocol with job-manager (RFC 27).
@@ -1187,10 +1151,7 @@ class Scheduler(BrokerModule):
             try:
                 R_dict = kvs_get(self.handle, key)
             except OSError:
-                self.log(
-                    syslog.LOG_ERR,
-                    f"hello: failed to look up R for job {JobID(jobid).f58}",
-                )
+                self.log.error(f"hello: failed to look up R for job {JobID(jobid).f58}")
                 f.reset()
                 continue
 
@@ -1212,12 +1173,10 @@ class Scheduler(BrokerModule):
                     R,
                 )
             except Exception as exc:
-                self.log(
-                    syslog.LOG_ERR,
+                self.log.error(
                     f"hello callback failed for job {JobID(jobid).f58}: {exc}",
                 )
-                self.log(
-                    syslog.LOG_ERR,
+                self.log.error(
                     f"raising fatal exception on running job id={JobID(jobid).f58}",
                 )
                 f_raise = job_raise_async(
@@ -1254,13 +1213,9 @@ class Scheduler(BrokerModule):
         except OSError as exc:
             raise OSError(f"sched-ready failed: {exc}") from exc
 
-        level_name = {v: k for k, v in self._LOG_LEVEL_NAMES.items()}.get(
-            self.log_level, str(self.log_level)
-        )
-        self.log(
-            syslog.LOG_INFO,
+        self.log.info(
             f"ready: queue-depth={depth}"
-            f" log-level={level_name}"
+            f" log-level={self.log.level_name}"
             f" Rv{self.resources.version}"
             f" {self.resources.dumps()}",
         )
