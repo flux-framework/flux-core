@@ -12,12 +12,14 @@
 # Unit tests for flux.brokermod (BrokerModule, request_handler, event_handler).
 # A broker is not required; the flux handle is mocked.
 
+import syslog
 import types
 import unittest
 from unittest.mock import MagicMock, patch
 
 import subflux  # noqa: F401 - To set up PYTHONPATH
 from flux.brokermod import (
+    BrokerLogger,
     BrokerModule,
     event_handler,
     request_handler,
@@ -318,6 +320,154 @@ class TestResolveEntryPoint(unittest.TestCase):
 
         mod = _make_mod(mod_main=mod_main, MyMod=MyMod)
         self.assertIs(resolve_entry_point(mod), mod_main)
+
+
+class TestBrokerLogger(unittest.TestCase):
+    def _make_logger(self):
+        mock_h = MagicMock()
+        return BrokerLogger(mock_h), mock_h
+
+    def test_default_level_is_debug(self):
+        """Default level passes all messages through (LOG_DEBUG)."""
+        logger, _ = self._make_logger()
+        self.assertEqual(logger.level, syslog.LOG_DEBUG)
+
+    def test_debug_calls_handle_log(self):
+        logger, mock_h = self._make_logger()
+        logger.debug("hi")
+        mock_h.log.assert_called_once_with(syslog.LOG_DEBUG, "hi")
+
+    def test_info_calls_handle_log(self):
+        logger, mock_h = self._make_logger()
+        logger.info("hi")
+        mock_h.log.assert_called_once_with(syslog.LOG_INFO, "hi")
+
+    def test_notice_calls_handle_log(self):
+        logger, mock_h = self._make_logger()
+        logger.notice("hi")
+        mock_h.log.assert_called_once_with(syslog.LOG_NOTICE, "hi")
+
+    def test_warning_calls_handle_log(self):
+        logger, mock_h = self._make_logger()
+        logger.warning("hi")
+        mock_h.log.assert_called_once_with(syslog.LOG_WARNING, "hi")
+
+    def test_error_calls_handle_log(self):
+        logger, mock_h = self._make_logger()
+        logger.error("hi")
+        mock_h.log.assert_called_once_with(syslog.LOG_ERR, "hi")
+
+    def test_critical_calls_handle_log(self):
+        logger, mock_h = self._make_logger()
+        logger.critical("hi")
+        mock_h.log.assert_called_once_with(syslog.LOG_CRIT, "hi")
+
+    def test_alert_calls_handle_log(self):
+        logger, mock_h = self._make_logger()
+        logger.alert("hi")
+        mock_h.log.assert_called_once_with(syslog.LOG_ALERT, "hi")
+
+    def test_emerg_calls_handle_log(self):
+        logger, mock_h = self._make_logger()
+        logger.emerg("hi")
+        mock_h.log.assert_called_once_with(syslog.LOG_EMERG, "hi")
+
+    def test_call_interface_passes_through(self):
+        """__call__(level, msg) forwards to handle.log when level is within threshold."""
+        logger, mock_h = self._make_logger()
+        logger(syslog.LOG_ERR, "raw")
+        mock_h.log.assert_called_once_with(syslog.LOG_ERR, "raw")
+
+    def test_message_below_threshold_is_dropped(self):
+        """Messages with priority lower than level are silently dropped."""
+        logger, mock_h = self._make_logger()
+        logger.level = "info"  # LOG_INFO=6; LOG_DEBUG=7 is below threshold
+        logger.debug("dropped")
+        mock_h.log.assert_not_called()
+
+    def test_message_at_threshold_is_passed(self):
+        """Messages exactly at the threshold are forwarded."""
+        logger, mock_h = self._make_logger()
+        logger.level = "info"
+        logger.info("kept")
+        mock_h.log.assert_called_once_with(syslog.LOG_INFO, "kept")
+
+    def test_message_above_threshold_is_passed(self):
+        """Messages with higher urgency than threshold are always forwarded."""
+        logger, mock_h = self._make_logger()
+        logger.level = "info"
+        logger.error("kept")
+        mock_h.log.assert_called_once_with(syslog.LOG_ERR, "kept")
+
+    def test_set_level_string(self):
+        """level setter accepts a level-name string and stores the integer."""
+        logger, _ = self._make_logger()
+        logger.level = "warning"
+        self.assertEqual(logger.level, syslog.LOG_WARNING)
+
+    def test_set_level_int(self):
+        """level setter accepts a syslog integer constant directly."""
+        logger, _ = self._make_logger()
+        logger.level = syslog.LOG_ERR
+        self.assertEqual(logger.level, syslog.LOG_ERR)
+
+    def test_set_level_invalid_string_raises(self):
+        """level setter raises ValueError for an unknown level name."""
+        logger, _ = self._make_logger()
+        with self.assertRaises(ValueError) as ctx:
+            logger.level = "verbose"
+        self.assertIn("verbose", str(ctx.exception))
+
+    def test_set_level_invalid_type_raises(self):
+        """level setter raises ValueError for a non-integer, non-string value."""
+        logger, _ = self._make_logger()
+        with self.assertRaises(ValueError):
+            logger.level = [1, 2, 3]
+
+    def test_level_name_property(self):
+        """level_name returns the string name matching the current level."""
+        logger, _ = self._make_logger()
+        logger.level = syslog.LOG_INFO
+        self.assertEqual(logger.level_name, "info")
+
+    def test_level_name_unknown_int(self):
+        """level_name falls back to the integer string for unknown values."""
+        logger, _ = self._make_logger()
+        logger.level = 99
+        self.assertEqual(logger.level_name, "99")
+
+    def test_broker_module_has_log_attribute(self):
+        """BrokerModule.__init__ creates a self.log BrokerLogger instance."""
+        mock_h = MagicMock()
+        mock_ffi = MagicMock()
+        mock_lib = MagicMock()
+        mock_ffi.string.return_value = b"mymod"
+        with patch("flux.brokermod.ffi", mock_ffi), patch(
+            "flux.brokermod.lib", mock_lib
+        ):
+
+            class Mod(BrokerModule):
+                pass
+
+            mod = Mod(mock_h)
+        self.assertIsInstance(mod.log, BrokerLogger)
+
+    def test_broker_module_log_forwards_to_handle(self):
+        """mod.log.error() reaches handle.log() on the underlying Flux handle."""
+        mock_h = MagicMock()
+        mock_ffi = MagicMock()
+        mock_lib = MagicMock()
+        mock_ffi.string.return_value = b"mymod"
+        with patch("flux.brokermod.ffi", mock_ffi), patch(
+            "flux.brokermod.lib", mock_lib
+        ):
+
+            class Mod(BrokerModule):
+                pass
+
+            mod = Mod(mock_h)
+        mod.log.error("boom")
+        mock_h.log.assert_called_once_with(syslog.LOG_ERR, "boom")
 
 
 if __name__ == "__main__":
