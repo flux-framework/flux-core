@@ -285,7 +285,8 @@ static struct idset *drain_targets_decode (struct drain *drain,
     struct idset *idset;
 
     if (!(idset = inventory_targets_to_ranks (drain->ctx->inventory,
-                                              ranks, errp)))
+                                              ranks,
+                                              errp)))
         return NULL;
     if (idset_count (idset) == 0) {
         errprintf (errp, "idset is empty");
