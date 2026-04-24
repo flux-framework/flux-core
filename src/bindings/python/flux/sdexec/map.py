@@ -88,6 +88,7 @@ Python class name.  When omitted, :class:`HwlocMapper` is used.
 import errno
 from pathlib import Path
 
+import flux
 from flux.idset import IDset
 from flux.resource import ResourceSet
 
@@ -392,3 +393,107 @@ class HwlocMapper(ResourceMapper):
 
         unique_devices = list(dict.fromkeys(devices))
         return {"DeviceAllow": ",".join(unique_devices)}
+
+
+def _build_R(cores=None, gpus=None):
+    """Build a minimal R JSON string for rank 0 with the given resource IDs."""
+    import subprocess
+
+    args = []
+
+    if cores is None and gpus is None:
+        args.append("--local")
+    else:
+        if cores:
+            args.append(f"--cores={cores}")
+        if gpus:
+            args.append(f"--gpus={gpus}")
+
+    result = subprocess.run(
+        ["flux", "R", "encode", *args],
+        stdout=subprocess.PIPE,
+        check=True,
+    )
+    return result.stdout.decode("utf-8")
+
+
+def _get_system_xml(xml_file=None):
+    """Return hwloc topology XML from *xml_file* or by running hwloc-ls."""
+    if xml_file:
+        return Path(xml_file).read_text()
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["hwloc-ls", "--of", "xml", "-"],
+            stdout=subprocess.PIPE,
+            check=True,
+        )
+        return result.stdout.decode("utf-8")
+    except FileNotFoundError:
+        raise SystemExit(
+            "hwloc-ls not found; install it or use --xml to supply topology XML"
+        )
+    except subprocess.CalledProcessError as exc:
+        raise SystemExit(f"hwloc-ls failed: {exc.stderr.strip()}")
+
+
+def main(args=None):
+    """CLI entry point: show systemd unit properties for given resource IDs."""
+    import argparse
+    import importlib
+    import json
+    import sys
+
+    parser = argparse.ArgumentParser(
+        prog="flux python -m flux.sdexec.map",
+        description="Show systemd unit properties that would be emitted for "
+        "the given Flux resource IDs on this system.",
+        formatter_class=flux.util.help_formatter(),
+    )
+    parser.add_argument(
+        "--cores", metavar="IDSET", default="", help="logical cores (e.g. '0-3')"
+    )
+    parser.add_argument(
+        "--gpus", metavar="IDSET", default="", help="logical GPUs (e.g. '0-1')"
+    )
+    parser.add_argument(
+        "--xml",
+        metavar="FILE",
+        help="hwloc topology XML file (default: run hwloc-ls)",
+    )
+    parser.add_argument(
+        "--mapper",
+        metavar="CLASS",
+        default=None,
+        help="fully-qualified mapper class (default: flux.sdexec.map.HwlocMapper)",
+    )
+    opts = parser.parse_args(args)
+
+    xml = _get_system_xml(opts.xml)
+
+    if opts.mapper:
+        module_name, _, class_name = opts.mapper.rpartition(".")
+        if not module_name:
+            raise SystemExit(
+                f"--mapper must be a fully-qualified class name: {opts.mapper!r}"
+            )
+        mod = importlib.import_module(module_name)
+        cls = getattr(mod, class_name)
+    else:
+        cls = HwlocMapper
+
+    mapper = cls(xml)
+    R = _build_R(cores=opts.cores or None, gpus=opts.gpus or None)
+    try:
+        result = mapper.map(R)
+    except OSError as exc:
+        print(f"mapper failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    main()
