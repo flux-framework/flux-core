@@ -260,6 +260,19 @@ test_expect_success MULTICORE \
 	test_cmp unconstrained.expected cpus1unconstrained.out
 '
 
+#
+# Diagnostic CLI: flux python -m flux.sdexec.map
+#
+command -v hwloc-ls >/dev/null && test_set_prereq HWLOC_LS
+test_expect_success HWLOC_LS \
+'flux python -m flux.sdexec.map --cores=0 emits valid JSON' '
+	flux python -m flux.sdexec.map --cores=0 >mapout.json &&
+	python3 -m json.tool mapout.json &&
+	jq -e ".AllowedCPUs" mapout.json &&
+	jq -e ".AllowedMemoryNodes" mapout.json &&
+	jq -e ".DevicePolicy == \"closed\"" mapout.json
+'
+
 test_expect_success 're-enable sdexec-constrain-resources via config reload' '
 	cat >config/config.toml <<-EOT &&
 	[systemd]
