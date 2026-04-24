@@ -217,6 +217,41 @@ class TestResourceJournalConsumer(unittest.TestCase):
                 self.assertEqual(R.nnodes, 4)
                 consumer.stop()
 
+    def test_backlog_batching(self):
+        """Test that a large backlog spanning multiple batches is delivered"""
+        # Generate enough events to exceed the send_backlog() batch size of 100.
+        # Each drain+undrain cycle adds 2 events to the resource eventlog.
+        n_cycles = 55
+        reason = "backlog-batch-test"
+        for _ in range(n_cycles):
+            self.fh.rpc("resource.drain", {"targets": "0", "reason": reason}).get()
+            self.fh.rpc("resource.undrain", {"targets": "0"}).get()
+
+        # Connect a consumer after all events are already in the backlog
+        consumer = ResourceJournalConsumer(self.fh, include_sentinel=True).start()
+        events = []
+        while True:
+            event = consumer.poll(timeout=30.0)
+            if event.is_empty():
+                break
+            events.append(event)
+        consumer.stop()
+
+        # Verify all drain events with our unique reason were received.
+        # If batching were broken, events past the batch boundary would be lost.
+        received = sum(
+            1 for e in events if e.name == "drain" and e.context.get("reason") == reason
+        )
+        self.assertEqual(received, n_cycles)
+
+        # Events must be time ordered
+        self.assertTrue(
+            all(
+                events[i].timestamp <= events[i + 1].timestamp
+                for i in range(len(events) - 1)
+            )
+        )
+
     def test_event_after_history(self):
         """Test that a consumer gets new events after history is processed"""
 
