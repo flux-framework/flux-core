@@ -217,6 +217,7 @@ TESTSCRIPTS = \
 	t2412-sdmon.t \
 	t2413-sdmon-resource.t \
 	t2414-imp-exec-helper.t \
+	t2415-sdexec-device.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
 	t2600-job-shell-rcalc.t \
