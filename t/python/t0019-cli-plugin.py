@@ -211,11 +211,19 @@ class TestConflictDetection(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             with open(os.path.join(d, "a.py"), "w") as f:
                 f.write(self.PLUGIN_SITE)
-            with open(os.path.join(d, "b.py"), "w") as f:
-                f.write(self.PLUGIN_SITE2)
-            os.environ["FLUX_CLI_PLUGINPATH_OVERRIDE"] = d
-            registry = CLIPluginRegistry("submit")
-            self.assertEqual(len(registry.plugins), 1)
+            with tempfile.TemporaryDirectory() as d2:
+                with open(os.path.join(d2, "b.py"), "w") as f:
+                    f.write(self.PLUGIN_SITE2)
+                os.environ["FLUX_CLI_PLUGINPATH_OVERRIDE"] = f"{d2}:{d}"
+                registry = CLIPluginRegistry("submit")
+                self.assertEqual(
+                    sum(
+                        1
+                        for p in registry.plugins
+                        if str(p.__class__) == "<class 'b.PluginSite2'>"
+                    ),
+                    1,
+                )
 
     def test_02_different_prefix_same_name_coexists(self):
         # two plugins with different prefixes get distinct dests and load cleanly
