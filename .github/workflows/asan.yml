@@ -4,7 +4,7 @@ jobs:
   check-asan:
     name: address-sanitizer check
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 100
     steps:
     - uses: actions/checkout@v6.0.2
       with:
@@ -15,7 +15,7 @@ jobs:
       run: |
         sudo sysctl -w kernel.randomize_va_space=0
     - name: docker-run-checks with ASan
-      timeout-minutes: 40
+      timeout-minutes: 80
       env:
         PRELOAD: /usr/lib64/libasan.so.8
         ASAN_OPTIONS: detect_leaks=0:start_deactivated=true:replace_str=true:verify_asan_link_order=false
@@ -23,7 +23,7 @@ jobs:
         TAP_DRIVER_QUIET: t
       run: >
         src/test/docker/docker-run-checks.sh \
-          --image=fedora40 --unit-test-only -j4 \
+          --image=fedora40 -j4 \
           -- --with-flux-security --enable-sanitizer=address
 
     - name: after failure

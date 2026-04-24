@@ -3,6 +3,8 @@
 test_description='Test flux cron service'
 
 . $(dirname $0)/sharness.sh
+
+# N.B. skip under ASAN, LD_PRELOAD is modified
 if ! test_have_prereq NO_ASAN; then
     skip_all='skipping faketime tests since AddressSanitizer is active'
     test_done

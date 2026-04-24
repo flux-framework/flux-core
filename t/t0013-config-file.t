@@ -271,6 +271,21 @@ waitgrep() {
 	return 1
 }
 
+# N.B. The 'pkill' command in test below hangs under ASAN.  Disable
+# LD_PRELOAD if ASAN is enabled.
+
+no_asan_pkill() {
+    local rc
+    SAVE_LD_PRELOAD=${LD_PRELOAD}
+    if test_have_prereq ASAN; then
+        LD_PRELOAD=""
+    fi
+    pkill "$@"
+    rc=$?
+    LD_PRELOAD=${SAVE_LD_PRELOAD}
+    return "$rc"
+}
+
 # RFC 2606 reserves the .invalid domain for testing
 test_expect_success NO_CHAIN_LINT 'a warning is printed when upstream URI has unknown host' '
 	mkdir conf8b &&
@@ -289,11 +304,12 @@ test_expect_success NO_CHAIN_LINT 'a warning is printed when upstream URI has un
 	echo $! >warn.pid &&
 	waitgrep "unable to resolve upstream peer" warn.err 30
 '
+
 # In case warn.pid actually refers to a libtool wrapper, try pkill(1) -P
 # first to kill its children, then kill(1).  See flux-framework/flux-core#5275.
 test_expect_success NO_CHAIN_LINT 'clean up broker from previous test' '
 	warnpid=$(cat warn.pid) &&
-	pkill -15 -P $warnpid || kill -15 $warnpid
+	no_asan_pkill -15 -P $warnpid || kill -15 $warnpid
 '
 
 getport() {
