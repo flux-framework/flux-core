@@ -8,8 +8,106 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import syslog
+
 from _flux._core import ffi, lib
 from flux.constants import FLUX_MSGTYPE_EVENT, FLUX_MSGTYPE_REQUEST
+
+
+class BrokerLogger:
+    """Logger bridge from a broker module to the Flux ring buffer.
+
+    Provides convenience methods (``debug``, ``info``, ``notice``,
+    ``warning``, ``error``, ``critical``, ``alert``, ``emerg``).  Also callable as
+    ``log(level, msg)`` so it can serve as a drop-in wrapper for
+    ``handle.log()``.
+
+    The ``level`` attribute is a threshold: messages with a numerically
+    higher syslog priority value (i.e. lower urgency, such as
+    ``LOG_DEBUG``) are silently dropped when they exceed the threshold.
+    The default ``syslog.LOG_DEBUG`` passes all messages through,
+    matching C module behaviour where the broker's global log level is
+    the only filter.
+
+    ``level`` may be assigned a syslog integer constant or a level-name
+    string (e.g. ``"info"``, ``"debug"``); reading ``level`` always
+    returns the integer.
+    """
+
+    LEVEL_NAMES = {
+        "emerg": syslog.LOG_EMERG,
+        "alert": syslog.LOG_ALERT,
+        "crit": syslog.LOG_CRIT,
+        "err": syslog.LOG_ERR,
+        "warning": syslog.LOG_WARNING,
+        "notice": syslog.LOG_NOTICE,
+        "info": syslog.LOG_INFO,
+        "debug": syslog.LOG_DEBUG,
+    }
+    _LEVEL_NAMES_REVERSE = {v: k for k, v in LEVEL_NAMES.items()}
+
+    def __init__(self, h):
+        self._h = h
+        self._level = syslog.LOG_DEBUG
+
+    @property
+    def level(self):
+        """Current log-level threshold as a syslog integer constant."""
+        return self._level
+
+    @level.setter
+    def level(self, value):
+        if isinstance(value, str):
+            name = value.lower()
+            if name not in self.LEVEL_NAMES:
+                raise ValueError(
+                    f"invalid log level {value!r}: "
+                    f"expected one of {', '.join(self.LEVEL_NAMES)}"
+                )
+            self._level = self.LEVEL_NAMES[name]
+        else:
+            try:
+                self._level = int(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"invalid log level {value!r}") from exc
+
+    @property
+    def level_name(self):
+        """Current log level as a name string (e.g. ``'info'``)."""
+        return self._LEVEL_NAMES_REVERSE.get(self._level, str(self._level))
+
+    def __call__(self, level: int, msg: str) -> None:
+        """Emit *msg* at syslog priority *level* if within the threshold.
+
+        Satisfies the ``(level, msg)`` callable contract for classes that
+        accept an injectable logger.
+        """
+        if level <= self._level:
+            self._h.log(level, msg)
+
+    def debug(self, msg: str) -> None:
+        self(syslog.LOG_DEBUG, msg)
+
+    def info(self, msg: str) -> None:
+        self(syslog.LOG_INFO, msg)
+
+    def notice(self, msg: str) -> None:
+        self(syslog.LOG_NOTICE, msg)
+
+    def warning(self, msg: str) -> None:
+        self(syslog.LOG_WARNING, msg)
+
+    def error(self, msg: str) -> None:
+        self(syslog.LOG_ERR, msg)
+
+    def critical(self, msg: str) -> None:
+        self(syslog.LOG_CRIT, msg)
+
+    def alert(self, msg: str) -> None:
+        self(syslog.LOG_ALERT, msg)
+
+    def emerg(self, msg: str) -> None:
+        self(syslog.LOG_EMERG, msg)
 
 
 def request_handler(topic, prefix=True, allow_guest=False):
@@ -88,6 +186,7 @@ class BrokerModule:
         self._name = ffi.string(name_p).decode() if name_p != ffi.NULL else "unknown"
         self._watchers = []
         self._stopped_with_error = False
+        self.log = BrokerLogger(h)
         self._register_handlers()
 
     @property
