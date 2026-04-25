@@ -29,31 +29,40 @@ The following dependency schemes are built-in:
    that the target job cannot be found.
 
 .. note::
-   The ``after*`` dependency schemes below only satisfy dependencies for
-   jobs that entered the RUN state. A job that is canceled while pending
-   does not satisfy the `afterany` or `afternotok` dependencies. Thus,
-   canceling a job with a chain of dependencies causes all jobs in the
-   chain to be canceled.
+   Most ``after*`` dependency schemes require that the target job enters
+   the RUN state. Only ``afterany`` can be satisfied by a job that is
+   canceled while pending, since it is satisfied after ANY outcome.
+
+   A helpful analogy: dependency chains behave like shell command separators.
+   ``afterany`` is like ``;`` (run regardless of result), while
+   ``afternotok`` and ``afterexcept`` are like ``||`` (run only on
+   failure). Just as a chain of ``||`` commands terminates when one
+   succeeds, a chain of ``afternotok`` jobs should terminate when canceled,
+   not continue. Similarly ``afterok`` behaves like ``&&``: once any job
+   fails the rest of the chain is canceled.
 
 after:JOBID
-   This dependency is satisfied after JOBID starts.
+   This dependency is satisfied after JOBID starts. The target job must
+   have entered the RUN state.
 
 afterany:JOBID
    This dependency is satisfied after JOBID enters the INACTIVE state,
-   regardless of the result
+   regardless of the result. This is the only ``after*`` dependency that
+   can be satisfied even if the target job is canceled before starting.
 
 afterok:JOBID
    This dependency is satisfied after JOBID enters the INACTIVE state
-   with a successful result.
+   with a successful result. The target job must have entered the RUN state.
 
 afternotok:JOBID
    This dependency is satisfied after JOBID enters the INACTIVE state
-   with an unsuccessful result.
+   with an unsuccessful result. The target job must have entered the RUN
+   state.
 
 afterexcept:JOBID
    This dependency is satisfied when JOBID enters the INACTIVE state
    and a fatal job exception caused the transition to CLEANUP (e.g.,
-   node failure, timeout, cancel, etc.).
+   node failure, timeout). The target job must have entered the RUN state.
 
 singleton
    This dependency is satisfied when there are no other active jobs
