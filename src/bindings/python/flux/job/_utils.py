@@ -18,6 +18,7 @@ import pathlib
 import re
 import resource
 import signal
+import sys
 from collections import ChainMap
 from itertools import chain
 from string import Template
@@ -131,6 +132,13 @@ class URIArg:
 
         self.path = self.uri.path.replace("FXX", "", 1)
         self.scheme = self.uri.scheme
+
+        # Emit deprecation warning for "after" scheme
+        if name == "dependency" and self.scheme == "after":
+            print(
+                "dependency scheme 'after' is deprecated, use 'afterstart'",
+                file=sys.stderr,
+            )
 
     @staticmethod
     def _try_number(value):

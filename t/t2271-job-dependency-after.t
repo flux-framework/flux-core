@@ -32,6 +32,27 @@ test_expect_success 'dependency=afterstart:invalid rejects invalid target jobids
 	grep "\"bar\" is not a valid jobid" after:bar.err &&
 	grep "job not found" after:1234.err
 '
+test_expect_success 'dependency=after emits deprecation warning' '
+	jobid=$(flux submit --urgency=hold hostname) &&
+	id=$(flux submit --dependency=after:$jobid hostname 2>after.err) &&
+	flux job wait-event -t 15 $id dependency-add &&
+	grep "deprecated" after.err &&
+	grep "afterstart" after.err &&
+	flux job eventlog $id | grep "deprecated" &&
+	flux job eventlog $id | grep "afterstart" &&
+	flux cancel $id &&
+	flux cancel $jobid
+'
+test_expect_success 'dependency=afterstart does not emit deprecation warning' '
+	jobid=$(flux submit --urgency=hold hostname) &&
+	id=$(flux submit --dependency=afterstart:$jobid hostname 2>afterstart.err) &&
+	flux job wait-event -t 15 $id dependency-add &&
+	test_must_fail grep deprecated afterstart.err &&
+	flux job eventlog $id > afterstart.eventlog &&
+	test_must_fail grep deprecated afterstart.eventlog &&
+	flux cancel $id &&
+	flux cancel $jobid
+'
 test_expect_success FLUX_SECURITY 'after* dependencies will not work on another user job' '
 	jobid=$(flux submit sleep 300) &&
 	test_debug "echo submitted job $jobid" &&

@@ -375,6 +375,17 @@ static int dependency_after_cb (flux_plugin_t *p,
                                        "invalid dependency scheme: %s",
                                        scheme);
 
+    /*  Emit deprecation warning for "after" scheme
+     */
+    if (streq (scheme, "after")) {
+        (void) flux_jobtap_raise_exception (p,
+                                            id,
+                                            "dependency",
+                                            3,
+                                            "dependency scheme 'after' is "
+                                            "deprecated, use 'afterstart'");
+    }
+
     /*  Parse the value argument, which must be a valid jobid
      *  Do not allow FLUX_JOBID_ANY/FLUX_JOBTAP_CURRENT_JOBID to be specified
      */

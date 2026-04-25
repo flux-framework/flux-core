@@ -530,6 +530,7 @@ afterany
 afterok
 afternotok
 afterexcept
+afterstart
 parsedatetime
 cancelall
 raiseall
