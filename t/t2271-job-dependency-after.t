@@ -197,7 +197,7 @@ test_expect_success 'chain of afternotok jobs are canceled if one fails before s
 	id4=$(flux submit --dependency=afternotok:$id3 hostname) &&
 	flux cancel $id &&
 	for i in $id2 $id3 $id4; do
-	    flux job wait-event -vt 15 -m type=dependency $id2 exception
+	    flux job wait-event -vt 15 -m type=dependency $i exception
 	done
 '
 test_expect_success 'chain of afternotok jobs are canceled if one succeeds' '
@@ -207,7 +207,7 @@ test_expect_success 'chain of afternotok jobs are canceled if one succeeds' '
 	id4=$(flux submit --dependency=afternotok:$id3 hostname) &&
 	flux job urgency $id default &&
 	for i in $id2 $id3 $id4; do
-	    flux job wait-event -vt 15 -m type=dependency $id2 exception
+	    flux job wait-event -vt 15 -m type=dependency $i exception
 	done
 '
 test_expect_success 'dependency=afterexcept works' '
