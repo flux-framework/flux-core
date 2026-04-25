@@ -69,7 +69,7 @@ static const char * after_typestr (enum after_type type)
 
 static int after_type_parse (const char *s, enum after_type *tp)
 {
-    if (streq (s, "after"))
+    if (streq (s, "after") || streq (s, "afterstart"))
         *tp = AFTER_START;
     else if (streq (s, "afterany"))
         *tp = AFTER_ANY;
@@ -772,6 +772,7 @@ static int query_cb (flux_plugin_t *p,
 
 static const struct flux_plugin_handler tab[] = {
     { "job.dependency.after",      dependency_after_cb, NULL },
+    { "job.dependency.afterstart", dependency_after_cb, NULL },
     { "job.dependency.afterok",    dependency_after_cb, NULL },
     { "job.dependency.afterany",   dependency_after_cb, NULL },
     { "job.dependency.afternotok", dependency_after_cb, NULL },
