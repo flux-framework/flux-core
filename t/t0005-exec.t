@@ -146,6 +146,7 @@ test_expect_success 'flux exec exits with code 126 for non executable' '
 	grep "Permission denied" exec.stderr2
 '
 
+# N.B. skip under ASAN, as it may capture segfault signal and report differently
 test_expect_success NO_ASAN 'flux exec passes non-zero exit status' '
 	test_expect_code 2 flux exec -n sh -c "exit 2" &&
 	test_expect_code 3 flux exec -n sh -c "exit 3" &&
@@ -158,6 +159,7 @@ test_expect_success 'flux exec fails with --with-imp if no IMP configured' '
 	grep "exec\.imp path not found in config" exec-no-imp.out
 '
 
+# N.B. skip under ASAN, as it may capture segfault signal and report differently
 test_expect_success NO_ASAN 'flux exec outputs tasks with errors' '
 	! flux exec -n sh -c "exit 2" > 2.out 2>&1 &&
         grep "\[0-3\]: Exit 2" 2.out &&
@@ -201,14 +203,24 @@ test_expect_success 'I/O -- long lines' '
 	test_cmp output expected
 '
 
+# N.B. The 'ps' command below hangs under ASAN.  Temporarily unset LD_PRELOAD
+# so 'ps' works in the check below.
+SAVE_LD_PRELOAD=${LD_PRELOAD}
+if test_have_prereq ASAN; then
+    LD_PRELOAD=""
+fi
+
 # The version of stdbuf(1) in older versions of uutils/coreutils does
 # not exec() its argument but instead remains the parent and collects
 # exit status. This version does not forward signals to children, so
 # it breaks the test below. Detect versions of stdbuf that don't exec
 # their arguments and skip the test if found.
+
 if test $(stdbuf --output=L sh -c 'ps -q $PPID -o comm=') != "stdbuf"; then
     test_set_prereq WORKING_STDBUF
 fi
+
+LD_PRELOAD=${SAVE_LD_PRELOAD}
 
 waitfile=$SHARNESS_TEST_SRCDIR/scripts/waitfile.lua
 test_expect_success WORKING_STDBUF 'signal forwarding works' '
