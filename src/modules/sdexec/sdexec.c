@@ -745,10 +745,12 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
     if (!(proc->unit = sdexec_unit_create (name)))
         goto error;
     /* Ensure that FLUX_URI refers to the local broker.
+     * Ensure systemd variables refer to the local systemd.
      */
     if (set_dict (proc->cmd, "env", "FLUX_URI", ctx->local_uri) < 0)
         goto error;
-    unset_dict (proc->cmd, "env", "NOTIFY_SOCKET"); // see sd_notify(3)
+    unset_dict (proc->cmd, "env", "NOTIFY_SOCKET");
+    unset_dict (proc->cmd, "env", "INVOCATION_ID");
     /* Create channels for stdio as required by flags.
      */
     if (!(proc->in = sdexec_channel_create_input (ctx->h, "stdin")))
