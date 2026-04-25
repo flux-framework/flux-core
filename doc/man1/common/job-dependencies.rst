@@ -41,9 +41,15 @@ The following dependency schemes are built-in:
    not continue. Similarly ``afterok`` behaves like ``&&``: once any job
    fails the rest of the chain is canceled.
 
-after:JOBID
+.. note::
+   The ``after`` scheme is deprecated. Use ``afterstart`` instead.
+
+afterstart:JOBID
    This dependency is satisfied after JOBID starts. The target job must
    have entered the RUN state.
+
+after:JOBID
+   Deprecated alias for ``afterstart``. Use ``afterstart`` instead.
 
 afterany:JOBID
    This dependency is satisfied after JOBID enters the INACTIVE state,
