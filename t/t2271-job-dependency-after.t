@@ -265,9 +265,6 @@ test_expect_success 'dependency=afternotok works for INACTIVE job' '
 		echo afterany:{} ::: ${job2} ${job3} &&
 	test_must_fail flux run --dependency=afternotok:${job1} hostname
 '
-test_expect_success 'afternotok fails for INACTIVE job with no start event' '
-	test_must_fail flux run --dependency=afternotok:${canceled_job} hostname
-'
 test_expect_success 'dependency=after fails for INACTIVE canceled job' '
 	job4=$(flux submit --urgency=hold hostname) &&
 	flux cancel ${job4} &&

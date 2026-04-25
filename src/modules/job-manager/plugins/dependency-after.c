@@ -30,7 +30,7 @@ static zlistx_t *global_reflist = NULL;
  */
 enum after_type {
     AFTER_START =   0x1,
-    AFTER_FINISH =  0x2,
+    AFTER_ANY =     0x2,  /* afterany */
     AFTER_SUCCESS = 0x4,
     AFTER_FAILURE = 0x8,
     AFTER_EXCEPT  = 0x10
@@ -55,7 +55,7 @@ static const char * after_typestr (enum after_type type)
     switch (type) {
         case AFTER_START:
             return "after-start";
-        case AFTER_FINISH:
+        case AFTER_ANY:
             return "after-finish";
         case AFTER_SUCCESS:
             return "after-success";
@@ -72,7 +72,7 @@ static int after_type_parse (const char *s, enum after_type *tp)
     if (streq (s, "after"))
         *tp = AFTER_START;
     else if (streq (s, "afterany"))
-        *tp = AFTER_FINISH;
+        *tp = AFTER_ANY;
     else if (streq (s, "afterok"))
         *tp = AFTER_SUCCESS;
     else if (streq (s, "afternotok"))
@@ -280,11 +280,15 @@ static int dependency_handle_inactive (flux_plugin_t *p,
                                        "dependency: failed to get %ss result",
                                        jobid);
 
-    /*  If the target job did not enter RUN state, immediately raise an
-     *  exception since after* dependencies only apply to jobs that actually
-     *  ran:
+    /*  If the target job did not enter RUN state, raise an exception for
+     *  all dependencies except 'afterany'. Only 'afterany' can be satisfied
+     *  if the job was canceled before starting since it is satisfied after
+     *  ANY outcome. The other dependency types ('after', 'afterok',
+     *  'afternotok', 'afterexcept') require the job to have actually run
+     *  to avoid unexpected behavior (see issue #6555).
      */
-    if (!flux_jobtap_job_event_posted (p, afterid, "alloc"))
+    if (type != AFTER_ANY
+        && !flux_jobtap_job_event_posted (p, afterid, "alloc"))
         return flux_jobtap_reject_job (p,
                                        args,
                                        "dependency: after: %s never started",
@@ -603,25 +607,28 @@ static int release_dependent_jobs (flux_plugin_t *p,
     }
 
     /*  If this job never entered RUN state (i.e. got an exception before
-     *  the alloc event), then none of the after* dependencies can be
-     *  satisfied. Immediately raise exception(s).
+     *  the alloc event), then only the afterany (AFTER_ANY) dependency
+     *  can be satisfied. All other after* dependencies require the job to
+     *  have run. Release afterany dependencies and raise exceptions on the
+     *  rest. See issue #6555 for why afternotok must not be satisfied here.
      */
     if (!flux_jobtap_job_event_posted (p, FLUX_JOBTAP_CURRENT_JOB, "alloc")) {
+        release_all (p, l, AFTER_ANY);
         raise_exceptions (p, l, "job never started");
         return 0;
     }
 
-    /*  O/w, release dependent jobs based on requisite job result.
+    /*  Release dependent jobs based on requisite job result.
      *  Entries will be removed from the list as they are processed.
      */
     if (result != FLUX_JOB_RESULT_COMPLETED) {
-        int typemask = AFTER_FINISH | AFTER_FAILURE;
+        int typemask = AFTER_ANY | AFTER_FAILURE;
         if (end_event_name && streq (end_event_name, "exception"))
             typemask |= AFTER_EXCEPT;
         release_all (p, l, typemask);
     }
     else
-        release_all (p, l, AFTER_FINISH | AFTER_SUCCESS);
+        release_all (p, l, AFTER_ANY | AFTER_SUCCESS);
 
     /*  Any remaining dependencies can't now be satisfied.
      *   Raise exceptions on any remaining members of list `l`
