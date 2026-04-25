@@ -529,20 +529,25 @@ ones and then rejects whatever remains:
 Logging
 -------
 
-Both the scheduler and pool implementations log via ``self.log(level, msg)``,
-where *level* is a :mod:`syslog` priority constant.  The base class filters
-messages against :attr:`~Scheduler.log_level` before forwarding to
-``handle.log``, so only messages at or above the configured severity are
-emitted:
+:attr:`~flux.brokermod.BrokerModule.log` is a
+:class:`~flux.brokermod.BrokerLogger` instance available on every
+:class:`~flux.brokermod.BrokerModule`, including :class:`Scheduler`.  Use
+the convenience methods to emit log messages without importing :mod:`syslog`:
 
 .. code-block:: python
 
-   import syslog
-   self.log(syslog.LOG_DEBUG, f"alloc: {jobid}: {alloc.dumps()}")
-   self.log(syslog.LOG_ERR,   f"unexpected error: {exc}")
+   self.log.debug(f"alloc: {jobid}: {alloc.dumps()}")
+   self.log.info("scheduler ready")
+   self.log.warning(f"unknown pool option {key!r} ignored")
+   self.log.error(f"unexpected error: {exc}")
 
-The default :attr:`~Scheduler.log_level` is ``LOG_INFO``.  Set it at load
-time to enable more verbose output:
+The full set of methods mirrors syslog severity levels: ``debug``, ``info``,
+``notice``, ``warning``, ``error``, ``critical``, ``alert``, and ``emerg``.
+
+Messages are filtered by a severity threshold before being forwarded to
+``handle.log``; only messages at or above the threshold are emitted.  The
+default threshold for :class:`Scheduler` is ``info``.  Set it at load time
+to enable more verbose output:
 
 .. code-block:: console
 
@@ -551,8 +556,8 @@ time to enable more verbose output:
 Valid level names are ``emerg``, ``alert``, ``crit``, ``err``, ``warning``,
 ``notice``, ``info``, and ``debug``.
 
-Pool implementations receive the same ``self.log`` method and should call it
-unconditionally — no ``None`` check is needed.
+Pool implementations receive the same :attr:`~flux.brokermod.BrokerModule.log`
+object and should call it unconditionally.
 
 Log messages appear in :man1:`flux-dmesg` and the broker's stderr.
 
