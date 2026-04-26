@@ -12,8 +12,8 @@ IMAGE="fluxrm/flux-core:el8"
 declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
-declare -r long_opts="help,no-home,no-cache,rebuild,jobs:,image:"
-declare -r short_opts="hrj:i:"
+declare -r long_opts="help,no-home,no-cache,rebuild,jobs:,image:,interactive"
+declare -r short_opts="hrj:i:I"
 declare -r usage="
 Usage: $prog [OPTIONS]\n\
 Build fluxorama system test docker image for CI builds\n\
@@ -22,6 +22,7 @@ Options:\n\
  -h, --help                    Display this message\n\
  -j, --jobs=N                  Value for make -j (default=$JOBS)\n\
  -i, --image=NAME              Base image (default=$IMAGE)\n\
+ -I, --interactive             Run interactive shell in container\n\
      --rebuild                 Rebuild base fluxorama image from source\n\
      --no-home                 Skip mounting the host home directory\n\
      --no-cache                Run docker build with --no-cache option\n\
@@ -48,6 +49,7 @@ while true; do
       --rebuild)     REBUILD_BASE_IMAGE=t;       shift   ;;
       --no-home)     MOUNT_HOME_ARGS="";         shift   ;;
       --no-cache)    NOCACHE="--no-cache";       shift   ;;
+      -I|--interactive) INTERACTIVE="-ti";       shift   ;;
       --)            shift; break;                       ;;
       *)             die "Invalid option '$1'\n$usage"   ;;
     esac
@@ -75,28 +77,21 @@ if test "$REBUILD_BASE_IMAGE" = "t"; then
         --install-only
 fi
 
-#  Note: podman cannot pull from local docker images in GitHub actions, so
-#  we have to use docker save -> podman load to make the image available
-#  to podman. This is done in steps to avoid a potential issue with
-#  podman reporting:
-#
-#  Error: payload does not match any of the supported image formats:
-#
-#  Saving to a file (avoiding a colon in the name) seems to work around
-#  these issues.
-#
-# N.B: docker save -o option doesn't seem to work and we can't use redirection
-# under checks_group() below. Therefore, use docker_save() shell function here:
-docker_save() { docker save $1> $2; }
+# Usage: podman_pull IMAGE
+# Pull image from docker if missing or checksum out of date
+podman_pull() {
+  DOCKER_ID=$(docker inspect --format '{{.Id}}' $1 2>/dev/null)
+  PODMAN_ID=$(sudo podman inspect --format '{{.Id}}' $1 2>/dev/null)
+  if [ "$DOCKER_ID" != "$PODMAN_ID" ]; then
+      checks_group "Moving $IMAGE from docker to podman" \
+          sudo podman pull docker-daemon:$1
+  fi
+}
 
-checks_group "Moving $IMAGE from docker to podman" \
-  docker_save $IMAGE /tmp/systest-$$.tar \
-  && ls -lh /tmp/systest-$$.tar \
-  && (podman load -i /tmp/systest-$$.tar || die "podman load failed") \
-  && rm -f /tmp/systest-$$.tar
+podman_pull $IMAGE
 
 checks_group "Building system image for user $USER $(id -u) group=$(id -g)" \
-  podman build \
+  sudo podman build \
     ${NOCACHE} \
     --build-arg IMAGE=$IMAGE \
     --build-arg USER=$USER \
@@ -109,24 +104,22 @@ checks_group "Building system image for user $USER $(id -u) group=$(id -g)" \
 
 NAME=flux-system-test-$$
 checks_group "Launching system instance container $NAME" \
-  podman run -d --rm \
+  sudo podman run -d --rm \
+    --name=flux-system-test-$$ \
+    --privileged \
+    --systemd=always \
+    --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
+    --security-opt apparmor=unconfined \
     --hostname=fluxorama \
+    --network=host \
     --workdir=$WORKDIR \
     $MOUNT_HOME_ARGS \
     --volume=$TOP:$WORKDIR \
-    --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
-    --tmpfs=/run \
     --mount=type=tmpfs,destination=/test/tmpfs-1m,tmpfs-size=1048576 \
-    --cap-add SYS_PTRACE \
-    --name=flux-system-test-$$ \
-    --network=host \
-    --systemd=always \
-    --userns=keep-id \
-    --security-opt unmask=/sys/fs/cgroup \
     fluxorama:systest \
     || die "docker run of fluxorama test container failed"
 
-until podman exec -u $USER:$GID \
+until sudo podman exec -u $USER:$GID \
     flux-system-test-$$ flux run hostname 2>/dev/null; do
     echo "Waiting for flux-system-test-$$ to be ready"
     sleep 1
@@ -135,16 +128,18 @@ done
 #  Start user@uid.service service for unit tests:
 #
 checks_group "Starting user service user@$(id -u).service" \
-  podman exec flux-system-test-$$ \
+  sudo podman exec flux-system-test-$$ \
     systemctl start user@$(id -u).service \
     || die "podman start user@$(id -u).service failed"
 
-if test -t 0; then
-    INTERACTIVE="-ti"
-fi
 
-checks_group "Executing tests under system instance container" \
-  podman exec \
+if test -n "$INTERACTIVE"; then
+  msg="Executing interactive shell in system instance container"
+else
+  msg="Executing tests under system instance container"
+fi
+checks_group "$msg" \
+  sudo podman exec \
     "${INTERACTIVE}" \
     -u $USER:$GID \
     ${CC+-e CC=$CC} \
@@ -152,31 +147,31 @@ checks_group "Executing tests under system instance container" \
     ${LDFLAGS+-e LDFLAGS=$LDFLAGS} \
     ${CFLAGS+-e CFLAGS=$CFLAGS} \
     ${CPPFLAGS+-e CPPFLAGS=$CPPFLAGS} \
-    -e PS1 \
-    -e GCOV \
-    -e CCACHE_CPP2 \
-    -e CCACHE_READONLY \
-    -e COVERAGE \
-    -e TEST_INSTALL \
-    -e CPPCHECK \
-    -e DISTCHECK \
-    -e RECHECK \
-    -e UNIT_TEST_ONLY \
-    -e chain_lint \
-    -e JOBS \
-    -e USER \
-    -e PROJECT \
-    -e CI \
-    -e TAP_DRIVER_QUIET \
-    -e FLUX_TEST_TIMEOUT \
-    -e FLUX_TEST_SIZE_MAX \
+    -e PS1=$PS1 \
+    -e GCOV=$GCOV \
+    -e CCACHE_CPP2=$CCACHE_CPP2 \
+    -e CCACHE_READONLY=$CCACHE_READONLY \
+    -e COVERAGE=$COVERAGE \
+    -e TEST_INSTALL=$TEST_INSTALL \
+    -e CPPCHECK=$CPPCHECK \
+    -e DISTCHECK=$DISTCHECK \
+    -e RECHECK=$RECHECK \
+    -e UNIT_TEST_ONLY=$UNIT_TEST_ONLY \
+    -e chain_lint=$chain_lint \
+    -e JOBS=$JOBS \
+    -e USER=$USER \
+    -e PROJECT=$PROJECT \
+    -e CI=$CI \
+    -e TAP_DRIVER_QUIET=$TAP_DRIVER_QUIET \
+    -e FLUX_TEST_TIMEOUT=$FLUX_TEST_TIMEOUT \
+    -e FLUX_TEST_SIZE_MAX=$FLUX_TEST_SIZE_MAX \
     -e FLUX_ENABLE_SYSTEM_TESTS=t \
-    -e PYTHON_VERSION \
-    -e PRELOAD \
-    -e POISON \
-    -e INCEPTION \
-    -e ASAN_OPTIONS \
-    -e BUILD_DIR \
+    -e PYTHON_VERSION=$PYTHON_VERSION \
+    -e PRELOAD=$PRELOAD \
+    -e POISON=$POISON \
+    -e INCEPTION=$INCEPTION \
+    -e ASAN_OPTIONS=$ASAN_OPTIONS \
+    -e BUILD_DIR=$BUILD_DIR \
     -e HOME=/home/$USER \
     -e XDG_RUNTIME_DIR=/run/user/$(id -u) \
     -e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus \
@@ -185,7 +180,7 @@ checks_group "Executing tests under system instance container" \
     flux-system-test-$$ "$@"
 RC=$?
 
-podman exec -ti flux-system-test-$$ shutdown -r now
+sudo podman exec -ti flux-system-test-$$ shutdown -r now
 
 if test $RC -ne 0; then
     die "system tests failed with rc=$RC"
