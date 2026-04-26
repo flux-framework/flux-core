@@ -68,6 +68,24 @@ which docker >/dev/null \
 
 . ${TOP}/src/test/checks-lib.sh
 
+# Force memory and cpuset controllers to be delegated in Github actions only
+# (Avoid modifying user systems by default)
+if test "$GITHUB_ACTIONS" = "true"; then
+    for controller in memory cpuset; do
+        grep -qw "$controller" /sys/fs/cgroup/cgroup.subtree_control \
+          || echo "+$controller" | sudo tee /sys/fs/cgroup/cgroup.subtree_control
+    done
+fi
+
+# Now check for controllers in subtree_control and warn if not present.
+# All resource control testing will fail without these controllers delegated:
+for controller in memory cpuset; do
+  if ! grep -qw "$controller" /sys/fs/cgroup/cgroup.subtree_control; then
+      echo "::warning:: cgroup controller '$controller' not delegated on host," \
+           "sdexec constraints may not work"
+  fi
+done
+
 if test "$REBUILD_BASE_IMAGE" = "t"; then
     checks_group "Rebuilding fluxrm/flux-core:el8 from source" \
       $TOP/src/test/docker/docker-run-checks.sh \
@@ -118,6 +136,14 @@ checks_group "Launching system instance container $NAME" \
     --mount=type=tmpfs,destination=/test/tmpfs-1m,tmpfs-size=1048576 \
     fluxorama:systest \
     || die "docker run of fluxorama test container failed"
+
+
+# Another workaround for cgroup delegation: Ensure the container's cgroup
+# has proper controllers in subtree_control:
+CONTAINER_CGROUP=$(sudo podman inspect --format '{{.CgroupPath}}' $NAME)
+checks_group "Ensuring controllers are delegated to container" \
+  echo "+memory +cpuset +io +pids" \
+    | sudo tee /sys/fs/cgroup/${CONTAINER_CGROUP}/cgroup.subtree_control
 
 until sudo podman exec -u $USER:$GID \
     flux-system-test-$$ flux run hostname 2>/dev/null; do
