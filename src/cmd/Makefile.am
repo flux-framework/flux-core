@@ -81,7 +81,8 @@ flux_SOURCES = \
 	builtin/shutdown.c \
 	builtin/lptest.c \
 	builtin/fsck.c \
-	builtin/cgroup.c
+	builtin/cgroup.c \
+	builtin/imp_exec_helper.c
 
 nodist_flux_SOURCES = \
 	builtin-cmds.c
@@ -123,7 +124,6 @@ dist_fluxcmd_SCRIPTS = \
 	flux-cancel.py \
 	flux-watch.py \
 	flux-update.py \
-	flux-imp-exec-helper \
 	py-runner.py \
 	flux-hostlist.py \
 	flux-post-job-event.py \

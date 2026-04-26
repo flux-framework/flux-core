@@ -360,6 +360,26 @@ static int sdmsg_get_array (sd_bus_message *m, const char *fmt, json_t **op)
     return 1;
 }
 
+static int sdmsg_get_struct_ss (sd_bus_message *m, json_t **op)
+{
+    const char *s1, *s2;
+    json_t *o;
+    int e;
+
+    if ((e = sd_bus_message_enter_container (m, 'r', "ss")) <= 0)
+        return e;
+    if ((e = sd_bus_message_read (m, "ss", &s1, &s2)) <= 0)
+        return e;
+    if (!(o = json_pack ("[ss]", s1, s2)))
+        return -ENOMEM;
+    if ((e = sd_bus_message_exit_container (m)) < 0) {
+        json_decref (o);
+        return e;
+    }
+    *op = o;
+    return 1;
+}
+
 static int sdmsg_get_unknown (sd_bus_message *m, const char *fmt, json_t **op)
 {
     int e;
@@ -387,6 +407,8 @@ static int sdmsg_get_variant (sd_bus_message *m, json_t **op)
         e = sdmsg_get_basic (m, contents[0], &val);
     else if (strlen (contents) == 2 && contents[0] == 'a')
         e = sdmsg_get_array (m, contents + 1, &val);
+    else if (streq (contents, "a(ss)"))
+        e = sdmsg_get_array (m, "(ss)", &val);
     else
         e = sdmsg_get_unknown (m, contents, &val);
     if (e <= 0)
@@ -449,6 +471,8 @@ int sdmsg_get (sd_bus_message *m, const char *fmt, json_t **op)
         e = sdmsg_get_array (m, fmt + 1, op);
     else if (streq (fmt, "v"))
         e = sdmsg_get_variant (m, op);
+    else if (streq (fmt, "(ss)"))
+        e = sdmsg_get_struct_ss (m, op);
     else if (strlen (fmt) == 1)
         e = sdmsg_get_basic (m, fmt[0], op);
     else
@@ -465,6 +489,8 @@ int sdmsg_read (sd_bus_message *m, const char *fmt, json_t *o)
 
         if (strstarts (&fmt[i], "a{sv}"))
             efmt = strndup (&fmt[i], 5);
+        else if (strstarts (&fmt[i], "(ss)"))
+            efmt = strndup (&fmt[i], 4);
         else if (fmt[i] == 'a' && strlen (&fmt[i]) > 1)
             efmt = strndup (&fmt[i], 2);
         else

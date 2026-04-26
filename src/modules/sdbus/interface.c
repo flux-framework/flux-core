@@ -169,6 +169,10 @@ static const struct xtab managertab[] = {
       "ssa(sv)a(sa(sv))",   start_transient_unit_fromjson,
       "o",                  generic_tojson,
     },
+    { "GetUnitByInvocationID",
+      "ay",     generic_fromjson,
+      "o",      generic_tojson,
+    },
 };
 
 static const struct xtab dbustab[] = {

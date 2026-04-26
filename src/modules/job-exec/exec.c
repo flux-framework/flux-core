@@ -651,7 +651,7 @@ static int exec_init (struct jobinfo *job)
         if (flux_cmd_setenvf (cmd,
                               1,
                               "FLUX_IMP_EXEC_HELPER",
-                              "flux imp-exec-helper %ju",
+                              "flux imp_exec_helper %ju",
                               (uintmax_t) job->id) < 0) {
             flux_log_error (job->h, "exec_init: flux_cmd_setenvf");
             goto err;
