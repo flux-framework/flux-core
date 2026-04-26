@@ -87,7 +87,7 @@ for controller in memory cpuset; do
 done
 
 if test "$REBUILD_BASE_IMAGE" = "t"; then
-    checks_group "Rebuilding fluxrm/flux-core:el8 from source" \
+    checks_group "Rebuilding fluxrm/flux-core:$IMAGE from source" \
       $TOP/src/test/docker/docker-run-checks.sh \
         -j $JOBS \
         -i el8 \
