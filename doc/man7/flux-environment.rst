@@ -590,6 +590,11 @@ MISCELLANEOUS
    plugins from those paths, with plugins in the ``flux.cli.plugins``
    namespace loaded last.
 
+.. envvar:: FLUX_IMP_EXEC_HELPER
+
+   The IMP optionally takes its input from the output of an unprivileged
+   helper program when this variable is set to its path.
+
 .. _sub_command_environment:
 
 SUB-COMMAND ENVIRONMENT
