@@ -159,6 +159,17 @@ checks_group "Starting user service user@$(id -u).service" \
     || die "podman start user@$(id -u).service failed"
 
 
+# We want checks to fail if cgroups aren't properly delegated in Github Actions
+# Check here and error out if user.slice doesn't have controllers delegated:
+if test "$GITHUB_ACTIONS" = "true"; then
+  for controller in memory cpuset; do \
+    sudo podman exec $NAME \
+      grep -qw "$controller" /sys/fs/cgroup/user.slice/cgroup.subtree_control \
+      || checks_die "cgroup controller '$controller' not delegated in " \
+                    "container user.slice, sdexec constraints will not work"; \
+  done
+fi
+
 if test -n "$INTERACTIVE"; then
   msg="Executing interactive shell in system instance container"
 else
