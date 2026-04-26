@@ -58,12 +58,25 @@ COPY imp.toml /etc/flux/imp/conf.d/imp.toml
 COPY job-exec.toml /etc/flux/system/conf.d/exec.toml
 COPY access.toml /etc/flux/system/conf.d/access.toml
 
+# Add ExecStartPost to user@.service to ensure cgroup delegation in container
+# to user slice:
+RUN mkdir -p /etc/systemd/system/user@.service.d \
+ && printf '[Service]\nExecStartPost=+/bin/sh -c "echo +memory +cpuset +io +pids > /sys/fs/cgroup/user.slice/cgroup.subtree_control || true"\n' \
+ > /etc/systemd/system/user@.service.d/cgroup-controllers.conf
+
 RUN chmod 4755 /usr/libexec/flux/flux-imp \
  && chmod 0644 /etc/flux/imp/conf.d/imp.toml \
  && chmod 0644 /etc/flux/system/conf.d/exec.toml \
  && chmod 0644 /etc/flux/system/conf.d/access.toml \
  && systemctl enable flux.service \
  && systemctl enable munge.service
+
+RUN mkdir -p /etc/systemd/system/flux.service.d \
+ && printf '[Service]\nDelegate=memory cpuset io pids\n' \
+    > /etc/systemd/system/flux.service.d/delegate.conf \
+ && mkdir -p /etc/systemd/system/user@.service.d \
+ && printf '[Service]\nDelegate=memory cpuset io pids\n' \
+    > /etc/systemd/system/user@.service.d/delegate.conf
 
 WORKDIR /home/$USER
 EXPOSE 7681
