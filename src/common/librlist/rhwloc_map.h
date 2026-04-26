@@ -18,6 +18,12 @@ typedef struct rhwloc_map rhwloc_map_t;
 rhwloc_map_t *rhwloc_map_create (const char *xml);
 void rhwloc_map_destroy (rhwloc_map_t *m);
 
+/*  Return the count of device type in the topology help by the rhwloc_map
+ *  object. Type is a string supported as an hwloc_obj_type_t, e.g. "core",
+ *  "pu", "package", etc, with the addition of "gpu" as a special type.
+ */
+int rhwloc_map_count_type (rhwloc_map_t *m, const char *typestr);
+
 /*  Map logical core IDs (idset string) to AllowedCPUs and AllowedMemoryNodes
  *  idset strings.  On success returns 0 with *cpus_out and *mems_out set to
  *  heap-allocated strings the caller must free().  Returns -1 on error.

@@ -55,6 +55,11 @@ char * rhwloc_core_idset_string (hwloc_topology_t topo);
  */
 char * rhwloc_gpu_idset_string (hwloc_topology_t topo);
 
+/*  Return the count of resource "type" in topology topo. Takes any
+ *  hwloc obj type string or "gpu" for supported GPU types.
+ */
+int rhwloc_count_type (hwloc_topology_t topo, const char *type);
+
 /*  Return rlist object from local hwloc topology, or from xml if non-NULL.
  */
 struct rlist *rlist_from_hwloc (int my_rank, const char *xml);

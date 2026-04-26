@@ -114,6 +114,15 @@ out:
     return rc;
 }
 
+int rhwloc_map_count_type (rhwloc_map_t *m, const char *type)
+{
+    if (!m || !type) {
+        errno = EINVAL;
+        return -1;
+    }
+    return rhwloc_count_type (m->topo, type);
+}
+
 /* Return true if the hwloc backend string identifies a compute GPU.
  * Mirrors the logic in rhwloc_gpu_idset_string().
  */
