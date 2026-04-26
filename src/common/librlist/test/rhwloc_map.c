@@ -117,6 +117,39 @@ void test_create (void)
     pass ("rhwloc_map_destroy(NULL) is safe");
 }
 
+void test_count (void)
+{
+    rhwloc_map_t *m;
+
+    m = rhwloc_map_create (xml);
+    if (!m)
+        BAIL_OUT ("rhwloc_map_create failed");
+
+    ok (rhwloc_map_count_type (NULL, NULL) < 0 && errno == EINVAL,
+        "rhwloc_map_count_type m=NULL type=NULL returns EVINAL");
+    ok (rhwloc_map_count_type (NULL, "core") < 0 && errno == EINVAL,
+        "rhwloc_map_count_type m=NULL type=core returns EVINAL");
+    ok (rhwloc_map_count_type (m, NULL) < 0 && errno == EINVAL,
+        "rhwloc_map_count_type type=NULL returns EVINAL");
+    ok (rhwloc_map_count_type (m, "foo") < 0 && errno == EINVAL,
+        "rhwloc_map_count_type type=foo returns EVINAL");
+
+    /*  From above test XML contains:
+     *  Minimal x86 topology: 1 NUMA node, 1 socket, 2 cores (4 PUs),
+     *  1 PCI bridge with 2 CUDA GPU children at known PCI addresses.
+     */
+    ok (rhwloc_map_count_type (m, "core") == 2,
+        "rhwloc_map_count_type core == 2");
+    ok (rhwloc_map_count_type (m, "pu") == 4,
+        "rhwloc_map_count_type pu == 4");
+    ok (rhwloc_map_count_type (m, "package") == 1,
+        "rhwloc_map_count_type package == 1");
+    ok (rhwloc_map_count_type (m, "gpu") == 2,
+        "rhwloc_map_count_type gpu == 2");
+
+    rhwloc_map_destroy (m);
+}
+
 void test_cores (void)
 {
     rhwloc_map_t *m;
@@ -246,6 +279,7 @@ int main (int ac, char *av[])
     plan (NO_PLAN);
 
     test_create ();
+    test_count ();
     test_cores ();
     test_gpu_pci_addrs ();
     test_strv_free ();
