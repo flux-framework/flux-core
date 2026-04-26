@@ -77,6 +77,7 @@ RUN mkdir -p /usr/lib/python3.8/dist-packages \
 # Other deps
 RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
+        linux-libc-dev \
         libsodium-dev \
         libzmq3-dev \
         libjansson-dev \

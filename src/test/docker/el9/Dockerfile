@@ -63,6 +63,7 @@ RUN dnf -y install 'dnf-command(config-manager)' \
 	pam-devel \
 	mpich-devel \
 #  Other deps
+	kernel-headers \
 	perl-Time-HiRes \
 	lua-posix \
 	libfaketime \

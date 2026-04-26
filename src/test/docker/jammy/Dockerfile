@@ -83,6 +83,7 @@ RUN for PY in python3.10 python3.11 ; do \
 # Other deps
 RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
+        linux-libc-dev \
         libsodium-dev \
         libzmq3-dev \
         libjansson-dev \

@@ -64,6 +64,7 @@ RUN yum -y update \
 	libarchive-devel \
 	pam-devel \
 #  Other deps
+	kernel-headers \
 	perl-Time-HiRes \
 	lua-posix \
 	libfaketime \
