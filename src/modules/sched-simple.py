@@ -27,8 +27,6 @@ following queue-depth aliases are also accepted::
 import errno
 import importlib.util
 import os
-import syslog
-
 from flux.job import JobID
 
 # sched-fifo is co-installed in the same directory; the hyphen in its name
@@ -72,8 +70,7 @@ class SimpleScheduler(FIFOScheduler):
     def hello(self, jobid, priority, userid, t_submit, R):
         """Register alloc and emit C sched-simple compatible DEBUG hello log."""
         super().hello(jobid, priority, userid, t_submit, R)
-        self.log(
-            syslog.LOG_DEBUG,
+        self.log.debug(
             f"hello: id={JobID(jobid).f58} priority={priority} "
             f"userid={userid} t_submit={t_submit:.1f}",
         )

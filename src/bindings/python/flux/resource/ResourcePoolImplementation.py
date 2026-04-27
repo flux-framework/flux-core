@@ -46,10 +46,11 @@ class ResourcePoolImplementation(ResourceSetImplementation):  # pragma: no cover
     generation: int = 0
 
     def log(self, level: int, msg: str) -> None:
-        """Log a message at *level* (a :mod:`syslog` priority constant).
+        """Log a message at syslog priority *level*.
 
-        Set at construction time to the scheduler's filtered ``log`` method so
-        that pool implementations can call ``self.log(syslog.LOG_WARNING, ...)``
+        Replaced at construction time by a :class:`~flux.brokermod.BrokerLogger`
+        instance (or any callable with the same ``(level, msg)`` signature) so
+        that pool implementations can call ``self.log(level, msg)``
         unconditionally.  This no-op default is used when no logger is supplied
         (e.g. in unit tests).
         """

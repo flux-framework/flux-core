@@ -106,6 +106,31 @@ The :attr:`~flux.brokermod.BrokerModule.handle` property returns the
 RPCs, KVS operations, timers, and other watchers.
 
 
+Logging
+-------
+
+:class:`~flux.brokermod.BrokerModule` provides a
+:class:`~flux.brokermod.BrokerLogger` instance as ``self.log``.  Use the
+convenience methods to emit log messages without importing :mod:`syslog`:
+
+.. code-block:: python
+
+   self.log.info("module started")
+   self.log.error(f"handler failed: {exc}")
+
+The full set of methods mirrors syslog severity levels: ``debug``, ``info``,
+``notice``, ``warning``, ``error``, ``critical``, ``alert``, and ``emerg``.
+Log messages appear in :man1:`flux-dmesg` and the broker's stderr.
+
+By default all messages are forwarded to the ring buffer and the broker's
+global log level acts as the filter — consistent with C module behaviour.
+Subclasses may tighten the threshold by setting ``self.log.level``:
+
+.. code-block:: python
+
+   self.log.level = "info"   # suppress debug messages
+
+
 Error handling
 --------------
 
