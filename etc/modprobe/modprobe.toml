@@ -117,8 +117,12 @@ needs-config = ["systemd.enable"]
 [[modules]]
 name = "sdexec"
 after = ["sdbus"]
-requires = ["sdbus"]
+requires = ["sdbus", "sdexec-mapper"]
 needs-config = ["systemd.enable"]
+
+[[modules]]
+name = "sdexec-mapper"
+needs-config = ["systemd.enable", "exec.sdexec-constrain-resources"]
 
 [[modules]]
 name = "resource"

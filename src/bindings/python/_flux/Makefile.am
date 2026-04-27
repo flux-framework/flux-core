@@ -30,7 +30,8 @@ PREPROC_FLAGS = \
 fluxpyso_LTLIBRARIES = \
 	_core.la \
 	_hostlist.la \
-	_idset.la
+	_idset.la \
+	_rhwloc_map.la
 
 fluxpyso_PYTHON = \
 	__init__.py
@@ -45,6 +46,7 @@ EXTRA_DIST = \
 	_security_build.py \
 	_hostlist_build.py \
 	_idset_build.py \
+	_rhwloc_map_build.py \
 	make_clean_header.py
 
 STDERR_DEVNULL = $(stderr_devnull_$(V))
@@ -104,6 +106,20 @@ _hostlist_la_LIBADD = $(common_libs)
 
 nodist__idset_la_SOURCES = _idset.c
 _idset_la_LIBADD = $(common_libs)
+
+_rhwloc_map.c: $(srcdir)/_rhwloc_map_build.py
+	$(AM_V_GEN)$(PYTHON) $< $(STDERR_DEVNULL)
+
+nodist__rhwloc_map_la_SOURCES = _rhwloc_map.c
+_rhwloc_map_la_CPPFLAGS = \
+	$(AM_CPPFLAGS) \
+	-I$(top_srcdir)/src/common/libccan \
+	$(HWLOC_CFLAGS)
+_rhwloc_map_la_LIBADD = \
+	$(top_builddir)/src/common/librlist/librlist-hwloc.la \
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(common_libs) \
+	$(HWLOC_LIBS)
 
 if HAVE_FLUX_SECURITY
 

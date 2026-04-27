@@ -27,9 +27,12 @@ libjob_exec_la_SOURCES = \
 	rset.h \
 	testexec.c \
 	exec.c
+libjob_exec_la_LIBADD = \
+	$(top_builddir)/src/common/librlist/librlist.la
 
 test_ldadd = \
 	$(builddir)/libjob-exec.la \
+	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \

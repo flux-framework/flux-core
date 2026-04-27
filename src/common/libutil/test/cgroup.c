@@ -11,6 +11,8 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <string.h>
+#include <unistd.h>
 #include "src/common/libtap/tap.h"
 #include "ccan/array_size/array_size.h"
 
@@ -74,6 +76,35 @@ void test_memory (struct cgroup_info *cgroup)
     end_skip;
 }
 
+void test_init_pid (struct cgroup_info *cgroup)
+{
+    struct cgroup_info cg;
+    int rc;
+
+    /* cgroup_info_init_pid (getpid()) should give the same path as
+     * cgroup_info_init(), since cgroup_info_init() is defined in terms of it.
+     */
+    rc = cgroup_info_init_pid (&cg, getpid ());
+    ok (rc == 0, "cgroup_info_init_pid (getpid()) succeeds");
+
+    skip (rc < 0, 1, "cgroup_info_init_pid (getpid()) failed");
+    ok (strcmp (cgroup->path, cg.path) == 0,
+        "cgroup_info_init_pid (getpid()) path matches cgroup_info_init()");
+    if (rc == 0)
+        diag ("path: %s", cg.path);
+    end_skip;
+
+    /* pid 1 (init/systemd) is always present and should have a cgroup */
+    rc = cgroup_info_init_pid (&cg, 1);
+    ok (rc == 0, "cgroup_info_init_pid (1) succeeds");
+    if (rc == 0)
+        diag ("pid 1 cgroup: %s", cg.path);
+
+    /* pid 0 (idle process) has no /proc/0 entry and should fail */
+    rc = cgroup_info_init_pid (&cg, 0);
+    ok (rc < 0, "cgroup_info_init_pid (0) fails as expected");
+}
+
 int main(int argc, char** argv)
 {
     struct cgroup_info cgroup;
@@ -86,6 +117,7 @@ int main(int argc, char** argv)
         plan (NO_PLAN);
         test_cpu (&cgroup);
         test_memory (&cgroup);
+        test_init_pid (&cgroup);
     }
     done_testing();
 }

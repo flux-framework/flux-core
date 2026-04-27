@@ -40,6 +40,13 @@ char *rhwloc_topology_xml_restrict (const char *xml);
  */
 const char *rhwloc_hostname (hwloc_topology_t topo);
 
+/*  Return the union of cpusets for the cores in idset string `cores`.
+ *  Returns heap-allocated hwloc_cpuset_t, or NULL on error.
+ *  Caller must free with hwloc_bitmap_free().
+ */
+hwloc_cpuset_t rhwloc_cores_to_cpuset (hwloc_topology_t topo,
+                                        const char *cores);
+
 /*  Return idset string for all cores in hwloc topology object
  */
 char * rhwloc_core_idset_string (hwloc_topology_t topo);
@@ -47,6 +54,11 @@ char * rhwloc_core_idset_string (hwloc_topology_t topo);
 /*  Return idset string for all GPUs in hwloc topology object
  */
 char * rhwloc_gpu_idset_string (hwloc_topology_t topo);
+
+/*  Return the count of resource "type" in topology topo. Takes any
+ *  hwloc obj type string or "gpu" for supported GPU types.
+ */
+int rhwloc_count_type (hwloc_topology_t topo, const char *type);
 
 /*  Return rlist object from local hwloc topology, or from xml if non-NULL.
  */

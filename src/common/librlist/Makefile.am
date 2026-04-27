@@ -31,7 +31,9 @@ librlist_la_SOURCES = \
 
 librlist_hwloc_la_SOURCES = \
 	rhwloc.c \
-	rhwloc.h
+	rhwloc.h \
+	rhwloc_map.c \
+	rhwloc_map.h
 
 test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
@@ -50,7 +52,8 @@ TESTS = \
 	test_verify_config.t \
 	test_match.t \
 	test_rlist.t \
-	test_rhwloc.t
+	test_rhwloc.t \
+	test_rhwloc_map.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -106,4 +109,16 @@ test_rhwloc_t_LDADD = \
 	$(test_ldadd) \
 	$(HWLOC_LIBS)
 test_rhwloc_t_LDFLAGS = \
+	$(test_ldflags)
+
+test_rhwloc_map_t_SOURCES = \
+	test/rhwloc_map.c
+test_rhwloc_map_t_CPPFLAGS = \
+	$(test_cppflags)
+test_rhwloc_map_t_LDADD = \
+	librlist-hwloc.la \
+	librlist.la \
+	$(test_ldadd) \
+	$(HWLOC_LIBS)
+test_rhwloc_map_t_LDFLAGS = \
 	$(test_ldflags)

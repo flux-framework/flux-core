@@ -38,7 +38,8 @@ libmodule_builtins_la_LDFLAGS = $(san_ld_zdef_flag)
 dist_fluxmod_SCRIPTS = \
 	sched-fifo.py \
 	sched-backfill.py \
-	sched-simple.py
+	sched-simple.py \
+	sdexec-mapper.py
 
 fluxmod_LTLIBRARIES = \
 	content.la \

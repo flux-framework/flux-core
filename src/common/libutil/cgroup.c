@@ -148,7 +148,7 @@ static char *remove_leading_dotdot (char *relpath)
 }
 
 /*
- *  Look up the current cgroup relative path from /proc/self/cgroup.
+ *  Look up the cgroup relative path from /proc/<pid>/cgroup.
  *
  *  If cgroup->unified is true, then look for the first entry where
  *   'subsys' is an empty string.
@@ -157,7 +157,7 @@ static char *remove_leading_dotdot (char *relpath)
  *
  *  See NOTES: /proc/[pid]/cgroup in cgroups(7).
  */
-static int cgroup_init_path (struct cgroup_info *cgroup)
+static int cgroup_init_path_pid (struct cgroup_info *cgroup, pid_t pid)
 {
     int rc = -1;
     int n;
@@ -165,8 +165,10 @@ static int cgroup_init_path (struct cgroup_info *cgroup)
     size_t size = 0;
     char *line = NULL;
     int saved_errno;
+    char path[32];
 
-    if (!(fp = fopen ("/proc/self/cgroup", "r")))
+    snprintf (path, sizeof (path), "/proc/%d/cgroup", (int)pid);
+    if (!(fp = fopen (path, "r")))
         return -1;
 
     while ((n = getline (&line, &size, fp)) >= 0) {
@@ -272,12 +274,17 @@ static int cgroup_init_mount_dir_and_type (struct cgroup_info *cg)
     return -1;
 }
 
-int cgroup_info_init (struct cgroup_info *cgroup)
+int cgroup_info_init_pid (struct cgroup_info *cgroup, pid_t pid)
 {
     if (cgroup_init_mount_dir_and_type (cgroup) < 0
-        || cgroup_init_path (cgroup) < 0)
+        || cgroup_init_path_pid (cgroup, pid) < 0)
         return -1;
     return 0;
+}
+
+int cgroup_info_init (struct cgroup_info *cgroup)
+{
+    return cgroup_info_init_pid (cgroup, getpid ());
 }
 
 /* vi: ts=4 sw=4 expandtab

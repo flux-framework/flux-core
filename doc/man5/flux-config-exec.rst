@@ -130,6 +130,48 @@ described in :ref:`job_termination`.
    runtime using ``flux module stats job-exec``. See :ref:`introspection`
    for details.
 
+sdexec-constrain-resources
+   (optional) Boolean value that enables resource containment for jobs. When
+   enabled, the ``sdexec-mapper`` module translates job resource allocations
+   (cores, GPUs) into systemd unit properties that constrain jobs to their
+   allocated resources. This ensures jobs cannot access resources allocated to
+   other jobs or escape their resource allocation. (Default: ``false``).
+
+   When enabled, the mapper sets:
+
+   - ``AllowedCPUs`` - Restricts job to allocated CPU cores
+   - ``AllowedMemoryNodes`` - Restricts job to NUMA nodes for allocated cores
+   - ``DeviceAllow`` - Grants access only to allocated GPUs
+   - ``DevicePolicy=closed`` - Blocks access to physical devices except those
+     explicitly allowed, while permitting standard pseudo devices like
+     ``/dev/null``, ``/dev/zero``, etc.
+
+   After each job unit starts, Flux verifies that the expected CPU set is
+   enforced.  This check is necessary because systemd may silently accept
+   ``AllowedCPUs`` without enforcing it if the ``cpuset`` controller is not
+   properly delegated.  If the check fails, Flux drains the node as a likely
+   misconfiguration that would affect all subsequent jobs.
+
+   See :ref:`sdexec_mapper` for information about customizing the resource
+   mapping behavior.
+
+   **Requirements:**
+
+   - cgroups v2 (unified hierarchy)
+   - cpuset cgroup controller delegated to user systemd instance
+   - flux-security >= 0.14.0
+
+   See the *Systemd and cgroup unified hierarchy* section of the Flux
+   Administrator's Guide for the required systemd override file configuration.
+
+   **Example:**
+
+   ::
+
+      [exec]
+      service = "sdexec"
+      sdexec-constrain-resources = true
+
 sdexec-properties
    (optional) A table of systemd properties to set for all jobs. All values
    must be strings. See :ref:`sdexec_properties` below.
@@ -199,11 +241,211 @@ OOMScoreAdjust
    Setting a negative value is likely a privileged operation in the Flux
    systemd instance.
 
+.. note::
+   When ``sdexec-constrain-resources`` is enabled, custom mappers may override
+   properties set via ``sdexec-properties``. This allows resource-aware property
+   adjustment, such as setting ``MemoryMax`` proportional to allocated cores on
+   shared nodes. Properties are merged with mapper output taking precedence.
+   See :ref:`custom_mappers` for examples.
+
 The following unit properties are reserved for use by Flux and should not be
-added to ``sdexec-properties``: AllowedCPUs, AllowedMemoryNodes,
-Description, Environment, ExecStart, KillMode, RemainAfterExit,
+added to ``sdexec-properties``: AllowedCPUs, AllowedMemoryNodes, DeviceAllow,
+DevicePolicy, Description, Environment, ExecStart, KillMode, RemainAfterExit,
 SendSIGKILL, StandardInputFileDescriptor, StandardOutputFileDescriptor,
 StandardErrorFileDescriptor, TimeoutStopUSec, Type, WorkingDirectory.
+
+
+.. _sdexec_mapper:
+
+SDEXEC RESOURCE MAPPER
+======================
+
+When ``sdexec-constrain-resources`` is enabled, the ``sdexec-mapper`` module
+translates job resource allocations into systemd unit properties. The mapper
+is implemented as a Python class that can be customized for site-specific
+requirements.
+
+The mapper is configured under the ``[sdexec]`` TOML table:
+
+mapper
+   (optional) Fully-qualified Python class name for the resource mapper.
+   (Default: ``flux.sdexec.map.HwlocMapper``).
+
+   The mapper class must be a subclass of ``flux.sdexec.map.ResourceMapper``
+   and implement ``map_<type>`` methods for each resource type. See
+   :ref:`custom_mappers` for details on implementing custom mappers.
+
+mapper-searchpath
+   (optional) Colon-separated list of directories to search for mapper modules.
+   This allows loading custom mappers from site-specific locations without
+   modifying the Python system path. (Default: empty).
+
+Default Mapper Behavior
+------------------------
+
+The default ``HwlocMapper`` uses hwloc topology information to map resources:
+
+**Core mapping:**
+
+- Translates logical core IDs (from resource allocation R) to physical CPU IDs
+  using hwloc topology
+- Sets ``AllowedCPUs`` to the physical CPU set for allocated cores
+- Sets ``AllowedMemoryNodes`` to NUMA nodes associated with allocated cores
+
+**GPU mapping:**
+
+- Translates logical GPU IDs to PCI addresses using hwloc
+- Discovers GPU device nodes via sysfs for each allocated GPU
+- Sets ``DeviceAllow`` to grant access to discovered devices
+
+GPU device discovery is vendor-aware and opportunistic:
+
+- **NVIDIA GPUs:** Includes ``/dev/nvidia*`` devices, ``/dev/nvidiactl`` (control),
+  ``/dev/nvidia-uvm`` (CUDA UVM), ``/dev/nvidia-uvm-tools`` (optional), and
+  ``/dev/dri/renderD*`` (DRM) devices
+- **AMD GPUs:** Includes ``/dev/dri/renderD*``, ``/dev/dri/card*``, and ``/dev/kfd``
+  (ROCm Kernel Fusion Driver) devices
+- Shared devices like ``/dev/kfd`` and ``/dev/nvidiactl`` are automatically
+  deduplicated when multiple GPUs are allocated
+
+**Device containment:**
+
+- Always sets ``DevicePolicy=closed`` to enforce device containment
+- Allows standard pseudo devices (``/dev/null``, ``/dev/zero``, ``/dev/urandom``, etc.)
+- Blocks physical devices unless explicitly granted via ``DeviceAllow``
+
+
+.. _custom_mappers:
+
+Custom Mappers
+--------------
+
+Sites can customize resource mapping by providing a Python class that extends
+``flux.sdexec.map.ResourceMapper`` or ``flux.sdexec.map.HwlocMapper``.
+
+**Basic structure:**
+
+.. code-block:: python
+
+   from flux.sdexec.map import HwlocMapper
+
+   class CustomMapper(HwlocMapper):
+       def finalize_properties(self, properties, R):
+           # Add custom systemd properties
+           properties.update({
+               "CPUAccounting": "true",
+               "MemoryAccounting": "true",
+           })
+           return super().finalize_properties(properties, R)
+
+The mapper provides two extension points:
+
+1. **Override** ``map_<type>()`` **methods** to customize resource-specific
+   mapping:
+
+   .. code-block:: python
+
+      class CustomMapper(HwlocMapper):
+          def map_gpus(self, gpus):
+              # Custom GPU device discovery
+              if not gpus:
+                  return {}
+              return {"DeviceAllow": f"/dev/my-gpu-device rw"}
+
+2. **Override** ``finalize_properties()`` to add properties not tied to specific
+   resource types:
+
+   .. code-block:: python
+
+      class CustomMapper(HwlocMapper):
+          def finalize_properties(self, properties, R):
+              # Add resource accounting
+              properties.update({
+                  "CPUAccounting": "true",
+                  "MemoryAccounting": "true",
+              })
+              # Always call super() to preserve default behavior
+              return super().finalize_properties(properties, R)
+
+   The ``finalize_properties()`` hook is called after all resource-specific
+   mapping is complete. It receives:
+
+   - ``properties``: Dict of properties from ``map_<type>()`` methods
+   - ``R``: Original ResourceSet object for conditional logic
+
+   The default implementation sets ``DevicePolicy=closed`` for device
+   containment. Custom implementations should call ``super()`` to preserve
+   this behavior.
+
+**Configuration example:**
+
+.. code-block:: toml
+
+   [exec]
+   service = "sdexec"
+   sdexec-constrain-resources = true
+
+   [sdexec]
+   mapper = "site.mappers.AccountingMapper"
+   mapper-searchpath = "/etc/flux/mappers"
+
+The mapper file at ``/etc/flux/mappers/site/mappers.py``:
+
+.. code-block:: python
+
+   from flux.sdexec.map import HwlocMapper
+
+   class AccountingMapper(HwlocMapper):
+       """Enable resource accounting for all jobs."""
+       def finalize_properties(self, properties, R):
+           properties.update({
+               "CPUAccounting": "true",
+               "MemoryAccounting": "true",
+           })
+           return super().finalize_properties(properties, R)
+
+**Overriding sdexec-properties:**
+
+Mappers can override properties set via ``sdexec-properties`` based on job
+resources. For example, to set memory limits proportional to allocated cores
+on shared nodes:
+
+.. code-block:: python
+
+   from flux.sdexec.map import HwlocMapper
+
+   class ProportionalMemoryMapper(HwlocMapper):
+       """Set MemoryMax based on allocated cores."""
+       def finalize_properties(self, properties, R):
+           # Get local rank's core count
+           local = R.copy_ranks(self._rank)
+           ncores = local.ncores
+
+           # 8 GB per core on shared nodes
+           memory_gb = ncores * 8
+           properties["MemoryMax"] = f"{memory_gb}G"
+
+           return super().finalize_properties(properties, R)
+
+This overrides any ``MemoryMax`` value from ``sdexec-properties``, allowing
+resource-aware limits on shared nodes while maintaining fixed limits via
+config for exclusive node allocations.
+
+**Common customization patterns:**
+
+- **Resource accounting:** Add ``CPUAccounting``, ``MemoryAccounting``, etc.
+- **Security policies:** Set ``PrivateTmp``, ``ProtectSystem``, etc.
+- **Resource-proportional limits:** Override ``MemoryMax`` or other properties
+  from ``sdexec-properties`` based on allocated cores/GPUs (e.g., memory per
+  core on shared nodes)
+- **Resource limits:** Add conditional ``TasksMax`` based on job requirements
+- **Custom device discovery:** Override ``map_gpus()`` for site-specific
+  hardware or drivers
+- **Conditional properties:** Use job attributes from R to set properties
+  (e.g., different limits for different queues)
+
+See the ``flux.sdexec.map`` module documentation and
+``t/python/t0043-sdexec-map.py`` for more examples.
 
 
 .. _testexec:
@@ -461,8 +703,18 @@ EXAMPLES
 
    [exec]
    service = "sdexec"
+   sdexec-constrain-resources = true
    [exec.sdexec-properties]
    MemoryMax = "90%"
+
+::
+
+   [exec]
+   service = "sdexec"
+   sdexec-constrain-resources = true
+   [sdexec]
+   mapper = "site.mappers.AccountingMapper"
+   mapper-searchpath = "/etc/flux/mappers"
 
 ::
 
