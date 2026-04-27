@@ -41,7 +41,8 @@ RUN apk add \
     jq \
     aspell \
     aspell-en \
-    valgrind
+    valgrind \
+    linux-headers
 
 RUN wget https://github.com/dun/munge/releases/download/munge-0.5.15/munge-0.5.15.tar.xz \
  && tar -xf munge-0.5.15.tar.xz \

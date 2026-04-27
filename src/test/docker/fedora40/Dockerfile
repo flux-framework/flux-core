@@ -61,6 +61,7 @@ RUN dnf -y install \
 	pmix-devel \
 	catch-devel \
 #  Other deps
+	kernel-headers \
 	perl-Time-HiRes \
 	lua-posix \
 	libfaketime \

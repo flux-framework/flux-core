@@ -46,6 +46,7 @@ RUN apt-get update \
         python3-setuptools \
         python3-wheel \
 # Other deps
+        linux-libc-dev \
         libsodium-dev \
         libzmq3-dev \
         libjansson-dev \

@@ -69,8 +69,15 @@ which docker >/dev/null \
 . ${TOP}/src/test/checks-lib.sh
 
 # Force memory and cpuset controllers to be delegated in Github actions only
+# also remove apparmor configs for unix-chkpwd and sudo which seem to get in
+# way of starting user managers in the container, and use of passwordless sudo
+# necessary for testing.
 # (Avoid modifying user systems by default)
 if test "$GITHUB_ACTIONS" = "true"; then
+    # Test: disable unix-chkpwd on host in github actions
+    sudo apparmor_parser -R /etc/apparmor.d/unix-chkpwd
+    sudo apparmor_parser -R /etc/apparmor.d/sudo
+
     for controller in memory cpuset; do
         grep -qw "$controller" /sys/fs/cgroup/cgroup.subtree_control \
           || echo "+$controller" | sudo tee /sys/fs/cgroup/cgroup.subtree_control
@@ -138,17 +145,26 @@ checks_group "Launching system instance container $NAME" \
     || die "docker run of fluxorama test container failed"
 
 
-# Another workaround for cgroup delegation: Ensure the container's cgroup
-# has proper controllers in subtree_control:
-CONTAINER_CGROUP=$(sudo podman inspect --format '{{.CgroupPath}}' $NAME)
-checks_group "Ensuring controllers are delegated to container" \
-  echo "+memory +cpuset +io +pids" \
-    | sudo tee /sys/fs/cgroup/${CONTAINER_CGROUP}/cgroup.subtree_control
-
-until sudo podman exec -u $USER:$GID \
-    flux-system-test-$$ flux run hostname 2>/dev/null; do
-    echo "Waiting for flux-system-test-$$ to be ready"
-    sleep 1
+# Wait up to 3 minutes for Flux to come up in the container
+# Dump logs for diagnosis in case it fails.
+NAME=flux-system-test-$$
+flux_uid=$(sudo podman exec $NAME id -u flux)
+TIMEOUT=180
+i=0
+while [ $i -lt $TIMEOUT ]; do
+  sudo podman exec $NAME systemctl is-active --quiet flux.service && break
+  i=$((i + 5))
+  echo "--- flux.service status at ${i}s ---"
+  sudo podman exec $NAME systemctl status flux.service --no-pager -l 2>&1 \
+    | tail -20
+  sudo podman exec $NAME systemctl status "user@${flux_uid}.service" \
+      --no-pager -l 2>&1 | tail -20
+  if [ $i -ge $TIMEOUT ]; then
+      echo "=== TIMEOUT: full journal ==="
+      sudo podman exec $NAME journalctl --no-pager -n 200
+      checks_die "flux.service failed to start within ${TIMEOUT}s"
+  fi
+  sleep 5
 done
 
 #  Start user@uid.service service for unit tests:

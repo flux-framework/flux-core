@@ -28,6 +28,10 @@ RUN (cd /lib/systemd/system/sysinit.target.wants/; \
     rm -f /lib/systemd/system/basic.target.wants/*;\
     rm -f /lib/systemd/system/anaconda.target.wants/*;
 
+# In some cases packages add sss to nsswitch.conf, which won't work in this
+# container because sssd is not running. Remove these entries:
+RUN sed -i 's/\bsss\b//g' /etc/nsswitch.conf
+
 RUN id $USER \
  || ( groupadd -g $UID $USER \
    && useradd -g $USER -u $UID -d /home/$USER -m $USER \
