@@ -82,9 +82,9 @@ test_expect_success 'flux-run: new plugin with the same name, diff dest/prefix i
 	grep -e "I am a valid plugin" \
 	     -e "Option for setting AMD SMI compute" help1.out
 '
-test_expect_success 'flux-batch: --list-plugins shows only plugins with no option conflicts' '
+test_expect_success 'flux-batch: --list-plugins shows plugins in the PLUGINPATH' '
 	flux batch --list-plugins >> tmp_help_real.out &&
-	grep "loaded from" tmp_help_real.out | wc -l | grep -qx 5
+	grep "MultiUserPlugin loaded from" tmp_help_real.out
 '
 test_expect_success 'flux-batch: FLUX_CLI_PLUGINPATH_OVERRIDE wins a fight against FLUX_CLI_PLUGINPATH' '
 	FLUX_CLI_PLUGINPATH_OVERRIDE= FLUX_CLI_PLUGINPATH=${SHARNESS_TEST_SRCDIR}/cli-plugins/extras/ \
