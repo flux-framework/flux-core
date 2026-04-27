@@ -336,19 +336,58 @@ int reslog_add_callback (struct reslog *reslog, reslog_cb_f cb, void *arg)
     return 0;
 }
 
+static int flush_batch (flux_t *h, const flux_msg_t *msg, json_t *batch)
+{
+    if (json_array_size (batch) == 0)
+        return 0;
+    if (flux_respond_pack (h, msg, "{s:O}", "events", batch) < 0)
+        return -1;
+    json_array_clear (batch);
+    return 0;
+}
+
 // returns true if streaming should continue
 static bool send_backlog (struct reslog *reslog, const flux_msg_t *msg)
 {
     flux_t *h = reslog->ctx->h;
-    json_t *entry = zlistx_first (reslog->eventlog);
+    json_t *batch;
+    json_t *entry;
+
+    if (!(batch = json_array ()))
+        goto error;
+    entry = zlistx_first (reslog->eventlog);
     while (entry) {
-        if (notify_one_consumer (reslog, msg, entry) < 0)
-            goto error;
+        if (match_event (entry, "resource-define")) {
+            /* resource-define carries R in its own response. Flush th
+             * current batch first, then respond with just this event.
+             */
+            json_t *R = inventory_get (reslog->ctx->inventory);
+            if (flush_batch (h, msg, batch) < 0
+                || flux_respond_pack (h,
+                                      msg,
+                                      "{s:[O] s:O}",
+                                      "events", entry,
+                                      "R", R) < 0)
+                goto error_batch;
+        }
+        else {
+            if (json_array_append (batch, entry) < 0) {
+                errno = ENOMEM;
+                goto error_batch;
+            }
+            if (json_array_size (batch) >= 100
+                && flush_batch (h, msg, batch) < 0)
+                goto error_batch;
+        }
         entry = zlistx_next (reslog->eventlog);
     }
-    if (flux_respond_pack (h, msg, "{s:[]}", "events") < 0) // delimiter
-        goto error;
+    if (flush_batch (h, msg, batch) < 0
+        || flux_respond_pack (h, msg, "{s:[]}", "events") < 0) // sentinel
+        goto error_batch;
+    json_decref (batch);
     return true;
+error_batch:
+    json_decref (batch);
 error:
     flux_log_error (h, "error responding to journal request");
     return false;
