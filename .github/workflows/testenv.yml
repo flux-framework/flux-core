@@ -176,12 +176,19 @@ jobs:
           docker images | head -n 50
 
       - name: run docker-run-checks
+        env:
+          FLUX_TESTS_LOGFILE: t
         run: |
-          src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-amd64 -j 4 --recheck --
+          src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-amd64 \
+            -j 6 --recheck --
 
       - name: tmate debug
         if: ${{ !cancelled() && runner.debug }}
         uses: mxschmitt/action-tmate@v3.23
+
+      - name: annotate errors
+        if: failure() || cancelled()
+        run: src/test/checks-annotate.sh
 
   test-arm64-container:
     name: Test newly-built arm64 container
@@ -212,12 +219,19 @@ jobs:
           docker images | head -n 50
 
       - name: run docker-run-checks
+        env:
+          FLUX_TESTS_LOGFILE: t
         run: |
-          src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-arm64 -j 4 --recheck --
+          src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-arm64 \
+            -j 6 --recheck --
 
       - name: tmate debug
         if: ${{ !cancelled() && runner.debug }}
         uses: mxschmitt/action-tmate@v3.23
+
+      - name: annotate errors
+        if: failure() || cancelled()
+        run: src/test/checks-annotate.sh
 
   test-386-container:
     name: Test newly-built 386 container
@@ -261,13 +275,19 @@ jobs:
             || { echo "ERROR: expected i386, got ${ARCH}"; exit 1; }
 
       - name: run docker-run-checks
+        env:
+          FLUX_TESTS_LOGFILE: t
         run: |
           src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-386 \
-            --platform linux/386 -j 4 --recheck --
+            --platform linux/386 -j 6 --recheck --
 
       - name: tmate debug
         if: ${{ !cancelled() && runner.debug }}
         uses: mxschmitt/action-tmate@v3.23
+
+      - name: annotate errors
+        if: failure() || cancelled()
+        run: src/test/checks-annotate.sh
 
   publish-manifest:
     name: Push images + publish multi-arch manifest

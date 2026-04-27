@@ -192,7 +192,12 @@ export FLUX_TEST_SIZE_MAX=5
 if test -f /usr/share/Modules/init/bash; then
     . /usr/share/Modules/init/bash && module load mpi
 fi
-export FLUX_TEST_MPI=t
+
+# Do not test MPI on fedora40 -- tests are flaky
+test -f /etc/os-release && . /etc/os-release
+if ! { [ "$ID" = "fedora" ] && [ "$VERSION_ID" = "40" ]; }; then
+  export FLUX_TEST_MPI=t
+fi
 
 # Generate logfiles from sharness tests for extra information:
 export FLUX_TESTS_LOGFILE=t
