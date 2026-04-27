@@ -43,7 +43,7 @@ for eventlog in ${SHARNESS_TEST_SRCDIR}/resource/resource.eventlog.*; do
 	'
 	test_expect_success 'reloading resource module does not rewrite log' '
 		flux dmesg -C &&
-		flux module reload resource noverify &&
+		flux module reload resource noverify notruncate &&
 		flux dmesg >dmesg.out &&
 		test_must_fail grep "resource.eventlog: reduced" dmesg.out
 	'

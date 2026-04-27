@@ -11,7 +11,11 @@
 #ifndef _FLUX_RESOURCE_DRAIN_H
 #define _FLUX_RESOURCE_DRAIN_H
 
-struct drain *drain_create (struct resource_ctx *ctx, const json_t *eventlog);
+#define RESOURCE_CHECKPOINT "checkpoint.resource"
+
+struct drain *drain_create (struct resource_ctx *ctx,
+                            const json_t *eventlog,
+                            double *checkpoint_timestamp);
 void drain_destroy (struct drain *drain);
 
 struct idset *drain_get (struct drain *drain);
@@ -26,6 +30,9 @@ json_t *drain_get_info  (struct drain *drain);
  * resource.drain RPC.
  */
 int drain_rank (struct drain *drain, uint32_t rank, const char *reason);
+
+/* Checkpointing current drain state */
+void drain_checkpoint (struct drain *drain);
 
 #endif /* !_FLUX_RESOURCE_DRAIN_H */
 

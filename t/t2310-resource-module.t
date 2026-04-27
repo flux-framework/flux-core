@@ -21,7 +21,7 @@ has_event() {
 # Ensure that module is loaded upstream-to-downstream TBON order
 load_resource () {
 	for rank in $(seq 0 $(($SIZE-1))); do \
-		flux exec -r $rank flux module load resource; \
+		flux exec -r $rank flux module load resource notruncate; \
 	done
 }
 

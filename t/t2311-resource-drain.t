@@ -160,7 +160,7 @@ test_expect_success 'drain works with idset' '
 
 test_expect_success 'reload resource module to simulate instance restart' '
 	flux module remove sched-simple &&
-	flux module reload resource noverify &&
+	flux module reload resource noverify notruncate &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -205,7 +205,7 @@ test_expect_success 'final undrain event has a reason' '
 '
 test_expect_success 'reload resource module to simulate instance restart' '
 	flux module remove sched-simple &&
-	flux module reload resource noverify &&
+	flux module reload resource noverify notruncate &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -221,7 +221,7 @@ test_expect_success 'reload resource module with one node excluded' '
 	flux module remove sched-simple &&
 	flux module remove resource &&
 	echo "resource.exclude = \"0\"" | flux config load &&
-	flux module load resource noverify &&
+	flux module load resource noverify notruncate &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -248,7 +248,7 @@ test_expect_success 'reload resource module with no nodes excluded' '
 	flux module remove sched-simple &&
 	flux module remove resource &&
 	echo "resource.exclude = \"\"" | flux config load &&
-	flux module load resource noverify &&
+	flux module load resource noverify notruncate &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -264,7 +264,7 @@ test_expect_success 'drained rank subsequently excluded is ignored' '
 	flux module remove sched-simple &&
 	flux module remove resource &&
 	echo resource.exclude = \"1\" | flux config load &&
-	flux module load resource noverify &&
+	flux module load resource noverify notruncate &&
 	waitdown 0 &&
 	flux module load sched-simple &&
 	test $(flux resource status -s drain -no {nnodes}) -eq 0 &&
@@ -275,7 +275,7 @@ test_expect_success 'reload resource module with no nodes excluded' '
 	flux module remove sched-simple &&
 	flux module remove resource &&
 	echo "resource.exclude = \"\"" | flux config load &&
-	flux module load resource noverify &&
+	flux module load resource noverify notruncate &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -554,6 +554,7 @@ test_expect_success 'drain works when fake resources outnumber actual brokers' '
 '
 test_expect_success 'reset test by clearing resource info' '
 	flux module remove -f resource &&
+	flux kvs unlink -f checkpoint.resource &&
 	flux kvs unlink resource.eventlog &&
 	flux module load resource noverify
 '

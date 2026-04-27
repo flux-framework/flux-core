@@ -18,9 +18,11 @@ struct resource_config {
     bool rediscover;
     bool noverify;
     bool norestrict;
+    bool notruncate;
     bool no_update_watch;
     bool monitor_force_up;
     int journal_max;
+    double history;
     bool systemd_enable; // systemd.enable, not under [resource]
 };
 
