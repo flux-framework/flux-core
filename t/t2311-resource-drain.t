@@ -417,6 +417,12 @@ test_expect_success 'flux resource drain works without scheduler loaded' '
 	test $(flux resource status -s drain -no {nnodes}) -eq 1
 '
 
+#
+# N.B. in many of the tests below we overwrite the resource.eventlog
+# to test specific corner cases.  Remove the resource checkpoint so we isolate
+# testing to just the resource eventlog.
+#
+
 test_expect_success 'resource can replay eventlog with pre v0.62 events' '
 	flux kvs put --raw resource.eventlog=- <<-EOT &&
 	{"timestamp":1713893408.8647039,"name":"resource-init","context":{"restart":false,"drain":{},"online":"","exclude":""}}
@@ -431,7 +437,9 @@ test_expect_success 'resource can replay eventlog with pre v0.62 events' '
 	{"timestamp":1713906351.000000,"name":"drain","context":{"idset":"2","reason":"underwear","overwrite":1}}
 	{"timestamp":1713906369.9485908,"name":"resource-init","context":{"restart":true,"drain":{"2":{"timestamp":1713906351.000000,"reason":"underwear"}},"online":"","exclude":""}}
 	EOT
-	flux module reload resource noverify
+	flux module remove resource &&
+	flux kvs unlink -f checkpoint.resource &&
+	flux module load resource noverify
 '
 test_expect_success 'nodes drained in old eventlog are drained after replay' '
 	flux resource drain -n -o "{ranks} {reason}" >legacydrain.out &&
@@ -445,7 +453,9 @@ test_expect_success 'resource can replay eventlog with bad ranks' '
 	flux kvs put --raw resource.eventlog=- <<-EOT &&
 	{"timestamp":1713906351.000000,"name":"drain","context":{"idset":"42","nodelist":"fake42","reason":"","overwrite":0}}
 	EOT
-	flux module reload resource noverify
+	flux module remove resource &&
+	flux kvs unlink -f checkpoint.resource &&
+	flux module load resource noverify
 '
 
 test_expect_success 'no nodes are drained after replay' '
@@ -456,7 +466,9 @@ test_expect_success 'reload resource with two nodes drained' '
 	flux kvs put --raw resource.eventlog=- <<-EOT &&
 	{"timestamp":1713906350.984611,"name":"drain","context":{"idset":"1-2","nodelist":"fake[1-2]","reason":"uvula","overwrite":0}}
 	EOT
-	flux module reload resource noverify
+	flux module remove resource &&
+	flux kvs unlink -f checkpoint.resource &&
+	flux module load resource noverify
 '
 
 test_expect_success 'the correct two nodes are drained after replay' '
@@ -471,7 +483,9 @@ test_expect_success 'reload resource with two nodes remapped' '
 	flux kvs put --raw resource.eventlog=- <<-EOT &&
 	{"timestamp":1713906350.984611,"name":"drain","context":{"idset":"1-2","nodelist":"fake[2-3]","reason":"uvula","overwrite":0}}
 	EOT
-	flux module reload resource noverify
+	flux module remove resource &&
+	flux kvs unlink -f checkpoint.resource &&
+	flux module load resource noverify
 '
 
 test_expect_success 'the remapped nodes are drained after replay' '
@@ -486,7 +500,9 @@ test_expect_success 'reload resource with two nodes remapped, one bad host' '
 	flux kvs put --raw resource.eventlog=- <<-EOT &&
 	{"timestamp":1713906350.984611,"name":"drain","context":{"idset":"1-2","nodelist":"fake[3-4]","reason":"uvula","overwrite":0}}
 	EOT
-	flux module reload resource noverify
+	flux module remove resource &&
+	flux kvs unlink -f checkpoint.resource &&
+	flux module load resource noverify
 '
 
 test_expect_success 'the remapped nodes are drained after replay' '
@@ -499,6 +515,7 @@ test_expect_success 'the remapped nodes are drained after replay' '
 
 test_expect_success 'a malformed event in the eventlog prevents loading' '
 	flux module remove -f resource &&
+	flux kvs unlink -f checkpoint.resource &&
 	flux kvs put --raw resource.eventlog=- <<-EOT &&
 	{}
 	EOT
@@ -506,6 +523,7 @@ test_expect_success 'a malformed event in the eventlog prevents loading' '
 '
 test_expect_success 'a malformed drain context in the eventlog prevents loading' '
 	flux module remove -f resource &&
+	flux kvs unlink -f checkpoint.resource &&
 	flux kvs put --raw resource.eventlog=- <<-EOT &&
 	{"timestamp":1713906350.984611,"name":"drain","context":{}}
 	EOT
@@ -513,6 +531,7 @@ test_expect_success 'a malformed drain context in the eventlog prevents loading'
 '
 test_expect_success 'a malformed undrain context in the eventlog fails' '
 	flux module remove -f resource &&
+	flux kvs unlink -f checkpoint.resource &&
 	flux kvs put --raw resource.eventlog=- <<-EOT &&
 	{"timestamp":1713906350.984611,"name":"undrain","context":{}}
 	EOT
