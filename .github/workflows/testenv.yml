@@ -13,6 +13,7 @@ on:
         default: 'noble'
         type: choice
         options:
+        - all
         - alpine
         - bookworm
         - el8
@@ -22,6 +23,11 @@ on:
         - focal
         - jammy
         - noble
+      skip-tests:
+        description: 'Skip the testing step'
+        required: false
+        default: false
+        type: boolean
 name: rebuild testenv containers using docker buildx
 jobs:
   setup:
@@ -34,9 +40,18 @@ jobs:
         with:
           fetch-depth: 2
       - id: get-distros
+        env:
+          DISTRO_INPUT: ${{ inputs.distro }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo 'distros=["${{ inputs.distro }}"]' >> $GITHUB_OUTPUT
+            if [ "${{ inputs.distro }}" = "all" ]; then
+              DISTROS=$(find src/test/docker -name "Dockerfile" -type f \
+                | bash src/test/docker/testenv-affected-distros.sh \
+                | jq -Rsc '[split("\n")[] | select(. != "")]')
+              echo "distros=${DISTROS}" >> $GITHUB_OUTPUT
+            else
+              printf 'distros=["%s"]\n' "${DISTRO_INPUT}" >> "$GITHUB_OUTPUT"
+            fi
           else
             DISTROS=$(git diff --name-only HEAD~1 HEAD \
               | src/test/docker/testenv-affected-distros.sh \
@@ -150,6 +165,7 @@ jobs:
   test-amd64-container:
     name: Test newly-built amd64 container
     needs: [setup, build-amd64-container]
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip-tests }}
     strategy:
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
@@ -193,6 +209,7 @@ jobs:
   test-arm64-container:
     name: Test newly-built arm64 container
     needs: [setup, build-arm64-container]
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip-tests }}
     strategy:
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
@@ -236,7 +253,9 @@ jobs:
   test-386-container:
     name: Test newly-built 386 container
     needs: [setup, build-386-container]
-    if: contains(needs.setup.outputs.distros, 'bookworm')
+    if: >
+      contains(needs.setup.outputs.distros, 'bookworm') &&
+      (github.event_name != 'workflow_dispatch' || !inputs.skip-tests)
     strategy:
       matrix:
         distro: ['bookworm']
@@ -294,14 +313,20 @@ jobs:
     timeout-minutes: 30
     needs:
       - setup
+      - build-amd64-container
+      - build-arm64-container
       - test-amd64-container
       - test-arm64-container
       - test-386-container
       - build-386-container
     if: >
       always() &&
-      needs.test-amd64-container.result == 'success' &&
-      needs.test-arm64-container.result == 'success' &&
+      (needs.build-arm64-container.result == 'success' &&
+       needs.build-amd64-container.result == 'success') &&
+      (needs.test-amd64-container.result == 'success' ||
+       needs.test-amd64-container.result == 'skipped') &&
+      (needs.test-arm64-container.result == 'success' ||
+       needs.test-arm64-container.result == 'skipped') &&
       (needs.build-386-container.result == 'success' ||
        needs.build-386-container.result == 'skipped') &&
       (needs.test-386-container.result == 'success' ||
