@@ -1105,8 +1105,11 @@ class Scheduler(BrokerModule):
             ``pool_class`` attribute is used (e.g. ``rackpool`` →
             ``rackpool.pool_class``).
 
-        The module must be importable, so ensure the directory containing it
-        is on :data:`sys.path` (e.g. via ``PYTHONPATH``).
+        For bare names without dots (e.g. ``AffinityPool``), the resolver
+        also tries ``flux.resource.<name>`` so that built-in pool classes
+        shipped in :mod:`flux.resource` can be referenced without a fully
+        qualified module path.  An explicit ``PYTHONPATH`` entry takes
+        precedence because the bare-name import is attempted first.
         """
         if not hasattr(self, "_uri_class_cache"):
             self._uri_class_cache = {}
@@ -1115,10 +1118,21 @@ class Scheduler(BrokerModule):
         parsed = urllib.parse.urlparse(uri)
         module_name = (parsed.scheme or parsed.path).replace("-", "_")
         cls_name = parsed.path if parsed.scheme else None
+        candidates = [module_name]
+        if "." not in module_name:
+            candidates.append(f"flux.resource.{module_name}")
+        mod = None
+        for candidate in candidates:
+            try:
+                mod = importlib.import_module(candidate)
+                break
+            except ImportError:
+                continue
+        if mod is None:
+            return None
         try:
-            mod = importlib.import_module(module_name)
             cls = getattr(mod, cls_name) if cls_name else mod.pool_class
-        except (ImportError, AttributeError):
+        except AttributeError:
             return None
         self._uri_class_cache[uri] = cls
         return cls
