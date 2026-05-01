@@ -156,6 +156,20 @@ journal-max
    default is 100,000. This value takes immediate effect on a configuration
    update.
 
+history
+   (optional) The maximum age in Flux Standard Duration (FSD) of
+   ``resource.eventlog`` entries to be preserved for historical
+   purposes.  When the resource module is reloaded, such as during a
+   flux restart, entries older than the most recent resource state
+   checkpoint are truncated by default.  "0" means truncate all
+   eligible entries; "inf" means never truncate. Default: "0".
+
+.. note::
+   Resource checkpoints were added in flux-core-0.86.0. Prior
+   releases did not create resource checkpoints, so resource eventlog
+   cleanup is not performed the first time Flux is started on that
+   release.
+
 Note that, except where noted above, updates to the resource table are
 ignored until the next Flux restart.
 
@@ -168,6 +182,7 @@ EXAMPLE
    path = "/etc/flux/system/R"
    exclude = "test[3,108]"
    norestrict = true
+   history = "30d"
 
 
 RESOURCES
