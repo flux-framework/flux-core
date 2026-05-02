@@ -11,10 +11,9 @@
 
 """Unit tests for Scheduler pool-class selection.
 
-Tests _pool_class_from_uri, _pool_class_from_writer, and _make_pool
-without a running Flux instance.  All three methods are pure Python and
-only use self for attribute access (pool_class, pool_kwargs, log) and
-recursive calls to each other — a lightweight mock suffices.
+Tests _pool_class_from_uri and _make_pool without a running Flux
+instance.  Scheduler methods only need self for attribute access
+(pool_class, pool_kwargs, log) — a lightweight mock suffices.
 """
 
 import json
@@ -26,7 +25,11 @@ import textwrap
 import unittest
 
 import subflux  # noqa: F401 - for PYTHONPATH
-from flux.resource.ResourcePool import ResourcePool
+from flux.resource.ResourcePool import (
+    _POOL_CLASS_CACHE,
+    ResourcePool,
+    _pool_class_from_uri,
+)
 from flux.resource.ResourcePoolImplementation import ResourcePoolImplementation
 from flux.resource.Rv1Pool import Rv1Pool
 from flux.scheduler import Scheduler
@@ -43,8 +46,6 @@ class _MockSched:
     def log(level, msg):
         pass
 
-    _pool_class_from_uri = Scheduler._pool_class_from_uri
-    _pool_class_from_writer = Scheduler._pool_class_from_writer
     _make_pool = Scheduler._make_pool
 
 
@@ -62,11 +63,11 @@ R_SIMPLE = {
 
 class TestPoolClassFromUri(unittest.TestCase):
     def setUp(self):
-        self.sched = _MockSched()
         self.tmpdir = tempfile.mkdtemp()
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir)
+        _POOL_CLASS_CACHE.clear()
 
     def _write_pool_file(self, filename, content):
         path = os.path.join(self.tmpdir, filename)
@@ -84,18 +85,18 @@ class TestPoolClassFromUri(unittest.TestCase):
 
     def test_missing_module_returns_none(self):
         """Unresolvable module URI returns None without raising."""
-        self.assertIsNone(self.sched._pool_class_from_uri("no_such_module_xyz"))
+        self.assertIsNone(_pool_class_from_uri("no_such_module_xyz"))
 
     def test_module_without_pool_class_attr_returns_none(self):
         """Module that exists but lacks pool_class returns None."""
-        self.assertIsNone(self.sched._pool_class_from_uri("json"))
+        self.assertIsNone(_pool_class_from_uri("json"))
 
     def test_module_uri_pool_class_attr(self):
         """Plain module URI loads pool_class attribute from the module."""
         self._write_pool_file("mypool.py", self._pool_file_content("MyPool"))
         sys.path.insert(0, self.tmpdir)
         try:
-            cls = self.sched._pool_class_from_uri("mypool")
+            cls = _pool_class_from_uri("mypool")
             self.assertEqual(cls.__name__, "MyPool")
         finally:
             sys.path.pop(0)
@@ -106,63 +107,26 @@ class TestPoolClassFromUri(unittest.TestCase):
         self._write_pool_file("mypool2.py", self._pool_file_content("MyPool2"))
         sys.path.insert(0, self.tmpdir)
         try:
-            cls = self.sched._pool_class_from_uri("mypool2:MyPool2")
+            cls = _pool_class_from_uri("mypool2:MyPool2")
             self.assertEqual(cls.__name__, "MyPool2")
         finally:
             sys.path.pop(0)
             sys.modules.pop("mypool2", None)
 
-
-class TestPoolClassFromWriter(unittest.TestCase):
-    def setUp(self):
-        self.sched = _MockSched()
-        self.tmpdir = tempfile.mkdtemp()
-
-    def tearDown(self):
-        shutil.rmtree(self.tmpdir)
-
-    def _write_pool_file(self, filename, classname):
-        path = os.path.join(self.tmpdir, filename)
-        with open(path, "w") as f:
-            f.write(
-                f"from flux.resource.Rv1Pool import Rv1Pool\n"
-                f"class {classname}(Rv1Pool):\n"
-                f"    pass\n"
-                f"pool_class = {classname}\n"
-            )
-        return path
-
-    def test_no_scheduling_key_returns_none(self):
-        """R without a scheduling key returns None."""
-        self.assertIsNone(self.sched._pool_class_from_writer(R_SIMPLE))
-
-    def test_scheduling_without_writer_tries_fluxion(self):
-        """scheduling key without writer defaults to fluxion; returns None if not installed."""
-        R = dict(R_SIMPLE, scheduling={})
-        # fluxion is not installed in the test environment
-        self.assertIsNone(self.sched._pool_class_from_writer(R))
-
-    def test_scheduling_with_module_writer(self):
-        """scheduling.writer pointing to a module URI loads the class."""
-        self._write_pool_file("writerpool.py", "WriterPool")
+    def test_failed_lookup_not_cached(self):
+        """A failed lookup is not cached, so a URI that is unresolvable at
+        first call resolves once its module becomes importable."""
+        self.assertIsNone(_pool_class_from_uri("latepool"))
+        # Now make it importable; the earlier None must not have been cached.
+        self._write_pool_file("latepool.py", self._pool_file_content("LatePool"))
         sys.path.insert(0, self.tmpdir)
         try:
-            R = dict(R_SIMPLE, scheduling={"writer": "writerpool"})
-            cls = self.sched._pool_class_from_writer(R)
-            self.assertEqual(cls.__name__, "WriterPool")
+            cls = _pool_class_from_uri("latepool")
+            self.assertIsNotNone(cls, "failed lookup was cached and not retried")
+            self.assertEqual(cls.__name__, "LatePool")
         finally:
             sys.path.pop(0)
-            sys.modules.pop("writerpool", None)
-
-    def test_json_string_input(self):
-        """R supplied as a JSON string is parsed before inspection."""
-        R = dict(R_SIMPLE, scheduling={})
-        self.assertIsNone(self.sched._pool_class_from_writer(json.dumps(R)))
-
-    def test_non_dict_non_str_returns_none(self):
-        """Non-dict, non-str input returns None without raising."""
-        self.assertIsNone(self.sched._pool_class_from_writer(42))
-        self.assertIsNone(self.sched._pool_class_from_writer(None))
+            sys.modules.pop("latepool", None)
 
 
 class TestMakePool(unittest.TestCase):
@@ -171,6 +135,7 @@ class TestMakePool(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir)
+        _POOL_CLASS_CACHE.clear()
 
     def _make_sched(self, pool_class=None, pool_kwargs=None):
         sched = _MockSched()
@@ -220,6 +185,21 @@ class TestMakePool(unittest.TestCase):
         """Falls back to the default ResourcePool version dispatch."""
         sched = self._make_sched()
         pool = sched._make_pool(R_SIMPLE)
+        self.assertIsInstance(pool, ResourcePool)
+
+    def test_scheduling_without_writer_tries_fluxion_fallback(self):
+        """R with scheduling but no writer key tries fluxion then falls back."""
+        R = dict(R_SIMPLE, scheduling={})
+        sched = self._make_sched()
+        # fluxion is not installed in the test environment, so the default
+        # "fluxion" writer resolves to None and ResourcePool is used.
+        pool = sched._make_pool(R)
+        self.assertIsInstance(pool, ResourcePool)
+
+    def test_json_string_input(self):
+        """R supplied as a JSON string is parsed before writer dispatch."""
+        sched = self._make_sched()
+        pool = sched._make_pool(json.dumps(R_SIMPLE))
         self.assertIsInstance(pool, ResourcePool)
 
     def test_pool_kwargs_forwarded_to_explicit_pool_class(self):

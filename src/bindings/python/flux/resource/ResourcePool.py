@@ -21,6 +21,7 @@ implementation based on the ``version`` field in the R JSON:
 - Version 1 → :class:`~flux.resource.Rv1Pool.Rv1Pool` (pure-Python)
 """
 
+import importlib
 import json
 from collections.abc import Mapping
 
@@ -41,9 +42,9 @@ def _pool_class_from_uri(uri: str):
     - ``"module:ClassName"`` → import ``module`` →
       ``getattr(module, "ClassName")``.
 
-    Results are cached, including failed lookups (``None``).  If a module is
-    not importable at first call, ``None`` is returned on all subsequent
-    calls for the same URI until the cache is cleared.
+    Successful lookups are cached.  Failed lookups (``None``) are not cached,
+    so a transient import failure (e.g. a module not yet on ``sys.path``) does
+    not permanently poison the URI for the life of the interpreter.
     """
     if uri in _POOL_CLASS_CACHE:
         return _POOL_CLASS_CACHE[uri]
@@ -70,9 +71,13 @@ def _pool_class_from_uri(uri: str):
             else:
                 result = mod.pool_class
         except AttributeError:
+            # Module exists but lacks the expected attribute.
             pass
-    _POOL_CLASS_CACHE[uri] = result
+    # Only cache successful lookups; a failed import may succeed later.
+    if result is not None:
+        _POOL_CLASS_CACHE[uri] = result
     return result
+
 
 class ResourcePool:
     """Public wrapper for a resource pool implementation.
