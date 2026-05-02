@@ -11,9 +11,7 @@
 """Public wrapper for Flux scheduler resource pool implementations.
 
 :class:`ResourcePool` is a plain delegating wrapper around a
-:class:`~flux.resource.ResourcePoolImplementation.ResourcePoolImplementation`,
-following the same pattern as :class:`~flux.resource.ResourceSet.ResourceSet`
-wraps a :class:`~flux.resource.ResourceSetImplementation.ResourceSetImplementation`.
+:class:`~flux.resource.ResourcePoolImplementation.ResourcePoolImplementation`.
 
 Calling ``ResourcePool(R)`` dispatches to the appropriate concrete
 implementation based on the ``version`` field in the R JSON:
@@ -21,6 +19,7 @@ implementation based on the ``version`` field in the R JSON:
 - Version 1 → :class:`~flux.resource.Rv1Pool.Rv1Pool` (pure-Python)
 """
 
+import importlib
 import json
 from collections.abc import Mapping
 
@@ -73,6 +72,7 @@ def _pool_class_from_uri(uri: str):
             pass
     _POOL_CLASS_CACHE[uri] = result
     return result
+
 
 class ResourcePool:
     """Public wrapper for a resource pool implementation.

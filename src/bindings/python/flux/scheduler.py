@@ -51,11 +51,10 @@ to override :meth:`schedule`::
 import errno
 import functools
 import heapq
-import importlib
 import inspect
 import json
 import time
-import urllib.parse
+from collections.abc import Mapping
 from typing import Optional
 
 from _flux._core import ffi, lib
@@ -326,7 +325,6 @@ class Scheduler(BrokerModule):
         super().__init__(h, *args)
         self.log.level = "info"
         self.pool_kwargs = dict(self.pool_kwargs)
-        self._uri_class_cache: dict = {}
         self._resources = None
         self._acquire_rpc = None
         self._queue = []  # heapq of PendingJob, ordered by PendingJob.__lt__
@@ -410,7 +408,9 @@ class Scheduler(BrokerModule):
                     )
             elif arg.startswith("pool-class="):
                 uri = arg[len("pool-class=") :]
-                cls = self._pool_class_from_uri(uri)
+                from flux.resource.ResourcePool import _pool_class_from_uri
+
+                cls = _pool_class_from_uri(uri)
                 if cls is None:
                     raise ValueError(f"pool-class={uri!r}: could not load pool class")
                 self.pool_class = cls
@@ -1075,68 +1075,6 @@ class Scheduler(BrokerModule):
         """Register a dynamic service by name (synchronous)."""
         self.handle.service_register(name).get()
 
-    def _pool_class_from_writer(self, R):
-        """Return a pool class derived from R.scheduling.writer, or None.
-
-        Per RFC 20, an absent ``scheduling`` key means no custom pool is
-        needed (returns ``None``).  An absent ``writer`` within a present
-        ``scheduling`` key defaults to ``"fluxion"``.  The writer value is
-        passed to :meth:`_pool_class_from_uri` for URI resolution; returns
-        ``None`` when the module cannot be imported.
-        """
-        if isinstance(R, str):
-            R = json.loads(R)
-        if not isinstance(R, dict):
-            return None
-        scheduling = R.get("scheduling")
-        if scheduling is None:
-            return None
-        writer = scheduling.get("writer", "fluxion")
-        return self._pool_class_from_uri(writer)
-
-    def _pool_class_from_uri(self, uri):
-        """Load and return a pool class from a URI string.
-
-        ``module`` or ``module:ClassName``
-            Import the Python module named by *module* (hyphens converted to
-            underscores).  If a *ClassName* component is present it is used as
-            the literal class name (e.g. ``rackpool:RackPool`` →
-            ``getattr(rackpool, "RackPool")``).  If absent, the module's
-            ``pool_class`` attribute is used (e.g. ``rackpool`` →
-            ``rackpool.pool_class``).
-
-        For bare names without dots (e.g. ``AffinityPool``), the resolver
-        also tries ``flux.resource.<name>`` so that built-in pool classes
-        shipped in :mod:`flux.resource` can be referenced without a fully
-        qualified module path.  An explicit ``PYTHONPATH`` entry takes
-        precedence because the bare-name import is attempted first.
-        """
-        if not hasattr(self, "_uri_class_cache"):
-            self._uri_class_cache = {}
-        if uri in self._uri_class_cache:
-            return self._uri_class_cache[uri]
-        parsed = urllib.parse.urlparse(uri)
-        module_name = (parsed.scheme or parsed.path).replace("-", "_")
-        cls_name = parsed.path if parsed.scheme else None
-        candidates = [module_name]
-        if "." not in module_name:
-            candidates.append(f"flux.resource.{module_name}")
-        mod = None
-        for candidate in candidates:
-            try:
-                mod = importlib.import_module(candidate)
-                break
-            except ImportError:
-                continue
-        if mod is None:
-            return None
-        try:
-            cls = getattr(mod, cls_name) if cls_name else mod.pool_class
-        except AttributeError:
-            return None
-        self._uri_class_cache[uri] = cls
-        return cls
-
     def _make_pool(self, R):
         """Construct a resource pool from an R dict or JSON string.
 
@@ -1146,14 +1084,18 @@ class Scheduler(BrokerModule):
            or subclass definition) — instantiated directly.  Raises
            :exc:`ValueError` if the value is not a
            :class:`~flux.resource.ResourcePool.ResourcePool` subclass.
-        2. ``R.scheduling.writer`` URI — parsed by
-           :meth:`_pool_class_from_writer` to derive the pool class.
+        2. ``R.scheduling.writer`` URI — resolved via
+           :func:`~flux.resource.ResourcePool._pool_class_from_uri` to find a
+           custom pool class.  An absent ``writer`` key defaults to
+           ``"fluxion"``; an absent ``scheduling`` key skips this step.
         3. Default :class:`~flux.resource.ResourcePool.ResourcePool` version
            dispatch.
 
-        In all three cases :attr:`pool_kwargs` are forwarded as keyword
-        arguments to the chosen constructor.
+        In all cases :attr:`pool_kwargs` are forwarded as keyword arguments
+        to the chosen constructor.
         """
+        from flux.resource.ResourcePool import _pool_class_from_uri
+
         if self.pool_class is not None:
             if not (
                 isinstance(self.pool_class, type)
@@ -1172,9 +1114,15 @@ class Scheduler(BrokerModule):
                     f"{self.pool_class!r} must set self.impl = self during __init__"
                 )
             return pool
-        pool_class = self._pool_class_from_writer(R)
-        if pool_class is not None:
-            return pool_class(R, log=self.log, **self.pool_kwargs)
+        if isinstance(R, str):
+            R = json.loads(R)
+        if isinstance(R, Mapping):
+            scheduling = R.get("scheduling")
+            if scheduling is not None:
+                writer = scheduling.get("writer", "fluxion")
+                pool_cls = _pool_class_from_uri(writer)
+                if pool_cls is not None:
+                    return pool_cls(R, log=self.log, **self.pool_kwargs)
         return ResourcePool(R, log=self.log, **self.pool_kwargs)
 
     def _acquire_resources(self):
