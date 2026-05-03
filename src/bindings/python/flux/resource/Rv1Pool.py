@@ -308,18 +308,80 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
     # Rv1Set override: _copy_from_ranks must add pool-specific fields
     # ------------------------------------------------------------------
 
+    @classmethod
+    def _from_state(
+        cls,
+        expiration: float,
+        starttime: float,
+        has_nodelist: bool,
+        properties: dict,
+        ranks: dict,
+        scheduling,
+        job_state: dict,
+        log,
+        generation: int = 0,
+        source=None,
+    ):
+        """Internal factory: construct from explicit state without parsing R JSON.
+
+        Used by :meth:`copy`, :meth:`_copy_from_ranks`, and :meth:`alloc` to
+        create instances without re-parsing R JSON. Subclasses that add instance
+        attributes should override :meth:`_init_from_state` to initialize them
+        from *source*.
+
+        Args:
+            expiration: Expiration timestamp for the pool.
+            starttime: Start timestamp for the pool.
+            has_nodelist: Whether this instance carries a nodelist.
+            properties: Property-to-ranks dict.
+            ranks: Rank dict with pool state.
+            scheduling: R.scheduling value (dict or None).
+            job_state: Job state dict (jobid -> (end_time, alloc)).
+            log: Logger callable or None.
+            generation: Generation counter for change tracking.
+            source: Source instance to copy subclass-specific state from, or None.
+
+        Returns:
+            A new instance of ``cls`` with the given state.
+        """
+        # Create instance without calling __init__ (which expects R JSON)
+        new = object.__new__(cls)
+        new._expiration = expiration
+        new._starttime = starttime
+        new._has_nodelist = has_nodelist
+        new._properties = properties
+        new._ranks = ranks
+        new.scheduling = scheduling
+        new._job_state = job_state
+        # Only set log attribute if non-None (otherwise use base class method)
+        if log is not None:
+            new.log = log
+        new.generation = generation
+        # Allow subclasses to initialize their attributes from source
+        if source is not None:
+            new._init_from_state(source)
+        return new
+
+    def _init_from_state(self, source: "Rv1Pool") -> None:
+        """Initialize subclass-specific attributes when copying from *source*.
+
+        Override this in subclasses that add instance attributes. The base
+        implementation is a no-op; overrides do not need to call
+        ``super()._init_from_state(source)``.
+
+        This replaces the old ``_copy_extra()`` hook and is called by
+        :meth:`_from_state` when *source* is not None.
+        """
+        pass
+
     def _copy_from_ranks(self, rank_set: set) -> "Rv1Pool":
         """Return a new Rv1Pool containing only the given ranks (alloc cleared)."""
-        new = object.__new__(Rv1Pool)
-        new._expiration = self._expiration
-        new._starttime = self._starttime
-        new._has_nodelist = getattr(self, "_has_nodelist", False)
-        new._properties = {
+        properties = {
             prop: ranks & rank_set
             for prop, ranks in self._properties.items()
             if ranks & rank_set
         }
-        new._ranks = {
+        ranks = {
             rank: {
                 "hostname": self._ranks[rank]["hostname"],
                 "cores": self._ranks[rank]["cores"],
@@ -331,10 +393,17 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             for rank in rank_set
             if rank in self._ranks
         }
-        new.scheduling = self.scheduling
-        new._job_state = {}
-        new.log = self.log
-        return new
+        return type(self)._from_state(
+            expiration=self._expiration,
+            starttime=self._starttime,
+            has_nodelist=getattr(self, "_has_nodelist", False),
+            properties=properties,
+            ranks=ranks,
+            scheduling=self.scheduling,
+            job_state={},
+            log=self.log,
+            source=self,
+        )
 
     # ------------------------------------------------------------------
     # ResourcePoolImplementation — availability management
@@ -588,24 +657,15 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
         # directly so the override never holds a mutable reference to pool state.
         selected_ranks = {rank for rank, _, _ in selected}
 
-        result = object.__new__(Rv1Pool)
-        result._expiration = 0.0
-        result._starttime = 0.0
-        result._has_nodelist = True
-        result._nslots = actual_nslots
-        result._properties = {
+        properties = {
             prop: ranks & selected_ranks
             for prop, ranks in self._properties.items()
             if ranks & selected_ranks
         }
-        result.scheduling = self.scheduling
-        result._ranks = {}
-        result._job_state = {}
-        result.log = self.log
-
+        ranks = {}
         for rank, alloc_cores, alloc_gpus in selected:
             info = self._ranks[rank]
-            result._ranks[rank] = {
+            ranks[rank] = {
                 "hostname": info["hostname"],
                 "cores": alloc_cores,
                 "gpus": alloc_gpus,
@@ -622,6 +682,19 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             end_time = self._expiration
         else:
             end_time = 0.0
+
+        result = type(self)._from_state(
+            expiration=0.0,
+            starttime=0.0,
+            has_nodelist=True,
+            properties=properties,
+            ranks=ranks,
+            scheduling=self.scheduling,
+            job_state={},
+            log=self.log,
+            source=self,
+        )
+        result._nslots = actual_nslots
         self._job_state[jobid] = (end_time, result)
         self._bump()
         self.log(syslog.LOG_DEBUG, f"alloc: {JobID(jobid).f58}: {result.dumps()}")
@@ -633,22 +706,26 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
 
     def copy(self) -> "Rv1Pool":
         """Return a full independent copy preserving allocation state."""
-        new = object.__new__(Rv1Pool)
-        new.generation = self.generation
-        new._expiration = self._expiration
-        new._starttime = self._starttime
-        new._has_nodelist = getattr(self, "_has_nodelist", False)
-        new._properties = {p: set(s) for p, s in self._properties.items()}
-        new._ranks = {}
+        properties = {p: set(s) for p, s in self._properties.items()}
+        ranks = {}
         for rank, info in self._ranks.items():
-            new._ranks[rank] = dict(info)
-            new._ranks[rank]["allocated_cores"] = set(info["allocated_cores"])
-            new._ranks[rank]["allocated_gpus"] = set(info["allocated_gpus"])
-        new.scheduling = self.scheduling
-        new._job_state = dict(self._job_state)
+            ranks[rank] = dict(info)
+            ranks[rank]["allocated_cores"] = set(info["allocated_cores"])
+            ranks[rank]["allocated_gpus"] = set(info["allocated_gpus"])
         # Do not copy self.log: copies are used for simulation (forecast /
         # shadow-time) and their alloc/free calls must not emit log lines.
-        return new
+        return type(self)._from_state(
+            expiration=self._expiration,
+            starttime=self._starttime,
+            has_nodelist=getattr(self, "_has_nodelist", False),
+            properties=properties,
+            ranks=ranks,
+            scheduling=self.scheduling,
+            job_state=dict(self._job_state),
+            log=None,
+            generation=self.generation,
+            source=self,
+        )
 
     def copy_allocated(self) -> Rv1Set:
         """Return an Rv1Set containing only the allocated resources.
@@ -760,9 +837,12 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
         Subclasses may override this method to implement topology-aware
         selection policies (e.g. locality or exclusivity within a chassis or
         rack).  The override receives the full candidate list with constraint
-        filtering already applied; it must raise
+        filtering already applied.  If the request cannot be satisfied, the
+        override must call ``self._check_feasibility(request)`` before raising
         :exc:`~flux.resource.ResourcePoolImplementation.InsufficientResources`
-        if the request cannot be satisfied from the candidates provided.
+        so that a structurally impossible request is escalated to
+        :exc:`~flux.resource.ResourcePoolImplementation.InfeasibleRequest`
+        rather than retried indefinitely.
         """
         nnodes = request.nnodes
         nslots = request.nslots

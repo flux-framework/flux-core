@@ -30,16 +30,65 @@ from flux.resource.ResourcePoolImplementation import (
     ResourcePoolImplementation,
 )
 
+_POOL_CLASS_CACHE: dict = {}
+
+
+def _pool_class_from_uri(uri: str):
+    """Resolve a scheduling writer URI to a ResourcePool subclass.
+
+    - ``"module"`` → import ``module`` (falling back to
+      ``flux.resource.module``) → ``mod.pool_class``
+    - ``"module:ClassName"`` → import ``module`` →
+      ``getattr(module, "ClassName")``.
+
+    Results are cached, including failed lookups (``None``).  If a module is
+    not importable at first call, ``None`` is returned on all subsequent
+    calls for the same URI until the cache is cleared.
+    """
+    if uri in _POOL_CLASS_CACHE:
+        return _POOL_CLASS_CACHE[uri]
+    if ":" in uri:
+        module_name, cls_name = uri.split(":", 1)
+    else:
+        module_name, cls_name = uri, None
+    module_name = module_name.replace("-", "_")
+    candidates = [module_name]
+    if "." not in module_name:
+        candidates.append(f"flux.resource.{module_name}")
+    mod = None
+    for candidate in candidates:
+        try:
+            mod = importlib.import_module(candidate)
+            break
+        except ImportError:
+            continue
+    result = None
+    if mod is not None:
+        try:
+            if cls_name:
+                result = getattr(mod, cls_name)
+            else:
+                result = mod.pool_class
+        except AttributeError:
+            pass
+    _POOL_CLASS_CACHE[uri] = result
+    return result
 
 class ResourcePool:
     """Public wrapper for a resource pool implementation.
 
-    Accepts the same argument forms as
-    :class:`~flux.resource.ResourceSet.ResourceSet`:
+    Accepts the following argument forms:
 
     - An R JSON string or parsed dict → dispatches to the correct
       :class:`ResourcePoolImplementation` subclass by version.
     - A :class:`ResourcePoolImplementation` instance → wraps it directly.
+
+    Subclasses preserve their identity through :meth:`alloc` and :meth:`copy`,
+    which rebuild the wrapper with :meth:`_from_impl` (not ``__init__``), so a
+    subclass that overrides ``__init__`` need not special-case an
+    impl-passthrough argument.  The base ``__init__`` still accepts a
+    :class:`ResourcePoolImplementation` directly for callers that wrap one
+    explicitly.
     """
 
     # Expose the module-level exception classes as class attributes so that
@@ -69,6 +118,23 @@ class ResourcePool:
             self.version = 1
         else:
             raise ValueError(f"R version {version} not supported by ResourcePool")
+
+    @classmethod
+    def _from_impl(cls, impl: "ResourcePoolImplementation") -> "ResourcePool":
+        """Wrap an existing implementation without re-running ``__init__``.
+
+        :meth:`alloc` and :meth:`copy` already hold a finished implementation,
+        so they build the wrapper directly instead of routing the impl back
+        through ``__init__``.  This mirrors the implementation layer's own
+        ``_from_state`` factory and means a subclass that overrides
+        ``__init__`` (e.g. to take extra config) does not have to special-case
+        an impl-passthrough argument.  Preserves subclass identity via
+        ``cls.__new__``.
+        """
+        new = cls.__new__(cls)
+        new.impl = impl
+        new.version = getattr(impl, "version", 1)
+        return new
 
     # ------------------------------------------------------------------
     # Generation counter (pool mutation tracking)
@@ -136,7 +202,7 @@ class ResourcePool:
 
     def alloc(self, jobid: int, request) -> "ResourcePool":
         """Allocate resources for *jobid* and return the allocated pool."""
-        return ResourcePool(self.impl.alloc(jobid, request))
+        return self._from_impl(self.impl.alloc(jobid, request))
 
     def check_feasibility(self, request) -> None:
         """Check whether *request* is structurally satisfiable."""
@@ -148,7 +214,7 @@ class ResourcePool:
 
     def copy(self) -> "ResourcePool":
         """Return a full independent copy preserving allocation state."""
-        return ResourcePool(self.impl.copy())
+        return self._from_impl(self.impl.copy())
 
     def to_resource_set(self):
         """Return a topology+availability snapshot as a ResourceSet."""

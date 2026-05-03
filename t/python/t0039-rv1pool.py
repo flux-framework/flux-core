@@ -539,7 +539,6 @@ class TestSelectResourcesAvailability(unittest.TestCase):
         self.assertNotIn(0, candidate_ranks)
 
 
-
 class TestRv1PoolExclusive(unittest.TestCase):
     def setUp(self):
         self.pool = Rv1Pool(R_4x4)
@@ -1511,6 +1510,83 @@ class TestRangeAlloc(unittest.TestCase):
         )
         self.assertEqual(req.nnodes, 2)
         self.assertEqual(req.nnodes_max, 2)
+
+
+class _TaggedPool(Rv1Pool):
+    """Minimal Rv1Pool subclass that adds one extra attribute."""
+
+    def __init__(self, R, *args, **kwargs):
+        super().__init__(R, *args, **kwargs)
+        self.tag = "tagged"
+
+    def _init_from_state(self, source):
+        self.tag = source.tag
+
+
+class TestSubclassCopy(unittest.TestCase):
+    """copy(), _copy_from_ranks(), and alloc() must preserve subclass identity."""
+
+    def _make_pool(self):
+        return _TaggedPool(R_4x4)
+
+    def _simple_request(self, pool):
+        return pool.parse_resource_request(
+            {
+                "version": 1,
+                "resources": [
+                    {
+                        "type": "node",
+                        "count": 1,
+                        "with": [
+                            {
+                                "type": "slot",
+                                "count": 1,
+                                "with": [{"type": "core", "count": 1}],
+                            }
+                        ],
+                    }
+                ],
+                "tasks": [],
+                "attributes": {"system": {"duration": 0.0}},
+            }
+        )
+
+    def test_copy_preserves_subclass_type(self):
+        pool = self._make_pool()
+        c = pool.copy()
+        self.assertIsInstance(c, _TaggedPool)
+
+    def test_copy_calls_init_from_state(self):
+        pool = self._make_pool()
+        c = pool.copy()
+        self.assertEqual(c.tag, "tagged")
+
+    def test_alloc_preserves_subclass_type(self):
+        pool = self._make_pool()
+        req = self._simple_request(pool)
+        result = pool.alloc(1, req)
+        self.assertIsInstance(result, _TaggedPool)
+
+    def test_alloc_calls_init_from_state(self):
+        pool = self._make_pool()
+        req = self._simple_request(pool)
+        result = pool.alloc(1, req)
+        self.assertEqual(result.tag, "tagged")
+
+    def test_copy_from_ranks_preserves_subclass_type(self):
+        pool = self._make_pool()
+        req = self._simple_request(pool)
+        alloc = pool.alloc(1, req)
+        # _copy_from_ranks is exercised via free() with a partial rank set
+        subset = alloc._copy_from_ranks(set(alloc._ranks.keys()))
+        self.assertIsInstance(subset, _TaggedPool)
+
+    def test_copy_from_ranks_calls_init_from_state(self):
+        pool = self._make_pool()
+        req = self._simple_request(pool)
+        alloc = pool.alloc(1, req)
+        subset = alloc._copy_from_ranks(set(alloc._ranks.keys()))
+        self.assertEqual(subset.tag, "tagged")
 
 
 if __name__ == "__main__":
