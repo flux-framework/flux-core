@@ -309,9 +309,19 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
     # Rv1Set override: _copy_from_ranks must add pool-specific fields
     # ------------------------------------------------------------------
 
+    def _copy_extra(self, new: "Rv1Pool") -> None:
+        """Copy subclass-specific attributes into *new* after base-class copy.
+
+        Override this in subclasses that add instance attributes in ``__init__``
+        so that :meth:`copy`, :meth:`_copy_from_ranks`, and :meth:`alloc` preserve
+        those attributes in the returned instance.  The base implementation is a
+        no-op; overrides do not need to call ``super()._copy_extra(new)``.
+        """
+        pass
+
     def _copy_from_ranks(self, rank_set: set) -> "Rv1Pool":
         """Return a new Rv1Pool containing only the given ranks (alloc cleared)."""
-        new = object.__new__(Rv1Pool)
+        new = object.__new__(type(self))
         new._expiration = self._expiration
         new._starttime = self._starttime
         new._has_nodelist = getattr(self, "_has_nodelist", False)
@@ -335,6 +345,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
         new.scheduling = self.scheduling
         new._job_state = {}
         new.log = self.log
+        self._copy_extra(new)
         return new
 
     # ------------------------------------------------------------------
@@ -586,8 +597,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
         # so that accidental mutation raises TypeError rather than silently
         # corrupting pool state.
         ro_candidates = [
-            (rank, MappingProxyType(info), fc, fg)
-            for rank, info, fc, fg in candidates
+            (rank, MappingProxyType(info), fc, fg) for rank, info, fc, fg in candidates
         ]
 
         selected, actual_nslots = self._select_resources(ro_candidates, request)
@@ -597,7 +607,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
         # directly so the override never holds a mutable reference to pool state.
         selected_ranks = {rank for rank, _, _ in selected}
 
-        result = object.__new__(Rv1Pool)
+        result = object.__new__(type(self))
         result._expiration = 0.0
         result._starttime = 0.0
         result._has_nodelist = True
@@ -631,6 +641,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             end_time = self._expiration
         else:
             end_time = 0.0
+        self._copy_extra(result)
         self._job_state[jobid] = (end_time, result)
         self._bump()
         self.log(syslog.LOG_DEBUG, f"alloc: {JobID(jobid).f58}: {result.dumps()}")
@@ -642,7 +653,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
 
     def copy(self) -> "Rv1Pool":
         """Return a full independent copy preserving allocation state."""
-        new = object.__new__(Rv1Pool)
+        new = object.__new__(type(self))
         new.generation = self.generation
         new._expiration = self._expiration
         new._starttime = self._starttime
@@ -657,6 +668,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
         new._job_state = dict(self._job_state)
         # Do not copy self.log: copies are used for simulation (forecast /
         # shadow-time) and their alloc/free calls must not emit log lines.
+        self._copy_extra(new)
         return new
 
     def copy_allocated(self) -> Rv1Set:
@@ -764,9 +776,12 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
         Subclasses may override this method to implement topology-aware
         selection policies (e.g. locality or exclusivity within a chassis or
         rack).  The override receives the full candidate list with constraint
-        filtering already applied; it must raise
+        filtering already applied.  If the request cannot be satisfied, the
+        override must call ``self._check_feasibility(request)`` before raising
         :exc:`~flux.resource.ResourcePoolImplementation.InsufficientResources`
-        if the request cannot be satisfied from the candidates provided.
+        so that a structurally impossible request is escalated to
+        :exc:`~flux.resource.ResourcePoolImplementation.InfeasibleRequest`
+        rather than retried indefinitely.
         """
         nnodes = request.nnodes
         nslots = request.nslots
