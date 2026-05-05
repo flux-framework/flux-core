@@ -90,6 +90,51 @@ test_expect_success 'flux R encode --xml works with AMD RSMI gpus' '
 	test_debug "echo encode XML = $result" &&
 	test "$result" = "rank0/core[0-47],gpu[0-7]"
 '
+test_expect_success 'flux R encode --scheduling=FORMAT fails without --local or --xml' '
+	test_must_fail flux R encode --scheduling=TreePool
+'
+test_expect_success 'flux R encode --scheduling=FORMAT fails with unknown format' '
+	test_must_fail flux R encode --local --scheduling=Unknown
+'
+test_expect_success 'flux R encode --xml --scheduling=TreePool works (corona)' '
+	flux R encode --xml=$SHARNESS_TEST_SRCDIR/hwloc-data/corona.xml \
+	    --scheduling=TreePool > R.corona.topo &&
+	test_debug "jq .scheduling R.corona.topo" &&
+	jq -e ".scheduling.writer == \"TreePool\"" R.corona.topo &&
+	jq -e ".scheduling.children | length == 1" R.corona.topo &&
+	jq -e ".scheduling.children[0].ranks == \"0\"" R.corona.topo &&
+	jq -e ".scheduling.children[0].topo.socket | length == 2" R.corona.topo &&
+	jq -e ".scheduling.children[0].topo.socket[0].cores == \"0-23\"" R.corona.topo &&
+	jq -e ".scheduling.children[0].topo.socket[0].gpus == \"0-3\"" R.corona.topo &&
+	jq -e ".scheduling.children[0].topo.socket[1].cores == \"24-47\"" R.corona.topo &&
+	jq -e ".scheduling.children[0].topo.socket[1].gpus == \"4-7\"" R.corona.topo
+'
+test_expect_success 'flux R encode --xml --scheduling=TreePool works (sierra)' '
+	flux R encode --xml=$SHARNESS_TEST_SRCDIR/hwloc-data/sierra.xml \
+	    --scheduling=TreePool > R.sierra.topo &&
+	test_debug "jq .scheduling R.sierra.topo" &&
+	jq -e ".scheduling.writer == \"TreePool\"" R.sierra.topo &&
+	jq -e ".scheduling.children | length == 1" R.sierra.topo &&
+	jq -e ".scheduling.children[0].ranks == \"0\"" R.sierra.topo &&
+	jq -e ".scheduling.children[0].topo.socket | length == 2" R.sierra.topo &&
+	jq -e ".scheduling.children[0].topo.socket[0].cores == \"0-21\"" R.sierra.topo &&
+	jq -e ".scheduling.children[0].topo.socket[0].gpus == \"0-1\"" R.sierra.topo &&
+	jq -e ".scheduling.children[0].topo.socket[1].cores == \"22-43\"" R.sierra.topo &&
+	jq -e ".scheduling.children[0].topo.socket[1].gpus == \"2-3\"" R.sierra.topo
+'
+test_expect_success 'flux R encode --local --scheduling=TreePool works' '
+	flux R encode --local --scheduling=TreePool > R.local.topo &&
+	test_debug "jq .scheduling R.local.topo" &&
+	jq -e ".scheduling.writer == \"TreePool\"" R.local.topo &&
+	jq -e ".scheduling.children | length == 1" R.local.topo &&
+	jq -e ".scheduling.children[0].ranks == \"0\"" R.local.topo &&
+	jq -e ".scheduling.children[0].topo != null" R.local.topo
+'
+test_expect_success 'flux R encode --scheduling=TreePool sets ranks to match --ranks' '
+	flux R encode --xml=$SHARNESS_TEST_SRCDIR/hwloc-data/corona.xml \
+	    --ranks 4-7 --scheduling=TreePool > R.corona.ranks.topo &&
+	jq -e ".scheduling.children[0].ranks == \"4-7\"" R.corona.ranks.topo
+'
 test_expect_success 'flux R decode --include works' '
 	result=$(flux R encode -r 0-1023 | flux R decode --include 5-7 --short) &&
 	test_debug "echo $result" &&
