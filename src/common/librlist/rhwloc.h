@@ -12,6 +12,7 @@
 #define HAVE_UTIL_RHWLOC_H 1
 
 #include <hwloc.h>
+#include <jansson.h>
 
 #include "src/common/libflux/types.h" /* flux_error_t */
 
@@ -47,12 +48,19 @@ const char *rhwloc_hostname (hwloc_topology_t topo);
  *  Caller must free with hwloc_bitmap_free().
  */
 hwloc_cpuset_t rhwloc_cores_to_cpuset (hwloc_topology_t topo,
-                                        const char *cores,
-                                        flux_error_t *errp);
+                                       const char *cores,
+                                       flux_error_t *errp);
 
-/*  Return idset string for all cores in hwloc topology object
+/*  Return idset string for cores in hwloc topology object.
+ *  If cpuset is non-NULL, only include cores whose cpuset is included in it.
  */
-char * rhwloc_core_idset_string (hwloc_topology_t topo);
+char * rhwloc_core_idset_string (hwloc_topology_t topo,
+                                   hwloc_bitmap_t cpuset);
+
+/*  Walk obj's parent chain and return the first HWLOC_OBJ_PCI_DEVICE
+ *  ancestor, or NULL if none.
+ */
+hwloc_obj_t rhwloc_osdev_get_pcidev (hwloc_obj_t obj);
 
 /*  Return heap-allocated array of unique compute GPU osdev objects from topo
  *  in hwloc traversal order, one per physical GPU (deduplicated by PCI

@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <flux/hostlist.h>
+#include <jansson.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/errprintf.h"
@@ -862,7 +863,7 @@ void test_cores_to_cpuset (void)
     hwloc_bitmap_free (cpuset);
 
     /* All cores: cpuset must equal full topology cpuset */
-    cores = rhwloc_core_idset_string (topo);
+    cores = rhwloc_core_idset_string (topo, NULL);
     if (!cores)
         BAIL_OUT ("rhwloc_core_idset_string failed");
     err_init (&error);
@@ -976,6 +977,7 @@ void test_gpu_objects (void)
 
     hwloc_topology_destroy (topo);
 }
+
 
 int main (int ac, char *av[])
 {
