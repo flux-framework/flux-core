@@ -23,9 +23,7 @@ import yaml
 from _flux._core import ffi
 from flux import Flux, hostlist, idset
 from flux.cli.plugin import CLIPluginRegistry
-from flux.constraint.parser import ConstraintSyntaxError
 from flux.job._utils import (
-    MiniConstraintParser,
     URIArg,
     decode_duration,
     dependency_array_create,
@@ -2031,6 +2029,11 @@ class JobspecV1(Jobspec):
 
         # constraints
         if merged.requires is not None:
+            from flux.constraint.parser import (  # noqa: PLC0415
+                ConstraintSyntaxError,
+                MiniConstraintParser,
+            )
+
             constraint = " ".join(merged.requires)
             try:
                 self.setattr(

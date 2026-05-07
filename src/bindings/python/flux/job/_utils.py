@@ -30,7 +30,6 @@ except ModuleNotFoundError:
     from flux.utils import tomli as tomllib
 
 from flux import util
-from flux.constraint.parser import ConstraintParser
 from flux.util import dict_merge, get_treedict, set_treedict
 
 
@@ -97,17 +96,6 @@ def parse_signal_option(arg):
         raise ValueError(f"--signal={arg}: {exc}") from None
 
     return {"signum": signum, "timeleft": timeleft}
-
-
-class MiniConstraintParser(ConstraintParser):
-    operator_map = {
-        None: "properties",
-        "host": "hostlist",
-        "hosts": "hostlist",
-        "rank": "ranks",
-    }
-    split_values = {"properties": ","}
-    combined_terms = {"properties"}
 
 
 class URIArg:

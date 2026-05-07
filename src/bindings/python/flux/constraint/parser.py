@@ -420,6 +420,17 @@ class ConstraintParser:
         p[0] = p[2]
 
 
+class MiniConstraintParser(ConstraintParser):
+    operator_map = {
+        None: "properties",
+        "host": "hostlist",
+        "hosts": "hostlist",
+        "rank": "ranks",
+    }
+    split_values = {"properties": ","}
+    combined_terms = {"properties"}
+
+
 if __name__ == "__main__":
     """
     Test command which can be run as flux python -m flux.constraint.parser
