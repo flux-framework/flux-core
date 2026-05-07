@@ -1328,6 +1328,7 @@ class Scheduler(BrokerModule):
         self.log.info(
             f"ready: queue-depth={depth}"
             f" log-level={self.log.level_name}"
+            f" pool-class={self._resources.impl.name}"
             f" Rv{self.resources.version}"
             f" {self.resources.dumps()}",
         )
