@@ -17,6 +17,7 @@
 #include <flux/idset.h>
 
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "rhwloc.h"
 #include "rhwloc_map.h"
@@ -80,6 +81,7 @@ out:
 }
 
 int rhwloc_map_cores (rhwloc_map_t *m,
+                      flux_error_t *errp,
                       const char *cores,
                       char **cpus_out,
                       char **mems_out)
@@ -91,16 +93,28 @@ int rhwloc_map_cores (rhwloc_map_t *m,
     int rc = -1;
 
     if (!m || !cores || !cpus_out || !mems_out) {
+        errprintf (errp, "Invalid argument");
         errno = EINVAL;
         return -1;
     }
-    if (!(cpuset = rhwloc_cores_to_cpuset (m->topo, cores))
-        || !(nodeset = hwloc_bitmap_alloc ())
-        || hwloc_cpuset_to_nodeset (m->topo, cpuset, nodeset) != 0)
+    if (!(cpuset = rhwloc_cores_to_cpuset (m->topo, cores, errp)))
         goto out;
+    if (!(nodeset = hwloc_bitmap_alloc ())) {
+        errprintf (errp, "Out of memory");
+        errno = ENOMEM;
+        goto out;
+    }
+    if (hwloc_cpuset_to_nodeset (m->topo, cpuset, nodeset) != 0) {
+        errprintf (errp,
+                   "failed to get NUMA nodes for cores: %s",
+                   cores);
+        goto out;
+    }
     if (!(cpus = bitmap_to_idset (cpuset))
-        || !(mems = bitmap_to_idset (nodeset)))
+        || !(mems = bitmap_to_idset (nodeset))) {
+        errprintf (errp, "out of memory");
         goto out;
+    }
     *cpus_out = cpus;
     *mems_out = mems;
     cpus = mems = NULL;
@@ -125,24 +139,34 @@ int rhwloc_map_count_type (rhwloc_map_t *m, const char *type)
 /* Return the PCI address of the GPU osdev object's nearest PCI ancestor
  * as a heap-allocated string, or NULL if no PCI ancestor is found.
  */
-static char *gpu_pci_addr (hwloc_obj_t obj)
+static char *gpu_pci_addr (hwloc_obj_t obj, flux_error_t *errp)
 {
     hwloc_obj_t parent = obj->parent;
     char buf[16]; /* "0000:ff:1f.7" + NUL */
+    char *s;
 
     while (parent && parent->type != HWLOC_OBJ_PCI_DEVICE)
         parent = parent->parent;
-    if (!parent)
+    if (!parent) {
+        errno = ENODEV;
+        errprintf (errp,
+                   "Failed to find PCI ancestor of GPU (logical id=%d)",
+                   obj->logical_index);
         return NULL;
+    }
     snprintf (buf, sizeof (buf), "%04x:%02x:%02x.%x",
               parent->attr->pcidev.domain,
               parent->attr->pcidev.bus,
               parent->attr->pcidev.dev,
               parent->attr->pcidev.func);
-    return strdup (buf);
+    if (!(s = strdup (buf)))
+        errprintf (errp, "Out of memory copying GPU PCI addr");
+    return s;
 }
 
-char **rhwloc_map_gpu_pci_addrs (rhwloc_map_t *m, const char *gpus)
+char **rhwloc_map_gpu_pci_addrs (rhwloc_map_t *m,
+                                 const char *gpus,
+                                 flux_error_t *errp)
 {
     struct idset *gpuset = NULL;
     hwloc_obj_t *gpu_objs = NULL;
@@ -150,21 +174,38 @@ char **rhwloc_map_gpu_pci_addrs (rhwloc_map_t *m, const char *gpus)
     int gpu_count = 0;
 
     if (!m || !gpus) {
+        errprintf (errp, "Invalid argument");
         errno = EINVAL;
         return NULL;
     }
-    if (!(gpuset = idset_decode (gpus)))
+    if (!(gpuset = idset_decode (gpus))) {
+        errprintf (errp, "idset_decode(\"%s\") failed", gpus);
         goto error;
-    if (!(result = calloc (idset_count (gpuset) + 1, sizeof (*result))))
+    }
+    if (!(result = calloc (idset_count (gpuset) + 1, sizeof (*result)))) {
+        errprintf (errp, "Out of memory");
         goto error;
+    }
+    errno = 0;
     if (!(gpu_objs = rhwloc_gpu_objects (m->topo, &gpu_count))
-        && gpu_count > 0)
+        && gpu_count > 0) {
+        errprintf (errp,
+                   "Failed to collect GPU objects from hwloc: %s",
+                   strerror (errno));
         goto error;
+    }
 
     int i = 0;
     unsigned int id = idset_first (gpuset);
     while (id != IDSET_INVALID_ID) {
-        if ((int)id >= gpu_count || !(result[i++] = gpu_pci_addr (gpu_objs[id])))
+        if ((int)id >= gpu_count) {
+            errprintf (errp,
+                       "gpu%d not found in local topology (gpu count=%d)",
+                        id,
+                        gpu_count);
+            goto error;
+        }
+        if (!(result[i++] = gpu_pci_addr (gpu_objs[id], errp)))
             goto error;
         id = idset_next (gpuset, id);
     }

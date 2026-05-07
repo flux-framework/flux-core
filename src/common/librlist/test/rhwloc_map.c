@@ -155,23 +155,28 @@ void test_cores (void)
     rhwloc_map_t *m;
     char *cpus = NULL;
     char *mems = NULL;
+    flux_error_t error;
 
     m = rhwloc_map_create (xml);
     if (!m)
         BAIL_OUT ("rhwloc_map_create failed");
 
     /* NULL inputs */
-    ok (rhwloc_map_cores (NULL, "0", &cpus, &mems) == -1 && errno == EINVAL,
+    ok (rhwloc_map_cores (NULL, &error, "0", &cpus, &mems) == -1
+        && errno == EINVAL,
         "rhwloc_map_cores m=NULL returns -1, EINVAL");
-    ok (rhwloc_map_cores (m, NULL, &cpus, &mems) == -1 && errno == EINVAL,
+    ok (rhwloc_map_cores (m, &error, NULL, &cpus, &mems) == -1
+        && errno == EINVAL,
         "rhwloc_map_cores cores=NULL returns -1, EINVAL");
-    ok (rhwloc_map_cores (m, "0", NULL, &mems) == -1 && errno == EINVAL,
+    ok (rhwloc_map_cores (m, &error, "0", NULL, &mems) == -1
+        && errno == EINVAL,
         "rhwloc_map_cores cpus_out=NULL returns -1, EINVAL");
-    ok (rhwloc_map_cores (m, "0", &cpus, NULL) == -1 && errno == EINVAL,
+    ok (rhwloc_map_cores (m, &error, "0", &cpus, NULL) == -1
+        && errno == EINVAL,
         "rhwloc_map_cores mems_out=NULL returns -1, EINVAL");
 
     /* Core 0: PUs 0,1 in NUMA node 0 */
-    ok (rhwloc_map_cores (m, "0", &cpus, &mems) == 0,
+    ok (rhwloc_map_cores (m, &error, "0", &cpus, &mems) == 0,
         "rhwloc_map_cores cores=0 returns 0");
     ok (cpus != NULL && streq (cpus, "0-1"),
         "rhwloc_map_cores cores=0 cpus=\"0-1\": got \"%s\"",
@@ -183,7 +188,7 @@ void test_cores (void)
     free (mems); mems = NULL;
 
     /* Core 1: PUs 2,3 in NUMA node 0 */
-    ok (rhwloc_map_cores (m, "1", &cpus, &mems) == 0,
+    ok (rhwloc_map_cores (m, &error, "1", &cpus, &mems) == 0,
         "rhwloc_map_cores cores=1 returns 0");
     ok (cpus != NULL && streq (cpus, "2-3"),
         "rhwloc_map_cores cores=1 cpus=\"2-3\": got \"%s\"",
@@ -195,7 +200,7 @@ void test_cores (void)
     free (mems); mems = NULL;
 
     /* Cores 0-1: all PUs, all in NUMA node 0 */
-    ok (rhwloc_map_cores (m, "0-1", &cpus, &mems) == 0,
+    ok (rhwloc_map_cores (m, &error, "0-1", &cpus, &mems) == 0,
         "rhwloc_map_cores cores=0-1 returns 0");
     ok (cpus != NULL && streq (cpus, "0-3"),
         "rhwloc_map_cores cores=0-1 cpus=\"0-3\": got \"%s\"",
@@ -213,19 +218,22 @@ void test_gpu_pci_addrs (void)
 {
     rhwloc_map_t *m;
     char **addrs;
+    flux_error_t error;
 
     m = rhwloc_map_create (xml);
     if (!m)
         BAIL_OUT ("rhwloc_map_create failed");
 
     /* NULL inputs */
-    ok (rhwloc_map_gpu_pci_addrs (NULL, "0") == NULL && errno == EINVAL,
+    ok (rhwloc_map_gpu_pci_addrs (NULL, "0", &error) == NULL
+        && errno == EINVAL,
         "rhwloc_map_gpu_pci_addrs m=NULL returns NULL, EINVAL");
-    ok (rhwloc_map_gpu_pci_addrs (m, NULL) == NULL && errno == EINVAL,
+    ok (rhwloc_map_gpu_pci_addrs (m, NULL, &error) == NULL
+        && errno == EINVAL,
         "rhwloc_map_gpu_pci_addrs gpus=NULL returns NULL, EINVAL");
 
     /* GPU 0 */
-    addrs = rhwloc_map_gpu_pci_addrs (m, "0");
+    addrs = rhwloc_map_gpu_pci_addrs (m, "0", &error);
     ok (addrs != NULL,
         "rhwloc_map_gpu_pci_addrs gpus=0 returns non-NULL");
     ok (addrs != NULL && addrs[0] != NULL
@@ -237,7 +245,7 @@ void test_gpu_pci_addrs (void)
     rhwloc_map_strv_free (addrs);
 
     /* GPU 1 */
-    addrs = rhwloc_map_gpu_pci_addrs (m, "1");
+    addrs = rhwloc_map_gpu_pci_addrs (m, "1", &error);
     ok (addrs != NULL,
         "rhwloc_map_gpu_pci_addrs gpus=1 returns non-NULL");
     ok (addrs != NULL && addrs[0] != NULL
@@ -247,7 +255,7 @@ void test_gpu_pci_addrs (void)
     rhwloc_map_strv_free (addrs);
 
     /* GPUs 0-1 */
-    addrs = rhwloc_map_gpu_pci_addrs (m, "0-1");
+    addrs = rhwloc_map_gpu_pci_addrs (m, "0-1", &error);
     ok (addrs != NULL,
         "rhwloc_map_gpu_pci_addrs gpus=0-1 returns non-NULL");
     ok (addrs != NULL && addrs[0] != NULL
@@ -261,7 +269,7 @@ void test_gpu_pci_addrs (void)
     rhwloc_map_strv_free (addrs);
 
     /* Out-of-range GPU */
-    addrs = rhwloc_map_gpu_pci_addrs (m, "2");
+    addrs = rhwloc_map_gpu_pci_addrs (m, "2", &error);
     ok (addrs == NULL,
         "rhwloc_map_gpu_pci_addrs out-of-range GPU returns NULL");
 

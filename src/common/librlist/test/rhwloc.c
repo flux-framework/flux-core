@@ -815,6 +815,7 @@ void test_cores_to_cpuset (void)
 {
     hwloc_topology_t topo;
     hwloc_cpuset_t cpuset;
+    flux_error_t error;
     char *cores;
 
     topo = rhwloc_local_topology_load (RHWLOC_NO_RESTRICT);
@@ -822,18 +823,18 @@ void test_cores_to_cpuset (void)
         BAIL_OUT ("rhwloc_local_topology_load failed");
 
     /* NULL inputs */
-    ok (rhwloc_cores_to_cpuset (NULL, "0") == NULL,
+    ok (rhwloc_cores_to_cpuset (NULL, "0", &error) == NULL,
         "rhwloc_cores_to_cpuset topo=NULL returns NULL");
-    ok (rhwloc_cores_to_cpuset (topo, NULL) == NULL,
+    ok (rhwloc_cores_to_cpuset (topo, NULL, &error) == NULL,
         "rhwloc_cores_to_cpuset cores=NULL returns NULL");
 
     /* Invalid core string */
-    ok (rhwloc_cores_to_cpuset (topo, "x") == NULL,
+    ok (rhwloc_cores_to_cpuset (topo, "x", &error) == NULL,
         "rhwloc_cores_to_cpuset cores=invalid returns NULL");
 
     /* Core 0 always exists; cpuset must be non-empty and include PU 0
      * (i.e. physical CPU 0 is always in core 0's cpuset) */
-    cpuset = rhwloc_cores_to_cpuset (topo, "0");
+    cpuset = rhwloc_cores_to_cpuset (topo, "0", &error);
     ok (cpuset != NULL && !hwloc_bitmap_iszero (cpuset),
         "rhwloc_cores_to_cpuset cores=0 returns non-empty cpuset");
     ok (cpuset != NULL && hwloc_bitmap_isset (cpuset, 0),
@@ -844,7 +845,7 @@ void test_cores_to_cpuset (void)
     cores = rhwloc_core_idset_string (topo);
     if (!cores)
         BAIL_OUT ("rhwloc_core_idset_string failed");
-    cpuset = rhwloc_cores_to_cpuset (topo, cores);
+    cpuset = rhwloc_cores_to_cpuset (topo, cores, &error);
     ok (cpuset != NULL
         && hwloc_bitmap_isequal (cpuset,
                                  hwloc_topology_get_allowed_cpuset (topo)),

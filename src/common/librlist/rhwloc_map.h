@@ -11,6 +11,8 @@
 #ifndef HAVE_RHWLOC_MAP_H
 #define HAVE_RHWLOC_MAP_H 1
 
+#include "src/common/libflux/types.h" /* flux_error_t */
+
 typedef struct rhwloc_map rhwloc_map_t;
 
 /*  Create a resource mapping context from hwloc topology XML.
@@ -29,6 +31,7 @@ int rhwloc_map_count_type (rhwloc_map_t *m, const char *type);
  *  heap-allocated strings the caller must free().  Returns -1 on error.
  */
 int rhwloc_map_cores (rhwloc_map_t *m,
+                      flux_error_t *errp,
                       const char *cores,
                       char **cpus_out,
                       char **mems_out);
@@ -37,7 +40,9 @@ int rhwloc_map_cores (rhwloc_map_t *m,
  *  address strings in the same order as the input GPU IDs.  Returns NULL
  *  on error.  Caller must free with rhwloc_map_strv_free().
  */
-char **rhwloc_map_gpu_pci_addrs (rhwloc_map_t *m, const char *gpus);
+char **rhwloc_map_gpu_pci_addrs (rhwloc_map_t *m,
+                                 const char *gpus,
+                                 flux_error_t *errp);
 
 /*  Free a NULL-terminated string array.
  */
