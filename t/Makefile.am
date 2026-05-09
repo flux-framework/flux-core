@@ -347,6 +347,7 @@ TESTSCRIPTS = \
 	python/t0046-job-watcher.py \
 	python/t0100-modprobe.py \
 	python/t1000-service-add-remove.py \
+	python/t6000-testing.py \
 	python/t6010-fake-resources.py
 
 if HAVE_FLUX_SECURITY
