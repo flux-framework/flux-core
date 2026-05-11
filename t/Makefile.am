@@ -349,7 +349,8 @@ TESTSCRIPTS = \
 	python/t1000-service-add-remove.py \
 	python/t6000-testing.py \
 	python/t6010-fake-resources.py \
-	python/t6030-testing-benchmarks.py
+	python/t6030-testing-benchmarks.py \
+	python/t6040-testing-ui.py
 
 if HAVE_FLUX_SECURITY
 TESTSCRIPTS += python/t0009-security.py
