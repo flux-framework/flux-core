@@ -100,6 +100,8 @@ nobase_fluxpy_PYTHON = \
 	testing/job_watcher.py \
 	testing/bulkrun.py \
 	testing/events.py \
+	testing/schedbench/__init__.py \
+	testing/schedbench/benchmarks.py \
 	utils/parsedatetime/__init__.py \
 	utils/parsedatetime/parsedatetime.py \
 	utils/parsedatetime/warns.py \
