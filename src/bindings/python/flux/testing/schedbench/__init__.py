@@ -22,6 +22,7 @@ from flux.testing.schedbench.benchmarks import (
     ThroughputBenchmark,
     simple_jobspec,
 )
+from flux.testing.schedbench.results import BenchmarkResults
 
 # Benchmark subclasses auto-register in BENCHMARKS via
 # Benchmark.__init_subclass__, so importing a module that defines

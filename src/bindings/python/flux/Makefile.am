@@ -102,6 +102,7 @@ nobase_fluxpy_PYTHON = \
 	testing/events.py \
 	testing/schedbench/__init__.py \
 	testing/schedbench/benchmarks.py \
+	testing/schedbench/results.py \
 	utils/parsedatetime/__init__.py \
 	utils/parsedatetime/parsedatetime.py \
 	utils/parsedatetime/warns.py \
