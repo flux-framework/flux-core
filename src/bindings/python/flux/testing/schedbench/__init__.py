@@ -23,6 +23,7 @@ from flux.testing.schedbench.benchmarks import (
     simple_jobspec,
 )
 from flux.testing.schedbench.results import BenchmarkResults
+from flux.testing.schedbench.ui import TerminalEmitter
 
 # Benchmark subclasses auto-register in BENCHMARKS via
 # Benchmark.__init_subclass__, so importing a module that defines
@@ -51,6 +52,7 @@ __all__ = (
     "Benchmark",
     "BenchmarkResults",
     "FillMachineBenchmark",
+    "TerminalEmitter",
     "ThroughputBenchmark",
     "simple_jobspec",
 )
