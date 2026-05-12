@@ -344,7 +344,8 @@ TESTSCRIPTS = \
 	python/t0043-scheduler-pool.py \
 	python/t0045-job-shape-parser.py \
 	python/t0100-modprobe.py \
-	python/t1000-service-add-remove.py
+	python/t1000-service-add-remove.py \
+	python/t6010-fake-resources.py
 
 if HAVE_FLUX_SECURITY
 TESTSCRIPTS += python/t0009-security.py
