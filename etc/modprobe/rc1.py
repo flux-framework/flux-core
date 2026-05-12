@@ -17,6 +17,7 @@ from subprocess import Popen
 import flux.kvs
 import flux.subprocess as sp
 from flux.modprobe import run_all_rc_scripts, task
+from flux.testing.fake_resources import InjectFakeResources
 
 
 def setup(context):
@@ -226,6 +227,38 @@ def slurm_expiration_sync(context):
         ["flux", "slurm-expiration-sync", f"--jobid={jobid}"],
         label="slurm-sync",
     )
+
+
+@task(
+    "fake-resources",
+    ranks="0",
+    before=["resource"],
+    after=["kvs"],
+    needs_config=["fake-resources"],
+)
+def fake_resources(context):
+    """
+    Encode synthetic R from the [fake-resources] config table and write it
+    to ``resource.R`` in the KVS, then set resource module options that
+    prevent verification of the synthetic R against the host's real hwloc
+    topology.
+    """
+    cfg = context.conf_get("fake-resources", {})
+
+    if "nnodes" not in cfg:
+        raise RuntimeError("[fake-resources] table requires the 'nnodes' key")
+
+    InjectFakeResources(
+        nodes=cfg["nnodes"],
+        cores_per_node=cfg.get("cores-per-node", 64),
+        gpus_per_node=cfg.get("gpus-per-node", 0),
+        host_prefix=cfg.get("host-prefix", "fake"),
+        hwloc_xml_path=cfg.get("hwloc-xml-path"),
+        amender=cfg.get("amend-r"),
+        log=print,
+    ).install(context.handle)
+
+    context.setopt("resource", "monitor-force-up noverify", overwrite=True)
 
 
 @task("run-all-rc1", after=["*"])
