@@ -293,6 +293,7 @@ TESTSCRIPTS = \
 	t3400-overlay-trace.t \
 	t3401-module-trace.t \
 	t4100-slurm-expiration-sync.t \
+	t6010-fake-resources.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
