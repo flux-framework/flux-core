@@ -49,6 +49,7 @@ clean-local:
 LONGTESTSCRIPTS = \
 	t9000-system.t \
 	t5000-valgrind.t \
+	t5001-asan.t \
 	t3100-flux-in-flux.t \
 	t3200-instance-restart.t \
 	t3202-instance-restart-testexec.t \

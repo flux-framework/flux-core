@@ -1,0 +1,17 @@
+#!/bin/sh
+
+flux submit --wait-event=alloc sleep inf
+
+flux resource drain 0
+
+# calls both resource.status and resource.sched-status
+flux resource status
+
+# second call should use cached values
+flux resource status
+
+flux resource undrain 0
+
+# Cancel the sleep job and wait for it to complete
+flux cancel $(flux job last)
+flux queue drain

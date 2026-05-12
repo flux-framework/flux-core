@@ -1,0 +1,12 @@
+#!/bin/bash -e
+
+set -x
+
+# Test info fetch
+
+id=$(flux submit -n 1 true)
+flux job attach ${id}
+
+flux job info ${id} eventlog >/dev/null
+flux job info ${id} jobspec >/dev/null
+flux job info ${id} R >/dev/null

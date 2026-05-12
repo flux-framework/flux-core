@@ -1,0 +1,6 @@
+#!/bin/bash -e
+
+NJOBS=${NJOBS:-10}
+
+flux submit --cc="1-$NJOBS" --wait \
+	flux lptest 78 2
