@@ -2474,6 +2474,139 @@ _flux_python3()
     return 0
 }
 
+_flux_schedbench()
+{
+    local cmd=$1
+    local subcmds="run sweep report"
+    local tests="throughput fill-machine locality"
+    local split=false
+
+    local general_OPTS="-h --help"
+
+    # Flags shared by both `run` and `sweep`.  In sweep mode, the
+    # axis-capable parameter flags (--nodes, --njobs, --scheduler,
+    # etc.) accept comma lists and RFC 45 ranges in addition to a
+    # single value — the completion logic is the same either way
+    # since we don't try to complete inside a multi-value spec.
+    local common_OPTS="\
+        -N --nodes= \
+        -c --cores-per-node= \
+        -g --gpus-per-node= \
+        -n --njobs= \
+        --slot-cores= \
+        --slot-gpus= \
+        --hwloc-xml-path= \
+        --amend-r= \
+        --scheduler= \
+        --scheduler-options= \
+        --conf= \
+        -x --exec \
+        --watcher= \
+        --tag= \
+        --results-file= \
+        --no-save \
+        --ui= \
+        --color= \
+        $tests \
+    "
+
+    local run_OPTS="\
+        $common_OPTS \
+        -o --extra-start-options= \
+        -q --quiet \
+        -v --verbose \
+    "
+
+    local sweep_OPTS="\
+        $common_OPTS \
+        --from= \
+        --sweep-name= \
+        --per-run-nodes= \
+    "
+
+    local report_OPTS="\
+        --results-file= \
+        --filter= \
+        -o --format= \
+        --sort= \
+        --no-header \
+        $tests \
+    "
+
+    _flux_split_longopt && split=true
+
+    # Value completion: enumerated choices for options with fixed
+    # values, file-path completion for PATH-typed args. Options that
+    # take values but have no useful suggestion (integer counts, free
+    # strings) fall through to the bare `return` at the bottom of the
+    # case so bash offers nothing.
+    case $prev in
+        --scheduler)
+            COMPREPLY=($(compgen -W \
+                "sched-simple sched-fluxion-qmanager" -- "$cur"))
+            return
+            ;;
+        --watcher)
+            COMPREPLY=($(compgen -W "journal per-job" -- "$cur"))
+            return
+            ;;
+        --ui)
+            COMPREPLY=($(compgen -W "auto on off" -- "$cur"))
+            return
+            ;;
+        --color)
+            COMPREPLY=($(compgen -W "auto always never" -- "$cur"))
+            return
+            ;;
+        --format)
+            # report subcommand: -o long form, named format choices.
+            COMPREPLY=($(compgen -W \
+                "default long csv help" -- "$cur"))
+            return
+            ;;
+        -o)
+            # -o is overloaded: --format on report, --extra-start-options
+            # on run. Dispatch by current subcommand. (On run, falls
+            # through to the bare-return branch since extra-start-options
+            # is free-form.)
+            if [[ $cmd == "report" ]]; then
+                COMPREPLY=($(compgen -W \
+                    "default long csv help" -- "$cur"))
+                return
+            fi
+            return
+            ;;
+        --hwloc-xml-path | --amend-r | --results-file | --from)
+            compopt -o default 2>/dev/null
+            COMPREPLY=()
+            return
+            ;;
+        -N | --nodes | -c | --cores-per-node | -g | --gpus-per-node | \
+            -n | --njobs | --slot-cores | --slot-gpus | \
+            --scheduler-options | --extra-start-options | --conf | \
+            --tag | --filter | --sort | \
+            --sweep-name | --per-run-nodes)
+            return
+            ;;
+    esac
+    $split && return
+
+    if [[ $cur == --*= ]]; then
+        COMPREPLY=()
+        return 0
+    fi
+    if [[ $cmd != "schedbench" ]]; then
+        var="${cmd//-/_}_OPTS"
+        COMPREPLY=( $(compgen -W "${!var} ${general_OPTS}" -- "$cur") )
+    else
+        COMPREPLY=( $(compgen -W "${general_OPTS} ${subcmds}" -- "$cur") )
+    fi
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        compopt -o nospace
+    fi
+    return 0
+}
+
 _flux_core()
 {
     FLUX_OPTS="-v --verbose -V --version -p --parent -r --root"
@@ -2629,6 +2762,9 @@ _flux_core()
         ;;
     sproc)
         _flux_sproc $subcmd
+        ;;
+    schedbench)
+        _flux_schedbench $subcmd
         ;;
     help)
         COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
