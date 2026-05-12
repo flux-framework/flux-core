@@ -12,3 +12,5 @@
 /waitcreate_cancel
 /watch_disconnect
 /watch_stream
+/loop_append
+/watch_initial_sentinel

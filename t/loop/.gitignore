@@ -1,6 +1,4 @@
-/handle.t
-/log.t
-/multrpc.t
-/reactor.t
-/reduce.t
-/rpc.t
+/issue2337
+/issue2711
+/logstderr
+

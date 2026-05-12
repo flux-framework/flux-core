@@ -1,0 +1,6 @@
+/bulk-exec
+/test_echo
+/test_echomsg
+/test_fdcopy
+/test_fork_sleep
+/test_multi_echo

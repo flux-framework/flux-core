@@ -36,6 +36,7 @@ libltdl/
 # docs intermediate files
 /doc/man*/*.xml
 /doc/_build
+/doc/man
 
 # Object files
 *.o
