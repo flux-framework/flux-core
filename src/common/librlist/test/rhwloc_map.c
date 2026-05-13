@@ -13,6 +13,7 @@
 #endif
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 #include "rhwloc_map.h"
 
@@ -162,18 +163,46 @@ void test_cores (void)
         BAIL_OUT ("rhwloc_map_create failed");
 
     /* NULL inputs */
+    err_init (&error);
     ok (rhwloc_map_cores (NULL, &error, "0", &cpus, &mems) == -1
         && errno == EINVAL,
         "rhwloc_map_cores m=NULL returns -1, EINVAL");
+    like (error.text, "Invalid",
+          "rhwloc_map_cores m=NULL error mentions Invalid");
+    err_init (&error);
     ok (rhwloc_map_cores (m, &error, NULL, &cpus, &mems) == -1
         && errno == EINVAL,
         "rhwloc_map_cores cores=NULL returns -1, EINVAL");
+    like (error.text, "Invalid",
+          "rhwloc_map_cores cores=NULL error mentions Invalid");
+    err_init (&error);
     ok (rhwloc_map_cores (m, &error, "0", NULL, &mems) == -1
         && errno == EINVAL,
         "rhwloc_map_cores cpus_out=NULL returns -1, EINVAL");
+    like (error.text, "Invalid",
+          "rhwloc_map_cores cpus_out=NULL error mentions Invalid");
+    err_init (&error);
     ok (rhwloc_map_cores (m, &error, "0", &cpus, NULL) == -1
         && errno == EINVAL,
         "rhwloc_map_cores mems_out=NULL returns -1, EINVAL");
+    like (error.text, "Invalid",
+          "rhwloc_map_cores mems_out=NULL error mentions Invalid");
+
+    /* Invalid core string */
+    err_init (&error);
+    ok (rhwloc_map_cores (m, &error, "x", &cpus, &mems) == -1
+        && errno == EINVAL,
+        "rhwloc_map_cores cores=invalid returns -1, EINVAL");
+    like (error.text, "invalid core",
+          "rhwloc_map_cores cores=invalid error mentions invalid core");
+
+    /* Out-of-range core */
+    err_init (&error);
+    ok (rhwloc_map_cores (m, &error, "999", &cpus, &mems) == -1
+        && errno == ENOENT,
+        "rhwloc_map_cores cores=out-of-range returns -1, ENOENT");
+    like (error.text, "not found",
+          "rhwloc_map_cores cores=out-of-range error mentions not found");
 
     /* Core 0: PUs 0,1 in NUMA node 0 */
     ok (rhwloc_map_cores (m, &error, "0", &cpus, &mems) == 0,
@@ -225,14 +254,21 @@ void test_gpu_pci_addrs (void)
         BAIL_OUT ("rhwloc_map_create failed");
 
     /* NULL inputs */
+    err_init (&error);
     ok (rhwloc_map_gpu_pci_addrs (NULL, "0", &error) == NULL
         && errno == EINVAL,
         "rhwloc_map_gpu_pci_addrs m=NULL returns NULL, EINVAL");
+    like (error.text, "Invalid",
+          "rhwloc_map_gpu_pci_addrs m=NULL error mentions Invalid");
+    err_init (&error);
     ok (rhwloc_map_gpu_pci_addrs (m, NULL, &error) == NULL
         && errno == EINVAL,
         "rhwloc_map_gpu_pci_addrs gpus=NULL returns NULL, EINVAL");
+    like (error.text, "Invalid",
+          "rhwloc_map_gpu_pci_addrs gpus=NULL error mentions Invalid");
 
     /* GPU 0 */
+    err_init (&error);
     addrs = rhwloc_map_gpu_pci_addrs (m, "0", &error);
     ok (addrs != NULL,
         "rhwloc_map_gpu_pci_addrs gpus=0 returns non-NULL");
@@ -242,9 +278,13 @@ void test_gpu_pci_addrs (void)
         addrs && addrs[0] ? addrs[0] : "(null)");
     ok (addrs != NULL && addrs[1] == NULL,
         "rhwloc_map_gpu_pci_addrs gpus=0 result is NULL-terminated");
+    ok (strlen (error.text) == 0,
+        "error.text is zero length");
+
     rhwloc_map_strv_free (addrs);
 
     /* GPU 1 */
+    err_init (&error);
     addrs = rhwloc_map_gpu_pci_addrs (m, "1", &error);
     ok (addrs != NULL,
         "rhwloc_map_gpu_pci_addrs gpus=1 returns non-NULL");
@@ -252,9 +292,12 @@ void test_gpu_pci_addrs (void)
         && streq (addrs[0], "0000:02:00.0"),
         "rhwloc_map_gpu_pci_addrs gpus=1 addrs[0]=\"0000:02:00.0\": got \"%s\"",
         addrs && addrs[0] ? addrs[0] : "(null)");
+    ok (strlen (error.text) == 0,
+        "error.text is zero length");
     rhwloc_map_strv_free (addrs);
 
     /* GPUs 0-1 */
+    err_init (&error);
     addrs = rhwloc_map_gpu_pci_addrs (m, "0-1", &error);
     ok (addrs != NULL,
         "rhwloc_map_gpu_pci_addrs gpus=0-1 returns non-NULL");
@@ -266,12 +309,17 @@ void test_gpu_pci_addrs (void)
         "rhwloc_map_gpu_pci_addrs gpus=0-1 addrs[1]=\"0000:02:00.0\"");
     ok (addrs != NULL && addrs[2] == NULL,
         "rhwloc_map_gpu_pci_addrs gpus=0-1 result is NULL-terminated");
+    ok (strlen (error.text) == 0,
+        "error.text is zero length");
     rhwloc_map_strv_free (addrs);
 
     /* Out-of-range GPU */
+    err_init (&error);
     addrs = rhwloc_map_gpu_pci_addrs (m, "2", &error);
     ok (addrs == NULL,
         "rhwloc_map_gpu_pci_addrs out-of-range GPU returns NULL");
+    like (error.text, "not found",
+          "rhwloc_map_gpu_pci_addrs out-of-range GPU error mentions not found");
 
     rhwloc_map_destroy (m);
 }

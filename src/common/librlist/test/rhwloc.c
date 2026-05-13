@@ -14,6 +14,7 @@
 #include <flux/hostlist.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libutil/errprintf.h"
 #include "rlist.h"
 #include "rhwloc.h"
 
@@ -823,33 +824,55 @@ void test_cores_to_cpuset (void)
         BAIL_OUT ("rhwloc_local_topology_load failed");
 
     /* NULL inputs */
+    err_init (&error);
     ok (rhwloc_cores_to_cpuset (NULL, "0", &error) == NULL,
         "rhwloc_cores_to_cpuset topo=NULL returns NULL");
+    like (error.text, "Invalid",
+          "rhwloc_cores_to_cpuset topo=NULL error mentions Invalid");
+    err_init (&error);
     ok (rhwloc_cores_to_cpuset (topo, NULL, &error) == NULL,
         "rhwloc_cores_to_cpuset cores=NULL returns NULL");
+    like (error.text, "Invalid",
+          "rhwloc_cores_to_cpuset cores=NULL error mentions Invalid");
 
     /* Invalid core string */
+    err_init (&error);
     ok (rhwloc_cores_to_cpuset (topo, "x", &error) == NULL,
         "rhwloc_cores_to_cpuset cores=invalid returns NULL");
+    like (error.text, "invalid core",
+          "rhwloc_cores_to_cpuset cores=invalid error mentions invalid core");
+
+    /* Out-of-range core */
+    err_init (&error);
+    ok (rhwloc_cores_to_cpuset (topo, "999", &error) == NULL,
+        "rhwloc_cores_to_cpuset cores=out-of-range returns NULL");
+    like (error.text, "not found",
+          "rhwloc_cores_to_cpuset cores=out-of-range error mentions not found");
 
     /* Core 0 always exists; cpuset must be non-empty and include PU 0
      * (i.e. physical CPU 0 is always in core 0's cpuset) */
+    err_init (&error);
     cpuset = rhwloc_cores_to_cpuset (topo, "0", &error);
     ok (cpuset != NULL && !hwloc_bitmap_iszero (cpuset),
         "rhwloc_cores_to_cpuset cores=0 returns non-empty cpuset");
     ok (cpuset != NULL && hwloc_bitmap_isset (cpuset, 0),
         "rhwloc_cores_to_cpuset cores=0 cpuset includes PU 0");
+    ok (strlen (error.text) == 0,
+        "error.text is empty");
     hwloc_bitmap_free (cpuset);
 
     /* All cores: cpuset must equal full topology cpuset */
     cores = rhwloc_core_idset_string (topo);
     if (!cores)
         BAIL_OUT ("rhwloc_core_idset_string failed");
+    err_init (&error);
     cpuset = rhwloc_cores_to_cpuset (topo, cores, &error);
     ok (cpuset != NULL
         && hwloc_bitmap_isequal (cpuset,
                                  hwloc_topology_get_allowed_cpuset (topo)),
         "rhwloc_cores_to_cpuset all cores cpuset matches topology cpuset");
+    ok (strlen (error.text) == 0,
+        "error.text is empty");
     hwloc_bitmap_free (cpuset);
     free (cores);
 
