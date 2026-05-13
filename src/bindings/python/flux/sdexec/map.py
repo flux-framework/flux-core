@@ -322,7 +322,7 @@ class HwlocMapper(ResourceMapper):
             < 0
         ):
             errstr = ffi.string(error[0].text).decode("utf-8")
-            raise OSError(ffi.errno, f"rhwloc_map_cores: {errstr}")
+            raise OSError(ffi.errno, f"failed to map cores: {errstr}")
         cpus = ffi.string(cpus_out[0]).decode()
         mems = ffi.string(mems_out[0]).decode()
         lib.free(cpus_out[0])
@@ -478,7 +478,7 @@ class HwlocMapper(ResourceMapper):
         addrs = lib.rhwloc_map_gpu_pci_addrs(self._map, gpus.encode(), error)
         if addrs == ffi.NULL:
             errstr = ffi.string(error[0].text).decode("utf-8")
-            raise OSError(ffi.errno, f"rhwloc_map_gpu_pci_addrs: {errstr}")
+            raise OSError(ffi.errno, f"failed to map GPUs: {errstr}")
         try:
             pci_addrs = []
             i = 0
