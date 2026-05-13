@@ -789,6 +789,8 @@ misconfiguration
 ogpu
 opmi
 printenv
+XML
+XML's
 XMLFILE
 initio
 mortem
@@ -1199,3 +1201,15 @@ amender
 amenders
 jgf
 importlib
+csv
+schedbench
+ui
+njobs
+benchmarking
+hwloc
+hwloc's
+nodeset
+numa
+pu
+backfill
+hoc
