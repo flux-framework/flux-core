@@ -1475,6 +1475,7 @@ error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     request_tracking_remove (ctx, msg);
+    lookup_destroy (lh);
 }
 
 
