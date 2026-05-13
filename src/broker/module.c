@@ -556,6 +556,12 @@ static void exec_state_cb (flux_subprocess_t *proc,
 
     switch (state) {
         case FLUX_SUBPROCESS_RUNNING:
+            flux_log (p->h,
+                      LOG_DEBUG,
+                      "%s %s pid=%d",
+                      loader,
+                      module_get_name (p),
+                      (int)flux_subprocess_pid (proc));
             break;
         case FLUX_SUBPROCESS_FAILED:
             module_errprintf (p,
@@ -740,21 +746,6 @@ ssize_t module_get_recv_queue_count (module_t *p)
                       sizeof (count)) < 0)
         return -1;
     return count;
-}
-
-
-bool module_is_exec (module_t *p)
-{
-    if (!p || !p->is_exec)
-        return false;
-    return true;
-}
-
-pid_t module_get_pid (module_t *p)
-{
-    if (!p || !p->is_exec)
-        return -1;
-    return flux_subprocess_pid (p->exec.p);
 }
 
 char *module_name_frompath (const char *path)
