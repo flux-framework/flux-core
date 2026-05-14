@@ -196,9 +196,14 @@ static hwloc_cpuset_t *distribute_tasks (hwloc_topology_t topo,
 static hwloc_cpuset_t shell_affinity_get_cpuset (struct shell_affinity *sa,
                                                  const char *cores)
 {
-    hwloc_cpuset_t cpuset = rhwloc_cores_to_cpuset (sa->topo, cores);
+    flux_error_t error;
+    hwloc_cpuset_t cpuset = rhwloc_cores_to_cpuset (sa->topo,
+                                                    cores,
+                                                    &error);
     if (!cpuset)
-        shell_log_error ("affinity: failed to get cpuset for cores: %s", cores);
+        shell_log_error ("affinity: failed to get cpuset for cores: %s: %s",
+                         cores,
+                         error.text);
     return cpuset;
 }
 

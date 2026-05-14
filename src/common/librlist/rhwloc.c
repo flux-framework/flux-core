@@ -23,6 +23,7 @@
 #include "ccan/str/str.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "rnode.h"
 #include "rlist.h"
@@ -267,32 +268,50 @@ const char * rhwloc_hostname (hwloc_topology_t topo)
  *  Returns heap-allocated hwloc_cpuset_t, or NULL on error.
  *  Caller must free with hwloc_bitmap_free().
  */
-hwloc_cpuset_t rhwloc_cores_to_cpuset (hwloc_topology_t topo, const char *cores)
+hwloc_cpuset_t rhwloc_cores_to_cpuset (hwloc_topology_t topo,
+                                       const char *cores,
+                                       flux_error_t *errp)
 {
     hwloc_cpuset_t coreset = NULL;
     hwloc_cpuset_t cpuset = NULL;
     int depth;
     int i;
 
-    if (!topo || !cores)
+    if (!topo || !cores) {
+        errprintf (errp, "Invalid argument");
+        errno = EINVAL;
         return NULL;
+    }
 
     if (!(coreset = hwloc_bitmap_alloc ())
-        || !(cpuset = hwloc_bitmap_alloc ()))
+        || !(cpuset = hwloc_bitmap_alloc ())) {
+        errprintf (errp, "Error allocating hwloc bitmaps");
+        errno = ENOMEM;
         goto err;
+    }
 
-    if (hwloc_bitmap_list_sscanf (coreset, cores) < 0)
+    if (hwloc_bitmap_list_sscanf (coreset, cores) < 0) {
+        errprintf (errp, "invalid core ID string: %s", cores);
+        errno = EINVAL;
         goto err;
+    }
 
     depth = hwloc_get_type_depth (topo, HWLOC_OBJ_CORE);
-    if (depth == HWLOC_TYPE_DEPTH_UNKNOWN || depth == HWLOC_TYPE_DEPTH_MULTIPLE)
+    if (depth == HWLOC_TYPE_DEPTH_UNKNOWN
+        || depth == HWLOC_TYPE_DEPTH_MULTIPLE) {
+        errprintf (errp, "hwloc reports invalid depth for Core objects");
+        errno = EINVAL;
         goto err;
+    }
 
     i = hwloc_bitmap_first (coreset);
     while (i >= 0) {
         hwloc_obj_t core = hwloc_get_obj_by_depth (topo, depth, i);
-        if (!core || !core->cpuset)
+        if (!core || !core->cpuset) {
+            errprintf (errp, "core %d not found in node topology", i);
+            errno = ENOENT;
             goto err;
+        }
         hwloc_bitmap_or (cpuset, cpuset, core->cpuset);
         i = hwloc_bitmap_next (coreset, i);
     }
@@ -410,7 +429,11 @@ hwloc_obj_t *rhwloc_gpu_objects (hwloc_topology_t topo, int *count_out)
     /* Get total count of PCI devices to size the visited array:
      */
     n_pci = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_PCI_DEVICE);
-    if (n_pci <= 0 || !(visited = calloc (n_pci, sizeof (*visited))))
+    if (n_pci <= 0) {
+        errno = ENODEV;
+        return NULL;
+    }
+    if (!(visited = calloc (n_pci, sizeof (*visited))))
         return NULL;
 
     /* Traverse topo first to get count of unique GPUs to size result

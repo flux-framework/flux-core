@@ -309,6 +309,45 @@ test_expect_success 'AllowedCPUs check failure drains rank with useful message' 
 '
 
 #
+# Mapper error reporting: sdexec-mapper.lookup returns a useful error message
+# when resource IDs cannot be mapped to the local hwloc topology.
+#
+
+cat >mapper_err.py <<'PYEOF'
+"""Send sdexec-mapper.lookup with a crafted R; on OSError print message and exit 0."""
+import json
+import subprocess
+import sys
+import flux
+
+result = subprocess.run(
+    ["flux", "R", "encode"] + sys.argv[1:],
+    stdout=subprocess.PIPE,
+    check=True,
+)
+R = json.loads(result.stdout)
+h = flux.Flux()
+try:
+    h.rpc("sdexec-mapper.lookup", {"R": R}).get()
+    print("ERROR: lookup succeeded unexpectedly", file=sys.stderr)
+    sys.exit(1)
+except OSError as e:
+    print(str(e))
+PYEOF
+
+test_expect_success 'sdexec-mapper.lookup: out-of-range core returns useful error' '
+	flux python mapper_err.py --cores=999 >core-out-of-range.out &&
+	test_debug "cat core-out-of-range.out" &&
+	grep -i "core" core-out-of-range.out
+'
+
+test_expect_success 'sdexec-mapper.lookup: out-of-range GPU returns useful error' '
+	flux python mapper_err.py --cores=0 --gpus=999 >gpu-out-of-range.out &&
+	test_debug "cat gpu-out-of-range.out" &&
+	grep -i "not found" gpu-out-of-range.out
+'
+
+#
 # Reload config: disable sdexec-constrain-resources, verify constraint removed
 #
 # N.B. do these tests last as they alter the job-exec module config
