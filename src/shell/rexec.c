@@ -42,6 +42,7 @@ struct shell_rexec {
     subprocess_server_t *server;
     char *name;
     bool parent_is_trusted;
+    bool sigkill_sent;
     double shutdown_timeout;
 #if HAVE_FLUX_SECURITY
     flux_security_t *sec;
@@ -237,25 +238,23 @@ static void shutdown_cb (flux_future_t *f, void *arg)
 {
     struct shell_rexec *rexec = arg;
 
-    /* On timeout, if shell_rexec was passed as arg, escalate to SIGKILL
-     * and wait for shutdown_timeout again. Pass NULL as arg this time so
-     * the callback stops the reactor on the second timeout instead of
-     * retrying indefinitely.
-     *
-     * This approach allows clients to receive completion messages for
-     * subprocesses terminated with SIGKILL. If we destroyed the subprocess
-     * server instead, SIGKILL would be sent but final RPCs to clients
-     * would never be sent.
+    /* On timeout, escalate to SIGKILL once (guarded by sigkill_sent) and
+     * wait for shutdown_timeout again. This approach allows clients to
+     * receive completion messages for subprocesses terminated with SIGKILL.
+     * If we destroyed the subprocess server instead, SIGKILL would be sent
+     * but final RPCs to clients would never be sent.
      */
     if (flux_future_get (f, NULL) < 0
         && errno == ETIMEDOUT
-        && rexec != NULL) {
+        && rexec != NULL
+        && !rexec->sigkill_sent) {
+        rexec->sigkill_sent = true;
         flux_future_destroy (f);
         if ((f = subprocess_server_shutdown (rexec->server, SIGKILL))
             && flux_future_then (f,
                                  rexec->shutdown_timeout,
                                  shutdown_cb,
-                                 NULL) == 0)
+                                 rexec) == 0)
             return;
 
         /* On failure, fall through to stopping the reactor. The subprocess
