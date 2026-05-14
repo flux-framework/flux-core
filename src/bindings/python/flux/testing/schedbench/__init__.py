@@ -22,6 +22,10 @@ from flux.testing.schedbench.benchmarks import (
     ThroughputBenchmark,
     simple_jobspec,
 )
+from flux.testing.schedbench.locality import (
+    LocalityBenchmark,
+    LocalityPredicate,
+)
 from flux.testing.schedbench.results import BenchmarkResults
 from flux.testing.schedbench.ui import TerminalEmitter
 
@@ -52,7 +56,11 @@ __all__ = (
     "Benchmark",
     "BenchmarkResults",
     "FillMachineBenchmark",
+    "LocalityBenchmark",
+    "LocalityPredicate",
     "TerminalEmitter",
     "ThroughputBenchmark",
     "simple_jobspec",
 )
+
+# vi: ts=4 sw=4 expandtab

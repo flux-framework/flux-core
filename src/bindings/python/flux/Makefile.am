@@ -102,6 +102,7 @@ nobase_fluxpy_PYTHON = \
 	testing/events.py \
 	testing/schedbench/__init__.py \
 	testing/schedbench/benchmarks.py \
+	testing/schedbench/locality.py \
 	testing/schedbench/results.py \
     testing/schedbench/_ansi.py \
 	testing/schedbench/ui.py \
