@@ -257,11 +257,21 @@ char *rhwloc_local_topology_xml (rhwloc_flags_t rflags)
 
 const char * rhwloc_hostname (hwloc_topology_t topo)
 {
+    static char hostname[_POSIX_HOST_NAME_MAX + 1];
+    const char *name;
     int depth = hwloc_get_type_depth (topo, HWLOC_OBJ_MACHINE);
     hwloc_obj_t obj = hwloc_get_obj_by_depth (topo, depth, 0);
-    if (obj)
-        return hwloc_obj_get_info_by_name(obj, "HostName");
-    return NULL;
+
+    if (obj && (name = hwloc_obj_get_info_by_name (obj, "HostName")))
+        return name;
+    /* Fall back to local hostname if HostName not available
+     */
+    if (hostname[0] == '\0') {
+        if (gethostname (hostname, sizeof (hostname)) < 0)
+            return NULL;
+        hostname[sizeof (hostname) - 1] = '\0'; // POSIX doesn't guarantee NUL
+    }
+    return hostname;
 }
 
 /*  Return the union of cpusets for the cores in idset string `cores`.
