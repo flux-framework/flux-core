@@ -350,6 +350,7 @@ TESTSCRIPTS = \
 	python/t6000-testing.py \
 	python/t6010-fake-resources.py \
 	python/t6030-testing-benchmarks.py \
+	python/t6031-testing-schedbench-locality.py \
 	python/t6040-testing-ui.py
 
 if HAVE_FLUX_SECURITY
