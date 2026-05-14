@@ -1233,7 +1233,6 @@ static lookup_t *lookup_common (flux_t *h,
     int flags;
     const char *ns = NULL;
     const char *key;
-    json_t *val = NULL;
     json_t *root_dirent = NULL;
     lookup_t *lh = NULL;
     const char *root_ref = NULL;
@@ -1368,10 +1367,8 @@ static lookup_t *lookup_common (flux_t *h,
     rc = 0;
 done:
     wait_destroy (wait);
-    if (rc < 0) {
+    if (rc < 0)
         lookup_destroy (lh);
-        json_decref (val);
-    }
     (*stall) = false;
     return (rc == 0) ? lh : NULL;
 
