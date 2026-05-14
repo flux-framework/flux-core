@@ -67,7 +67,7 @@ __get_flux_subcommands() {
           modprobe sproc proxy update hostlist dump restore R keygen logger \
           post-job-event fsck startlog pmi uptime version env cgroup \
           heaptrace lptest relay python python3.13 getattr setattr lsattr \
-          content admin help"
+          content admin schedbench help"
 }
 
 # Temp file used to capture COMPREPLY across function calls
@@ -301,6 +301,124 @@ test_expect_success 'pmi get: completes --ranks' '
 test_expect_success 'pmi exchange: completes --count' '
     run_completion "flux pmi exchange --" &&
     completion_has "--count="
+'
+
+#
+# flux-schedbench
+#
+test_expect_success 'schedbench: completes subcommands' '
+    run_completion "flux schedbench " &&
+    completion_has "run" &&
+    completion_has "sweep" &&
+    completion_has "report"
+'
+test_expect_success 'schedbench run: completes long options' '
+    run_completion "flux schedbench run --" &&
+    completion_has "--nodes=" &&
+    completion_has "--cores-per-node=" &&
+    completion_has "--gpus-per-node=" &&
+    completion_has "--hwloc-xml-path=" &&
+    completion_has "--amend-r=" &&
+    completion_has "--exec"
+'
+test_expect_success 'schedbench run: completes short options' '
+    run_completion "flux schedbench run -" &&
+    completion_has "-N" &&
+    completion_has "-c" &&
+    completion_has "-g" &&
+    completion_has "-x"
+'
+test_expect_success 'schedbench run: --scheduler completes scheduler names' '
+    run_completion "flux schedbench run --scheduler " &&
+    completion_has "sched-simple" &&
+    completion_has "sched-fluxion-qmanager"
+'
+test_expect_success 'schedbench run: --watcher completes journal and per-job' '
+    run_completion "flux schedbench run --watcher " &&
+    completion_has "journal" &&
+    completion_has "per-job"
+'
+test_expect_success 'schedbench run: --ui completes auto/on/off' '
+    run_completion "flux schedbench run --ui " &&
+    completion_has "auto" &&
+    completion_has "on" &&
+    completion_has "off"
+'
+test_expect_success 'schedbench run: --color completes auto/always/never' '
+    run_completion "flux schedbench run --color " &&
+    completion_has "auto" &&
+    completion_has "always" &&
+    completion_has "never"
+'
+test_expect_success 'schedbench run: positional completes test names' '
+    run_completion "flux schedbench run " &&
+    completion_has "throughput" &&
+    completion_has "fill-machine" &&
+    completion_has "locality"
+'
+test_expect_success 'schedbench run: -o (extra-start-options) takes free-form value' '
+    run_completion "flux schedbench run -o " &&
+    completion_empty
+'
+test_expect_success 'schedbench run: --hwloc-xml-path delegates to file completion' '
+    run_completion "flux schedbench run --hwloc-xml-path " &&
+    completion_empty
+'
+test_expect_success 'schedbench run: --amend-r delegates to file completion' '
+    run_completion "flux schedbench run --amend-r " &&
+    completion_empty
+'
+test_expect_success 'schedbench sweep: completes long options' '
+    run_completion "flux schedbench sweep --" &&
+    completion_has "--nodes=" &&
+    completion_has "--scheduler=" &&
+    completion_has "--njobs=" &&
+    completion_has "--from=" &&
+    completion_has "--sweep-name=" &&
+    completion_has "--per-run-nodes="
+'
+test_expect_success 'schedbench sweep: positional completes test names' '
+    run_completion "flux schedbench sweep " &&
+    completion_has "throughput" &&
+    completion_has "fill-machine" &&
+    completion_has "locality"
+'
+test_expect_success 'schedbench sweep: --from delegates to file completion' '
+    run_completion "flux schedbench sweep --from " &&
+    completion_empty
+'
+test_expect_success 'schedbench sweep: --scheduler completes scheduler names' '
+    run_completion "flux schedbench sweep --scheduler " &&
+    completion_has "sched-simple" &&
+    completion_has "sched-fluxion-qmanager"
+'
+test_expect_success 'schedbench sweep: --sweep-name takes free-form value' '
+    run_completion "flux schedbench sweep --sweep-name " &&
+    completion_empty
+'
+test_expect_success 'schedbench sweep: --per-run-nodes takes free-form value' '
+    run_completion "flux schedbench sweep --per-run-nodes " &&
+    completion_empty
+'
+test_expect_success 'schedbench report: completes long options' '
+    run_completion "flux schedbench report --" &&
+    completion_has "--results-file=" &&
+    completion_has "--filter=" &&
+    completion_has "--format=" &&
+    completion_has "--sort=" &&
+    completion_has "--no-header"
+'
+test_expect_success 'schedbench report: -o completes format names' '
+    run_completion "flux schedbench report -o " &&
+    completion_has "default" &&
+    completion_has "long" &&
+    completion_has "csv"
+'
+test_expect_success 'schedbench report: positional completes test names' '
+    run_completion "flux schedbench report " &&
+    completion_has "throughput" &&
+    completion_has "fill-machine" &&
+    completion_has "locality"
 '
 
 #
