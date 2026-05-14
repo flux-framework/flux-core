@@ -32,8 +32,14 @@ class JournalEvent(JournalEventBase):
     def __init__(self, jobid, event, jobspec=None, R=None):
         super().__init__(event)
         self.jobid = JobID(jobid)
-        self.jobspec = jobspec
-        self.R = R
+        self.jobspec = None
+        self.R = None
+        if self.is_empty():
+            return
+        if self.name == "submit":
+            self.jobspec = jobspec
+        elif self.name == "alloc":
+            self.R = R
 
     def is_empty(self):
         """Return True if this event is an empty journal event"""
@@ -45,12 +51,17 @@ class JournalEvent(JournalEventBase):
         if self.is_empty():
             return "-1: End of historical data stream"
         return " ".join(
-            [
-                f"{self.jobid.f58}:",
-                f"{self.timestamp:<0.5f}",
-                self.name,
-                self.context_string,
-            ]
+            filter(
+                None,
+                [
+                    f"{self.jobid.f58}:",
+                    f"{self.timestamp:<0.5f}",
+                    self.name,
+                    self.context_string,
+                    self.jobspec and f"jobspec={self.jobspec}",
+                    self.R and f"R={self.R}",
+                ],
+            )
         )
 
 
