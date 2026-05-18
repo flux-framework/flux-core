@@ -29,6 +29,7 @@ import shlex
 import socket
 import sys
 import time
+from collections import ChainMap
 
 import flux
 import flux.resource
@@ -65,75 +66,81 @@ _WATCHERS = {
 }
 
 
-def _add_common_run_opts(parser):
-    """Add common --opts for 'flux schedbench run' to the parser."""
+def _add_common_run_opts(parser, sweep_mode=False):
+    """Add common --opts for ``flux schedbench run`` (and ``sweep``).
+
+    When ``sweep_mode=True``, axis-capable parameter flags
+    (--nodes, --njobs, --scheduler, etc.) take string values that
+    the sweep dispatcher parses as axis specs — a comma list like
+    ``16,32,64`` or an RFC 45 range like ``16-1024:2`` becomes a
+    sweep axis with multiple values; a scalar stays fixed across
+    the whole sweep.  Defaults switch to ``None`` so missing flags
+    don't accidentally pollute the matrix.  Run-only meta flags
+    (--quiet, --verbose, --extra-start-options) are omitted.
+    """
+
+    def _param(type_, default, metavar):
+        """Type/default/metavar kwargs for an axis-capable param
+        flag — string axis-spec in sweep_mode, native type in run
+        mode."""
+        if sweep_mode:
+            return dict(type=str, default=None, metavar="V")
+        return dict(type=type_, default=default, metavar=metavar)
+
     parser.add_argument(
         "-N",
         "--nodes",
-        type=int,
-        default=4,
-        metavar="N",
         help="fake-resource node count for the launched "
         "subinstance (default: 4; ignored with --exec — the "
         "real broker's resources are used instead)",
+        **_param(int, 4, "N"),
     )
     parser.add_argument(
         "-c",
         "--cores-per-node",
-        type=int,
-        default=64,
-        metavar="C",
         help="cores per node (default: 64; ignored with --exec)",
+        **_param(int, 64, "C"),
     )
     parser.add_argument(
         "-g",
         "--gpus-per-node",
-        type=int,
-        default=8,
-        metavar="G",
         help="GPUs per node (default: 8; ignored with --exec)",
+        **_param(int, 8, "G"),
     )
     parser.add_argument(
         "-n",
         "--njobs",
-        type=int,
-        default=1000,
-        metavar="N",
         help="number of jobs to submit (default: 1000). Each "
         "benchmark uses this differently: throughput and locality "
         "submit exactly this many; fill-machine derives its job "
         "count from the resource set and ignores this value; "
         "locality's --duration=fill mode likewise overrides.",
+        **_param(int, 1000, "N"),
     )
     parser.add_argument(
         "--slot-cores",
-        type=int,
-        default=1,
-        metavar="K",
         help="cores per slot (default: 1). Per-task core "
         "requirement for jobs submitted by this benchmark.",
+        **_param(int, 1, "K"),
     )
     parser.add_argument(
         "--slot-gpus",
-        type=int,
-        default=0,
-        metavar="K",
         help="GPUs per slot (default: 0). Per-task GPU requirement "
         "for jobs submitted by this benchmark.",
+        **_param(int, 0, "K"),
     )
     parser.add_argument(
         "--hwloc-xml-path",
-        metavar="PATH",
         help="path to an hwloc XML file describing per-node "
         "topology; passed to the subinstance as "
         "--conf=fake-resources.hwloc-xml-path=PATH. The XML's "
         "per-node shape is replicated across --nodes. Useful for "
         "testing topology-aware schedulers (e.g. Fluxion). "
         "Ignored with --exec.",
+        **_param(str, None, "PATH"),
     )
     parser.add_argument(
         "--amend-r",
-        metavar="SPEC",
         help="reference to a Python amender that mutates R before "
         "it is written to KVS, in either ``module:function`` form "
         "or as a path to a file with an ``amend()`` callable "
@@ -142,11 +149,10 @@ def _add_common_run_opts(parser):
         "--conf=fake-resources.amend-r=SPEC. Typically paired with "
         "--hwloc-xml-path to inject scheduler-specific topology "
         "metadata into R. Ignored with --exec.",
+        **_param(str, None, "SPEC"),
     )
     parser.add_argument(
         "--scheduler",
-        default="sched-simple",
-        metavar="NAME",
         help="scheduler module to load in the fake-resources "
         "subinstance via --conf=modules.alternatives.sched "
         "(default: sched-simple). Ignored with --exec — in "
@@ -155,15 +161,16 @@ def _add_common_run_opts(parser):
         "name is read from the broker post-setup via the "
         "sched-service lookup — so the results record reflects "
         "what was actually loaded, not what was requested.",
+        **_param(str, "sched-simple", "NAME"),
     )
     parser.add_argument(
         "--scheduler-options",
-        metavar="OPTS",
         help="module options string for the scheduler; "
         "shlex-parsed into a list and encoded into the "
         "subinstance config as "
         '--conf=modules.sched.args=["opt1", "opt2"]. '
         "Ignored with --exec.",
+        **_param(str, None, "OPTS"),
     )
     parser.add_argument(
         "--conf",
@@ -177,20 +184,21 @@ def _add_common_run_opts(parser):
         "shorter, and accumulates across multiple uses. Ignored "
         "with --exec.",
     )
-    parser.add_argument(
-        "-o",
-        "--extra-start-options",
-        action="append",
-        default=[],
-        metavar="OPTS",
-        help="extra arguments to pass through to the underlying "
-        "`flux start` when launching the fake-resources "
-        "subinstance; shlex-parsed. May be given multiple "
-        "times. Useful for broker attributes (--setattr=...) "
-        "and other non-config flags; for plain --conf=KEY=VALUE "
-        "settings prefer the dedicated --conf option above. "
-        "Ignored with --exec.",
-    )
+    if not sweep_mode:
+        parser.add_argument(
+            "-o",
+            "--extra-start-options",
+            action="append",
+            default=[],
+            metavar="OPTS",
+            help="extra arguments to pass through to the underlying "
+            "`flux start` when launching the fake-resources "
+            "subinstance; shlex-parsed. May be given multiple "
+            "times. Useful for broker attributes (--setattr=...) "
+            "and other non-config flags; for plain --conf=KEY=VALUE "
+            "settings prefer the dedicated --conf option above. "
+            "Ignored with --exec.",
+        )
     parser.add_argument(
         "-x",
         "--exec",
@@ -202,20 +210,34 @@ def _add_common_run_opts(parser):
         "broker's currently-loaded scheduler and currently-up "
         "resources are what you want to benchmark.",
     )
-    parser.add_argument(
-        "--watcher",
-        choices=sorted(_WATCHERS.keys()),
-        default="journal",
-        help="event-watcher implementation (default: journal). "
-        "The journal watcher imposes a single subscription on "
-        "kvs-watch; the per-job watcher opens one subscription "
-        "per job, useful for measuring watcher overhead under "
-        "high job counts.",
-    )
+    # --watcher has a fixed choice set in run mode; in sweep mode
+    # it becomes axis-capable and choices come off (the child
+    # validates each axis value as it spawns).
+    if sweep_mode:
+        parser.add_argument(
+            "--watcher",
+            type=str,
+            default=None,
+            metavar="V",
+            help="event-watcher implementation (axis-capable). "
+            "Same semantics as `run`'s --watcher; in sweep mode "
+            "accepts a comma list like ``journal,per-job``.",
+        )
+    else:
+        parser.add_argument(
+            "--watcher",
+            choices=sorted(_WATCHERS.keys()),
+            default="journal",
+            help="event-watcher implementation (default: journal). "
+            "The journal watcher imposes a single subscription on "
+            "kvs-watch; the per-job watcher opens one subscription "
+            "per job, useful for measuring watcher overhead under "
+            "high job counts.",
+        )
     parser.add_argument(
         "--tag",
         metavar="LABEL",
-        default="",
+        default=("" if not sweep_mode else None),
         help="free-form label stored in results metadata",
     )
     parser.add_argument(
@@ -229,19 +251,20 @@ def _add_common_run_opts(parser):
         action="store_true",
         help="don't append to the results file",
     )
-    parser.add_argument(
-        "-q",
-        "--quiet",
-        action="store_true",
-        help="emit only terminal events (test.start, result, "
-        "test.complete, test.error); forces JSON output",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="emit progress/info/metric events",
-    )
+    if not sweep_mode:
+        parser.add_argument(
+            "-q",
+            "--quiet",
+            action="store_true",
+            help="emit only terminal events (test.start, result, "
+            "test.complete, test.error); forces JSON output",
+        )
+        parser.add_argument(
+            "-v",
+            "--verbose",
+            action="store_true",
+            help="emit progress/info/metric events",
+        )
     parser.add_argument(
         "--ui",
         choices=("auto", "on", "off"),
@@ -405,7 +428,73 @@ def parse_args():
         help="omit the header row",
     )
 
+    # `flux schedbench sweep ...`
+    swp_p = sub.add_parser(
+        "sweep",
+        help="run a parameter-matrix sweep of benchmarks",
+        formatter_class=help_formatter(),
+    )
+    # Same positional + flag shape as ``run`` — but every
+    # axis-capable value may be a single scalar OR a comma list /
+    # RFC 45 range; multi-value forms become sweep axes.  The test
+    # positional is optional in sweep mode (it can come from the
+    # TOML file via --from instead); choices=... is dropped so
+    # multi-test sweeps like ``throughput,locality`` work.
+    swp_p.add_argument(
+        "test",
+        nargs="?",
+        metavar="TEST",
+        help="benchmark to run (comma list for a multi-test "
+        "sweep; may be omitted if provided by --from)",
+    )
+    _add_common_run_opts(swp_p, sweep_mode=True)
+
+    # Sweep-only meta flags.
+    swp_p.add_argument(
+        "--from",
+        dest="from_file",
+        metavar="PATH",
+        help="load sweep definition from a TOML file; CLI flag "
+        "values for the same parameters take precedence",
+    )
+    swp_p.add_argument(
+        "--sweep-name",
+        metavar="NAME",
+        help="human-readable label for this sweep (default: a " "timestamp-based name)",
+    )
+    swp_p.add_argument(
+        "--per-run-nodes",
+        type=int,
+        default=1,
+        metavar="N",
+        help="nodes to allocate to each child Flux job "
+        "(default: 1, enough for fake-resources benchmarks)",
+    )
+
     return parser.parse_args()
+
+
+#: Argparse destinations for axis-capable sweep parameters.  These
+#: are the flags whose values are parsed via :func:`parse_axis_spec`
+#: in :func:`cmd_sweep` to determine whether each one becomes a
+#: fixed parameter (single value) or a sweep axis (multi-value).
+#: The list is the single source of truth; flags themselves are
+#: declared by :func:`_add_common_run_opts` in sweep mode.
+_SWEEP_AXIS_DESTS = (
+    "test",
+    "nodes",
+    "cores_per_node",
+    "gpus_per_node",
+    "njobs",
+    "slot_cores",
+    "slot_gpus",
+    "hwloc_xml_path",
+    "amend_r",
+    "scheduler",
+    "scheduler_options",
+    "watcher",
+    "tag",
+)
 
 
 def _detect_scheduler(handle):
@@ -554,7 +643,15 @@ def _select_emitter(args):
     # ui == "off"
     if args.quiet:
         return _ResultOnlyEmitter()
-    return TestEventEmitter(verbosity=NORMAL)
+    # In --ui=off mode `-v` upgrades the event stream from NORMAL
+    # (test.start/stage/result/test.complete only) to VERBOSE
+    # (adds progress/info/metric events).  Without this upgrade,
+    # `--ui=off -v` would silently produce the same event stream
+    # as `--ui=off` alone — surprising on its own and a problem
+    # for the sweep dashboard, which needs progress events for
+    # the per-run mini bars.
+    verbosity = VERBOSE if args.verbose else NORMAL
+    return TestEventEmitter(verbosity=verbosity)
 
 
 def _flux_version(handle):
@@ -592,14 +689,25 @@ def _config_dict(args, resources, scheduler_name):
     return cfg
 
 
-def _run_record(args, resources, scheduler_name, metrics, flux_version):
+def _run_record(
+    args,
+    resources,
+    scheduler_name,
+    config,
+    metrics,
+    flux_version,
+):
     """Build the result-file record for this run.
 
     ``resources`` carries the resolved shape (real or fake);
     ``scheduler_name`` is the broker's currently-loaded sched module, looked
     up post-setup (so it matches what actually ran, not what was requested);
-    ``args.real_exec`` flags which mode produced the run. Schema is identical
-    for both modes so reports and downstream tools don't have to branch.
+    ``args.real_exec`` flags which mode produced the run.  ``config`` is the
+    test.start event's config dict (see :func:`_config_dict`) — persisted
+    under ``benchmarks[test]`` alongside ``results`` so the report tool can
+    surface per-benchmark configuration (njobs, slot_cores, ...) on rows
+    whose ``results`` are absent.  Schema is identical for both real and
+    mock modes so reports and downstream tools don't have to branch.
     """
     return {
         "test_name": args.test,
@@ -621,7 +729,10 @@ def _run_record(args, resources, scheduler_name, metrics, flux_version):
         },
         "watcher": args.watcher,
         "benchmarks": {
-            args.test: {"results": metrics},
+            args.test: {
+                "config": dict(config),
+                "results": metrics,
+            },
         },
     }
 
@@ -827,10 +938,11 @@ def _run_in_broker(args):
     # specifics.
     if hasattr(emitter, "set_summary_metrics"):
         emitter.set_summary_metrics(type(bench).SUMMARY_METRICS)
+    config = _config_dict(args, resources, scheduler_name)
     emitter.test_start(
         args.test,
         stages=bench.stages,
-        config=_config_dict(args, resources, scheduler_name),
+        config=config,
     )
 
     t0 = time.monotonic()
@@ -851,6 +963,7 @@ def _run_in_broker(args):
                 args,
                 resources,
                 scheduler_name,
+                config,
                 metrics,
                 _flux_version(handle),
             ),
@@ -934,21 +1047,124 @@ def _csv_format_for(headings):
     return ",".join(f"{{{k}}}" for k in headings)
 
 
+class _MissingMetric:
+    """Sentinel for a missing report-row value.
+
+    Renders so that failed/incomplete runs are immediately visible
+    in the report table, following the Flux empty-display convention
+    (single ``-`` hyphen, as used by ``:h`` in :class:`UtilFormatter`
+    and recognized by :class:`DisplayValue` for sort equivalence).
+    Behaviour depends on the format spec:
+
+    * **Numeric specs** (``f``/``d``/``g``/``e``/etc.) -> ``-``
+      right-aligned in the column.  A row missing all its metric
+      values (a benchmark that errored out, an OOM-killed run,
+      etc.) appears as a sequence of ``-`` cells, distinguishing
+      it from real data at a glance.  This is the float-precision
+      counterpart to ``:h`` — ``:h`` strips the type letter and
+      converts to a string format, which loses ``.2f``-style
+      precision.  The sentinel keeps the numeric column width
+      while substituting the hyphen marker.
+    * **String specs** and **width-only specs** (no numeric type
+      letter) -> width-padded blank.  Avoids confusion in identity
+      columns like ``scheduler`` and ``real_exec`` where ``-``
+      would imply data we don't have rather than data that failed.
+    * **No spec** (CSV / ``str()``) -> empty string, so spreadsheets
+      see empty cells rather than a ``-`` literal.
+
+    Without this sentinel, a missing ``time_to_fill`` formatted as
+    ``>7.2f`` raises ``Unknown format code 'f' for object of type
+    'str'`` and aborts the whole report.
+
+    Sort and empty-detection compatibility:
+
+    * ``str(_MISSING) == ""`` -> :class:`DisplayValue` categorizes
+      as EMPTY (group with ``None`` / ``""`` / ``"-"``), so sorting
+      by a column with missing values puts the failed rows at the
+      start (or end, with reverse sort).
+    * ``_MISSING == ""`` -> :class:`OutputFormat`'s ``?:`` empty-skip
+      sentinel treats the field as empty.
+    * ``str(_MISSING) in empty_outputs()`` -> :class:`UtilFormatter`'s
+      ``:h`` substitution would map _MISSING to ``-`` itself (the
+      sentinel composes with the existing convention rather than
+      conflicting with it).
+    """
+
+    #: Format-spec type letters that mean "numeric value".  Stripped
+    #: of fill / align / sign / etc. — only the type letter matters
+    #: for the missing-marker decision.  Includes Python's full
+    #: numeric set; ``%`` is a presentation type for floats.
+    _NUMERIC_TYPES = frozenset("bcdefgnoxEFGX%")
+
+    def __format__(self, spec):
+        if not spec:
+            return ""
+        # Flux's OutputFormat may add a trailing ``+`` ellipsis
+        # extension; strip before inspecting the type letter.
+        spec_core = spec.rstrip("+")
+        is_numeric = spec_core and spec_core[-1] in self._NUMERIC_TYPES
+        # Empirically determine the rendered width by probing
+        # ``spec_core`` (the extension-stripped form) with samples
+        # of each base type.  The ``+`` extension affects content,
+        # not width, so probing without it gives the right answer
+        # for the flux-extended specs that Python's ``format()``
+        # otherwise rejects.  Falls through to empty string if no
+        # sample accepts the spec — rare; degrades gracefully.
+        for sample in (0.0, 0, ""):
+            try:
+                width = len(format(sample, spec_core))
+            except (ValueError, TypeError):
+                continue
+            if is_numeric:
+                # Right-align the hyphen marker in the column —
+                # matches the convention used by ``:h`` in
+                # :class:`UtilFormatter` and by :class:`DisplayValue`
+                # for "this field is empty / not applicable".
+                return "-".rjust(width) if width >= 1 else ""
+            return " " * width
+        LOGGER.debug(
+            "_MissingMetric: no sample accepted spec %r; returning empty", spec
+        )
+        return ""
+
+    def __str__(self):
+        return ""
+
+    def __bool__(self):
+        return False
+
+    def __eq__(self, other):
+        return other == "" or other is self
+
+    def __hash__(self):
+        return hash("")
+
+    def __repr__(self):
+        return "<missing>"
+
+
+#: Module-level singleton used in :class:`_ReportRow` for every
+#: heading-named field until a real value is set.  One instance
+#: shared across all rows — equality is by value not identity.
+_MISSING = _MissingMetric()
+
+
 class _ReportRow:
     """Flat attribute view of a results-file run for OutputFormat.
 
-    Every field named in the benchmark's ``REPORT_HEADINGS`` is initialized to
-    ``""`` so OutputFormat's ``?:`` sentinel works (the empty-string check in
-    ``empty_outputs()`` picks it up) and CSV cells for missing data render
-    empty rather than ``"None"``. Values are then overwritten from the run
-    record where applicable. The row never raises ``AttributeError`` for a
-    heading-listed field — older results that predate a metric just get ``""``
-    for it.
+    Every field named in the benchmark's ``REPORT_HEADINGS`` is
+    initialized to :data:`_MISSING` (a :class:`_MissingMetric`
+    sentinel that formats safely under both string-spec and
+    numeric-spec columns and compares equal to ``""``).  Values
+    are then overwritten from the run record where applicable.
+    The row never raises ``AttributeError`` for a heading-listed
+    field — older results that predate a metric just get the
+    sentinel for it, which renders as a width-padded blank cell.
     """
 
     def __init__(self, run, bench_cls):
         for key in bench_cls.REPORT_HEADINGS:
-            setattr(self, key, "")
+            setattr(self, key, _MISSING)
         self.time = run.get("iso_timestamp", "")
         sched = run.get("scheduler") or {}
         self.scheduler = sched.get("name", "")
@@ -963,29 +1179,47 @@ class _ReportRow:
         # pandas). Older records without the field render as "N" — correct,
         # since the feature postdates them and those runs were all mock.
         self.real_exec = "Y" if run.get("real_exec") else "N"
-        # Per-test metric dict lives at benchmarks[test_name].results. Use the
-        # run's recorded test_name (not bench_cls.name) so a rename of the
-        # benchmark class doesn't strand old records.
+        # Per-test data lives at benchmarks[test_name].  Use the
+        # run's recorded test_name (not bench_cls.name) so a rename
+        # of the benchmark class doesn't strand old records.
+        # ``config`` carries the parameters the benchmark was set
+        # up with (njobs, slot_cores, slot_gpus, ...) and is written
+        # at test.start — so it's present even for runs that errored
+        # out before producing a result.  ``results`` carries the
+        # measured outputs and is only present on success.
+        #
+        # ChainMap encodes the precedence directly: results-wins-
+        # over-config.  Keys present in both (notably ``njobs`` —
+        # benchmarks echo the input count as a result metric) take
+        # the results value, which for partial runs may differ from
+        # the configured count.  Keys only in config (e.g. ``njobs``
+        # on a failed run that never emitted results) still surface,
+        # so failed rows show their configuration alongside the
+        # missing-measurement markers.
         test = run.get("test_name", "")
-        metrics = (run.get("benchmarks") or {}).get(test, {}).get("results", {})
-        for key, value in metrics.items():
+        test_data = (run.get("benchmarks") or {}).get(test) or {}
+        for key, value in ChainMap(
+            test_data.get("results") or {},
+            test_data.get("config") or {},
+        ).items():
             if key in bench_cls.REPORT_HEADINGS:
                 setattr(self, key, value)
 
-        # Final normalization: convert any None to "". Two ways None leaks
-        # into a row: (a) argparse stores unset string options like --tag as
-        # None, which _run_record propagates to the JSON; .get(key, default)
-        # only returns default when the key is *absent*, not when its value is
-        # explicitly None — so tag-less runs leave self.tag=None here even
-        # though we passed "" as the default. (b) An older results file may
-        # have a metric stored as None. Both cases would otherwise blow up at
-        # format time because numeric/precision specs reject None (and even
-        # the string spec "<8.8" fails with "unsupported format string passed
-        # to NoneType.__format__"). Defending here keeps the renderer simple
-        # and tolerant.
+        # Final normalization: convert any None to :data:`_MISSING`.
+        # Two ways None leaks into a row: (a) argparse stores unset
+        # string options like --tag as None, which _run_record
+        # propagates to the JSON; .get(key, default) only returns
+        # default when the key is *absent*, not when its value is
+        # explicitly None — so tag-less runs leave self.tag=None
+        # here even though we passed "" as the default.  (b) An
+        # older results file may have a metric stored as None.  Both
+        # cases would otherwise blow up at format time because
+        # numeric/precision specs reject None.  Routing through the
+        # sentinel handles both string- and numeric-spec columns
+        # uniformly.
         for key in bench_cls.REPORT_HEADINGS:
             if getattr(self, key) is None:
-                setattr(self, key, "")
+                setattr(self, key, _MISSING)
 
 
 def cmd_report(args):
@@ -1033,7 +1267,100 @@ def cmd_report(args):
     formatter.print_items(rows, no_header=args.no_header)
 
 
-@flux.util.CLIMain(LOGGER)
+def cmd_sweep(args):
+    """Execute a parameter-matrix sweep.
+
+    Reads ``run``-shaped flags from the CLI: each axis-capable
+    value (--nodes, --njobs, --scheduler, ...) is interpreted as
+    an axis spec by :func:`parse_axis_spec` — a single value stays
+    fixed across the sweep, a comma list or RFC 45 range becomes
+    a sweep axis.  The cross-product of axes drives the matrix.
+
+    Optional ``--from FILE`` loads structured sweep definitions
+    (multi-module scheduler recipes, env overlays) from a TOML
+    file; CLI values for the same parameters take precedence.
+
+    Each run is dispatched as a parallel Flux job submitted to the
+    outer instance.  To run a sweep without a pre-existing outer
+    instance, wrap the command in ``flux start``::
+
+        flux start -s 1 -- flux schedbench sweep ...
+    """
+    from flux.testing.schedbench.sweep import (
+        LineSweepEmitter,
+        SweepMatrix,
+        TerminalSweepEmitter,
+        generate_sweep_id,
+        parse_axis_spec,
+        run_flux,
+    )
+
+    # Parse each axis-capable arg via parse_axis_spec.  A None or
+    # empty value means "not specified on the CLI" — those don't
+    # enter the matrix (file values, or run defaults, supply them).
+    params = {}
+    for dest in _SWEEP_AXIS_DESTS:
+        v = getattr(args, dest, None)
+        if v is None or v == "":
+            continue
+        params[dest] = parse_axis_spec(v)
+    if args.real_exec:
+        params["real_exec"] = [True]
+
+    if args.from_file:
+        matrix = SweepMatrix.from_file(
+            args.from_file,
+            cli_overrides=params,
+            cli_conf=args.conf,
+        )
+    else:
+        if not params:
+            raise ValueError(
+                "no parameters specified for sweep; pass "
+                "run-style flags (e.g. --nodes=16,32) or use --from"
+            )
+        matrix = SweepMatrix.from_cli(
+            params=params,
+            name=args.sweep_name,
+            conf=args.conf,
+        )
+
+    if args.sweep_name:
+        matrix.name = args.sweep_name
+
+    # Emitter selection: dashboard on TTY, line emitter otherwise.
+    ui = args.ui
+    if ui == "auto":
+        ui = "on" if sys.stdout.isatty() else "off"
+    if ui == "on":
+        emitter = TerminalSweepEmitter(color=args.color)
+    else:
+        emitter = LineSweepEmitter()
+
+    sweep_id = generate_sweep_id()
+    results_file = None if args.no_save else args.results_file
+
+    # Lack of a running outer broker surfaces as a flux.Flux()
+    # construction error inside run_flux, which is more informative
+    # than a pre-flight env-var check — and points users at the
+    # right fix (wrap in `flux start`).
+    n_ok, n_failed = run_flux(
+        matrix=matrix,
+        sweep_id=sweep_id,
+        results_file=results_file,
+        emitter=emitter,
+        per_run_nodes=args.per_run_nodes,
+    )
+    if n_failed:
+        LOGGER.warning(
+            "sweep complete with %d failure(s) of %d total",
+            n_failed,
+            n_ok + n_failed,
+        )
+    return 0 if n_failed == 0 else 1
+
+
+@CLIMain(LOGGER)
 def main():
     args = parse_args()
     # `run` accepts -q/--quiet but `report` does not, so guard the attribute
@@ -1048,6 +1375,8 @@ def main():
         cmd_run(args)
     elif args.subcommand == "report":
         cmd_report(args)
+    elif args.subcommand == "sweep":
+        cmd_sweep(args)
 
 
 if __name__ == "__main__":
