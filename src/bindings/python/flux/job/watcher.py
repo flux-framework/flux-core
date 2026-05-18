@@ -358,6 +358,7 @@ class JobWatcher:
         stderr=sys.stderr,
         labelio=False,
         starttime=None,
+        output_callback=None,
     ):
         """
         Initialize an instance of the JobWatcher class.
@@ -378,6 +379,13 @@ class JobWatcher:
             stderr (TextIOWrapper): Default stderr location (default=sys.stderr)
             labelio (bool): Label lines of output with jobid and taskid
             starttime (float): If not None, start elapsed timer at this time.
+            output_callback (callable): Optional output callback. Signature:
+                ``cb(jobid, stream, line)`` where ``stream`` is "stdout" or
+                "stderr" and ``line`` is a ``str``. When set, output is
+                dispatched through the callback INSTEAD of being written to
+                ``stdout``/``stderr`` (which become unused). Useful for
+                consumers that want to receive child output directly without
+                the awkwardness of constructing a TextIOWrapper sink.
         """
         self.flux_handle = flux_handle
         self.progress = None
@@ -386,8 +394,10 @@ class JobWatcher:
         self.t0 = starttime
         self.log_events = log_events
         self.log_status = log_status
-        self.stdout = self._reopen(stdout)
-        self.stderr = self._reopen(stderr)
+        self.output_callback = output_callback
+        if self.output_callback is None:
+            self.stdout = self._reopen(stdout)
+            self.stderr = self._reopen(stderr)
         self.labelio = labelio
         self.exitcode = 0
         self.show_progress = progress
@@ -454,10 +464,11 @@ class JobWatcher:
 
         self.progress.add_jobs(*jobs)
 
-        if stdout is None:
-            stdout = self._reopen(self.stdout)
-        if stderr is None:
-            stderr = self._reopen(self.stderr)
+        if self.output_callback is None:
+            if stdout is None:
+                stdout = self.stdout
+            if stderr is None:
+                stderr = self.stderr
 
         for job in jobs:
             if not self.t0 or job.t_submit < self.t0:
@@ -599,6 +610,12 @@ class JobWatcher:
 
     def _output_watch_cb(self, future, job):
         stream, data = future.get_output()
+
+        # If an output_callback is set, simply call it and return:
+        if self.output_callback is not None:
+            self.output_callback(job.id, stream, data)
+            return
+
         if stream is not None:
             output_stream = getattr(job, stream)
             if self.show_progress:
@@ -609,5 +626,5 @@ class JobWatcher:
             else:
                 output_stream.write(data)
         else:
-            for stream in ("stdout", "stderr"):
-                getattr(job, stream).flush()
+            for attr in ("stdout", "stderr"):
+                getattr(job, attr).flush()
