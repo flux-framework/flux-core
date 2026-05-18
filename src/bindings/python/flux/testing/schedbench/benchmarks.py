@@ -127,6 +127,15 @@ class Benchmark(ABC):
     stages = ()
     description = None  # optional human prose shown in --help group header
 
+    #: The benchmark's canonical headline outcome, as a
+    #: ``(metric_key, unit)`` tuple — e.g. ``("throughput", "job/s")``
+    #: or ``("mean_locality_score", "")``.  The sweep dashboard uses
+    #: this to render each row's "result=N unit" column.
+    #:
+    #: Subclasses should override.  ``None`` (the default) means the
+    #: sweep falls back to a heuristic pick from SUMMARY_METRICS.
+    RESULT = None
+
     #: Ordered tuple of ``(result_key, label, kind)`` triples declaring
     #: which result-dict keys appear in the post-run metrics table and
     #: how they're rendered. ``kind`` selects a formatter / unit in
@@ -519,6 +528,8 @@ class ThroughputBenchmark(Benchmark):
         ("ingest_rate", "ingest rate", "rate"),
     )
 
+    RESULT = ("throughput", "job/s")
+
     #: Report-only metadata. ``REPORT_HEADINGS`` lists every field that may
     #: appear in a ``flux schedbench report throughput`` output, mapping the
     #: field name (as referenced in format strings) to its column header.
@@ -821,6 +832,8 @@ class FillMachineBenchmark(Benchmark):
         ("start_rate", "start rate", "rate"),
         ("cancel_rate", "cancel rate", "rate"),
     )
+
+    RESULT = ("alloc_rate", "job/s")
 
     #: Report-only metadata; see ThroughputBenchmark for the pattern.
     #: Fill-machine's headline metric is ``time_to_fill`` plus the per-phase

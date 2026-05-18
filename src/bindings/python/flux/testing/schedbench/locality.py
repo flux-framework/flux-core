@@ -482,6 +482,8 @@ class LocalityBenchmark(Benchmark):
         ("alloc_rate", "alloc rate", "rate"),
     )
 
+    RESULT = ("mean_locality_score", "")
+
     REPORT_HEADINGS = {
         **COMMON_REPORT_HEADINGS,
         "nslots": "NSLOTS",
