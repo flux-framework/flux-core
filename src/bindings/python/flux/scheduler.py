@@ -67,6 +67,7 @@ from flux.kvs import commit_async as kvs_commit_async
 from flux.kvs import get_key_direct as kvs_get
 from flux.resource import InfeasibleRequest
 from flux.resource.ResourcePool import ResourcePool
+from flux.resource.ResourcePoolImplementation import ResourcePoolImplementation
 
 
 @functools.total_ordering
@@ -1142,13 +1143,21 @@ class Scheduler(BrokerModule):
         if self.pool_class is not None:
             if not (
                 isinstance(self.pool_class, type)
-                and issubclass(self.pool_class, ResourcePool)
+                and issubclass(
+                    self.pool_class, (ResourcePool, ResourcePoolImplementation)
+                )
             ):
                 raise ValueError(
-                    f"pool_class must be a ResourcePool subclass, "
+                    f"pool_class must be a ResourcePool "
+                    f"or ResourcePoolImplementation subclass, "
                     f"got {self.pool_class!r}"
                 )
-            return self.pool_class(R, log=self.log, **self.pool_kwargs)
+            pool = self.pool_class(R, log=self.log, **self.pool_kwargs)
+            if not isinstance(pool, ResourcePool) and not hasattr(pool, "impl"):
+                raise ValueError(
+                    f"{self.pool_class!r} must set self.impl = self during __init__"
+                )
+            return pool
         pool_class = self._pool_class_from_writer(R)
         if pool_class is not None:
             return pool_class(R, log=self.log, **self.pool_kwargs)
