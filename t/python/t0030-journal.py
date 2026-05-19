@@ -87,6 +87,42 @@ class TestJournalConsumer(unittest.TestCase):
         # ensure JournalEvent can be converted to a string:
         print(f"{events[-1]}")
 
+    def test_jobspec_R_placement(self):
+        """verify jobspec is only set on submit and R only on alloc events"""
+        consumer = JournalConsumer(self.fh).start()
+
+        count = 0
+        events = []
+        while True:
+            event = consumer.poll(timeout=5.0)
+            events.append(event)
+            if event.name == "clean":
+                count += 1
+                if count == 4:
+                    break
+        consumer.stop()
+
+        submit_events = [e for e in events if e.name == "submit"]
+        alloc_events = [e for e in events if e.name == "alloc"]
+
+        self.assertGreater(len(submit_events), 0)
+        self.assertGreater(len(alloc_events), 0)
+
+        for event in events:
+            if event.name == "submit":
+                self.assertIsNotNone(event.jobspec)
+                self.assertIsNone(event.R)
+            elif event.name == "alloc":
+                self.assertIsNone(event.jobspec)
+                self.assertIsNotNone(event.R)
+            else:
+                self.assertIsNone(event.jobspec)
+                self.assertIsNone(event.R)
+
+        # verify jobspec/R appear in the string representation
+        self.assertIn("jobspec=", str(submit_events[0]))
+        self.assertIn("R=", str(alloc_events[0]))
+
     def test_async(self):
         events = []
         test_arg2 = 42
