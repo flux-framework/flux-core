@@ -75,6 +75,14 @@ test_expect_success 'flux R encode --xml works' '
 	test_debug "echo encode XML = $result" &&
 	test "$result" = "rank0/core[0-43],gpu[0-3]"
 '
+command -v hwloc-ls >/dev/null && test_set_prereq HWLOC_LS
+test_expect_success HWLOC_LS 'flux R encode --xml works with synthetic XML' '
+    hwloc-ls --of xml -i "numa:2 core:3 pu:1" >test.xml &&
+    flux R encode --xml test.xml > R.synthetic &&
+    result=$(flux R decode --short < R.synthetic) &&
+    test_debug "echo encode synthetic XML = $result" &&
+    test "$result" = "rank0/core[0-5]"
+'
 test_expect_success 'flux R encode --xml works with AMD RSMI gpus' '
 	flux R encode --xml=$SHARNESS_TEST_SRCDIR/hwloc-data/corona.xml \
 	    > R.corona &&
