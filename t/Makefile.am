@@ -347,6 +347,7 @@ TESTSCRIPTS = \
 	python/t0042-job-manager-alloc-cache.py \
 	python/t0043-sdexec-map.py \
 	python/t0043-scheduler-pool.py \
+	python/t0044-tree-pool.py \
 	python/t0045-job-shape-parser.py \
 	python/t0046-job-watcher.py \
 	python/t0047-flux-argument-parser.py \
