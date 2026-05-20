@@ -502,8 +502,7 @@ static void find_similar_command (const char *searchpath, const char *argv0)
     extern struct builtin_cmd builtin_cmds[];
     struct builtin_cmd *builtin_cmd = &builtin_cmds[0];
     struct similar_cmds similar = {INT_MAX, NULL, argv0};
-    char *searchpathcpy;
-    char *dir, *saveptr = NULL, *a1;
+    zlist_t *l;
 
     similar.min = INT_MAX;
     if (!(similar.cmds = zlist_new ()))
@@ -517,13 +516,13 @@ static void find_similar_command (const char *searchpath, const char *argv0)
     }
 
     /* now check commands in search paths */
-    searchpathcpy = xstrdup (searchpath);
-    a1 = searchpathcpy;
-    while ((dir = strtok_r (a1, ":", &saveptr))) {
-        (void)dirwalk (dir, DIRWALK_NORECURSE, similar_filter, &similar);
-        a1 = NULL;
-    }
-    free (searchpathcpy);
+    l = dirwalk_find (searchpath,
+                      DIRWALK_NORECURSE,
+                      "flux-*",
+                      -1,
+                      similar_filter,
+                      &similar);
+    zlist_destroy (&l);
 
     /* only output if command is similar enough, we'll go with a
      * distance of at most 3.
