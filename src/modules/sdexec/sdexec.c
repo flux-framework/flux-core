@@ -341,13 +341,14 @@ static int sdproc_check_allowed_cpus (struct sdproc *proc, flux_error_t *errp)
     }
     if (!(fp = fopen (fpath, "r"))) {
         errprintf (errp,
-                   "AllowedCPUs not enforced: %s unavailable "
-                   "(is cpuset controller delegated to the user instance?)",
-                   fpath);
+                   "AllowedCPUs not enforced: cpuset.cpus unavailable "
+                   "(is cpuset controller delegated to the user instance?)");
         return -1;
     }
     if (!fgets (line, sizeof (line), fp)) {
-        errprintf (errp, "AllowedCPUs: failed to read %s", fpath);
+        errprintf (errp,
+                   "AllowedCPUs: failed to read cpuset.cpus: %s",
+                   strerror (errno));
         fclose (fp);
         return -1;
     }
