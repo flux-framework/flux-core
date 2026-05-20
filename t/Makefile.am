@@ -201,6 +201,9 @@ TESTSCRIPTS = \
 	t2317-resource-shrink.t \
 	t2318-resource-verify.t \
 	t2319-resource-history.t \
+	t2320-sched-treepool.t \
+	t2321-sched-treepool-tva.t \
+	t2322-sched-treepool-tvb.t \
 	t2350-resource-list.t \
 	t2351-resource-status-input.t \
 	t2352-resource-cmd-config.t \
@@ -393,6 +396,7 @@ EXTRA_DIST= \
 	module/testmod.py \
 	scheduler/sched-slowgen.py \
 	scheduler/sched_tree_amender.py \
+	scheduler/sched-tree-subclass.py \
 	cocci/json_set_new_decref.cocci
 
 dist_check_SCRIPTS = \

@@ -869,7 +869,9 @@ def amend(R, hwloc_xml=None):
     json_str_ptr = lib.rhwloc_treepool_topo_to_json(xml_bytes, errp)
 
     if json_str_ptr == ffi.NULL:
-        errmsg = ffi.string(errp.text).decode("utf-8") if errp.text[0] else "unknown error"
+        errmsg = (
+            ffi.string(errp.text).decode("utf-8") if errp.text[0] else "unknown error"
+        )
         raise RuntimeError(f"rhwloc_treepool_topo_to_json failed: {errmsg}")
 
     try:
