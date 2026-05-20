@@ -181,4 +181,27 @@ test_expect_success 'environment variables are prepended in correct order' '
 test_expect_success 'flux-env output can be passed to eval' '
     (eval $(flux env))
 '
+test_expect_success 'flux finds flux-* commands in PATH' '
+    EXTDIR=$(mktemp -d) &&
+    cat >$EXTDIR/flux-myextcmd <<-EOF &&
+	#!/bin/sh
+	echo myextcmd-ok
+	EOF
+    chmod +x $EXTDIR/flux-myextcmd &&
+    PATH=$EXTDIR:$PATH flux myextcmd >myextcmd.out &&
+    grep myextcmd-ok myextcmd.out
+'
+
+test_expect_success 'flux suggests PATH-installed flux-* commands on typo' '
+    EXTDIR=$(mktemp -d) &&
+    cat >$EXTDIR/flux-myextcmd <<-EOF &&
+	#!/bin/sh
+	echo myextcmd-ok
+	EOF
+    chmod +x $EXTDIR/flux-myextcmd &&
+    test_expect_code 1 \
+        env PATH=$EXTDIR:$PATH flux myextcmdd >similar.out 2>&1 &&
+    grep myextcmd similar.out
+'
+
 test_done
