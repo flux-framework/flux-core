@@ -621,9 +621,13 @@ of compiled-in install paths and the environment.
 
    :man1:`flux` finds sub-command executables by searching:
 
-      $FLUX_EXEC_PATH_PREPEND : install-path : $FLUX_EXEC_PATH
+      $FLUX_EXEC_PATH_PREPEND : install-path : $FLUX_EXEC_PATH : $PATH
 
    Values may include multiple directories separated by colons.
+   The directories in :envvar:`PATH` are searched last, which allows
+   third-party :command:`flux-*` commands installed independently
+   (e.g. via :command:`pip install`) to be used as :man1:`flux`
+   sub-commands without additional configuration.
 
 .. envvar:: FLUX_MODULE_PATH
             FLUX_MODULE_PATH_PREPEND

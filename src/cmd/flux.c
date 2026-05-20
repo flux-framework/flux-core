@@ -502,8 +502,8 @@ static void find_similar_command (const char *searchpath, const char *argv0)
     extern struct builtin_cmd builtin_cmds[];
     struct builtin_cmd *builtin_cmd = &builtin_cmds[0];
     struct similar_cmds similar = {INT_MAX, NULL, argv0};
-    char *searchpathcpy;
-    char *dir, *saveptr = NULL, *a1;
+    const char *path;
+    zlist_t *l;
 
     similar.min = INT_MAX;
     if (!(similar.cmds = zlist_new ()))
@@ -517,13 +517,24 @@ static void find_similar_command (const char *searchpath, const char *argv0)
     }
 
     /* now check commands in search paths */
-    searchpathcpy = xstrdup (searchpath);
-    a1 = searchpathcpy;
-    while ((dir = strtok_r (a1, ":", &saveptr))) {
-        (void)dirwalk (dir, DIRWALK_NORECURSE, similar_filter, &similar);
-        a1 = NULL;
+    l = dirwalk_find (searchpath,
+                      DIRWALK_NORECURSE,
+                      "flux-*",
+                      -1,
+                      similar_filter,
+                      &similar);
+    zlist_destroy (&l);
+
+    /* also check PATH, consistent with exec_subcommand() fallback */
+    if ((path = getenv ("PATH"))) {
+        l = dirwalk_find (path,
+                          DIRWALK_NORECURSE,
+                          "flux-*",
+                          -1,
+                          similar_filter,
+                          &similar);
+        zlist_destroy (&l);
     }
-    free (searchpathcpy);
 
     /* only output if command is similar enough, we'll go with a
      * distance of at most 3.
@@ -567,6 +578,11 @@ void exec_subcommand (const char *searchpath, bool vopt, int argc, char *argv[])
             a1 = NULL;
         }
         free (cpy);
+        /* Fall back to searching PATH, as git does, so that third-party
+         * flux-* commands installed independently (e.g. via pip) are
+         * found without requiring FLUX_EXEC_PATH to be set manually.
+         */
+        exec_subcommand_dir (vopt, NULL, argv, "flux-");
         log_msg ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
         find_similar_command (searchpath, argv[0]);
         exit (1);
