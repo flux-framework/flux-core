@@ -8,5 +8,19 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-# Allow dataclass to be imported directly from flux.utils.dataclasses
-from flux.utils.dataclasses.dataclasses import dataclass
+# Re-export the full public API of the stdlib dataclasses module (minus
+# KW_ONLY, which was added in 3.10 and is absent from this backport).
+from flux.utils.dataclasses.dataclasses import (
+    FrozenInstanceError,
+    InitVar,
+    Field,
+    MISSING,
+    field,
+    fields,
+    dataclass,
+    asdict,
+    astuple,
+    make_dataclass,
+    replace,
+    is_dataclass,
+)
