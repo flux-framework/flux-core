@@ -27,6 +27,8 @@ import unittest
 
 import subflux  # noqa: F401 - for PYTHONPATH
 from flux.resource.ResourcePool import ResourcePool
+from flux.resource.ResourcePoolImplementation import ResourcePoolImplementation
+from flux.resource.Rv1Pool import Rv1Pool
 from flux.scheduler import Scheduler
 from pycotap import TAPTestRunner
 
@@ -232,6 +234,40 @@ class TestMakePool(unittest.TestCase):
         sched = self._make_sched(pool_class=TrackingPool, pool_kwargs={"foo": "bar"})
         sched._make_pool(R_SIMPLE)
         self.assertEqual(received, {"foo": "bar"})
+
+    def test_pool_implementation_subclass_accepted(self):
+        """ResourcePoolImplementation subclass is accepted as pool_class."""
+
+        class ImplPool(Rv1Pool):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.impl = self  # required: scheduler accesses pool.impl directly
+
+        # Rv1Pool is a ResourcePoolImplementation subclass but NOT a ResourcePool
+        # subclass — this was rejected before the fix.
+        self.assertFalse(issubclass(ImplPool, ResourcePool))
+        self.assertTrue(issubclass(ImplPool, ResourcePoolImplementation))
+        sched = self._make_sched(pool_class=ImplPool)
+        pool = sched._make_pool(R_SIMPLE)
+        self.assertIsInstance(pool, ImplPool)
+
+    def test_pool_implementation_missing_impl_raises_value_error(self):
+        """ResourcePoolImplementation subclass that omits self.impl = self raises ValueError."""
+
+        class BrokenImplPool(Rv1Pool):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                # deliberately omits self.impl = self
+
+        sched = self._make_sched(pool_class=BrokenImplPool)
+        with self.assertRaises(ValueError):
+            sched._make_pool(R_SIMPLE)
+
+    def test_invalid_pool_class_raises_value_error(self):
+        """Non-ResourcePool, non-ResourcePoolImplementation pool_class raises ValueError."""
+        sched = self._make_sched(pool_class=str)
+        with self.assertRaises(ValueError):
+            sched._make_pool(R_SIMPLE)
 
 
 if __name__ == "__main__":
