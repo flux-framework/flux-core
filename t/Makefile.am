@@ -189,6 +189,9 @@ TESTSCRIPTS = \
 	t2306-sched-fifo.t \
 	t2307-sched-backfill.t \
 	t2308-sched-generator.t \
+	t2319-sched-treepool.t \
+	t2320-sched-treepool-tva.t \
+	t2321-sched-treepool-tvb.t \
 	t2310-resource-module.t \
 	t2311-resource-drain.t \
 	t2312-resource-exclude.t \
@@ -387,6 +390,8 @@ EXTRA_DIST= \
 	flux-resource \
 	module/testmod.py \
 	scheduler/sched-slowgen.py \
+	scheduler/sched-tree-subclass.py \
+	scheduler/sched_tree_amender.py \
 	cocci/json_set_new_decref.cocci
 
 dist_check_SCRIPTS = \
