@@ -566,7 +566,9 @@ void exec_subcommand (const char *searchpath, bool vopt, int argc, char *argv[])
         exec_subcommand_dir (vopt, NULL, argv, NULL);
         log_err_exit ("%s", argv[0]);
     } else {
-        char *cpy = xstrdup (searchpath);
+        const char *path = getenv ("PATH");
+        char *cpy = path ? xasprintf ("%s:%s", searchpath, path)
+                         : xstrdup (searchpath);
         char *dir, *saveptr = NULL, *a1 = cpy;
 
         while ((dir = strtok_r (a1, ":", &saveptr))) {
@@ -578,11 +580,6 @@ void exec_subcommand (const char *searchpath, bool vopt, int argc, char *argv[])
             a1 = NULL;
         }
         free (cpy);
-        /* Fall back to searching PATH, as git does, so that third-party
-         * flux-* commands installed independently (e.g. via pip) are
-         * found without requiring FLUX_EXEC_PATH to be set manually.
-         */
-        exec_subcommand_dir (vopt, NULL, argv, "flux-");
         log_msg ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
         find_similar_command (searchpath, argv[0]);
         exit (1);
