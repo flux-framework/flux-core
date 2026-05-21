@@ -47,7 +47,7 @@ jobs:
           DISTRO_INPUT: ${{ inputs.distro }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if [ "${{ inputs.distro }}" = "all" ]; then
+            if [ "${DISTRO_INPUT}" = "all" ]; then
               DISTROS=$(find src/test/docker -name "Dockerfile" -type f \
                 | bash src/test/docker/testenv-affected-distros.sh \
                 | jq -Rsc '[split("\n")[] | select(. != "")]')
@@ -70,6 +70,8 @@ jobs:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     timeout-minutes: 90
     runs-on: ubuntu-latest
+    env:
+      DISTRO: ${{ matrix.distro }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -81,10 +83,10 @@ jobs:
         run: |
           mkdir -p out
           docker buildx build \
-            -o type=docker,dest=out/testenv-${{ matrix.distro }}-amd64.tar \
+            -o type=docker,dest=out/testenv-${DISTRO}-amd64.tar \
             --platform=linux/amd64 \
-            --tag $DOCKERHUB_REPO/testenv:${{ matrix.distro }}-amd64 \
-            -f src/test/docker/${{ matrix.distro }}/Dockerfile .
+            --tag $DOCKERHUB_REPO/testenv:${DISTRO}-amd64 \
+            -f src/test/docker/${DISTRO}/Dockerfile .
 
       - name: Upload amd64 container tarball
         uses: actions/upload-artifact@v7.0.1
@@ -101,6 +103,8 @@ jobs:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     timeout-minutes: 90
     runs-on: ubuntu-24.04-arm
+    env:
+      DISTRO: ${{ matrix.distro }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -112,10 +116,10 @@ jobs:
         run: |
           mkdir -p out
           docker buildx build \
-            -o type=docker,dest=out/testenv-${{ matrix.distro }}-arm64.tar \
+            -o type=docker,dest=out/testenv-${DISTRO}-arm64.tar \
             --platform=linux/arm64 \
-            --tag $DOCKERHUB_REPO/testenv:${{ matrix.distro }}-arm64 \
-            -f src/test/docker/${{ matrix.distro }}/Dockerfile .
+            --tag $DOCKERHUB_REPO/testenv:${DISTRO}-arm64 \
+            -f src/test/docker/${DISTRO}/Dockerfile .
 
       - name: Upload arm64 container tarball
         uses: actions/upload-artifact@v7.0.1
@@ -133,6 +137,8 @@ jobs:
         distro: ['bookworm']
     timeout-minutes: 90
     runs-on: ubuntu-latest
+    env:
+      DISTRO: ${{ matrix.distro }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -147,10 +153,10 @@ jobs:
         run: |
           mkdir -p out
           docker buildx build \
-            -o type=docker,dest=out/testenv-${{ matrix.distro }}-386.tar \
+            -o type=docker,dest=out/testenv-${DISTRO}-386.tar \
             --platform=linux/386 \
-            --tag $DOCKERHUB_REPO/testenv:${{ matrix.distro }}-386 \
-            -f src/test/docker/${{ matrix.distro }}/Dockerfile .
+            --tag $DOCKERHUB_REPO/testenv:${DISTRO}-386 \
+            -f src/test/docker/${DISTRO}/Dockerfile .
 
       - name: Upload 386 container tarball
         uses: actions/upload-artifact@v7.0.1
@@ -168,6 +174,8 @@ jobs:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      DISTRO: ${{ matrix.distro }}
     steps:
       - uses: actions/checkout@v6.0.2
         with:
@@ -183,14 +191,14 @@ jobs:
       - name: Load images from tarballs
         run: |
           set -euo pipefail
-          docker load -i artifacts/testenv-${{ matrix.distro }}-amd64.tar
+          docker load -i artifacts/testenv-${DISTRO}-amd64.tar
           docker images | head -n 50
 
       - name: run docker-run-checks
         env:
           FLUX_TESTS_LOGFILE: t
         run: |
-          src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-amd64 \
+          src/test/docker/docker-run-checks.sh -i ${DISTRO}-amd64 \
             -j 6 --recheck --
 
       - name: tmate debug
@@ -210,6 +218,8 @@ jobs:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
+    env:
+      DISTRO: ${{ matrix.distro }}
     steps:
       - uses: actions/checkout@v6.0.2
         with:
@@ -225,14 +235,14 @@ jobs:
       - name: Load images from tarballs
         run: |
           set -euo pipefail
-          docker load -i artifacts/testenv-${{ matrix.distro }}-arm64.tar
+          docker load -i artifacts/testenv-${DISTRO}-arm64.tar
           docker images | head -n 50
 
       - name: run docker-run-checks
         env:
           FLUX_TESTS_LOGFILE: t
         run: |
-          src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-arm64 \
+          src/test/docker/docker-run-checks.sh -i ${DISTRO}-arm64 \
             -j 6 --recheck --
 
       - name: tmate debug
@@ -254,6 +264,8 @@ jobs:
         distro: ['bookworm']
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      DISTRO: ${{ matrix.distro }}
     steps:
       - uses: actions/checkout@v6.0.2
         with:
@@ -272,13 +284,13 @@ jobs:
       - name: Load images from tarballs
         run: |
           set -euo pipefail
-          docker load -i artifacts/testenv-${{ matrix.distro }}-386.tar
+          docker load -i artifacts/testenv-${DISTRO}-386.tar
           docker images | head -n 50
 
       - name: Verify 386 image architecture
         run: |
           ARCH=$(docker run --rm \
-            ${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-386 \
+            ${DOCKERHUB_REPO}/testenv:${DISTRO}-386 \
             dpkg --print-architecture)
           echo "Image architecture: ${ARCH}"
           test "${ARCH}" = "i386" \
@@ -288,7 +300,7 @@ jobs:
         env:
           FLUX_TESTS_LOGFILE: t
         run: |
-          src/test/docker/docker-run-checks.sh -i ${{ matrix.distro }}-386 \
+          src/test/docker/docker-run-checks.sh -i ${DISTRO}-386 \
             --platform linux/386 -j 6 --recheck --
 
       - name: tmate debug
@@ -327,7 +339,8 @@ jobs:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     runs-on: ubuntu-latest
     env:
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_HUB_TRAVISFLUX_TOKEN }}
+      DISTRO: ${{ matrix.distro }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_HUB_TRAVISFLUX_TOKEN }}
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.0.0
@@ -360,33 +373,33 @@ jobs:
       - name: Load images from tarballs
         run: |
           set -euo pipefail
-          docker load -i artifacts/testenv-${{ matrix.distro }}-amd64.tar
-          docker load -i artifacts/testenv-${{ matrix.distro }}-arm64.tar
-          if [ "${{ matrix.distro }}" = "bookworm" ]; then
-            docker load -i artifacts/testenv-${{ matrix.distro }}-386.tar
+          docker load -i artifacts/testenv-${DISTRO}-amd64.tar
+          docker load -i artifacts/testenv-${DISTRO}-arm64.tar
+          if [ "${DISTRO}" = "bookworm" ]; then
+            docker load -i artifacts/testenv-${DISTRO}-386.tar
           fi
           docker images | head -n 50
 
       # Push arch-specific tags first
       - name: Push per-arch tags
         run: |
-          docker push "${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-amd64"
-          docker push "${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-arm64"
-          if [ "${{ matrix.distro }}" = "bookworm" ]; then
-            docker push "${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-386"
+          docker push "${DOCKERHUB_REPO}/testenv:${DISTRO}-amd64"
+          docker push "${DOCKERHUB_REPO}/testenv:${DISTRO}-arm64"
+          if [ "${DISTRO}" = "bookworm" ]; then
+            docker push "${DOCKERHUB_REPO}/testenv:${DISTRO}-386"
           fi
 
       # Then create the multi-arch manifest that points at the per-arch tags
       - name: Create and push manifest
         run: |
-          IMAGE="${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}"
-          TAGS="${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-amd64"
-          TAGS+=" ${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-arm64"
-          if [ "${{ matrix.distro }}" = "bookworm" ]; then
-            TAGS+=" ${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}-386"
+          IMAGE="${DOCKERHUB_REPO}/testenv:${DISTRO}"
+          TAGS="${DOCKERHUB_REPO}/testenv:${DISTRO}-amd64"
+          TAGS+=" ${DOCKERHUB_REPO}/testenv:${DISTRO}-arm64"
+          if [ "${DISTRO}" = "bookworm" ]; then
+            TAGS+=" ${DOCKERHUB_REPO}/testenv:${DISTRO}-386"
           fi
           docker buildx imagetools create --tag "${IMAGE}" ${TAGS}
 
       - name: Inspect published manifest
-        run: docker buildx imagetools inspect ${DOCKERHUB_REPO}/testenv:${{ matrix.distro }}
+        run: docker buildx imagetools inspect ${DOCKERHUB_REPO}/testenv:${DISTRO}
 # vim: set shiftwidth=2 tabstop=2 softtabstop=2 expandtab:
