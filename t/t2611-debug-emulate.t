@@ -75,7 +75,18 @@ test_expect_success 'debugger: attaching to a finished job must fail' '
 test_expect_success 'debug-emulate: attaching to a failed job must fail' '
 	jobid=$(flux submit -n 2 ./bad_cmd) &&
 	flux job wait-event -vt ${TIMEOUT} ${jobid} finish &&
-	test_must_fail flux job attach --debug-emulate ${jobid}
+	test_must_fail flux job attach --debug-emulate ${jobid} 2>bad_cmd.err &&
+	test_debug "cat bad_cmd.err" &&
+	grep "start failed" bad_cmd.err
+'
+
+test_expect_success \
+	'debug-emulate: attaching to unsatisfiable job provides exception note' '
+	jobid=$(flux submit -N1000 hostname) &&
+	flux job wait-event -vt ${TIMEOUT} ${jobid} clean &&
+	test_must_fail flux job attach --debug-emulate ${jobid} 2>unsatisfy.err &&
+	test_debug "cat unsatisfy.err" &&
+	grep "unsatisfiable request" unsatisfy.err
 '
 
 test_expect_success 'debugger: totalview_jobid is set for attach mode' '
