@@ -192,6 +192,16 @@ test_expect_success 'flux finds flux-* commands in PATH' '
     grep myextcmd-ok myextcmd.out
 '
 
+test_expect_success 'flux finds flux-*.py commands in PATH' '
+    EXTDIR=$(mktemp -d) &&
+    cat >$EXTDIR/flux-mypycmd.py <<-EOF &&
+	print("mypycmd-ok")
+	EOF
+    chmod +x $EXTDIR/flux-mypycmd.py &&
+    PATH=$EXTDIR:$PATH flux mypycmd >mypycmd.out &&
+    grep mypycmd-ok mypycmd.out
+'
+
 # cover a builtin command, a c binary, and a python script
 test_expect_success 'typoed commands are given suggestions on correct commands' '
 	test_must_fail flux dmsg > invalid1.out 2>&1 &&
