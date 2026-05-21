@@ -739,3 +739,45 @@ class TreePool(ResourcePool):
 
 
 pool_class = TreePool
+
+
+def amend(R, hwloc_xml=None):
+    """Amender for fake-resources: add R.scheduling with TreePool topology.
+
+    When ``hwloc_xml`` is None (``fake-resources.hwloc-xml-path`` not set),
+    R is returned unchanged — no scheduling key is added.  When XML is
+    provided, calls ``flux R encode --scheduling=TreePool`` to derive the
+    topology and splices the resulting ``scheduling`` key into R.
+
+    Configure via::
+
+        --conf=fake-resources.hwloc-xml-path=<topology.xml>
+        --conf=fake-resources.amend-r=flux.resource.TreePool:amend
+    """
+    import subprocess
+
+    ranks = IDset()
+    for entry in R.get("execution", {}).get("R_lite", []):
+        ranks |= IDset(entry["rank"])
+    if not ranks:
+        return R
+
+    if hwloc_xml is None:
+        return R
+
+    cmd = [
+        "flux",
+        "R",
+        "encode",
+        "--scheduling=TreePool",
+        "--xml=-",
+        f"-r{ranks}",
+    ]
+    result = subprocess.run(
+        cmd, input=hwloc_xml, capture_output=True, text=True, check=True
+    )
+
+    scheduling = json.loads(result.stdout).get("scheduling")
+    if scheduling is not None:
+        R["scheduling"] = scheduling
+    return R
