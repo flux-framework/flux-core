@@ -835,3 +835,53 @@ class TreePool(ResourcePool):
 
 
 pool_class = TreePool
+
+
+def amend(R, hwloc_xml=None):
+    """Amender for fake-resources: add R.scheduling with TreePool topology.
+
+    When ``hwloc_xml`` is None (``fake-resources.hwloc-xml-path`` not set),
+    R is returned unchanged — no scheduling key is added.  When XML is
+    provided, calls ``rhwloc_treepool_topo_to_json()`` via CFFI to derive
+    the topology and builds the ``scheduling`` key into R.
+
+    Configure via::
+
+        --conf=fake-resources.hwloc-xml-path=<topology.xml>
+        --conf=fake-resources.amend-r=flux.resource.TreePool:amend
+    """
+    # No XML configured: return R unchanged before any other work (and before
+    # importing the CFFI extension, which is only needed to parse XML).
+    if hwloc_xml is None:
+        return R
+
+    ranks = IDset()
+    for entry in R.get("execution", {}).get("R_lite", []):
+        ranks |= IDset(entry["rank"])
+    if not ranks:
+        return R
+
+    from _flux._rhwloc_treepool import ffi, lib
+
+    # Convert XML to TreePool topology JSON
+    xml_bytes = hwloc_xml.encode("utf-8")
+    errp = ffi.new("flux_error_t *")
+    json_str_ptr = lib.rhwloc_treepool_topo_to_json(xml_bytes, errp)
+
+    if json_str_ptr == ffi.NULL:
+        errmsg = ffi.string(errp.text).decode("utf-8") if errp.text[0] else "unknown error"
+        raise RuntimeError(f"rhwloc_treepool_topo_to_json failed: {errmsg}")
+
+    try:
+        json_str = ffi.string(json_str_ptr).decode("utf-8")
+        topo_dict = json.loads(json_str)
+    finally:
+        lib.free(json_str_ptr)
+
+    # Build scheduling object with writer and children
+    R["scheduling"] = {
+        "writer": "TreePool",
+        "children": [{"ranks": str(ranks), "topo": topo_dict}],
+    }
+
+    return R
