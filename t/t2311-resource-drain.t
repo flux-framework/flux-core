@@ -533,7 +533,7 @@ test_expect_success 'drain works when fake resources outnumber actual brokers' '
 	chmod +x test-drain.sh &&
 	flux start --test-size=1 -Shostlist=fake[0-99] ./test-drain.sh
 '
-test_expect_success '' '
+test_expect_success 'reset test by clearing resource info' '
 	flux module remove -f resource &&
 	flux kvs unlink resource.eventlog &&
 	flux module load resource noverify
