@@ -685,25 +685,44 @@ void attach_output_start (struct attach_ctx *ctx)
 static void valid_or_exit_for_debug (struct attach_ctx *ctx)
 {
     flux_future_t *f = NULL;
-    char *attrs = "[\"state\"]";
+    char *attrs = "[\"state\","
+                   "\"exception_occurred\","
+                   "\"exception_severity\","
+                   "\"exception_type\","
+                   "\"exception_note\"]";
+    int exception_occurred = 0;
+    int exception_severity = -1;
+    const char *exception_type = NULL;
+    const char *exception_note = NULL;
     flux_job_state_t state = FLUX_JOB_STATE_INACTIVE;
 
     if (!(f = flux_job_list_id (ctx->h, ctx->id, attrs)))
         log_err_exit ("flux_job_list_id");
 
-    if (flux_rpc_get_unpack (f, "{s:{s:i}}", "job", "state", &state) < 0)
+    if (flux_rpc_get_unpack (f,
+                             "{s:{s:i s?b s?i s?s s?s}}",
+                             "job",
+                              "state", &state,
+                              "exception_occurred", &exception_occurred,
+                              "exception_severity", &exception_severity,
+                              "exception_type", &exception_type,
+                              "exception_note", &exception_note) < 0)
         log_err_exit ("Invalid job id (%s) for debugging", ctx->jobid);
-
-    flux_future_destroy (f);
 
     if (state != FLUX_JOB_STATE_NEW
         && state != FLUX_JOB_STATE_DEPEND
         && state != FLUX_JOB_STATE_PRIORITY
         && state != FLUX_JOB_STATE_SCHED
         && state != FLUX_JOB_STATE_RUN) {
+        if (exception_occurred && exception_severity == 0)
+            log_msg ("job.exception %s type=%s severity=0 %s",
+                     ctx->jobid,
+                     exception_type ? exception_type : "unknown",
+                     exception_note ? exception_note : "");
         log_msg_exit ("cannot debug job that has finished running");
     }
 
+    flux_future_destroy (f);
     return;
 }
 
