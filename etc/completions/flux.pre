@@ -1304,7 +1304,13 @@ _flux_config()
 _flux_admin()
 {
     local cmd=$1
-    local subcmds="cleanup-push"
+    local subcmds="cleanup-push system-scripts"
+
+    local system_scripts_OPTS="\
+        -v \
+        --verbose \
+        --color= \
+    "
 
     if [[ $cmd != "admin" ]]; then
         var="${cmd//-/_}_OPTS"
