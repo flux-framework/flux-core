@@ -535,6 +535,8 @@ LOGGER = logging.getLogger("flux-admin")
 
 @flux.util.CLIMain(LOGGER)
 def main():
+    sys.stdout = open(sys.stdout.fileno(), "w", encoding="utf8")
+
     parser = argparse.ArgumentParser(prog="flux-admin")
     subparsers = parser.add_subparsers(
         title="subcommands", description="", dest="subcommand"
