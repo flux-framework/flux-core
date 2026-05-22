@@ -1233,7 +1233,6 @@ static lookup_t *lookup_common (flux_t *h,
     int flags;
     const char *ns = NULL;
     const char *key;
-    json_t *val = NULL;
     json_t *root_dirent = NULL;
     lookup_t *lh = NULL;
     const char *root_ref = NULL;
@@ -1293,6 +1292,15 @@ static lookup_t *lookup_common (flux_t *h,
                                   flags,
                                   h)))
             goto done;
+
+        if (flux_msg_aux_set (msg,
+                              "lookup_handle",
+                              lh,
+                              (flux_free_f)lookup_destroy) < 0) {
+            flux_log_error (ctx->h, "%s: flux_msg_aux_set", __FUNCTION__);
+            lookup_destroy (lh);
+            goto done;
+        }
     }
     else {
         int err;
@@ -1320,24 +1328,12 @@ static lookup_t *lookup_common (flux_t *h,
         root = getroot (ctx, ns, mh, msg, &stall);
         assert (!root);
 
-        if (stall) {
-            if (flux_msg_aux_set (msg, "lookup_handle", lh, NULL) < 0) {
-                flux_log_error (ctx->h, "%s: flux_msg_aux_set", __FUNCTION__);
-                goto done;
-            }
+        if (stall)
             goto stall;
-        }
         goto done;
     }
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
-
-        /* do not destroy lookup_handle on message destruction, we
-         * manage it in here */
-        if (flux_msg_aux_set (msg, "lookup_handle", lh, NULL) < 0) {
-            flux_log_error (ctx->h, "%s: flux_msg_aux_set", __FUNCTION__);
-            goto done;
-        }
 
         if (!(wait = wait_create_msg_handler (h, mh, msg, ctx, replay_cb)))
             goto done;
@@ -1368,10 +1364,6 @@ static lookup_t *lookup_common (flux_t *h,
     rc = 0;
 done:
     wait_destroy (wait);
-    if (rc < 0) {
-        lookup_destroy (lh);
-        json_decref (val);
-    }
     (*stall) = false;
     return (rc == 0) ? lh : NULL;
 
@@ -1404,7 +1396,8 @@ static void lookup_request_cb (flux_t *h,
     }
     if (flux_respond_pack (h, msg, "{ s:O }", "val", val) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-    lookup_destroy (lh);
+    /* N.B. lookup_handle 'lh' owned by message, will be destroyed
+     * when message destroyed */
     json_decref (val);
     request_tracking_remove (ctx, msg);
     return;
@@ -1412,7 +1405,6 @@ error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     request_tracking_remove (ctx, msg);
-    lookup_destroy (lh);
 }
 
 /* similar to kvs.lookup, but root_ref / root_seq returned to caller.
@@ -1470,7 +1462,8 @@ static void lookup_plus_request_cb (flux_t *h,
                                "rootref", root_ref) < 0)
             flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     }
-    lookup_destroy (lh);
+    /* N.B. lookup_handle 'lh' owned by message, will be destroyed
+     * when message destroyed */
     json_decref (val);
     request_tracking_remove (ctx, msg);
     return;
