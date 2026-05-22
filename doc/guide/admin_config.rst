@@ -377,6 +377,47 @@ housekeeping scripts from the following locations (in order):
    The location of ``$libexecdir`` is system dependent, but can be determined
    from :command:`pkg-config --variable=fluxlibexecdir flux-core`.
 
+Verifying Script Configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use :command:`flux admin system-scripts` to view the current configuration and
+verify which scripts will be executed:
+
+.. code-block:: console
+
+   $ flux admin system-scripts
+   prolog: enabled (per-rank=true)
+     system: /usr/libexec/flux/prolog.d
+       ✓ 01-syslog.sh
+     site: /etc/flux/system/prolog.d
+       ✓ 10-local-setup.sh
+
+   epilog: enabled (per-rank=true)
+     system: /usr/libexec/flux/epilog.d
+       ✓ 01-cleanup.sh
+
+   housekeeping: not configured
+
+This command shows:
+
+- Whether each system script type is enabled or configured
+- The execution mode:
+
+  - ``per-rank=true``: scripts execute on all allocated nodes
+  - ``per-rank=false``: scripts execute only on rank 0
+
+  Note: The ``per-rank`` setting controls *where* scripts execute, not *which* scripts
+  execute. The same scripts from the directories are used in both modes.
+
+- Which scripts will be executed and from which directories. Scripts are shown when
+  using the default ``flux-imp run <type>`` command (used when no explicit command
+  is configured). Custom commands show the command itself instead of script directories.
+- Whether scripts are executable (✓) or not (✗)
+- If a legacy single-file script is present, which skips the ``.d`` directory
+
+Use :option:`flux admin system-scripts -v` to show script locations even when
+not configured.
+
 Script Environment
 ~~~~~~~~~~~~~~~~~~
 
