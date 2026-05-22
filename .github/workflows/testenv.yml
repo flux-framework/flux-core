@@ -65,6 +65,7 @@ jobs:
   build-amd64-container:
     name: build new testenv container for amd64
     needs: [setup]
+    if: needs.setup.outputs.distros
     strategy:
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
@@ -98,6 +99,7 @@ jobs:
   build-arm64-container:
     name: build new testenv container for arm64
     needs: [setup]
+    if: needs.setup.outputs.distros
     strategy:
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
