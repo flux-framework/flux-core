@@ -48,6 +48,9 @@ int rutil_idkey_map (json_t *obj, rutil_idkey_map_f map, void *arg);
  */
 int rutil_idkey_count (json_t *obj);
 
+/* Get current timestamp */
+int get_timestamp_now (double *timestamp);
+
 #endif /* !_FLUX_RESOURCE_RUTIL_H */
 
 
