@@ -199,7 +199,7 @@ test_expect_success 'I/O, multiple lines, no newline on last line' '
 '
 
 test_expect_success 'I/O -- long lines' '
-	dd if=/dev/urandom bs=4096 count=1 | base64 --wrap=0 >expected &&
+	$NOASAN dd if=/dev/urandom bs=4096 count=1 | base64 --wrap=0 >expected &&
 	flux exec -n -r1 cat expected > output &&
 	test_cmp output expected
 '
@@ -267,14 +267,14 @@ test_expect_success 'stdin redirect from /dev/null works with -n' '
 '
 
 test_expect_success 'create large file for tests' '
-	dd if=/dev/urandom of=5Mfile bs=5M count=1
+	$NOASAN dd if=/dev/urandom of=5Mfile bs=5M count=1
 '
 
 test_expect_success 'create test script to redirect stdin to a file' '
 	cat <<-EOT >stdin2file &&
 	#!/bin/bash
 	rank=\$(flux getattr rank)
-	dd of=cpy.\$rank
+	$NOASAN dd of=cpy.\$rank
 	EOT
 	chmod +x stdin2file
 '
@@ -301,7 +301,7 @@ test_expect_success 'create test script to redirect stdin to a file, one rank ex
 	#!/bin/bash
 	rank=\$(flux getattr rank)
 	if test \$rank -ne 0; then
-		dd of=cpy.\$rank
+		$NOASAN dd of=cpy.\$rank
 	fi
 	EOT
 	chmod +x stdin2file
@@ -317,7 +317,7 @@ test_expect_success 'stdin flow control works (all ranks, one rank will exit ear
 '
 
 test_expect_success 'stdin broadcast -- multiple lines' '
-	dd if=/dev/urandom bs=1024 count=4 | base64 >expected &&
+	$NOASAN dd if=/dev/urandom bs=1024 count=4 | base64 >expected &&
 	cat expected | run_timeout 10 flux exec -l -r0-3 cat >output &&
 	for i in $(seq 0 3); do
 		sed -n "s/^$i: //p" output > output.$i &&
@@ -326,7 +326,7 @@ test_expect_success 'stdin broadcast -- multiple lines' '
 '
 
 test_expect_success 'stdin broadcast -- long lines' '
-	dd if=/dev/urandom bs=1024 count=4 | base64 --wrap=0 >expected &&
+	$NOASAN dd if=/dev/urandom bs=1024 count=4 | base64 --wrap=0 >expected &&
         echo >>expected &&
 	cat expected | run_timeout 10 flux exec -l -r0-3 cat >output &&
 	for i in $(seq 0 3); do

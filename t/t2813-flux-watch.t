@@ -8,6 +8,8 @@ test_under_flux 2 job
 
 export FLUX_PYCLI_LOGLEVEL=10
 export SHELL=/bin/sh
+
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast --line-buffer"
 
@@ -131,7 +133,7 @@ test_expect_success 'flux-watch: --filter works' '
 	grep "Watching ${nfailed} job" failed.out
 '
 test_expect_success 'flux-watch: handles binary data' '
-	id=$(flux submit --wait-event=start dd if=/dev/urandom count=1) &&
+	id=$(flux submit --wait-event=start $NOASAN dd if=/dev/urandom count=1) &&
 	test_debug "flux job eventlog -p guest.output -HL $id" &&
 	flux job attach $id >binary.expected &&
 	flux watch $id >binary.output &&

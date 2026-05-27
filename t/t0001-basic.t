@@ -20,6 +20,7 @@ export MAN_DISABLE_SECCOMP=1
 # An unexpected umask could affect tests below. Set it explicitly here:
 umask 022
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 startctl=${SHARNESS_TEST_SRCDIR}/scripts/startctl.py
 path_printenv=$(which printenv)
 
@@ -776,7 +777,7 @@ test_expect_success 'setting local-uri to a long path fails (#3925)' '
 
 reactorcat=${SHARNESS_TEST_DIRECTORY}/reactor/reactorcat
 test_expect_success 'reactor: reactorcat example program works' '
-	dd if=/dev/urandom bs=1024 count=4 >reactorcat.in &&
+	$NOASAN dd if=/dev/urandom bs=1024 count=4 >reactorcat.in &&
 	$reactorcat <reactorcat.in >reactorcat.out &&
 	test_cmp reactorcat.in reactorcat.out &&
 	$reactorcat </dev/null >reactorcat.devnull.out &&
