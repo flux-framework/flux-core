@@ -1,5 +1,6 @@
 [![ci](https://github.com/flux-framework/flux-core/workflows/ci/badge.svg)](https://github.com/flux-framework/flux-core/actions?query=workflow%3A.github%2Fworkflows%2Fmain.yml)
 [![codecov](https://codecov.io/gh/flux-framework/flux-core/branch/master/graph/badge.svg)](https://codecov.io/gh/flux-framework/flux-core)
+[![R&D100 - Winner](https://img.shields.io/badge/R%26D100-Winner-gold)](https://www.rdworldonline.com/rd-100-2021-winner/flux-next-generation-workload-management-software-framework/)
 
 See our [Flux Framework Documentation](https://flux-framework.readthedocs.io)
 and the [Flux Core Documentation](https://flux-framework.readthedocs.io/projects/flux-core)
