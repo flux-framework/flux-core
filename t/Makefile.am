@@ -93,6 +93,7 @@ TESTSCRIPTS = \
 	t0025-broker-state-machine.t \
 	t0027-broker-groups.t \
 	t0040-flux-sproc.t \
+	t0041-broker-conf-builtin.t \
 	t0013-config-file.t \
 	t0014-runlevel.t \
 	t0015-cron.t \
