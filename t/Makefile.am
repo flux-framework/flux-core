@@ -108,6 +108,7 @@ TESTSCRIPTS = \
 	t0024-jjc-reader.t \
 	t0026-flux-R.t \
 	t0090-content-enospc.t \
+	t0099-admin-system-scripts.t \
 	t0100-modprobe.t \
 	t0800-completion.t \
 	t1000-kvs.t \
