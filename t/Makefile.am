@@ -31,8 +31,7 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/config/tap-driver.sh
 PY_LOG_DRIVER = $(PYTHON) $(top_srcdir)/config/tap-driver.py
 
-lua_SCRIPTS = \
-	fluxometer.lua
+lua_DATA = fluxometer.lua
 
 install-data-local:
 	$(INSTALL) -m644 fluxometer/conf.lua.installed \

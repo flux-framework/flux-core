@@ -35,11 +35,12 @@ libmodule_builtins_la_LIBADD = \
 	$(builddir)/overlay/liboverlay.la
 libmodule_builtins_la_LDFLAGS = $(san_ld_zdef_flag)
 
-dist_fluxmod_SCRIPTS = \
+dist_fluxmod_SCRIPTS = sdexec-mapper.py
+
+dist_fluxmod_DATA = \
 	sched-fifo.py \
 	sched-backfill.py \
-	sched-simple.py \
-	sdexec-mapper.py
+	sched-simple.py
 
 fluxmod_LTLIBRARIES = \
 	content.la \

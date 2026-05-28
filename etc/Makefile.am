@@ -15,7 +15,7 @@ tmpfiles_DATA = flux.conf
 dist_cron_DATA = \
 	kvs-backup.cron
 
-nobase_dist_fluxlibexec_SCRIPTS = \
+nobase_dist_fluxlibexec_DATA = \
 	modprobe/rc1.py \
 	modprobe/rc3.py
 

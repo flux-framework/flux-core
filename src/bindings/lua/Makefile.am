@@ -14,14 +14,14 @@ fluxluadir =     $(luadir)/flux
 fluxometerdir =  $(luadir)/fluxometer
 fluxluaexecdir = $(luaexecdir)/flux
 
-nobase_dist_lua_SCRIPTS = \
+nobase_dist_lua_DATA = \
 	flux/timer.lua \
 	flux/alt_getopt.lua \
 	flux/posix.lua \
 	flux/shell.lua \
 	flux/Subcommander.lua
 
-nobase_dist_fluxometer_SCRIPTS = \
+nobase_dist_fluxometer_DATA = \
 	Test/Builder/NoOutput.lua \
 	Test/Builder/SocketOutput.lua \
 	Test/Builder/Tester.lua \
