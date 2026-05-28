@@ -58,6 +58,8 @@ extern struct shell_builtin builtin_hwloc;
 extern struct shell_builtin builtin_rexec;
 extern struct shell_builtin builtin_env_expand;
 extern struct shell_builtin builtin_sysmon;
+extern struct shell_builtin builtin_alloc_reuest;
+
 
 static struct shell_builtin * builtins [] = {
     &builtin_tmpdir,
@@ -90,6 +92,7 @@ static struct shell_builtin * builtins [] = {
     &builtin_rexec,
     &builtin_env_expand,
     &builtin_sysmon,
+    &builtin_alloc_reuest,
     &builtin_list_end,
 };
 
@@ -99,7 +102,6 @@ static int shell_load_builtin (flux_shell_t *shell,
     flux_plugin_t *p = flux_plugin_create ();
     if (!p)
         return -1;
-
     if (flux_plugin_aux_set (p, "flux::shell", shell, NULL) < 0
         || flux_plugin_set_name (p, sb->name) < 0
         || flux_plugin_add_handler (p, "shell.validate", sb->validate, NULL) < 0

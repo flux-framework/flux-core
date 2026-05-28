@@ -49,6 +49,12 @@ struct alloc {
     flux_watcher_t *idle;
     unsigned int alloc_limit;   // will have a value of 0 in mode=unlimited
     char *sched_sender;         // scheduler uuid for disconnect processing
+    flux_t *parent_instance;
+};
+
+struct alloc_ctx {
+    flux_t *h;
+    const flux_msg_t *msg;
 };
 
 static void requeue_pending (struct alloc *alloc, struct job *job)
@@ -638,6 +644,132 @@ bool alloc_sched_ready (struct alloc *alloc)
     return alloc->scheduler_is_online;
 }
 
+/* recives RESPONSE from scheduler/parent instance for dynamic allocation request. 
+ * forwards response to requestor  
+ * Note: arg is the original request msg
+ */
+static void dyn_alloc_response_completion (flux_future_t *f, void *arg)
+{
+    json_t *xdata = NULL;
+    struct alloc_ctx *ctx = arg;
+    int rc;
+
+
+    flux_log(ctx->h, LOG_DEBUG, "received allocation response from paren/scheduler");
+
+    /* TODO: DO whatever is necessary for LEVEL 'job_manager' before forwarding response to shell */
+
+    if (flux_rpc_get_unpack (f, "{s:O}", "data", &xdata) < 0){
+        flux_log(ctx->h, LOG_WARNING, "pmix-alloc request: %s", future_strerror (f, errno));
+        flux_respond_error(ctx->h, ctx->msg, -1, "unable to unpack response");
+        goto out;
+    }
+
+    if(0 > (rc = flux_respond_pack(ctx->h, ctx->msg,  "{s:O}", "data", xdata))){
+        flux_log(ctx->h, LOG_WARNING, "flux_respond_pack failed with %d", rc);
+        flux_respond_error(ctx->h, ctx->msg, -1, "unable to pack response");
+        goto out;
+    };
+    flux_log(ctx->h, LOG_DEBUG, "forwarded allocation response");
+
+out:
+    flux_msg_decref(ctx->msg);
+    free(ctx);
+}
+
+
+/* recives REQUEST from shell/child instance for dynamic allocation request. 
+ * forwards REQUEST to parent or local scheduler  
+ * Note: arg is job_ctx
+ */
+static void dyn_alloc_request (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
+{
+    json_t *xdata = NULL;
+    char *error_msg = NULL;
+    struct job_manager *job_ctx = arg;
+    struct alloc *alloc = job_ctx->alloc;
+    struct alloc_ctx *ctx; 
+    flux_future_t *f = NULL;
+    int directive;
+
+    flux_log (h, LOG_DEBUG, "recived allocation request");
+
+    /* TODO: DO whatever is necessary for LEVEL 'job_manager' before forwarding request to parent/scheduler */
+
+    ctx = calloc(1, sizeof(*ctx));
+    ctx->h = h;
+    ctx->msg = flux_msg_incref(msg);
+
+    if (flux_msg_unpack (msg, "{s:i s:O}", "directive", &directive, "data", &xdata) < 0){
+        error_msg = "failed to unpack request data";
+        flux_log_error (h, "%s: %s", __FUNCTION__, error_msg);
+        goto error;
+    }
+
+    if(alloc->parent_instance){
+
+        flux_log (h, LOG_DEBUG, "forwarding allocation request to parent instance");
+        
+        /* forward to parent instance */
+        if( !(f = flux_rpc_pack(alloc->parent_instance, 
+                    "job-manager.dyn_alloc_request", 
+                    FLUX_NODEID_ANY, 
+                    0, 
+                    "{s:i s:O}",
+                    "directive", directive,
+                    "data", xdata )) 
+            || flux_future_then (f,
+                                 -1,
+                                 dyn_alloc_response_completion,
+                                 (void *) ctx) < 0) 
+        {
+            error_msg = "failed to send allocation to parent instance";
+            flux_log (h, LOG_DEBUG, error_msg);
+            goto error;
+        }
+        flux_log (ctx->h, LOG_DEBUG, "forwarded allocation request to parent instance");
+    }else if(alloc->scheduler_is_online){
+        
+        /* forward to scheduler */
+        if (!(f = flux_rpc_pack (ctx->h,
+                                 "sched.dyn_alloc_request",
+                                 0,
+                                 0,
+                                 "{s:O}",
+                                 "data", xdata))
+            ||  flux_future_then (f,
+                                 -1.,
+                                 dyn_alloc_response_completion,
+                                 (void *) ctx) < 0) 
+        {
+            error_msg = "failed to forward request to local scheduler";
+            flux_log_error (h, "%s: %s", __FUNCTION__, error_msg);
+            goto error;
+            return;
+        }
+        flux_log (ctx->h, LOG_DEBUG, "forwarded allocation request to scheduler");
+    }else{
+        error_msg = "failed to forward request: no scheduler or parent instance found";
+        flux_log_error (h, "%s: %s", __FUNCTION__, error_msg);
+        goto error;
+    }
+
+    json_decref (xdata);
+    return;
+
+error:
+    if(f) flux_future_destroy (f);
+    if(xdata) json_decref (xdata);
+    flux_respond_error(h, msg, -1, error_msg);
+
+    flux_msg_decref(ctx->msg);
+    free(ctx);
+}
+
+
 static void alloc_query_cb (flux_t *h,
                             flux_msg_handler_t *mh,
                             const flux_msg_t *msg,
@@ -766,6 +898,11 @@ static const struct flux_msg_handler_spec htab[] = {
         resource_status_cb,
         0
     },
+    {   FLUX_MSGTYPE_REQUEST,
+        "job-manager.dyn_alloc_request",
+        dyn_alloc_request,
+        0
+    },
     {   FLUX_MSGTYPE_RESPONSE,
         "sched.alloc",
         alloc_response_cb,
@@ -777,6 +914,7 @@ static const struct flux_msg_handler_spec htab[] = {
 struct alloc *alloc_ctx_create (struct job_manager *ctx)
 {
     struct alloc *alloc;
+    const char *parent_uri;
     flux_reactor_t *r = flux_get_reactor (ctx->h);
 
     if (!(alloc = calloc (1, sizeof (*alloc))))
@@ -794,6 +932,11 @@ struct alloc *alloc_ctx_create (struct job_manager *ctx)
         errno = ENOMEM;
         goto error;
     }
+    alloc->parent_instance = NULL;
+    if ((parent_uri = flux_attr_get (ctx->h, "parent-uri"))){
+        alloc->parent_instance = flux_open (parent_uri, 0);
+    }
+
     flux_watcher_start (alloc->prep);
     flux_watcher_start (alloc->check);
     return alloc;

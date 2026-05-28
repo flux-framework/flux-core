@@ -923,6 +923,23 @@ class Scheduler(BrokerModule):
             raise
         super().run()
 
+
+    @request_handler("sched.dyn_alloc_request", prefix=False)
+    def _handle_dyn_alloc_request(self, msg):
+        self.log(syslog.LOG_DEBUG, f"dyn_alloc_request callback called")
+        try:
+            self.log(syslog.LOG_DEBUG, str(msg.payload))
+            p = msg.payload
+            data = p["data"]
+            resp = {
+                "data": data,
+            }
+            rc = self.handle.respond(msg, resp)
+            self.log(syslog.LOG_DEBUG, f"respond returned "+str(rc))
+        except Exception as exc:
+            self.log(syslog.LOG_ERR, f"dyn_alloc callback raised: {exc}")
+            self.stop_error()
+
     # ------------------------------------------------------------------
     # RFC 27 sched message handlers (registered by BrokerModule)
     # ------------------------------------------------------------------

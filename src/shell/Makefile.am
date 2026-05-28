@@ -116,7 +116,8 @@ flux_shell_SOURCES = \
 	files.c \
 	hwloc.c \
 	rexec.c \
-	env-expand.c
+	env-expand.c \
+	alloc_request.c
 
 if HAVE_INOTIFY
 flux_shell_SOURCES += oom.c
