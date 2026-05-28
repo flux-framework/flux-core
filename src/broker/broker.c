@@ -1235,6 +1235,63 @@ error:
     json_decref (env);
 }
 
+static void broker_conf_builtin_cb (flux_t *h,
+                                    flux_msg_handler_t *mh,
+                                    const flux_msg_t *msg,
+                                    void *arg)
+{
+    json_t *keys;
+    json_t *values = NULL;
+    size_t index;
+    json_t *entry;
+    flux_error_t error;
+
+    err_init (&error);
+
+    if (flux_request_unpack (msg, NULL, "{s:o}", "keys", &keys) < 0)
+        goto error;
+    if (!json_is_array (keys)) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (!(values = json_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    json_array_foreach (keys, index, entry) {
+        const char *key = json_string_value (entry);
+        const char *val;
+
+        if (key && (val = flux_conf_builtin_get (key, FLUX_CONF_AUTO))) {
+            json_t *o;
+            if (!(o = json_string (val))
+                || json_object_set_new (values, key, o) < 0) {
+                // jansson decrefs the new object on failure
+                errno = ENOMEM;
+                goto error;
+            }
+        }
+        else if (key) {
+            // flux_conf_builtin_get returns NULL with EINVAL for unknown key
+            errprintf (&error, "%s: invalid key", key);
+            goto error;
+        }
+    }
+    if (flux_respond_pack (h, msg, "{s:O}", "values", values) < 0)
+        flux_log_error (h, "error responding to broker.conf_builtin");
+    json_decref (values);
+    return;
+error:
+    if (flux_respond_error (h,
+                            msg,
+                            errno,
+                            error.text[0] != '\0' ?
+                            error.text :
+                            NULL) < 0)
+        flux_log_error (h, "error responding to broker.conf_builtin");
+    json_decref (values);
+}
+
 static int route_to_handle (flux_msg_t **msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
@@ -1564,6 +1621,12 @@ static const struct flux_msg_handler_spec htab[] = {
         "broker.setenv",
         broker_setenv_cb,
         0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "broker.conf-builtin",
+        broker_conf_builtin_cb,
+        FLUX_ROLE_ALL
     },
     {
         FLUX_MSGTYPE_REQUEST,
