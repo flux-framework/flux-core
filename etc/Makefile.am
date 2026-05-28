@@ -100,5 +100,4 @@ completions/flux: completions/flux.pre completions/get_builtins.sh
 	$(srcdir)/completions/get_builtins.sh \
 	$(top_srcdir)/src/cmd/builtin >> $@
 
-bashcomp_SCRIPTS = \
-	completions/flux
+bashcomp_DATA =	completions/flux
