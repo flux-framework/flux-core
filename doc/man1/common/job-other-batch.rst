@@ -47,7 +47,7 @@
    interactively attach to the job (though it will print any errors or
    output).
 
-.. option:: -B, --broker-opts=OPT
+.. option:: --broker-opts=OPT
 
    Pass specified options to the Flux brokers of the new instance. This
    option may be specified multiple times.
