@@ -16,6 +16,8 @@
 #endif
 
 #include <flux/core.h>
+#include <math.h>
+#include <time.h>
 #include <jansson.h>
 
 #include "src/common/libutil/errno_safe.h"
@@ -23,6 +25,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/librlist/rlist.h"
+#include "src/common/libutil/fsd.h"
 #include "ccan/str/str.h"
 
 #include "resource.h"
@@ -36,6 +39,7 @@
 #include "rutil.h"
 #include "status.h"
 #include "upgrade.h"
+#include "truncate.h"
 
 /* Parse [resource] table.
  *
@@ -67,6 +71,10 @@
  *
  * journal-max = 100000
  *   Maximum size allowed of the resource journal before it is truncated.
+ *
+ * history = 0
+ *   An amount of time specified in Flux Standard Duration (FSD) to preserve
+ *   resource.eventlog entries.
  */
 
 /* Initialize a resource_config object
@@ -141,12 +149,14 @@ static int parse_config (struct resource_ctx *ctx,
     int no_update_watch = 0;
     int rediscover = 0;
     int journal_max = 100000;
+    const char *history = NULL;
+    double history_time = 0.0;
     json_t *o = NULL;
     json_t *config = NULL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s s?o s?o s?s s?b s?b s?b s?b s?i !}}",
+                          "{s?{s?s s?s s?o s?o s?s s?b s?b s?b s?b s?i s?s !}}",
                           "resource",
                             "path", &path,
                             "scheduling", &scheduling_path,
@@ -157,7 +167,8 @@ static int parse_config (struct resource_ctx *ctx,
                             "noverify", &noverify,
                             "no-update-watch", &no_update_watch,
                             "rediscover", &rediscover,
-                            "journal-max", &journal_max) < 0) {
+                            "journal-max", &journal_max,
+                            "history", &history) < 0) {
         errprintf (errp,
                    "error parsing [resource] configuration: %s",
                    error.text);
@@ -213,6 +224,13 @@ static int parse_config (struct resource_ctx *ctx,
             return -1;
         }
     }
+    if (history) {
+        if (fsd_parse_duration (history, &history_time) < 0) {
+            errprintf (errp, "invalid history time");
+            json_decref (o);
+            return -1;
+        }
+    }
     /* Check systemd.enable so we know whether sdmon.online will be populated.
      * Configuration errors in [systemd] are handled elsewhere.
      */
@@ -233,6 +251,7 @@ static int parse_config (struct resource_ctx *ctx,
         rconfig->rediscover = rediscover ? true : false;
         rconfig->R = o;
         rconfig->systemd_enable = systemd_enable ? true : false;
+        rconfig->history = history_time;
     }
     else
         json_decref (o);
@@ -386,10 +405,15 @@ static int reload_eventlog (flux_t *h, json_t **eventlog)
         o = NULL;
     }
     else {
-        if (!(o = eventlog_decode (s))) {
-            flux_log (h, LOG_ERR, "%s: decode error", RESLOG_KEY);
-            goto error;
+        if (s) {
+            if (!(o = eventlog_decode (s))) {
+                flux_log (h, LOG_ERR, "%s: decode error", RESLOG_KEY);
+                goto error;
+            }
         }
+        else
+            /* s == NULL, RESLOG_KEY has been set to empty string */
+            o = NULL;
     }
     *eventlog = o;
     flux_future_destroy (f);
@@ -412,6 +436,8 @@ int parse_args (flux_t *h, int argc,
             config->monitor_force_up = true;
         else if (streq (argv[i], "noverify"))
             config->noverify = true;
+        else if (streq (argv[i], "notruncate"))
+            config->notruncate = true;
         else  {
             flux_log (h, LOG_ERR, "unknown option: %s", argv[i]);
             errno = EINVAL;
@@ -420,7 +446,6 @@ int parse_args (flux_t *h, int argc,
     }
     return 0;
 }
-
 
 int mod_main (flux_t *h, int argc, char **argv)
 {
@@ -454,6 +479,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto error;
 
     if (ctx->rank == 0) {
+        double checkpoint_timestamp;
         /*  Create reslog and reload eventlog before initializing
          *  acquire, exclude, and drain subsystems, since these
          *  are required by acquire and exclude.
@@ -477,8 +503,25 @@ int mod_main (flux_t *h, int argc, char **argv)
          */
         if (!(ctx->exclude = exclude_create (ctx, config.exclude_idset)))
             goto error;
-        if (!(ctx->drain = drain_create (ctx, eventlog)))
+        if (!(ctx->drain = drain_create (ctx, eventlog, &checkpoint_timestamp)))
             goto error;
+        if (!isinf (config.history)
+            && !flux_attr_get (ctx->h, "broker.recovery-mode")
+            && !config.notruncate) {
+            json_t *curr_eventlog;
+            if (reslog_sync (ctx->reslog) < 0) {
+                flux_log_error (h, "failed to sync reslog");
+                goto error;
+            }
+            /* must reload eventlog due to reslog_sync() call above */
+            if (reload_eventlog (h, &curr_eventlog) < 0)
+                goto error;
+            truncate_eventlog (ctx,
+                               curr_eventlog,
+                               checkpoint_timestamp,
+                               config.history);
+            json_decref (curr_eventlog);
+        }
     }
     /*  topology is initialized after exclude/drain etc since this
      *  rank may attempt to drain itself due to a topology mismatch.
@@ -497,6 +540,9 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_reactor_run");
         goto error;
     }
+    /* Checkpoint final drain state */
+    if (ctx->rank == 0)
+        drain_checkpoint (ctx->drain);
     resource_config_deinit (&config);
     resource_ctx_destroy (ctx);
     json_decref (eventlog);

@@ -40,7 +40,7 @@ test_expect_success 'resource-define event was posted to the KVS' '
 '
 
 test_expect_success 'reload resource with monitor-force-up' '
-	flux module reload resource monitor-force-up
+	flux module reload resource monitor-force-up notruncate
 '
 test_expect_success 'flux resource eventlog works' '
 	flux resource eventlog -f json --wait=resource-define >forcelog

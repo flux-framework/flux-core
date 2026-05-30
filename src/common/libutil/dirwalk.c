@@ -67,7 +67,8 @@ static void direntry_destroy (struct direntry *e)
  *  Create a direntry under parent dirfd `fd` and path `dir`, from
  *   directory entry `dent`.
  */
-static struct direntry *direntry_create (int fd, const char *dir,
+static struct direntry *direntry_create (int fd,
+                                         const char *dir,
                                          struct dirent *dent)
 {
     struct direntry *e = calloc (1, sizeof (*e));
@@ -271,8 +272,10 @@ void dirwalk_stop (dirwalk_t *d, int errnum)
     d->errnum = errnum;
 }
 
-int dirwalk (const char *path, int flags,
-             dirwalk_filter_f fn, void *arg)
+int dirwalk (const char *path,
+             int flags,
+             dirwalk_filter_f fn,
+             void *arg)
 {
     char *dirpath = NULL;
     int count = -1;
@@ -330,9 +333,12 @@ static int find_f (dirwalk_t *d, void *arg)
     return 0;
 }
 
-zlist_t *dirwalk_find (const char *searchpath, int flags,
-                       const char *pattern, int count,
-                       dirwalk_filter_f fn, void *uarg)
+zlist_t *dirwalk_find (const char *searchpath,
+                       int flags,
+                       const char *pattern,
+                       int count,
+                       dirwalk_filter_f fn,
+                       void *uarg)
 {
     int saved_errno;
     char *copy = NULL;

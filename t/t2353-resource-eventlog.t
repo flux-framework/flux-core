@@ -26,17 +26,24 @@ test_expect_success 'unload scheduler' '
 
 for eventlog in ${SHARNESS_TEST_SRCDIR}/resource/resource.eventlog.*; do
 	filename=$(basename $eventlog)
+        #
+        # N.B. below we overwrite the resource.eventlog to test
+        # specific corner cases.  Remove the resource checkpoint so we
+        # isolate testing to just the resource eventlog.
+        #
 	test_expect_success "load test resources $filename" '
 		flux dmesg -C &&
 		flux kvs put --raw resource.eventlog=- <$eventlog &&
-		flux module reload resource noverify
+		flux module remove resource &&
+		flux kvs unlink -f checkpoint.resource &&
+		flux module load resource noverify
 	'
 	test_expect_success 'eventlog upgrade reduced entry count' '
 		flux dmesg | grep "resource.eventlog: reduced"
 	'
 	test_expect_success 'reloading resource module does not rewrite log' '
 		flux dmesg -C &&
-		flux module reload resource noverify &&
+		flux module reload resource noverify notruncate &&
 		flux dmesg >dmesg.out &&
 		test_must_fail grep "resource.eventlog: reduced" dmesg.out
 	'

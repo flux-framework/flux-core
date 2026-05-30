@@ -41,7 +41,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <time.h>
 #include <math.h>
 #include <flux/core.h>
 #include <jansson.h>
@@ -78,15 +77,6 @@ struct drain_init_args {
     struct drain *drain;
     const struct idset *exclude;
 };
-
-static int get_timestamp_now (double *timestamp)
-{
-    struct timespec ts;
-    if (clock_gettime (CLOCK_REALTIME, &ts) < 0)
-        return -1;
-    *timestamp = (1E-9 * ts.tv_nsec) + ts.tv_sec;
-    return 0;
-}
 
 static int draininfo_undrain_rank (struct drain *drain, unsigned int rank)
 {
@@ -285,7 +275,8 @@ static struct idset *drain_targets_decode (struct drain *drain,
     struct idset *idset;
 
     if (!(idset = inventory_targets_to_ranks (drain->ctx->inventory,
-                                              ranks, errp)))
+                                              ranks,
+                                              errp)))
         return NULL;
     if (idset_count (idset) == 0) {
         errprintf (errp, "idset is empty");
@@ -657,9 +648,79 @@ done:
     return newids;
 }
 
+/* Recover checkpointed drain state
+ */
+static int load_drain_state (struct drain *drain,
+                             double *checkpoint_timestamp,
+                             flux_error_t *error)
+{
+    flux_future_t *f;
+    double check_timestamp;
+    json_t *drain_state;
+    const char *key;
+    json_t *value;
+    int rc = -1;
+
+    if (!(f = flux_kvs_lookup (drain->ctx->h,
+                               NULL,
+                               0,
+                               RESOURCE_CHECKPOINT))
+        || flux_kvs_lookup_get_unpack (f,
+                                       "{s:f s:o}",
+                                       "timestamp", &check_timestamp,
+                                       "drain_state", &drain_state) < 0) {
+        if (errno == ENOENT) {
+            check_timestamp = 0.0;
+            goto out;
+        }
+        errprintf (error, "failed to load drain-state");
+        goto error;
+    }
+
+    json_object_foreach (drain_state, key, value) {
+        struct idset *idset = NULL;
+        double timestamp;
+        char *nodelist;
+        char *reason;
+
+        if (json_unpack (value,
+                         "{s:f s:s s:s}",
+                         "timestamp", &timestamp,
+                         "nodelist", &nodelist,
+                         "reason", &reason) < 0
+            || !(idset = decode_targets (drain, key, nodelist))) {
+            errprintf (error, "invalid drain state entry");
+            goto error;
+        }
+
+        /* a NULL reason is serialized as an empty string during
+         * checkpoint, convert back to NULL to indicate there is no
+         * reason for the drain
+         */
+        if (reason[0] == '\0')
+            reason = NULL;
+
+        if (draininfo_drain_idset (drain, idset, timestamp, reason, 0) < 0) {
+            errprintf (error, "failed to update drain state");
+            idset_destroy (idset);
+            goto error;
+        }
+
+        idset_destroy (idset);
+    }
+
+out:
+    rc = 0;
+    (*checkpoint_timestamp) = check_timestamp;
+error:
+    flux_future_destroy (f);
+    return rc;
+}
+
 /* Recover drained idset from eventlog.
  */
 static int replay_eventlog (struct drain *drain,
+                            double checkpoint_timestamp,
                             const json_t *eventlog,
                             flux_error_t *error)
 {
@@ -679,6 +740,9 @@ static int replay_eventlog (struct drain *drain,
                 errprintf (error, "line %zu: event parse error", index + 1);
                 return -1;
             }
+            /* no need to replay anything before checkpoint timestamp */
+            if (timestamp < checkpoint_timestamp)
+                continue;
             if (streq (name, "drain")) {
                 int overwrite = 1;
                 const char *nodelist;
@@ -801,6 +865,65 @@ done:
     return rc;
 }
 
+static json_t *drain_get_drain_state (struct drain *drain)
+{
+    json_t *o = NULL;
+    const char *key;
+    json_t *value;
+
+    if (!(o = drain_get_info (drain)))
+        goto error;
+
+    json_object_foreach (o, key, value) {
+        char *nodelist = flux_hostmap_lookup (drain->ctx->h, key, NULL);
+        json_t *nl = NULL;
+        if (!nodelist
+            || !(nl = json_string (nodelist))
+            || json_object_set (value, "nodelist", nl) < 0) {
+            flux_log (drain->ctx->h,
+                      LOG_ERR,
+                      "failed to add nodelist to drain state");
+            json_decref (nl);
+            free (nodelist);
+            goto error;
+        }
+        json_decref (nl);
+        free (nodelist);
+    }
+
+    return o;
+error:
+    json_decref (o);
+    return NULL;
+}
+
+void drain_checkpoint (struct drain *drain)
+{
+    json_t *drain_state = NULL;
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
+    double timestamp;
+
+    if (flux_attr_get (drain->ctx->h, "broker.recovery-mode"))
+        return;
+
+    if (!(drain_state = drain_get_drain_state (drain))
+        || get_timestamp_now (&timestamp) < 0
+        || !(txn = flux_kvs_txn_create ())
+        || flux_kvs_txn_pack (txn,
+                              0,
+                              RESOURCE_CHECKPOINT,
+                              "{s:f s:O}",
+                              "timestamp", timestamp,
+                              "drain_state", drain_state) < 0
+        || !(f = flux_kvs_commit (drain->ctx->h, NULL, FLUX_KVS_SYNC, txn))
+        || flux_future_get (f, NULL) < 0)
+        flux_log_error (drain->ctx->h, "failed to checkpoint drain state");
+    json_decref (drain_state);
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "resource.drain", drain_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "resource.undrain", undrain_cb, 0 },
@@ -823,10 +946,13 @@ void drain_destroy (struct drain *drain)
     }
 }
 
-struct drain *drain_create (struct resource_ctx *ctx, const json_t *eventlog)
+struct drain *drain_create (struct resource_ctx *ctx,
+                            const json_t *eventlog,
+                            double *checkpoint_timestamp)
 {
     struct drain *drain;
     flux_error_t error;
+    double timestamp = 0.0;
 
     if (!(drain = calloc (1, sizeof (*drain))))
         return NULL;
@@ -837,7 +963,11 @@ struct drain *drain_create (struct resource_ctx *ctx, const json_t *eventlog)
         drain->size = rsize;
     if (!(drain->info = calloc (drain->size, sizeof (drain->info[0]))))
         goto error;
-    if (replay_eventlog (drain, eventlog, &error) < 0) {
+    if (load_drain_state (drain, &timestamp, &error) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: %s", RESOURCE_CHECKPOINT, error.text);
+        goto error;
+    }
+    if (replay_eventlog (drain, timestamp, eventlog, &error) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: %s", RESLOG_KEY, error.text);
         goto error;
     }
@@ -847,6 +977,8 @@ struct drain *drain_create (struct resource_ctx *ctx, const json_t *eventlog)
     }
     if (flux_msg_handler_addvec (ctx->h, htab, drain, &drain->handlers) < 0)
         goto error;
+    if (checkpoint_timestamp)
+        (*checkpoint_timestamp) = timestamp;
     return drain;
 error:
     drain_destroy (drain);

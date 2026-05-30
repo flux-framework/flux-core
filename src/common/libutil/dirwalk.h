@@ -84,8 +84,11 @@ int dirwalk_isdir (dirwalk_t *d);
  *
  *  zlist must be freed by caller (results are set to autofree).
  */
-zlist_t * dirwalk_find (const char *path, int flags,
-                        const char *pattern, int count,
-                        dirwalk_filter_f fn, void *arg);
+zlist_t * dirwalk_find (const char *path,
+                        int flags,
+                        const char *pattern,
+                        int count,
+                        dirwalk_filter_f fn,
+                        void *arg);
 
 #endif /* !HAVE_UTIL_DIRWALK_H */

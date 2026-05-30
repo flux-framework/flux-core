@@ -13,6 +13,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -265,6 +266,15 @@ int rutil_idkey_count (json_t *obj)
     int count = 0;
     (void)rutil_idkey_map (obj, idkey_count_map, &count);
     return count;
+}
+
+int get_timestamp_now (double *timestamp)
+{
+    struct timespec ts;
+    if (clock_gettime (CLOCK_REALTIME, &ts) < 0)
+        return -1;
+    *timestamp = (1E-9 * ts.tv_nsec) + ts.tv_sec;
+    return 0;
 }
 
 /*
