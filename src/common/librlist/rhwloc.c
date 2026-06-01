@@ -416,7 +416,14 @@ static int collect_unique_gpus (hwloc_topology_t topo,
 {
     int nvisited = 0;
     int count = 0;
+    bool dedup = true;
     hwloc_obj_t obj = NULL;
+
+    /*  Allow disabling deduplication via environment variable as an escape
+     *  hatch in case this logic causes problems in the field.
+     */
+    if (getenv ("FLUX_HWLOC_GPU_NO_DEDUP"))
+        dedup = false;
 
     /*  Manually index GPUs -- os_index does not seem to be valid for
      *  these devices in some cases, and logical index also seems
@@ -429,7 +436,10 @@ static int collect_unique_gpus (hwloc_topology_t topo,
         const char *backend = hwloc_obj_get_info_by_name (obj, "Backend");
         hwloc_obj_t pcidev = osdev_get_pcidev (obj);
         if (!backend_is_coproc (backend)
-            || gpu_identity_visited (visited, nvisited, pcidev, backend))
+            || (dedup && gpu_identity_visited (visited,
+                                               nvisited,
+                                               pcidev,
+                                               backend)))
             continue;
         if (nvisited < vlen) {
             visited[nvisited].pcidev = pcidev;
