@@ -378,13 +378,25 @@ static bool backend_is_coproc (const char *s)
             || streq (s, "RSMI"));
 }
 
-static bool pcidev_visited (hwloc_obj_t *visited,
-                            int nvisited,
-                            hwloc_obj_t pcidev)
+/*  Structure to track unique GPU identities by PCI device and backend.
+ *  Deduplicates GPUs appearing under multiple backends (e.g., CUDA and
+ *  OpenCL for the same physical NVIDIA GPU), while preserving AMD CPX/TPX
+ *  partitioned GPUs which share a PCI device but are distinct logical GPUs.
+ */
+struct gpu_identity {
+    hwloc_obj_t pcidev;
+    const char *backend;
+};
+
+static bool gpu_identity_visited (struct gpu_identity *visited,
+                                  int nvisited,
+                                  hwloc_obj_t pcidev,
+                                  const char *backend)
 {
-    if (pcidev) {
+    if (pcidev && backend) {
         for (int i = 0; i < nvisited; i++) {
-            if (visited[i] == pcidev)
+            if (visited[i].pcidev == pcidev
+                && !streq (visited[i].backend, backend))
                 return true;
         }
     }
@@ -397,7 +409,7 @@ static bool pcidev_visited (hwloc_obj_t *visited,
  *  there up to rlen entries. Returns the count of unique GPUs.
  */
 static int collect_unique_gpus (hwloc_topology_t topo,
-                                hwloc_obj_t *visited,
+                                struct gpu_identity *visited,
                                 int vlen,
                                 hwloc_obj_t *result,
                                 int rlen)
@@ -409,17 +421,21 @@ static int collect_unique_gpus (hwloc_topology_t topo,
     /*  Manually index GPUs -- os_index does not seem to be valid for
      *  these devices in some cases, and logical index also seems
      *  incorrect (?).
-     *  Ensure GPUs are not counted twice when they appear with multiple
-     *  backends by tracking visited devices by the PCI parent.
+     *  Deduplicate GPUs that appear with multiple backends (e.g., CUDA
+     *  and OpenCL for the same NVIDIA GPU), while preserving AMD partitioned
+     *  GPUs (CPX/TPX) which share a PCI device but have the same backend.
      */
     while ((obj = hwloc_get_next_osdev (topo, obj))) {
         const char *backend = hwloc_obj_get_info_by_name (obj, "Backend");
         hwloc_obj_t pcidev = osdev_get_pcidev (obj);
         if (!backend_is_coproc (backend)
-            || pcidev_visited (visited, nvisited, pcidev))
+            || gpu_identity_visited (visited, nvisited, pcidev, backend))
             continue;
-        if (nvisited < vlen)
-            visited[nvisited++] = pcidev;
+        if (nvisited < vlen) {
+            visited[nvisited].pcidev = pcidev;
+            visited[nvisited].backend = backend;
+            nvisited++;
+        }
         if (result && count < rlen)
             result[count] = obj;
         count++;
@@ -431,7 +447,7 @@ hwloc_obj_t *rhwloc_gpu_objects (hwloc_topology_t topo, int *count_out)
 {
     int n_pci;
     int count = 0;
-    hwloc_obj_t *visited = NULL;
+    struct gpu_identity *visited = NULL;
     hwloc_obj_t *result = NULL;
 
     *count_out = 0;
@@ -446,17 +462,17 @@ hwloc_obj_t *rhwloc_gpu_objects (hwloc_topology_t topo, int *count_out)
     if (!(visited = calloc (n_pci, sizeof (*visited))))
         return NULL;
 
-    /* Traverse topo first to get count of unique GPUs to size result
+    /* Allocate result for worst case (all PCI devices are GPUs), then
+     * traverse once to collect unique GPUs
      */
-    count = collect_unique_gpus (topo, visited, n_pci, NULL, 0);
-    if (count == 0 || !(result = calloc (count, sizeof (*result))))
+    if (!(result = calloc (n_pci, sizeof (*result))))
         goto out;
-
-    /* Reset visited and traverse again, this time collecting GPUs
-     * in result
-     */
-    memset (visited, 0, n_pci * sizeof (*visited));
-    collect_unique_gpus (topo, visited, n_pci, result, count);
+    count = collect_unique_gpus (topo, visited, n_pci, result, n_pci);
+    if (count == 0) {
+        free (result);
+        result = NULL;
+        goto out;
+    }
     *count_out = count;
 out:
     ERRNO_SAFE_WRAP (free, visited);
@@ -467,7 +483,7 @@ static struct idset *rhwloc_gpu_idset (hwloc_topology_t topo)
 {
     int n_pci;
     int count = 0;
-    hwloc_obj_t *visited = NULL;
+    struct gpu_identity *visited = NULL;
     struct idset *ids = NULL;
 
     /* Count total PCI objects to size visited array:
