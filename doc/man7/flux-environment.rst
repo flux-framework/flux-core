@@ -414,6 +414,20 @@ components or writing tests.
    non-empty value and is ignored if :envvar:`FLUX_HWLOC_XMLFILE` is
    not set.
 
+.. envvar:: FLUX_HWLOC_GPU_NO_DEDUP
+
+   By default, Flux removes duplicate GPU devices that appear under multiple
+   hwloc discovery methods. For example, a physical NVIDIA GPU may be discovered
+   by CUDA, NVML, and OpenCL, but Flux counts it as one GPU. This duplicate
+   removal preserves AMD partitioned GPUs (CPX/TPX modes) where a single
+   physical GPU is split into multiple logical devices that share a PCI device
+   but have the same discovery method.
+
+   If set to any non-empty value, duplicate removal is completely disabled
+   and all GPU device objects reported by hwloc are counted. This is primarily
+   useful for testing or as an escape hatch if the duplicate removal logic
+   causes problems in the field.
+
 .. envvar:: FLUX_URI_RESOLVE_LOCAL
 
    If set, force :man1:`flux-uri` and the URI resolver embedded in other
