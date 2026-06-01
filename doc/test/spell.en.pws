@@ -378,6 +378,8 @@ EHOSTUNREACH
 ap
 MSGID
 NULL's
+NVML
+OpenCL
 ORed
 PRI
 procid
@@ -440,7 +442,9 @@ params
 sched
 setopt
 unsetenv
+CPX
 CUDA
+DEDUP
 GPU
 GPUs
 cpu
@@ -503,6 +507,7 @@ rc
 rcpath
 searchpath
 sysconfdir
+TPX
 TRACEME
 WIFEXTED
 builtin

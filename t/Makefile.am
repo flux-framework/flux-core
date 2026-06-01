@@ -107,6 +107,7 @@ TESTSCRIPTS = \
 	t0023-jobspec1-validate.t \
 	t0024-jjc-reader.t \
 	t0026-flux-R.t \
+	t0042-rhwloc-gpu-dedup.t \
 	t0090-content-enospc.t \
 	t0099-admin-system-scripts.t \
 	t0100-modprobe.t \
@@ -588,6 +589,10 @@ check_LTLIBRARIES = \
 dist_check_DATA = \
 	hwloc-data/sierra.xml \
 	hwloc-data/corona.xml \
+	hwloc-data/ipa20.xml \
+	hwloc-data/tuo.SPX.xml \
+	hwloc-data/tuo.TPX.xml \
+	hwloc-data/tuo.CPX.xml \
 	valgrind/valgrind.supp
 
 test_ldadd = \
