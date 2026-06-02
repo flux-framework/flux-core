@@ -19,6 +19,10 @@ test_expect_success 'flux run ignores ambiguous args after --' '
 	flux run -n2 --dry-run -- hostname --n=2 \
 		| jq -e ".tasks[0].command[0] == \"hostname\""
 '
+test_expect_success 'flux run: Flux option after command is not consumed' '
+	flux run -n2 --dry-run hostname --job-name=foo \
+		| jq -e ".tasks[0].command == [\"hostname\", \"--job-name=foo\"]"
+'
 test_expect_success 'flux run works' '
 	flux run hostname >run.out &&
 	hostname >run.exp &&
