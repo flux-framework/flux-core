@@ -18,6 +18,7 @@ from itertools import islice
 from pathlib import PurePath
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.job import JobID, JobInfoFormat, JobList
 from flux.util import FilterActionSetUpdate, UtilConfig
 
@@ -138,9 +139,7 @@ def fetch_jobs(args, flux_handle=None):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        prog=PROGRAM, formatter_class=flux.util.help_formatter()
-    )
+    parser = FluxArgumentParser(prog=PROGRAM)
     parser.add_argument(
         "-a",
         action="store_true",

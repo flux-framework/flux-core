@@ -8,13 +8,12 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import argparse
 import random
 import sys
 from datetime import datetime
 
-import flux.util
 from flux.cli import base
+from flux.cli.argparse import FluxArgumentParser
 
 # Choice of decorating symbols
 symbols = ["@", "*", "**", "!", "$", "%", "^", "O", "o", "|", "x", "8", "*", "{*}", "-"]
@@ -54,11 +53,10 @@ class FortuneCmd(base.MiniCmd):
         if usage is None:
             usage = f"{prog} [OPTIONS...] COMMAND [ARGS...]"
 
-        parser = argparse.ArgumentParser(
+        parser = FluxArgumentParser(
             prog=prog,
             usage=usage,
             description=description,
-            formatter_class=flux.util.help_formatter(),
         )
         parser.add_argument(
             "-c",

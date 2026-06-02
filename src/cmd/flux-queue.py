@@ -15,6 +15,7 @@ import logging
 import sys
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.queue import QueueList
 from flux.util import AltField, FilterActionSetUpdate, UtilConfig, parse_fsd
 
@@ -442,9 +443,7 @@ def common_parser_create(subparsers, command):
     Create an options parser for one of the flux-queue subcommands that
     take a common set of arguments. (status, enable, disable, start, stop)
     """
-    command_parser = subparsers.add_parser(
-        command, formatter_class=flux.util.help_formatter()
-    )
+    command_parser = subparsers.add_parser(command)
     command_parser.add_argument(
         "-q",
         "--queue",
@@ -496,15 +495,13 @@ def main():
         sys.stdout.fileno(), "w", encoding="utf8", errors="surrogateescape"
     )
 
-    parser = argparse.ArgumentParser(prog="flux-queue")
+    parser = FluxArgumentParser(prog="flux-queue")
     subparsers = parser.add_subparsers(
         title="subcommands", description="", dest="subcommand"
     )
     subparsers.required = True
 
-    list_parser = subparsers.add_parser(
-        "list", formatter_class=flux.util.help_formatter()
-    )
+    list_parser = subparsers.add_parser("list")
     list_parser.add_argument(
         "-q",
         "--queue",
@@ -528,9 +525,7 @@ def main():
     for command in ("status", "enable", "disable", "start", "stop"):
         common_parser_create(subparsers, command)
 
-    drain_parser = subparsers.add_parser(
-        "drain", formatter_class=flux.util.help_formatter()
-    )
+    drain_parser = subparsers.add_parser("drain")
     drain_parser.add_argument(
         "-t",
         "--timeout",
@@ -541,9 +536,7 @@ def main():
     )
     drain_parser.set_defaults(func=drain)
 
-    idle_parser = subparsers.add_parser(
-        "idle", formatter_class=flux.util.help_formatter()
-    )
+    idle_parser = subparsers.add_parser("idle")
     idle_parser.add_argument(
         "-t",
         "--timeout",

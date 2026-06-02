@@ -9,7 +9,6 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import argparse
 import json
 import logging
 import math
@@ -19,6 +18,7 @@ import time
 import flux
 import flux.job
 import flux.util
+from flux.cli.argparse import FluxArgumentParser
 from flux.job import event_watch
 
 LOGGER = logging.getLogger("flux-update")
@@ -169,12 +169,11 @@ class JobspecUpdates:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        prog="flux-update", formatter_class=flux.util.help_formatter()
-    )
+    parser = FluxArgumentParser(prog="flux-update")
     parser.add_argument(
         "-n",
         "--dry-run",
+        hidden_aliases=("--dry",),
         action="store_true",
         help="Do not apply any updates, just emit update payload to stdout",
     )

@@ -8,11 +8,11 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import argparse
 import os
 from abc import abstractmethod
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.importer import import_path, import_plugins
 from flux.job import Jobspec
 
@@ -78,9 +78,7 @@ class JobFrobnicator:
             pluginpath = []
 
         if parser is None:
-            parser = argparse.ArgumentParser(
-                formatter_class=flux.util.help_formatter(), add_help=False
-            )
+            parser = FluxArgumentParser(add_help=False)
 
         self.parser = parser
         self.parser_group = self.parser.add_argument_group("Options")
@@ -88,7 +86,9 @@ class JobFrobnicator:
             "Options provided by plugins"
         )
 
-        self.parser_group.add_argument("--plugins", action="append", default=[])
+        self.parser_group.add_argument(
+            "--plugins", hidden_aliases=("--plugin",), action="append", default=[]
+        )
 
         args, self.remaining_args = self.parser.parse_known_args(argv)
         if not args.plugins:

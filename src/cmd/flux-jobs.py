@@ -18,6 +18,7 @@ import os
 import sys
 
 import flux.constants
+from flux.cli.argparse import FluxArgumentParser
 from flux.hostlist import Hostlist
 from flux.idset import IDset
 from flux.job import JobID, JobInfo, JobInfoFormat, JobList, job_fields_to_attrs
@@ -29,7 +30,6 @@ from flux.util import (
     FilterActionUser,
     FilterTrueAction,
     UtilConfig,
-    help_formatter,
 )
 
 LOGGER = logging.getLogger("flux-jobs")
@@ -227,7 +227,7 @@ def fetch_jobs(args, fields):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(prog="flux-jobs", formatter_class=help_formatter())
+    parser = FluxArgumentParser(prog="flux-jobs")
     # -a equivalent to -s "pending,running,inactive" and -u set to userid
     parser.add_argument("-a", action=FilterTrueAction, help="List jobs in all states")
     # -A equivalent to -s "pending,running,inactive" and -u set to "all"
