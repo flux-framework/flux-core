@@ -9,6 +9,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import argparse
 import io
 import unittest
 
@@ -181,6 +182,110 @@ class TestHiddenAliases(unittest.TestCase):
         p = FluxArgumentParser(prog="test")
         with self.assertRaises(TypeError):
             p.add_argument("--states", hidden_aliases="--state")
+
+
+class TestPosixMode(unittest.TestCase):
+    def _make_parser(self, **kwargs):
+        p = FluxArgumentParser(prog="flux-run", posix=True, **kwargs)
+        p.add_argument("-n", "--ntasks", type=int, default=1)
+        p.add_argument("-t", "--time-limit", default=None)
+        p.add_argument("command", nargs=argparse.REMAINDER)
+        return p
+
+    def test_option_before_command_parsed(self):
+        """Flux option before command is consumed by Flux parser"""
+        args = self._make_parser().parse_args(["--ntasks=4", "myjob"])
+        self.assertEqual(args.ntasks, 4)
+        self.assertIn("myjob", args.command)
+
+    def test_option_after_command_not_consumed(self):
+        """Option-like token after command is NOT consumed by Flux parser"""
+        args = self._make_parser().parse_args(["myjob", "--ntasks=8"])
+        self.assertEqual(args.ntasks, 1)  # default; --ntasks=8 was not parsed
+        self.assertIn("--ntasks=8", args.command)
+
+    def test_flux_option_then_command_then_cmd_option(self):
+        """Flux option + command + command option handled correctly"""
+        args = self._make_parser().parse_args(["--ntasks=4", "myjob", "--ntasks=8"])
+        self.assertEqual(args.ntasks, 4)
+        self.assertIn("--ntasks=8", args.command)
+        self.assertIn("myjob", args.command)
+
+    def test_explicit_double_dash_preserved(self):
+        """User-supplied '--' is preserved in REMAINDER for downstream use"""
+        args = self._make_parser().parse_args(
+            ["--ntasks=4", "--", "myjob", "--ntasks=8"]
+        )
+        self.assertEqual(args.ntasks, 4)
+        # '--' is preserved so commands that pass it to a subprocess (e.g.
+        # flux alloc → flux broker) can do so; run/submit strip it in init_jobspec
+        self.assertIn("--", args.command)
+        self.assertIn("myjob", args.command)
+        self.assertIn("--ntasks=8", args.command)
+
+    def test_posix_no_implicit_double_dash(self):
+        """POSIX mode does not insert '--' into REMAINDER when none was given"""
+        args = self._make_parser().parse_args(["--ntasks=4", "myjob", "--ntasks=8"])
+        self.assertNotIn("--", args.command)
+
+    def test_short_option_separate_value_skipped(self):
+        """Short option with separate value: value is skipped, not treated as positional"""
+        args = self._make_parser().parse_args(["-n", "4", "myjob", "--ntasks=8"])
+        self.assertEqual(args.ntasks, 4)
+        self.assertNotIn("4", args.command)  # '4' was the value of -n, not positional
+        self.assertIn("myjob", args.command)
+
+    def test_short_option_embedded_value_skipped(self):
+        """Short option with embedded value (-n4) is not treated as positional"""
+        args = self._make_parser().parse_args(["-n4", "myjob", "--ntasks=8"])
+        self.assertEqual(args.ntasks, 4)
+        self.assertNotIn("-n4", args.command)
+        self.assertIn("myjob", args.command)
+
+    def test_empty_args(self):
+        """Empty arg list returns empty command"""
+        p = FluxArgumentParser(prog="test", posix=True)
+        p.add_argument("command", nargs=argparse.REMAINDER)
+        args = p.parse_args([])
+        self.assertEqual(args.command, [])
+
+    def test_posix_false_does_not_preprocess(self):
+        """posix=False (default) leaves arg_strings untouched"""
+        p = FluxArgumentParser(prog="test")  # posix=False by default
+        p.add_argument("--ntasks", type=int, default=1)
+        p.add_argument("command", nargs=argparse.REMAINDER)
+        # Without posix mode, --ntasks after myjob is still consumed by Flux parser
+        # (standard GNU argparse behavior with REMAINDER)
+        args = p.parse_args(["myjob", "--ntasks=4"])
+        # REMAINDER captures everything from first positional including options
+        self.assertIn("myjob", args.command)
+
+    def test_negative_number_in_command(self):
+        """Negative number in command position is preserved in REMAINDER"""
+        # Stock argparse treats -1 as a non-option (negative number), so it
+        # lands in REMAINDER. posix mode must match that behavior.
+        args = self._make_parser().parse_args(["-1", "myjob"])
+        self.assertIn("-1", args.command)
+        self.assertIn("myjob", args.command)
+
+    def test_posix_no_remainder_stray_positionals_error(self):
+        """posix parser with no REMAINDER action errors on stray positionals"""
+        p = FluxArgumentParser(prog="test", posix=True)
+        p.add_argument("--foo", default=None)
+        with self.assertRaises(SystemExit):
+            p.parse_args(["--foo=1", "stray", "args"])
+
+    def test_nargs_plus_posix(self):
+        """nargs='+' option in posix mode greedily consumes non-option tokens"""
+        # With nargs='+', _count_option_args greedily consumes all consecutive
+        # non-option tokens, matching stock argparse behavior. Use '--' to
+        # delimit the command start explicitly if needed.
+        p = FluxArgumentParser(prog="test", posix=True)
+        p.add_argument("--multi", nargs="+")
+        p.add_argument("command", nargs=argparse.REMAINDER)
+        args = p.parse_args(["--multi", "a", "b", "myjob"])
+        self.assertEqual(args.multi, ["a", "b", "myjob"])
+        self.assertEqual(args.command, [])
 
 
 if __name__ == "__main__":
