@@ -144,8 +144,10 @@ def help_formatter(argwidth=40, raw_description=False):
                 (metavar,) = self._metavar_formatter(action, action.dest)(1)
                 return metavar
 
-            hidden = getattr(action, "hidden_option_strings", set())
-            opts = [o for o in action.option_strings if o not in hidden]
+            opts = list(action.option_strings)
+            if hasattr(action, "hidden_option_strings"):
+                hidden = action.hidden_option_strings
+                opts = [o for o in opts if o not in hidden]
 
             #  Default optstring is `-l, --long-opt`
             optstring = ", ".join(opts)

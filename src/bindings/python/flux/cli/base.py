@@ -372,6 +372,7 @@ class MiniCmd:
             usage=usage,
             description=description,
             add_help=False,
+            posix=True,
         )
         parser.add_argument(
             "--help",
