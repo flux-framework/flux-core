@@ -9,7 +9,6 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import argparse
 import errno
 import logging
 import os
@@ -17,6 +16,7 @@ import sys
 
 import flux
 import flux.subprocess as subprocess
+from flux.cli.argparse import FluxArgumentParser
 
 
 def exit_with_status(status):
@@ -122,14 +122,14 @@ LOGGER = logging.getLogger("flux-sproc")
 
 @flux.util.CLIMain(LOGGER)
 def main():
-    parser = argparse.ArgumentParser(prog="flux-sproc")
+    parser = FluxArgumentParser(prog="flux-sproc")
     subparsers = parser.add_subparsers(
         title="supported subcommands", description="", dest="subcommand"
     )
     subparsers.required = True
 
     # Parent parser with common arguments
-    common_parser = argparse.ArgumentParser(add_help=False)
+    common_parser = FluxArgumentParser(add_help=False)
     common_parser.add_argument(
         "-r",
         "--rank",
@@ -149,7 +149,6 @@ def main():
     kill_parser = subparsers.add_parser(
         "kill",
         parents=[common_parser],
-        formatter_class=flux.util.help_formatter(),
     )
     kill_parser.add_argument(
         "-w",
@@ -165,7 +164,6 @@ def main():
     wait_parser = subparsers.add_parser(
         "wait",
         parents=[common_parser],
-        formatter_class=flux.util.help_formatter(),
     )
     wait_parser.add_argument("pid")
     wait_parser.set_defaults(func=wait)
@@ -174,7 +172,6 @@ def main():
     ps_parser = subparsers.add_parser(
         "ps",
         parents=[common_parser],
-        formatter_class=flux.util.help_formatter(),
     )
     ps_parser.add_argument(
         "-o",

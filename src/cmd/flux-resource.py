@@ -20,6 +20,7 @@ import time
 from itertools import combinations
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.eventlog import EventLogFormatter
 from flux.hostlist import Hostlist
 from flux.idset import IDset
@@ -984,20 +985,16 @@ def main():
         sys.stdout.fileno(), "w", encoding="utf8", errors="surrogateescape"
     )
 
-    parser = argparse.ArgumentParser(prog="flux-resource")
+    parser = FluxArgumentParser(prog="flux-resource")
     subparsers = parser.add_subparsers(
         title="subcommands", description="", dest="subcommand"
     )
     subparsers.required = True
 
-    acquire_mute_parser = subparsers.add_parser(
-        "acquire-mute", formatter_class=flux.util.help_formatter()
-    )
+    acquire_mute_parser = subparsers.add_parser("acquire-mute")
     acquire_mute_parser.set_defaults(func=acquire_mute)
 
-    drain_parser = subparsers.add_parser(
-        "drain", formatter_class=flux.util.help_formatter()
-    )
+    drain_parser = subparsers.add_parser("drain")
     drain_parser.add_argument(
         "-f",
         "--force",
@@ -1050,9 +1047,7 @@ def main():
     drain_parser.add_argument("reason", help="Reason", nargs=argparse.REMAINDER)
     drain_parser.set_defaults(func=drain)
 
-    undrain_parser = subparsers.add_parser(
-        "undrain", formatter_class=flux.util.help_formatter()
-    )
+    undrain_parser = subparsers.add_parser("undrain")
     undrain_parser.add_argument(
         "-u",
         "--update",
@@ -1074,9 +1069,7 @@ def main():
     undrain_parser.add_argument("reason", help="Reason", nargs=argparse.REMAINDER)
     undrain_parser.set_defaults(func=undrain)
 
-    status_parser = subparsers.add_parser(
-        "status", formatter_class=flux.util.help_formatter()
-    )
+    status_parser = subparsers.add_parser("status")
     status_parser.add_argument(
         "-o",
         "--format",
@@ -1087,6 +1080,7 @@ def main():
     status_parser.add_argument(
         "-s",
         "--states",
+        hidden_aliases=("--state",),
         metavar="STATE,...",
         help="Output resources in given states",
     )
@@ -1124,9 +1118,7 @@ def main():
     )
     status_parser.set_defaults(func=status)
 
-    list_parser = subparsers.add_parser(
-        "list", formatter_class=flux.util.help_formatter()
-    )
+    list_parser = subparsers.add_parser("list")
     list_parser.add_argument(
         "-o",
         "--format",
@@ -1137,6 +1129,7 @@ def main():
     list_parser.add_argument(
         "-s",
         "--states",
+        hidden_aliases=("--state",),
         metavar="STATE,...",
         default="free,allocated,down",
         help="Output resources in given states",
@@ -1176,12 +1169,11 @@ def main():
     list_parser.set_defaults(func=list_handler)
 
     # flux-resource info:
-    info_parser = subparsers.add_parser(
-        "info", formatter_class=flux.util.help_formatter()
-    )
+    info_parser = subparsers.add_parser("info")
     info_parser.add_argument(
         "-s",
         "--states",
+        hidden_aliases=("--state",),
         metavar="STATE,...",
         help="Show output only for resources in given states",
     )
@@ -1215,9 +1207,7 @@ def main():
     )
     info_parser.set_defaults(func=info)
 
-    reload_parser = subparsers.add_parser(
-        "reload", formatter_class=flux.util.help_formatter()
-    )
+    reload_parser = subparsers.add_parser("reload")
     reload_parser.set_defaults(func=reload)
     reload_parser.add_argument("path", help="path to R or hwloc <rank>.xml dir")
     reload_parser.add_argument(
@@ -1235,11 +1225,12 @@ def main():
         help="allow resources to contain invalid ranks",
     )
 
-    R_parser = subparsers.add_parser("R", formatter_class=flux.util.help_formatter())
+    R_parser = subparsers.add_parser("R")
     R_parser.set_defaults(func=emit_R)
     R_parser.add_argument(
         "-s",
         "--states",
+        hidden_aliases=("--state",),
         metavar="STATE,...",
         default="all",
         help="Emit R for resources in given states",
@@ -1262,9 +1253,7 @@ def main():
     R_parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
     R_parser.add_argument("--config-file", help=argparse.SUPPRESS)
 
-    eventlog_parser = subparsers.add_parser(
-        "eventlog", formatter_class=flux.util.help_formatter()
-    )
+    eventlog_parser = subparsers.add_parser("eventlog")
     eventlog_parser.add_argument(
         "-f",
         "--format",

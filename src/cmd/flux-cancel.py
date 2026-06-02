@@ -9,7 +9,6 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import argparse
 import logging
 import os
 import pwd
@@ -17,6 +16,7 @@ import sys
 from operator import itemgetter
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.job import cancel_async
 
 LOGGER = logging.getLogger("flux-cancel")
@@ -26,11 +26,10 @@ def parse_args():
     description = """
     Cancel pending or running jobs with an optional exception note.
     """
-    parser = argparse.ArgumentParser(
+    parser = FluxArgumentParser(
         prog="flux-cancel",
         usage="flux cancel [OPTIONS] [JOBID...]",
         description=description,
-        formatter_class=flux.util.help_formatter(),
     )
     parser.add_argument("--all", action="store_true", help="Target all jobs")
     parser.add_argument(
@@ -52,6 +51,7 @@ def parse_args():
     parser.add_argument(
         "-S",
         "--states",
+        hidden_aliases=("--state",),
         action="append",
         help="List of job states to target (default=active)",
     )

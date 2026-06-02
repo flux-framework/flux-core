@@ -9,13 +9,13 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import argparse
 import concurrent.futures
 import logging
 import sys
 
 import flux
 import flux.uri
+from flux.cli.argparse import FluxArgumentParser
 from flux.job import JobID, JobInfo, JobInfoFormat, JobList
 from flux.util import FilterAction, FilterTrueAction, Tree, YesNoAction
 
@@ -208,9 +208,7 @@ def load_tree(
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        prog="flux-pstree", formatter_class=flux.util.help_formatter()
-    )
+    parser = FluxArgumentParser(prog="flux-pstree")
     parser.add_argument(
         "-a",
         "--all",

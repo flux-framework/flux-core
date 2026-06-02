@@ -9,12 +9,12 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import argparse
 import logging
 import os
 import sys
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.uri import FluxURIResolver
 
 LOGGER = logging.getLogger("flux-uri")
@@ -31,11 +31,11 @@ def main():
     plugins = [f"  {x}\t\t{y}" for x, y in resolver.plugins().items()]
     plugin_list = "Supported resolver schemes:\n" + "\n".join(plugins)
 
-    parser = argparse.ArgumentParser(
+    parser = FluxArgumentParser(
         prog="flux-uri",
         description="Resolve TARGET to a Flux URI",
         epilog=plugin_list,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        raw_description=True,
     )
     parser.add_argument(
         "--remote",
