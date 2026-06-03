@@ -92,4 +92,4 @@ RESOURCES
 
 .. include:: common/resources.rst
 
-Jansson: https://jansson.readthedocs.io/en/2.9/apiref.html
+Jansson: https://jansson.readthedocs.io/en/2.11/apiref.html
