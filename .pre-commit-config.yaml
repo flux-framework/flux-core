@@ -2,7 +2,7 @@ files: '^(src/(modules/.*\.py|bindings/python/flux|broker/.*\.py|cmd)|t/(rc|pyth
 exclude: "^(src/bindings/python/_flux/|src/bindings/python/flux/utils/|t/python/tap)"
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-added-large-files
       - id: check-case-conflict
