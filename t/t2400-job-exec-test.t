@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Test flux job execution service in simulated mode'
 

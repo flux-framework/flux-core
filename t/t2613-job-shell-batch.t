@@ -1,5 +1,7 @@
 #!/bin/sh
 #
+# ci=asan
+
 test_description='Test flux-shell per-resource and batch support'
 
 . `dirname $0`/sharness.sh

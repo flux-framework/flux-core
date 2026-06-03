@@ -1,5 +1,5 @@
 #!/bin/sh
-#
+
 test_description='Test flux-shell pty support'
 
 . `dirname $0`/sharness.sh

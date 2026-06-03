@@ -1,5 +1,4 @@
 #!/bin/sh
-#
 
 test_description='Hard fail a router node and verify child restarts
 

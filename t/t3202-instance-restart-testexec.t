@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Test instance restart and still running jobs with testexec'
 

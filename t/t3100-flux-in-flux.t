@@ -1,5 +1,4 @@
 #!/bin/sh
-#
 
 test_description='Test that Flux can launch Flux'
 

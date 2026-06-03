@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=asan
 
 test_description="Test that Flux's MPI personalities work"
 
