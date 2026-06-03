@@ -2,10 +2,16 @@
 # sles15-sp5    ships 2.9  (flux-framework/flux-core#5544)
 # centos7/TOSS3 ships 2.10 (flux-framework/flux-core#3239)
 # centos8/TOSS4 ships 2.11
+# el9           ships 2.14
+# el10          ships 2.14
 # Ubuntu 18.04  ships 2.11
 # Ubuntu 20.04  ships 2.12
+# Ubuntu 22.04  ships 2.13
+# Ubuntu 24.04  ships 2.14
+# Ubuntu 26.04  ships 2.14
 #
 # Some modern jansson features used in flux-core:
+# - json_pack ("o*")     from 2.11
 # - json_pack ("O?")     from 2.8
 # - json_string_length() from 2.7
 #

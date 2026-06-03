@@ -40,6 +40,9 @@ the corresponding argument or arguments.
 
 **O** (any value)['json_t \*']
    Like **o**, but the JSON value's reference count is incremented.
+   Storage pointers should be initialized NULL before using unpack.
+   The caller is responsible for releasing all references incremented
+   by unpack, even when an error occurs.
 
 **[fmt]** (array)
    Convert each item in the JSON array according to the inner format
@@ -48,10 +51,10 @@ the corresponding argument or arguments.
 
 **{fmt}** (object)
    Convert each item in the JSON object according to the inner format
-   string **fmt**. The first, third, etc. format specifier represent a
-   key, and must by **s**. The corresponding argument to unpack functions
+   string **fmt**. The first, third, etc. format specifier represents a
+   key, and must be **s**. The corresponding argument to unpack functions
    is read as the object key. The second, fourth, etc. format specifier
-   represent a value and is written to the address given as the corresponding
+   represents a value and is written to the address given as the corresponding
    argument. Note that every other argument is read from and every other
    is written to. **fmt** may contain objects and arrays as values, i.e.
    recursive value extraction is supported. Any **s** representing a key
@@ -66,6 +69,6 @@ the corresponding argument or arguments.
 
 Whitespace, **:** (colon) and **,** (comma) are ignored.
 
-These descriptions came from the Jansson 2.9 manual.
+These descriptions came from the Jansson 2.11 manual.
 
-See also: Jansson API: Parsing and Validating Values: http://jansson.readthedocs.io/en/2.9/apiref.html#parsing-and-validating-values
+See also: Jansson API: Parsing and Validating Values: http://jansson.readthedocs.io/en/2.11/apiref.html#parsing-and-validating-values
