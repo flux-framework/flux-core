@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 ###############################################################
 # Copyright 2021 Lawrence Livermore National Security, LLC
 # (c.f. AUTHORS, NOTICE.LLNS, COPYING)
