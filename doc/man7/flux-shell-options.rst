@@ -483,6 +483,20 @@ INPUT/OUTPUT
 
     $ flux run --input=/tmp/input.data myapp
 
+.. option:: input.limit=SIZE
+
+  Limit KVS input to *SIZE* bytes. If exceeded, a fatal job exception
+  is raised.
+
+  - *SIZE* format: number with optional SI suffix (k, K, M, G)
+  - Maximum: 32M
+  - Default: 10M
+  - Ignored for file input
+
+  .. code-block:: console
+
+    $ flux run -o input.limit=1M myapp
+
 .. option:: output.batch-timeout=FSD
 
   Set the KVS output batch-timeout to a time period in Flux Standard Duration.

@@ -205,12 +205,9 @@ void attach_completed_check (struct attach_ctx *ctx)
      * futures so we can exit the reactor */
     if (!ctx->eventlog_watch_count) {
         if (ctx->stdin_rpcs) {
-            flux_future_t *f = zlist_pop (ctx->stdin_rpcs);
-            while (f) {
+            flux_future_t *f;
+            while ((f = zlist_pop (ctx->stdin_rpcs)))
                 flux_future_destroy (f);
-                zlist_remove (ctx->stdin_rpcs, f);
-                f = zlist_pop (ctx->stdin_rpcs);
-            }
         }
         flux_watcher_stop (ctx->sigint_w);
         flux_watcher_stop (ctx->sigtstp_w);
@@ -1372,6 +1369,12 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                  note);
 
         ctx->fatal_exception = (severity == 0);
+
+        /*  If this is a fatal exception, stop stdin immediately to avoid
+         *   continuing to send data that will fail.
+         */
+        if (severity == 0 && ctx->stdin_w)
+            flux_watcher_stop (ctx->stdin_w);
 
         /*  If this job has an interactive pty and the pty is not yet attached,
          *   destroy the pty to avoid a potential hang attempting to connect

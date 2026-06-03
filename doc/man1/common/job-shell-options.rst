@@ -49,6 +49,12 @@
        those resources assigned to the current job. By default, the XML is
        not restricted.
 
+   * - :option:`input.limit`
+     - Set KVS input limit to SIZE bytes, where SIZE may be a floating point
+       value including optional SI units: k, K, M, G. If this limit is
+       exceeded, a fatal job exception is raised. This value is ignored
+       if input is directed from a file with :option:`--input`.
+
    * - :option:`output.limit`
      - Set KVS output limit to SIZE bytes, where SIZE may be a floating point
        value including optional SI units: k, K, M, G. This value is ignored
