@@ -240,4 +240,68 @@ test_expect_success 'flux-shell: no fatal exception after stdin sent to exited t
 	echo | flux job attach -XE ${id} &&
 	flux job wait-event -t 5 -v ${id} clean
 '
+
+#
+# input limit tests
+#
+
+test_expect_success 'flux-shell: stdin limit with small value causes job exception' '
+	test_expect_code 1 sh -c "dd if=/dev/zero bs=1024 count=20 2>/dev/null | \
+		flux run -o input.limit=1K cat >/dev/null 2>limit1.err" &&
+	test_debug "cat limit1.err" &&
+	grep "stdin exceeds 1K limit" limit1.err &&
+	grep "Try file input" limit1.err
+'
+
+test_expect_success 'flux-shell: stdin under limit succeeds' '
+	dd if=/dev/zero bs=512 count=1 2>/dev/null | \
+		flux run -o input.limit=1K cat >/dev/null
+'
+
+test_expect_success 'flux-shell: setting limit to 100K works' '
+	dd if=/dev/zero bs=1K count=50 2>/dev/null | \
+		flux run -o input.limit=100K cat >/dev/null
+'
+
+test_expect_success 'flux-shell: invalid input.limit string is rejected (text)' '
+	test_must_fail flux run -o input.limit=foo hostname
+'
+
+test_expect_success 'flux-shell: invalid input.limit string is rejected (zero)' '
+	test_must_fail flux run -o input.limit=0 hostname
+'
+
+test_expect_success 'flux-shell: invalid input.limit is rejected (negative)' '
+	test_must_fail flux run -o input.limit=-1 hostname
+'
+
+test_expect_success 'flux-shell: input.limit exceeding max (32M) is rejected' '
+	test_must_fail flux run -o input.limit=33M hostname
+'
+
+test_expect_success 'flux-shell: input.limit exceeding max (1G) is rejected' '
+	test_must_fail flux run -o input.limit=1G hostname
+'
+
+test_expect_success 'flux-shell: input.limit at max (32M) works' '
+	flux run -o input.limit=32M hostname
+'
+
+test_expect_success 'flux-shell: input.limit as integer works' '
+	dd if=/dev/zero bs=512 count=1 2>/dev/null | \
+		flux run -o input.limit=1024 cat >/dev/null
+'
+
+test_expect_success 'flux-shell: input.limit as integer exceeding max is rejected' '
+	test_must_fail flux run -o input.limit=34603008 hostname
+'
+
+test_expect_success 'flux-shell: flux job attach stops sending stdin on exception' '
+	jobid=$(flux submit -o input.limit=1K cat) &&
+	test_expect_code 1 sh -c "dd if=/dev/zero bs=1024 count=20 2>/dev/null | \
+		flux job attach $jobid 2>attach-stop.err" &&
+	test_debug "cat attach-stop.err" &&
+	grep "stdin exceeds 1K limit" attach-stop.err
+'
+
 test_done

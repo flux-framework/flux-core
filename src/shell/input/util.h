@@ -22,7 +22,9 @@
 int input_eventlog_init (flux_shell_t *shell);
 
 /*  Put an input eventlog entry `name` defined in `context` to the KVS input
- *  eventlog.
+ *  eventlog. Returns 0 on success, -1 on error.
+ *  Note: If stdin data exceeds the configured limit (default 10M), this
+ *  function will call shell_die() with a fatal error.
  */
 int input_eventlog_put_event (flux_shell_t *shell,
                               const char *name,
