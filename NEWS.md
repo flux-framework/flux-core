@@ -1,3 +1,53 @@
+flux-core version 0.86.0 - 2026-06-03
+-------------------------------------
+
+## New Features
+ * resource: support checkpoint and eventlog truncation (#7594)
+ * cmd: add `flux admin system-scripts` to list status and details of prolog,
+   epilog, and housekeeping configuration (#7640)
+ * broker: add `broker.conf-builtin` RPC (#7642)
+ * python: support namespace package extension via pkgutil (#7633)
+ * python: add optional `output_callback` to `JobWatcher` (#7628)
+ * cmd: fall back to `PATH` when searching for `flux-*` subcommands (#7631)
+ * support launching test Flux instances with fake resources (#7619)
+ * use zeromq zerocopy for message parts >= 64kB (#7613)
+
+## Fixes
+ * shell: limit job input written to the KVS to 10M (#7650)
+ * librlist: fix overzealous GPU duplicate check when loading topology (#7647)
+ * sdexec: avoid error message truncation (#7635)
+ * flux-job: provide exception message for debugged jobs that fail before
+   start (#7638)
+ * kvs: fix memory leak on namespace lookup failure (#7622)
+ * cmd: fix handling of Python subcommands when searching `PATH` (#7636)
+ * python: re-export full stdlib API for flux.utils.dataclasses (#7632)
+ * scheduler: relax `pool_class` subclass check (#7626)
+ * python: JournalConsumer: only set R and jobspec on alloc and submit
+   events (#7630)
+ * librlist: allow missing HostName in hwloc XML (#7629)
+ * improve error messages when sdexec-mapper fails to map cores or GPUs
+   (#7618)
+ * shell: fix potential NULL deref in rexec server shutdown path (#7620)
+ * broker: fix debug logging of module loader pid (#7616)
+ * python: improve handling of the `sort:` prefix in `UtilFormat` (#7602)
+ * python: fix `ply` ImportError (#7591)
+
+## Cleanup
+ * gitignore: many additions throughout (#7614)
+
+## Build/CI/Testsuite/Documentation
+ * doc: update jansson version refs in documentation (#7652)
+ * build: fix missing shebangs and non-executable scripts (#7643)
+ * github: bump the github-actions group with 6 updates (#7648)
+ * doc: remove `-B` as `--broker-opts` short option (#7645)
+ * README: add R&D100 badge (#7641)
+ * .github: conditionally evaluate testenv build strategy (#7639)
+ * .github: add "all" keyword to rebuild all testenv containers in workflow
+   (#7586)
+ * ci: fix push of `flux-core:latest` and `fluxoroma` docker images (#7608)
+ * t: do not use "python" in command similarity test (#7610)
+
+
 flux-core version 0.85.0 - 2026-05-05
 -------------------------------------
 
