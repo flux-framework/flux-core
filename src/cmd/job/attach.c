@@ -1370,6 +1370,12 @@ void attach_event_continuation (flux_future_t *f, void *arg)
 
         ctx->fatal_exception = (severity == 0);
 
+        /*  If this is a fatal exception, stop stdin immediately to avoid
+         *   continuing to send data that will fail.
+         */
+        if (severity == 0 && ctx->stdin_w)
+            flux_watcher_stop (ctx->stdin_w);
+
         /*  If this job has an interactive pty and the pty is not yet attached,
          *   destroy the pty to avoid a potential hang attempting to connect
          *   to job pty that will never exist.
