@@ -1,4 +1,4 @@
-files: '^(src/modules/.*\.py|src/bindings/python/flux|src/cmd|t/(rc|python)|t/scripts/.*\.py|etc/)'
+files: '^(src/(modules/.*\.py|bindings/python/flux|broker/.*\.py|cmd)|t/(rc|python|scripts/.*\.py)|etc/)'
 exclude: "^(src/bindings/python/_flux/|src/bindings/python/flux/utils/|t/python/tap)"
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -6,6 +6,7 @@ repos:
     hooks:
       - id: check-added-large-files
       - id: check-case-conflict
+      - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
       - id: end-of-file-fixer
       - id: trailing-whitespace
