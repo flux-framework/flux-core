@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Sanity checks for job-exec multiuser exec'
 

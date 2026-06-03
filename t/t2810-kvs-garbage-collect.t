@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 # Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile

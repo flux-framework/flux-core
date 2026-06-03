@@ -1,4 +1,7 @@
 #!/bin/sh
+#
+# ci=asan
+
 test_description='Test flux job memo command'
 
 . $(dirname $0)/job-manager/sched-helper.sh
