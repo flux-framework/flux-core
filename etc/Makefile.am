@@ -15,7 +15,7 @@ tmpfiles_DATA = flux.conf
 dist_cron_DATA = \
 	kvs-backup.cron
 
-nobase_dist_fluxlibexec_SCRIPTS = \
+nobase_dist_fluxlibexec_DATA = \
 	modprobe/rc1.py \
 	modprobe/rc3.py
 
@@ -100,5 +100,4 @@ completions/flux: completions/flux.pre completions/get_builtins.sh
 	$(srcdir)/completions/get_builtins.sh \
 	$(top_srcdir)/src/cmd/builtin >> $@
 
-bashcomp_SCRIPTS = \
-	completions/flux
+bashcomp_DATA =	completions/flux

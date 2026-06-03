@@ -19,7 +19,7 @@ AM_CPPFLAGS = \
 shellrcdir = \
 	$(fluxconfdir)/shell
 
-nobase_dist_shellrc_SCRIPTS = \
+nobase_dist_shellrc_DATA = \
 	initrc.lua \
 	lua.d/openmpi.lua \
 	lua.d/mpi/spectrum.lua

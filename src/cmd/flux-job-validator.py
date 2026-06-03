@@ -1,3 +1,4 @@
+#!/bin/false
 ###############################################################
 # Copyright 2021 Lawrence Livermore National Security, LLC
 # (c.f. AUTHORS, NOTICE.LLNS, COPYING)
