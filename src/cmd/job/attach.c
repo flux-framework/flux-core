@@ -205,12 +205,9 @@ void attach_completed_check (struct attach_ctx *ctx)
      * futures so we can exit the reactor */
     if (!ctx->eventlog_watch_count) {
         if (ctx->stdin_rpcs) {
-            flux_future_t *f = zlist_pop (ctx->stdin_rpcs);
-            while (f) {
+            flux_future_t *f;
+            while ((f = zlist_pop (ctx->stdin_rpcs)))
                 flux_future_destroy (f);
-                zlist_remove (ctx->stdin_rpcs, f);
-                f = zlist_pop (ctx->stdin_rpcs);
-            }
         }
         flux_watcher_stop (ctx->sigint_w);
         flux_watcher_stop (ctx->sigtstp_w);
