@@ -213,6 +213,10 @@ job.state.depend
   the dependency was subsequently removed. (This allows idempotent operation
   of plugin-managed dependencies for job-manager or plugin restart).
 
+  .. note::
+    See :ref:`event_processing` for important information about when state
+    transitions occur synchronously when removing dependencies.
+
 job.state.priority
   The callback for ``FLUX_JOB_STATE_PRIORITY`` is special, in that a plugin
   must return a priority at the end of the callback (if the plugin is
@@ -224,6 +228,10 @@ job.state.priority
   a plugin should arrange for the priority to be set asynchronously using 
   ``flux_jobtap_reprioritize_job()``. See the :ref:`priority` section
   for more detailed information about plugin management of job priority.
+
+  .. note::
+    See :ref:`event_processing` for important information about when the
+    ``job.state.sched`` callback is invoked relative to this callback.
 
 job.state.sched
   In the callback for ``FLUX_JOB_STATE_SCHED`` a plugin may set ``R``
@@ -332,6 +340,223 @@ plugin.query
     flux_plugin_arg_pack (p, FLUX_PLUGIN_ARG_OUT,
                           "{s:O}"
                           "data", internal_data);
+
+.. _event_processing:
+
+EVENT PROCESSING MODEL
+======================
+
+Understanding when events are processed synchronously versus asynchronously
+is important for plugin developers, especially when posting events that
+affect other jobs or when multiple state transitions may occur in response
+to a single action.
+
+Event Queue Mechanism
+---------------------
+
+The job manager maintains a per-job event queue to ensure events are
+processed in order and to prevent problematic recursive callback invocations.
+When a plugin posts an event (e.g., via ``flux_jobtap_dependency_remove()``,
+``flux_jobtap_event_post_pack()``, or by returning values like ``priority``
+in callback output arguments), the event is added to the target job's queue.
+
+The queue processing behavior depends on whether the target job is currently
+executing a callback:
+
+**Target job is idle** (not processing any event):
+  The event is processed immediately and synchronously before the posting
+  function returns. This can trigger a cascade of state transitions and
+  additional callbacks, all within the same call stack.
+
+**Target job is busy** (currently in a callback):
+  The event is queued and will be processed after the current callback
+  completes, but still before control returns to the original caller.
+  This prevents recursive callbacks that could see inconsistent job state.
+
+Synchronous State Transition Chains
+------------------------------------
+
+Jobtap operations can trigger chains of synchronous state transitions.
+
+**Example 1: Dependency Removal**
+
+When a plugin removes the last dependency from a job::
+
+  flux_jobtap_dependency_remove (p, target_jobid, "my-dependency");
+  // When this returns, target job may have reached SCHED state
+
+**If the target job is not currently in a callback**, the following occurs
+synchronously before the function returns:
+
+1. A ``dependency-remove`` event is posted and processed immediately
+2. The job transitions from ``DEPEND`` to ``PRIORITY`` state
+3. All plugins' ``job.state.priority`` callbacks are invoked
+4. If a plugin returns a valid priority (or uses default priority):
+
+   a. A ``priority`` event is posted (queued due to recursion prevention)
+   b. After the ``job.state.priority`` callback returns, the queued
+      ``priority`` event is processed
+   c. The job transitions from ``PRIORITY`` to ``SCHED`` state
+   d. All plugins' ``job.state.sched`` callbacks are invoked
+   e. The job is enqueued with the scheduler
+
+5. Only then does ``flux_jobtap_dependency_remove()`` return
+
+**If the target job is currently in a callback**, the event is queued,
+the function returns immediately, and state transitions occur after the
+target job's callback completes.
+
+**Example 2: Priority Assignment**
+
+When a plugin returns a priority in its ``job.state.priority`` callback::
+
+  int priority_cb (flux_plugin_t *p,
+                   const char *topic,
+                   flux_plugin_arg_t *args,
+                   void *arg)
+  {
+      // Calculate priority
+      int64_t priority = calculate_priority (args);
+
+      flux_plugin_arg_pack (args, FLUX_PLUGIN_ARG_OUT,
+                           "{s:I}",
+                           "priority", priority);
+      return 0;
+      // When this returns, job.state.sched may have been called
+  }
+
+When priority is available immediately:
+
+1. The plugin returns with a priority in output args
+2. A ``priority`` event is posted (queued to prevent recursion)
+3. After all ``job.state.priority`` callbacks complete, the queued event
+   is processed
+4. The job transitions from ``PRIORITY`` to ``SCHED`` state
+5. All plugins' ``job.state.sched`` callbacks are invoked
+6. Control returns through the callback stack
+
+Recursion Prevention
+--------------------
+
+The event queue prevents infinite recursion in two scenarios:
+
+**Events posted to the current job**:
+  If a callback posts an event to the job for which it was invoked, that
+  event is queued and processed after the callback returns, not recursively
+  during the callback. This ensures the job state remains stable during
+  callback execution.
+
+**Cascading events during event processing**:
+  When processing an event triggers additional events (like priority
+  assignment triggering a state transition), these events are queued and
+  processed in order before returning to the original caller, but without
+  deep recursion.
+
+This design ensures:
+
+- Job state remains consistent during each callback invocation
+- Callbacks see a stable, well-defined view of the job
+- Events are always processed in strict FIFO order
+- Stack depth remains bounded regardless of event chains
+- Jobs cannot change state "underneath" a running callback
+
+Job Hold Mechanism
+------------------
+
+The job manager may temporarily "hold" events for a job using the
+``job->hold_events`` flag. While this flag is set, all events for that
+job are queued and not processed immediately. This occurs during:
+
+- Batch KVS commit operations
+- Certain bulk job operations
+
+When the hold is released, all queued events are processed synchronously
+in order before control returns. This is transparent to plugins but explains
+why multiple state transitions may occur atomically.
+
+Implications for Plugin Authors
+--------------------------------
+
+**Synchronous cascades**:
+  Callbacks on other jobs or later states may execute before posting
+  functions return. Do not assume operations occur after event posting—the
+  event and its callbacks complete within the posting function.
+
+**State consistency**:
+  Job state remains constant during callback execution. A job in
+  ``job.state.priority`` remains in PRIORITY state until the callback
+  returns, even if the callback posts events.
+
+**Dependency removal timing**:
+  If the target job is not in a callback:
+
+  - ``job.state.priority`` callback executes before
+    ``flux_jobtap_dependency_remove()`` returns
+  - If priority is available, ``job.state.sched`` also executes before return
+  - If priority is unavailable, target job remains in PRIORITY state
+
+  If the target job is in a callback, the dependency removal is queued and
+  ``flux_jobtap_dependency_remove()`` returns immediately.
+
+**Priority assignment timing**:
+  When returning a priority in ``job.state.priority``:
+
+  - ``job.state.sched`` callback executes before the callback returns
+  - All plugins' ``job.state.sched`` callbacks execute synchronously
+  - The job may be enqueued with the scheduler before callback returns
+
+**Asynchronous operations**:
+  For asynchronous work (I/O, RPCs, timers):
+
+  - For priority: Use ``flux_jobtap_priority_unavail()``, then call
+    ``flux_jobtap_reprioritize_job()`` when ready
+  - For dependencies: Add in ``job.state.depend``, remove when condition met
+  - Do not attempt to defer event processing—use the provided mechanisms
+
+**Querying job state**:
+  Querying a job after posting an event returns the state after all
+  synchronous transitions complete::
+
+    flux_jobtap_dependency_remove (p, other_id, "my-dependency");
+
+    // Query the job - it may now be in SCHED state
+    flux_plugin_arg_t *job_info = flux_jobtap_job_lookup (p, other_id);
+    int state;
+    flux_plugin_arg_unpack (job_info, FLUX_PLUGIN_ARG_IN,
+                           "{s:i}", "state", &state);
+    // state may be FLUX_JOB_STATE_SCHED, not DEPEND or PRIORITY
+
+**Callback ordering**:
+  Events are processed in order per job. Across jobs, processing order
+  depends on the order events were posted.
+
+Example: Dependency Chain
+--------------------------
+
+Consider a plugin managing a chain of dependent jobs. When the first job
+completes, it should release the second job::
+
+  int finish_cb (flux_plugin_t *p,
+                 const char *topic,
+                 flux_plugin_arg_t *args,
+                 void *arg)
+  {
+      flux_jobid_t completed_id, dependent_id;
+
+      flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+                             "{s:I}", "id", &completed_id);
+
+      dependent_id = get_dependent_job (completed_id);
+      if (dependent_id != FLUX_JOBID_ANY) {
+          // If dependent_id is idle: DEPEND -> PRIORITY -> SCHED synchronously
+          // If dependent_id is busy: queued for later processing
+          flux_jobtap_dependency_remove (p, dependent_id, "predecessor");
+      }
+      return 0;
+  }
+
+When the target job is idle, synchronous processing releases dependent jobs
+immediately, minimizing startup latency.
 
 .. _priority:
 
