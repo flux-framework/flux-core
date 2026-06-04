@@ -932,9 +932,21 @@ struct alloc *alloc_ctx_create (struct job_manager *ctx)
         errno = ENOMEM;
         goto error;
     }
+
+    /* If we have a parent, connect to it so we can forward alloc requests */
     alloc->parent_instance = NULL;
     if ((parent_uri = flux_attr_get (ctx->h, "parent-uri"))){
-        alloc->parent_instance = flux_open (parent_uri, 0);
+        if(! (alloc->parent_instance = flux_open (parent_uri, 0)) ){
+            goto error;
+        }
+        /*  Associate the main flux_t handle reactor with the parent handle
+         *  reactor so that events from both can be handled with the single
+         *  reactor instance:
+         */
+        if (flux_set_reactor (alloc->parent_instance, flux_get_reactor (ctx->h)) < 0) {
+            flux_log_error (ctx->h, "flux_set_reactor");
+            goto error;
+        }
     }
 
     flux_watcher_start (alloc->prep);
