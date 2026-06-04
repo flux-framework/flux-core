@@ -1210,3 +1210,9 @@ pc
 pricount
 resultp
 stateful
+logind
+reparents
+sshd
+hidepid
+pam
+pam's

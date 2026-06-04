@@ -98,6 +98,14 @@ domainrefs = {
         'text': '%s(8)',
         'url': 'https://flux-framework.readthedocs.io/projects/flux-security/en/latest/man8/%s.html'
     },
+    'pam:man5': {
+        'text': '%s(5)',
+        'url': 'https://flux-framework.readthedocs.io/projects/flux-pam/en/latest/man5/%s.html'
+    },
+    'pam:man8': {
+        'text': '%s(8)',
+        'url': 'https://flux-framework.readthedocs.io/projects/flux-pam/en/latest/man8/%s.html'
+    },
 }
 
 # Disable "smartquotes" to avoid things such as turning long-options
