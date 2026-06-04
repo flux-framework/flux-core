@@ -111,6 +111,35 @@ annotations by returning a value for the ``annotations`` key::
                          "{s:{s:s}}",
                          "annotations", "test", value);
 
+UTILITY FUNCTIONS
+=================
+
+Getting the Flux Handle
+------------------------
+
+::
+
+  flux_t *flux_jobtap_get_flux (flux_plugin_t *p);
+
+Returns the ``flux_t`` handle for the broker instance. Use for RPCs, logging,
+or other Flux APIs. Returns NULL on failure.
+
+The handle is owned by the plugin infrastructure and must not be destroyed.
+
+Example::
+
+  static int callback (flux_plugin_t *p,
+                      const char *topic,
+                      flux_plugin_arg_t *args,
+                      void *arg)
+  {
+      flux_t *h = flux_jobtap_get_flux (p);
+
+      flux_log (h, LOG_INFO, "callback invoked for topic %s", topic);
+
+      return 0;
+  }
+
 .. _callback_topics:
 
 JOB CALLBACK TOPICS
@@ -194,12 +223,23 @@ job.state.*
   action could involve immediately transitioning to a new state)
 
 job.event.*
-  The ``job.event.*`` callbacks are only made for plugins that have explicitly
-  subscribed to a job with ``flux_jobtap_job_subscribe()``. In this case,
-  all job events result in this callback being invoked on all subscribed
-  plugins. This may be useful for plugins to get notification of events
-  that do not necessarily result in a state transition, e.g. the ``start``
-  event or a non-fatal ``exception``.
+  The ``job.event.*`` callbacks are made only for plugins subscribed to
+  a job with ``flux_jobtap_job_subscribe()``. All job events trigger this
+  callback for subscribed plugins, including events that do not result in
+  state transitions (e.g., ``start`` or non-fatal ``exception``).
+
+  Subscribing to Job Events::
+
+    int flux_jobtap_job_subscribe (flux_plugin_t *p, flux_jobid_t id);
+    void flux_jobtap_job_unsubscribe (flux_plugin_t *p, flux_jobid_t id);
+
+  ``flux_jobtap_job_subscribe()`` subscribes the plugin to ``job.event.*``
+  callbacks for job ``id``. Returns 0 on success, -1 on failure.
+
+  ``flux_jobtap_job_unsubscribe()`` unsubscribes from job ``id`` events.
+
+  Subscriptions are cleaned up automatically when the job becomes inactive
+  or the plugin is unloaded.
 
 job.state.depend
   The callback for ``FLUX_JOB_STATE_DEPEND`` is the final place from which
@@ -326,6 +366,132 @@ if a plugin wishes to update ``attributes.system.foo`` to 1, it can set ::
 in the ``FLUX_PLUGIN_OUT_ARGS`` before returning. Updates are applied by
 updating the requested updates, so this method could overwrite other user-
 requested updates and caution is advised.
+
+Example: Complete Update Handler
+---------------------------------
+
+A plugin that allows updating job duration while enforcing limits::
+
+  #define MAX_DURATION 86400  /* 24 hours */
+
+  static int update_duration_cb (flux_plugin_t *p,
+                                 const char *topic,
+                                 flux_plugin_arg_t *args,
+                                 void *arg)
+  {
+      double duration;
+
+      /* Unpack the requested update value */
+      if (flux_plugin_arg_unpack (args,
+                                  FLUX_PLUGIN_ARG_IN,
+                                  "{s:{s:f}}",
+                                  "updates",
+                                    "attributes.system.duration", &duration) < 0) {
+          return flux_jobtap_error (p, args, "failed to unpack duration");
+      }
+
+      /* Enforce maximum duration limit */
+      if (duration > MAX_DURATION) {
+          return flux_jobtap_error (p, args,
+                                   "duration %.0f exceeds maximum of %d",
+                                   duration, MAX_DURATION);
+      }
+
+      /* Enforce minimum duration */
+      if (duration < 60.0) {
+          return flux_jobtap_error (p, args,
+                                   "duration %.0f is below minimum of 60",
+                                   duration);
+      }
+
+      /* Accept the update - no additional validation needed */
+      flux_plugin_arg_pack (args,
+                           FLUX_PLUGIN_ARG_OUT,
+                           "{s:i}",
+                           "validated", 1);
+
+      return 0;
+  }
+
+  int flux_plugin_init (flux_plugin_t *p)
+  {
+      return flux_plugin_add_handler (p,
+                                      "job.update.attributes.system.duration",
+                                      update_duration_cb,
+                                      NULL);
+  }
+
+This plugin validates duration updates against limits and sets ``validated=1``
+to skip additional validation.
+
+UPDATING JOBS PROGRAMMATICALLY
+===============================
+
+::
+
+  int flux_jobtap_jobspec_update_pack (flux_plugin_t *p,
+                                       const char *fmt,
+                                       ...);
+
+  int flux_jobtap_jobspec_update_id_pack (flux_plugin_t *p,
+                                          flux_jobid_t id,
+                                          const char *fmt,
+                                          ...);
+
+``flux_jobtap_jobspec_update_pack()`` updates the jobspec of the current
+job (the job for which the callback was invoked). Arguments follow Jansson
+pack format with period-delimited keys per RFC 21 jobspec-update format.
+
+Call only from a jobtap callback for the job being updated, not for other
+jobs or outside callback context. Returns 0 on success, -1 on failure.
+
+``flux_jobtap_jobspec_update_id_pack()`` updates job ``id`` asynchronously,
+outside a callback for the target job. The job must not be the current job
+(use ``flux_jobtap_jobspec_update_pack()`` for that). Returns 0 on success,
+-1 on failure.
+
+Restrictions:
+
+- Jobs in RUN, CLEANUP, or INACTIVE state cannot be updated
+- Jobs with readonly eventlogs cannot be updated
+- Updates are subject to ``job.validate`` callbacks
+- Use ``job.update.*`` callbacks to allow/deny specific attribute updates
+
+Example updating job duration::
+
+  static int some_callback (flux_plugin_t *p,
+                           const char *topic,
+                           flux_plugin_arg_t *args,
+                           void *arg)
+  {
+      /* Update current job's duration to 1 hour */
+      if (flux_jobtap_jobspec_update_pack (p,
+                                          "{s:f}",
+                                          "attributes.system.duration",
+                                          3600.0) < 0)
+          return -1;
+
+      return 0;
+  }
+
+Example updating another job asynchronously::
+
+  /* Called from timer or other async context */
+  static void timer_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
+  {
+      flux_plugin_t *p = arg;
+      flux_jobid_t target_job = get_target_job ();
+
+      /* Update different job's priority attribute */
+      flux_jobtap_jobspec_update_id_pack (p,
+                                         target_job,
+                                         "{s:i}",
+                                         "attributes.system.urgency",
+                                         16);
+  }
 
 PLUGIN CALLBACK TOPICS
 ======================
@@ -558,6 +724,371 @@ completes, it should release the second job::
 When the target job is idle, synchronous processing releases dependent jobs
 immediately, minimizing startup latency.
 
+.. _job_auxiliary_data:
+
+JOB AUXILIARY DATA
+==================
+
+Plugins can attach arbitrary data to jobs. This data persists across callbacks
+and state transitions, enabling stateful plugin operation.
+
+API Functions
+-------------
+
+::
+
+  int flux_jobtap_job_aux_set (flux_plugin_t *p,
+                               flux_jobid_t id,
+                               const char *name,
+                               void *val,
+                               flux_free_f free_fn);
+
+  void *flux_jobtap_job_aux_get (flux_plugin_t *p,
+                                 flux_jobid_t id,
+                                 const char *name);
+
+  int flux_jobtap_job_aux_delete_value (flux_plugin_t *p,
+                                        flux_jobid_t id,
+                                        void *val);
+
+``flux_jobtap_job_aux_set()`` attaches data ``val`` with key ``name`` to
+job ``id``. If ``free_fn`` is non-NULL, it destroys ``val`` when the job
+is destroyed or the plugin unloads. Returns 0 on success, -1 on failure.
+
+``flux_jobtap_job_aux_get()`` retrieves data for key ``name`` from job
+``id``. Returns the data pointer, or NULL if not found.
+
+``flux_jobtap_job_aux_delete_value()`` removes aux data by value from job
+``id``. Use when the key name is unknown but the value pointer is available.
+Returns 0 on success, -1 on failure.
+
+The ``id`` parameter accepts ``FLUX_JOBTAP_CURRENT_JOB`` to operate on the
+current callback's job.
+
+Lifecycle
+---------
+
+Auxiliary data is cleaned up automatically when:
+
+- The job transitions to INACTIVE state
+- The plugin is unloaded
+- The data is explicitly deleted
+
+Data persists across all state transitions before INACTIVE.
+
+Isolation
+---------
+
+Each plugin's auxiliary data is isolated from other plugins. Two plugins
+can use the same key without conflict.
+
+Example
+-------
+
+Track the number of times a job has been through PRIORITY state::
+
+  struct priority_count {
+      int count;
+  };
+
+  static int priority_cb (flux_plugin_t *p,
+                         const char *topic,
+                         flux_plugin_arg_t *args,
+                         void *arg)
+  {
+      struct priority_count *pc;
+
+      pc = flux_jobtap_job_aux_get (p, FLUX_JOBTAP_CURRENT_JOB, "pricount");
+      if (!pc) {
+          pc = calloc (1, sizeof (*pc));
+          if (flux_jobtap_job_aux_set (p,
+                                       FLUX_JOBTAP_CURRENT_JOB,
+                                       "pricount",
+                                       pc,
+                                       free) < 0) {
+              free (pc);
+              return -1;
+          }
+      }
+      pc->count++;
+
+      flux_log (flux_jobtap_get_flux (p),
+               LOG_INFO,
+               "job priority calculated %d times",
+               pc->count);
+
+      return 0;
+  }
+
+.. _raising_exceptions:
+
+RAISING EXCEPTIONS
+==================
+
+Plugins can raise job exceptions to signal errors or anomalous conditions.
+Exceptions are recorded in the job eventlog and can terminate the job.
+
+API Function
+------------
+
+::
+
+  int flux_jobtap_raise_exception (flux_plugin_t *p,
+                                   flux_jobid_t id,
+                                   const char *type,
+                                   int severity,
+                                   const char *fmt,
+                                   ...);
+
+Raises an exception on job ``id`` with the specified ``type``, ``severity``,
+and formatted message. The ``id`` parameter accepts ``FLUX_JOBTAP_CURRENT_JOB``.
+Returns 0 on success, -1 on failure.
+
+Severity Levels
+---------------
+
+**severity = 0** (fatal):
+  Terminates the job immediately. Job transitions to CLEANUP state and
+  will not run. Use for unrecoverable errors.
+
+**severity = 1-6** (non-fatal):
+  Logs the exception but allows the job to continue. Use for warning
+  conditions that should be recorded but do not prevent execution.
+
+**severity = 7** (debug):
+  Debug-level exception, not shown to users by default.
+
+Severity levels correspond to syslog levels, with 0 most severe (LOG_EMERG)
+and 7 least severe (LOG_DEBUG).
+
+Exception Types
+---------------
+
+The ``type`` parameter identifies the exception category. Common types:
+
+- ``"dependency"`` - dependency-related errors
+- ``"alloc"`` - resource allocation failures
+- ``"timeout"`` - job timeout
+- ``"cancel"`` - job cancellation
+- ``"exec"`` - execution system errors
+
+The type is recorded in the exception event for monitoring tools.
+
+When to Use
+-----------
+
+Use ``flux_jobtap_raise_exception()`` instead of returning -1 when:
+
+- The error should be visible in job eventlogs
+- A detailed error message is needed
+- The error should terminate the job (severity 0)
+- The job should continue but the condition logged (severity 1-6)
+
+Return -1 for plugin-internal errors that should not generate user-visible
+exceptions.
+
+Example
+-------
+
+Raise a fatal exception if a job violates policy::
+
+  static int validate_cb (flux_plugin_t *p,
+                         const char *topic,
+                         flux_plugin_arg_t *args,
+                         void *arg)
+  {
+      int nnodes;
+
+      if (flux_plugin_arg_unpack (args,
+                                  FLUX_PLUGIN_ARG_IN,
+                                  "{s:{s:{s:i}}}",
+                                  "jobspec",
+                                    "resources",
+                                      "nnodes", &nnodes) < 0)
+          return -1;
+
+      if (nnodes > 1024) {
+          flux_jobtap_raise_exception (p,
+                                       FLUX_JOBTAP_CURRENT_JOB,
+                                       "policy",
+                                       0,
+                                       "requested %d nodes exceeds limit of 1024",
+                                       nnodes);
+          return -1;
+      }
+
+      return 0;
+  }
+
+Raise a non-fatal warning::
+
+  static int alloc_cb (flux_plugin_t *p,
+                      const char *topic,
+                      flux_plugin_arg_t *args,
+                      void *arg)
+  {
+      /* Warn if job has been waiting more than 1 hour */
+      double t_submit, now = flux_reactor_now (flux_get_reactor (
+                                                flux_jobtap_get_flux (p)));
+
+      flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+                             "{s:f}", "t_submit", &t_submit);
+
+      if (now - t_submit > 3600.0) {
+          flux_jobtap_raise_exception (p,
+                                       FLUX_JOBTAP_CURRENT_JOB,
+                                       "long-wait",
+                                       4,
+                                       "job waited %.0f seconds for allocation",
+                                       now - t_submit);
+      }
+
+      return 0;
+  }
+
+.. _querying_job_state:
+
+QUERYING JOB STATE
+==================
+
+Getting Job Information
+-----------------------
+
+::
+
+  flux_plugin_arg_t *flux_jobtap_job_lookup (flux_plugin_t *p,
+                                             flux_jobid_t id);
+
+Returns job information for job ``id`` as a ``flux_plugin_arg_t`` containing
+the same fields as callback input args (see :ref:`arguments`). Returns NULL
+on failure.
+
+Call ``flux_plugin_arg_destroy()`` on the returned object.
+
+Getting Job Result
+------------------
+
+::
+
+  int flux_jobtap_get_job_result (flux_plugin_t *p,
+                                  flux_jobid_t id,
+                                  flux_job_result_t *resultp);
+
+Gets the result of job ``id`` and stores it in ``*resultp``. Valid only for
+jobs in CLEANUP or INACTIVE state. Returns 0 on success, -1 on failure.
+
+Result values:
+
+``FLUX_JOB_RESULT_COMPLETED``
+  Job completed successfully (exit code 0)
+
+``FLUX_JOB_RESULT_FAILED``
+  Job failed (non-zero exit code)
+
+``FLUX_JOB_RESULT_CANCELED``
+  Job canceled by exception type "cancel"
+
+``FLUX_JOB_RESULT_TIMEOUT``
+  Job canceled by exception type "timeout"
+
+Use in ``job.state.cleanup`` or ``job.state.inactive`` callbacks to
+determine why a job ended.
+
+Checking Posted Events
+-----------------------
+
+::
+
+  int flux_jobtap_job_event_posted (flux_plugin_t *p,
+                                    flux_jobid_t id,
+                                    const char *name);
+
+Returns 1 if event ``name`` was posted to job ``id``, 0 if not, -1 on
+failure. Use for idempotent operations and checking job history.
+
+Setting Job Flags
+-----------------
+
+::
+
+  int flux_jobtap_job_set_flag (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                const char *flag);
+
+Sets a flag on job ``id``. The ``id`` parameter accepts
+``FLUX_JOBTAP_CURRENT_JOB``. Returns 0 on success, -1 on failure.
+
+Supported flags:
+
+``waitable``
+  Makes the job waitable via ``flux_job_wait()``. By default, only jobs
+  submitted with ``FLUX_JOB_WAITABLE`` are waitable. This allows plugins
+  to make jobs waitable after submission.
+
+Posts a ``set-flags`` event to the job eventlog.
+
+Example
+-------
+
+Query job information from another context::
+
+  flux_plugin_arg_t *args = flux_jobtap_job_lookup (p, other_jobid);
+  if (args) {
+      int state;
+      flux_jobid_t id;
+
+      flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+                             "{s:I s:i}",
+                             "id", &id,
+                             "state", &state);
+
+      flux_log (flux_jobtap_get_flux (p),
+               LOG_DEBUG,
+               "job %s is in state %d",
+               idf58 (id),
+               state);
+
+      flux_plugin_arg_destroy (args);
+  }
+
+Get job result in cleanup::
+
+  static int cleanup_cb (flux_plugin_t *p,
+                        const char *topic,
+                        flux_plugin_arg_t *args,
+                        void *arg)
+  {
+      flux_job_result_t result;
+
+      if (flux_jobtap_get_job_result (p,
+                                      FLUX_JOBTAP_CURRENT_JOB,
+                                      &result) == 0) {
+          switch (result) {
+              case FLUX_JOB_RESULT_COMPLETED:
+                  /* Job succeeded */
+                  break;
+              case FLUX_JOB_RESULT_FAILED:
+                  /* Job failed */
+                  break;
+              case FLUX_JOB_RESULT_CANCELED:
+                  /* Job was canceled */
+                  break;
+              case FLUX_JOB_RESULT_TIMEOUT:
+                  /* Job timed out */
+                  break;
+          }
+      }
+
+      return 0;
+  }
+
+Check if dependency event was posted::
+
+  if (flux_jobtap_job_event_posted (p, id, "dependency-add")) {
+      /* Dependency was already added, skip */
+      return 0;
+  }
+
 .. _priority:
 
 PRIORITY
@@ -708,7 +1239,72 @@ is called ::
                                "custom.topic",
                                args);
  }
- 
+
+REGISTERING SERVICES
+====================
+
+::
+
+  int flux_jobtap_service_register (flux_plugin_t *p,
+                                    const char *method,
+                                    flux_msg_handler_f cb,
+                                    void *arg);
+
+  int flux_jobtap_service_register_ex (flux_plugin_t *p,
+                                       const char *method,
+                                       uint32_t rolemask,
+                                       flux_msg_handler_f cb,
+                                       void *arg);
+
+Registers a service endpoint invoked via Flux RPC. The service name is
+``job-manager.<plugin-name>.<method>``, where ``<plugin-name>`` is the
+plugin's internal name (see JOBTAP PLUGIN NAMES section).
+
+``flux_jobtap_service_register()`` registers a service accessible to all
+users.
+
+``flux_jobtap_service_register_ex()`` restricts access to users matching
+``rolemask``. Use ``FLUX_ROLE_OWNER`` for instance owner, ``FLUX_ROLE_USER``
+for any user.
+
+Both return 0 on success, -1 on failure.
+
+The callback receives RPC requests and responds using ``flux_respond()`` or
+``flux_respond_error()``.
+
+Example::
+
+  static void query_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
+  {
+      struct plugin_data *data = arg;
+
+      /* Return plugin state */
+      if (flux_respond_pack (h, msg,
+                            "{s:i}",
+                            "count", data->count) < 0)
+          flux_log_error (h, "query response failed");
+  }
+
+  int flux_plugin_init (flux_plugin_t *p)
+  {
+      struct plugin_data *data = calloc (1, sizeof (*data));
+
+      /* Register job-manager.myplugin.query service */
+      if (flux_jobtap_service_register (p, "query", query_cb, data) < 0)
+          return -1;
+
+      return 0;
+  }
+
+Users can then query via::
+
+  $ flux exec -r 0 flux python
+  >>> import flux
+  >>> h = flux.Flux()
+  >>> h.rpc("job-manager.myplugin.query").get()
 
 RESOURCES
 =========
