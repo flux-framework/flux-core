@@ -51,6 +51,11 @@
 #include "boot_pmi.h"
 #include "boot_config.h"
 
+/* Module debug flag to create zombie socket that blocks zmq_ctx_term().
+ * Enable with: flux module debug --setbit 1 overlay
+ */
+#define DEBUG_ZOMBIESOCKET 1
+
 /* How long to wait (seconds) for a peer broker's TCP ACK before disconnecting.
  * This can be configured via TOML and on the broker command line.
  */
@@ -2599,6 +2604,47 @@ error:
         flux_log_error (h, "error responding to %s request", topic);
 }
 
+/* Test hook: create socket with pending message to block zmq_ctx_term().
+ * This allows testing of broker.unload-builtins-timeout.
+ */
+static void test_create_zombie_socket (struct overlay *ov)
+{
+    void *zombie;
+    int linger = -1;  // infinite linger - wait forever for pending sends
+    int hwm = 1;
+
+    if (!ov->zctx) {
+        flux_log (ov->h, LOG_DEBUG, "test: no zctx (no overlay peers), skipping");
+        return;
+    }
+
+    flux_log (ov->h, LOG_DEBUG, "test: creating zombie socket");
+
+    if (!(zombie = zmq_socket (ov->zctx, ZMQ_PUSH))) {
+        flux_log_error (ov->h, "test: zmq_socket failed");
+        return;
+    }
+    zmq_setsockopt (zombie, ZMQ_LINGER, &linger, sizeof (linger));
+    zmq_setsockopt (zombie, ZMQ_SNDHWM, &hwm, sizeof (hwm));
+
+    // Connect to unreachable endpoint
+    if (zmq_connect (zombie, "tcp://127.0.0.1:1") < 0) {
+        flux_log_error (ov->h, "test: zmq_connect failed");
+        zmq_close (zombie);
+        return;
+    }
+
+    // Send message - will be queued since endpoint is unreachable
+    if (zmq_send (zombie, "x", 1, 0) < 0) {
+        flux_log_error (ov->h, "test: zmq_send failed");
+        zmq_close (zombie);
+        return;
+    }
+
+    flux_log (ov->h, LOG_DEBUG, "test: zombie socket created successfully");
+    // Don't close - zmq_ctx_term will block waiting for this message
+}
+
 void overlay_destroy (struct overlay *ov)
 {
     if (ov) {
@@ -2640,6 +2686,8 @@ void overlay_destroy (struct overlay *ov)
         flux_msglist_destroy (ov->monitor_requests);
         flux_msglist_destroy (ov->trace_requests);
         topology_decref (ov->topo);
+        if (flux_module_debug_test (ov->h, DEBUG_ZOMBIESOCKET, false))
+            test_create_zombie_socket (ov);
         if (!ov->zctx_external)
             zmq_ctx_term (ov->zctx);
         free (ov->hostname);
