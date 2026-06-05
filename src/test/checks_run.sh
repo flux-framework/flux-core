@@ -175,7 +175,9 @@ fi
 
 if test -n "$ASAN_TEST_ONLY"; then
   ASAN_TESTS=$(cd t && grep -l ci=asan *.t)
-  CHECKCMDS="(cd src && $CHECKCMDS && cd ../t && make check TESTS=\"$ASAN_TESTS\")"
+  CHECKCMDS="(make check TESTS= && \
+              cd src && $CHECKCMDS && \
+              cd ../t && make check TESTS=\"$ASAN_TESTS\")"
 fi
 
 if test -n "$QUICK_CHECK"; then
