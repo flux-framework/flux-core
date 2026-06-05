@@ -26,6 +26,9 @@
 #include "src/common/libutil/errprintf.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
+#ifndef HAVE_STRLCAT
+#include "src/common/libmissing/strlcat.h"
+#endif
 
 #include "state_machine.h"
 
@@ -64,6 +67,11 @@ struct goodbye {
     flux_watcher_t *timer;
 };
 
+struct unload_builtins {
+    double timeout;
+    flux_watcher_t *timer;
+};
+
 struct monitor {
     struct flux_msglist *requests;
 
@@ -95,6 +103,7 @@ struct state_machine {
     struct cleanup cleanup;
     struct shutdown shutdown;
     struct goodbye goodbye;
+    struct unload_builtins unload_builtins;
 
     struct systemd sd;
 
@@ -206,6 +215,7 @@ static const double default_shutdown_warn = 60; // log slow shutdown
 static const double default_shutdown_timeout = -1;
 static const double default_cleanup_timeout = -1;
 static const double default_sd_stop_timeout = -1;
+static const double default_unload_builtins_timeout = 60;
 static const double goodbye_timeout = 60;
 
 static void state_action (struct state_machine *s, broker_state_t state)
@@ -776,6 +786,35 @@ static void action_goodbye (struct state_machine *s)
     flux_watcher_start (s->goodbye.timer);
 }
 
+static void unload_builtins_timer_cb (flux_reactor_t *r,
+                                      flux_watcher_t *w,
+                                      int revents,
+                                      void *arg)
+{
+    struct state_machine *s = arg;
+
+    if (s->state == STATE_UNLOAD_BUILTINS) {
+        module_t *p;
+        char modules[1024] = "";
+
+        p = modhash_first (s->ctx->modhash);
+        while (p) {
+            const char *name = module_get_name (p);
+            if (modules[0] != '\0')
+                strlcat (modules, " ", sizeof (modules));
+            strlcat (modules, name, sizeof (modules));
+            p = modhash_next (s->ctx->modhash);
+        }
+
+        flux_log (s->ctx->h,
+                  LOG_ERR,
+                  "unloading built-in broker module timed out after %.1fs: %s",
+                  s->unload_builtins.timeout,
+                  modules);
+        state_machine_post (s, "builtins-unload-fail");
+    }
+}
+
 static void unload_builtins_continuation (flux_future_t *f, void *arg)
 {
     struct state_machine *s = arg;
@@ -787,8 +826,10 @@ static void unload_builtins_continuation (flux_future_t *f, void *arg)
                   future_strerror (f, errno));
         state_machine_post (s, "builtins-unload-fail");
     }
-    else
+    else {
+        flux_watcher_stop (s->unload_builtins.timer);
         state_machine_post (s, "builtins-done");
+    }
 }
 
 /* Unload builtin modules, then stop the broker's reactor.
@@ -803,6 +844,12 @@ static void action_unload_builtins (struct state_machine *s)
         || flux_future_then (f, -1, unload_builtins_continuation, s) < 0) {
         flux_log_error (h, "unload builtins initiation");
         state_machine_post (s, "builtins-unload-fail");
+    }
+    if (s->unload_builtins.timeout >= 0) {
+        flux_timer_watcher_reset (s->unload_builtins.timer,
+                                  s->unload_builtins.timeout,
+                                  0.);
+        flux_watcher_start (s->unload_builtins.timer);
     }
 }
 
@@ -1600,6 +1647,7 @@ void state_machine_destroy (struct state_machine *s)
         flux_watcher_destroy (s->shutdown.timer);
         flux_future_destroy (s->shutdown.health_f);
         flux_watcher_destroy (s->goodbye.timer);
+        flux_watcher_destroy (s->unload_builtins.timer);
         free (s);
         errno = saved_errno;
     }
@@ -1648,7 +1696,12 @@ struct state_machine *state_machine_create (struct broker *ctx,
                                                            goodbye_timeout,
                                                            0.,
                                                            goodbye_timer_cb,
-                                                           s)))
+                                                           s))
+        || !(s->unload_builtins.timer = flux_timer_watcher_create (r,
+                                                                    0.,
+                                                                    0.,
+                                                                    unload_builtins_timer_cb,
+                                                                    s)))
         goto error;
     flux_watcher_start (s->prep);
     flux_watcher_start (s->check);
@@ -1696,6 +1749,13 @@ struct state_machine *state_machine_create (struct broker *ctx,
                            "broker.shutdown-timeout",
                            &s->shutdown.timeout,
                            default_shutdown_timeout,
+                           errp) < 0) {
+        goto error_hasmsg;
+    }
+    if (timeout_configure (s,
+                           "broker.unload-builtins-timeout",
+                           &s->unload_builtins.timeout,
+                           default_unload_builtins_timeout,
                            errp) < 0) {
         goto error_hasmsg;
     }
