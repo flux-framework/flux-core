@@ -2120,6 +2120,26 @@ _flux_content()
     fi
 }
 
+# flux-sqlite(1) completions
+_flux_sqlite()
+{
+    local cmd=$1
+    local subcmds="query backup"
+    query_OPTS="\
+        -H --header \
+        -c --column \
+        --force \
+    "
+    backup_OPTS=""
+
+    if [[ $cmd != "sqlite" ]]; then
+        var="${cmd//-/_}_OPTS"
+        COMPREPLY=( $(compgen -W "${!var} -h --help" -- "$cur") )
+    else
+        COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
+    fi
+}
+
 # flux-start(1) completions
 _flux_start()
 {
@@ -2594,6 +2614,9 @@ _flux_core()
         ;;
     content)
         _flux_content $subcmd
+        ;;
+    sqlite)
+        _flux_sqlite $subcmd
         ;;
     start)
         _flux_start $subcmd
