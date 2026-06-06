@@ -29,6 +29,7 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-fsck.1 \
 	man1/flux-archive.1 \
 	man1/flux-content.1 \
+	man1/flux-sqlite.1 \
 	man1/flux-config.1 \
 	man1/flux-proxy.1 \
 	man1/flux-queue.1 \

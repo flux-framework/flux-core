@@ -27,6 +27,7 @@ man_pages = [
     ('man1/flux-version', 'flux-version', 'Display flux version information', [author], 1),
     ('man1/flux-config', 'flux-config', 'Manage/query Flux configuration', [author], 1),
     ('man1/flux-content', 'flux-content', 'access content service', [author], 1),
+    ('man1/flux-sqlite', 'flux-sqlite', 'query and backup content-sqlite database', [author], 1),
     ('man1/flux-cron', 'flux-cron', 'Cron-like utility for Flux', [author], 1),
     ('man1/flux-dmesg', 'flux-dmesg', 'access broker ring buffer', [author], 1),
     ('man1/flux-dump', 'flux-dump', 'Write KVS snapshot to portable archive', [author], 1),
