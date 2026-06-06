@@ -1040,6 +1040,232 @@ static void content_sqlite_destroy (struct content_sqlite *ctx)
     }
 }
 
+static void backup_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    const char *path = NULL;
+    const char *errstr = NULL;
+    sqlite3 *dest_db = NULL;
+    sqlite3_backup *backup = NULL;
+    int rc;
+
+    if (flux_request_unpack (msg, NULL, "{s:s}", "path", &path) < 0) {
+        errstr = "failed to unpack backup request";
+        goto error;
+    }
+
+    /* Validate path is absolute */
+    if (path[0] != '/') {
+        errstr = "backup path must be absolute";
+        errno = EINVAL;
+        goto error;
+    }
+
+    /* Ensure we're not backing up to the same file */
+    if (strcmp (path, ctx->dbfile) == 0) {
+        errstr = "backup path cannot be the same as source database";
+        errno = EINVAL;
+        goto error;
+    }
+
+    /* Open destination database */
+    rc = sqlite3_open (path, &dest_db);
+    if (rc != SQLITE_OK) {
+        errstr = sqlite3_errmsg (dest_db);
+        errno = EIO;
+        goto error;
+    }
+
+    /* Initialize backup */
+    backup = sqlite3_backup_init (dest_db, "main", ctx->db, "main");
+    if (!backup) {
+        errstr = sqlite3_errmsg (dest_db);
+        errno = EIO;
+        goto error;
+    }
+
+    /* Perform backup - copy all pages at once */
+    rc = sqlite3_backup_step (backup, -1);
+    if (rc != SQLITE_DONE) {
+        errstr = sqlite3_errstr (rc);
+        errno = EIO;
+        goto error;
+    }
+
+    /* Finalize backup */
+    rc = sqlite3_backup_finish (backup);
+    backup = NULL;
+    if (rc != SQLITE_OK) {
+        errstr = sqlite3_errstr (rc);
+        errno = EIO;
+        goto error;
+    }
+
+    sqlite3_close (dest_db);
+
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "backup: flux_respond");
+
+    return;
+
+error:
+    if (backup)
+        sqlite3_backup_finish (backup);
+    if (dest_db)
+        sqlite3_close (dest_db);
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "backup: flux_respond_error");
+}
+
+static void query_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    const char *query = NULL;
+    const char *errstr = NULL;
+    sqlite3_stmt *stmt = NULL;
+    json_t *rows = NULL;
+    json_t *columns = NULL;
+    int force = 0;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s?b}",
+                             "query", &query,
+                             "force", &force) < 0) {
+        errstr = "failed to unpack query request";
+        goto error;
+    }
+
+    /* Skip leading whitespace */
+    while (*query && isspace (*query))
+        query++;
+
+    /* Allow SELECT, PRAGMA, DELETE, and VACUUM for admin operations.
+     * Other operations (INSERT, UPDATE, CREATE, DROP) are not allowed
+     * since they could corrupt the database.
+     */
+    if (strncasecmp (query, "SELECT", 6) != 0
+        && strncasecmp (query, "PRAGMA", 6) != 0
+        && strncasecmp (query, "DELETE", 6) != 0
+        && strncasecmp (query, "VACUUM", 6) != 0) {
+        errstr = "only SELECT, PRAGMA, DELETE, and VACUUM queries are allowed";
+        errno = EPERM;
+        goto error;
+    }
+
+    /* DELETE and VACUUM require --force flag */
+    if ((strncasecmp (query, "DELETE", 6) == 0
+         || strncasecmp (query, "VACUUM", 6) == 0) && !force) {
+        errstr = "DELETE and VACUUM require --force flag";
+        errno = EPERM;
+        goto error;
+    }
+
+    if (!(rows = json_array ()) || !(columns = json_array ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+
+    if (sqlite3_prepare_v2 (ctx->db, query, -1, &stmt, NULL) != SQLITE_OK) {
+        errstr = sqlite3_errmsg (ctx->db);
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    /* Get column names */
+    int ncols = sqlite3_column_count (stmt);
+    for (int i = 0; i < ncols; i++) {
+        const char *name = sqlite3_column_name (stmt, i);
+        json_t *col = json_string (name ? name : "");
+        if (!col || json_array_append_new (columns, col) < 0) {
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+
+    /* Execute and fetch rows */
+    while (sqlite3_step (stmt) == SQLITE_ROW) {
+        json_t *row = json_array ();
+        if (!row) {
+            errno = ENOMEM;
+            goto error;
+        }
+        for (int i = 0; i < ncols; i++) {
+            json_t *val = NULL;
+            const char *text;
+            int type = sqlite3_column_type (stmt, i);
+            switch (type) {
+                case SQLITE_INTEGER:
+                    val = json_integer (sqlite3_column_int64 (stmt, i));
+                    break;
+                case SQLITE_FLOAT:
+                    val = json_real (sqlite3_column_double (stmt, i));
+                    break;
+                case SQLITE_TEXT:
+                    text = (const char *)sqlite3_column_text (stmt, i);
+                    val = json_string (text);
+                    break;
+                case SQLITE_BLOB: {
+                    const void *blob = sqlite3_column_blob (stmt, i);
+                    int size = sqlite3_column_bytes (stmt, i);
+                    char *hex = malloc (size * 2 + 1);
+                    if (!hex) {
+                        json_decref (row);
+                        errno = ENOMEM;
+                        goto error;
+                    }
+                    for (int j = 0; j < size; j++)
+                        sprintf (hex + j*2, "%02x",
+                                ((unsigned char *)blob)[j]);
+                    val = json_string (hex);
+                    free (hex);
+                    break;
+                }
+                case SQLITE_NULL:
+                default:
+                    val = json_null ();
+                    break;
+            }
+            if (!val || json_array_append_new (row, val) < 0) {
+                json_decref (row);
+                errno = ENOMEM;
+                goto error;
+            }
+        }
+        if (json_array_append_new (rows, row) < 0) {
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+
+    sqlite3_finalize (stmt);
+
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:O s:O}",
+                           "rows", rows,
+                           "columns", columns) < 0)
+        flux_log_error (h, "query: flux_respond_pack");
+
+    json_decref (rows);
+    json_decref (columns);
+    return;
+
+error:
+    if (stmt)
+        sqlite3_finalize (stmt);
+    json_decref (rows);
+    json_decref (columns);
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "query: flux_respond_error");
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -1076,6 +1302,18 @@ static const struct flux_msg_handler_spec htab[] = {
         "content-sqlite.stats-get",
         stats_get_cb,
         FLUX_ROLE_USER
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-sqlite.query",
+        query_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-sqlite.backup",
+        backup_cb,
+        0
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
