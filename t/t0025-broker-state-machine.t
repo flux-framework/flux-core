@@ -394,5 +394,28 @@ test_expect_success 'appropriate message was logged' '
 	grep "shutdown timeout" shutdown2.log
 '
 
+test_expect_success 'broker.unload-builtins-timeout default is 60s' '
+	flux start ${ARGS} \
+		flux getattr broker.unload-builtins-timeout >ubto.out &&
+	cat >ubto.exp <<-EOT &&
+	1m
+	EOT
+	test_cmp ubto.exp ubto.out
+'
+
+test_expect_success 'run instance with hanging overlay unload' '
+	test_must_fail_or_be_terminated flux start -s2 \
+		-Slog-filename=unload.log \
+		-Sbroker.rc1_path= \
+		-Sbroker.rc3_path= \
+		-Sbroker.unload-builtins-timeout=2s \
+		bash -c "flux module debug --setbit 1 overlay"
+'
+
+test_expect_success 'appropriate message was logged' '
+	grep "unloading built-in broker module timed out" unload.log &&
+	grep "overlay" unload.log
+'
+
 
 test_done
