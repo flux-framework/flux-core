@@ -1619,6 +1619,14 @@ int overlay_connect (struct overlay *ov)
                 return -1;
         }
 #endif
+#ifdef ZMQ_TCP_MAXRT
+        if (ov->tcp_user_timeout > 0) {
+            if (zsetsockopt_int (ov->parent.zsock,
+                                 ZMQ_TCP_MAXRT,
+                                 ov->tcp_user_timeout * 1000) < 0)
+                return -1;
+        }
+#endif
         if (cert_apply (ov->cert, ov->parent.zsock) < 0)
             return -1;
         if (zmq_connect (ov->parent.zsock, ov->parent.uri) < 0)
