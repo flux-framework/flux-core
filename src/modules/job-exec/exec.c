@@ -464,6 +464,33 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
                              rank);
 }
 
+static int drain_barrier_pending_ranks (struct jobinfo *job,
+                                        struct exec_ctx *ctx,
+                                        const struct idset *ranks)
+{
+    struct idset *drain_ranks;
+    char *drain_ids = NULL;
+    int rc = -1;
+
+    if (!(drain_ranks = idset_intersect (ranks, ctx->barrier_pending_ranks))
+        || !(drain_ids = idset_encode (drain_ranks, IDSET_FLAG_RANGE)))
+        goto fail;
+
+
+    if (idset_count (drain_ranks) > 0
+        && jobinfo_drain_ranks (job,
+                                drain_ids,
+                                "%s terminated before first barrier",
+                                idf58 (job->id)) < 0)
+        goto fail;
+
+    rc = 0;
+
+fail:
+    idset_destroy (drain_ranks);
+    free (drain_ids);
+    return rc;
+}
 
 static void exit_cb (struct bulk_exec *exec,
                      void *arg,
@@ -507,17 +534,13 @@ static void exit_cb (struct bulk_exec *exec,
          * or incorrect MUNGE key)
          */
         if (job->multiuser
-            && jobinfo_drain_ranks (job,
-                                    ids,
-                                    "%s terminated before first barrier",
-                                    idf58 (job->id)) < 0)
+            && drain_barrier_pending_ranks (job, ctx, ranks) < 0)
             flux_log_error (job->h,
                             "failed to drain %s (rank%s %s) for job %s",
                             hosts ? hosts : "(unknown)",
                             idset_count (ranks) ? "s" : "",
                             ids ? ids : "(unknown)",
                             idf58 (job->id));
-
         free (ids);
         free (hosts);
     }
