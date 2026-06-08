@@ -367,8 +367,10 @@ static void state_post_event (flux_t *h, const char *event)
 
 /* Handle response from parent config module.  If this is called, this
  * broker is a follower and configuration will track the leader.
+ * Post either sync-success or sync-fail to the broker state machine on
+ * the first response.
  * N.B. There is no mechanism for a follower to reject the configuration
- * already accepted by the leader, therefore make all failures fatal.
+ * already accepted by the leader.
  */
 static void parent_continuation (flux_future_t *f, void *arg)
 {
@@ -377,6 +379,7 @@ static void parent_continuation (flux_future_t *f, void *arg)
     flux_conf_t *conf;
     flux_error_t error;
     bool initialize = false;
+    const char *event = "sync-success";
 
     if (!cfg->config_event_posted)
         initialize = true;
@@ -387,7 +390,8 @@ static void parent_continuation (flux_future_t *f, void *arg)
                   LOG_CRIT,
                   "parent update: %s",
                   future_strerror (f, errno));
-        goto fatal;
+        event = "sync-fail";
+        goto done;
     }
     if (config_equal (flux_get_conf (cfg->h), conf)) {
         flux_log (cfg->h, LOG_DEBUG, "parent update ignored: no change");
@@ -397,24 +401,17 @@ static void parent_continuation (flux_future_t *f, void *arg)
     if (update_all_new (cfg->h, initialize, conf, &error) < 0) {
         flux_log (cfg->h, LOG_ERR, "parent update: %s", error.text);
         flux_conf_decref (conf);
-        goto fatal;
+        event = "sync-fail";
+        goto done;
     }
     flux_log (cfg->h, LOG_DEBUG, "parent update applied");
     getters_respond (cfg, flux_get_conf (cfg->h));
 done:
     if (!cfg->config_event_posted) {
-        int saved_errno = errno;
-        state_post_event (cfg->h, "sync-success");
+        state_post_event (cfg->h, event);
         cfg->config_event_posted = true;
-        errno = saved_errno;
     }
     flux_future_reset (f);
-    return;
-fatal:
-    if (cfg->config_event_posted)
-        flux_reactor_stop_error (flux_get_reactor (cfg->h));
-    else
-        state_post_event (cfg->h, "sync-fail");
 }
 
 static void state_continuation (flux_future_t *f, void *arg)
