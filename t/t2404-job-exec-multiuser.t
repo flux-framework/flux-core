@@ -25,7 +25,7 @@ if ! test -d conf.d; then
 fi
 
 export FLUX_CONF_DIR=$(pwd)/conf.d
-test_under_flux 2 job
+test_under_flux 4
 
 test_expect_success 'job-exec: module configured to use IMP' '
 	flux module stats -p bulk-exec.config.flux_imp_path job-exec | grep ${IMP}
@@ -93,7 +93,62 @@ test_expect_success NO_ASAN 'job-exec: kill multiuser job works' '
 	flux cancel ${id} &&
 	test_expect_code 143 run_timeout 30 flux job status -v ${id}
 '
-
+# Ensure barrier-timeout drains only affected rank on multiuser flux (#7663)
+test_expect_success 'job-exec: barrier timeout raises job exception' '
+	flux run --dry-run -N4 \
+		--env=FAIL_MODE=hang-on-rank3 \
+		--setattr=exec.bulkexec.barrier-timeout=0.5 \
+		sleep 30 \
+		| flux python ${SIGN_AS} 42 >signed.json &&
+	jobid=$(FLUX_HANDLE_USERID=42 \
+		flux job submit --flags=signed signed.json) &&
+	flux job wait-event -vHt 60 $jobid exception
+'
+test_expect_success 'job-exec: only the affected rank is drained' '
+	test_debug "flux resource drain" &&
+	test "$(flux resource drain -no {ranks})" = "3" &&
+	flux resource drain -no {reason} | grep "start timeout"
+'
+test_expect_success 'job-exec: undrain all ranks' '
+	flux resource list &&
+	flux resource undrain $(flux resource drain -no {ranks})
+'
+# Ensure exit-before-first barrier drains only affected rank
+test_expect_success 'job-exec: barrier timeout raises job exception' '
+	flux run --dry-run -N4 \
+		--env=FAIL_MODE=exit-on-rank3 \
+		sleep 30 \
+		| flux python ${SIGN_AS} 42 >signed.json &&
+	jobid=$(FLUX_HANDLE_USERID=42 \
+		flux job submit --flags=signed signed.json) &&
+	flux job wait-event -vHt 60 $jobid exception
+'
+test_expect_success 'job-exec: only the affected rank is drained' '
+	test_debug "flux resource drain -o long" &&
+	test "$(flux resource drain -no {ranks})" = "3" &&
+	flux resource drain -no {reason} | grep "terminated before first"
+'
+test_expect_success 'job-exec: undrain all ranks' '
+	flux resource list &&
+	flux resource undrain $(flux resource drain -no {ranks})
+'
+# Ensure "exited before first barrier" doesn't drain ranks when exception
+# occurs before first barrier
+test_expect_success 'job-exec: barrier timeout raises job exception' '
+	flux run --dry-run -N4 \
+		--env=FAIL_MODE=hang-on-all \
+		--setattr=exec.bulkexec.barrier-timeout=0.5 \
+		sleep 30 \
+		| flux python ${SIGN_AS} 42 >signed.json &&
+	jobid=$(FLUX_HANDLE_USERID=42 \
+		flux job submit --flags=signed signed.json) &&
+	flux job wait-event -vHt 60 $jobid start &&
+	flux cancel $jobid &&
+	flux job wait-event -vHt 60 $jobid clean
+'
+test_expect_success 'job-exec: no ranks were drained' '
+	test "$(flux resource drain -no {ranks})" = ""
+'
 #  Configure failing IMP
 test_expect_success 'job-exec: reconfig with failing dummy IMP' '
 	cat <<-EOF >conf.d/exec.toml
