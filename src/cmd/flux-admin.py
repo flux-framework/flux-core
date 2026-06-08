@@ -154,7 +154,7 @@ def get_script_paths(prog_type, builtin_config=None, imp_path=None):
 
     # libexecdir already includes /flux (e.g., /usr/libexec/flux)
     system_path = Path(libexecdir) / f"{prog_type}.d"
-    flux_sysconfdir = Path(confdir) / "flux" / "system"
+    flux_sysconfdir = Path(confdir) / "system"
     legacy_path = flux_sysconfdir / prog_type
     sysconf_path = flux_sysconfdir / f"{prog_type}.d"
 

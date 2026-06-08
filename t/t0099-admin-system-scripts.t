@@ -104,10 +104,10 @@ test_expect_success 'scripts in sorted order' '
 
 test_expect_success 'verbose mode shows scripts even when not configured' '
 	FLUX_SYSTEM_SCRIPTS_LIBEXECDIR=$(pwd)/test_scripts/flux \
-	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts \
+	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts/flux \
 	flux admin system-scripts >normal.out 2>&1 &&
 	FLUX_SYSTEM_SCRIPTS_LIBEXECDIR=$(pwd)/test_scripts/flux \
-	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts \
+	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts/flux \
 	flux admin system-scripts -v >verbose.out 2>&1 &&
 	test_debug "cat normal.out" &&
 	test_debug "cat verbose.out" &&
@@ -119,7 +119,7 @@ test_expect_success 'verbose mode shows scripts even when not configured' '
 
 test_expect_success 'command scans test script directories with env override' '
 	FLUX_SYSTEM_SCRIPTS_LIBEXECDIR=$(pwd)/test_scripts/flux \
-	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts \
+	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts/flux \
 	flux admin system-scripts -v >scripts.out &&
 	test_debug "cat scripts.out"
 '
@@ -154,7 +154,7 @@ test_expect_success 'legacy script shown with path and note' '
 test_expect_success 'directories are ignored in script scan' '
 	mkdir -p test_scripts/flux/prolog.d/subdir &&
 	FLUX_SYSTEM_SCRIPTS_LIBEXECDIR=$(pwd)/test_scripts/flux \
-	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts \
+	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts/flux \
 	flux admin system-scripts -v >nosubdir.out 2>&1 &&
 	test_must_fail grep -q "subdir" nosubdir.out
 '
@@ -174,7 +174,7 @@ test_expect_success 'create legacy prolog to test site script skipping' '
 
 test_expect_success 'legacy script skips site scripts' '
 	FLUX_SYSTEM_SCRIPTS_LIBEXECDIR=$(pwd)/test_scripts/flux \
-	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts \
+	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts/flux \
 	flux admin system-scripts -v >legacy_skip.out 2>&1 &&
 	sed -n "/^.* prolog:/,/^.* epilog:/p" \
 		legacy_skip.out >prolog_legacy.out &&
@@ -197,7 +197,7 @@ test_expect_success 'load config with exec.imp matching test libexecdir' '
 
 test_expect_success 'no mismatch warning when imp_path matches libexecdir' '
 	FLUX_SYSTEM_SCRIPTS_LIBEXECDIR=$(pwd)/test_scripts/flux \
-	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts \
+	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts/flux \
 	flux admin system-scripts -v >no_mismatch.out 2>&1 &&
 	test_debug "cat no_mismatch.out" &&
 	test_must_fail grep -i "mismatch" no_mismatch.out
@@ -212,7 +212,7 @@ test_expect_success 'load config with exec.imp NOT matching test libexecdir' '
 
 test_expect_success 'mismatch warning shown when imp_path differs from libexecdir' '
 	FLUX_SYSTEM_SCRIPTS_LIBEXECDIR=$(pwd)/test_scripts/flux \
-	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts \
+	FLUX_SYSTEM_SCRIPTS_CONFDIR=$(pwd)/test_scripts/flux \
 	flux admin system-scripts -v >mismatch.out 2>&1 &&
 	test_debug "cat mismatch.out" &&
 	grep -i "mismatch" mismatch.out &&
