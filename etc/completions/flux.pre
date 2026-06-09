@@ -2128,6 +2128,7 @@ _flux_sqlite()
     query_OPTS="\
         -H --header \
         -c --column \
+        -p --param= \
         --force \
     "
     backup_OPTS=""
