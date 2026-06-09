@@ -1213,3 +1213,4 @@ stateful
 wal
 SQLite
 SQLite's
+HEXSTRING

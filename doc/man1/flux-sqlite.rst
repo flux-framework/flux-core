@@ -65,6 +65,21 @@ as they could corrupt the database.
 
    Use column mode output with aligned columns.
 
+.. option:: -p, --param PARAM
+
+   Add a parameter to the query. This option can be specified multiple
+   times for queries with multiple placeholders (``?``). Parameters are
+   automatically typed:
+
+   * Integers and floats are parsed to their respective types
+   * The literal string ``null`` becomes SQL NULL
+   * ``blob:HEXSTRING`` encodes a hex string as a BLOB (e.g.,
+     ``blob:a1b2c3``)
+   * All other values are treated as TEXT
+
+   Parameters enable safe, SQL-injection-proof queries when working with
+   dynamic values.
+
 .. option:: --force
 
    Allow destructive operations (DELETE, VACUUM). This flag prevents
@@ -112,6 +127,20 @@ Check database statistics::
 Query total database size::
 
   $ flux sqlite query "SELECT COUNT(*), SUM(size) FROM objects"
+
+Query with a parameterized integer value::
+
+  $ flux sqlite query -p 100 "SELECT COUNT(*) FROM objects WHERE size > ?"
+
+Query with multiple parameters::
+
+  $ flux sqlite query -p 10 -p 1000 \
+    "SELECT * FROM objects WHERE size > ? AND size < ?"
+
+Delete a specific object by hash using a BLOB parameter::
+
+  $ flux sqlite query --force -p blob:a1b2c3d4e5 \
+    "DELETE FROM objects WHERE hash = ?"
 
 Reclaim space after garbage collection::
 
