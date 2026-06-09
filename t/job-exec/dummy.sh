@@ -147,7 +147,37 @@ test_mock_failure() {
             ;;
     esac
 }
-
+barrier_hang()
+{
+    FAIL_MODE=$(json_get "$JOBSPEC" '.attributes.system.environment.FAIL_MODE')
+    case "$FAIL_MODE" in
+        hang-on-rank*)
+            #  Cause one shell rank to hang before the first barrier.
+            #  Other ranks continue:
+            #
+            if test $JOB_SHELL_RANK -eq ${FAIL_MODE##*rank}; then
+                log "Got FAIL_MODE=$FAIL_MODE sleeping on $JOB_SHELL_RANK"
+                sleep 30
+            fi
+            ;;
+        exit-on-rank*)
+            #  Cause one shell rank to hang then exit before the first barrier
+            #  ensuring other ranks make it to the barrier
+            #
+            if test $JOB_SHELL_RANK -eq ${FAIL_MODE##*rank}; then
+                log "Got FAIL_MODE=$FAIL_MODE sleep then exit on $JOB_SHELL_RANK"
+                sleep 2
+                exit
+            fi
+            ;;
+        hang-on-all)
+            log "Got FAIL_MODE=$FAIL_MODE sleeping on $JOB_SHELL_RANK"
+            sleep 30
+            ;;
+        *)
+            ;;
+    esac
+}
 barrier() {
     if [[ ${NNODES} -gt 1 ]]; then
         echo enter >&1
@@ -163,6 +193,7 @@ barrier() {
 #
 get_job_shell_rank
 get_nnodes
+barrier_hang
 barrier
 get_duration
 get_command

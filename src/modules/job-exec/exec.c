@@ -63,6 +63,13 @@ struct exec_ctx {
     struct idset *barrier_pending_ranks;
     int barrier_enter_count;
     int barrier_completion_count;
+
+    /*  terminated_before_barrier will be set to true if one shell terminates
+     *  before the first barrier *and* the first exception. This allows other
+     *  ranks to be drained when they exit too.
+     */
+    bool terminated_before_barrier;
+
     int exit_count;
 
     flux_watcher_t *shell_barrier_timer;
@@ -457,6 +464,33 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
                              rank);
 }
 
+static int drain_barrier_pending_ranks (struct jobinfo *job,
+                                        struct exec_ctx *ctx,
+                                        const struct idset *ranks)
+{
+    struct idset *drain_ranks;
+    char *drain_ids = NULL;
+    int rc = -1;
+
+    if (!(drain_ranks = idset_intersect (ranks, ctx->barrier_pending_ranks))
+        || !(drain_ids = idset_encode (drain_ranks, IDSET_FLAG_RANGE)))
+        goto fail;
+
+
+    if (idset_count (drain_ranks) > 0
+        && jobinfo_drain_ranks (job,
+                                drain_ids,
+                                "%s terminated before first barrier",
+                                idf58 (job->id)) < 0)
+        goto fail;
+
+    rc = 0;
+
+fail:
+    idset_destroy (drain_ranks);
+    free (drain_ids);
+    return rc;
+}
 
 static void exit_cb (struct bulk_exec *exec,
                      void *arg,
@@ -478,7 +512,8 @@ static void exit_cb (struct bulk_exec *exec,
      *   case we raise a job exception because the shell or IMP may not
      *   have had a chance to do so.
      */
-    if (ctx->barrier_completion_count == 0) {
+    if (ctx->barrier_completion_count == 0
+        && (!job->exception_in_progress || ctx->terminated_before_barrier)) {
         char *ids = idset_encode (ranks, IDSET_FLAG_RANGE);
         char *hosts = flux_hostmap_lookup (job->h, ids, NULL);
         jobinfo_fatal_error (job, 0,
@@ -487,22 +522,25 @@ static void exit_cb (struct bulk_exec *exec,
                               idset_count (ranks) ? "s" : "",
                               ids ? ids : "(unknown)");
 
+        /* Set the terminated-before-first-barrier flag. This will allow
+         * other terminating tasks to also raise their own exception and
+         * possibly drain affected ranks, even though exception_in_progress
+         * is now true.
+         */
+        ctx->terminated_before_barrier = true;
+
         /* If this job was run under the IMP, drain the affected ranks since
          * this could indicate an unrecoverable node issue (like missing
          * or incorrect MUNGE key)
          */
         if (job->multiuser
-            && jobinfo_drain_ranks (job,
-                                    ids,
-                                    "%s terminated before first barrier",
-                                    idf58 (job->id)) < 0)
+            && drain_barrier_pending_ranks (job, ctx, ranks) < 0)
             flux_log_error (job->h,
                             "failed to drain %s (rank%s %s) for job %s",
                             hosts ? hosts : "(unknown)",
                             idset_count (ranks) ? "s" : "",
                             ids ? ids : "(unknown)",
                             idf58 (job->id));
-
         free (ids);
         free (hosts);
     }
