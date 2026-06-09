@@ -40,6 +40,7 @@ struct rbwatcher {
     bool eof_read;  /* flag, if EOF on stream seen */
     bool eof_sent;  /* flag, if EOF to user sent */
     bool line;      /* flag, if line buffered */
+    bool full;      /* flag, if fully buffered */
     void *data;
 };
 
@@ -72,6 +73,14 @@ static bool data_to_read (struct rbwatcher *rbw, bool *is_eof)
             if (rbw->eof_read && fbuf_bytes (rbw->fbuf))
                 return true;
         }
+    }
+    else if (rbw->full) {
+        /* Only return data when buffer is full */
+        if (!fbuf_space (rbw->fbuf))
+            return true;
+        /* Or on EOF to flush remaining data */
+        if (rbw->eof_read && fbuf_bytes (rbw->fbuf))
+            return true;
     }
     else {
         if (fbuf_bytes (rbw->fbuf) > 0)
@@ -215,6 +224,16 @@ static struct flux_watcher_ops rbwatcher_ops = {
     .is_active = rbwatcher_is_active,
 };
 
+static int validate_read_watcher_flags (int flags)
+{
+    if ((flags & FBUF_WATCHER_LINE_BUFFER)
+        && (flags & FBUF_WATCHER_FULL_BUFFER)) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
 flux_watcher_t *fbuf_read_watcher_create (flux_reactor_t *r,
                                           int fd,
                                           int size,
@@ -225,7 +244,8 @@ flux_watcher_t *fbuf_read_watcher_create (flux_reactor_t *r,
     struct rbwatcher *rbw;
     flux_watcher_t *w;
 
-    if (validate_fd_nonblock (fd) < 0)
+    if (validate_fd_nonblock (fd) < 0
+        || validate_read_watcher_flags (flags) < 0)
         return NULL;
     if (!(w = watcher_create (r, sizeof (*rbw), &rbwatcher_ops, cb, arg)))
         goto error;
@@ -234,6 +254,8 @@ flux_watcher_t *fbuf_read_watcher_create (flux_reactor_t *r,
     rbw->refcnt = 1;
     if ((flags & FBUF_WATCHER_LINE_BUFFER))
         rbw->line = true;
+    if ((flags & FBUF_WATCHER_FULL_BUFFER))
+        rbw->full = true;
     if (!(rbw->fbuf = fbuf_create (size))
         || !(rbw->prepare_w = flux_prepare_watcher_create (r,
                                                            rbwatcher_prepare_cb,
@@ -289,8 +311,12 @@ const char *fbuf_read_watcher_get_data (flux_watcher_t *w, int *lenp)
         if (!(*lenp) && !fbuf_space (rbw->fbuf))
             return fbuf_read (rbw->fbuf, -1, lenp);
      }
-    /* Not line-buffered, or reading last bit of data which does
-     * not contain a newline. Read any data:
+    else if (rbw->full) {
+        /* Fully buffered: read all available data */
+        return fbuf_read (rbw->fbuf, -1, lenp);
+    }
+    /* Not line-buffered or fully-buffered, or reading last bit of
+     * data which does not contain a newline. Read any data:
      */
     return fbuf_read (rbw->fbuf, -1, lenp);
 }
