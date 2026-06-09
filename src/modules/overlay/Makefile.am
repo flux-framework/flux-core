@@ -29,6 +29,8 @@ liboverlay_la_SOURCES = \
 	boot_pmi.c \
 	boot_config.h \
 	boot_config.c \
+	ovconf.h \
+	ovconf.c \
 	overlay.h \
 	overlay.c
 
