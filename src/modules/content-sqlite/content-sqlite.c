@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/statvfs.h>
+#include <stdbool.h>
 #include <sqlite3.h>
 #include <lz4.h>
 #include <flux/core.h>
@@ -32,6 +33,7 @@
 
 #include "src/common/libcontent/content-util.h"
 #include "ccan/str/str.h"
+#include "ccan/base64/base64.h"
 
 const size_t lzo_buf_chunksize = 1024*1024;
 const size_t compression_threshold = 256; /* compress blobs >= this size */
@@ -1131,13 +1133,15 @@ static void query_cb (flux_t *h,
     sqlite3_stmt *stmt = NULL;
     json_t *rows = NULL;
     json_t *columns = NULL;
+    json_t *params = NULL;
     int force = 0;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s?b}",
+                             "{s:s s?b s?o}",
                              "query", &query,
-                             "force", &force) < 0) {
+                             "force", &force,
+                             "params", &params) < 0) {
         errstr = "failed to unpack query request";
         goto error;
     }
@@ -1175,6 +1179,113 @@ static void query_cb (flux_t *h,
     if (sqlite3_prepare_v2 (ctx->db, query, -1, &stmt, NULL) != SQLITE_OK) {
         errstr = sqlite3_errmsg (ctx->db);
         set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    /* Bind parameters if provided */
+    int expected_params = sqlite3_bind_parameter_count (stmt);
+    if (params) {
+        int actual_params = json_array_size (params);
+
+        if (actual_params != expected_params) {
+            errstr = "parameter count mismatch";
+            errno = EINVAL;
+            goto error;
+        }
+
+        for (size_t i = 0; i < actual_params; i++) {
+            json_t *val = json_array_get (params, i);
+            int rc;
+
+            if (json_is_string (val)) {
+                const char *str = json_string_value (val);
+                size_t str_len = strlen (str);
+                /* Check if string could be valid base64:
+                 * - Length must be multiple of 4 (with padding)
+                 * - Should contain only valid base64 characters
+                 * This distinguishes BLOB params (base64-encoded) from TEXT
+                 */
+                bool try_base64 = (str_len > 0 && str_len % 4 == 0);
+                if (try_base64) {
+                    /* Verify all characters are in base64 alphabet */
+                    for (size_t j = 0; j < str_len; j++) {
+                        if (!base64_char_in_alphabet (&base64_maps_rfc4648,
+                                                       str[j])
+                            && str[j] != '=') {
+                            try_base64 = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (try_base64) {
+                    /* Looks like base64 - try to decode as BLOB */
+                    size_t decoded_max = base64_decoded_length (str_len);
+                    char *decoded = malloc (decoded_max);
+                    if (!decoded) {
+                        errno = ENOMEM;
+                        goto error;
+                    }
+                    ssize_t decoded_len = base64_decode (decoded,
+                                                         decoded_max,
+                                                         str,
+                                                         str_len);
+                    if (decoded_len >= 0) {
+                        /* Successfully decoded - bind as BLOB */
+                        rc = sqlite3_bind_blob (stmt,
+                                               i + 1,
+                                               decoded,
+                                               decoded_len,
+                                               free);
+                    }
+                    else {
+                        /* Decode failed - bind as TEXT */
+                        free (decoded);
+                        rc = sqlite3_bind_text (stmt,
+                                               i + 1,
+                                               str,
+                                               -1,
+                                               SQLITE_TRANSIENT);
+                    }
+                }
+                else {
+                    /* Not base64 format - bind as TEXT */
+                    rc = sqlite3_bind_text (stmt,
+                                           i + 1,
+                                           str,
+                                           -1,
+                                           SQLITE_TRANSIENT);
+                }
+            }
+            else if (json_is_integer (val)) {
+                rc = sqlite3_bind_int64 (stmt,
+                                        i + 1,
+                                        json_integer_value (val));
+            }
+            else if (json_is_real (val)) {
+                rc = sqlite3_bind_double (stmt,
+                                         i + 1,
+                                         json_real_value (val));
+            }
+            else if (json_is_null (val)) {
+                rc = sqlite3_bind_null (stmt, i + 1);
+            }
+            else {
+                errstr = "unsupported parameter type";
+                errno = EINVAL;
+                goto error;
+            }
+
+            if (rc != SQLITE_OK) {
+                errstr = sqlite3_errmsg (ctx->db);
+                set_errno_from_sqlite_error (ctx);
+                goto error;
+            }
+        }
+    }
+    else if (expected_params > 0) {
+        errstr = "query has parameters but none provided";
+        errno = EINVAL;
         goto error;
     }
 
