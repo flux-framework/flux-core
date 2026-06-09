@@ -468,6 +468,11 @@ flux_watcher_t *fbuf_write_watcher_create (flux_reactor_t *r,
 
     if (validate_fd_nonblock (fd) < 0)
         return NULL;
+    /* Buffering flags are not supported for write watchers */
+    if ((flags & (FBUF_WATCHER_LINE_BUFFER | FBUF_WATCHER_FULL_BUFFER))) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (!(w = watcher_create (r, sizeof (*wbw), &wbwatcher_ops, cb, arg)))
         goto error;
     wbw = watcher_get_data (w);
