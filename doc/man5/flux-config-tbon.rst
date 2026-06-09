@@ -39,7 +39,7 @@ torpid_max
 
 tcp_user_timeout
    (optional) The amount of time (in RFC 23 Flux Standard Duration format) that
-   a broker waits for a TBON child connection to acknowledge transmitted TCP
+   a broker waits for a TBON connection to acknowledge transmitted TCP
    data before forcibly closing the connection.  A value of 0 means use the
    system default.  This value affects how Flux responds to an abruptly turned
    off node.  The configured value may be overridden by setting the
