@@ -10,6 +10,7 @@
 ##############################################################
 
 import argparse
+import base64
 import sys
 
 import flux
@@ -19,10 +20,40 @@ def query(args):
     """Execute SQL query against content-sqlite database"""
     h = flux.Flux()
     try:
-        future = h.rpc(
-            "content-sqlite.query",
-            {"query": args.query, "force": args.force},
-        )
+        req = {"query": args.query, "force": args.force}
+
+        # Add parameters if provided
+        if args.params:
+            params = []
+            for param in args.params:
+                # Try to parse as different types
+                if param.lower() == "null":
+                    params.append(None)
+                elif param.startswith("blob:"):
+                    # BLOB parameter: base64-encode the hex string
+                    hex_str = param[5:]
+                    blob_bytes = bytes.fromhex(hex_str)
+                    params.append(base64.b64encode(blob_bytes).decode("ascii"))
+                else:
+                    # Try integer
+                    try:
+                        params.append(int(param))
+                        continue
+                    except ValueError:
+                        # Not an integer, try float
+                        pass
+                    # Try float
+                    try:
+                        params.append(float(param))
+                        continue
+                    except ValueError:
+                        # Not a float, treat as string
+                        pass
+                    # Default to string
+                    params.append(param)
+            req["params"] = params
+
+        future = h.rpc("content-sqlite.query", req)
         result = future.get()
 
         if "error" in result:
@@ -122,6 +153,13 @@ def main():
         "--force",
         action="store_true",
         help="Allow destructive operations (DELETE, VACUUM)",
+    )
+    query_parser.add_argument(
+        "-p",
+        "--param",
+        dest="params",
+        action="append",
+        help="Query parameter (use 'null' for NULL, 'blob:hex' for BLOB)",
     )
     query_parser.set_defaults(func=query)
 
