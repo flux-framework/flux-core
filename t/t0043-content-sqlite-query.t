@@ -120,27 +120,81 @@ test_expect_success 'flux sqlite backup fails as guest' '
 	grep -q "owner credentials" backup-guest.err
 '
 
-test_expect_success 'flux sqlite query handles FLOAT type with expression' '
-	flux sqlite query "SELECT 3.14 as float_col" >float.out &&
-	grep -q "3.14" float.out
+# Parameterized query tests
+test_expect_success 'store test data for parameter tests' '
+	echo "param test 1" | flux content store --bypass-cache >param1.out &&
+	echo "param test 2" | flux content store --bypass-cache >param2.out &&
+	echo "param test 3" | flux content store --bypass-cache >param3.out
 '
 
-test_expect_success 'flux sqlite query handles NULL type with expression' '
-	flux sqlite query "SELECT NULL as null_col" >null.out &&
-	grep -q "None" null.out
+test_expect_success 'flux sqlite query with INTEGER parameter works' '
+	flux sqlite query -p 1 "SELECT COUNT(*) FROM objects WHERE size = ?" >param-int.out &&
+	test -s param-int.out
 '
 
-test_expect_success 'flux sqlite query handles BLOB type from objects table' '
-	flux sqlite query "SELECT object FROM objects LIMIT 1" >blob.out &&
-	test -s blob.out
+test_expect_success 'flux sqlite query with TEXT parameter works' '
+	flux sqlite query -p "objects" \
+		"SELECT COUNT(*) FROM sqlite_master WHERE type = '\''table'\'' AND tbl_name = ?" >param-text.out &&
+	grep -q "1" param-text.out
 '
 
-test_expect_success 'flux sqlite query handles mixed types in one query' '
-	flux sqlite query "SELECT 42 as int_val, 3.14 as float_val, \"text\" as text_val, NULL as null_val" >mixed.out &&
-	grep -q "42" mixed.out &&
-	grep -q "3.14" mixed.out &&
-	grep -q "text" mixed.out &&
-	grep -q "None" mixed.out
+test_expect_success 'flux sqlite query with NULL parameter works' '
+	flux sqlite query -p null \
+		"SELECT COUNT(*) FROM objects WHERE size = ?" >param-null.out &&
+	grep -q "0" param-null.out
+'
+
+test_expect_success 'flux sqlite query with REAL parameter works' '
+	flux sqlite query -p 3.14 \
+		"SELECT typeof(?)" >param-real.out &&
+	grep -q "real" param-real.out
+'
+
+test_expect_success 'flux sqlite query with BLOB parameter works' '
+	HASH=$(cat param1.out) &&
+	HEXHASH=$(echo $HASH | sed "s/sha1-//") &&
+	flux sqlite query -p "blob:$HEXHASH" \
+		"SELECT typeof(?)" >param-blob.out &&
+	grep -q "blob" param-blob.out
+'
+
+test_expect_success 'flux sqlite query with multiple parameters works' '
+	flux sqlite query -p 5 -p 20 \
+		"SELECT COUNT(*) FROM objects WHERE size > ? AND size < ?" >param-multi.out &&
+	test -s param-multi.out
+'
+
+test_expect_success 'flux sqlite query parameter count mismatch (too few params) fails' '
+	test_must_fail flux sqlite query -p 1 \
+		"SELECT COUNT(*) FROM objects WHERE size = ? OR size = ?" 2>param-mismatch.err &&
+	grep -q "parameter count mismatch" param-mismatch.err
+'
+
+test_expect_success 'flux sqlite query parameter count mismatch (too many params) fails' '
+	test_must_fail flux sqlite query -p 1 -p 2 -p 3 \
+		"SELECT COUNT(*) FROM objects WHERE size = ?" 2>param-mismatch2.err &&
+	grep -q "parameter count mismatch" param-mismatch2.err
+'
+
+test_expect_success 'flux sqlite query with placeholder but no params fails' '
+	test_must_fail flux sqlite query \
+		"SELECT COUNT(*) FROM objects WHERE size = ?" 2>no-params.err &&
+	grep -q "query has parameters but none provided" no-params.err
+'
+
+test_expect_success 'flux sqlite query with parameters to invalid column fails gracefully' '
+	test_must_fail flux sqlite query -p 1 \
+		"SELECT COUNT(*) FROM objects WHERE nonexistent_column = ?" 2>invalid-col.err
+'
+
+test_expect_success 'flux sqlite query DELETE with BLOB parameters works' '
+	HASH=$(cat param1.out) &&
+	HEXHASH=$(echo $HASH | sed "s/sha1-//") &&
+	COUNT_BEFORE=$(flux sqlite query "SELECT COUNT(*) FROM objects") &&
+	flux sqlite query --force -p "blob:$HEXHASH" \
+		"DELETE FROM objects WHERE hash = ?" &&
+	COUNT_AFTER=$(flux sqlite query "SELECT COUNT(*) FROM objects") &&
+	test "$COUNT_AFTER" -le "$COUNT_BEFORE"
 '
 
 test_expect_success 'remove content-sqlite module' '
