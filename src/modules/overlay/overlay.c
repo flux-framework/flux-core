@@ -50,31 +50,12 @@
 #include "boot_util.h"
 #include "boot_pmi.h"
 #include "boot_config.h"
+#include "ovconf.h"
 
 /* Module debug flag to create zombie socket that blocks zmq_ctx_term().
  * Enable with: flux module debug --setbit 1 overlay
  */
 #define DEBUG_ZOMBIESOCKET 1
-
-/* How long to wait (seconds) for a peer broker's TCP ACK before disconnecting.
- * This can be configured via TOML and on the broker command line.
- */
-static const double default_tcp_user_timeout = 20.;
-#ifdef ZMQ_TCP_MAXRT
-static bool have_tcp_maxrt = true;
-#else
-static bool have_tcp_maxrt = false;
-#endif
-
-/* How long to wait (seconds) for a connect attempt to time out before
- * reconnecting.
- */
-static const double default_connect_timeout = 30.;
-#ifdef ZMQ_CONNECT_TIMEOUT
-static bool have_connect_timeout = true;
-#else
-static bool have_connect_timeout = false;
-#endif
 
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers
@@ -143,11 +124,6 @@ struct parent {
 static const double sync_min = 1.0;
 static const double sync_max = 5.0;
 
-static const double default_torpid_min = 5.0;
-static const double default_torpid_max = 30.0;
-
-static const char *default_interface_hint = "default-route";
-
 struct overlay {
     void *zctx;
     bool zctx_external;
@@ -169,13 +145,8 @@ struct overlay {
     int event_seq;              // used for sequence verification
     char uuid[UUID_STR_LEN];
     int version;
-    int zmqdebug;
-    int zmq_io_threads;
-    double torpid_min;
-    double torpid_max;
-    double tcp_user_timeout;
-    double connect_timeout;
-    int child_rcvhwm;
+
+    struct ovconf config;
 
     struct parent parent;
 
@@ -458,7 +429,8 @@ static void update_torpid_children (struct overlay *ov)
         if (subtree_is_online (child->status) && child->lastseen > 0) {
             double duration = now - child->lastseen;
 
-            if (duration >= ov->torpid_max && ov->torpid_max > 0) {
+            if (duration >= ov->config.torpid_max
+                && ov->config.torpid_max > 0) {
                 if (!child->torpid) {
                     log_torpid_child (ov->h, child->rank, true, duration);
                     child->torpid = true;
@@ -766,7 +738,7 @@ static void sync_cb (flux_future_t *f, void *arg)
     struct overlay *ov = arg;
     double now = flux_reactor_now (ov->reactor);
 
-    if (now - ov->parent.lastsent > ov->torpid_min)
+    if (now - ov->parent.lastsent > ov->config.torpid_min)
         overlay_control_parent (ov, CONTROL_HEARTBEAT, 0);
     update_torpid_children (ov);
 
@@ -1563,17 +1535,17 @@ static int overlay_zmq_init (struct overlay *ov)
          * other nodes yet increases the broker's footprint.
          * This could be removed if we decide otherwise later on.
          */
-        if (ov->rank > 0 && ov->zmq_io_threads != 1) {
+        if (ov->rank > 0 && ov->config.zmq_io_threads != 1) {
             const char *key = "tbon.zmq_io_threads";
             if (compat_attr_set_flags (ov->h, key, 0) < 0
                 || compat_attr_delete (ov->h, key, true) < 0
                 || compat_attr_add_int (ov->h, key, 1, ATTR_IMMUTABLE) < 0)
                 return -1;
-            ov->zmq_io_threads = 1;
+            ov->config.zmq_io_threads = 1;
         }
         if (zmq_ctx_set (ov->zctx,
                          ZMQ_IO_THREADS,
-                         ov->zmq_io_threads) < 0)
+                         ov->config.zmq_io_threads) < 0)
             return -1;
     }
     return 0;
@@ -1604,7 +1576,7 @@ int overlay_connect (struct overlay *ov)
         /* The socket monitor is only used for logging.
          * Setup may fail if libzmq is too old.
          */
-        if (ov->zmqdebug) {
+        if (ov->config.zmqdebug) {
             ov->parent.monitor = zmqutil_monitor_create (ov->zctx,
                                                          ov->parent.zsock,
                                                          ov->reactor,
@@ -1612,18 +1584,18 @@ int overlay_connect (struct overlay *ov)
                                                          ov);
         }
 #ifdef ZMQ_CONNECT_TIMEOUT
-        if (ov->connect_timeout > 0) {
+        if (ov->config.connect_timeout > 0) {
             if (zsetsockopt_int (ov->parent.zsock,
                                  ZMQ_CONNECT_TIMEOUT,
-                                 ov->connect_timeout * 1000) < 0)
+                                 ov->config.connect_timeout * 1000) < 0)
                 return -1;
         }
 #endif
 #ifdef ZMQ_TCP_MAXRT
-        if (ov->tcp_user_timeout > 0) {
+        if (ov->config.tcp_user_timeout > 0) {
             if (zsetsockopt_int (ov->parent.zsock,
                                  ZMQ_TCP_MAXRT,
-                                 ov->tcp_user_timeout * 1000) < 0)
+                                 ov->config.tcp_user_timeout * 1000) < 0)
                 return -1;
         }
 #endif
@@ -1705,7 +1677,9 @@ int overlay_bind (struct overlay *ov,
 
     if (!(ov->bind_zsock = zmq_socket (ov->zctx, ZMQ_ROUTER))
         || zsetsockopt_int (ov->bind_zsock, ZMQ_SNDHWM, 0) < 0
-        || zsetsockopt_int (ov->bind_zsock, ZMQ_RCVHWM, ov->child_rcvhwm) < 0
+        || zsetsockopt_int (ov->bind_zsock,
+                            ZMQ_RCVHWM,
+                            ov->config.child_rcvhwm) < 0
         || zsetsockopt_int (ov->bind_zsock, ZMQ_LINGER, 5) < 0
         || zsetsockopt_int (ov->bind_zsock, ZMQ_ROUTER_MANDATORY, 1) < 0
         || zsetsockopt_int (ov->bind_zsock, ZMQ_IPV6, ov->enable_ipv6) < 0
@@ -1718,7 +1692,7 @@ int overlay_bind (struct overlay *ov,
     /* The socket monitor is only used for logging.
      * Setup may fail if libzmq is too old.
      */
-    if (ov->zmqdebug) {
+    if (ov->config.zmqdebug) {
         ov->bind_monitor = zmqutil_monitor_create (ov->zctx,
                                                    ov->bind_zsock,
                                                    ov->reactor,
@@ -1726,10 +1700,10 @@ int overlay_bind (struct overlay *ov,
                                                    ov);
     }
 #ifdef ZMQ_TCP_MAXRT
-    if (ov->tcp_user_timeout > 0) {
+    if (ov->config.tcp_user_timeout > 0) {
         if (zsetsockopt_int (ov->bind_zsock,
                              ZMQ_TCP_MAXRT,
-                             ov->tcp_user_timeout * 1000) < 0) {
+                             ov->config.tcp_user_timeout * 1000) < 0) {
             return errprintf (errp,
                               "error setting TCP_MAXRT option"
                               " on bind socket: %s",
@@ -2248,370 +2222,6 @@ int overlay_authorize (struct overlay *ov,
     return zmqutil_zap_authorize (ov->zap, name, pubkey);
 }
 
-static int overlay_configure_attr (flux_t *h,
-                                   const char *name,
-                                   const char *default_value,
-                                   const char **valuep)
-{
-    const char *val = default_value;
-    int flags;
-
-    if (compat_attr_get (h, name, &val, &flags) == 0) {
-        if (!(flags & ATTR_IMMUTABLE)) {
-            flags |= ATTR_IMMUTABLE;
-            if (compat_attr_set_flags (h, name, flags) < 0)
-                return -1;
-        }
-    }
-    else {
-        val = default_value;
-        if (compat_attr_add (h, name, val, ATTR_IMMUTABLE) < 0)
-            return -1;
-    }
-    if (valuep)
-        *valuep = val;
-    return 0;
-}
-
-static int overlay_configure_attr_int (flux_t *h,
-                                       const char *name,
-                                       int default_value,
-                                       int *valuep,
-                                       flux_error_t *errp)
-{
-    int value = default_value;
-    const char *val;
-    char *endptr;
-
-    if (compat_attr_get (h, name, &val, NULL) == 0) {
-        errno = 0;
-        value = strtol (val, &endptr, 10);
-        if (errno != 0 || *endptr != '\0') {
-            errno = EINVAL;
-            return errprintf (errp, "%s value must be an integer", name);
-        }
-        if (compat_attr_delete (h, name, true) < 0) {
-            return errprintf (errp,
-                              "attr_delete %s: %s",
-                              name,
-                              strerror (errno));
-        }
-    }
-    if (compat_attr_add_int (h, name, value, ATTR_IMMUTABLE) < 0)
-        return errprintf (errp, "attr_add %s: %s", name, strerror (errno));
-    if (valuep)
-        *valuep = value;
-    return 0;
-}
-
-/* Set attribute with the following precedence:
- * 1. broker attribute
- * 2. TOML config
- * 3. legacy environment variables
- * Leave it unset if none of those are available.
- * The bootstrap methods set it later, but only if not already set.
- */
-static int overlay_configure_interface_hint (struct overlay *ov,
-                                             const char *table,
-                                             const char *name,
-                                             flux_error_t *errp)
-{
-    char long_name[128];
-    const char *val = NULL;
-    const char *config_val = NULL;
-    const char *attr_val = NULL;
-    int flags;
-    const flux_conf_t *cf;
-    flux_error_t error;
-
-    if ((cf = flux_get_conf (ov->h))) {
-        if (flux_conf_unpack (cf,
-                              &error,
-                              "{s?{s?s}}",
-                              table,
-                                name, &config_val) < 0) {
-            return errprintf (errp,
-                              "Config file error [%s]: %s",
-                              table,
-                              error.text);
-        }
-    }
-    (void)snprintf (long_name, sizeof (long_name), "%s.%s", table, name);
-    (void)compat_attr_get (ov->h, long_name, &attr_val, &flags);
-
-    if (attr_val)
-        val = attr_val;
-    else if (config_val)
-        val = config_val;
-    else if ((val = getenv ("FLUX_IPADDR_INTERFACE")))
-        ;
-    else if (getenv ("FLUX_IPADDR_HOSTNAME"))
-        val = "hostname";
-    else
-        val = default_interface_hint;
-
-    if (val && !attr_val) {
-         if (compat_attr_add (ov->h, long_name, val, 0) < 0) {
-            return errprintf (errp,
-                              "Error setting %s attribute value: %s",
-                              long_name,
-                              strerror (errno));
-         }
-    }
-    return 0;
-}
-
-static int overlay_configure_torpid (struct overlay *ov,
-                                     const flux_conf_t *conf,
-                                     bool initialize,
-                                     flux_error_t *errp)
-{
-    flux_error_t error;
-    double tmin_val = -1;
-    double tmax_val = -1;
-    const char *tmin;
-    const char *tmax;
-    char fsd[64];
-
-    // compiled-in default
-    if (initialize) {
-        tmin_val = default_torpid_min;
-        tmax_val = default_torpid_max;
-    }
-
-    // TOML config (initial and updates)
-    tmin = tmax = NULL;
-    if (flux_conf_unpack (conf,
-                          &error,
-                          "{s?{s?s s?s}}",
-                          "tbon",
-                            "torpid_min", &tmin,
-                            "torpid_max", &tmax) < 0)
-        return errprintf (errp, "Config file error [tbon]: %s", error.text);
-    if (tmin && fsd_parse_duration (tmin, &tmin_val) < 0)
-        return errprintf (errp, "Config file error parsing tbon.torpid_min");
-    if (tmax && fsd_parse_duration (tmax, &tmax_val) < 0)
-        return errprintf (errp, "Config file error parsing tbon.torpid_max");
-
-    // command line attribute setting
-    if (initialize) {
-        if ((tmin = flux_attr_get (ov->h, "tbon.torpid_min"))
-            && fsd_parse_duration (tmin, &tmin_val) < 0)
-            return errprintf (errp, "error parsing tbon.torpid_min attribute");
-        if ((tmax = flux_attr_get (ov->h, "tbon.torpid_max"))
-            && fsd_parse_duration (tmax, &tmax_val) < 0)
-            return errprintf (errp, "error parsing tbon.torpid_max attribute");
-    }
-
-    // update tbon.torpid_min
-    if (tmin_val != -1) {
-        if (tmin_val == 0)
-            return errprintf (errp, "tbon.torpid_min must be nonzero");
-        double tmax_check = tmax_val != -1 ? tmax_val : ov->torpid_max;
-        if (tmax_check != 0 && !(tmin_val < tmax_check))
-            return errprintf (errp, "tbon.torpid_min must be less than torpid_max");
-        if (fsd_format_duration (fsd, sizeof (fsd), tmin_val) < 0
-            || flux_attr_set_ex (ov->h, "tbon.torpid_min", fsd, true, NULL) < 0)
-            return errprintf (errp, "error updating tbon.torpid_min attribute");
-        ov->torpid_min = tmin_val;
-    }
-    // update tbon.torpid_max
-    if (tmax_val != -1) {
-        double tmin_check = tmin_val != -1 ? tmin_val : ov->torpid_min;
-        if (tmax_val != 0 && !(tmax_val > tmin_check))
-            return errprintf (errp,
-                              "tbon.torpid_max must be greater than torpid_min");
-        if (fsd_format_duration (fsd, sizeof (fsd), tmax_val) < 0
-            || flux_attr_set_ex (ov->h, "tbon.torpid_max", fsd, true, NULL) < 0)
-            return errprintf (errp, "error updating tbon.torpid_max attribute");
-        ov->torpid_max = tmax_val;
-    }
-    return 0;
-}
-
-static int overlay_configure_timeout (struct overlay *ov,
-                                      const char *table,
-                                      const char *name,
-                                      bool enabled,
-                                      double default_value,
-                                      double *valuep,
-                                      flux_error_t *errp)
-{
-    const flux_conf_t *cf;
-    const char *fsd = NULL;
-    bool override = false;
-    double value = default_value;
-    char long_name[128];
-
-    (void)snprintf (long_name, sizeof (long_name), "%s.%s", table, name);
-
-    if ((cf = flux_get_conf (ov->h))) {
-        flux_error_t error;
-
-        if (flux_conf_unpack (cf, &error, "{s?{s?s}}", table, name, &fsd) < 0) {
-            return errprintf (errp,
-                              "Config file error [%s]: %s",
-                              table,
-                              error.text);
-        }
-        if (fsd) {
-            if (fsd_parse_duration (fsd, &value) < 0) {
-                return errprintf (errp,
-                                  "Config file error parsing %s",
-                                  long_name);
-            }
-            override = true;
-        }
-    }
-    /* Override with broker attribute (command line only) settings, if any.
-     */
-    if (compat_attr_get (ov->h, long_name, &fsd, NULL) == 0) {
-        if (fsd_parse_duration (fsd, &value) < 0)
-            return errprintf (errp, "Error parsing %s attribute", long_name);
-        if (compat_attr_delete (ov->h, long_name, true) < 0) {
-            return errprintf (errp,
-                              "attr_delete %s: %s",
-                              long_name,
-                              strerror (errno));
-        }
-        override = true;
-    }
-    if (enabled) {
-        char buf[64];
-        if (fsd_format_duration (buf, sizeof (buf), value) < 0)
-            return errprintf (errp, "fsd format: %s", strerror (errno));
-        if (compat_attr_add (ov->h, long_name, buf, ATTR_IMMUTABLE) < 0) {
-            return errprintf (errp,
-                              "attr_add %s: %s",
-                              long_name,
-                              strerror (errno));
-        }
-    }
-    else {
-        if (override) {
-            return errprintf (errp,
-                              "%s unsupported by this zeromq version",
-                              long_name);
-        }
-    }
-    *valuep = value;
-    return 0;
-}
-
-static int overlay_configure_tbon_int (struct overlay *ov,
-                                       const char *name,
-                                       int *value,
-                                       int default_value,
-                                       flux_error_t *errp)
-{
-    const flux_conf_t *cf;
-    char attrname[128];
-
-    *value = default_value;
-    if ((cf = flux_get_conf (ov->h))) {
-        flux_error_t error;
-
-        if (flux_conf_unpack (cf,
-                              &error,
-                              "{s?{s?i}}",
-                              "tbon",
-                                name, value) < 0) {
-            errprintf (errp, "Config file error [tbon]: %s", error.text);
-            return -1;
-        }
-    }
-    (void)snprintf (attrname, sizeof (attrname), "tbon.%s", name);
-    if (overlay_configure_attr_int (ov->h,
-                                    attrname,
-                                    *value,
-                                    value,
-                                    errp) < 0)
-        return -1;
-    return 0;
-}
-
-/* Configure tbon.topo attribute.
- * Ascending precedence: compiled-in default, TOML config, command line.
- * Topology creation is deferred to bootstrap, when we know the instance size.
- */
-static int overlay_configure_topo (struct overlay *ov, flux_error_t *errp)
-{
-    const char *topo_uri = "kary:32";
-    const flux_conf_t *cf;
-
-    if ((cf = flux_get_conf (ov->h))) {
-        flux_error_t error;
-
-        if (flux_conf_unpack (cf, NULL, "{s:{}}", "bootstrap") == 0)
-            topo_uri = "custom"; // adjust default for config boot
-
-        if (flux_conf_unpack (cf,
-                              &error,
-                              "{s?{s?s}}",
-                              "tbon",
-                                "topo", &topo_uri) < 0) {
-            errprintf (errp, "Config file error [tbon]: %s", error.text);
-            return -1;
-        }
-    }
-    /* Treat tbon.fanout=K as an alias for tbon.topo=kary:K.
-     */
-    const char *fanout;
-    char buf[16];
-    if (compat_attr_get (ov->h, "tbon.fanout", &fanout, NULL) == 0) {
-        snprintf (buf, sizeof (buf), "kary:%s", fanout);
-        topo_uri = buf;
-    }
-    if (overlay_configure_attr (ov->h,
-                                "tbon.topo",
-                                topo_uri,
-                                NULL) < 0) {
-        errprintf (errp,
-                   "Error manipulating tbon.topo attribute: %s",
-                   strerror (errno));
-        return -1;
-    }
-    return 0;
-}
-
-/* Handle a config update, topic: config-sync or config-reload.
- * In the former case, the update should be handled like the initial
- * config, where command line broker attribute settings override the config.
- * In the latter case, the config overrides.
- */
-static void overlay_config_reload_cb (flux_t *h,
-                                      flux_msg_handler_t *mh,
-                                      const flux_msg_t *msg,
-                                      void *arg)
-{
-    struct overlay *ov = arg;
-    const char *topic = "unknown";
-    flux_error_t error;
-    flux_conf_t *conf = NULL;
-    bool initialize = false;
-
-    if (flux_request_decode (msg, &topic, NULL) < 0
-        || flux_module_config_request_decode (msg, &conf) < 0) {
-        errprintf (&error, "Failed to parse %s request", topic);
-        goto error;
-    }
-    if (streq (topic, "overlay.config-sync"))
-        initialize = true;
-    if (overlay_configure_torpid (ov, conf, initialize, &error) < 0)
-        goto error;
-    if (flux_set_conf_new (h, conf) < 0) {
-        errprintf (&error, "Failed to update config");
-        goto error;
-    }
-    if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to %s request", topic);
-    return;
-error:
-    flux_conf_decref (conf);
-    if (flux_respond_error (h, msg, errno, error.text) < 0)
-        flux_log_error (h, "error responding to %s request", topic);
-}
-
 /* Test hook: create socket with pending message to block zmq_ctx_term().
  * This allows testing of broker.unload-builtins-timeout.
  */
@@ -2699,6 +2309,7 @@ void overlay_destroy (struct overlay *ov)
         if (!ov->zctx_external)
             zmq_ctx_term (ov->zctx);
         free (ov->hostname);
+        ovconf_fini (&ov->config);
         free (ov);
         errno = saved_errno;
     }
@@ -2716,18 +2327,6 @@ static const struct flux_msg_handler_spec htab[] = {
         "overlay.stats-get",
         overlay_stats_get_cb,
         FLUX_ROLE_USER,
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "overlay.config-reload",
-        overlay_config_reload_cb,
-        0,
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "overlay.config-sync",
-        overlay_config_reload_cb,
-        0,
     },
     {
         FLUX_MSGTYPE_REQUEST,
@@ -2811,64 +2410,7 @@ struct overlay *overlay_create (flux_t *h,
     }
     if (!(ov->monitor_requests = flux_msglist_create ()))
         goto error;
-    if (overlay_configure_attr_int (ov->h,
-                                    "tbon.prefertcp",
-                                    0,
-                                    NULL,
-                                    errp) < 0)
-        goto error_hasmsg;
-    if (overlay_configure_interface_hint (ov,
-                                          "tbon",
-                                          "interface-hint",
-                                          errp) < 0)
-        goto error_hasmsg;
-    if (overlay_configure_torpid (ov, flux_get_conf (ov->h), true, errp) < 0)
-        goto error_hasmsg;
-    if (overlay_configure_timeout (ov,
-                                   "tbon",
-                                   "tcp_user_timeout",
-                                   have_tcp_maxrt,
-                                   default_tcp_user_timeout,
-                                   &ov->tcp_user_timeout,
-                                   errp) < 0)
-        goto error_hasmsg;
-    if (overlay_configure_timeout (ov,
-                                   "tbon",
-                                   "connect_timeout",
-                                   have_connect_timeout,
-                                   default_connect_timeout,
-                                   &ov->connect_timeout,
-                                   errp) < 0)
-        goto error_hasmsg;
-    if (overlay_configure_tbon_int (ov,
-                                    "zmqdebug",
-                                    &ov->zmqdebug,
-                                    0,
-                                    errp) < 0)
-        goto error_hasmsg;
-    if (overlay_configure_tbon_int (ov,
-                                    "child_rcvhwm",
-                                    &ov->child_rcvhwm,
-                                    0,
-                                    errp) < 0)
-        goto error_hasmsg;
-    if (ov->child_rcvhwm < 0 || ov->child_rcvhwm == 1) {
-        errprintf (errp, "tbon.child_rcvhwm must be 0 (unlimited) or >= 2");
-        errno = EINVAL;
-        goto error_hasmsg;
-    }
-    if (overlay_configure_tbon_int (ov,
-                                    "zmq_io_threads",
-                                    &ov->zmq_io_threads,
-                                    1,
-                                    errp) < 0)
-        goto error_hasmsg;
-    if (ov->zmq_io_threads < 1) {
-        errprintf (errp, "tbon.zmq_io_threads must be >= 1");
-        errno = EINVAL;
-        goto error_hasmsg;
-    }
-    if (overlay_configure_topo (ov, errp) < 0)
+    if (ovconf_init (&ov->config, ov->h, errp) < 0)
         goto error_hasmsg;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;
