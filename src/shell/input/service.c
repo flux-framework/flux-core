@@ -106,8 +106,12 @@ static void input_service_stdin_cb (flux_t *h,
     }
     if (input_eventlog_put_event (in->shell, "data", o) < 0)
         goto error;
-    if (eof && subtract_idset (in->open_tasks, ranks, ids) < 0)
-        shell_log_errno ("failed to remove '%s' from open tasks", ranks);
+    if (eof) {
+        /* Flush eventlogger immediately on EOF to ensure prompt delivery */
+        input_eventlog_flush (in->shell);
+        if (subtract_idset (in->open_tasks, ranks, ids) < 0)
+            shell_log_errno ("failed to remove '%s' from open tasks", ranks);
+    }
     if (flux_respond (h, msg, NULL) < 0)
         shell_log_errno ("flux_respond");
     idset_destroy (ids);

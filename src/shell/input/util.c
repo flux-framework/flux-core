@@ -198,6 +198,16 @@ int input_eventlog_put_event (flux_shell_t *shell,
                                     context);
 }
 
+void input_eventlog_flush (flux_shell_t *shell)
+{
+    struct input_ctx *ctx;
+
+    if ((ctx = get_input_ctx (shell))) {
+        if (eventlogger_flush (ctx->ev) < 0)
+            shell_log_errno ("eventlogger_flush");
+    }
+}
+
 static int input_kvs_eventlog_init (flux_shell_t *shell, json_t *header)
 {
     flux_kvs_txn_t *txn = NULL;
