@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=asan
 
 test_description='kvs internals tests in a flux session
 
@@ -17,6 +18,8 @@ would be unaware of.
 SIZE=$(test_size_large)
 test_under_flux ${SIZE} kvs
 echo "# $0: flux session size will be ${SIZE}"
+
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 
 DIR=test.a.b
 
@@ -40,7 +43,7 @@ test_expect_success 'kvs: no pending requests at start of tests' '
 #
 test_expect_success 'kvs: kvs get/put large raw values works' '
 	flux kvs unlink -Rf $DIR &&
-	dd if=/dev/urandom bs=4096 count=1 >random.data &&
+	$NOASAN dd if=/dev/urandom bs=4096 count=1 >random.data &&
 	flux kvs put --raw $DIR.data=- <random.data &&
 	flux kvs get --raw $DIR.data >reread.data &&
 	test_cmp random.data reread.data
@@ -305,7 +308,7 @@ test_expect_success 'kvs: invalid dirref write wont hang' '
 MAXBLOB=1048576
 
 test_expect_success "kvs: failure to store blob that exceeds max size does not hang" '
-	dd if=/dev/zero count=$(($MAXBLOB/4096+1)) bs=4096 \
+	$NOASAN dd if=/dev/zero count=$(($MAXBLOB/4096+1)) bs=4096 \
 			skip=$(($MAXBLOB/4096)) >toobig_long 2>/dev/null &&
 	test_must_fail flux kvs put -r $DIR.bad_toobig_long=- < toobig_long
 '

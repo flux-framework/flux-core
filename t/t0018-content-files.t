@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Test content-files backing store service'
 
@@ -8,6 +10,7 @@ test_description='Test content-files backing store service'
 
 test_under_flux 1 minimal -Sstatedir=$(pwd)
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 TEST_LOAD=${FLUX_BUILD_DIR}/src/modules/content-files/test_load
@@ -32,9 +35,9 @@ backing_store() {
 # Usage: make_blob size >blob
 make_blob() {
 	if test $1 -eq 0; then
-		dd if=/dev/null 2>/dev/null
+		$NOASAN dd if=/dev/null 2>/dev/null
 	else
-		dd if=/dev/urandom count=1 bs=$1 2>/dev/null
+		$NOASAN dd if=/dev/urandom count=1 bs=$1 2>/dev/null
 	fi
 }
 # Usage: check_blob size

@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=asan
 
 test_description='Test broker rexec functionality
 
@@ -11,6 +12,7 @@ Test rexec functionality
 SIZE=4
 test_under_flux ${SIZE} minimal
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
 rexec="${FLUX_BUILD_DIR}/t/rexec/rexec"
 
@@ -111,7 +113,7 @@ test_expect_success 'basic rexec stdin / stdout multiple lines' '
 '
 
 test_expect_success 'basic rexec stdin / stdout long lines' '
-	dd if=/dev/urandom bs=4096 count=1 | base64 --wrap=0 >expected &&
+	$NOASAN dd if=/dev/urandom bs=4096 count=1 | base64 --wrap=0 >expected &&
 	$rexec cat expected > output &&
 	test_cmp expected output
 '

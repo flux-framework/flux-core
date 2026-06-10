@@ -15,7 +15,7 @@
 #  CPPCHECK      Run cppcheck if set to "t"
 #  DISTCHECK     Run `make distcheck` if set
 #  RECHECK       Run `make recheck` if `make check` fails the first time
-#  UNIT_TEST_ONLY Only run `make check` under ./src
+#  ASAN_TEST_ONLY Only run `make check` under ./src and asan tests under ./t
 #  QUICK_CHECK   Run only `make TESTS=` and a simple test
 #  PRELOAD       Set as LD_PRELOAD for make and tests
 #  POISON        Install poison libflux and flux(1) in image
@@ -173,8 +173,11 @@ if test -n "$PRELOAD" ; then
   CHECKCMDS="/usr/bin/env 'LD_PRELOAD=$PRELOAD' ${CHECKCMDS}"
 fi
 
-if test -n "$UNIT_TEST_ONLY"; then
-  CHECKCMDS="(cd src && $CHECKCMDS)"
+if test -n "$ASAN_TEST_ONLY"; then
+  ASAN_TESTS=$(cd t && grep -l ci=asan *.t)
+  CHECKCMDS="(make check TESTS= && \
+              cd src && $CHECKCMDS && \
+              cd ../t && make check TESTS=\"$ASAN_TESTS\")"
 fi
 
 if test -n "$QUICK_CHECK"; then

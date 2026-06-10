@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Test flux submit command'
 
@@ -6,6 +8,7 @@ test_description='Test flux submit command'
 
 test_under_flux 4 full -Slog-stderr-level=1
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 NCORES=$(flux resource list -no {ncores})
 test ${NCORES} -gt 4 && test_set_prereq MULTICORE
 
@@ -317,7 +320,7 @@ test_expect_success 'flux submit: create test files ' '
 	cat <<-EOF >file.txt &&
 	This is a test file
 	EOF
-	dd if=/dev/urandom of=file.binary bs=64 count=1 &&
+	$NOASAN dd if=/dev/urandom of=file.binary bs=64 count=1 &&
 	touch file.empty
 '
 for file in file.txt file.binary file.empty; do

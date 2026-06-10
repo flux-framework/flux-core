@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=asan
 
 test_description='Hard fail a router node and verify child restarts
 
@@ -52,9 +53,19 @@ test_expect_success 'construct FLUX_URI for rank 2 (child of 1)' '
 
 # Choice of signal 11 (SIGSEGV) is deliberate here.
 # The broker should not trap this signal - see flux-framework/flux-core#4230.
-test_expect_success 'kill -11 broker 1' '
+# N.B. under ASAN, the segfault signal will result in a log file being
+# generated and broker will exit with different error code.  Skip and see
+# following test for ASAN workaround.
+test_expect_success NO_ASAN 'kill -11 broker 1' '
 	$startctl kill 1 11 &&
 	test_expect_code 139 $startctl wait 1
+'
+
+# N.B. prior test will not work under ASAN but we still need broker to
+# die for later tests.  Send SIGKILL when running under ASAN.
+test_expect_success ASAN 'kill -9 broker 1' '
+	$startctl kill 1 9 &&
+	test_expect_code 137 $startctl wait 1
 '
 
 test_expect_success 'wait broker.online to reach count of one' '

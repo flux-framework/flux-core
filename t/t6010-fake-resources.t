@@ -8,6 +8,8 @@
 #
 # SPDX-License-Identifier: LGPL-3.0
 #
+# ci=asan
+#
 
 test_description='Test fake-resources modprobe rc1 task'
 

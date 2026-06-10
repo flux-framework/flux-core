@@ -50,10 +50,20 @@ static void segfault (flux_t *h,
     kill (getpid (), SIGSEGV);
 }
 
+static void killevent (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
+{
+    flux_log (h, LOG_CRIT, "kill event received: raising SIGKILL");
+    kill (getpid (), SIGKILL);
+}
+
 static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "info", info, 0 },
     { FLUX_MSGTYPE_EVENT, "panic", panic, 0 },
     { FLUX_MSGTYPE_EVENT, "segfault", segfault, 0 },
+    { FLUX_MSGTYPE_EVENT, "kill", killevent, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -109,7 +119,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
 
     const char *module_name = flux_aux_get (h, "flux::name");
-    const char *topics[] = { "panic", "segfault" };
+    const char *topics[] = { "panic", "segfault", "kill" };
 
     for (int i = 0; i < ARRAY_SIZE (topics); i++) {
         char topic[256];

@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=asan
 
 test_description='Test the very basics
 
@@ -20,6 +21,7 @@ export MAN_DISABLE_SECCOMP=1
 # An unexpected umask could affect tests below. Set it explicitly here:
 umask 022
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 startctl=${SHARNESS_TEST_SRCDIR}/scripts/startctl.py
 path_printenv=$(which printenv)
 
@@ -656,8 +658,10 @@ test_expect_success 'flux-help command list can be extended' '
 	grep "^test two commands" help2.out &&
 	grep "a test two" help2.out
 '
+# N.B. Set NO_ASAN, as there appears to be errors in 'man', which is executed
+# internally in `flux help`.
 command -v man >/dev/null && test_set_prereq HAVE_MAN
-test_expect_success HAVE_MAN 'flux-help command can display manpages for subcommands' '
+test_expect_success NO_ASAN,HAVE_MAN 'flux-help command can display manpages for subcommands' '
 	PWD=$(pwd) &&
 	mkdir -p man/man1 &&
 	cat <<-EOF > man/man1/flux-foo.1 &&
@@ -667,7 +671,7 @@ test_expect_success HAVE_MAN 'flux-help command can display manpages for subcomm
 	EOF
 	MANPATH=${PWD}/man FLUX_IGNORE_NO_DOCS=y flux help foo | grep "^FOO(1)"
 '
-test_expect_success HAVE_MAN 'flux-help command can display manpages for api calls' '
+test_expect_success NO_ASAN,HAVE_MAN 'flux-help command can display manpages for api calls' '
 	PWD=$(pwd) &&
 	mkdir -p man/man3 &&
 	cat <<-EOF > man/man3/flux_foo.3 &&
@@ -776,7 +780,7 @@ test_expect_success 'setting local-uri to a long path fails (#3925)' '
 
 reactorcat=${SHARNESS_TEST_DIRECTORY}/reactor/reactorcat
 test_expect_success 'reactor: reactorcat example program works' '
-	dd if=/dev/urandom bs=1024 count=4 >reactorcat.in &&
+	$NOASAN dd if=/dev/urandom bs=1024 count=4 >reactorcat.in &&
 	$reactorcat <reactorcat.in >reactorcat.out &&
 	test_cmp reactorcat.in reactorcat.out &&
 	$reactorcat </dev/null >reactorcat.devnull.out &&

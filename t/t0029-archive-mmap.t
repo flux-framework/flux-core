@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Test flux-archive'
 
@@ -6,6 +8,7 @@ test_description='Test flux-archive'
 
 . `dirname $0`/sharness.sh
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 LPTEST="flux lptest"
 
 # SEEK_DATA support was added to the linux NFS client in kernel 3.18.
@@ -263,7 +266,7 @@ test_expect_success 'map test file' '
 	flux archive create --mmap ./testfile
 '
 test_expect_success 'modify mapped test file without reducing its size' '
-	dd if=/dev/zero of=testfile bs=4096 count=1 conv=notrunc
+	$NOASAN dd if=/dev/zero of=testfile bs=4096 count=1 conv=notrunc
 '
 test_expect_success 'content change should cause an error' '
 	rm -f copydir/testfile &&

@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=asan
 
 # Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
@@ -8,6 +9,7 @@ test_description='Test config file overlay bootstrap'
 
 . `dirname $0`/sharness.sh
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 
 # Avoid loading unnecessary modules in back to back broker tests
 ARGS="-Sbroker.rc1_path= -Sbroker.rc3_path="
@@ -293,7 +295,7 @@ test_expect_success NO_CHAIN_LINT 'a warning is printed when upstream URI has un
 # first to kill its children, then kill(1).  See flux-framework/flux-core#5275.
 test_expect_success NO_CHAIN_LINT 'clean up broker from previous test' '
 	warnpid=$(cat warn.pid) &&
-	pkill -15 -P $warnpid || kill -15 $warnpid
+	$NOASAN pkill -15 -P $warnpid || kill -15 $warnpid
 '
 
 getport() {

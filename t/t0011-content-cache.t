@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Test broker content service'
 
@@ -9,6 +11,7 @@ SIZE=$(test_size_large)
 test_under_flux ${SIZE} minimal
 echo "# $0: flux session size will be ${SIZE}"
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SPAMUTIL=${FLUX_BUILD_DIR}/t/kvs/content-spam
@@ -70,16 +73,16 @@ test_expect_success 'store 100 blobs on rank 0' '
 test_expect_success 'store test blobs on rank 0' '
 	cat /dev/null >0.0.store 2>/dev/null &&
 	flux content store <0.0.store >0.0.hash &&
-	dd if=/dev/urandom count=1 bs=64 >64.0.store 2>/dev/null &&
+	$NOASAN dd if=/dev/urandom count=1 bs=64 >64.0.store 2>/dev/null &&
 	flux content store <64.0.store >64.0.hash &&
-	dd if=/dev/urandom count=1 bs=4096 >4k.0.store 2>/dev/null &&
+	$NOASAN dd if=/dev/urandom count=1 bs=4096 >4k.0.store 2>/dev/null &&
 	flux content store <4k.0.store >4k.0.hash &&
-	dd if=/dev/urandom count=256 bs=4096 >1m.0.store 2>/dev/null &&
+	$NOASAN dd if=/dev/urandom count=256 bs=4096 >1m.0.store 2>/dev/null &&
 	flux content store <1m.0.store >1m.0.hash
 '
 
 test_expect_success "cannot store blob that exceeds max size of $MAXBLOB" '
-	dd if=/dev/zero count=$(($MAXBLOB/4096+1)) bs=4096 \
+	$NOASAN dd if=/dev/zero count=$(($MAXBLOB/4096+1)) bs=4096 \
 			skip=$(($MAXBLOB/4096)) >toobig 2>/dev/null &&
 	test_must_fail flux content store <toobig
 '
@@ -120,11 +123,11 @@ test_expect_success 'load and verify 1m blob on all ranks' '
 # Verify on all ranks
 
 test_expect_success 'store blobs on rank 3' '
-	dd if=/dev/urandom count=1 bs=64 >64.3.store 2>/dev/null &&
+	$NOASAN dd if=/dev/urandom count=1 bs=64 >64.3.store 2>/dev/null &&
 	flux exec -n --rank 3 sh -c "flux content store <64.3.store >64.3.hash" &&
-	dd if=/dev/urandom count=1 bs=4096 >4k.3.store 2>/dev/null &&
+	$NOASAN dd if=/dev/urandom count=1 bs=4096 >4k.3.store 2>/dev/null &&
 	flux exec -n --rank 3 sh -c "flux content store <4k.3.store >4k.3.hash" &&
-	dd if=/dev/urandom count=256 bs=4096 >1m.3.store 2>/dev/null &&
+	$NOASAN dd if=/dev/urandom count=256 bs=4096 >1m.3.store 2>/dev/null &&
 	flux exec -n --rank 3 sh -c "flux content store <1m.3.store >1m.3.hash"
 '
 
