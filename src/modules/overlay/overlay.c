@@ -467,12 +467,7 @@ static void channel_cb (flux_reactor_t *r,
                     goto request_error;
                 if (overlay_sendmsg_child (ov, msg) < 0)
                     goto request_error;
-                if (!child) {
-                    if ((uuid = flux_msg_route_last (msg)))
-                        child = children_lookup_online (ov->children, ov->uuid);
-                }
-                if (child)
-                    rpc_track_update (child->tracker, msg);
+                rpc_track_update (child->tracker, msg);
             }
             // upstream
             else {
