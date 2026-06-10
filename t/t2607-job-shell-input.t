@@ -304,4 +304,34 @@ test_expect_success 'flux-shell: flux job attach stops sending stdin on exceptio
 	grep "stdin exceeds 1K limit" attach-stop.err
 '
 
+#
+# input.batch-timeout tests
+#
+
+test_expect_success 'flux-shell: input.batch-timeout option works' '
+	flux run -o input.batch-timeout=1.0 -o verbose=2 \
+		cat < input_stdin_file > batch1.out 2> batch1.err &&
+	test_cmp input_stdin_file batch1.out &&
+	grep "input batch timeout = 1.000s" batch1.err
+'
+
+test_expect_success 'flux-shell: input.batch-timeout default is 0.5s' '
+	flux run -o verbose=2 \
+		cat < input_stdin_file > batch2.out 2> batch2.err &&
+	test_cmp input_stdin_file batch2.out &&
+	grep "input batch timeout = 0.500s" batch2.err
+'
+
+test_expect_success 'flux-shell: input.batch-timeout=0 disables batching' '
+	flux run -o input.batch-timeout=0 -o verbose=2 \
+		cat < input_stdin_file > batch3.out 2> batch3.err &&
+	test_cmp input_stdin_file batch3.out &&
+	grep "input batch timeout = 0.000s" batch3.err
+'
+
+test_expect_success 'flux-shell: invalid input.batch-timeout is rejected' '
+	test_must_fail flux run -o input.batch-timeout=foo hostname 2>batchbad.err &&
+	grep "invalid input.batch-timeout option" batchbad.err
+'
+
 test_done
