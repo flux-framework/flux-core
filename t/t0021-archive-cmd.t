@@ -6,6 +6,8 @@ test_description='Test flux-archive'
 
 test_under_flux 2
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
+
 # after test_under_flux is launched, cannot assume what umask is.  An
 # unexpected umask could affect tests below.  Hard code to 022 for
 # these tests.
@@ -13,7 +15,7 @@ umask 022
 
 # Usage: randbytes bytes
 randbytes() {
-	dd if=/dev/urandom bs=$1 count=1
+	$NOASAN dd if=/dev/urandom bs=$1 count=1
 }
 
 test_expect_success 'flux archive create --badopt prints unrecognized option' '

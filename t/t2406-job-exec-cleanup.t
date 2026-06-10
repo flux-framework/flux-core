@@ -6,6 +6,8 @@ test_description='Test flux job exec job cleanup via SIGKILL'
 
 test_under_flux 4 job
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
+
 test_expect_success 'job-exec: active_ranks stat works' '
 	flux submit -N4 sh -c "test \$FLUX_TASK_RANK -eq 2 && exit; sleep 30" &&
 	jobid=$(flux job last) &&
@@ -45,7 +47,7 @@ test_expect_success 'job-exec: ensure cancellation kills job' '
 	flux cancel $id &&
 	test_debug "flux job attach -vEX $id || :" &&
 	test_expect_code 137 flux job status $id &&
-	test_must_fail ps -q $pid
+	test_must_fail $NOASAN ps -q $pid
 '
 # Note: increase max-kill-count here to ensure job doesn't disappear from
 # job-exec while we're testing kill-timeout:
