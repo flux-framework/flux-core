@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <flux/hostlist.h>
+#include <jansson.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/errprintf.h"
@@ -977,6 +978,379 @@ void test_gpu_objects (void)
     hwloc_topology_destroy (topo);
 }
 
+/* NPS1: 1 package, 1 NUMA, 2 cores (core 0 = PU 0, core 1 = PU 1), 8 GiB */
+static const char xml_nps1_1pkg[] = "\
+<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+<!DOCTYPE topology SYSTEM \"hwloc.dtd\">\n\
+<topology>\n\
+  <object type=\"Machine\" os_index=\"0\"\
+ cpuset=\"0x00000003\" complete_cpuset=\"0x00000003\"\
+ online_cpuset=\"0x00000003\" allowed_cpuset=\"0x00000003\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+    <info name=\"HostName\" value=\"testhost\"/>\n\
+    <object type=\"NUMANode\" os_index=\"0\"\
+ cpuset=\"0x00000003\" complete_cpuset=\"0x00000003\"\
+ online_cpuset=\"0x00000003\" allowed_cpuset=\"0x00000003\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\" local_memory=\"8589934592\">\n\
+      <object type=\"Package\" os_index=\"0\"\
+ cpuset=\"0x00000003\" complete_cpuset=\"0x00000003\"\
+ online_cpuset=\"0x00000003\" allowed_cpuset=\"0x00000003\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+        <object type=\"Core\" os_index=\"0\"\
+ cpuset=\"0x00000001\" complete_cpuset=\"0x00000001\"\
+ online_cpuset=\"0x00000001\" allowed_cpuset=\"0x00000001\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+          <object type=\"PU\" os_index=\"0\"\
+ cpuset=\"0x00000001\" complete_cpuset=\"0x00000001\"\
+ online_cpuset=\"0x00000001\" allowed_cpuset=\"0x00000001\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\"/>\n\
+        </object>\n\
+        <object type=\"Core\" os_index=\"1\"\
+ cpuset=\"0x00000002\" complete_cpuset=\"0x00000002\"\
+ online_cpuset=\"0x00000002\" allowed_cpuset=\"0x00000002\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+          <object type=\"PU\" os_index=\"1\"\
+ cpuset=\"0x00000002\" complete_cpuset=\"0x00000002\"\
+ online_cpuset=\"0x00000002\" allowed_cpuset=\"0x00000002\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\"/>\n\
+        </object>\n\
+      </object>\n\
+    </object>\n\
+  </object>\n\
+</topology>\n";
+
+/* NPS1: 2 packages, 1 NUMA each, 2 cores each (cores 0-1 / 2-3), 8 GiB each */
+static const char xml_nps1_2pkg[] = "\
+<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+<!DOCTYPE topology SYSTEM \"hwloc.dtd\">\n\
+<topology>\n\
+  <object type=\"Machine\" os_index=\"0\"\
+ cpuset=\"0x0000000f\" complete_cpuset=\"0x0000000f\"\
+ online_cpuset=\"0x0000000f\" allowed_cpuset=\"0x0000000f\"\
+ nodeset=\"0x00000003\" complete_nodeset=\"0x00000003\"\
+ allowed_nodeset=\"0x00000003\">\n\
+    <info name=\"HostName\" value=\"testhost\"/>\n\
+    <object type=\"NUMANode\" os_index=\"0\"\
+ cpuset=\"0x00000003\" complete_cpuset=\"0x00000003\"\
+ online_cpuset=\"0x00000003\" allowed_cpuset=\"0x00000003\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\" local_memory=\"8589934592\">\n\
+      <object type=\"Package\" os_index=\"0\"\
+ cpuset=\"0x00000003\" complete_cpuset=\"0x00000003\"\
+ online_cpuset=\"0x00000003\" allowed_cpuset=\"0x00000003\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+        <object type=\"Core\" os_index=\"0\"\
+ cpuset=\"0x00000001\" complete_cpuset=\"0x00000001\"\
+ online_cpuset=\"0x00000001\" allowed_cpuset=\"0x00000001\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+          <object type=\"PU\" os_index=\"0\"\
+ cpuset=\"0x00000001\" complete_cpuset=\"0x00000001\"\
+ online_cpuset=\"0x00000001\" allowed_cpuset=\"0x00000001\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\"/>\n\
+        </object>\n\
+        <object type=\"Core\" os_index=\"1\"\
+ cpuset=\"0x00000002\" complete_cpuset=\"0x00000002\"\
+ online_cpuset=\"0x00000002\" allowed_cpuset=\"0x00000002\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+          <object type=\"PU\" os_index=\"1\"\
+ cpuset=\"0x00000002\" complete_cpuset=\"0x00000002\"\
+ online_cpuset=\"0x00000002\" allowed_cpuset=\"0x00000002\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\"/>\n\
+        </object>\n\
+      </object>\n\
+    </object>\n\
+    <object type=\"NUMANode\" os_index=\"1\"\
+ cpuset=\"0x0000000c\" complete_cpuset=\"0x0000000c\"\
+ online_cpuset=\"0x0000000c\" allowed_cpuset=\"0x0000000c\"\
+ nodeset=\"0x00000002\" complete_nodeset=\"0x00000002\"\
+ allowed_nodeset=\"0x00000002\" local_memory=\"8589934592\">\n\
+      <object type=\"Package\" os_index=\"1\"\
+ cpuset=\"0x0000000c\" complete_cpuset=\"0x0000000c\"\
+ online_cpuset=\"0x0000000c\" allowed_cpuset=\"0x0000000c\"\
+ nodeset=\"0x00000002\" complete_nodeset=\"0x00000002\"\
+ allowed_nodeset=\"0x00000002\">\n\
+        <object type=\"Core\" os_index=\"2\"\
+ cpuset=\"0x00000004\" complete_cpuset=\"0x00000004\"\
+ online_cpuset=\"0x00000004\" allowed_cpuset=\"0x00000004\"\
+ nodeset=\"0x00000002\" complete_nodeset=\"0x00000002\"\
+ allowed_nodeset=\"0x00000002\">\n\
+          <object type=\"PU\" os_index=\"2\"\
+ cpuset=\"0x00000004\" complete_cpuset=\"0x00000004\"\
+ online_cpuset=\"0x00000004\" allowed_cpuset=\"0x00000004\"\
+ nodeset=\"0x00000002\" complete_nodeset=\"0x00000002\"\
+ allowed_nodeset=\"0x00000002\"/>\n\
+        </object>\n\
+        <object type=\"Core\" os_index=\"3\"\
+ cpuset=\"0x00000008\" complete_cpuset=\"0x00000008\"\
+ online_cpuset=\"0x00000008\" allowed_cpuset=\"0x00000008\"\
+ nodeset=\"0x00000002\" complete_nodeset=\"0x00000002\"\
+ allowed_nodeset=\"0x00000002\">\n\
+          <object type=\"PU\" os_index=\"3\"\
+ cpuset=\"0x00000008\" complete_cpuset=\"0x00000008\"\
+ online_cpuset=\"0x00000008\" allowed_cpuset=\"0x00000008\"\
+ nodeset=\"0x00000002\" complete_nodeset=\"0x00000002\"\
+ allowed_nodeset=\"0x00000002\"/>\n\
+        </object>\n\
+      </object>\n\
+    </object>\n\
+  </object>\n\
+</topology>\n";
+
+/* No packages: 2 NUMA nodes with cores directly beneath, 4 GiB each */
+static const char xml_no_pkg[] = "\
+<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+<!DOCTYPE topology SYSTEM \"hwloc.dtd\">\n\
+<topology>\n\
+  <object type=\"Machine\" os_index=\"0\"\
+ cpuset=\"0x0000000f\" complete_cpuset=\"0x0000000f\"\
+ online_cpuset=\"0x0000000f\" allowed_cpuset=\"0x0000000f\"\
+ nodeset=\"0x00000003\" complete_nodeset=\"0x00000003\"\
+ allowed_nodeset=\"0x00000003\">\n\
+    <info name=\"HostName\" value=\"testhost\"/>\n\
+    <object type=\"NUMANode\" os_index=\"0\"\
+ cpuset=\"0x00000003\" complete_cpuset=\"0x00000003\"\
+ online_cpuset=\"0x00000003\" allowed_cpuset=\"0x00000003\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\" local_memory=\"4294967296\">\n\
+      <object type=\"Core\" os_index=\"0\"\
+ cpuset=\"0x00000001\" complete_cpuset=\"0x00000001\"\
+ online_cpuset=\"0x00000001\" allowed_cpuset=\"0x00000001\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+        <object type=\"PU\" os_index=\"0\"\
+ cpuset=\"0x00000001\" complete_cpuset=\"0x00000001\"\
+ online_cpuset=\"0x00000001\" allowed_cpuset=\"0x00000001\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\"/>\n\
+      </object>\n\
+      <object type=\"Core\" os_index=\"1\"\
+ cpuset=\"0x00000002\" complete_cpuset=\"0x00000002\"\
+ online_cpuset=\"0x00000002\" allowed_cpuset=\"0x00000002\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+        <object type=\"PU\" os_index=\"1\"\
+ cpuset=\"0x00000002\" complete_cpuset=\"0x00000002\"\
+ online_cpuset=\"0x00000002\" allowed_cpuset=\"0x00000002\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\"/>\n\
+      </object>\n\
+    </object>\n\
+    <object type=\"NUMANode\" os_index=\"1\"\
+ cpuset=\"0x0000000c\" complete_cpuset=\"0x0000000c\"\
+ online_cpuset=\"0x0000000c\" allowed_cpuset=\"0x0000000c\"\
+ nodeset=\"0x00000002\" complete_nodeset=\"0x00000002\"\
+ allowed_nodeset=\"0x00000002\" local_memory=\"4294967296\">\n\
+      <object type=\"Core\" os_index=\"2\"\
+ cpuset=\"0x00000004\" complete_cpuset=\"0x00000004\"\
+ online_cpuset=\"0x00000004\" allowed_cpuset=\"0x00000004\"\
+ nodeset=\"0x00000002\" complete_nodeset=\"0x00000002\"\
+ allowed_nodeset=\"0x00000002\">\n\
+        <object type=\"PU\" os_index=\"2\"\
+ cpuset=\"0x00000004\" complete_cpuset=\"0x00000004\"\
+ online_cpuset=\"0x00000004\" allowed_cpuset=\"0x00000004\"\
+ nodeset=\"0x00000002\" complete_nodeset=\"0x00000002\"\
+ allowed_nodeset=\"0x00000002\"/>\n\
+      </object>\n\
+      <object type=\"Core\" os_index=\"3\"\
+ cpuset=\"0x00000008\" complete_cpuset=\"0x00000008\"\
+ online_cpuset=\"0x00000008\" allowed_cpuset=\"0x00000008\"\
+ nodeset=\"0x00000002\" complete_nodeset=\"0x00000002\"\
+ allowed_nodeset=\"0x00000002\">\n\
+        <object type=\"PU\" os_index=\"3\"\
+ cpuset=\"0x00000008\" complete_cpuset=\"0x00000008\"\
+ online_cpuset=\"0x00000008\" allowed_cpuset=\"0x00000008\"\
+ nodeset=\"0x00000002\" complete_nodeset=\"0x00000002\"\
+ allowed_nodeset=\"0x00000002\"/>\n\
+      </object>\n\
+    </object>\n\
+  </object>\n\
+</topology>\n";
+
+/* NPS1 with GPU: 1 package, 1 NUMA containing a GPU PCIDev, 8 GiB */
+static const char xml_nps1_gpu[] = "\
+<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+<!DOCTYPE topology SYSTEM \"hwloc.dtd\">\n\
+<topology>\n\
+  <object type=\"Machine\" os_index=\"0\"\
+ cpuset=\"0x00000003\" complete_cpuset=\"0x00000003\"\
+ online_cpuset=\"0x00000003\" allowed_cpuset=\"0x00000003\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+    <info name=\"HostName\" value=\"testhost\"/>\n\
+    <object type=\"NUMANode\" os_index=\"0\"\
+ cpuset=\"0x00000003\" complete_cpuset=\"0x00000003\"\
+ online_cpuset=\"0x00000003\" allowed_cpuset=\"0x00000003\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\" local_memory=\"8589934592\">\n\
+      <object type=\"Package\" os_index=\"0\"\
+ cpuset=\"0x00000003\" complete_cpuset=\"0x00000003\"\
+ online_cpuset=\"0x00000003\" allowed_cpuset=\"0x00000003\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+        <object type=\"Core\" os_index=\"0\"\
+ cpuset=\"0x00000001\" complete_cpuset=\"0x00000001\"\
+ online_cpuset=\"0x00000001\" allowed_cpuset=\"0x00000001\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+          <object type=\"PU\" os_index=\"0\"\
+ cpuset=\"0x00000001\" complete_cpuset=\"0x00000001\"\
+ online_cpuset=\"0x00000001\" allowed_cpuset=\"0x00000001\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\"/>\n\
+        </object>\n\
+        <object type=\"Core\" os_index=\"1\"\
+ cpuset=\"0x00000002\" complete_cpuset=\"0x00000002\"\
+ online_cpuset=\"0x00000002\" allowed_cpuset=\"0x00000002\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\">\n\
+          <object type=\"PU\" os_index=\"1\"\
+ cpuset=\"0x00000002\" complete_cpuset=\"0x00000002\"\
+ online_cpuset=\"0x00000002\" allowed_cpuset=\"0x00000002\"\
+ nodeset=\"0x00000001\" complete_nodeset=\"0x00000001\"\
+ allowed_nodeset=\"0x00000001\"/>\n\
+        </object>\n\
+      </object>\n\
+      <object type=\"Bridge\" os_index=\"0\" bridge_type=\"0-1\" depth=\"0\"\
+ bridge_pci=\"0000:[00-01]\">\n\
+        <object type=\"PCIDev\" os_index=\"256\" name=\"Test GPU 0\"\
+ pci_busid=\"0000:01:00.0\" pci_type=\"0302 [10de:1234] [10de:0000] a1\"\
+ pci_link_speed=\"0.000000\">\n\
+          <object type=\"OSDev\" name=\"cuda0\" osdev_type=\"5\">\n\
+            <info name=\"CoProcType\" value=\"CUDA\"/>\n\
+            <info name=\"Backend\" value=\"CUDA\"/>\n\
+          </object>\n\
+        </object>\n\
+      </object>\n\
+    </object>\n\
+  </object>\n\
+</topology>\n";
+
+/* Return the "topo" object from the first children entry of a scheduling key */
+static json_t *scheduling_topo (json_t *sched)
+{
+    json_t *children = json_object_get (sched, "children");
+    json_t *entry = json_array_get (children, 0);
+    return json_object_get (entry, "topo");
+}
+
+void test_scheduling (void)
+{
+    hwloc_topology_t topo;
+    json_t *result, *t, *arr, *e;
+    const char *s;
+
+    /* NPS1 single package: single-element socket collapses to flat leaf */
+    topo = rhwloc_xml_topology_load (xml_nps1_1pkg, RHWLOC_NO_RESTRICT);
+    if (!topo)
+        BAIL_OUT ("failed to load xml_nps1_1pkg topology");
+    result = rhwloc_scheduling (topo, "TreePool", "0", NULL);
+    hwloc_topology_destroy (topo);
+    ok (result != NULL,
+        "scheduling: NPS1 1-pkg returns non-NULL");
+    ok (strcmp (json_string_value (json_object_get (result, "writer")),
+                "TreePool") == 0,
+        "scheduling: NPS1 1-pkg writer == \"TreePool\"");
+    t = scheduling_topo (result);
+    ok (t != NULL, "scheduling: NPS1 1-pkg topo present");
+    ok (json_object_get (t, "socket") == NULL,
+        "scheduling: NPS1 1-pkg topo has no socket array (collapsed)");
+    s = json_string_value (json_object_get (t, "cores"));
+    ok (s && strcmp (s, "0-1") == 0,
+        "scheduling: NPS1 1-pkg topo.cores == \"0-1\"");
+    ok (json_integer_value (json_object_get (t, "memory")) == 8,
+        "scheduling: NPS1 1-pkg topo.memory == 8");
+    json_decref (result);
+
+    /* NPS1 two packages: two socket entries, each folding its sole NUMA */
+    topo = rhwloc_xml_topology_load (xml_nps1_2pkg, RHWLOC_NO_RESTRICT);
+    if (!topo)
+        BAIL_OUT ("failed to load xml_nps1_2pkg topology");
+    result = rhwloc_scheduling (topo, "TreePool", "0", NULL);
+    hwloc_topology_destroy (topo);
+    ok (result != NULL,
+        "scheduling: NPS1 2-pkg returns non-NULL");
+    t = scheduling_topo (result);
+    arr = json_object_get (t, "socket");
+    ok (json_is_array (arr) && json_array_size (arr) == 2,
+        "scheduling: NPS1 2-pkg topo.socket has 2 entries");
+    e = json_array_get (arr, 0);
+    s = json_string_value (json_object_get (e, "cores"));
+    ok (s && strcmp (s, "0-1") == 0,
+        "scheduling: NPS1 2-pkg topo.socket[0].cores == \"0-1\"");
+    ok (json_integer_value (json_object_get (e, "memory")) == 8,
+        "scheduling: NPS1 2-pkg topo.socket[0].memory == 8");
+    e = json_array_get (arr, 1);
+    s = json_string_value (json_object_get (e, "cores"));
+    ok (s && strcmp (s, "2-3") == 0,
+        "scheduling: NPS1 2-pkg topo.socket[1].cores == \"2-3\"");
+    ok (json_integer_value (json_object_get (e, "memory")) == 8,
+        "scheduling: NPS1 2-pkg topo.socket[1].memory == 8");
+    json_decref (result);
+
+    /* No packages: two NUMA nodes directly in topo */
+    topo = rhwloc_xml_topology_load (xml_no_pkg, RHWLOC_NO_RESTRICT);
+    if (!topo)
+        BAIL_OUT ("failed to load xml_no_pkg topology");
+    result = rhwloc_scheduling (topo, "TreePool", "0", NULL);
+    hwloc_topology_destroy (topo);
+    ok (result != NULL,
+        "scheduling: no-pkg returns non-NULL");
+    t = scheduling_topo (result);
+    arr = json_object_get (t, "numa");
+    ok (json_is_array (arr) && json_array_size (arr) == 2,
+        "scheduling: no-pkg topo.numa has 2 entries");
+    e = json_array_get (arr, 0);
+    s = json_string_value (json_object_get (e, "cores"));
+    ok (s && strcmp (s, "0-1") == 0,
+        "scheduling: no-pkg topo.numa[0].cores == \"0-1\"");
+    ok (json_integer_value (json_object_get (e, "memory")) == 4,
+        "scheduling: no-pkg topo.numa[0].memory == 4");
+    e = json_array_get (arr, 1);
+    s = json_string_value (json_object_get (e, "cores"));
+    ok (s && strcmp (s, "2-3") == 0,
+        "scheduling: no-pkg topo.numa[1].cores == \"2-3\"");
+    ok (json_integer_value (json_object_get (e, "memory")) == 4,
+        "scheduling: no-pkg topo.numa[1].memory == 4");
+    json_decref (result);
+
+    /* GPU under NUMANode: single socket collapses, gpus at topo level */
+    topo = rhwloc_xml_topology_load (xml_nps1_gpu, RHWLOC_NO_RESTRICT);
+    if (!topo)
+        BAIL_OUT ("failed to load xml_nps1_gpu topology");
+    result = rhwloc_scheduling (topo, "TreePool", "0", NULL);
+    hwloc_topology_destroy (topo);
+    ok (result != NULL,
+        "scheduling: GPU topology returns non-NULL");
+    t = scheduling_topo (result);
+    s = json_string_value (json_object_get (t, "gpus"));
+    ok (s && strcmp (s, "0") == 0,
+        "scheduling: GPU topology topo.gpus == \"0\"");
+    ok (json_integer_value (json_object_get (t, "memory")) == 8,
+        "scheduling: GPU topology topo.memory == 8");
+    json_decref (result);
+
+    /* Unknown format returns NULL with EINVAL */
+    topo = rhwloc_xml_topology_load (xml_nps1_1pkg, RHWLOC_NO_RESTRICT);
+    if (!topo)
+        BAIL_OUT ("failed to load xml_nps1_1pkg topology");
+    result = rhwloc_scheduling (topo, "Unknown", "0", NULL);
+    hwloc_topology_destroy (topo);
+    ok (result == NULL && errno == EINVAL,
+        "scheduling: unknown format returns NULL, errno == EINVAL");
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
@@ -986,6 +1360,7 @@ int main (int ac, char *av[])
     test_xml ();
     test_cores_to_cpuset ();
     test_gpu_objects ();
+    test_scheduling ();
 
     done_testing ();
 }

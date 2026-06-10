@@ -88,6 +88,12 @@ static struct optparse_option encode_opts[] = {
       .has_arg = 1,
       .usage = "Generate child resources from hwloc XML",
     },
+    { .name = "scheduling", .key = 't',
+      .has_arg = 1,
+      .arginfo = "FORMAT",
+      .usage = "Emit scheduling.children in FORMAT (requires --local or --xml;"
+               " supported: TreePool)",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -494,6 +500,31 @@ int cmd_encode (optparse_t *p, int argc, char **argv)
     }
 
     set_properties (p, rl);
+
+    const char *scheduling_fmt = optparse_get_str (p, "scheduling", NULL);
+    if (scheduling_fmt) {
+        if (!optparse_hasopt (p, "local") && xml == NULL)
+            log_msg_exit ("--scheduling requires --local or --xml");
+        hwloc_topology_t topo;
+        if (xml)
+            topo = rhwloc_xml_topology_load (xml, RHWLOC_NO_RESTRICT);
+        else
+            topo = rhwloc_local_topology_load (0);
+        if (!topo)
+            log_err_exit ("failed to load hwloc topology for --scheduling");
+        char *ranks_str = idset_encode (ranks, IDSET_FLAG_RANGE);
+        if (!ranks_str)
+            log_err_exit ("failed to encode ranks for --scheduling");
+        flux_error_t sched_err;
+        json_t *sched = rhwloc_scheduling (topo, scheduling_fmt, ranks_str,
+                                           &sched_err);
+        free (ranks_str);
+        hwloc_topology_destroy (topo);
+        if (!sched)
+            log_msg_exit ("--scheduling: %s", sched_err.text);
+        json_decref (rl->scheduling);
+        rl->scheduling = sched;
+    }
 
     rlist_puts (rl);
 

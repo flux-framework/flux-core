@@ -19,6 +19,7 @@
 #include <sys/utsname.h>
 
 #include <flux/idset.h>
+#include <jansson.h>
 
 #include "ccan/str/str.h"
 #include "src/common/libutil/read_all.h"
@@ -357,7 +358,7 @@ out:
 
 /*  Walk up from obj to the nearest HWLOC_OBJ_PCI_DEVICE ancestor, or NULL.
  */
-static hwloc_obj_t osdev_get_pcidev (hwloc_obj_t obj)
+hwloc_obj_t rhwloc_osdev_get_pcidev (hwloc_obj_t obj)
 {
     hwloc_obj_t p = obj->parent;
     while (p && p->type != HWLOC_OBJ_PCI_DEVICE)
@@ -434,7 +435,7 @@ static int collect_unique_gpus (hwloc_topology_t topo,
      */
     while ((obj = hwloc_get_next_osdev (topo, obj))) {
         const char *backend = hwloc_obj_get_info_by_name (obj, "Backend");
-        hwloc_obj_t pcidev = osdev_get_pcidev (obj);
+        hwloc_obj_t pcidev = rhwloc_osdev_get_pcidev (obj);
         if (!backend_is_coproc (backend)
             || (dedup && gpu_identity_visited (visited,
                                                nvisited,

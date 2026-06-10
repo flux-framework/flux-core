@@ -191,6 +191,9 @@ TESTSCRIPTS = \
 	t2306-sched-fifo.t \
 	t2307-sched-backfill.t \
 	t2308-sched-generator.t \
+	t2319-sched-treepool.t \
+	t2320-sched-treepool-tva.t \
+	t2321-sched-treepool-tvb.t \
 	t2310-resource-module.t \
 	t2311-resource-drain.t \
 	t2312-resource-exclude.t \
@@ -346,6 +349,7 @@ TESTSCRIPTS = \
 	python/t0042-job-manager-alloc-cache.py \
 	python/t0043-sdexec-map.py \
 	python/t0043-scheduler-pool.py \
+	python/t0044-tree-pool.py \
 	python/t0045-job-shape-parser.py \
 	python/t0046-job-watcher.py \
 	python/t0100-modprobe.py \
@@ -389,6 +393,8 @@ EXTRA_DIST= \
 	flux-resource \
 	module/testmod.py \
 	scheduler/sched-slowgen.py \
+	scheduler/sched-tree-subclass.py \
+	scheduler/sched_tree_amender.py \
 	cocci/json_set_new_decref.cocci
 
 dist_check_SCRIPTS = \

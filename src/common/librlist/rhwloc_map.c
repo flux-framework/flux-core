@@ -141,7 +141,7 @@ int rhwloc_map_count_type (rhwloc_map_t *m, const char *type)
  */
 static char *gpu_pci_addr (hwloc_obj_t obj, flux_error_t *errp)
 {
-    hwloc_obj_t parent = obj->parent;
+    hwloc_obj_t parent = rhwloc_osdev_get_pcidev (obj);
     char buf[16]; /* "0000:ff:1f.7" + NUL */
     char *s;
 

@@ -32,6 +32,8 @@ librlist_la_SOURCES = \
 librlist_hwloc_la_SOURCES = \
 	rhwloc.c \
 	rhwloc.h \
+	rhwloc_scheduling.c \
+	rhwloc_scheduling_treepool.c \
 	rhwloc_map.c \
 	rhwloc_map.h
 
