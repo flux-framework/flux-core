@@ -726,12 +726,16 @@ static void valid_or_exit_for_debug (struct attach_ctx *ctx)
 static void attach_setup_stdin (struct attach_ctx *ctx)
 {
     flux_watcher_t *w;
-    int flags = 0;
+    int flags;
 
     if (ctx->readonly)
         return;
 
-    if (!ctx->unbuffered)
+    if (ctx->unbuffered)
+        flags = 0;
+    else if (!isatty (STDIN_FILENO))
+        flags = FBUF_WATCHER_FULL_BUFFER;
+    else
         flags = FBUF_WATCHER_LINE_BUFFER;
 
     /* fbuf_read_watcher_create() requires O_NONBLOCK on
