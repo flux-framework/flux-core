@@ -31,6 +31,8 @@ liboverlay_la_SOURCES = \
 	boot_config.c \
 	ovconf.h \
 	ovconf.c \
+	children.h \
+	children.c \
 	overlay.h \
 	overlay.c
 
