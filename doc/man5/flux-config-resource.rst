@@ -162,7 +162,8 @@ history
    purposes.  When the resource module is reloaded, such as during a
    flux restart, entries older than the most recent resource state
    checkpoint are truncated by default.  "0" means truncate all
-   eligible entries; "inf" means never truncate. Default: "0".
+   eligible entries; "inf" means never truncate. Default: temporarily "90d",
+   eventually "0".
 
 .. note::
    Resource checkpoints were added in flux-core-0.86.0. Prior

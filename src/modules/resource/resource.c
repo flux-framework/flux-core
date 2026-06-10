@@ -149,7 +149,7 @@ static int parse_config (struct resource_ctx *ctx,
     int no_update_watch = 0;
     int rediscover = 0;
     int journal_max = 100000;
-    const char *history = NULL;
+    const char *history = "90d"; // temporarily changed from NULL #7669
     double history_time = 0.0;
     json_t *o = NULL;
     json_t *config = NULL;
