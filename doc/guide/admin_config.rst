@@ -658,13 +658,190 @@ Use PAM to Restrict Access to Compute Nodes
 ===========================================
 
 If Pluggable Authentication Modules (PAM) are in use within a cluster, it may
-be convenient to use the ``pam_flux.so`` *account* module to configure a PAM
-stack that denies users access to compute nodes unless they have a job running
-there.
+be convenient to use the ``pam_flux.so`` module to configure a PAM stack that
+denies users access to compute nodes unless they have a job running there.
+The flux-pam package provides two levels of integration:
 
-Install the ``flux-pam`` package to make the ``pam_flux.so`` module available
-to be added to one or more PAM stacks, e.g.
+1. **Account management only** - Basic access control
+2. **Session management** - Full systemd integration with resource containment
+
+Account Management Only
+-----------------------
+
+Install the ``flux-pam`` package to make the ``pam_flux.so`` module available.
+Add it to the PAM account stack for SSH or other login services:
 
 .. code-block:: console
 
-  account  sufficient pam_flux.so
+  # /etc/pam.d/sshd
+  account  required    pam_unix.so
+  account  sufficient  pam_flux.so
+  account  required    pam_deny.so
+
+Users without an active Flux job on the node are denied access with an
+informative message. To also allow access to multi-user Flux instances as
+guests, add the ``allow-guest-user`` option:
+
+.. code-block:: console
+
+  account  sufficient  pam_flux.so allow-guest-user
+
+See :pam:man8:`pam_flux` for details.
+
+Session Management with Systemd Integration
+--------------------------------------------
+
+On compute nodes, Flux is incompatible with :linux:man8:`pam_systemd.so`
+because systemd-logind migrates all user processes into the user's systemd
+slice (``user-UID.slice``) on first login. This reparents active job processes
+out from under Flux's control, breaking resource tracking, accounting, and
+signal delivery.
+
+flux-pam provides alternative session management integrated with Flux's
+job lifecycle. When ``pam.manage-user-slice=true`` is set, prolog and
+housekeeping scripts manage the user slice (``user-UID.slice``) by creating
+an active marker file that controls login admission. The prolog creates the
+marker when jobs start; housekeeping removes it when the last job completes.
+The PAM session module checks for the marker under lock before placing SSH
+sessions in a transient scope under the user slice. When
+``pam.manage-user-slice`` is disabled, logins proceed normally without slice
+management.
+
+With ``exec.sdexec-constrain-resources=true``, the slice is constrained to
+the union of resources (CPU, memory, devices) allocated to the user's jobs.
+With ``pam.kill-user-slice=true``, SSH sessions terminate when the last job
+completes.
+
+Benefits:
+
+- SSH sessions constrained to allocated job resources
+- Standard ``XDG_RUNTIME_DIR`` and D-Bus session bus
+- Automatic cleanup when the last job completes
+- Works with ``/proc`` mounted ``hidepid=2``
+
+.. note::
+  Session management only applies to users authenticated by ``pam_flux.so``
+  (those with active jobs). Users authenticated by other PAM modules are
+  unaffected.
+
+Prerequisites
+^^^^^^^^^^^^^
+
+- flux-core ≥ 0.85.0
+- flux-pam ≥ 0.4.0
+- systemd ≥ 239 with cgroup v2
+- ``perilog.so`` plugin loaded with ``per-rank = true``
+
+PAM Configuration
+^^^^^^^^^^^^^^^^^
+
+Add ``pam_flux.so`` to both the account and session stacks.
+:linux:man8:`pam_systemd.so` should be removed from the session stack to
+avoid conflicts with flux-pam's slice management.
+
+.. code-block:: console
+
+  # /etc/pam.d/sshd
+  auth     required    pam_unix.so
+
+  account  required    pam_unix.so
+  account  sufficient  pam_access.so
+  account  sufficient  pam_flux.so allow-guest-user
+  account  required    pam_deny.so
+
+  session  requisite   pam_flux.so
+  session  required    pam_limits.so
+  session  required    pam_unix.so
+  # NOTE: pam_systemd.so must NOT be present
+
+Place ``pam_flux.so`` first in the session stack with ``requisite`` to deny
+sessions immediately if scope creation fails, before other modules run.
+
+Flux Configuration
+^^^^^^^^^^^^^^^^^^
+
+Enable flux-pam session management:
+
+.. code-block:: toml
+
+  # /etc/flux/system/conf.d/pam.toml
+  [pam]
+  manage-user-slice = true  # Required: enable session management
+  kill-user-slice = false   # Optional: kill user logins after last job
+
+Configure prolog and housekeeping to run on each rank (see earlier sections
+for more details on prolog/epilog/housekeeping configuration):
+
+.. code-block:: toml
+
+  # /etc/flux/system/conf.d/perilog.toml
+  [job-manager]
+  plugins = [ { load = "perilog.so" } ]
+
+  [job-manager.prolog]
+  per-rank = true
+
+  [job-manager.housekeeping]
+  per-rank = true
+
+Ensure the IMP allows the prolog and housekeeping wrappers:
+
+.. code-block:: toml
+
+  # /etc/flux/imp/conf.d/imp.toml
+  [run.prolog]
+  allowed-users = [ "flux" ]
+  allowed-environment = [ "FLUX_*" ]
+  path = "/usr/libexec/flux/cmd/flux-run-prolog"
+
+  [run.housekeeping]
+  allowed-users = [ "flux" ]
+  allowed-environment = [ "FLUX_*" ]
+  path = "/usr/libexec/flux/cmd/flux-run-housekeeping"
+
+Behavior
+^^^^^^^^
+
+**Job start (prolog):**
+
+1. Acquires exclusive per-user lock
+2. If ``exec.sdexec-constrain-resources`` is true, computes resource union
+   for all user jobs on the node and applies constraints to ``user-UID.slice``
+3. Creates marker file (``/run/flux-pam/uid.$UID.active``)
+4. Attempts to start ``user@UID.service`` (best-effort, non-fatal)
+5. Releases lock
+
+**SSH login (PAM session module):**
+
+1. Acquires lock and checks for marker file
+2. If present, creates transient scope (``flux-pam-PID.scope``) in ``user-UID.slice``
+3. Sets ``XDG_RUNTIME_DIR`` and ``DBUS_SESSION_BUS_ADDRESS``
+4. Releases lock
+
+SSH sessions inherit resource constraints from ``user-UID.slice``.
+
+**Last job completion (housekeeping):**
+
+1. Acquires lock
+2. Removes marker file (blocks new logins)
+3. Attempts to stop ``user@UID.service`` (best-effort)
+4. Optionally terminates remaining processes (see ``kill-user-slice``)
+5. Reverts slice constraints
+6. Releases lock
+
+With ``kill-user-slice = false`` (default), SSH sessions and other processes
+remain running after the last job completes. Site policy or user action must
+clean them up.
+
+With ``kill-user-slice = true``, housekeeping terminates all slice processes
+(SIGTERM, grace period, SIGKILL) after removing the marker. This terminates
+active SSH sessions when the last job completes.
+
+.. note::
+  Marker-based containment works even when ``user@UID.service`` fails to
+  start (e.g., ``/proc`` mounted ``hidepid=2``). The slice enforces containment,
+  not the service. Service start failures are logged but non-fatal.
+
+See :pam:man5:`flux-config-pam` and :pam:man8:`pam_flux` for all configuration
+options including orphan process handling, lock directories, and subprocess
+timeouts.
