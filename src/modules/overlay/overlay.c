@@ -1180,9 +1180,9 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     }
     if (!(child = children_lookup_byrank (ov->children, rank))) {
         errprintf (&error,
-                  "rank %lu is not a peer of parent %ld: mismatched config?",
+                  "rank %lu is not a child of rank %lu: mismatched config?",
                   (unsigned long)rank,
-                  ov->parent ? (long)ov->parent->rank : -1L);
+                  (unsigned long)ov->rank);
         flux_log (ov->h, LOG_ERR,
                   "rejecting connection from %s (rank %lu): %s",
                   flux_get_hostbyrank (ov->h, rank),
