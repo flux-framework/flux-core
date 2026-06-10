@@ -78,7 +78,8 @@ test_expect_success 'drain status is identical to before the reload' '
 	test_cmp drain_status2.exp drain_status2.out
 '
 
-test_expect_success 'resource eventlog has truncated events' '
+# Default temporarily changed from 0 (no history) to 90d #7669
+test_expect_failure 'resource eventlog has truncated events' '
 	test $(has_resource_event drain | wc -l) -eq 0
 '
 
