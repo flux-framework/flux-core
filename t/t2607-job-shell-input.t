@@ -53,9 +53,10 @@ test_expect_success LONGTEST 'flux-shell: 10K line lptest piped input works' '
 # to read the stdin data and write to the target task, but the cancel could
 # come before that since there is no way to synchronize. Thus, the test may
 # give false positive results (ok) but never a false negative (no ok).
+# Disable input batching to reduce the race window.
 #
 test_expect_success NO_CHAIN_LINT 'flux-shell: ignores SIGPIPE if task closes stdin' '
-	id=$(flux submit sh -c "exec <&-; sleep 60") &&
+	id=$(flux submit -o input.batch-timeout=0 sh -c "exec <&-; sleep 60") &&
 	flux job wait-event $id start &&
 	flux job wait-event -vp exec $id shell.start &&
 	(echo foo | flux job attach $id &) &&
@@ -247,7 +248,7 @@ test_expect_success 'flux-shell: no fatal exception after stdin sent to exited t
 
 test_expect_success 'flux-shell: stdin limit with small value causes job exception' '
 	test_expect_code 1 sh -c "dd if=/dev/zero bs=1024 count=20 2>/dev/null | \
-		flux run -o input.limit=1K cat >/dev/null 2>limit1.err" &&
+		flux run -o input.limit=1K -o input.batch-timeout=0 cat >/dev/null 2>limit1.err" &&
 	test_debug "cat limit1.err" &&
 	grep "stdin exceeds 1K limit" limit1.err &&
 	grep "Try file input" limit1.err
@@ -297,7 +298,7 @@ test_expect_success 'flux-shell: input.limit as integer exceeding max is rejecte
 '
 
 test_expect_success 'flux-shell: flux job attach stops sending stdin on exception' '
-	jobid=$(flux submit -o input.limit=1K cat) &&
+	jobid=$(flux submit -o input.limit=1K -o input.batch-timeout=0 cat) &&
 	test_expect_code 1 sh -c "dd if=/dev/zero bs=1024 count=20 2>/dev/null | \
 		flux job attach $jobid 2>attach-stop.err" &&
 	test_debug "cat attach-stop.err" &&
