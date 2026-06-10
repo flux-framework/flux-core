@@ -104,6 +104,14 @@ struct shell_task *shell_task_create (flux_shell_t *shell,
     task->size = info->total_ntasks;
     if (!(task->cmd = flux_cmd_create (0, NULL, NULL)))
         goto error;
+    /* Set larger stdin buffer to handle bursty input from batching.
+     * With input batching, multiple events can arrive rapidly before
+     * task starts consuming stdin. Default 4MB buffer can fill quickly,
+     * causing ENOSPC and stdin to close prematurely. 32MB provides
+     * sufficient headroom for typical use cases.
+     */
+    if (flux_cmd_setopt (task->cmd, "stdin_BUFSIZE", "32M") < 0)
+        goto error;
     json_array_foreach (info->jobspec->command, i, entry) {
         if (flux_cmd_argv_append (task->cmd, json_string_value (entry)) < 0)
             goto error;
