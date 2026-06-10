@@ -119,10 +119,12 @@ static void input_eventlog_cb (flux_future_t *f, void *arg)
                                                stream,
                                                data,
                                                len) < 0) {
-                        if (errno != EPIPE)
+                        if (errno != EPIPE && errno != ENOSPC)
                             shell_die_errno (1, "flux_subprocess_write");
-                        else
-                            eof = true; /* Pretend that we got eof */
+                        if (errno == ENOSPC)
+                            shell_warn ("task %d: buffer full, closing stdin",
+                                        task->rank);
+                        eof = true; /* Pretend that we got eof */
                     }
                 }
                 if (eof) {
