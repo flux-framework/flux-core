@@ -33,6 +33,8 @@ liboverlay_la_SOURCES = \
 	ovconf.c \
 	children.h \
 	children.c \
+	parent.h \
+	parent.c \
 	overlay.h \
 	overlay.c
 
