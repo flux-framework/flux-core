@@ -703,6 +703,26 @@ static void test_buffer (flux_reactor_t *reactor)
     ok (fd_set_nonblocking (pfds[1]) >= 0,
         "buffer: fd_set_nonblocking");
 
+    errno = 0;
+    w = fbuf_write_watcher_create (reactor,
+                                   pfds[1],
+                                   1024,
+                                   buffer_write,
+                                   FBUF_WATCHER_LINE_BUFFER,
+                                   &count);
+    ok (w == NULL && errno == EINVAL,
+        "buffer: write_watcher_create returns EINVAL if LINE_BUFFER flag set");
+
+    errno = 0;
+    w = fbuf_write_watcher_create (reactor,
+                                   pfds[1],
+                                   1024,
+                                   buffer_write,
+                                   FBUF_WATCHER_FULL_BUFFER,
+                                   &count);
+    ok (w == NULL && errno == EINVAL,
+        "buffer: write_watcher_create returns EINVAL if FULL_BUFFER flag set");
+
     w = fbuf_write_watcher_create (reactor,
                                    pfds[1],
                                    1024,
