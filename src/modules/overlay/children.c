@@ -148,10 +148,17 @@ bool child_is_online (struct child *child)
 
 struct child *children_lookup (struct children *ctx, const char *id)
 {
+    struct child *child;
+
     if (!ctx || !id)
         return NULL;
 
-    struct child *child;
+    /* Try fast O(1) hash lookup first (online children only).
+     */
+    if ((child = children_lookup_online (ctx, id)))
+        return child;
+    /* Fall back to O(n) scan for offline children.
+     */
     children_foreach (ctx, child) {
         if (streq (id, child->uuid))
             return child;
