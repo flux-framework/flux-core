@@ -166,9 +166,11 @@ all tasks (the default) or delivered to a subset of tasks. See the
 When input is read from the KVS, all job shells watch the input eventlog and
 deliver data to matching tasks as it appears. For interactive jobs, the rank 0
 (leader) shell registers a standard input service to which clients (typically
-:man1:`flux job attach`) write input. The leader shell then writes this data
-to the input eventlog for distribution to all other shells in the job. The
-input eventlog acts as a permanent record of job input.
+:man1:`flux job attach`) write input. The leader shell batches input eventlog
+entries for a configurable period (see ``input.batch-timeout`` in
+:man7:`flux-shell-options`) before posting them to the ``guest.input``
+eventlog for distribution to all other shells in the job. EOF is always
+flushed immediately. The input eventlog acts as a permanent record of job input.
 
 For file-based input, each task's stdin is connected directly to the input
 file. An RFC 24 ``redirect`` event is posted to the input eventlog as a
