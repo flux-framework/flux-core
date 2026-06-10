@@ -106,8 +106,12 @@ static void input_service_stdin_cb (flux_t *h,
     }
     if (input_eventlog_put_event (in->shell, "data", o) < 0)
         goto error;
-    if (eof && subtract_idset (in->open_tasks, ranks, ids) < 0)
-        shell_log_errno ("failed to remove '%s' from open tasks", ranks);
+    if (eof) {
+        /* Flush eventlogger immediately on EOF to ensure prompt delivery */
+        input_eventlog_flush (in->shell);
+        if (subtract_idset (in->open_tasks, ranks, ids) < 0)
+            shell_log_errno ("failed to remove '%s' from open tasks", ranks);
+    }
     if (flux_respond (h, msg, NULL) < 0)
         shell_log_errno ("flux_respond");
     idset_destroy (ids);
@@ -190,9 +194,20 @@ static int input_service_init (flux_plugin_t *p,
     return 0;
 }
 
+static int input_service_reconnect (flux_plugin_t *p,
+                                    const char *topic,
+                                    flux_plugin_arg_t *args,
+                                    void *data)
+{
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+    input_eventlog_reconnect (shell);
+    return 0;
+}
+
 struct shell_builtin builtin_input_service = {
     .name = FLUX_SHELL_PLUGIN_NAME,
     .init = input_service_init,
+    .reconnect = input_service_reconnect,
 };
 
 /*

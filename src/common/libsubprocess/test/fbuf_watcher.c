@@ -167,6 +167,46 @@ static void buffer_read_data (flux_reactor_t *r, flux_watcher_t *w,
     return;
 }
 
+static void buffer_read_full (flux_reactor_t *r,
+                              flux_watcher_t *w,
+                              int revents,
+                              void *arg)
+{
+    int *count = arg;
+
+    if (revents & FLUX_POLLERR) {
+        ok (false,
+            "buffer: read full callback incorrectly called with FLUX_POLLERR");
+    }
+    else if (revents & FLUX_POLLIN) {
+        const void *ptr;
+        int len;
+
+        ok ((ptr = fbuf_read_watcher_get_data (w, &len)) != NULL,
+            "buffer: read full data from buffer success");
+
+        if ((*count) == 0) {
+            /* First callback when buffer is full (1024 bytes) */
+            ok (len == 1024,
+                "buffer: read full returned full buffer size");
+        }
+        else if ((*count) == 1) {
+            /* Second callback on EOF with remaining data */
+            ok (len == 24,
+                "buffer: read full returned remaining data on EOF");
+        }
+    }
+    else {
+        ok (false,
+            "buffer: read full callback failed to return FLUX_POLLIN: %d", revents);
+    }
+
+    (*count)++;
+    /* Stop after each callback so we can control the test flow */
+    flux_watcher_stop (w);
+    return;
+}
+
 
 static void buffer_write (flux_reactor_t *r, flux_watcher_t *w,
                           int revents, void *arg)
@@ -301,6 +341,18 @@ static void test_buffer (flux_reactor_t *reactor)
 
     /* read buffer test */
 
+    errno = 0;
+    w = fbuf_read_watcher_create (reactor,
+                                  fd[0],
+                                  1024,
+                                  buffer_read,
+                                  FBUF_WATCHER_LINE_BUFFER
+                                  | FBUF_WATCHER_FULL_BUFFER,
+                                  &count);
+    ok (w == NULL && errno == EINVAL,
+        "buffer: read buffer create with invalid flags returns EINVAL");
+
+
     count = 0;
     w = fbuf_read_watcher_create (reactor,
                                   fd[0],
@@ -422,6 +474,66 @@ static void test_buffer (flux_reactor_t *reactor)
 
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
+
+    /* read fully buffered test */
+
+    count = 0;
+    w = fbuf_read_watcher_create (reactor,
+                                  fd[0],
+                                  1024,
+                                  buffer_read_full,
+                                  FBUF_WATCHER_FULL_BUFFER,
+                                  &count);
+    ok (w != NULL,
+        "buffer: read full buffer created");
+
+    fb = fbuf_read_watcher_get_buffer (w);
+
+    ok (fb != NULL,
+        "buffer: buffer retrieved");
+
+    /* Write exactly 1024 bytes to fill buffer */
+    {
+        char buf[1024];
+        memset (buf, 'x', sizeof (buf));
+        ok (write (fd[1], buf, 1024) == 1024,
+            "buffer: write 1024 bytes to socketpair success");
+    }
+
+    flux_watcher_start (w);
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer: reactor ran to completion");
+
+    ok (count == 1,
+        "buffer: read full callback called once (buffer full)");
+
+    /* Now write 24 more bytes and close to trigger EOF */
+    ok (write (fd[1], "extra data after buffer", 23) == 23,
+        "buffer: write 23 more bytes to socketpair success");
+    ok (write (fd[1], "\n", 1) == 1,
+        "buffer: write final byte to socketpair success");
+
+    close (fd[1]);
+    fd[1] = -1;
+
+    flux_watcher_start (w);
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer: reactor ran to completion for EOF");
+
+    ok (count == 2,
+        "buffer: read full callback called twice (EOF with remaining data)");
+
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+    /* Recreate socketpair for next tests */
+    close (fd[0]);
+    ok (socketpair (PF_LOCAL, SOCK_STREAM, 0, fd) == 0,
+        "buffer: socketpair created for write tests");
+    ok (fd_set_nonblocking (fd[0]) >= 0 && fd_set_nonblocking (fd[1]) >= 0,
+        "buffer: fd_set_nonblocking for write tests");
 
 
     /* write buffer test */
@@ -590,6 +702,26 @@ static void test_buffer (flux_reactor_t *reactor)
 
     ok (fd_set_nonblocking (pfds[1]) >= 0,
         "buffer: fd_set_nonblocking");
+
+    errno = 0;
+    w = fbuf_write_watcher_create (reactor,
+                                   pfds[1],
+                                   1024,
+                                   buffer_write,
+                                   FBUF_WATCHER_LINE_BUFFER,
+                                   &count);
+    ok (w == NULL && errno == EINVAL,
+        "buffer: write_watcher_create returns EINVAL if LINE_BUFFER flag set");
+
+    errno = 0;
+    w = fbuf_write_watcher_create (reactor,
+                                   pfds[1],
+                                   1024,
+                                   buffer_write,
+                                   FBUF_WATCHER_FULL_BUFFER,
+                                   &count);
+    ok (w == NULL && errno == EINVAL,
+        "buffer: write_watcher_create returns EINVAL if FULL_BUFFER flag set");
 
     w = fbuf_write_watcher_create (reactor,
                                    pfds[1],

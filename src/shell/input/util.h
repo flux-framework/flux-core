@@ -30,5 +30,16 @@ int input_eventlog_put_event (flux_shell_t *shell,
                               const char *name,
                               json_t *context);
 
+/*  Flush any pending batched input eventlog entries to KVS immediately.
+ *  This should be called when EOF is sent to ensure prompt delivery.
+ */
+void input_eventlog_flush (flux_shell_t *shell);
+
+/*  Clear all pending input completion references during a reconnect.
+ *  During a reconnect, responses to event logging may not occur, so
+ *  completion references for inflight transactions must be cleared.
+ */
+void input_eventlog_reconnect (flux_shell_t *shell);
+
 #endif /* !SHELL_INPUT_INTERNAL_H */
 

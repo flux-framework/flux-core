@@ -16,6 +16,7 @@
 
 enum {
     FBUF_WATCHER_LINE_BUFFER = 1, /* line buffer data before invoking callback */
+    FBUF_WATCHER_FULL_BUFFER = 2, /* full buffer data before invoking callback */
 };
 
 /* read watcher
