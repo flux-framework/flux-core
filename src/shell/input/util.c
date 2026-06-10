@@ -20,6 +20,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/parse_size.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libioencode/ioencode.h"
 #include "ccan/str/str.h"
 
@@ -34,16 +35,37 @@
 #define INPUT_LIMIT_MAX   33554432 /* 32M */
 #define INPUT_EVENT_DATA  "data"
 #define INPUT_STATS_KEY   "input_stats"
+#define DEFAULT_BATCH_TIMEOUT 0.5
 
 struct input_stats {
     flux_shell_t *shell;
     size_t stdin_bytes;
     size_t limit_bytes;
+    struct eventlogger *ev;
 };
 
 static void input_stats_destroy (struct input_stats *stats)
 {
-    free (stats);
+    if (stats) {
+        int saved_errno = errno;
+        if (stats->ev && eventlogger_flush (stats->ev) < 0)
+            shell_log_errno ("eventlogger_flush");
+        eventlogger_destroy (stats->ev);
+        free (stats);
+        errno = saved_errno;
+    }
+}
+
+static void input_ref (struct eventlogger *ev, void *arg)
+{
+    struct input_stats *stats = arg;
+    flux_shell_add_completion_ref (stats->shell, "input.txn");
+}
+
+static void input_unref (struct eventlogger *ev, void *arg)
+{
+    struct input_stats *stats = arg;
+    flux_shell_remove_completion_ref (stats->shell, "input.txn");
 }
 
 static int get_input_limit (struct input_stats *stats)
@@ -90,33 +112,49 @@ static struct input_stats *get_input_stats (flux_shell_t *shell)
 
     stats = flux_shell_aux_get (shell, INPUT_STATS_KEY);
     if (!stats) {
+        flux_t *h;
+        double batch_timeout = DEFAULT_BATCH_TIMEOUT;
+        struct eventlogger_ops ops = {
+            .busy = input_ref,
+            .idle = input_unref
+        };
+
         if (!(stats = calloc (1, sizeof (*stats))))
             return NULL;
         stats->shell = shell;
+
+        if (flux_shell_getopt_unpack (shell,
+                                      "input",
+                                      "{s?F}",
+                                      "batch-timeout", &batch_timeout) < 0) {
+            shell_log_errno ("invalid input.batch-timeout option");
+            goto error;
+        }
+
+        shell_debug ("input batch timeout = %.3fs", batch_timeout);
+
+        if (!(h = flux_shell_get_flux (shell)))
+            goto error;
+
+        if (!(stats->ev = eventlogger_create (h, batch_timeout, &ops, stats))) {
+            shell_log_errno ("eventlogger_create");
+            goto error;
+        }
+
         if (get_input_limit (stats) < 0
             || flux_shell_aux_set (shell,
                                    INPUT_STATS_KEY,
                                    stats,
                                    (flux_free_f) input_stats_destroy) < 0) {
-            input_stats_destroy (stats);
-            return NULL;
+            goto error;
         }
     }
     return stats;
+error:
+    input_stats_destroy (stats);
+    return NULL;
 }
 
-static void input_put_kvs_completion (flux_future_t *f, void *arg)
-{
-    flux_shell_t *shell = arg;
-
-    if (flux_future_get (f, NULL) < 0)
-        /* failing to write stdin to input is a fatal error */
-        shell_die (1, "input_service_put_kvs: %s", strerror (errno));
-    flux_future_destroy (f);
-
-    if (flux_shell_remove_completion_ref (shell, "input.kvs") < 0)
-        shell_log_errno ("flux_shell_remove_completion_ref");
-}
 
 static void check_input_limit (flux_shell_t *shell, int len)
 {
@@ -141,13 +179,7 @@ int input_eventlog_put_event (flux_shell_t *shell,
                               const char *name,
                               json_t *context)
 {
-    flux_t *h;
-    flux_kvs_txn_t *txn = NULL;
-    flux_future_t *f = NULL;
-    json_t *entry = NULL;
-    char *entrystr = NULL;
-    int saved_errno;
-    int rc = -1;
+    struct input_stats *stats;
     int len = 0;
 
     if (streq (name, INPUT_EVENT_DATA)) {
@@ -155,36 +187,15 @@ int input_eventlog_put_event (flux_shell_t *shell,
             check_input_limit (shell, len);
     }
 
-    if (!(h = flux_shell_get_flux (shell)))
-        goto error;
-    if (!(entry = eventlog_entry_pack (0.0, name, "O", context)))
-        goto error;
-    if (!(entrystr = eventlog_entry_encode (entry)))
-        goto error;
-    if (!(txn = flux_kvs_txn_create ()))
-        goto error;
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "input", entrystr) < 0)
-        goto error;
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
-        goto error;
-    if (flux_future_then (f, -1, input_put_kvs_completion, shell) < 0)
-        goto error;
-    if (flux_shell_add_completion_ref (shell, "input.kvs") < 0) {
-        shell_log_errno ("flux_shell_remove_completion_ref");
-        goto error;
-    }
-    /* f memory responsibility of input_service_put_kvs_completion()
-     * callback */
-    f = NULL;
-    rc = 0;
- error:
-    saved_errno = errno;
-    flux_kvs_txn_destroy (txn);
-    free (entrystr);
-    json_decref (entry);
-    flux_future_destroy (f);
-    errno = saved_errno;
-    return rc;
+    if (!(stats = get_input_stats (shell)))
+        return -1;
+
+    return eventlogger_append_pack (stats->ev,
+                                    0,
+                                    "input",
+                                    name,
+                                    "O",
+                                    context);
 }
 
 static int input_kvs_eventlog_init (flux_shell_t *shell, json_t *header)
