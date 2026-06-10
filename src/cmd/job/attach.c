@@ -744,7 +744,7 @@ static void attach_setup_stdin (struct attach_ctx *ctx)
 
     w = fbuf_read_watcher_create (flux_get_reactor (ctx->h),
                                   STDIN_FILENO,
-                                  1 << 20,
+                                  1 << 17,
                                   attach_stdin_cb,
                                   flags,
                                   ctx);
