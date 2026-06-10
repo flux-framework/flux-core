@@ -661,6 +661,7 @@ class Jobspec(object):
             self.setattr_shell_option("output.stdout.buffer.type", "none")
             self.setattr_shell_option("output.stderr.buffer.type", "none")
             self.setattr_shell_option("output.batch-timeout", 0.05)
+            self.setattr_shell_option("input.batch-timeout", 0.0)
         else:
             try:
                 del_treedict(
@@ -677,6 +678,12 @@ class Jobspec(object):
                     del_treedict(
                         self.attributes,
                         "system.shell.options.output.batch-timeout",
+                        remove_empty=True,
+                    )
+                if self.getattr("shell.options.input.batch-timeout") == 0.0:
+                    del_treedict(
+                        self.attributes,
+                        "system.shell.options.input.batch-timeout",
                         remove_empty=True,
                     )
             except KeyError:
