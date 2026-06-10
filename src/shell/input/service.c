@@ -194,9 +194,20 @@ static int input_service_init (flux_plugin_t *p,
     return 0;
 }
 
+static int input_service_reconnect (flux_plugin_t *p,
+                                    const char *topic,
+                                    flux_plugin_arg_t *args,
+                                    void *data)
+{
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+    input_eventlog_reconnect (shell);
+    return 0;
+}
+
 struct shell_builtin builtin_input_service = {
     .name = FLUX_SHELL_PLUGIN_NAME,
     .init = input_service_init,
+    .reconnect = input_service_reconnect,
 };
 
 /*

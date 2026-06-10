@@ -208,6 +208,16 @@ void input_eventlog_flush (flux_shell_t *shell)
     }
 }
 
+void input_eventlog_reconnect (flux_shell_t *shell)
+{
+    /* during a reconnect, response to event logging may not occur,
+     * thus input_unref() may not be called. Clear all completion
+     * references to inflight transactions.
+     */
+    while (flux_shell_remove_completion_ref (shell, "input.txn") == 0)
+        ;
+}
+
 static int input_kvs_eventlog_init (flux_shell_t *shell, json_t *header)
 {
     flux_kvs_txn_t *txn = NULL;
