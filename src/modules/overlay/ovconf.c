@@ -18,7 +18,6 @@
 #include "src/common/libutil/fsd.h"
 #include "ccan/str/str.h"
 
-#include "compat.h"
 #include "ovconf.h"
 
 static const char *default_interface_hint = "default-route";
@@ -37,30 +36,6 @@ static const double default_tcp_user_timeout = 20.;
 static const double default_connect_timeout = 30.;
 
 
-static int ovconf_attr_str (flux_t *h,
-                            const char *name,
-                            const char *default_value,
-                            const char **valuep)
-{
-    const char *val = default_value;
-    int flags;
-
-    if (compat_attr_get (h, name, &val, &flags) == 0) {
-        if (!(flags & ATTR_IMMUTABLE)) {
-            flags |= ATTR_IMMUTABLE;
-            if (compat_attr_set_flags (h, name, flags) < 0)
-                return -1;
-        }
-    }
-    else {
-        val = default_value;
-        if (compat_attr_add (h, name, val, ATTR_IMMUTABLE) < 0)
-            return -1;
-    }
-    if (valuep)
-        *valuep = val;
-    return 0;
-}
 
 static int ovconf_attr_int (flux_t *h,
                             const char *name,
@@ -71,23 +46,22 @@ static int ovconf_attr_int (flux_t *h,
     int value = default_value;
     const char *val;
     char *endptr;
+    char buf[32];
 
-    if (compat_attr_get (h, name, &val, NULL) == 0) {
+    if ((val = flux_attr_get (h, name))) {
         errno = 0;
         value = strtol (val, &endptr, 10);
         if (errno != 0 || *endptr != '\0') {
             errno = EINVAL;
             return errprintf (errp, "%s value must be an integer", name);
         }
-        if (compat_attr_delete (h, name, true) < 0) {
-            return errprintf (errp,
-                              "attr_delete %s: %s",
-                              name,
-                              strerror (errno));
-        }
     }
-    if (compat_attr_add_int (h, name, value, ATTR_IMMUTABLE) < 0)
-        return errprintf (errp, "attr_add %s: %s", name, strerror (errno));
+    if (snprintf (buf, sizeof (buf), "%d", value) >= sizeof (buf)) {
+        errno = EOVERFLOW;
+        return errprintf (errp, "%s value too large", name);
+    }
+    if (flux_attr_set_ex (h, name, buf, true, NULL) < 0)
+        return errprintf (errp, "attr_set %s: %s", name, strerror (errno));
     if (valuep)
         *valuep = value;
     return 0;
@@ -150,21 +124,15 @@ static int ovconf_tbon_timeout (flux_t *h,
 
     /* Override with broker attribute (command line only) settings, if any.
      */
-    if (compat_attr_get (h, long_name, &fsd, NULL) == 0) {
+    if ((fsd = flux_attr_get (h, long_name))) {
         if (fsd_parse_duration (fsd, &value) < 0)
             return errprintf (errp, "Error parsing %s attribute", long_name);
-        if (compat_attr_delete (h, long_name, true) < 0) {
-            return errprintf (errp,
-                              "attr_delete %s: %s",
-                              long_name,
-                              strerror (errno));
-        }
     }
     if (fsd_format_duration (buf, sizeof (buf), value) < 0)
         return errprintf (errp, "fsd format: %s", strerror (errno));
-    if (compat_attr_add (h, long_name, buf, ATTR_IMMUTABLE) < 0) {
+    if (flux_attr_set_ex (h, long_name, buf, true, NULL) < 0) {
         return errprintf (errp,
-                          "attr_add %s: %s",
+                          "attr_set %s: %s",
                           long_name,
                           strerror (errno));
     }
@@ -187,7 +155,6 @@ static int ovconf_interface_hint (flux_t *h,
     const char *val = NULL;
     const char *config_val = NULL;
     const char *attr_val = NULL;
-    int flags;
     flux_error_t error;
 
     if (flux_conf_unpack (conf,
@@ -200,7 +167,7 @@ static int ovconf_interface_hint (flux_t *h,
                           "tbon",
                           error.text);
     }
-    (void)compat_attr_get (h, name, &attr_val, &flags);
+    attr_val = flux_attr_get (h, name);
 
     if (attr_val)
         val = attr_val;
@@ -214,7 +181,7 @@ static int ovconf_interface_hint (flux_t *h,
         val = default_interface_hint;
 
     if (val && !attr_val) {
-        if (compat_attr_add (h, name, val, 0) < 0) {
+        if (flux_attr_set (h, name, val) < 0) {
             return errprintf (errp,
                               "Error setting %s attribute value: %s",
                               name,
@@ -248,18 +215,19 @@ static int ovconf_topo (flux_t *h, const flux_conf_t *conf, flux_error_t *errp)
      */
     const char *fanout;
     char buf[16];
-    if (compat_attr_get (h, "tbon.fanout", &fanout, NULL) == 0) {
+    if ((fanout = flux_attr_get (h, "tbon.fanout"))) {
         snprintf (buf, sizeof (buf), "kary:%s", fanout);
         topo_uri = buf;
     }
-    if (ovconf_attr_str (h,
-                         "tbon.topo",
-                         topo_uri,
-                         NULL) < 0) {
-        errprintf (errp,
-                   "Error manipulating tbon.topo attribute: %s",
-                   strerror (errno));
-        return -1;
+    /* Set tbon.topo attribute if not already set.
+     */
+    if (!flux_attr_get (h, "tbon.topo")) {
+        if (flux_attr_set (h, "tbon.topo", topo_uri) < 0) {
+            errprintf (errp,
+                       "Error setting tbon.topo attribute: %s",
+                       strerror (errno));
+            return -1;
+        }
     }
     return 0;
 }

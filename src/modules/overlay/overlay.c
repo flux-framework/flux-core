@@ -44,7 +44,6 @@
 #endif
 
 #include "overlay.h"
-#include "compat.h"
 #include "src/broker/trace.h"
 #include "src/broker/state_machine.h"
 #include "boot_util.h"
@@ -1323,9 +1322,7 @@ static int overlay_zmq_init (struct overlay *ov)
          */
         if (ov->rank > 0 && ov->config.zmq_io_threads != 1) {
             const char *key = "tbon.zmq_io_threads";
-            if (compat_attr_set_flags (ov->h, key, 0) < 0
-                || compat_attr_delete (ov->h, key, true) < 0
-                || compat_attr_add_int (ov->h, key, 1, ATTR_IMMUTABLE) < 0)
+            if (flux_attr_set_ex (ov->h, key, "1", true, NULL) < 0)
                 return -1;
             ov->config.zmq_io_threads = 1;
         }
@@ -1428,25 +1425,26 @@ int overlay_bind (struct overlay *ov,
  */
 static int overlay_register_attrs (struct overlay *overlay)
 {
-    if (compat_attr_add (overlay->h,
-                         "tbon.parent-endpoint",
-                         overlay->parent ? overlay->parent->uri : NULL,
-                         ATTR_IMMUTABLE) < 0)
+    char buf[32];
+
+    // tbon.parent-endpoint can be NULL on rank 0
+    if (overlay->parent) {
+        if (flux_attr_set (overlay->h, "tbon.parent-endpoint",
+                          overlay->parent->uri) < 0)
+            return -1;
+    }
+
+    snprintf (buf, sizeof (buf), "%d", topology_get_level (overlay->topo));
+    if (flux_attr_set (overlay->h, "tbon.level", buf) < 0)
         return -1;
-    if (compat_attr_add_int (overlay->h,
-                             "tbon.level",
-                             topology_get_level (overlay->topo),
-                             ATTR_IMMUTABLE) < 0)
+
+    snprintf (buf, sizeof (buf), "%d", topology_get_maxlevel (overlay->topo));
+    if (flux_attr_set (overlay->h, "tbon.maxlevel", buf) < 0)
         return -1;
-    if (compat_attr_add_int (overlay->h,
-                             "tbon.maxlevel",
-                             topology_get_maxlevel (overlay->topo),
-                             ATTR_IMMUTABLE) < 0)
-        return -1;
-    if (compat_attr_add_int (overlay->h,
-                             "tbon.descendants",
-                             topology_get_descendant_count (overlay->topo),
-                             ATTR_IMMUTABLE) < 0)
+
+    snprintf (buf, sizeof (buf), "%d",
+              topology_get_descendant_count (overlay->topo));
+    if (flux_attr_set (overlay->h, "tbon.descendants", buf) < 0)
         return -1;
 
     return 0;
