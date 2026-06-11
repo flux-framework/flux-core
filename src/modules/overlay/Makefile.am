@@ -38,7 +38,10 @@ liboverlay_la_SOURCES = \
 
 TESTS = \
 	test_topology.t \
-	test_overlay.t
+	test_overlay.t \
+	test_children.t \
+	test_parent.t \
+	test_ovconf.t
 
 test_ldadd = \
 	$(builddir)/liboverlay.la \
@@ -77,3 +80,18 @@ test_topology_t_SOURCES = test/topology.c
 test_topology_t_CPPFLAGS = $(test_cppflags)
 test_topology_t_LDADD = $(test_ldadd)
 test_topology_t_LDFLAGS = $(test_ldflags)
+
+test_children_t_SOURCES = test/children.c
+test_children_t_CPPFLAGS = $(test_cppflags)
+test_children_t_LDADD = $(test_ldadd)
+test_children_t_LDFLAGS = $(test_ldflags)
+
+test_parent_t_SOURCES = test/parent.c
+test_parent_t_CPPFLAGS = $(test_cppflags)
+test_parent_t_LDADD = $(test_ldadd)
+test_parent_t_LDFLAGS = $(test_ldflags)
+
+test_ovconf_t_SOURCES = test/ovconf.c
+test_ovconf_t_CPPFLAGS = $(test_cppflags)
+test_ovconf_t_LDADD = $(test_ldadd)
+test_ovconf_t_LDFLAGS = $(test_ldflags)
