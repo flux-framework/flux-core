@@ -26,7 +26,7 @@ struct parent {
     void *zsock;            // NULL on rank 0
     char *uri;
     flux_watcher_t *w;
-    int lastsent;
+    double lastsent;
     char *pubkey;
     uint32_t rank;
     char uuid[UUID_STR_LEN];
