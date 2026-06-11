@@ -226,7 +226,7 @@ static void overlay_monitor_notify (struct overlay *ov, uint32_t rank)
     /* Notify state machine once all child subtrees are offline
      */
     if (ov->broker_state == STATE_SHUTDOWN
-        && ov->children->count > 0
+        && ov->children
         && children_get_online_count (ov->children) == 0)
         overlay_state_machine_post (ov, "children-complete", false);
 }
@@ -241,13 +241,18 @@ int overlay_set_topology (struct overlay *ov, struct topology *topo)
         if (cert_meta_set (ov->cert, "name", val) < 0)
             return -1;
     }
-    if (!(ov->children = children_create (ov->h, topo)))
-        return -1;
-    if (ov->children->count > 0) {
+    /* Only create children structure if there are actual children.
+     * This avoids creating unused ZAP authenticator and bind socket.
+     */
+    if (topology_get_child_ranks (topo, NULL, 0) > 0) {
+        if (!(ov->children = children_create (ov->h, topo)))
+            return -1;
         ov->status = SUBTREE_STATUS_PARTIAL;
     }
-    else
+    else {
+        ov->children = NULL;
         ov->status = SUBTREE_STATUS_FULL;
+    }
     monotime (&ov->status_timestamp);
     if (ov->rank > 0) {
         uint32_t parent_rank = topology_get_parent (topo);
@@ -1365,7 +1370,10 @@ int overlay_bind (struct overlay *ov,
     char *new_uri = NULL;
     char *new_uri2 = NULL;
 
-    if (!ov->h || ov->rank == FLUX_NODEID_ANY || ov->children->bind_zsock) {
+    if (!ov->h
+        || ov->rank == FLUX_NODEID_ANY
+        || !ov->children
+        || ov->children->bind_zsock) {
         errno = EINVAL;
         return errprintf (errp, "overlay_bind: invalid arguments");
     }
@@ -1557,7 +1565,7 @@ static void overlay_stats_get_cb (flux_t *h,
     if (flux_respond_pack (h,
                            msg,
                            "{s:i s:i s:i s:i s:i s:{s:i s:i}}",
-                           "child-count", ov->children->count,
+                           "child-count", ov->children ? ov->children->count : 0,
                            "child-connected", child_connected,
                            "parent-count", ov->parent ? 1 : 0,
                            "parent-rpc", ov->parent ? rpc_track_count (ov->parent->tracker) : 0,
@@ -1901,7 +1909,7 @@ int overlay_authorize (struct overlay *ov,
                        const char *name,
                        const char *pubkey)
 {
-    if (!ov->children->zap) {
+    if (!ov->children || !ov->children->zap) {
         errno = EINVAL;
         return -1;
     }
