@@ -24,7 +24,6 @@
 #include "src/common/libpmi/bizcache.h"
 #include "ccan/str/str.h"
 
-#include "compat.h"
 #include "overlay.h"
 #include "topology.h"
 #include "boot_util.h"
@@ -54,8 +53,7 @@ static int clique_ranks (struct taskmap *map, int rank, int *ranks, int nranks)
 static bool get_prefer_tcp (flux_t *h)
 {
     const char *val;
-    if (compat_attr_get (h, "tbon.prefertcp", &val, NULL) < 0
-        || val == NULL
+    if (!(val = flux_attr_get (h, "tbon.prefertcp"))
         || streq (val, "0"))
         return false;
     return true;
@@ -74,7 +72,7 @@ static int format_tcp_uri (char *buf,
     const char *interface = NULL;
     char ipaddr[_POSIX_HOST_NAME_MAX + 1];
 
-    if (compat_attr_get (h, "tbon.interface-hint", &hint, NULL) < 0) {
+    if (!(hint = flux_attr_get (h, "tbon.interface-hint"))) {
         return errprintf (error,
                           "tbon.interface-hint attribute is not set: %s",
                           strerror (errno));
@@ -112,7 +110,7 @@ static int format_ipc_uri (char *buf,
 {
     const char *rundir;
 
-    if (compat_attr_get (h, "rundir", &rundir, NULL) < 0) {
+    if (!(rundir = flux_attr_get (h, "rundir"))) {
         errprintf (error, "rundir attribute is not set");
         return -1;
     }
@@ -140,7 +138,7 @@ int boot_pmi (flux_t *h,
     const char *broker_mapping;
 
     // N.B. overlay_create() sets the tbon.topo attribute
-    if (compat_attr_get (h, "tbon.topo", &topo_uri, NULL) < 0)
+    if (!(topo_uri = flux_attr_get (h, "tbon.topo")))
         return errprintf (errp, "error fetching tbon.topo attribute");
     if (!(topo = topology_create (topo_uri, size, NULL, &error))) {
         errprintf (errp,
@@ -175,9 +173,8 @@ int boot_pmi (flux_t *h,
         }
     }
 
-    if (compat_attr_get (h, "broker.mapping", &broker_mapping, NULL) == 0) {
-        if (broker_mapping
-            && !(taskmap = taskmap_decode (broker_mapping, &error))) {
+    if ((broker_mapping = flux_attr_get (h, "broker.mapping"))) {
+        if (!(taskmap = taskmap_decode (broker_mapping, &error))) {
             errprintf (errp, "error decoding broker.mapping: %s", error.text);
             goto error;
         }
@@ -227,12 +224,12 @@ int boot_pmi (flux_t *h,
         }
         if (boot_util_iam (h, bc, errp) < 0)
             goto error;
-        if (compat_attr_add (h,
-                             "tbon.endpoint",
-                             bizcard_uri_first (bc), // OK if NULL
-                             ATTR_IMMUTABLE) < 0) {
-            errprintf (errp, "setattr tbon.endpoint: %s", strerror (errno));
-            goto error;
+        {
+            const char *endpoint = bizcard_uri_first (bc); // may be NULL
+            if (endpoint && flux_attr_set (h, "tbon.endpoint", endpoint) < 0) {
+                errprintf (errp, "setattr tbon.endpoint: %s", strerror (errno));
+                goto error;
+            }
         }
     }
 
