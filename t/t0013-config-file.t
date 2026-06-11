@@ -12,17 +12,9 @@ test_description='Test config file overlay bootstrap'
 # Avoid loading unnecessary modules in back to back broker tests
 ARGS="-Sbroker.rc1_path= -Sbroker.rc3_path="
 
-# This option is compiled out of flux if zeromq is too old
-if flux broker ${ARGS} flux getattr tbon.tcp_user_timeout >/dev/null 2>&1; then
-	test_set_prereq MAXRT
-else
-	test_set_prereq NOMAXRT
-fi
-if flux broker ${ARGS} flux getattr tbon.connect_timeout >/dev/null 2>&1; then
-	test_set_prereq CONNTO
-else
-	test_set_prereq NOCONNTO
-fi
+# These options are always available with zeromq >= 4.2.0
+test_set_prereq MAXRT
+test_set_prereq CONNTO
 
 #
 # check config file parsing
@@ -436,23 +428,6 @@ test_expect_success MAXRT 'tbon.tcp_user_timeout with bad FSD configured fails' 
 		true 2>badconf.err &&
 	grep "Config file error" badconf.err
 '
-test_expect_success NOMAXRT 'tbon.tcp_user_timeout config cannot be set with old zeromq' '
-	mkdir conf17 &&
-	cat <<-EOT >conf17/tbon.toml &&
-	[tbon]
-	tcp_user_timeout = "30s"
-	EOT
-	test_must_fail flux broker ${ARGS} -c conf17 \
-		true 2>noconf.err &&
-	grep "unsupported by this zeromq version" noconf.err
-'
-test_expect_success NOMAXRT 'tbon.tcp_user_timeout attr cannot be set with old zeromq' '
-	test_must_fail flux broker ${ARGS} \
-		-Stbon.tcp_user_timeout=30s \
-		true 2>noattr.err &&
-	grep "unsupported by this zeromq version" noattr.err
-'
-
 test_expect_success 'tbon.zmqdebug is zero by default' '
 	cat <<-EOT >zmqdebug.exp &&
 	0
@@ -659,22 +634,6 @@ test_expect_success CONNTO 'tbon.connect_timeout command line overrides config' 
 		-Stbon.connect_timeout=1h \
 		flux getattr tbon.connect_timeout >connto3.out &&
 	test_cmp connto3.exp connto3.out
-'
-test_expect_success NOCONNTO 'tbon.connect_timeout config cannot be set with old zeromq' '
-	mkdir conf27 &&
-	cat <<-EOT >conf27/tbon.toml &&
-	[tbon]
-	connect_timeout = "35s"
-	EOT
-	test_must_fail flux broker ${ARGS} -c conf27 \
-		true 2>noconnto_conf.err &&
-	grep "unsupported by this zeromq version" noconnto_conf.err
-'
-test_expect_success NOCONNTO 'tbon.connect_timeout attr cannot be set with old zeromq' '
-	test_must_fail flux broker ${ARGS} \
-		-Stbon.connect_timeout=10s \
-		true 2>noconnto_attr.err &&
-	grep "unsupported by this zeromq version" noconnto_attr.err
 '
 test_expect_success CONNTO 'tbon.connect_timeout config can be set to 0' '
 	mkdir conf28 &&

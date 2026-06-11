@@ -153,23 +153,19 @@ int parent_connect (struct parent *parent,
                                                    parent);
     }
 
-#ifdef ZMQ_CONNECT_TIMEOUT
     if (config->connect_timeout > 0) {
         if (zsetsockopt_int (parent->zsock,
                              ZMQ_CONNECT_TIMEOUT,
                              config->connect_timeout * 1000) < 0)
             return -1;
     }
-#endif
 
-#ifdef ZMQ_TCP_MAXRT
     if (config->tcp_user_timeout > 0) {
         if (zsetsockopt_int (parent->zsock,
                              ZMQ_TCP_MAXRT,
                              config->tcp_user_timeout * 1000) < 0)
             return -1;
     }
-#endif
 
     if (cert_apply (cert, parent->zsock) < 0)
         return -1;

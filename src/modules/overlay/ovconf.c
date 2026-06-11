@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <zmq.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/errprintf.h"
@@ -29,21 +30,11 @@ static const double default_torpid_max = 30.0;
  * This can be configured via TOML and on the broker command line.
  */
 static const double default_tcp_user_timeout = 20.;
-#ifdef ZMQ_TCP_MAXRT
-static bool have_tcp_maxrt = true;
-#else
-static bool have_tcp_maxrt = false;
-#endif
 
 /* How long to wait (seconds) for a connect attempt to time out before
  * reconnecting.
  */
 static const double default_connect_timeout = 30.;
-#ifdef ZMQ_CONNECT_TIMEOUT
-static bool have_connect_timeout = true;
-#else
-static bool have_connect_timeout = false;
-#endif
 
 
 static int ovconf_attr_str (flux_t *h,
@@ -132,15 +123,14 @@ static int ovconf_tbon_int (flux_t *h,
 static int ovconf_tbon_timeout (flux_t *h,
                                 const flux_conf_t *conf,
                                 const char *name,
-                                bool enabled,
                                 double default_value,
                                 double *valuep,
                                 flux_error_t *errp)
 {
     const char *fsd = NULL;
-    bool override = false;
     double value = default_value;
     char long_name[128];
+    char buf[64];
     flux_error_t error;
 
     (void)snprintf (long_name, sizeof (long_name), "tbon.%s", name);
@@ -156,7 +146,6 @@ static int ovconf_tbon_timeout (flux_t *h,
                               "Config file error parsing %s",
                               long_name);
         }
-        override = true;
     }
 
     /* Override with broker attribute (command line only) settings, if any.
@@ -170,25 +159,14 @@ static int ovconf_tbon_timeout (flux_t *h,
                               long_name,
                               strerror (errno));
         }
-        override = true;
     }
-    if (enabled) {
-        char buf[64];
-        if (fsd_format_duration (buf, sizeof (buf), value) < 0)
-            return errprintf (errp, "fsd format: %s", strerror (errno));
-        if (compat_attr_add (h, long_name, buf, ATTR_IMMUTABLE) < 0) {
-            return errprintf (errp,
-                              "attr_add %s: %s",
-                              long_name,
-                              strerror (errno));
-        }
-    }
-    else {
-        if (override) {
-            return errprintf (errp,
-                              "%s unsupported by this zeromq version",
-                              long_name);
-        }
+    if (fsd_format_duration (buf, sizeof (buf), value) < 0)
+        return errprintf (errp, "fsd format: %s", strerror (errno));
+    if (compat_attr_add (h, long_name, buf, ATTR_IMMUTABLE) < 0) {
+        return errprintf (errp,
+                          "attr_add %s: %s",
+                          long_name,
+                          strerror (errno));
     }
     *valuep = value;
     return 0;
@@ -437,14 +415,12 @@ int ovconf_init (struct ovconf *ovconf, flux_t *h, flux_error_t *errp)
         || ovconf_tbon_timeout (h,
                                 conf,
                                 "tcp_user_timeout",
-                                have_tcp_maxrt,
                                 default_tcp_user_timeout,
                                 &ovconf_new.tcp_user_timeout,
                                 errp) < 0
         || ovconf_tbon_timeout (h,
                                 conf,
                                 "connect_timeout",
-                                have_connect_timeout,
                                 default_connect_timeout,
                                 &ovconf_new.connect_timeout,
                                 errp) < 0

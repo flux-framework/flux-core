@@ -310,7 +310,6 @@ int children_bind (struct children *ctx,
                                                      ctx);
     }
 
-#ifdef ZMQ_TCP_MAXRT
     if (config->tcp_user_timeout > 0) {
         if (zsetsockopt_int (ctx->bind_zsock,
                              ZMQ_TCP_MAXRT,
@@ -321,7 +320,6 @@ int children_bind (struct children *ctx,
                               strerror (errno));
         }
     }
-#endif
 
     if (cert_apply (cert, ctx->bind_zsock) < 0) {
         return errprintf (errp,

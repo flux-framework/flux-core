@@ -1,8 +1,11 @@
-# N.B oldest in CI are focal=libzmq-4.3.2-2, centos7=zeromq-4.1.4
+# ZeroMQ versions in CI docker images (circa 2026):
+#   alpine=4.3.5, bookworm=4.3.4, el8=4.3.4, el9=4.3.4, el10=4.3.6+,
+#   fedora40=4.3.5+, focal=4.3.2, jammy=4.3.4, noble=4.3.5+
+# Minimum is focal=4.3.2. Require 4.2.0 for ZMQ_TCP_MAXRT, ZMQ_CONNECT_TIMEOUT.
 
 AC_DEFUN([X_AC_ZEROMQ], [
 
-    PKG_CHECK_MODULES([ZMQ], [libzmq >= 4.0.4])
+    PKG_CHECK_MODULES([ZMQ], [libzmq >= 4.2.0])
 
     old_CFLAGS=$CFLAGS
     CFLAGS="$CFLAGS $ZMQ_CFLAGS"
