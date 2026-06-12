@@ -109,6 +109,11 @@ struct jobinfo {
 
     flux_watcher_t       *expiration_timer;
 
+    /* Timer armed when the leader shell exits to raise a fatal exception
+     * if remaining shells do not exit within shell-exit-timeout.
+     */
+    flux_watcher_t       *shell_exit_timer;
+
     double                t0;        /* timestamp we initially saw this job */
 
     /* Exec implementation for this job */
