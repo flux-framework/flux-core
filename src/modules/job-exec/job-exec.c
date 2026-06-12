@@ -41,8 +41,8 @@
  * After initialization is complete, the exec service emits a "starting"
  * event to the exec eventlog and calls the implementation "start" method.
  * Once all job shells or equivalent are running, the exec implementation
- * should invoke jobinfo_started(), which emits a "running" event to the
- * exec eventlog and sends the "start" response to the job-manager.
+ * should invoke jobinfo_started(), which sends the "start" response to
+ * the job-manager.
  *
  * JOB FINISH/CLEANUP:
  *
