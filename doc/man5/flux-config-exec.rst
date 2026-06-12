@@ -47,6 +47,16 @@ kill-timeout
    specification.  The default is "5s" (5 seconds). See :ref:`job_termination`
    below for details.
 
+shell-exit-timeout
+   (optional) The amount of time in FSD to wait after the leader job shell
+   (shell rank 0) exits before raising a fatal exception for any job shells
+   that remain active. This handles the rare condition where a remote job
+   shell or its wrapper process does not exit after the leader shell
+   terminates, which would otherwise leave the job stuck in RUN state
+   indefinitely. Once the exception is raised, the existing kill and drain
+   machinery handles cleanup. Set to ``"none"`` to disable. The default is
+   ``"30s"``.
+
 max-kill-count
    (optional) The maximum number of times ``kill-signal`` will be sent to the
    job shell before the execution system considers the job unkillable and
