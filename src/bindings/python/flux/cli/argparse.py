@@ -71,9 +71,35 @@ class FluxArgumentParser(argparse.ArgumentParser):
             "formatter_class",
             help_formatter(argwidth=argwidth, raw_description=raw_description),
         )
-        kwargs.setdefault("allow_abbrev", False)
+        if sys.version_info >= (3, 8):
+            # allow_abbrev=False is safe on 3.8+: bpo-26967 moved the gate
+            # inside _get_option_tuples so short-option concatenation (-vvv,
+            # -n4) still works.
+            kwargs.setdefault("allow_abbrev", False)
+        # else: leave allow_abbrev at its default (True) so _parse_optional
+        # still reaches _get_option_tuples (needed for short-option
+        # concatenation on 3.6/3.7); long-option abbreviations are disabled
+        # instead by the _get_option_tuples override below (bpo-26967 backport).
         super().__init__(*args, **kwargs)
         self.posix = posix
+
+    if sys.version_info < (3, 8):
+
+        def _get_option_tuples(self, option_string):
+            # bpo-26967 backport: reject long-option prefix matching while
+            # preserving short-option concatenation handling.
+            # On 3.6/3.7, allow_abbrev=False would have gated the entire
+            # _get_option_tuples call in _parse_optional, breaking -vvv/-n4.
+            # Instead we leave allow_abbrev=True and intercept here: for long
+            # options (starting with two prefix chars) return [] to suppress
+            # abbreviation matching; for short options fall through to super()
+            # so concatenation works normally.
+            # 3.6/3.7 are frozen/EOL so this private-method override cannot
+            # drift. Verified against the real CPython 3.6 argparse.py.
+            chars = self.prefix_chars
+            if option_string[0] in chars and option_string[1] in chars:
+                return []
+            return super()._get_option_tuples(option_string)
 
     def add_argument(self, *args, hidden_aliases=(), **kwargs):
         return _add_with_hidden(super(), *args, hidden_aliases=hidden_aliases, **kwargs)
