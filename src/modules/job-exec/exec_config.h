@@ -36,6 +36,8 @@ bool config_get_exec_service_override (void);
 
 double config_get_default_barrier_timeout (void);
 
+double config_get_shell_exit_timeout (void);
+
 int config_get_stats (json_t **config_stats);
 
 const char *config_get_sdexec_stop_timer_sec (void);

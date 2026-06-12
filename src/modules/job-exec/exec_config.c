@@ -31,6 +31,8 @@
 
 static const char *default_cwd = "/tmp";
 
+#define DEFAULT_SHELL_EXIT_TIMEOUT 30.
+
 struct exec_config {
     const char *default_job_shell;
     const char *flux_imp_path;
@@ -41,6 +43,7 @@ struct exec_config {
     int sdexec_stop_timer_signal;
     int sdexec_constrain_resources;
     double default_barrier_timeout;
+    double shell_exit_timeout;  /* <=0 means disabled */
 };
 
 /* Global configs initialized in config_init() */
@@ -131,11 +134,16 @@ double config_get_default_barrier_timeout (void)
     return exec_conf.default_barrier_timeout;
 }
 
+double config_get_shell_exit_timeout (void)
+{
+    return exec_conf.shell_exit_timeout;
+}
+
 int config_get_stats (json_t **config_stats)
 {
     json_t *o = NULL;
 
-    if (!(o = json_pack ("{s:s? s:s? s:s? s:s? s:i s:f s:i s:i s:i}",
+    if (!(o = json_pack ("{s:s? s:s? s:s? s:s? s:i s:f s:f s:i s:i s:i}",
                          "default_cwd", default_cwd,
                          "default_job_shell", exec_conf.default_job_shell,
                          "flux_imp_path", exec_conf.flux_imp_path,
@@ -144,6 +152,8 @@ int config_get_stats (json_t **config_stats)
                          exec_conf.exec_service_override,
                          "default_barrier_timeout",
                          exec_conf.default_barrier_timeout,
+                         "shell_exit_timeout",
+                         exec_conf.shell_exit_timeout,
                          "sdexec_stop_timer_sec",
                          derive_sdexec_stop_timer_sec (),
                          "sdexec_stop_timer_signal",
@@ -182,6 +192,7 @@ static void exec_config_init (struct exec_config *ec)
     ec->sdexec_stop_timer_signal = 10; // SIGUSR1
     ec->sdexec_constrain_resources = 0;
     ec->default_barrier_timeout = 1800.;
+    ec->shell_exit_timeout = DEFAULT_SHELL_EXIT_TIMEOUT;
 }
 
 /*  Initialize configurations for use by job-exec bulk-exec
@@ -327,6 +338,38 @@ int config_setup (flux_t *h,
         return -1;
     }
 
+    /*  Check configuration for exec.shell-exit-timeout */
+    {
+        const char *shell_exit_timeout = NULL;
+        if (flux_conf_unpack (conf,
+                              &err,
+                              "{s?{s?s}}",
+                              "exec",
+                                "shell-exit-timeout",
+                                &shell_exit_timeout) < 0) {
+            errprintf (errp,
+                       "error reading config value"
+                       " exec.shell-exit-timeout: %s",
+                       err.text);
+            return -1;
+        }
+        if (shell_exit_timeout) {
+            if (streq (shell_exit_timeout, "none"))
+                tmpconf.shell_exit_timeout = 0.;
+            else {
+                double val;
+                if (fsd_parse_duration (shell_exit_timeout, &val) < 0
+                    || val < 0) {
+                    errprintf (errp,
+                               "invalid shell-exit-timeout: %s",
+                               shell_exit_timeout);
+                    errno = EINVAL;
+                    return -1;
+                }
+                tmpconf.shell_exit_timeout = val;
+            }
+        }
+    }
 
     if (argv && argc) {
         /* Finally, override values on cmdline */
@@ -337,6 +380,22 @@ int config_setup (flux_t *h,
                 tmpconf.flux_imp_path = argv[i]+4;
             else if (strstarts (argv[i], "service="))
                 tmpconf.exec_service = argv[i]+8;
+            else if (strstarts (argv[i], "shell-exit-timeout=")) {
+                const char *val = argv[i] + 19;
+                if (streq (val, "none"))
+                    tmpconf.shell_exit_timeout = 0.;
+                else {
+                    double d;
+                    if (fsd_parse_duration (val, &d) < 0 || d < 0) {
+                        errprintf (errp,
+                                   "invalid shell-exit-timeout: %s",
+                                   val);
+                        errno = EINVAL;
+                        return -1;
+                    }
+                    tmpconf.shell_exit_timeout = d;
+                }
+            }
         }
     }
 
