@@ -223,6 +223,7 @@ TESTSCRIPTS = \
 	t2414-imp-exec-helper.t \
 	t2415-sdexec-device.t \
 	t2416-sdexec-constrain-resources.t \
+	t2417-job-exec-shell-exit.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
 	t2600-job-shell-rcalc.t \
