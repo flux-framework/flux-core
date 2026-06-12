@@ -72,6 +72,8 @@ struct exec_ctx {
 
     int exit_count;
 
+    bool shell_exit_posted; /* true after shell-exit event is posted */
+
     flux_watcher_t *shell_barrier_timer;
 };
 
@@ -492,6 +494,51 @@ fail:
     return rc;
 }
 
+/*  Post the shell-exit event when the leader shell (shell rank 0) exits.
+ *  Called at most once per job (guarded by ctx->shell_exit_posted).
+ */
+static void post_shell_exit_event (struct bulk_exec *exec,
+                                   struct jobinfo *job,
+                                   struct exec_ctx *ctx,
+                                   unsigned int leader_rank)
+{
+    flux_subprocess_t *p;
+    struct idset *active = NULL;
+    char *active_ids = NULL;
+    int wait_status = 0;
+
+    if (ctx->shell_exit_posted)
+        return;
+    ctx->shell_exit_posted = true;
+
+    p = bulk_exec_get_subprocess (exec, leader_rank);
+    if (p)
+        wait_status = flux_subprocess_status (p);
+
+    active = bulk_exec_active_ranks (exec);
+    if (active && idset_count (active) > 0)
+        active_ids = idset_encode (active, IDSET_FLAG_RANGE);
+
+    if (active_ids) {
+        jobinfo_emit_event_pack_nowait (job,
+                                       "shell-exit",
+                                       "{s:i s:i s:s}",
+                                       "rank", (int) leader_rank,
+                                       "wait_status", wait_status,
+                                       "active_ranks", active_ids);
+    }
+    else {
+        jobinfo_emit_event_pack_nowait (job,
+                                       "shell-exit",
+                                       "{s:i s:i}",
+                                       "rank", (int) leader_rank,
+                                       "wait_status", wait_status);
+    }
+
+    free (active_ids);
+    idset_destroy (active);
+}
+
 static void exit_cb (struct bulk_exec *exec,
                      void *arg,
                      const struct idset *ranks)
@@ -499,8 +546,19 @@ static void exit_cb (struct bulk_exec *exec,
     struct jobinfo *job = arg;
     struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
 
-    /*  Nothing to do here if the job consists of only one shell.
-     *  (or, if we fail to to get ctx object (highly unlikely))
+    /*  Post shell-exit event if the leader shell (shell rank 0) is in the
+     *  set of exiting ranks.  This must be done before the single-shell
+     *  early-return so the event is posted for single-shell jobs too.
+     *  ctx may be NULL in highly unlikely error scenarios; skip if so.
+     */
+    if (ctx) {
+        unsigned int leader_rank = resource_set_nth_rank (job->R, 0);
+        if (idset_test (ranks, leader_rank))
+            post_shell_exit_event (exec, job, ctx, leader_rank);
+    }
+
+    /*  Nothing more to do here if the job consists of only one shell.
+     *  (or, if we fail to get ctx object (highly unlikely))
      */
     if (bulk_exec_total (exec) == 1
         || !(ctx = bulk_exec_aux_get (exec, "ctx")))
