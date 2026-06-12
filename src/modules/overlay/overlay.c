@@ -44,57 +44,25 @@
 #endif
 
 #include "overlay.h"
-#include "compat.h"
 #include "src/broker/trace.h"
 #include "src/broker/state_machine.h"
 #include "boot_util.h"
 #include "boot_pmi.h"
 #include "boot_config.h"
+#include "ovconf.h"
+#include "children.h"
+#include "parent.h"
 
 /* Module debug flag to create zombie socket that blocks zmq_ctx_term().
  * Enable with: flux module debug --setbit 1 overlay
  */
 #define DEBUG_ZOMBIESOCKET 1
 
-/* How long to wait (seconds) for a peer broker's TCP ACK before disconnecting.
- * This can be configured via TOML and on the broker command line.
- */
-static const double default_tcp_user_timeout = 20.;
-#ifdef ZMQ_TCP_MAXRT
-static bool have_tcp_maxrt = true;
-#else
-static bool have_tcp_maxrt = false;
-#endif
-
-/* How long to wait (seconds) for a connect attempt to time out before
- * reconnecting.
- */
-static const double default_connect_timeout = 30.;
-#ifdef ZMQ_CONNECT_TIMEOUT
-static bool have_connect_timeout = true;
-#else
-static bool have_connect_timeout = false;
-#endif
-
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers
 #endif
 
 #define FLUX_ZAP_DOMAIN "flux"
-
-/* Numerical values for "subtree health" so we can send them in control
- * messages.  Textual values below will be used for communication with front
- * end diagnostic tool.
- */
-enum subtree_status {
-    SUBTREE_STATUS_UNKNOWN = 0,
-    SUBTREE_STATUS_FULL = 1,
-    SUBTREE_STATUS_PARTIAL = 2,
-    SUBTREE_STATUS_DEGRADED = 3,
-    SUBTREE_STATUS_LOST = 4,
-    SUBTREE_STATUS_OFFLINE = 5,
-    SUBTREE_STATUS_MAXIMUM = 5,
-};
 
 /* Names array is indexed with subtree_status enum.
  * Convert with subtree_status_str()
@@ -109,33 +77,6 @@ static const char *subtree_status_names[] = {
     NULL,
 };
 
-struct child {
-    double lastseen;
-    uint32_t rank;
-    char uuid[UUID_STR_LEN];
-    enum subtree_status status;
-    struct timespec status_timestamp;
-    bool torpid;
-    struct rpc_track *tracker;
-    flux_error_t error;
-};
-
-struct parent {
-    void *zsock;            // NULL on rank 0
-    char *uri;
-    flux_watcher_t *w;
-    int lastsent;
-    char *pubkey;
-    uint32_t rank;
-    char uuid[UUID_STR_LEN];
-    bool hello_error;
-    bool hello_responded;
-    bool offline;           // set upon receipt of CONTROL_DISCONNECT
-    bool goodbye_sent;
-    struct rpc_track *tracker;
-    struct zmqutil_monitor *monitor;
-};
-
 /* Wake up periodically (between 'sync_min' and 'sync_max' seconds) and:
  * 1) send control to parent if nothing was sent in 'torpid_min' seconds
  * 2) find children that have not been heard from in 'torpid_max' seconds
@@ -143,17 +84,10 @@ struct parent {
 static const double sync_min = 1.0;
 static const double sync_max = 5.0;
 
-static const double default_torpid_min = 5.0;
-static const double default_torpid_max = 30.0;
-
-static const char *default_interface_hint = "default-route";
-
 struct overlay {
     void *zctx;
     bool zctx_external;
     struct cert *cert;
-    struct zmqutil_zap *zap;
-    int enable_ipv6;
 
     flux_t *h;
     char *hostname;
@@ -169,26 +103,16 @@ struct overlay {
     int event_seq;              // used for sequence verification
     char uuid[UUID_STR_LEN];
     int version;
-    int zmqdebug;
-    int zmq_io_threads;
-    double torpid_min;
-    double torpid_max;
-    double tcp_user_timeout;
-    double connect_timeout;
-    int child_rcvhwm;
 
-    struct parent parent;
+    struct ovconf config;
+
+    struct parent *parent;
 
     bool spurn_hello;           // no new downstream connections permitted
-    void *bind_zsock;           // NULL if no downstream peers
     struct bizcard *bizcard;
-    flux_watcher_t *bind_w;
-    struct child *children;
-    int child_count;
-    zhashx_t *child_hash;
+    struct children *children;
     enum subtree_status status;
     struct timespec status_timestamp;
-    struct zmqutil_monitor *bind_monitor;
 
     struct flux_msglist *monitor_requests;
 
@@ -208,36 +132,16 @@ static int overlay_control_parent (struct overlay *ov,
                                    enum control_type type,
                                    int status);
 static void overlay_health_respond_all (struct overlay *ov);
-static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank);
 static int overlay_goodbye_parent (struct overlay *overlay, flux_error_t *errp);
 static void overlay_goodbye_cb (struct overlay *ov, const flux_msg_t *msg);
-static int overlay_get_child_online_peer_count (struct overlay *ov);
 static void overlay_event_checkseq (struct overlay *ov, const flux_msg_t *msg);
 
-/* Convenience iterator for ov->children
- */
-#define foreach_overlay_child(ov, child) \
-    for ((child) = &(ov)->children[0]; \
-            (child) - &(ov)->children[0] < (ov)->child_count; \
-            (child)++)
 
 static const char *subtree_status_str (enum subtree_status status)
 {
     if (status > SUBTREE_STATUS_MAXIMUM)
         return "unknown";
     return subtree_status_names[status];
-}
-
-static bool subtree_is_online (enum subtree_status status)
-{
-    switch (status) {
-        case SUBTREE_STATUS_FULL:
-        case SUBTREE_STATUS_PARTIAL:
-        case SUBTREE_STATUS_DEGRADED:
-            return true;
-        default:
-            return false;
-    }
 }
 
 /* Call this function after a child->status changes.
@@ -250,7 +154,7 @@ static void subtree_status_update (struct overlay *ov)
     enum subtree_status status = SUBTREE_STATUS_FULL;
     struct child *child;
 
-    foreach_overlay_child (ov, child) {
+    children_foreach (ov->children, child) {
         switch (child->status) {
             case SUBTREE_STATUS_FULL:
                 break;
@@ -314,7 +218,7 @@ static void overlay_monitor_notify (struct overlay *ov, uint32_t rank)
     msg = flux_msglist_first (ov->monitor_requests);
     while (msg) {
         struct child *child;
-        if ((child = child_lookup_byrank (ov, rank)))
+        if ((child = children_lookup_byrank (ov->children, rank)))
             overlay_monitor_respond_one (ov->h, msg, child);
         msg = flux_msglist_next (ov->monitor_requests);
     }
@@ -322,69 +226,40 @@ static void overlay_monitor_notify (struct overlay *ov, uint32_t rank)
     /* Notify state machine once all child subtrees are offline
      */
     if (ov->broker_state == STATE_SHUTDOWN
-        && ov->child_count > 0
-        && overlay_get_child_online_peer_count (ov) == 0)
+        && ov->children
+        && children_get_online_count (ov->children) == 0)
         overlay_state_machine_post (ov, "children-complete", false);
 }
 
 int overlay_set_topology (struct overlay *ov, struct topology *topo)
 {
-    int *child_ranks = NULL;
-    ssize_t child_count;
-
     ov->topo = topology_incref (topo);
-    /* Determine which ranks, if any are direct children of this one.
-     */
-    if ((child_count = topology_get_child_ranks (topo, NULL, 0)) < 0
-        || !(child_ranks = calloc (child_count, sizeof (child_ranks[0])))
-        || topology_get_child_ranks (topo, child_ranks, child_count) < 0)
-        goto error;
 
     if (!cert_meta_get (ov->cert, "name")) {
         char val[16];
         snprintf (val, sizeof (val), "%lu", (unsigned long)ov->rank);
         if (cert_meta_set (ov->cert, "name", val) < 0)
-            goto error;
+            return -1;
     }
-    ov->child_count = child_count;
-    if (ov->child_count > 0) {
-        int i;
-
-        if (!(ov->children = calloc (ov->child_count, sizeof (struct child))))
+    /* Only create children structure if there are actual children.
+     * This avoids creating unused ZAP authenticator and bind socket.
+     */
+    if (topology_get_child_ranks (topo, NULL, 0) > 0) {
+        if (!(ov->children = children_create (ov->h, topo)))
             return -1;
-        if (!(ov->child_hash = zhashx_new ()))
-            return -1;
-        zhashx_set_key_duplicator (ov->child_hash, NULL);
-        zhashx_set_key_destructor (ov->child_hash, NULL);
-        for (i = 0; i < ov->child_count; i++) {
-            struct child *child = &ov->children[i];
-            child->rank = child_ranks[i];
-            child->status = SUBTREE_STATUS_OFFLINE;
-            monotime (&child->status_timestamp);
-            child->tracker = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG);
-            if (!child->tracker)
-                return -1;
-            if (topology_rank_aux_set (topo,
-                                       child->rank,
-                                       "child",
-                                       child,
-                                       NULL) < 0)
-                return -1;
-        }
         ov->status = SUBTREE_STATUS_PARTIAL;
     }
-    else
+    else {
+        ov->children = NULL;
         ov->status = SUBTREE_STATUS_FULL;
+    }
     monotime (&ov->status_timestamp);
     if (ov->rank > 0) {
-        ov->parent.rank = topology_get_parent (topo);
-        ov->parent.tracker = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG);
+        uint32_t parent_rank = topology_get_parent (topo);
+        if (!(ov->parent = parent_create (ov->h, parent_rank)))
+            return -1;
     }
-    free (child_ranks);
     return 0;
-error:
-    free (child_ranks);
-    return -1;
 }
 
 void overlay_test_set_rank (struct overlay *ov, uint32_t rank)
@@ -394,8 +269,7 @@ void overlay_test_set_rank (struct overlay *ov, uint32_t rank)
 
 static bool overlay_parent_error (struct overlay *ov)
 {
-    return ((ov->parent.hello_responded && ov->parent.hello_error)
-            || ov->parent.offline);
+    return parent_error (ov->parent);
 }
 
 void overlay_test_set_version (struct overlay *ov, int version)
@@ -403,21 +277,9 @@ void overlay_test_set_version (struct overlay *ov, int version)
     ov->version = version;
 }
 
-static int overlay_get_child_online_peer_count (struct overlay *ov)
-{
-    struct child *child;
-    int count = 0;
-
-    foreach_overlay_child (ov, child) {
-        if (subtree_is_online (child->status))
-            count++;
-    }
-    return count;
-}
-
 void overlay_set_ipv6 (struct overlay *ov, int enable)
 {
-    ov->enable_ipv6 = enable;
+    ovconf_set_ipv6 (&ov->config, enable);
 }
 
 static void log_torpid_child (flux_t *h,
@@ -454,11 +316,12 @@ static void update_torpid_children (struct overlay *ov)
     struct child *child;
     double now = flux_reactor_now (ov->reactor);
 
-    foreach_overlay_child (ov, child) {
-        if (subtree_is_online (child->status) && child->lastseen > 0) {
+    children_foreach (ov->children, child) {
+        if (child_is_online (child) && child->lastseen > 0) {
             double duration = now - child->lastseen;
 
-            if (duration >= ov->torpid_max && ov->torpid_max > 0) {
+            if (duration >= ov->config.torpid_max
+                && ov->config.torpid_max > 0) {
                 if (!child->torpid) {
                     log_torpid_child (ov->h, child->rank, true, duration);
                     child->torpid = true;
@@ -476,79 +339,28 @@ static void update_torpid_children (struct overlay *ov)
     }
 }
 
-static struct child *child_lookup (struct overlay *ov, const char *id)
-{
-    if (id) {
-        struct child *child;
-        foreach_overlay_child (ov, child) {
-            if (streq (id, child->uuid))
-                return child;
-        }
-    }
-    return NULL;
-}
-
-/* N.B. overlay_child_status_update() ensures child_lookup_online() only
- * succeeds for online peers.
- */
-static struct child *child_lookup_online (struct overlay *ov, const char *id)
-{
-    return ov->child_hash ?  zhashx_lookup (ov->child_hash, id) : NULL;
-}
-
-/* Lookup (direct) child peer by rank.
- * Returns NULL on lookup failure.
- */
-static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank)
-{
-    return topology_rank_aux_get (ov->topo, rank, "child");
-}
-
-/* Look up child that provides route to 'rank' (NULL if none).
- */
-static struct child *child_lookup_route (struct overlay *ov, uint32_t rank)
-{
-    int child_rank;
-
-    child_rank = topology_get_child_route (ov->topo, rank);
-    if (child_rank < 0)
-        return NULL;
-    return child_lookup_byrank (ov, child_rank);
-}
-
 int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey)
 {
-    if (!(ov->parent.pubkey = strdup (pubkey)))
-        return -1;
-    return 0;
+    return parent_set_pubkey (ov->parent, pubkey);
 }
 
 int overlay_set_parent_uri (struct overlay *ov, const char *uri)
 {
-    free (ov->parent.uri);
-    if (!(ov->parent.uri = strdup (uri)))
-        return -1;
-    return 0;
+    return parent_set_uri (ov->parent, uri);
 }
 
 static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg)
 {
-    int rc = -1;
+    int rc;
 
-    if (!ov->parent.zsock || ov->parent.offline || ov->parent.goodbye_sent) {
-        errno = EHOSTUNREACH;
-        goto done;
-    }
-    rc = zmqutil_msg_send (ov->parent.zsock, msg);
+    rc = parent_sendmsg (ov->parent, msg);
     if (rc == 0) {
-        ov->parent.lastsent = flux_reactor_now (ov->reactor);
         trace_overlay_msg (ov->h,
                            "tx",
-                           ov->parent.rank,
+                           ov->parent->rank,
                            ov->trace_requests,
                            msg);
     }
-done:
     return rc;
 }
 
@@ -558,7 +370,7 @@ static int overlay_control_parent (struct overlay *ov,
 {
     flux_msg_t *msg = NULL;
 
-    if (ov->parent.zsock) {
+    if (ov->parent) {
         if (!(msg = flux_control_encode (type, status)))
             return -1;
         flux_msg_route_enable (msg);
@@ -623,8 +435,8 @@ static void channel_cb (flux_reactor_t *r,
             bool upstream = flux_msg_has_flag (msg, FLUX_MSGFLAG_UPSTREAM);
             // downstream
             if (!(upstream && nodeid == ov->rank)
-                && (child = child_lookup_route (ov, nodeid))) {
-                if (!subtree_is_online (child->status)) {
+                && (child = children_lookup_route (ov->children, nodeid))) {
+                if (!child_is_online (child)) {
                     errno = EHOSTUNREACH;
                     goto request_error;
                 }
@@ -633,12 +445,7 @@ static void channel_cb (flux_reactor_t *r,
                     goto request_error;
                 if (overlay_sendmsg_child (ov, msg) < 0)
                     goto request_error;
-                if (!child) {
-                    if ((uuid = flux_msg_route_last (msg)))
-                        child = child_lookup_online (ov, ov->uuid);
-                }
-                if (child)
-                    rpc_track_update (child->tracker, msg);
+                rpc_track_update (child->tracker, msg);
             }
             // upstream
             else {
@@ -646,15 +453,16 @@ static void channel_cb (flux_reactor_t *r,
                  * while unroutable rank-addressed requests get EHOSTUNREACH.
                  * Special-case ENOSYS here.
                  */
-                if (ov->rank == 0
-                    && !upstream
-                    && (nodeid == 0 || nodeid == FLUX_NODEID_ANY)) {
-                    errno = ENOSYS;
+                if (!ov->parent) {
+                    if (!upstream && (nodeid == 0 || nodeid == FLUX_NODEID_ANY))
+                        errno = ENOSYS;
+                    else
+                        errno = EHOSTUNREACH;
                     goto request_error;
                 }
                 if (overlay_sendmsg_parent (ov, msg) < 0)
                     goto request_error;
-                rpc_track_update (ov->parent.tracker, msg);
+                rpc_track_update (ov->parent->tracker, msg);
             }
             break;
         case FLUX_MSGTYPE_RESPONSE:
@@ -662,9 +470,9 @@ static void channel_cb (flux_reactor_t *r,
              * otherwise downstream.  The send downstream will fail with
              * EHOSTUNREACH if uuid doesn't match an immediate peer.
              */
-            if (ov->rank > 0
+            if (ov->parent
                 && (uuid = flux_msg_route_last (msg)) != NULL
-                && streq (uuid, ov->parent.uuid)) {
+                && streq (uuid, ov->parent->uuid)) {
                 if (overlay_sendmsg_parent (ov, msg) < 0)
                     goto done;
             }
@@ -732,7 +540,7 @@ static void state_continuation (flux_future_t *f, void *arg)
              * if there are no children or they are not connected, post
              * children-none here.
              */
-            if (overlay_get_child_online_peer_count (ov) == 0)
+            if (children_get_online_count (ov->children) == 0)
                 overlay_state_machine_post (ov, "children-none", false);
             ov->spurn_hello = true;
             break;
@@ -742,9 +550,9 @@ static void state_continuation (flux_future_t *f, void *arg)
             /* Send an overlay.goodbye request to parent, if any.
              * The overlay.goodbye response handler posts goodbye.
              * If the request cannot be sent, post it here.
-             * N.B. on rank 0, the broker shutdown logic posts goodbye.
+             * N.B. on rank 0, there is no parent so skip this.
              */
-            if (ov->rank > 0) {
+            if (ov->parent) {
                 flux_error_t error;
                 if (overlay_goodbye_parent (ov, &error) < 0) {
                     flux_log (ov->h, LOG_ERR, "%s", error.text);
@@ -766,7 +574,7 @@ static void sync_cb (flux_future_t *f, void *arg)
     struct overlay *ov = arg;
     double now = flux_reactor_now (ov->reactor);
 
-    if (now - ov->parent.lastsent > ov->torpid_min)
+    if (ov->parent && now - ov->parent->lastsent > ov->config.torpid_min)
         overlay_control_parent (ov, CONTROL_HEARTBEAT, 0);
     update_torpid_children (ov);
 
@@ -830,12 +638,12 @@ static void fail_child_rpcs (const flux_msg_t *msg, void *arg)
 
     last_hop = flux_msg_route_last (response);
 
-    if ((child = child_lookup (ov, last_hop))) {
+    if ((child = children_lookup (ov->children, last_hop))) {
         if (overlay_sendmsg_child (ov, response) < 0)
             goto error;
         flux_msg_decref (response);
     }
-    else if (ov->rank > 0 && last_hop && streq (last_hop, ov->parent.uuid)) {
+    else if (ov->parent && last_hop && streq (last_hop, ov->parent->uuid)) {
         if (overlay_sendmsg_parent (ov, response) < 0)
             goto error;
         flux_msg_decref (response);
@@ -855,20 +663,11 @@ static void overlay_child_status_update (struct overlay *ov,
                                          int status,
                                          const char *reason)
 {
-    if (child->status != status) {
-        if (subtree_is_online (child->status)
-            && !subtree_is_online (status)) {
-            zhashx_delete (ov->child_hash, child->uuid);
+    bool went_offline;
+
+    if (children_set_status (ov->children, child, status, &went_offline)) {
+        if (went_offline)
             rpc_track_purge (child->tracker, fail_child_rpcs, ov);
-        }
-        else if (!subtree_is_online (child->status)
-            && subtree_is_online (status)) {
-            zhashx_insert (ov->child_hash, child->uuid, child);
-        }
-
-        child->status = status;
-        monotime (&child->status_timestamp);
-
         subtree_status_update (ov);
         overlay_monitor_notify (ov, child->rank);
         overlay_health_respond_all (ov);
@@ -902,11 +701,7 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
 {
     int rc = -1;
 
-    if (!ov->bind_zsock) {
-        errno = EHOSTUNREACH;
-        goto done;
-    }
-    rc = zmqutil_msg_send_ex (ov->bind_zsock, msg, true);
+    rc = children_sendmsg (ov->children, msg);
     /* Since ROUTER socket has ZMQ_ROUTER_MANDATORY set, EHOSTUNREACH on a
      * connected peer signifies a disconnect.  See zmq_setsockopt(3).
      */
@@ -916,7 +711,7 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
         struct child *child;
 
         if ((uuid = flux_msg_route_last (msg))
-            && (child = child_lookup_online (ov, uuid))) {
+            && (child = children_lookup_online (ov->children, uuid))) {
             log_lost_connection (ov, child, "failed");
             overlay_child_status_update (ov,
                                          child,
@@ -936,12 +731,11 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
         // N.B. events are traced in overlay_mcast_child()
         if (type != FLUX_MSGTYPE_EVENT) {
             if ((uuid = flux_msg_route_last (msg))
-                && (child = child_lookup_online (ov, uuid)))
+                && (child = children_lookup_online (ov->children, uuid)))
                 rank = child->rank;
             trace_overlay_msg (ov->h, "tx", rank, ov->trace_requests, msg);
         }
     }
-done:
     return rc;
 }
 
@@ -961,8 +755,8 @@ static void overlay_mcast_child (struct overlay *ov, flux_msg_t *msg)
 
     flux_msg_route_enable (msg);
 
-    foreach_overlay_child (ov, child) {
-        if (subtree_is_online (child->status)) {
+    children_foreach (ov->children, child) {
+        if (child_is_online (child)) {
             if (msg_route_sendto (msg,
                                   child->uuid,
                                   overlay_mcast_send,
@@ -1044,7 +838,7 @@ static void child_cb (flux_reactor_t *r,
     const char *uuid = NULL;
     struct child *child;
 
-    if (!(msg = zmqutil_msg_recv (ov->bind_zsock)))
+    if (!(msg = children_recvmsg (ov->children)))
         return;
     if (clear_msg_role (msg, FLUX_ROLE_LOCAL) < 0) {
         logdrop (ov, "downstream", msg, "failed to clear local role");
@@ -1055,7 +849,7 @@ static void child_cb (flux_reactor_t *r,
         logdrop (ov, "downstream", msg, "malformed message");
         goto done;
     }
-    if (!(child = child_lookup_online (ov, uuid))) {
+    if (!(child = children_lookup_online (ov->children, uuid))) {
         bool is_hello = false;
         json_int_t rank = FLUX_NODEID_ANY;
 
@@ -1166,7 +960,7 @@ static void fail_parent_rpc (const flux_msg_t *msg, void *arg)
         || flux_msg_set_string (response, "overlay disconnect") < 0)
         goto error;
     last_hop = flux_msg_route_last (response);
-    if (child_lookup (ov, last_hop)) {
+    if (children_lookup (ov->children, last_hop)) {
         if (overlay_sendmsg_child (ov, response) < 0)
             goto error;
         flux_msg_decref (response);
@@ -1181,12 +975,11 @@ error:
     flux_msg_decref (response);
 }
 
-static void parent_disconnect (struct overlay *ov)
+static void overlay_handle_parent_disconnect (struct overlay *ov)
 {
-    if (ov->parent.zsock) {
-        (void)zmq_disconnect (ov->parent.zsock, ov->parent.uri);
-        ov->parent.offline = true;
-        rpc_track_purge (ov->parent.tracker, fail_parent_rpc, ov);
+    if (ov->parent) {
+        parent_disconnect (ov->parent);
+        rpc_track_purge (ov->parent->tracker, fail_parent_rpc, ov);
         overlay_monitor_notify (ov, FLUX_NODEID_ANY);
         if (overlay_parent_error (ov))
             overlay_state_machine_post (ov, "parent-fail", true);
@@ -1230,7 +1023,7 @@ static void parent_cb (flux_reactor_t *r,
     int type;
     const char *topic = NULL;
 
-    if (!(msg = zmqutil_msg_recv (ov->parent.zsock)))
+    if (!(msg = parent_recvmsg (ov->parent)))
         return;
     if (clear_msg_role (msg, FLUX_ROLE_LOCAL) < 0) {
         logdrop (ov, "upstream", msg, "failed to clear local role");
@@ -1240,7 +1033,7 @@ static void parent_cb (flux_reactor_t *r,
         logdrop (ov, "upstream", msg, "malformed message");
         goto done;
     }
-    if (!ov->parent.hello_responded) {
+    if (!ov->parent->hello_responded) {
         /* process hello response */
         if (type == FLUX_MSGTYPE_RESPONSE
             && flux_msg_get_topic (msg, &topic) == 0
@@ -1264,7 +1057,7 @@ static void parent_cb (flux_reactor_t *r,
                 overlay_state_machine_post (ov, "goodbye", false);
                 goto done;
             }
-            rpc_track_update (ov->parent.tracker, msg);
+            rpc_track_update (ov->parent->tracker, msg);
             break;
         case FLUX_MSGTYPE_EVENT:
             /* Upstream broker enables routing and pushes our uuid, then
@@ -1285,9 +1078,9 @@ static void parent_cb (flux_reactor_t *r,
             else if (ctrl_type == CONTROL_DISCONNECT) {
                 flux_log (ov->h, LOG_CRIT,
                           "%s (rank %lu) sent disconnect control message",
-                          flux_get_hostbyrank (ov->h, ov->parent.rank),
-                          (unsigned long)ov->parent.rank);
-                parent_disconnect (ov);
+                          flux_get_hostbyrank (ov->h, ov->parent->rank),
+                          (unsigned long)ov->parent->rank);
+                overlay_handle_parent_disconnect (ov);
             }
             else
                 logdrop (ov, "upstream", msg, "unknown control type");
@@ -1296,7 +1089,7 @@ static void parent_cb (flux_reactor_t *r,
         default:
             break;
     }
-    trace_overlay_msg (ov->h, "rx", ov->parent.rank, ov->trace_requests, msg);
+    trace_overlay_msg (ov->h, "rx", ov->parent->rank, ov->trace_requests, msg);
     if (flux_send_new (ov->h_channel, &msg, 0) < 0)
         goto done;
     return;
@@ -1389,11 +1182,11 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
         errno = EINVAL;
         goto error;
     }
-    if (!(child = child_lookup_byrank (ov, rank))) {
+    if (!(child = children_lookup_byrank (ov->children, rank))) {
         errprintf (&error,
-                  "rank %lu is not a peer of parent %lu: mismatched config?",
+                  "rank %lu is not a child of rank %lu: mismatched config?",
                   (unsigned long)rank,
-                  (unsigned long)ov->parent.rank);
+                  (unsigned long)ov->rank);
         flux_log (ov->h, LOG_ERR,
                   "rejecting connection from %s (rank %lu): %s",
                   flux_get_hostbyrank (ov->h, rank),
@@ -1407,7 +1200,7 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
      * Update the (old) child's subtree status to LOST.  If the hello
      * request is successful, another update will immediately follow.
      */
-    if (subtree_is_online (child->status)) { // crash
+    if (child_is_online (child)) { // crash
         flux_log (ov->h, LOG_ERR,
         "%s (rank %lu) reconnected after crash, dropping old connection state",
                   flux_get_hostbyrank (ov->h, child->rank),
@@ -1471,16 +1264,16 @@ static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg)
     flux_log (ov->h,
               LOG_DEBUG,
               "hello parent %lu %s",
-              (unsigned long)ov->parent.rank,
+              (unsigned long)ov->parent->rank,
               uuid);
-    if (strlcpy (ov->parent.uuid,
+    if (strlcpy (ov->parent->uuid,
                  uuid,
-                 sizeof (ov->parent.uuid)) >= sizeof (ov->parent.uuid)) {
+                 sizeof (ov->parent->uuid)) >= sizeof (ov->parent->uuid)) {
         errno = EOVERFLOW;
         goto error;
     }
-    ov->parent.hello_responded = true;
-    ov->parent.hello_error = false;
+    ov->parent->hello_responded = true;
+    ov->parent->hello_error = false;
     overlay_monitor_notify (ov, FLUX_NODEID_ANY);
     if (overlay_parent_error (ov))
         overlay_state_machine_post (ov, "parent-fail", true);
@@ -1490,8 +1283,8 @@ error:
               LOG_ERR,
               "overlay.hello: %s",
               errstr ? errstr : strerror (errno));
-    ov->parent.hello_responded = true;
-    ov->parent.hello_error = true;
+    ov->parent->hello_responded = true;
+    ov->parent->hello_error = true;
     overlay_monitor_notify (ov, FLUX_NODEID_ANY);
     if (overlay_parent_error (ov))
         overlay_state_machine_post (ov, "parent-fail", true);
@@ -1522,37 +1315,6 @@ static int hello_request_send (struct overlay *ov,
     return 0;
 }
 
-static void bind_monitor_cb (struct zmqutil_monitor *mon, void *arg)
-{
-    struct overlay *ov = arg;
-    struct monitor_event event;
-
-    if (zmqutil_monitor_get (mon, &event) == 0) {
-        flux_log (ov->h,
-                  zmqutil_monitor_iserror (&event) ? LOG_ERR : LOG_DEBUG,
-                  "child sockevent %s %s%s%s",
-                  event.endpoint,
-                  event.event_str,
-                  *event.value_str ? ": " : "",
-                  event.value_str);
-    }
-}
-static void parent_monitor_cb (struct zmqutil_monitor *mon, void *arg)
-{
-    struct overlay *ov = arg;
-    struct monitor_event event;
-
-    if (zmqutil_monitor_get (mon, &event) == 0) {
-        flux_log (ov->h,
-                  zmqutil_monitor_iserror (&event) ? LOG_ERR : LOG_DEBUG,
-                  "parent sockevent %s %s%s%s",
-                  event.endpoint,
-                  event.event_str,
-                  *event.value_str ? ": " : "",
-                  event.value_str);
-    }
-}
-
 static int overlay_zmq_init (struct overlay *ov)
 {
     if (!ov->zctx) {
@@ -1563,17 +1325,15 @@ static int overlay_zmq_init (struct overlay *ov)
          * other nodes yet increases the broker's footprint.
          * This could be removed if we decide otherwise later on.
          */
-        if (ov->rank > 0 && ov->zmq_io_threads != 1) {
+        if (ov->rank > 0 && ov->config.zmq_io_threads != 1) {
             const char *key = "tbon.zmq_io_threads";
-            if (compat_attr_set_flags (ov->h, key, 0) < 0
-                || compat_attr_delete (ov->h, key, true) < 0
-                || compat_attr_add_int (ov->h, key, 1, ATTR_IMMUTABLE) < 0)
+            if (flux_attr_set_ex (ov->h, key, "1", true, NULL) < 0)
                 return -1;
-            ov->zmq_io_threads = 1;
+            ov->config.zmq_io_threads = 1;
         }
         if (zmq_ctx_set (ov->zctx,
                          ZMQ_IO_THREADS,
-                         ov->zmq_io_threads) < 0)
+                         ov->config.zmq_io_threads) < 0)
             return -1;
     }
     return 0;
@@ -1581,100 +1341,24 @@ static int overlay_zmq_init (struct overlay *ov)
 
 int overlay_connect (struct overlay *ov)
 {
-    if (ov->rank > 0) {
-        if (!ov->h || ov->rank == FLUX_NODEID_ANY || !ov->parent.uri) {
+    if (ov->parent) {
+        if (!ov->h || ov->rank == FLUX_NODEID_ANY || !ov->parent->uri) {
             errno = EINVAL;
             return -1;
         }
         if (overlay_zmq_init (ov) < 0)
             return -1;
-        if (!(ov->parent.zsock = zmq_socket (ov->zctx, ZMQ_DEALER))
-            || zsetsockopt_int (ov->parent.zsock, ZMQ_SNDHWM, 0) < 0
-            || zsetsockopt_int (ov->parent.zsock, ZMQ_RCVHWM, 0) < 0
-            || zsetsockopt_int (ov->parent.zsock, ZMQ_LINGER, 5) < 0
-            || zsetsockopt_int (ov->parent.zsock, ZMQ_IPV6, ov->enable_ipv6) < 0
-            || zsetsockopt_str (ov->parent.zsock, ZMQ_IDENTITY, ov->uuid) < 0
-            || zsetsockopt_str (ov->parent.zsock,
-                                ZMQ_ZAP_DOMAIN,
-                                FLUX_ZAP_DOMAIN) < 0
-            || zsetsockopt_str (ov->parent.zsock,
-                                ZMQ_CURVE_SERVERKEY,
-                                ov->parent.pubkey) < 0)
+        if (parent_connect (ov->parent,
+                            ov->zctx,
+                            ov->cert,
+                            ov->uuid,
+                            &ov->config) < 0)
             return -1;
-        /* The socket monitor is only used for logging.
-         * Setup may fail if libzmq is too old.
-         */
-        if (ov->zmqdebug) {
-            ov->parent.monitor = zmqutil_monitor_create (ov->zctx,
-                                                         ov->parent.zsock,
-                                                         ov->reactor,
-                                                         parent_monitor_cb,
-                                                         ov);
-        }
-#ifdef ZMQ_CONNECT_TIMEOUT
-        if (ov->connect_timeout > 0) {
-            if (zsetsockopt_int (ov->parent.zsock,
-                                 ZMQ_CONNECT_TIMEOUT,
-                                 ov->connect_timeout * 1000) < 0)
-                return -1;
-        }
-#endif
-#ifdef ZMQ_TCP_MAXRT
-        if (ov->tcp_user_timeout > 0) {
-            if (zsetsockopt_int (ov->parent.zsock,
-                                 ZMQ_TCP_MAXRT,
-                                 ov->tcp_user_timeout * 1000) < 0)
-                return -1;
-        }
-#endif
-        if (cert_apply (ov->cert, ov->parent.zsock) < 0)
+        if (parent_watch (ov->parent, parent_cb, ov) < 0)
             return -1;
-        if (zmq_connect (ov->parent.zsock, ov->parent.uri) < 0)
-            return -1;
-        flux_log (ov->h, LOG_DEBUG, "connecting to %s", ov->parent.uri);
-        if (!(ov->parent.w = zmqutil_watcher_create (ov->reactor,
-                                                     ov->parent.zsock,
-                                                     FLUX_POLLIN,
-                                                     parent_cb,
-                                                     ov)))
-            return -1;
-        flux_watcher_start (ov->parent.w);
         if (hello_request_send (ov, ov->rank, FLUX_CORE_VERSION_HEX) < 0)
             return -1;
     }
-    return 0;
-}
-
-static void zaplogger (int severity, const char *message, void *arg)
-{
-    struct overlay *ov = arg;
-
-    flux_log (ov->h, severity, "%s", message);
-}
-
-static int bind_uri (struct overlay *ov, const char *uri)
-{
-    char *new_uri;
-    if (zmq_bind (ov->bind_zsock, uri) < 0)
-        return -1;
-    /* Capture URI after zmq_bind() processing, so it reflects expanded
-     * wildcards and normalized addresses.
-     */
-    if (zgetsockopt_str (ov->bind_zsock, ZMQ_LAST_ENDPOINT, &new_uri) < 0)
-        return -1;
-    /* Record the concretized URI in the business card for sharing with peers.
-     */
-    if (bizcard_uri_append (ov->bizcard, new_uri) < 0) {
-        ERRNO_SAFE_WRAP (free, new_uri);
-        return -1;
-    }
-    /* Ensure that any AF_UNIX sockets are unlinked when the broker exits,
-     * but only if they begin with '/'.  (Abstract sockets begin with '@')
-     */
-    if (strstarts (new_uri, "ipc:///"))
-        cleanup_push_string (cleanup_file, new_uri + 6);
-    flux_log (ov->h, LOG_DEBUG, "listening on %s", new_uri);
-    free (new_uri);
     return 0;
 }
 
@@ -1683,7 +1367,13 @@ int overlay_bind (struct overlay *ov,
                   const char *uri2,
                   flux_error_t *errp)
 {
-    if (!ov->h || ov->rank == FLUX_NODEID_ANY || ov->bind_zsock) {
+    char *new_uri = NULL;
+    char *new_uri2 = NULL;
+
+    if (!ov->h
+        || ov->rank == FLUX_NODEID_ANY
+        || !ov->children
+        || ov->children->bind_zsock) {
         errno = EINVAL;
         return errprintf (errp, "overlay_bind: invalid arguments");
     }
@@ -1692,78 +1382,49 @@ int overlay_bind (struct overlay *ov,
                           "error creating zeromq context: %s",
                           strerror (errno));
     }
-    if (ov->zap != NULL) {
-        errno = EINVAL;
-        return errprintf (errp, "ZAP is already initialized!");
-    }
-    if (!(ov->zap = zmqutil_zap_create (ov->zctx, ov->reactor))) {
-        return errprintf (errp,
-                          "error creating ZAP server: %s",
-                          strerror (errno));
-    }
-    zmqutil_zap_set_logger (ov->zap, zaplogger, ov);
 
-    if (!(ov->bind_zsock = zmq_socket (ov->zctx, ZMQ_ROUTER))
-        || zsetsockopt_int (ov->bind_zsock, ZMQ_SNDHWM, 0) < 0
-        || zsetsockopt_int (ov->bind_zsock, ZMQ_RCVHWM, ov->child_rcvhwm) < 0
-        || zsetsockopt_int (ov->bind_zsock, ZMQ_LINGER, 5) < 0
-        || zsetsockopt_int (ov->bind_zsock, ZMQ_ROUTER_MANDATORY, 1) < 0
-        || zsetsockopt_int (ov->bind_zsock, ZMQ_IPV6, ov->enable_ipv6) < 0
-        || zsetsockopt_str (ov->bind_zsock, ZMQ_ZAP_DOMAIN, FLUX_ZAP_DOMAIN) < 0
-        || zsetsockopt_int (ov->bind_zsock, ZMQ_CURVE_SERVER, 1) < 0) {
-        return errprintf (errp,
-                          "error creating zmq ROUTER socket: %s",
-                          strerror (errno));
-    }
-    /* The socket monitor is only used for logging.
-     * Setup may fail if libzmq is too old.
+    if (children_bind (ov->children,
+                       ov->zctx,
+                       ov->cert,
+                       uri,
+                       uri2,
+                       &ov->config,
+                       &new_uri,
+                       uri2 ? &new_uri2 : NULL,
+                       errp) < 0)
+        return -1;
+
+    /* Record the concretized URIs in the business card for sharing with peers.
      */
-    if (ov->zmqdebug) {
-        ov->bind_monitor = zmqutil_monitor_create (ov->zctx,
-                                                   ov->bind_zsock,
-                                                   ov->reactor,
-                                                   bind_monitor_cb,
-                                                   ov);
+    if (bizcard_uri_append (ov->bizcard, new_uri) < 0) {
+        ERRNO_SAFE_WRAP (free, new_uri);
+        ERRNO_SAFE_WRAP (free, new_uri2);
+        errno = ENOMEM;
+        return errprintf (errp, "error appending URI to bizcard");
     }
-#ifdef ZMQ_TCP_MAXRT
-    if (ov->tcp_user_timeout > 0) {
-        if (zsetsockopt_int (ov->bind_zsock,
-                             ZMQ_TCP_MAXRT,
-                             ov->tcp_user_timeout * 1000) < 0) {
-            return errprintf (errp,
-                              "error setting TCP_MAXRT option"
-                              " on bind socket: %s",
-                              strerror (errno));
+    /* Ensure that any AF_UNIX sockets are unlinked when the broker exits,
+     * but only if they begin with '/'.  (Abstract sockets begin with '@')
+     */
+    if (strstarts (new_uri, "ipc:///"))
+        cleanup_push_string (cleanup_file, new_uri + 6);
+    free (new_uri);
+
+    if (new_uri2) {
+        if (bizcard_uri_append (ov->bizcard, new_uri2) < 0) {
+            ERRNO_SAFE_WRAP (free, new_uri2);
+            errno = ENOMEM;
+            return errprintf (errp, "error appending URI2 to bizcard");
         }
+        if (strstarts (new_uri2, "ipc:///"))
+            cleanup_push_string (cleanup_file, new_uri2 + 6);
+        free (new_uri2);
     }
-#endif
-    if (cert_apply (ov->cert, ov->bind_zsock) < 0) {
-        return errprintf (errp,
-                          "error setting curve socket options: %s",
-                          strerror (errno));
-    }
-    if (bind_uri (ov, uri) < 0) {
-        return errprintf (errp,
-                          "error binding to %s: %s",
-                          uri,
-                          strerror (errno));
-    }
-    if (uri2 && bind_uri (ov, uri2) < 0) {
-        return errprintf (errp,
-                          "error binding to %s: %s",
-                          uri2,
-                          strerror (errno));
-    }
-    if (!(ov->bind_w = zmqutil_watcher_create (ov->reactor,
-                                               ov->bind_zsock,
-                                               FLUX_POLLIN,
-                                               child_cb,
-                                               ov))) {
+
+    if (children_watch (ov->children, child_cb, ov) < 0) {
         return errprintf (errp,
                           "error creating watcher for bind socket: %s",
                           strerror (errno));
     }
-    flux_watcher_start (ov->bind_w);
     return 0;
 }
 
@@ -1772,25 +1433,26 @@ int overlay_bind (struct overlay *ov,
  */
 static int overlay_register_attrs (struct overlay *overlay)
 {
-    if (compat_attr_add (overlay->h,
-                         "tbon.parent-endpoint",
-                         overlay->parent.uri,
-                         ATTR_IMMUTABLE) < 0)
+    char buf[32];
+
+    // tbon.parent-endpoint can be NULL on rank 0
+    if (overlay->parent) {
+        if (flux_attr_set (overlay->h, "tbon.parent-endpoint",
+                          overlay->parent->uri) < 0)
+            return -1;
+    }
+
+    snprintf (buf, sizeof (buf), "%d", topology_get_level (overlay->topo));
+    if (flux_attr_set (overlay->h, "tbon.level", buf) < 0)
         return -1;
-    if (compat_attr_add_int (overlay->h,
-                             "tbon.level",
-                             topology_get_level (overlay->topo),
-                             ATTR_IMMUTABLE) < 0)
+
+    snprintf (buf, sizeof (buf), "%d", topology_get_maxlevel (overlay->topo));
+    if (flux_attr_set (overlay->h, "tbon.maxlevel", buf) < 0)
         return -1;
-    if (compat_attr_add_int (overlay->h,
-                             "tbon.maxlevel",
-                             topology_get_maxlevel (overlay->topo),
-                             ATTR_IMMUTABLE) < 0)
-        return -1;
-    if (compat_attr_add_int (overlay->h,
-                             "tbon.descendants",
-                             topology_get_descendant_count (overlay->topo),
-                             ATTR_IMMUTABLE) < 0)
+
+    snprintf (buf, sizeof (buf), "%d",
+              topology_get_descendant_count (overlay->topo));
+    if (flux_attr_set (overlay->h, "tbon.descendants", buf) < 0)
         return -1;
 
     return 0;
@@ -1810,7 +1472,7 @@ static void overlay_goodbye_cb (struct overlay *ov, const flux_msg_t *msg)
         flux_log (ov->h, LOG_ERR, "overlay.goodbye: %s", strerror (errno));
         return;
     }
-    if (!(child = child_lookup_online (ov, uuid))) {
+    if (!(child = children_lookup_online (ov->children, uuid))) {
         flux_log (ov->h, LOG_ERR, "overlay.goodbye: uuid unknown");
         return;
     }
@@ -1842,10 +1504,15 @@ static int overlay_goodbye_parent (struct overlay *ov, flux_error_t *errp)
 {
     flux_msg_t *msg;
 
+    if (!ov->parent) {
+        errprintf (errp, "no parent connection");
+        errno = EINVAL;
+        return -1;
+    }
     /* Avoid 60s delay on shutdown of followers when upstream is down.
      * flux-framework/flux-core#5991
      */
-    if (!(ov->parent.hello_responded)) {
+    if (!(ov->parent->hello_responded)) {
         errprintf (errp,
                    "cannot send overlay.goodbye because overlay.hello"
                    " is still in progress");
@@ -1858,17 +1525,18 @@ static int overlay_goodbye_parent (struct overlay *ov, flux_error_t *errp)
         errprintf (errp, "error sending overlay.goodbye: %s", strerror (errno));
         return -1;
     }
-    ov->parent.goodbye_sent = true; // suppress further sends to parent
+    ov->parent->goodbye_sent = true; // suppress further sends to parent
     flux_msg_decref (msg);
     return 0;
 }
 
 static int child_rpc_track_count (struct overlay *ov)
 {
+    struct child *child;
     int count = 0;
-    int i;
-    for (i = 0; i < ov->child_count; i++)
-        count += rpc_track_count (ov->children[i].tracker);
+
+    children_foreach (ov->children, child)
+        count += rpc_track_count (child->tracker);
     return count;
 }
 
@@ -1893,14 +1561,14 @@ static void overlay_stats_get_cb (flux_t *h,
                             &sendq,
                             sizeof (sendq));
     }
-    int child_connected = overlay_get_child_online_peer_count (ov);
+    int child_connected = children_get_online_count (ov->children);
     if (flux_respond_pack (h,
                            msg,
                            "{s:i s:i s:i s:i s:i s:{s:i s:i}}",
-                           "child-count", ov->child_count,
+                           "child-count", ov->children ? ov->children->count : 0,
                            "child-connected", child_connected,
-                           "parent-count", ov->rank > 0 ? 1 : 0,
-                           "parent-rpc", rpc_track_count (ov->parent.tracker),
+                           "parent-count", ov->parent ? 1 : 0,
+                           "parent-rpc", ov->parent ? rpc_track_count (ov->parent->tracker) : 0,
                            "child-rpc", child_rpc_track_count (ov),
                            "interthread",
                              "sendq", (int)sendq,
@@ -1921,14 +1589,14 @@ static int overlay_health_respond (struct overlay *ov, const flux_msg_t *msg)
 
     if (!(array = json_array ()))
         goto nomem;
-    foreach_overlay_child (ov, child) {
+    children_foreach (ov->children, child) {
         duration = monotime_since (child->status_timestamp) / 1000.0;
         if (!(entry = json_pack ("{s:i s:s s:f}",
                                  "rank", child->rank,
                                  "status", subtree_status_str (child->status),
                                  "duration", duration)))
             goto nomem;
-        if (!subtree_is_online (child->status) && child->error.text[0]) {
+        if (!child_is_online (child) && child->error.text[0]) {
             json_t *o;
             if (!(o = json_string (child->error.text))
                 || json_object_set_new (entry, "error", o) < 0) {
@@ -2007,7 +1675,7 @@ static void overlay_monitor_cb (flux_t *h,
         goto error;
     if (!flux_msg_is_streaming (msg))
         goto eproto;
-    foreach_overlay_child (ov, child) {
+    children_foreach (ov->children, child) {
         if (child->status != SUBTREE_STATUS_OFFLINE || child->torpid)
             overlay_monitor_respond_one (ov->h, msg, child);
     }
@@ -2077,7 +1745,7 @@ static void overlay_topology_cb (flux_t *h,
 
     if (flux_request_unpack (msg, NULL, "{s:i}", "rank", &rank) < 0)
         goto error;
-    if (rank != ov->rank && !child_lookup_byrank (ov, rank)) {
+    if (rank != ov->rank && !children_lookup_byrank (ov->children, rank)) {
         errstr = "requested rank is not this broker or its direct child";
         errno = ENOENT;
         goto error;
@@ -2109,12 +1777,12 @@ static void overlay_disconnect_subtree_cb (flux_t *h,
 
     if (flux_request_unpack (msg, NULL, "{s:i}", "rank", &rank) < 0)
         goto error;
-    if (!(child = child_lookup_byrank (ov, rank))) {
+    if (!(child = children_lookup_byrank (ov->children, rank))) {
         errstr = "requested rank is not this broker's direct child";
         errno = ENOENT;
         goto error;
     }
-    if (!subtree_is_online (child->status)) {
+    if (!child_is_online (child)) {
         snprintf (errbuf, sizeof (errbuf), "rank %d is already %s", rank,
                   subtree_status_str (child->status));
         errstr = errbuf;
@@ -2153,7 +1821,7 @@ static void overlay_disconnect_parent_cb (flux_t *h,
     if (flux_request_unpack (msg, NULL, "{s:s}", "reason", &reason) < 0)
         goto error;
     flux_log (h, LOG_CRIT, "disconnecting: %s", reason);
-    parent_disconnect (ov);
+    overlay_handle_parent_disconnect (ov);
     return;
 error:
     flux_log_error (h, "overlay.disconnect-parent error");
@@ -2241,375 +1909,11 @@ int overlay_authorize (struct overlay *ov,
                        const char *name,
                        const char *pubkey)
 {
-    if (!ov->zap) {
+    if (!ov->children || !ov->children->zap) {
         errno = EINVAL;
         return -1;
     }
-    return zmqutil_zap_authorize (ov->zap, name, pubkey);
-}
-
-static int overlay_configure_attr (flux_t *h,
-                                   const char *name,
-                                   const char *default_value,
-                                   const char **valuep)
-{
-    const char *val = default_value;
-    int flags;
-
-    if (compat_attr_get (h, name, &val, &flags) == 0) {
-        if (!(flags & ATTR_IMMUTABLE)) {
-            flags |= ATTR_IMMUTABLE;
-            if (compat_attr_set_flags (h, name, flags) < 0)
-                return -1;
-        }
-    }
-    else {
-        val = default_value;
-        if (compat_attr_add (h, name, val, ATTR_IMMUTABLE) < 0)
-            return -1;
-    }
-    if (valuep)
-        *valuep = val;
-    return 0;
-}
-
-static int overlay_configure_attr_int (flux_t *h,
-                                       const char *name,
-                                       int default_value,
-                                       int *valuep,
-                                       flux_error_t *errp)
-{
-    int value = default_value;
-    const char *val;
-    char *endptr;
-
-    if (compat_attr_get (h, name, &val, NULL) == 0) {
-        errno = 0;
-        value = strtol (val, &endptr, 10);
-        if (errno != 0 || *endptr != '\0') {
-            errno = EINVAL;
-            return errprintf (errp, "%s value must be an integer", name);
-        }
-        if (compat_attr_delete (h, name, true) < 0) {
-            return errprintf (errp,
-                              "attr_delete %s: %s",
-                              name,
-                              strerror (errno));
-        }
-    }
-    if (compat_attr_add_int (h, name, value, ATTR_IMMUTABLE) < 0)
-        return errprintf (errp, "attr_add %s: %s", name, strerror (errno));
-    if (valuep)
-        *valuep = value;
-    return 0;
-}
-
-/* Set attribute with the following precedence:
- * 1. broker attribute
- * 2. TOML config
- * 3. legacy environment variables
- * Leave it unset if none of those are available.
- * The bootstrap methods set it later, but only if not already set.
- */
-static int overlay_configure_interface_hint (struct overlay *ov,
-                                             const char *table,
-                                             const char *name,
-                                             flux_error_t *errp)
-{
-    char long_name[128];
-    const char *val = NULL;
-    const char *config_val = NULL;
-    const char *attr_val = NULL;
-    int flags;
-    const flux_conf_t *cf;
-    flux_error_t error;
-
-    if ((cf = flux_get_conf (ov->h))) {
-        if (flux_conf_unpack (cf,
-                              &error,
-                              "{s?{s?s}}",
-                              table,
-                                name, &config_val) < 0) {
-            return errprintf (errp,
-                              "Config file error [%s]: %s",
-                              table,
-                              error.text);
-        }
-    }
-    (void)snprintf (long_name, sizeof (long_name), "%s.%s", table, name);
-    (void)compat_attr_get (ov->h, long_name, &attr_val, &flags);
-
-    if (attr_val)
-        val = attr_val;
-    else if (config_val)
-        val = config_val;
-    else if ((val = getenv ("FLUX_IPADDR_INTERFACE")))
-        ;
-    else if (getenv ("FLUX_IPADDR_HOSTNAME"))
-        val = "hostname";
-    else
-        val = default_interface_hint;
-
-    if (val && !attr_val) {
-         if (compat_attr_add (ov->h, long_name, val, 0) < 0) {
-            return errprintf (errp,
-                              "Error setting %s attribute value: %s",
-                              long_name,
-                              strerror (errno));
-         }
-    }
-    return 0;
-}
-
-static int overlay_configure_torpid (struct overlay *ov,
-                                     const flux_conf_t *conf,
-                                     bool initialize,
-                                     flux_error_t *errp)
-{
-    flux_error_t error;
-    double tmin_val = -1;
-    double tmax_val = -1;
-    const char *tmin;
-    const char *tmax;
-    char fsd[64];
-
-    // compiled-in default
-    if (initialize) {
-        tmin_val = default_torpid_min;
-        tmax_val = default_torpid_max;
-    }
-
-    // TOML config (initial and updates)
-    tmin = tmax = NULL;
-    if (flux_conf_unpack (conf,
-                          &error,
-                          "{s?{s?s s?s}}",
-                          "tbon",
-                            "torpid_min", &tmin,
-                            "torpid_max", &tmax) < 0)
-        return errprintf (errp, "Config file error [tbon]: %s", error.text);
-    if (tmin && fsd_parse_duration (tmin, &tmin_val) < 0)
-        return errprintf (errp, "Config file error parsing tbon.torpid_min");
-    if (tmax && fsd_parse_duration (tmax, &tmax_val) < 0)
-        return errprintf (errp, "Config file error parsing tbon.torpid_max");
-
-    // command line attribute setting
-    if (initialize) {
-        if ((tmin = flux_attr_get (ov->h, "tbon.torpid_min"))
-            && fsd_parse_duration (tmin, &tmin_val) < 0)
-            return errprintf (errp, "error parsing tbon.torpid_min attribute");
-        if ((tmax = flux_attr_get (ov->h, "tbon.torpid_max"))
-            && fsd_parse_duration (tmax, &tmax_val) < 0)
-            return errprintf (errp, "error parsing tbon.torpid_max attribute");
-    }
-
-    // update tbon.torpid_min
-    if (tmin_val != -1) {
-        if (tmin_val == 0)
-            return errprintf (errp, "tbon.torpid_min must be nonzero");
-        double tmax_check = tmax_val != -1 ? tmax_val : ov->torpid_max;
-        if (tmax_check != 0 && !(tmin_val < tmax_check))
-            return errprintf (errp, "tbon.torpid_min must be less than torpid_max");
-        if (fsd_format_duration (fsd, sizeof (fsd), tmin_val) < 0
-            || flux_attr_set_ex (ov->h, "tbon.torpid_min", fsd, true, NULL) < 0)
-            return errprintf (errp, "error updating tbon.torpid_min attribute");
-        ov->torpid_min = tmin_val;
-    }
-    // update tbon.torpid_max
-    if (tmax_val != -1) {
-        double tmin_check = tmin_val != -1 ? tmin_val : ov->torpid_min;
-        if (tmax_val != 0 && !(tmax_val > tmin_check))
-            return errprintf (errp,
-                              "tbon.torpid_max must be greater than torpid_min");
-        if (fsd_format_duration (fsd, sizeof (fsd), tmax_val) < 0
-            || flux_attr_set_ex (ov->h, "tbon.torpid_max", fsd, true, NULL) < 0)
-            return errprintf (errp, "error updating tbon.torpid_max attribute");
-        ov->torpid_max = tmax_val;
-    }
-    return 0;
-}
-
-static int overlay_configure_timeout (struct overlay *ov,
-                                      const char *table,
-                                      const char *name,
-                                      bool enabled,
-                                      double default_value,
-                                      double *valuep,
-                                      flux_error_t *errp)
-{
-    const flux_conf_t *cf;
-    const char *fsd = NULL;
-    bool override = false;
-    double value = default_value;
-    char long_name[128];
-
-    (void)snprintf (long_name, sizeof (long_name), "%s.%s", table, name);
-
-    if ((cf = flux_get_conf (ov->h))) {
-        flux_error_t error;
-
-        if (flux_conf_unpack (cf, &error, "{s?{s?s}}", table, name, &fsd) < 0) {
-            return errprintf (errp,
-                              "Config file error [%s]: %s",
-                              table,
-                              error.text);
-        }
-        if (fsd) {
-            if (fsd_parse_duration (fsd, &value) < 0) {
-                return errprintf (errp,
-                                  "Config file error parsing %s",
-                                  long_name);
-            }
-            override = true;
-        }
-    }
-    /* Override with broker attribute (command line only) settings, if any.
-     */
-    if (compat_attr_get (ov->h, long_name, &fsd, NULL) == 0) {
-        if (fsd_parse_duration (fsd, &value) < 0)
-            return errprintf (errp, "Error parsing %s attribute", long_name);
-        if (compat_attr_delete (ov->h, long_name, true) < 0) {
-            return errprintf (errp,
-                              "attr_delete %s: %s",
-                              long_name,
-                              strerror (errno));
-        }
-        override = true;
-    }
-    if (enabled) {
-        char buf[64];
-        if (fsd_format_duration (buf, sizeof (buf), value) < 0)
-            return errprintf (errp, "fsd format: %s", strerror (errno));
-        if (compat_attr_add (ov->h, long_name, buf, ATTR_IMMUTABLE) < 0) {
-            return errprintf (errp,
-                              "attr_add %s: %s",
-                              long_name,
-                              strerror (errno));
-        }
-    }
-    else {
-        if (override) {
-            return errprintf (errp,
-                              "%s unsupported by this zeromq version",
-                              long_name);
-        }
-    }
-    *valuep = value;
-    return 0;
-}
-
-static int overlay_configure_tbon_int (struct overlay *ov,
-                                       const char *name,
-                                       int *value,
-                                       int default_value,
-                                       flux_error_t *errp)
-{
-    const flux_conf_t *cf;
-    char attrname[128];
-
-    *value = default_value;
-    if ((cf = flux_get_conf (ov->h))) {
-        flux_error_t error;
-
-        if (flux_conf_unpack (cf,
-                              &error,
-                              "{s?{s?i}}",
-                              "tbon",
-                                name, value) < 0) {
-            errprintf (errp, "Config file error [tbon]: %s", error.text);
-            return -1;
-        }
-    }
-    (void)snprintf (attrname, sizeof (attrname), "tbon.%s", name);
-    if (overlay_configure_attr_int (ov->h,
-                                    attrname,
-                                    *value,
-                                    value,
-                                    errp) < 0)
-        return -1;
-    return 0;
-}
-
-/* Configure tbon.topo attribute.
- * Ascending precedence: compiled-in default, TOML config, command line.
- * Topology creation is deferred to bootstrap, when we know the instance size.
- */
-static int overlay_configure_topo (struct overlay *ov, flux_error_t *errp)
-{
-    const char *topo_uri = "kary:32";
-    const flux_conf_t *cf;
-
-    if ((cf = flux_get_conf (ov->h))) {
-        flux_error_t error;
-
-        if (flux_conf_unpack (cf, NULL, "{s:{}}", "bootstrap") == 0)
-            topo_uri = "custom"; // adjust default for config boot
-
-        if (flux_conf_unpack (cf,
-                              &error,
-                              "{s?{s?s}}",
-                              "tbon",
-                                "topo", &topo_uri) < 0) {
-            errprintf (errp, "Config file error [tbon]: %s", error.text);
-            return -1;
-        }
-    }
-    /* Treat tbon.fanout=K as an alias for tbon.topo=kary:K.
-     */
-    const char *fanout;
-    char buf[16];
-    if (compat_attr_get (ov->h, "tbon.fanout", &fanout, NULL) == 0) {
-        snprintf (buf, sizeof (buf), "kary:%s", fanout);
-        topo_uri = buf;
-    }
-    if (overlay_configure_attr (ov->h,
-                                "tbon.topo",
-                                topo_uri,
-                                NULL) < 0) {
-        errprintf (errp,
-                   "Error manipulating tbon.topo attribute: %s",
-                   strerror (errno));
-        return -1;
-    }
-    return 0;
-}
-
-/* Handle a config update, topic: config-sync or config-reload.
- * In the former case, the update should be handled like the initial
- * config, where command line broker attribute settings override the config.
- * In the latter case, the config overrides.
- */
-static void overlay_config_reload_cb (flux_t *h,
-                                      flux_msg_handler_t *mh,
-                                      const flux_msg_t *msg,
-                                      void *arg)
-{
-    struct overlay *ov = arg;
-    const char *topic = "unknown";
-    flux_error_t error;
-    flux_conf_t *conf = NULL;
-    bool initialize = false;
-
-    if (flux_request_decode (msg, &topic, NULL) < 0
-        || flux_module_config_request_decode (msg, &conf) < 0) {
-        errprintf (&error, "Failed to parse %s request", topic);
-        goto error;
-    }
-    if (streq (topic, "overlay.config-sync"))
-        initialize = true;
-    if (overlay_configure_torpid (ov, conf, initialize, &error) < 0)
-        goto error;
-    if (flux_set_conf_new (h, conf) < 0) {
-        errprintf (&error, "Failed to update config");
-        goto error;
-    }
-    if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to %s request", topic);
-    return;
-error:
-    flux_conf_decref (conf);
-    if (flux_respond_error (h, msg, errno, error.text) < 0)
-        flux_log_error (h, "error responding to %s request", topic);
+    return zmqutil_zap_authorize (ov->children->zap, name, pubkey);
 }
 
 /* Test hook: create socket with pending message to block zmq_ctx_term().
@@ -2661,7 +1965,6 @@ void overlay_destroy (struct overlay *ov)
         flux_msglist_destroy (ov->health_requests);
 
         cert_destroy (ov->cert);
-        zmqutil_zap_destroy (ov->zap);
 
         flux_future_destroy (ov->f_sync);
         flux_future_destroy (ov->f_state);
@@ -2672,25 +1975,12 @@ void overlay_destroy (struct overlay *ov)
         flux_close (ov->h_channel);
         flux_watcher_destroy (ov->w_channel);
 
-        zmq_close (ov->parent.zsock);
-        free (ov->parent.uri);
-        flux_watcher_destroy (ov->parent.w);
-        free (ov->parent.pubkey);
-        zmqutil_monitor_destroy (ov->parent.monitor);
+        parent_destroy (ov->parent);
 
         bizcard_decref (ov->bizcard);
-        zmq_close (ov->bind_zsock);
-        flux_watcher_destroy (ov->bind_w);
-        zmqutil_monitor_destroy (ov->bind_monitor);
 
-        zhashx_destroy (&ov->child_hash);
-        if (ov->children) {
-            int i;
-            for (i = 0; i < ov->child_count; i++)
-                rpc_track_destroy (ov->children[i].tracker);
-            free (ov->children);
-        }
-        rpc_track_destroy (ov->parent.tracker);
+        children_destroy (ov->children);
+
         flux_msglist_destroy (ov->monitor_requests);
         flux_msglist_destroy (ov->trace_requests);
         topology_decref (ov->topo);
@@ -2699,6 +1989,7 @@ void overlay_destroy (struct overlay *ov)
         if (!ov->zctx_external)
             zmq_ctx_term (ov->zctx);
         free (ov->hostname);
+        ovconf_fini (&ov->config);
         free (ov);
         errno = saved_errno;
     }
@@ -2716,18 +2007,6 @@ static const struct flux_msg_handler_spec htab[] = {
         "overlay.stats-get",
         overlay_stats_get_cb,
         FLUX_ROLE_USER,
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "overlay.config-reload",
-        overlay_config_reload_cb,
-        0,
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "overlay.config-sync",
-        overlay_config_reload_cb,
-        0,
     },
     {
         FLUX_MSGTYPE_REQUEST,
@@ -2784,7 +2063,6 @@ struct overlay *overlay_create (flux_t *h,
         goto error;
     if (!(ov->hostname = strdup (hostname)))
         goto error;
-    ov->parent.lastsent = -1;
     ov->h = h;
     ov->rank = rank;
     ov->size = size;
@@ -2811,64 +2089,7 @@ struct overlay *overlay_create (flux_t *h,
     }
     if (!(ov->monitor_requests = flux_msglist_create ()))
         goto error;
-    if (overlay_configure_attr_int (ov->h,
-                                    "tbon.prefertcp",
-                                    0,
-                                    NULL,
-                                    errp) < 0)
-        goto error_hasmsg;
-    if (overlay_configure_interface_hint (ov,
-                                          "tbon",
-                                          "interface-hint",
-                                          errp) < 0)
-        goto error_hasmsg;
-    if (overlay_configure_torpid (ov, flux_get_conf (ov->h), true, errp) < 0)
-        goto error_hasmsg;
-    if (overlay_configure_timeout (ov,
-                                   "tbon",
-                                   "tcp_user_timeout",
-                                   have_tcp_maxrt,
-                                   default_tcp_user_timeout,
-                                   &ov->tcp_user_timeout,
-                                   errp) < 0)
-        goto error_hasmsg;
-    if (overlay_configure_timeout (ov,
-                                   "tbon",
-                                   "connect_timeout",
-                                   have_connect_timeout,
-                                   default_connect_timeout,
-                                   &ov->connect_timeout,
-                                   errp) < 0)
-        goto error_hasmsg;
-    if (overlay_configure_tbon_int (ov,
-                                    "zmqdebug",
-                                    &ov->zmqdebug,
-                                    0,
-                                    errp) < 0)
-        goto error_hasmsg;
-    if (overlay_configure_tbon_int (ov,
-                                    "child_rcvhwm",
-                                    &ov->child_rcvhwm,
-                                    0,
-                                    errp) < 0)
-        goto error_hasmsg;
-    if (ov->child_rcvhwm < 0 || ov->child_rcvhwm == 1) {
-        errprintf (errp, "tbon.child_rcvhwm must be 0 (unlimited) or >= 2");
-        errno = EINVAL;
-        goto error_hasmsg;
-    }
-    if (overlay_configure_tbon_int (ov,
-                                    "zmq_io_threads",
-                                    &ov->zmq_io_threads,
-                                    1,
-                                    errp) < 0)
-        goto error_hasmsg;
-    if (ov->zmq_io_threads < 1) {
-        errprintf (errp, "tbon.zmq_io_threads must be >= 1");
-        errno = EINVAL;
-        goto error_hasmsg;
-    }
-    if (overlay_configure_topo (ov, errp) < 0)
+    if (ovconf_init (&ov->config, ov->h, errp) < 0)
         goto error_hasmsg;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;

@@ -30,7 +30,6 @@
 #include "src/common/libpmi/bizcache.h"
 #include "ccan/str/str.h"
 
-#include "compat.h"
 #include "overlay.h"
 #include "topology.h"
 #include "boot_util.h"
@@ -89,6 +88,55 @@ done:
     free (cpy);
 }
 
+/* Create the instance topology.
+ */
+static struct topology *create_topology (flux_t *h,
+                                         uint32_t rank,
+                                         uint32_t size,
+                                         json_t *hosts,
+                                         flux_error_t *errp)
+{
+    struct topology *topo;
+    const char *topo_uri;
+    json_t *topo_args;
+    flux_error_t error;
+
+    // N.B. overlay_create() sets the tbon.topo attribute
+    if (!(topo_uri = flux_attr_get (h, "tbon.topo"))) {
+        errprintf (errp,
+                   "error fetching tbon.topo attribute: %s",
+                   strerror (errno));
+        return NULL;
+    }
+    if (!(topo_args = json_pack ("{s:O}", "hosts", hosts))) {
+        errprintf (errp,
+                   "Error preparing for %s topology creation",
+                   topo_uri);
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(topo = topology_create (topo_uri, size, topo_args, &error))) {
+        errprintf (errp,
+                   "Error creating %s topology: %s",
+                   topo_uri,
+                   error.text);
+        goto error;
+    }
+    if (topology_set_rank (topo, rank) < 0) {
+        errprintf (errp,
+                   "Error assigning local rank to topology: %s",
+                   strerror (errno));
+        goto error;
+    }
+
+    json_decref (topo_args);
+    return topo;
+error:
+    ERRNO_SAFE_WRAP (json_decref, topo_args);
+    topology_decref (topo);
+    return NULL;
+}
+
 int boot_config (flux_t *h,
                  uint32_t rank,
                  uint32_t size,
@@ -99,10 +147,8 @@ int boot_config (flux_t *h,
     bool enable_ipv6 = false;
     const char *curve_cert = NULL;
     json_t *hosts = NULL;
-    json_t *topo_args = NULL;
     struct topology *topo = NULL;
     flux_error_t error;
-    const char *topo_uri;
 
     /* Ingest the [bootstrap] stanza.
      */
@@ -114,26 +160,11 @@ int boot_config (flux_t *h,
                               errp) < 0)
         return -1;
 
-    // N.B. overlay_create() sets the tbon.topo attribute
-    if (compat_attr_get (h, "tbon.topo", &topo_uri, NULL) < 0) {
-        errprintf (errp,
-                   "error fetching tbon.topo attribute: %s",
-                   strerror (errno));
+    if (!(topo = create_topology (h, rank, size, hosts, errp)))
         goto error;
-    }
-    if (!(topo_args = json_pack ("{s:O}", "hosts", hosts))
-        || !(topo = topology_create (topo_uri, size, topo_args, &error))) {
+    if (overlay_set_topology (overlay, topo) < 0) {
         errprintf (errp,
-                   "Error creating %s topology: %s",
-                   topo_uri,
-                   error.text);
-        goto error;
-    }
-    if (topology_set_rank (topo, rank) < 0
-        || overlay_set_topology (overlay, topo) < 0) {
-        errprintf (errp,
-                   "Error setting %s topology: %s",
-                   topo_uri,
+                   "Error assigning topology to overlay subsystem: %s",
                    strerror (errno));
         goto error;
     }
@@ -158,7 +189,7 @@ int boot_config (flux_t *h,
      * downstream peers, set tbon.endpoint to NULL.
      */
     if (topology_get_child_ranks (topo, NULL, 0) > 0
-        && compat_attr_get (h, "broker.recovery-mode", NULL, NULL) < 0) {
+        && !flux_attr_get (h, "broker.recovery-mode")) {
         struct bizcard *bc;
         const char *my_uri;
         const char *bind_uri;
@@ -182,10 +213,7 @@ int boot_config (flux_t *h,
             bizcard_decref (bc);
             goto error;
         }
-        if (compat_attr_add (h,
-                             "tbon.endpoint",
-                             my_uri,
-                             ATTR_IMMUTABLE) < 0) {
+        if (flux_attr_set (h, "tbon.endpoint", my_uri) < 0) {
             errprintf (errp,
                        "setattr tbon.endpoint %s: %s",
                        my_uri,
@@ -195,17 +223,7 @@ int boot_config (flux_t *h,
         }
         bizcard_decref (bc);
     }
-    else {
-        if (compat_attr_add (h,
-                             "tbon.endpoint",
-                             NULL,
-                             ATTR_IMMUTABLE) < 0) {
-            errprintf (errp,
-                       "setattr tbon.endpoint NULL: %s",
-                       strerror (errno));
-            goto error;
-        }
-    }
+    /* else: no downstream peers, tbon.endpoint remains unset */
 
     /* If broker has an "upstream" peer, determine its URI and tell overlay.
      */
@@ -242,12 +260,10 @@ int boot_config (flux_t *h,
     }
 
     json_decref (hosts);
-    json_decref (topo_args);
     topology_decref (topo);
     return 0;
 error:
     ERRNO_SAFE_WRAP (json_decref, hosts);
-    ERRNO_SAFE_WRAP (json_decref, topo_args);
     ERRNO_SAFE_WRAP (topology_decref, topo);
     return -1;
 }

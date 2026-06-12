@@ -466,16 +466,15 @@ void trio (flux_t *h)
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "eeeb"),
         "%s: received message has expected topic", ctx[1]->name);
 
-    /* Cover some error code in overlay_bind() where the ZAP handler
-     * fails to initialize because its endpoint is already bound.
+    /* overlay_bind() should fail on rank 1 since it has no children.
      */
     errno = 0;
     if (snprintf (uri, sizeof uri, "ipc://%s/flux_ipc_foo", get_test_dir ()) < 0)
         BAIL_OUT("asprintf failed");
     err_init (&error);
     ok (overlay_bind (ctx[1]->ov, uri, NULL, &error) < 0
-        && errno == EADDRINUSE,
-        "%s: second overlay_bind in proc fails with EADDRINUSE", ctx[0]->name);
+        && errno == EINVAL,
+        "%s: overlay_bind on rank with no children fails with EINVAL", ctx[1]->name);
     diag ("%s", error.text);
 
     /* Various tests of rank 2 without proper authorization.
