@@ -125,3 +125,15 @@
 
    Enable job debug events, primarily for debugging Flux itself.
    The specific effects of this option may change in the future.
+
+These commands use POSIX-style option parsing: option processing stops at
+the first non-option argument.  COMMAND (or SCRIPT for
+:man1:`flux-batch`) and all following arguments are passed to the job
+verbatim and are never interpreted as Flux options.  A ``--`` separator
+may be used to explicitly mark the end of Flux options and is consumed by
+the parser; arguments following ``--`` are passed to the job unchanged.
+For :man1:`flux-alloc`, a user-supplied ``--`` is forwarded to the
+``flux broker`` command of the new instance.
+
+Long options may not be abbreviated; for example, ``--time-limit`` must
+be spelled out in full and cannot be shortened to ``--time``.
