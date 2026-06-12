@@ -151,6 +151,7 @@ def parse_args():
     load_parser = subparsers.add_parser("load")
     load_parser.add_argument(
         "--dry-run",
+        hidden_aliases=("--dry",),
         action="store_true",
         help="Don't do anything. Print what would be run",
     )

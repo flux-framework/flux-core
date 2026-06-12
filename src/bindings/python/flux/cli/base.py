@@ -566,6 +566,7 @@ class MiniCmd:
         )
         parser.add_argument(
             "--dry-run",
+            hidden_aliases=("--dry",),
             action="store_true",
             help="Don't actually submit job, just emit jobspec",
         )

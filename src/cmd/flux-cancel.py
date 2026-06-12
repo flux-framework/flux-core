@@ -33,7 +33,11 @@ def parse_args():
     )
     parser.add_argument("--all", action="store_true", help="Target all jobs")
     parser.add_argument(
-        "-n", "--dry-run", action="store_true", help="Do not cancel any jobs"
+        "-n",
+        "--dry-run",
+        hidden_aliases=("--dry",),
+        action="store_true",
+        help="Do not cancel any jobs",
     )
     parser.add_argument(
         "-q",

@@ -173,6 +173,7 @@ def parse_args():
     parser.add_argument(
         "-n",
         "--dry-run",
+        hidden_aliases=("--dry",),
         action="store_true",
         help="Do not apply any updates, just emit update payload to stdout",
     )
