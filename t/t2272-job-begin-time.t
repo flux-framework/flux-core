@@ -35,7 +35,7 @@ test_expect_success 'begin-time: elapsed begin-time releases job immediately' '
 	flux job wait-event -vt 15 $jobid clean
 '
 test_expect_success 'begin-time: job with begin-time works' '
-	flux run -vvv --begin=time=+1s hostname
+	flux run -vvv --begin-time=+1s hostname
 '
 test_expect_success 'begin-time: job with begin-time=+1h is still in depend' '
 	flux jobs &&

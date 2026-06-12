@@ -14,6 +14,7 @@ import logging
 import sys
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.util import TreedictAction
 
 
@@ -64,15 +65,13 @@ LOGGER = logging.getLogger("flux-jobtap")
 
 @flux.util.CLIMain(LOGGER)
 def main():
-    parser = argparse.ArgumentParser(prog="flux-jobtap")
+    parser = FluxArgumentParser(prog="flux-jobtap")
     subparsers = parser.add_subparsers(
         title="subcommands", description="", dest="subcommand"
     )
     subparsers.required = True
 
-    load_parser = subparsers.add_parser(
-        "load", formatter_class=flux.util.help_formatter()
-    )
+    load_parser = subparsers.add_parser("load")
     load_parser.add_argument(
         "-r",
         "--remove",
@@ -90,9 +89,7 @@ def main():
     )
     load_parser.set_defaults(func=jobtap_load)
 
-    remove_parser = subparsers.add_parser(
-        "remove", formatter_class=flux.util.help_formatter()
-    )
+    remove_parser = subparsers.add_parser("remove")
     remove_parser.add_argument(
         "plugin",
         help="Plugin name or pattern to remove. "
@@ -100,9 +97,7 @@ def main():
     )
     remove_parser.set_defaults(func=jobtap_remove)
 
-    list_parser = subparsers.add_parser(
-        "list", formatter_class=flux.util.help_formatter()
-    )
+    list_parser = subparsers.add_parser("list")
     list_parser.add_argument(
         "-a",
         "--all",
@@ -111,9 +106,7 @@ def main():
     )
     list_parser.set_defaults(func=jobtap_list)
 
-    query_parser = subparsers.add_parser(
-        "query", formatter_class=flux.util.help_formatter()
-    )
+    query_parser = subparsers.add_parser("query")
     query_parser.add_argument("plugin", help="Plugin name to query")
     query_parser.set_defaults(func=jobtap_query)
 

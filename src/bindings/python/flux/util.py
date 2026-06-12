@@ -145,6 +145,9 @@ def help_formatter(argwidth=40, raw_description=False):
                 return metavar
 
             opts = list(action.option_strings)
+            if hasattr(action, "hidden_option_strings"):
+                hidden = action.hidden_option_strings
+                opts = [o for o in opts if o not in hidden]
 
             #  Default optstring is `-l, --long-opt`
             optstring = ", ".join(opts)

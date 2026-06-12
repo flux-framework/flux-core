@@ -18,7 +18,6 @@ flux_job_timeleft(3) reflects the Slurm job's expiration.
 
 """
 
-import argparse
 import logging
 import signal
 import sys
@@ -26,6 +25,7 @@ import time
 
 import flux
 import flux.slurm as slurm
+from flux.cli.argparse import FluxArgumentParser
 from flux.resource import ResourceJournalConsumer
 from flux.util import fsd
 
@@ -85,7 +85,7 @@ def wait_for_resource_define(fh):
 @flux.util.CLIMain(LOGGER)
 def main():
 
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = FluxArgumentParser(description=__doc__)
     parser.add_argument(
         "--poll-interval",
         type=float,

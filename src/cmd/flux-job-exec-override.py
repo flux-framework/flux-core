@@ -9,11 +9,11 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import argparse
 import logging
 import sys
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.job import JobID
 
 LOGGER = logging.getLogger("flux-job-exec-override")
@@ -44,21 +44,17 @@ def job_exec_finish(args):
 
 @flux.util.CLIMain(LOGGER)
 def main():
-    parser = argparse.ArgumentParser(prog="flux-job-exec")
+    parser = FluxArgumentParser(prog="flux-job-exec")
     subparsers = parser.add_subparsers(
         title="subcommands", description="", dest="subcommand"
     )
     subparsers.required = True
 
-    start_parser = subparsers.add_parser(
-        "start", formatter_class=flux.util.help_formatter()
-    )
+    start_parser = subparsers.add_parser("start")
     start_parser.add_argument("jobid", metavar="JOBID", type=JobID, help="target JOBID")
     start_parser.set_defaults(func=job_exec_start)
 
-    finish_parser = subparsers.add_parser(
-        "finish", formatter_class=flux.util.help_formatter()
-    )
+    finish_parser = subparsers.add_parser("finish")
     finish_parser.add_argument(
         "jobid", metavar="JOBID", type=JobID, help="target JOBID"
     )

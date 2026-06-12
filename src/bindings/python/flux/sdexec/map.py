@@ -90,7 +90,7 @@ import errno
 import math
 from pathlib import Path
 
-import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.idset import IDset
 from flux.resource import ResourceSet
 
@@ -563,16 +563,14 @@ def _get_system_xml(xml_file=None):
 
 def main(args=None):
     """CLI entry point: show systemd unit properties for given resource IDs."""
-    import argparse
     import importlib
     import json
     import sys
 
-    parser = argparse.ArgumentParser(
+    parser = FluxArgumentParser(
         prog="flux python -m flux.sdexec.map",
         description="Show systemd unit properties that would be emitted for "
         "the given Flux resource IDs on this system.",
-        formatter_class=flux.util.help_formatter(),
     )
     parser.add_argument(
         "--cores", metavar="IDSET", default="", help="logical cores (e.g. '0-3')"

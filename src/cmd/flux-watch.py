@@ -9,26 +9,19 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import argparse
 import logging
 import os
 import sys
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.job import JobID, JobList
 from flux.job.watcher import JobWatcher
-from flux.util import (
-    FilterAction,
-    FilterActionSetUpdate,
-    FilterTrueAction,
-    help_formatter,
-)
+from flux.util import FilterAction, FilterActionSetUpdate, FilterTrueAction
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        prog="flux-watch", formatter_class=help_formatter()
-    )
+    parser = FluxArgumentParser(prog="flux-watch")
     parser.add_argument(
         "-a",
         "--active",

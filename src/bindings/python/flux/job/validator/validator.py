@@ -8,12 +8,12 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import argparse
 import concurrent.futures
 import json
 from abc import ABC, abstractmethod
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.importer import import_path, import_plugins
 
 
@@ -149,16 +149,16 @@ class JobValidator:
         #  Setup parser so we can parse --plugin and plugins can attach
         #   their own options
         if parser is None:
-            parser = argparse.ArgumentParser(
-                formatter_class=flux.util.help_formatter(), add_help=False
-            )
+            parser = FluxArgumentParser(add_help=False)
 
         self.parser = parser
         self.parser_group = self.parser.add_argument_group("Validator options")
         self.plugins_group = self.parser.add_argument_group(
             "Options provided by plugins"
         )
-        self.parser_group.add_argument("--plugins", action="append", default=[])
+        self.parser_group.add_argument(
+            "--plugins", hidden_aliases=("--plugin",), action="append", default=[]
+        )
 
         #  Parse provided argv, but only parse known args, save
         #   remaining arguments for plugin configuration once plugins
