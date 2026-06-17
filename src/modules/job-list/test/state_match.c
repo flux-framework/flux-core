@@ -240,6 +240,20 @@ struct state_match_constraint_test {
         }
     },
     {
+        "{ \"t_depend\": [ \"<=100.0\" ] }",
+        {
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+        }
+    },
+    {
         "{ \"t_run\": [ \">100.0\" ] }",
         {
             false,
@@ -251,6 +265,34 @@ struct state_match_constraint_test {
             false,
             true,
             true,
+        }
+    },
+    {
+        "{ \"t_cleanup\": [ \">=100.0\" ] }",
+        {
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+        }
+    },
+    {
+        "{ \"t_inactive\": [ \"<=100.0\" ] }",
+        {
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+            false,
+            false,
+            false,
         }
     },
     /* N.B. For state depend, priority, sched, is always false, so not
