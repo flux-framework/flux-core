@@ -78,8 +78,21 @@ const char *sql_checkpt_get_all = "SELECT * FROM checkpt_v2 ORDER BY id DESC";
 const char *sql_alter_objects_add_epoch = "ALTER TABLE objects ADD COLUMN epoch INT DEFAULT 0";
 const char *sql_get_max_checkpt_id = "SELECT MAX(id) FROM checkpt_v2";
 const char *sql_table_info = "PRAGMA table_info(objects)";
+const char *sql_mark_blob = "UPDATE objects SET epoch = MAX(epoch, ?1) WHERE hash = ?2";
+const char *sql_sweep_batch = "DELETE FROM objects WHERE rowid IN ("
+                              "  SELECT rowid FROM objects WHERE epoch < ?1 LIMIT ?2"
+                              ")";
+const char *sql_count_sweep_candidates = "SELECT COUNT(*) FROM objects WHERE epoch < ?1";
 
 #define MAX_CHECKPOINTS_DEFAULT 5
+
+/* Upper bound on the number of hashes accepted by a single mark RPC.
+ * The mark handler runs synchronously on content-sqlite's single reactor
+ * thread, so an unbounded array would block all other backing traffic while
+ * it is processed.  flux-gc batches marks in chunks of 100; this cap is well
+ * above that but still bounds the per-RPC work.
+ */
+#define MARK_HASHES_MAX 16384
 
 struct content_stats {
     tstat_t load;
@@ -783,6 +796,281 @@ error:
     json_decref (checkpoints);
 }
 
+/* content-backing.mark - mark a batch of blobs to target epoch
+ * Request: {"epoch":I, "hashes":[s,s,...]}  (hashes are blobref strings)
+ * Response: {"marked":i}
+ */
+static void mark_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    int64_t target_epoch;
+    json_t *hashes;
+    size_t index;
+    json_t *hash_str;
+    sqlite3_stmt *stmt = NULL;
+    int marked_count = 0;
+    char errbuf[128];
+    const char *errstr = NULL;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:o}",
+                             "epoch", &target_epoch,
+                             "hashes", &hashes) < 0)
+        goto error;
+
+    if (!json_is_array (hashes)) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (json_array_size (hashes) > MARK_HASHES_MAX) {
+        snprintf (errbuf,
+                  sizeof (errbuf),
+                  "mark request of %zu hashes exceeds limit of %d",
+                  json_array_size (hashes),
+                  MARK_HASHES_MAX);
+        errstr = errbuf;
+        errno = EINVAL;
+        goto error;
+    }
+
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_mark_blob,
+                            -1,
+                            &stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "mark: preparing statement");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    json_array_foreach (hashes, index, hash_str) {
+        const char *blobref;
+        char hash[BLOBREF_MAX_DIGEST_SIZE];
+        ssize_t hash_len;
+
+        if (!json_is_string (hash_str)) {
+            errno = EPROTO;
+            goto error;
+        }
+
+        blobref = json_string_value (hash_str);
+
+        /* Convert blobref string to raw hash */
+        if ((hash_len = blobref_strtohash (blobref, hash, sizeof (hash))) < 0) {
+            errno = EPROTO;
+            goto error;
+        }
+
+        if (hash_len != ctx->hash_size) {
+            errno = EPROTO;
+            goto error;
+        }
+
+        if (sqlite3_bind_int64 (stmt, 1, target_epoch) != SQLITE_OK) {
+            log_sqlite_error (ctx, "mark: binding epoch");
+            set_errno_from_sqlite_error (ctx);
+            goto error;
+        }
+
+        if (sqlite3_bind_text (stmt, 2, hash, hash_len, SQLITE_TRANSIENT) != SQLITE_OK) {
+            log_sqlite_error (ctx, "mark: binding hash");
+            set_errno_from_sqlite_error (ctx);
+            goto error;
+        }
+
+        if (sqlite3_step (stmt) != SQLITE_DONE) {
+            log_sqlite_error (ctx, "mark: executing statement");
+            set_errno_from_sqlite_error (ctx);
+            goto error;
+        }
+
+        marked_count += sqlite3_changes (ctx->db);
+        sqlite3_reset (stmt);
+    }
+
+    if (flux_respond_pack (h, msg, "{s:i}", "marked", marked_count) < 0)
+        flux_log_error (h, "mark: flux_respond_pack");
+
+    sqlite3_finalize (stmt);
+    return;
+
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "mark: flux_respond_error");
+    if (stmt)
+        sqlite3_finalize (stmt);
+}
+
+/* content-backing.sweep - delete blobs with epoch < threshold
+ * Request: {"epoch":I, "batch_size":i}
+ * Response: {"deleted":i, "remaining":i}
+ */
+static void sweep_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    int64_t threshold_epoch;
+    int batch_size;
+    sqlite3_stmt *sweep_stmt = NULL;
+    sqlite3_stmt *count_stmt = NULL;
+    int deleted = 0;
+    int remaining = 0;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:i}",
+                             "epoch", &threshold_epoch,
+                             "batch_size", &batch_size) < 0)
+        goto error;
+
+    if (batch_size <= 0) {
+        errno = EINVAL;
+        goto error;
+    }
+
+    /* Execute the delete */
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_sweep_batch,
+                            -1,
+                            &sweep_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "sweep: preparing delete statement");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    if (sqlite3_bind_int64 (sweep_stmt, 1, threshold_epoch) != SQLITE_OK) {
+        log_sqlite_error (ctx, "sweep: binding epoch");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    if (sqlite3_bind_int (sweep_stmt, 2, batch_size) != SQLITE_OK) {
+        log_sqlite_error (ctx, "sweep: binding batch_size");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    if (sqlite3_step (sweep_stmt) != SQLITE_DONE) {
+        log_sqlite_error (ctx, "sweep: executing delete");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    deleted = sqlite3_changes (ctx->db);
+
+    /* Count remaining candidates */
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_count_sweep_candidates,
+                            -1,
+                            &count_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "sweep: preparing count statement");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    if (sqlite3_bind_int64 (count_stmt, 1, threshold_epoch) != SQLITE_OK) {
+        log_sqlite_error (ctx, "sweep: binding count epoch");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    if (sqlite3_step (count_stmt) != SQLITE_ROW) {
+        log_sqlite_error (ctx, "sweep: executing count");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    remaining = sqlite3_column_int (count_stmt, 0);
+
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:i}",
+                           "deleted", deleted,
+                           "remaining", remaining) < 0)
+        flux_log_error (h, "sweep: flux_respond_pack");
+
+    sqlite3_finalize (sweep_stmt);
+    sqlite3_finalize (count_stmt);
+    return;
+
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "sweep: flux_respond_error");
+    if (sweep_stmt)
+        sqlite3_finalize (sweep_stmt);
+    if (count_stmt)
+        sqlite3_finalize (count_stmt);
+}
+
+/* content-backing.gc-info - get GC information
+ * Request: {"epoch":I} (epoch threshold for counting candidates)
+ * Response: {"current_epoch":I, "candidates":i}
+ */
+static void gc_info_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    int64_t threshold_epoch;
+    sqlite3_stmt *stmt = NULL;
+    int candidates = 0;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I}",
+                             "epoch", &threshold_epoch) < 0)
+        goto error;
+
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_count_sweep_candidates,
+                            -1,
+                            &stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "gc-info: preparing statement");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    if (sqlite3_bind_int64 (stmt, 1, threshold_epoch) != SQLITE_OK) {
+        log_sqlite_error (ctx, "gc-info: binding epoch");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    if (sqlite3_step (stmt) != SQLITE_ROW) {
+        log_sqlite_error (ctx, "gc-info: executing statement");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+
+    candidates = sqlite3_column_int (stmt, 0);
+
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:I s:i}",
+                           "current_epoch", ctx->current_epoch,
+                           "candidates", candidates) < 0)
+        flux_log_error (h, "gc-info: flux_respond_pack");
+
+    sqlite3_finalize (stmt);
+    return;
+
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "gc-info: flux_respond_error");
+    if (stmt)
+        sqlite3_finalize (stmt);
+}
+
 /* Check if epoch column exists in objects table.
  * Returns 1 if exists, 0 if not, -1 on error.
  */
@@ -1201,6 +1489,24 @@ static const struct flux_msg_handler_spec htab[] = {
         "content-sqlite.stats-get",
         stats_get_cb,
         FLUX_ROLE_USER
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.mark",
+        mark_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.sweep",
+        sweep_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content-backing.gc-info",
+        gc_info_cb,
+        0
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
