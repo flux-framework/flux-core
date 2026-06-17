@@ -39,12 +39,14 @@ const size_t compression_threshold = 256; /* compress blobs >= this size */
 const char *sql_create_table = "CREATE TABLE if not exists objects("
                                "  hash BLOB PRIMARY KEY,"
                                "  size INT,"
-                               "  object BLOB"
+                               "  object BLOB,"
+                               "  epoch INT DEFAULT 0"
                                ");";
 const char *sql_load = "SELECT object,size FROM objects"
                        "  WHERE hash = ?1 LIMIT 1";
-const char *sql_store = "INSERT INTO objects (hash,size,object) "
-                        "  values (?1, ?2, ?3)";
+const char *sql_store = "INSERT INTO objects (hash,size,object,epoch) "
+                        "  values (?1, ?2, ?3, ?4) "
+                        "ON CONFLICT(hash) DO UPDATE SET epoch = excluded.epoch";
 const char *sql_validate = "SELECT EXISTS("
                            "  SELECT 1 FROM objects WHERE hash = ?1)";
 const char *sql_objects_count = "SELECT count(1) FROM objects";
@@ -72,6 +74,10 @@ const char *sql_checkpt_prune =
 const char *sql_table_list = "SELECT tbl_name FROM sqlite_master where type = 'table'";
 
 const char *sql_checkpt_get_all = "SELECT * FROM checkpt_v2 ORDER BY id DESC";
+
+const char *sql_alter_objects_add_epoch = "ALTER TABLE objects ADD COLUMN epoch INT DEFAULT 0";
+const char *sql_get_max_checkpt_id = "SELECT MAX(id) FROM checkpt_v2";
+const char *sql_table_info = "PRAGMA table_info(objects)";
 
 #define MAX_CHECKPOINTS_DEFAULT 5
 
@@ -101,6 +107,7 @@ struct content_sqlite {
     char *synchronous;
     int max_checkpoints;
     bool truncate;
+    int64_t current_epoch;
 };
 
 static int set_config (char **conf, const char *val)
@@ -307,12 +314,16 @@ static int content_sqlite_store (struct content_sqlite *ctx,
         set_errno_from_sqlite_error (ctx);
         goto error;
     }
-    /* N.B. ignore SQLITE_CONSTRAINT errors - it means the insert failed
-     * because it violated the implicit primary key uniqueness constraint.
-     * Blob and blobref are indeed stored and storage is conserved - success!
+    if (sqlite3_bind_int64 (ctx->store_stmt,
+                            4,
+                            ctx->current_epoch) != SQLITE_OK) {
+        log_sqlite_error (ctx, "store: binding epoch");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+    /* N.B. ON CONFLICT clause updates epoch without rewriting object.
      */
-    if (sqlite3_step (ctx->store_stmt) != SQLITE_DONE
-                    && sqlite3_errcode (ctx->db) != SQLITE_CONSTRAINT) {
+    if (sqlite3_step (ctx->store_stmt) != SQLITE_DONE) {
         log_sqlite_error (ctx, "store: executing stmt");
         set_errno_from_sqlite_error (ctx);
         goto error;
@@ -548,6 +559,12 @@ void checkpoint_put_cb (flux_t *h,
         set_errno_from_sqlite_error (ctx);
         goto error;
     }
+    /* Update current_epoch to the id of the just-inserted checkpoint */
+    ctx->current_epoch = sqlite3_last_insert_rowid (ctx->db);
+    flux_log (ctx->h,
+              LOG_DEBUG,
+              "checkpoint-put: advanced epoch to %jd",
+              (intmax_t)ctx->current_epoch);
     if (sqlite3_bind_int (ctx->checkpt_prune_stmt,
                           1,
                           ctx->max_checkpoints) != SQLITE_OK) {
@@ -766,6 +783,110 @@ error:
     json_decref (checkpoints);
 }
 
+/* Check if epoch column exists in objects table.
+ * Returns 1 if exists, 0 if not, -1 on error.
+ */
+static int epoch_column_exists (struct content_sqlite *ctx)
+{
+    sqlite3_stmt *stmt = NULL;
+    int exists = 0;
+    int rc;
+
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_table_info,
+                            -1,
+                            &stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing table_info query");
+        return -1;
+    }
+
+    while ((rc = sqlite3_step (stmt)) == SQLITE_ROW) {
+        const unsigned char *col_name = sqlite3_column_text (stmt, 1);
+        if (col_name && strcmp ((const char *)col_name, "epoch") == 0) {
+            exists = 1;
+            break;
+        }
+    }
+
+    if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
+        log_sqlite_error (ctx, "querying table_info");
+        sqlite3_finalize (stmt);
+        return -1;
+    }
+
+    sqlite3_finalize (stmt);
+    return exists;
+}
+
+/* Add epoch column to objects table if it doesn't exist.
+ */
+static int migrate_add_epoch_column (struct content_sqlite *ctx)
+{
+    int exists = epoch_column_exists (ctx);
+
+    if (exists < 0)
+        return -1;
+
+    if (exists) {
+        flux_log (ctx->h, LOG_DEBUG, "epoch column already exists");
+        return 0;
+    }
+
+    flux_log (ctx->h, LOG_INFO, "adding epoch column to objects table");
+    if (sqlite3_exec (ctx->db,
+                      sql_alter_objects_add_epoch,
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "adding epoch column");
+        set_errno_from_sqlite_error (ctx);
+        return -1;
+    }
+
+    return 0;
+}
+
+/* Initialize current_epoch from MAX(checkpt_v2.id).
+ * Returns 0 on success, -1 on error.
+ */
+static int init_current_epoch (struct content_sqlite *ctx)
+{
+    sqlite3_stmt *stmt = NULL;
+    int rc;
+
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_get_max_checkpt_id,
+                            -1,
+                            &stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing get_max_checkpt_id query");
+        return -1;
+    }
+
+    rc = sqlite3_step (stmt);
+    if (rc == SQLITE_ROW) {
+        if (sqlite3_column_type (stmt, 0) == SQLITE_NULL) {
+            ctx->current_epoch = 0;  // No checkpoints yet
+        }
+        else {
+            ctx->current_epoch = sqlite3_column_int64 (stmt, 0);
+        }
+    }
+    else {
+        log_sqlite_error (ctx, "querying max checkpoint id");
+        sqlite3_finalize (stmt);
+        return -1;
+    }
+
+    sqlite3_finalize (stmt);
+    flux_log (ctx->h,
+              LOG_DEBUG,
+              "initialized current_epoch=%jd",
+              (intmax_t)ctx->current_epoch);
+    return 0;
+}
+
 /* Open the database file ctx->dbfile and set up the database.
  */
 static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
@@ -831,6 +952,10 @@ static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
         log_sqlite_error (ctx, "creating checkpt table");
         goto error;
     }
+    if (migrate_add_epoch_column (ctx) < 0)
+        goto error;
+    if (init_current_epoch (ctx) < 0)
+        goto error;
     if (sqlite3_prepare_v2 (ctx->db,
                             sql_load,
                             -1,
