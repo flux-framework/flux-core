@@ -516,6 +516,7 @@ EXTRA_DIST = \
 	guide/internals.rst \
 	guide/debug.rst \
 	guide/kvs.rst \
+	guide/kvs_gc.rst \
 	guide/broker.rst \
 	guide/systemd.rst \
 	guide/sdbus.rst \

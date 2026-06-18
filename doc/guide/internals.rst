@@ -7,5 +7,6 @@ Resources for Flux Developers
 
    debug
    kvs
+   kvs_gc
    broker
    systemd
