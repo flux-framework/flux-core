@@ -107,6 +107,7 @@ TESTSCRIPTS = \
 	t0024-jjc-reader.t \
 	t0026-flux-R.t \
 	t0042-rhwloc-gpu-dedup.t \
+	t0043-content-sqlite-gc.t \
 	t0090-content-enospc.t \
 	t0099-admin-system-scripts.t \
 	t0100-modprobe.t \
