@@ -39,6 +39,21 @@ service-override
 job-shell
    (optional) Override the compiled-in default job shell path.
 
+shell-exit-timeout
+   (optional) Time to wait after the leader shell (rank 0) exits normally
+   before raising a fatal exception if other shells remain active.
+   Set to ``"none"`` to disable. The default is ``"30s"``.
+
+   This keeps a job from hanging when a remote shell or wrapper fails to
+   exit after the leader terminates. When the timeout expires, the
+   resulting exception begins the job termination sequence, cleaning up
+   the presumably stuck shells.
+
+   .. note::
+      The timeout does not apply if the job already has a fatal exception
+      (cancel, timeout, etc) when rank 0 exits. In that case the normal
+      termination sequence already ensures that remaining shells exit.
+
 kill-timeout
    (optional) The amount of time in Flux Standard Duration (FSD) to wait
    after ``SIGTERM`` is sent to a job before sending ``SIGKILL``. FSD is

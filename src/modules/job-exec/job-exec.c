@@ -41,8 +41,8 @@
  * After initialization is complete, the exec service emits a "starting"
  * event to the exec eventlog and calls the implementation "start" method.
  * Once all job shells or equivalent are running, the exec implementation
- * should invoke jobinfo_started(), which emits a "running" event to the
- * exec eventlog and sends the "start" response to the job-manager.
+ * should invoke jobinfo_started(), which sends the "start" response to
+ * the job-manager.
  *
  * JOB FINISH/CLEANUP:
  *
@@ -181,6 +181,7 @@ void jobinfo_decref (struct jobinfo *job)
         flux_watcher_destroy (job->kill_shell_timer);
         flux_watcher_destroy (job->max_kill_timer);
         flux_watcher_destroy (job->expiration_timer);
+        flux_watcher_destroy (job->shell_exit_timer);
         zhashx_delete (job->ctx->jobs, &job->id);
         if (job->impl && job->impl->exit)
             (*job->impl->exit) (job);
@@ -392,6 +393,11 @@ static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
 {
     flux_t *h = job->ctx->h;
     job->running = 0;
+
+    /* Stop shell_exit_timer so it cannot fire on a job that is already
+     * completing normally.
+     */
+    flux_watcher_stop (job->shell_exit_timer);
 
     if (job->exception_in_progress) {
         if (job->exception_wait_status >= 0)
@@ -774,6 +780,11 @@ static void jobinfo_cancel (struct jobinfo *job)
     /*  If a kill-timer is already active, the cancellation is in progress */
     if (job->kill_timer)
         return;
+
+    /*  Stop shell_exit_timer if active - an exception has occurred so the
+     *  normal shell exit monitoring no longer applies.
+     */
+    flux_watcher_stop (job->shell_exit_timer);
 
     if (job->impl->cancel)
         (*job->impl->cancel) (job);
