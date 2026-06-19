@@ -25,8 +25,8 @@
  *
  * t_submit = "submit"
  * t_depend - "validate"
- * t_priority - "priority" (not saved, can be entered multiple times)
- * t_sched - "depend" (not saved, can be entered multiple times)
+ * t_priority - "priority" (can be entered multiple times, store first time)
+ * t_sched - "depend" (can be entered multiple times, store first time)
  * t_run - "alloc"
  * t_cleanup - "finish" or "exception" w/ severity == 0
  * t_inactive - "clean"
@@ -40,6 +40,8 @@ struct job {
     int64_t priority;
     double t_submit;
     double t_depend;
+    double t_priority;
+    double t_sched;
     double t_run;
     double t_cleanup;
     double t_inactive;

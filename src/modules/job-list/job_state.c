@@ -172,6 +172,15 @@ static void update_job_state (struct job_state_ctx *jsctx,
     job->state = new_state;
     if (job->state == FLUX_JOB_STATE_DEPEND)
         job->t_depend = timestamp;
+    /* N.B. PRIORITY and SCHED state can be re-entered, so store
+     * the timestamp of the first time the event occurs
+     */
+    else if (job->state == FLUX_JOB_STATE_PRIORITY
+             && !(job->states_mask & FLUX_JOB_STATE_PRIORITY))
+        job->t_priority = timestamp;
+    else if (job->state == FLUX_JOB_STATE_SCHED
+             && !(job->states_mask & FLUX_JOB_STATE_SCHED))
+        job->t_sched = timestamp;
     else if (job->state == FLUX_JOB_STATE_RUN)
         job->t_run = timestamp;
     else if (job->state == FLUX_JOB_STATE_CLEANUP)

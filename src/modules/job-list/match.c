@@ -39,9 +39,11 @@ struct list_constraint {
 typedef enum {
     MATCH_T_SUBMIT = 1,
     MATCH_T_DEPEND = 2,
-    MATCH_T_RUN = 3,
-    MATCH_T_CLEANUP = 4,
-    MATCH_T_INACTIVE = 5,
+    MATCH_T_PRIORITY = 3,
+    MATCH_T_SCHED = 4,
+    MATCH_T_RUN = 5,
+    MATCH_T_CLEANUP = 6,
+    MATCH_T_INACTIVE = 7,
 } match_timestamp_type_t;
 
 typedef enum {
@@ -109,6 +111,10 @@ static struct timestamp_value *timestamp_value_create (
         tv->t_type = MATCH_T_SUBMIT;
     else if (streq (type, "t_depend"))
         tv->t_type = MATCH_T_DEPEND;
+    else if (streq (type, "t_priority"))
+        tv->t_type = MATCH_T_PRIORITY;
+    else if (streq (type, "t_sched"))
+        tv->t_type = MATCH_T_SCHED;
     else if (streq (type, "t_run"))
         tv->t_type = MATCH_T_RUN;
     else if (streq (type, "t_cleanup"))
@@ -629,6 +635,12 @@ static int match_timestamp (struct list_constraint *c,
         else
             return 0;
     }
+    else if (tv->t_type == MATCH_T_PRIORITY
+             && (job->states_mask & FLUX_JOB_STATE_PRIORITY))
+        t = job->t_priority;
+    else if (tv->t_type == MATCH_T_SCHED
+             && (job->states_mask & FLUX_JOB_STATE_SCHED))
+        t = job->t_sched;
     else if (tv->t_type == MATCH_T_RUN
              && (job->states_mask & FLUX_JOB_STATE_RUN))
         t = job->t_run;
@@ -846,6 +858,8 @@ struct list_constraint *list_constraint_create (struct match_ctx *mctx,
                 return create_ranks_constraint (mctx, values, errp);
             else if (streq (op, "t_submit")
                      || streq (op, "t_depend")
+                     || streq (op, "t_priority")
+                     || streq (op, "t_sched")
                      || streq (op, "t_run")
                      || streq (op, "t_cleanup")
                      || streq (op, "t_inactive"))

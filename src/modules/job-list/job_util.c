@@ -60,6 +60,16 @@ static int store_attr (struct job *job,
             return 0;
         val = json_real (job->t_depend);
     }
+    else if (streq (attr, "t_priority")) {
+        if (!(job->states_mask & FLUX_JOB_STATE_PRIORITY))
+            return 0;
+        val = json_real (job->t_priority);
+    }
+    else if (streq (attr, "t_sched")) {
+        if (!(job->states_mask & FLUX_JOB_STATE_SCHED))
+            return 0;
+        val = json_real (job->t_sched);
+    }
     else if (streq (attr, "t_run")) {
         if (!(job->states_mask & FLUX_JOB_STATE_RUN))
             return 0;

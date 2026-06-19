@@ -304,6 +304,8 @@ class JobInfo:
     #  Default values for job properties.
     defaults = {
         "t_depend": 0.0,
+        "t_priority": 0.0,
+        "t_sched": 0.0,
         "t_run": 0.0,
         "t_cleanup": 0.0,
         "t_inactive": 0.0,
@@ -688,6 +690,8 @@ def job_fields_to_attrs(fields):
         "result_emoji": ("result",),
         "t_submit": ("t_submit",),
         "t_depend": ("t_depend",),
+        "t_priority": ("t_priority",),
+        "t_sched": ("t_sched",),
         "t_run": ("t_run",),
         "t_cleanup": ("t_cleanup",),
         "t_inactive": ("t_inactive",),
@@ -787,6 +791,8 @@ class JobInfoFormat(flux.util.OutputFormat):
         "result_emoji": "RESULT",
         "t_submit": "T_SUBMIT",
         "t_depend": "T_DEPEND",
+        "t_priority": "T_PRIORITY",
+        "t_sched": "T_SCHED",
         "t_run": "T_RUN",
         "t_cleanup": "T_CLEANUP",
         "t_inactive": "T_INACTIVE",
