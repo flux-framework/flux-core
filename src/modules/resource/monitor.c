@@ -217,6 +217,36 @@ error:
     return rc;
 }
 
+/* Leader: Process a group online response and update monitor->up.
+ * Posts online/offline events if the set changed.
+ * Returns 0 on success, -1 on error (with errno set).
+ *
+ * Note: If post of join/leave event fails, an error is logged, but the
+ * function returns success. This allows caller to reset future in this
+ * case in hopes the next group response can be successfully processed.
+ */
+static int process_online_update (struct monitor *monitor, flux_future_t *f)
+{
+    struct idset *up = NULL;
+
+    if (!(up = group_get (f)))
+        return -1;
+
+    if (post_join_leave (monitor, monitor->up, up, "online", "offline") < 0) {
+        idset_destroy (up);
+        flux_log (monitor->ctx->h,
+                  LOG_WARNING,
+                  "monitor: error posting online/offline event");
+        return 0;
+    }
+
+    idset_destroy (monitor->up);
+    monitor->up = up;
+
+    notify_waitup (monitor);
+    return 0;
+}
+
 /* Leader: set of online brokers has changed.
  * Update monitor->up and post online/offline events to resource.eventlog.
  * Avoid posting events if nothing changed.
@@ -224,29 +254,49 @@ error:
 static void broker_online_cb (flux_future_t *f, void *arg)
 {
     struct monitor *monitor = arg;
-    flux_t *h = monitor->ctx->h;
-    struct idset *up = NULL;
 
-    if (!(up = group_get (f))) {
-        flux_log (h,
-                  LOG_ERR,
+    if (process_online_update (monitor, f) < 0) {
+        flux_log (monitor->ctx->h,
+                  LOG_CRIT,
                   "monitor: broker.online: %s",
                   future_strerror (f, errno));
         return;
     }
-    if (post_join_leave (monitor, monitor->up, up, "online", "offline") < 0) {
-        flux_log_error (h, "monitor: error posting online/offline event");
-        idset_destroy (up);
-        flux_future_reset (f);
-        return;
-    }
-
-    idset_destroy (monitor->up);
-    monitor->up = up;
-
-    notify_waitup (monitor);
-
     flux_future_reset (f);
+}
+
+/* Leader: Set up streaming watch for the online group.
+ * Synchronously wait for the first response to initialize monitor->up with
+ * current state, then set up streaming callback for future updates.
+ * Returns 0 on success, -1 on error.
+ */
+static int initialize_online_monitor (struct monitor *monitor,
+                                      const char *group_name)
+{
+    struct resource_ctx *ctx = monitor->ctx;
+
+    if (!(monitor->f_online = group_monitor (ctx->h, group_name))
+        || flux_future_get (monitor->f_online, NULL) < 0) {
+        flux_log_error (ctx->h,
+                        "monitor: failed to get initial %s state",
+                        group_name);
+        return -1;
+    }
+    if (process_online_update (monitor, monitor->f_online) < 0) {
+        flux_log (ctx->h,
+                  LOG_CRIT,
+                  "monitor: initial %s response: %s",
+                  group_name,
+                  future_strerror (monitor->f_online, errno));
+        return -1;
+    }
+    flux_future_reset (monitor->f_online);
+    if (flux_future_then (monitor->f_online,
+                          -1,
+                          broker_online_cb,
+                          monitor) < 0)
+        return -1;
+    return 0;
 }
 
 static void broker_torpid_cb (flux_future_t *f, void *arg)
@@ -455,11 +505,7 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
         const char *online_group = "broker.online";
         if (config->systemd_enable)
             online_group = "sdmon.online";
-        if (!(monitor->f_online = group_monitor (ctx->h, online_group))
-            || flux_future_then (monitor->f_online,
-                                 -1,
-                                 broker_online_cb,
-                                 monitor) < 0)
+        if (initialize_online_monitor (monitor, online_group) < 0)
             goto error;
         if (!(monitor->f_torpid = group_monitor (ctx->h, "broker.torpid"))
             || flux_future_then (monitor->f_torpid,
