@@ -185,7 +185,12 @@ static state_match_t match_t_priority (struct state_constraint *c,
 static state_match_t match_t_sched (struct state_constraint *c,
                                     flux_job_state_t state)
 {
-    if (state >= FLUX_JOB_STATE_SCHED)
+    /* a job can move from the SCHED state to PRIORITY and back.
+     * t_sched stores the first instance of reaching the sched state.
+     * So if we are in job state PRIORITY, it's possible t_sched is
+     * available.
+     */
+    if (state >= FLUX_JOB_STATE_PRIORITY)
         return MATCH_MAYBE;
     return MATCH_NEVER;
 }

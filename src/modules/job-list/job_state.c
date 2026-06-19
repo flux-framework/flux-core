@@ -176,10 +176,10 @@ static void update_job_state (struct job_state_ctx *jsctx,
      * the timestamp of the first time the event occurs
      */
     else if (job->state == FLUX_JOB_STATE_PRIORITY
-             && !(job->states_mask & FLUX_JOB_STATE_PRIORITY))
+             && job->t_priority == 0.0)
         job->t_priority = timestamp;
     else if (job->state == FLUX_JOB_STATE_SCHED
-             && !(job->states_mask & FLUX_JOB_STATE_SCHED))
+             && job->t_sched == 0.0)
         job->t_sched = timestamp;
     else if (job->state == FLUX_JOB_STATE_RUN)
         job->t_run = timestamp;

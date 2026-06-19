@@ -635,11 +635,16 @@ static int match_timestamp (struct list_constraint *c,
         else
             return 0;
     }
+    /* PRIORITY and SCHED state can be entered multiple times and
+     * t_priority / t_sched indicate the first time it has been
+     * entered.  So trust if t_priority or t_sched are > 0.0 instead
+     * of using the states_mask.
+     */
     else if (tv->t_type == MATCH_T_PRIORITY
-             && (job->states_mask & FLUX_JOB_STATE_PRIORITY))
+             && job->t_priority != 0.0)
         t = job->t_priority;
     else if (tv->t_type == MATCH_T_SCHED
-             && (job->states_mask & FLUX_JOB_STATE_SCHED))
+             && job->t_sched != 0.0)
         t = job->t_sched;
     else if (tv->t_type == MATCH_T_RUN
              && (job->states_mask & FLUX_JOB_STATE_RUN))
