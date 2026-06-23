@@ -18,9 +18,12 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/job_hash.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "idsync.h"
 #include "job_util.h"
+#include "auth.h"
+#include "match.h"
 
 /* Used in waits hash, need to store job id within data structure for lookup */
 struct idsync_wait_list {
@@ -116,6 +119,14 @@ error:
     idsync_ctx_destroy (isctx);
     errno = saved_errno;
     return NULL;
+}
+
+void idsync_ctx_set_auth (struct idsync_ctx *isctx,
+                          struct job_auth *auth,
+                          struct match_ctx *mctx)
+{
+    isctx->auth = auth;
+    isctx->mctx = mctx;
 }
 
 void idsync_ctx_destroy (struct idsync_ctx *isctx)
@@ -250,7 +261,22 @@ static void idsync_data_respond (struct idsync_ctx *isctx,
                                  struct job *job)
 {
     flux_error_t err;
-    json_t *o;
+    json_t *o = NULL;
+    int rc;
+
+    /* Enforce access policy: in private mode a non-owner may not see
+     * another user's job.  Report it as if the job does not exist.
+     */
+    if ((rc = job_auth_check_job (isctx->auth,
+                                  isctx->mctx,
+                                  isd->msg,
+                                  job,
+                                  &err)) < 0)
+        goto error;
+    if (rc == 0) {
+        errno = ENOENT;
+        goto error;
+    }
 
     if (!(o = job_to_json (job, isd->attrs, &err)))
         goto error;

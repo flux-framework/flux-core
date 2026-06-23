@@ -250,6 +250,7 @@ static struct list_ctx *list_ctx_create (flux_t *h)
         goto error;
     if (!(ctx->auth = job_auth_create (h)))
         goto error;
+    idsync_ctx_set_auth (ctx->isctx, ctx->auth, ctx->mctx);
     return ctx;
 error:
     list_ctx_destroy (ctx);
