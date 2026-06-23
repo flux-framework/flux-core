@@ -52,6 +52,12 @@ static void stats_cb (flux_t *h,
         return;
     }
 
+    /* In private mode, module statistics are not available to users
+     * without the owner role.
+     */
+    if (job_auth_msg_restricted (ctx->auth, msg))
+        goto error;
+
     int pending = zlistx_size (ctx->jsctx->pending);
     int running = zlistx_size (ctx->jsctx->running);
     int inactive = zlistx_size (ctx->jsctx->inactive);
@@ -251,6 +257,7 @@ static struct list_ctx *list_ctx_create (flux_t *h)
     if (!(ctx->auth = job_auth_create (h)))
         goto error;
     idsync_ctx_set_auth (ctx->isctx, ctx->auth, ctx->mctx);
+    job_stats_set_auth (ctx->jsctx->statsctx, ctx->auth);
     return ctx;
 error:
     list_ctx_destroy (ctx);

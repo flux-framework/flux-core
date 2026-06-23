@@ -21,6 +21,7 @@
 
 #include "stats.h"
 #include "job_data.h"
+#include "auth.h"
 
 #define BATCH_DELAY 0.2
 
@@ -32,7 +33,14 @@ struct job_stats_ctx {
     struct flux_msglist *watchers;
     flux_watcher_t *timer;
     bool timer_running;
+    struct job_auth *auth;
 };
+
+void job_stats_set_auth (struct job_stats_ctx *statsctx,
+                         struct job_auth *auth)
+{
+    statsctx->auth = auth;
+}
 
 static void arm_timer (struct job_stats_ctx *statsctx);
 
@@ -410,6 +418,12 @@ static void job_stats_cb (flux_t *h,
                           void *arg)
 {
     struct job_stats_ctx *statsctx = arg;
+
+    /* In private mode, aggregate job statistics are not available to
+     * users without the owner role.
+     */
+    if (job_auth_msg_restricted (statsctx->auth, msg))
+        goto error;
 
     if (flux_msg_is_streaming (msg)) {
         if (flux_msglist_append (statsctx->watchers, msg) < 0)

@@ -16,6 +16,8 @@
 
 #include "job_data.h"
 
+struct job_auth;
+
 struct job_stats {
     unsigned int state_count[FLUX_JOB_NR_STATES];
     unsigned int successful;
@@ -28,6 +30,12 @@ struct job_stats {
 struct job_stats_ctx *job_stats_ctx_create (flux_t *h);
 
 void job_stats_ctx_destroy (struct job_stats_ctx *statsctx);
+
+/* Provide the access policy used to restrict job-stats requests from
+ * guests when private mode is enabled.
+ */
+void job_stats_set_auth (struct job_stats_ctx *statsctx,
+                         struct job_auth *auth);
 
 void job_stats_update (struct job_stats_ctx *statsctx,
                        struct job *job,
