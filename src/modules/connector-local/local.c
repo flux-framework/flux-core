@@ -206,6 +206,9 @@ error:
  * allow-root-owner = true
  *   Allow root user to have instance owner role
  *
+ * private-mode = true
+ *   Restrict guests to viewing only their own jobs (consumed by job-list).
+ *
  * Missing [access] keys are interpreted as false.
  * [access] keys other than the above are not allowed.
  */
@@ -216,15 +219,18 @@ static int parse_config (struct connector_local *ctx,
     flux_error_t error;
     int allow_guest_user = 0;
     int allow_root_owner = 0;
+    int private_mode = 0;       /* unused here; validated for job-list */
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?b s?b !}}",
+                          "{s?{s?b s?b s?b !}}",
                           "access",
                             "allow-guest-user",
                             &allow_guest_user,
                             "allow-root-owner",
-                            &allow_root_owner) < 0) {
+                            &allow_root_owner,
+                            "private-mode",
+                            &private_mode) < 0) {
         errprintf (errp,
                    "error parsing [access] configuration: %s",
                    error.text);
