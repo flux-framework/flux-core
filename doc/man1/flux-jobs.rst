@@ -21,6 +21,11 @@ jobs and information can be listed using options listed below.
 Alternately, specific job ids can be listed on the command line to
 only list those job IDs.
 
+When the instance is configured with ``private-mode`` in the ``access``
+table (see :man5:`flux-config-access`), users other than the instance owner
+may list only their own jobs, and the :option:`--stats` and
+:option:`--stats-only` options are unavailable to them.
+
 
 OPTIONS
 =======
@@ -702,4 +707,4 @@ FLUX RFC
 SEE ALSO
 ========
 
-:man1:`flux-pstree`
+:man1:`flux-pstree`, :man5:`flux-config-access`
