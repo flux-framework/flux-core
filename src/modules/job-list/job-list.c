@@ -144,6 +144,10 @@ static void config_reload_cb (flux_t *h,
         errstr = error.text;
         goto error_decref;
     }
+    if (job_auth_config_reload (ctx->auth, conf, &error) < 0) {
+        errstr = error.text;
+        goto error_decref;
+    }
     if (flux_set_conf_new (h, conf) < 0) {
         errstr = "error updating config";
         goto error_decref;
@@ -220,6 +224,7 @@ static void list_ctx_destroy (struct list_ctx *ctx)
             idsync_ctx_destroy (ctx->isctx);
         if (ctx->mctx)
             match_ctx_destroy (ctx->mctx);
+        job_auth_destroy (ctx->auth);
         free (ctx);
         errno = saved_errno;
     }
@@ -242,6 +247,8 @@ static struct list_ctx *list_ctx_create (flux_t *h)
     if (!(ctx->deferred_requests = flux_msglist_create ()))
         goto error;
     if (!(ctx->mctx = match_ctx_create (ctx->h)))
+        goto error;
+    if (!(ctx->auth = job_auth_create (h)))
         goto error;
     return ctx;
 error:

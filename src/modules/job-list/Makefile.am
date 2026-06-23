@@ -19,6 +19,8 @@ noinst_LTLIBRARIES = libjob-list.la
 libjob_list_la_SOURCES = \
 	job-list.c \
 	job-list.h \
+	auth.h \
+	auth.c \
 	job_state.h \
 	job_state.c \
 	job_data.h \
