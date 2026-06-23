@@ -265,6 +265,8 @@ void list_cb (flux_t *h,
     double since = 0.;
     json_t *constraint = NULL;
     json_t *legacy_constraint = NULL;
+    json_t *auth_constraint = NULL;
+    json_t *combined_constraint = NULL;
     struct list_constraint *c = NULL;
     struct state_constraint *statec = NULL;
     flux_error_t error;
@@ -322,6 +324,30 @@ void list_cb (flux_t *h,
         errno = EPROTO;
         goto error;
     }
+
+    /* In private mode, restrict non-owners to their own jobs by ANDing an
+     * access policy constraint with the requested constraint.
+     */
+    if (job_auth_constraint (ctx->auth, msg, &auth_constraint, &error) < 0) {
+        errprintf (&err, "%s", error.text);
+        goto error;
+    }
+    if (auth_constraint) {
+        if (constraint)
+            combined_constraint = json_pack ("{s:[OO]}",
+                                             "and",
+                                             constraint,
+                                             auth_constraint);
+        else
+            combined_constraint = json_incref (auth_constraint);
+        if (!combined_constraint) {
+            errprintf (&err, "failed to build access policy constraint");
+            errno = ENOMEM;
+            goto error;
+        }
+        constraint = combined_constraint;
+    }
+
     if (!(c = list_constraint_create (ctx->mctx, constraint, &error))) {
         errprintf (&err,
                    "invalid payload: constraint object invalid: %s",
@@ -383,6 +409,8 @@ void list_cb (flux_t *h,
     list_constraint_destroy (c);
     state_constraint_destroy (statec);
     json_decref (legacy_constraint);
+    json_decref (auth_constraint);
+    json_decref (combined_constraint);
     return;
 
 error:
@@ -392,6 +420,8 @@ error:
     list_constraint_destroy (c);
     state_constraint_destroy (statec);
     json_decref (legacy_constraint);
+    json_decref (auth_constraint);
+    json_decref (combined_constraint);
 }
 
 void check_id_valid_continuation (flux_future_t *f, void *arg)
