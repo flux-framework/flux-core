@@ -12,6 +12,8 @@ testssh="${SHARNESS_TEST_SRCDIR}/scripts/tssh"
 
 export FLUX_URI_RESOLVE_LOCAL=t
 
+other_uid=$(($(id -u) + 100))
+
 # To ensure no raciness in tests below, ensure the job-list
 # module knows about submitted jobs in desired states
 job_list_wait_state() {
@@ -437,4 +439,21 @@ test_expect_success NO_CHAIN_LINT 'flux-top cycles left and right work' '
 		flux top --queue=batch
 '
 
+test_expect_success 'enable private mode' '
+	flux config load <<-EOT
+	[access]
+	private-mode = true
+	EOT
+'
+test_expect_success 'flux-top works as guest in private mode (zeroed stats)' '
+	FLUX_HANDLE_USERID=$other_uid FLUX_HANDLE_ROLEMASK=0x2 \
+	    $runpty flux top --test-exit --test-exit-dump=private.out >/dev/null &&
+	grep "0 pending" private.out &&
+	grep "0 running" private.out &&
+	grep "0 complete" private.out &&
+	grep "0 failed" private.out
+'
+test_expect_success 'disable private mode' '
+	flux config load </dev/null
+'
 test_done
