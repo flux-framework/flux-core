@@ -125,7 +125,7 @@ void getattr_handle_request (flux_t *h,
      */
     if (flux_msg_cred_authorize (cred, job->userid) < 0) {
         if (!ctx->private_mode)
-            errstr = "guests can only reprioritize their own jobs";
+            errstr = "guests can only access their own jobs";
         goto error;
     }
     if (!(dict = make_dict (job, attrs, &error))) {
