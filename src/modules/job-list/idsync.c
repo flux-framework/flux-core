@@ -264,6 +264,8 @@ static void idsync_data_respond (struct idsync_ctx *isctx,
     json_t *o = NULL;
     int rc;
 
+    err_init (&err);
+
     /* Enforce access policy: in private mode a non-owner may not see
      * another user's job.  Report it as if the job does not exist.
      */
@@ -288,7 +290,10 @@ static void idsync_data_respond (struct idsync_ctx *isctx,
     return;
 
 error:
-    if (flux_respond_error (isctx->h, isd->msg, errno, err.text) < 0)
+    if (flux_respond_error (isctx->h,
+                            isd->msg,
+                            errno,
+                            err.text[0] != '\0' ? err.text : NULL) < 0)
         flux_log_error (isctx->h, "%s: flux_respond_error", __FUNCTION__);
 }
 
