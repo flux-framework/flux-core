@@ -31,7 +31,8 @@ fluxpyso_LTLIBRARIES = \
 	_core.la \
 	_hostlist.la \
 	_idset.la \
-	_rhwloc_map.la
+	_rhwloc_map.la \
+	_rhwloc_treepool.la
 
 fluxpyso_PYTHON = \
 	__init__.py
@@ -47,6 +48,7 @@ EXTRA_DIST = \
 	_hostlist_build.py \
 	_idset_build.py \
 	_rhwloc_map_build.py \
+	_rhwloc_treepool_build.py \
 	make_clean_header.py
 
 STDERR_DEVNULL = $(stderr_devnull_$(V))
@@ -120,6 +122,22 @@ _rhwloc_map_la_LIBADD = \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(common_libs) \
 	$(HWLOC_LIBS)
+
+_rhwloc_treepool.c: $(srcdir)/_rhwloc_treepool_build.py
+	$(AM_V_GEN)$(PYTHON) $< $(STDERR_DEVNULL)
+
+nodist__rhwloc_treepool_la_SOURCES = _rhwloc_treepool.c
+_rhwloc_treepool_la_CPPFLAGS = \
+	$(AM_CPPFLAGS) \
+	-I$(top_srcdir)/src/common/libccan \
+	$(HWLOC_CFLAGS) \
+	$(JANSSON_CFLAGS)
+_rhwloc_treepool_la_LIBADD = \
+	$(top_builddir)/src/common/librlist/librlist-hwloc.la \
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(common_libs) \
+	$(HWLOC_LIBS) \
+	$(JANSSON_LIBS)
 
 if HAVE_FLUX_SECURITY
 
