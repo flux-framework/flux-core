@@ -19,6 +19,23 @@ test_expect_success 'flux run ignores ambiguous args after --' '
 	flux run -n2 --dry-run -- hostname --n=2 \
 		| jq -e ".tasks[0].command[0] == \"hostname\""
 '
+test_expect_success 'flux run ignores -- after --' '
+	flux run -n2 --dry-run -- -- hostname -n1 \
+		| jq -e ".tasks[0].command[0] == \"--\""
+'
+test_expect_success 'flux run: accepted option after command is not consumed' '
+	flux run -n2 --dry-run hostname --job-name=foo \
+		| jq -e ".tasks[0].command == [\"hostname\", \"--job-name=foo\"]"
+'
+test_expect_success 'flux run: -n4 vs -n 4 --ntasks 4 create same jobspec' '
+	flux run -n4 --dry-run --env=-* -- hostname | jq -S . >j1.json &&
+	flux run -n 4 --dry-run --env=-* -- hostname | jq -S . >j2.json &&
+	flux run --ntasks 4 --dry-run --env=-* -- hostname | jq -S . >j3.json &&
+	flux run --ntasks=4 --dry-run --env=-* -- hostname | jq -S . >j4.json &&
+	test_cmp j1.json j2.json &&
+	test_cmp j2.json j3.json &&
+	test_cmp j3.json j4.json
+'
 test_expect_success 'flux run works' '
 	flux run hostname >run.out &&
 	hostname >run.exp &&

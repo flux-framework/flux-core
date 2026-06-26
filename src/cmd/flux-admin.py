@@ -19,6 +19,7 @@ from pathlib import Path
 
 import flux
 import flux.util
+from flux.cli.argparse import FluxArgumentParser
 from flux.conf_builtin import conf_builtin_get
 from flux.rpc import RPC
 
@@ -538,15 +539,13 @@ LOGGER = logging.getLogger("flux-admin")
 def main():
     sys.stdout = open(sys.stdout.fileno(), "w", encoding="utf8")
 
-    parser = argparse.ArgumentParser(prog="flux-admin")
+    parser = FluxArgumentParser(prog="flux-admin")
     subparsers = parser.add_subparsers(
         title="subcommands", description="", dest="subcommand"
     )
     subparsers.required = True
 
-    cleanup_push_parser = subparsers.add_parser(
-        "cleanup-push", formatter_class=flux.util.help_formatter()
-    )
+    cleanup_push_parser = subparsers.add_parser("cleanup-push")
     cleanup_push_parser.add_argument(
         "cmdline", help="Command line", nargs=argparse.REMAINDER
     )
@@ -554,7 +553,6 @@ def main():
 
     system_scripts_parser = subparsers.add_parser(
         "system-scripts",
-        formatter_class=flux.util.help_formatter(),
         help="Show configured system scripts (prolog, epilog, housekeeping)",
     )
     system_scripts_parser.add_argument(

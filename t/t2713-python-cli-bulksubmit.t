@@ -329,4 +329,12 @@ test_expect_success 'flux bulksubmit --dry-run works with --cc' '
 	EOF
 	test_cmp dry-run-cc.expected dry-run-cc.out
 '
+test_expect_success 'flux bulksubmit: Flux option after command template is not consumed' '
+	flux bulksubmit --dry-run echo {} --job-name=foo ::: a \
+	  >dry-run-posix.out 2>&1 &&
+	cat <<-EOF >dry-run-posix.expected &&
+	bulksubmit: submit echo a --job-name=foo
+	EOF
+	test_cmp dry-run-posix.expected dry-run-posix.out
+'
 test_done

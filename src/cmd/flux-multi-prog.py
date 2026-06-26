@@ -9,14 +9,13 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import argparse
 import logging
 import os
 import re
 import shlex
 import sys
 
-import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.idset import IDset
 from flux.util import CLIMain
 
@@ -109,11 +108,10 @@ def parse_args():
     description = """
     Run a parallel program with a different executable and arguments for each task
     """
-    parser = argparse.ArgumentParser(
+    parser = FluxArgumentParser(
         prog="flux-multi-prog",
         usage="flux multi-prog [OPTIONS] CONFIG",
         description=description,
-        formatter_class=flux.util.help_formatter(),
     )
     parser.add_argument(
         "-n",

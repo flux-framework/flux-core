@@ -24,6 +24,10 @@ test_expect_success 'flux submit ignores ambiguous args after --' '
 	flux submit -n2 --dry-run -- hostname --n=2 \
 		| jq -e ".tasks[0].command[0] == \"hostname\""
 '
+test_expect_success 'flux submit: Flux option after command is not consumed' '
+	flux submit -n2 --dry-run hostname --job-name=foo \
+		| jq -e ".tasks[0].command == [\"hostname\", \"--job-name=foo\"]"
+'
 test_expect_success 'flux submit + flux job attach works' '
 	jobid=$(flux submit hostname) &&
 	flux job attach $jobid

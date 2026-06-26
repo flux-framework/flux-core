@@ -13,6 +13,7 @@ import argparse
 import logging
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.job import JobID
 from flux.util import TreedictAction
 
@@ -35,7 +36,7 @@ LOGGER = logging.getLogger("flux-job-post-event")
 
 @flux.util.CLIMain(LOGGER)
 def main():
-    parser = argparse.ArgumentParser(prog="flux-job-post-event")
+    parser = FluxArgumentParser(prog="flux-job-post-event")
     parser.add_argument("id", help="jobid to which event shall be posted")
     parser.add_argument("name", help="name of event to post")
     parser.add_argument(

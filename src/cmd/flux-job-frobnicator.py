@@ -16,6 +16,7 @@ import os
 import sys
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.job import Jobspec
 from flux.job.frobnicator import JobFrobnicator
 from flux.proctitle import set_proctitle
@@ -54,9 +55,8 @@ def main():
 
     set_proctitle("job-frobnicator")
 
-    parser = argparse.ArgumentParser(
+    parser = FluxArgumentParser(
         prog="flux-job-frobnicator",
-        formatter_class=flux.util.help_formatter(),
         description="Modify Flux jobs from lines of JSON input on stdin",
         add_help=False,
     )

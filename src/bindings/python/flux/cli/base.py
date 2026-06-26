@@ -20,6 +20,7 @@ import sys
 
 import flux
 from flux import debugged, job, util
+from flux.cli.argparse import FluxArgumentParser
 from flux.cli.plugin import CLIPluginRegistry
 from flux.idset import IDset
 from flux.job import JobspecV1, JobWatcher
@@ -366,12 +367,12 @@ class MiniCmd:
         """
         if usage is None:
             usage = f"{prog} [OPTIONS...] COMMAND [ARGS...]"
-        parser = argparse.ArgumentParser(
+        parser = FluxArgumentParser(
             prog=prog,
             usage=usage,
             description=description,
-            formatter_class=flux.util.help_formatter(),
             add_help=False,
+            posix=True,
         )
         parser.add_argument(
             "--help",
@@ -450,6 +451,7 @@ class MiniCmd:
         )
         parser.add_argument(
             "--requires",
+            hidden_aliases=("--require",),
             action="append",
             help="Specify job constraints in RFC 35 syntax",
             metavar="CONSTRAINT",
@@ -564,6 +566,7 @@ class MiniCmd:
         )
         parser.add_argument(
             "--dry-run",
+            hidden_aliases=("--dry",),
             action="store_true",
             help="Don't actually submit job, just emit jobspec",
         )
@@ -1195,6 +1198,7 @@ class BatchAllocCmd(MiniCmd):
         )
         self.parser.add_argument(
             "--broker-opts",
+            hidden_aliases=("--broker-opt",),
             metavar="OPTS",
             default=None,
             action="append",

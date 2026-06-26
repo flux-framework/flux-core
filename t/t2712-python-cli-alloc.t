@@ -31,6 +31,10 @@ test_expect_success 'flux alloc ignores ambiguous option after --' '
 	flux alloc -n1 --dry-run -- myapp --n=2 | \
 	    jq -e ".tasks[0].command == [ \"flux\", \"broker\", \"--\", \"myapp\", \"--n=2\" ]"
 '
+test_expect_success 'flux alloc: Flux option after command is not consumed' '
+	flux alloc -n1 --dry-run myapp --job-name=foo | \
+	    jq -e ".tasks[0].command == [ \"flux\", \"broker\", \"myapp\", \"--job-name=foo\" ]"
+'
 test_expect_success 'flux alloc -N2 requests 2 nodes exclusively' '
 	flux alloc -N2 --dry-run hostname | jq -S ".resources[0]" | jq -e ".type == \"node\" and .exclusive"
 '

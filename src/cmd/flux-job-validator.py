@@ -16,6 +16,7 @@ import os
 import sys
 
 import flux
+from flux.cli.argparse import FluxArgumentParser
 from flux.job.validator import JobValidator
 from flux.proctitle import set_proctitle
 
@@ -53,9 +54,8 @@ def main():
 
     set_proctitle("job-validator")
 
-    parser = argparse.ArgumentParser(
+    parser = FluxArgumentParser(
         prog="flux-job-validator",
-        formatter_class=flux.util.help_formatter(),
         description="Validate Flux jobs from lines of JSON input on stdin",
         add_help=False,
     )

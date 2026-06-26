@@ -9,7 +9,6 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import argparse
 import logging
 import os
 import select
@@ -17,6 +16,7 @@ import sys
 
 import flux
 import flux.util
+from flux.cli.argparse import FluxArgumentParser
 from flux.hostlist import Hostlist
 from flux.idset import IDset
 from flux.job import JobID, job_list_id
@@ -40,10 +40,10 @@ option is used, in which case the default is 'local'.
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
+    parser = FluxArgumentParser(
         prog="flux-hostlist",
         epilog=sources_description,
-        formatter_class=flux.util.help_formatter(raw_description=True),
+        raw_description=True,
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(

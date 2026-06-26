@@ -9,7 +9,6 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import argparse
 import json
 import logging
 import os
@@ -18,9 +17,10 @@ from collections import deque
 
 import flux
 import flux.kvs
+from flux.cli.argparse import FluxArgumentParser
 from flux.job._utils import list_split
 from flux.modprobe import Modprobe
-from flux.util import CLIMain, Tree, help_formatter
+from flux.util import CLIMain, Tree
 
 
 def disable_modules(M, modules=None):
@@ -138,19 +138,20 @@ def list_dependencies(args):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
+    parser = FluxArgumentParser(
         prog="flux-modprobe",
         description="Task and module load/unload management for Flux",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        raw_description=True,
     )
     subparsers = parser.add_subparsers(
         title="subcommands", description="", dest="subcommand"
     )
     subparsers.required = True
 
-    load_parser = subparsers.add_parser("load", formatter_class=help_formatter())
+    load_parser = subparsers.add_parser("load")
     load_parser.add_argument(
         "--dry-run",
+        hidden_aliases=("--dry",),
         action="store_true",
         help="Don't do anything. Print what would be run",
     )
@@ -162,7 +163,7 @@ def parse_args():
     )
     load_parser.set_defaults(func=load)
 
-    remove_parser = subparsers.add_parser("remove", formatter_class=help_formatter())
+    remove_parser = subparsers.add_parser("remove")
     remove_parser.add_argument(
         "modules",
         metavar="MODULE",
@@ -176,10 +177,7 @@ def parse_args():
     )
     remove_parser.set_defaults(func=remove)
 
-    run_parser = subparsers.add_parser(
-        "run",
-        formatter_class=help_formatter(),
-    )
+    run_parser = subparsers.add_parser("run")
     run_parser.add_argument(
         "--show-deps",
         action="store_true",
@@ -198,7 +196,7 @@ def parse_args():
     )
     run_parser.set_defaults(func=run)
 
-    rc1_parser = subparsers.add_parser("rc1", formatter_class=help_formatter())
+    rc1_parser = subparsers.add_parser("rc1")
     rc1_parser.add_argument(
         "--timing",
         action="store_true",
@@ -219,7 +217,7 @@ def parse_args():
     )
     rc1_parser.set_defaults(func=rc1)
 
-    rc3_parser = subparsers.add_parser("rc3", formatter_class=help_formatter())
+    rc3_parser = subparsers.add_parser("rc3")
     rc3_parser.add_argument(
         "-v", "--verbose", action="store_true", help="Print tasks as they are executed"
     )
@@ -230,9 +228,7 @@ def parse_args():
     )
     rc3_parser.set_defaults(func=rc3)
 
-    list_deps_parser = subparsers.add_parser(
-        "list-dependencies", formatter_class=help_formatter()
-    )
+    list_deps_parser = subparsers.add_parser("list-dependencies")
     list_deps_parser.add_argument(
         "-S",
         "--set-alternative",
@@ -263,7 +259,7 @@ def parse_args():
     )
     list_deps_parser.set_defaults(func=list_dependencies)
 
-    show_parser = subparsers.add_parser("show", formatter_class=help_formatter())
+    show_parser = subparsers.add_parser("show")
     show_parser.add_argument(
         "-S",
         "--set-alternative",

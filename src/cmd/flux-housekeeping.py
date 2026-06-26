@@ -9,13 +9,13 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import argparse
 import logging
 import sys
 import time
 
 import flux
 import flux.util
+from flux.cli.argparse import FluxArgumentParser
 from flux.hostlist import Hostlist
 from flux.idset import IDset
 from flux.job import JobID
@@ -195,15 +195,13 @@ def housekeeping_kill(args):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(prog="flux-housekeeping")
+    parser = FluxArgumentParser(prog="flux-housekeeping")
     subparsers = parser.add_subparsers(
         title="subcommands", description="", dest="subcommand"
     )
     subparsers.required = True
 
-    list_parser = subparsers.add_parser(
-        "list", formatter_class=flux.util.help_formatter()
-    )
+    list_parser = subparsers.add_parser("list")
     list_parser.add_argument(
         "-i",
         "--include",
@@ -228,9 +226,7 @@ def parse_args():
     )
     list_parser.set_defaults(func=housekeeping_list)
 
-    kill_parser = subparsers.add_parser(
-        "kill", formatter_class=flux.util.help_formatter()
-    )
+    kill_parser = subparsers.add_parser("kill")
     kill_parser.add_argument(
         "-s",
         "--signal",
