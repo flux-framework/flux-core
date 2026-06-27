@@ -24,6 +24,7 @@
 #include "src/common/libutil/hola.h"
 #include "src/common/libutil/slice.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libjob/job_hash.h"
 
 struct job_entry {
     flux_jobid_t id;
@@ -33,6 +34,9 @@ struct job_entry {
 struct history {
     flux_plugin_t *p;
     struct hola *users; // userid => job list
+    zhashx_t *index;    // jobid => list handle (for O(1) find/delete)
+                        // invariant: every users list entry has exactly one
+                        // index entry; remove from both together
 };
 
 #define COMPARE_NUM_REVERSE(a,b) ((a)>(b)?-1:(a)<(b)?1:0)
@@ -108,6 +112,7 @@ static void history_destroy (struct history *hist)
     if (hist) {
         int saved_errno = errno;
         hola_destroy (hist->users);
+        zhashx_destroy (&hist->index);
         free (hist);
         errno = saved_errno;
     };
@@ -128,10 +133,44 @@ static struct history *history_create (flux_plugin_t *p)
     hola_set_hash_key_hasher (hist->users, userid_hasher);
     hola_set_list_destructor (hist->users, job_entry_destructor);
     hola_set_list_comparator (hist->users, job_entry_comparator);
+
+    /* Index jobid->list handle so duplicate check on job.inactive-add
+     * and the lookup on job.inactive-remove are O(1) instead of a linear
+     * scan of the user's job list (hola_list_find). The index borrows the
+     * job_entry's id as key and stores no values of its own, so no key/value
+     * duplicator or destructor is needed.
+     */
+    if (!(hist->index = job_hash_create ()))
+        goto error;
+
     return hist;
 error:
     history_destroy (hist);
     return NULL;
+}
+
+/* Insert entry into the user's t_submit-ordered list and record its list
+ * handle in the jobid index. Insertion searches from the front of the list
+ * (low_value=true) because new jobs have the largest t_submit and the list is
+ * sorted largest-first.
+ *
+ * On failure, 'entry' is consumed (freed) and -1 is returned.
+ */
+static int job_entry_insert (struct history *hist,
+                             const void *key,
+                             struct job_entry *entry)
+{
+    void *handle;
+
+    if (!(handle = hola_list_insert (hist->users, key, entry, true))) {
+        job_entry_destroy (entry);
+        return -1;
+    }
+    if (zhashx_insert (hist->index, &entry->id, handle) < 0) {
+        hola_list_delete (hist->users, key, handle); // frees entry
+        return -1;
+    }
+    return 0;
 }
 
 static int jobtap_cb (flux_plugin_t *p,
@@ -156,21 +195,27 @@ static int jobtap_cb (flux_plugin_t *p,
     key = userid2key (userid);
     if (streq (topic, "job.inactive-remove")) {
         void *handle;
-        if ((handle = hola_list_find (hist->users, key, entry)))
+        if ((handle = zhashx_lookup (hist->index, &entry->id))) {
+            zhashx_delete (hist->index, &entry->id);
             hola_list_delete (hist->users, key, handle);
+        }
         job_entry_destroy (entry);
     }
     else if (streq (topic, "job.inactive-add")) {
-        if (hola_list_find (hist->users, key, entry)) {
+        /* A job that transitioned active->inactive already has an entry from
+         * job.new, so skip the duplicate. At restart, replayed inactive jobs
+         * arrive here without a prior job.new and are added.
+         */
+        if (zhashx_lookup (hist->index, &entry->id)) {
             job_entry_destroy (entry);
             return 0;
         }
-        if (!hola_list_insert (hist->users, key, entry, true))
-            goto error;
+        if (job_entry_insert (hist, key, entry) < 0) // consumes entry
+            return -1;
     }
     else if (streq (topic, "job.new")) {
-        if (!hola_list_insert (hist->users, key, entry, true))
-            goto error;
+        if (job_entry_insert (hist, key, entry) < 0) // consumes entry
+            return -1;
     }
     return 0;
 error:
