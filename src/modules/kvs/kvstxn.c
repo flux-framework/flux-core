@@ -36,6 +36,13 @@
 
 #include "kvstxn.h"
 
+/* Result of store_cache(): what the caller should do with the entry.
+ */
+enum store_result {
+    STORE_CACHE_NOOP = 0,   /* already cached: nothing further to do */
+    STORE_CACHE_DIRTY,      /* newly cached: must be flushed to content store */
+};
+
 struct kvstxn_mgr {
     struct cache *cache;
     const char *ns_name;
@@ -294,23 +301,39 @@ static int kvstxn_add_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry
     return 0;
 }
 
+/* Dispatch a store_cache() result to the appropriate per-transaction
+ * handling.  Returns 0 on success, -1 on error.
+ */
+static int kvstxn_add_cache_entry (kvstxn_t *kt,
+                                   struct cache_entry *entry,
+                                   enum store_result result)
+{
+    switch (result) {
+        case STORE_CACHE_NOOP:
+            break;
+        case STORE_CACHE_DIRTY:
+            return kvstxn_add_dirty_cache_entry (kt, entry);
+    }
+    return 0;
+}
+
 /* Store object 'o' under key 'ref' in local cache.
  * Object reference is still owned by the caller.
  * 'is_raw' indicates this data is a json string w/ base64 value and
  * should be flushed to the content store as raw data after it is
  * decoded.  Otherwise, the json object should be a treeobj.
- * Returns -1 on error, 0 on success entry already there, 1 on success
- * entry needs to be flushed to content store
+ * On success returns 0 and sets *result to indicate what the caller
+ * should do with the entry (see enum store_result).  Returns -1 on error.
  */
 static int store_cache (kvstxn_t *kt,
                         json_t *o,
                         bool is_raw,
                         char *ref,
                         int ref_len,
-                        struct cache_entry **entryp)
+                        struct cache_entry **entryp,
+                        enum store_result *result)
 {
     struct cache_entry *entry;
-    int rc;
     const char *xdata;
     char *data = NULL;
     size_t xlen, databuflen;
@@ -355,7 +378,7 @@ static int store_cache (kvstxn_t *kt,
     }
     if (cache_entry_get_valid (entry)) {
         kt->ktm->noop_stores++;
-        rc = 0;
+        *result = STORE_CACHE_NOOP;
     }
     else {
         if (cache_entry_set_raw (entry, data, datalen) < 0) {
@@ -371,11 +394,11 @@ static int store_cache (kvstxn_t *kt,
             assert (ret == 1);
             goto error;
         }
-        rc = 1;
+        *result = STORE_CACHE_DIRTY;
     }
     *entryp = entry;
     free (data);
-    return rc;
+    return 0;
 
  error:
     ERRNO_SAFE_WRAP (free, data);
@@ -392,7 +415,7 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
     json_t *dir_data;
     json_t *ktmp;
     char ref[BLOBREF_MAX_STRING_SIZE];
-    int ret;
+    enum store_result result;
     struct cache_entry *entry;
     void *iter;
 
@@ -411,17 +434,16 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
         if (treeobj_is_dir (dir_entry)) {
             if (kvstxn_unroll (kt, dir_entry) < 0) /* depth first */
                 return -1;
-            if ((ret = store_cache (kt,
-                                    dir_entry,
-                                    false,
-                                    ref,
-                                    sizeof (ref),
-                                    &entry)) < 0)
+            if (store_cache (kt,
+                             dir_entry,
+                             false,
+                             ref,
+                             sizeof (ref),
+                             &entry,
+                             &result) < 0)
                 return -1;
-            if (ret) {
-                if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
-                    return -1;
-            }
+            if (kvstxn_add_cache_entry (kt, entry, result) < 0)
+                return -1;
             if (!(ktmp = treeobj_create_dirref (ref)))
                 return -1;
             if (json_object_iter_set_new (dir, iter, ktmp) < 0) {
@@ -436,17 +458,16 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
             if (!(val_data = treeobj_get_data (dir_entry)))
                 return -1;
             if (json_string_length (val_data) > BLOBREF_MAX_STRING_SIZE) {
-                if ((ret = store_cache (kt,
-                                        val_data,
-                                        true,
-                                        ref,
-                                        sizeof (ref),
-                                        &entry)) < 0)
+                if (store_cache (kt,
+                                 val_data,
+                                 true,
+                                 ref,
+                                 sizeof (ref),
+                                 &entry,
+                                 &result) < 0)
                     return -1;
-                if (ret) {
-                    if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
-                        return -1;
-                }
+                if (kvstxn_add_cache_entry (kt, entry, result) < 0)
+                    return -1;
                 if (!(ktmp = treeobj_create_valref (ref)))
                     return -1;
                 if (json_object_iter_set_new (dir, iter, ktmp) < 0) {
@@ -469,23 +490,22 @@ static int kvstxn_val_data_to_cache (kvstxn_t *kt,
 {
     struct cache_entry *entry;
     json_t *val_data;
-    int ret;
+    enum store_result result;
 
     if (!(val_data = treeobj_get_data (val)))
         return -1;
 
-    if ((ret = store_cache (kt,
-                            val_data,
-                            true,
-                            ref,
-                            ref_len,
-                            &entry)) < 0)
+    if (store_cache (kt,
+                     val_data,
+                     true,
+                     ref,
+                     ref_len,
+                     &entry,
+                     &result) < 0)
         return -1;
 
-    if (ret) {
-        if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
-            return -1;
-    }
+    if (kvstxn_add_cache_entry (kt, entry, result) < 0)
+        return -1;
 
     return 0;
 }
@@ -1003,21 +1023,20 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
              * proceed until they are completed.
              */
             struct cache_entry *entry;
-            int sret;
+            enum store_result result;
 
             if (kvstxn_unroll (kt, kt->rootcpy) < 0)
                 kt->errnum = errno;
-            else if ((sret = store_cache (kt,
-                                          kt->rootcpy,
-                                          false,
-                                          kt->newroot,
-                                          sizeof (kt->newroot),
-                                          &entry)) < 0)
+            else if (store_cache (kt,
+                                  kt->rootcpy,
+                                  false,
+                                  kt->newroot,
+                                  sizeof (kt->newroot),
+                                  &entry,
+                                  &result) < 0)
                 kt->errnum = errno;
-            else if (sret) {
-                if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
-                    kt->errnum = errno;
-            }
+            else if (kvstxn_add_cache_entry (kt, entry, result) < 0)
+                kt->errnum = errno;
 
             if (kt->errnum) {
                 cleanup_dirty_cache_list (kt);
