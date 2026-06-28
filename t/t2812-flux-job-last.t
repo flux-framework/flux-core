@@ -46,6 +46,36 @@ test_expect_success 'flux-job last lists inactive jobs after instance restart' '
 		flux job last "[:]" >lastdump.out &&
 	test_cmp lastdump.exp lastdump.out
 '
+# Rewrite the submit event timestamp (== t_submit) of a job's eventlog in
+# the KVS so that multiple jobs can be forced to share an identical t_submit.
+force_t_submit() {
+	local id=$1
+	local ts=$2
+	local kd=$(flux job id --to=kvs $id)
+	flux kvs get -r ${kd}.eventlog | flux python -c "
+import sys, json
+lines = sys.stdin.read().splitlines()
+e = json.loads(lines[0])
+e['timestamp'] = $ts
+lines[0] = json.dumps(e)
+sys.stdout.write('\n'.join(lines) + '\n')
+" | flux kvs put -r ${kd}.eventlog=-
+}
+
+# The history plugin keys jobs by id, not t_submit, so jobs sharing a
+# t_submit must all survive a restart (replay).  Before this was fixed,
+# the t_submit-based duplicate check dropped all but one such job.
+test_expect_success 'flux-job last keeps jobs sharing a t_submit after restart' '
+	ids=$(flux submit --cc=1-3 --wait true | sort) &&
+	flux queue idle &&
+	for id in $ids; do force_t_submit $id 1000000000.0; done &&
+	flux module reload job-manager &&
+	flux job last "[:]" >shared_tsubmit.out &&
+	for id in $ids; do
+		grep -q $id shared_tsubmit.out || return 1
+	done
+'
+
 # issue #4931
 test_expect_success 'flux-job last does not list purged jobs' '
 	flux job purge --force --num-limit=0 &&
