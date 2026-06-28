@@ -768,7 +768,12 @@ class Scheduler(BrokerModule):
         """
         try:
             rr = self.resources.parse_resource_request(jobspec)
-        except (KeyError, IndexError, ValueError) as exc:
+        except Exception as exc:
+            # jobspec is untrusted input: any parse failure (including a
+            # RecursionError from a pathologically nested request) must deny
+            # the job rather than escape to _handle_alloc() and stop the
+            # scheduler module.
+            self.log.error(f"alloc: cannot parse jobspec for {jobid}: {exc}")
             request.deny(f"cannot parse jobspec: {exc}")
             return
         heapq.heappush(
@@ -870,14 +875,19 @@ class Scheduler(BrokerModule):
         try:
             rr = self.resources.parse_resource_request(jobspec)
             self.resources.check_feasibility(rr)
-        except (KeyError, IndexError, ValueError) as exc:
-            self.handle.respond_error(msg, errno.EINVAL, str(exc))
-            return
         except InfeasibleRequest as exc:
             self.handle.respond_error(msg, errno.EOVERFLOW, str(exc))
             return
         except OSError as exc:
             self.handle.respond_error(msg, exc.errno, str(exc))
+            return
+        except Exception as exc:
+            # jobspec is untrusted input: any parse failure (including a
+            # RecursionError from a pathologically nested request) must error
+            # the RPC rather than escape to _handle_feasibility() and stop the
+            # scheduler module.
+            self.log.error(f"feasibility: cannot parse jobspec: {exc}")
+            self.handle.respond_error(msg, errno.EINVAL, str(exc))
             return
         self.handle.respond(msg, None)
 
