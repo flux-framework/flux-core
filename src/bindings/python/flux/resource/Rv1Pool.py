@@ -53,6 +53,11 @@ from flux.resource.ResourcePoolImplementation import (
 )
 from flux.resource.Rv1Set import Rv1Set
 
+# Maximum resource nesting depth accepted by the recursive jobspec parser.
+# jobspecs nest only a handful of levels (node/slot/core/gpu); this bound is
+# far above any legitimate request but well below Python's recursion limit.
+MAX_RESOURCE_DEPTH = 100
+
 
 class ResourceRequest:
     """Parsed resource request extracted from a jobspec.
@@ -177,7 +182,12 @@ class ResourceRequest:
             "nodefactor": 1,  # product of non-node counts above node level
         }
 
-        def walk(res_list, nodefactor):
+        def walk(res_list, nodefactor, depth=0):
+            if depth > MAX_RESOURCE_DEPTH:
+                raise ValueError(
+                    f"jobspec resource nesting exceeds maximum depth "
+                    f"{MAX_RESOURCE_DEPTH}"
+                )
             for vertex in res_list:
                 rtype = vertex.get("type", "")
                 count = ResourceCount.from_count_spec(vertex.get("count", 1))
@@ -188,7 +198,7 @@ class ResourceRequest:
                     if vertex.get("exclusive", False):
                         state["exclusive"] = True
                     if children:
-                        walk(children, nodefactor)
+                        walk(children, nodefactor, depth + 1)
                 else:
                     # Non-node: accumulate nodefactor (use min for ranges),
                     # then record known types and recurse.
@@ -203,7 +213,7 @@ class ResourceRequest:
                         state["gpu_per_slot"] = count.min
                     # else: unknown type — ignore, continue recursing
                     if children:
-                        walk(children, new_nf)
+                        walk(children, new_nf, depth + 1)
 
         walk(resources, 1)
 
