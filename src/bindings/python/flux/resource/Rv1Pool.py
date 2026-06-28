@@ -308,18 +308,80 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
     # Rv1Set override: _copy_from_ranks must add pool-specific fields
     # ------------------------------------------------------------------
 
+    @classmethod
+    def _from_state(
+        cls,
+        expiration: float,
+        starttime: float,
+        has_nodelist: bool,
+        properties: dict,
+        ranks: dict,
+        scheduling,
+        job_state: dict,
+        log,
+        generation: int = 0,
+        source=None,
+    ):
+        """Internal factory: construct from explicit state without parsing R JSON.
+
+        Used by :meth:`copy`, :meth:`_copy_from_ranks`, and :meth:`alloc` to
+        create instances without re-parsing R JSON. Subclasses that add instance
+        attributes should override :meth:`_init_from_state` to initialize them
+        from *source*.
+
+        Args:
+            expiration: Expiration timestamp for the pool.
+            starttime: Start timestamp for the pool.
+            has_nodelist: Whether this instance carries a nodelist.
+            properties: Property-to-ranks dict.
+            ranks: Rank dict with pool state.
+            scheduling: R.scheduling value (dict or None).
+            job_state: Job state dict (jobid -> (end_time, alloc)).
+            log: Logger callable or None.
+            generation: Generation counter for change tracking.
+            source: Source instance to copy subclass-specific state from, or None.
+
+        Returns:
+            A new instance of ``cls`` with the given state.
+        """
+        # Create instance without calling __init__ (which expects R JSON)
+        new = object.__new__(cls)
+        new._expiration = expiration
+        new._starttime = starttime
+        new._has_nodelist = has_nodelist
+        new._properties = properties
+        new._ranks = ranks
+        new.scheduling = scheduling
+        new._job_state = job_state
+        # Only set log attribute if non-None (otherwise use base class method)
+        if log is not None:
+            new.log = log
+        new.generation = generation
+        # Allow subclasses to initialize their attributes from source
+        if source is not None:
+            new._init_from_state(source)
+        return new
+
+    def _init_from_state(self, source: "Rv1Pool") -> None:
+        """Initialize subclass-specific attributes when copying from *source*.
+
+        Override this in subclasses that add instance attributes. The base
+        implementation is a no-op; overrides do not need to call
+        ``super()._init_from_state(source)``.
+
+        This replaces the old ``_copy_extra()`` hook and is called by
+        :meth:`_from_state` when *source* is not None.
+        """
+        pass
+
     def _copy_from_ranks(self, rank_set: set) -> "Rv1Pool":
         """Return a new Rv1Pool containing only the given ranks (alloc cleared)."""
-        new = object.__new__(Rv1Pool)
-        new._expiration = self._expiration
-        new._starttime = self._starttime
-        new._has_nodelist = getattr(self, "_has_nodelist", False)
-        new._properties = {
+        properties = {
             prop: ranks & rank_set
             for prop, ranks in self._properties.items()
             if ranks & rank_set
         }
-        new._ranks = {
+        ranks = {
             rank: {
                 "hostname": self._ranks[rank]["hostname"],
                 "cores": self._ranks[rank]["cores"],
@@ -331,10 +393,17 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             for rank in rank_set
             if rank in self._ranks
         }
-        new.scheduling = self.scheduling
-        new._job_state = {}
-        new.log = self.log
-        return new
+        return type(self)._from_state(
+            expiration=self._expiration,
+            starttime=self._starttime,
+            has_nodelist=getattr(self, "_has_nodelist", False),
+            properties=properties,
+            ranks=ranks,
+            scheduling=self.scheduling,
+            job_state={},
+            log=self.log,
+            source=self,
+        )
 
     # ------------------------------------------------------------------
     # ResourcePoolImplementation — availability management
@@ -522,14 +591,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                 "slot count specifies discrete valid values that this scheduler "
                 "does not support; use a simple min-max range instead"
             )
-        self._check_feasibility(
-            request.nnodes,
-            request.nslots,
-            request.slot_size,
-            request.exclusive,
-            request.constraint,
-            request.gpu_per_slot,
-        )
+        self._check_feasibility(request)
 
     def alloc(self, jobid: int, request) -> "Rv1Pool":
         """Allocate resources for *jobid* matching *request*.
@@ -556,8 +618,6 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                 "slot count specifies discrete valid values that this scheduler "
                 "does not support; use a simple min-max range instead"
             )
-        nnodes = request.nnodes
-        nslots = request.nslots
         slot_size = request.slot_size
         gpu_per_slot = request.gpu_per_slot
         exclusive = request.exclusive
@@ -588,97 +648,24 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                 if self._matches_constraint(r, i, constraint)
             ]
 
-        # Worst-fit: descending free cores (break ties by free GPUs)
-        candidates.sort(
-            key=lambda x: (len(x[2]), len(x[3])),
-            reverse=True,
-        )
+        candidates = self._sort_candidates(candidates)
 
-        # Greedy selection — each entry is (rank, info, alloc_cores, alloc_gpus)
-        selected: List[Tuple[int, dict, frozenset, frozenset]] = []
+        selected, actual_nslots = self._select_resources(candidates, request)
 
-        if nnodes > 0:
-            nnodes_min = nnodes
-            # nnodes_max: same as min → fixed; larger → bounded range; None → unbounded
-            nnodes_target = request.nnodes_max
-            slots_per_node = nslots // nnodes_min
-            for rank, info, free_cores, free_gpus in candidates:
-                if nnodes_target is not None and len(selected) >= nnodes_target:
-                    break
-                if exclusive:
-                    if len(free_cores) < len(info["cores"]):
-                        continue
-                    alloc_cores = frozenset(free_cores)
-                    alloc_gpus = frozenset(free_gpus)
-                else:
-                    need_cores = slots_per_node * slot_size
-                    need_gpus = slots_per_node * gpu_per_slot
-                    if len(free_cores) < need_cores or len(free_gpus) < need_gpus:
-                        continue
-                    alloc_cores = frozenset(sorted(free_cores)[:need_cores])
-                    alloc_gpus = frozenset(sorted(free_gpus)[:need_gpus])
-                selected.append((rank, info, alloc_cores, alloc_gpus))
-            if len(selected) < nnodes_min:
-                self._check_feasibility(
-                    nnodes, nslots, slot_size, exclusive, constraint, gpu_per_slot
-                )
-                raise InsufficientResources("insufficient resources")
-        else:
-            nslots_min = nslots
-            nslots_target = request.nslots_max  # None → unbounded
-            allocated_slots = 0
-            for rank, info, free_cores, free_gpus in candidates:
-                if nslots_target is not None and allocated_slots >= nslots_target:
-                    break
-                free_core_slots = len(free_cores) // slot_size
-                if gpu_per_slot > 0:
-                    free_gpu_slots = len(free_gpus) // gpu_per_slot
-                    free_slots = min(free_core_slots, free_gpu_slots)
-                else:
-                    free_slots = free_core_slots
-                if nslots_target is not None:
-                    take = min(free_slots, nslots_target - allocated_slots)
-                else:
-                    take = free_slots  # unbounded: take all available on this node
-                if take > 0:
-                    ncores_take = take * slot_size
-                    ngpus_take = take * gpu_per_slot
-                    alloc_cores = frozenset(sorted(free_cores)[:ncores_take])
-                    alloc_gpus = frozenset(sorted(free_gpus)[:ngpus_take])
-                    selected.append((rank, info, alloc_cores, alloc_gpus))
-                    allocated_slots += take
-            if allocated_slots < nslots_min:
-                self._check_feasibility(
-                    nnodes, nslots, slot_size, exclusive, constraint, gpu_per_slot
-                )
-                raise InsufficientResources("insufficient resources")
+        # Build result pool and update allocation state on self.
+        # selected is [(rank, alloc_cores, alloc_gpus)] — info is looked up
+        # directly so the override never holds a mutable reference to pool state.
+        selected_ranks = {rank for rank, _, _ in selected}
 
-        # Compute actual allocated slot count for storage in R.
-        if nnodes > 0:
-            actual_nslots = slots_per_node * len(selected)
-        else:
-            actual_nslots = allocated_slots
-
-        # Build result pool and update allocation state on self
-        selected_ranks = {rank for rank, _, _, _ in selected}
-
-        result = object.__new__(Rv1Pool)
-        result._expiration = 0.0
-        result._starttime = 0.0
-        result._has_nodelist = True
-        result._nslots = actual_nslots
-        result._properties = {
+        properties = {
             prop: ranks & selected_ranks
             for prop, ranks in self._properties.items()
             if ranks & selected_ranks
         }
-        result.scheduling = self.scheduling
-        result._ranks = {}
-        result._job_state = {}
-        result.log = self.log
-
-        for rank, info, alloc_cores, alloc_gpus in selected:
-            result._ranks[rank] = {
+        ranks = {}
+        for rank, alloc_cores, alloc_gpus in selected:
+            info = self._ranks[rank]
+            ranks[rank] = {
                 "hostname": info["hostname"],
                 "cores": alloc_cores,
                 "gpus": alloc_gpus,
@@ -695,6 +682,19 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             end_time = self._expiration
         else:
             end_time = 0.0
+
+        result = type(self)._from_state(
+            expiration=0.0,
+            starttime=0.0,
+            has_nodelist=True,
+            properties=properties,
+            ranks=ranks,
+            scheduling=self.scheduling,
+            job_state={},
+            log=self.log,
+            source=self,
+        )
+        result._nslots = actual_nslots
         self._job_state[jobid] = (end_time, result)
         self._bump()
         self.log(syslog.LOG_DEBUG, f"alloc: {JobID(jobid).f58}: {result.dumps()}")
@@ -706,22 +706,26 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
 
     def copy(self) -> "Rv1Pool":
         """Return a full independent copy preserving allocation state."""
-        new = object.__new__(Rv1Pool)
-        new.generation = self.generation
-        new._expiration = self._expiration
-        new._starttime = self._starttime
-        new._has_nodelist = getattr(self, "_has_nodelist", False)
-        new._properties = {p: set(s) for p, s in self._properties.items()}
-        new._ranks = {}
+        properties = {p: set(s) for p, s in self._properties.items()}
+        ranks = {}
         for rank, info in self._ranks.items():
-            new._ranks[rank] = dict(info)
-            new._ranks[rank]["allocated_cores"] = set(info["allocated_cores"])
-            new._ranks[rank]["allocated_gpus"] = set(info["allocated_gpus"])
-        new.scheduling = self.scheduling
-        new._job_state = dict(self._job_state)
+            ranks[rank] = dict(info)
+            ranks[rank]["allocated_cores"] = set(info["allocated_cores"])
+            ranks[rank]["allocated_gpus"] = set(info["allocated_gpus"])
         # Do not copy self.log: copies are used for simulation (forecast /
         # shadow-time) and their alloc/free calls must not emit log lines.
-        return new
+        return type(self)._from_state(
+            expiration=self._expiration,
+            starttime=self._starttime,
+            has_nodelist=getattr(self, "_has_nodelist", False),
+            properties=properties,
+            ranks=ranks,
+            scheduling=self.scheduling,
+            job_state=dict(self._job_state),
+            log=None,
+            generation=self.generation,
+            source=self,
+        )
 
     def copy_allocated(self) -> Rv1Set:
         """Return an Rv1Set containing only the allocated resources.
@@ -800,16 +804,125 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
                 self._ranks[rank]["allocated_cores"] |= oinfo["cores"]
                 self._ranks[rank]["allocated_gpus"] |= oinfo["gpus"]
 
-    def _check_feasibility(
-        self,
-        nnodes: int,
-        nslots: int,
-        slot_size: int,
-        exclusive: bool,
-        constraint,
-        gpu_per_slot: int,
-    ) -> None:
-        """Raise EOVERFLOW if the request can structurally never be satisfied."""
+    def _sort_candidates(self, candidates: list) -> list:
+        """Sort *candidates* for node selection order.
+
+        Default: worst-fit (descending free cores, breaking ties by free GPUs).
+        Subclasses may override to use a different ordering.
+        """
+        return sorted(
+            candidates,
+            key=lambda x: (len(x[2]), len(x[3])),
+            reverse=True,
+        )
+
+    def _select_resources(self, candidates: list, request) -> tuple:
+        """Select resources from *candidates* to satisfy *request*.
+
+        *candidates* is a list of ``(rank, info, free_cores, free_gpus)``
+        tuples, already filtered for availability and sorted by
+        ``_sort_candidates``.
+
+        .. warning::
+           The *info* dict is live pool state shared with the parent Rv1Pool.
+           Subclass overrides **must not mutate** it—mutation will corrupt
+           resource tracking.  Read from *info* only; use the returned
+           ``(rank, alloc_cores, alloc_gpus)`` tuples to specify allocations.
+
+        Returns ``(selected, actual_nslots)`` where *selected* is a list of
+        ``(rank, alloc_cores, alloc_gpus)`` tuples and *actual_nslots* is the
+        total slot count to record in the allocated R (stored as
+        ``execution.nslots``).
+
+        Subclasses may override this method to implement topology-aware
+        selection policies (e.g. locality or exclusivity within a chassis or
+        rack).  The override receives the full candidate list with constraint
+        filtering already applied.  If the request cannot be satisfied, the
+        override must call ``self._check_feasibility(request)`` before raising
+        :exc:`~flux.resource.ResourcePoolImplementation.InsufficientResources`
+        so that a structurally impossible request is escalated to
+        :exc:`~flux.resource.ResourcePoolImplementation.InfeasibleRequest`
+        rather than retried indefinitely.
+        """
+        nnodes = request.nnodes
+        nslots = request.nslots
+        slot_size = request.slot_size
+        gpu_per_slot = request.gpu_per_slot
+        exclusive = request.exclusive
+        selected: List[Tuple[int, frozenset, frozenset]] = []
+
+        if nnodes > 0:
+            nnodes_min = nnodes
+            nnodes_target = request.nnodes_max
+            slots_per_node = nslots // nnodes_min
+            for rank, info, free_cores, free_gpus in candidates:
+                if nnodes_target is not None and len(selected) >= nnodes_target:
+                    break
+                if exclusive:
+                    if len(free_cores) < len(info["cores"]):
+                        continue
+                    alloc_cores = frozenset(free_cores)
+                    alloc_gpus = frozenset(free_gpus)
+                else:
+                    need_cores = slots_per_node * slot_size
+                    need_gpus = slots_per_node * gpu_per_slot
+                    if len(free_cores) < need_cores or len(free_gpus) < need_gpus:
+                        continue
+                    alloc_cores = frozenset(sorted(free_cores)[:need_cores])
+                    alloc_gpus = frozenset(sorted(free_gpus)[:need_gpus])
+                selected.append((rank, alloc_cores, alloc_gpus))
+            if len(selected) < nnodes_min:
+                self._check_feasibility(request)
+                raise InsufficientResources("insufficient resources")
+            actual_nslots = slots_per_node * len(selected)
+        else:
+            nslots_min = nslots
+            nslots_target = request.nslots_max
+            allocated_slots = 0
+            for rank, info, free_cores, free_gpus in candidates:
+                if nslots_target is not None and allocated_slots >= nslots_target:
+                    break
+                free_core_slots = len(free_cores) // slot_size
+                if gpu_per_slot > 0:
+                    free_gpu_slots = len(free_gpus) // gpu_per_slot
+                    free_slots = min(free_core_slots, free_gpu_slots)
+                else:
+                    free_slots = free_core_slots
+                if nslots_target is not None:
+                    take = min(free_slots, nslots_target - allocated_slots)
+                else:
+                    take = free_slots
+                if take > 0:
+                    ncores_take = take * slot_size
+                    ngpus_take = take * gpu_per_slot
+                    alloc_cores = frozenset(sorted(free_cores)[:ncores_take])
+                    alloc_gpus = frozenset(sorted(free_gpus)[:ngpus_take])
+                    selected.append((rank, alloc_cores, alloc_gpus))
+                    allocated_slots += take
+            if allocated_slots < nslots_min:
+                self._check_feasibility(request)
+                raise InsufficientResources("insufficient resources")
+            actual_nslots = allocated_slots
+
+        return selected, actual_nslots
+
+    def _check_feasibility(self, request) -> None:
+        """Raise :exc:`InfeasibleRequest` if *request* can structurally never
+        be satisfied by this pool.
+
+        Subclasses may override to add topology-aware feasibility checks on
+        top of the base size and constraint checks.  Call
+        ``super()._check_feasibility(request)`` first to run the base checks,
+        then add subclass-specific checks.
+        """
+        nnodes = request.nnodes
+        nslots = request.nslots
+        slot_size = request.slot_size
+        exclusive = request.exclusive
+        gpu_per_slot = request.gpu_per_slot
+        constraint = request.constraint
+        if constraint is not None and isinstance(constraint, str):
+            constraint = json.loads(constraint)
         all_candidates = list(self._ranks.items())
         if constraint is not None:
             all_candidates = [

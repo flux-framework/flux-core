@@ -26,10 +26,13 @@ extend-exclude = [
 [default.extend-identifiers]
 gl_pathc = "gl_pathc"
 infp = "infp"
+anc = "anc"
 
 [default.extend-words]
 # in hwloc output
 hsi = "hsi"
+# HPE is a company name (Hewlett Packard Enterprise)
+HPE = "HPE"
 # commonly used names/variables that aren't typos
 fo = "fo"
 ba = "ba"

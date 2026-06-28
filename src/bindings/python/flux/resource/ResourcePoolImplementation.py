@@ -60,6 +60,16 @@ class ResourcePoolImplementation(ResourceSetImplementation):  # pragma: no cover
         self.generation += 1
 
     @property
+    def name(self) -> str:
+        """Human-readable pool implementation name.
+
+        Defaults to the class name.  Subclasses may override with a plain
+        class attribute to supply a friendlier name (e.g. ``name = "TreePool"``
+        for ``_TreePoolV1``).
+        """
+        return type(self).__name__
+
+    @property
     def expiration(self) -> float:
         """Resource expiration timestamp (seconds since epoch, 0 = none)."""
         return self.get_expiration()
