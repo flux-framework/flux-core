@@ -1254,6 +1254,28 @@ class TestFromJobspec(unittest.TestCase):
                     .get("rack_exclusive")
                 )
 
+    def test_deeply_nested_jobspec_raises_valueerror(self):
+        """A pathologically nested jobspec is denied, not a RecursionError.
+
+        Untrusted jobspec input must not be able to overflow the recursive
+        parser and crash the scheduler module (issue #7687); the depth guard
+        turns it into a catchable ValueError.
+        """
+        node = {"type": "core", "count": 1}
+        for _ in range(2000):
+            node = {"type": "slot", "count": 1, "with": [node]}
+        jobspec = {
+            "version": 1,
+            "resources": [node],
+            "tasks": [],
+            "attributes": {"system": {"duration": 60.0}},
+        }
+        for pool in self._pools():
+            with self.subTest(pool=type(pool).__name__):
+                with self.assertRaises(ValueError) as ctx:
+                    pool.parse_resource_request(jobspec)
+                self.assertIn("depth", str(ctx.exception))
+
 
 class TestFromJobspecNonV1(unittest.TestCase):
     """Tests for from_jobspec() with non-V1 resource hierarchies (regression of #6632).
