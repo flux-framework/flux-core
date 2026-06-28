@@ -907,8 +907,8 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
     ctx.h = builtin_get_flux_handle (p);
     ctx.isatty = isatty (STDERR_FILENO);
 
-    if (kvs_is_running (&ctx))
-        log_msg_exit ("please unload kvs module before using flux-fsck");
+    if (ctx.repair && kvs_is_running (&ctx))
+        log_msg_exit ("please unload kvs module before using flux-fsck --repair");
 
     if ((blobref = optparse_get_str (p, "rootref", NULL))) {
         if (blobref_validate (blobref) < 0)

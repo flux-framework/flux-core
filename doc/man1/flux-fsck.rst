@@ -18,6 +18,9 @@ The :program:`flux fsck` checks the integrity of the KVS backing
 store.  By default, it starts with the most recent checkpoint (root version)
 written to the backing store.
 
+Read-only integrity checks can run while the KVS is loaded. The :option:`--repair`
+option requires the KVS to be unloaded.
+
 
 OPTIONS
 =======
@@ -50,7 +53,7 @@ OPTIONS
    unlinked. All damaged keys and their disposition are listed on
    stderr. This process creates a new root reference for these
    changes, and commits it as the current KVS checkpoint at the end of
-   the scan. The KVS is required to be unloaded during repair.
+   the scan. The KVS must be unloaded when using this option.
 
    This option should be considered :ref:`EXPERIMENTAL <fsck_experimental>`
    at this time.

@@ -17,9 +17,6 @@ test_expect_success 'load content and content-sqlite module' '
 test_expect_success 'load kvs' '
 	flux module load kvs
 '
-test_expect_success 'flux-fsck fails if kvs loaded' '
-	test_must_fail flux fsck
-'
 test_expect_success 'create some kvs content' '
 	flux kvs put testdir.a=test &&
 	flux kvs getroot -b > a.rootref &&
@@ -46,6 +43,13 @@ test_expect_success 'create some kvs content' '
 # exists but we do this just to be extra sure
 test_expect_success 'call sync to ensure we have checkpointed' '
 	flux kvs sync
+'
+test_expect_success 'flux-fsck works with kvs loaded (read-only)' '
+	flux fsck
+'
+test_expect_success 'flux-fsck --repair fails if kvs loaded' '
+	test_must_fail flux fsck --repair 2>repair_kvs_loaded.err &&
+	grep "please unload kvs module" repair_kvs_loaded.err
 '
 test_expect_success 'save some treeobjs for later' '
 	flux kvs get --treeobj testdir.b > testdirb.out &&
