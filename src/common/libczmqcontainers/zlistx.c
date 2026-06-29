@@ -481,6 +481,8 @@ zlistx_sort (zlistx_t *self)
     bool swapped = false;
     while (gap > 1 || swapped) {
         gap = (size_t) ((double) gap / 1.3);
+        if (gap < 1)
+            gap = 1;
         node_t *base = self->head->next;
         node_t *test = self->head->next;
         size_t jump = gap;
