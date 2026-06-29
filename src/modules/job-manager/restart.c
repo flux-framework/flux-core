@@ -28,10 +28,43 @@
 #include "queue.h"
 #include "jobtap-internal.h"
 
-/* restart_map callback should return -1 on error to stop map with error,
- * or 0 on success.  'job' is only valid for the duration of the callback.
+/* Number of jobs whose KVS lookups are kept in flight while reloading jobs
+ * on restart. Pipelining hides KVS round-trip latency, which otherwise
+ * dominates restart of an instance with many inactive jobs. The benefit
+ * saturates at a small window; larger windows increase memory use and can
+ * swamp the KVS/broker message queues. Carried in struct job_loader so it
+ * could be made configurable in the future.
  */
-typedef int (*restart_map_f)(struct job *job, void *arg, flux_error_t *error);
+#define JOB_LOOKUP_WINDOW 64
+
+/* The KVS lookups for one job, issued but not yet consumed. */
+struct job_lookup {
+    flux_jobid_t id;
+    char *key;                  // KVS dir key, retained for move_to_lost_found
+    flux_future_t *eventlog;
+    flux_future_t *jobspec;
+    flux_future_t *R;
+};
+
+/* Sliding window of in-flight job lookups. Jobs are added in KVS walk order
+ * (== jobid order) and completed in the same order, so replay order matches
+ * the original serial implementation.
+ */
+struct job_loader {
+    struct job_manager *ctx;
+    zlistx_t *window;           // FIFO of struct job_lookup *
+    int window_size;
+    int count;                  // jobs successfully loaded
+};
+
+/* restart_map callback, invoked once per job directory found in the KVS.
+ * 'id' and 'key' identify the job; the callback fetches and replays it.
+ * Returns -1 on error to stop the map, or 0 on success.
+ */
+typedef int (*restart_map_f)(flux_jobid_t id,
+                             const char *key,
+                             void *arg,
+                             flux_error_t *error);
 
 const char *checkpoint_key = "checkpoint.job-manager";
 
@@ -75,64 +108,6 @@ static const char *lookup_job_data_get (flux_future_t *f,
     return result;
 }
 
-static struct job *lookup_job (flux_t *h,
-                               flux_jobid_t id,
-                               flux_error_t *error,
-                               bool *fatal)
-{
-    flux_future_t *f1 = NULL;
-    flux_future_t *f2 = NULL;
-    flux_future_t *f3 = NULL;
-    const char *eventlog;
-    const char *jobspec;
-    const char *R;
-    struct job *job = NULL;
-    flux_error_t e;
-
-    if (!(f1 = lookup_job_data (h, id, "eventlog"))
-        || !(f2 = lookup_job_data (h, id, "jobspec"))
-        || !(f3 = lookup_job_data (h, id, "R"))) {
-        errprintf (error,
-                   "cannot send lookup requests for job %s: %s",
-                   idf58 (id),
-                   strerror (errno));
-        *fatal = true;
-        goto done;
-    }
-    if (!(eventlog = lookup_job_data_get (f1, error))) {
-        *fatal = false;
-        goto done;
-    }
-    if (!(jobspec = lookup_job_data_get (f2, error))) {
-        *fatal = false;
-        goto done;
-    }
-    /* Ignore error if this returns NULL, since R is only available
-     * after resources have been allocated.
-     */
-    R = lookup_job_data_get (f3, NULL);
-
-    /* Treat these errors as non-fatal to avoid a nuisance on restart.
-     * See also: flux-framework/flux-core#6123
-     */
-    if (!(job = job_create_from_eventlog (id,
-                                          eventlog,
-                                          jobspec,
-                                          R,
-                                          &e))) {
-        errprintf (error,
-                   "replay %s: %s",
-                   flux_kvs_lookup_get_key (f1),
-                   e.text);
-        *fatal = false;
-    }
-done:
-    flux_future_destroy (f1);
-    flux_future_destroy (f2);
-    flux_future_destroy (f3);
-    return job;
-}
-
 /* A job could not be reloaded due to some problem like a truncated eventlog.
  * Move job data to job-lost+found for manual cleanup.
  */
@@ -154,9 +129,10 @@ static void move_to_lost_found (flux_t *h, const char *key, flux_jobid_t id)
     flux_future_destroy (f);
 }
 
-/* Create a 'struct job' from the KVS, using synchronous KVS RPCs.
- * Return 1 on success, 0 on non-fatal error, or -1 on a fatal error,
- * where a fatal error will prevent flux from starting.
+/* Decode the job ID from a leaf KVS directory key and hand it to the map
+ * callback, which is responsible for fetching and replaying the job.
+ * Return value is the callback's: 1 if a job was loaded, 0 on non-fatal
+ * skip, or -1 on a fatal error that will prevent flux from starting.
  */
 static int depthfirst_map_one (flux_t *h,
                                const char *key,
@@ -166,8 +142,6 @@ static int depthfirst_map_one (flux_t *h,
                                flux_error_t *error)
 {
     flux_jobid_t id;
-    struct job *job = NULL;
-    int rc = -1;
 
     if (strlen (key) <= dirskip) {
         errprintf (error, "internal error key=%s dirskip=%d", key, dirskip);
@@ -178,29 +152,7 @@ static int depthfirst_map_one (flux_t *h,
         errprintf (error, "could not decode %s to job ID", key + dirskip + 1);
         return -1;
     }
-
-    flux_error_t lookup_error;
-    bool fatal = false;
-    if (!(job = lookup_job (h, id, &lookup_error, &fatal))) {
-        if (fatal) {
-            errprintf (error, "%s", lookup_error.text);
-            return -1;
-        }
-        move_to_lost_found (h, key, id);
-        flux_log (h,
-                  LOG_ERR,
-                  "job %s not replayed: %s",
-                  idf58 (id),
-                  lookup_error.text);
-        return 0;
-    }
-
-    if (cb (job, arg, error) < 0)
-        goto done;
-    rc = 1;
-done:
-    job_decref (job);
-    return rc;
+    return cb (id, key, arg, error);
 }
 
 static int depthfirst_map (flux_t *h,
@@ -278,13 +230,167 @@ done:
     return rc;
 }
 
-/* reload_map_f callback
- * The job state/flags has been recreated by replaying the job's eventlog.
+static void job_lookup_destroy (struct job_lookup *jl)
+{
+    if (jl) {
+        int saved_errno = errno;
+        flux_future_destroy (jl->eventlog);
+        flux_future_destroy (jl->jobspec);
+        flux_future_destroy (jl->R);
+        free (jl->key);
+        free (jl);
+        errno = saved_errno;
+    }
+}
+
+/* zlistx_destructor_fn footprint */
+static void job_lookup_destructor (void **item)
+{
+    if (item) {
+        job_lookup_destroy (*item);
+        *item = NULL;
+    }
+}
+
+/* Issue (but do not wait on) the KVS lookups for one job. */
+static struct job_lookup *job_lookup_create (flux_t *h,
+                                             flux_jobid_t id,
+                                             const char *key)
+{
+    struct job_lookup *jl;
+
+    if (!(jl = calloc (1, sizeof (*jl))))
+        return NULL;
+    jl->id = id;
+    if (!(jl->key = strdup (key))
+        || !(jl->eventlog = lookup_job_data (h, id, "eventlog"))
+        || !(jl->jobspec = lookup_job_data (h, id, "jobspec"))
+        || !(jl->R = lookup_job_data (h, id, "R"))) {
+        job_lookup_destroy (jl);
+        return NULL;
+    }
+    return jl;
+}
+
+static int restart_map_cb (struct job *job,
+                           struct job_manager *ctx,
+                           flux_error_t *error);
+
+/* Wait on one job's lookups, build the job, and hand it to restart_map_cb.
+ * Returns 1 if the job was loaded, 0 if skipped (non-fatal), -1 on fatal
+ * error. Lookup/replay failures are non-fatal: the job data is moved aside
+ * to job-lost+found. See also: flux-framework/flux-core#6123.
+ */
+static int job_loader_complete (struct job_loader *loader,
+                                struct job_lookup *jl,
+                                flux_error_t *error)
+{
+    flux_t *h = loader->ctx->h;
+    const char *eventlog, *jobspec;
+    struct job *job;
+    flux_error_t e;
+    int rc;
+
+    if (!(eventlog = lookup_job_data_get (jl->eventlog, &e))
+        || !(jobspec = lookup_job_data_get (jl->jobspec, &e))
+        || !(job = job_create_from_eventlog (jl->id,
+                                             eventlog,
+                                             jobspec,
+                                             lookup_job_data_get (jl->R, NULL),
+                                             &e))) {
+        move_to_lost_found (h, jl->key, jl->id);
+        flux_log (h,
+                  LOG_ERR,
+                  "job %s not replayed: %s",
+                  idf58 (jl->id),
+                  e.text);
+        return 0;
+    }
+    rc = restart_map_cb (job, loader->ctx, error);
+    job_decref (job);
+    if (rc < 0)
+        return -1;
+    loader->count++;
+    return 1;
+}
+
+/* Complete the oldest in-flight lookup.
+ */
+static int job_loader_complete_oldest (struct job_loader *loader,
+                                       flux_error_t *error)
+{
+    struct job_lookup *jl;
+    int rc;
+
+    if (!(jl = zlistx_first (loader->window)))
+        return 0;
+    rc = job_loader_complete (loader, jl, error);
+    zlistx_delete (loader->window, zlistx_cursor (loader->window)); // frees jl
+    return rc;
+}
+
+/* restart_map_f callback: issue this job's lookups into the window, draining
+ * the oldest first if the window is full.
+ */
+static int job_loader_add (flux_jobid_t id,
+                           const char *key,
+                           void *arg,
+                           flux_error_t *error)
+{
+    struct job_loader *loader = arg;
+    struct job_lookup *jl;
+
+    if (!(jl = job_lookup_create (loader->ctx->h, id, key))) {
+        errprintf (error,
+                   "cannot send lookup requests for job %s: %s",
+                   idf58 (id),
+                   strerror (errno));
+        return -1;
+    }
+    if (!zlistx_add_end (loader->window, jl)) {
+        job_lookup_destroy (jl);
+        errprintf (error, "out of memory queueing job %s", idf58 (id));
+        return -1;
+    }
+    if (zlistx_size (loader->window) > loader->window_size)
+        return job_loader_complete_oldest (loader, error);
+    return 0;
+}
+
+/* Drain all remaining in-flight lookups, in order. Returns 0 or -1.
+ */
+static int job_loader_drain (struct job_loader *loader, flux_error_t *error)
+{
+    while (zlistx_size (loader->window) > 0) {
+        if (job_loader_complete_oldest (loader, error) < 0)
+            return -1;
+    }
+    return 0;
+}
+
+static int job_loader_init (struct job_loader *loader, struct job_manager *ctx)
+{
+    memset (loader, 0, sizeof (*loader));
+    loader->ctx = ctx;
+    loader->window_size = JOB_LOOKUP_WINDOW;
+    if (!(loader->window = zlistx_new ()))
+        return -1;
+    zlistx_set_destructor (loader->window, job_lookup_destructor);
+    return 0;
+}
+
+static void job_loader_finalize (struct job_loader *loader)
+{
+    zlistx_destroy (&loader->window); // destroys any leftover job_lookups
+}
+
+/* The job state/flags has been recreated by replaying the job's eventlog.
  * Enqueue the job and kick off actions appropriate for job's current state.
  */
-static int restart_map_cb (struct job *job, void *arg, flux_error_t *error)
+static int restart_map_cb (struct job *job,
+                           struct job_manager *ctx,
+                           flux_error_t *error)
 {
-    struct job_manager *ctx = arg;
     flux_job_state_t state = job->state;
 
     if (zhashx_insert (ctx->active_jobs, &job->id, job) < 0) {
@@ -382,24 +488,33 @@ int restart_from_kvs (struct job_manager *ctx)
 {
     const char *dirname = "job";
     int dirskip = strlen (dirname);
-    int count;
     struct job *job;
     zlistx_t *active_jobs;
     flux_error_t error;
+    struct job_loader loader;
 
-    /* Load any active jobs present in the KVS at startup.
+    /* Load any active jobs present in the KVS at startup. The job-loader
+     * pipelines the per-job KVS lookups: depthfirst_map walks the job
+     * directory in jobid order and feeds each job to job_loader_add, which
+     * keeps a window of lookups in flight and completes them in order.
      */
-    count = depthfirst_map (ctx->h,
-                            dirname,
-                            dirskip,
-                            restart_map_cb,
-                            ctx,
-                            &error);
-    if (count < 0) {
-        flux_log (ctx->h, LOG_ERR, "restart failed: %s", error.text);
+    if (job_loader_init (&loader, ctx) < 0) {
+        flux_log_error (ctx->h, "restart: job_loader_init");
         return -1;
     }
-    flux_log (ctx->h, LOG_INFO, "restart: %d jobs", count);
+    if (depthfirst_map (ctx->h,
+                        dirname,
+                        dirskip,
+                        job_loader_add,
+                        &loader,
+                        &error) < 0
+        || job_loader_drain (&loader, &error) < 0) {
+        flux_log (ctx->h, LOG_ERR, "restart failed: %s", error.text);
+        job_loader_finalize (&loader);
+        return -1;
+    }
+    flux_log (ctx->h, LOG_INFO, "restart: %d jobs", loader.count);
+    job_loader_finalize (&loader);
 
     /* Get active jobs as list for safe iteration:
      */
