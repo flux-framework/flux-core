@@ -22,34 +22,19 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_checkpoint.h"
+#include "src/common/libkvs/kvs_treewalk.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libcontent/content.h"
-#include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
 
 #include "builtin.h"
 
-struct dump_valref_data
-{
+/* Passed as the kvs_treewalk callback argument. */
+struct dump {
     flux_t *h;
-    json_t *treeobj;
-    const flux_msg_t **msgs;
-    const char *path;
-    int total_size;
-    int index;
-    int count;
-    int in_flight;
-    int errorcount;
-    int errnum;
+    struct archive *ar;
 };
-
-static void get_blobref (struct dump_valref_data *dvd);
-
-static void dump_treeobj (struct archive *ar,
-                          flux_t *h,
-                          const char *path,
-                          json_t *treeobj);
 
 static bool sd_notify_flag;
 static bool verbose;
@@ -174,71 +159,37 @@ static void dump_write_data (struct archive *ar, const void *data, int size)
                  "assuming non-fatal libarchive write size reporting error");
 }
 
-static void get_blobref_continuation (flux_future_t *f, void *arg)
-{
-    struct dump_valref_data *dvd = arg;
-    const flux_msg_t *msg;
-    size_t len;
-    int index;
-
-    index = ptr2int (flux_future_aux_get (f, "index"));
-    if (flux_future_get (f, (const void **)&msg) < 0
-        || flux_response_decode_raw (msg, NULL, NULL, &len) < 0) {
-        read_error ("%s: missing blobref %d: %s",
-                    dvd->path,
-                    index,
-                    future_strerror (f, errno));
-        flux_future_destroy (f);
-        dvd->in_flight--;
-        dvd->errorcount++;
-        dvd->errnum = errno;    /* we'll report the last errno */
-        return;
-    }
-    dvd->in_flight--;
-    dvd->total_size += len;
-    if (index >= dvd->count)
-        log_msg_exit ("invalid index specified: %d, count = %d",
-                      index,
-                      dvd->count);
-    dvd->msgs[index] = flux_msg_incref (msg);
-
-    /* if an error has occurred, we won't get more blobrefs */
-    if (dvd->index < dvd->count
-        && !dvd->errorcount) {
-        get_blobref (dvd);
-        dvd->in_flight++;
-        dvd->index++;
-    }
-    flux_future_destroy (f);
-}
-
-static void get_blobref (struct dump_valref_data *dvd)
-{
-    const char *blobref;
-    flux_future_t *f;
-
-    blobref = treeobj_get_blobref (dvd->treeobj, dvd->index);
-
-    if (!(f = content_load_byblobref (dvd->h, blobref, content_flags))
-        || flux_future_then (f, -1, get_blobref_continuation, dvd) < 0
-        || flux_future_aux_set (f, "index", int2ptr (dvd->index), NULL) < 0)
-        log_err_exit ("%s: cannot load blobref %d", dvd->path, dvd->index);
-}
-
-/* Write a valref archive entry from the array of stashed content.load
- * response messages.  The total size of the value must be calculated and
- * written in the entry header before any data, so all blobs comprising the
- * valref must be loaded before calling this.  'msgs' has 'count' entries and
- * 'total_size' is the sum of their payload lengths.
+/* kvs_treewalk valref_done callback: write a valref archive entry from the
+ * array of completed content.load responses.  The total size of the value
+ * must be calculated and written in the entry header before any data, so all
+ * blobs are accumulated by the walker before this is called.  A blob load
+ * error (only possible with --ignore-failed-read, else the walker's error
+ * path would have exited) causes the whole entry to be skipped.
  */
-static void dump_write_valref (struct archive *ar,
-                               flux_t *h,
-                               const char *path,
-                               const flux_msg_t **msgs,
-                               int count,
-                               int total_size)
+static void dump_valref (void *arg,
+                         const char *path,
+                         json_t *treeobj,
+                         int count,
+                         const struct kvs_treewalk_blob *blobs)
 {
+    struct dump *d = arg;
+    struct archive *ar = d->ar;
     struct archive_entry *entry;
+    int total_size = 0;
+
+    for (int i = 0; i < count; i++) {
+        size_t len;
+        if (blobs[i].errnum) {
+            read_error ("%s: missing blobref %d: %s",
+                        path,
+                        i,
+                        strerror (blobs[i].errnum));
+            return;
+        }
+        if (flux_response_decode_raw (blobs[i].msg, NULL, NULL, &len) < 0)
+            log_err_exit ("error processing stashed valref responses");
+        total_size += len;
+    }
 
     if (!(entry = archive_entry_new ()))
         log_msg_exit ("error creating archive entry");
@@ -255,75 +206,21 @@ static void dump_write_valref (struct archive *ar,
     for (int i = 0; i < count; i++) {
         const void *data;
         size_t len;
-        if (flux_response_decode_raw (msgs[i], NULL, &data, &len) < 0)
+        if (flux_response_decode_raw (blobs[i].msg, NULL, &data, &len) < 0)
             log_err_exit ("error processing stashed valref responses");
         if (len > 0)
             dump_write_data (ar, data, len);
     }
     archive_entry_free (entry);
-    progress (h, 1);
+    if (verbose)
+        fprintf (stderr, "%s\n", path);
+    progress (d->h, 1);
 }
 
-static void dump_valref (struct archive *ar,
-                         flux_t *h,
-                         const char *path,
-                         json_t *treeobj)
+static void dump_val (void *arg, const char *path, json_t *treeobj)
 {
-    int count = treeobj_get_count (treeobj);
-    const flux_msg_t **msgs;
-    struct dump_valref_data dvd = {0};
-
-    /* Load all data comprising the valref before starting the archive
-     * entry. This is because the total size of the value must
-     * calculated and written before any data, and any load errors
-     * must be detected so the whole entry can be skipped if
-     * --ignore-failed-read.
-     */
-    /* N.B. first attempt was to save the futures in an array, but ran into:
-     *   flux: ev_epoll.c:134: epoll_modify: Assertion `("libev: I/O watcher
-     *    with invalid fd found in epoll_ctl", errno != EBADF && errno != ELOOP
-     *    && errno != EINVAL)' failed.
-     * while archiving a resource.eventlog with 781 entries.  Instead of
-     * retaining the futures for a second pass, just retain references to the
-     * content.load response messages.
-     */
-    if (!(msgs = calloc (count, sizeof (msgs[0]))))
-        log_err_exit ("could not create messages array");
-
-    dvd.h = h;
-    dvd.treeobj = treeobj;
-    dvd.msgs = msgs;
-    dvd.path = path;
-    dvd.count = count;
-
-    while (dvd.in_flight < async_max && dvd.index < dvd.count) {
-        get_blobref (&dvd);
-        dvd.in_flight++;
-        dvd.index++;
-    }
-
-    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
-        log_err_exit ("flux_reactor_run");
-
-    if (dvd.errorcount) {
-        errno = dvd.errnum;
-        goto cleanup;
-    }
-
-    dump_write_valref (ar, h, path, msgs, dvd.count, dvd.total_size);
-cleanup:
-    for (int i = 0; i < dvd.count; i++) {
-        if (msgs[i])
-            flux_msg_decref (msgs[i]);
-    }
-    free (msgs);
-}
-
-static void dump_val (struct archive *ar,
-                      flux_t *h,
-                      const char *path,
-                      json_t *treeobj)
-{
+    struct dump *d = arg;
+    struct archive *ar = d->ar;
     struct archive_entry *entry;
     void *data;
     size_t len;
@@ -340,17 +237,18 @@ static void dump_val (struct archive *ar,
     if (archive_write_header (ar, entry) != ARCHIVE_OK)
         log_msg_exit ("%s", archive_error_string (ar));
     dump_write_data (ar, data, len);
-    progress (h, 1);
+    if (verbose)
+        fprintf (stderr, "%s\n", path);
+    progress (d->h, 1);
 
     archive_entry_free (entry);
     free (data);
 }
 
-static void dump_symlink (struct archive *ar,
-                          flux_t *h,
-                          const char *path,
-                          json_t *treeobj)
+static void dump_symlink (void *arg, const char *path, json_t *treeobj)
 {
+    struct dump *d = arg;
+    struct archive *ar = d->ar;
     struct archive_entry *entry;
     const char *ns;
     const char *target;
@@ -371,123 +269,64 @@ static void dump_symlink (struct archive *ar,
     archive_entry_set_symlink (entry, target);
     if (archive_write_header (ar, entry) != ARCHIVE_OK)
         log_msg_exit ("%s", archive_error_string (ar));
-    progress (h, 1);
+    if (verbose)
+        fprintf (stderr, "%s\n", path);
+    progress (d->h, 1);
 
     free (target_with_ns);
     archive_entry_free (entry);
 }
 
-static void dump_dir (struct archive *ar,
-                      flux_t *h,
-                      const char *path,
-                      json_t *treeobj)
+/* kvs_treewalk error callback: a dirref could not be loaded/decoded.  Report
+ * it (read_error exits unless --ignore-failed-read), pruning the subtree.
+ */
+static void dump_error (void *arg,
+                        const char *path,
+                        enum kvs_treewalk_error error,
+                        int errnum)
 {
-    json_t *dict = treeobj_get_data (treeobj);
-    const char *name;
-    json_t *entry;
-
-    json_object_foreach (dict, name, entry) {
-        char *newpath;
-        if (asprintf (&newpath, "%s/%s", path, name) < 0)
-            log_msg_exit ("out of memory");
-        dump_treeobj (ar, h, newpath, entry); // recurse
-        free (newpath);
+    switch (error) {
+        case KVS_TREEWALK_ERROR_LOAD:
+            read_error ("%s: missing blobref: %s", path, strerror (errnum));
+            break;
+        case KVS_TREEWALK_ERROR_BADCOUNT:
+            log_msg_exit ("%s: blobref count is not 1", path);
+            break;
+        case KVS_TREEWALK_ERROR_DECODE:
+            log_err_exit ("%s: could not decode directory", path);
+            break;
+        case KVS_TREEWALK_ERROR_NOTDIR:
+            log_msg_exit ("%s: dirref references non-directory", path);
+            break;
+        case KVS_TREEWALK_ERROR_INVALID:
+            log_msg_exit ("%s: invalid tree object", path);
+            break;
     }
 }
 
-static void dump_dirref (struct archive *ar,
-                         flux_t *h,
-                         const char *path,
-                         json_t *treeobj)
+static const struct kvs_treewalk_ops dump_ops = {
+    .value = dump_val,
+    .symlink = dump_symlink,
+    .valref_done = dump_valref,
+    .error = dump_error,
+};
+
+static void dump_root (flux_t *h, struct archive *ar, const char *blobref)
 {
-    flux_future_t *f;
-    const void *buf;
-    size_t buflen;
-    json_t *treeobj_deref = NULL;
+    struct dump d = { .h = h, .ar = ar };
+    struct kvs_treewalk *tw;
 
-    if (treeobj_get_count (treeobj) != 1)
-        log_msg_exit ("%s: blobref count is not 1", path);
-    if (!(f = content_load_byblobref (h,
-                                      treeobj_get_blobref (treeobj, 0),
-                                      content_flags))
-        || content_load_get (f, &buf, &buflen) < 0) {
-        read_error ("%s: missing blobref: %s",
-                    path,
-                    future_strerror (f, errno));
-        flux_future_destroy (f);
-        return;
-    }
-    if (!(treeobj_deref = treeobj_decodeb (buf, buflen)))
-        log_err_exit ("%s: could not decode directory", path);
-    if (!treeobj_is_dir (treeobj_deref))
-        log_msg_exit ("%s: dirref references non-directory", path);
-    dump_dir (ar, h, path, treeobj_deref); // recurse
-    json_decref (treeobj_deref);
-    flux_future_destroy (f);
-}
-
-static void dump_treeobj (struct archive *ar,
-                          flux_t *h,
-                          const char *path,
-                          json_t *treeobj)
-{
-    if (treeobj_validate (treeobj) < 0)
-        log_msg_exit ("%s: invalid tree object", path);
-    if (treeobj_is_symlink (treeobj)) {
-        if (verbose)
-            fprintf (stderr, "%s\n", path);
-        dump_symlink (ar, h, path, treeobj);
-    }
-    else if (treeobj_is_val (treeobj)) {
-        if (verbose)
-            fprintf (stderr, "%s\n", path);
-        dump_val (ar, h, path, treeobj);
-    }
-    else if (treeobj_is_valref (treeobj)) {
-        if (verbose)
-            fprintf (stderr, "%s\n", path);
-        dump_valref (ar, h, path, treeobj);
-    }
-    else if (treeobj_is_dirref (treeobj)) {
-        dump_dirref (ar, h, path, treeobj); // recurse
-    }
-    else if (treeobj_is_dir (treeobj)) {
-        dump_dir (ar, h, path, treeobj); // recurse
-    }
-}
-
-static void dump_blobref (struct archive *ar,
-                          flux_t *h,
-                          const char *blobref)
-{
-    flux_future_t *f;
-    const void *buf;
-    size_t buflen;
-    json_t *treeobj;
-    json_t *dict;
-    const char *key;
-    json_t *entry;
-
-    if (!(f = content_load_byblobref (h, blobref, content_flags))
-        || content_load_get (f, &buf, &buflen) < 0) {
-        read_error ("cannot load root tree object: %s",
-                    future_strerror (f, errno));
-        flux_future_destroy (f);
-        return;
-    }
-    if (!(treeobj = treeobj_decodeb (buf, buflen)))
-        log_err_exit ("cannot decode root tree object");
-    if (treeobj_validate (treeobj) < 0)
-        log_msg_exit ("invalid root tree object");
-    if (!treeobj_is_dir (treeobj))
-        log_msg_exit ("root tree object is not a directory");
-
-    dict = treeobj_get_data (treeobj);
-    json_object_foreach (dict, key, entry) {
-        dump_treeobj (ar, h, key, entry);
-    }
-    json_decref (treeobj);
-    flux_future_destroy (f);
+    if (!(tw = kvs_treewalk_create (h,
+                                    blobref,
+                                    '/',
+                                    async_max,
+                                    content_flags,
+                                    &dump_ops,
+                                    &d)))
+        log_err_exit ("error creating kvs treewalk");
+    if (kvs_treewalk_run (tw) < 0)
+        log_err_exit ("error walking kvs");
+    kvs_treewalk_destroy (tw);
 }
 
 static int cmd_dump (optparse_t *p, int ac, char *av[])
@@ -550,7 +389,7 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
                           future_strerror (f, errno));
 
         dump_time = timestamp;
-        dump_blobref (ar, h, blobref);
+        dump_root (h, ar, blobref);
         flux_future_destroy (f);
     }
     else {
@@ -561,7 +400,7 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
             || flux_kvs_getroot_get_blobref (f, &blobref) < 0)
             log_msg_exit ("error fetching current KVS root: %s",
                           future_strerror (f, errno));
-        dump_blobref (ar, h, blobref);
+        dump_root (h, ar, blobref);
         flux_future_destroy (f);
     }
 
