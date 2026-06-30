@@ -53,6 +53,19 @@ struct fsck_ctx {
     int errorcount;
     regex_t jobpath;
     zlist_t *repaired_jobdirs;
+    zlist_t *pending_repairs;   // struct fsck_repair * recorded during walk
+};
+
+/* A repair recorded during the tree walk and applied to ctx->root after the
+ * walk completes.  Deferring keeps repair (which mutates the in-memory root)
+ * out of the traversal, in preparation for converting the walk to an
+ * event-driven form where inline mutation is unsafe.  'replacement' is the
+ * rebuilt value to file under lost+found (valref repair), or NULL to only
+ * unlink the path (missing dirref).
+ */
+struct fsck_repair {
+    char *path;
+    json_t *replacement;
 };
 
 struct fsck_valref_data
@@ -359,6 +372,55 @@ static void save_kvs_job_path (struct fsck_ctx *ctx, const char *path)
     }
 }
 
+/* Record a repair to apply to ctx->root after the walk completes, rather than
+ * mutating the root mid-traversal.  'replacement' is filed under lost+found
+ * (valref repair) and the path is unlinked; a NULL 'replacement' only unlinks
+ * (missing dirref).  Ownership of 'replacement' transfers here.
+ */
+static void record_repair (struct fsck_ctx *ctx,
+                           const char *path,
+                           json_t *replacement)
+{
+    struct fsck_repair *r;
+
+    if (!ctx->pending_repairs) {
+        if (!(ctx->pending_repairs = zlist_new ()))
+            log_err_exit ("cannot create repair list");
+    }
+    if (!(r = calloc (1, sizeof (*r)))
+        || !(r->path = strdup (path)))
+        log_err_exit ("cannot allocate repair record");
+    r->replacement = replacement; // takes ownership (may be NULL)
+    if (zlist_append (ctx->pending_repairs, r) < 0)
+        log_err_exit ("cannot append repair record");
+}
+
+static void fsck_repair_destroy (struct fsck_repair *r)
+{
+    if (r) {
+        json_decref (r->replacement);
+        free (r->path);
+        free (r);
+    }
+}
+
+/* Apply the repairs recorded during the walk: file the rebuilt value under
+ * lost+found (valref repair) and/or unlink the bad path.
+ */
+static void apply_repairs (struct fsck_ctx *ctx)
+{
+    struct fsck_repair *r;
+
+    if (!ctx->pending_repairs)
+        return;
+    while ((r = zlist_pop (ctx->pending_repairs))) {
+        if (r->replacement)
+            put_lost_and_found (ctx, r->path, r->replacement);
+        unlink_path (ctx, r->path);
+        fsck_repair_destroy (r);
+    }
+}
+
 static void fsck_valref (struct fsck_ctx *ctx,
                          const char *path,
                          json_t *treeobj)
@@ -399,15 +461,11 @@ static void fsck_valref (struct fsck_ctx *ctx,
             && fvd.errorcount == zlist_size (fvd.missing_indexes)) {
             json_t *repaired = repair_valref (ctx, treeobj, &fvd);
 
-            put_lost_and_found (ctx, path, repaired);
-
-            unlink_path (ctx, path);
+            record_repair (ctx, path, repaired); // applied after the walk
 
             ctx->repair_count++;
 
             warn (ctx, "%s repaired and moved to lost+found", path);
-
-            json_decref (repaired);
 
             if (ctx->job_aware)
                 save_kvs_job_path (ctx, path);
@@ -481,7 +539,7 @@ static void fsck_dirref (struct fsck_ctx *ctx,
                     future_strerror (f, errno));
         ctx->errorcount++;
         if (ctx->repair && errno == ENOENT) {
-            unlink_path (ctx, path);
+            record_repair (ctx, path, NULL); // unlink only, after the walk
             warn (ctx, "%s unlinked due to missing blobref", path);
             ctx->unlink_dir_count++;
         }
@@ -557,6 +615,8 @@ static void fsck_blobref (struct fsck_ctx *ctx, const char *blobref)
         fsck_treeobj (ctx, key, entry);
     }
     flux_future_destroy (f);
+
+    apply_repairs (ctx);
 }
 
 static json_t *lookup_job_subdir (struct fsck_ctx *ctx,
@@ -985,6 +1045,8 @@ static int cmd_fsck (optparse_t *p, int ac, char *av[])
     }
 
     zlist_destroy (&ctx.repair_treeobjs);
+    zlist_destroy (&ctx.pending_repairs);
+    zlist_destroy (&ctx.repaired_jobdirs);
     json_decref (ctx.root);
     flux_close (ctx.h);
 
