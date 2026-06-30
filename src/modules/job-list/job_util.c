@@ -60,6 +60,24 @@ static int store_attr (struct job *job,
             return 0;
         val = json_real (job->t_depend);
     }
+    else if (streq (attr, "t_priority")) {
+        /* PRIORITY state can be entered multiple times and t_priority
+         * indicates the first time it has been entered.  So trust if
+         * t_priority > 0.0 instead of using the states_mask.
+         */
+        if (job->t_priority == 0.0)
+            return 0;
+        val = json_real (job->t_priority);
+    }
+    else if (streq (attr, "t_sched")) {
+        /* SCHED state can be entered multiple times and t_sched
+         * indicates the first time it has been entered.  So trust if
+         * t_sched > 0.0 instead of using the states_mask.
+         */
+        if (job->t_sched == 0.0)
+            return 0;
+        val = json_real (job->t_sched);
+    }
     else if (streq (attr, "t_run")) {
         if (!(job->states_mask & FLUX_JOB_STATE_RUN))
             return 0;

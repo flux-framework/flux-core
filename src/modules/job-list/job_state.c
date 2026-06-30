@@ -172,6 +172,15 @@ static void update_job_state (struct job_state_ctx *jsctx,
     job->state = new_state;
     if (job->state == FLUX_JOB_STATE_DEPEND)
         job->t_depend = timestamp;
+    /* N.B. PRIORITY and SCHED state can be re-entered, so store
+     * the timestamp of the first time the event occurs
+     */
+    else if (job->state == FLUX_JOB_STATE_PRIORITY
+             && job->t_priority == 0.0)
+        job->t_priority = timestamp;
+    else if (job->state == FLUX_JOB_STATE_SCHED
+             && job->t_sched == 0.0)
+        job->t_sched = timestamp;
     else if (job->state == FLUX_JOB_STATE_RUN)
         job->t_run = timestamp;
     else if (job->state == FLUX_JOB_STATE_CLEANUP)
@@ -454,9 +463,14 @@ static int job_transition_state (struct job_state_ctx *jsctx,
                                  int flags,
                                  flux_job_state_t expected_state)
 {
+    /* N.B. PRIORITY and SCHED states can be entered multiple times,
+     * thus we ignore it in the states_events_mask.
+     */
     if (!((flags & STATE_TRANSITION_FLAG_REVERT)
           || (flags & STATE_TRANSITION_FLAG_CONDITIONAL))
-        && (newstate & job->states_events_mask))
+        && (newstate & job->states_events_mask)
+        && (newstate != FLUX_JOB_STATE_PRIORITY
+            && newstate != FLUX_JOB_STATE_SCHED))
         return 0;
 
     job->states_events_mask |= newstate;
@@ -482,10 +496,8 @@ static int journal_revert_job (struct job_state_ctx *jsctx,
                                struct job *job,
                                double timestamp)
 {
-    /* The flux-restart event is currently only posted to jobs in
-     * SCHED state since that is the only state transition defined
-     * for the event in RFC21.  In the future, other transitions
-     * may be defined.
+    /* N.B. The flux-restart, urgency, and jobspec-update events only
+     * transition from SCHED to PRIORITY state.  See RFC21.
      */
     return job_transition_state (jsctx,
                                  job,
@@ -987,6 +999,8 @@ static int journal_process_event (struct job_state_ctx *jsctx,
                                    job,
                                    context) < 0)
             return -1;
+        if (journal_revert_job (jsctx, job, timestamp) < 0)
+            return -1;
     }
     else if (streq (name, "exception")) {
         if (journal_exception_event (jsctx,
@@ -1003,6 +1017,8 @@ static int journal_process_event (struct job_state_ctx *jsctx,
     }
     else if (streq (name, "jobspec-update")) {
         if (journal_jobspec_update_event (jsctx, job, context) < 0)
+            return -1;
+        if (journal_revert_job (jsctx, job, timestamp) < 0)
             return -1;
     }
     else if (streq (name, "resource-update")) {

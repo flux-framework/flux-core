@@ -616,6 +616,56 @@ test_expect_success 'flux job list all via t_depend (3)' '
 	test $(cat list_constraint_all3.out | wc -l) -eq ${numlines}
 '
 
+test_expect_success 'flux job list all via t_priority (1)' '
+	constraint="{ or: [ {t_priority:[\">=0\"]} ] }" &&
+	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_all4.out &&
+	numlines=$(cat all.ids | wc -l) &&
+	test $(cat list_constraint_all4.out | wc -l) -eq ${numlines}
+'
+
+# use a floating point in this one
+test_expect_success 'flux job list all via t_priority (2)' '
+	constraint="{ or: [ {t_priority:[\">=1.0\"]} ] }" &&
+	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_all5.out &&
+	numlines=$(cat all.ids | wc -l) &&
+	test $(cat list_constraint_all5.out | wc -l) -eq ${numlines}
+'
+
+test_expect_success 'flux job list all via t_priority (3)' '
+	constraint="{ or: [ {t_priority:[\">1.1\"]} ] }" &&
+	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_all6.out &&
+	numlines=$(cat all.ids | wc -l) &&
+	test $(cat list_constraint_all6.out | wc -l) -eq ${numlines}
+'
+
+test_expect_success 'flux job list all via t_sched (1)' '
+	constraint="{ or: [ {t_sched:[\">=0\"]} ] }" &&
+	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_all7.out &&
+	numlines=$(cat all.ids | wc -l) &&
+	test $(cat list_constraint_all7.out | wc -l) -eq ${numlines}
+'
+
+# use a floating point in this one
+test_expect_success 'flux job list all via t_sched (2)' '
+	constraint="{ or: [ {t_sched:[\">=1.0\"]} ] }" &&
+	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_all8.out &&
+	numlines=$(cat all.ids | wc -l) &&
+	test $(cat list_constraint_all8.out | wc -l) -eq ${numlines}
+'
+
+test_expect_success 'flux job list all via t_sched (3)' '
+	constraint="{ or: [ {t_sched:[\">1.1\"]} ] }" &&
+	jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC_STREAM job-list.list | jq .jobs[].id > list_constraint_all9.out &&
+	numlines=$(cat all.ids | wc -l) &&
+	test $(cat list_constraint_all9.out | wc -l) -eq ${numlines}
+'
+
 #
 # nodelist / hostlist constraint filtering
 #
@@ -1220,7 +1270,9 @@ test_expect_success 'flux job list job state timing outputs valid (job inactive)
 	wait_jobid_state $jobid inactive &&
 	obj=$(flux job list -s inactive | grep $jobid) &&
 	echo $obj | jq -e ".t_submit < .t_depend" &&
-	echo $obj | jq -e ".t_depend < .t_run" &&
+	echo $obj | jq -e ".t_depend < .t_priority" &&
+	echo $obj | jq -e ".t_priority < .t_sched" &&
+	echo $obj | jq -e ".t_sched < .t_run" &&
 	echo $obj | jq -e ".t_run < .t_cleanup" &&
 	echo $obj | jq -e ".t_cleanup < .t_inactive"
 '
@@ -1232,7 +1284,9 @@ test_expect_success 'flux job list job state timing outputs valid (job running)'
 	wait_jobid_state $jobid run &&
 	obj=$(flux job list -s running | grep $jobid) &&
 	echo $obj | jq -e ".t_submit < .t_depend" &&
-	echo $obj | jq -e ".t_depend < .t_run" &&
+	echo $obj | jq -e ".t_depend < .t_priority" &&
+	echo $obj | jq -e ".t_priority < .t_sched" &&
+	echo $obj | jq -e ".t_sched < .t_run" &&
 	echo $obj | jq -e ".t_cleanup == null" &&
 	echo $obj | jq -e ".t_inactive == null" &&
 	flux cancel $jobid &&
@@ -2163,6 +2217,45 @@ test_expect_success 'verify duration preserved across restart' '
 	jq -e ".duration == 3600.0" < duration2.json
 '
 
+#
+# t_priority / t_sched list the first time they enter the job state
+#
+#
+
+# N.B.
+#
+# for this test we temporarily drain all ranks so the job won't immediately run.
+# This allows us to change the urgency of the job, thus getting the job
+# re-enter the priority and sched states multiple times.
+#
+# we add a sleep 1 below just to make the timestamps a bit more
+# different, otherwise they will all be milliseconds different from
+# each other
+test_expect_success 'get initial time t_priority / t_sched it is set' '
+	ALL_RANKS=$(flux resource status -s avail -no {ranks}) &&
+	flux resource drain $ALL_RANKS &&
+	jobid=$(flux submit hostname | flux job id) &&
+	wait_jobid_state $jobid sched &&
+	obj=$(flux job list -s pending | grep $jobid) &&
+	echo $obj | jq -e ".t_priority" > t_priority.1 &&
+	echo $obj | jq -e ".t_sched" > t_sched.1 &&
+	flux job urgency $jobid 10 &&
+	sleep 1 &&
+	flux job urgency $jobid 12 &&
+	flux resource undrain $ALL_RANKS &&
+	wait_jobid_state $jobid inactive &&
+	flux job eventlog $jobid &&
+	count=$(flux job eventlog $jobid | grep priority | wc -l) &&
+	test $count -gt 1 &&
+	count=$(flux job eventlog $jobid | grep -v submit | grep urgency | wc -l) &&
+	test $count -gt 1 &&
+	obj=$(flux job list -s inactive | grep $jobid) &&
+	echo $obj | jq -e ".t_priority" > t_priority.2 &&
+	echo $obj | jq -e ".t_sched" > t_sched.2 &&
+	test_cmp t_priority.1 t_priority.2 &&
+	test_cmp t_sched.1 t_sched.2
+'
+
 # all job attributes
 
 # note that not all attributes may be returned by via the 'all'
@@ -2181,6 +2274,8 @@ test_expect_success 'list request with all attr works (job success)' '
 	cat all_success.out | jq -e ".priority" &&
 	cat all_success.out | jq -e ".t_submit" &&
 	cat all_success.out | jq -e ".t_depend" &&
+	cat all_success.out | jq -e ".t_priority" &&
+	cat all_success.out | jq -e ".t_sched" &&
 	cat all_success.out | jq -e ".t_run" &&
 	cat all_success.out | jq -e ".t_cleanup" &&
 	cat all_success.out | jq -e ".t_inactive" &&
@@ -2207,6 +2302,8 @@ test_expect_success 'list request with all attr works (job fail)' '
 	cat all_fail.out | jq -e ".priority" &&
 	cat all_fail.out | jq -e ".t_submit" &&
 	cat all_fail.out | jq -e ".t_depend" &&
+	cat all_fail.out | jq -e ".t_priority" &&
+	cat all_fail.out | jq -e ".t_sched" &&
 	cat all_fail.out | jq -e ".t_cleanup" &&
 	cat all_fail.out | jq -e ".t_inactive" &&
 	cat all_fail.out | jq -e ".state" &&
@@ -2557,6 +2654,8 @@ urgency \
 priority \
 t_submit \
 t_depend \
+t_priority \
+t_sched \
 t_run \
 t_cleanup \
 t_inactive \

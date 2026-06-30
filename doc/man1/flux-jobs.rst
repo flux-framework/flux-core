@@ -500,6 +500,12 @@ The field names that can be specified are:
 **t_depend**
    time job entered depend state
 
+**t_priority**
+   first time a job entered priority state
+
+**t_sched**
+   first time a job entered sched state
+
 **t_run**
    time job entered run state
 

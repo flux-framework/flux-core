@@ -174,6 +174,27 @@ static state_match_t match_t_depend (struct state_constraint *c,
     return MATCH_NEVER;
 }
 
+static state_match_t match_t_priority (struct state_constraint *c,
+                                       flux_job_state_t state)
+{
+    if (state >= FLUX_JOB_STATE_PRIORITY)
+        return MATCH_MAYBE;
+    return MATCH_NEVER;
+}
+
+static state_match_t match_t_sched (struct state_constraint *c,
+                                    flux_job_state_t state)
+{
+    /* a job can move from the SCHED state to PRIORITY and back.
+     * t_sched stores the first instance of reaching the sched state.
+     * So if we are in job state PRIORITY, it's possible t_sched is
+     * available.
+     */
+    if (state >= FLUX_JOB_STATE_PRIORITY)
+        return MATCH_MAYBE;
+    return MATCH_NEVER;
+}
+
 static state_match_t match_t_run (struct state_constraint *c,
                                   flux_job_state_t state)
 {
@@ -208,6 +229,10 @@ static struct state_constraint *create_timestamp_constraint (const char *type,
         cb = match_t_submit;
     else if (streq (type, "t_depend"))
         cb = match_t_depend;
+    else if (streq (type, "t_priority"))
+        cb = match_t_priority;
+    else if (streq (type, "t_sched"))
+        cb = match_t_sched;
     else if (streq (type, "t_run"))
         cb = match_t_run;
     else if (streq (type, "t_cleanup"))
@@ -376,6 +401,8 @@ struct state_constraint *state_constraint_create (json_t *constraint, flux_error
                 return create_states_constraint (values, errp);
             else if (streq (op, "t_submit")
                      || streq (op, "t_depend")
+                     || streq (op, "t_priority")
+                     || streq (op, "t_sched")
                      || streq (op, "t_run")
                      || streq (op, "t_cleanup")
                      || streq (op, "t_inactive"))

@@ -240,6 +240,53 @@ struct state_match_constraint_test {
         }
     },
     {
+        "{ \"t_depend\": [ \"<=100.0\" ] }",
+        {
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+        }
+    },
+    {
+        "{ \"t_priority\": [ \">100.0\" ] }",
+        {
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+        }
+    },
+    /* job event state machine allows movement from SCHED back to
+     * PRIORITY.  Therefore if a job is in state PRIORITY, it is still
+     * possible t_sched is available.  Thus for state PRIORITY, a test
+     * for t_sched is possible.
+     */
+    {
+        "{ \"t_sched\": [ \"<100.0\" ] }",
+        {
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+        }
+    },
+    {
         "{ \"t_run\": [ \">100.0\" ] }",
         {
             false,
@@ -251,6 +298,34 @@ struct state_match_constraint_test {
             false,
             true,
             true,
+        }
+    },
+    {
+        "{ \"t_cleanup\": [ \">=100.0\" ] }",
+        {
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+        }
+    },
+    {
+        "{ \"t_inactive\": [ \"<=100.0\" ] }",
+        {
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+            false,
+            false,
+            false,
         }
     },
     /* N.B. For state depend, priority, sched, is always false, so not
@@ -1106,6 +1181,8 @@ struct state_match_constraint_test {
              { \"results\": [ \"completed\" ] }, \
              { \"t_submit\": [ \">=500.0\" ] }, \
              { \"t_depend\": [ \">=100.0\" ] }, \
+             { \"t_priority\": [ \">100.0\" ] }, \
+             { \"t_sched\": [ \"<100.0\" ] }, \
              { \"t_run\": [ \"<=100.0\" ] }, \
              { \"t_cleanup\": [ \">=100.0\" ] }, \
              { \"t_inactive\": [ \"<=100.0\" ] } \
