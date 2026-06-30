@@ -21,17 +21,21 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_checkpoint.h"
+#include "src/common/libkvs/kvs_treewalk.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/timestamp.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libcontent/content.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
-#include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
 
 #include "builtin.h"
 
-#define BLOBREF_ASYNC_MAX 1000
+/* Max concurrent content load/validate requests kept in flight while walking
+ * the KVS.  The walk is offline (the KVS module is not servicing it), so a
+ * large window simply saturates the content backing store.
+ */
+#define FSCK_WALK_WINDOW 1000
 /* regex for "job.xxxx.xxxx.xxxx.xxxx", where 'x' is a hex character */
 #define KVS_JOB_PATH_REGEX \
     "^job.[0-9a-fA-F]{4}\\.[0-9a-fA-F]{4}\\.[0-9a-fA-F]{4}\\.[0-9a-fA-F]{4}"
@@ -56,36 +60,16 @@ struct fsck_ctx {
     zlist_t *pending_repairs;   // struct fsck_repair * recorded during walk
 };
 
-/* A repair recorded during the tree walk and applied to ctx->root after the
- * walk completes.  Deferring keeps repair (which mutates the in-memory root)
- * out of the traversal, in preparation for converting the walk to an
- * event-driven form where inline mutation is unsafe.  'replacement' is the
- * rebuilt value to file under lost+found (valref repair), or NULL to only
- * unlink the path (missing dirref).
+/* A repair recorded during the (read-only) tree walk and applied to ctx->root
+ * afterward, since applying it mutates the in-memory root and may issue
+ * blocking content loads, neither of which is safe inside a walk callback.
+ * 'replacement' is the rebuilt value to file under lost+found (valref repair),
+ * or NULL to only unlink the path (missing dirref).
  */
 struct fsck_repair {
     char *path;
     json_t *replacement;
 };
-
-struct fsck_valref_data
-{
-    struct fsck_ctx *ctx;
-    json_t *treeobj;
-    int index;
-    int count;
-    int in_flight;
-    const char *path;
-    int errorcount;
-    int errnum;
-    zlist_t *missing_indexes;
-};
-
-static void fsck_treeobj (struct fsck_ctx *ctx,
-                          const char *path,
-                          json_t *treeobj);
-
-static void valref_validate (struct fsck_valref_data *fvd);
 
 static void vmsg (struct fsck_ctx *ctx, const char *fmt, va_list ap)
 {
@@ -119,103 +103,42 @@ void errmsg (struct fsck_ctx *ctx, const char *fmt, ...)
     va_end (ap);
 }
 
-static void save_missing_ref_index (struct fsck_valref_data *fvd, int index)
+/* kvs_treewalk valref_request override: validate that a blob exists in the
+ * backing store without transferring its content.  "validate" was added in
+ * v0.77.0; fall back to "load" on older targets (see check_validate_available).
+ */
+static flux_future_t *fsck_valref_request (void *arg, const char *blobref)
 {
-    int *cpy;
-
-    if (!fvd->missing_indexes) {
-        if (!(fvd->missing_indexes = zlist_new ()))
-            log_err_exit ("cannot create missing indexes list");
-    }
-
-    if (!(cpy = malloc (sizeof (index))))
-        log_err_exit ("cannot allocate memory for index");
-    *cpy = index;
-
-    if (zlist_append (fvd->missing_indexes, cpy) < 0)
-        log_err_exit ("cannot append index to list");
-    zlist_freefn (fvd->missing_indexes, cpy, (zlist_free_fn *) free, true);
-}
-
-static void valref_validate_continuation (flux_future_t *f, void *arg)
-{
-    struct fsck_valref_data *fvd = arg;
-
-    if (flux_rpc_get (f, NULL) < 0) {
-        int index = ptr2int (flux_future_aux_get (f, "index"));
-        if (fvd->ctx->verbose) {
-            if (errno == ENOENT)
-                errmsg (fvd->ctx,
-                        "%s: missing blobref index=%d",
-                        fvd->path,
-                        index);
-            else
-                errmsg (fvd->ctx,
-                        "%s: error retrieving blobref index=%d: %s",
-                        fvd->path,
-                        index,
-                        future_strerror (f, errno));
-        }
-        fvd->errorcount++;
-        fvd->errnum = errno;     /* we'll report the last errno */
-        if (fvd->ctx->repair && errno == ENOENT)
-            save_missing_ref_index (fvd, index);
-    }
-    fvd->in_flight--;
-
-    if (fvd->index < fvd->count) {
-        valref_validate (fvd);
-        fvd->in_flight++;
-        fvd->index++;
-    }
-
-    flux_future_destroy (f);
-}
-
-static void valref_validate (struct fsck_valref_data *fvd)
-{
-    const char *topic = fvd->ctx->validate_available ?
+    struct fsck_ctx *ctx = arg;
+    const char *topic = ctx->validate_available ?
         "content-backing.validate" : "content-backing.load";
     uint32_t hash[BLOBREF_MAX_DIGEST_SIZE];
     ssize_t hash_size;
-    const char *blobref;
-    flux_future_t *f;
-
-    blobref = treeobj_get_blobref (fvd->treeobj, fvd->index);
 
     if ((hash_size = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
-        log_err_exit ("cannot get hash from ref string");
-
-    if (!(f = flux_rpc_raw (fvd->ctx->h, topic, hash, hash_size, 0, 0)))
-        log_err_exit ("failed to validate valref blob");
-    if (flux_future_then (f, -1, valref_validate_continuation, fvd) < 0)
-        log_err_exit ("cannot validate valref blob");
-    if (flux_future_aux_set (f, "index", int2ptr (fvd->index), NULL) < 0)
-        log_err_exit ("could not save index value");
+        return NULL;
+    return flux_rpc_raw (ctx->h, topic, hash, hash_size, 0, 0);
 }
 
+/* Build a repaired valref from the original, dropping the blobs that failed
+ * to validate (blobs[i].errnum == ENOENT).  If every blob was bad the value
+ * becomes an empty val object.
+ */
 static json_t *repair_valref (struct fsck_ctx *ctx,
                               json_t *treeobj,
-                              struct fsck_valref_data *fvd)
+                              int count,
+                              const struct kvs_treewalk_blob *blobs)
 {
     json_t *repaired;
-    int *missing;
-    int i;
-    int count = treeobj_get_count (treeobj);
 
     if (!(repaired = treeobj_create_valref (NULL)))
         log_err_exit ("cannot create treeobj valref");
 
-    missing = zlist_pop (fvd->missing_indexes);
-    for (i = 0; i < count; i++) {
-        const char *blobref = treeobj_get_blobref (treeobj, i);
-        if (!missing || i != (*missing)) {
-            if (treeobj_append_blobref (repaired, blobref) < 0)
+    for (int i = 0; i < count; i++) {
+        if (!blobs[i].errnum) {
+            if (treeobj_append_blobref (repaired,
+                                        treeobj_get_blobref (treeobj, i)) < 0)
                 log_err_exit ("cannot append blobref to valref");
-        }
-        else {
-            free (missing);
-            missing = zlist_pop (fvd->missing_indexes);
         }
     }
 
@@ -372,10 +295,9 @@ static void save_kvs_job_path (struct fsck_ctx *ctx, const char *path)
     }
 }
 
-/* Record a repair to apply to ctx->root after the walk completes, rather than
- * mutating the root mid-traversal.  'replacement' is filed under lost+found
- * (valref repair) and the path is unlinked; a NULL 'replacement' only unlinks
- * (missing dirref).  Ownership of 'replacement' transfers here.
+/* Record a repair to apply to ctx->root after the walk completes.  Applying
+ * it now would mutate the root mid-traversal and (for lost+found) issue
+ * blocking content loads from within a walk callback.
  */
 static void record_repair (struct fsck_ctx *ctx,
                            const char *path,
@@ -404,8 +326,126 @@ static void fsck_repair_destroy (struct fsck_repair *r)
     }
 }
 
+/* kvs_treewalk valref_done callback: a value's blobs have all been validated.
+ * Report any that are missing (one error per key; per-blob detail in verbose
+ * mode) and, in repair mode, record a rebuilt value for lost+found.
+ */
+static void fsck_valref_done (void *arg,
+                              const char *path,
+                              json_t *treeobj,
+                              int count,
+                              const struct kvs_treewalk_blob *blobs)
+{
+    struct fsck_ctx *ctx = arg;
+    int errorcount = 0;
+    int missingcount = 0;
+    int last_errnum = 0;
+
+    for (int i = 0; i < count; i++) {
+        if (!blobs[i].errnum)
+            continue;
+        errorcount++;
+        last_errnum = blobs[i].errnum;
+        if (blobs[i].errnum == ENOENT)
+            missingcount++;
+        if (ctx->verbose) {
+            if (blobs[i].errnum == ENOENT)
+                errmsg (ctx, "%s: missing blobref index=%d", path, i);
+            else
+                errmsg (ctx,
+                        "%s: error retrieving blobref index=%d: %s",
+                        path,
+                        i,
+                        strerror (blobs[i].errnum));
+        }
+    }
+    if (errorcount == 0)
+        return;
+
+    /* each invalid blobref is output above in verbose mode */
+    if (!ctx->verbose) {
+        if (last_errnum == ENOENT)
+            errmsg (ctx, "%s: missing blobref(s)", path);
+        else
+            errmsg (ctx,
+                    "%s: error retrieving blobref(s): %s",
+                    path,
+                    strerror (last_errnum));
+    }
+    ctx->errorcount++;
+
+    /* can only recover if errors were all bad (missing) references */
+    if (ctx->repair && errorcount == missingcount) {
+        record_repair (ctx, path, repair_valref (ctx, treeobj, count, blobs));
+        ctx->repair_count++;
+        warn (ctx, "%s repaired and moved to lost+found", path);
+        if (ctx->job_aware)
+            save_kvs_job_path (ctx, path);
+    }
+}
+
+/* kvs_treewalk error callback: a dirref could not be loaded, decoded, or
+ * validated.  Report it (the subtree is pruned by the walker) and, for a
+ * missing dirref in repair mode, record the path for unlinking.
+ */
+static void fsck_error (void *arg,
+                        const char *path,
+                        enum kvs_treewalk_error error,
+                        int errnum)
+{
+    struct fsck_ctx *ctx = arg;
+
+    switch (error) {
+        case KVS_TREEWALK_ERROR_INVALID:
+            errmsg (ctx, "%s: invalid tree object", path);
+            break;
+        case KVS_TREEWALK_ERROR_BADCOUNT:
+            errmsg (ctx, "%s: invalid dirref treeobj count", path);
+            break;
+        case KVS_TREEWALK_ERROR_LOAD:
+            if (errnum == ENOENT)
+                errmsg (ctx, "%s: missing dirref blobref", path);
+            else
+                errmsg (ctx,
+                        "%s: error retrieving dirref blobref: %s",
+                        path,
+                        strerror (errnum));
+            if (ctx->repair && errnum == ENOENT) {
+                record_repair (ctx, path, NULL); // unlink only
+                warn (ctx, "%s unlinked due to missing blobref", path);
+                ctx->unlink_dir_count++;
+            }
+            break;
+        case KVS_TREEWALK_ERROR_DECODE:
+            errmsg (ctx, "%s: could not decode directory", path);
+            break;
+        case KVS_TREEWALK_ERROR_NOTDIR:
+            errmsg (ctx, "%s: dirref references non-directory", path);
+            break;
+    }
+    ctx->errorcount++;
+}
+
+/* kvs_treewalk visit callback: verbose path listing, matching the order the
+ * old recursion printed (every object as it is reached).
+ */
+static void fsck_visit (void *arg, const char *path, json_t *treeobj)
+{
+    struct fsck_ctx *ctx = arg;
+    if (ctx->verbose)
+        warn (ctx, "%s", path);
+}
+
+static const struct kvs_treewalk_ops fsck_ops = {
+    .visit = fsck_visit,
+    .valref_request = fsck_valref_request,
+    .valref_done = fsck_valref_done,
+    .error = fsck_error,
+};
+
 /* Apply the repairs recorded during the walk: file the rebuilt value under
- * lost+found (valref repair) and/or unlink the bad path.
+ * lost+found (valref repair) and/or unlink the bad path.  Done after the walk
+ * because these mutate ctx->root and may issue blocking content loads.
  */
 static void apply_repairs (struct fsck_ctx *ctx)
 {
@@ -414,6 +454,10 @@ static void apply_repairs (struct fsck_ctx *ctx)
     if (!ctx->pending_repairs)
         return;
     while ((r = zlist_pop (ctx->pending_repairs))) {
+        /* A replacement (valref repair) is filed under lost+found and the
+         * original path unlinked; with no replacement (missing dirref) the
+         * path is only unlinked.
+         */
         if (r->replacement)
             put_lost_and_found (ctx, r->path, r->replacement);
         unlink_path (ctx, r->path);
@@ -421,202 +465,60 @@ static void apply_repairs (struct fsck_ctx *ctx)
     }
 }
 
-static void fsck_valref (struct fsck_ctx *ctx,
-                         const char *path,
-                         json_t *treeobj)
-{
-    struct fsck_valref_data fvd = {0};
-
-    fvd.ctx = ctx;
-    fvd.treeobj = treeobj;
-    fvd.count = treeobj_get_count (treeobj);
-    fvd.path = path;
-
-    while (fvd.in_flight < BLOBREF_ASYNC_MAX
-           && fvd.index < fvd.count) {
-        valref_validate (&fvd);
-        fvd.in_flight++;
-        fvd.index++;
-    }
-
-    if (flux_reactor_run (flux_get_reactor (ctx->h), 0) < 0)
-        log_err_exit ("flux_reactor_run");
-
-    if (fvd.errorcount) {
-        /* each invalid blobref will be output in verbose mode */
-        if (!ctx->verbose) {
-            if (fvd.errnum == ENOENT)
-                errmsg (ctx, "%s: missing blobref(s)", path);
-            else
-                errmsg (ctx,
-                        "%s: error retrieving blobref(s): %s",
-                        path,
-                        strerror (fvd.errnum));
-        }
-        ctx->errorcount++;
-
-        /* can only recover if errors were all bad references */
-        if (ctx->repair
-            && fvd.missing_indexes
-            && fvd.errorcount == zlist_size (fvd.missing_indexes)) {
-            json_t *repaired = repair_valref (ctx, treeobj, &fvd);
-
-            record_repair (ctx, path, repaired); // applied after the walk
-
-            ctx->repair_count++;
-
-            warn (ctx, "%s repaired and moved to lost+found", path);
-
-            if (ctx->job_aware)
-                save_kvs_job_path (ctx, path);
-        }
-    }
-
-    zlist_destroy (&fvd.missing_indexes);
-}
-
-
-static void fsck_val (struct fsck_ctx *ctx,
-                      const char *path,
-                      json_t *treeobj)
-{
-    /* Do nothing for now */
-}
-
-static void fsck_symlink (struct fsck_ctx *ctx,
-                          const char *path,
-                          json_t *treeobj)
-{
-    /* Do nothing for now */
-}
-
-static void fsck_dir (struct fsck_ctx *ctx,
-                      const char *path,
-                      json_t *treeobj)
-{
-    json_t *dict = treeobj_get_data (treeobj);
-    const char *name;
-    json_t *entry;
-
-    json_object_foreach (dict, name, entry) {
-        char *newpath;
-        if (asprintf (&newpath, "%s.%s", path, name) < 0)
-            log_msg_exit ("out of memory");
-        fsck_treeobj (ctx, newpath, entry); // recurse
-        free (newpath);
-    }
-}
-
-static void fsck_dirref (struct fsck_ctx *ctx,
-                         const char *path,
-                         json_t *treeobj)
-{
-    flux_future_t *f = NULL;
-    const void *buf;
-    size_t buflen;
-    json_t *treeobj_deref = NULL;
-    int count;
-
-    count = treeobj_get_count (treeobj);
-    if (count != 1) {
-        errmsg (ctx,
-                "%s: invalid dirref treeobj count=%d",
-                path,
-                count);
-        ctx->errorcount++;
-        return;
-    }
-    if (!(f = content_load_byblobref (ctx->h,
-                                      treeobj_get_blobref (treeobj, 0),
-                                      CONTENT_FLAG_CACHE_BYPASS))
-        || content_load_get (f, &buf, &buflen) < 0) {
-        if (errno == ENOENT)
-            errmsg (ctx, "%s: missing dirref blobref", path);
-        else
-            errmsg (ctx,
-                    "%s: error retrieving dirref blobref: %s",
-                    path,
-                    future_strerror (f, errno));
-        ctx->errorcount++;
-        if (ctx->repair && errno == ENOENT) {
-            record_repair (ctx, path, NULL); // unlink only, after the walk
-            warn (ctx, "%s unlinked due to missing blobref", path);
-            ctx->unlink_dir_count++;
-        }
-        goto cleanup;
-    }
-    if (!(treeobj_deref = treeobj_decodeb (buf, buflen))) {
-        errmsg (ctx, "%s: could not decode directory", path);
-        ctx->errorcount++;
-        goto cleanup;
-    }
-    if (!treeobj_is_dir (treeobj_deref)) {
-        errmsg (ctx, "%s: dirref references non-directory", path);
-        ctx->errorcount++;
-        goto cleanup;
-    }
-    fsck_dir (ctx, path, treeobj_deref); // recurse
-cleanup:
-    json_decref (treeobj_deref);
-    flux_future_destroy (f);
-}
-
-static void fsck_treeobj (struct fsck_ctx *ctx,
-                          const char *path,
-                          json_t *treeobj)
-{
-    if (treeobj_validate (treeobj) < 0) {
-        errmsg (ctx, "%s: invalid tree object", path);
-        ctx->errorcount++;
-        return;
-    }
-    if (ctx->verbose)
-        warn (ctx, "%s", path);
-    if (treeobj_is_symlink (treeobj))
-        fsck_symlink (ctx, path, treeobj);
-    else if (treeobj_is_val (treeobj))
-        fsck_val (ctx, path, treeobj);
-    else if (treeobj_is_valref (treeobj))
-        fsck_valref (ctx, path, treeobj);
-    else if (treeobj_is_dirref (treeobj))
-        fsck_dirref (ctx, path, treeobj); // recurse
-    else if (treeobj_is_dir (treeobj))
-        fsck_dir (ctx, path, treeobj); // recurse
-}
-
 static void fsck_blobref (struct fsck_ctx *ctx, const char *blobref)
 {
-    flux_future_t *f;
-    const void *buf;
-    size_t buflen;
-    json_t *dict;
-    const char *key;
-    json_t *entry;
+    struct kvs_treewalk *tw;
 
-    if (!(f = content_load_byblobref (ctx->h,
-                                      blobref,
-                                      CONTENT_FLAG_CACHE_BYPASS))
-        || content_load_get (f, &buf, &buflen) < 0) {
-        errmsg (ctx,
-                "cannot load root tree object: %s",
-                future_strerror (f, errno));
-        ctx->errorcount++;
+    if (!(tw = kvs_treewalk_create (ctx->h,
+                                    blobref,
+                                    '.',
+                                    FSCK_WALK_WINDOW,
+                                    CONTENT_FLAG_CACHE_BYPASS,
+                                    &fsck_ops,
+                                    ctx)))
+        log_err_exit ("error creating kvs treewalk");
+    /* Retain the decoded root for repair (lost+found/unlink) after the walk.
+     * kvs_treewalk loads its own copy internally; this is a separate fetch of
+     * the same root object.
+     */
+    if (ctx->repair) {
+        flux_future_t *f;
+        const void *buf;
+        size_t buflen;
+        if (!(f = content_load_byblobref (ctx->h,
+                                          blobref,
+                                          CONTENT_FLAG_CACHE_BYPASS))
+            || content_load_get (f, &buf, &buflen) < 0) {
+            errmsg (ctx,
+                    "cannot load root tree object: %s",
+                    future_strerror (f, errno));
+            ctx->errorcount++;
+            flux_future_destroy (f);
+            kvs_treewalk_destroy (tw);
+            return;
+        }
+        if (!(ctx->root = treeobj_decodeb (buf, buflen))
+            || treeobj_validate (ctx->root) < 0)
+            log_msg_exit ("blobref does not refer to a valid RFC 11 tree "
+                          "object");
+        if (!treeobj_is_dir (ctx->root))
+            log_msg_exit ("root tree object is not a directory");
         flux_future_destroy (f);
-        return;
     }
-    if (!(ctx->root = treeobj_decodeb (buf, buflen))
-        || treeobj_validate (ctx->root) < 0)
-        log_msg_exit ("blobref does not refer to a valid RFC 11 tree object");
-    if (!treeobj_is_dir (ctx->root))
-        log_msg_exit ("root tree object is not a directory");
-
-    dict = treeobj_get_data (ctx->root);
-    json_object_foreach (dict, key, entry) {
-        fsck_treeobj (ctx, key, entry);
+    if (kvs_treewalk_run (tw) < 0) {
+        /* a fatal walk error (e.g. failure to load the root) is reported as
+         * an error here; per-object errors went through fsck_error already */
+        if (ctx->errorcount == 0) {
+            errmsg (ctx,
+                    "cannot load root tree object: %s",
+                    strerror (errno));
+            ctx->errorcount++;
+        }
     }
-    flux_future_destroy (f);
+    kvs_treewalk_destroy (tw);
 
-    apply_repairs (ctx);
+    if (ctx->repair)
+        apply_repairs (ctx);
 }
 
 static json_t *lookup_job_subdir (struct fsck_ctx *ctx,
