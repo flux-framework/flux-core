@@ -55,7 +55,8 @@ TESTS = \
 	test_treeobj.t \
 	test_kvs_checkpoint.t \
 	test_kvs_copy.t \
-	test_kvs_util.t
+	test_kvs_util.t \
+	test_kvs_treewalk.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -121,3 +122,9 @@ test_kvs_copy_t_LDADD = $(test_ldadd)
 test_kvs_util_t_SOURCES = test/kvs_util.c
 test_kvs_util_t_CPPFLAGS = $(test_cppflags)
 test_kvs_util_t_LDADD = $(test_ldadd)
+
+test_kvs_treewalk_t_SOURCES = test/treewalk.c
+test_kvs_treewalk_t_CPPFLAGS = $(test_cppflags)
+test_kvs_treewalk_t_LDADD = \
+	$(top_builddir)/src/common/libtestutil/libtestutil.la \
+	$(test_ldadd)
