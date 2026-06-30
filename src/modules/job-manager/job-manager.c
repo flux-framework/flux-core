@@ -48,9 +48,16 @@ void getinfo_handle_request (flux_t *h,
                              void *arg)
 {
     struct job_manager *ctx = arg;
+    struct flux_msg_cred cred;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
+    if (flux_msg_get_cred (msg, &cred) < 0)
+        goto error;
+    if (ctx->private_mode && !(cred.rolemask & FLUX_ROLE_OWNER)) {
+        errno = EPERM;
+        goto error;
+    }
     if (flux_respond_pack (h,
                            msg,
                            "{s:I}",
@@ -79,10 +86,17 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct job_manager *ctx = arg;
+    struct flux_msg_cred cred;
     json_t *journal = journal_get_stats (ctx->journal);
     json_t *housekeeping = housekeeping_get_stats (ctx->housekeeping);
     if (!housekeeping || !journal)
         goto error;
+    if (flux_msg_get_cred (msg, &cred) < 0)
+        goto error;
+    if (ctx->private_mode && !(cred.rolemask & FLUX_ROLE_OWNER)) {
+        errno = EPERM;
+        goto error;
+    }
     if (flux_respond_pack (h,
                            msg,
                            "{s:O s:i s:i s:I s:O}",
@@ -102,6 +116,23 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (housekeeping);
     json_decref (journal);
+}
+
+static int private_mode_update (const flux_conf_t *conf,
+                                flux_error_t *error,
+                                void *arg)
+{
+    struct job_manager *ctx = arg;
+    int private_mode = 0;
+
+    if (flux_conf_unpack (conf,
+                          error,
+                          "{s?{s?b}}",
+                          "access",
+                            "private-mode", &private_mode) < 0)
+        return -1;
+    ctx->private_mode = private_mode ? true : false;
+    return 1;
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -243,6 +274,13 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
         flux_log_error (h, "flux_msghandler_add");
+        goto done;
+    }
+    if (conf_register_callback (ctx.conf,
+                                &error,
+                                private_mode_update,
+                                &ctx) < 0) {
+        flux_log (h, LOG_ERR, "error parsing access config: %s", error.text);
         goto done;
     }
     if (restart_from_kvs (&ctx) < 0) // logs its own error messages

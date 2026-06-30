@@ -38,6 +38,27 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
                        flux_job_state_t state,
                        bool *stall);
 
+/* Enforce access policy for a single job lookup. Returns 0 if 'job' is
+ * visible to the user that sent 'msg', or -1 with errno set (ENOENT when
+ * the job exists but is not visible to the user in private mode, so error
+ * matches what user would see for an invalid jobid where ENOENT is passed
+ * through the from KVS lookup).
+ */
+static int check_job_visible (struct list_ctx *ctx,
+                              const flux_msg_t *msg,
+                              const struct job *job)
+{
+    int rc;
+
+    if ((rc = job_auth_check_job (ctx->auth, ctx->mctx, msg, job, NULL)) < 0)
+        return -1;
+    if (rc == 0) {
+        errno = ENOENT;
+        return -1;
+    }
+    return 0;
+}
+
 /* Put jobs from list onto jobs array, breaking if max_entries has
  * been reached. Returns 1 if jobs array is full, 0 if continue, -1
  * one error with errno set:
@@ -265,6 +286,8 @@ void list_cb (flux_t *h,
     double since = 0.;
     json_t *constraint = NULL;
     json_t *legacy_constraint = NULL;
+    json_t *auth_constraint = NULL;
+    json_t *combined_constraint = NULL;
     struct list_constraint *c = NULL;
     struct state_constraint *statec = NULL;
     flux_error_t error;
@@ -322,6 +345,30 @@ void list_cb (flux_t *h,
         errno = EPROTO;
         goto error;
     }
+
+    /* In private mode, restrict non-owners to their own jobs by ANDing an
+     * access policy constraint with the requested constraint.
+     */
+    if (job_auth_constraint (ctx->auth, msg, &auth_constraint, &error) < 0) {
+        errprintf (&err, "%s", error.text);
+        goto error;
+    }
+    if (auth_constraint) {
+        if (constraint)
+            combined_constraint = json_pack ("{s:[OO]}",
+                                             "and",
+                                             constraint,
+                                             auth_constraint);
+        else
+            combined_constraint = json_incref (auth_constraint);
+        if (!combined_constraint) {
+            errprintf (&err, "failed to build access policy constraint");
+            errno = ENOMEM;
+            goto error;
+        }
+        constraint = combined_constraint;
+    }
+
     if (!(c = list_constraint_create (ctx->mctx, constraint, &error))) {
         errprintf (&err,
                    "invalid payload: constraint object invalid: %s",
@@ -383,6 +430,8 @@ void list_cb (flux_t *h,
     list_constraint_destroy (c);
     state_constraint_destroy (statec);
     json_decref (legacy_constraint);
+    json_decref (auth_constraint);
+    json_decref (combined_constraint);
     return;
 
 error:
@@ -392,6 +441,8 @@ error:
     list_constraint_destroy (c);
     state_constraint_destroy (statec);
     json_decref (legacy_constraint);
+    json_decref (auth_constraint);
+    json_decref (combined_constraint);
 }
 
 void check_id_valid_continuation (flux_future_t *f, void *arg)
@@ -419,6 +470,13 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
         }
         else {
             json_t *o;
+            if (check_job_visible (jsctx->ctx, isd->msg, job) < 0) {
+                if (flux_respond_error (jsctx->h, isd->msg, errno, NULL) < 0)
+                    flux_log_error (jsctx->h,
+                                    "%s: flux_respond_error",
+                                    __FUNCTION__);
+                goto cleanup;
+            }
             if (!(o = get_job_by_id (jsctx,
                                      NULL,
                                      isd->msg,
@@ -501,6 +559,12 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
         }
         return NULL;
     }
+
+    /*  Enforce access policy: in private mode a non-owner may not see
+     *  another user's job.  Report it as if the job does not exist.
+     */
+    if (check_job_visible (jsctx->ctx, msg, job) < 0)
+        return NULL;
 
     /*  Always return job in inactive state, even if a requested state was
      *  provided. This avoids no response when a job does not enter a given

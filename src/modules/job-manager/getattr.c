@@ -112,14 +112,20 @@ void getattr_handle_request (flux_t *h,
         goto error;
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))
         && !(job = zhashx_lookup (ctx->inactive_jobs, &id))) {
-        errstr = "unknown job";
-        errno = EINVAL;
+        if (ctx->private_mode && !(cred.rolemask & FLUX_ROLE_OWNER))
+            errno = EPERM;
+        else {
+            errstr = "unknown job";
+            errno = EINVAL;
+        }
         goto error;
     }
-    /* Security: guests can only access their own jobs
+    /* Security: guests can only access their own jobs. In private mode,
+     * suppress the errstr so existence of the job is not revealed.
      */
     if (flux_msg_cred_authorize (cred, job->userid) < 0) {
-        errstr = "guests can only reprioritize their own jobs";
+        if (!ctx->private_mode)
+            errstr = "guests can only access their own jobs";
         goto error;
     }
     if (!(dict = make_dict (job, attrs, &error))) {

@@ -476,8 +476,9 @@ void summary_pane_jobstats (struct summary_pane *sum, flux_future_t *f)
     const char *filter_queue;
 
     if (flux_rpc_get_unpack (f, "o", &o) < 0) {
-        if (errno != ENOSYS)
+        if (errno != ENOSYS && errno != EPERM)
             fatal (errno, "error getting job-list.job-stats RPC response");
+        goto out;
     }
 
     /* can return NULL filter_queue for "all" queues */

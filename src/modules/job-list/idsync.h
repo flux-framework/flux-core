@@ -17,10 +17,15 @@
 
 #include "job_data.h"
 
+struct job_auth;
+struct match_ctx;
+
 struct idsync_ctx {
     flux_t *h;
     zlistx_t *lookups;
     zhashx_t *waits;
+    struct job_auth *auth;      /* set via idsync_ctx_set_auth() */
+    struct match_ctx *mctx;
 };
 
 struct idsync_data {
@@ -36,6 +41,13 @@ struct idsync_data {
 struct idsync_ctx *idsync_ctx_create (flux_t *h);
 
 void idsync_ctx_destroy (struct idsync_ctx *isctx);
+
+/* Provide the access policy and match context used to enforce job
+ * visibility when responding to deferred (waiting) id lookups.
+ */
+void idsync_ctx_set_auth (struct idsync_ctx *isctx,
+                          struct job_auth *auth,
+                          struct match_ctx *mctx);
 
 void idsync_data_destroy (void *data);
 

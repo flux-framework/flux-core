@@ -19,6 +19,8 @@ noinst_LTLIBRARIES = libjob-list.la
 libjob_list_la_SOURCES = \
 	job-list.c \
 	job-list.h \
+	auth.h \
+	auth.c \
 	job_state.h \
 	job_state.c \
 	job_data.h \
@@ -41,7 +43,8 @@ libjob_list_la_SOURCES = \
 TESTS = \
 	test_job_data.t \
 	test_match.t \
-	test_state_match.t
+	test_state_match.t \
+	test_auth.t
 
 test_ldadd = \
 	$(builddir)/libjob-list.la \
@@ -87,6 +90,14 @@ test_state_match_t_CPPFLAGS = \
 test_state_match_t_LDADD = \
 	$(test_ldadd)
 test_state_match_t_LDFLAGS = \
+	$(test_ldflags)
+
+test_auth_t_SOURCES = test/auth.c
+test_auth_t_CPPFLAGS = \
+	$(test_cppflags)
+test_auth_t_LDADD = \
+	$(test_ldadd)
+test_auth_t_LDFLAGS = \
 	$(test_ldflags)
 
 EXTRA_DIST = \
