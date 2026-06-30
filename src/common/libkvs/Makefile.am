@@ -31,7 +31,9 @@ libkvs_la_SOURCES = \
 	treeobj.c \
 	kvs_copy.c \
 	kvs_util.c \
-	kvs_util_private.h
+	kvs_util_private.h \
+	kvs_treewalk.c \
+	kvs_treewalk.h
 
 fluxcoreinclude_HEADERS = \
 	kvs.h \
