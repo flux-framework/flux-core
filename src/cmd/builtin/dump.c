@@ -225,6 +225,45 @@ static void get_blobref (struct dump_valref_data *dvd)
         log_err_exit ("%s: cannot load blobref %d", dvd->path, dvd->index);
 }
 
+/* Write a valref archive entry from the array of stashed content.load
+ * response messages.  The total size of the value must be calculated and
+ * written in the entry header before any data, so all blobs comprising the
+ * valref must be loaded before calling this.  'msgs' has 'count' entries and
+ * 'total_size' is the sum of their payload lengths.
+ */
+static void dump_write_valref (struct archive *ar,
+                               flux_t *h,
+                               const char *path,
+                               const flux_msg_t **msgs,
+                               int count,
+                               int total_size)
+{
+    struct archive_entry *entry;
+
+    if (!(entry = archive_entry_new ()))
+        log_msg_exit ("error creating archive entry");
+    archive_entry_set_pathname (entry, path);
+    archive_entry_set_size (entry, total_size);
+    archive_entry_set_perm (entry, 0644);
+    archive_entry_set_filetype (entry, AE_IFREG);
+    archive_entry_set_mtime (entry, dump_time, 0);
+    archive_entry_set_uid (entry, dump_uid);
+    archive_entry_set_gid (entry, dump_gid);
+
+    if (archive_write_header (ar, entry) != ARCHIVE_OK)
+        log_msg_exit ("%s", archive_error_string (ar));
+    for (int i = 0; i < count; i++) {
+        const void *data;
+        size_t len;
+        if (flux_response_decode_raw (msgs[i], NULL, &data, &len) < 0)
+            log_err_exit ("error processing stashed valref responses");
+        if (len > 0)
+            dump_write_data (ar, data, len);
+    }
+    archive_entry_free (entry);
+    progress (h, 1);
+}
+
 static void dump_valref (struct archive *ar,
                          flux_t *h,
                          const char *path,
@@ -232,7 +271,6 @@ static void dump_valref (struct archive *ar,
 {
     int count = treeobj_get_count (treeobj);
     const flux_msg_t **msgs;
-    struct archive_entry *entry;
     struct dump_valref_data dvd = {0};
 
     /* Load all data comprising the valref before starting the archive
@@ -272,30 +310,7 @@ static void dump_valref (struct archive *ar,
         goto cleanup;
     }
 
-    if (!(entry = archive_entry_new ()))
-        log_msg_exit ("error creating archive entry");
-    archive_entry_set_pathname (entry, path);
-    archive_entry_set_size (entry, dvd.total_size);
-    archive_entry_set_perm (entry, 0644);
-    archive_entry_set_filetype (entry, AE_IFREG);
-    archive_entry_set_mtime (entry, dump_time, 0);
-    archive_entry_set_uid (entry, dump_uid);
-    archive_entry_set_gid (entry, dump_gid);
-
-    if (archive_write_header (ar, entry) != ARCHIVE_OK)
-        log_msg_exit ("%s", archive_error_string (ar));
-    for (int i = 0; i < dvd.count; i++) {
-        const void *data;
-        size_t len;
-        if (flux_response_decode_raw (msgs[i], NULL, &data, &len) < 0)
-            log_err_exit ("error processing stashed valref responses");
-        if (len > 0)
-            dump_write_data (ar, data, len);
-        flux_msg_decref (msgs[i]);
-        msgs[i] = NULL;
-    }
-    archive_entry_free (entry);
-    progress (h, 1);
+    dump_write_valref (ar, h, path, msgs, dvd.count, dvd.total_size);
 cleanup:
     for (int i = 0; i < dvd.count; i++) {
         if (msgs[i])
