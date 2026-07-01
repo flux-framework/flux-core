@@ -11,6 +11,7 @@
 #ifndef _KVS_TREEWALK_H
 #define _KVS_TREEWALK_H
 
+#include <stdbool.h>
 #include <flux/core.h>
 #include <jansson.h>
 
@@ -61,6 +62,24 @@ struct kvs_treewalk_ops {
      * Useful for verbose path listing.  May be NULL.
      */
     void (*visit) (void *arg, const char *path, json_t *treeobj);
+
+    /* Called before a dirref subtree is loaded, with the dirref's (single)
+     * blobref.  Return true to descend (load the directory object and recurse)
+     * or false to prune the subtree (its children are not visited).  This lets
+     * a caller walking several overlapping roots skip a subtree it has already
+     * walked, avoiding repeated loads of shared interior nodes.  When NULL,
+     * every dirref is descended.  Note that visit() has already fired for the
+     * dirref object before this is called.
+     */
+    bool (*descend) (void *arg, const char *path, const char *blobref);
+
+    /* If true, valref blobs are not fetched at all: the valref object is still
+     * reported through visit() (from which its blobrefs are available), but
+     * valref_request and valref_done are ignored and no blob load is issued.
+     * Use when only the blobrefs matter (e.g. marking) and neither the content
+     * nor the existence of each blob needs to be checked.
+     */
+    bool valref_noload;
 
     /* Inline value (val) and symbolic link (symlink) objects.  May be NULL.
      */

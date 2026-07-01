@@ -125,6 +125,8 @@ struct collector {
     int valref_blob_errors;
     int errors;
     int valref_requests;        // times valref_request override was called
+    int descend_calls;          // times descend predicate was called
+    const char *prune_path;     // descend returns false for this path (or NULL)
     enum kvs_treewalk_error last_error;
 };
 
@@ -193,6 +195,16 @@ static flux_future_t *on_valref_request_fail (void *arg, const char *blobref)
 {
     errno = ENOMEM;
     return NULL;
+}
+
+/* descend predicate: count calls and prune the configured path. */
+static bool on_descend (void *arg, const char *path, const char *blobref)
+{
+    struct collector *c = arg;
+    c->descend_calls++;
+    if (c->prune_path && streq (path, c->prune_path))
+        return false;
+    return true;
 }
 
 static struct kvs_treewalk_ops test_ops = {
@@ -496,6 +508,63 @@ static void test_request_failure (flux_t *h, struct blobstore *bs)
     free (rootref);
 }
 
+/* The descend predicate can prune a subtree: returning false for the 'sub'
+ * dirref stops the walker from loading it, so 'sub/deep' is never visited.
+ */
+static void test_descend_prune (flux_t *h, struct blobstore *bs)
+{
+    char *rootref = build_tree (bs, 4);
+    struct collector c;
+    struct kvs_treewalk *tw;
+    struct kvs_treewalk_ops ops = test_ops;
+    ops.descend = on_descend;
+
+    collector_init (&c, h);
+    c.prune_path = "sub";
+    tw = kvs_treewalk_create (h, rootref, '/', 4, 0, &ops, &c);
+    ok (kvs_treewalk_run (tw) == 0, "walk with descend prune ok");
+    ok (c.descend_calls == 1, "descend called once for the 'sub' dirref (got %d)",
+        c.descend_calls);
+    ok (visited_has (&c, "sub"), "'sub' dirref still visited before prune");
+    ok (!visited_has (&c, "sub/deep"),
+        "'sub/deep' not visited (subtree pruned)");
+    ok (c.values == 1, "only root-level val visited, deep val pruned (got %d)",
+        c.values);
+    ok (c.errors == 0, "prune reports no error (got %d)", c.errors);
+    kvs_treewalk_destroy (tw);
+    collector_fini (&c);
+    free (rootref);
+}
+
+/* With valref_noload set, the valref object is still reported through visit()
+ * but no blob loads are issued and valref_done() is never called.
+ */
+static void test_valref_noload (flux_t *h, struct blobstore *bs)
+{
+    char *rootref = build_tree (bs, 4);
+    struct collector c;
+    struct kvs_treewalk *tw;
+    struct kvs_treewalk_ops ops = test_ops;
+    ops.valref_noload = true;
+    ops.valref_request = on_valref_request; // must be ignored when noload set
+
+    collector_init (&c, h);
+    tw = kvs_treewalk_create (h, rootref, '/', 4, 0, &ops, &c);
+    ok (kvs_treewalk_run (tw) == 0, "walk with valref_noload ok");
+    ok (visited_has (&c, "big"), "valref object still visited");
+    ok (c.valrefs_done == 0, "valref_done not called when noload set (got %d)",
+        c.valrefs_done);
+    ok (c.valref_requests == 0,
+        "valref_request not called when noload set (got %d)",
+        c.valref_requests);
+    ok (c.valref_total_bytes == 0, "no valref blob bytes fetched (got %d)",
+        c.valref_total_bytes);
+    ok (c.errors == 0, "valref_noload reports no error (got %d)", c.errors);
+    kvs_treewalk_destroy (tw);
+    collector_fini (&c);
+    free (rootref);
+}
+
 static void test_invalid_args (flux_t *h)
 {
     struct collector c;
@@ -534,6 +603,8 @@ int main (int argc, char *argv[])
     test_separator (h, &bs);
     test_inline_dir (h, &bs);
     test_valref_request_override (h, &bs);
+    test_descend_prune (h, &bs);
+    test_valref_noload (h, &bs);
     test_missing_dirref (h, &bs);
     test_missing_valref_blob (h, &bs);
     test_request_failure (h, &bs);
