@@ -126,6 +126,7 @@ const char *sql_count_sweep_candidates = "SELECT COUNT(*) FROM objects WHERE epo
 struct content_stats {
     tstat_t load;
     tstat_t store;
+    tstat_t batch;  // stores per group-committed transaction
 };
 
 struct content_sqlite {
@@ -341,6 +342,7 @@ static int batch_commit (struct content_sqlite *ctx)
         return -1;
     }
     ctx->in_batch = false;
+    tstat_push (&ctx->stats.batch, ctx->batch_count);
     ctx->batch_count = 0;
     batch_respond_pending (ctx, 0);
     return 0;
@@ -651,6 +653,7 @@ void store_cb (flux_t *h,
     }
     p->msg = flux_msg_incref (msg);
     list_add_tail (&ctx->batch_pending, &p->list);
+    ctx->batch_count++;
     tstat_push (&ctx->stats.store, monotime_since (t0));
 
     /* Commit when the burst drains (opportunistic), or a ceiling is hit.
@@ -662,7 +665,7 @@ void store_cb (flux_t *h,
      * never drains.
      */
     bool drained = !(flux_pollevents (h) & FLUX_POLLIN);
-    if (drained || ++ctx->batch_count >= BATCH_COUNT_MAX) {
+    if (drained || ctx->batch_count >= BATCH_COUNT_MAX) {
         if (batch_commit (ctx) < 0)
             flux_log_error (h, "store: batch commit failed");
     }
@@ -1019,6 +1022,7 @@ void stats_get_cb (flux_t *h,
     flux_error_t error;
     json_t *load_time = NULL;
     json_t *store_time = NULL;
+    json_t *batch_size = NULL;
     json_t *checkpoints = NULL;
 
     if (sqlite3_exec (ctx->db,
@@ -1031,7 +1035,8 @@ void stats_get_cb (flux_t *h,
         goto error;
     }
     if (!(load_time = pack_tstat (&ctx->stats.load))
-        || !(store_time = pack_tstat (&ctx->stats.store)))
+        || !(store_time = pack_tstat (&ctx->stats.store))
+        || !(batch_size = pack_tstat (&ctx->stats.batch)))
         goto error;
     if (!(checkpoints = stats_checkpoints (ctx, &error))) {
         errmsg = error.text;
@@ -1039,20 +1044,23 @@ void stats_get_cb (flux_t *h,
     }
     if (flux_respond_pack (h,
                            msg,
-                           "{s:I s:I s:I s:I s:O s:O s:{s:s s:s} s:O}",
+                           "{s:I s:I s:I s:I s:O s:O s:O s:{s:s s:s s:f} s:O}",
                            "object_count", count,
                            "current_epoch", ctx->current_epoch,
                            "dbfile_size", get_file_size (ctx->dbfile),
                            "dbfile_free", get_fs_free (ctx->dbfile),
                            "load_time", load_time,
                            "store_time", store_time,
+                           "batch_size", batch_size,
                            "config",
                              "journal_mode", ctx->journal_mode,
                              "synchronous", ctx->synchronous,
+                             "batch_timeout", ctx->batch_timeout,
                            "checkpoints", checkpoints) < 0)
         flux_log_error (h, "error responding to stats-get request");
     json_decref (load_time);
     json_decref (store_time);
+    json_decref (batch_size);
     json_decref (checkpoints);
     return;
 error:
@@ -1060,6 +1068,7 @@ error:
         flux_log_error (h, "error responding to stats-get request");
     json_decref (load_time);
     json_decref (store_time);
+    json_decref (batch_size);
     json_decref (checkpoints);
 }
 
