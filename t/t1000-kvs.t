@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=asan
 
 test_description='Test flux-kvs and kvs in flux session
 
@@ -11,6 +12,7 @@ any other tests that require kvs functionality.
 
 . `dirname $0`/sharness.sh
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 # Size the session to one more than the number of cores, minimum of 4
@@ -478,7 +480,7 @@ test_expect_success 'kvs: treeobj of all types handled by get --treeobj' '
 '
 test_expect_success 'kvs: get --treeobj: returns value ref for large value' '
 	flux kvs unlink -Rf $DIR &&
-	dd if=/dev/zero bs=4096 count=1 | flux kvs put --raw $DIR.a=- &&
+	$NOASAN dd if=/dev/zero bs=4096 count=1 | flux kvs put --raw $DIR.a=- &&
 	flux kvs get --treeobj $DIR.a | grep -q \"valref\"
 '
 test_expect_success 'kvs: treeobj is created by put --treeobj' '

@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Test flux dump/restore'
 
@@ -6,6 +8,7 @@ test_description='Test flux dump/restore'
 
 test_under_flux 1 minimal -Sstatedir=$(pwd)
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 QUERYCMD="flux python ${FLUX_SOURCE_DIR}/t/scripts/sqlite-query.py"
 
 countblobs() {
@@ -367,11 +370,11 @@ test_expect_success LONGTEST 'unload content-sqlite' '
 
 test_expect_success 'create bigdump.tar with a 12M blob in it' '
 	mkdir -p big &&
-	dd if=/dev/zero of=big/tinyblob bs=1048576 count=1 &&
-	dd if=/dev/zero of=big/bigblob bs=1048576 count=12 &&
-	dd if=/dev/zero of=big/smallblob bs=1048576 count=3 &&
-	dd if=/dev/zero of=big/medblob bs=1048576 count=6 &&
-	dd if=/dev/zero of=big/med2blob bs=1048576 count=6 &&
+	$NOASAN dd if=/dev/zero of=big/tinyblob bs=1048576 count=1 &&
+	$NOASAN dd if=/dev/zero of=big/bigblob bs=1048576 count=12 &&
+	$NOASAN dd if=/dev/zero of=big/smallblob bs=1048576 count=3 &&
+	$NOASAN dd if=/dev/zero of=big/medblob bs=1048576 count=6 &&
+	$NOASAN dd if=/dev/zero of=big/med2blob bs=1048576 count=6 &&
 	tar cvf bigdump.tar big
 '
 test_expect_success 'restore bigdump.tar and verify blob count' '
@@ -386,7 +389,7 @@ test_expect_success 'restore bigdump.tar with size limit' '
 	grep "restored 4 keys (6 blobs)" bigdump2.err
 '
 test_expect_success 'rc1 skips blob that exceeds 100M limit' '
-	dd if=/dev/zero of=big/hugeblob bs=1048576 count=120 &&
+	$NOASAN dd if=/dev/zero of=big/hugeblob bs=1048576 count=120 &&
 	tar cvf bigdump2.tar big &&
 	flux start -Scontent.restore=bigdump2.tar \
 		true 2>bigdump3.err &&

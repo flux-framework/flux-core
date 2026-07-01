@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Test flux job info service security'
 
@@ -7,6 +9,8 @@ test_description='Test flux job info service security'
 test_under_flux 1 job
 
 flux version | grep -q libflux-security && test_set_prereq FLUX_SECURITY
+
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 
 # Usage: submit_as_alternate_user cmd...
 submit_as_alternate_user()
@@ -264,7 +268,7 @@ test_expect_success 'flux job info fails on malformed eventlog (no submit userid
 
 test_expect_success 'flux job info fails on malformed eventlog (random garbage)' '
 	jobpath=`flux job id --to=kvs 123456789` &&
-        dd if=/dev/urandom bs=64 count=1 > binary.out &&
+        $NOASAN dd if=/dev/urandom bs=64 count=1 > binary.out &&
 	flux kvs put --raw "${jobpath}.eventlog"=- < binary.out &&
         test_must_fail flux job info 123456789 dummy 2>malevent6.err &&
 	grep "error parsing eventlog" malevent6.err

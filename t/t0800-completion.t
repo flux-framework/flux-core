@@ -1,5 +1,7 @@
 #!/bin/bash
 #
+# ci=asan
+#
 
 test_description='Test bash completions for flux commands'
 

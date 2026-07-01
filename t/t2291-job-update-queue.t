@@ -1,4 +1,7 @@
 #!/bin/sh
+#
+# ci=asan
+
 test_description='Test update of job queue'
 
 . $(dirname $0)/sharness.sh

@@ -1,5 +1,7 @@
 #!/bin/sh
 #
+# ci=asan
+
 test_description='Test flux-submit/flux-shell taskmap plugin support'
 
 . `dirname $0`/sharness.sh

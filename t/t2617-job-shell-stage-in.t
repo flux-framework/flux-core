@@ -1,8 +1,12 @@
 #!/bin/sh
 #
+# ci=asan
+
 test_description='Test flux-shell stage-in plugin support'
 
 . `dirname $0`/sharness.sh
+
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 
 lptest="flux lptest"
 
@@ -113,7 +117,7 @@ test_expect_success 'remove archives' '
 	flux archive remove --name=red
 '
 test_expect_success 'create a test file with random content' '
-        dd if=/dev/urandom of=foo bs=4096 count=1 conv=notrunc
+        $NOASAN dd if=/dev/urandom of=foo bs=4096 count=1 conv=notrunc
 '
 test_expect_success 'map test file and access it to prime the cache' '
 	mkdir -p copydir &&
@@ -122,7 +126,7 @@ test_expect_success 'map test file and access it to prime the cache' '
 	cmp foo copydir/foo
 '
 test_expect_success 'modify mapped test file without reducing its size' '
-        dd if=/dev/zero of=foo bs=4096 count=1 conv=notrunc
+        $NOASAN dd if=/dev/zero of=foo bs=4096 count=1 conv=notrunc
 '
 test_expect_success 'content change should cause an error' '
         test_must_fail flux run -N1 -o stage-in true 2>changed.err &&

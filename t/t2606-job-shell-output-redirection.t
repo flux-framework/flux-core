@@ -1,11 +1,14 @@
 #!/bin/sh
 #
+# ci=asan
+
 test_description='Test flux-shell'
 
 . `dirname $0`/sharness.sh
 
 test_under_flux 4 job -Slog-stderr-level=1
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
 
 #
@@ -362,7 +365,7 @@ test_expect_success 'job-shell: stderr truncation works' '
 	grep "stderr.*truncated" trunc2.error
 '
 test_expect_success LONGTEST 'job-shell: no truncation at 10MB for single-user job' '
-	dd if=/dev/urandom bs=10240 count=800 | base64 --wrap 79 >10M+ &&
+	$NOASAN dd if=/dev/urandom bs=10240 count=800 | base64 --wrap 79 >10M+ &&
 	flux run cat 10M+ >10M+.output &&
 	test_cmp 10M+ 10M+.output
 '

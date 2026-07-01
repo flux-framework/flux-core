@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Test content-sqlite service'
 
@@ -15,6 +17,7 @@ PURGE_TARGET_SIZE=100
 PURGE_OLD_ENTRY=1
 FLUSH_BATCH_LIMIT=5
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SPAMUTIL="${FLUX_BUILD_DIR}/t/kvs/content-spam"
@@ -55,11 +58,11 @@ test_expect_success 'store 100 blobs on rank 0' '
 test_expect_success 'store blobs bypassing cache' '
 	cat /dev/null >0.0.store &&
 	flux content store --bypass-cache <0.0.store >0.0.hash &&
-	dd if=/dev/urandom count=1 bs=64 >64.0.store 2>/dev/null &&
+	$NOASAN dd if=/dev/urandom count=1 bs=64 >64.0.store 2>/dev/null &&
 	flux content store --bypass-cache <64.0.store >64.0.hash &&
-	dd if=/dev/urandom count=1 bs=4096 >4k.0.store 2>/dev/null &&
+	$NOASAN dd if=/dev/urandom count=1 bs=4096 >4k.0.store 2>/dev/null &&
 	flux content store --bypass-cache <4k.0.store >4k.0.hash &&
-	dd if=/dev/urandom count=256 bs=4096 >1m.0.store 2>/dev/null &&
+	$NOASAN dd if=/dev/urandom count=256 bs=4096 >1m.0.store 2>/dev/null &&
 	flux content store --bypass-cache <1m.0.store >1m.0.hash
 '
 
@@ -329,14 +332,14 @@ load_module_xfail()
 # FWIW https://www.sqlite.org/fileformat.html
 test_expect_success 'create database with bad header magic' '
 	recreate_database &&
-	echo "xxxxxxxxxxxxxxxx" | dd obs=1 count=16 seek=0 of=content.sqlite
+	echo "xxxxxxxxxxxxxxxx" | $NOASAN dd obs=1 count=16 seek=0 of=content.sqlite
 '
 test_expect_success 'module load fails with corrupt database' '
 	test_must_fail load_module_xfail
 '
 test_expect_success 'create database with bad schema format number' '
 	recreate_database &&
-	echo "\001\001\001\001" | dd obs=1 count=4 seek=44 of=content.sqlite
+	echo "\001\001\001\001" | $NOASAN dd obs=1 count=4 seek=44 of=content.sqlite
 '
 test_expect_success 'module load fails with corrupt database' '
 	test_must_fail load_module_xfail

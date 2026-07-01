@@ -21,6 +21,7 @@ if flux job submit --help 2>&1 | grep -q sign-type; then
 	   && test_set_prereq SIGN_WRAP
 fi
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 TMPDIR=$(cd /tmp && $(which pwd))
 
 test_expect_success 'flux exec --jobid fails with invalid job id' '
@@ -157,7 +158,7 @@ test_expect_success SIGN_WRAP 'signed exec uses signed write requests' '
 # exit status. This version does not forward signals to children, so
 # it breaks the test below. Detect versions of stdbuf that don't exec
 # their arguments and skip the test if found.
-if test $(stdbuf --output=L sh -c 'ps -q $PPID -o comm=') != "stdbuf"; then
+if test $(stdbuf --output=L sh -c '$NOASAN ps -q $PPID -o comm=') != "stdbuf"; then
 	test_set_prereq WORKING_STDBUF
 fi
 
