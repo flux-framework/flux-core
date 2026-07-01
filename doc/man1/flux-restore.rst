@@ -68,6 +68,13 @@ OPTIONS
    suffix k or K=1024, M=1024\*1024, or G=1024\*1024\*1024 (up to
    ``INT_MAX``).
 
+.. option:: --maxreqs=N
+
+   Limit the number of concurrent content store requests to N (default 256).
+   Restoring a large archive (e.g. an instance with many inactive jobs)
+   pipelines its store requests to hide the per-request round-trip latency;
+   this option caps the number in flight at once.
+
 .. option:: --sd-notify
 
    Regularly inform the broker of progress so it can provide human readable

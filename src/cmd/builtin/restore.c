@@ -29,6 +29,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libcontent/content.h"
+#include "src/common/libccan/ccan/list/list.h"
 #include "ccan/str/str.h"
 
 #include "builtin.h"
@@ -43,6 +44,37 @@ static time_t restore_timestamp;
 static int blobcount;
 static int keycount;
 static int blob_size_limit;
+static int store_window;
+
+/* Shared bounded-window engine for asynchronous content_store requests.
+ * Both restore phases (value blobs, then directory objects) issue stores
+ * through one of these, capping the number of in-flight content.store RPCs
+ * at 'window' to hide the per-request round-trip latency that otherwise
+ * serializes restore of a large KVS (e.g. an instance with many inactive
+ * jobs).  Continuations run one at a time on the reactor thread.
+ */
+struct store_ctx {
+    flux_t *h;
+    const char *hash_type;  // borrowed
+    int window;             // max in-flight content.store RPCs
+    int in_flight;          // outstanding content.store RPCs
+};
+
+/* Run the reactor until the number of in-flight stores drops to 'limit',
+ * one completion at a time.  With limit = window - 1 this throttles a
+ * synchronous producer to the window; with limit = 0 it drains all stores.
+ * Store errors are fatal (continuations log_msg_exit), so there is nothing
+ * to check for on return.
+ */
+static void store_ctx_wait (struct store_ctx *ctx, int limit)
+{
+    flux_reactor_t *r = flux_get_reactor (ctx->h);
+
+    while (ctx->in_flight > limit) {
+        if (flux_reactor_run (r, FLUX_REACTOR_ONCE) < 0)
+            log_err_exit ("flux_reactor_run");
+    }
+}
 
 static void progress_notify (flux_t *h)
 {
@@ -124,45 +156,163 @@ static void restore_destroy (struct archive *ar)
     archive_read_free (ar);
 }
 
-static json_t *restore_dir (flux_t *h, const char *hash_type, json_t *dir)
+/* One directory object awaiting store.  The directory tree is stored
+ * bottom-up: a directory's treeobj cannot be encoded and stored until all of
+ * its child directories have been stored and their dirref objects substituted
+ * into it.  'dir' points at the live node in the in-memory tree, which is
+ * mutated in place as child dirrefs replace child dir entries.
+ *
+ * Dirs with no unstored children are "ready" and are linked through 'list'
+ * into a single ready list (order is irrelevant) owned by the dir_walk
+ * below.  A node is on the list at most once.
+ */
+struct dir_op {
+    struct dir_walk *walk;  // shared walk state
+    json_t *dir;            // borrowed: node in the in-memory tree
+    struct dir_op *parent;  // NULL for root
+    char *child_name;       // name of 'dir' in parent->dir; NULL for root
+    int pending_children;   // child dirs not yet stored
+    struct list_node list;  // ready-list link
+};
+
+/* State shared across a bottom-up directory store walk. */
+struct dir_walk {
+    struct store_ctx *ctx;
+    struct list_head ready; // dirs ready to store
+    json_t *rootref;        // final root dirref, set when the root completes
+};
+
+static void dir_pump (struct dir_walk *walk);
+
+/* Recursively create a dir_op for 'dir' and each of its descendant
+ * directories, counting child directories so leaves (no child dirs) are
+ * immediately marked ready.
+ */
+static void build_dir_ops (struct dir_walk *walk,
+                           json_t *dir,
+                           struct dir_op *parent,
+                           const char *child_name)
 {
     json_t *data = treeobj_get_data (dir);
     const char *name;
     json_t *entry;
-    json_t *ndir;
+    struct dir_op *op;
 
-    if (!(ndir = treeobj_create_dir ()))
+    if (!(op = calloc (1, sizeof (*op))))
         log_msg_exit ("out of memory");
-    json_object_foreach (data, name, entry) {
-        json_t *nentry = NULL;
-        if (treeobj_is_dir (entry)) // recurse
-            nentry = restore_dir (h, hash_type, entry);
-        if (treeobj_insert_entry_novalidate (ndir,
-                                             name,
-                                             nentry ? nentry : entry) < 0)
-            log_msg_exit ("error inserting object");
-        json_decref (nentry);
-    }
+    op->walk = walk;
+    op->dir = dir;
+    op->parent = parent;
+    if (child_name && !(op->child_name = strdup (child_name)))
+        log_msg_exit ("out of memory");
 
-    char *s;
-    flux_future_t *f;
+    json_object_foreach (data, name, entry) {
+        if (treeobj_is_dir (entry)) { // recurse
+            build_dir_ops (walk, entry, op, name);
+            op->pending_children++;
+        }
+    }
+    if (op->pending_children == 0)
+        list_add_tail (&walk->ready, &op->list);
+}
+
+/* content.store completion for a directory object: build its dirref and
+ * substitute it into the parent (making the parent ready once its last
+ * child completes), or record it as the final root dirref.
+ */
+static void dirref_continuation (flux_future_t *f, void *arg)
+{
+    struct dir_op *op = arg;
+    struct dir_walk *walk = op->walk;
+    struct store_ctx *ctx = walk->ctx;
     const char *blobref;
     json_t *dirref;
 
-    if (!(s = treeobj_encode (ndir)))
-        log_msg_exit ("out of memory");
-    if (!(f = content_store (h, s, strlen (s), content_flags))
-        || content_store_get_blobref (f, hash_type, &blobref) < 0)
+    ctx->in_flight--;
+    if (content_store_get_blobref (f, ctx->hash_type, &blobref) < 0)
         log_msg_exit ("error storing dirref blob: %s",
                       future_strerror (f, errno));
-    progress (h, 1, 0);
+    progress (ctx->h, 1, 0);
     if (!(dirref = treeobj_create_dirref (blobref)))
         log_msg_exit ("out of memory");
-    free (s);
+    if (op->parent) {
+        if (treeobj_insert_entry_novalidate (op->parent->dir,
+                                             op->child_name,
+                                             dirref) < 0)
+            log_msg_exit ("error inserting dirref for %s", op->child_name);
+        json_decref (dirref);
+        if (--op->parent->pending_children == 0)
+            list_add_tail (&walk->ready, &op->parent->list);
+    }
+    else
+        walk->rootref = dirref; // transfer ownership to caller
     flux_future_destroy (f);
-    json_decref (ndir);
+    free (op->child_name);
+    free (op);
+    dir_pump (walk);
+}
 
-    return dirref;
+/* Issue directory stores from the ready list up to the window limit. */
+static void dir_pump (struct dir_walk *walk)
+{
+    struct store_ctx *ctx = walk->ctx;
+    struct dir_op *op;
+
+    while (ctx->in_flight < ctx->window
+           && (op = list_pop (&walk->ready, struct dir_op, list))) {
+        char *s;
+        flux_future_t *f;
+
+        if (!(s = treeobj_encode (op->dir)))
+            log_msg_exit ("out of memory");
+        if (!(f = content_store (ctx->h, s, strlen (s), content_flags))
+            || flux_future_then (f, -1, dirref_continuation, op) < 0)
+            log_msg_exit ("error storing dirref blob: %s",
+                          future_strerror (f, errno));
+        free (s);
+        ctx->in_flight++;
+    }
+}
+
+static struct dir_walk *dir_walk_create (struct store_ctx *ctx)
+{
+    struct dir_walk *walk;
+
+    if (!(walk = calloc (1, sizeof (*walk))))
+        return NULL;
+    walk->ctx = ctx;
+    list_head_init (&walk->ready);
+    return walk;
+}
+
+static void dir_walk_destroy (struct dir_walk *walk)
+{
+    if (walk) {
+        int saved_errno = errno;
+        free (walk);
+        errno = saved_errno;
+    }
+}
+
+/* Store all directory objects in the in-memory tree bottom-up through the
+ * bounded store window and return the root dirref.
+ */
+static json_t *restore_dir_async (struct store_ctx *ctx, json_t *root)
+{
+    json_t *result;
+    struct dir_walk *walk;
+
+    if (!(walk = dir_walk_create (ctx)))
+        return NULL;
+    build_dir_ops (walk, root, NULL, NULL);
+    dir_pump (walk);
+    if (flux_reactor_run (flux_get_reactor (ctx->h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
+
+    result = walk->rootref;
+    dir_walk_destroy (walk);
+
+    return result;
 }
 
 static void restore_treeobj (json_t *root, const char *path, json_t *treeobj)
@@ -233,13 +383,49 @@ static void restore_symlink (flux_t *h,
     progress (h, 0, 1);
 }
 
-static void restore_value (flux_t *h,
-                           const char *hash_type,
-                           json_t *root,
-                           const char *path,
-                           const void *buf,
-                           int size)
+/* One in-flight value-blob store.  'root' and 'ctx' are borrowed; 'path' is
+ * owned and freed by the continuation.  The value data is not retained: it
+ * has been copied into the content.store request message by the time the
+ * store is issued (see restore_value_async()).
+ */
+struct valref_op {
+    struct store_ctx *ctx;
+    json_t *root;
+    char *path;
+};
+
+/* content.store completion for a value blob: turn the returned blobref into a
+ * valref treeobj and insert it into the in-memory tree at the stashed path.
+ */
+static void valref_continuation (flux_future_t *f, void *arg)
 {
+    struct valref_op *op = arg;
+    struct store_ctx *ctx = op->ctx;
+    const char *blobref;
+    json_t *treeobj;
+
+    ctx->in_flight--;
+    if (content_store_get_blobref (f, ctx->hash_type, &blobref) < 0)
+        log_msg_exit ("error storing blob for %s: %s",
+                      op->path,
+                      future_strerror (f, errno));
+    progress (ctx->h, 1, 1);
+    if (!(treeobj = treeobj_create_valref (blobref)))
+        log_err_exit ("error creating valref object for %s", op->path);
+    restore_treeobj (op->root, op->path, treeobj);
+    json_decref (treeobj);
+    flux_future_destroy (f);
+    free (op->path);
+    free (op);
+}
+
+static void restore_value_async (struct store_ctx *ctx,
+                                 json_t *root,
+                                 const char *path,
+                                 const void *buf,
+                                 int size)
+{
+    flux_t *h = ctx->h;
     json_t *treeobj;
 
     if (size < BLOBREF_MAX_STRING_SIZE) {
@@ -247,22 +433,54 @@ static void restore_value (flux_t *h,
             log_err_exit ("error creating val object for %s", path);
     }
     else {
+        struct valref_op *op;
         flux_future_t *f;
-        const char *blobref;
 
+        /* Issue the store through the bounded window.  content_store()
+         * copies 'buf' into the request message before returning, so the
+         * caller's buffer may be reused as soon as this returns; the
+         * continuation completes the valref insertion later.
+         */
+        store_ctx_wait (ctx, ctx->window - 1);
+        if (!(op = calloc (1, sizeof (*op)))
+            || !(op->path = strdup (path)))
+            log_msg_exit ("out of memory");
+        op->ctx = ctx;
+        op->root = root;
         if (!(f = content_store (h, buf, size, content_flags))
-            || content_store_get_blobref (f, hash_type, &blobref) < 0)
+            || flux_future_then (f, -1, valref_continuation, op) < 0)
             log_msg_exit ("error storing blob for %s: %s",
                           path,
                           future_strerror (f, errno));
-        progress (h, 1, 0);
-        if (!(treeobj = treeobj_create_valref (blobref)))
-            log_err_exit ("error creating valref object for %s", path);
-        flux_future_destroy (f);
+        ctx->in_flight++;
+        return; // key count is bumped by valref_continuation on completion
     }
     restore_treeobj (root, path, treeobj);
     json_decref (treeobj);
     progress (h, 0, 1);
+}
+
+static struct store_ctx *store_ctx_create (flux_t *h,
+                                           const char *hash_type,
+                                           int window)
+{
+    struct store_ctx *ctx;
+
+    if (!(ctx = calloc (1, sizeof (*ctx))))
+        return NULL;
+    ctx->h = h;
+    ctx->hash_type = hash_type;
+    ctx->window = window;
+    return ctx;
+}
+
+static void store_ctx_destroy (struct store_ctx *ctx)
+{
+    if (ctx) {
+        int saved_errno = errno;
+        free (ctx);
+        errno = saved_errno;
+    }
 }
 
 /* Restore archive and return a 'dirref' object pointing to it.
@@ -275,8 +493,10 @@ static json_t *restore_snapshot (struct archive *ar,
     int bufsize = 0;
     json_t *root;
     json_t *rootref;
+    struct store_ctx *ctx;
 
-    if (!(root = treeobj_create_dir ()))
+    if (!(ctx = store_ctx_create (h, hash_type, store_window))
+        || !(root = treeobj_create_dir ()))
         log_msg_exit ("out of memory");
 
     for (;;) {
@@ -333,13 +553,15 @@ static json_t *restore_snapshot (struct archive *ar,
                 else
                     log_msg_exit ("short read from archive");
             }
-            restore_value (h, hash_type, root, path, buf, size);
+            restore_value_async (ctx, root, path, buf, size);
             if (verbose)
                 fprintf (stderr, "%s\n", path);
         }
     }
     free (buf);
-    rootref = restore_dir (h, hash_type, root);
+    store_ctx_wait (ctx, 0);  // drain in-flight value stores (phase A)
+    rootref = restore_dir_async (ctx, root);
+    store_ctx_destroy (ctx);
     json_decref (root);
 
     return rootref;
@@ -405,6 +627,9 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
         kvs_checkpoint_flags |= KVS_CHECKPOINT_FLAG_CACHE_BYPASS;
     }
     blob_size_limit = optparse_get_size_int (p, "size-limit", "0");
+    store_window = optparse_get_int (p, "maxreqs", 256);
+    if (store_window <= 0)
+        log_err_exit ("invalid value for maxreqs");
 
     h = builtin_get_flux_handle (p);
 
@@ -514,6 +739,9 @@ static struct optparse_option restore_opts[] = {
     },
     { .name = "size-limit", .has_arg = 1, .arginfo = "SIZE",
       .usage = "Do not restore blobs greater than SIZE bytes",
+    },
+    { .name = "maxreqs", .has_arg = 1, .arginfo = "N",
+      .usage = "Max concurrent content store requests (default 256)",
     },
     { .name = "sd-notify", .has_arg = 0,
       .usage = "Send status updates to systemd via flux-broker(1)",
