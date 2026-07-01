@@ -28,9 +28,11 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libutil/fsd.h"
 #include "src/common/libkvs/kvs_checkpoint.h"
 
 #include "src/common/libcontent/content-util.h"
+#include "src/common/libccan/ccan/list/list.h"
 #include "ccan/str/str.h"
 
 const size_t lzo_buf_chunksize = 1024*1024;
@@ -101,6 +103,50 @@ struct content_sqlite {
     char *synchronous;
     int max_checkpoints;
     bool truncate;
+
+    /* Group commit: when batch_timeout > 0, store inserts are grouped
+     * into an explicit transaction to amortize per-commit WAL overhead across
+     * many blobs. A store request is NOT answered until the transaction that
+     * includes it has committed, preserving content's guarantee that a store
+     * response implies the blob is durable.  Responses for all stores in a
+     * batch are therefore held on batch_pending and sent together by
+     * batch_commit().
+     *
+     * Grouping is opportunistic: the open batch is committed as soon as no
+     * more store requests are queued behind the current one (flux_pollevents),
+     * i.e. the burst has drained.  Under a sustained burst (e.g. flux-restore)
+     * stores pile into large transactions, while an isolated runtime store
+     * commits at once with no durability lag (no delay is ever added to wait
+     * for a batch to fill).  Two ceilings bound a batch that would otherwise
+     * never drain:
+     *  - batch_timeout seconds since the batch opened (bounds response
+     *  latency and WAL growth under a continuous burst),
+     *  - BATCH_COUNT_MAX stores accumulated (hard WAL-growth safety cap),
+     * plus boundaries: checkpoint-put and shutdown.
+     */
+    int batch_count;    // stores in the currently open transaction
+    bool in_batch;      // an explicit transaction is open
+    double batch_timeout;         // >0 enables group commit; max open-batch age
+    flux_watcher_t *batch_timer;  // one-shot, armed while a batch is open
+    struct list_head batch_pending; // store responses awaiting commit
+};
+
+/* Hard ceiling on stores per group-committed transaction if a burst never
+ * lets the recv queue drain.  Not user-tunable: the opportunistic drain check
+ * and batch_timeout are the normal commit triggers; this only caps a
+ * pathological continuous burst.  Note this bounds the store count, not bytes:
+ * batch_timeout is the primary bound on how long WAL growth can accumulate.
+ */
+#define BATCH_COUNT_MAX 65536
+
+/* A store request whose response is deferred until its batch commits.  'hash'
+ * is the computed blobref to return (always ctx->hash_size bytes); 'msg' is
+ * the borrowed request (ref held).
+ */
+struct pending_store {
+    struct list_node list;
+    const flux_msg_t *msg;
+    uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
 };
 
 static int set_config (char **conf, const char *val)
@@ -159,6 +205,92 @@ static void set_errno_from_sqlite_error (struct content_sqlite *ctx)
             errno = EINVAL;
             break;
     }
+}
+
+/* Begin an explicit write transaction for group-committed stores, and arm the
+ * timeout so the batch cannot stay open indefinitely when stores arrive
+ * slowly (which would keep blobs non-durable and grow the WAL unbounded).
+ */
+static int batch_begin (struct content_sqlite *ctx)
+{
+    if (sqlite3_exec (ctx->db, "BEGIN", NULL, NULL, NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "batch: BEGIN");
+        set_errno_from_sqlite_error (ctx);
+        return -1;
+    }
+    ctx->in_batch = true;
+    ctx->batch_count = 0;
+    if (ctx->batch_timer) {
+        flux_timer_watcher_reset (ctx->batch_timer, ctx->batch_timeout, 0.);
+        flux_watcher_start (ctx->batch_timer);
+    }
+    return 0;
+}
+
+static void pending_store_destroy (struct pending_store *p)
+{
+    if (p) {
+        int saved_errno = errno;
+        flux_msg_decref (p->msg);
+        free (p);
+        errno = saved_errno;
+    }
+}
+
+/* Answer every deferred store response held for the just-completed batch.
+ * On success each gets its blobref; on failure each gets 'errnum'.
+ */
+static void batch_respond_pending (struct content_sqlite *ctx, int errnum)
+{
+    struct pending_store *p;
+
+    while ((p = list_pop (&ctx->batch_pending, struct pending_store, list))) {
+        if (errnum == 0) {
+            if (flux_respond_raw (ctx->h, p->msg, p->hash, ctx->hash_size) < 0)
+                flux_log_error (ctx->h, "store: flux_respond_raw");
+        }
+        else {
+            if (flux_respond_error (ctx->h, p->msg, errnum, NULL) < 0)
+                flux_log_error (ctx->h, "store: flux_respond_error");
+        }
+        pending_store_destroy (p);
+    }
+}
+
+/* Commit the open group-commit transaction, if any, disarm the timeout,
+ * and only then answer the deferred store responses (a response must not
+ * precede the durable commit).  Called on the size cap, at boundaries
+ * (checkpoint-put, shutdown), and from the batch timeout.
+ */
+static int batch_commit (struct content_sqlite *ctx)
+{
+    if (!ctx->in_batch)
+        return 0;
+    if (ctx->batch_timer)
+        flux_watcher_stop (ctx->batch_timer);
+    if (sqlite3_exec (ctx->db, "COMMIT", NULL, NULL, NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "batch: COMMIT");
+        set_errno_from_sqlite_error (ctx);
+        ctx->in_batch = false;
+        ctx->batch_count = 0;
+        batch_respond_pending (ctx, errno); // commit failed: fail them all
+        return -1;
+    }
+    ctx->in_batch = false;
+    ctx->batch_count = 0;
+    batch_respond_pending (ctx, 0);
+    return 0;
+}
+
+/* Batch timeout: commit whatever has accumulated so it doesn't age further. */
+static void batch_timer_cb (flux_reactor_t *r,
+                            flux_watcher_t *w,
+                            int revents,
+                            void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    if (batch_commit (ctx) < 0)
+        flux_log_error (ctx->h, "batch: timed commit failed");
 }
 
 static int grow_lzo_buf (struct content_sqlite *ctx, size_t size)
@@ -405,6 +537,7 @@ void store_cb (flux_t *h,
     size_t size;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
     int hash_size;
+    struct pending_store *p;
     struct timespec t0;
 
     if (flux_request_decode_raw (msg, NULL, &data, &size) < 0) {
@@ -412,15 +545,58 @@ void store_cb (flux_t *h,
         goto error;
     }
     monotime (&t0);
-    if ((hash_size = content_sqlite_store (ctx,
-                                           data,
-                                           size,
-                                           hash,
-                                           sizeof (hash))) < 0)
+    /* Unbatched: store and respond immediately (the store is durable per the
+     * synchronous/journal_mode settings once the autocommit returns).
+     */
+    if (ctx->batch_timeout == 0.) {
+        if ((hash_size = content_sqlite_store (ctx,
+                                               data,
+                                               size,
+                                               hash,
+                                               sizeof (hash))) < 0)
+            goto error;
+        tstat_push (&ctx->stats.store, monotime_since (t0));
+        if (flux_respond_raw (h, msg, hash, hash_size) < 0)
+            flux_log_error (h, "store: flux_respond_raw");
+        return;
+    }
+    /* Batched: run the INSERT inside an open transaction and defer the
+     * response until batch_commit() makes the blob durable (see policy at
+     * struct content_sqlite).
+     */
+    if (!ctx->in_batch) {
+        if (batch_begin (ctx) < 0)
+            goto error;
+    }
+    if (!(p = calloc (1, sizeof (*p))))
         goto error;
+    if (content_sqlite_store (ctx, data, size, p->hash, sizeof (p->hash)) < 0) {
+        /* This store failed; fail it directly.  Earlier stores in the batch
+         * are valid, so commit them (releasing their deferred responses)
+         * rather than losing the open transaction.
+         */
+        int saved_errno = errno;
+        pending_store_destroy (p);
+        (void)batch_commit (ctx);
+        errno = saved_errno;
+        goto error;
+    }
+    p->msg = flux_msg_incref (msg);
+    list_add_tail (&ctx->batch_pending, &p->list);
     tstat_push (&ctx->stats.store, monotime_since (t0));
-    if (flux_respond_raw (h, msg, hash, hash_size) < 0)
-        flux_log_error (h, "store: flux_respond_raw");
+
+    /* Commit when the burst drains (opportunistic), or a ceiling is hit.  The
+     * deferred responses are released by batch_commit().  FLUX_POLLIN on our
+     * handle means another request is already queued behind this one, so the
+     * burst has not drained yet and the batch keeps growing.  This per-store
+     * check keeps an isolated store from waiting for the timeout; the timeout
+     * and BATCH_COUNT_MAX bound the batch if the queue never drains.
+     */
+    bool drained = !(flux_pollevents (h) & FLUX_POLLIN);
+    if (drained || ++ctx->batch_count >= BATCH_COUNT_MAX) {
+        if (batch_commit (ctx) < 0)
+            flux_log_error (h, "store: batch commit failed");
+    }
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
@@ -528,6 +704,12 @@ void checkpoint_put_cb (flux_t *h,
                              "{s:o}",
                              "value", &o) < 0)
         goto error;
+    /* Flush any pending group-committed stores before recording a checkpoint
+     * that may reference them, so the checkpoint is never durable ahead of its
+     * blobs.
+     */
+    if (batch_commit (ctx) < 0)
+        goto error;
     if (!(value = json_dumps (o, JSON_COMPACT))) {
         errstr = "failed to encode checkpoint value";
         errno = EINVAL;
@@ -625,6 +807,8 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
+        /* Commit any pending group-committed stores before teardown. */
+        (void)batch_commit (ctx);
         if (ctx->validate_stmt) {
             if (sqlite3_finalize (ctx->validate_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize validate_stmt");
@@ -1030,6 +1214,7 @@ static void content_sqlite_destroy (struct content_sqlite *ctx)
     if (ctx) {
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
+        flux_watcher_destroy (ctx->batch_timer);
         free (ctx->dbfile);
         free (ctx->lzo_buf);
         free (ctx->hashfun);
@@ -1097,6 +1282,8 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
     if (set_config (&ctx->synchronous, "NORMAL") < 0)
         goto error;
     ctx->max_checkpoints = MAX_CHECKPOINTS_DEFAULT;
+    ctx->batch_timeout = 0.1;   // enable group commit by default (0 disables)
+    list_head_init (&ctx->batch_pending);
 
     /* Some tunables:
      * - the hash function, e.g. sha1, sha256
@@ -1179,15 +1366,23 @@ static int process_config (struct content_sqlite *ctx,
     const char *journal_mode = NULL;
     const char *synchronous = NULL;
     int tmp_max_checkpoints = ctx->max_checkpoints;
+    const char *batch_timeout = NULL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?s s?i}}",
+                          "{s?{s?s s?s s?i s?s}}",
                           "content-sqlite",
                             "journal_mode", &journal_mode,
                             "synchronous", &synchronous,
-                            "max_checkpoints", &tmp_max_checkpoints) < 0) {
+                            "max_checkpoints", &tmp_max_checkpoints,
+                            "batch_timeout", &batch_timeout) < 0) {
         flux_log_error (ctx->h, "%s", error.text);
+        return -1;
+    }
+    if (batch_timeout && fsd_parse_duration (batch_timeout,
+                                             &ctx->batch_timeout) < 0) {
+        flux_log (ctx->h, LOG_ERR, "invalid content-sqlite.batch_timeout");
+        errno = EINVAL;
         return -1;
     }
     if (journal_mode) {
@@ -1257,6 +1452,15 @@ static int process_args (struct content_sqlite *ctx,
             }
             ctx->max_checkpoints = tmp_max_checkpoints;
         }
+        else if (strstarts (argv[i], "batch-timeout=")) {
+            double tmp;
+            if (fsd_parse_duration (argv[i] + 14, &tmp) < 0) {
+                flux_log (ctx->h, LOG_ERR, "invalid batch-timeout specified");
+                errno = EINVAL;
+                return -1;
+            }
+            ctx->batch_timeout = tmp;
+        }
         else if (streq ("truncate", argv[i])) {
             *truncate = true;
         }
@@ -1284,6 +1488,19 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     if (process_args (ctx, argc, argv, &truncate) < 0)
         goto done;
+    /* Create the batch timeout watcher only when group commit is enabled;
+     * the NULL batch_timer otherwise signals batching is off.
+     */
+    if (ctx->batch_timeout > 0.
+        && !(ctx->batch_timer = flux_timer_watcher_create (
+                                        flux_get_reactor (h),
+                                        ctx->batch_timeout,
+                                        0.,
+                                        batch_timer_cb,
+                                        ctx))) {
+        flux_log_error (h, "flux_timer_watcher_create");
+        goto done;
+    }
     if (content_sqlite_opendb (ctx, truncate) < 0)
         goto done;
     if (content_sqlite_table_exists (ctx, "checkpt", &exists) < 0
