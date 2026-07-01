@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.0
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
@@ -19,15 +19,15 @@ jobs:
   spelling:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.0
     - name: Check Spelling
-      uses: crate-ci/typos@v1.47.0
+      uses: crate-ci/typos@v1.48.0
 
   coccinelle:
     name: coccinelle
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.0
     - name: install coccinelle
       run: sudo apt update; sudo apt install -y coccinelle
     - name: run coccinelle checks
@@ -45,8 +45,8 @@ jobs:
     name: python linting
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/setup-python@v6.2.0
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/setup-python@v6.3.0
+    - uses: actions/checkout@v7.0.0
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
@@ -60,7 +60,7 @@ jobs:
     name: flux-sched check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.0
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
@@ -78,7 +78,7 @@ jobs:
     name: flux-accounting check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.0
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
@@ -94,7 +94,7 @@ jobs:
     name: flux-pmix check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.0
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
@@ -116,7 +116,7 @@ jobs:
     name: flux-pam check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.0
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
@@ -136,7 +136,7 @@ jobs:
     name: macos build only
     runs-on: macos-14
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.0
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
@@ -159,7 +159,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.0
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
@@ -185,7 +185,7 @@ jobs:
       fail-fast: false
     name: ${{matrix.name}}
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.0
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
@@ -207,7 +207,7 @@ jobs:
     - name: setup python
       env: ${{matrix.env}}
       if: matrix.coverage
-      uses: actions/setup-python@v6.2.0
+      uses: actions/setup-python@v6.3.0
       with:
         # Use python3.12 to ensure compatbility with coverage tool:
         python-version: '3.12'
@@ -252,7 +252,7 @@ jobs:
       if: success() && matrix.coverage
       env:
         DOCKER_REPO:
-      uses: codecov/codecov-action@v6.0.1
+      uses: codecov/codecov-action@v7.0.0
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         flags: ${{matrix.coverage_flags}}
@@ -269,7 +269,7 @@ jobs:
         && matrix.create_release
         && github.repository == 'flux-framework/flux-core'
       env: ${{matrix.env}}
-      uses: softprops/action-gh-release@v3.0.0
+      uses: softprops/action-gh-release@v3.0.1
       with:
         tag_name: ${{ matrix.tag }}
         name: flux-core ${{ matrix.tag }}
@@ -289,7 +289,7 @@ jobs:
       DOCKER_PASSWORD: ${{ secrets.DOCKER_HUB_TRAVISFLUX_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.0
     - name: make and push manifest as fluxrm/flux-core
       run: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
