@@ -11,6 +11,7 @@ Test exec functionality
 SIZE=4
 test_under_flux ${SIZE} minimal
 
+NOASAN="${SHARNESS_TEST_SRCDIR}/util/no-asan-wrapper.sh"
 rkill="flux sproc kill"
 rps="flux sproc ps"
 rwait="flux sproc wait"
@@ -146,6 +147,7 @@ test_expect_success 'flux exec exits with code 126 for non executable' '
 	grep "Permission denied" exec.stderr2
 '
 
+# N.B. skip under ASAN, as it may capture segfault signal and report differently
 test_expect_success NO_ASAN 'flux exec passes non-zero exit status' '
 	test_expect_code 2 flux exec -n sh -c "exit 2" &&
 	test_expect_code 3 flux exec -n sh -c "exit 3" &&
@@ -158,6 +160,7 @@ test_expect_success 'flux exec fails with --with-imp if no IMP configured' '
 	grep "exec\.imp path not found in config" exec-no-imp.out
 '
 
+# N.B. skip under ASAN, as it may capture segfault signal and report differently
 test_expect_success NO_ASAN 'flux exec outputs tasks with errors' '
 	! flux exec -n sh -c "exit 2" > 2.out 2>&1 &&
         grep "\[0-3\]: Exit 2" 2.out &&
@@ -196,7 +199,7 @@ test_expect_success 'I/O, multiple lines, no newline on last line' '
 '
 
 test_expect_success 'I/O -- long lines' '
-	dd if=/dev/urandom bs=4096 count=1 | base64 --wrap=0 >expected &&
+	$NOASAN dd if=/dev/urandom bs=4096 count=1 | base64 --wrap=0 >expected &&
 	flux exec -n -r1 cat expected > output &&
 	test_cmp output expected
 '
@@ -206,7 +209,7 @@ test_expect_success 'I/O -- long lines' '
 # exit status. This version does not forward signals to children, so
 # it breaks the test below. Detect versions of stdbuf that don't exec
 # their arguments and skip the test if found.
-if test $(stdbuf --output=L sh -c 'ps -q $PPID -o comm=') != "stdbuf"; then
+if test $(stdbuf --output=L sh -c '$NOASAN ps -q $PPID -o comm=') != "stdbuf"; then
     test_set_prereq WORKING_STDBUF
 fi
 
@@ -264,14 +267,14 @@ test_expect_success 'stdin redirect from /dev/null works with -n' '
 '
 
 test_expect_success 'create large file for tests' '
-	dd if=/dev/urandom of=5Mfile bs=5M count=1
+	$NOASAN dd if=/dev/urandom of=5Mfile bs=5M count=1
 '
 
 test_expect_success 'create test script to redirect stdin to a file' '
 	cat <<-EOT >stdin2file &&
 	#!/bin/bash
 	rank=\$(flux getattr rank)
-	dd of=cpy.\$rank
+	$NOASAN dd of=cpy.\$rank
 	EOT
 	chmod +x stdin2file
 '
@@ -298,7 +301,7 @@ test_expect_success 'create test script to redirect stdin to a file, one rank ex
 	#!/bin/bash
 	rank=\$(flux getattr rank)
 	if test \$rank -ne 0; then
-		dd of=cpy.\$rank
+		$NOASAN dd of=cpy.\$rank
 	fi
 	EOT
 	chmod +x stdin2file
@@ -314,7 +317,7 @@ test_expect_success 'stdin flow control works (all ranks, one rank will exit ear
 '
 
 test_expect_success 'stdin broadcast -- multiple lines' '
-	dd if=/dev/urandom bs=1024 count=4 | base64 >expected &&
+	$NOASAN dd if=/dev/urandom bs=1024 count=4 | base64 >expected &&
 	cat expected | run_timeout 10 flux exec -l -r0-3 cat >output &&
 	for i in $(seq 0 3); do
 		sed -n "s/^$i: //p" output > output.$i &&
@@ -323,7 +326,7 @@ test_expect_success 'stdin broadcast -- multiple lines' '
 '
 
 test_expect_success 'stdin broadcast -- long lines' '
-	dd if=/dev/urandom bs=1024 count=4 | base64 --wrap=0 >expected &&
+	$NOASAN dd if=/dev/urandom bs=1024 count=4 | base64 --wrap=0 >expected &&
         echo >>expected &&
 	cat expected | run_timeout 10 flux exec -l -r0-3 cat >output &&
 	for i in $(seq 0 3); do
