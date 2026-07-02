@@ -111,6 +111,12 @@ test_expect_success 'repeat restore with -q' '
 test_expect_success 'repeat restore with --no-cache' '
 	flux restore --no-cache --checkpoint foo.tar
 '
+test_expect_success 'restore with invalid input to --maxreqs fails' '
+	test_must_fail flux restore --maxreqs=0 --checkpoint foo.tar
+'
+test_expect_success 'repeat restore with --maxreqs=1000' '
+	flux restore --maxreqs=1000 --checkpoint foo.tar
+'
 test_expect_success 'unload content-sqlite' '
 	flux content flush &&
 	flux content dropcache &&
@@ -143,6 +149,20 @@ test_expect_success 'now restore to key and verify content' '
 	flux restore -v --key zz foo.tar &&
 	test $(flux kvs get zz.a.b.c) = "testkey" &&
 	test $(flux kvs get zz.x) = $(cat x.val)
+'
+# The store window completes requests in a nondeterministic order, but
+# content addressing means the restored root must be identical regardless
+# of --maxreqs.  Restore the same archive at several window sizes and
+# require the resulting root treeobjs to match.
+test_expect_success 'restore is identical across --maxreqs values' '
+	flux restore --maxreqs=1 --key m1 foo.tar &&
+	flux restore --maxreqs=4 --key m4 foo.tar &&
+	flux restore --maxreqs=1000 --key m1000 foo.tar &&
+	flux kvs get --treeobj m1 >m1.root &&
+	flux kvs get --treeobj m4 >m4.root &&
+	flux kvs get --treeobj m1000 >m1000.root &&
+	test_cmp m1.root m4.root &&
+	test_cmp m1.root m1000.root
 '
 test_expect_success 'try dump - | restore - to key and verify content' '
 	flux dump - | flux restore --key yy - &&
