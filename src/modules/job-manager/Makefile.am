@@ -20,7 +20,8 @@ jobtap_plugin_LTLIBRARIES = \
 	plugins/submit-hold.la \
 	plugins/alloc-bypass.la \
 	plugins/alloc-check.la \
-	plugins/perilog.la
+	plugins/perilog.la \
+	plugins/delegate.la
 
 libjob_manager_la_SOURCES = \
 	job-manager.c \
@@ -119,6 +120,14 @@ plugins_perilog_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
 
+plugins_delegate_la_SOURCES = \
+	plugins/delegate.c
+plugins_delegate_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+	$(JANSSON_LIBS)
+plugins_delegate_la_LDFLAGS = \
+	$(fluxplugin_ldflags) \
+	-module
 
 TESTS = \
 	test_job.t \
