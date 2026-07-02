@@ -26,6 +26,7 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-getattr.1 \
 	man1/flux-dmesg.1 \
 	man1/flux-dump.1 \
+	man1/flux-gc.1 \
 	man1/flux-fsck.1 \
 	man1/flux-archive.1 \
 	man1/flux-content.1 \
@@ -515,6 +516,7 @@ EXTRA_DIST = \
 	guide/internals.rst \
 	guide/debug.rst \
 	guide/kvs.rst \
+	guide/kvs_gc.rst \
 	guide/broker.rst \
 	guide/systemd.rst \
 	guide/sdbus.rst \

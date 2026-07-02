@@ -129,6 +129,19 @@ int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
                                      kvstxn_cache_entry_f cb,
                                      void *data);
 
+/* on completion (FINISHED state), iterate through cache entries that
+ * were deduplicated against an already-persisted blob and should be
+ * re-stored to refresh their backing-store epoch for online GC.  This
+ * is best-effort and decoupled from transaction completion: the
+ * callback should fire-and-forget the store and must not fail the
+ * transaction.
+ *
+ * return -1 in callback to break iteration
+ */
+int kvstxn_iter_refresh_cache_entries (kvstxn_t *kt,
+                                       kvstxn_cache_entry_f cb,
+                                       void *data);
+
 /* convenience function for cleaning up a dirty cache entry that was
  * returned to the user via kvstxn_process().  Generally speaking, this
  * should only be used for error cleanup in the callback function used in

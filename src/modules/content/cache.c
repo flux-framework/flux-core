@@ -682,6 +682,15 @@ static void content_store_request (flux_t *h,
                                   e->len,
                                   "load");
     }
+    /* If entry was already valid (dedup case), mark it dirty to ensure
+     * it eventually reaches backing store.  This supports online GC by
+     * ensuring all referenced blobs are eventually persisted.
+     */
+    else if (!e->dirty) {
+        list_del (&e->list);  // remove from LRU
+        e->dirty = 1;
+        cache->acct_dirty++;
+    }
     if (e->dirty) {
         if (cache->rank > 0 || cache->backing) {
             if (cache_store (cache, e) < 0)

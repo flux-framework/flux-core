@@ -705,6 +705,45 @@ error:
         flux_log (ctx->h, LOG_ERR, "%s: cache_remove_entry", __FUNCTION__);
 }
 
+/* Completion for a best-effort epoch-refresh store (online GC).  We do
+ * not act on the result beyond logging; the store exists only to bump
+ * the blob's epoch in the backing store via the content cache's
+ * dedup-dirty path.
+ */
+static void content_refresh_completion (flux_future_t *f, void *arg)
+{
+    struct kvs_ctx *ctx = arg;
+
+    if (flux_future_get (f, NULL) < 0)
+        flux_log_error (ctx->h, "content store (epoch refresh)");
+    flux_future_destroy (f);
+}
+
+/* Re-store an already-persisted, re-referenced blob to refresh its
+ * backing-store epoch for online GC.  Fire-and-forget: a failure here
+ * does not fail the transaction (the blob is already durable; only its
+ * GC epoch is at stake), so we always return 0.
+ */
+static int kvstxn_refresh_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
+{
+    struct kvs_ctx *ctx = data;
+    const void *storedata;
+    int storedatalen = 0;
+    flux_future_t *f;
+
+    if (cache_entry_get_raw (entry, &storedata, &storedatalen) < 0) {
+        flux_log_error (ctx->h, "%s: cache_entry_get_raw", __FUNCTION__);
+        return 0;
+    }
+    if (!(f = content_store (ctx->h, storedata, storedatalen, 0))
+        || flux_future_then (f, -1., content_refresh_completion, ctx) < 0) {
+        flux_log_error (ctx->h, "%s: content_store", __FUNCTION__);
+        flux_future_destroy (f);
+        return 0;
+    }
+    return 0;
+}
+
 static int content_store_request_send (struct kvs_ctx *ctx,
                                        const char *blobref,
                                        const void *data,
@@ -1031,6 +1070,16 @@ static void kvstxn_apply (kvstxn_t *kt)
         goto stall;
     }
     /* else ret == KVSTXN_PROCESS_FINISHED */
+
+    /* Best-effort: re-store any re-referenced (deduplicated) blobs to
+     * refresh their epoch in the content backing store for online GC.
+     * This is decoupled from the dirty-flush path above: it does not
+     * gate transaction completion and a failure does not fail the
+     * transaction.  Only reached on the FINISHED fall-through (error
+     * paths jump directly to "done").
+     */
+    if (kvstxn_iter_refresh_cache_entries (kt, kvstxn_refresh_cb, ctx) < 0)
+        flux_log_error (ctx->h, "kvstxn_iter_refresh_cache_entries");
 
     /* This finalizes the transaction by replacing root->ref with
      * newroot, incrementing root->seq, and sending out the setroot

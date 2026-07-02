@@ -2398,6 +2398,20 @@ _flux_fsck()
     return 0
 }
 
+# flux-gc(1) completions
+_flux_gc()
+{
+    local cmd=$1
+    local split=false
+    local OPTS="\
+        -v --verbose \
+        -n --dry-run \
+        --no-cache \
+    "
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    return 0
+}
+
 # flux-startlog(1) completions
 _flux_startlog()
 {
@@ -2570,6 +2584,9 @@ _flux_core()
         ;;
     fsck)
         _flux_fsck $subcmd
+        ;;
+    gc)
+        _flux_gc $subcmd
         ;;
     startlog)
         _flux_startlog $subcmd

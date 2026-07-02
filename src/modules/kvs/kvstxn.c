@@ -36,6 +36,14 @@
 
 #include "kvstxn.h"
 
+/* Result of store_cache(): what the caller should do with the entry.
+ */
+enum store_result {
+    STORE_CACHE_NOOP = 0,   /* already cached + dirty: nothing further to do */
+    STORE_CACHE_DIRTY,      /* newly cached: must be flushed to content store */
+    STORE_CACHE_REFRESH,    /* already stored: re-store to refresh GC epoch */
+};
+
 struct kvstxn_mgr {
     struct cache *cache;
     const char *ns_name;
@@ -62,6 +70,7 @@ struct kvstxn {
     char newroot[BLOBREF_MAX_STRING_SIZE];
     zlist_t *missing_refs_list;
     zlist_t *dirty_cache_entries_list;
+    zlist_t *refresh_cache_entries_list;
     flux_future_t *f_sync_checkpoint;
     bool processing;            /* kvstxn is being processed */
     bool merged;                /* kvstxn is a merger of transactions */
@@ -113,6 +122,17 @@ static void kvstxn_destroy (kvstxn_t *kt)
             zlist_destroy (&kt->missing_refs_list);
         if (kt->dirty_cache_entries_list)
             zlist_destroy (&kt->dirty_cache_entries_list);
+        if (kt->refresh_cache_entries_list) {
+            struct cache_entry *entry;
+            /* refresh entries are pre-existing/persisted cache entries
+             * that were only incref'd (never marked dirty or owned by
+             * this transaction), so just drop our reference.  Unlike
+             * dirty entries, they must not be removed from the cache.
+             */
+            while ((entry = zlist_pop (kt->refresh_cache_entries_list)))
+                cache_entry_decref (entry);
+            zlist_destroy (&kt->refresh_cache_entries_list);
+        }
         flux_future_destroy (kt->f_sync_checkpoint);
         free (kt);
     }
@@ -153,6 +173,8 @@ static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
         goto error_enomem;
     zlist_autofree (kt->missing_refs_list);
     if (!(kt->dirty_cache_entries_list = zlist_new ()))
+        goto error_enomem;
+    if (!(kt->refresh_cache_entries_list = zlist_new ()))
         goto error_enomem;
     kt->ktm = ktm;
     kt->state = KVSTXN_STATE_INIT;
@@ -294,23 +316,61 @@ static int kvstxn_add_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry
     return 0;
 }
 
+/* A "refresh" entry is a blob that was deduplicated against an already
+ * valid+clean (i.e. already persisted) cache entry.  It is not part of
+ * this transaction's dirty set: it does not need to be flushed for the
+ * commit to be durable, and on abort it must not be removed from the
+ * cache.  We only take a reference so it cannot expire before the
+ * transaction has a chance to re-store it (to refresh its backing-store
+ * epoch for online GC).
+ */
+static int kvstxn_add_refresh_cache_entry (kvstxn_t *kt,
+                                           struct cache_entry *entry)
+{
+    cache_entry_incref (entry);
+    if (zlist_push (kt->refresh_cache_entries_list, entry) < 0) {
+        cache_entry_decref (entry);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
+/* Dispatch a store_cache() result to the appropriate per-transaction
+ * handling.  Returns 0 on success, -1 on error.
+ */
+static int kvstxn_add_cache_entry (kvstxn_t *kt,
+                                   struct cache_entry *entry,
+                                   enum store_result result)
+{
+    switch (result) {
+        case STORE_CACHE_NOOP:
+            break;
+        case STORE_CACHE_DIRTY:
+            return kvstxn_add_dirty_cache_entry (kt, entry);
+        case STORE_CACHE_REFRESH:
+            return kvstxn_add_refresh_cache_entry (kt, entry);
+    }
+    return 0;
+}
+
 /* Store object 'o' under key 'ref' in local cache.
  * Object reference is still owned by the caller.
  * 'is_raw' indicates this data is a json string w/ base64 value and
  * should be flushed to the content store as raw data after it is
  * decoded.  Otherwise, the json object should be a treeobj.
- * Returns -1 on error, 0 on success entry already there, 1 on success
- * entry needs to be flushed to content store
+ * On success returns 0 and sets *result to indicate what the caller
+ * should do with the entry (see enum store_result).  Returns -1 on error.
  */
 static int store_cache (kvstxn_t *kt,
                         json_t *o,
                         bool is_raw,
                         char *ref,
                         int ref_len,
-                        struct cache_entry **entryp)
+                        struct cache_entry **entryp,
+                        enum store_result *result)
 {
     struct cache_entry *entry;
-    int rc;
     const char *xdata;
     char *data = NULL;
     size_t xlen, databuflen;
@@ -355,7 +415,18 @@ static int store_cache (kvstxn_t *kt,
     }
     if (cache_entry_get_valid (entry)) {
         kt->ktm->noop_stores++;
-        rc = 0;
+        /* Entry is already cached.  If it is already dirty, it is part
+         * of this transaction's dirty set and will be flushed anyway,
+         * so there is nothing more to do.  If it is clean, it is already
+         * persisted; schedule a best-effort re-store (STORE_CACHE_REFRESH)
+         * to refresh its epoch in the backing store for online GC, without
+         * marking it dirty (which would make a no-op commit appear to have
+         * dirty entries and would evict a live blob on transaction abort).
+         */
+        if (cache_entry_get_dirty (entry))
+            *result = STORE_CACHE_NOOP;
+        else
+            *result = STORE_CACHE_REFRESH;
     }
     else {
         if (cache_entry_set_raw (entry, data, datalen) < 0) {
@@ -371,11 +442,11 @@ static int store_cache (kvstxn_t *kt,
             assert (ret == 1);
             goto error;
         }
-        rc = 1;
+        *result = STORE_CACHE_DIRTY;
     }
     *entryp = entry;
     free (data);
-    return rc;
+    return 0;
 
  error:
     ERRNO_SAFE_WRAP (free, data);
@@ -392,7 +463,7 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
     json_t *dir_data;
     json_t *ktmp;
     char ref[BLOBREF_MAX_STRING_SIZE];
-    int ret;
+    enum store_result result;
     struct cache_entry *entry;
     void *iter;
 
@@ -411,17 +482,16 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
         if (treeobj_is_dir (dir_entry)) {
             if (kvstxn_unroll (kt, dir_entry) < 0) /* depth first */
                 return -1;
-            if ((ret = store_cache (kt,
-                                    dir_entry,
-                                    false,
-                                    ref,
-                                    sizeof (ref),
-                                    &entry)) < 0)
+            if (store_cache (kt,
+                             dir_entry,
+                             false,
+                             ref,
+                             sizeof (ref),
+                             &entry,
+                             &result) < 0)
                 return -1;
-            if (ret) {
-                if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
-                    return -1;
-            }
+            if (kvstxn_add_cache_entry (kt, entry, result) < 0)
+                return -1;
             if (!(ktmp = treeobj_create_dirref (ref)))
                 return -1;
             if (json_object_iter_set_new (dir, iter, ktmp) < 0) {
@@ -436,17 +506,16 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
             if (!(val_data = treeobj_get_data (dir_entry)))
                 return -1;
             if (json_string_length (val_data) > BLOBREF_MAX_STRING_SIZE) {
-                if ((ret = store_cache (kt,
-                                        val_data,
-                                        true,
-                                        ref,
-                                        sizeof (ref),
-                                        &entry)) < 0)
+                if (store_cache (kt,
+                                 val_data,
+                                 true,
+                                 ref,
+                                 sizeof (ref),
+                                 &entry,
+                                 &result) < 0)
                     return -1;
-                if (ret) {
-                    if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
-                        return -1;
-                }
+                if (kvstxn_add_cache_entry (kt, entry, result) < 0)
+                    return -1;
                 if (!(ktmp = treeobj_create_valref (ref)))
                     return -1;
                 if (json_object_iter_set_new (dir, iter, ktmp) < 0) {
@@ -469,23 +538,22 @@ static int kvstxn_val_data_to_cache (kvstxn_t *kt,
 {
     struct cache_entry *entry;
     json_t *val_data;
-    int ret;
+    enum store_result result;
 
     if (!(val_data = treeobj_get_data (val)))
         return -1;
 
-    if ((ret = store_cache (kt,
-                            val_data,
-                            true,
-                            ref,
-                            ref_len,
-                            &entry)) < 0)
+    if (store_cache (kt,
+                     val_data,
+                     true,
+                     ref,
+                     ref_len,
+                     &entry,
+                     &result) < 0)
         return -1;
 
-    if (ret) {
-        if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
-            return -1;
-    }
+    if (kvstxn_add_cache_entry (kt, entry, result) < 0)
+        return -1;
 
     return 0;
 }
@@ -1003,21 +1071,20 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
              * proceed until they are completed.
              */
             struct cache_entry *entry;
-            int sret;
+            enum store_result result;
 
             if (kvstxn_unroll (kt, kt->rootcpy) < 0)
                 kt->errnum = errno;
-            else if ((sret = store_cache (kt,
-                                          kt->rootcpy,
-                                          false,
-                                          kt->newroot,
-                                          sizeof (kt->newroot),
-                                          &entry)) < 0)
+            else if (store_cache (kt,
+                                  kt->rootcpy,
+                                  false,
+                                  kt->newroot,
+                                  sizeof (kt->newroot),
+                                  &entry,
+                                  &result) < 0)
                 kt->errnum = errno;
-            else if (sret) {
-                if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
-                    kt->errnum = errno;
-            }
+            else if (kvstxn_add_cache_entry (kt, entry, result) < 0)
+                kt->errnum = errno;
 
             if (kt->errnum) {
                 cleanup_dirty_cache_list (kt);
@@ -1161,6 +1228,31 @@ int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
             errno = saved_errno;
             return -1;
         }
+    }
+    return 0;
+}
+
+int kvstxn_iter_refresh_cache_entries (kvstxn_t *kt,
+                                       kvstxn_cache_entry_f cb,
+                                       void *data)
+{
+    struct cache_entry *entry;
+
+    if (kt->state != KVSTXN_STATE_FINISHED) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* Refresh entries are best-effort (epoch refresh for online GC) and
+     * do not gate transaction completion.  We release our reference on
+     * each as it is popped; the entry itself is left in the cache
+     * untouched.  Any entries left on the list (e.g. if the callback
+     * breaks iteration) are released in kvstxn_destroy().
+     */
+    while ((entry = zlist_pop (kt->refresh_cache_entries_list))) {
+        cache_entry_decref (entry);
+        if (cb (kt, entry, data) < 0)
+            return -1;
     }
     return 0;
 }

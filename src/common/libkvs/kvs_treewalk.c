@@ -224,16 +224,27 @@ static void classify (struct kvs_treewalk *tw,
         walk_dir (tw, path, treeobj);
     }
     else if (treeobj_is_dirref (treeobj)) {
+        const char *blobref;
         if (treeobj_get_count (treeobj) != 1) {
             report_error (tw, path, KVS_TREEWALK_ERROR_BADCOUNT, 0);
             return;
         }
-        enqueue_load (tw, treeobj_get_blobref (treeobj, 0), path, NULL, 0);
+        blobref = treeobj_get_blobref (treeobj, 0);
+        /* Let the caller prune an already-walked subtree (see ops.descend). */
+        if (tw->ops.descend && !tw->ops.descend (tw->arg, path, blobref))
+            return;
+        enqueue_load (tw, blobref, path, NULL, 0);
     }
     else if (treeobj_is_valref (treeobj)) {
         /* count >= 1: treeobj_validate() above rejects an empty valref. */
         int count = treeobj_get_count (treeobj);
         struct valref_obj *vobj;
+
+        /* The caller only wants the blobrefs (reported via visit above), not
+         * the blob content or existence: skip the loads entirely.
+         */
+        if (tw->ops.valref_noload)
+            return;
 
         if (!(vobj = valref_obj_create (path, treeobj, count))) {
             treewalk_fatal (tw, errno);
