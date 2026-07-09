@@ -500,6 +500,7 @@ check_PROGRAMS = \
 	loop/issue2337 \
 	loop/issue2711 \
 	kvs/content-spam \
+	kvs/content-gc-race \
 	kvs/torture \
 	kvs/dtree \
 	kvs/blobref \
@@ -696,6 +697,11 @@ kvs_content_spam_SOURCES = kvs/content-spam.c
 kvs_content_spam_CPPFLAGS = $(test_cppflags)
 kvs_content_spam_LDADD = $(test_ldadd)
 kvs_content_spam_LDFLAGS = $(test_ldflags)
+
+kvs_content_gc_race_SOURCES = kvs/content-gc-race.c
+kvs_content_gc_race_CPPFLAGS = $(test_cppflags)
+kvs_content_gc_race_LDADD = $(test_ldadd)
+kvs_content_gc_race_LDFLAGS = $(test_ldflags)
 
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)
