@@ -524,10 +524,19 @@ error:
  */
 static void cache_resume_flush (struct content_cache *cache)
 {
-    if (cache->acct_dirty == 0 || (cache->rank == 0 && !cache->backing))
+    if (cache->acct_dirty == 0 || (cache->rank == 0 && !cache->backing)) {
         flush_respond (cache);
-    else
-        (void)cache_flush (cache); /* resume flushing, subject to limits */
+        return;
+    }
+    (void)cache_flush (cache); /* resume flushing, subject to limits */
+    /* If no stores remain in progress yet dirty entries linger, no further
+     * store completion will arrive to drive a parked flush: the lingering
+     * entries had their stores fail (e.g. ENOSPC) and are not requeued for
+     * retry.  Respond now (flush_respond reports the sticky error) rather
+     * than leave the flush request hanging.
+     */
+    if (cache->flush_batch_count == 0)
+        flush_respond (cache);
 }
 
 static void cache_store_continuation (flux_future_t *f, void *arg)
@@ -561,8 +570,17 @@ static void cache_store_continuation (flux_future_t *f, void *arg)
         goto error;
     }
     cache_entry_dirty_clear (cache, e);
-    /* clear flush errno if backing store functional/recovered */
-    cache->flush_errno = 0;
+    /* Clear flush errno only once the cache is fully clean. A single store
+     * success does not prove the backing store recovered: a backing module
+     * that group-commits (content-sqlite) can fail a large transaction on
+     * ENOSPC, freeing space so a later, smaller store succeeds even though
+     * the earlier entries failed and remain dirty. Clearing on that success
+     * would drop the sticky error while dirty entries linger, so a subsequent
+     * content.flush would neither flush them nor report the error -- it would
+     * hang (see the flush_errno guard in content_flush_request()).
+     */
+    if (cache->acct_dirty == 0)
+        cache->flush_errno = 0;
     flux_future_destroy (f);
     cache_resume_flush (cache);
     return;
@@ -907,9 +925,16 @@ static void flush_respond (struct content_cache *cache)
                                   "flush");
     }
     else {
-        errno = EIO;
-        if (cache->rank == 0 && !cache->backing)
+        /* Dirty entries remain.  Prefer the recorded backing-store error
+         * (e.g. ENOSPC) so the caller sees the true cause; fall back to
+         * ENOSYS with no backing store, else EIO.
+         */
+        if (cache->flush_errno)
+            errno = cache->flush_errno;
+        else if (cache->rank == 0 && !cache->backing)
             errno = ENOSYS;
+        else
+            errno = EIO;
         request_list_respond_error (&cache->flush_requests,
                                     cache->h,
                                     errno,
