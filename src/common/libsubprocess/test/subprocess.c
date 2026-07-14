@@ -857,6 +857,14 @@ void test_state_strings (void)
         "Stopped");
 }
 
+void test_sigchld_strings (void)
+{
+    is (flux_subprocess_sigchld_string (FLUX_SUBPROCESS_SIGCHLD_UNKNOWN),
+        "Unknown");
+    ok (!flux_subprocess_sigchld_string (100),
+        "flux_subprocess_sigchld_string returns NULL on bad sigchld");
+}
+
 void test_exec_fail (flux_reactor_t *r)
 {
     char path [4096];
@@ -1308,6 +1316,8 @@ int main (int argc, char *argv[])
     test_state_change_stopped (r);
     diag ("state_strings");
     test_state_strings ();
+    diag ("sigchld_strings");
+    test_sigchld_strings ();
     diag ("exec_fail");
     test_exec_fail (r);
     diag ("context");
