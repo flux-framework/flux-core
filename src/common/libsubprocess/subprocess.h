@@ -48,6 +48,15 @@ typedef enum {
 } flux_subprocess_state_t;
 
 /*
+ * Subprocess sigchld, reported via the on_sigchld callback below.
+ * Values are distinct bits so that pending sigchlds can be tracked in a
+ * bitmask.
+ */
+typedef enum {
+    FLUX_SUBPROCESS_SIGCHLD_UNKNOWN = 1, /* placeholder, none reported */
+} flux_subprocess_sigchld_t;
+
+/*
  * Subprocess flags
  */
 enum {
@@ -95,6 +104,9 @@ typedef void (*flux_subprocess_state_f) (flux_subprocess_t *p,
 typedef void (*flux_subprocess_credit_f) (flux_subprocess_t *p,
                                           const char *stream,
                                           int bytes);
+typedef void (*flux_subprocess_sigchld_f) (
+    flux_subprocess_t *p,
+    flux_subprocess_sigchld_t sigchld);
 typedef void (*flux_subprocess_hook_f) (flux_subprocess_t *p, void *arg);
 
 /*
@@ -118,6 +130,7 @@ typedef struct {
     flux_subprocess_output_f on_stdout; /* Read of stdout is ready           */
     flux_subprocess_output_f on_stderr; /* Read of stderr is ready           */
     flux_subprocess_credit_f on_credit; /* Write buffer space available      */
+    flux_subprocess_sigchld_f on_sigchld; /* Process sigchld info      */
 } flux_subprocess_ops_t;
 
 /*
@@ -379,6 +392,11 @@ flux_subprocess_state_t flux_subprocess_state (flux_subprocess_t *p);
 /*  Return string value of state of subprocess
  */
 const char *flux_subprocess_state_string (flux_subprocess_state_t state);
+
+/*  Return string value of sigchld of subprocess
+ */
+const char *
+flux_subprocess_sigchld_string (flux_subprocess_sigchld_t sigchld);
 
 /*  Return true if subprocess p is still active, i.e. it is waiting to
  *  start, still running, or waiting for eof on all streams.

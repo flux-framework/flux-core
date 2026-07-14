@@ -150,6 +150,10 @@ static void subprocess_free (flux_subprocess_t *p)
         flux_watcher_destroy (p->state_idle_w);
         flux_watcher_destroy (p->state_check_w);
 
+        flux_watcher_destroy (p->sigchld_prep_w);
+        flux_watcher_destroy (p->sigchld_idle_w);
+        flux_watcher_destroy (p->sigchld_check_w);
+
         flux_watcher_destroy (p->completed_prep_w);
         flux_watcher_destroy (p->completed_idle_w);
         flux_watcher_destroy (p->completed_check_w);
@@ -413,6 +417,98 @@ static int subprocess_setup_state_change (flux_subprocess_t *p)
     return 0;
 }
 
+/* Pending sigchld is tracked in sigchld_pending.
+ * N.B. only one sigchld is supported right now.
+ */
+void sigchld_set (flux_subprocess_t *p,
+                  flux_subprocess_sigchld_t sigchld)
+{
+    if (!p->ops.on_sigchld)
+        return;
+
+    p->sigchld_pending = sigchld;
+}
+
+void sigchld_notify_start (flux_subprocess_t *p)
+{
+    if (p->ops.on_sigchld) {
+        flux_watcher_start (p->sigchld_prep_w);
+        flux_watcher_start (p->sigchld_check_w);
+    }
+}
+
+static void sigchld_prep_cb (flux_reactor_t *r,
+                             flux_watcher_t *w,
+                             int revents,
+                             void *arg)
+{
+    flux_subprocess_t *p = arg;
+
+    if (p->sigchld_pending)
+        flux_watcher_start (p->sigchld_idle_w);
+    else {
+        /* nothing left to report, stop watching */
+        flux_watcher_stop (p->sigchld_prep_w);
+        flux_watcher_stop (p->sigchld_check_w);
+    }
+}
+
+static void sigchld_check_cb (flux_reactor_t *r,
+                              flux_watcher_t *w,
+                              int revents,
+                              void *arg)
+{
+    flux_subprocess_t *p = arg;
+
+    flux_watcher_stop (p->sigchld_idle_w);
+
+    /* always a chance caller may destroy subprocess in callback */
+    subprocess_incref (p);
+
+    /* Only one sigchld value exists for now, so clear the pending flags
+     * and report it directly.
+     */
+    if (p->sigchld_pending != 0) {
+        p->sigchld_pending = 0;
+        (*p->ops.on_sigchld) (p, FLUX_SUBPROCESS_SIGCHLD_UNKNOWN);
+    }
+
+    subprocess_decref (p);
+}
+
+static int subprocess_setup_sigchld (flux_subprocess_t *p)
+{
+    if (p->ops.on_sigchld) {
+        p->sigchld_prep_w =
+            flux_prepare_watcher_create (p->reactor,
+                                         sigchld_prep_cb,
+                                         p);
+        if (!p->sigchld_prep_w) {
+            log_err ("flux_prepare_watcher_create");
+            return -1;
+        }
+
+        p->sigchld_idle_w =
+            flux_idle_watcher_create (p->reactor,
+                                      NULL,
+                                      p);
+        if (!p->sigchld_idle_w) {
+            log_err ("flux_idle_watcher_create");
+            return -1;
+        }
+
+        p->sigchld_check_w =
+            flux_check_watcher_create (p->reactor,
+                                       sigchld_check_cb,
+                                       p);
+        if (!p->sigchld_check_w) {
+            log_err ("flux_check_watcher_create");
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static void completed_prep_cb (flux_reactor_t *r,
                                flux_watcher_t *w,
                                int revents,
@@ -539,6 +635,9 @@ flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
         goto error;
 
     state_change_start (p);
+
+    if (subprocess_setup_sigchld (p) < 0)
+        goto error;
 
     if (subprocess_setup_completed (p) < 0)
         goto error;
@@ -671,6 +770,9 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
         goto error;
 
     if (subprocess_setup_state_change (p) < 0)
+        goto error;
+
+    if (subprocess_setup_sigchld (p) < 0)
         goto error;
 
     if (subprocess_setup_completed (p) < 0)
@@ -1243,6 +1345,17 @@ const char *flux_subprocess_state_string (flux_subprocess_state_t state)
         return "Failed";
     case FLUX_SUBPROCESS_STOPPED:
         return "Stopped";
+    }
+    return NULL;
+}
+
+const char *
+flux_subprocess_sigchld_string (flux_subprocess_sigchld_t sigchld)
+{
+    switch (sigchld)
+    {
+    case FLUX_SUBPROCESS_SIGCHLD_UNKNOWN:
+        return "Unknown";
     }
     return NULL;
 }
