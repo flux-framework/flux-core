@@ -44,7 +44,11 @@ typedef enum {
     FLUX_SUBPROCESS_RUNNING,      /* exec(2) has been called */
     FLUX_SUBPROCESS_EXITED,       /* process has exited */
     FLUX_SUBPROCESS_FAILED,       /* exec failure or other non-child error */
-    FLUX_SUBPROCESS_STOPPED,      /* process was stopped */
+    FLUX_SUBPROCESS_STOPPED,      /* DEPRECATED, no longer reported.  Use the
+                                   * on_sigchld callback and
+                                   * FLUX_SUBPROCESS_SIGCHLD_STOPPED instead.
+                                   * The enum value is retained for backwards
+                                   * compatibility. */
 } flux_subprocess_state_t;
 
 /*

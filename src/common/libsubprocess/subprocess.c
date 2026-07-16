@@ -326,9 +326,6 @@ static void state_change_prep_cb (flux_reactor_t *r,
 
 static flux_subprocess_state_t state_change_next (flux_subprocess_t *p)
 {
-    /* N.B. possible transition to FLUX_SUBPROCESS_STOPPED not handled
-     * here, see issue #5083
-     */
     assert (p->state_reported != p->state);
     assert (p->state_reported == FLUX_SUBPROCESS_INIT
             || p->state_reported == FLUX_SUBPROCESS_RUNNING);
@@ -1374,7 +1371,7 @@ const char *flux_subprocess_state_string (flux_subprocess_state_t state)
         return "Exited";
     case FLUX_SUBPROCESS_FAILED:
         return "Failed";
-    case FLUX_SUBPROCESS_STOPPED:
+    case FLUX_SUBPROCESS_STOPPED: /* deprecated */
         return "Stopped";
     }
     return NULL;
