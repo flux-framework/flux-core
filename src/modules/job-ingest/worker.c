@@ -133,7 +133,7 @@ static void worker_state_cb (flux_subprocess_t *p,
             break;
         case FLUX_SUBPROCESS_EXITED:
         case FLUX_SUBPROCESS_INIT:
-        case FLUX_SUBPROCESS_STOPPED:
+        case FLUX_SUBPROCESS_STOPPED: /* deprecated */
             break; // ignore
     }
 }
