@@ -575,7 +575,7 @@ static void exec_state_cb (flux_subprocess_t *proc,
             break;
         case FLUX_SUBPROCESS_EXITED:
         case FLUX_SUBPROCESS_INIT:
-        case FLUX_SUBPROCESS_STOPPED:
+        case FLUX_SUBPROCESS_STOPPED: /* deprecated */
             break; // ignore
     }
 }

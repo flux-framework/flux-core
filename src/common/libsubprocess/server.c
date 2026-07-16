@@ -608,13 +608,6 @@ static void proc_state_change_cb (flux_subprocess_t *p,
                                     "type", "finished",
                                     "status", flux_subprocess_status (p));
     }
-    else if (state == FLUX_SUBPROCESS_STOPPED) {
-        if (client_listening (p))
-            rc = flux_respond_pack (s->h,
-                                    request,
-                                    "{s:s}",
-                                    "type", "stopped");
-    }
     else if (state == FLUX_SUBPROCESS_FAILED) {
         const char *errmsg = NULL;
         if (p->failed_error.text[0] != '\0')
