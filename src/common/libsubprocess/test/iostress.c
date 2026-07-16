@@ -118,7 +118,7 @@ static void iostress_state_cb (flux_subprocess_t *p,
                 || ctx->write_type == WRITE_DIRECT)
                 flux_watcher_start (ctx->source); // start sourcing data
             break;
-        case FLUX_SUBPROCESS_STOPPED:
+        case FLUX_SUBPROCESS_STOPPED: /* deprecated */
             break;
         case FLUX_SUBPROCESS_EXITED: {
             int status = flux_subprocess_status (p);
