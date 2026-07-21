@@ -171,7 +171,7 @@ int bulk_exec_close (struct bulk_exec *exec, const char *stream)
     return 0;
 }
 
-static int exec_exit_notify (struct bulk_exec *exec)
+static void exec_exit_notify (struct bulk_exec *exec)
 {
     if (exec->handlers->on_exit)
         (*exec->handlers->on_exit) (exec, exec->arg, exec->exit_batch);
@@ -180,7 +180,6 @@ static int exec_exit_notify (struct bulk_exec *exec)
         exec->exit_batch_timer = NULL;
         idset_range_clear (exec->exit_batch, 0, INT_MAX);
     }
-    return 0;
 }
 
 static void exit_batch_cb (flux_reactor_t *r,
