@@ -857,6 +857,7 @@ static void server_exec_cb (flux_t *h,
      */
     bool background = !flux_msg_is_streaming (msg);
 
+    err_init (&error);
     if (server_auth_unpack (s,
                             msg,
                             &error,
@@ -1107,6 +1108,7 @@ static void server_kill_cb (flux_t *h,
     flux_subprocess_t *p;
     flux_future_t *f = NULL;
 
+    err_init (&error);
     if (server_auth_unpack (s,
                             msg,
                             &error,
@@ -1199,6 +1201,7 @@ static void server_list_cb (flux_t *h,
     flux_error_t error;
     const char *errmsg = NULL;
 
+    err_init (&error);
     if (server_auth_unpack (s, msg, &error, NULL) < 0) {
         errmsg = error.text;
         goto error;
@@ -1289,6 +1292,7 @@ static void server_wait_cb (flux_t *h,
     pid_t pid;
     const char *label = NULL;
 
+    err_init (&error);
     if (server_auth_unpack (s,
                             msg,
                             &error,
@@ -1447,6 +1451,7 @@ static void server_attach_cb (flux_t *h,
     const char *errmsg = NULL;
     flux_subprocess_t *p;
 
+    err_init (&error);
     if (server_auth_unpack (s,
                             msg,
                             &error,
