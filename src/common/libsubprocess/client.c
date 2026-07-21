@@ -140,7 +140,7 @@ static flux_future_t *rpc_send_signed (flux_t *h,
                                        const char *topic,
                                        uint32_t rank,
                                        int flags,
-                                       int signature_only,
+                                       bool signature_only,
                                        json_t *payload)
 {
     flux_security_t *sec;
@@ -204,7 +204,7 @@ static flux_future_t *rpc_pack_signed (flux_t *h,
                                        const char *topic,
                                        uint32_t rank,
                                        int flags,
-                                       int signature_only,
+                                       bool signature_only,
                                        const char *fmt,
                                        ...)
 {
