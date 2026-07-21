@@ -77,7 +77,7 @@ struct flux_subprocess {
 
     flux_subprocess_ops_t ops;      /* Callbacks registered for this proc */
 
-    flux_cmd_t *cmd;                /* readonly/o copy of the command     */
+    flux_cmd_t *cmd;                /* read-only copy of the command      */
 
     struct aux_item *aux;           /* auxiliary data                     */
 

@@ -19,7 +19,7 @@
 int sigchld_initialize (flux_reactor_t *r);
 
 /* Call sigchld_finalize () after exit.  Each call decreases the SIGCHLD
- * handler reference count.  The handler is is unregistered when the
+ * handler reference count.  The handler is unregistered when the
  * count reaches zero.
  */
 void sigchld_finalize (void);

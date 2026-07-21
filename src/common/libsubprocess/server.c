@@ -433,7 +433,7 @@ static void proc_delete (subprocess_server_t *s, flux_subprocess_t *p)
     wait_notify (s, p);
 
     /* Processes that are still waitable (i.e. have the waitable flag but
-     * no current waiter) stay in subprocesses list until an wait RPC or
+     * no current waiter) stay in subprocesses list until a wait RPC or
      * the server is shutdown.
      */
     if (is_waitable (p))

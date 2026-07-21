@@ -27,6 +27,6 @@ int msgchan_get_fd (struct msgchan *mch);
 // for debugging (caller must free stats)
 int msgchan_get_stats (struct msgchan *mch, json_t **stats);
 
-#endif /* !_SUBPROCESS_MSGCHAN */
+#endif /* !_SUBPROCESS_MSGCHAN_H */
 
 // vi: ts=4 sw=4 expandtab

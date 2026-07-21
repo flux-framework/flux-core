@@ -150,7 +150,7 @@ typedef void (*subprocess_log_f)(void *arg,
 
 /*
  *  Asynchronously create a new subprocess described by command object
- *   `cmd`.  flux_local_exec() create a new subprocess locally.
+ *   `cmd`.  flux_local_exec() creates a new subprocess locally.
  *   flux_rexec() creates a new subprocess on Flux rank
  *   `rank`. Callbacks in `ops` structure that are non-NULL will be
  *   called to process state changes, I/O, and completion.
@@ -323,7 +323,7 @@ int flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
                                        const char *stream,
                                        const char **bufp);
 
-/* Determine if the read stream has is closed / received an EOF.  This
+/* Determine if the read stream is closed / received an EOF.  This
  * function can be useful if you are reading lines via
  * flux_subprocess_read_line() or flux_subprocess_read_trimmed_line()
  * in output callbacks.  Those functions will return length 0 when no
@@ -346,7 +346,7 @@ bool flux_subprocess_read_stream_closed (flux_subprocess_t *p,
  *   character, this function will return that last data without the
  *   trailing newline.
  * - if the stream has been closed / reached EOF, 0 will be returned.
- * - if the stream is not line buffered, NULL and errno = EPERM will
+ * - if the stream is not line buffered, -1 and errno = EPERM will
  *   be returned.
  */
 int flux_subprocess_getline (flux_subprocess_t *p,
@@ -364,7 +364,7 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signo);
 /*
  *  Remove a reference to subprocess object `p`. The subprocess object
  *   is destroyed once the last reference is removed.  This call
- *   silently deso nothing if called within a hook.
+ *   silently does nothing if called within a hook.
  */
 void flux_subprocess_destroy (flux_subprocess_t *p);
 
@@ -437,8 +437,8 @@ void *flux_subprocess_aux_get (flux_subprocess_t *p, const char *name);
 
 /*
  *  Take/drop a reference on a subprocess output channel `name` (e.g. "stdout"
- *   or "stderr"). EOF will not be produced from this channel the reference
- *   count drops to zero.
+ *   or "stderr"). EOF will not be produced from this channel until the
+ *   reference count drops to zero.
  */
 void flux_subprocess_channel_incref (flux_subprocess_t *p, const char *name);
 void flux_subprocess_channel_decref (flux_subprocess_t *p, const char *name);
