@@ -253,7 +253,6 @@ static int remote_channel_setup (flux_subprocess_t *p,
                                  int channel_flags)
 {
     struct subprocess_channel *c = NULL;
-    char *e = NULL;
     int save_errno;
 
     if (!(c = channel_create (p, output_cb, name, channel_flags))) {
@@ -330,13 +329,11 @@ static int remote_channel_setup (flux_subprocess_t *p,
      */
     c = NULL;
 
-    free (e);
     return 0;
 
  error:
     save_errno = errno;
     channel_destroy (c);
-    free (e);
     errno = save_errno;
     return -1;
 }
