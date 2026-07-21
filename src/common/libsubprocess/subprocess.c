@@ -863,11 +863,11 @@ int flux_subprocess_write (flux_subprocess_t *p,
             log_err ("fbuf_write_watcher_get_buffer");
             return -1;
         }
-        if (fbuf_space (fb) < len) {
+        if ((size_t)fbuf_space (fb) < len) {
             errno = ENOSPC;
             return -1;
         }
-        if ((ret = fbuf_write (fb, buf, len)) < 0) {
+        if ((ret = fbuf_write (fb, buf, (int)len)) < 0) {
             log_err ("fbuf_write");
             return -1;
         }
