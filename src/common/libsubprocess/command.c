@@ -520,15 +520,24 @@ static zlist_t *msgchans_dup (zlist_t *l)
 static zhash_t * z_hash_dup (zhash_t *src)
 {
     zhash_t *new;
-    zlist_t *keys = zhash_keys (src);
+    zlist_t *keys;
     const char *k;
 
-    new = zhash_new ();
+    if (!(keys = zhash_keys (src)))
+        return NULL;
+    if (!(new = zhash_new ())) {
+        zlist_destroy (&keys);
+        return NULL;
+    }
     zhash_autofree (new);
 
     k = zlist_first (keys);
     while (k) {
-        zhash_insert (new, k, zhash_lookup (src, k));
+        if (zhash_insert (new, k, zhash_lookup (src, k)) < 0) {
+            zlist_destroy (&keys);
+            zhash_destroy (&new);
+            return NULL;
+        }
         k = zlist_next (keys);
     }
     zlist_destroy (&keys);
@@ -870,8 +879,10 @@ flux_cmd_t * flux_cmd_copy (const flux_cmd_t *src)
         goto err;
     if (!(cmd->msgchans = msgchans_dup (src->msgchans)))
         goto err;
-    cmd->channels = zlist_dup (src->channels);
-    cmd->opts = z_hash_dup (src->opts);
+    if (!(cmd->channels = zlist_dup (src->channels)))
+        goto err;
+    if (!(cmd->opts = z_hash_dup (src->opts)))
+        goto err;
     return (cmd);
 err:
     flux_cmd_destroy (cmd);
