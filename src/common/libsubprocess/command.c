@@ -247,7 +247,7 @@ fail:
     free (*argzp);
     *argzp = NULL;
     *argz_lenp = 0;
-    errno = EINVAL;
+    errno = EPROTO;
     return -1;
 }
 
@@ -286,7 +286,6 @@ static int envz_fromjson (json_t *o, char **envzp, size_t *envz_lenp)
 {
     const char *var;
     json_t *val;
-    int errnum = EINVAL;
 
     assert (*envzp == NULL && *envz_lenp == 0);
     if (!json_is_object (o))
@@ -303,7 +302,7 @@ fail:
     free (*envzp);
     *envzp = NULL;
     *envz_lenp = 0;
-    errno = errnum;
+    errno = EPROTO;
     return -1;
 }
 
@@ -472,7 +471,7 @@ static zlist_t *msgchans_fromjson (json_t *o)
     return l;
 inval:
     zlist_destroy (&l);
-    errno = EINVAL;
+    errno = EPROTO;
     return NULL;
 }
 
