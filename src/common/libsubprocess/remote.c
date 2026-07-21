@@ -405,7 +405,7 @@ static int remote_setup_channels (flux_subprocess_t *p)
  * must be the actual command before this is called.  For attach this is
  * deferred until the command is received in the attach response.
  */
-int remote_setup_io (flux_subprocess_t *p)
+static int remote_setup_io (flux_subprocess_t *p)
 {
     if (remote_setup_stdio (p) < 0)
         return -1;

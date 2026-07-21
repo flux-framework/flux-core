@@ -62,7 +62,7 @@ struct msgchan {
     struct watched_handle h; // handle opened to creation uri
 };
 
-json_t *watched_handle_get_stats (struct watched_handle *wh)
+static json_t *watched_handle_get_stats (struct watched_handle *wh)
 {
     return json_pack ("{s:i s:i s:i s:i s:i s:i}",
                       "sends", wh->stats.sends,
