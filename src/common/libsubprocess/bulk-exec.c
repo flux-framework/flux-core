@@ -139,15 +139,20 @@ int bulk_exec_write (struct bulk_exec *exec,
 {
     flux_subprocess_t *p;
 
-    if (!exec || !stream || !buf || len <= 0) {
+    if (!exec || !stream || !buf || len == 0) {
         errno = EINVAL;
         return -1;
     }
 
     p = zlist_first (exec->processes);
     while (p) {
-        if (flux_subprocess_write (p, stream, buf, len) < len)
+        int n = flux_subprocess_write (p, stream, buf, len);
+        if (n < 0)
             return -1;
+        if ((size_t)n < len) {
+            errno = ENOSPC;
+            return -1;
+        }
         p = zlist_next (exec->processes);
     }
     return 0;
