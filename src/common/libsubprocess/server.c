@@ -1605,7 +1605,7 @@ static void server_purge_zombies (subprocess_server_t *s)
     }
 }
 
-static int server_killall (subprocess_server_t *s, int signum)
+static void server_killall (subprocess_server_t *s, int signum)
 {
     flux_subprocess_t *p;
 
@@ -1620,8 +1620,6 @@ static int server_killall (subprocess_server_t *s, int signum)
             server_kill (p, signum);
         p = zlistx_next (s->subprocesses);
     }
-
-    return 0;
 }
 
 void subprocess_server_destroy (subprocess_server_t *s)
