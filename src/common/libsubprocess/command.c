@@ -231,6 +231,7 @@ static int argz_fromjson (json_t *o, char **argzp, size_t *argz_lenp)
 {
     size_t index;
     json_t *value;
+    int errnum = EPROTO;
 
     assert (*argzp == NULL && *argz_lenp == 0);
     if (!json_is_array (o))
@@ -239,15 +240,17 @@ static int argz_fromjson (json_t *o, char **argzp, size_t *argz_lenp)
     json_array_foreach (o, index, value) {
         if (!json_is_string (value))
             goto fail;
-        if (argz_add (argzp, argz_lenp, json_string_value (value)))
+        if (argz_add (argzp, argz_lenp, json_string_value (value))) {
+            errnum = ENOMEM;
             goto fail;
+        }
     }
     return 0;
 fail:
     free (*argzp);
     *argzp = NULL;
     *argz_lenp = 0;
-    errno = EPROTO;
+    errno = errnum;
     return -1;
 }
 
@@ -286,6 +289,7 @@ static int envz_fromjson (json_t *o, char **envzp, size_t *envz_lenp)
 {
     const char *var;
     json_t *val;
+    int errnum = EPROTO;
 
     assert (*envzp == NULL && *envz_lenp == 0);
     if (!json_is_object (o))
@@ -294,15 +298,17 @@ static int envz_fromjson (json_t *o, char **envzp, size_t *envz_lenp)
     json_object_foreach (o, var, val) {
         if (!json_is_string (val))
             goto fail;
-        if (envz_add (envzp, envz_lenp, var, json_string_value (val)))
+        if (envz_add (envzp, envz_lenp, var, json_string_value (val))) {
+            errnum = ENOMEM;
             goto fail;
+        }
     }
     return 0;
 fail:
     free (*envzp);
     *envzp = NULL;
     *envz_lenp = 0;
-    errno = EPROTO;
+    errno = errnum;
     return -1;
 }
 
