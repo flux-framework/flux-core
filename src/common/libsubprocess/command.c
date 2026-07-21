@@ -887,7 +887,7 @@ flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp)
     json_t *jmsgchans = NULL;
     const char *cwd = NULL;
     const char *label = NULL;
-    flux_cmd_t *cmd = NULL;;
+    flux_cmd_t *cmd = NULL;
 
     if (!(cmd = calloc (1, sizeof (*cmd)))) {
         errnum = ENOMEM;
