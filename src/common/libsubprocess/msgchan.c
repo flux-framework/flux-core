@@ -10,8 +10,8 @@
 
 /* msgchan.c - message channel
  *
- * This is intended to be encapsulated and tested on its own, then
- * integrated with libsubprocess.
+ * This is encapsulated and tested on its own, and integrated with
+ * libsubprocess.
  *
  * Server calls msgchan_create(), which
  * - opens a socketpair
