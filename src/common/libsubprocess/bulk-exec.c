@@ -356,7 +356,9 @@ static void subprocess_destroy_finish (flux_future_t *f, void *arg)
 static int subprocess_destroy (flux_t *h, flux_subprocess_t *p)
 {
     flux_future_t *f = flux_subprocess_kill (p, SIGKILL);
-    if (!f || flux_future_then (f, -1., subprocess_destroy_finish, p) < 0) {
+    if (!f
+        || flux_subprocess_aux_set (p, "flux_t", h, NULL) < 0
+        || flux_future_then (f, -1., subprocess_destroy_finish, p) < 0) {
         flux_future_destroy (f);
         return -1;
     }
