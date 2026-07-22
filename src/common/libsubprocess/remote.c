@@ -146,6 +146,12 @@ static void process_new_state (flux_subprocess_t *p,
 
     p->state = state;
 
+    /* On EXITED, leave the output watchers running so any remaining
+     * output can drain and EOF can be delivered to the caller; they
+     * stop themselves in remote_out_check_cb() once the buffer empties.
+     * On FAILED there is nothing worth draining, so stop the output
+     * watchers immediately.
+     */
     if (state == FLUX_SUBPROCESS_EXITED) {
         stop_in_watchers (p);
     }
