@@ -917,8 +917,8 @@ flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp)
         errnum = errno;
         goto fail;
     }
-    /* All sub-objects of `o` inherit reference from root object so
-     *  this decref should free jenv, jargv, ... etc.
+    /* jenv, jargv, ... are borrowed references from `o` (unpacked with
+     *  "s:o"), so there is nothing to decref here.
      */
     return cmd;
 
