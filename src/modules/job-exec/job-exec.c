@@ -119,9 +119,11 @@ static int kill_signal;
 
 extern struct exec_implementation testexec;
 extern struct exec_implementation bulkexec;
+extern struct exec_implementation bgexec;
 
 static struct exec_implementation * implementations[] = {
     &testexec,
+    &bgexec,
     &bulkexec,
     NULL
 };

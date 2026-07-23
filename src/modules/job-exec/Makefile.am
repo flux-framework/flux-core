@@ -30,7 +30,8 @@ libjob_exec_la_SOURCES = \
 	rset.c \
 	rset.h \
 	testexec.c \
-	bulkexec.c
+	bulkexec.c \
+	bgexec.c
 libjob_exec_la_LIBADD = \
 	$(top_builddir)/src/common/librlist/librlist.la
 
