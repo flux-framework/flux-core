@@ -35,8 +35,8 @@ exec.service
    configured.  See :man5:`flux-config-systemd`.
 
 exec.method
-   (optional) Select the execution implementation used to launch jobs.
-   The only valid value is ``bulk-exec``, which is also the default.
+   (optional) Select the execution implementation used to launch jobs,
+   either ``bulk-exec`` or ``bgexec``.  (Default: ``bulk-exec``).
    Note that a job may instead select the :ref:`testexec` implementation
    by including an ``attributes.system.exec.test`` object in its jobspec.
 
