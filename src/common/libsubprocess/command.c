@@ -1020,8 +1020,7 @@ int flux_cmd_env_replace (flux_cmd_t *cmd, char **env)
     if (init_argz (&new_envz, &new_envz_len, env) < 0)
         return -1;
 
-    if (cmd->envz)
-        free (cmd->envz);
+    free (cmd->envz);
     cmd->envz = new_envz;
     cmd->envz_len = new_envz_len;
 
