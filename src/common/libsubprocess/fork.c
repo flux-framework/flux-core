@@ -285,7 +285,7 @@ int create_process_fork (flux_subprocess_t *p)
 {
     /* set CLOEXEC on sync_fds, so on exec(), child sync_fd is closed
      * and seen by parent */
-#if SOCK_CLOEXEC
+#ifdef SOCK_CLOEXEC
     if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, p->sync_fds) < 0)
         return -1;
 #else
