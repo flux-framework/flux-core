@@ -571,12 +571,21 @@ flux_future_t *flux_rexec_bg (flux_t *h,
                               int flags,
                               const flux_cmd_t *cmd)
 {
+    int valid_flags = (FLUX_SUBPROCESS_FLAGS_NO_SETPGRP
+                       | FLUX_SUBPROCESS_FLAGS_FORK_EXEC
+                       | FLUX_SUBPROCESS_FLAGS_WAITABLE
+                       | FLUX_SUBPROCESS_FLAGS_SIGN);
+
     if (!h
         || (rank < 0
             && rank != FLUX_NODEID_ANY
             && rank != FLUX_NODEID_UPSTREAM)
         || !cmd
         || !flux_cmd_argc (cmd)) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (flags & ~valid_flags) {
         errno = EINVAL;
         return NULL;
     }
