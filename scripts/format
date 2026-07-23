@@ -12,3 +12,11 @@ if command -v black 2>&1 > /dev/null ; then
 else
   echo "black not found, python left unformatted"
 fi
+
+if command -v clang-format 2>&1 > /dev/null ; then
+    # clang-format-flux skips vendored/copied code itself.
+    find src -type f \( -name "*.c" -o -name "*.h" \) -print \
+        | xargs scripts/clang-format-flux
+else
+  echo "clang-format not found, C/C++ left unformatted"
+fi
