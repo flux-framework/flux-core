@@ -49,18 +49,42 @@ class DefaultsConfig:
             self.queue_defaults(queue)
 
     def queue_defaults(self, name):
-        """Create a copy of self.defaults updated with queue-specific values"""
+        """Create a copy of self.defaults updated with queue-specific values
+
+        Effective defaults are layered: global defaults, then (if 'name'
+        is a virtual queue, RFC 33) the parent queue's own defaults,
+        then this queue's own defaults - each layer overlaid per-key
+        over the last. Inheritance is one level (validated by
+        conf_policy.c), so there is no chain to walk beyond the parent.
+        """
+
+        def queue_system_defaults(qconf):
+            try:
+                return qconf["policy"]["jobspec"]["defaults"]["system"]
+            except KeyError:
+                return None
+
         defaults = copy.deepcopy(self.defaults)
         if name and self.queues:
             if name not in self.queues:
                 raise ValueError(f"Invalid queue '{name}' specified")
             qconf = self.queues[name]
-            try:
-                qdefaults = qconf["policy"]["jobspec"]["defaults"]["system"]
+            # A virtual queue (RFC 33) inherits the parent's defaults
+            # beneath its own. An unresolvable parent is a fatal error
+            # (fail closed): silently skipping the parent layer would
+            # give the vqueue the wrong effective defaults.
+            parent = qconf.get("parent")
+            if parent is not None:
+                if parent not in self.queues:
+                    raise ValueError(
+                        f"queue '{name}': parent queue '{parent}' is not configured"
+                    )
+                pdefaults = queue_system_defaults(self.queues[parent])
+                if pdefaults is not None:
+                    defaults.update(pdefaults)
+            qdefaults = queue_system_defaults(qconf)
+            if qdefaults is not None:
                 defaults.update(qdefaults)
-                return defaults
-            except KeyError:
-                return defaults
         return defaults
 
     def setattr_default(self, jobspec, attr, value):
