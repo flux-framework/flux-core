@@ -880,8 +880,7 @@ int flux_subprocess_write (flux_subprocess_t *p,
             return -1;
         }
         if (subprocess_write (p->f, c->name, buf, len, false) < 0) {
-            log_err ("error sending rexec.write request: %s",
-                     strerror (errno));
+            log_err ("error sending rexec.write request");
             return -1;
         }
         ret = len;
@@ -923,8 +922,7 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
     }
     else {
         if (subprocess_write (p->f, c->name, NULL, 0, true) < 0) {
-            log_err ("error sending rexec.write request: %s",
-                     strerror (errno));
+            log_err ("error sending rexec.write request");
             return -1;
         }
         c->closed = true;
