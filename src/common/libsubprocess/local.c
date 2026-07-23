@@ -240,7 +240,6 @@ static int channel_local_setup (flux_subprocess_t *p,
 {
     struct subprocess_channel *c = NULL;
     int fds[2] = { -1, -1 };
-    char *e = NULL;
     int save_errno;
     int fd_flags;
     int buffer_size;
@@ -327,16 +326,11 @@ static int channel_local_setup (flux_subprocess_t *p,
     }
 
     if (channel_flags & CHANNEL_FD) {
-        if (asprintf (&e, "%s", name) < 0) {
-            llog_debug (p, "asprintf: %s", strerror (errno));
-            goto error;
-        }
-
         /* set overwrite flag, if caller recursively launches
          * another subprocess */
         if (flux_cmd_setenvf (p->cmd,
                               1,
-                              e,
+                              name,
                               "%d",
                               c->child_fd) < 0) {
             llog_debug (p, "flux_cmd_setenvf: %s", strerror (errno));
@@ -358,14 +352,12 @@ static int channel_local_setup (flux_subprocess_t *p,
      */
     c = NULL;
 
-    free (e);
     return 0;
 
 error:
     save_errno = errno;
     close_pair_fds (fds);
     channel_destroy (c);
-    free (e);
     errno = save_errno;
     return -1;
 }
