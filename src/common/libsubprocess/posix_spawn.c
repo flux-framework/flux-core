@@ -46,6 +46,7 @@ static int spawn_setup_fds (flux_subprocess_t *p,
                             posix_spawn_file_actions_t *fa)
 {
     int rc = -1;
+    int e;
     struct subprocess_channel *c;
     struct spawn_close_arg sc;
 
@@ -55,28 +56,40 @@ static int spawn_setup_fds (flux_subprocess_t *p,
 
     if (!(p->flags & FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH)) {
         if ((c = zhash_lookup (p->channels, "stdin"))) {
-            if (posix_spawn_file_actions_adddup2 (fa,
-                                                  c->child_fd,
-                                                  STDIN_FILENO) < 0)
+            if ((e = posix_spawn_file_actions_adddup2 (fa,
+                                                       c->child_fd,
+                                                       STDIN_FILENO)) != 0) {
+                errno = e;
                 goto out;
+            }
         }
         if ((c = zhash_lookup (p->channels, "stdout"))) {
-            if (posix_spawn_file_actions_adddup2 (fa,
-                                                  c->child_fd,
-                                                  STDOUT_FILENO) < 0)
+            if ((e = posix_spawn_file_actions_adddup2 (fa,
+                                                       c->child_fd,
+                                                       STDOUT_FILENO)) != 0) {
+                errno = e;
                 goto out;
+            }
         }
-        else if (posix_spawn_file_actions_addclose (fa, STDOUT_FILENO) < 0)
-                goto out;
+        else if ((e = posix_spawn_file_actions_addclose (fa,
+                                                         STDOUT_FILENO)) != 0) {
+            errno = e;
+            goto out;
+        }
 
         if ((c = zhash_lookup (p->channels, "stderr"))) {
-            if (posix_spawn_file_actions_adddup2 (fa,
-                                                  c->child_fd,
-                                                  STDERR_FILENO) < 0)
+            if ((e = posix_spawn_file_actions_adddup2 (fa,
+                                                       c->child_fd,
+                                                       STDERR_FILENO)) != 0) {
+                errno = e;
                 goto out;
+            }
         }
-        else if (posix_spawn_file_actions_addclose (fa, STDERR_FILENO) < 0)
-                goto out;
+        else if ((e = posix_spawn_file_actions_addclose (fa,
+                                                         STDERR_FILENO)) != 0) {
+            errno = e;
+            goto out;
+        }
     }
 
     if (fdwalk (spawn_closefd, (void *) &sc) < 0)
@@ -93,10 +106,14 @@ out:
 static int setup_signals (posix_spawnattr_t *attr)
 {
     sigset_t mask;
+    int e;
 
-    if (sigemptyset (&mask) < 0
-        || posix_spawnattr_setsigmask (attr, &mask) < 0)
+    if (sigemptyset (&mask) < 0)
         return -1;
+    if ((e = posix_spawnattr_setsigmask (attr, &mask)) != 0) {
+        errno = e;
+        return -1;
+    }
 
     /*  Iterate list of signals to reset.
      *
@@ -111,7 +128,11 @@ static int setup_signals (posix_spawnattr_t *attr)
             if (sigaddset (&mask, i) < 0)
                 return -1;
     }
-    return posix_spawnattr_setsigdefault (attr, &mask);
+    if ((e = posix_spawnattr_setsigdefault (attr, &mask)) != 0) {
+        errno = e;
+        return -1;
+    }
+    return 0;
 }
 
 /*  Create a child process using posix_spawnp(3).
