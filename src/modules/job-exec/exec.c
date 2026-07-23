@@ -49,11 +49,6 @@
 #include "rset.h"
 #include "barrier.h"
 
-/*  Numeric severity used for a non-fatal, critical job exception:
- *  (e.g. node failure)
- */
-#define FLUX_JOB_EXCEPTION_CRIT 2
-
 extern char **environ;
 
 struct exec_ctx {
@@ -179,68 +174,6 @@ static void output_cb (struct bulk_exec *exec,
                         len);
 }
 
-static int lost_shell (struct jobinfo *job,
-                       bool critical,
-                       int shell_rank,
-                       const char *fmt,
-                       ...)
-{
-    flux_future_t *f;
-    char msgbuf[160];
-    int msglen = sizeof (msgbuf);
-    char *msg = msgbuf;
-    va_list ap;
-    int severity = critical ? 0 : FLUX_JOB_EXCEPTION_CRIT;
-
-    if (fmt) {
-        va_start (ap, fmt);
-        if (vsnprintf (msg, msglen, fmt, ap) >= msglen)
-            (void) snprintf (msg, msglen, "%s", "lost contact with job shell");
-        va_end (ap);
-    }
-
-    if (!critical) {
-        /* Raise a non-fatal job exception if the lost shell was not critical.
-         * The job exec service will raise a fatal exception later for
-         * critical shells.
-         */
-        jobinfo_raise (job,
-                       "node-failure",
-                       FLUX_JOB_EXCEPTION_CRIT,
-                       "%s",
-                       msg);
-        /* If an exception was raised, do not duplicate the message
-         * to the shell exception service since the message will already
-         * be displayed as part of the exception note:
-         */
-        msg = "";
-    }
-
-    /* Also notify job shell rank 0 of exception
-     */
-    if (!(f = jobinfo_shell_rpc_pack (job,
-                                      "exception",
-                                      "{s:s s:i s:i s:s}",
-                                      "type", "lost-shell",
-                                      "severity", severity,
-                                      "shell_rank", shell_rank,
-                                      "message", msg)))
-            return -1;
-    /*  Do not wait for response. If a shell is lost because the job
-     *  is terminating, then the rank 0 shell may also have exited by the
-     *  time this message is sent, so a response may never come. This
-     *  could leak the future (and the job reference taken by
-     *  jobinfo_shell_rpc_pack())
-     */
-    flux_future_destroy (f);
-    return 0;
-}
-
-static bool is_critical_rank (struct jobinfo *job, int shell_rank)
-{
-    return idset_test (job->critical_ranks, shell_rank);
-}
-
 static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
 {
     struct jobinfo *job = arg;
@@ -267,17 +200,17 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
                                         "sdexec reports %s for job %s",
                                         flux_subprocess_fail_error (p),
                                         idf58 (job->id));
-            bool critical = is_critical_rank (job, shell_rank);
+            bool critical = jobinfo_is_critical_rank (job, shell_rank);
 
             /*  Always notify rank 0 shell of a lost shell.
              */
-            lost_shell (job,
-                        critical,
-                        shell_rank,
-                        "shell exited with unkillable processes"
-                        " on %s (shell rank %d)",
-                        hostname,
-                        shell_rank);
+            jobinfo_lost_shell (job,
+                                critical,
+                                shell_rank,
+                                "shell exited with unkillable processes"
+                                " on %s (shell rank %d)",
+                                hostname,
+                                shell_rank);
 
             /*  Raise a fatal error and terminate job immediately if
              *  the lost shell was critical.
@@ -291,16 +224,16 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
                                      rank);
         }
         else if (errnum == EHOSTUNREACH) {
-            bool critical = is_critical_rank (job, shell_rank);
+            bool critical = jobinfo_is_critical_rank (job, shell_rank);
 
             /*  Always notify rank 0 shell of a lost shell.
              */
-            lost_shell (job,
-                        critical,
-                        shell_rank,
-                        "node failure on %s (shell rank %d)",
-                        hostname,
-                        shell_rank);
+            jobinfo_lost_shell (job,
+                                critical,
+                                shell_rank,
+                                "node failure on %s (shell rank %d)",
+                                hostname,
+                                shell_rank);
 
             /*  Raise a fatal error and terminate job immediately if
              *  the lost shell was critical.
@@ -445,13 +378,13 @@ static void exit_cb (struct bulk_exec *exec,
         int shell_rank = resource_set_rank_index (job->R, rank);
         if (p && signo > 0) {
             if (shell_rank != 0)
-                lost_shell (job,
-                            is_critical_rank (job, shell_rank),
-                            shell_rank,
-                            "shell rank %d (on %s): %s",
-                            shell_rank,
-                            flux_get_hostbyrank (job->h, rank),
-                            strsignal (signo));
+                jobinfo_lost_shell (job,
+                                    jobinfo_is_critical_rank (job, shell_rank),
+                                    shell_rank,
+                                    "shell rank %d (on %s): %s",
+                                    shell_rank,
+                                    flux_get_hostbyrank (job->h, rank),
+                                    strsignal (signo));
             else {
                 /*  Job can't continue without the leader shell, which has
                  *  terminated unexpectedly. Cancel the job now to avoid

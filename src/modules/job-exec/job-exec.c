@@ -1000,6 +1000,68 @@ void jobinfo_raise (struct jobinfo *job,
     va_end (ap);
 }
 
+bool jobinfo_is_critical_rank (struct jobinfo *job, int shell_rank)
+{
+    return idset_test (job->critical_ranks, shell_rank);
+}
+
+int jobinfo_lost_shell (struct jobinfo *job,
+                        bool critical,
+                        int shell_rank,
+                        const char *fmt,
+                        ...)
+{
+    flux_future_t *f;
+    char msgbuf[160];
+    int msglen = sizeof (msgbuf);
+    char *msg = msgbuf;
+    va_list ap;
+    int severity = critical ? 0 : FLUX_JOB_EXCEPTION_CRIT;
+
+    if (fmt) {
+        va_start (ap, fmt);
+        if (vsnprintf (msg, msglen, fmt, ap) >= msglen)
+            (void) snprintf (msg, msglen, "%s", "lost contact with job shell");
+        va_end (ap);
+    }
+
+    if (!critical) {
+        /* Raise a non-fatal job exception if the lost shell was not critical.
+         * The job exec service will raise a fatal exception later for
+         * critical shells.
+         */
+        jobinfo_raise (job,
+                       "node-failure",
+                       FLUX_JOB_EXCEPTION_CRIT,
+                       "%s",
+                       msg);
+        /* If an exception was raised, do not duplicate the message
+         * to the shell exception service since the message will already
+         * be displayed as part of the exception note:
+         */
+        msg = "";
+    }
+
+    /* Also notify job shell rank 0 of exception
+     */
+    if (!(f = jobinfo_shell_rpc_pack (job,
+                                      "exception",
+                                      "{s:s s:i s:i s:s}",
+                                      "type", "lost-shell",
+                                      "severity", severity,
+                                      "shell_rank", shell_rank,
+                                      "message", msg)))
+            return -1;
+    /*  Do not wait for response. If a shell is lost because the job
+     *  is terminating, then the rank 0 shell may also have exited by the
+     *  time this message is sent, so a response may never come. This
+     *  could leak the future (and the job reference taken by
+     *  jobinfo_shell_rpc_pack())
+     */
+    flux_future_destroy (f);
+    return 0;
+}
+
 void jobinfo_log_output (struct jobinfo *job,
                          int rank,
                          const char *component,

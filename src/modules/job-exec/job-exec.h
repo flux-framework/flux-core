@@ -11,6 +11,7 @@
 #ifndef HAVE_JOB_EXEC_H
 #define HAVE_JOB_EXEC_H 1
 
+#include <stdbool.h>
 #include <jansson.h>
 #include <flux/core.h>
 #include <flux/idset.h>
@@ -180,10 +181,33 @@ void jobinfo_tasks_complete (struct jobinfo *job,
 void jobinfo_fatal_error (struct jobinfo *job, int errnum,
                           const char *fmt, ...);
 
+/*  Numeric severity used for a non-fatal, critical job exception:
+ *  (e.g. node failure)
+ */
+#define FLUX_JOB_EXCEPTION_CRIT 2
+
 void jobinfo_raise (struct jobinfo *job,
                     const char *type,
                     int severity,
                     const char *fmt, ...);
+
+/*  Return true if shell rank `shell_rank` is a critical rank, i.e. one whose
+ *  loss requires a fatal job exception rather than a non-fatal one.
+ */
+bool jobinfo_is_critical_rank (struct jobinfo *job, int shell_rank);
+
+/*  Report shell rank `shell_rank` as lost: raise a non-fatal "node-failure"
+ *  exception if the rank is not critical (the caller raises a fatal error
+ *  separately for critical ranks), and always notify shell rank 0 via a
+ *  "lost-shell" exception RPC so the leader shell does not hang awaiting a
+ *  peer that will never respond.  `fmt` supplies the human-readable reason.
+ *  Returns 0 on success, -1 on error.
+ */
+int jobinfo_lost_shell (struct jobinfo *job,
+                        bool critical,
+                        int shell_rank,
+                        const char *fmt,
+                        ...);
 
 int jobinfo_drain_ranks (struct jobinfo *job,
                          const char *ranks,
