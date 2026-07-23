@@ -44,7 +44,7 @@ void close_pair_fds (int *fds)
 
 int cmd_option_bufsize (flux_subprocess_t *p, const char *name)
 {
-    char *var;
+    char *var = NULL;
     const char *val;
     int rv = -1;
 
@@ -75,7 +75,7 @@ cleanup:
 
 int cmd_option_line_buffer (flux_subprocess_t *p, const char *name)
 {
-    char *var;
+    char *var = NULL;
     const char *val;
     int rv = -1;
 
