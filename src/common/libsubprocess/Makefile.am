@@ -46,6 +46,8 @@ libsubprocess_la_SOURCES = \
 	fbuf_watcher.c \
 	bulk-exec.h \
 	bulk-exec.c \
+	bgexec.h \
+	bgexec.c \
 	msgchan.h \
 	msgchan.c
 
