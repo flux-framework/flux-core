@@ -376,6 +376,11 @@ flux_future_t *subprocess_rexec_bg (flux_t *h,
 
     bool sign = false;
 
+    if (!h || !cmd) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     /* Move waitable flag from local_flags to flags
      */
     if (local_flags & FLUX_SUBPROCESS_FLAGS_WAITABLE) {
