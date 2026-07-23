@@ -347,7 +347,10 @@ static zhash_t *zhash_fromjson (json_t *o)
     if (!json_is_object (o))
         goto fail;
 
-    h = zhash_new ();
+    if (!(h = zhash_new ())) {
+        errnum = ENOMEM;
+        goto fail;
+    }
     zhash_autofree (h);
 
     json_object_foreach (o, key, val) {
@@ -377,7 +380,10 @@ static zlist_t *channels_fromjson (json_t *o)
 
     if (!json_is_array (o))
         goto fail;
-    l = zlist_new ();
+    if (!(l = zlist_new ())) {
+        errnum = ENOMEM;
+        goto fail;
+    }
     zlist_autofree (l);
 
     json_array_foreach (o, index, value) {
