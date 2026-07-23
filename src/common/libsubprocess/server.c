@@ -887,6 +887,14 @@ static void server_exec_cb (flux_t *h,
         errno = EINVAL;
         goto error;
     }
+    /* LOCAL_UNBUF is a client-side output optimization and is not
+     * meaningful for a background subprocess launched by the server.
+     */
+    if (background && (local_flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF)) {
+        errmsg = "local-unbuf flag is not allowed in background mode";
+        errno = EINVAL;
+        goto error;
+    }
     if (!(flags & SUBPROCESS_REXEC_CHANNEL))
         ops.on_channel_out = NULL;
     if (!background && !(flags & SUBPROCESS_REXEC_STDOUT))
