@@ -1252,7 +1252,7 @@ static void server_disconnect_cb (flux_t *h,
         p = zlistx_first (s->subprocesses);
         while (p) {
             const char *uuid = subprocess_sender (p);
-            if (sender && uuid && streq (uuid, sender)) {
+            if (uuid && streq (uuid, sender)) {
                 /* RFC 42: if an attached client disconnects, the subprocess
                  * reverts to unattached background mode and continues
                  * running.  A foreground (never-backgrounded) process is
