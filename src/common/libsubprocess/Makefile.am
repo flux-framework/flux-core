@@ -62,6 +62,7 @@ TESTS = \
 	test_stdio.t \
 	test_channel.t \
 	test_remote.t \
+	test_bgexec.t \
 	test_iostress.t \
 	test_iochan.t \
 	test_fbuf.t \
@@ -152,6 +153,13 @@ test_remote_t_CPPFLAGS = \
 	$(test_cppflags)
 test_remote_t_LDADD = $(test_ldadd)
 test_remote_t_LDFLAGS = $(test_ldflags)
+
+test_bgexec_t_SOURCES = test/bgexec.c
+test_bgexec_t_CPPFLAGS = \
+	-DTEST_SUBPROCESS_DIR=\"$(top_builddir)/src/common/libsubprocess/\" \
+	$(test_cppflags)
+test_bgexec_t_LDADD = $(test_ldadd)
+test_bgexec_t_LDFLAGS = $(test_ldflags)
 
 test_iostress_t_SOURCES = test/iostress.c
 test_iostress_t_CPPFLAGS = $(test_cppflags)
