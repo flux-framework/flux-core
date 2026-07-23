@@ -1,0 +1,212 @@
+#!/bin/sh
+test_description='Test RFC 33 virtual queues (vqueues)'
+
+. $(dirname $0)/sharness.sh
+
+test_under_flux 4 full -Slog-stderr-level=1
+
+test_expect_success 'config queues, resources, and a vqueue' '
+	flux R encode -r 0-3 -p batch:0-2 -p debug:3 \
+	   | flux kvs put -r resource.R=- &&
+	flux config load <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+
+	[queues.expedite]
+	parent = "batch"
+	policy.jobspec.defaults.system.duration = "5m"
+
+	[queues.debug]
+	requires = [ "debug" ]
+
+	[policy.jobspec.defaults.system]
+	queue = "batch"
+	EOT
+	flux queue start --all &&
+	flux module unload sched-simple &&
+	flux module reload resource &&
+	flux module load sched-simple &&
+	flux queue list &&
+	flux resource list -o rlist
+'
+
+test_expect_success 'invalid config: vqueue parent missing is rejected' '
+	test_must_fail flux config load 2>orphan.err <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+	[queues.orphan]
+	parent = "nosuchqueue"
+	EOT
+	grep "parent queue .nosuchqueue. is not configured" orphan.err
+'
+
+test_expect_success 'invalid config: vqueue parent is the queue itself' '
+	test_must_fail flux config load 2>selfparent.err <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+	[queues.selfq]
+	parent = "selfq"
+	EOT
+	grep "parent queue is itself" selfparent.err
+'
+
+test_expect_success 'invalid config: vqueue parent is itself virtual' '
+	test_must_fail flux config load 2>subexpedite.err <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+	[queues.expedite]
+	parent = "batch"
+	[queues.subexpedite]
+	parent = "expedite"
+	EOT
+	grep "parent queue .expedite. is itself a virtual queue" subexpedite.err
+'
+
+test_expect_success 'invalid config: vqueue with requires is rejected' '
+	test_must_fail flux config load 2>requires.err <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+	[queues.expedite]
+	parent = "batch"
+	requires = [ "expedite" ]
+	EOT
+	grep "a virtual queue must not set .requires." requires.err
+'
+
+test_expect_success 'invalid config: vqueue with policy.scheduler is rejected' '
+	test_must_fail flux config load 2>scheduler.err <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+	[queues.expedite]
+	parent = "batch"
+	policy.scheduler.foo = 1
+	EOT
+	grep "a virtual queue must not set .policy.scheduler." scheduler.err
+'
+
+test_expect_success 'invalid config: vqueue parent is not a string is rejected' '
+	test_must_fail flux config load 2>parenttype.err <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+	[queues.expedite]
+	parent = 42
+	EOT
+	grep "parent. must be a string" parenttype.err
+'
+
+test_expect_success 'invalid vqueue config fails the instance at startup' '
+	cat >startup-badvq.toml <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+	[queues.orphan]
+	parent = "nosuchqueue"
+	EOT
+	test_must_fail flux start --config-path=startup-badvq.toml \
+	  true 2>startup-badvq.err &&
+	grep "parent queue .nosuchqueue. is not configured" startup-badvq.err
+'
+
+test_expect_success 'valid config: vqueue as default queue is accepted' '
+	flux config load <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+	[queues.expedite]
+	parent = "batch"
+	[policy.jobspec.defaults.system]
+	queue = "expedite"
+	EOT
+	flux config load <<-EOT
+	[queues.batch]
+	requires = [ "batch" ]
+
+	[queues.expedite]
+	parent = "batch"
+	policy.jobspec.defaults.system.duration = "5m"
+
+	[queues.debug]
+	requires = [ "debug" ]
+
+	[policy.jobspec.defaults.system]
+	queue = "batch"
+	EOT
+'
+
+test_expect_success 'submit to vqueue succeeds and job keeps vqueue name' '
+	jobid=$(flux submit -q expedite --urgency=hold hostname) &&
+	echo $jobid >expedite.jobid &&
+	test "$(flux jobs -no {queue} $jobid)" = "expedite"
+'
+
+test_expect_success 'vqueue job jobspec carries parent property constraint' '
+	jobid=$(cat expedite.jobid) &&
+	flux job info $jobid jobspec | jq -e \
+	  ".attributes.system.constraints.properties == [\"batch\"]"
+'
+
+test_expect_success 'cleanup held vqueue job' '
+	flux cancel $(cat expedite.jobid) &&
+	flux job wait-event $(cat expedite.jobid) clean
+'
+
+test_expect_success 'AND rule: parent stopped + vqueue started holds the job' '
+	flux queue stop batch &&
+	flux queue start expedite &&
+	jobid=$(flux submit -q expedite --wait-event=priority hostname) &&
+	echo $jobid >and-rule.jobid &&
+	flux queue status -v >and-rule.out &&
+	grep "^0 alloc requests queued" and-rule.out &&
+	grep "^0 alloc requests pending to scheduler" and-rule.out
+'
+
+test_expect_success 'starting the parent releases the vqueue job' '
+	jobid=$(cat and-rule.jobid) &&
+	flux queue start batch &&
+	flux job wait-event -t 20 $jobid clean
+'
+
+test_expect_success 'vqueue holds new jobs while parent jobs still run' '
+	flux queue start --all &&
+	flux queue stop expedite &&
+	vqid=$(flux submit -q expedite --wait-event=priority hostname) &&
+	pqid=$(flux submit -q batch hostname) &&
+	echo $vqid >held.jobid &&
+	flux job wait-event -t 20 $pqid clean &&
+	flux queue status -v >held.out &&
+	grep "^0 alloc requests queued" held.out &&
+	grep "^0 alloc requests pending to scheduler" held.out
+'
+
+test_expect_success 'starting the vqueue releases its held job' '
+	flux queue start expedite &&
+	flux job wait-event -t 20 $(cat held.jobid) clean
+'
+
+test_expect_success 'flux queue status shows expected output for the vqueue' '
+	flux queue start --all &&
+	flux queue status expedite >vqstatus.out &&
+	grep "submission is enabled" vqstatus.out &&
+	grep "Scheduling is started" vqstatus.out
+'
+
+test_expect_success 'flux queue status shows vqueue blocked by stopped parent' '
+	flux queue stop batch &&
+	flux queue start expedite &&
+	flux queue status expedite >vqstatus2.out &&
+	grep "Scheduling is stopped: parent queue .batch. is stopped" \
+	  vqstatus2.out &&
+	flux queue start --all
+'
+
+test_expect_success 'flux job update into vqueue picks up parent constraint' '
+	jobid=$(flux submit --urgency=hold -q debug hostname) &&
+	flux job info $jobid jobspec | jq -e \
+	  ".attributes.system.constraints.properties == [\"debug\"]" &&
+	flux update --wait $jobid queue=expedite &&
+	flux job info $jobid jobspec | jq -e \
+	  ".attributes.system.constraints.properties == [\"batch\"]" &&
+	test "$(flux jobs -no {queue} $jobid)" = "expedite" &&
+	flux cancel $jobid &&
+	flux job wait-event $jobid clean
+'
+
+test_done
