@@ -345,7 +345,6 @@ static void state_change_check_cb (flux_reactor_t *r,
                                    void *arg)
 {
     flux_subprocess_t *p = arg;
-    flux_subprocess_state_t next_state = FLUX_SUBPROCESS_INIT;
 
     flux_watcher_stop (p->state_idle_w);
 
@@ -353,6 +352,7 @@ static void state_change_check_cb (flux_reactor_t *r,
     subprocess_incref (p);
 
     if (p->state_reported != p->state) {
+        flux_subprocess_state_t next_state;
         /* this is the ubiquitous fail state for internal failures,
          * any state can jump to this state.  Even if some state changes
          * occurred in between, we'll jump to this state.
