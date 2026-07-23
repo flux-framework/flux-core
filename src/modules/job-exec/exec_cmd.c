@@ -26,6 +26,7 @@
 #include "job-exec.h"
 #include "exec_config.h"
 #include "exec_cmd.h"
+#include "rset.h"
 
 extern char **environ;
 
@@ -108,6 +109,35 @@ flux_cmd_t *job_shell_cmd_create (struct jobinfo *job, const char *service)
 err:
     flux_cmd_destroy (cmd);
     return NULL;
+}
+
+bool job_shell_needs_per_rank_cmds (const char *test_expected_cpus)
+{
+    return config_get_sdexec_constrain_resources ()
+        || test_expected_cpus != NULL;
+}
+
+int job_shell_cmd_set_rank_opts (struct jobinfo *job,
+                                 flux_cmd_t *cmd,
+                                 unsigned int r,
+                                 const char *test_expected_cpus)
+{
+    if (config_get_sdexec_constrain_resources ()) {
+        char *R_str = resource_set_R_local (job->R, r);
+        if (!R_str)
+            return -1;
+        int rc = flux_cmd_setopt (cmd, "SDEXEC_R_LOCAL", R_str);
+        free (R_str);
+        if (rc < 0)
+            return -1;
+    }
+    if (test_expected_cpus) {
+        if (flux_cmd_setopt (cmd,
+                             "SDEXEC_TEST_EXPECTED_CPUS",
+                             test_expected_cpus) < 0)
+            return -1;
+    }
+    return 0;
 }
 
 /* vi: ts=4 sw=4 expandtab

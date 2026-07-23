@@ -27,6 +27,23 @@
  */
 flux_cmd_t *job_shell_cmd_create (struct jobinfo *job, const char *service);
 
+/*  Return true if per-rank job-shell commands are needed for sdexec, in which
+ *  case each rank must be launched with a command carrying its own sdexec
+ *  options rather than a single command covering all ranks.  This is the case
+ *  when resource constraints are configured or `test_expected_cpus` (the
+ *  jobspec sdexec-test-expected-cpus override) is set.
+ */
+bool job_shell_needs_per_rank_cmds (const char *test_expected_cpus);
+
+/*  Set per-rank sdexec options on `cmd` for rank `r`: the local resource set
+ *  (when constraints are configured) and `test_expected_cpus` (when set).
+ *  Returns 0 on success, -1 on error.
+ */
+int job_shell_cmd_set_rank_opts (struct jobinfo *job,
+                                 flux_cmd_t *cmd,
+                                 unsigned int r,
+                                 const char *test_expected_cpus);
+
 #endif /* !HAVE_JOB_EXEC_CMD_H */
 
 /* vi: ts=4 sw=4 expandtab

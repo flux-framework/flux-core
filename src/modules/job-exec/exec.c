@@ -450,40 +450,6 @@ static struct bulk_exec_ops exec_ops = {
     .on_error =     error_cb
 };
 
-/* Set per-rank sdexec options on `cmd` for rank `r`.
- * Returns 0 on success, -1 on error.
- */
-static int sdexec_cmd_set_rank_opts (struct exec_ctx *ctx,
-                                     flux_cmd_t *cmd,
-                                     unsigned int r)
-{
-    if (config_get_sdexec_constrain_resources ()) {
-        char *R_str = resource_set_R_local (ctx->job->R, r);
-        if (!R_str)
-            return -1;
-        int rc = flux_cmd_setopt (cmd, "SDEXEC_R_LOCAL", R_str);
-        free (R_str);
-        if (rc < 0)
-            return -1;
-    }
-    if (ctx->sdexec_test_expected_cpus) {
-        if (flux_cmd_setopt (cmd,
-                             "SDEXEC_TEST_EXPECTED_CPUS",
-                             ctx->sdexec_test_expected_cpus) < 0)
-            return -1;
-    }
-    return 0;
-}
-
-/* Return true if per-rank sdexec commands are needed.
- * When true, exec_init() pushes one cmd per rank instead of one for all.
- */
-static bool sdexec_needs_per_rank_cmds (struct exec_ctx *ctx)
-{
-    return config_get_sdexec_constrain_resources ()
-        || ctx->sdexec_test_expected_cpus != NULL;
-}
-
 /* Push one bulk_exec cmd per rank, each with rank-specific sdexec options.
  * Returns 0 on success, -1 on error.
  */
@@ -501,7 +467,11 @@ static int sdexec_push_per_rank_cmds (struct bulk_exec *exec,
         if (!(rcmd = flux_cmd_copy (cmd))
             || !(rset = idset_create (0, IDSET_FLAG_AUTOGROW))
             || idset_set (rset, r) < 0
-            || sdexec_cmd_set_rank_opts (ctx, rcmd, r) < 0) {
+            || job_shell_cmd_set_rank_opts (ctx->job,
+                                            rcmd,
+                                            r,
+                                            ctx->sdexec_test_expected_cpus)
+               < 0) {
             flux_cmd_destroy (rcmd);
             idset_destroy (rset);
             return -1;
@@ -564,7 +534,8 @@ static int exec_init (struct jobinfo *job)
      * each transient unit can be configured for its own allocation.
      * Otherwise push a single command covering all ranks (the common case).
      */
-    if (streq (service, "sdexec") && sdexec_needs_per_rank_cmds (ctx)) {
+    if (streq (service, "sdexec")
+        && job_shell_needs_per_rank_cmds (ctx->sdexec_test_expected_cpus)) {
         if (sdexec_push_per_rank_cmds (exec, ranks, cmd) < 0) {
             flux_log_error (job->h, "exec_init: sdexec per-rank cmd setup");
             goto err;
