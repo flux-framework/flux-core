@@ -46,7 +46,6 @@ static void local_channel_flush (struct subprocess_channel *c)
 
     if (!c->eof_sent_to_caller && c->output_cb) {
         struct fbuf *fb;
-        int len;
 
         /* always a chance caller may destroy subprocess in callback */
         subprocess_incref (c->p);
@@ -58,7 +57,7 @@ static void local_channel_flush (struct subprocess_channel *c)
             return;
         }
 
-        while ((len = fbuf_bytes (fb)) > 0)
+        while (fbuf_bytes (fb) > 0)
             c->output_cb (c->p, c->name);
 
         /* eof call */
