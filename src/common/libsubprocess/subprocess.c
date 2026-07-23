@@ -108,8 +108,10 @@ struct idset *subprocess_childfds (flux_subprocess_t *p)
     if (!(ids = idset_decode ("0-2")))
         return NULL;
 
-    if (p->sync_fds[1] > 0)
-        idset_set (ids, p->sync_fds[1]);
+    if (p->sync_fds[1] > 0) {
+        if (idset_set (ids, p->sync_fds[1]) < 0)
+            goto error;
+    }
 
     c = zhash_first (p->channels);
     while (c) {
@@ -118,7 +120,8 @@ struct idset *subprocess_childfds (flux_subprocess_t *p)
             if (streq (c->name, stdchan[i]))
                 goto next;
         }
-        idset_set (ids, c->child_fd);
+        if (idset_set (ids, c->child_fd) < 0)
+            goto error;
 next:
         c = zhash_next (p->channels);
     }
@@ -126,11 +129,15 @@ next:
     // protect any message channel file descriptors to be passed to subproc
     mch = zhash_first (p->msgchans);
     while (mch) {
-        idset_set (ids, msgchan_get_fd (mch));
+        if (idset_set (ids, msgchan_get_fd (mch)) < 0)
+            goto error;
         mch = zhash_next (p->msgchans);
     }
 
     return ids;
+error:
+    idset_destroy (ids);
+    return NULL;
 }
 
 static void subprocess_free (flux_subprocess_t *p)
