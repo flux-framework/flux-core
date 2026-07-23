@@ -945,6 +945,9 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
     json_t *o = json_object ();
     json_t *a;
 
+    if (!o)
+        goto err;
+
     /* Pack cwd */
     if (cmd->cwd) {
         if (!(a = json_string (cmd->cwd)))
