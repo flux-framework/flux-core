@@ -1057,7 +1057,7 @@ static void test_list_names (void)
 
     /* snapshot survives queue removal mid-iteration */
     name = zlistx_first (names);
-    ok (queues_remove (qs, "batch") == 0,
+    ok (queues_remove (qs, "batch", &error) == 0,
         "queues_remove during snapshot iteration works");
     ok (queues_lookup (qs, "batch", NULL) == NULL,
         "removed name no longer resolves");
@@ -1121,15 +1121,15 @@ static void test_add_remove_primitives (void)
 
     /* remove error cases */
     errno = 0;
-    ok (queues_remove (qs, "noexist") < 0 && errno == ENOENT,
+    ok (queues_remove (qs, "noexist", &error) < 0 && errno == ENOENT,
         "queues_remove unknown name fails with ENOENT");
     errno = 0;
-    ok (queues_remove (qs, NULL) < 0 && errno == EINVAL,
+    ok (queues_remove (qs, NULL, &error) < 0 && errno == EINVAL,
         "queues_remove NULL name fails with EINVAL");
 
     /* remove one queue */
     notify_reset ();
-    ok (queues_remove (qs, "debug") == 0,
+    ok (queues_remove (qs, "debug", &error) == 0,
         "queues_remove debug works");
     ok (notify_count == 1
         && streq (notify_log[0].event, "remove")
@@ -1160,7 +1160,7 @@ static void test_add_remove_primitives (void)
 
     /* remove in anon mode is an error */
     errno = 0;
-    ok (queues_remove (qs, "batch") < 0 && errno == EINVAL,
+    ok (queues_remove (qs, "batch", &error) < 0 && errno == EINVAL,
         "queues_remove in anon mode fails with EINVAL");
 
     queues_destroy (qs);
@@ -1421,6 +1421,7 @@ static void test_status_encode (void)
     json_t *o;
     int enable;
     int start;
+    const char *blocked;
     const char *reason;
 
     qs = queues_create ();
@@ -1463,13 +1464,21 @@ static void test_status_encode (void)
         "started status: start true, no stop_reason");
     json_decref (o);
 
-    /* started but scheduler offline: presented stopped + synthesized
-     * reason (own state untouched) */
+    /* started but scheduler offline: presented stopped + blocked +
+     * synthesized reason (own state untouched) */
     o = queue_status_encode (q, false);
-    ok (o && json_unpack (o, "{s:b s:b s:s !}", "enable", &enable,
-                          "start", &start, "stop_reason", &reason) == 0
-        && enable && !start && streq (reason, "Scheduler is offline"),
-        "sched offline: presented stopped with synthesized reason");
+    ok (o
+        && json_unpack (o,
+                        "{s:b s:b s:s s:s !}",
+                        "enable", &enable,
+                        "start", &start,
+                        "blocked", &blocked,
+                        "stop_reason", &reason) == 0
+        && enable
+        && !start
+        && streq (blocked, "scheduler")
+        && streq (reason, "Scheduler is offline"),
+        "sched offline: presented stopped and blocked with reason");
     ok (queue_is_started (q),
         "sched offline does not modify queue state");
     json_decref (o);
