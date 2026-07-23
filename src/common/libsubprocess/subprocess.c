@@ -1098,7 +1098,10 @@ static flux_future_t *add_pending_signal (flux_subprocess_t *p, int signum)
         return NULL;
     }
     if ((f = flux_future_create (NULL, NULL))) {
-        flux_subprocess_aux_set (p, "sp::signal_future", f, NULL);
+        if (flux_subprocess_aux_set (p, "sp::signal_future", f, NULL) < 0) {
+            flux_future_destroy (f);
+            return NULL;
+        }
         p->signal_pending = signum;
         /*  Take a reference on the returned future in case the caller
          *  destroys it between now and when the signal is actually sent.
