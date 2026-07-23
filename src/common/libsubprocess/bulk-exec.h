@@ -73,7 +73,7 @@ int bulk_exec_start (flux_t *h, struct bulk_exec *exec);
  */
 flux_future_t * bulk_exec_kill (struct bulk_exec *exec,
                                 const struct idset *ranks,
-                                int signal);
+                                int signum);
 
 /*  Log per-rank kill errors for a failed bulk_exec_kill() RPC.
  */

@@ -47,7 +47,7 @@ flux_future_t *subprocess_rexec (flux_t *h,
                                  uint32_t rank,
                                  flux_cmd_t *cmd,
                                  int flags,
-                                 int lflags);
+                                 int local_flags);
 
 flux_future_t *subprocess_rexec_bg (flux_t *h,
                                     const char *service_name,

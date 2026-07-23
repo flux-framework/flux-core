@@ -143,7 +143,7 @@ struct idset * subprocess_childfds (flux_subprocess_t *p);
 void subprocess_incref (flux_subprocess_t *p);
 void subprocess_decref (flux_subprocess_t *p);
 
-void subprocess_standard_output (flux_subprocess_t *p, const char *name);
+void subprocess_standard_output (flux_subprocess_t *p, const char *stream);
 
 #endif /* !_SUBPROCESS_PRIVATE_H */
 

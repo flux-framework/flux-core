@@ -359,7 +359,7 @@ int flux_subprocess_getline (flux_subprocess_t *p,
  *   a continuation callback when the kill operation is complete, or
  *   flux_future_wait_for(3) to block until the kill operation is complete.
  */
-flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signo);
+flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum);
 
 /*
  *  Remove a reference to subprocess object `p`. The subprocess object
