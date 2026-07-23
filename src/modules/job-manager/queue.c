@@ -453,11 +453,16 @@ static int constraints_match_check (struct queue_ctx *qctx,
         return -1;
 
     /*  If current queue has constraints, then create a constraint object
-     *  for equivalence test below:
+     *  for equivalence test below. queue_requires() returns the effective
+     *  requires: for a virtual queue (RFC 33) its own requires is always
+     *  NULL (enforced by conf_policy.c), but its jobs carry the parent's
+     *  property constraint (injected by the constraints frobnicator
+     *  plugin), so the parent's requires is what must match here.
      */
     if (queue_requires (q)
         && !(expected = json_pack ("{s:O}",
-                                   "properties", queue_requires (q)))) {
+                                   "properties",
+                                   queue_requires (q)))) {
         errprintf (errp, "failed to get constraints for current queue");
         goto out;
     }
@@ -544,7 +549,10 @@ static int queue_update_cb (flux_plugin_t *p,
      *  and append an additional update of the job constraints.
      *
      *  This is done via two different calls below dependent on whether the
-     *  new queue has any constraints.
+     *  new queue has any constraints. As above, queue_requires() is the
+     *  effective requires: a job moved into a virtual queue must pick up
+     *  the parent's constraint, since that is what makes it schedule as
+     *  part of the parent's job list.
      */
     if (queue_requires (newq)) {
         /*  Replace current constraints with those of the new queue
@@ -555,7 +563,8 @@ static int queue_update_cb (flux_plugin_t *p,
                                    "feasibility", 1,
                                    "updates",
                                     "attributes.system.constraints",
-                                     "properties", queue_requires (newq));
+                                     "properties",
+                                     queue_requires (newq));
     }
     else {
         /*  New queue has no requirements. Set constraints to empty object.
