@@ -182,7 +182,7 @@ static char *env_entry_name (char *entry, char *dst, size_t len)
         p = entry + strlen (entry) + 1;
 
     /* Refuse to truncate */
-    if (len-1 < p - entry)
+    if (len == 0 || len-1 < p - entry)
         return NULL;
 
     /* strncat(3): safer than strncpy(3), faster than by-hand: */
