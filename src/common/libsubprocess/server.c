@@ -1050,8 +1050,7 @@ static void server_write_cb (flux_t *h,
         goto out;
 
     if (data && len) {
-        int rc = flux_subprocess_write (p, stream, data, len);
-        if (rc < 0) {
+        if (flux_subprocess_write (p, stream, data, len) < 0) {
             llog_error (s,
                         "Error writing %d bytes to subprocess %s",
                         len,
@@ -1347,19 +1346,17 @@ static int attach_respond (subprocess_server_t *s,
 {
     flux_cmd_t *cmd = flux_subprocess_get_cmd (p);
     json_t *cmd_obj;
-    int rc;
 
     if (!cmd || !(cmd_obj = cmd_tojson (cmd))) {
         errno = ENOMEM;
         return -1;
     }
-    rc = flux_respond_pack (s->h,
-                            msg,
-                            "{s:s s:i s:o}",
-                            "type", "attached",
-                            "pid", flux_subprocess_pid (p),
-                            "cmd", cmd_obj);
-    return rc;
+    return flux_respond_pack (s->h,
+                              msg,
+                              "{s:s s:i s:o}",
+                              "type", "attached",
+                              "pid", flux_subprocess_pid (p),
+                              "cmd", cmd_obj);
 }
 
 /* Return true if output on read channel 'name' is forwarded to the client,
