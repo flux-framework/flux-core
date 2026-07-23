@@ -936,20 +936,31 @@ static void ns_copy (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-/*  Graft the guest namespace for `job` into the primary namespace and
- *   remove it, first quiescing the exec.eventlog.  If `event` is non-NULL
- *   it is posted to the exec.eventlog as the final entry (e.g. "done" on
- *   job completion); pass NULL to preserve a still-running job across a
- *   restart without terminating its eventlog.
+/*  Graft the guest namespace for `job` into the primary namespace, first
+ *   quiescing the exec.eventlog.  If `event` is non-NULL it is posted to the
+ *   exec.eventlog as the final entry (e.g. "done" on job completion); pass
+ *   NULL to preserve a still-running job across a restart without terminating
+ *   its eventlog.
  *
- *  The process is a chained future of 3 parts:
+ *  If `remove` is true, remove the guest namespace after grafting (the job
+ *   has terminated, so its guest KVS content lives on only as the graft).
+ *   If false, leave the live namespace in place: the job is still running and
+ *   job-exec may be reloaded within the same KVS session, in which case
+ *   reattach adopts the still-live namespace rather than recreating it from
+ *   the graft (recreation would race the KVS async removal of the same name).
+ *   On a full broker restart the KVS restarts and the live namespace vanishes
+ *   regardless; reattach then recreates it from the graft.
+ *
+ *  The process is a chained future of 2 or 3 parts:
  *   1. Post the final event (if any) and commit the exec.eventlog, so its
  *      buffered entries are flushed to the guest namespace before it is
  *      grafted and becomes read-only.
  *   2. Graft the namespace into the primary namespace.
- *   3. Remove the guest namespace.
+ *   3. Remove the guest namespace (only if `remove`).
  */
-static flux_future_t * ns_move (struct jobinfo *job, const char *event)
+static flux_future_t * ns_move (struct jobinfo *job,
+                                const char *event,
+                                bool remove)
 {
     flux_t *h = job->ctx->h;
     flux_future_t *f = NULL;
@@ -963,8 +974,13 @@ static flux_future_t * ns_move (struct jobinfo *job, const char *event)
         goto error;
     }
     if (!(f1 = flux_future_and_then (f, ns_copy, job))
-        || !(f1 = flux_future_or_then (f, ns_copy, job))
-        || !(f2 = flux_future_and_then (f1, ns_delete, job))
+        || !(f1 = flux_future_or_then (f, ns_copy, job))) {
+        flux_log_error (h, "ns_move: flux_future_and_then");
+        goto error;
+    }
+    if (!remove)
+        return f1;
+    if (!(f2 = flux_future_and_then (f1, ns_delete, job))
         || !(f2 = flux_future_or_then (f1, ns_delete, job))) {
         flux_log_error (h, "ns_move: flux_future_and_then");
         goto error;
@@ -1033,7 +1049,7 @@ static int jobinfo_finalize (struct jobinfo *job)
     job->finalizing = 1;
 
     if (job->has_namespace) {
-        if (!(f = ns_move (job, "done"))
+        if (!(f = ns_move (job, "done", true))
             || flux_future_then (f, -1., ns_move_cb, job) < 0)
             goto error;
     }
@@ -1118,11 +1134,13 @@ done:
     flux_future_destroy (f);
 }
 
-static void ns_link (flux_future_t *fprev, void *arg)
+/*  Post the init/reattach event and (re)establish the job.<id>.guest symlink
+ *   to the live guest namespace, continuing `fprev` with the combined future.
+ */
+static void ns_emit_and_symlink (flux_future_t *fprev, struct jobinfo *job)
 {
     int saved_errno;
     flux_t *h = flux_future_get_flux (fprev);
-    struct jobinfo *job = arg;
     flux_future_t *cf = NULL;
     flux_future_t *f = NULL;
 
@@ -1150,6 +1168,34 @@ error:
     flux_future_destroy (fprev);
 }
 
+static void ns_link (flux_future_t *fprev, void *arg)
+{
+    ns_emit_and_symlink (fprev, arg);
+}
+
+/*  Error continuation for the reattach namespace create.  A reattaching job
+ *   whose guest namespace is still live in the same KVS session (e.g. a
+ *   job-exec module reload rather than a full broker restart) gets EEXIST
+ *   from namespace_create: the namespace was grafted but not removed on
+ *   unload, so it is still present and current.  Adopt it in place --
+ *   re-post the reattach event and restore the symlink -- rather than
+ *   failing the job.  Any other error is fatal.
+ */
+static void ns_adopt (flux_future_t *fprev, void *arg)
+{
+    struct jobinfo *job = arg;
+    int errnum = 0;
+
+    if (flux_future_get (fprev, NULL) < 0)
+        errnum = errno;
+    if (job->reattach && errnum == EEXIST) {
+        ns_emit_and_symlink (fprev, job);
+        return;
+    }
+    flux_future_continue_error (fprev, errnum, NULL);
+    flux_future_destroy (fprev);
+}
+
 static flux_future_t *ns_create_and_link (flux_t *h, struct jobinfo *job)
 {
     flux_future_t *f = NULL;
@@ -1164,7 +1210,9 @@ static flux_future_t *ns_create_and_link (flux_t *h, struct jobinfo *job)
      */
     job->has_namespace = 1;
 
-    if (!f || !(f2 = flux_future_and_then (f, ns_link, job))) {
+    if (!f
+        || !(f2 = flux_future_and_then (f, ns_link, job))
+        || !(f2 = flux_future_or_then (f, ns_adopt, job))) {
         flux_log_error (h, "ns_create_and_link: flux_future_and_then");
         flux_future_destroy (f);
         return NULL;
@@ -1762,11 +1810,13 @@ static int configure_implementations (flux_t *h, int argc, char **argv)
 }
 
 /*  On module unload, graft each running job's guest namespace into the
- *   primary namespace (as a dirref at job.<id>.guest) and remove it, so the
- *   namespace is preserved across a restart: its content is reachable from
- *   the primary root, protected by KVS garbage collection and captured by
- *   the shutdown content dump.  No terminating event is posted since the
- *   jobs are still running and will be reattached.
+ *   primary namespace (as a dirref at job.<id>.guest) without removing the
+ *   live namespace, so the content is preserved across a restart: it is
+ *   reachable from the primary root, protected by KVS garbage collection and
+ *   captured by the shutdown content dump.  Retaining the live namespace lets
+ *   a same-KVS reload reattach by adopting it in place (see ns_adopt()).  No
+ *   terminating event is posted since the jobs are still running and will be
+ *   reattached.
  */
 static int graft_running_ns (struct job_exec_ctx *ctx)
 {
@@ -1782,7 +1832,7 @@ static int graft_running_ns (struct job_exec_ctx *ctx)
                     goto cleanup;
                 flux_future_set_flux (fall, ctx->h);
             }
-            if (!(f = ns_move (job, NULL)))
+            if (!(f = ns_move (job, NULL, false)))
                 goto cleanup;
             if (flux_future_push (fall, job->ns, f) < 0)
                 goto cleanup;
