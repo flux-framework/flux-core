@@ -113,6 +113,7 @@ struct jobinfo {
     uint8_t               multiuser:1;
     uint8_t               has_namespace:1;
     uint8_t               exception_in_progress:1;
+    uint8_t               shell_exit_posted:1; /* shell-exit event was posted */
 
     uint8_t               started:1;     /* some or all shells are starting */
     uint8_t               running:1;     /* all shells are running */
@@ -188,6 +189,16 @@ int jobinfo_drain_ranks (struct jobinfo *job,
                          const char *ranks,
                          const char *fmt,
                          ...);
+
+/* Post the "shell-exit" event for the exiting leader shell (shell rank 0),
+ * then arm a timer that raises a fatal exception if other shells remain
+ * active longer than the configured shell-exit timeout.  `wait_status` is
+ * the leader shell's raw wait status (supplied by the exec implementation,
+ * which holds the exited shell).  Posts at most once per job.
+ */
+void jobinfo_post_shell_exit (struct jobinfo *job,
+                              unsigned int leader_rank,
+                              int wait_status);
 
 /* Append a log output message to exec.eventlog for job
  */

@@ -42,7 +42,6 @@
 #include "src/common/libutil/basename.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
-#include "src/common/libutil/fsd.h"
 #include "src/common/libsubprocess/bulk-exec.h"
 
 #include "job-exec.h"
@@ -77,8 +76,6 @@ struct exec_ctx {
      *  ranks to be drained when they exit too.
      */
     bool terminated_before_barrier;
-
-    bool shell_exit_posted; /* true after shell-exit event is posted */
 };
 
 static void exec_ctx_destroy (struct exec_ctx *tc)
@@ -364,144 +361,25 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
                              rank);
 }
 
-static void shell_exit_timer_cb (flux_reactor_t *r,
-                                 flux_watcher_t *w,
-                                 int revents,
-                                 void *arg)
-{
-    struct jobinfo *job = arg;
-    struct bulk_exec *exec = job->data;
-    struct idset *active = bulk_exec_active_ranks (exec);
-    char *ids = NULL;
-    char *hosts = NULL;
-    char fsd_buf[64];
-    double timeout = config_get_shell_exit_timeout ();
-
-    flux_watcher_stop (w);
-
-    if (!active)
-        return;
-
-    ids = idset_encode (active, IDSET_FLAG_RANGE);
-    hosts = flux_hostmap_lookup (job->h, ids, NULL);
-    (void) fsd_format_duration (fsd_buf, sizeof (fsd_buf), timeout);
-
-    jobinfo_fatal_error (job,
-                         0,
-                         "job shells still active on %s"
-                         " (rank%s %s) %s after leader shell exit",
-                         hosts ? hosts : "(unknown)",
-                         idset_count (active) > 1 ? "s" : "",
-                         ids ? ids : "(unknown)",
-                         fsd_buf);
-    free (ids);
-    free (hosts);
-    idset_destroy (active);
-}
-
-/*  Post the shell-exit event when the leader shell (shell rank 0) exits.
- *  Also arm the shell_exit_timer if configured and shells remain active.
- *  Called at most once per job (guarded by ctx->shell_exit_posted).
- */
-static void post_shell_exit_event (struct bulk_exec *exec,
-                                   struct jobinfo *job,
-                                   struct exec_ctx *ctx,
-                                   unsigned int leader_rank)
-{
-    flux_subprocess_t *p;
-    int rc;
-    struct idset *active = NULL;
-    char *active_ids = NULL;
-    int wait_status = 0;
-    double timeout;
-
-    if (ctx->shell_exit_posted)
-        return;
-    ctx->shell_exit_posted = true;
-
-    p = bulk_exec_get_subprocess (exec, leader_rank);
-    if (p)
-        wait_status = flux_subprocess_status (p);
-
-    /*  The shell-exit event is informational only (to notify eventlog
-     *  consumers that rank 0 shell services are unavailable). If encoding
-     *  or posting fails, log but continue - the timer below is the critical
-     *  safety mechanism to prevent hanging jobs.
-     */
-    if ((active = bulk_exec_active_ranks (exec))
-        && idset_count (active) > 0
-        && !(active_ids = idset_encode (active, IDSET_FLAG_RANGE)))
-        flux_log_error (job->h,
-                        "%s: failed to encode %zu active_ranks for %s",
-                        "shell-exit",
-                        idset_count (active),
-                        idf58 (job->id));
-
-    if (active_ids) {
-        rc = jobinfo_emit_event_pack_nowait (job,
-                                             "shell-exit",
-                                             "{s:i s:i s:s}",
-                                             "rank", (int) leader_rank,
-                                             "wait_status", wait_status,
-                                             "active_ranks", active_ids);
-    }
-    else {
-        rc = jobinfo_emit_event_pack_nowait (job,
-                                             "shell-exit",
-                                             "{s:i s:i}",
-                                             "rank", (int) leader_rank,
-                                             "wait_status", wait_status);
-    }
-    if (rc < 0)
-        flux_log_error (job->h,
-                        "failed to post shell-exit event for job %s",
-                        idf58 (job->id));
-
-    timeout = config_get_shell_exit_timeout ();
-    if (timeout > 0.
-        && active
-        && idset_count (active) > 0
-        && !job->exception_in_progress) {
-        flux_reactor_t *reactor = flux_get_reactor (job->h);
-        job->shell_exit_timer =
-            flux_timer_watcher_create (reactor,
-                                       timeout,
-                                       0.,
-                                       shell_exit_timer_cb,
-                                       job);
-        if (job->shell_exit_timer)
-            flux_watcher_start (job->shell_exit_timer);
-        else {
-            /*  Without the timer the job could hang indefinitely waiting
-             *  for the remaining shells, so raise an exception now rather
-             *  than just logging the error.
-             */
-            jobinfo_fatal_error (job,
-                                 errno,
-                                 "failed to create shell exit timer");
-        }
-    }
-
-    free (active_ids);
-    idset_destroy (active);
-}
-
 static void exit_cb (struct bulk_exec *exec,
                      void *arg,
                      const struct idset *ranks)
 {
     struct jobinfo *job = arg;
-    struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
+    struct exec_ctx *ctx;
 
     /*  Post shell-exit event if the leader shell (shell rank 0) is in the
      *  set of exiting ranks.  This must be done before the single-shell
      *  early-return so the event is posted for single-shell jobs too.
-     *  ctx may be NULL in highly unlikely error scenarios; skip if so.
+     *  jobinfo_post_shell_exit() is a no-op after the first call.
      */
-    if (ctx) {
+    {
         unsigned int leader_rank = resource_set_nth_rank (job->R, 0);
-        if (idset_test (ranks, leader_rank))
-            post_shell_exit_event (exec, job, ctx, leader_rank);
+        if (idset_test (ranks, leader_rank)) {
+            flux_subprocess_t *p = bulk_exec_get_subprocess (exec, leader_rank);
+            int wait_status = p ? flux_subprocess_status (p) : 0;
+            jobinfo_post_shell_exit (job, leader_rank, wait_status);
+        }
     }
 
     /*  Nothing more to do here if the job consists of only one shell.
