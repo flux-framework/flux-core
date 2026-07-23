@@ -248,12 +248,6 @@ error:
  * Accessors
  */
 
-int subprocess_status (flux_subprocess_t *p)
-{
-    assert (p);
-    return p->status;
-}
-
 void subprocess_standard_output (flux_subprocess_t *p, const char *stream)
 {
     /* everything except stderr goes to stdout */
