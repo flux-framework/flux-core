@@ -48,6 +48,7 @@
 #include "job-exec.h"
 #include "exec_config.h"
 #include "rset.h"
+#include "barrier.h"
 
 /*  Numeric severity used for a non-fatal, critical job exception:
  *  (e.g. node failure)
@@ -61,10 +62,15 @@ struct exec_ctx {
 
     const char * mock_exception;   /* fake exception */
     const char *sdexec_test_expected_cpus; /* override for post-start check */
-    struct idset *barrier_pending_ranks;
-    int barrier_enter_count;
-    int barrier_completion_count;
-    struct flux_msglist *barrier_requests;
+
+    /*  Shells enter a sequence of barriers during startup.  Only the first
+     *  is timed; on completion the current barrier is destroyed and a fresh
+     *  untimed one is created for the next.  first_barrier_done records that
+     *  the first barrier has completed.
+     */
+    struct barrier *barrier;
+    double barrier_timeout;
+    bool first_barrier_done;
 
     /*  terminated_before_barrier will be set to true if one shell terminates
      *  before the first barrier *and* the first exception. This allows other
@@ -72,80 +78,14 @@ struct exec_ctx {
      */
     bool terminated_before_barrier;
 
-    int exit_count;
-
     bool shell_exit_posted; /* true after shell-exit event is posted */
-
-    flux_watcher_t *shell_barrier_timer;
 };
-
-static void barrier_release (struct exec_ctx *ctx, int errnum)
-{
-    const flux_msg_t *msg;
-    struct jobinfo *job = ctx->job;
-
-    if (!ctx->barrier_requests)
-        return;
-    while ((msg = flux_msglist_first (ctx->barrier_requests))) {
-        int rc;
-        if (errnum == 0)
-            rc = shell_barrier_respond (job->h, msg, NULL);
-        else
-            rc = shell_barrier_respond_error (job->h, msg, errnum, NULL);
-        if (rc < 0)
-            flux_log_error (job->h, "shell-barrier: error responding to shell");
-        flux_msglist_delete (ctx->barrier_requests);
-    }
-}
-
-static void barrier_timer_cb (flux_reactor_t *r,
-                              flux_watcher_t *w,
-                              int revents,
-                              void *arg)
-{
-    struct exec_ctx *ctx = arg;
-    struct jobinfo *job = ctx->job;
-    struct bulk_exec *exec = ctx->job->data;
-    char *ranks;
-
-    if (!(ranks = idset_encode (ctx->barrier_pending_ranks,
-                                IDSET_FLAG_RANGE))) {
-        flux_log_error (job->h,
-                        "failed to encode barrier pending ranks for job %s",
-                        idf58 (job->id));
-        return;
-    }
-
-    (void) jobinfo_drain_ranks (job,
-                                ranks,
-                                "job %s start timeout: %s",
-                                idf58 (job->id),
-                                "possible node hang");
-
-    jobinfo_fatal_error (job,
-                         0,
-                         "%s waiting for %zu/%d nodes (rank%s %s)",
-                         "start barrier timeout",
-                         idset_count (ctx->barrier_pending_ranks),
-                         bulk_exec_total (exec),
-                         idset_count (ctx->barrier_pending_ranks) > 1 ?"s":"",
-                         ranks);
-    free (ranks);
-}
-
 
 static void exec_ctx_destroy (struct exec_ctx *tc)
 {
     if (tc) {
         int saved_errno = errno;
-        /*  Respond with an error to any requests still parked in the
-         *  barrier so those shells exit rather than blocking until killed.
-         */
-        if (tc->job)
-            barrier_release (tc, EIO);
-        flux_msglist_destroy (tc->barrier_requests);
-        idset_destroy (tc->barrier_pending_ranks);
-        flux_watcher_destroy (tc->shell_barrier_timer);
+        barrier_destroy (tc->barrier);
         free (tc);
         errno = saved_errno;
     }
@@ -157,19 +97,15 @@ static struct exec_ctx *exec_ctx_create (struct jobinfo *job,
 {
     json_error_t error;
     const char *service;
-    flux_reactor_t *r;
     struct exec_ctx *ctx = NULL;
-    double barrier_timeout = config_get_default_barrier_timeout ();
 
-    if (!(r = flux_get_reactor (job->h))
-        || !(ctx = calloc (1, sizeof (*ctx)))
-        || !(ctx->barrier_requests = flux_msglist_create ())
-        || !(ctx->barrier_pending_ranks = idset_copy (ranks))) {
+    if (!(ctx = calloc (1, sizeof (*ctx)))) {
         errprintf (errp, "%s", strerror (errno));
         goto error;
     }
 
     ctx->job = job;
+    ctx->barrier_timeout = config_get_default_barrier_timeout ();
 
     /* Note: service unpacked below but unused to allow use of strict (!)
      * unpacking.
@@ -186,7 +122,7 @@ static struct exec_ctx *exec_ctx_create (struct jobinfo *job,
                                 "mock_exception", &ctx->mock_exception,
                                 "sdexec-test-expected-cpus",
                                     &ctx->sdexec_test_expected_cpus,
-                                "barrier-timeout", &barrier_timeout) < 0) {
+                                "barrier-timeout", &ctx->barrier_timeout) < 0) {
         errprintf (errp,
                    "failed to unpack system.exec.bulkexec for %s: %s",
                     idf58 (job->id),
@@ -194,19 +130,11 @@ static struct exec_ctx *exec_ctx_create (struct jobinfo *job,
         goto error;
     }
 
-    if (barrier_timeout > 0.) {
-        ctx->shell_barrier_timer = flux_timer_watcher_create (r,
-                                                              barrier_timeout,
-                                                              0.,
-                                                              barrier_timer_cb,
-                                                              ctx);
-        if (!ctx->shell_barrier_timer) {
-            errprintf (errp,
-                       "%s: failed to create barrier timer",
-                       idf58 (ctx->job->id));
-            goto error;
-        }
-    }
+    if (!(ctx->barrier = barrier_create (job,
+                                         ranks,
+                                         ctx->barrier_timeout,
+                                         errp)))
+        goto error;
 
     return ctx;
 error:
@@ -234,84 +162,6 @@ static void complete_cb (struct bulk_exec *exec, void *arg)
     jobinfo_tasks_complete (job,
                             resource_set_ranks (job->R),
                             bulk_exec_rc (exec));
-}
-
-static void barrier_timer_stop (struct exec_ctx *ctx)
-{
-    flux_watcher_stop (ctx->shell_barrier_timer);
-}
-
-static void barrier_timer_start (struct exec_ctx *ctx)
-{
-    /* Only ever create one barrier timer (for the first shell barrier)
-     */
-    if (ctx->barrier_completion_count == 0)
-        flux_watcher_start (ctx->shell_barrier_timer);
-}
-
-
-static int exec_barrier_enter (struct bulk_exec *exec, const flux_msg_t *msg)
-{
-    struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
-    int rank;
-
-    if (!ctx)
-        return -1;
-
-    if (flux_msg_unpack (msg, "{s:i}", "rank", &rank) < 0)
-        return -1;
-    /*  Reject a request whose rank is out of range or not pending
-     *  to avoid corrupting barrier accounting.
-     */
-    if (rank < 0 || !idset_test (ctx->barrier_pending_ranks, rank)) {
-        flux_error_t error;
-        errprintf (&error, "rank %d is not pending in barrier", rank);
-        if (shell_barrier_respond_error (ctx->job->h,
-                                         msg,
-                                         EINVAL,
-                                         error.text) < 0)
-            flux_log_error (ctx->job->h, "shell-barrier: error responding");
-        return 0;
-    }
-    (void) idset_clear (ctx->barrier_pending_ranks, rank);
-    ctx->barrier_enter_count++;
-
-    /*
-     *  Terminate barrier with error immediately when a shell enters after
-     *   one or more shells have already exited. The case where a shell exits
-     *   while a barrier is already in progress is handled in exit_cb().
-     */
-    if (ctx->exit_count > 0) {
-        if (shell_barrier_respond_error (ctx->job->h, msg, EIO, NULL) < 0)
-            flux_log_error (ctx->job->h, "shell-barrier: error responding");
-        return 0;
-    }
-
-    if (flux_msglist_append (ctx->barrier_requests, msg) < 0)
-        return -1;
-
-    if (ctx->barrier_enter_count == bulk_exec_total (exec)) {
-        barrier_release (ctx, 0);
-        ctx->barrier_enter_count = 0;
-        ctx->barrier_completion_count++;
-        barrier_timer_stop (ctx);
-        /*  Reset pending ranks for next barrier.  Failure is unlikely
-         *  since the set universe won't expand here.
-         */
-        if (idset_add (ctx->barrier_pending_ranks,
-                       resource_set_ranks (ctx->job->R)) < 0) {
-            flux_log_error (ctx->job->h,
-                            "shell-barrier: failed to reset pending ranks");
-        }
-    }
-    /*  When the first shell enters the barrier, start a timer after
-     *   which the job will be terminated if all shells have not reached
-     *   the barrier.
-     */
-    else if (ctx->barrier_enter_count == 1)
-        barrier_timer_start (ctx);
-
-    return 0;
 }
 
 static void output_cb (struct bulk_exec *exec,
@@ -514,34 +364,6 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
                              rank);
 }
 
-static int drain_barrier_pending_ranks (struct jobinfo *job,
-                                        struct exec_ctx *ctx,
-                                        const struct idset *ranks)
-{
-    struct idset *drain_ranks;
-    char *drain_ids = NULL;
-    int rc = -1;
-
-    if (!(drain_ranks = idset_intersect (ranks, ctx->barrier_pending_ranks))
-        || !(drain_ids = idset_encode (drain_ranks, IDSET_FLAG_RANGE)))
-        goto fail;
-
-
-    if (idset_count (drain_ranks) > 0
-        && jobinfo_drain_ranks (job,
-                                drain_ids,
-                                "%s terminated before first barrier",
-                                idf58 (job->id)) < 0)
-        goto fail;
-
-    rc = 0;
-
-fail:
-    idset_destroy (drain_ranks);
-    free (drain_ids);
-    return rc;
-}
-
 static void shell_exit_timer_cb (flux_reactor_t *r,
                                  flux_watcher_t *w,
                                  int revents,
@@ -689,13 +511,11 @@ static void exit_cb (struct bulk_exec *exec,
         || !(ctx = bulk_exec_aux_get (exec, "ctx")))
         return;
 
-    ctx->exit_count++;
-
     /*  Check if a shell is exiting before the first barrier, in which
      *   case we raise a job exception because the shell or IMP may not
      *   have had a chance to do so.
      */
-    if (ctx->barrier_completion_count == 0
+    if (!ctx->first_barrier_done
         && (!job->exception_in_progress || ctx->terminated_before_barrier)) {
         char *ids = idset_encode (ranks, IDSET_FLAG_RANGE);
         char *hosts = flux_hostmap_lookup (job->h, ids, NULL);
@@ -717,7 +537,7 @@ static void exit_cb (struct bulk_exec *exec,
          * or incorrect MUNGE key)
          */
         if (job->multiuser
-            && drain_barrier_pending_ranks (job, ctx, ranks) < 0)
+            && barrier_drain_pending (ctx->barrier, ranks) < 0)
             flux_log_error (job->h,
                             "failed to drain %s (rank%s %s) for job %s",
                             hosts ? hosts : "(unknown)",
@@ -728,12 +548,12 @@ static void exit_cb (struct bulk_exec *exec,
         free (hosts);
     }
 
-    /*  Terminate any barrier in progress with error, releasing shells
-     *   currently waiting so they exit immediately rather than being killed
-     *   by the exec system.  Shells that enter the barrier later are
-     *   rejected by exec_barrier_enter() since exit_count is now nonzero.
+    /*  Notify the barrier that shells have exited: terminates any barrier in
+     *   progress with error (releasing waiting shells so they exit rather
+     *   than being killed) and causes later barrier-enter requests to be
+     *   rejected.
      */
-    barrier_release (ctx, EIO);
+    barrier_notify_shell_exit (ctx->barrier);
 
     /*  If a shell exits due to signal report the shell as lost to
      *  the leader shell. This avoids potential hangs in the leader
@@ -1188,7 +1008,29 @@ static struct idset *active_ranks (struct jobinfo *job)
 
 static int exec_barrier_enter_op (struct jobinfo *job, const flux_msg_t *msg)
 {
-    return exec_barrier_enter ((struct bulk_exec *) job->data, msg);
+    struct bulk_exec *exec = job->data;
+    struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
+    flux_error_t error;
+    int rc;
+
+    if (!ctx || !ctx->barrier)
+        return -1;
+    if ((rc = barrier_enter (ctx->barrier, msg)) != BARRIER_COMPLETE)
+        return rc == BARRIER_ERROR ? -1 : 0;
+
+    /*  This barrier is done and its shells have been released.  Replace it
+     *  with a fresh untimed barrier for the next one in the sequence: only
+     *  the first barrier is timed (a hung node at initialization), and this
+     *  keeps barrier.c ignorant of the barrier sequence.
+     */
+    barrier_destroy (ctx->barrier);
+    ctx->first_barrier_done = true;
+    if (!(ctx->barrier = barrier_create (job,
+                                         resource_set_ranks (job->R),
+                                         0.,
+                                         &error)))
+        jobinfo_fatal_error (job, errno, "barrier: %s", error.text);
+    return 0;
 }
 
 struct exec_implementation bulkexec = {
