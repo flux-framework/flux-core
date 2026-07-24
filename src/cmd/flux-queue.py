@@ -112,6 +112,7 @@ class FluxQueueConfig(UtilConfig):
             "description": "Default flux-queue list format string",
             "format": (
                 "?:{queuem:<8.8} "
+                "?:{parent:<8.8} "
                 "{color_enabled}{enabled:>2}{color_off} "
                 "{color_started}{started:>2}{color_off} "
                 "{defaults.timelimit!F:>8} "
@@ -125,6 +126,7 @@ class FluxQueueConfig(UtilConfig):
             "description": "flux-queue list with policy limits only",
             "format": (
                 "?:{queuem:<8.8} "
+                "?:{parent:<8.8} "
                 "{color_enabled}{enabled:>2}{color_off} "
                 "{color_started}{started:>2}{color_off} "
                 "{defaults.timelimit!F:>8} "
@@ -138,6 +140,7 @@ class FluxQueueConfig(UtilConfig):
             "description": "Show queue status plus all/up/allocated/free nodes",
             "format": (
                 "?:{queuem:<8.8} "
+                "?:{parent:<8.8} "
                 "{color_enabled}{enabled:>2}{color_off} "
                 "{color_started}{started:>2}{color_off} "
                 "{resources.all.nnodes:>6} "
@@ -231,6 +234,7 @@ class QueueInfoWrapper:
         self.__qinfo = queue_info
         self.is_started = queue_info.started
         self.is_enabled = queue_info.enabled
+        self.blocked_reason = queue_info.blocked
         self.limits = QueueLimitsWrapper(queue_info)
 
     def __getattr__(self, attr):
@@ -240,8 +244,25 @@ class QueueInfoWrapper:
             raise AttributeError("invalid QueueInfo attribute '{}'".format(attr))
 
     @property
+    def is_paused(self):
+        # An RFC 33 virtual queue whose own start bit is set but which is
+        # effectively stopped because its parent queue is stopped
+        # (blocked reason "parent"). This is the only blocked condition
+        # that gets a distinct display (SCHED "stopped (parent)", yellow
+        # paused glyph): it is new with virtual queues, so no prior
+        # expectation is perturbed, and it clears on its own once the
+        # parent starts. Other blocked conditions (e.g. "scheduler", the
+        # scheduler being offline) are pre-existing and remain rendered
+        # as a plain red "stopped", unchanged from prior behavior.
+        return self.blocked_reason == "parent"
+
+    @property
     def scheduling(self):
-        return "started" if self.is_started else "stopped"
+        if self.is_started:
+            return "started"
+        if self.is_paused:
+            return "stopped (parent)"
+        return "stopped"
 
     @property
     def submission(self):
@@ -271,11 +292,24 @@ class QueueInfoWrapper:
 
     @property
     def color_started(self):
-        return "\033[01;32m" if self.is_started else "\033[01;31m"
+        if self.is_started:
+            return "\033[01;32m"
+        # Yellow for a vqueue paused by a stopped parent, between the
+        # green "started" and red "stopped". See is_paused.
+        if self.is_paused:
+            return "\033[01;33m"
+        return "\033[01;31m"
 
     @property
     def started(self):
-        return AltField("✔", "y") if self.is_started else AltField("✗", "n")
+        if self.is_started:
+            return AltField("✔", "y")
+        # A vqueue paused by a stopped parent gets a distinct "paused"
+        # glyph rather than the plain "stopped" ✗, since it resumes
+        # scheduling on its own once the parent starts. See is_paused.
+        if self.is_paused:
+            return AltField("⏸", "p")
+        return AltField("✗", "n")
 
 
 def generate_resource_headings():
@@ -293,6 +327,7 @@ def list(args):
     headings = {
         "queue": "QUEUE",
         "queuem": "QUEUE",
+        "parent": "PARENT",
         "submission": "SUBMIT",
         "scheduling": "SCHED",
         "enabled": "EN",
