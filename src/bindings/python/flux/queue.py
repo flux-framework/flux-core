@@ -60,6 +60,7 @@ attributes are also documented for each corresponding class in this module::
   queue.is_default (bool)
   queue.enabled (bool)
   queue.started (bool)
+  queue.parent (str) (empty string unless this is an RFC 33 virtual queue)
   queue.defaults.duration (float)
   queue.limits.min.{nnodes,ncores,ngpus} (int)
   queue.limits.max.{nnodes,ncores,ngpus} (int)
@@ -147,16 +148,27 @@ class QueueResources:
             allocated to jobs
     """
 
-    def __init__(self, name, resources, config):
-        if (
-            name
-            and "queues" in config
-            and name in config["queues"]
-            and "requires" in config["queues"][name]
-        ):
-            self._resource_list = resources.copy_constraint(
-                {"properties": config["queues"][name]["requires"]}
-            )
+    def __init__(self, name, resources, config, parent=""):
+        # A virtual queue (RFC 33) has no "requires" of its own (enforced
+        # at config validation), so it takes its parent's resource slice
+        # instead of the full instance resource set. 'parent' comes from
+        # the queue-status RPC while 'config' comes from a separate
+        # config.get RPC, so a config reload can race the two: a parent
+        # that is no longer in config is an error (fail closed), since
+        # falling through would silently report the vqueue as covering
+        # the full instance resource set.
+        requires = None
+        queues = config.get("queues", {})
+        if name and name in queues:
+            requires = queues[name].get("requires")
+        if requires is None and parent:
+            if parent not in queues:
+                raise ValueError(
+                    f"queue '{name}': parent queue '{parent}' is not configured"
+                )
+            requires = queues[parent].get("requires")
+        if requires is not None:
+            self._resource_list = resources.copy_constraint({"properties": requires})
         else:
             self._resource_list = resources
 
@@ -172,19 +184,43 @@ class QueueInfo:
         name (str): The queue name (empty string for anonymous queue)
         is_default (bool): True if this is the default queue
         enabled (bool): True if this queue is enabled
-        started (bool): True if this queue is started
+        started (bool): True if this queue is started (effective state,
+            i.e. own AND parent for an RFC 33 virtual queue)
+        blocked (str): Reason keyword (RFC 33) if this queue's own started
+            bit is set but it is effectively stopped by an external
+            condition: "scheduler" (scheduler offline) or "parent" (a
+            virtual queue's parent is stopped). None otherwise. An
+            unrecognized keyword is treated as a generic blocked condition.
+        parent (str): Name of the parent queue if this is an RFC 33
+            virtual queue, otherwise an empty string
         resources (:obj:`QueueResources`): resources currently in this queue
         defaults (:obj:`QueueDefaults`): defaults that apply to this queue
         limits (:obj:`QueueLimits`): policy limits that apply to this queue
     """
 
-    def __init__(self, name, config, resources, enabled, started, default):
+    def __init__(
+        self,
+        name,
+        config,
+        resources,
+        enabled,
+        started,
+        default,
+        parent="",
+        blocked=None,
+    ):
         self.name = name or ""
         self.config = config
         self.is_default = default
         self.enabled = enabled
         self.started = started
-        self.resources = QueueResources(name, resources, config)
+        # RFC 33 virtual queues: parent is sourced from the queue-status
+        # RPC response rather than config, since that is the job-manager's
+        # authoritative view of the resolved parent (config is also in
+        # hand here, but a single source avoids the two ever disagreeing).
+        self.parent = parent or ""
+        self.blocked = blocked
+        self.resources = QueueResources(name, resources, config, self.parent)
         self.defaults = QueueDefaults(
             duration=parse_fsd(self._policy_default("duration"))
         )
@@ -202,42 +238,57 @@ class QueueInfo:
             duration=parse_fsd(self._policy_system_limit("duration")),
         )
 
+    def _config_entries(self):
+        """
+        Yield config entries to search for a policy/limit/default key, in
+        RFC 33 virtual queue inheritance order: this queue's own config
+        entry, its parent's config entry (if this is a virtual queue),
+        then the global config. Each key is looked up independently in
+        this order (per-key inheritance), so a vqueue setting only one
+        key still inherits its parent's other keys. A parent missing
+        from config (a config reload racing the queue-status RPC, see
+        QueueResources) is an error: silently skipping the parent layer
+        would report the wrong effective limits and defaults.
+        """
+        queues = self.config.get("queues", {})
+        if self.name in queues:
+            yield queues[self.name]
+        if self.parent:
+            if self.parent not in queues:
+                raise ValueError(
+                    f"queue '{self.name}': parent queue '{self.parent}'"
+                    " is not configured"
+                )
+            yield queues[self.parent]
+        yield self.config
+
     def _size_limit(self, key, maximum=True):
         limit = maximum and "max" or "min"
-        try:
-            val = self.config["queues"][self.name]["policy"]["limits"]["job-size"][
-                limit
-            ][key]
-        except KeyError:
+        for entry in self._config_entries():
             try:
-                val = self.config["policy"]["limits"]["job-size"][limit][key]
+                val = entry["policy"]["limits"]["job-size"][limit][key]
             except KeyError:
-                val = math.inf if maximum else 0
+                continue
             if val < 0:
                 val = math.inf
-        return val
+            return val
+        return math.inf if maximum else 0
 
     def _policy_default(self, key, default="inf"):
-        try:
-            result = self.config["queues"][self.name]["policy"]["jobspec"]["defaults"][
-                "system"
-            ][key]
-        except KeyError:
+        for entry in self._config_entries():
             try:
-                result = self.config["policy"]["jobspec"]["defaults"]["system"][key]
+                return entry["policy"]["jobspec"]["defaults"]["system"][key]
             except KeyError:
-                result = default
-        return result
+                continue
+        return default
 
     def _policy_system_limit(self, key, default="inf"):
-        try:
-            result = self.config["queues"][self.name]["policy"]["limits"][key]
-        except KeyError:
+        for entry in self._config_entries():
             try:
-                result = self.config["policy"]["limits"][key]
+                return entry["policy"]["limits"][key]
             except KeyError:
-                result = default
-        return result
+                continue
+        return default
 
 
 class QueueList:
@@ -268,7 +319,14 @@ class QueueList:
         if not queue_config:
             # single anonymous queue:
             self.__queue = QueueInfo(
-                None, config, resources, status["enable"], status["start"], True
+                None,
+                config,
+                resources,
+                status["enable"],
+                status["start"],
+                True,
+                status.get("parent", ""),
+                status.get("blocked"),
             )
             self.__queues = {"": self.__queue}
         else:
@@ -281,6 +339,8 @@ class QueueList:
                     status[x]["enable"],
                     status[x]["start"],
                     x == self.default_queue,
+                    status[x].get("parent", ""),
+                    status[x].get("blocked"),
                 )
                 for x in queue_config.keys()
             }
