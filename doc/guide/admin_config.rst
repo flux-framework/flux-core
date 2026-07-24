@@ -575,6 +575,17 @@ define a default queue.
 Finally, queues can override the ``[policy]`` table on a per queue basis.
 This is useful for setting queue-specific limits.
 
+A queue may also be configured as a *virtual queue* by setting ``parent``
+to the name of another queue. A virtual queue is an alternate submission
+name for the parent queue's resources with different policy: it inherits the
+parent's policy and overrides only the keys it sets. For example, a virtual
+queue that raises the parent's limits can allow a subset of users to submit
+jobs that bypass those limits. Note that Flux does not yet enforce per-queue
+access control, so restricting who may use a virtual queue currently requires
+an external mechanism such as the flux-accounting multi-factor priority
+plugin. A virtual queue may also be started, stopped, enabled, or disabled
+independently of its parent. See :man5:`flux-config-queues` for details.
+
 Here is an example that puts these concepts together:
 
 .. code-block:: toml
@@ -630,8 +641,12 @@ is rejected.
   ``nnodes`` *and* ``ncores`` limits when configuring job size policy limits.
 
 Limits are global when set in the top level ``[policy]`` table.  Global limits
-may be overridden by a ``policy`` table within a ``[queues]`` entry.  Here is
-an example which implements duration and job size limits for two queues:
+may be overridden by a ``policy`` table within a ``[queues]`` entry. A virtual
+queue's ``policy`` table overrides its parent queue's limits on a per-key
+basis, so a virtual queue that overrides only the duration limit still
+inherits the parent's job size limits. Here is an example which implements
+duration and job size limits for two queues, and adds a virtual queue for
+smaller jobs with a longer duration limit in the batch queue.
 
 .. code-block:: toml
 
@@ -651,6 +666,12 @@ an example which implements duration and job size limits for two queues:
  policy.limits.duration = "8h"
  policy.limits.job-size.max.nnodes = 16
  policy.limits.job-size.max.ncores = 128
+
+ [queues.small]
+ parent = "batch"
+ policy.limits.duration = "24h"
+ policy.limits.job-size.max.nnodes = 2
+ policy.limits.job-size.max.ncores = 16
 
 See also: :man5:`flux-config-policy`.
 

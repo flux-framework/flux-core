@@ -56,6 +56,10 @@ OPTIONS
 
    List jobs in a specific queue or queues. Multiple queues may be separated
    by a comma or by using the :option:`-q, --queue` option multiple times.
+   If a named queue has virtual queues configured (RFC 33), then jobs
+   submitted to any of its virtual queues are also listed, since they are
+   scheduled as part of the named queue. Naming a virtual queue directly
+   lists only the jobs submitted to that virtual queue.
 
 .. option:: -i, --include=HOSTS|RANKS
 

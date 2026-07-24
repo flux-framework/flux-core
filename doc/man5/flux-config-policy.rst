@@ -12,7 +12,10 @@ and limits, as described in RFC 33.
 Each queue defined in the ``queues`` table described in
 :man5:`flux-config-queues` may have a ``policy`` sub-table that follows the
 same rules as the main table.  The per-queue table overrides the general table
-for jobs submitted to that queue.
+for jobs submitted to that queue. A virtual queue (RFC 33) adds a further
+level: its own ``policy`` table, where set, overrides its parent queue's
+effective policy on a per-key basis, which in turn overrides the general
+table.
 
 DEFAULTS
 ========
