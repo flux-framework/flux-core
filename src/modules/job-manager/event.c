@@ -664,6 +664,9 @@ int event_job_update (struct job *job, json_t *event)
         if (job->state == FLUX_JOB_STATE_SCHED)
             job->state = FLUX_JOB_STATE_RUN;
     }
+    else if (streq (name, "start")) {
+        job->started = 1;
+    }
     else if (streq (name, "free")) {
         job->has_resources = 0;
     }

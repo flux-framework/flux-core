@@ -225,11 +225,12 @@ static void start_response_cb (flux_t *h,
         goto error;
     }
     if (streq (type, "start")) {
-        if (job->reattach)
+        if (job->started) {
             flux_log (h,
                       LOG_ERR,
                       "start response: id=%s should not get start event",
                       idf58 (id));
+        }
         else {
             if (event_job_post_pack (ctx->event, job, "start", 0, NULL) < 0)
                 goto error_post;
@@ -336,7 +337,7 @@ int start_send_request (struct start *start, struct job *job)
                            "id", job->id,
                            "userid", (json_int_t) job->userid,
                            "jobspec", job->jobspec_redacted,
-                           "reattach", job->reattach,
+                           "reattach", job->started,
                            "R", job->R_redacted) < 0)
             goto error;
         if (flux_send (ctx->h, msg, 0) < 0)
