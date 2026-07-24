@@ -18,6 +18,10 @@ test_expect_success 'flux-queue: default lists expected fields' '
 	grep NGPUS default.out
 '
 
+test_expect_success 'flux-queue: PARENT column is hidden with no vqueues configured' '
+	test_must_fail grep PARENT default.out
+'
+
 test_expect_success 'flux-queue: FLUX_QUEUE_LIST_FORMAT_DEFAULT works' '
 	FLUX_QUEUE_LIST_FORMAT_DEFAULT="{limits.min.nnodes} {limits.max.ngpus}" \
 		flux queue list > default_override.out &&
