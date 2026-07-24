@@ -168,14 +168,56 @@ static int queues_parse (zhashx_t **zhp,
     if ((queues = json_object_get (conf, "queues"))) {
         const char *name;
         json_t *entry;
-        double duration;
         flux_error_t e;
 
         json_object_foreach (queues, name, entry) {
-            if (duration_parse (&duration, entry, &e) < 0) {
+            double duration = DURATION_INVALID;
+            double own;
+            json_t *parent = json_object_get (entry, "parent");
+
+            /* RFC 33 virtual queues: a vqueue with no own duration
+             * limit inherits its parent queue's limit. Read the
+             * parent's entry directly out of the [queues] table
+             * rather than the hash being built here, since
+             * json_object_foreach() iteration order is arbitrary
+             * and the parent may not have been processed yet. A
+             * malformed or unresolvable parent is a fatal error (fail
+             * closed): a vqueue silently defaulting to global/no limit
+             * would let jobs bypass the intended limit.
+             * conf_policy_validate() rejects this config up front, so
+             * reaching here means validation was bypassed.
+             */
+            if (parent) {
+                const char *parent_name;
+                json_t *parent_entry;
+
+                if (!json_is_string (parent)) {
+                    errprintf (error,
+                               "queues.%s: 'parent' must be a string",
+                               name);
+                    goto error;
+                }
+                parent_name = json_string_value (parent);
+                if (!(parent_entry = json_object_get (queues,
+                                                      parent_name))) {
+                    errprintf (error,
+                               "queues.%s: parent queue '%s' is not"
+                               " configured",
+                               name,
+                               parent_name);
+                    goto error;
+                }
+                if (duration_parse (&duration, parent_entry, &e) < 0) {
+                    errprintf (error, "queues.%s.%s", parent_name, e.text);
+                    goto error;
+                }
+            }
+            if (duration_parse (&own, entry, &e) < 0) {
                 errprintf (error, "queues.%s.%s", name, e.text);
                 goto error;
             }
+            if (own != DURATION_INVALID)
+                duration = own;
             queues_insert (zh, name, duration);
         }
     }
