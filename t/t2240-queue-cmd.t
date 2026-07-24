@@ -193,6 +193,10 @@ test_expect_success 'flux-queue: queue says scheduling stopped' '
 	EOT
 	test_cmp sched_stat.exp sched_stat.out
 '
+test_expect_success 'flux-queue: scheduler offline lists as plain stopped' '
+	test "$(flux queue list -no {scheduling})" = "stopped" &&
+	test "$(flux queue list -no {started.ascii})" = "n"
+'
 
 test_expect_success 'flux-queue: queue contains 1 active job' '
 	COUNT=$(${LIST_JOBS} | wc -l) &&

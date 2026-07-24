@@ -30,6 +30,29 @@ test_expect_success 'config queues, resources, and a vqueue' '
 	flux resource list -o rlist
 '
 
+test_expect_success 'flux queue list shows PARENT column when a vqueue is configured' '
+	flux queue list >list.out &&
+	head -1 list.out | grep PARENT &&
+	test "$(flux queue list -q expedite -no "{parent}")" = "batch" &&
+	test "$(flux queue list -q batch -no "{parent}")" = "" &&
+	test "$(flux queue list -q debug -no "{parent}")" = ""
+'
+
+test_expect_success 'flux resource list does not show vqueue in QUEUE column' '
+	flux resource list >rlist-noqueue.out &&
+	test_must_fail grep expedite rlist-noqueue.out
+'
+
+test_expect_success 'flux resource list -q vqueue selects the parent ranks' '
+	flux resource list -no "{ranks}" -q expedite >vq-ranks.out &&
+	flux resource list -no "{ranks}" -q batch >pq-ranks.out &&
+	test_cmp pq-ranks.out vq-ranks.out
+'
+
+test_expect_success 'flux resource list -q vqueue shows vqueue in QUEUE column' '
+	test "$(flux resource list -s up -no "{queue}" -q expedite)" = "expedite"
+'
+
 test_expect_success 'invalid config: vqueue parent missing is rejected' '
 	test_must_fail flux config load 2>orphan.err <<-EOT &&
 	[queues.batch]
@@ -195,6 +218,41 @@ test_expect_success 'flux queue status shows vqueue blocked by stopped parent' '
 	grep "Scheduling is stopped: parent queue .batch. is stopped" \
 	  vqstatus2.out &&
 	flux queue start --all
+'
+
+test_expect_success 'flux queue list shows three-state SCHED/ST for a blocked vqueue' '
+	flux queue stop batch &&
+	flux queue start expedite &&
+	test "$(flux queue list -q expedite -no "{scheduling}")" \
+	  = "stopped (parent)" &&
+	test "$(flux queue list -q expedite -no "{started.ascii}")" = "p" &&
+	test "$(flux queue list -q batch -no "{scheduling}")" = "stopped" &&
+	test "$(flux queue list -q batch -no "{started.ascii}")" = "n" &&
+	flux queue start --all &&
+	test "$(flux queue list -q expedite -no "{scheduling}")" = "started" &&
+	test "$(flux queue list -q expedite -no "{started.ascii}")" = "y"
+'
+
+test_expect_success 'flux queue list renders the paused glyph in yellow' '
+	flux queue stop batch &&
+	flux queue start expedite &&
+	test "$(flux queue list -q expedite -no "{color_started}")" \
+	  = "$(printf "\033[01;33m")" &&
+	test "$(flux queue list -q batch -no "{color_started}")" \
+	  = "$(printf "\033[01;31m")" &&
+	flux queue start --all &&
+	test "$(flux queue list -q expedite -no "{color_started}")" \
+	  = "$(printf "\033[01;32m")"
+'
+
+test_expect_success 'scheduler offline renders vqueue as stopped, not paused' '
+	flux queue start --all &&
+	flux module remove sched-simple &&
+	test_when_finished "flux module load sched-simple && flux queue start --all" &&
+	test "$(flux queue list -q expedite -no "{scheduling}")" = "stopped" &&
+	test "$(flux queue list -q expedite -no "{started.ascii}")" = "n" &&
+	test "$(flux queue list -q expedite -no "{color_started}")" \
+	  = "$(printf "\033[01;31m")"
 '
 
 test_expect_success 'flux job update into vqueue picks up parent constraint' '
