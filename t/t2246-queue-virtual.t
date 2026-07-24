@@ -209,4 +209,79 @@ test_expect_success 'flux job update into vqueue picks up parent constraint' '
 	flux job wait-event $jobid clean
 '
 
+test_expect_success 'configure parent duration and job-size limits' '
+	flux config load <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+	policy.limits.duration = "1h"
+	policy.limits.job-size.max.nnodes = 2
+
+	[queues.expedite]
+	parent = "batch"
+	policy.limits.duration = "30m"
+
+	[queues.debug]
+	requires = [ "debug" ]
+
+	[policy.jobspec.defaults.system]
+	queue = "batch"
+	EOT
+	flux queue start --all
+'
+
+test_expect_success 'vqueue duration override rejects jobs over its own limit' '
+	test_must_fail flux submit -q expedite -t 45m hostname \
+	  2>expedite-duration.err &&
+	grep "duration (45m) exceeds.*limit of 30m for queue expedite" \
+	  expedite-duration.err
+'
+
+test_expect_success 'vqueue inherits parent job-size limit' '
+	test_must_fail flux submit -q expedite -N 3 hostname \
+	  2>expedite-jobsize.err &&
+	grep "exceeds policy limit of 2 for queue expedite" \
+	  expedite-jobsize.err
+'
+
+test_expect_success 'vqueue job within both inherited and own limits passes' '
+	flux submit -q expedite -N 2 -t 20m hostname
+'
+
+test_expect_success 'parent queue job still honors parent duration limit' '
+	test_must_fail flux submit -q batch -t 2h hostname \
+	  2>batch-duration.err &&
+	grep "duration (2h) exceeds.*limit of 1h for queue batch" \
+	  batch-duration.err
+'
+
+test_expect_success 'parent queue job still honors parent job-size limit' '
+	test_must_fail flux submit -q batch -N 3 hostname \
+	  2>batch-jobsize.err &&
+	grep "exceeds policy limit of 2 for queue batch" \
+	  batch-jobsize.err
+'
+
+test_expect_success 'config reload updating parent limit is picked up' '
+	flux config load <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+	policy.limits.duration = "1h"
+	policy.limits.job-size.max.nnodes = 1
+
+	[queues.expedite]
+	parent = "batch"
+	policy.limits.duration = "30m"
+
+	[queues.debug]
+	requires = [ "debug" ]
+
+	[policy.jobspec.defaults.system]
+	queue = "batch"
+	EOT
+	test_must_fail flux submit -q expedite -N 2 hostname \
+	  2>expedite-reload.err &&
+	grep "exceeds policy limit of 1 for queue expedite" \
+	  expedite-reload.err
+'
+
 test_done
