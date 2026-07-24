@@ -15,6 +15,7 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/modules/job-list/job_data.h"
 #include "src/modules/job-list/match.h"
 #include "ccan/str/str.h"
@@ -476,6 +477,190 @@ static void test_basic_queue (void)
         list_constraint_destroy (c);
         ctests++;
     }
+}
+
+/* zhashx_set_destructor for mctx.queue_parents in test_virtual_queue () */
+static void wrap_free_test (void **item)
+{
+    if (item) {
+        free (*item);
+        (*item) = NULL;
+    }
+}
+
+/* RFC 33 virtual queues: a constraint naming a queue that has vqueues
+ * matches jobs in that queue or in any of its vqueues. A constraint
+ * naming a vqueue matches only that vqueue's own jobs.
+ */
+static void test_virtual_queue (void)
+{
+    struct job *job;
+    struct list_constraint *c;
+    flux_error_t error;
+
+    if (!(mctx.queue_parents = zhashx_new ()))
+        BAIL_OUT ("failed to create queue_parents hash");
+    zhashx_set_destructor (mctx.queue_parents, wrap_free_test);
+    zhashx_set_duplicator (mctx.queue_parents,
+                           (zhashx_duplicator_fn *) strdup);
+    if (zhashx_insert (mctx.queue_parents, "expedite", "batch") < 0)
+        BAIL_OUT ("failed to insert into queue_parents hash");
+
+    c = create_list_constraint ("{ \"queue\": [ \"batch\" ] }");
+
+    job = setup_job (0,
+                     NULL,
+                     "batch",
+                     NULL,
+                     NULL,
+                     0,
+                     0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0);
+    ok (job_match (job, c, &error) == true,
+        "queue constraint on parent matches parent job");
+    job_destroy (job);
+
+    job = setup_job (0,
+                     NULL,
+                     "expedite",
+                     NULL,
+                     NULL,
+                     0,
+                     0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0);
+    ok (job_match (job, c, &error) == true,
+        "queue constraint on parent matches vqueue job");
+    job_destroy (job);
+
+    job = setup_job (0,
+                     NULL,
+                     "debug",
+                     NULL,
+                     NULL,
+                     0,
+                     0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0);
+    ok (job_match (job, c, &error) == false,
+        "queue constraint on parent does not match unrelated queue job");
+    job_destroy (job);
+
+    list_constraint_destroy (c);
+
+    c = create_list_constraint ("{ \"queue\": [ \"expedite\" ] }");
+
+    job = setup_job (0,
+                     NULL,
+                     "expedite",
+                     NULL,
+                     NULL,
+                     0,
+                     0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0);
+    ok (job_match (job, c, &error) == true,
+        "queue constraint on vqueue matches its own job");
+    job_destroy (job);
+
+    job = setup_job (0,
+                     NULL,
+                     "batch",
+                     NULL,
+                     NULL,
+                     0,
+                     0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0);
+    ok (job_match (job, c, &error) == false,
+        "queue constraint on vqueue does not match parent job");
+    job_destroy (job);
+
+    list_constraint_destroy (c);
+
+    zhashx_destroy (&mctx.queue_parents);
+}
+
+/* job_match_config_reload() builds the queue parent map into a new
+ * hash and swaps it in only on success: a rejected config reload
+ * leaves the old config in effect, so it must leave the old map in
+ * effect too. A malformed 'parent' is rejected rather than skipped.
+ */
+static void test_virtual_queue_config_reload (void)
+{
+    flux_conf_t *conf;
+    flux_error_t error;
+
+    if (!(conf = flux_conf_pack ("{s:{s:{} s:{s:s}}}",
+                                 "queues",
+                                   "batch",
+                                   "expedite",
+                                     "parent", "batch")))
+        BAIL_OUT ("flux_conf_pack failed");
+    ok (job_match_config_reload (&mctx, conf, &error) == 0,
+        "config reload with vqueue works");
+    flux_conf_decref (conf);
+    ok (mctx.queue_parents
+        && zhashx_lookup (mctx.queue_parents, "expedite") != NULL,
+        "queue parent map contains vqueue entry");
+
+    /* Invalid config: non-string parent is an error, and the map
+     * built from the previous config remains in effect.
+     */
+    if (!(conf = flux_conf_pack ("{s:{s:{} s:{s:i}}}",
+                                 "queues",
+                                   "batch",
+                                   "expedite",
+                                     "parent", 42)))
+        BAIL_OUT ("flux_conf_pack failed");
+    error.text[0] = '\0';
+    ok (job_match_config_reload (&mctx, conf, &error) < 0,
+        "config reload with non-string parent fails");
+    diag ("%s", error.text);
+    ok (strstr (error.text, "must be a string") != NULL,
+        "error message says parent must be a string");
+    flux_conf_decref (conf);
+    ok (mctx.queue_parents
+        && zhashx_lookup (mctx.queue_parents, "expedite") != NULL,
+        "failed reload leaves the previous queue parent map in effect");
+
+    /* Reload without queues clears the map */
+    if (!(conf = flux_conf_create ()))
+        BAIL_OUT ("flux_conf_create failed");
+    ok (job_match_config_reload (&mctx, conf, &error) == 0,
+        "config reload without [queues] works");
+    flux_conf_decref (conf);
+    ok (mctx.queue_parents
+        && zhashx_lookup (mctx.queue_parents, "expedite") == NULL,
+        "queue parent map no longer contains vqueue entry");
+
+    zhashx_destroy (&mctx.queue_parents);
 }
 
 struct basic_states_test {
@@ -2153,6 +2338,8 @@ int main (int argc, char *argv[])
     test_basic_userid ();
     test_basic_name ();
     test_basic_queue ();
+    test_virtual_queue ();
+    test_virtual_queue_config_reload ();
     test_basic_states ();
     test_basic_results ();
     test_corner_case_hostlist ();
