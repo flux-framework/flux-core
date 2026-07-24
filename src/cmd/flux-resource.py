@@ -196,6 +196,29 @@ def undrain(args):
     RPC(flux.Flux(), "resource.undrain", payload, nodeid=0).get()
 
 
+def queue_effective_entry(queues, name):
+    """
+    Return the effective [queues] config entry for queue ``name``: its own
+    entry, or its parent's entry if it is an RFC 33 virtual queue.
+
+    A virtual queue has no "requires" of its own, so resolving to the
+    parent's entry is what maps it to the parent's resource slice rather
+    than wrongly matching every node as an unconstrained queue would. An
+    unresolvable parent raises ValueError (defense in depth: config
+    validation rejects it in a live instance, but --config-file and
+    --from-stdin input is not validated).
+    """
+    entry = queues[name]
+    if "parent" in entry:
+        parent = entry["parent"]
+        if parent not in queues:
+            raise ValueError(
+                f"queue '{name}': parent queue '{parent}' is not configured"
+            )
+        entry = queues[parent]
+    return entry
+
+
 class QueueResources:
     """
     Convenience class to map queues to resource sets
@@ -206,10 +229,9 @@ class QueueResources:
         if "queues" not in config:
             return
         for queue in config["queues"]:
-            if "requires" in config["queues"][queue]:
-                result = resource_set.copy_constraint(
-                    {"properties": config["queues"][queue]["requires"]}
-                )
+            entry = queue_effective_entry(config["queues"], queue)
+            if "requires" in entry:
+                result = resource_set.copy_constraint({"properties": entry["requires"]})
             else:
                 result = resource_set.copy()
             self._queues[queue] = result
@@ -561,7 +583,14 @@ class ResourceSetExtra(ResourceSet):
                         continue
                 elif key in self._hidden_queues:
                     continue
-                if "requires" not in value or set(value["requires"]).issubset(
+                # RFC 33 virtual queues: only emit a vqueue name when it
+                # was explicitly requested via -q (i.e. is in the filter),
+                # otherwise it would match every node in the default QUEUE
+                # column via its resolved parent's requires:
+                if "parent" in value and not self._queue_filter:
+                    continue
+                entry = queue_effective_entry(self.flux_config["queues"], key)
+                if "requires" not in entry or set(entry["requires"]).issubset(
                     set(properties)
                 ):
                     queues = queues + "," + key if queues else key
@@ -633,11 +662,20 @@ def resources_uniq_lines(
     #  Get a list of configured queues if a specific list of queues
     #  was not supplied by the caller. Hidden queues are excluded from the
     #  default list but are still visible when explicitly requested via -q.
+    #  RFC 33 virtual queues are excluded from this default list, since
+    #  they share their parent's resources and would otherwise duplicate
+    #  the parent's rows. When requested explicitly via -q they are kept
+    #  (queues == args.queue is truthy, so this branch is skipped) and
+    #  resolve to their parent's slice in ResourceSetExtra.queue.
     #  If no queues are configured then one "anonymous" queue is simulated
     #  with [None].
     if not queues:
         if config and "queues" in config:
-            queues = [q for q in config["queues"] if q not in hidden_queues]
+            queues = [
+                q
+                for q, entry in config["queues"].items()
+                if q not in hidden_queues and "parent" not in entry
+            ]
             if not queues:
                 queues = [None]
         else:
