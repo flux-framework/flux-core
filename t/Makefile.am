@@ -52,6 +52,7 @@ LONGTESTSCRIPTS = \
 	t3200-instance-restart.t \
 	t3202-instance-restart-testexec.t \
 	t3203-instance-recovery.t \
+	t3204-job-exec-reattach-reload.t \
 	t4000-issues-test-driver.t \
 	t2800-jobs-cmd.t \
 	t2801-top-cmd.t \
