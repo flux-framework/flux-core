@@ -342,4 +342,113 @@ test_expect_success 'config reload updating parent limit is picked up' '
 	  expedite-reload.err
 '
 
+test_expect_success 'job-list: submit jobs to parent and vqueue for listing tests' '
+	flux config load <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+
+	[queues.expedite]
+	parent = "batch"
+
+	[queues.debug]
+	requires = [ "debug" ]
+
+	[policy.jobspec.defaults.system]
+	queue = "batch"
+	EOT
+	flux queue start --all &&
+	flux bulksubmit -q {} --urgency=hold hostname \
+	  ::: batch expedite >joblist-parent.ids &&
+	sed -n 1p joblist-parent.ids >joblist-parent.jobid &&
+	sed -n 2p joblist-parent.ids >joblist-vqueue.jobid
+'
+
+test_expect_success 'job-list: flux jobs -q parent includes vqueue jobs' '
+	flux jobs -no {id} -q batch | sort >joblist-parent.out &&
+	sort joblist-parent.ids >joblist-parent.exp &&
+	test_cmp joblist-parent.exp joblist-parent.out
+'
+
+test_expect_success 'job-list: flux jobs -q vqueue lists only vqueue job' '
+	flux jobs -no {id} -q expedite >joblist-vqueue.out &&
+	test_cmp joblist-vqueue.jobid joblist-vqueue.out
+'
+
+test_expect_success 'job-list: RPC queue constraint on parent includes vqueue job' '
+	id=$(id -u) &&
+	constraint="{ and: [ {userid:[${id}]}, {states:[\"active\"]}, \
+	  {queue:[\"batch\"]}] }" &&
+	jq -j -c -n "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | ${FLUX_BUILD_DIR}/t/request/rpc_stream job-list.list \
+	  | jq .jobs[].id | flux job id -t f58 | sort >joblist-rpc-parent.out &&
+	sort joblist-parent.ids >joblist-rpc-parent.exp &&
+	test_cmp joblist-rpc-parent.exp joblist-rpc-parent.out
+'
+
+test_expect_success 'job-list: RPC queue constraint on vqueue is exact' '
+	id=$(id -u) &&
+	constraint="{ and: [ {userid:[${id}]}, {states:[\"active\"]}, \
+	  {queue:[\"expedite\"]}] }" &&
+	jq -j -c -n "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | ${FLUX_BUILD_DIR}/t/request/rpc_stream job-list.list \
+	  | jq .jobs[].id | flux job id -t f58 >joblist-rpc-vqueue.out &&
+	test_cmp joblist-vqueue.jobid joblist-rpc-vqueue.out
+'
+
+test_expect_success 'cleanup vqueue job listing jobs' '
+	flux cancel $(cat joblist-parent.jobid) &&
+	flux cancel $(cat joblist-vqueue.jobid) &&
+	flux job wait-event $(cat joblist-parent.jobid) clean &&
+	flux job wait-event $(cat joblist-vqueue.jobid) clean
+'
+
+test_expect_success 'configure two virtual queues sharing a parent' '
+	flux config load <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+
+	[queues.expedite]
+	parent = "batch"
+
+	[queues.standby]
+	parent = "batch"
+
+	[policy.jobspec.defaults.system]
+	queue = "batch"
+	EOT
+	flux queue enable --all &&
+	flux queue start --all
+'
+
+test_expect_success 'stopping one vqueue leaves its sibling and parent started' '
+	flux queue stop expedite &&
+	test "$(flux queue list -q expedite -no "{started.ascii}")" = "n" &&
+	test "$(flux queue list -q standby -no "{started.ascii}")" = "y" &&
+	test "$(flux queue list -q batch -no "{started.ascii}")" = "y"
+'
+
+test_expect_success 'starting one vqueue leaves its sibling stopped' '
+	flux queue stop --all &&
+	flux queue start expedite &&
+	test "$(flux queue list -q expedite -no "{started.ascii}")" = "p" &&
+	test "$(flux queue list -q standby -no "{started.ascii}")" = "n" &&
+	test "$(flux queue list -q batch -no "{started.ascii}")" = "n"
+'
+
+test_expect_success 'starting the parent releases only the started sibling' '
+	flux queue start batch &&
+	test "$(flux queue list -q expedite -no "{started.ascii}")" = "y" &&
+	test "$(flux queue list -q standby -no "{started.ascii}")" = "n" &&
+	test "$(flux queue list -q batch -no "{started.ascii}")" = "y"
+'
+
+test_expect_success 'disabling one vqueue leaves its sibling and parent enabled' '
+	flux queue enable --all &&
+	flux queue disable -m test expedite &&
+	test "$(flux queue list -q expedite -no "{enabled.ascii}")" = "n" &&
+	test "$(flux queue list -q standby -no "{enabled.ascii}")" = "y" &&
+	test "$(flux queue list -q batch -no "{enabled.ascii}")" = "y" &&
+	flux queue enable --all
+'
+
 test_done
