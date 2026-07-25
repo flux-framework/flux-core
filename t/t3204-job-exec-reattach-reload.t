@@ -49,4 +49,59 @@ test_expect_success 'cancel job and wait for it to clean up' '
 	flux cancel ${id} &&
 	flux job wait-event -t 60 ${id} clean
 '
+# The recoverable event (RFC 50) gates reattach: without it, generic job-exec
+# code raises a fatal exception rather than relaunching the job's shells.
+# Strip the event from a running job's exec.eventlog, then reload to confirm
+# the gate fires.
+test_expect_success 'submit another job and wait for recoverable event' '
+	id2=$(flux submit --flags=debug \
+	                  --setattr=system.exec.test.run_duration=100s \
+	                  hostname) &&
+	ns2=$(flux job namespace ${id2}) &&
+	flux job wait-event -t 60 ${id2} start &&
+	run_timeout 60 flux kvs eventlog wait-event -N ${ns2} \
+	    exec.eventlog recoverable
+'
+test_expect_success 'strip recoverable event from exec.eventlog' '
+	flux kvs eventlog get -u -N ${ns2} exec.eventlog \
+	    | jq -c "select(.name != \"recoverable\")" >stripped.out &&
+	flux kvs put --raw -N ${ns2} exec.eventlog=- <stripped.out
+'
+test_expect_success 'reload job-exec module' '
+	flux module reload job-exec
+'
+test_expect_success 'non-recoverable job raises exec exception on reattach' '
+	flux job wait-event -t 60 ${id2} exception &&
+	flux job eventlog ${id2} >eventlog2.out &&
+	test_debug "cat eventlog2.out" &&
+	grep -q "type=\"exec\"" eventlog2.out &&
+	grep -q "job is not recoverable" eventlog2.out
+'
+test_expect_success 'clean up non-recoverable job' '
+	flux job wait-event -t 60 ${id2} clean
+'
+# The real (bulk-exec) executor does not implement reattach, so the generic
+# gate raises a fatal exception rather than relaunching the shells -- the same
+# terminal behavior as a full restart (t3202), but reached via the module
+# reload / in-place namespace adoption path.  --input=/dev/null avoids the
+# shell's KVS stdin watcher, which is not torn down by a bare module reload
+# but is left in flight otherwise; dropping it keeps the reattach reject the
+# only thing that can fail the job.
+test_expect_success 'submit a real (bulk-exec) job and wait for start' '
+	id3=$(flux submit --flags=debug --input=/dev/null \
+	                  --wait-event=start sleep 300)
+'
+test_expect_success 'reload job-exec module' '
+	flux module reload job-exec
+'
+test_expect_success 'bulk-exec job raises exec exception on reattach' '
+	flux job wait-event -t 60 ${id3} exception &&
+	flux job eventlog ${id3} >eventlog3.out &&
+	test_debug "cat eventlog3.out" &&
+	grep -q "type=\"exec\"" eventlog3.out &&
+	grep -q "reattach to running job is not implemented" eventlog3.out
+'
+test_expect_success 'clean up bulk-exec job' '
+	flux job wait-event -t 60 ${id3} clean
+'
 test_done
