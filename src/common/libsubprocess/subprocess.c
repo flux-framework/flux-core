@@ -437,6 +437,30 @@ void sigchld_notify_start (flux_subprocess_t *p)
     }
 }
 
+static void sigchld_clear_check (flux_subprocess_t *p)
+{
+    /* N.B. no more sigchld reports after EXITED or FAILED */
+    flux_subprocess_state_t state =
+        p->ops.on_state_change ? p->state_reported : p->state;
+
+    if (state == FLUX_SUBPROCESS_EXITED
+        || state == FLUX_SUBPROCESS_FAILED)
+        p->sigchld_pending = 0;
+}
+
+/* True when a queued sigchld must not yet be delivered because the
+ * caller has an on_state_change callback and the RUNNING state has not
+ * been reported to them (see issue #5083).  While deferred we leave the
+ * idle watcher stopped so the reactor is not spun; the state-change
+ * machinery keeps the reactor live until RUNNING is reported, and the
+ * prep watcher re-evaluates each iteration.
+ */
+static bool sigchld_deferred (flux_subprocess_t *p)
+{
+    return p->ops.on_state_change
+        && p->state_reported < FLUX_SUBPROCESS_RUNNING;
+}
+
 static void sigchld_prep_cb (flux_reactor_t *r,
                              flux_watcher_t *w,
                              int revents,
@@ -444,13 +468,15 @@ static void sigchld_prep_cb (flux_reactor_t *r,
 {
     flux_subprocess_t *p = arg;
 
-    if (p->sigchld_pending)
-        flux_watcher_start (p->sigchld_idle_w);
-    else {
+    sigchld_clear_check (p);
+
+    if (!p->sigchld_pending) {
         /* nothing left to report, stop watching */
         flux_watcher_stop (p->sigchld_prep_w);
         flux_watcher_stop (p->sigchld_check_w);
     }
+    else if (!sigchld_deferred (p))
+        flux_watcher_start (p->sigchld_idle_w);
 }
 
 static void sigchld_check_cb (flux_reactor_t *r,
@@ -465,14 +491,19 @@ static void sigchld_check_cb (flux_reactor_t *r,
     /* always a chance caller may destroy subprocess in callback */
     subprocess_incref (p);
 
-    /* Only one sigchld value exists for now, so clear the pending flags
-     * and report it directly.
-     */
+    sigchld_clear_check (p);
+
     if (p->sigchld_pending != 0) {
+        /* N.B. See issue #5083.  We do not want to report any signal
+         * status until after the job is reported as RUNNING.
+         */
+        if (sigchld_deferred (p))
+            goto out;
+        (*p->ops.on_sigchld) (p, p->sigchld_pending);
         p->sigchld_pending = 0;
-        (*p->ops.on_sigchld) (p, FLUX_SUBPROCESS_SIGCHLD_UNKNOWN);
     }
 
+out:
     subprocess_decref (p);
 }
 
@@ -1354,8 +1385,8 @@ flux_subprocess_sigchld_string (flux_subprocess_sigchld_t sigchld)
 {
     switch (sigchld)
     {
-    case FLUX_SUBPROCESS_SIGCHLD_UNKNOWN:
-        return "Unknown";
+    case FLUX_SUBPROCESS_SIGCHLD_STOPPED:
+        return "Stopped";
     }
     return NULL;
 }
