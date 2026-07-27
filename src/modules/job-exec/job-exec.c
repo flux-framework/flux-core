@@ -1072,11 +1072,20 @@ static int jobinfo_start_execution (struct jobinfo *job)
         jobinfo_emit_event_pack_nowait (job, "re-starting", NULL);
     else
         jobinfo_emit_event_pack_nowait (job, "starting", NULL);
-    /* Set started flag before calling 'start' method because we want to
-     *  be sure to clean up properly if an exception occurs
+    /* Set started flag before calling start/reattach method because we want
+     *  to be sure to clean up properly if an exception occurs
      */
     job->started = 1;
-    if ((*job->impl->start) (job) < 0) {
+    if (job->reattach) {
+        if ((*job->impl->reattach) (job, NULL) < 0) {
+            jobinfo_fatal_error (job,
+                                 errno,
+                                 "%s: reattach failed",
+                                 job->impl->name);
+            return -1;
+        }
+    }
+    else if ((*job->impl->start) (job) < 0) {
         jobinfo_fatal_error (job, errno, "%s: start failed", job->impl->name);
         return -1;
     }
@@ -1106,6 +1115,21 @@ static int jobinfo_load_implementation (struct jobinfo *job)
     return -1;
 }
 
+/*  Dispatch a reattach.  A backend that does not implement reattach cannot
+ *   recover running shells, so raise a fatal exception rather than silently
+ *   relaunching the job.
+ */
+static int jobinfo_reattach (struct jobinfo *job)
+{
+    if (!job->impl->reattach) {
+        jobinfo_fatal_error (job,
+                             ENOSYS,
+                             "reattach to running job is not implemented");
+        return -1;
+    }
+    return jobinfo_start_execution (job);
+}
+
 /*  Completion for jobinfo_start_init (), finish init of jobinfo using
  *   data fetched from KVS
  */
@@ -1125,6 +1149,10 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
         goto done;
     if (jobinfo_load_implementation (job) < 0) {
         jobinfo_fatal_error (job, errno, "failed to initialize implementation");
+        goto done;
+    }
+    if (job->reattach) {
+        (void)jobinfo_reattach (job);
         goto done;
     }
     if (jobinfo_start_execution (job) < 0)

@@ -326,23 +326,27 @@ static int testexec_start (struct jobinfo *job)
 {
     struct testexec *te = job->data;
 
-    if (job->reattach) {
-        if (testexec_reattach (te) < 0)
-            return -1;
+    if (!te->conf.override && start_timer (job->h,
+                                           te,
+                                           te->conf.run_duration) < 0) {
+        jobinfo_fatal_error (job, errno, "unable to start test exec timer");
+        return -1;
     }
-    else {
-        if (!te->conf.override && start_timer (job->h,
-                                               te,
-                                               te->conf.run_duration) < 0) {
-            jobinfo_fatal_error (job, errno, "unable to start test exec timer");
-            return -1;
-        }
-        if (testconf_mock_exception (&te->conf, "run")) {
-            jobinfo_fatal_error (job, 0, "mock run exception generated");
-            return -1;
-        }
+    if (testconf_mock_exception (&te->conf, "run")) {
+        jobinfo_fatal_error (job, 0, "mock run exception generated");
+        return -1;
     }
     return 0;
+}
+
+static int testexec_reattach_op (struct jobinfo *job, json_t *eventlog)
+{
+    struct testexec *te = job->data;
+
+    /*  testexec recovers its state from the job eventlog start timestamp and
+     *   does not consult the exec eventlog replay state.
+     */
+    return testexec_reattach (te);
 }
 
 static int testexec_kill (struct jobinfo *job, int signum)
@@ -519,6 +523,7 @@ struct exec_implementation testexec = {
     .init =     testexec_init,
     .exit =     testexec_exit,
     .start =    testexec_start,
+    .reattach = testexec_reattach_op,
     .kill =     testexec_kill,
     .stats =    NULL,
 };
