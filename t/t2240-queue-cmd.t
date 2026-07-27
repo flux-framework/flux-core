@@ -586,5 +586,20 @@ test_expect_success 'flux-queue disable fails on unknown queue' '
 test_expect_success 'flux-queue status fails on unknown queue' '
 	test_must_fail flux queue status notaqueue
 '
+test_expect_success 'config load with bad job-manager table fails' '
+	test_must_fail flux config load 2>badconf.err <<-EOT &&
+	[job-manager]
+	stop-queues-on-restart = "notabool"
+	[queues.batch]
+	[queues.debug]
+	[policy.jobspec.defaults.system]
+	queue = "batch"
+	EOT
+	grep "error updating job-manager" badconf.err
+'
+test_expect_success 'configured queues survive a failed config load' '
+	flux queue list -n >queues_after_badconf.out &&
+	test $(wc -l < queues_after_badconf.out) -eq 2
+'
 
 test_done
