@@ -718,6 +718,73 @@ void sigstop_test (flux_t *h)
     flux_cmd_destroy (cmd);
 }
 
+/* Like sigstop_test, but verifies the on_sigchld callback is invoked
+ * with FLUX_SUBPROCESS_SIGCHLD_STOPPED when the subprocess is stopped.
+ */
+
+static int sigchld_stopped_count;
+
+static void sigchld_stop_cb (flux_subprocess_t *p,
+                             flux_subprocess_sigchld_t sigchld)
+{
+    diag ("sigchld callback sigchld=%s",
+          flux_subprocess_sigchld_string (sigchld));
+    ok (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED,
+        "sigchld callback sigchld == STOPPED");
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "sigchld returned when job was running");
+    sigchld_stopped_count++;
+}
+
+flux_subprocess_ops_t sigchld_stoptest_ops = {
+    .on_state_change    = stop_state_cb,
+    .on_stdout          = stop_output_cb,
+    .on_stderr          = stop_output_cb,
+    .on_sigchld         = sigchld_stop_cb,
+};
+
+void sigchld_sigstop_test (flux_t *h)
+{
+    char *av[] = { "/bin/cat", NULL };
+    flux_subprocess_t *p;
+    flux_cmd_t *cmd;
+    int rc;
+
+    cmd = flux_cmd_create (ARRAY_SIZE (av) - 1, av, environ);
+    if (!cmd)
+        BAIL_OUT ("flux_cmd_create failed");
+
+    sigchld_stopped_count = 0;
+
+    p = flux_rexec_ex (h,
+                       SERVER_NAME,
+                       FLUX_NODEID_ANY,
+                       0,
+                       cmd,
+                       &sigchld_stoptest_ops,
+                       tap_logger,
+                       NULL);
+    ok (p != NULL,
+        "sigchld stoptest: created subprocess");
+    if (flux_subprocess_aux_set (p, "reactor", flux_get_reactor (h), NULL) < 0)
+        BAIL_OUT ("could not stash reactor in subprocess aux container");
+
+    rc = flux_reactor_run (flux_get_reactor (h), 0);
+    ok (rc >= 0,
+        "sigchld stoptest: reactor ran successfully");
+    /* N.B. The subprocess is reported as stopped via both the legacy
+     * FLUX_SUBPROCESS_STOPPED state and the new sigchld path (until a
+     * later commit removes the former).  Both append the same
+     * FLUX_SUBPROCESS_SIGCHLD_STOPPED flag, which coalesces into a
+     * single pending sigchld, so on_sigchld is called exactly once.
+     */
+    ok (sigchld_stopped_count == 1,
+        "sigchld stoptest: on_sigchld called once with STOPPED");
+
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
 void bg_kill (flux_t *h, const char *label)
 {
     flux_future_t *f;
@@ -1223,6 +1290,8 @@ int main (int argc, char *argv[])
     local_unbuf_multiline_test (h);
     diag ("sigstop_test");
     sigstop_test (h);
+    diag ("sigchld_sigstop_test");
+    sigchld_sigstop_test (h);
     diag ("background_test");
     background_waitable_test (h);
     diag ("background_output_test");
