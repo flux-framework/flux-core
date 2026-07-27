@@ -809,6 +809,36 @@ error:
     proc_internal_fatal (p);
 }
 
+static void proc_sigchld_cb (flux_subprocess_t *p,
+                             flux_subprocess_sigchld_t sigchld)
+{
+    subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
+    const flux_msg_t *request = flux_subprocess_aux_get (p, msgkey);
+    int rc = 0;
+
+    if (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED) {
+        if (client_listening (p))
+            rc = flux_respond_pack (s->h,
+                                    request,
+                                    "{s:s}",
+                                    "type", "stopped");
+    } else {
+        errno = EPROTO;
+        llog_error (s, "subprocess received unexpected sigchld %d", sigchld);
+        goto error;
+    }
+    if (rc < 0) {
+        llog_error (s,
+                    "error responding to %s.exec request: %s",
+                    s->service_name,
+                    strerror (errno));
+    }
+    return;
+
+error:
+    proc_internal_fatal (p);
+}
+
 /* Per RFC 42, a background subprocess's standard input and any writable
  * auxiliary channels are at end-of-file.  Close the write side of each
  * writable channel so the subprocess reads EOF rather than blocking.
@@ -845,6 +875,7 @@ static void server_exec_cb (flux_t *h,
         .on_stdout = proc_output_cb,
         .on_stderr = proc_output_cb,
         .on_credit = proc_credit_cb,
+        .on_sigchld = proc_sigchld_cb,
     };
     char **env = NULL;
     const char *errmsg = NULL;
