@@ -166,6 +166,15 @@ static void process_new_state (flux_subprocess_t *p,
         state_change_start (p);
 }
 
+static void process_new_sigchld (flux_subprocess_t *p,
+                                 flux_subprocess_sigchld_t sigchld)
+{
+    if (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED) {
+        sigchld_set (p, FLUX_SUBPROCESS_SIGCHLD_STOPPED);
+        sigchld_notify_start (p);
+    }
+}
+
 static void process_add_credit (flux_subprocess_t *p, json_t *channels)
 {
     if (p->ops.on_credit) {
@@ -601,6 +610,7 @@ static void rexec_continuation (flux_future_t *f, void *arg)
     }
     else if (subprocess_rexec_is_stopped (f)) {
         process_new_state (p, FLUX_SUBPROCESS_STOPPED);
+        process_new_sigchld (p, FLUX_SUBPROCESS_SIGCHLD_STOPPED);
     }
     else if (subprocess_rexec_is_finished (f, &p->status)) {
         process_new_state (p, FLUX_SUBPROCESS_EXITED);
