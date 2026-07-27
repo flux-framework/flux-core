@@ -806,9 +806,32 @@ void state_change_stopped_cb (flux_subprocess_t *p,
     diag ("state_change_stopped: state = %s",
           flux_subprocess_state_string (state));
     if (state == FLUX_SUBPROCESS_STOPPED) {
-        flux_future_t *f = flux_subprocess_kill (p, SIGKILL);
-        ok (true, "subprocess state == STOPPED in state change handler");
-        flux_future_destroy (f);
+        /* N.B. SIGSTOP reported in two callbacks for now, will be
+         * rectified in later commit */
+        if (stopped_cb_count == 1) {
+            flux_future_t *f = flux_subprocess_kill (p, SIGKILL);
+            ok (true, "subprocess state == STOPPED in state change handler");
+            flux_future_destroy (f);
+        }
+        stopped_cb_count++;
+    }
+}
+
+void sigchld_stopped_cb (flux_subprocess_t *p,
+                         flux_subprocess_sigchld_t sigchld)
+{
+    diag ("sigchld = %s",
+          flux_subprocess_sigchld_string (sigchld));
+    if (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED) {
+        ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+            "sigchld returned when job was running");
+        /* N.B. SIGSTOP reported in two callbacks for now, will be
+         * rectified in later commit */
+        if (stopped_cb_count == 1) {
+            flux_future_t *f = flux_subprocess_kill (p, SIGKILL);
+            ok (true, "sigchld == STOPPED in sigchld handler");
+            flux_future_destroy (f);
+        }
         stopped_cb_count++;
     }
 }
@@ -822,7 +845,8 @@ void test_state_change_stopped (flux_reactor_t *r)
     ok ((cmd = flux_cmd_create (2, av, NULL)) != NULL, "flux_cmd_create");
 
     flux_subprocess_ops_t ops = {
-        .on_state_change = state_change_stopped_cb
+        .on_state_change = state_change_stopped_cb,
+        .on_sigchld = sigchld_stopped_cb
     };
     stopped_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -838,7 +862,10 @@ void test_state_change_stopped (flux_reactor_t *r)
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
-    ok (stopped_cb_count == 1, "subprocess was stopped");
+    /* N.B. count is 2 due to legacy FLUX_SUBPROCESS_STOPPED state
+     * still being handled.  This will be rectified in a later commit.
+     */
+    ok (stopped_cb_count == 2, "subprocess was stopped");
     flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
 }
@@ -859,8 +886,8 @@ void test_state_strings (void)
 
 void test_sigchld_strings (void)
 {
-    is (flux_subprocess_sigchld_string (FLUX_SUBPROCESS_SIGCHLD_UNKNOWN),
-        "Unknown");
+    is (flux_subprocess_sigchld_string (FLUX_SUBPROCESS_SIGCHLD_STOPPED),
+        "Stopped");
     ok (!flux_subprocess_sigchld_string (100),
         "flux_subprocess_sigchld_string returns NULL on bad sigchld");
 }
