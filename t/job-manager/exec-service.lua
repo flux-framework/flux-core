@@ -55,8 +55,13 @@ assert (f:msghandler {
     handler = function (f, msg, mh)
         local id = msg.data.id
         jobs[id] = { msg = msg }
-        printf ("%s: start: %d\n", service, id)
-        assert (msg:respond {id = id, type = "start", data = {}})
+        if msg.data.reattach then
+            printf ("%s: reattach: %d\n", service, id)
+            assert (msg:respond {id = id, type = "reattached", data = {}})
+        else
+            printf ("%s: start: %d\n", service, id)
+            assert (msg:respond {id = id, type = "start", data = {}})
+        end
 
         -- Launch job timer:
         jobs[id].timer = assert (f:timer {

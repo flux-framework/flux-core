@@ -40,7 +40,7 @@ test_expect_success NO_CHAIN_LINT 'exec hello: job start events are paused' '
 	id=$(flux submit --flags=debug hostname) &&
 	flux job wait-event -vt 5 ${id} alloc &&
 	test_debug "flux job eventlog ${id}" &&
-	test $(lastevent ${id}) = "debug.start-lost"
+	test $(lastevent ${id}) = "alloc"
 '
 test_expect_success NO_CHAIN_LINT 'exec hello: start server with job timer' '
 	${execservice} test-exec3 30 > server3.log &
@@ -60,6 +60,34 @@ test_expect_success NO_CHAIN_LINT 'exec hello: terminate all jobs and servers' '
 	test_debug "cat server3.log" &&
 	flux job wait-event -t 2.5 ${id} clean &&
 	kill ${SERVER3}
+'
+test_expect_success NO_CHAIN_LINT 'exec hello: start server for disconnect test' '
+	${execservice} test-exec5 30 > server5.log &
+	SERVER5=$! &&
+	flux kvs get -c 1 --watch --waitcreate test.exec-hello.test-exec5 &&
+	id5=$(flux submit --flags=debug hostname) &&
+	flux job wait-event -t 5 ${id5} start
+'
+test_expect_success NO_CHAIN_LINT 'exec hello: removing service posts start-lost' '
+	kill -9 ${SERVER5} &&
+	wait ${SERVER5} || : &&
+	flux job wait-event -t 5 ${id5} debug.start-lost &&
+	test_debug "flux job eventlog ${id5}" &&
+	flux job wait-event -t 5 --match-context=note=disconnect \
+		${id5} debug.start-lost
+'
+test_expect_success NO_CHAIN_LINT 'exec hello: new service reattaches lost job' '
+	${execservice} test-exec6 30 > server6.log &
+	SERVER6=$! &&
+	flux kvs get -c 1 --watch --waitcreate test.exec-hello.test-exec6 &&
+	flux job wait-event -t 5 ${id5} debug.exec-reattach-finish &&
+	test_debug "cat server6.log" &&
+	grep "test-exec6: reattach: $(flux job id ${id5})" server6.log
+'
+test_expect_success NO_CHAIN_LINT 'exec hello: terminate disconnect-test job' '
+	flux cancel ${id5} &&
+	flux job wait-event -t 5 ${id5} clean &&
+	kill ${SERVER6}
 '
 
 test_done
