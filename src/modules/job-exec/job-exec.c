@@ -1047,6 +1047,9 @@ error_release:
     return -1;
 }
 
+/*  Start execution of the job shells.  On failure, a fatal exception has
+ *   already been raised, so the caller need not raise another.
+ */
 static int jobinfo_start_execution (struct jobinfo *job)
 {
     if (job->reattach)
@@ -1108,10 +1111,8 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
         jobinfo_fatal_error (job, errno, "failed to initialize implementation");
         goto done;
     }
-    if (jobinfo_start_execution (job) < 0) {
-        jobinfo_fatal_error (job, errno, "failed to start execution");
+    if (jobinfo_start_execution (job) < 0)
         goto done;
-    }
 done:
     jobinfo_decref (job); /* clear init reference */
     flux_future_destroy (f);
