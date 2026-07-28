@@ -1,8 +1,8 @@
--- Load all *.so plugins from plugin.searchpath
-plugin.load { file = "*.so", conf = {} }
-
 -- Source all rc files under shell.rcpath/lua.d/*.lua of shell rcpath:
 shell.source_rcpath ("*.lua")
+
+-- Load all *.so plugins from plugin.searchpath
+plugin.load { file = "*.so", conf = {} }
 
 -- Attempt to load an mpi version specific rc from rcpath:
 shell.source_rcpath_option ("mpi")
