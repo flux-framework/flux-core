@@ -199,8 +199,13 @@ static int start_timer (flux_t *h, struct testexec *te, double t)
         }
         if (te->job->reattach)
             jobinfo_reattached (te->job);
-        else
+        else {
             jobinfo_started (te->job);
+            /*  testexec is always recoverable: post the RFC 50 recoverable
+             *   event so a reattach after a restart is permitted.
+             */
+            jobinfo_emit_event_pack_nowait (te->job, "recoverable", NULL);
+        }
     }
     else
         return -1;

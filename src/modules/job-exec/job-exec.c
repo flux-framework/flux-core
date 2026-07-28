@@ -1063,10 +1063,32 @@ error_release:
     return -1;
 }
 
-/*  Start execution of the job shells.  On failure, a fatal exception has
- *   already been raised, so the caller need not raise another.
+/*  Return 1 if the decoded exec eventlog array contains an event named
+ *   `name`, 0 if it does not, or -1 on an eventlog parse error (errno set).
+ *   A parse error is distinct from absence so the caller can report a
+ *   corrupt eventlog rather than misattributing it to a missing event.
  */
-static int jobinfo_start_execution (struct jobinfo *job)
+static int exec_eventlog_has_event (json_t *eventlog, const char *name)
+{
+    size_t index;
+    json_t *value;
+
+    json_array_foreach (eventlog, index, value) {
+        const char *n;
+        if (eventlog_entry_parse (value, NULL, &n, NULL) < 0)
+            return -1;
+        if (streq (n, name))
+            return 1;
+    }
+    return 0;
+}
+
+/*  Start (or, on reattach, re-attach to) the job shells.  On a reattach the
+ *   decoded exec eventlog is passed to the implementation for replay state;
+ *   it is NULL on a fresh start.  On failure, a fatal exception has already
+ *   been raised, so the caller need not raise another.
+ */
+static int jobinfo_start_execution (struct jobinfo *job, json_t *eventlog)
 {
     if (job->reattach)
         jobinfo_emit_event_pack_nowait (job, "re-starting", NULL);
@@ -1077,7 +1099,7 @@ static int jobinfo_start_execution (struct jobinfo *job)
      */
     job->started = 1;
     if (job->reattach) {
-        if ((*job->impl->reattach) (job, NULL) < 0) {
+        if ((*job->impl->reattach) (job, eventlog) < 0) {
             jobinfo_fatal_error (job,
                                  errno,
                                  "%s: reattach failed",
@@ -1115,19 +1137,60 @@ static int jobinfo_load_implementation (struct jobinfo *job)
     return -1;
 }
 
-/*  Dispatch a reattach.  A backend that does not implement reattach cannot
- *   recover running shells, so raise a fatal exception rather than silently
- *   relaunching the job.
+/*  Gate a reattach on the RFC 50 "recoverable" event and the loaded
+ *   implementation's ability to recover.  The job's exec.eventlog was read
+ *   from the guest namespace as the tail of the "ns" child future (see
+ *   ns_read_eventlog ()).  Require that the backend implements reattach and
+ *   that the eventlog contains a "recoverable" event, raising a fatal
+ *   exception rather than silently relaunching the job if either is missing.
+ *   The decoded eventlog is passed to the implementation for any replay state
+ *   it needs.  Returns 0 on success (execution started), -1 on failure (a
+ *   fatal exception has been raised).
  */
-static int jobinfo_reattach (struct jobinfo *job)
+static int jobinfo_reattach (struct jobinfo *job, flux_future_t *nsf)
 {
+    const char *s;
+    json_t *eventlog = NULL;
+    int rc = -1;
+
     if (!job->impl->reattach) {
         jobinfo_fatal_error (job,
                              ENOSYS,
                              "reattach to running job is not implemented");
-        return -1;
+        goto done;
     }
-    return jobinfo_start_execution (job);
+    if (flux_kvs_lookup_get (nsf, &s) < 0) {
+        jobinfo_fatal_error (job,
+                             errno,
+                             "reattach: failed to read exec.eventlog");
+        goto done;
+    }
+    if (!(eventlog = eventlog_decode (s))) {
+        jobinfo_fatal_error (job,
+                             errno,
+                             "reattach: failed to parse exec.eventlog");
+        goto done;
+    }
+    switch (exec_eventlog_has_event (eventlog, "recoverable")) {
+        case -1:
+            jobinfo_fatal_error (job,
+                                 errno,
+                                 "reattach: corrupt exec.eventlog");
+            goto done;
+        case 0:
+            jobinfo_fatal_error (job,
+                                 0,
+                                 "job is not recoverable: no recoverable event");
+            goto done;
+    }
+    /*  jobinfo_start_execution () raises its own fatal exception on failure.
+     */
+    if (jobinfo_start_execution (job, eventlog) < 0)
+        goto done;
+    rc = 0;
+done:
+    json_decref (eventlog);
+    return rc;
 }
 
 /*  Completion for jobinfo_start_init (), finish init of jobinfo using
@@ -1136,8 +1199,9 @@ static int jobinfo_reattach (struct jobinfo *job)
 static void jobinfo_start_continue (flux_future_t *f, void *arg)
 {
     struct jobinfo *job = arg;
+    flux_future_t *nsf = flux_future_get_child (f, "ns");
 
-    if (flux_future_get (flux_future_get_child (f, "ns"), NULL) < 0) {
+    if (flux_future_get (nsf, NULL) < 0) {
         jobinfo_fatal_error (job, errno, "failed to create guest ns");
         goto done;
     }
@@ -1152,18 +1216,46 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
         goto done;
     }
     if (job->reattach) {
-        (void)jobinfo_reattach (job);
+        /*  On reattach the "ns" child future carries the job's exec.eventlog
+         *   (read once the namespace was established); gate the reattach on
+         *   the recoverable event before dispatching to the implementation.
+         */
+        (void)jobinfo_reattach (job, nsf);
         goto done;
     }
-    if (jobinfo_start_execution (job) < 0)
+    if (jobinfo_start_execution (job, NULL) < 0)
         goto done;
 done:
     jobinfo_decref (job); /* clear init reference */
     flux_future_destroy (f);
 }
 
+/*  Continuation chained onto the reattach namespace future once the guest
+ *   namespace is live: read the job's exec.eventlog from the namespace and
+ *   continue with the lookup future so jobinfo_start_continue () can consume
+ *   it via flux_kvs_lookup_get () on the "ns" child.  The recoverable-event
+ *   gate (RFC 50) is applied there.
+ */
+static void ns_read_eventlog (flux_future_t *fprev, void *arg)
+{
+    struct jobinfo *job = arg;
+    flux_t *h = flux_future_get_flux (fprev);
+    flux_future_t *f;
+
+    if (!(f = flux_kvs_lookup (h, job->ns, 0, "exec.eventlog"))) {
+        flux_future_continue_error (fprev, errno, NULL);
+        flux_future_destroy (fprev);
+        return;
+    }
+    flux_future_continue (fprev, f);
+    flux_future_destroy (fprev);
+}
+
 /*  Post the init/reattach event and (re)establish the job.<id>.guest symlink
  *   to the live guest namespace, continuing `fprev` with the combined future.
+ *   On reattach, chain a read of the job's exec.eventlog onto the combined
+ *   future so the recoverable-event gate can be applied once the namespace is
+ *   established.
  */
 static void ns_emit_and_symlink (flux_future_t *fprev, struct jobinfo *job)
 {
@@ -1186,6 +1278,12 @@ static void ns_emit_and_symlink (flux_future_t *fprev, struct jobinfo *job)
     if (!(f = namespace_symlink (h, job->id, job->ns))
         || flux_future_push (cf, "link guestns", f) < 0)
         goto error;
+    if (job->reattach) {
+        flux_future_t *ef;
+        if (!(ef = flux_future_and_then (cf, ns_read_eventlog, job)))
+            goto error;
+        cf = ef;
+    }
     flux_future_continue (fprev, cf);
     flux_future_destroy (fprev);
     return;
