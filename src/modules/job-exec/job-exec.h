@@ -40,6 +40,15 @@ struct jobinfo;
  *
  *   - start:   start execution of job
  *
+ *   - reattach:
+ *              (optional) reattach to the already-running job shells of a
+ *              recovered job. Present if and only if the implementation can
+ *              recover running shells; a NULL reattach means the
+ *              implementation cannot reattach, and a reattach attempt is a
+ *              fatal error. The decoded exec eventlog (RFC 50) is passed in
+ *              for the implementation to consult for replay state; ownership
+ *              is retained by the caller. See also the "recoverable" event.
+ *
  *   - kill:    signal executing job shells, e.g. due to exception or other
  *              fatal error.
  *
@@ -61,6 +70,7 @@ struct exec_implementation {
     int  (*init)    (struct jobinfo *job);
     void (*exit)    (struct jobinfo *job);
     int  (*start)   (struct jobinfo *job);
+    int  (*reattach) (struct jobinfo *job, json_t *eventlog);
     int  (*kill)    (struct jobinfo *job, int signum);
     int  (*cancel)  (struct jobinfo *job);
     json_t * (*stats) (struct jobinfo *job);

@@ -936,20 +936,31 @@ static void ns_copy (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-/*  Graft the guest namespace for `job` into the primary namespace and
- *   remove it, first quiescing the exec.eventlog.  If `event` is non-NULL
- *   it is posted to the exec.eventlog as the final entry (e.g. "done" on
- *   job completion); pass NULL to preserve a still-running job across a
- *   restart without terminating its eventlog.
+/*  Graft the guest namespace for `job` into the primary namespace, first
+ *   quiescing the exec.eventlog.  If `event` is non-NULL it is posted to the
+ *   exec.eventlog as the final entry (e.g. "done" on job completion); pass
+ *   NULL to preserve a still-running job across a restart without terminating
+ *   its eventlog.
  *
- *  The process is a chained future of 3 parts:
+ *  If `remove` is true, remove the guest namespace after grafting (the job
+ *   has terminated, so its guest KVS content lives on only as the graft).
+ *   If false, leave the live namespace in place: the job is still running and
+ *   job-exec may be reloaded within the same KVS session, in which case
+ *   reattach adopts the still-live namespace rather than recreating it from
+ *   the graft (recreation would race the KVS async removal of the same name).
+ *   On a full broker restart the KVS restarts and the live namespace vanishes
+ *   regardless; reattach then recreates it from the graft.
+ *
+ *  The process is a chained future of 2 or 3 parts:
  *   1. Post the final event (if any) and commit the exec.eventlog, so its
  *      buffered entries are flushed to the guest namespace before it is
  *      grafted and becomes read-only.
  *   2. Graft the namespace into the primary namespace.
- *   3. Remove the guest namespace.
+ *   3. Remove the guest namespace (only if `remove`).
  */
-static flux_future_t * ns_move (struct jobinfo *job, const char *event)
+static flux_future_t * ns_move (struct jobinfo *job,
+                                const char *event,
+                                bool remove)
 {
     flux_t *h = job->ctx->h;
     flux_future_t *f = NULL;
@@ -963,8 +974,13 @@ static flux_future_t * ns_move (struct jobinfo *job, const char *event)
         goto error;
     }
     if (!(f1 = flux_future_and_then (f, ns_copy, job))
-        || !(f1 = flux_future_or_then (f, ns_copy, job))
-        || !(f2 = flux_future_and_then (f1, ns_delete, job))
+        || !(f1 = flux_future_or_then (f, ns_copy, job))) {
+        flux_log_error (h, "ns_move: flux_future_and_then");
+        goto error;
+    }
+    if (!remove)
+        return f1;
+    if (!(f2 = flux_future_and_then (f1, ns_delete, job))
         || !(f2 = flux_future_or_then (f1, ns_delete, job))) {
         flux_log_error (h, "ns_move: flux_future_and_then");
         goto error;
@@ -1033,7 +1049,7 @@ static int jobinfo_finalize (struct jobinfo *job)
     job->finalizing = 1;
 
     if (job->has_namespace) {
-        if (!(f = ns_move (job, "done"))
+        if (!(f = ns_move (job, "done", true))
             || flux_future_then (f, -1., ns_move_cb, job) < 0)
             goto error;
     }
@@ -1047,17 +1063,51 @@ error_release:
     return -1;
 }
 
-static int jobinfo_start_execution (struct jobinfo *job)
+/*  Return 1 if the decoded exec eventlog array contains an event named
+ *   `name`, 0 if it does not, or -1 on an eventlog parse error (errno set).
+ *   A parse error is distinct from absence so the caller can report a
+ *   corrupt eventlog rather than misattributing it to a missing event.
+ */
+static int exec_eventlog_has_event (json_t *eventlog, const char *name)
+{
+    size_t index;
+    json_t *value;
+
+    json_array_foreach (eventlog, index, value) {
+        const char *n;
+        if (eventlog_entry_parse (value, NULL, &n, NULL) < 0)
+            return -1;
+        if (streq (n, name))
+            return 1;
+    }
+    return 0;
+}
+
+/*  Start (or, on reattach, re-attach to) the job shells.  On a reattach the
+ *   decoded exec eventlog is passed to the implementation for replay state;
+ *   it is NULL on a fresh start.  On failure, a fatal exception has already
+ *   been raised, so the caller need not raise another.
+ */
+static int jobinfo_start_execution (struct jobinfo *job, json_t *eventlog)
 {
     if (job->reattach)
         jobinfo_emit_event_pack_nowait (job, "re-starting", NULL);
     else
         jobinfo_emit_event_pack_nowait (job, "starting", NULL);
-    /* Set started flag before calling 'start' method because we want to
-     *  be sure to clean up properly if an exception occurs
+    /* Set started flag before calling start/reattach method because we want
+     *  to be sure to clean up properly if an exception occurs
      */
     job->started = 1;
-    if ((*job->impl->start) (job) < 0) {
+    if (job->reattach) {
+        if ((*job->impl->reattach) (job, eventlog) < 0) {
+            jobinfo_fatal_error (job,
+                                 errno,
+                                 "%s: reattach failed",
+                                 job->impl->name);
+            return -1;
+        }
+    }
+    else if ((*job->impl->start) (job) < 0) {
         jobinfo_fatal_error (job, errno, "%s: start failed", job->impl->name);
         return -1;
     }
@@ -1087,14 +1137,71 @@ static int jobinfo_load_implementation (struct jobinfo *job)
     return -1;
 }
 
+/*  Gate a reattach on the RFC 50 "recoverable" event and the loaded
+ *   implementation's ability to recover.  The job's exec.eventlog was read
+ *   from the guest namespace as the tail of the "ns" child future (see
+ *   ns_read_eventlog ()).  Require that the backend implements reattach and
+ *   that the eventlog contains a "recoverable" event, raising a fatal
+ *   exception rather than silently relaunching the job if either is missing.
+ *   The decoded eventlog is passed to the implementation for any replay state
+ *   it needs.  Returns 0 on success (execution started), -1 on failure (a
+ *   fatal exception has been raised).
+ */
+static int jobinfo_reattach (struct jobinfo *job, flux_future_t *nsf)
+{
+    const char *s;
+    json_t *eventlog = NULL;
+    int rc = -1;
+
+    if (!job->impl->reattach) {
+        jobinfo_fatal_error (job,
+                             ENOSYS,
+                             "reattach to running job is not implemented");
+        goto done;
+    }
+    if (flux_kvs_lookup_get (nsf, &s) < 0) {
+        jobinfo_fatal_error (job,
+                             errno,
+                             "reattach: failed to read exec.eventlog");
+        goto done;
+    }
+    if (!(eventlog = eventlog_decode (s))) {
+        jobinfo_fatal_error (job,
+                             errno,
+                             "reattach: failed to parse exec.eventlog");
+        goto done;
+    }
+    switch (exec_eventlog_has_event (eventlog, "recoverable")) {
+        case -1:
+            jobinfo_fatal_error (job,
+                                 errno,
+                                 "reattach: corrupt exec.eventlog");
+            goto done;
+        case 0:
+            jobinfo_fatal_error (job,
+                                 0,
+                                 "job is not recoverable: no recoverable event");
+            goto done;
+    }
+    /*  jobinfo_start_execution () raises its own fatal exception on failure.
+     */
+    if (jobinfo_start_execution (job, eventlog) < 0)
+        goto done;
+    rc = 0;
+done:
+    json_decref (eventlog);
+    return rc;
+}
+
 /*  Completion for jobinfo_start_init (), finish init of jobinfo using
  *   data fetched from KVS
  */
 static void jobinfo_start_continue (flux_future_t *f, void *arg)
 {
     struct jobinfo *job = arg;
+    flux_future_t *nsf = flux_future_get_child (f, "ns");
 
-    if (flux_future_get (flux_future_get_child (f, "ns"), NULL) < 0) {
+    if (flux_future_get (nsf, NULL) < 0) {
         jobinfo_fatal_error (job, errno, "failed to create guest ns");
         goto done;
     }
@@ -1108,20 +1215,52 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
         jobinfo_fatal_error (job, errno, "failed to initialize implementation");
         goto done;
     }
-    if (jobinfo_start_execution (job) < 0) {
-        jobinfo_fatal_error (job, errno, "failed to start execution");
+    if (job->reattach) {
+        /*  On reattach the "ns" child future carries the job's exec.eventlog
+         *   (read once the namespace was established); gate the reattach on
+         *   the recoverable event before dispatching to the implementation.
+         */
+        (void)jobinfo_reattach (job, nsf);
         goto done;
     }
+    if (jobinfo_start_execution (job, NULL) < 0)
+        goto done;
 done:
     jobinfo_decref (job); /* clear init reference */
     flux_future_destroy (f);
 }
 
-static void ns_link (flux_future_t *fprev, void *arg)
+/*  Continuation chained onto the reattach namespace future once the guest
+ *   namespace is live: read the job's exec.eventlog from the namespace and
+ *   continue with the lookup future so jobinfo_start_continue () can consume
+ *   it via flux_kvs_lookup_get () on the "ns" child.  The recoverable-event
+ *   gate (RFC 50) is applied there.
+ */
+static void ns_read_eventlog (flux_future_t *fprev, void *arg)
+{
+    struct jobinfo *job = arg;
+    flux_t *h = flux_future_get_flux (fprev);
+    flux_future_t *f;
+
+    if (!(f = flux_kvs_lookup (h, job->ns, 0, "exec.eventlog"))) {
+        flux_future_continue_error (fprev, errno, NULL);
+        flux_future_destroy (fprev);
+        return;
+    }
+    flux_future_continue (fprev, f);
+    flux_future_destroy (fprev);
+}
+
+/*  Post the init/reattach event and (re)establish the job.<id>.guest symlink
+ *   to the live guest namespace, continuing `fprev` with the combined future.
+ *   On reattach, chain a read of the job's exec.eventlog onto the combined
+ *   future so the recoverable-event gate can be applied once the namespace is
+ *   established.
+ */
+static void ns_emit_and_symlink (flux_future_t *fprev, struct jobinfo *job)
 {
     int saved_errno;
     flux_t *h = flux_future_get_flux (fprev);
-    struct jobinfo *job = arg;
     flux_future_t *cf = NULL;
     flux_future_t *f = NULL;
 
@@ -1139,6 +1278,12 @@ static void ns_link (flux_future_t *fprev, void *arg)
     if (!(f = namespace_symlink (h, job->id, job->ns))
         || flux_future_push (cf, "link guestns", f) < 0)
         goto error;
+    if (job->reattach) {
+        flux_future_t *ef;
+        if (!(ef = flux_future_and_then (cf, ns_read_eventlog, job)))
+            goto error;
+        cf = ef;
+    }
     flux_future_continue (fprev, cf);
     flux_future_destroy (fprev);
     return;
@@ -1146,6 +1291,34 @@ error:
     saved_errno = errno;
     flux_future_destroy (cf);
     flux_future_continue_error (fprev, saved_errno, NULL);
+    flux_future_destroy (fprev);
+}
+
+static void ns_link (flux_future_t *fprev, void *arg)
+{
+    ns_emit_and_symlink (fprev, arg);
+}
+
+/*  Error continuation for the reattach namespace create.  A reattaching job
+ *   whose guest namespace is still live in the same KVS session (e.g. a
+ *   job-exec module reload rather than a full broker restart) gets EEXIST
+ *   from namespace_create: the namespace was grafted but not removed on
+ *   unload, so it is still present and current.  Adopt it in place --
+ *   re-post the reattach event and restore the symlink -- rather than
+ *   failing the job.  Any other error is fatal.
+ */
+static void ns_adopt (flux_future_t *fprev, void *arg)
+{
+    struct jobinfo *job = arg;
+    int errnum = 0;
+
+    if (flux_future_get (fprev, NULL) < 0)
+        errnum = errno;
+    if (job->reattach && errnum == EEXIST) {
+        ns_emit_and_symlink (fprev, job);
+        return;
+    }
+    flux_future_continue_error (fprev, errnum, NULL);
     flux_future_destroy (fprev);
 }
 
@@ -1163,7 +1336,9 @@ static flux_future_t *ns_create_and_link (flux_t *h, struct jobinfo *job)
      */
     job->has_namespace = 1;
 
-    if (!f || !(f2 = flux_future_and_then (f, ns_link, job))) {
+    if (!f
+        || !(f2 = flux_future_and_then (f, ns_link, job))
+        || !(f2 = flux_future_or_then (f, ns_adopt, job))) {
         flux_log_error (h, "ns_create_and_link: flux_future_and_then");
         flux_future_destroy (f);
         return NULL;
@@ -1761,11 +1936,13 @@ static int configure_implementations (flux_t *h, int argc, char **argv)
 }
 
 /*  On module unload, graft each running job's guest namespace into the
- *   primary namespace (as a dirref at job.<id>.guest) and remove it, so the
- *   namespace is preserved across a restart: its content is reachable from
- *   the primary root, protected by KVS garbage collection and captured by
- *   the shutdown content dump.  No terminating event is posted since the
- *   jobs are still running and will be reattached.
+ *   primary namespace (as a dirref at job.<id>.guest) without removing the
+ *   live namespace, so the content is preserved across a restart: it is
+ *   reachable from the primary root, protected by KVS garbage collection and
+ *   captured by the shutdown content dump.  Retaining the live namespace lets
+ *   a same-KVS reload reattach by adopting it in place (see ns_adopt()).  No
+ *   terminating event is posted since the jobs are still running and will be
+ *   reattached.
  */
 static int graft_running_ns (struct job_exec_ctx *ctx)
 {
@@ -1781,7 +1958,7 @@ static int graft_running_ns (struct job_exec_ctx *ctx)
                     goto cleanup;
                 flux_future_set_flux (fall, ctx->h);
             }
-            if (!(f = ns_move (job, NULL)))
+            if (!(f = ns_move (job, NULL, false)))
                 goto cleanup;
             if (flux_future_push (fall, job->ns, f) < 0)
                 goto cleanup;

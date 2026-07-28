@@ -24,6 +24,11 @@ int start_send_expiration_update (struct start *start,
                                   struct job *job,
                                   json_t *context);
 
+void start_disconnect_rpc (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg);
+
 #endif /* ! _FLUX_JOB_MANAGER_START_H */
 
 /*

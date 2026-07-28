@@ -100,6 +100,7 @@ struct start {
     flux_msg_handler_t **handlers;
     char *topic;
     char *update_topic;
+    const flux_msg_t *hello_request;
 };
 
 static void hello_cb (flux_t *h,
@@ -134,6 +135,12 @@ static void hello_cb (flux_t *h,
     if (asprintf (&start->topic, "%s.start", service_name) < 0
         || asprintf (&start->update_topic, "%s.expiration", service_name) < 0)
         goto error;
+    /* Cache the request so a later disconnect can be matched to the
+     * registering service (sender uuid + credentials).  See
+     * start_disconnect_rpc().
+     */
+    flux_msg_decref (start->hello_request);
+    start->hello_request = flux_msg_incref (msg);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     /* Response has been sent, now take action on jobs in run state.
@@ -161,16 +168,21 @@ static void interface_teardown (struct start *start, char *s, int errnum)
         struct job_manager *ctx = start->ctx;
         struct job *job;
 
-        flux_log (ctx->h,
-                  LOG_DEBUG,
-                  "start: stop due to %s: %s",
-                  s,
-                  flux_strerror (errnum));
+        if (errnum)
+            flux_log (ctx->h,
+                      LOG_DEBUG,
+                      "start: stop due to %s: %s",
+                      s,
+                      flux_strerror (errnum));
+        else
+            flux_log (ctx->h, LOG_DEBUG, "start: stop due to %s", s);
 
         free (start->topic);
         free (start->update_topic);
+        flux_msg_decref (start->hello_request);
         start->topic = NULL;
         start->update_topic = NULL;
+        start->hello_request = NULL;
 
         job = zhashx_first (ctx->active_jobs);
         while (job) {
@@ -187,6 +199,19 @@ static void interface_teardown (struct start *start, char *s, int errnum)
             job = zhashx_next (ctx->active_jobs);
         }
     }
+}
+
+void start_disconnect_rpc (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct job_manager *ctx = arg;
+    struct start *start = ctx->start;
+
+    if (start->hello_request
+        && flux_disconnect_match (msg, start->hello_request))
+        interface_teardown (start, "disconnect", 0);
 }
 
 static void start_response_cb (flux_t *h,
@@ -225,11 +250,12 @@ static void start_response_cb (flux_t *h,
         goto error;
     }
     if (streq (type, "start")) {
-        if (job->reattach)
+        if (job->started) {
             flux_log (h,
                       LOG_ERR,
                       "start response: id=%s should not get start event",
                       idf58 (id));
+        }
         else {
             if (event_job_post_pack (ctx->event, job, "start", 0, NULL) < 0)
                 goto error_post;
@@ -336,7 +362,7 @@ int start_send_request (struct start *start, struct job *job)
                            "id", job->id,
                            "userid", (json_int_t) job->userid,
                            "jobspec", job->jobspec_redacted,
-                           "reattach", job->reattach,
+                           "reattach", job->started,
                            "R", job->R_redacted) < 0)
             goto error;
         if (flux_send (ctx->h, msg, 0) < 0)
@@ -415,6 +441,7 @@ void start_ctx_destroy (struct start *start)
         flux_msg_handler_delvec (start->handlers);
         free (start->topic);
         free (start->update_topic);
+        flux_msg_decref (start->hello_request);
         free (start);
         errno = saved_errno;
     }

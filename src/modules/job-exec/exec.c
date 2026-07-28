@@ -1052,19 +1052,6 @@ static int exec_start (struct jobinfo *job)
         return -1;
     }
 
-    /*  The bulk-exec implementation cannot yet reattach to the job shells of
-     *  a job that was running before a restart.  Rather than silently launch
-     *  a fresh set of shells for a job the rest of the instance believes is
-     *  already running, fail the job explicitly.  Reattach is currently only
-     *  implemented by the testexec implementation.
-     */
-    if (job->reattach) {
-        jobinfo_fatal_error (job,
-                             ENOSYS,
-                             "reattach to running job is not implemented");
-        return -1;
-    }
-
     if (streq (exec_mock_exception (exec), "init")) {
         /* If creating an "init" mock exception, generate it and
          *  then return to simulate an exception that came in before

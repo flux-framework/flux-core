@@ -580,7 +580,6 @@ int restart_from_kvs (struct job_manager *ctx)
         }
         else if ((job->state & FLUX_JOB_STATE_RUNNING) != 0) {
             ctx->running_jobs++;
-            job->reattach = 1;
             if ((job->flags & FLUX_JOB_DEBUG)) {
                 if (event_job_post_pack (ctx->event,
                                          job,

@@ -78,6 +78,7 @@ void disconnect_rpc (flux_t *h,
      * which services a client used, so we must check all services for
      * cleanup */
     alloc_disconnect_rpc (h, mh, msg, arg);
+    start_disconnect_rpc (h, mh, msg, arg);
     wait_disconnect_rpc (h, mh, msg, arg);
     journal_listeners_disconnect_rpc (h, mh, msg, arg);
 }
