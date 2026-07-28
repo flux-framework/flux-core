@@ -11,6 +11,7 @@
 #ifndef HAVE_JOB_EXEC_H
 #define HAVE_JOB_EXEC_H 1
 
+#include <stdbool.h>
 #include <jansson.h>
 #include <flux/core.h>
 #include <flux/idset.h>
@@ -113,6 +114,7 @@ struct jobinfo {
     uint8_t               multiuser:1;
     uint8_t               has_namespace:1;
     uint8_t               exception_in_progress:1;
+    uint8_t               shell_exit_posted:1; /* shell-exit event was posted */
 
     uint8_t               started:1;     /* some or all shells are starting */
     uint8_t               running:1;     /* all shells are running */
@@ -179,15 +181,48 @@ void jobinfo_tasks_complete (struct jobinfo *job,
 void jobinfo_fatal_error (struct jobinfo *job, int errnum,
                           const char *fmt, ...);
 
+/*  Numeric severity used for a non-fatal, critical job exception:
+ *  (e.g. node failure)
+ */
+#define FLUX_JOB_EXCEPTION_CRIT 2
+
 void jobinfo_raise (struct jobinfo *job,
                     const char *type,
                     int severity,
                     const char *fmt, ...);
 
+/*  Return true if shell rank `shell_rank` is a critical rank, i.e. one whose
+ *  loss requires a fatal job exception rather than a non-fatal one.
+ */
+bool jobinfo_is_critical_rank (struct jobinfo *job, int shell_rank);
+
+/*  Report shell rank `shell_rank` as lost: raise a non-fatal "node-failure"
+ *  exception if the rank is not critical (the caller raises a fatal error
+ *  separately for critical ranks), and always notify shell rank 0 via a
+ *  "lost-shell" exception RPC so the leader shell does not hang awaiting a
+ *  peer that will never respond.  `fmt` supplies the human-readable reason.
+ *  Returns 0 on success, -1 on error.
+ */
+int jobinfo_lost_shell (struct jobinfo *job,
+                        bool critical,
+                        int shell_rank,
+                        const char *fmt,
+                        ...);
+
 int jobinfo_drain_ranks (struct jobinfo *job,
                          const char *ranks,
                          const char *fmt,
                          ...);
+
+/* Post the "shell-exit" event for the exiting leader shell (shell rank 0),
+ * then arm a timer that raises a fatal exception if other shells remain
+ * active longer than the configured shell-exit timeout.  `wait_status` is
+ * the leader shell's raw wait status (supplied by the exec implementation,
+ * which holds the exited shell).  Posts at most once per job.
+ */
+void jobinfo_post_shell_exit (struct jobinfo *job,
+                              unsigned int leader_rank,
+                              int wait_status);
 
 /* Append a log output message to exec.eventlog for job
  */

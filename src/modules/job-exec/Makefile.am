@@ -23,6 +23,10 @@ libjob_exec_la_SOURCES = \
 	namespace.c \
 	exec_config.h \
 	exec_config.c \
+	exec_cmd.h \
+	exec_cmd.c \
+	barrier.h \
+	barrier.c \
 	rset.c \
 	rset.h \
 	testexec.c \

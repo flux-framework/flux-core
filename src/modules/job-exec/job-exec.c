@@ -389,6 +389,123 @@ static int jobinfo_respond (flux_t *h,
                               "data");
 }
 
+static struct idset *jobinfo_active_ranks (struct jobinfo *job)
+{
+    if (job->impl->active_ranks)
+        return (*job->impl->active_ranks) (job);
+    return NULL;
+}
+
+static void shell_exit_timer_cb (flux_reactor_t *r,
+                                 flux_watcher_t *w,
+                                 int revents,
+                                 void *arg)
+{
+    struct jobinfo *job = arg;
+    struct idset *active = jobinfo_active_ranks (job);
+    char *ids = NULL;
+    char *hosts = NULL;
+    char fsd_buf[64];
+    double timeout = config_get_shell_exit_timeout ();
+
+    flux_watcher_stop (w);
+
+    if (!active)
+        return;
+
+    ids = idset_encode (active, IDSET_FLAG_RANGE);
+    hosts = flux_hostmap_lookup (job->h, ids, NULL);
+    (void) fsd_format_duration (fsd_buf, sizeof (fsd_buf), timeout);
+
+    jobinfo_fatal_error (job,
+                         0,
+                         "job shells still active on %s"
+                         " (rank%s %s) %s after leader shell exit",
+                         hosts ? hosts : "(unknown)",
+                         idset_count (active) > 1 ? "s" : "",
+                         ids ? ids : "(unknown)",
+                         fsd_buf);
+    free (ids);
+    free (hosts);
+    idset_destroy (active);
+}
+
+void jobinfo_post_shell_exit (struct jobinfo *job,
+                              unsigned int leader_rank,
+                              int wait_status)
+{
+    int rc;
+    struct idset *active = NULL;
+    char *active_ids = NULL;
+    double timeout;
+
+    if (job->shell_exit_posted)
+        return;
+    job->shell_exit_posted = 1;
+
+    /*  The shell-exit event is informational only (to notify eventlog
+     *  consumers that rank 0 shell services are unavailable). If encoding
+     *  or posting fails, log but continue - the timer below is the critical
+     *  safety mechanism to prevent hanging jobs.
+     */
+    if ((active = jobinfo_active_ranks (job))
+        && idset_count (active) > 0
+        && !(active_ids = idset_encode (active, IDSET_FLAG_RANGE)))
+        flux_log_error (job->h,
+                        "%s: failed to encode %zu active_ranks for %s",
+                        "shell-exit",
+                        idset_count (active),
+                        idf58 (job->id));
+
+    if (active_ids) {
+        rc = jobinfo_emit_event_pack_nowait (job,
+                                             "shell-exit",
+                                             "{s:i s:i s:s}",
+                                             "rank", (int) leader_rank,
+                                             "wait_status", wait_status,
+                                             "active_ranks", active_ids);
+    }
+    else {
+        rc = jobinfo_emit_event_pack_nowait (job,
+                                             "shell-exit",
+                                             "{s:i s:i}",
+                                             "rank", (int) leader_rank,
+                                             "wait_status", wait_status);
+    }
+    if (rc < 0)
+        flux_log_error (job->h,
+                        "failed to post shell-exit event for job %s",
+                        idf58 (job->id));
+
+    timeout = config_get_shell_exit_timeout ();
+    if (timeout > 0.
+        && active
+        && idset_count (active) > 0
+        && !job->exception_in_progress) {
+        flux_reactor_t *reactor = flux_get_reactor (job->h);
+        job->shell_exit_timer =
+            flux_timer_watcher_create (reactor,
+                                       timeout,
+                                       0.,
+                                       shell_exit_timer_cb,
+                                       job);
+        if (job->shell_exit_timer)
+            flux_watcher_start (job->shell_exit_timer);
+        else {
+            /*  Without the timer the job could hang indefinitely waiting
+             *  for the remaining shells, so raise an exception now rather
+             *  than just logging the error.
+             */
+            jobinfo_fatal_error (job,
+                                 errno,
+                                 "failed to create shell exit timer");
+        }
+    }
+
+    free (active_ids);
+    idset_destroy (active);
+}
+
 static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
 {
     flux_t *h = job->ctx->h;
@@ -881,6 +998,68 @@ void jobinfo_raise (struct jobinfo *job,
     va_start (ap, fmt);
     jobinfo_vraise (job, type, severity, fmt, ap);
     va_end (ap);
+}
+
+bool jobinfo_is_critical_rank (struct jobinfo *job, int shell_rank)
+{
+    return idset_test (job->critical_ranks, shell_rank);
+}
+
+int jobinfo_lost_shell (struct jobinfo *job,
+                        bool critical,
+                        int shell_rank,
+                        const char *fmt,
+                        ...)
+{
+    flux_future_t *f;
+    char msgbuf[160];
+    int msglen = sizeof (msgbuf);
+    char *msg = msgbuf;
+    va_list ap;
+    int severity = critical ? 0 : FLUX_JOB_EXCEPTION_CRIT;
+
+    if (fmt) {
+        va_start (ap, fmt);
+        if (vsnprintf (msg, msglen, fmt, ap) >= msglen)
+            (void) snprintf (msg, msglen, "%s", "lost contact with job shell");
+        va_end (ap);
+    }
+
+    if (!critical) {
+        /* Raise a non-fatal job exception if the lost shell was not critical.
+         * The job exec service will raise a fatal exception later for
+         * critical shells.
+         */
+        jobinfo_raise (job,
+                       "node-failure",
+                       FLUX_JOB_EXCEPTION_CRIT,
+                       "%s",
+                       msg);
+        /* If an exception was raised, do not duplicate the message
+         * to the shell exception service since the message will already
+         * be displayed as part of the exception note:
+         */
+        msg = "";
+    }
+
+    /* Also notify job shell rank 0 of exception
+     */
+    if (!(f = jobinfo_shell_rpc_pack (job,
+                                      "exception",
+                                      "{s:s s:i s:i s:s}",
+                                      "type", "lost-shell",
+                                      "severity", severity,
+                                      "shell_rank", shell_rank,
+                                      "message", msg)))
+            return -1;
+    /*  Do not wait for response. If a shell is lost because the job
+     *  is terminating, then the rank 0 shell may also have exited by the
+     *  time this message is sent, so a response may never come. This
+     *  could leak the future (and the job reference taken by
+     *  jobinfo_shell_rpc_pack())
+     */
+    flux_future_destroy (f);
+    return 0;
 }
 
 void jobinfo_log_output (struct jobinfo *job,
