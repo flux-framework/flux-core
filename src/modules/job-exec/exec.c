@@ -678,7 +678,6 @@ static json_t *exec_config_stats (void)
     return o;
 error:
     ERRNO_SAFE_WRAP (json_decref, o);
-    ERRNO_SAFE_WRAP (json_decref, conf);
     return NULL;
 }
 
