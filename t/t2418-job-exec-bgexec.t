@@ -188,11 +188,73 @@ test_expect_success 'cancel of running job reaches clean' '
 '
 
 # ---------------------------------------------------------------------------
-# reattach is not implemented (matches bulk-exec)
+# recoverable event (RFC 50)
+#
+# A multi-node job's barrier state cannot be reconstructed on reattach, so the
+# recoverable event is posted only after the second (post-task-start) barrier
+# completes -- not when the shells are merely launched.  A job that fails
+# before that point (e.g. shells start and pass the init barrier, but the user
+# executable does not exist) must therefore NOT be marked recoverable.
 # ---------------------------------------------------------------------------
 
-# TODO: exercise the reattach=ENOSYS path once an instance-restart harness
-# for bgexec exists (cf. t3202-instance-restart-testexec.t).
+test_expect_success 'multi-node job posts recoverable after second barrier' '
+	id=$(flux submit -N2 -n2 sleep 30) &&
+	flux job wait-event -p exec -t 30 $id recoverable &&
+	flux cancel $id &&
+	flux job wait-event -t 30 $id clean
+'
+test_expect_success 'job that fails before second barrier is not recoverable' '
+	id=$(flux submit -N2 -n2 /nonexistent-executable) &&
+	flux job wait-event -t 30 $id clean &&
+	flux job wait-event -t 5 $id exception &&
+	test_must_fail flux job wait-event -p exec -t 5 $id recoverable
+'
+
+# ---------------------------------------------------------------------------
+# reattach across a module reload
+#
+# bgexec launches shells via the real rexec service, so they live in the
+# broker and survive a job-exec module reload (unlike a full instance restart,
+# which is the sdexec follow-on).  On reload the job manager re-issues the
+# start request with reattach set; bgexec recovers status by re-issuing the
+# wait for each rank by its deterministic label rather than relaunching.  This
+# mirrors the testexec reattach path in t3204.
+# ---------------------------------------------------------------------------
+
+test_expect_success 'submit long-running job under bgexec and wait for start' '
+	id=$(flux submit --flags=debug -N2 -n2 sleep 300) &&
+	flux job wait-event -t 60 $id start &&
+	flux job wait-event -p exec -t 60 $id recoverable
+'
+test_expect_success 'job is reattached rather than relaunched on reload' '
+	flux module reload job-exec method=bgexec &&
+	flux job wait-event -t 60 $id debug.exec-reattach-finish &&
+	flux job eventlog $id >reattach.out &&
+	test_debug "cat reattach.out" &&
+	grep "debug.start-lost" reattach.out &&
+	grep "debug.exec-reattach-finish" reattach.out
+'
+test_expect_success 'reattached job remains in RUN state' '
+	test $(flux jobs -no "{state}" $id) = RUN
+'
+test_expect_success 'reattached job can be canceled and cleaned up' '
+	flux cancel $id &&
+	flux job wait-event -t 60 $id clean
+'
+
+# A reattached multi-node job that exits normally (rather than being
+# canceled) must not be misread as having terminated before the first
+# barrier.  The reattach path marks both barriers done since the recoverable
+# event gate guarantees they completed in the prior incarnation.
+test_expect_success 'multi-node reattached job exits cleanly without exception' '
+	id=$(flux submit --flags=debug -N2 -n2 sleep 10) &&
+	flux job wait-event -p exec -t 60 $id recoverable &&
+	flux module reload job-exec method=bgexec &&
+	flux job wait-event -t 60 $id debug.exec-reattach-finish &&
+	flux job wait-event -t 60 $id clean &&
+	flux job status $id &&
+	test_must_fail flux job wait-event -t 5 $id exception
+'
 
 test_expect_success 'reload job-exec to defaults' '
 	flux module reload job-exec
