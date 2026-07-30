@@ -63,6 +63,8 @@ libjob_manager_la_SOURCES = \
 	getattr.c \
 	prioritize.h \
 	prioritize.c \
+	queues.h \
+	queues.c \
 	queue.h \
 	queue.c \
 	jobtap-internal.h \
@@ -126,6 +128,7 @@ TESTS = \
 	test_raise.t \
 	test_kill.t \
 	test_restart.t \
+	test_queues.t \
 	test_annotate.t
 
 test_ldadd = \
@@ -189,6 +192,14 @@ test_restart_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/restart.o \
         $(test_ldadd)
 test_restart_t_LDFLAGS = \
+        $(test_ldflags)
+
+test_queues_t_SOURCES = test/queues.c
+test_queues_t_CPPFLAGS = $(test_cppflags)
+test_queues_t_LDADD = \
+        $(top_builddir)/src/modules/job-manager/queues.o \
+        $(test_ldadd)
+test_queues_t_LDFLAGS = \
         $(test_ldflags)
 
 test_annotate_t_SOURCES = test/annotate.c
