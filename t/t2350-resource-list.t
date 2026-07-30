@@ -188,6 +188,23 @@ test_expect_success 'flux-resource -q, --queue reports invalid queue' '
 		< $FLUKE_INPUT 2>badqueue.err &&
 	grep "foo: no such queue" badqueue.err
 '
+# Defense in depth: a live instance rejects this config up front, but
+# --config-file input is not validated, and a virtual queue with an
+# unresolvable parent must not fall through to matching every node.
+test_expect_success 'flux-resource -q reports vqueue with unconfigured parent' '
+	cat >dangling.config <<-EOT &&
+	{
+	  "queues": {
+	    "batch": { "requires": [ "batch" ] },
+	    "expedite": { "parent": "notaqueue" }
+	  }
+	}
+	EOT
+	test_must_fail flux resource list --queue=expedite \
+		--from-stdin --config-file=dangling.config \
+		< $FLUKE_INPUT 2>dangling.err &&
+	grep "parent queue .notaqueue. is not configured" dangling.err
+'
 test_expect_success 'flux-resource list supports --include' '
 	flux resource list -s all -ni 0 --no-skip-empty >list-include.output &&
 	test_debug "cat list-include.output" &&
