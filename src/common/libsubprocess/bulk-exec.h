@@ -10,8 +10,8 @@
 
 /* "bulk" subprocess execution wrapper around libsubprocess API */
 
-#ifndef HAVE_JOB_EXEC_BULK_EXEC_H
-#define HAVE_JOB_EXEC_BULK_EXEC_H 1
+#ifndef _SUBPROCESS_BULK_EXEC_H
+#define _SUBPROCESS_BULK_EXEC_H 1
 
 #include <flux/core.h>
 #include <flux/idset.h>
@@ -114,4 +114,4 @@ const char *bulk_exec_service_name (struct bulk_exec *exec);
 flux_subprocess_t *bulk_exec_get_subprocess (struct bulk_exec *exec,
                                              int rank);
 
-#endif /* !HAVE_JOB_EXEC_BULK_EXEC_H */
+#endif /* !_SUBPROCESS_BULK_EXEC_H */
