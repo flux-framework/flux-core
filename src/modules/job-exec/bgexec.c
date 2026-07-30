@@ -13,15 +13,9 @@
  * DESCRIPTION
  *
  * A peer of the bulk-exec implementation (exec.c) that launches the job
- * shells using the libsubprocess bgexec abstraction (flux_rexec_bg(3) +
- * flux_rexec_wait(3)) rather than streaming flux_rexec_ex(3).  Selected by
- * setting the exec.method config key to "bgexec".
- *
- * The start and status-collection phases are decoupled so that a wait may
- * be re-issued after a job-exec restart, which is the property WARMSTART
- * requires.  Reattach to shells launched by a previous incarnation is not
- * yet wired up here (it needs command reconstruction from KVS); this
- * implementation drives the normal launch path only.
+ * shells using the libsubprocess bgexec abstraction and supports reattach.
+ * Selected by setting the exec.method config key to "bgexec" or loading
+ * job-exec with the method=bgexec module option.
  *
  * TEST CONFIGURATION
  *
@@ -56,14 +50,19 @@ struct bgexec_ctx {
     const char *mock_exception;   /* fake exception */
     const char *sdexec_test_expected_cpus; /* override for post-start check */
 
-    /*  Shells enter a sequence of barriers during startup.  Only the first
-     *  is timed (with first_barrier_timeout); on completion the current
+    /*  Shells enter a sequence of two barriers during startup: the first
+     *  after initialization, the second after tasks have started.  Only the
+     *  first is timed (with first_barrier_timeout); on completion the current
      *  barrier is destroyed and a fresh untimed one is created for the next.
-     *  first_barrier_done records that the first barrier has completed.
+     *  first_barrier_done and second_barrier_done record their completion.
+     *  The RFC 50 recoverable event is posted once the second barrier
+     *  completes, since barrier state cannot be reconstructed on reattach
+     *  and only then are all shells known to be past the startup sequence.
      */
     struct barrier *barrier;
     double first_barrier_timeout;
     bool first_barrier_done;
+    bool second_barrier_done;
 
     /*  Set to true if one shell terminates before the first barrier *and*
      *  the first exception.  This allows other ranks to be drained when they
@@ -140,7 +139,21 @@ static const char *bgexec_mock_exception (struct bgexec *bg)
 static void start_cb (struct bgexec *bg, void *arg)
 {
     struct jobinfo *job = arg;
-    jobinfo_started (job);
+    if (job->reattach)
+        jobinfo_reattached (job);
+    else {
+        jobinfo_started (job);
+        /*  The shells are launched WAITABLE and their status can be
+         *  recovered by re-issuing the wait by label.  A single-shell job
+         *  runs no barriers and has no barrier state to lose across a
+         *  restart, so post the RFC 50 recoverable event now.  A multi-shell
+         *  job defers this to second-barrier completion (see
+         *  bgexec_barrier_enter_op) because its barrier state is not
+         *  reconstructible on reattach.
+         */
+        if (bgexec_total (bg) == 1)
+            jobinfo_emit_event_pack_nowait (job, "recoverable", NULL);
+    }
 }
 
 static void complete_cb (struct bgexec *bg, void *arg)
@@ -577,24 +590,43 @@ static void bgexec_check_cb (flux_reactor_t *r,
     }
 }
 
+/*  Reattach to shells launched before a restart: the per-rank commands were
+ *  reconstructed by bgexec_impl_init() from job->R (which yields the same
+ *  deterministic per-rank labels as the original start), so recover status by
+ *  re-issuing the wait for every rank by label rather than launching a fresh
+ *  set of shells.  The processes survive because the rexec server retains
+ *  waitable exited shells across a client disconnect.  The exec eventlog is
+ *  not consulted: the label is reconstructible from the jobid and R alone.
+ */
+static int bgexec_impl_reattach (struct jobinfo *job, json_t *eventlog)
+{
+    struct bgexec *bg = job->data;
+    struct bgexec_ctx *ctx;
+
+    if (!bg || !(ctx = bgexec_aux_get (bg, "ctx"))) {
+        jobinfo_fatal_error (job, errno, "failed to get bgexec ctx");
+        return -1;
+    }
+
+    /*  Reattach is gated on the RFC 50 recoverable event, which is only
+     *  posted once all shells are past the startup barrier sequence (the
+     *  second barrier has completed).  The reattached shells will not
+     *  re-enter that sequence, so mark both barriers done: otherwise
+     *  exit_cb() would misread a normally-exiting shell as having terminated
+     *  before the first barrier and raise a spurious exception (draining
+     *  ranks under the IMP).
+     */
+    ctx->first_barrier_done = true;
+    ctx->second_barrier_done = true;
+    return bgexec_wait (job->h, bg);
+}
+
 static int bgexec_impl_start (struct jobinfo *job)
 {
     struct bgexec *bg = job->data;
 
     if (!bg || !bgexec_aux_get (bg, "ctx")) {
         jobinfo_fatal_error (job, errno, "failed to get bgexec ctx");
-        return -1;
-    }
-
-    /*  Reattach to shells launched before a restart is not yet implemented
-     *  for bgexec: rebuilding the per-rank commands from KVS to re-issue the
-     *  wait is a follow-on.  Fail the job explicitly rather than launching a
-     *  fresh set of shells for a job believed to be already running.
-     */
-    if (job->reattach) {
-        jobinfo_fatal_error (job,
-                             ENOSYS,
-                             "reattach to running job is not implemented");
         return -1;
     }
 
@@ -723,7 +755,16 @@ static int bgexec_barrier_enter_op (struct jobinfo *job, const flux_msg_t *msg)
      *  keeps barrier.c ignorant of the barrier sequence.
      */
     barrier_destroy (ctx->barrier);
-    ctx->first_barrier_done = true;
+    if (!ctx->first_barrier_done)
+        ctx->first_barrier_done = true;
+    else if (!ctx->second_barrier_done) {
+        ctx->second_barrier_done = true;
+        /*  All shells are past the startup barrier sequence, so their state
+         *  is now recoverable by re-issuing the wait by label: post the
+         *  RFC 50 recoverable event to permit a reattach after a restart.
+         */
+        jobinfo_emit_event_pack_nowait (job, "recoverable", NULL);
+    }
     if (!(ctx->barrier = barrier_create (job,
                                          resource_set_ranks (job->R),
                                          0.,
@@ -738,6 +779,7 @@ struct exec_implementation bgexec = {
     .init =     bgexec_impl_init,
     .exit =     bgexec_impl_exit,
     .start =    bgexec_impl_start,
+    .reattach = bgexec_impl_reattach,
     .kill =     bgexec_impl_kill,
     .cancel =   bgexec_impl_cancel,
     .stats =    bgexec_impl_stats,
