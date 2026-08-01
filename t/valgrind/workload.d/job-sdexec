@@ -14,14 +14,21 @@ fi
 flux module load sdbus
 flux module load sdexec
 
+# Direct job-exec at sdexec for the duration of this workload, then revert
+# so the remaining workloads run under the default service.
+flux config load <<-EOT
+	[exec]
+	service = "sdexec"
+	EOT
+
 NJOBS=${NJOBS:-10}
 
 for i in `seq 1 ${NJOBS}`
 do
-    flux submit --wait \
-        --setattr system.exec.bulkexec.service=sdexec \
-        flux lptest 78 2
+    flux submit --wait flux lptest 78 2
 done
+
+flux config load </dev/null
 
 flux module remove sdexec
 flux module remove sdbus
