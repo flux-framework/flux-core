@@ -1867,7 +1867,7 @@ int shell_barrier_respond_error (flux_t *h,
 
 /*  Handle a shell-barrier "enter" request from a job shell.  Look up the
  *  job and dispatch to the exec implementation, which parks the request
- *  until the barrier is released (see exec.c).  The reply is the barrier
+ *  until the barrier is released (see bulkexec.c).  The reply is the barrier
  *  exit status: an (empty) success response releases the shell, an error
  *  response tells it to abort.
  */
