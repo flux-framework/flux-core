@@ -261,34 +261,6 @@ test_expect_success 'job-exec: cmdline exec service takes priority' '
 	grep "cmdline-exec-service" reload6B.out &&
 	rm -f ${FLUX_CONF_DIR}/exec.toml
 '
-test_expect_success 'job-exec: exec service override can be set in exec conf' '
-	name=exec-service-override &&
-	cat <<-EOF > ${name}.toml &&
-	[exec]
-	service = "bar"
-	service-override = true
-	EOF
-	flux start --config-path=${name}.toml -s1 \
-		flux module stats -p bulk-exec.config.exec_service_override job-exec > ${name}.out 2>&1 &&
-	val=$(cat ${name}.out) &&
-	test $val -eq 1
-'
-# N.B. exec service defaults to off/disabled
-test_expect_success 'job-exec: update exec service override via config reload' '
-	flux module reload -f job-exec &&
-	flux module stats -p bulk-exec.config.exec_service_override job-exec > reload7A.out 2>&1 &&
-	val=$(cat reload7A.out) &&
-	test $val -eq 0 &&
-	cat <<-EOF > ${FLUX_CONF_DIR}/exec.toml &&
-	[exec]
-	service-override = true
-	EOF
-	flux config reload &&
-	flux module stats -p bulk-exec.config.exec_service_override job-exec > reload7B.out 2>&1 &&
-	val=$(cat reload7B.out) &&
-	test $val -eq 1 &&
-	rm -f ${FLUX_CONF_DIR}/exec.toml
-'
 test_expect_success 'job-exec: sdexex properties can be set in exec conf' '
 	name=sdexec-properties &&
 	cat <<-EOF > ${name}.toml &&

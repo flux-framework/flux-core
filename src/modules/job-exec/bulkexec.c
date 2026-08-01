@@ -22,8 +22,6 @@
  * {
  *    "mock_exception":s       - Generate a mock exception in phase:
  *                               "init", or "starting"
- *    "service":s              - Specify service to use for launching remote
- *                               subprocesses: "rexec" or "sdexec".
  *    "barrier-timeout":F      - Specify timeout for start barrier in floating
  *                               point seconds.
  * }
@@ -400,47 +398,18 @@ static void exit_cb (struct bulk_exec *exec,
     }
 }
 
-static int parse_service_option (json_t *jobspec,
-                                 const char **service,
-                                 flux_error_t *error)
+static int get_exec_service (const char **service, flux_error_t *error)
 {
-    const char *s = config_get_exec_service (); // default
-    bool override = config_get_exec_service_override ();
-    json_error_t e;
+    const char *s = config_get_exec_service ();
 
-    if (jobspec) {
-        const char *s2 = NULL;
-        if (json_unpack_ex (jobspec,
-                            &e,
-                            0,
-                            "{s:{s?{s?{s?{s?s}}}}}",
-                            "attributes",   // key is required per RFC 14
-                              "system",     // key is optional per RFC 14
-                                "exec",
-                                  "bulkexec",
-                                    "service", &s2) < 0) {
-            errprintf (error, "error parsing bulkexec.service: %s", e.text);
-            errno = EINVAL;
-            return -1;
-        }
-        if (s2) {
-            if (!override && !streq (s, s2)) {
-                errprintf (error, "exec service override is not permitted");
-                errno = EINVAL;
-                return -1;
-            }
-            s = s2;
-        }
-    }
     if (!streq (s, "rexec") && !streq (s, "sdexec")) {
-        errprintf (error, "unknown bulkexec.service value: %s", s);
+        errprintf (error, "unsupported exec.service value: %s", s);
         errno = EINVAL;
         return -1;
     }
     *service = s;
     return 0;
 }
-
 
 static struct bulk_exec_ops exec_ops = {
     .on_start =     start_cb,
@@ -506,7 +475,7 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: resource_set_ranks");
         goto err;
     }
-    if (parse_service_option (job->jobspec, &service, &error) < 0) {
+    if (get_exec_service (&service, &error) < 0) {
         flux_log (job->h, LOG_ERR, "exec_init: %s" , error.text);
         goto err;
     }

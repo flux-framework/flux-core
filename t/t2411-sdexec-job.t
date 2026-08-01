@@ -38,21 +38,12 @@ sdexec="flux exec --service sdexec"
 lptest="flux lptest"
 rkill="flux sproc kill -s sdexec"
 
-test_expect_success 'job gets exception if sdexec requested but not loaded' '
-	test_must_fail flux run --setattr system.exec.bulkexec.service=sdexec \
-	    -N1 true 2>except.err &&
-	grep "sdexec service is not loaded" except.err
-'
 test_expect_success 'load sdbus,sdexec modules' '
 	flux exec flux module load sdbus &&
 	flux exec flux module load sdexec
 '
 test_expect_success 'clear broker logs' '
         flux dmesg -C
-'
-test_expect_success 'incorrect bulkexec.service fails' '
-	test_must_fail flux run --setattr system.exec.bulkexec.service=zzz \
-	    -N1 true
 '
 test_expect_success '1-node job works' '
 	flux run --setattr system.exec.bulkexec.service=sdexec \
