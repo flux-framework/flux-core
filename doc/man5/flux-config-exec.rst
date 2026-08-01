@@ -32,10 +32,6 @@ service
    Note that ``systemd.enable`` must be set to ``true`` if ``sdexec`` is
    configured.  See :man5:`flux-config-systemd`.
 
-service-override
-   (optional) Allow ``service`` to be overridden on a per-job basis with
-   ``--setattr system.exec.bulkexec.service=NAME``.  (Default: ``false``).
-
 job-shell
    (optional) Override the compiled-in default job shell path.
 
@@ -551,7 +547,6 @@ sdexec_stop_timer_signal
       "default_cwd": "/tmp",
       "default_job_shell": "/home/grondo/git/f.git/src/shell/flux-shell",
       "exec_service": "rexec",
-      "exec_service_override": 0,
       "default_barrier_timeout": 1800.0,
       "sdexec_stop_timer_sec": 640,
       "sdexec_stop_timer_signal": 10
@@ -588,7 +583,6 @@ In this example:
       "default_cwd": "/tmp",
       "default_job_shell": "/home/grondo/git/f.git/src/shell/flux-shell",
       "exec_service": "rexec",
-      "exec_service_override": 0,
       "default_barrier_timeout": 1800.0,
       "sdexec_stop_timer_sec": 1800,
       "sdexec_stop_timer_signal": 10
