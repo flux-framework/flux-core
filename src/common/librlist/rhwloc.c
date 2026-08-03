@@ -38,11 +38,6 @@ static int topo_init_common (hwloc_topology_t *tp, unsigned long flags)
 {
     if (hwloc_topology_init (tp) < 0)
         return -1;
-#if HWLOC_API_VERSION < 0x20000
-    flags |= HWLOC_TOPOLOGY_FLAG_IO_DEVICES;
-    if (hwloc_topology_ignore_type (*tp, HWLOC_OBJ_CACHE) < 0)
-        return -1;
-#else
     if (hwloc_topology_set_io_types_filter(*tp,
                                            HWLOC_TYPE_FILTER_KEEP_IMPORTANT)
         < 0)
@@ -51,7 +46,6 @@ static int topo_init_common (hwloc_topology_t *tp, unsigned long flags)
                                                HWLOC_TYPE_FILTER_KEEP_STRUCTURE)
         < 0)
         return -1;
-#endif
     /*  N.B.: hwloc_topology_set_flags may cause memory leaks on some systems
      */
     if (hwloc_topology_set_flags (*tp, flags) < 0)
@@ -128,13 +122,9 @@ static char *topo_xml_export (hwloc_topology_t topo)
     if (!topo)
         return NULL;
 
-#if HWLOC_API_VERSION >= 0x20000
-    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen, 0) < 0) {
-#else
-    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen) < 0) {
-#endif
+    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen, 0) < 0)
         goto out;
-    }
+
     result = strdup (buf);
 out:
     if (buf)
@@ -226,7 +216,7 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
 
     if (topo_init_common (&topo, 0) < 0)
         goto err;
-#if HWLOC_API_VERSION >= 0x20100
+
     /* gl probes the NV-CONTROL X server extension, and requires X auth
      * to be properly set up or errors are emitted to stderr.
      * Nvidia GPUs can still be discovered via opencl.
@@ -234,7 +224,6 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
     hwloc_topology_set_components (topo,
                                    HWLOC_TOPOLOGY_COMPONENTS_FLAG_BLACKLIST,
                                    "gl");
-#endif
     if (hwloc_topology_load (topo) < 0)
         goto err;
     if (flags & RHWLOC_NO_RESTRICT)
