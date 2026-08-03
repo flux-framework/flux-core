@@ -62,6 +62,41 @@ test_expect_success 'job-exec: cmdline kill-timeout takes priority' '
 test_expect_success 'job-exec: reset config' '
 	echo | flux config load
 '
+test_expect_success 'job-exec: valid exec.method loads' '
+	name=method-ok &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	method = "bulk-exec"
+	EOF
+	flux start --config-path=${name}.toml -s1 true
+'
+test_expect_success 'job-exec: method stat reports active implementation' '
+	flux module reload -f job-exec &&
+	flux module stats -p method job-exec > method-stat.out &&
+	grep bulk-exec method-stat.out
+'
+test_expect_success 'job-exec: bad exec.method config causes module failure' '
+	name=bad-method &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	method = "wrong"
+	EOF
+	test_must_fail flux start --config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
+	grep "unknown exec.method .wrong." ${name}.log
+'
+test_expect_success 'job-exec: bad exec.method causes config reload failure' '
+	echo exec.method=\"wrong\" | test_must_fail flux config load
+'
+test_expect_success 'job-exec: can specify method on cmdline' '
+	flux module reload -f job-exec method=bulk-exec
+'
+test_expect_success 'job-exec: bad method on cmdline causes module failure' '
+	flux dmesg -C &&
+	test_expect_code 1 flux module reload -f job-exec method=wrong &&
+	dmesg-grep.py -vt 10 "unknown exec.method .wrong." &&
+	flux module reload -f job-exec
+'
 test_expect_success 'job-exec: can specify term-signal on cmdline' '
 	flux dmesg -C &&
 	flux module reload job-exec term-signal=SIGUSR1 &&
