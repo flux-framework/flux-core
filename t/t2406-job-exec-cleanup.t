@@ -156,7 +156,7 @@ test_expect_success 'job-exec: default barrier timeout can be configured' '
 	barrier-timeout = "0.1s"
 	EOF
 	flux module stats job-exec |
-		jq -e ".\"bulk-exec\".config.default_barrier_timeout < 1." &&
+		jq -e ".config.default_barrier_timeout < 1." &&
 	jobid=$(flux submit -N4 -o userrc=initrc.lua sleep 60) &&
 	flux job wait-event -vHt 60 $jobid exception
 '
@@ -291,11 +291,11 @@ test_expect_success 'job-exec: reload module with default settings' '
 check_sdexec_stop_timer() {
 	if test -n "$1"; then
 	    flux module stats job-exec |
-	        jq -e ".[\"bulk-exec\"].config.sdexec_stop_timer_sec == $1"
+	        jq -e ".config.sdexec_stop_timer_sec == $1"
 	else
 	    flux module stats job-exec |
 	        jq -e "
-	            .[\"bulk-exec\"].config.sdexec_stop_timer_sec \
+	            .config.sdexec_stop_timer_sec \
 	             == .[\"effective-max-kill-timeout\"] \
 	        "
 	fi

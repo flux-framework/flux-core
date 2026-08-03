@@ -39,7 +39,6 @@
 #include "ccan/str/str.h"
 #include "src/common/libutil/basename.h"
 #include "src/common/libutil/errprintf.h"
-#include "src/common/libutil/errno_safe.h"
 #include "src/common/libsubprocess/bulk-exec.h"
 
 #include "job-exec.h"
@@ -628,55 +627,29 @@ static int exec_config (flux_t *h,
     return config_setup (h, conf, argc, argv, errp);
 }
 
-static json_t *exec_config_stats (void)
+/* Per-job stats.
+ */
+static json_t *exec_stats (struct jobinfo *job)
 {
-    json_t *o = NULL;
-    json_t *conf = NULL;
-
-    if (!(o = json_object ())) {
-        errno = ENOMEM;
-        goto error;
-    }
-
-    if (config_get_stats (&conf) < 0)
-        goto error;
-
-    if (json_object_set_new (o, "config", conf) < 0)
-        goto error;
-
-    return o;
-error:
-    ERRNO_SAFE_WRAP (json_decref, o);
-    return NULL;
-}
-
-static json_t *exec_job_stats (struct jobinfo *job)
-{
-    struct bulk_exec *exec = job->data;
+    struct bulk_exec *exec;
     struct idset *active_ranks;
     char *s = NULL;
     json_t *o;
-    int total = bulk_exec_total (exec);
-    int active = bulk_exec_active_count (exec);
+
+    if (!job)
+        return NULL;
+    exec = job->data;
 
     if ((active_ranks = bulk_exec_active_ranks (exec)))
         s = idset_encode (active_ranks, IDSET_FLAG_RANGE);
 
     o = json_pack ("{s:i s:i s:s}",
-                   "total_shells", total,
-                   "active_shells", active,
+                   "total_shells", bulk_exec_total (exec),
+                   "active_shells", bulk_exec_active_count (exec),
                    "active_ranks", s ? s : "");
     free (s);
     idset_destroy (active_ranks);
     return o;
-}
-
-static json_t *exec_stats (struct jobinfo *job)
-{
-    if (job)
-        return exec_job_stats (job);
-    else
-        return exec_config_stats ();
 }
 
 static struct idset *active_ranks (struct jobinfo *job)

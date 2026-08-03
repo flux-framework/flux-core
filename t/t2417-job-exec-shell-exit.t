@@ -57,7 +57,7 @@ test_expect_success 'valid FSD shell-exit-timeout loads successfully' '
 	EOF
 	flux module reload job-exec &&
 	flux module stats job-exec \
-	    | jq -e ".\"bulk-exec\".config.shell_exit_timeout == 60."
+	    | jq -e ".config.shell_exit_timeout == 60."
 '
 test_expect_success 'shell-exit-timeout = "none" disables the timer' '
 	flux config load <<-EOF &&
@@ -66,7 +66,7 @@ test_expect_success 'shell-exit-timeout = "none" disables the timer' '
 	EOF
 	flux module reload job-exec &&
 	flux module stats job-exec \
-	    | jq -e ".\"bulk-exec\".config.shell_exit_timeout == 0."
+	    | jq -e ".config.shell_exit_timeout == 0."
 '
 test_expect_success 'reload job-exec to defaults' '
 	flux config load </dev/null &&

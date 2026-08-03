@@ -2254,6 +2254,7 @@ static void stats_cb (flux_t *h,
     struct exec_implementation *impl;
     json_t *o = NULL;
     json_t *jobs;
+    json_t *config;
     int i = 0;
     double max_kto = job_exec_max_kill_timeout ();
 
@@ -2269,6 +2270,12 @@ static void stats_cb (flux_t *h,
     }
     if (!(jobs = running_job_stats (ctx))
         || json_object_set_new (o, "jobs", jobs)) {
+        // jansson decrefs the new object on failure
+        errno = ENOMEM;
+        goto error;
+    }
+    if (config_get_stats (&config) < 0
+        || json_object_set_new (o, "config", config) < 0) {
         // jansson decrefs the new object on failure
         errno = ENOMEM;
         goto error;
