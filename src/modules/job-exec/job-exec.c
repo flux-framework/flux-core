@@ -2321,6 +2321,8 @@ static void config_reload_cb (flux_t *h,
                                      ctx->argv,
                                      &err) < 0)
         goto error_decref;
+    if (config_setup (h, conf, ctx->argc, ctx->argv, &err) < 0)
+        goto error_decref;
 
     while ((impl = implementations[i]) && impl->name) {
         if (impl->config) {
@@ -2375,6 +2377,10 @@ int mod_main (flux_t *h, int argc, char **argv)
                                      argc,
                                      argv,
                                      &error) < 0) {
+        flux_log_error (h, "job-exec: error parsing config: %s", error.text);
+        goto out;
+    }
+    if (config_setup (h, flux_get_conf (h), argc, argv, &error) < 0) {
         flux_log_error (h, "job-exec: error parsing config: %s", error.text);
         goto out;
     }

@@ -618,15 +618,6 @@ static void exec_exit (struct jobinfo *job)
     job->data = NULL;
 }
 
-static int exec_config (flux_t *h,
-                        const flux_conf_t *conf,
-                        int argc,
-                        char **argv,
-                        flux_error_t *errp)
-{
-    return config_setup (h, conf, argc, argv, errp);
-}
-
 /* Per-job stats.
  */
 static json_t *exec_stats (struct jobinfo *job)
@@ -688,7 +679,6 @@ static int exec_barrier_enter_op (struct jobinfo *job, const flux_msg_t *msg)
 
 struct exec_implementation bulkexec = {
     .name =     "bulk-exec",
-    .config =   exec_config,
     .init =     exec_init,
     .exit =     exec_exit,
     .start =    exec_start,

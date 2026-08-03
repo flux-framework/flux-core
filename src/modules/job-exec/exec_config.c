@@ -8,7 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* Flux bulk-exec configuration code */
+/* Shared job-exec configuration code (exec.* config keys and cmdline
+ * overrides used by all execution implementations).
+ */
 
 #if HAVE_CONFIG_H
 # include "config.h"
@@ -186,8 +188,8 @@ static void exec_config_init (struct exec_config *ec)
     ec->shell_exit_timeout = DEFAULT_SHELL_EXIT_TIMEOUT;
 }
 
-/*  Initialize configurations for use by job-exec bulk-exec
- *  implementation
+/*  Initialize the shared job-exec configuration from the exec.* config
+ *  table and cmdline overrides.
  */
 int config_setup (flux_t *h,
                   const flux_conf_t *conf,
