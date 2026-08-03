@@ -440,7 +440,7 @@ if test "$have_libsystemd" = yes -a "$have_sd_bus_h" = yes; then
                  AC_DEFINE([HAVE_SD_BUS_MESSAGE_DUMP], [1],
                            [Define if you have sd_bus_message_dump]))
 fi
-PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.11.1], [], [])
+PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.1.0], [], [])
 PKG_CHECK_MODULES([LZ4], [liblz4], [], [])
 PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
 PKG_CHECK_MODULES([LIBUUID], [uuid], [], [])
