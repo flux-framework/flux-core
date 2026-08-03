@@ -679,6 +679,7 @@ static int exec_barrier_enter_op (struct jobinfo *job, const flux_msg_t *msg)
 
 struct exec_implementation bulkexec = {
     .name =     "bulk-exec",
+    .select =   EXEC_SELECT_CONFIG,
     .init =     exec_init,
     .exit =     exec_exit,
     .start =    exec_start,

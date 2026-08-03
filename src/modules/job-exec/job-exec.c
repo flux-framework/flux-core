@@ -132,6 +132,7 @@ struct job_exec_ctx {
     char **               argv; /* needed for later reparse */
     flux_msg_handler_t ** handlers;
     zhashx_t *            jobs;
+    struct exec_implementation *default_impl; /* exec.method backend */
 };
 
 /* Return an estimate for the maximum time job-exec will wait to terminate
@@ -1296,24 +1297,33 @@ static int jobinfo_start_execution (struct jobinfo *job, json_t *eventlog)
 static int jobinfo_load_implementation (struct jobinfo *job)
 {
     int i = 0;
-    int rc = -1;
+    int rc;
     struct exec_implementation *impl;
 
-    while ((impl = implementations[i]) && impl->name) {
-        /*
-         *  Immediately fail if any implementation init method returns < 0.
-         *  If rc > 0, then select this implementation and skip others,
-         *  O/w, continue with the list.
-         */
+    /*  First check jobspec-selected implementation(s).
+     */
+    while ((impl = implementations[i++]) && impl->name) {
+        if (impl->select != EXEC_SELECT_JOBSPEC)
+            continue;
         if ((rc = (*impl->init) (job)) < 0)
             return -1;
-        else if (rc > 0) {
+        if (rc > 0) {
             job->impl = impl;
             return 0;
         }
-        i++;
     }
-    return -1;
+    /*  Fall through to configured default implementation.  Unlike a
+     *  jobspec-selected backend, the default is already chosen, so its init
+     *  must not "pass" (return 0); treat that as a fatal error along with a
+     *  negative return.
+     */
+    if ((rc = (*job->ctx->default_impl->init) (job)) <= 0) {
+        if (rc == 0) // contract violation: default backend must not pass
+            errno = EINVAL;
+        return -1;
+    }
+    job->impl = job->ctx->default_impl;
+    return 0;
 }
 
 /*  Gate a reattach on the RFC 50 "recoverable" event and the loaded
@@ -2094,6 +2104,44 @@ static int job_exec_set_config_globals (flux_t *h,
     return 0;
 }
 
+/*  Resolve the exec.method config key (default "bulk-exec") to one of the
+ *   config-selected backends and stash it in ctx->default_impl.  A cmdline
+ *   "method=" argument overrides the config value.  Fails if the named
+ *   backend is unknown or is not eligible to be the default (e.g. testexec,
+ *   which is selected per-job from the jobspec).
+ */
+static int configure_default_impl (struct job_exec_ctx *ctx,
+                                   const flux_conf_t *conf,
+                                   int argc,
+                                   char **argv,
+                                   flux_error_t *errp)
+{
+    const char *method = "bulk-exec";
+    struct exec_implementation *impl;
+    flux_error_t error;
+    int i = 0;
+
+    if (flux_conf_unpack (conf,
+                          &error,
+                          "{s?{s?s}}",
+                          "exec",
+                            "method", &method) < 0)
+        return errprintf (errp,
+                          "error reading config value exec.method: %s",
+                          error.text);
+    for (int j = 0; j < argc; j++) {
+        if (strstarts (argv[j], "method="))
+            method = argv[j] + 7;
+    }
+    while ((impl = implementations[i++]) && impl->name) {
+        if (impl->select == EXEC_SELECT_CONFIG && streq (impl->name, method)) {
+            ctx->default_impl = impl;
+            return 0;
+        }
+    }
+    return errprintf (errp, "unknown exec.method '%s'", method);
+}
+
 static int configure_implementations (flux_t *h, int argc, char **argv)
 {
     struct exec_implementation *impl;
@@ -2258,7 +2306,8 @@ static void stats_cb (flux_t *h,
     int i = 0;
     double max_kto = job_exec_max_kill_timeout ();
 
-    if (!(o = json_pack ("{s:f s:s s:s s:i s:f s:f}",
+    if (!(o = json_pack ("{s:s s:f s:s s:s s:i s:f s:f}",
+                         "method", ctx->default_impl->name,
                          "kill-timeout", kill_timeout,
                          "term-signal", sigutil_signame (term_signal),
                          "kill-signal", sigutil_signame (kill_signal),
@@ -2323,6 +2372,8 @@ static void config_reload_cb (flux_t *h,
         goto error_decref;
     if (config_setup (h, conf, ctx->argc, ctx->argv, &err) < 0)
         goto error_decref;
+    if (configure_default_impl (ctx, conf, ctx->argc, ctx->argv, &err) < 0)
+        goto error_decref;
 
     while ((impl = implementations[i]) && impl->name) {
         if (impl->config) {
@@ -2382,6 +2433,14 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (config_setup (h, flux_get_conf (h), argc, argv, &error) < 0) {
         flux_log_error (h, "job-exec: error parsing config: %s", error.text);
+        goto out;
+    }
+    if (configure_default_impl (ctx,
+                                flux_get_conf (h),
+                                argc,
+                                argv,
+                                &error) < 0) {
+        flux_log_error (h, "job-exec: %s", error.text);
         goto out;
     }
     if (configure_implementations (h, argc, argv) < 0) {
