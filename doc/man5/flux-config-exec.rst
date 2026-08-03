@@ -34,6 +34,12 @@ exec.service
    Note that ``systemd.enable`` must be set to ``true`` if ``sdexec`` is
    configured.  See :man5:`flux-config-systemd`.
 
+exec.method
+   (optional) Select the execution implementation used to launch jobs.
+   The only valid value is ``bulk-exec``, which is also the default.
+   Note that a job may instead select the :ref:`testexec` implementation
+   by including an ``attributes.system.exec.test`` object in its jobspec.
+
 exec.job-shell
    (optional) Override the compiled-in default job shell path.
 
@@ -503,6 +509,12 @@ be queried using ``flux module stats job-exec``. This is useful for:
 
 Key configuration settings available:
 
+**Implementation Selection:**
+
+method
+   The active execution implementation, i.e. the effective value of
+   ``exec.method`` (see `KEYS`_).
+
 **Termination Settings:**
 
 kill-timeout
@@ -543,6 +555,7 @@ sdexec_stop_timer_signal
 
    $ flux module stats job-exec
    {
+    "method": "bulk-exec",
     "kill-timeout": 5.0,
     "term-signal": "SIGTERM",
     "kill-signal": "SIGKILL",
@@ -577,6 +590,7 @@ In this example:
    $ echo exec.max-kill-timeout=\"30m\" | flux config load
    $ flux module stats job-exec
    {
+    "method": "bulk-exec",
     "kill-timeout": 5.0,
     "term-signal": "SIGTERM",
     "kill-signal": "SIGKILL",
