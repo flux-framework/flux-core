@@ -1613,6 +1613,15 @@ static void kill_cb (flux_t *h,
         errstr = "error sending KillUnit request";
         goto error;
     }
+    /* Retain the request until kill_continuation() responds.  The future f is
+     * attached to it as aux, so the message must outlive this callback (the
+     * dispatcher destroys its reference on return) or the future is torn down
+     * before the KillUnit reply arrives and no response is ever sent.
+     */
+    if (flux_msglist_append (ctx->kills, msg) < 0) {
+        errstr = "error queuing kill request";
+        goto error;
+    }
     // kill_continuation will respond
     return;
 error:
