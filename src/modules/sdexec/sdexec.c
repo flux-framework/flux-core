@@ -1708,13 +1708,21 @@ static void list_cb (flux_t *h,
     proc = zlistx_first (ctx->procs);
     while (proc) {
         const char *arg0;
+        const char *label = NULL;
+        const char *state;
         json_t *o;
+
+        /* A finished process retained for a wait request is a zombie ("Z");
+         * anything else is still running ("R").  Mirrors the rexec server.
+         */
+        state = sdexec_unit_has_finished (proc->unit) ? "Z" : "R";
+        (void)json_unpack (proc->cmd, "{s:s}", "label", &label);
         if (json_unpack (proc->cmd, "{s:[s]}", "cmdline", &arg0) == 0
             && (o = json_pack ("{s:i s:s s:s s:s}",
                                "pid", sdexec_unit_pid (proc->unit),
                                "cmd", arg0,
-                               "label", "",
-                               "state", "R"))) {
+                               "label", label ? label : "",
+                               "state", state))) {
             if (json_array_append_new (procs, o) < 0) {
                 // jansson decrefs the new object on failure
                 goto nomem;
