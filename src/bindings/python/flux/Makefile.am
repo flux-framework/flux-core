@@ -29,6 +29,7 @@ nobase_fluxpy_PYTHON = \
 	cli/plugin.py \
 	cli/plugins/__init__.py \
 	cli/plugins/shape.py \
+	cli/plugins/cosched.py \
 	core/__init__.py \
 	core/watchers.py \
 	core/inner.py \
