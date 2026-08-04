@@ -1564,6 +1564,7 @@ static void kill_cb (flux_t *h,
 {
     struct sdexec_ctx *ctx = arg;
     pid_t pid;
+    const char *label = NULL;
     int signum;
     struct sdproc *proc;
     flux_error_t error;
@@ -1572,16 +1573,24 @@ static void kill_cb (flux_t *h,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:i s:i}",
+                             "{s:i s:i s?s}",
                              "pid", &pid,
-                             "signum", &signum) < 0)
+                             "signum", &signum,
+                             "label", &label) < 0)
         goto error;
     if (authorize_request (msg, ctx->rank, &error) < 0) {
         errstr = error.text;
         goto error;
     }
-    if (!(proc = sdproc_lookup_bypid (ctx, pid))) {
-        errprintf (&error, "kill pid=%d not found", pid);
+    if (label)
+        proc = sdproc_lookup_bylabel (ctx, label);
+    else
+        proc = sdproc_lookup_bypid (ctx, pid);
+    if (!proc) {
+        if (label)
+            errprintf (&error, "kill label=%s not found", label);
+        else
+            errprintf (&error, "kill pid=%d not found", pid);
         errstr = error.text;
         errno = ESRCH;
         goto error;
