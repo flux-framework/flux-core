@@ -1,3 +1,43 @@
+flux-core version 0.88.0 - 2026-08-04
+-------------------------------------
+
+## New Features
+ * job-exec: support reloading with running jobs (#7748)
+ * job-manager: pick up queue config changes on reload (#7740)
+ * add subprocess server caching of output for waitable subprocesses (#7736)
+ * job-exec: handle shell barrier as an RPC (#7734)
+ * libsubprocess: add attach for background processes (#7731)
+ * shell: add coprocess helper plugin (#7723)
+ * flux-sproc: make ps output more useful (#7721)
+ * libkvs: add `kvs_treewalk_strerror()` (#7715)
+ * support `admin` role which allows users to bypass private mode permissions
+   (#7705)
+
+## Fixes
+ * pmi: fix possible nonzero exit after abort (#7728)
+ * libsubprocess: disable input for background subprocesses (#7722)
+ * job-exec: fix job private namespace checkpoint to survive offline garbage
+   collection (#7719)
+ * content-sqlite: improve error handling (#7717)
+ * sanitize PALS_* in the initial program environment (#7713)
+
+## Cleanup
+ * libsubprocess: misc cleanup (#7741)
+ * job-manager: split queue configuration/state into a standalone queues
+   class (#7749)
+ * job-exec: refactor to allow backends to share code (#7750)
+
+## Build/CI/Testsuite/Documentation
+ * configure: bump hwloc min version to 2.1.0 (#7756)
+ * github: bump the github-actions group with 6 updates (#7755)
+ * ci: enhance coccinelle test to catch more double-free cases with
+   `json_*_new()` calls (#7752)
+ * doc: add vendors landing page (#7729)
+ * testsuite: fix a couple flaky tests (#7727)
+ * ci: fix systemd unit dir in el8 deploy image (#7714)
+ * ci: bump black from 24.3.0 to 26.5.1 (#7759)
+
+
 flux-core version 0.87.0 - 2026-07-07
 -------------------------------------
 
