@@ -6,40 +6,44 @@ flux-config-exec(5)
 DESCRIPTION
 ===========
 
-The exec system is highly configurable. If configuring a Flux system instance
+The job execution system's built-in configuration is suited to single-user
+Flux instances and rarely needs tuning.  A multi-user system instance, on
+the other hand, requires configuration.  If configuring a Flux system instance
 for the first time, it may be helpful to consult the Flux Administrator's
-Guide (see `RESOURCES`_) and start with a simple configuration. See also
+Guide (see `RESOURCES`_) and start with a simple configuration.  See also
 `EXAMPLES`_ below.
 
-The Flux system instance **job-exec** service requires additional
-configuration via the ``exec`` table, for example to enlist the services
-of a setuid helper to launch jobs as guests.
-
-The ``exec`` table may contain the following keys:
+The job execution system is primarily configured via the ``exec`` table.
+However, other TOML tables may be involved, such as
+:man5:`flux-config-systemd`.  Therefore, keys on this page are introduced
+in fully-qualified form, such as ``exec.service`` and ``sdexec.mapper``,
+to make the containing table explicit.
 
 
 KEYS
 ====
 
-imp
+exec.imp
    (optional) Set the path to the IMP (Independent Minister of Privilege)
    helper program, as described in RFC 15, so that jobs may be launched with
    the credentials of the guest user that submitted them.  If unset, only
    jobs submitted by the instance owner may be executed.
 
-service
+exec.service
    (optional) Set the remote subprocess service name. (Default: ``rexec``).
    Note that ``systemd.enable`` must be set to ``true`` if ``sdexec`` is
    configured.  See :man5:`flux-config-systemd`.
 
-service-override
-   (optional) Allow ``service`` to be overridden on a per-job basis with
-   ``--setattr system.exec.bulkexec.service=NAME``.  (Default: ``false``).
+exec.method
+   (optional) Select the execution implementation used to launch jobs.
+   The only valid value is ``bulk-exec``, which is also the default.
+   Note that a job may instead select the :ref:`testexec` implementation
+   by including an ``attributes.system.exec.test`` object in its jobspec.
 
-job-shell
+exec.job-shell
    (optional) Override the compiled-in default job shell path.
 
-shell-exit-timeout
+exec.shell-exit-timeout
    (optional) Time to wait after the leader shell (rank 0) exits normally
    before raising a fatal exception if other shells remain active.
    Set to ``"none"`` to disable. The default is ``"30s"``.
@@ -54,7 +58,7 @@ shell-exit-timeout
       (cancel, timeout, etc) when rank 0 exits. In that case the normal
       termination sequence already ensures that remaining shells exit.
 
-kill-timeout
+exec.kill-timeout
    (optional) The amount of time in Flux Standard Duration (FSD) to wait
    after ``SIGTERM`` is sent to a job before sending ``SIGKILL``. FSD is
    a human-readable time format supporting units like "5s" (seconds),
@@ -62,14 +66,14 @@ kill-timeout
    specification.  The default is "5s" (5 seconds). See :ref:`job_termination`
    below for details.
 
-max-kill-count
+exec.max-kill-count
    (optional) The maximum number of times ``kill-signal`` will be sent to the
    job shell before the execution system considers the job unkillable and
    drains the node. The default is 8. Note that the node is drained
    immediately after the final kill attempt without waiting an additional
    timeout period. See :ref:`job_termination` below for details.
 
-max-kill-timeout
+exec.max-kill-timeout
    (optional) The maximum amount of time in FSD to wait for a job to terminate
    before draining nodes with unkillable processes. When set, this overrides
    ``max-kill-count`` by continuing the kill signal escalation sequence until
@@ -95,15 +99,15 @@ max-kill-timeout
 
   When both are set, ``max-kill-timeout`` takes precedence.
 
-term-signal
+exec.term-signal
    (optional) A string specifying an alternate signal to ``SIGTERM`` when
    terminating job tasks. Mainly used for testing.
 
-kill-signal
+exec.kill-signal
    (optional) A string specifying an alternate signal to ``SIGKILL`` when
    killing tasks and the job shell. Mainly used for testing.
 
-barrier-timeout
+exec.barrier-timeout
    (optional) Specify the default job shell start barrier timeout in FSD.
    All multi-node jobs enter a barrier at startup once the Flux job shell
    completes initialization tasks such as changing the working directory
@@ -113,7 +117,7 @@ barrier-timeout
    nodes on which the barrier is waiting. To disable the barrier timeout,
    set this value to ``"0"``. (Default: ``30m``).
 
-max-start-delay-percent
+exec.max-start-delay-percent
    (optional) Specify the maximum allowed delay, as a percentage of a job's
    duration, between when a job is allocated (i.e. the starttime recorded
    in _R_) and when the execution system receives the start request from
@@ -124,7 +128,7 @@ max-start-delay-percent
    at which a ``timeout`` exception is raised for longer running jobs,
    where any runtime impact will be negligible. The default is 25 percent.
 
-testexec
+exec.testexec
    (optional) A table of keys (see :ref:`testexec`) for configuring the
    **job-exec** test execution implementation (used mainly for testing).
 
@@ -145,7 +149,7 @@ described in :ref:`job_termination`.
    runtime using ``flux module stats job-exec``. See :ref:`introspection`
    for details.
 
-sdexec-constrain-resources
+exec.sdexec-constrain-resources
    (optional) Boolean value that enables resource containment for jobs. When
    enabled, the ``sdexec-mapper`` module translates job resource allocations
    (cores, GPUs) into systemd unit properties that constrain jobs to their
@@ -193,11 +197,11 @@ sdexec-constrain-resources
       service = "sdexec"
       sdexec-constrain-resources = true
 
-sdexec-properties
+exec.sdexec-properties
    (optional) A table of systemd properties to set for all jobs. All values
    must be strings. See :ref:`sdexec_properties` below.
 
-sdexec-stop-timer-sec
+exec.sdexec-stop-timer-sec
    (optional) Configure the length of time in seconds after a unit enters
    deactivating state when it will be sent the ``sdexec-stop-timer-signal``.
    Deactivating state is entered by ``imp-shell`` units when the
@@ -219,7 +223,7 @@ sdexec-stop-timer-sec
    Use ``flux module stats job-exec`` to inspect the current effective value.
    See :ref:`introspection`.
 
-sdexec-stop-timer-signal
+exec.sdexec-stop-timer-signal
    (optional) Configure the signal used by the stop timer.  By default,
    10 (SIGUSR1, the IMP proxy for SIGKILL) is used.
 
@@ -230,7 +234,7 @@ SDEXEC PROPERTIES
 =================
 
 When the sdexec service is selected, systemd unit properties may be set by
-adding them to the ``sdexec-properties`` sub-table. All values must be
+adding them to the ``exec.sdexec-properties`` sub-table. All values must be
 specified as TOML strings. Properties that require other value types
 can only be specified if Flux knows about them so it can perform type
 conversion. Those are:
@@ -279,7 +283,7 @@ OOMScoreAdjust
    systemd instance.
 
 The following unit properties are reserved for use by Flux and should not be
-added to ``sdexec-properties``: AllowedCPUs, AllowedMemoryNodes, DeviceAllow,
+added to ``exec.sdexec-properties``: AllowedCPUs, AllowedMemoryNodes, DeviceAllow,
 DevicePolicy, Description, Environment, ExecStart, KillMode, RemainAfterExit,
 SendSIGKILL, StandardInputFileDescriptor, StandardOutputFileDescriptor,
 StandardErrorFileDescriptor, TimeoutStopUSec, Type, WorkingDirectory.
@@ -295,9 +299,10 @@ translates job resource allocations into systemd unit properties. The mapper
 is implemented as a Python class that can be customized for site-specific
 requirements.
 
-The mapper is configured under the ``[sdexec]`` TOML table:
+The mapper is configured under the ``sdexec`` table, which is separate from
+the ``exec`` table used for the other keys on this page:
 
-mapper
+sdexec.mapper
    (optional) Fully-qualified Python class name for the resource mapper.
    (Default: ``flux.sdexec.map.HwlocMapper``).
 
@@ -305,7 +310,7 @@ mapper
    and implement ``map_<type>`` methods for each resource type. See
    :ref:`custom_mappers` for details on implementing custom mappers.
 
-mapper-searchpath
+sdexec.mapper-searchpath
    (optional) Colon-separated list of directories to search for mapper modules.
    This allows loading custom mappers from site-specific locations without
    modifying the Python system path. (Default: empty).
@@ -440,7 +445,7 @@ The mapper file at ``/etc/flux/mappers/site/mappers.py``:
 **Replacing a scaled property with a computed value:**
 
 A custom ``finalize_properties()`` can override any property set by
-``super()``, including values scaled from ``sdexec-properties``.  For
+``super()``, including values scaled from ``exec.sdexec-properties``.  For
 example, to enforce a fixed per-core memory limit instead of using a
 node-level budget:
 
@@ -479,7 +484,12 @@ See the ``flux.sdexec.map`` module documentation and
 TESTEXEC
 ========
 
-allow-guests
+The testexec implementation is an alternate execution implementation that
+simulates job execution with a timer instead of launching job shells,
+for testing and demonstration purposes. It is configured under the
+``exec.testexec`` table:
+
+exec.testexec.allow-guests
    Boolean value enables access to the testexec implementation from guest
    users. By default, guests cannot use this implementation.
 
@@ -498,6 +508,12 @@ be queried using ``flux module stats job-exec``. This is useful for:
 - Monitoring job execution system behavior
 
 Key configuration settings available:
+
+**Implementation Selection:**
+
+method
+   The active execution implementation, i.e. the effective value of
+   ``exec.method`` (see `KEYS`_).
 
 **Termination Settings:**
 
@@ -524,7 +540,7 @@ effective-max-kill-timeout
    immediately after this final attempt without waiting an additional timeout
    period.
 
-**Sdexec Settings** (under ``bulk-exec.config``):
+**Sdexec Settings** (under ``config``):
 
 sdexec_stop_timer_sec
    The effective stop timer value in seconds. If not explicitly configured,
@@ -539,6 +555,7 @@ sdexec_stop_timer_signal
 
    $ flux module stats job-exec
    {
+    "method": "bulk-exec",
     "kill-timeout": 5.0,
     "term-signal": "SIGTERM",
     "kill-signal": "SIGKILL",
@@ -546,16 +563,13 @@ sdexec_stop_timer_signal
     "max-kill-timeout": -1.0,
     "effective-max-kill-timeout": 640.0,
     "jobs": {},
-    "bulk-exec": {
-     "config": {
-      "default_cwd": "/tmp",
-      "default_job_shell": "/home/grondo/git/f.git/src/shell/flux-shell",
-      "exec_service": "rexec",
-      "exec_service_override": 0,
-      "default_barrier_timeout": 1800.0,
-      "sdexec_stop_timer_sec": 640,
-      "sdexec_stop_timer_signal": 10
-     }
+    "config": {
+     "default_cwd": "/tmp",
+     "default_job_shell": "/home/grondo/git/f.git/src/shell/flux-shell",
+     "exec_service": "rexec",
+     "default_barrier_timeout": 1800.0,
+     "sdexec_stop_timer_sec": 640,
+     "sdexec_stop_timer_signal": 10
     }
    }
 
@@ -576,6 +590,7 @@ In this example:
    $ echo exec.max-kill-timeout=\"30m\" | flux config load
    $ flux module stats job-exec
    {
+    "method": "bulk-exec",
     "kill-timeout": 5.0,
     "term-signal": "SIGTERM",
     "kill-signal": "SIGKILL",
@@ -583,16 +598,13 @@ In this example:
     "max-kill-timeout": 1800.0,
     "effective-max-kill-timeout": 1800.0,
     "jobs": {},
-    "bulk-exec": {
-     "config": {
-      "default_cwd": "/tmp",
-      "default_job_shell": "/home/grondo/git/f.git/src/shell/flux-shell",
-      "exec_service": "rexec",
-      "exec_service_override": 0,
-      "default_barrier_timeout": 1800.0,
-      "sdexec_stop_timer_sec": 1800,
-      "sdexec_stop_timer_signal": 10
-     }
+    "config": {
+     "default_cwd": "/tmp",
+     "default_job_shell": "/home/grondo/git/f.git/src/shell/flux-shell",
+     "exec_service": "rexec",
+     "default_barrier_timeout": 1800.0,
+     "sdexec_stop_timer_sec": 1800,
+     "sdexec_stop_timer_signal": 10
     }
    }
 

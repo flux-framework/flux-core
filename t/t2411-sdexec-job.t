@@ -27,7 +27,7 @@ cat >config/config.toml <<EOT
 [systemd]
 sdexec-debug = true
 [exec]
-service-override = true
+service = "sdexec"
 EOT
 
 test_under_flux 2 full --config-path=$(pwd)/config
@@ -38,11 +38,6 @@ sdexec="flux exec --service sdexec"
 lptest="flux lptest"
 rkill="flux sproc kill -s sdexec"
 
-test_expect_success 'job gets exception if sdexec requested but not loaded' '
-	test_must_fail flux run --setattr system.exec.bulkexec.service=sdexec \
-	    -N1 true 2>except.err &&
-	grep "sdexec service is not loaded" except.err
-'
 test_expect_success 'load sdbus,sdexec modules' '
 	flux exec flux module load sdbus &&
 	flux exec flux module load sdexec
@@ -50,20 +45,14 @@ test_expect_success 'load sdbus,sdexec modules' '
 test_expect_success 'clear broker logs' '
         flux dmesg -C
 '
-test_expect_success 'incorrect bulkexec.service fails' '
-	test_must_fail flux run --setattr system.exec.bulkexec.service=zzz \
-	    -N1 true
-'
 test_expect_success '1-node job works' '
-	flux run --setattr system.exec.bulkexec.service=sdexec \
-	    -N1 true
+	flux run -N1 true
 '
 test_expect_success 'dump broker logs' '
         flux dmesg >dmesg.out
 '
 test_expect_success '2-node job works' '
-	flux run --setattr system.exec.bulkexec.service=sdexec \
-	    -N2 true
+	flux run -N2 true
 '
 test_expect_success 'create a shell userrc that dumps data to stderr' '
 	cat >userrc.lua <<-EOT
@@ -74,8 +63,7 @@ test_expect_success 'create a shell userrc that dumps data to stderr' '
 	EOT
 '
 test_expect_success 'run a job that uses that userrc' '
-	flux run --setattr system.exec.bulkexec.service=sdexec \
-	    -o userrc=userrc.lua true
+	flux run -o userrc=userrc.lua true
 '
 
 select_log() {

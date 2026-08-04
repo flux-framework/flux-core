@@ -8,7 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* Flux bulk-exec configuration code */
+/* Shared job-exec configuration code (exec.* config keys and cmdline
+ * overrides used by all execution implementations).
+ */
 
 #if HAVE_CONFIG_H
 # include "config.h"
@@ -37,7 +39,6 @@ struct exec_config {
     const char *default_job_shell;
     const char *flux_imp_path;
     const char *exec_service;
-    int exec_service_override;
     json_t *sdexec_properties;
     int sdexec_stop_timer_sec;
     int sdexec_stop_timer_signal;
@@ -78,11 +79,6 @@ const char *config_get_imp_path (void)
 const char *config_get_exec_service (void)
 {
     return exec_conf.exec_service;
-}
-
-bool config_get_exec_service_override (void)
-{
-    return exec_conf.exec_service_override;
 }
 
 json_t *config_get_sdexec_properties (void)
@@ -143,13 +139,11 @@ int config_get_stats (json_t **config_stats)
 {
     json_t *o = NULL;
 
-    if (!(o = json_pack ("{s:s? s:s? s:s? s:s? s:i s:f s:f s:i s:i s:i}",
+    if (!(o = json_pack ("{s:s? s:s? s:s? s:s? s:f s:f s:i s:i s:i}",
                          "default_cwd", default_cwd,
                          "default_job_shell", exec_conf.default_job_shell,
                          "flux_imp_path", exec_conf.flux_imp_path,
                          "exec_service", exec_conf.exec_service,
-                         "exec_service_override",
-                         exec_conf.exec_service_override,
                          "default_barrier_timeout",
                          exec_conf.default_barrier_timeout,
                          "shell_exit_timeout",
@@ -186,7 +180,6 @@ static void exec_config_init (struct exec_config *ec)
     ec->default_job_shell = flux_conf_builtin_get ("shell_path", FLUX_CONF_AUTO);
     ec->flux_imp_path = NULL;
     ec->exec_service = "rexec";
-    ec->exec_service_override = 0;
     ec->sdexec_properties = NULL;
     ec->sdexec_stop_timer_sec = -1;
     ec->sdexec_stop_timer_signal = 10; // SIGUSR1
@@ -195,8 +188,8 @@ static void exec_config_init (struct exec_config *ec)
     ec->shell_exit_timeout = DEFAULT_SHELL_EXIT_TIMEOUT;
 }
 
-/*  Initialize configurations for use by job-exec bulk-exec
- *  implementation
+/*  Initialize the shared job-exec configuration from the exec.* config
+ *  table and cmdline overrides.
  */
 int config_setup (flux_t *h,
                   const flux_conf_t *conf,
@@ -243,14 +236,12 @@ int config_setup (flux_t *h,
         return -1;
     }
 
-    /*  Check configuration for exec.service and exec.service-override */
+    /*  Check configuration for exec.service */
     if (flux_conf_unpack (conf,
                           &err,
-                          "{s?{s?s s?b}}",
+                          "{s?{s?s}}",
                           "exec",
-                            "service", &tmpconf.exec_service,
-                            "service-override",
-                              &tmpconf.exec_service_override) < 0) {
+                            "service", &tmpconf.exec_service) < 0) {
         errprintf (errp,
                    "error reading config value exec.service: %s",
                    err.text);

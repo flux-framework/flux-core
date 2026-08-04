@@ -79,7 +79,7 @@ test_expect_success 'exec.sdexec-constrain-resources is set' '
 	flux config get exec.sdexec-constrain-resources &&
 	test "$(flux config get exec.sdexec-constrain-resources)" = "true" &&
 	flux module stats job-exec \
-	  | jq -e ".\"bulk-exec\".config.sdexec_constrain_resources == 1"
+	  | jq -e ".config.sdexec_constrain_resources == 1"
 '
 
 test_expect_success 'sdexec-mapper module is running' '

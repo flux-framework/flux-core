@@ -35,7 +35,9 @@ struct jobinfo;
  *              from jobspec and/or R. An implementation should return 0 to
  *              "pass" on handling this job, > 0 to denote successful
  *              initialization, or < 0 for a fatal error (generates immediate
- *              exception).
+ *              exception).  A config-selected backend (see select below) is
+ *              only invoked once chosen, so it should return > 0 or < 0 but
+ *              never 0.
  *
  *   - exit:    called at job destruction so implementation may free resources
  *
@@ -60,8 +62,18 @@ struct jobinfo;
  *   - active_ranks:
  *              (optional) get the set of ranks with active job shells.
  */
+/*  How an implementation is selected to handle a job.
+ */
+enum exec_select {
+    EXEC_SELECT_JOBSPEC = 0,  /* self-selects by inspecting the jobspec, e.g.
+                               * testexec claims a job with an exec.test block */
+    EXEC_SELECT_CONFIG,       /* eligible as the exec.method default backend,
+                               * e.g. bulk-exec */
+};
+
 struct exec_implementation {
     const char *name;
+    enum exec_select select;
     int  (*config)  (flux_t *h,
                      const flux_conf_t *conf,
                      int argc,

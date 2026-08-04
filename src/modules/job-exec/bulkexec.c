@@ -22,8 +22,6 @@
  * {
  *    "mock_exception":s       - Generate a mock exception in phase:
  *                               "init", or "starting"
- *    "service":s              - Specify service to use for launching remote
- *                               subprocesses: "rexec" or "sdexec".
  *    "barrier-timeout":F      - Specify timeout for start barrier in floating
  *                               point seconds.
  * }
@@ -41,7 +39,6 @@
 #include "ccan/str/str.h"
 #include "src/common/libutil/basename.h"
 #include "src/common/libutil/errprintf.h"
-#include "src/common/libutil/errno_safe.h"
 #include "src/common/libsubprocess/bulk-exec.h"
 
 #include "job-exec.h"
@@ -400,47 +397,18 @@ static void exit_cb (struct bulk_exec *exec,
     }
 }
 
-static int parse_service_option (json_t *jobspec,
-                                 const char **service,
-                                 flux_error_t *error)
+static int get_exec_service (const char **service, flux_error_t *error)
 {
-    const char *s = config_get_exec_service (); // default
-    bool override = config_get_exec_service_override ();
-    json_error_t e;
+    const char *s = config_get_exec_service ();
 
-    if (jobspec) {
-        const char *s2 = NULL;
-        if (json_unpack_ex (jobspec,
-                            &e,
-                            0,
-                            "{s:{s?{s?{s?{s?s}}}}}",
-                            "attributes",   // key is required per RFC 14
-                              "system",     // key is optional per RFC 14
-                                "exec",
-                                  "bulkexec",
-                                    "service", &s2) < 0) {
-            errprintf (error, "error parsing bulkexec.service: %s", e.text);
-            errno = EINVAL;
-            return -1;
-        }
-        if (s2) {
-            if (!override && !streq (s, s2)) {
-                errprintf (error, "exec service override is not permitted");
-                errno = EINVAL;
-                return -1;
-            }
-            s = s2;
-        }
-    }
     if (!streq (s, "rexec") && !streq (s, "sdexec")) {
-        errprintf (error, "unknown bulkexec.service value: %s", s);
+        errprintf (error, "unsupported exec.service value: %s", s);
         errno = EINVAL;
         return -1;
     }
     *service = s;
     return 0;
 }
-
 
 static struct bulk_exec_ops exec_ops = {
     .on_start =     start_cb,
@@ -506,7 +474,7 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: resource_set_ranks");
         goto err;
     }
-    if (parse_service_option (job->jobspec, &service, &error) < 0) {
+    if (get_exec_service (&service, &error) < 0) {
         flux_log (job->h, LOG_ERR, "exec_init: %s" , error.text);
         goto err;
     }
@@ -650,64 +618,29 @@ static void exec_exit (struct jobinfo *job)
     job->data = NULL;
 }
 
-static int exec_config (flux_t *h,
-                        const flux_conf_t *conf,
-                        int argc,
-                        char **argv,
-                        flux_error_t *errp)
+/* Per-job stats.
+ */
+static json_t *exec_stats (struct jobinfo *job)
 {
-    return config_setup (h, conf, argc, argv, errp);
-}
-
-static json_t *exec_config_stats (void)
-{
-    json_t *o = NULL;
-    json_t *conf = NULL;
-
-    if (!(o = json_object ())) {
-        errno = ENOMEM;
-        goto error;
-    }
-
-    if (config_get_stats (&conf) < 0)
-        goto error;
-
-    if (json_object_set_new (o, "config", conf) < 0)
-        goto error;
-
-    return o;
-error:
-    ERRNO_SAFE_WRAP (json_decref, o);
-    return NULL;
-}
-
-static json_t *exec_job_stats (struct jobinfo *job)
-{
-    struct bulk_exec *exec = job->data;
+    struct bulk_exec *exec;
     struct idset *active_ranks;
     char *s = NULL;
     json_t *o;
-    int total = bulk_exec_total (exec);
-    int active = bulk_exec_active_count (exec);
+
+    if (!job)
+        return NULL;
+    exec = job->data;
 
     if ((active_ranks = bulk_exec_active_ranks (exec)))
         s = idset_encode (active_ranks, IDSET_FLAG_RANGE);
 
     o = json_pack ("{s:i s:i s:s}",
-                   "total_shells", total,
-                   "active_shells", active,
+                   "total_shells", bulk_exec_total (exec),
+                   "active_shells", bulk_exec_active_count (exec),
                    "active_ranks", s ? s : "");
     free (s);
     idset_destroy (active_ranks);
     return o;
-}
-
-static json_t *exec_stats (struct jobinfo *job)
-{
-    if (job)
-        return exec_job_stats (job);
-    else
-        return exec_config_stats ();
 }
 
 static struct idset *active_ranks (struct jobinfo *job)
@@ -746,7 +679,7 @@ static int exec_barrier_enter_op (struct jobinfo *job, const flux_msg_t *msg)
 
 struct exec_implementation bulkexec = {
     .name =     "bulk-exec",
-    .config =   exec_config,
+    .select =   EXEC_SELECT_CONFIG,
     .init =     exec_init,
     .exit =     exec_exit,
     .start =    exec_start,
