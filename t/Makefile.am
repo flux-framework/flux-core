@@ -279,6 +279,7 @@ TESTSCRIPTS = \
 	t2717-python-cli-plugins.t \
 	t2718-python-cli-job-shape.t \
 	t2720-python-cli-multi-prog.t \
+	t2721-python-cli-cosched-plugin.t \
 	t2800-jobs-cmd-multiuser.t \
 	t2800-jobs-recursive.t \
 	t2800-jobs-instance-info.t \
