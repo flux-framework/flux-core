@@ -124,13 +124,11 @@ def post_start_event(context):
     needs=["content-backing"],
 )
 def check_clean_shutdown(context):
-    context.bash(
-        """
+    context.bash("""
     if ! flux startlog --check --quiet; then
         echo "Flux was not shut down properly.  Data may have been lost."
     fi
-    """
-    )
+    """)
 
 
 # The most common scenario we want to fsck is when the flux instance

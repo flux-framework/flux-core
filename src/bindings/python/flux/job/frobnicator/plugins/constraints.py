@@ -8,9 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-"""Apply constraints to incoming jobspec based on broker config.
-
-"""
+"""Apply constraints to incoming jobspec based on broker config."""
 
 from flux.job.frobnicator import FrobnicatorPlugin
 

@@ -431,7 +431,7 @@ def get_jobs_recursive(job, args, fields):
         #   of the job. Either way, simply skip descending into the job
         #
         handle = flux.Flux(str(job.uri))
-        (jobs, truncated) = fetch_jobs_flux(args, fields, flux_handle=handle)
+        jobs, truncated = fetch_jobs_flux(args, fields, flux_handle=handle)
         stats = None
         if args.stats:
             stats = JobStats(handle).update_sync()
@@ -488,7 +488,7 @@ def print_jobs(jobs, args, formatter, path="", level=0):
         path = f"{path}/"
 
     for future in futures:
-        (job, jobs, stats) = future.result()
+        job, jobs, stats = future.result()
 
         #  If generating JSON, just add this job's children to a job["jobs"]
         #  array and continue:
@@ -550,7 +550,7 @@ def main():
     if args.sort:
         formatter.set_sort_keys(args.sort)
 
-    (jobs, truncated) = fetch_jobs(args, formatter.fields)
+    jobs, truncated = fetch_jobs(args, formatter.fields)
     if args.jobids and not jobs:
         # one or more jobids provided on command line, but none of these
         # jobs were returned. Exit with error immediately. Errors already

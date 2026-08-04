@@ -11,6 +11,7 @@
 """
 python bindings to flux-core, the main core of the flux resource manager
 """
+
 from pkgutil import extend_path
 
 __path__ = extend_path(__path__, __name__)

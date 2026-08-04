@@ -299,7 +299,7 @@ class TTYBuffer:
     def getline(self):
         if not self.data:
             return None
-        (line, sep, rest) = self.data.partition(b"\r\n")
+        line, sep, rest = self.data.partition(b"\r\n")
         if sep:
             self.data = rest
             return line + sep
@@ -371,10 +371,10 @@ def main():
         log.error(f'Unknown output format "{args.format}"')
         sys.exit(1)
 
-    (width, height) = map(int, args.window_size.split("x"))
+    width, height = map(int, args.window_size.split("x"))
     quit_char = args.quit_char.encode()
 
-    (pid, fd) = pty.fork()
+    pid, fd = pty.fork()
 
     if pid == pty.CHILD:
         """
@@ -432,7 +432,7 @@ def main():
             with open(args.input, "r") as infile:
                 infile.readline()
                 for line in infile:
-                    (timestamp, event_type, data) = json.loads(line)
+                    timestamp, event_type, data = json.loads(line)
                     if event_type == "i":
                         loop.call_later(float(timestamp), write_tty, data)
 
@@ -498,7 +498,7 @@ def main():
         if exit_requested:
             sys.exit(0)
 
-        (pid, status) = os.waitpid(pid, 0)
+        pid, status = os.waitpid(pid, 0)
         sys.exit(status_to_exitcode(status))
 
 

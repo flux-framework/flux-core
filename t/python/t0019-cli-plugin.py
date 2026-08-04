@@ -15,6 +15,7 @@ CLIPluginRegistry._make_alias().  No running Flux instance is required.
 Run with:
     cd t && ../src/cmd/flux python python/t0019-cli-plugin.py
 """
+
 import os
 import shutil
 import tempfile
@@ -167,35 +168,29 @@ class TestMakeAlias(unittest.TestCase):
 class TestConflictDetection(unittest.TestCase):
     """CLIPluginRegistry detects dest conflicts at load time."""
 
-    PLUGIN_SITE = textwrap.dedent(
-        """\
+    PLUGIN_SITE = textwrap.dedent("""\
         from flux.cli.plugin import CLIPlugin
         class PluginSite(CLIPlugin):
             def __init__(self, prog, prefix="site"):
                 super().__init__(prog, prefix=prefix)
                 self.add_option("--my-option")
-    """
-    )
+    """)
 
-    PLUGIN_VENDOR = textwrap.dedent(
-        """\
+    PLUGIN_VENDOR = textwrap.dedent("""\
         from flux.cli.plugin import CLIPlugin
         class PluginVendor(CLIPlugin):
             def __init__(self, prog, prefix="vendor"):
                 super().__init__(prog, prefix=prefix)
                 self.add_option("--my-option")
-    """
-    )
+    """)
 
-    PLUGIN_SITE2 = textwrap.dedent(
-        """\
+    PLUGIN_SITE2 = textwrap.dedent("""\
         from flux.cli.plugin import CLIPlugin
         class PluginSite2(CLIPlugin):
             def __init__(self, prog, prefix="site"):
                 super().__init__(prog, prefix=prefix)
                 self.add_option("--my-option")
-    """
-    )
+    """)
 
     def setUp(self):
         self._saved = os.environ.get("FLUX_CLI_PLUGINPATH_OVERRIDE")

@@ -82,7 +82,7 @@ def cleanup_push(args):
     commands.
     """
     if args.cmdline:
-        commands = [(" ".join(args.cmdline))]
+        commands = [" ".join(args.cmdline)]
     else:
         commands = [line.strip() for line in sys.stdin]
 
