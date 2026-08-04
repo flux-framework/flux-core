@@ -400,7 +400,7 @@ class TestKVS(unittest.TestCase):
             kd.commit()
 
         with flux.kvs.get_dir(self.f, "listalltest") as kd2:
-            (files, directories) = kd2.list_all()
+            files, directories = kd2.list_all()
             self.assertEqual(len(files), 2)
             self.assertEqual(len(directories), 1)
             self.assertIn("somefile", files)
@@ -414,7 +414,7 @@ class TestKVS(unittest.TestCase):
                 kd[k] = "bar"
                 kd[k + "d." + k] = "meh"
         walk_gen = flux.kvs.walk("testwalk", flux_handle=self.f, topdown=True)
-        (r, ds, fs) = next(walk_gen)
+        r, ds, fs = next(walk_gen)
         print(r, ds, fs)
         self.assertEqual(r, "")
         self.assertEqual(len(list(ds)), 14)
@@ -574,12 +574,12 @@ class TestKVS(unittest.TestCase):
 
     def test_namespace_13_KVSDir_list_all(self):
         with flux.kvs.get_dir(self.f, namespace="testns1") as kd:
-            (files, directories) = kd.list_all()
+            files, directories = kd.list_all()
             self.assertEqual(len(files), 0)
             self.assertEqual(len(directories), 1)
 
         with flux.kvs.get_dir(self.f, namespace="testns2") as kd2:
-            (files, directories) = kd2.list_all()
+            files, directories = kd2.list_all()
             self.assertEqual(len(files), 0)
             self.assertEqual(len(directories), 1)
 
@@ -587,7 +587,7 @@ class TestKVS(unittest.TestCase):
         walk_gen = flux.kvs.walk(
             ".", flux_handle=self.f, topdown=True, namespace="testns1"
         )
-        (r, ds, fs) = next(walk_gen)
+        r, ds, fs = next(walk_gen)
         self.assertEqual(r, "")
         self.assertEqual(len(list(ds)), 1)
         self.assertEqual(len(list(fs)), 0)
@@ -595,7 +595,7 @@ class TestKVS(unittest.TestCase):
         walk_gen = flux.kvs.walk(
             "testdirns1", flux_handle=self.f, topdown=True, namespace="testns1"
         )
-        (r, ds, fs) = next(walk_gen)
+        r, ds, fs = next(walk_gen)
         self.assertEqual(r, "")
         self.assertEqual(len(list(ds)), 0)
         self.assertEqual(len(list(fs)), 2)

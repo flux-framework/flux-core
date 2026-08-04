@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """run command with a timeout, timeout as a float is first argument, rest are command"""
+
 import argparse
 import os
 import signal
@@ -61,7 +62,7 @@ def exit_signal(rc):
 def do_timeout():
     environ = dict(os.environ)
     for e in args.env:
-        (k, v) = e.split("=")
+        k, v = e.split("=")
         environ[k] = v
     try:
         # add cmd onto the front of the cmd arg list

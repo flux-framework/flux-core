@@ -8,9 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-"""Apply defaults to incoming jobspec based on broker config.
-
-"""
+"""Apply defaults to incoming jobspec based on broker config."""
 
 import copy
 

@@ -525,8 +525,7 @@ class TestApplyOptions(unittest.TestCase):
 class TestApplyOptionsWithPlugin(unittest.TestCase):
     """Test apply_options() interactions with CLI plugins."""
 
-    PLUGIN_CODE = textwrap.dedent(
-        """\
+    PLUGIN_CODE = textwrap.dedent("""\
         from flux.cli.plugin import CLIPlugin
 
         class TestPlugin(CLIPlugin):
@@ -537,8 +536,7 @@ class TestApplyOptionsWithPlugin(unittest.TestCase):
             def modify_jobspec(self, args, jobspec):
                 if args.myopt is not None:
                     jobspec.setattr_shell_option("test-opt", args.myopt)
-    """
-    )
+    """)
 
     def setUp(self):
         self._plugin_dir = tempfile.mkdtemp()
@@ -600,8 +598,7 @@ class TestApplyOptionsWithPlugin(unittest.TestCase):
     def test_08_proxy_setattr_alias_in_callback(self):
         # a plugin that writes to args via the old unprefixed name in
         # modify_jobspec should update the namespace via the proxy alias
-        write_plugin = textwrap.dedent(
-            """\
+        write_plugin = textwrap.dedent("""\
             from flux.cli.plugin import CLIPlugin
 
             class WritePlugin(CLIPlugin):
@@ -612,8 +609,7 @@ class TestApplyOptionsWithPlugin(unittest.TestCase):
                 def modify_jobspec(self, args, jobspec):
                     args.flag = "rewritten"  # write via old unprefixed name
                     jobspec.setattr_shell_option("wp-result", args.flag)
-            """
-        )
+            """)
         with open(os.path.join(self._plugin_dir, "writeplugin.py"), "w") as fp:
             fp.write(write_plugin)
         js = self._js()
@@ -624,8 +620,7 @@ class TestApplyOptionsWithPlugin(unittest.TestCase):
     def test_09_no_prefix_plugin_kwarg_accepted(self):
         # a plugin with prefix=None has dest equal to the bare option name;
         # the proxy alias map is empty (identity), so args.mykey passes through
-        noprefix_code = textwrap.dedent(
-            """\
+        noprefix_code = textwrap.dedent("""\
             from flux.cli.plugin import CLIPlugin
 
             class NoPrefixPlugin(CLIPlugin):
@@ -636,8 +631,7 @@ class TestApplyOptionsWithPlugin(unittest.TestCase):
                 def modify_jobspec(self, args, jobspec):
                     if args.mykey:
                         jobspec.setattr_shell_option("np-result", args.mykey)
-            """
-        )
+            """)
         with open(os.path.join(self._plugin_dir, "noprefixplugin.py"), "w") as fp:
             fp.write(noprefix_code)
         js = self._js()
@@ -648,8 +642,7 @@ class TestApplyOptionsWithPlugin(unittest.TestCase):
     def test_10_explicit_dest_plugin_kwarg_accepted(self):
         # a plugin with explicit dest= bypasses alias entirely;
         # the kwarg must use the custom dest name, not the option flag name
-        explicit_dest_code = textwrap.dedent(
-            """\
+        explicit_dest_code = textwrap.dedent("""\
             from flux.cli.plugin import CLIPlugin
 
             class ExplicitDestPlugin(CLIPlugin):
@@ -660,8 +653,7 @@ class TestApplyOptionsWithPlugin(unittest.TestCase):
                 def modify_jobspec(self, args, jobspec):
                     if args.custom_key:
                         jobspec.setattr_shell_option("ed-result", args.custom_key)
-            """
-        )
+            """)
         with open(os.path.join(self._plugin_dir, "explicitdestplugin.py"), "w") as fp:
             fp.write(explicit_dest_code)
         js = self._js()
@@ -671,8 +663,7 @@ class TestApplyOptionsWithPlugin(unittest.TestCase):
 
     def test_11_two_plugins_both_fire(self):
         # when two plugins are loaded, both modify_jobspec callbacks run
-        second_code = textwrap.dedent(
-            """\
+        second_code = textwrap.dedent("""\
             from flux.cli.plugin import CLIPlugin
 
             class SecondPlugin(CLIPlugin):
@@ -682,8 +673,7 @@ class TestApplyOptionsWithPlugin(unittest.TestCase):
 
                 def modify_jobspec(self, args, jobspec):
                     jobspec.setattr_shell_option("b-result", "b-fired")
-            """
-        )
+            """)
         with open(os.path.join(self._plugin_dir, "secondplugin.py"), "w") as fp:
             fp.write(second_code)
         js = self._js()
@@ -697,8 +687,7 @@ class TestApplyOptionsWithPlugin(unittest.TestCase):
         # because from_submit() builds the jobspec before apply_options() runs.
         # This test documents the known limitation: the plugin cannot resize
         # the job from preinit() when called through from_submit().
-        preinit_code = textwrap.dedent(
-            """\
+        preinit_code = textwrap.dedent("""\
             from flux.cli.plugin import CLIPlugin
 
             class PreinitPlugin(CLIPlugin):
@@ -708,8 +697,7 @@ class TestApplyOptionsWithPlugin(unittest.TestCase):
                 def preinit(self, args):
                     # Attempt to override ntasks — has no effect via from_submit()
                     args.ntasks = 99
-            """
-        )
+            """)
         with open(os.path.join(self._plugin_dir, "preinitplugin.py"), "w") as fp:
             fp.write(preinit_code)
         js = JobspecV1.from_submit(["hostname"], ntasks=1)

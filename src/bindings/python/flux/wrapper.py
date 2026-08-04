@@ -13,6 +13,7 @@ Flux interface wrapper generator.
 This could, in principle, be used for other projects as well, but it encodes a
 number of assumptions about the error propagation and handling that flux uses.
 """
+
 import errno
 import inspect
 import os
@@ -128,9 +129,7 @@ Invalid arguments passed to wrapped C function:
 Name: {name}
 C signature: {c_type}
 Arguments: {arguments}
-          """.format(
-            name=name, c_type=signature, arguments=arguments
-        )
+          """.format(name=name, c_type=signature, arguments=arguments)
         super(InvalidArguments, self).__init__(message)
 
 
@@ -264,9 +263,7 @@ class Wrapper(WrapperBase):
         if SIGS_.get(mytype, None) is None:
             SIGS_[mytype] = signature
         else:
-            assert (
-                signature == SIGS_[mytype]
-            ), f"""
+            assert signature == SIGS_[mytype], f"""
 signatures do not match, create a new subclass to change matching parameters:
 {mytype}: mysig: {SIGS_[mytype]} sig:{signature}
             """

@@ -46,25 +46,25 @@ def statetoemoji(stateid):
     statestr = raw.flux_job_statetostr(stateid, "S").decode("utf-8")
     if statestr == "N":
         # wrapped gift
-        emoji = "\U0001F381"
+        emoji = "\U0001f381"
     elif statestr == "D":
         # stop sign
-        emoji = "\U0001F6D1"
+        emoji = "\U0001f6d1"
     elif statestr == "P":
         # vertical traffic light
-        emoji = "\U0001F6A6"
+        emoji = "\U0001f6a6"
     elif statestr == "S":
         # calendar
-        emoji = "\U0001F4C5"
+        emoji = "\U0001f4c5"
     elif statestr == "R":
         # person running
-        emoji = "\U0001F3C3"
+        emoji = "\U0001f3c3"
     elif statestr == "C":
         # wastebasket
-        emoji = "\U0001F5D1"
+        emoji = "\U0001f5d1"
     elif statestr == "I":
         # skull
-        emoji = "\U0001F480"
+        emoji = "\U0001f480"
     # can we output unicode to stdout? if not, return the normal short
     # string
     try:
@@ -86,19 +86,19 @@ def resulttoemoji(resultid):
         resultstr = raw.flux_job_resulttostr(resultid, "S").decode("utf-8")
         if resultstr == "CD":
             # grinning face
-            emoji = "\U0001F600"
+            emoji = "\U0001f600"
             alt = ":-)"
         elif resultstr == "F":
             # pile of poo
-            emoji = "\U0001F4A9"
+            emoji = "\U0001f4a9"
             alt = ":'-("
         elif resultstr == "CA":
             # collision
-            emoji = "\U0001F4A5"
+            emoji = "\U0001f4a5"
             alt = "%-|"
         elif resultstr == "TO":
             # hourglass done
-            emoji = "\u231B"
+            emoji = "\u231b"
             alt = "(-_-)"
     else:
         # ideographic space
