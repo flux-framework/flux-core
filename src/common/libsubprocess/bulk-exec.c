@@ -66,8 +66,6 @@ struct bulk_exec {
     void *arg;
 };
 
-extern char **environ;
-
 int bulk_exec_rc (struct bulk_exec *exec)
 {
     if (!exec) {

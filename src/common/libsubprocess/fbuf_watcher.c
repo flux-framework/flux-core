@@ -310,7 +310,7 @@ const char *fbuf_read_watcher_get_data (flux_watcher_t *w, int *lenp)
         /* if no space, have to flush data out */
         if (!(*lenp) && !fbuf_space (rbw->fbuf))
             return fbuf_read (rbw->fbuf, -1, lenp);
-     }
+    }
     else if (rbw->full) {
         /* Fully buffered: read all available data */
         return fbuf_read (rbw->fbuf, -1, lenp);

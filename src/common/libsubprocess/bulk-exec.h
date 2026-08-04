@@ -55,7 +55,7 @@ int bulk_exec_aux_set (struct bulk_exec *exec,
                        void *val,
                        flux_free_f free_fn);
 
-/*  Set maximum number of flux_subprocess_rexex(3) calls per event
+/*  Set maximum number of flux_rexec_ex(3) calls per event
  *   loop iteration. (-1 for no max)
  */
 int bulk_exec_set_max_per_loop (struct bulk_exec *exec, int max);
@@ -73,7 +73,7 @@ int bulk_exec_start (flux_t *h, struct bulk_exec *exec);
  */
 flux_future_t * bulk_exec_kill (struct bulk_exec *exec,
                                 const struct idset *ranks,
-                                int signal);
+                                int signum);
 
 /*  Log per-rank kill errors for a failed bulk_exec_kill() RPC.
  */

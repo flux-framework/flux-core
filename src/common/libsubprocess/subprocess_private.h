@@ -77,7 +77,7 @@ struct flux_subprocess {
 
     flux_subprocess_ops_t ops;      /* Callbacks registered for this proc */
 
-    flux_cmd_t *cmd;                /* readonly/o copy of the command     */
+    flux_cmd_t *cmd;                /* read-only copy of the command      */
 
     struct aux_item *aux;           /* auxiliary data                     */
 
@@ -143,7 +143,7 @@ struct idset * subprocess_childfds (flux_subprocess_t *p);
 void subprocess_incref (flux_subprocess_t *p);
 void subprocess_decref (flux_subprocess_t *p);
 
-void subprocess_standard_output (flux_subprocess_t *p, const char *name);
+void subprocess_standard_output (flux_subprocess_t *p, const char *stream);
 
 #endif /* !_SUBPROCESS_PRIVATE_H */
 

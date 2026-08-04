@@ -32,7 +32,7 @@ int fbuf_space (struct fbuf *fb);
  * - fbuf_readonly() makes it so writes are no longer allowed
  *   to the buffer.  Reads are allowed until the buffer is empty.
  *   Changing a buffer to "readonly" can only be called once and
- *   cannot be disabled.  This is a convenience status can be used to
+ *   cannot be disabled.  This is a convenience status that can be used to
  *   indicate to users that the buffer is no longer usable.
  * - fbuf_is_readonly() returns true if a buffer is readonly,
  *    and false if not.
@@ -75,7 +75,7 @@ const void *fbuf_read_trimmed_line (struct fbuf *fb, int *lenp);
 int fbuf_read_to_fd (struct fbuf *fb, int fd, int len);
 
 /* Write up to [len] bytes to buffer from file descriptor [fd].  Set
- * [len] to -1 to read an appropriate chunk size.  Returns number of
+ * [len] to -1 to write an appropriate chunk size.  Returns number of
  * bytes written on success.
  */
 int fbuf_write_from_fd (struct fbuf *fb, int fd, int len);

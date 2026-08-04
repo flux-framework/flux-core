@@ -887,7 +887,7 @@ flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp)
     json_t *jmsgchans = NULL;
     const char *cwd = NULL;
     const char *label = NULL;
-    flux_cmd_t *cmd = NULL;;
+    flux_cmd_t *cmd = NULL;
 
     if (!(cmd = calloc (1, sizeof (*cmd)))) {
         errnum = ENOMEM;
@@ -917,8 +917,8 @@ flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp)
         errnum = errno;
         goto fail;
     }
-    /* All sub-objects of `o` inherit reference from root object so
-     *  this decref should free jenv, jargv, ... etc.
+    /* jenv, jargv, ... are borrowed references from `o` (unpacked with
+     *  "s:o"), so there is nothing to decref here.
      */
     return cmd;
 
@@ -1020,8 +1020,7 @@ int flux_cmd_env_replace (flux_cmd_t *cmd, char **env)
     if (init_argz (&new_envz, &new_envz_len, env) < 0)
         return -1;
 
-    if (cmd->envz)
-        free (cmd->envz);
+    free (cmd->envz);
     cmd->envz = new_envz;
     cmd->envz_len = new_envz_len;
 

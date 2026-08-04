@@ -37,7 +37,7 @@ struct fbuf {
 struct fbuf *fbuf_create (int size)
 {
     struct fbuf *fb = NULL;
-    int minsize = FBUF_MIN;
+    int minsize;
 
     if (size <= 0) {
         errno = EINVAL;

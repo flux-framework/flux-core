@@ -146,6 +146,12 @@ static void process_new_state (flux_subprocess_t *p,
 
     p->state = state;
 
+    /* On EXITED, leave the output watchers running so any remaining
+     * output can drain and EOF can be delivered to the caller; they
+     * stop themselves in remote_out_check_cb() once the buffer empties.
+     * On FAILED there is nothing worth draining, so stop the output
+     * watchers immediately.
+     */
     if (state == FLUX_SUBPROCESS_EXITED) {
         stop_in_watchers (p);
     }
@@ -253,7 +259,6 @@ static int remote_channel_setup (flux_subprocess_t *p,
                                  int channel_flags)
 {
     struct subprocess_channel *c = NULL;
-    char *e = NULL;
     int save_errno;
 
     if (!(c = channel_create (p, output_cb, name, channel_flags))) {
@@ -330,13 +335,11 @@ static int remote_channel_setup (flux_subprocess_t *p,
      */
     c = NULL;
 
-    free (e);
     return 0;
 
  error:
     save_errno = errno;
     channel_destroy (c);
-    free (e);
     errno = save_errno;
     return -1;
 }
@@ -402,7 +405,7 @@ static int remote_setup_channels (flux_subprocess_t *p)
  * must be the actual command before this is called.  For attach this is
  * deferred until the command is received in the attach response.
  */
-int remote_setup_io (flux_subprocess_t *p)
+static int remote_setup_io (flux_subprocess_t *p)
 {
     if (remote_setup_stdio (p) < 0)
         return -1;

@@ -10,8 +10,8 @@
 
 /* msgchan.c - message channel
  *
- * This is intended to be encapsulated and tested on its own, then
- * integrated with libsubprocess.
+ * This is encapsulated and tested on its own, and integrated with
+ * libsubprocess.
  *
  * Server calls msgchan_create(), which
  * - opens a socketpair
@@ -62,7 +62,7 @@ struct msgchan {
     struct watched_handle h; // handle opened to creation uri
 };
 
-json_t *watched_handle_get_stats (struct watched_handle *wh)
+static json_t *watched_handle_get_stats (struct watched_handle *wh)
 {
     return json_pack ("{s:i s:i s:i s:i s:i s:i}",
                       "sends", wh->stats.sends,
