@@ -34,6 +34,7 @@
 #endif
 
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libsubprocess/client.h"
 #include "src/common/libioencode/ioencode.h"
 #include "src/common/libutil/cgroup.h"
@@ -59,7 +60,7 @@ struct sdexec_ctx {
     uint32_t rank;
     char *local_uri;
     flux_msg_handler_t **handlers;
-    struct flux_msglist *requests; // each exec request "owns" an sdproc
+    zlistx_t *procs; // list of struct sdproc, owned by the module
     struct flux_msglist *kills;
 };
 
@@ -78,7 +79,8 @@ struct stop_timer {
 };
 
 struct sdproc {
-    const flux_msg_t *msg;
+    const flux_msg_t *exec_request; // exec request; sdproc holds a reference
+    void *list_handle;     // handle in ctx->procs for O(1) removal
     json_t *cmd;
     int flags;
     flux_future_t *f_map;
@@ -121,32 +123,15 @@ void sdexec_log_debug (flux_t *h, const char *fmt, ...)
     }
 }
 
-static void delete_message (struct flux_msglist *msglist,
-                            const flux_msg_t *msg)
+static struct sdproc *sdproc_lookup_bypid (struct sdexec_ctx *ctx, pid_t pid)
 {
-    const flux_msg_t *m;
+    struct sdproc *proc;
 
-    m = flux_msglist_first (msglist);
-    while (m) {
-        if (msg == m) {
-            flux_msglist_delete (msglist);
-            return;
-        }
-        m = flux_msglist_next (msglist);
-    }
-}
-
-static const flux_msg_t *lookup_message_bypid (struct flux_msglist *msglist,
-                                               pid_t pid)
-{
-    const flux_msg_t *m;
-
-    m = flux_msglist_first (msglist);
-    while (m) {
-        struct sdproc *proc = flux_msg_aux_get (m, "sdproc");
+    proc = zlistx_first (ctx->procs);
+    while (proc) {
         if (sdexec_unit_pid (proc->unit) == pid)
-            return m;
-        m = flux_msglist_next (msglist);
+            return proc;
+        proc = zlistx_next (ctx->procs);
     }
     return NULL;
 }
@@ -166,21 +151,21 @@ static const flux_msg_t *lookup_message_byaux (struct flux_msglist *msglist,
     return NULL;
 }
 
-/* Find an sdexec.exec message with the same sender as msg and matchtag as
- * specified in the msg matchtag field.
+/* Find the sdproc whose exec request has the same sender as msg and matchtag
+ * as specified in the msg matchtag field.
  * N.B. flux_cancel_match() happens to be helpful because RFC 42 subprocess
  * write works like RFC 6 cancel.
  */
-static const flux_msg_t *lookup_message_byclient (struct flux_msglist *msglist,
-                                                  const flux_msg_t *msg)
+static struct sdproc *sdproc_lookup_byclient (struct sdexec_ctx *ctx,
+                                              const flux_msg_t *msg)
 {
-    const flux_msg_t *m;
+    struct sdproc *proc;
 
-    m = flux_msglist_first (msglist);
-    while (m) {
-        if (flux_cancel_match (msg, m))
-            return m;
-        m = flux_msglist_next (msglist);
+    proc = zlistx_first (ctx->procs);
+    while (proc) {
+        if (flux_cancel_match (msg, proc->exec_request))
+            return proc;
+        proc = zlistx_next (ctx->procs);
     }
     return NULL;
 }
@@ -189,9 +174,11 @@ static void exec_respond_error (struct sdproc *proc,
                                 int errnum,
                                 const char *errstr)
 {
-    if (flux_respond_error (proc->ctx->h, proc->msg, errnum, errstr) < 0)
-        flux_log_error (proc->ctx->h, "error responding to exec request");
-    delete_message (proc->ctx->requests, proc->msg); // destroys proc too
+    struct sdexec_ctx *ctx = proc->ctx;
+
+    if (flux_respond_error (ctx->h, proc->exec_request, errnum, errstr) < 0)
+        flux_log_error (ctx->h, "error responding to exec request");
+    zlistx_delete (ctx->procs, proc->list_handle); // destroys proc too
 }
 
 /* Send the streaming response IFF unit cleanup is complete and EOFs have
@@ -457,7 +444,7 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
                 goto done;
             }
             if (flux_respond_pack (h,
-                                   proc->msg,
+                                   proc->exec_request,
                                    "{s:s s:I}",
                                    "type", "started",
                                    "pid", sdexec_unit_pid (proc->unit)) < 0)
@@ -473,7 +460,7 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
     if (!proc->finished_response_sent && !proc->errnum) {
         if (sdexec_unit_has_finished (proc->unit)) {
             if (flux_respond_pack (h,
-                                   proc->msg,
+                                   proc->exec_request,
                                    "{s:s s:i}",
                                    "type", "finished",
                                    "status",
@@ -555,9 +542,8 @@ done:
  */
 static void start_continuation (flux_future_t *f, void *arg)
 {
-    const flux_msg_t *msg = flux_future_aux_get (f, "request");
-    struct sdproc *proc = flux_msg_aux_get (msg, "sdproc");
-    struct sdexec_ctx *ctx = arg;
+    struct sdproc *proc = arg;
+    struct sdexec_ctx *ctx = proc->ctx;
 
     if (sdexec_start_transient_unit_get (f, NULL) < 0)
         goto error;
@@ -585,9 +571,7 @@ static void start_continuation (flux_future_t *f, void *arg)
     }
     return;
 error:
-    if (flux_respond_error (ctx->h, msg, errno, future_strerror (f, errno)))
-        flux_log_error (ctx->h, "error responding to exec request");
-    delete_message (ctx->requests, msg);
+    exec_respond_error (proc, errno, future_strerror (f, errno));
 }
 
 /* Log an error receiving data from unit stdout or stderr.  channel_cb will
@@ -612,7 +596,7 @@ static void channel_cb (struct channel *ch, json_t *io, void *arg)
     flux_t *h = proc->ctx->h;
 
     if (flux_respond_pack (h,
-                           proc->msg,
+                           proc->exec_request,
                            "{s:s s:i s:O}",
                            "type", "output",
                            "pid", sdexec_unit_pid (proc->unit),
@@ -630,12 +614,11 @@ static void channel_cb (struct channel *ch, json_t *io, void *arg)
     finalize_exec_request_if_done (proc);
 }
 
-/* Since an sdproc is attached to each exec message's aux container, this
- * destructor is typically called when an exec request is destroyed, e.g.
- * after unit reaping is complete and the exec client has been sent ENODATA
- * or another error response.  This ends the sdbus.subscribe request for
- * property updates on this unit.  The subscribe future is destroyed here;
- * we do not wait for the ENODATA response.
+/* An sdproc is owned by ctx->procs, so this is typically reached when the
+ * proc is removed from that list, e.g. after unit reaping is complete and the
+ * exec client has been sent ENODATA or another error response.  This ends the
+ * sdbus.subscribe request for property updates on this unit.  The subscribe
+ * future is destroyed here; we do not wait for the ENODATA response.
  */
 static void sdproc_destroy (struct sdproc *proc)
 {
@@ -666,9 +649,19 @@ static void sdproc_destroy (struct sdproc *proc)
         flux_watcher_destroy (proc->stop.timer);
         json_decref (proc->cmd);
         flux_msglist_destroy (proc->write_requests);
+        flux_msg_decref (proc->exec_request);
         free (proc->expected_cpus);
         free (proc);
         errno = saved_errno;
+    }
+}
+
+// zlistx_destructor_fn footprint
+static void sdproc_destructor (void **item)
+{
+    if (item) {
+        sdproc_destroy (*item);
+        *item = NULL;
     }
 }
 
@@ -1017,11 +1010,7 @@ static void map_continuation (flux_future_t *f, void *arg)
         errstr = error.text;
         goto error;
     }
-    if (flux_future_then (proc->f_start, -1, start_continuation, ctx) < 0
-        || flux_future_aux_set (proc->f_start,
-                                "request",
-                                (void *)proc->msg,
-                                NULL) < 0)
+    if (flux_future_then (proc->f_start, -1, start_continuation, proc) < 0)
         goto error;
     return;
 error:
@@ -1118,31 +1107,29 @@ static void exec_cb (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (!(proc = sdproc_create (ctx, cmd, flags))
-        || flux_msg_aux_set (msg,
-                             "sdproc",
-                             proc,
-                             (flux_free_f)sdproc_destroy) < 0) {
+    if (!(proc = sdproc_create (ctx, cmd, flags)))
+        goto error;
+    /* The sdproc is owned by ctx->procs and holds its own reference to the
+     * exec request message, so it outlives this callback.  Insert it into the
+     * list first; on any later failure exec_respond_error() removes it (which
+     * destroys it), so the goto error path below only covers pre-insertion
+     * failures.
+     */
+    proc->exec_request = flux_msg_incref (msg);
+    if (!(proc->list_handle = zlistx_add_end (ctx->procs, proc))) {
         sdproc_destroy (proc);
+        errno = ENOMEM;
         goto error;
     }
-    proc->msg = msg;
     sdexec_log_debug (h, "sdexec-mapper %s", sdexec_unit_name (proc->unit));
-    if (!(proc->f_map = sdexec_request_map (h, proc)))
-        goto error;
-    if (flux_future_then (proc->f_map,
-                          -1.,
-                          map_continuation,
-                          proc) < 0)
-        goto error;
-
-    /* N.B. msg owns sdproc (by virtue of flux_msg_aux_set() above), so take
-     * an extra reference on msg by placing on the requests msglist before
-     * leaving this function. Otherwise, msg and sdproc will be destroyed
-     * (as occurs with any `goto error`).
-     */
-    if (flux_msglist_append (ctx->requests, proc->msg) < 0)
-        goto error;
+    if (!(proc->f_map = sdexec_request_map (h, proc))
+        || flux_future_then (proc->f_map,
+                             -1.,
+                             map_continuation,
+                             proc) < 0) {
+        exec_respond_error (proc, errno, "error requesting resource map");
+        return;
+    }
     return; // response occurs later
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
@@ -1161,7 +1148,6 @@ static void write_cb (flux_t *h,
     struct sdexec_ctx *ctx = arg;
     int matchtag;
     json_t *io;
-    const flux_msg_t *exec_request;
     flux_error_t error;
     struct sdproc *proc;
     const char *stream;
@@ -1182,8 +1168,7 @@ static void write_cb (flux_t *h,
         flux_log_error (h, "%s", error.text);
         return;
     }
-    if (!(exec_request = lookup_message_byclient (ctx->requests, msg))
-        || !(proc = flux_msg_aux_get (exec_request, "sdproc"))) {
+    if (!(proc = sdproc_lookup_byclient (ctx, msg))) {
         flux_log (h, LOG_ERR, "sdexec.write: subprocess no longer exists");
         return;
     }
@@ -1243,7 +1228,6 @@ static void kill_cb (flux_t *h,
     struct sdexec_ctx *ctx = arg;
     pid_t pid;
     int signum;
-    const flux_msg_t *exec_request;
     struct sdproc *proc;
     flux_error_t error;
     const char *errstr = NULL;
@@ -1259,8 +1243,7 @@ static void kill_cb (flux_t *h,
         errstr = error.text;
         goto error;
     }
-    if (!(exec_request = lookup_message_bypid (ctx->requests, pid))
-        || !(proc = flux_msg_aux_get (exec_request, "sdproc"))) {
+    if (!(proc = sdproc_lookup_bypid (ctx, pid))) {
         errprintf (&error, "kill pid=%d not found", pid);
         errstr = error.text;
         errno = ESRCH;
@@ -1304,7 +1287,7 @@ static void list_cb (flux_t *h,
     flux_error_t error;
     const char *errstr = NULL;
     json_t *procs = NULL;
-    const flux_msg_t *req;
+    struct sdproc *proc;
 
     if (authorize_request (msg, ctx->rank, &error) < 0) {
         errstr = error.text;
@@ -1312,13 +1295,11 @@ static void list_cb (flux_t *h,
     }
     if (!(procs = json_array ()))
         goto nomem;
-    req = flux_msglist_first (ctx->requests);
-    while (req) {
-        struct sdproc *proc;
+    proc = zlistx_first (ctx->procs);
+    while (proc) {
         const char *arg0;
         json_t *o;
-        if ((proc = flux_msg_aux_get (req, "sdproc"))
-            && json_unpack (proc->cmd, "{s:[s]}", "cmdline", &arg0) == 0
+        if (json_unpack (proc->cmd, "{s:[s]}", "cmdline", &arg0) == 0
             && (o = json_pack ("{s:i s:s s:s s:s}",
                                "pid", sdexec_unit_pid (proc->unit),
                                "cmd", arg0,
@@ -1329,7 +1310,7 @@ static void list_cb (flux_t *h,
                 goto nomem;
             }
         }
-        req = flux_msglist_next (ctx->requests);
+        proc = zlistx_next (ctx->procs);
     }
     if (flux_respond_pack (h,
                            msg,
@@ -1393,17 +1374,15 @@ static void stats_cb (flux_t *h,
 {
     struct sdexec_ctx *ctx = arg;
     json_t *procs;
-    const flux_msg_t *m;
+    struct sdproc *proc;
 
     if (!(procs = json_object ()))
         goto nomem;
-    m = flux_msglist_first (ctx->requests);
-    while (m) {
-        struct sdproc *proc;
+    proc = zlistx_first (ctx->procs);
+    while (proc) {
         json_t *entry = NULL;
 
-        if (!(proc = flux_msg_aux_get (m, "sdproc"))
-            || !(entry = get_proc_stats (proc)))
+        if (!(entry = get_proc_stats (proc)))
             goto nomem;
         if (json_object_set_new (procs,
                                  sdexec_unit_name (proc->unit),
@@ -1411,7 +1390,7 @@ static void stats_cb (flux_t *h,
             // jansson decrefs the new object on failure
             goto nomem;
         }
-        m = flux_msglist_next (ctx->requests);
+        proc = zlistx_next (ctx->procs);
     }
     if (flux_respond_pack (h, msg, "{s:O}", "procs", procs) < 0)
         flux_log_error (h, "error responding to stats-get request");
@@ -1426,9 +1405,9 @@ nomem:
 
 /* When a client (like flux-exec or job-exec) disconnects, send any running
  * units that were started by that UUID a SIGKILL to begin cleanup.  Leave
- * the request in ctx->requests so the unit can be "reaped".  Let normal
- * cleanup of the request (including generating a response which shouldn't
- * hurt) occur when that happens.
+ * the sdproc in ctx->procs so the unit can be "reaped".  Let normal cleanup
+ * of the sdproc (including generating a response which shouldn't hurt) occur
+ * when that happens.
  */
 static void disconnect_cb (flux_t *h,
                            flux_msg_handler_t *mh,
@@ -1436,23 +1415,20 @@ static void disconnect_cb (flux_t *h,
                            void *arg)
 {
     struct sdexec_ctx *ctx = arg;
-    const flux_msg_t *request;
+    struct sdproc *proc;
 
-    request = flux_msglist_first (ctx->requests);
-    while (request) {
-        if (flux_disconnect_match (msg, request)) {
-            struct sdproc *proc = flux_msg_aux_get (request, "sdproc");
-            if (proc) {
-                flux_future_t *f;
-                f = sdexec_kill_unit (h,
-                                      ctx->rank,
-                                      sdexec_unit_name (proc->unit),
-                                      "main",
-                                       SIGKILL);
-                flux_future_destroy (f);
-            }
+    proc = zlistx_first (ctx->procs);
+    while (proc) {
+        if (flux_disconnect_match (msg, proc->exec_request)) {
+            flux_future_t *f;
+            f = sdexec_kill_unit (h,
+                                  ctx->rank,
+                                  sdexec_unit_name (proc->unit),
+                                  "main",
+                                   SIGKILL);
+            flux_future_destroy (f);
         }
-        request = flux_msglist_next (ctx->requests);
+        proc = zlistx_next (ctx->procs);
     }
 }
 
@@ -1556,16 +1532,19 @@ static void sdexec_ctx_destroy (struct sdexec_ctx *ctx)
     if (ctx) {
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
-        if (ctx->requests) {
-            const flux_msg_t *msg;
-            msg = flux_msglist_first (ctx->requests);
-            while (msg) {
+        if (ctx->procs) {
+            struct sdproc *proc;
+            proc = zlistx_first (ctx->procs);
+            while (proc) {
                 const char *errstr = "sdexec module is unloading";
-                if (flux_respond_error (ctx->h, msg, ENOSYS, errstr) < 0)
+                if (flux_respond_error (ctx->h,
+                                        proc->exec_request,
+                                        ENOSYS,
+                                        errstr) < 0)
                     flux_log_error (ctx->h, "error responding to exec request");
-                msg = flux_msglist_next (ctx->requests);
+                proc = zlistx_next (ctx->procs);
             }
-            flux_msglist_destroy (ctx->requests);
+            zlistx_destroy (&ctx->procs);
         }
         flux_msglist_destroy (ctx->kills);
         free (ctx->local_uri);
@@ -1587,9 +1566,10 @@ static struct sdexec_ctx *sdexec_ctx_create (flux_t *h)
     if (!(s = flux_attr_get (h, "local-uri"))
         || !(ctx->local_uri = strdup (s)))
         goto error;
-    if (!(ctx->requests = flux_msglist_create ())
+    if (!(ctx->procs = zlistx_new ())
         || !(ctx->kills = flux_msglist_create ()))
         goto error;
+    zlistx_set_destructor (ctx->procs, sdproc_destructor);
     return ctx;
 error:
     sdexec_ctx_destroy (ctx);
