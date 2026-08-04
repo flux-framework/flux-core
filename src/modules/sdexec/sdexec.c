@@ -45,6 +45,7 @@
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/parse_size.h"
 #include "src/common/libutil/strstrip.h"
+#include "src/common/libutil/basename.h"
 #include "ccan/str/str.h"
 
 #include "src/common/libsdexec/stop.h"
@@ -96,6 +97,9 @@ struct sdproc {
     uint8_t finished_response_sent:1;
     uint8_t out_eof_sent:1;
     uint8_t err_eof_sent:1;
+    uint8_t bg:1;            // background (non-streaming) request
+    uint8_t waitable:1;      // status collected later via a wait request
+    uint8_t request_done:1;  // no more responses on the exec_request
 
     struct stop_timer stop;
 
@@ -170,15 +174,51 @@ static struct sdproc *sdproc_lookup_byclient (struct sdexec_ctx *ctx,
     return NULL;
 }
 
+/* Return a short display name for a background process for use in log
+ * messages: the subprocess label if one was set, otherwise the basename of
+ * argv[0].  Falls back to the unit name if neither is available.
+ */
+static const char *sdproc_logname (struct sdproc *proc)
+{
+    const char *label;
+    const char *arg0;
+
+    if (json_unpack (proc->cmd, "{s:s}", "label", &label) == 0)
+        return label;
+    if (json_unpack (proc->cmd, "{s:[s]}", "cmdline", &arg0) == 0)
+        return basename_simple (arg0);
+    return sdexec_unit_name (proc->unit);
+}
+
+/* Respond to the exec request with an error and remove the process.
+ * A background process that has already received its single "started" response
+ * (proc->request_done) is beyond the point where the client expects further
+ * responses, so only the removal is performed in that case.  This lets the
+ * shared "unit fully reaped" logic in finalize_exec_request_if_done() clean up
+ * both foreground and background processes without a separate code path.
+ */
 static void exec_respond_error (struct sdproc *proc,
                                 int errnum,
                                 const char *errstr)
 {
     struct sdexec_ctx *ctx = proc->ctx;
 
-    if (flux_respond_error (ctx->h, proc->exec_request, errnum, errstr) < 0)
-        flux_log_error (ctx->h, "error responding to exec request");
+    if (!proc->request_done) {
+        if (flux_respond_error (ctx->h, proc->exec_request, errnum, errstr) < 0)
+            flux_log_error (ctx->h, "error responding to exec request");
+        proc->request_done = 1;
+    }
     zlistx_delete (ctx->procs, proc->list_handle); // destroys proc too
+}
+
+/* True if the exec request is still expecting streaming responses (output and
+ * a terminating status).  A foreground process always is; a background process
+ * receives only a single "started" response and is then detached, so it never
+ * is (no attach support yet), nor is a process with no request message.
+ */
+static bool client_listening (struct sdproc *proc)
+{
+    return !proc->bg && proc->exec_request != NULL;
 }
 
 /* Send the streaming response IFF unit cleanup is complete and EOFs have
@@ -450,14 +490,21 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
                                    "pid", sdexec_unit_pid (proc->unit)) < 0)
                 flux_log_error (h, "error responding to exec request");
             proc->started_response_sent = 1;
+            /* "started" is the single response to a background request, so no
+             * further responses may be sent on proc->exec_request after this.
+             */
+            if (proc->bg)
+                proc->request_done = 1;
             sdexec_channel_start_output (proc->out);
             sdexec_channel_start_output (proc->err);
         }
     }
     /* The finished response is sent when wait status is available.
      * If there was an exec error, "finished" should not be sent.
+     * A background process does not stream a finished response to its client.
      */
-    if (!proc->finished_response_sent && !proc->errnum) {
+    if (client_listening (proc)
+        && !proc->finished_response_sent && !proc->errnum) {
         if (sdexec_unit_has_finished (proc->unit)) {
             if (flux_respond_pack (h,
                                    proc->exec_request,
@@ -474,11 +521,12 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
      * Normally we wait until the finished response has been sent, but on the
      * post-start check failure path (proc->errnum set) that response is
      * suppressed, so key off the stored error instead to ensure the unit is
-     * still reaped rather than left in active.exited.
+     * still reaped rather than left in active.exited.  A background process
+     * likewise sends no finished response, so key off proc->bg as well.
      */
     if (sdexec_unit_state (proc->unit) == STATE_ACTIVE
         && sdexec_unit_substate (proc->unit) == SUBSTATE_EXITED
-        && (proc->finished_response_sent || proc->errnum)) {
+        && (proc->finished_response_sent || proc->errnum || proc->bg)) {
 
         if (!proc->f_stop) {
             flux_future_t *f2;
@@ -585,6 +633,34 @@ static void cherror_cb (struct channel *ch, flux_error_t *error, void *arg)
     flux_log (h, LOG_ERR, "%s: %s", sdexec_channel_get_name (ch), error->text);
 }
 
+/* A background process's output is not streamed to a client (there is no
+ * attach support yet).  Instead, log each line to the broker log so the log is
+ * a complete record of the process's output (parity with the rexec server).
+ */
+static void log_background_output (struct sdproc *proc, json_t *io)
+{
+    flux_t *h = proc->ctx->h;
+    const char *stream;
+    char *data = NULL;
+    int len = 0;
+
+    if (iodecode (io, &stream, NULL, &data, &len, NULL) < 0)
+        return;
+    if (len > 0) {
+        int loglen = len;
+        if (data[loglen - 1] == '\n') // trim trailing newline for readability
+            loglen--;
+        flux_log (h,
+                  streq (stream, "stderr") ? LOG_ERR : LOG_INFO,
+                  "%s[%d]: %.*s",
+                  sdproc_logname (proc),
+                  (int)sdexec_unit_pid (proc->unit),
+                  loglen,
+                  data);
+    }
+    free (data);
+}
+
 /* Receive some data from unit stdout or stderr and forward it as an
  * exec response.  In case this was the last thing the exec request was
  * waiting to receive (e.g. a final EOF), call finalize_exec_request_if_done()
@@ -595,13 +671,17 @@ static void channel_cb (struct channel *ch, json_t *io, void *arg)
     struct sdproc *proc = arg;
     flux_t *h = proc->ctx->h;
 
-    if (flux_respond_pack (h,
-                           proc->exec_request,
-                           "{s:s s:i s:O}",
-                           "type", "output",
-                           "pid", sdexec_unit_pid (proc->unit),
-                           "io", io) < 0)
-        flux_log_error (h, "error responding to exec request");
+    if (client_listening (proc)) {
+        if (flux_respond_pack (h,
+                               proc->exec_request,
+                               "{s:s s:i s:O}",
+                               "type", "output",
+                               "pid", sdexec_unit_pid (proc->unit),
+                               "io", io) < 0)
+            flux_log_error (h, "error responding to exec request");
+    }
+    else
+        log_background_output (proc, io);
 
     const char *stream;
     bool eof;
@@ -803,7 +883,8 @@ static struct channel *create_out_channel (flux_t *h,
 
 static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
                                      json_t *cmd,
-                                     int flags)
+                                     int flags,
+                                     bool background)
 {
     struct sdproc *proc;
     const int valid_flags = SUBPROCESS_REXEC_STDOUT
@@ -821,6 +902,7 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
         return NULL;
     proc->ctx = ctx;
     proc->flags = flags;
+    proc->bg = background;
     if (!(proc->stop.timer = flux_timer_watcher_create (reactor,
                                                         0,
                                                         0,
@@ -870,23 +952,44 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
         goto error;
     unset_dict (proc->cmd, "env", "NOTIFY_SOCKET");
     unset_dict (proc->cmd, "env", "INVOCATION_ID");
-    /* Create channels for stdio as required by flags.
+    /* Create channels for stdio.
+     * A background process has no stdin channel: per RFC 42 its standard input
+     * is at end-of-file.  With no channel the StandardInputFileDescriptor
+     * property is left unset and systemd applies its default (null), so reads
+     * return EOF.  Its stdout and stderr are always captured (regardless of the
+     * STDOUT and STDERR flags, which only gate streaming to a client) so the
+     * output can be logged to the broker log.
+     * A foreground process has a stdin channel and captures stdout/stderr only
+     * as selected by the STDOUT and STDERR flags for streaming to the client.
      */
-    if (!(proc->in = sdexec_channel_create_input (ctx->h, "stdin")))
-        goto error;
-    if ((flags & SUBPROCESS_REXEC_STDOUT)) {
+    if (background) {
         if (!(proc->out = create_out_channel (ctx->h,
                                               proc->cmd,
                                               "stdout",
-                                              proc)))
+                                              proc))
+            || !(proc->err = create_out_channel (ctx->h,
+                                                 proc->cmd,
+                                                 "stderr",
+                                                 proc)))
             goto error;
     }
-    if ((flags & SUBPROCESS_REXEC_STDERR)) {
-        if (!(proc->err = create_out_channel (ctx->h,
-                                              proc->cmd,
-                                              "stderr",
-                                              proc)))
+    else {
+        if (!(proc->in = sdexec_channel_create_input (ctx->h, "stdin")))
             goto error;
+        if ((flags & SUBPROCESS_REXEC_STDOUT)) {
+            if (!(proc->out = create_out_channel (ctx->h,
+                                                  proc->cmd,
+                                                  "stdout",
+                                                  proc)))
+                goto error;
+        }
+        if ((flags & SUBPROCESS_REXEC_STDERR)) {
+            if (!(proc->err = create_out_channel (ctx->h,
+                                                  proc->cmd,
+                                                  "stderr",
+                                                  proc)))
+                goto error;
+        }
     }
     free (tmp);
     return proc;
@@ -1062,7 +1165,10 @@ static int authorize_request (const flux_msg_t *msg,
     return -1;
 }
 
-/* Start a process as a systemd transient unit.  This is a streaming request.
+/* Start a process as a systemd transient unit.  A streaming request runs the
+ * process in the foreground (output and status are streamed back to the
+ * client); a non-streaming request runs it in the background (a single
+ * "started" response is sent and the process is detached).
  * It first triggers a request to the sdexec-mapper service to map resources
  * to systemd properties for containment. If there is no SDEXEC_R_LOCAL opt
  * set in the sdexec cmd, then the sdexec-mapper future is fulfilled immediately
@@ -1083,21 +1189,25 @@ static void exec_cb (flux_t *h,
     struct sdexec_ctx *ctx = arg;
     json_t *cmd;
     int flags;
+    int local_flags = 0;
+    bool background;
+    bool waitable = false;
     flux_error_t error;
     const char *errstr = NULL;
     struct sdproc *proc;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:o s:i}",
+                             "{s:o s:i s?i}",
                              "cmd", &cmd,
-                             "flags", &flags) < 0)
+                             "flags", &flags,
+                             "local_flags", &local_flags) < 0)
         goto error;
-    if (!flux_msg_is_streaming (msg)) {
-        errstr = "exec request is missing STREAMING flag";
-        errno = EPROTO;
-        goto error;
-    }
+    /* Per RFC 42, a non-streaming exec request runs the process in the
+     * background: a single "started" response is sent, then the process is
+     * detached and the client may disconnect without terminating it.
+     */
+    background = !flux_msg_is_streaming (msg);
     if (authorize_request (msg, ctx->rank, &error) < 0) {
         errstr = error.text;
         goto error;
@@ -1107,8 +1217,37 @@ static void exec_cb (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (!(proc = sdproc_create (ctx, cmd, flags)))
+    /* Per RFC 42, a background subprocess's stdin is at end-of-file and its
+     * output is not streamed to the client, so flags that request input
+     * handling or output fall-through are not permitted in background mode.
+     */
+    if (background && (flags & SUBPROCESS_REXEC_WRITE_CREDIT)) {
+        errstr = "write-credit flag is not allowed in background mode";
+        errno = EINVAL;
         goto error;
+    }
+    if (background
+        && (local_flags & FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH)) {
+        errstr = "stdio-fallthrough flag is not allowed in background mode";
+        errno = EINVAL;
+        goto error;
+    }
+    /* The waitable flag is only meaningful for a background subprocess, whose
+     * exit status is collected later with a wait request.  Strip it from flags
+     * before handing them to sdproc_create(), which validates channel flags.
+     */
+    if ((flags & SUBPROCESS_REXEC_WAITABLE)) {
+        if (!background) {
+            errstr = "waitable flag only supported in background mode";
+            errno = EINVAL;
+            goto error;
+        }
+        waitable = true;
+        flags &= ~SUBPROCESS_REXEC_WAITABLE;
+    }
+    if (!(proc = sdproc_create (ctx, cmd, flags, background)))
+        goto error;
+    proc->waitable = waitable;
     /* The sdproc is owned by ctx->procs and holds its own reference to the
      * exec request message, so it outlives this callback.  Insert it into the
      * list first; on any later failure exec_respond_error() removes it (which
@@ -1170,6 +1309,12 @@ static void write_cb (flux_t *h,
     }
     if (!(proc = sdproc_lookup_byclient (ctx, msg))) {
         flux_log (h, LOG_ERR, "sdexec.write: subprocess no longer exists");
+        return;
+    }
+    if (proc->bg) {
+        flux_log (h,
+                  LOG_ERR,
+                  "sdexec.write: stdin is closed for a background process");
         return;
     }
     /* If the systemd unit has not started yet, enqueue the write request for
@@ -1404,10 +1549,11 @@ nomem:
 }
 
 /* When a client (like flux-exec or job-exec) disconnects, send any running
- * units that were started by that UUID a SIGKILL to begin cleanup.  Leave
- * the sdproc in ctx->procs so the unit can be "reaped".  Let normal cleanup
- * of the sdproc (including generating a response which shouldn't hurt) occur
- * when that happens.
+ * foreground units that were started by that UUID a SIGKILL to begin cleanup.
+ * Leave the sdproc in ctx->procs so the unit can be "reaped".  Let normal
+ * cleanup of the sdproc (including generating a response which shouldn't hurt)
+ * occur when that happens.  Background units are intentionally left running:
+ * detaching the client is the whole point of background execution.
  */
 static void disconnect_cb (flux_t *h,
                            flux_msg_handler_t *mh,
@@ -1419,7 +1565,7 @@ static void disconnect_cb (flux_t *h,
 
     proc = zlistx_first (ctx->procs);
     while (proc) {
-        if (flux_disconnect_match (msg, proc->exec_request)) {
+        if (!proc->bg && flux_disconnect_match (msg, proc->exec_request)) {
             flux_future_t *f;
             f = sdexec_kill_unit (h,
                                   ctx->rank,
@@ -1537,10 +1683,14 @@ static void sdexec_ctx_destroy (struct sdexec_ctx *ctx)
             proc = zlistx_first (ctx->procs);
             while (proc) {
                 const char *errstr = "sdexec module is unloading";
-                if (flux_respond_error (ctx->h,
-                                        proc->exec_request,
-                                        ENOSYS,
-                                        errstr) < 0)
+                /* A background process whose client already received its
+                 * "started" response (request_done) owes no further response.
+                 */
+                if (!proc->request_done
+                    && flux_respond_error (ctx->h,
+                                           proc->exec_request,
+                                           ENOSYS,
+                                           errstr) < 0)
                     flux_log_error (ctx->h, "error responding to exec request");
                 proc = zlistx_next (ctx->procs);
             }
