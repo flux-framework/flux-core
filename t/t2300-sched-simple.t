@@ -28,6 +28,7 @@ test_expect_success 'sched-simple: reload resource with properties and R.schedul
 	flux module unload sched-simple &&
 	flux kvs put resource.R="$(flux kvs get resource.R |
 		flux R set-property xx:0-1 |
+		flux R set-property +batch:0-3 |
 		jq ".+{scheduling:{test:\"data\"}}")" &&
 	flux module reload resource noverify &&
 	flux module load sched-simple
@@ -35,6 +36,15 @@ test_expect_success 'sched-simple: reload resource with properties and R.schedul
 test_expect_success 'sched-simple: allocated R contains execution.properties' '
 	flux run -n1 --requires=xx hostname &&
 	flux job info $(flux job last) R | jq -e ".execution.properties.xx"
+'
+test_expect_success 'sched-simple: instance-local property omitted from job R' '
+	flux run -n1 --requires=+batch hostname &&
+	flux job info $(flux job last) R >batch_R.json &&
+	test_debug "jq -S .execution.properties <batch_R.json" &&
+	test_must_fail jq -e ".execution.properties[\"+batch\"]" <batch_R.json
+'
+test_expect_success 'sched-simple: instance-local property present in instance R' '
+	flux kvs get resource.R | jq -e ".execution.properties[\"+batch\"]"
 '
 test_expect_success 'sched-simple: allocated R contains R.scheduling' '
 	flux run -n1 hostname &&

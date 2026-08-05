@@ -124,6 +124,20 @@ R_props = {
     },
 }
 
+# 4 nodes with a hardware property ("fast") and an RFC 20 instance-local
+# property ("+batch", a leading '+'); used to test that instance-local
+# properties are omitted from allocation R while still matching constraints.
+R_local_props = {
+    "version": 1,
+    "execution": {
+        "R_lite": [{"rank": "0-3", "children": {"core": "0-1"}}],
+        "starttime": 0,
+        "expiration": 0,
+        "nodelist": ["node0", "node1", "node2", "node3"],
+        "properties": {"fast": "0-1", "+batch": "0-3"},
+    },
+}
+
 
 class TestRv1PoolConstruct(unittest.TestCase):
     def test_from_dict(self):
@@ -346,6 +360,26 @@ class TestRv1PoolAlloc(unittest.TestCase):
         a = pool.alloc(1, rr(0, 1, 1, constraint={"properties": ["slow"]}))
         self.assertIn("slow", a._properties)
         self.assertNotIn("fast", a._properties)
+
+    def test_alloc_omits_instance_local_properties(self):
+        # RFC 20: instance-local properties (leading '+') describe the instance,
+        # not the hardware, so a scheduler must not copy them into the job's R.
+        # Hardware properties on the allocated ranks are still propagated.
+        pool = Rv1Pool(R_local_props)
+        self.assertIn("+batch", pool._properties)
+        a = pool.alloc(1, rr(0, 1, 1, constraint={"properties": ["fast"]}))
+        self.assertIn("fast", a._properties)
+        self.assertNotIn("+batch", a._properties)
+        self.assertNotIn("+batch", a.to_dict()["execution"].get("properties", {}))
+
+    def test_alloc_matches_instance_local_constraint(self):
+        # A '+' membership property still selects ranks even though it is
+        # omitted from the resulting allocation R.
+        pool = Rv1Pool(R_local_props)
+        self.assertIn("+batch", pool._properties)
+        a = pool.alloc(1, rr(0, 1, 1, constraint={"properties": ["+batch"]}))
+        self.assertEqual(a.nnodes(), 1)
+        self.assertNotIn("+batch", a._properties)
 
 
 class TestRv1PoolIssue2473(unittest.TestCase):
