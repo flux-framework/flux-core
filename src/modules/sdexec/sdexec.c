@@ -1253,6 +1253,31 @@ out:
     return rc;
 }
 
+/* Subscribe to PropertiesChanged signals for proc's unit so that unit state
+ * transitions drive the response protocol.  Used both when starting a unit and
+ * when recovering one that a previous instance of this module started.
+ */
+static int sdproc_start_watch (struct sdproc *proc, const char **errstrp)
+{
+    flux_t *h = proc->ctx->h;
+    const char *unit_path = sdexec_unit_path (proc->unit);
+
+    sdexec_log_debug (h, "watch %s", sdexec_unit_name (proc->unit));
+    if (!(proc->f_watch = sdexec_property_changed (h,
+                                                   "sdbus",
+                                                   proc->ctx->rank,
+                                                   unit_path))
+        || flux_future_then (proc->f_watch,
+                             -1,
+                             property_changed_continuation,
+                             proc) < 0) {
+        if (errstrp)
+            *errstrp = "sdbus watch operation failed";
+        return -1;
+    }
+    return 0;
+}
+
 /*
  * Resource mapping is complete. Set systemd properties as encoded by
  * key in the response payload, then start the transient unit.
@@ -1280,18 +1305,8 @@ static void map_continuation (flux_future_t *f, void *arg)
         goto error;
     }
 
-    sdexec_log_debug (h, "watch %s", sdexec_unit_name (proc->unit));
-    if (!(proc->f_watch = sdexec_property_changed (h,
-                                               "sdbus",
-                                               ctx->rank,
-                                               sdexec_unit_path (proc->unit)))
-        || flux_future_then (proc->f_watch,
-                             -1,
-                             property_changed_continuation,
-                             proc) < 0) {
-        errstr = "sdbus watch operation failed";
+    if (sdproc_start_watch (proc, &errstr) < 0)
         goto error;
-    }
 
     sdexec_log_debug (h, "start %s", sdexec_unit_name (proc->unit));
     if (!(proc->f_start = sdexec_start_transient_unit (h,
