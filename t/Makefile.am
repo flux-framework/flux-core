@@ -196,6 +196,7 @@ TESTSCRIPTS = \
 	t2306-sched-fifo.t \
 	t2307-sched-backfill.t \
 	t2308-sched-generator.t \
+	t2309-sched-schedutil.t \
 	t2310-resource-module.t \
 	t2311-resource-drain.t \
 	t2312-resource-exclude.t \
@@ -561,6 +562,7 @@ check_LTLIBRARIES = \
 	module/legacy.la \
 	module/hang.la \
 	request/req.la \
+	sched/schedutil-shim.la \
 	ingest/job-manager.la \
 	disconnect/watcher.la \
 	shell/plugins/dummy.la \
@@ -865,6 +867,14 @@ ingest_job_manager_la_SOURCES = ingest/job-manager.c
 ingest_job_manager_la_CPPFLAGS = $(test_cppflags)
 ingest_job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 ingest_job_manager_la_LIBADD = $(test_ldadd)
+
+sched_schedutil_shim_la_SOURCES = sched/schedutil-shim.c
+sched_schedutil_shim_la_CPPFLAGS = $(test_cppflags)
+sched_schedutil_shim_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
+sched_schedutil_shim_la_LIBADD = \
+	$(top_builddir)/src/common/libschedutil/libschedutil.la \
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(test_ldadd)
 
 ingest_submitbench_SOURCES = ingest/submitbench.c
 ingest_submitbench_CPPFLAGS = $(test_cppflags)
