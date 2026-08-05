@@ -573,25 +573,17 @@ static int sdproc_post_start_checks (struct sdproc *proc, flux_error_t *errp)
     return 0;
 }
 
-/* sdbus.subscribe sent a PropertiesChanged response for a particular unit.
- * Advance the proc->unit state accordingly and send exec responses as needed.
- * call finalize_exec_request_if_done() in case this update is the last thing
- * the exec request was waiting for.
+/* Advance proc->unit through the response protocol after its state has been
+ * updated (from a PropertiesChanged signal or a GetAll snapshot) and send
+ * exec responses as needed.  The caller is responsible for calling
+ * finalize_exec_request_if_done() afterward in case this was the last thing
+ * the exec request was waiting for.  This is shared by
+ * property_changed_continuation (live units) and the startup sweep
+ * (recovered units).
  */
-static void property_changed_continuation (flux_future_t *f, void *arg)
+static void sdproc_advance_state (struct sdproc *proc)
 {
-    flux_t *h = flux_future_get_flux (f);
-    struct sdproc *proc = arg;
-    json_t *properties;
-
-    if (!(properties = sdexec_property_changed_dict (f))) {
-        exec_respond_error (proc, errno, future_strerror (f, errno));
-        return;
-    }
-    if (!sdexec_unit_update (proc->unit, properties)) {
-        flux_future_reset (f);
-        return;
-    }
+    flux_t *h = proc->ctx->h;
 
     sdexec_log_debug (h,
                       "%s: %s.%s",
@@ -634,7 +626,7 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
                     flux_log_error (h, "error killing unit after failed check");
                 sdexec_channel_start_output (proc->out);
                 sdexec_channel_start_output (proc->err);
-                goto done;
+                return;
             }
             if (flux_respond_pack (h,
                                    proc->exec_request,
@@ -737,7 +729,27 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
             proc->f_stop = f2;
         }
     }
-done:
+}
+
+/* sdbus.subscribe sent a PropertiesChanged response for a particular unit.
+ * Advance the proc->unit state accordingly and send exec responses as needed.
+ * call finalize_exec_request_if_done() in case this update is the last thing
+ * the exec request was waiting for.
+ */
+static void property_changed_continuation (flux_future_t *f, void *arg)
+{
+    struct sdproc *proc = arg;
+    json_t *properties;
+
+    if (!(properties = sdexec_property_changed_dict (f))) {
+        exec_respond_error (proc, errno, future_strerror (f, errno));
+        return;
+    }
+    if (!sdexec_unit_update (proc->unit, properties)) {
+        flux_future_reset (f);
+        return;
+    }
+    sdproc_advance_state (proc);
     flux_future_reset (f);
     /* Conditionally send the final RPC response.
      */
