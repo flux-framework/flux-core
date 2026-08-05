@@ -116,8 +116,8 @@ needs-config = ["systemd.enable"]
 
 [[modules]]
 name = "sdexec"
-after = ["sdbus"]
-requires = ["sdbus", "sdexec-mapper"]
+after = ["sdbus", "sdmon"]
+requires = ["sdbus", "sdexec-mapper", "sdmon"]
 needs-config = ["systemd.enable"]
 
 [[modules]]
