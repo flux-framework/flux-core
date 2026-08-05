@@ -127,6 +127,32 @@ static void alloc_destroy (struct alloc *ctx)
     }
 }
 
+/* Omit RFC 20 instance-local properties (leading '+') from 'R'
+ * Returns the number of properties removed: 0 if R is unchanged.
+ */
+static int strip_instance_local_properties (json_t *R)
+{
+    json_t *execution;
+    json_t *properties;
+    const char *name;
+    json_t *value;
+    void *tmp;
+    int count = 0;
+
+    if (!(execution = json_object_get (R, "execution"))
+        || !(properties = json_object_get (execution, "properties")))
+        return 0;
+    json_object_foreach_safe (properties, tmp, name, value) {
+        if (name[0] == '+') {
+            (void)json_object_del (properties, name);
+            count++;
+        }
+    }
+    if (count > 0 && json_object_size (properties) == 0)
+        (void)json_object_del (execution, "properties");
+    return count;
+}
+
 static struct alloc *alloc_create (const flux_msg_t *msg,
                                    const char *R,
                                    const char *fmt,
@@ -155,7 +181,14 @@ static struct alloc *alloc_create (const flux_msg_t *msg,
     }
     if (!(ctx->txn = flux_kvs_txn_create ()))
         goto error;
-    if (flux_kvs_txn_put (ctx->txn, 0, key, R) < 0)
+    /* Strip RFC 20 instance-local properties.
+     * Commit result instead of original if R was modified.
+     */
+    if (strip_instance_local_properties (ctx->R) > 0) {
+        if (flux_kvs_txn_pack (ctx->txn, 0, key, "O", ctx->R) < 0)
+            goto error;
+    }
+    else if (flux_kvs_txn_put (ctx->txn, 0, key, R) < 0)
         goto error;
     return ctx;
 error:
