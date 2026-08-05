@@ -10,18 +10,21 @@
 
 /* sdmon.c - create and maintain a list of running flux systemd units
  *
- * This monitors two instances of systemd:
- * - the user one, running as user flux (where jobs are run)
- * - the system one (where housekeeping, prolog, epilog run)
+ * This monitors the system instance of systemd (where housekeeping, prolog,
+ * and epilog run).  The user instance (where jobs are run) is monitored by
+ * sdexec, which enumerates its own leftover units at startup and can tell a
+ * unit that job-exec is legitimately reclaiming from a true orphan; it reports
+ * the user bus clean with a one-shot sdmon.user-clean request.
  *
- * A list of units matching flux unit globs is requested at initialization,
- * and a subscription to property updates on those globs is obtained.
- * After the initial list, monitoring is driven solely by property updates.
+ * A list of units matching the system unit glob is requested at
+ * initialization, and a subscription to property updates on that glob is
+ * obtained.  After the initial list, monitoring is driven solely by property
+ * updates.
  *
- * Join the sdmon.online broker group once the unit list responses have been
- * received and there are no Flux units running on the node.  This lets the
- * resource module on rank 0 hold back nodes that require cleanup from the
- * scheduler.
+ * Join the sdmon.online broker group once the system unit list response has
+ * been received with no Flux units running on the node, and sdexec has
+ * reported the user bus clean.  This lets the resource module on rank 0 hold
+ * back nodes that require cleanup from the scheduler.
  */
 
 #if HAVE_CONFIG_H
@@ -55,7 +58,8 @@ struct sdmon_ctx {
     uint32_t rank;
     flux_msg_handler_t **handlers;
     struct sdmon_bus sys;
-    struct sdmon_bus usr;
+    // sdexec reported the user bus has no un-reclaimed orphan
+    bool sdexec_clean;
     bool group_joined;
     bool cleanup_needed;
     flux_future_t *fg;
@@ -66,14 +70,11 @@ static void sdmon_bus_restart (struct sdmon_bus *bus);
 static const char *path_prefix = "/org/freedesktop/systemd1/unit";
 
 static const char *def_sys_glob = "flux-*";
-static const char *def_usr_glob = "*shell-*"; // match with and without imp- prefix
 
 static const char *unit_allow[] = {
     "flux-housekeeping",
     "flux-prolog",
     "flux-epilog",
-    "imp-shell-",
-    "shell-",
 };
 
 static const char *group_name = "sdmon.online";
@@ -103,16 +104,16 @@ static void sdmon_join_continuation (flux_future_t *f, void *arg)
 
 /* Send a broker groups.join request IFF:
  * - we haven't joined yet
- * - both busses have their initial list responses (prop updates unmuted)
- * - the unit hashes are empty
+ * - the system bus has its initial list response (prop updates unmuted)
+ * - the system unit hash is empty
+ * - sdexec has reported the user bus clean
  */
 static void sdmon_group_join_if_ready (struct sdmon_ctx *ctx)
 {
     if (ctx->group_joined
         || !ctx->sys.unmute_property_updates
-        || !ctx->usr.unmute_property_updates
         || zhashx_size (ctx->sys.units) > 0
-        || zhashx_size (ctx->usr.units) > 0)
+        || !ctx->sdexec_clean)
         return;
 
     // unit(s) needing cleanup were logged, so indicate they are resolved now.
@@ -170,7 +171,6 @@ static void sdmon_stats_cb (flux_t *h,
     json_t *units;
 
     if (!(units = json_array ())
-        || add_units (units, &ctx->usr) < 0
         || add_units (units, &ctx->sys) < 0)
         goto error;
     if (flux_respond_pack (h, msg, "{s:O}", "units", units) < 0)
@@ -181,6 +181,25 @@ error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "error responding to stats-get request");
     json_decref (units);
+}
+
+/* sdexec on this rank reports that the user bus has no un-reclaimed orphan.
+ * This is a level-triggered one-shot: record it and re-check the join
+ * predicate.  Because messages queue at a loaded module, this request is
+ * waiting even if sdexec sent it before sdmon finished its own startup (see
+ * the modprobe ordering that loads sdmon first).
+ */
+static void sdmon_user_clean_cb (flux_t *h,
+                                 flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg,
+                                 void *arg)
+{
+    struct sdmon_ctx *ctx = arg;
+
+    ctx->sdexec_clean = true;
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to user-clean request");
+    sdmon_group_join_if_ready (ctx);
 }
 
 // zhashx_destructor_fn footprint
@@ -212,7 +231,7 @@ static bool sdmon_unit_is_running (struct unit *unit)
     return running;
 }
 
-/* A unit matching a subscribed-to glob (on either bus) has changed properties.
+/* A unit matching the subscribed-to glob has changed properties.
  * If it's a new, running unit, add it to the units hash.
  * If it's a known unit that is no longer running, remove it.
  * Join the group if the unit hash transitions to empty.
@@ -220,7 +239,7 @@ static bool sdmon_unit_is_running (struct unit *unit)
 static void sdmon_property_continuation (flux_future_t *f, void *arg)
 {
     struct sdmon_ctx *ctx = arg;
-    struct sdmon_bus *bus = f == ctx->usr.fp ? &ctx->usr : &ctx->sys;
+    struct sdmon_bus *bus = &ctx->sys;
     const char *path;
     const char *name;
     json_t *dict;
@@ -287,7 +306,7 @@ fatal:
 static void sdmon_list_continuation (flux_future_t *f, void *arg)
 {
     struct sdmon_ctx *ctx = arg;
-    struct sdmon_bus *bus = f == ctx->usr.fl ? &ctx->usr : &ctx->sys;
+    struct sdmon_bus *bus = &ctx->sys;
     struct unit_info info;
 
     if (flux_future_get (f, NULL) < 0) {
@@ -444,32 +463,11 @@ static int sdmon_bus_initialize (struct sdmon_bus *bus,
     return 0;
 }
 
-static int sdmon_parse_args (int argc,
-                             char **argv,
-                             const char **usr_glob,
-                             flux_error_t *error)
-{
-    for (int i = 0; i < argc; i++) {
-        if (strstarts (argv[i], "usr_glob=")) {
-            *usr_glob = argv[i] + 9;
-        }
-        else {
-            errprintf (error, "%s: unknown option", argv[i]);
-            goto inval;
-        }
-    }
-    return 0;
-inval:
-    errno = EINVAL;
-    return -1;
-}
-
 static void sdmon_ctx_destroy (struct sdmon_ctx *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
         sdmon_bus_finalize (&ctx->sys);
-        sdmon_bus_finalize (&ctx->usr);
         flux_future_destroy (ctx->fg);
         flux_msg_handler_delvec (ctx->handlers);
         free (ctx);
@@ -498,6 +496,11 @@ static struct flux_msg_handler_spec htab[] = {
       sdmon_stats_cb,
       0
     },
+    { FLUX_MSGTYPE_REQUEST,
+      "user-clean",
+      sdmon_user_clean_cb,
+      0
+    },
     FLUX_MSGHANDLER_TABLE_END
 };
 
@@ -506,30 +509,26 @@ int mod_main (flux_t *h, int argc, char **argv)
     struct sdmon_ctx *ctx;
     flux_error_t error;
     const char *modname = flux_aux_get (h, "flux::name");
-    const char *usr_glob = def_usr_glob;
     const char *sys_glob = def_sys_glob;
     int rc = -1;
 
     if (!(ctx = sdmon_ctx_create (h)))
         goto error;
-    if (sdmon_parse_args (argc, argv, &usr_glob, &error) < 0) {
-        flux_log_error (h, "%s", error.text);
+    if (argc > 0) {
+        flux_log (h, LOG_ERR, "%s: unknown option", argv[0]);
         goto error;
     }
     if (flux_msg_handler_addvec_ex (h, modname, htab, ctx, &ctx->handlers) < 0)
         goto error;
-    if (sdbus_is_loaded (h, "sdbus-sys", ctx->rank, &error) < 0
-        || sdbus_is_loaded (h, "sdbus-sys", ctx->rank, &error) < 0) {
+    if (sdbus_is_loaded (h, "sdbus-sys", ctx->rank, &error) < 0) {
         flux_log_error (h, "%s", error.text);
         goto error;
     }
-    if (sdmon_bus_initialize (&ctx->sys, ctx, "sdbus-sys", sys_glob) < 0
-        || sdmon_bus_initialize (&ctx->usr, ctx, "sdbus", usr_glob) < 0) {
+    if (sdmon_bus_initialize (&ctx->sys, ctx, "sdbus-sys", sys_glob) < 0) {
         flux_log_error (h, "failed to initialize bus objects");
         goto error;
     }
-    if (sdmon_bus_start (&ctx->sys, &error) < 0
-        || sdmon_bus_start (&ctx->usr, &error) < 0) {
+    if (sdmon_bus_start (&ctx->sys, &error) < 0) {
         flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
     }
