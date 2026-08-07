@@ -54,7 +54,7 @@ static void local_channel_flush (struct subprocess_channel *c)
             llog_error (c->p,
                         "fbuf_read_watcher_get_buffer: %s",
                         strerror (errno));
-            return;
+            goto out;
         }
 
         while (fbuf_bytes (fb) > 0)
@@ -70,7 +70,7 @@ static void local_channel_flush (struct subprocess_channel *c)
 
         if (c->p->state == FLUX_SUBPROCESS_EXITED && c->eof_sent_to_caller)
             subprocess_check_completed (c->p);
-
+out:
         subprocess_decref (c->p);
     }
 }
