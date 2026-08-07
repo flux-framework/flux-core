@@ -238,6 +238,7 @@ TESTSCRIPTS = \
 	t2418-job-exec-bgexec.t \
 	t2420-job-exec-bgexec-sdexec.t \
 	t2421-sdexec-bg.t \
+	t2419-sdexec-recover.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
 	t2600-job-shell-rcalc.t \
