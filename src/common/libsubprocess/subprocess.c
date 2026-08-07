@@ -150,6 +150,10 @@ static void subprocess_free (flux_subprocess_t *p)
         flux_watcher_destroy (p->state_idle_w);
         flux_watcher_destroy (p->state_check_w);
 
+        flux_watcher_destroy (p->sigchld_prep_w);
+        flux_watcher_destroy (p->sigchld_idle_w);
+        flux_watcher_destroy (p->sigchld_check_w);
+
         flux_watcher_destroy (p->completed_prep_w);
         flux_watcher_destroy (p->completed_idle_w);
         flux_watcher_destroy (p->completed_check_w);
@@ -322,9 +326,6 @@ static void state_change_prep_cb (flux_reactor_t *r,
 
 static flux_subprocess_state_t state_change_next (flux_subprocess_t *p)
 {
-    /* N.B. possible transition to FLUX_SUBPROCESS_STOPPED not handled
-     * here, see issue #5083
-     */
     assert (p->state_reported != p->state);
     assert (p->state_reported == FLUX_SUBPROCESS_INIT
             || p->state_reported == FLUX_SUBPROCESS_RUNNING);
@@ -406,6 +407,129 @@ static int subprocess_setup_state_change (flux_subprocess_t *p)
                                                       state_change_check_cb,
                                                       p);
         if (!p->state_check_w) {
+            log_err ("flux_check_watcher_create");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+/* Pending sigchld is tracked in sigchld_pending.
+ * N.B. only one sigchld is supported right now.
+ */
+void sigchld_set (flux_subprocess_t *p,
+                  flux_subprocess_sigchld_t sigchld)
+{
+    if (!p->ops.on_sigchld)
+        return;
+
+    p->sigchld_pending = sigchld;
+}
+
+void sigchld_notify_start (flux_subprocess_t *p)
+{
+    if (p->ops.on_sigchld) {
+        flux_watcher_start (p->sigchld_prep_w);
+        flux_watcher_start (p->sigchld_check_w);
+    }
+}
+
+static void sigchld_clear_check (flux_subprocess_t *p)
+{
+    /* N.B. no more sigchld reports after EXITED or FAILED */
+    flux_subprocess_state_t state =
+        p->ops.on_state_change ? p->state_reported : p->state;
+
+    if (state == FLUX_SUBPROCESS_EXITED
+        || state == FLUX_SUBPROCESS_FAILED)
+        p->sigchld_pending = 0;
+}
+
+/* True when a queued sigchld must not yet be delivered because the
+ * caller has an on_state_change callback and the RUNNING state has not
+ * been reported to them (see issue #5083).  While deferred we leave the
+ * idle watcher stopped so the reactor is not spun; the state-change
+ * machinery keeps the reactor live until RUNNING is reported, and the
+ * prep watcher re-evaluates each iteration.
+ */
+static bool sigchld_deferred (flux_subprocess_t *p)
+{
+    return p->ops.on_state_change
+        && p->state_reported < FLUX_SUBPROCESS_RUNNING;
+}
+
+static void sigchld_prep_cb (flux_reactor_t *r,
+                             flux_watcher_t *w,
+                             int revents,
+                             void *arg)
+{
+    flux_subprocess_t *p = arg;
+
+    sigchld_clear_check (p);
+
+    if (!p->sigchld_pending) {
+        /* nothing left to report, stop watching */
+        flux_watcher_stop (p->sigchld_prep_w);
+        flux_watcher_stop (p->sigchld_check_w);
+    }
+    else if (!sigchld_deferred (p))
+        flux_watcher_start (p->sigchld_idle_w);
+}
+
+static void sigchld_check_cb (flux_reactor_t *r,
+                              flux_watcher_t *w,
+                              int revents,
+                              void *arg)
+{
+    flux_subprocess_t *p = arg;
+
+    flux_watcher_stop (p->sigchld_idle_w);
+
+    /* always a chance caller may destroy subprocess in callback */
+    subprocess_incref (p);
+
+    sigchld_clear_check (p);
+
+    if (p->sigchld_pending != 0) {
+        /* N.B. See issue #5083.  We do not want to report any signal
+         * status until after the job is reported as RUNNING.
+         */
+        if (sigchld_deferred (p))
+            goto out;
+        (*p->ops.on_sigchld) (p, p->sigchld_pending);
+        p->sigchld_pending = 0;
+    }
+
+out:
+    subprocess_decref (p);
+}
+
+static int subprocess_setup_sigchld (flux_subprocess_t *p)
+{
+    if (p->ops.on_sigchld) {
+        p->sigchld_prep_w =
+            flux_prepare_watcher_create (p->reactor,
+                                         sigchld_prep_cb,
+                                         p);
+        if (!p->sigchld_prep_w) {
+            log_err ("flux_prepare_watcher_create");
+            return -1;
+        }
+
+        p->sigchld_idle_w =
+            flux_idle_watcher_create (p->reactor,
+                                      NULL,
+                                      p);
+        if (!p->sigchld_idle_w) {
+            log_err ("flux_idle_watcher_create");
+            return -1;
+        }
+
+        p->sigchld_check_w =
+            flux_check_watcher_create (p->reactor,
+                                       sigchld_check_cb,
+                                       p);
+        if (!p->sigchld_check_w) {
             log_err ("flux_check_watcher_create");
             return -1;
         }
@@ -540,6 +664,9 @@ flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
 
     state_change_start (p);
 
+    if (subprocess_setup_sigchld (p) < 0)
+        goto error;
+
     if (subprocess_setup_completed (p) < 0)
         goto error;
 
@@ -671,6 +798,9 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
         goto error;
 
     if (subprocess_setup_state_change (p) < 0)
+        goto error;
+
+    if (subprocess_setup_sigchld (p) < 0)
         goto error;
 
     if (subprocess_setup_completed (p) < 0)
@@ -1241,7 +1371,18 @@ const char *flux_subprocess_state_string (flux_subprocess_state_t state)
         return "Exited";
     case FLUX_SUBPROCESS_FAILED:
         return "Failed";
-    case FLUX_SUBPROCESS_STOPPED:
+    case FLUX_SUBPROCESS_STOPPED: /* deprecated */
+        return "Stopped";
+    }
+    return NULL;
+}
+
+const char *
+flux_subprocess_sigchld_string (flux_subprocess_sigchld_t sigchld)
+{
+    switch (sigchld)
+    {
+    case FLUX_SUBPROCESS_SIGCHLD_STOPPED:
         return "Stopped";
     }
     return NULL;
