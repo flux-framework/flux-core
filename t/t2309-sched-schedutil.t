@@ -56,6 +56,23 @@ test_expect_success 'alloc: success response carries scheduler annotation' '
 	test "$(flux jobs -no {annotations.sched.resource_summary} $jobid)" \
 		= "rank[0-1]"
 '
+test_expect_success 'alloc: grant R with hardware and instance-local props' '
+	flux R encode -r0-1 -c0-1 \
+		| flux R set-property xx:0-1 \
+		| flux R set-property +batch:0-1 >prop_R.json &&
+	flux kvs put test.schedutil.R="$(cat prop_R.json)"
+'
+test_expect_success "alloc: libschedutil strips '+' properties from job R" '
+	jobid=$(flux submit hostname) &&
+	flux job wait-event -t 30 $jobid alloc &&
+	flux job info $jobid R >stripped_R.json &&
+	test_debug "jq -S .execution.properties <stripped_R.json" &&
+	jq -e ".execution.properties.xx == \"0-1\"" <stripped_R.json &&
+	test_must_fail jq -e ".execution.properties[\"+batch\"]" <stripped_R.json
+'
+test_expect_success 'alloc: restore canned R without properties' '
+	flux kvs put test.schedutil.R="$(cat shim_R.json)"
+'
 test_expect_success 'deny: unschedulable jobs receive an exception' '
 	flux kvs put test.schedutil.mode=deny &&
 	jobid=$(flux submit hostname) &&

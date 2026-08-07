@@ -667,10 +667,14 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
         # directly so the override never holds a mutable reference to pool state.
         selected_ranks = {rank for rank, _, _ in selected}
 
+        # Omit instance-local properties (RFC 20 leading '+') from the R
+        # generated for the job. If every property is instance-local this
+        # yields {}, which Rv1Set._build_dict() then omits from the encoded
+        # R via its "if self._properties" guard.
         properties = {
             prop: ranks & selected_ranks
             for prop, ranks in self._properties.items()
-            if ranks & selected_ranks
+            if ranks & selected_ranks and not prop.startswith("+")
         }
         ranks = {}
         for rank, alloc_cores, alloc_gpus in selected:
