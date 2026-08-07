@@ -1,4 +1,5 @@
 #!/bin/sh
+#
 # ci=system
 
 test_description='Test flux systemd sd-bus bridge standalone'

@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='test sched hello
 

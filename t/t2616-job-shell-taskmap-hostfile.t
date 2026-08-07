@@ -1,5 +1,7 @@
 #!/bin/sh
 #
+# ci=asan
+
 test_description='Test hostfile taskmap plugin support'
 
 . `dirname $0`/sharness.sh

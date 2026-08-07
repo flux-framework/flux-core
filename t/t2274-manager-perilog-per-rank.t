@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Test perilog jobtap plugin with per-rank=true'
 

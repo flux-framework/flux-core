@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Test flux jobs command with multiple user jobs'
 

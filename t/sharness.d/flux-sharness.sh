@@ -5,6 +5,10 @@
 
 # add scripts directory to path
 export PATH="${SHARNESS_TEST_SRCDIR}/scripts:$PATH"
+# prefix asan-scripts directory if running with ASAN
+if flux version | grep -q +asan; then
+    export PATH="${SHARNESS_TEST_SRCDIR}/asan-scripts:$PATH"
+fi
 # only load namespaced plugins from flux.cli.plugins in tests
 export FLUX_CLI_PLUGINPATH_OVERRIDE=""
 

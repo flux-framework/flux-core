@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=asan
 
 test_description='Deprive a leaf node of heartbeats and make it sad'
 
