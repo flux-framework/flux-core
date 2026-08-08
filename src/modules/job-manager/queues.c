@@ -935,6 +935,97 @@ error:
     return NULL;
 }
 
+/* Encode one queue's effective configuration for the conf object:
+ * {"name":s, "requires"?:[...], "parent"?:s}. 'requires' is the
+ * effective required-properties array (a virtual queue inherits its
+ * parent's - see queue_requires()), omitted when the queue has none.
+ * 'parent' is present only for a virtual queue (RFC 33).
+ */
+static json_t *queue_conf_encode (struct queue *q)
+{
+    json_t *o;
+    json_t *requires;
+
+    if (!(o = json_pack ("{s:s}", "name", q->name)))
+        goto nomem;
+    if ((requires = queue_requires (q))) {
+        if (json_object_set (o, "requires", requires) < 0)
+            goto nomem;
+    }
+    if (queue_is_virtual (q)) {
+        if (set_string (o, "parent", queue_name (queue_parent (q))) < 0)
+            goto error;
+    }
+    return o;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return NULL;
+}
+
+/* Encode the effective queue configuration object returned by the
+ * queue-list RPC: {"queues":[{name,requires?,parent?}, ...]}. The
+ * anonymous queue is omitted (empty array in anon mode). Future global
+ * fields (default queue, merged policy) attach here as siblings of
+ * "queues".
+ */
+static json_t *queues_conf_encode (struct queues *queues)
+{
+    json_t *conf;
+    json_t *a;
+
+    if (!(a = json_array ()))
+        goto nomem;
+    if (queues->named) {
+        struct queue *q = zhashx_first (queues->named);
+        while (q) {
+            json_t *o;
+            if (!(o = queue_conf_encode (q))
+                || json_array_append_new (a, o) < 0) {
+                /* jansson decrefs `o` on failure */
+                goto error;
+            }
+            q = zhashx_next (queues->named);
+        }
+    }
+    if (!(conf = json_pack ("{s:o}", "queues", a))) {
+        goto nomem;
+    }
+    return conf;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, a);
+    return NULL;
+}
+
+/* Assemble the full queue-list RPC response:
+ *   {"queues":[names...], "conf":{"queues":[{name,requires?,parent?}...]}}
+ * The "queues" name array is retained for backwards compatibility; "conf"
+ * carries the effective per-queue configuration. Returns a new reference
+ * the caller must decref.
+ */
+json_t *queues_list_response (struct queues *queues)
+{
+    json_t *names = NULL;
+    json_t *conf = NULL;
+    json_t *resp;
+
+    if (!(names = queues_list_encode (queues))
+        || !(conf = queues_conf_encode (queues)))
+        goto error;
+    if (!(resp = json_pack ("{s:o s:o}", "queues", names, "conf", conf)))
+        goto nomem;
+    return resp;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, names);
+    ERRNO_SAFE_WRAP (json_decref, conf);
+    return NULL;
+}
+
 static int save_one (json_t *a, struct queue *q)
 {
     json_t *entry;
