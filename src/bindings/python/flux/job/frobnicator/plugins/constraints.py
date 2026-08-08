@@ -25,9 +25,25 @@ class QueueConfig:
 
     def queue_properties(self, name):
         try:
-            return self.queues[name]["requires"]
+            entry = self.queues[name]
         except KeyError:
             return None
+        # A virtual queue (RFC 33) has no 'requires' of its own -
+        # inject the parent's instead, since that is what makes the
+        # job schedule as part of the parent's job list. Inheritance
+        # is one level (validated by conf_policy.c), so no chain to
+        # walk. An unresolvable parent is a fatal error (fail closed):
+        # silently dropping the parent's constraint would place the
+        # job outside the parent's resource slice.
+        parent = entry.get("parent")
+        if parent is not None:
+            try:
+                entry = self.queues[parent]
+            except KeyError:
+                raise ValueError(
+                    f"queue '{name}': parent queue '{parent}' is not configured"
+                )
+        return entry.get("requires")
 
     def apply_constraints(self, jobspec):
         """Apply queue-specific constraints to jobspec"""

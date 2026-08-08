@@ -171,6 +171,7 @@ TESTSCRIPTS = \
 	t2240-queue-cmd.t \
 	t2241-queue-cmd-list.t \
 	t2245-policy-config.t \
+	t2246-queue-virtual.t \
 	t2260-job-list.t \
 	t2261-job-list-update.t \
 	t2262-job-list-stats.t \
@@ -361,6 +362,7 @@ TESTSCRIPTS = \
 	python/t0045-job-shape-parser.py \
 	python/t0046-job-watcher.py \
 	python/t0047-flux-argument-parser.py \
+	python/t0048-frobnicator-vqueue.py \
 	python/t0100-modprobe.py \
 	python/t1000-service-add-remove.py \
 	python/t6010-fake-resources.py

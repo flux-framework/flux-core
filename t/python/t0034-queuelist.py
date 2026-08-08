@@ -18,7 +18,8 @@ except ModuleNotFoundError:
     from flux.utils import tomli as tomllib
 
 import flux
-from flux.queue import QueueList
+from flux.queue import QueueInfo, QueueList
+from flux.resource import resource_list
 from subflux import rerun_under_flux
 
 
@@ -100,6 +101,44 @@ class TestQueueList(unittest.TestCase):
         self.assertFalse(qlist.debug.started)
         self.assertEqual(qlist.debug.limits.duration, 3600.0)
         self.assertEqual(qlist.debug.limits.timelimit, 3600.0)
+
+    def test_003_vqueue_stale_parent(self):
+        # A QueueInfo parent (sourced from the queue-status RPC) missing
+        # from the config (a separate RPC, so a config reload can race
+        # the two) must raise, not fall back to the full instance
+        # resource set or drop the parent's limits layer.
+        resources = resource_list(self.fh).get()
+        config = {
+            "queues": {
+                "batch": {"requires": ["batch"]},
+            }
+        }
+        with self.assertRaises(ValueError) as ctx:
+            QueueInfo(
+                "expedite",
+                config,
+                resources,
+                enabled=True,
+                started=True,
+                default=False,
+                parent="gone",
+            )
+        self.assertIn("parent queue 'gone' is not configured", str(ctx.exception))
+
+        # The limits/defaults lookup path fails the same way even when
+        # constructed with a then-valid parent that a raced config lost:
+        qinfo = QueueInfo(
+            "expedite",
+            config,
+            resources,
+            enabled=True,
+            started=True,
+            default=False,
+            parent="batch",
+        )
+        qinfo.config = {"queues": {}}
+        with self.assertRaises(ValueError):
+            list(qinfo._config_entries())
 
 
 if __name__ == "__main__":

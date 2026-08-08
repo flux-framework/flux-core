@@ -493,7 +493,9 @@ The following field names can be specified for the **list** subcommand:
 
 **queue**
    Queue(s) associated with resources. When ``-q, --queue`` is used,
-   only the specified queues are shown.
+   only the specified queues are shown. Virtual queues (RFC 33) do not
+   appear in this field, since they share their parent queue's resources
+   rather than being associated with any resources of their own.
 
 **properties**
    Properties associated with resources.

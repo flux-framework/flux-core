@@ -40,12 +40,22 @@ int queues_configure (struct queues *queues,
                       flux_error_t *error);
 
 /* First-class add/remove/update (used by configure)
+ *
+ * queues_remove() refuses to remove a queue that other queues name as
+ * their parent (RFC 33 virtual queues), failing with EBUSY and an
+ * error naming the dependent virtual queues; remove or re-parent them
+ * first. (queues_configure() is not subject to this: its up-front
+ * validation guarantees a surviving virtual queue's parent survives
+ * any reload, so a parent and its virtual queues may be removed
+ * together.)
  */
 struct queue *queues_add (struct queues *queues,
                           const char *name,
                           json_t *config,
                           flux_error_t *error);
-int queues_remove (struct queues *queues, const char *name);
+int queues_remove (struct queues *queues,
+                   const char *name,
+                   flux_error_t *error);
 
 /* Refresh config-derived fields (requires, ...) of an existing queue;
  * administrative state (enable/start bits, reasons, sticky) is preserved.
@@ -118,11 +128,33 @@ json_t *queues_list_encode (struct queues *queues);
  * If q == NULL, assume anonymous queue.
  */
 const char *queue_name (struct queue *q);
+/* Effective requires: for a virtual queue (RFC 33) this is the parent's
+ * requires, since a vqueue has none of its own; for a non-virtual queue
+ * it is the queue's own requires.
+ */
 json_t *queue_requires (struct queue *q);
 bool queue_is_enabled (struct queue *q);
 const char *queue_disable_reason (struct queue *q);
+/* Own started bit; see queue_is_started_effective() below for a
+ * virtual queue's effective state.
+ */
 bool queue_is_started (struct queue *q);
 const char *queue_stop_reason (struct queue *q);
+
+/* Virtual queue (RFC 33) accessors.
+ *
+ * A queue is virtual iff its config sets 'parent'. Inheritance is one
+ * level: a vqueue's parent is validated (conf_policy.c and the second
+ * validation pass below) to never itself be virtual, so there is no
+ * chain to walk - queue_root() is a single pointer dereference.
+ */
+bool queue_is_virtual (struct queue *q);
+/* NULL if not virtual */
+struct queue *queue_parent (struct queue *q);
+/* 'q's parent if virtual, else 'q' itself */
+struct queue *queue_root (struct queue *q);
+/* Own started bit AND root's started bit */
+bool queue_is_started_effective (struct queue *q);
 
 /* Per-queue mutators
  * These methods fire notification.

@@ -1057,7 +1057,7 @@ static void test_list_names (void)
 
     /* snapshot survives queue removal mid-iteration */
     name = zlistx_first (names);
-    ok (queues_remove (qs, "batch") == 0,
+    ok (queues_remove (qs, "batch", &error) == 0,
         "queues_remove during snapshot iteration works");
     ok (queues_lookup (qs, "batch", NULL) == NULL,
         "removed name no longer resolves");
@@ -1121,15 +1121,15 @@ static void test_add_remove_primitives (void)
 
     /* remove error cases */
     errno = 0;
-    ok (queues_remove (qs, "noexist") < 0 && errno == ENOENT,
+    ok (queues_remove (qs, "noexist", &error) < 0 && errno == ENOENT,
         "queues_remove unknown name fails with ENOENT");
     errno = 0;
-    ok (queues_remove (qs, NULL) < 0 && errno == EINVAL,
+    ok (queues_remove (qs, NULL, &error) < 0 && errno == EINVAL,
         "queues_remove NULL name fails with EINVAL");
 
     /* remove one queue */
     notify_reset ();
-    ok (queues_remove (qs, "debug") == 0,
+    ok (queues_remove (qs, "debug", &error) == 0,
         "queues_remove debug works");
     ok (notify_count == 1
         && streq (notify_log[0].event, "remove")
@@ -1160,7 +1160,7 @@ static void test_add_remove_primitives (void)
 
     /* remove in anon mode is an error */
     errno = 0;
-    ok (queues_remove (qs, "batch") < 0 && errno == EINVAL,
+    ok (queues_remove (qs, "batch", &error) < 0 && errno == EINVAL,
         "queues_remove in anon mode fails with EINVAL");
 
     queues_destroy (qs);
@@ -1376,6 +1376,73 @@ static void test_configure_partial_failure (void)
     queues_destroy (qs);
 }
 
+/* A failed queues_configure() must not partially apply when the failure is
+ * an unresolvable virtual-queue parent (RFC 33), and in particular must not
+ * leave a sibling virtual queue's ->parent dangling. The bad new config here
+ * drops "batch" (which "vq" is parented to) and adds "aaa" naming a missing
+ * parent; "aaa" sorts before "vq" so a per-entry resolve would fail after
+ * "batch" was already freed, leaving vq->parent pointing at freed memory.
+ * The whole-config pre-check must reject this before any queue is touched.
+ * This path is unreachable via the broker (conf_policy_validate() rejects it
+ * first) but the class must be self-protecting against direct input.
+ */
+static void test_configure_bad_parent_transactional (void)
+{
+    struct queues *qs;
+    struct queue *batch;
+    struct queue *vq;
+    flux_error_t error;
+    json_t *config;
+    json_t *bad;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    config = json_pack ("{s:{} s:{s:s}}",
+                        "batch",
+                        "vq",
+                          "parent", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    if (queues_configure (qs, config, &error) < 0)
+        BAIL_OUT ("queues_configure failed");
+    json_decref (config);
+
+    batch = queues_lookup (qs, "batch", NULL);
+    vq = queues_lookup (qs, "vq", NULL);
+    if (!batch || !vq || queue_parent (vq) != batch)
+        BAIL_OUT ("initial vqueue config not as expected");
+
+    queues_set_notify (qs, notify_cb, NULL);
+    notify_reset ();
+
+    /* aaa names a missing parent; batch (vq's parent) is dropped. */
+    bad = json_pack ("{s:{s:s} s:{s:s}}",
+                     "aaa",
+                       "parent", "nosuchqueue",
+                     "vq",
+                       "parent", "batch");
+    if (!bad)
+        BAIL_OUT ("json_pack failed");
+    errno = 0;
+    ok (queues_configure (qs, bad, &error) < 0 && errno == EINVAL,
+        "configure with an unresolvable parent fails with EINVAL");
+    json_decref (bad);
+
+    ok (notify_count == 0, "no notifications fired on failed configure");
+    ok (queues_lookup (qs, "batch", NULL) == batch,
+        "batch still present (not freed) after failed configure");
+    ok (queues_lookup (qs, "aaa", NULL) == NULL,
+        "invalid queue was not added");
+    vq = queues_lookup (qs, "vq", NULL);
+    ok (vq != NULL && queue_parent (vq) == batch,
+        "vq's parent still points at the live batch queue");
+    ok (queue_root (vq) == batch, "vq's root still resolves to batch");
+
+    queues_destroy (qs);
+}
+
 /* A malformed entry inside the restore array (missing a required field)
  * fails with EINVAL. Covers the per-entry unpack error in restore_v1
  * and restore_v0.
@@ -1421,6 +1488,7 @@ static void test_status_encode (void)
     json_t *o;
     int enable;
     int start;
+    const char *blocked;
     const char *reason;
 
     qs = queues_create ();
@@ -1463,13 +1531,21 @@ static void test_status_encode (void)
         "started status: start true, no stop_reason");
     json_decref (o);
 
-    /* started but scheduler offline: presented stopped + synthesized
-     * reason (own state untouched) */
+    /* started but scheduler offline: presented stopped + blocked +
+     * synthesized reason (own state untouched) */
     o = queue_status_encode (q, false);
-    ok (o && json_unpack (o, "{s:b s:b s:s !}", "enable", &enable,
-                          "start", &start, "stop_reason", &reason) == 0
-        && enable && !start && streq (reason, "Scheduler is offline"),
-        "sched offline: presented stopped with synthesized reason");
+    ok (o
+        && json_unpack (o,
+                        "{s:b s:b s:s s:s !}",
+                        "enable", &enable,
+                        "start", &start,
+                        "blocked", &blocked,
+                        "stop_reason", &reason) == 0
+        && enable
+        && !start
+        && streq (blocked, "scheduler")
+        && streq (reason, "Scheduler is offline"),
+        "sched offline: presented stopped and blocked with reason");
     ok (queue_is_started (q),
         "sched offline does not modify queue state");
     json_decref (o);
@@ -1530,6 +1606,691 @@ static void test_list_encode (void)
     queues_destroy (qs);
 }
 
+/* ---------- virtual queue (RFC 33) tests -------------------------------- */
+
+static void test_vqueue_configure (void)
+{
+    struct queues *qs;
+    struct queue *batch;
+    struct queue *expedite;
+    flux_error_t error;
+    json_t *config;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    /* batch is a real queue, expedite is virtual with parent=batch.
+     * Pack expedite first in the object to exercise the "parent
+     * processed before the object it names" ordering case - jansson
+     * preserves insertion order, so this is deterministic.
+     */
+    config = json_pack ("{s:{s:s} s:{}}",
+                        "expedite",
+                          "parent", "batch",
+                        "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+
+    ok (queues_configure (qs, config, &error) == 0,
+        "configure with vqueue works (parent object added after child)");
+    json_decref (config);
+
+    batch = queues_lookup (qs, "batch", &error);
+    ok (batch != NULL, "batch found");
+    ok (!queue_is_virtual (batch), "batch is not virtual");
+    ok (queue_parent (batch) == NULL, "batch has no parent");
+    ok (queue_root (batch) == batch, "batch is its own root");
+
+    expedite = queues_lookup (qs, "expedite", &error);
+    ok (expedite != NULL, "expedite found");
+    ok (queue_is_virtual (expedite), "expedite is virtual");
+    ok (queue_parent (expedite) == batch, "expedite's parent is batch");
+    ok (queue_root (expedite) == batch, "expedite's root is batch");
+
+    /* Defense in depth: a config in which a queue names itself as parent
+     * is rejected by the second-pass parent resolution (conf_policy.c
+     * rejects this earlier in the normal broker path). */
+    config = json_pack ("{s:{s:s}}", "selfq", "parent", "selfq");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    errno = 0;
+    ok (queues_configure (qs, config, &error) < 0 && errno == EINVAL,
+        "configure with a self-parent queue fails with EINVAL");
+    json_decref (config);
+
+    queues_destroy (qs);
+}
+
+static void test_vqueue_reparent_on_reload (void)
+{
+    struct queues *qs;
+    struct queue *batch;
+    struct queue *debug;
+    struct queue *vq;
+    flux_error_t error;
+    json_t *config;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    config = json_pack ("{s:{} s:{} s:{s:s}}",
+                        "batch",
+                        "debug",
+                        "vq",
+                          "parent", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0,
+        "initial configure: batch, debug, vq(parent=batch)");
+    json_decref (config);
+
+    batch = queues_lookup (qs, "batch", &error);
+    vq = queues_lookup (qs, "vq", &error);
+    ok (batch && vq && queue_parent (vq) == batch,
+        "vq initially parented to batch");
+
+    /* Reload: reparent vq to debug */
+    config = json_pack ("{s:{} s:{} s:{s:s}}",
+                        "batch",
+                        "debug",
+                        "vq",
+                          "parent", "debug");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0,
+        "reload reparents vq to debug");
+    json_decref (config);
+
+    debug = queues_lookup (qs, "debug", &error);
+    vq = queues_lookup (qs, "vq", &error);
+    ok (vq != NULL, "vq still exists after reparent reload");
+    ok (queue_parent (vq) == debug, "vq is now parented to debug");
+    ok (queue_root (vq) == debug, "vq's root is now debug");
+
+    /* Reload again: vq loses its parent (becomes an ordinary queue) */
+    config = json_pack ("{s:{} s:{} s:{}}", "batch", "debug", "vq");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0,
+        "reload removes vq's parent key");
+    json_decref (config);
+
+    vq = queues_lookup (qs, "vq", &error);
+    ok (vq != NULL, "vq still exists");
+    ok (!queue_is_virtual (vq), "vq is no longer virtual");
+    ok (queue_parent (vq) == NULL, "vq has no parent now");
+    ok (queue_root (vq) == vq, "vq is now its own root");
+
+    queues_destroy (qs);
+}
+
+static void test_vqueue_add_bad_parent (void)
+{
+    struct queues *qs;
+    struct queue *q;
+    flux_error_t error;
+    json_t *config;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+    queues_set_notify (qs, notify_cb, NULL);
+
+    /* Missing parent. This would be the FIRST named queue: a failed
+     * add must leave the collection in anon mode (the add validates
+     * 'parent' before any state mutates), not stranded in named mode
+     * with an empty table and the anon queue destroyed.
+     */
+    notify_reset ();
+    errno = 0;
+    config = json_pack ("{s:s}", "parent", "nosuchqueue");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    q = queues_add (qs, "vq", config, &error);
+    json_decref (config);
+    ok (q == NULL && errno == EINVAL,
+        "queues_add with missing parent fails cleanly with EINVAL");
+    ok (queues_lookup (qs, "vq", NULL) == NULL,
+        "failed add leaves no half-added queue behind");
+    ok (!queues_have_named (qs)
+        && queues_lookup (qs, NULL, NULL) != NULL,
+        "failed first add leaves the anon queue in place");
+    ok (notify_count == 0, "failed add fires no notifications");
+
+    /* Add a real queue, then a vqueue-of-vqueue (parent is virtual) */
+    ok (queues_add (qs, "batch", NULL, &error) != NULL,
+        "add batch (real queue)");
+    config = json_pack ("{s:s}", "parent", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_add (qs, "expedite", config, &error) != NULL,
+        "add expedite (parent=batch) works");
+    json_decref (config);
+
+    notify_reset ();
+    errno = 0;
+    config = json_pack ("{s:s}", "parent", "expedite");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    q = queues_add (qs, "subq", config, &error);
+    json_decref (config);
+    ok (q == NULL && errno == EINVAL,
+        "queues_add with a virtual parent fails cleanly with EINVAL");
+    ok (queues_lookup (qs, "subq", NULL) == NULL,
+        "failed vqueue-of-vqueue add leaves no queue behind");
+    ok (notify_count == 0,
+        "failed vqueue-of-vqueue add fires no notifications");
+
+    /* A queue naming itself as parent is rejected (would otherwise
+     * leave q->parent == q, a queue that is its own parent). The
+     * standalone add path must catch this by name, since the queue
+     * being added is not in the table yet when 'parent' is validated.
+     */
+    errno = 0;
+    config = json_pack ("{s:s}", "parent", "selfq");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    q = queues_add (qs, "selfq", config, &error);
+    json_decref (config);
+    ok (q == NULL && errno == EINVAL,
+        "queues_add with self as parent fails cleanly with EINVAL");
+    ok (queues_lookup (qs, "selfq", NULL) == NULL,
+        "failed self-parent add leaves no queue behind");
+
+    /* queues_update with a bad parent fails cleanly BEFORE mutating:
+     * the queue's config-derived state is untouched and no "update"
+     * notification fires for the rejected change.
+     */
+    q = queues_lookup (qs, "batch", &error);
+    ok (q != NULL, "batch found for update test");
+    config = json_pack ("{s:[s]}", "requires", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_update (qs, q, config, &error) == 0,
+        "queues_update batch with requires works");
+    json_decref (config);
+    notify_reset ();
+    errno = 0;
+    config = json_pack ("{s:s}", "parent", "nosuchqueue");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_update (qs, q, config, &error) < 0 && errno == EINVAL,
+        "queues_update with missing parent fails cleanly with EINVAL");
+    json_decref (config);
+    ok (queue_requires (q) != NULL
+        && json_array_size (queue_requires (q)) == 1,
+        "failed update leaves the queue's requires untouched");
+    ok (notify_count == 0, "failed update fires no notifications");
+
+    /* queues_update making a queue its own parent is rejected too */
+    errno = 0;
+    config = json_pack ("{s:s}", "parent", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_update (qs, q, config, &error) < 0 && errno == EINVAL,
+        "queues_update with self as parent fails cleanly with EINVAL");
+    json_decref (config);
+
+    queues_destroy (qs);
+}
+
+/* queues_remove() of a queue that other queues name as their parent
+ * (RFC 33 virtual queues) must fail with EBUSY and an error naming the
+ * dependent virtual queues, else their ->parent pointers would dangle.
+ * queues_configure() is exempt: a reload may remove a parent and its
+ * virtual queues together.
+ */
+static void test_vqueue_remove_parent_busy (void)
+{
+    struct queues *qs;
+    flux_error_t error;
+    json_t *config;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    config = json_pack ("{s:{} s:{s:s} s:{s:s}}",
+                        "batch",
+                        "expedite",
+                          "parent", "batch",
+                        "background",
+                          "parent", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0,
+        "configure batch with two vqueues works");
+    json_decref (config);
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok (queues_remove (qs, "batch", &error) < 0 && errno == EBUSY,
+        "queues_remove of a parent with vqueues fails with EBUSY");
+    ok (strstr (error.text, "expedite") != NULL
+        && strstr (error.text, "background") != NULL,
+        "error message names the dependent virtual queues");
+    diag ("%s", error.text);
+    ok (queues_lookup (qs, "batch", NULL) != NULL,
+        "parent queue is still in the table");
+
+    /* Removing the virtual queues first unblocks the parent */
+    ok (queues_remove (qs, "expedite", &error) == 0,
+        "queues_remove expedite works");
+    errno = 0;
+    ok (queues_remove (qs, "batch", &error) < 0 && errno == EBUSY,
+        "parent removal still fails while one vqueue remains");
+    ok (queues_remove (qs, "background", &error) == 0,
+        "queues_remove background works");
+    ok (queues_remove (qs, "batch", &error) == 0,
+        "queues_remove batch works once no vqueues depend on it");
+
+    /* A whole-table reconfigure may drop a parent and its vqueues
+     * together (not subject to the EBUSY check)
+     */
+    config = json_pack ("{s:{} s:{s:s}}",
+                        "batch",
+                        "expedite",
+                          "parent", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0,
+        "reconfigure batch + vqueue works");
+    json_decref (config);
+    config = json_pack ("{s:{}}", "debug");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0,
+        "reconfigure removing parent and vqueue together works");
+    json_decref (config);
+    ok (queues_lookup (qs, "batch", NULL) == NULL
+        && queues_lookup (qs, "expedite", NULL) == NULL,
+        "parent and vqueue are both gone");
+
+    queues_destroy (qs);
+}
+
+/* queues_remove() of a parent with so many dependent virtual queues that
+ * the composed EBUSY message overflows flux_error_t.text (160 bytes) must
+ * still fail cleanly, and the error text must carry errprintf()'s '+'
+ * truncation marker in its final byte. queues_remove() builds the list of
+ * dependent vqueue names into a fixed 128-byte buffer, and errprintf()
+ * marks any message it had to truncate.
+ */
+static void test_vqueue_remove_parent_truncated (void)
+{
+    struct queues *qs;
+    flux_error_t error;
+    json_t *config;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    /* One real parent 'batch' plus many virtual queues parented to it.
+     * 50 four-character names comma-joined far exceeds queues_remove()'s
+     * 128-byte vqueue-name buffer, so the resulting message overruns the
+     * 160-byte error buffer and must be truncated.
+     */
+    if (!(config = json_object ()))
+        BAIL_OUT ("json_object failed");
+    if (json_object_set_new (config, "batch", json_object ()) < 0)
+        BAIL_OUT ("json_object_set_new failed");
+    for (int i = 0; i < 50; i++) {
+        char name[16];
+        snprintf (name, sizeof (name), "vq%02d", i);
+        if (json_object_set_new (config,
+                                 name,
+                                 json_pack ("{s:s}", "parent", "batch")) < 0)
+            BAIL_OUT ("json_object_set_new failed");
+    }
+    ok (queues_configure (qs, config, &error) == 0,
+        "configure batch with 50 vqueues works");
+    json_decref (config);
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok (queues_remove (qs, "batch", &error) < 0 && errno == EBUSY,
+        "queues_remove of a parent with many vqueues fails with EBUSY");
+    diag ("%s", error.text);
+    ok (strncmp (error.text, "queue 'batch' is the parent", 27) == 0,
+        "error message identifies the parent queue");
+    ok (strlen (error.text) == sizeof (error.text) - 1,
+        "error message fills the error buffer (was truncated)");
+    ok (error.text[sizeof (error.text) - 2] == '+',
+        "truncated error message ends with the '+' truncation marker");
+    ok (queues_lookup (qs, "batch", NULL) != NULL,
+        "parent queue is still in the table after the failed remove");
+
+    queues_destroy (qs);
+}
+
+static void test_vqueue_root_and_requires (void)
+{
+    struct queues *qs;
+    struct queue *batch;
+    struct queue *expedite;
+    flux_error_t error;
+    json_t *config;
+    json_t *req;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    req = json_pack ("[s]", "batch");
+    if (!req)
+        BAIL_OUT ("json_pack failed");
+    config = json_pack ("{s:{s:O} s:{s:s}}",
+                        "batch",
+                          "requires", req,
+                        "expedite",
+                          "parent", "batch");
+    json_decref (req);
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0,
+        "configure batch (requires) + expedite (parent=batch)");
+    json_decref (config);
+
+    batch = queues_lookup (qs, "batch", &error);
+    expedite = queues_lookup (qs, "expedite", &error);
+    ok (batch && expedite, "both queues found");
+
+    ok (queue_requires (expedite) != NULL
+        && json_array_size (queue_requires (expedite)) == 1,
+        "vqueue's effective requires is the parent's");
+    ok (queue_requires (expedite) == queue_requires (batch),
+        "vqueue's effective requires is the same object as the parent's");
+    ok (queue_requires (batch) != NULL
+        && json_array_size (queue_requires (batch)) == 1,
+        "non-virtual queue's effective requires is its own");
+
+    queues_destroy (qs);
+}
+
+/* Effective-started 4-state matrix: parent x vqueue, started x stopped. */
+static void test_vqueue_effective_started (void)
+{
+    struct queues *qs;
+    struct queue *batch;
+    struct queue *vq;
+    flux_error_t error;
+    json_t *config;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    config = json_pack ("{s:{} s:{s:s}}",
+                        "batch",
+                        "vq",
+                          "parent", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0, "configure batch+vq");
+    json_decref (config);
+
+    batch = queues_lookup (qs, "batch", &error);
+    vq = queues_lookup (qs, "vq", &error);
+    ok (batch && vq, "both queues found");
+
+    /* Named queues start stopped: (parent stopped, vq stopped) */
+    ok (!queue_is_started (batch) && !queue_is_started (vq),
+        "initial: both own bits stopped");
+    ok (!queue_is_started_effective (vq),
+        "stopped+stopped: effective started is false");
+
+    /* parent started, vq stopped: vq must NOT be effectively started */
+    queue_start (batch, false);
+    ok (queue_is_started (batch) && !queue_is_started (vq),
+        "parent started, vq still stopped (own bits)");
+    ok (!queue_is_started_effective (vq),
+        "started(parent)+stopped(vq): effective started is false");
+    ok (queue_is_started_effective (batch),
+        "parent's own effective started is true (root == self)");
+
+    /* parent stopped, vq started: vq must NOT be effectively started
+     * (starting a vqueue under a stopped parent has no effect until
+     * the parent starts)
+     */
+    queue_stop (batch, NULL, false);
+    queue_start (vq, false);
+    ok (!queue_is_started (batch) && queue_is_started (vq),
+        "parent stopped, vq started (own bits)");
+    ok (!queue_is_started_effective (vq),
+        "stopped(parent)+started(vq): effective started is false");
+
+    /* both started: vq is now effectively started */
+    queue_start (batch, false);
+    ok (queue_is_started (batch) && queue_is_started (vq),
+        "both started (own bits)");
+    ok (queue_is_started_effective (vq),
+        "started+started: effective started is true");
+
+    queues_destroy (qs);
+}
+
+/* Status encode matrix for a vqueue: all 4 (parent x vqueue) started
+ * states, checking start/blocked/parent/stop_reason keys with a strict
+ * unpack. Also confirms a non-virtual queue's payload is unaffected
+ * (byte identical key set to pre-vqueue behavior) and that scheduler
+ * offline on a started queue reports blocked.
+ */
+static void test_vqueue_status_encode (void)
+{
+    struct queues *qs;
+    struct queue *batch;
+    struct queue *vq;
+    flux_error_t error;
+    json_t *config;
+    json_t *o;
+    int enable, start;
+    const char *blocked;
+    const char *parent;
+    const char *reason;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    config = json_pack ("{s:{} s:{s:s}}",
+                        "batch",
+                        "vq",
+                          "parent", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0, "configure batch+vq");
+    json_decref (config);
+
+    batch = queues_lookup (qs, "batch", &error);
+    vq = queues_lookup (qs, "vq", &error);
+    ok (batch && vq, "both queues found");
+
+    /* State 1: parent stopped, vq stopped - no blocked key */
+    o = queue_status_encode (vq, true);
+    ok (o != NULL, "status_encode works (stopped/stopped)");
+    ok (json_unpack (o,
+                     "{s:b s:b s:s !}",
+                     "enable", &enable,
+                     "start", &start,
+                     "parent", &parent) == 0
+        && !start
+        && streq (parent, "batch"),
+        "stopped/stopped: start=false, no blocked key, parent=batch");
+    json_decref (o);
+
+    /* State 2: parent started, vq stopped - still not blocked (own
+     * bit is the cause) */
+    queue_start (batch, false);
+    o = queue_status_encode (vq, true);
+    ok (o
+        && json_unpack (o,
+                        "{s:b s:b s:s !}",
+                        "enable", &enable,
+                        "start", &start,
+                        "parent", &parent) == 0
+        && !start,
+        "started(parent)/stopped(vq): start=false, no blocked key");
+    json_decref (o);
+
+    /* State 3: parent stopped, vq started - blocked "parent", synthesized
+     * reason names the parent */
+    queue_stop (batch, NULL, false);
+    queue_start (vq, false);
+    o = queue_status_encode (vq, true);
+    ok (o
+        && json_unpack (o,
+                        "{s:b s:b s:s s:s s:s !}",
+                        "enable", &enable,
+                        "start", &start,
+                        "parent", &parent,
+                        "blocked", &blocked,
+                        "stop_reason", &reason) == 0
+        && !start
+        && streq (blocked, "parent")
+        && streq (reason, "parent queue 'batch' is stopped"),
+        "stopped(parent)/started(vq): start=false blocked=parent with"
+        " synthesized stop_reason");
+    json_decref (o);
+
+    /* State 4: both started - no blocked key */
+    queue_start (batch, false);
+    o = queue_status_encode (vq, true);
+    ok (o
+        && json_unpack (o,
+                        "{s:b s:b s:s !}",
+                        "enable", &enable,
+                        "start", &start,
+                        "parent", &parent) == 0
+        && start,
+        "started/started: start=true, no blocked key");
+    json_decref (o);
+
+    /* Non-virtual queue payload: unaffected, no parent/blocked keys */
+    o = queue_status_encode (batch, true);
+    ok (o
+        && json_unpack (o,
+                        "{s:b s:b !}",
+                        "enable", &enable,
+                        "start", &start) == 0,
+        "non-virtual queue payload has exactly {enable,start} (no"
+        " parent/blocked keys) - unchanged from pre-vqueue behavior");
+    json_decref (o);
+
+    /* Scheduler offline on a started queue: blocked "scheduler" with
+     * synthesized reason (own state untouched) */
+    o = queue_status_encode (batch, false);
+    ok (o
+        && json_unpack (o,
+                        "{s:b s:b s:s s:s !}",
+                        "enable", &enable,
+                        "start", &start,
+                        "blocked", &blocked,
+                        "stop_reason", &reason) == 0
+        && !start
+        && streq (blocked, "scheduler")
+        && streq (reason, "Scheduler is offline"),
+        "sched offline on started queue: start=false blocked=scheduler");
+    ok (queue_is_started (batch),
+        "sched offline does not modify queue state");
+    json_decref (o);
+
+    /* Scheduler offline on a started vqueue (parent started): blocked is
+     * "scheduler", not "parent" - the offline condition takes precedence
+     * even though the queue is virtual. */
+    o = queue_status_encode (vq, false);
+    ok (o
+        && json_unpack (o,
+                        "{s:b s:b s:s s:s s:s !}",
+                        "enable", &enable,
+                        "start", &start,
+                        "parent", &parent,
+                        "blocked", &blocked,
+                        "stop_reason", &reason) == 0
+        && !start
+        && streq (parent, "batch")
+        && streq (blocked, "scheduler")
+        && streq (reason, "Scheduler is offline"),
+        "sched offline on started vqueue: blocked=scheduler not parent");
+    json_decref (o);
+
+    /* Scheduler offline on a stopped queue: not blocked */
+    queue_stop (batch, NULL, false);
+    o = queue_status_encode (batch, false);
+    ok (o
+        && json_unpack (o,
+                        "{s:b s:b s:s !}",
+                        "enable", &enable,
+                        "start", &start,
+                        "stop_reason", &reason) == 0
+        && !start
+        && streq (reason, "Scheduler is offline"),
+        "sched offline on stopped queue: no blocked key");
+    json_decref (o);
+
+    queues_destroy (qs);
+}
+
+/* Notify events for vqueues behave like ordinary queues: add/update on
+ * a vqueue fires the same event names, independent of parent linkage.
+ */
+static void test_vqueue_notify (void)
+{
+    struct queues *qs;
+    struct queue *vq;
+    flux_error_t error;
+    json_t *config;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+    queues_set_notify (qs, notify_cb, NULL);
+    notify_reset ();
+
+    config = json_pack ("{s:{} s:{s:s}}",
+                        "batch",
+                        "vq",
+                          "parent", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0,
+        "configure batch+vq fires notify events");
+    json_decref (config);
+
+    bool saw_vq_add = false;
+    for (int i = 0; i < notify_count; i++) {
+        if (streq (notify_log[i].name, "vq")
+            && streq (notify_log[i].event, "add"))
+            saw_vq_add = true;
+    }
+    ok (saw_vq_add, "vq add event fired same as an ordinary queue");
+
+    vq = queues_lookup (qs, "vq", &error);
+    ok (vq != NULL, "vq found");
+
+    notify_reset ();
+    ok (queue_start (vq, false) == 0, "start vq");
+    ok (notify_count == 1
+        && streq (notify_log[0].event, "start"),
+        "vq start event fired same as an ordinary queue");
+
+    notify_reset ();
+    ok (queue_stop (vq, "down", false) == 0, "stop vq");
+    ok (notify_count == 1
+        && streq (notify_log[0].event, "stop"),
+        "vq stop event fired same as an ordinary queue");
+
+    notify_reset ();
+    ok (queue_disable (vq, "maint") == 0, "disable vq");
+    ok (notify_count == 1
+        && streq (notify_log[0].event, "disable"),
+        "vq disable event fired same as an ordinary queue");
+
+    queues_destroy (qs);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1556,12 +2317,23 @@ int main (int argc, char *argv[])
     test_add_invalid_config ();
     test_update_invalid_config ();
     test_configure_partial_failure ();
+    test_configure_bad_parent_transactional ();
     test_restore_bad_entry ();
     test_admin_ops ();
     test_admin_ops_reenter ();
     test_list_names ();
     test_status_encode ();
     test_list_encode ();
+
+    test_vqueue_configure ();
+    test_vqueue_reparent_on_reload ();
+    test_vqueue_add_bad_parent ();
+    test_vqueue_remove_parent_busy ();
+    test_vqueue_remove_parent_truncated ();
+    test_vqueue_root_and_requires ();
+    test_vqueue_effective_started ();
+    test_vqueue_status_encode ();
+    test_vqueue_notify ();
 
     done_testing ();
 }
