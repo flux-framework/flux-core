@@ -61,19 +61,38 @@ struct queue {
 struct queues {
     struct queue *anon;         /* live when named == NULL */
     zhashx_t *named;            /* non-NULL selects named mode */
+    json_t *list_cache;         /* cached queue-list response, built
+                                 * lazily by queues_list_response() and
+                                 * invalidated by notify() on any
+                                 * mutation. NULL when not yet built.
+                                 */
     bool restoring;             /* suppress notify during queues_restore */
     queues_change_f notify_cb;
     void *notify_arg;
 };
 
+/* Invalidate any cached queue-list response.
+ */
+static void cache_invalidate (struct queues *queues)
+{
+    json_decref (queues->list_cache);
+    queues->list_cache = NULL;
+}
+
 /* Internal: fire change notification if callback is registered.
  * Suppressed during queues_restore: restore reconstructs state that
  * was already notified when it originally changed.
+ *
+ * The response cache is invalidated unconditionally (even during restore,
+ * which is not a notify consumer) since any mutation may change it. The
+ * cache depends only on config-derived fields, so enable/start/stop
+ * events over-invalidate harmlessly.
  */
 static void notify (struct queues *queues,
                     struct queue *q,
                     const char *event)
 {
+    cache_invalidate (queues);
     if (queues->notify_cb && !queues->restoring)
         queues->notify_cb (queues, q, event, queues->notify_arg);
 }
@@ -296,6 +315,7 @@ void queues_destroy (struct queues *queues)
             zhashx_destroy (&queues->named);
         else
             queue_free (queues->anon);
+        json_decref (queues->list_cache);
         free (queues);
         errno = saved_errno;
     }
@@ -999,13 +1019,10 @@ nomem:
     return NULL;
 }
 
-/* Assemble the full queue-list RPC response:
+/* Build the full queue-list RPC response (a new reference):
  *   {"queues":[names...], "conf":{"queues":[{name,requires?,parent?}...]}}
- * The "queues" name array is retained for backwards compatibility; "conf"
- * carries the effective per-queue configuration. Returns a new reference
- * the caller must decref.
  */
-json_t *queues_list_response (struct queues *queues)
+static json_t *list_response_build (struct queues *queues)
 {
     json_t *names = NULL;
     json_t *conf = NULL;
@@ -1025,6 +1042,13 @@ error:
     ERRNO_SAFE_WRAP (json_decref, names);
     ERRNO_SAFE_WRAP (json_decref, conf);
     return NULL;
+}
+
+json_t *queues_list_response (struct queues *queues)
+{
+    if (!queues->list_cache)
+        queues->list_cache = list_response_build (queues);
+    return queues->list_cache;
 }
 
 static int save_one (json_t *a, struct queue *q)
