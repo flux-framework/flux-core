@@ -124,6 +124,17 @@ int queues_restore (struct queues *queues, int version, json_t *o);
 json_t *queue_status_encode (struct queue *q, bool sched_ready);
 json_t *queues_list_encode (struct queues *queues);
 
+/* Assemble the full job-manager.queue-list RPC response:
+ *   {"queues":[names...],
+ *    "conf":{"queues":[{"name":s,"requires"?:[...],"parent"?:s}, ...]}}
+ * The "queues" name array is retained for backwards compatibility; "conf"
+ * carries the effective per-queue configuration (a virtual queue's
+ * 'requires' is inherited from its parent). Queue order is unspecified.
+ * Returns a new reference the caller must destroy, or NULL with errno set
+ * on error.
+ */
+json_t *queues_list_response (struct queues *queues);
+
 /* Per-queue accessors
  * If q == NULL, assume anonymous queue.
  */
