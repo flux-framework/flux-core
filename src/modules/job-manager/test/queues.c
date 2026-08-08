@@ -1711,6 +1711,22 @@ static void test_list_response (void)
         && streq (json_string_value (json_array_get (req0, 0)), "batch"),
         "virtual queue conf inherits parent requires and reports parent");
 
+    /* cache: a second call with no mutation returns the same object */
+    ok (queues_list_response (qs) == resp,
+        "queues_list_response returns cached object when unchanged");
+
+    /* cache: a mutation invalidates, so a fresh object is built. Hold a
+     * reference across the mutation: the borrowed 'resp' is owned by the
+     * cache, which decrefs (frees) it on invalidation, and comparing the
+     * rebuilt response against freed memory is undefined - the allocator
+     * may hand the same address back.
+     */
+    json_incref (resp);
+    queue_stop (queues_lookup (qs, "batch", NULL), NULL, false);
+    ok (queues_list_response (qs) != resp,
+        "a queue mutation invalidates the cached response");
+    json_decref (resp);
+
     queues_destroy (qs);
 }
 
