@@ -130,8 +130,11 @@ json_t *queues_list_encode (struct queues *queues);
  * The "queues" name array is retained for backwards compatibility; "conf"
  * carries the effective per-queue configuration (a virtual queue's
  * 'requires' is inherited from its parent). Queue order is unspecified.
- * Returns a new reference the caller must destroy, or NULL with errno set
- * on error.
+ *
+ * The response is cached and rebuilt lazily; any queue mutation
+ * invalidates the cache. Returns a BORROWED reference owned by the queues
+ * object (do not destroy it; incref if it must outlive the next
+ * mutation), or NULL with errno set on error.
  */
 json_t *queues_list_response (struct queues *queues);
 

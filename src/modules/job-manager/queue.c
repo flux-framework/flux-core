@@ -144,20 +144,21 @@ static void queue_list_cb (flux_t *h,
                            void *arg)
 {
     struct queue_ctx *qctx = arg;
-    json_t *resp = NULL;
+    json_t *resp;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
+    /* resp is a borrowed reference owned by the queues cache; "O"
+     * increfs it for the response, so it is not decref'd here.
+     */
     if (!(resp = queues_list_response (qctx->queues)))
         goto error;
     if (flux_respond_pack (h, msg, "O", resp) < 0)
         flux_log_error (h, "error responding to job-manager.queue-list");
-    json_decref (resp);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "error responding to job-manager.queue-list");
-    json_decref (resp);
 }
 
 static void queue_status_cb (flux_t *h,

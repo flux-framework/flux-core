@@ -1643,7 +1643,9 @@ static void test_list_response (void)
     if (!qs)
         BAIL_OUT ("queues_create failed");
 
-    /* anon mode: names empty and conf.queues empty */
+    /* anon mode: names empty and conf.queues empty. The returned
+     * reference is borrowed (owned by the cache), so it is not decref'd.
+     */
     resp = queues_list_response (qs);
     ok (resp != NULL
         && json_unpack (resp,
@@ -1654,7 +1656,6 @@ static void test_list_response (void)
         && json_array_size (names) == 0
         && json_array_size (cq) == 0,
         "response in anon mode: empty queues and empty conf.queues");
-    json_decref (resp);
 
     /* batch (real, requires=batch), then expedite (virtual, parent
      * batch, no own requires). Queue order in the response is not
@@ -1710,7 +1711,6 @@ static void test_list_response (void)
         && streq (json_string_value (json_array_get (req0, 0)), "batch"),
         "virtual queue conf inherits parent requires and reports parent");
 
-    json_decref (resp);
     queues_destroy (qs);
 }
 
