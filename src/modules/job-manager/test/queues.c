@@ -1606,6 +1606,114 @@ static void test_list_encode (void)
     queues_destroy (qs);
 }
 
+/* Look up the conf.queues entry named 'name' in array 'cq', or NULL.
+ * Queue order in the array is not guaranteed, so entries are found by
+ * name rather than by position.
+ */
+static json_t *conf_entry (json_t *cq, const char *name)
+{
+    size_t index;
+    json_t *entry;
+
+    json_array_foreach (cq, index, entry) {
+        const char *n;
+        if (json_unpack (entry, "{s:s}", "name", &n) == 0 && streq (n, name))
+            return entry;
+    }
+    return NULL;
+}
+
+/* The queue-list response carries both the "queues" name array and a
+ * "conf" object with each queue's effective config. Effective
+ * 'requires'/'parent' are checked on a virtual queue.
+ */
+static void test_list_response (void)
+{
+    struct queues *qs;
+    flux_error_t error;
+    json_t *config;
+    json_t *resp;
+    json_t *names;
+    json_t *cq;
+    const char *name;
+    json_t *req0;
+    const char *parent2 = NULL;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    /* anon mode: names empty and conf.queues empty */
+    resp = queues_list_response (qs);
+    ok (resp != NULL
+        && json_unpack (resp,
+                        "{s:o s:{s:o}}",
+                        "queues", &names,
+                        "conf",
+                          "queues", &cq) == 0
+        && json_array_size (names) == 0
+        && json_array_size (cq) == 0,
+        "response in anon mode: empty queues and empty conf.queues");
+    json_decref (resp);
+
+    /* batch (real, requires=batch), then expedite (virtual, parent
+     * batch, no own requires). Queue order in the response is not
+     * guaranteed, so entries are checked by name.
+     */
+    config = json_pack ("{s:{s:[s]} s:{s:[s]} s:{s:s}}",
+                        "debug",
+                          "requires", "debug",
+                        "batch",
+                          "requires", "batch",
+                        "expedite",
+                          "parent", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    if (queues_configure (qs, config, &error) < 0)
+        BAIL_OUT ("queues_configure failed: %s", error.text);
+    json_decref (config);
+
+    resp = queues_list_response (qs);
+    ok (resp != NULL, "queues_list_response works in named mode");
+    ok (resp
+        && json_unpack (resp,
+                        "{s:o s:{s:o}}",
+                        "queues", &names,
+                        "conf",
+                          "queues", &cq) == 0,
+        "response has queues array and conf.queues array");
+
+    /* conf.queues carries an entry for each configured queue */
+    ok (cq && json_array_size (cq) == 3
+        && conf_entry (cq, "debug") != NULL
+        && conf_entry (cq, "batch") != NULL
+        && conf_entry (cq, "expedite") != NULL,
+        "conf.queues has an entry for each configured queue");
+
+    /* real queue carries its own requires, no parent key */
+    ok (json_unpack (conf_entry (cq, "batch"),
+                     "{s:s s:o !}",
+                     "name", &name,
+                     "requires", &req0) == 0
+        && json_array_size (req0) == 1
+        && streq (json_string_value (json_array_get (req0, 0)), "batch"),
+        "real queue conf carries own requires and no parent key");
+
+    /* virtual queue inherits parent's requires and reports parent */
+    ok (json_unpack (conf_entry (cq, "expedite"),
+                     "{s:s s:o s:s !}",
+                     "name", &name,
+                     "requires", &req0,
+                     "parent", &parent2) == 0
+        && streq (parent2, "batch")
+        && json_array_size (req0) == 1
+        && streq (json_string_value (json_array_get (req0, 0)), "batch"),
+        "virtual queue conf inherits parent requires and reports parent");
+
+    json_decref (resp);
+    queues_destroy (qs);
+}
+
 /* ---------- virtual queue (RFC 33) tests -------------------------------- */
 
 static void test_vqueue_configure (void)
@@ -2324,6 +2432,7 @@ int main (int argc, char *argv[])
     test_list_names ();
     test_status_encode ();
     test_list_encode ();
+    test_list_response ();
 
     test_vqueue_configure ();
     test_vqueue_reparent_on_reload ();
