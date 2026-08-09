@@ -32,6 +32,15 @@ The :program:`flux queue` command operates on Flux job queue(s).
 By default, Flux has one anonymous queue.  Multiple named queues may be
 configured - see :man5:`flux-config-queues`.
 
+A named queue may be a virtual queue, as described in RFC 33: an alternate
+submission name for a parent queue's resources with different policy,
+such as raised limits for a subset of users. Jobs submitted to a virtual
+queue are scheduled as part of the parent queue. The :program:`flux queue`
+administrative commands below operate on a virtual queue's own state
+without affecting its parent or sibling queues, but note that a virtual
+queue's jobs are only eligible for scheduling when both the virtual queue
+and its parent are started.
+
 COMMANDS
 ========
 
@@ -42,7 +51,9 @@ list
 
 .. program:: flux queue list
 
-List queue status, defaults, and limits.
+List queue status, defaults, and limits. When one or more virtual
+queues are configured, a ``PARENT`` column is also shown, listing each
+virtual queue's parent queue (blank for a non-virtual queue).
 
 .. option:: -q, --queue=QUEUE,...
 
@@ -223,23 +234,35 @@ The following field names can be specified:
 **queuem**
    queue name, but default queue is marked up with an asterisk
 
+**parent**
+   parent queue name if this is a virtual queue (RFC 33), otherwise empty.
+   This field is only shown by default if at least one configured queue
+   has a parent.
+
 **submission**
    Description of queue submission status: ``enabled`` or ``disabled``
 
 **scheduling**
-   Description of queue scheduling status: ``started`` or ``stopped``
+   Description of queue scheduling status: ``started``, ``stopped``, or,
+   for a virtual queue whose own state is started but whose parent queue
+   is stopped, ``stopped (parent)``.
 
 **enabled**
    Single character submission status: ``✔`` if enabled, ``✗`` if disabled.
 
 **started**
    Single character scheduling status: ``✔`` if started, ``✗`` if stopped.
+   A virtual queue whose own state is started but whose parent queue is
+   stopped shows ``⏸`` instead: scheduling will resume automatically once
+   the parent is started.
 
 **enabled.ascii**
    Single character submission status: ``y`` if enabled, ``n`` if disabled.
 
 **started.ascii**
-   Single character scheduling status: ``y`` if started, ``n`` if stopped.
+   Single character scheduling status: ``y`` if started, ``n`` if stopped,
+   or ``p`` if started but paused because its parent is stopped (see
+   **started** above).
 
 **defaults.timelimit**
    default timelimit for jobs submitted to the queue

@@ -18,12 +18,21 @@
 #include <flux/core.h> /* flux_error_t */
 #include <jansson.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "job_data.h"
 
 struct match_ctx {
     flux_t *h;
     uint64_t max_comparisons;
     uint32_t max_hostlist;
+
+    /* RFC 33 virtual queues: map of vqueue name to parent queue name,
+     * built from the [queues] config table at load and config-reload.
+     * A job's queue is a key in this table iff it names a virtual
+     * queue.
+     */
+    zhashx_t *queue_parents;
 };
 
 struct match_ctx *match_ctx_create (flux_t *h);
