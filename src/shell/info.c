@@ -119,6 +119,60 @@ static void R_update_cb (flux_future_t *f, void *arg)
     (void) flux_shell_plugstack_call (shell, "shell.resource-update", NULL);
 }
 
+/*  Determine the slot label the scheduler matched for resources on `rank`.
+ *
+ *  Fluxion's flexible traverser tags each vertex it allocates to a matched
+ *  slot with that slot's label, emitted in R as
+ *  scheduling.graph.nodes[].metadata.ephemeral.slot_label (present only with
+ *  match-format=rv1; rv1_nosched omits the scheduling key). The label lets the
+ *  shell pick the task command bound to the matched slot (RFC 14 tasks[].slot).
+ *
+ *  On success *labelp is set to a newly allocated label string, or to NULL when
+ *  no label applies to this rank (no scheduling key, no ephemeral label, or a
+ *  jobspec that did not use labeled alternatives) -- in which case the caller
+ *  keeps the tasks[0] default. Returns 0 on success, -1 (errno set) on error,
+ *  including finding more than one distinct label for this rank (which the
+ *  single-label task-selection model cannot represent).
+ */
+static int lookup_slot_label (json_t *R, int rank, char **labelp)
+{
+    json_t *nodes;
+    size_t index;
+    json_t *node;
+    const char *found = NULL;
+    char *label = NULL;
+
+    *labelp = NULL;
+    if (json_unpack (R, "{s:{s:{s:o}}}", "scheduling", "graph", "nodes", &nodes)
+            < 0)
+        return 0;
+    json_array_foreach (nodes, index, node) {
+        int node_rank = -1;
+        const char *slot_label = NULL;
+        if (json_unpack (node,
+                         "{s:{s:i s?{s?s}}}",
+                         "metadata",
+                         "rank", &node_rank,
+                         "ephemeral", "slot_label", &slot_label) < 0)
+            continue;
+        if (node_rank != rank || !slot_label)
+            continue;
+        if (found && !streq (found, slot_label)) {
+            shell_log_error ("rank %d has conflicting slot labels '%s' and '%s'",
+                             rank, found, slot_label);
+            errno = EINVAL;
+            return -1;
+        }
+        found = slot_label;
+    }
+    if (found && !(label = strdup (found))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    *labelp = label;
+    return 0;
+}
+
 /*  Fetch jobinfo (jobspec, R) from job-info service if not provided on
  *   command line, and parse.
  */
@@ -310,6 +364,19 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
     info->shell_rank = info->rankinfo.nodeid;
     info->total_ntasks = rcalc_total_ntasks (info->rcalc);
 
+    /*  If the scheduler matched a labeled slot (xor_slot/or_slot) for this
+     *  rank's resources, select the task command bound to that label. With no
+     *  label (single-task jobspec, or match-format without a scheduling key)
+     *  the tasks[0] default is kept.
+     */
+    if (lookup_slot_label (info->R, broker_rank, &info->matched_slot_label) < 0)
+        goto error;
+    if (jobspec_resolve_task_command (jobspec, info->matched_slot_label) < 0) {
+        shell_log_error ("no task found for matched slot label '%s'",
+                         info->matched_slot_label);
+        goto error;
+    }
+
     if (!(map = create_taskmap (info))
         || shell_info_set_taskmap (info, map) < 0) {
         taskmap_destroy (map);
@@ -334,6 +401,7 @@ void shell_info_destroy (struct shell_info *info)
         idset_destroy (info->taskids);
         hostlist_destroy (info->hostlist);
         free (info->hwloc_xml);
+        free (info->matched_slot_label);
         free (info);
         errno = saved_errno;
     }
