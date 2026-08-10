@@ -75,6 +75,7 @@ struct sdexec_ctx {
     bool sweep_done;       // startup unit list has been processed
     int recover_pending;   // recovered procs awaiting their GetAll snapshot
     bool clean_sent;       // sdmon.user-clean has been sent (one-shot)
+    const char *recover_glob; // unit glob for the startup sweep
 };
 
 enum stop_timer_state {
@@ -2210,10 +2211,10 @@ error:
 /* The startup sweep enumerates leftover units this module's previous instance
  * may have started.  Units are named shell-<rank>-<jobid>.service or
  * imp-shell-<rank>-<jobid>.service (bulk-exec.c), so this glob finds ours (and
- * mirrors the user-bus glob sdmon uses).  The allow-list guards against any
- * other unit that might match the glob.
+ * mirrors the user-bus glob sdmon formerly used).  The allow-list guards
+ * against any other unit that might match the glob.
  */
-static const char *sweep_glob = "*shell-*";
+static const char *default_recover_glob = "*shell-*";
 
 static const char *sweep_allow[] = {
     "imp-shell-",
@@ -2389,7 +2390,7 @@ static int start_sweep (struct sdexec_ctx *ctx, flux_error_t *error)
     if (!(ctx->f_list = sdexec_list_units (ctx->h,
                                            "sdbus",
                                            ctx->rank,
-                                           sweep_glob))
+                                           ctx->recover_glob))
         || flux_future_then (ctx->f_list,
                              -1,
                              sweep_list_continuation,
@@ -2457,6 +2458,20 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     if (!(ctx = sdexec_ctx_create (h)))
         goto error;
+    ctx->recover_glob = default_recover_glob;
+    for (int i = 0; i < argc; i++) {
+        /* recover_glob= narrows the startup sweep (test use only: it lets tests
+         * that share the user systemd instance avoid recovering each other's
+         * units).  Swept units must still match the built-in allow-list.
+         */
+        if (strstarts (argv[i], "recover_glob="))
+            ctx->recover_glob = argv[i] + 13;
+        else {
+            flux_log (h, LOG_ERR, "%s: unknown option", argv[i]);
+            errno = EINVAL;
+            goto error;
+        }
+    }
     if (sdexec_configure (ctx, flux_get_conf (h), &error) < 0) {
         flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
