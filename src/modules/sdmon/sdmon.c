@@ -514,9 +514,18 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     if (!(ctx = sdmon_ctx_create (h)))
         goto error;
-    if (argc > 0) {
-        flux_log (h, LOG_ERR, "%s: unknown option", argv[0]);
-        goto error;
+    for (int i = 0; i < argc; i++) {
+        /* sys_glob= narrows system bus monitoring (test use only: it lets
+         * tests that share a systemd instance ignore units they don't own).
+         * Units must still match the built-in allow-list.
+         */
+        if (strstarts (argv[i], "sys_glob="))
+            sys_glob = argv[i] + 9;
+        else {
+            flux_log (h, LOG_ERR, "%s: unknown option", argv[i]);
+            errno = EINVAL;
+            goto error;
+        }
     }
     if (flux_msg_handler_addvec_ex (h, modname, htab, ctx, &ctx->handlers) < 0)
         goto error;
