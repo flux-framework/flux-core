@@ -45,16 +45,16 @@ struct queue {
     bool is_started_sticky;     /* tracks is_started unless --nocheckpoint */
     char *stop_reason;          /* reason if stopped (optionally set) */
     json_t *requires;           /* required properties array (own; a
-                                  * virtual queue's is always NULL - see
-                                  * queue_root() for the effective value)
-                                  */
+                                 * virtual queue's is always NULL - see
+                                 * queue_root() for the effective value)
+                                 */
     struct queue *parent;       /* resolved parent queue (RFC 33 virtual
-                                  * queues), or NULL if not virtual. Not
-                                  * owned; borrowed from the same queues
-                                  * table. Inheritance is one level
-                                  * (validated elsewhere) so this is
-                                  * never itself virtual.
-                                  */
+                                 * queues), or NULL if not virtual. Not
+                                 * owned; borrowed from the same queues
+                                 * table. Inheritance is one level
+                                 * (validated elsewhere) so this is
+                                 * never itself virtual.
+                                 */
     struct queues *queues;      /* back-pointer for notify */
 };
 
