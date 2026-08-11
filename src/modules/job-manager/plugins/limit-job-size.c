@@ -284,7 +284,8 @@ static int queues_parse (zhashx_t **zhp,
         flux_error_t e;
 
         json_object_foreach (queues, name, entry) {
-            json_t *parent = json_object_get (entry, "parent");
+            json_error_t jerror;
+            const char *parent_name = NULL;
 
             limits_clear (&limits);
 
@@ -300,17 +301,14 @@ static int queues_parse (zhashx_t **zhp,
              * conf_policy_validate() rejects this config up front, so
              * reaching here means validation was bypassed.
              */
-            if (parent) {
-                const char *parent_name;
+            if (json_unpack_ex (entry, &jerror, 0,
+                                "{s?s}", "parent", &parent_name) < 0) {
+                errprintf (error, "queues.%s: %s", name, jerror.text);
+                goto error;
+            }
+            if (parent_name) {
                 json_t *parent_entry;
 
-                if (!json_is_string (parent)) {
-                    errprintf (error,
-                               "queues.%s: 'parent' must be a string",
-                               name);
-                    goto error;
-                }
-                parent_name = json_string_value (parent);
                 if (!(parent_entry = json_object_get (queues,
                                                       parent_name))) {
                     errprintf (error,

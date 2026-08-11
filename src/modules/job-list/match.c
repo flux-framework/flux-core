@@ -969,19 +969,19 @@ static int config_parse_queue_parents (struct match_ctx *mctx,
 
     if (queues) {
         json_object_foreach (queues, name, entry) {
-            json_t *parent;
+            json_error_t jerror;
+            const char *parent = NULL;
 
-            if (!(parent = json_object_get (entry, "parent")))
-                continue;
-            if (!json_is_string (parent)) {
-                errprintf (errp,
-                           "queues.%s: 'parent' must be a string",
-                           name);
+            if (json_unpack_ex (entry, &jerror, 0,
+                                "{s?s}", "parent", &parent) < 0) {
+                errprintf (errp, "queues.%s: %s", name, jerror.text);
                 goto error;
             }
+            if (!parent)
+                continue;
             if (zhashx_insert (queue_parents,
                                name,
-                               (void *)json_string_value (parent)) < 0) {
+                               (void *)parent) < 0) {
                 errprintf (errp,
                           "error building queue parent map entry for '%s'",
                           name);

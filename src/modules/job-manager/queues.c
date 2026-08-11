@@ -103,14 +103,17 @@ static void queue_destructor (void **item)
 /* Extract the "parent" key from a queue's own config entry 'entry' (may
  * be NULL). On success, '*namep' is set to the borrowed name string,
  * or NULL if 'entry' has no "parent" key. Returns -1 if "parent" is
- * present but not a string.
+ * present but not a string, filling in 'jerror' (which may be NULL) with
+ * jansson's diagnostic ("expected string").
  */
-static int entry_parent_name (json_t *entry, const char **namep)
+static int entry_parent_name (json_t *entry,
+                              const char **namep,
+                              json_error_t *jerror)
 {
     *namep = NULL;
     if (!entry)
         return 0;
-    return json_unpack (entry, "{s?s}", "parent", namep);
+    return json_unpack_ex (entry, jerror, 0, "{s?s}", "parent", namep);
 }
 
 /* True if 'name's config entry in 'table' (the full desired [queues]
@@ -127,7 +130,8 @@ static bool entry_is_virtual (json_t *table, const char *name)
 
     return table
         && entry_parent_name (json_object_get (table, name),
-                              &parent_name) == 0
+                              &parent_name,
+                              NULL) == 0
         && parent_name != NULL;
 }
 
@@ -148,7 +152,7 @@ static int resolve_parent (struct queue *q, json_t *entry)
     const char *parent_name;
 
     q->parent = NULL;
-    if (entry_parent_name (entry, &parent_name) < 0) {
+    if (entry_parent_name (entry, &parent_name, NULL) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -186,12 +190,14 @@ static int lookup_parent (struct queues *queues,
 {
     struct queue *parent;
     const char *parent_name;
+    json_error_t jerror;
 
     *parentp = NULL;
-    if (entry_parent_name (entry, &parent_name) < 0) {
+    if (entry_parent_name (entry, &parent_name, &jerror) < 0) {
         errprintf (error,
-                  "queue '%s': 'parent' must be a string",
-                  name ? name : "(anon)");
+                  "queue '%s': %s",
+                  name ? name : "(anon)",
+                  jerror.text);
         errno = EINVAL;
         return -1;
     }
@@ -697,9 +703,10 @@ static int queues_config_validate (json_t *config, flux_error_t *error)
     }
     json_object_foreach (config, name, value) {
         const char *parent_name;
+        json_error_t jerror;
 
-        if (entry_parent_name (value, &parent_name) < 0) {
-            errprintf (error, "queue '%s': 'parent' must be a string", name);
+        if (entry_parent_name (value, &parent_name, &jerror) < 0) {
+            errprintf (error, "queue '%s': %s", name, jerror.text);
             errno = EINVAL;
             return -1;
         }

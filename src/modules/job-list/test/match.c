@@ -643,8 +643,8 @@ static void test_virtual_queue_config_reload (void)
     ok (job_match_config_reload (&mctx, conf, &error) < 0,
         "config reload with non-string parent fails");
     diag ("%s", error.text);
-    ok (strstr (error.text, "must be a string") != NULL,
-        "error message says parent must be a string");
+    ok (strstr (error.text, "Expected string") != NULL,
+        "error message says parent should be a string");
     flux_conf_decref (conf);
     ok (mctx.queue_parents
         && zhashx_lookup (mctx.queue_parents, "expedite") != NULL,
