@@ -23,6 +23,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libeventlog/formatter.h"
 #include "ccan/str/str.h"
+#include "ccan/array_size/array_size.h"
 #include "common.h"
 
 struct optparse_option eventlog_opts[] =  {
@@ -122,16 +123,14 @@ struct path_shortname eventlog_paths[] = {
     { "exec",   "guest.exec.eventlog" },
     { "output", "guest.output"        },
     { "input",  "guest.input"         },
-    { NULL,     NULL                  },
 };
 
 const char *path_lookup (const char *name)
 {
-    const struct path_shortname *path = eventlog_paths;
-    while (path->name) {
-        if (streq (name, path->name))
-            return path->path;
-        path++;
+    for (int i = 0; i < ARRAY_SIZE (eventlog_paths); i++) {
+        const struct path_shortname *entry = &eventlog_paths[i];
+        if (streq (name, entry->name))
+            return entry->path;
     }
     return name;
 }
