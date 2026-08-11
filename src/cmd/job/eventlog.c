@@ -193,7 +193,6 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     flux_t *h;
     int optindex = optparse_option_index (p);
     flux_future_t *f;
-    const char *topic = "job-info.lookup";
     struct eventlog_ctx ctx = {0};
 
     if (!(h = flux_open (NULL, 0)))
@@ -227,7 +226,7 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     formatter_parse_options (p, ctx.evf);
 
     if (!(f = flux_rpc_pack (h,
-                             topic,
+                             "job-info.lookup",
                              FLUX_NODEID_ANY,
                              0,
                              "{s:I s:[s] s:i}",
