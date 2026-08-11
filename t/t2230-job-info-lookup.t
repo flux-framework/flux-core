@@ -229,6 +229,18 @@ test_expect_success 'flux job eventlog -p fails on invalid path' '
 	jobid=$(submit_job) &&
 	test_must_fail flux job eventlog -p "foobar" $jobid
 '
+test_expect_success 'flux job eventlog -F -p eventlog terminates on clean' '
+	jobid=$(submit_job) &&
+	run_timeout 30 \
+	    flux job eventlog -p eventlog -F $jobid 2>follow_main.err &&
+	test_cmp /dev/null follow_main.err
+'
+test_expect_success 'flux job eventlog -F -p exec terminates on done' '
+	jobid=$(submit_job) &&
+	run_timeout 30 \
+	    flux job eventlog -p exec -F $jobid 2>follow_exec.err &&
+	test_cmp /dev/null follow_exec.err
+'
 # submit job in separate test to avoid using the form:
 #  jobid=$(flux submit ..) && flux job eventlog $jobid ... &
 # which will pick up the wrong $jobid since the pipeline is placed into

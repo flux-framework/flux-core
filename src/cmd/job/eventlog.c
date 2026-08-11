@@ -23,6 +23,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libeventlog/formatter.h"
 #include "ccan/str/str.h"
+#include "ccan/array_size/array_size.h"
 #include "common.h"
 
 struct optparse_option eventlog_opts[] =  {
@@ -114,25 +115,31 @@ struct eventlog_ctx {
 struct path_shortname {
     const char *name;
     const char *path;
+    const char *end_event;
 };
 
-/*  Set of shorthand names for common job eventlog paths:
+/*  Set of shorthand names and RFC-defined terminating event,
+ *  if any, for common job eventlog paths:
  */
 struct path_shortname eventlog_paths[] = {
-    { "exec",   "guest.exec.eventlog" },
-    { "output", "guest.output"        },
-    { "input",  "guest.input"         },
-    { NULL,     NULL                  },
+    { "eventlog",   "eventlog",             "clean" },
+    { "exec",       "guest.exec.eventlog",  "done"  },
+    { "output",     "guest.output",         NULL    },
+    { "input",      "guest.input",          NULL    },
 };
 
-const char *path_lookup (const char *name)
+const char *path_lookup (const char *name, const char **end_event)
 {
-    const struct path_shortname *path = eventlog_paths;
-    while (path->name) {
-        if (streq (name, path->name))
-            return path->path;
-        path++;
+    for (int i = 0; i < ARRAY_SIZE (eventlog_paths); i++) {
+        const struct path_shortname *entry = &eventlog_paths[i];
+        if (streq (name, entry->name) || streq (name, entry->path)) {
+            if (end_event)
+                *end_event = entry->end_event;
+            return entry->path;
+        }
     }
+    if (end_event)
+        *end_event = NULL;
     return name;
 }
 
@@ -194,7 +201,6 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     flux_t *h;
     int optindex = optparse_option_index (p);
     flux_future_t *f;
-    const char *topic = "job-info.lookup";
     struct eventlog_ctx ctx = {0};
 
     if (!(h = flux_open (NULL, 0)))
@@ -210,7 +216,7 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     if (optparse_hasopt (p, "follow"))
         return wait_event_run (p,
                                ctx.jobid,
-                               "clean",
+                               NULL, // will look up terminating event
                                optparse_get_str (p, "path", "eventlog"),
                                NULL,
                                1,
@@ -220,14 +226,17 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
                                false);
 
     ctx.id = parse_jobid (ctx.jobid);
-    ctx.path = path_lookup (optparse_get_str (p, "path", "eventlog"));
+    ctx.path = path_lookup (optparse_get_str (p, "path", "eventlog"), NULL);
     ctx.p = p;
 
     if (!(ctx.evf = eventlog_formatter_create ()))
         log_err_exit ("eventlog_formatter_create");
     formatter_parse_options (p, ctx.evf);
 
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-info.lookup",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:I s:[s] s:i}",
                              "id", ctx.id,
                              "keys", ctx.path,
@@ -394,8 +403,9 @@ static int wait_event_run (optparse_t *p,
     ctx.p = p;
     ctx.jobid = jobid;
     ctx.id = parse_jobid (ctx.jobid);
-    ctx.wait_event = wait_event;
-    ctx.path = path_lookup (path);
+    ctx.path = path_lookup (path, &ctx.wait_event);
+    if (wait_event)
+        ctx.wait_event = wait_event;
     ctx.verbose = verbose;
     ctx.quiet = quiet;
     if ((ctx.count = count) <= 0)

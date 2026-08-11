@@ -23,6 +23,7 @@ SYNOPSIS
 | **flux** **job** **purge** [*-f*] [*--age-limit=FSD*] [*--num-limit=N*] [*ids...*]
 | **flux** **job** **info** [*--original*] [*--base*] *id* *key*
 | **flux** **job** **hostpids** [*OPTIONS*] *id*
+| **flux** **job** **eventlog** [*-F*] [*-H*] [*-p PATH*] *id*
 
 
 DESCRIPTION
@@ -502,6 +503,40 @@ Options:
   (a floating point value with optional suffix ``s`` for seconds,
    ``m`` for minutes, ``h`` for hours, or ``d`` for days).
 
+eventlog
+--------
+
+.. program:: flux job eventlog
+
+:program:`flux job eventlog` prints a job eventlog.
+
+Options:
+
+.. option:: -f, --format=FORMAT
+
+  Specify the output FORMAT (text or json).  Default: text.
+
+.. option:: -T, --time-format=FORMAT
+
+  Specify the timestamp FORMAT (raw, iso, or offset).  Default: raw.
+
+.. option:: -H, --human
+
+  Display human-readable output.
+
+.. option:: -L, --color=WHEN
+
+  Colorize output when supported and WHEN condition is met
+  (always, never, or auto).  Default: always.
+
+.. option:: -F, --follow
+
+  Follow events until the job is inactive.
+
+.. option:: -p, --path=PATH
+
+  Specify alternate eventlog name or path suffix, e.g. ``exec``, ``output``,
+  ``guest.exec.eventlog``.  Default: ``eventlog``.
 
 RESOURCES
 =========
