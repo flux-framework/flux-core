@@ -329,7 +329,7 @@ static void exit_cb (struct bulk_exec *exec,
         jobinfo_fatal_error (job, 0,
                              "%s (rank%s %s) terminated before first barrier",
                               hosts ? hosts : "(unknown)",
-                              idset_count (ranks) ? "s" : "",
+                              idset_count (ranks) > 1 ? "s" : "",
                               ids ? ids : "(unknown)");
 
         /* Set the terminated-before-first-barrier flag. This will allow
@@ -348,7 +348,7 @@ static void exit_cb (struct bulk_exec *exec,
             flux_log_error (job->h,
                             "failed to drain %s (rank%s %s) for job %s",
                             hosts ? hosts : "(unknown)",
-                            idset_count (ranks) ? "s" : "",
+                            idset_count (ranks) > 1 ? "s" : "",
                             ids ? ids : "(unknown)",
                             idf58 (job->id));
         free (ids);
