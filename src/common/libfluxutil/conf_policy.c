@@ -364,12 +364,12 @@ static int validate_queues_config (const flux_conf_t *conf,
             json_error_t jerror;
             json_t *policy = NULL;
             json_t *requires = NULL;
-            const char *parent = NULL;
+            json_t *parent = NULL;
 
             if (json_unpack_ex (entry,
                                 &jerror,
                                 0,
-                                "{s?o s?o s?s !}",
+                                "{s?o s?o s?o !}",
                                 "policy", &policy,
                                 "requires", &requires,
                                 "parent", &parent) < 0) {
@@ -377,6 +377,13 @@ static int validate_queues_config (const flux_conf_t *conf,
                            "error parsing [queues.%s] config table: %s",
                            name,
                            jerror.text);
+                goto inval;
+            }
+            if (parent && !json_is_string (parent)) {
+                errprintf (error,
+                           "error parsing [queues.%s] config table:"
+                           " 'parent' must be a string",
+                           name);
                 goto inval;
             }
             if (policy) {
