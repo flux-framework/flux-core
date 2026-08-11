@@ -119,9 +119,11 @@ static int kill_signal;
 
 extern struct exec_implementation testexec;
 extern struct exec_implementation bulkexec;
+extern struct exec_implementation bgexec;
 
 static struct exec_implementation * implementations[] = {
     &testexec,
+    &bgexec,
     &bulkexec,
     NULL
 };
@@ -1270,9 +1272,7 @@ static int exec_eventlog_has_event (json_t *eventlog, const char *name)
  */
 static int jobinfo_start_execution (struct jobinfo *job, json_t *eventlog)
 {
-    if (job->reattach)
-        jobinfo_emit_event_pack_nowait (job, "re-starting", NULL);
-    else
+    if (!job->reattach)
         jobinfo_emit_event_pack_nowait (job, "starting", NULL);
     /* Set started flag before calling start/reattach method because we want
      *  to be sure to clean up properly if an exception occurs
