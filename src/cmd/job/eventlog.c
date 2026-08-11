@@ -226,7 +226,10 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
         log_err_exit ("eventlog_formatter_create");
     formatter_parse_options (p, ctx.evf);
 
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:I s:[s] s:i}",
                              "id", ctx.id,
                              "keys", ctx.path,
