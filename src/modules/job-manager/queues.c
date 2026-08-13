@@ -48,6 +48,12 @@ struct queue {
                                  * virtual queue's is always NULL - see
                                  * queue_root() for the effective value)
                                  */
+    json_t *policy;             /* this queue's own [queues.NAME.policy]
+                                 * table (own only; NULL if unset). See
+                                 * queue_policy() for the vqueue-resolved
+                                 * value. The global [policy] is not merged
+                                 * in here.
+                                 */
     struct queue *parent;       /* resolved parent queue (RFC 33 virtual
                                  * queues), or NULL if not virtual. Not
                                  * owned; borrowed from the same queues
@@ -61,6 +67,11 @@ struct queue {
 struct queues {
     struct queue *anon;         /* live when named == NULL */
     zhashx_t *named;            /* non-NULL selects named mode */
+    json_t *global_policy;      /* the global [policy] table (own ref) or
+                                 * NULL. The per-key base merged beneath
+                                 * each queue's own policy to form its
+                                 * effective policy (see queue_policy()).
+                                 */
     json_t *list_cache;         /* cached queue-list response, built
                                  * lazily by queues_list_response() and
                                  * invalidated by notify() on any
@@ -102,6 +113,7 @@ static void queue_free (struct queue *q)
     if (q) {
         int saved_errno = errno;
         json_decref (q->requires);
+        json_decref (q->policy);
         free (q->name);
         free (q->disable_reason);
         free (q->stop_reason);
@@ -254,13 +266,19 @@ static int lookup_parent (struct queues *queues,
 static int queue_parse_config (struct queue *q, json_t *config)
 {
     json_t *requires = NULL;
+    json_t *policy = NULL;
 
-    if (config && json_unpack (config, "{s?O}", "requires", &requires) < 0) {
+    if (config && json_unpack (config,
+                               "{s?O s?O}",
+                               "requires", &requires,
+                               "policy", &policy) < 0) {
         errno = EINVAL;
         return -1;
     }
     json_decref (q->requires);
     q->requires = requires;   /* may be NULL */
+    json_decref (q->policy);
+    q->policy = policy;        /* may be NULL */
     return 0;
 }
 
@@ -315,6 +333,7 @@ void queues_destroy (struct queues *queues)
             zhashx_destroy (&queues->named);
         else
             queue_free (queues->anon);
+        json_decref (queues->global_policy);
         json_decref (queues->list_cache);
         free (queues);
         errno = saved_errno;
@@ -749,6 +768,15 @@ static int queues_config_validate (json_t *config, flux_error_t *error)
         }
     }
     return 0;
+}
+
+void queues_set_global_policy (struct queues *queues, json_t *policy)
+{
+    if (queues->global_policy != policy) {
+        json_decref (queues->global_policy);
+        queues->global_policy = json_incref (policy);
+        cache_invalidate (queues);
+    }
 }
 
 int queues_configure (struct queues *queues,

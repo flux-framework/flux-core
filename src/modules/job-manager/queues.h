@@ -39,6 +39,13 @@ int queues_configure (struct queues *queues,
                       json_t *config,
                       flux_error_t *error);
 
+/* Set the global [policy] table (may be NULL). Stored by reference (the
+ * queues object increfs it) and used as the per-key base beneath each
+ * queue's own policy when computing effective policy. Invalidates the
+ * list cache.
+ */
+void queues_set_global_policy (struct queues *queues, json_t *policy);
+
 /* First-class add/remove/update (used by configure)
  *
  * queues_remove() refuses to remove a queue that other queues name as
