@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <errno.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
@@ -188,8 +189,17 @@ static void rbwatcher_fd_cb (flux_reactor_t *r,
         if ((space = fbuf_space (rbw->fbuf)) < 0)
             return;
 
-        if ((ret = fbuf_write_from_fd (rbw->fbuf, rbw->fd, space)) < 0)
+        if ((ret = fbuf_write_from_fd (rbw->fbuf, rbw->fd, space)) < 0) {
+            /* EAGAIN and EWOULDBLOCK are transient errors: return and
+             * try again. Otherwise, stop the watcher and return
+             * FLUX_POLLERR to catch permanent errors like EBADF.
+             */
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                return;
+            flux_watcher_stop (fd_w);
+            watcher_call (w, FLUX_POLLERR);
             return;
+        }
 
         if (!ret) {
             fbuf_read_watcher_decref (w);
