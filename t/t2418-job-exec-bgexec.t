@@ -38,25 +38,9 @@ test_expect_success 'reload job-exec with method=bgexec via cmdline' '
 	flux module stats job-exec \
 	    | jq -e ".method == \"bgexec\""
 '
-# The sdexec service is not yet supported with method=bgexec.  The
-# combination must fail the job cleanly at init rather than crash job-exec
-# (see PR #7767 review).  Restore the default config afterward so later
-# tests run under rexec.
-test_expect_success 'method=bgexec with exec.service=sdexec fails job cleanly' '
-	flux config load <<-EOF &&
-	[exec]
-	method = "bgexec"
-	service = "sdexec"
-	EOF
-	flux module reload job-exec &&
-	test_when_finished "flux config load </dev/null && \
-	    flux module reload job-exec method=bgexec" &&
-	id=$(flux submit -N1 true) &&
-	flux job wait-event -t 30 $id clean &&
-	test_must_fail flux job status $id &&
-	flux job wait-event -Ht 30 $id exception \
-	    | grep "failed to initialize implementation"
-'
+# The method=bgexec + exec.service=sdexec combination is covered by the
+# systemd-gated test t2420-job-exec-bgexec-sdexec.t, which requires a running
+# user systemd/dbus to exercise sdexec.
 
 # ---------------------------------------------------------------------------
 # Normal execution under bgexec

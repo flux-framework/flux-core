@@ -98,6 +98,65 @@ escalation:
 3. On second expiry: ``KillUnit`` with SIGKILL is sent; timer is reset.
 4. On third expiry: the request is failed with ``EDEADLK``.
 
+Background Execution
+====================
+
+An ``sdexec.exec`` request initiated as a non-streaming RFC 6 request runs
+in *background mode* (RFC 42).  Rather than streaming output and a terminating
+status back to the client, sdexec sends a single ``started`` response and then
+detaches: the transient unit continues to run until it exits or the module is
+unloaded.  As required by RFC 42, a background unit's stdin is at end-of-file,
+so a process that reads stdin does not block waiting for a client that will
+never write.
+
+A background unit's stdout and stderr are captured regardless of the
+``stdout``/``stderr`` flags (which only gate streaming to a client).  Each
+output line is written to the broker log — stdout at ``LOG_INFO`` and stderr
+at ``LOG_ERR``, prefixed with the process name and PID — so the log is a
+complete record of a process whose output is not streamed.  The process's exit
+status is logged the same way.  Any terminal error that occurs after the
+``started`` response (and so cannot be returned on the exec request) is also
+logged rather than silently dropped.  This mirrors the built-in rexec server.
+
+Waitable Processes
+==================
+
+A background process started with the ``waitable`` flag can be waited on with
+an ``sdexec.wait`` request that returns its exit status.  This lets job-exec
+run a job in the background and collect its result separately, decoupling the
+start and wait phases per RFC 42.
+
+While a waitable process runs, sdexec retains a bounded tail of its most
+recent output (up to ``RETAINED_OUTPUT_MAX`` bytes, oldest dropped first) as an
+array of I/O objects.  The ``wait`` response carries the exit status and, if
+any was retained, this output, so job-exec can record it in the job's KVS
+output eventlog.
+
+A ``wait`` request identifies its target by ``pid`` or, if given, ``label``.
+Its handling depends on the process state:
+
+- If the process has already terminated, the status (and any retained output)
+  is returned immediately and the process is removed.
+- If it is still running, the request is *parked*: it is answered when the
+  unit is reaped.  Only one waiter is allowed at a time.
+- If a terminal error occurred after the process started, that error is
+  returned to the waiter — a successful background start is never reported to a
+  later ``wait`` as if the process had never existed.
+
+If the client sending a parked ``wait`` disconnects, the parked request is
+dropped, but the process remains waitable so its status is not lost and a
+subsequent ``wait`` can still collect it.  A waitable process that is never
+waited on is retained until the module is unloaded.
+
+Inspecting and Signaling Processes
+==================================
+
+The ``sdexec.list`` RPC returns the processes sdexec is tracking, each with
+its pid, command, label, and state (``R`` while the unit is running, ``Z``
+once it has finished but is retained awaiting a ``wait``).  The
+``sdexec.kill`` RPC signals a process identified by ``pid`` or, if given,
+``label``.  Both are surfaced by :man1:`flux-sproc` with ``--service sdexec``.
+
 ********************
 sdexec-mapper Module
 ********************

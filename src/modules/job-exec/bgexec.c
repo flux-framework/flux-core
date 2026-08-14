@@ -511,18 +511,6 @@ static int bgexec_impl_init (struct jobinfo *job)
         flux_log (job->h, LOG_ERR, "bgexec_init: %s" , error.text);
         goto err;
     }
-    /* The sdexec service is not yet supported with this backend (per-rank
-     * unit setup and reattach are unimplemented for it).  Reject it here
-     * rather than proceeding to a partially-wired sdexec launch below.
-     */
-    if (streq (service, "sdexec")) {
-        flux_log (job->h,
-                  LOG_ERR,
-                  "bgexec_init: exec.service=sdexec is not supported with"
-                  " method=bgexec");
-        errno = ENOTSUP;
-        goto err;
-    }
     if (!(bg = bgexec_create (&bgexec_ops,
                               service,
                               job->id,
