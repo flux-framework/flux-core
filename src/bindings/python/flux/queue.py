@@ -15,6 +15,7 @@ except ModuleNotFoundError:
     from flux.utils.dataclasses import dataclass
 
 from flux.resource import resource_list
+from flux.rpc import RPC
 from flux.util import parse_fsd
 
 """Simple access to information about Flux queues from Python.
@@ -174,6 +175,146 @@ class QueueResources:
 
     def __getattr__(self, attr):
         return getattr(self._resource_list, attr)
+
+
+def queue_conf_from_config(config):
+    """Build the job-manager.queue-list "conf" object from a raw broker config.
+
+    This helper creates a job-manager.queue-list response ``conf`` object
+    directly from broker config. For use in testing and as a fallback when
+    the job-manager is from an older version of Flux that does not provide
+    the queue config directly.
+
+    Returns ``{"queues": [{"name": str, "requires"?: list, "parent"?: str},
+    ...]}``. A virtual queue (RFC 33) has no "requires" of its own, so its
+    effective "requires" is resolved from its parent.
+
+    Args:
+        config (dict): a broker config, e.g. from the ``config.get`` RPC.
+
+    Raises:
+        ValueError: a virtual queue names a parent that is not configured.
+    """
+    queues = config.get("queues", {})
+    entries = []
+    for name, entry in queues.items():
+        conf = {"name": name}
+        parent = entry.get("parent")
+        if parent is not None:
+            # Virtual queue: inherit the parent's requires. An unresolvable
+            # parent is fatal (fail closed) - falling through would report
+            # the vqueue as covering the full instance resource set.
+            if parent not in queues:
+                raise ValueError(
+                    f"queue '{name}': parent queue '{parent}' is not configured"
+                )
+            conf["parent"] = parent
+            requires = queues[parent].get("requires")
+        else:
+            requires = entry.get("requires")
+        if requires is not None:
+            conf["requires"] = requires
+        entries.append(conf)
+    return {"queues": entries}
+
+
+class QueueConf:
+    """The job-manager's authoritative queue configuration.
+
+    Wraps a job-manager.queue-list "conf" object (``{"queues": [...]}``) and
+    exposes per-queue effective configuration. RFC 33 virtual-queue
+    inheritance is already resolved by the job-manager, so a queue's
+    ``requires`` is an effective value.
+
+    Fetch from a live instance with :func:`queue_config_fetch`. Build from a
+    raw broker config with :meth:`from_config` (the ``--config-file`` /
+    stdin / test path). The empty (anonymous-queue) case is a QueueConf with
+    no entries.
+    """
+
+    def __init__(self, conf):
+        self._entries = {entry["name"]: entry for entry in conf.get("queues", [])}
+
+    @classmethod
+    def from_config(cls, config):
+        """Return a QueueConf built from a raw broker config (the config-file
+        test path). See :func:`queue_conf_from_config`.
+        """
+        return cls(queue_conf_from_config(config))
+
+    def __contains__(self, name):
+        return name in self._entries
+
+    def __iter__(self):
+        return iter(self._entries)
+
+    def __len__(self):
+        # Number of named queues (0 in the anonymous-queue case), so a
+        # QueueConf is falsy when no named queues are configured.
+        return len(self._entries)
+
+    @property
+    def entries(self):
+        """The raw name -> conf-entry dict.
+
+        A low-level escape hatch for bulk/iteration consumers whose access
+        pattern does not fit the per-queue accessors (requires/parent) --
+        e.g. flux-resource's dict-oriented rendering. Prefer the accessors
+        for per-queue lookups.
+        """
+        return self._entries
+
+    def requires(self, name):
+        """The queue's effective required-properties list, or None.
+
+        Already vqueue-resolved by the job-manager (a virtual queue reports
+        its parent's requires). ``name`` may be None or an unconfigured queue
+        (the anonymous-queue case) -> None.
+        """
+        return (self._entries.get(name) or {}).get("requires")
+
+    def parent(self, name):
+        """The queue's resolved parent name (RFC 33 virtual queue), or "".
+
+        The job-manager's authoritative view of the resolved parent.
+        """
+        return (self._entries.get(name) or {}).get("parent", "")
+
+
+class QueueConfRPC(RPC):
+    """A pending queue configuration fetch from a Flux instance.
+
+    Sends the ``job-manager.queue-list`` RPC on construction (so it can
+    overlap with other work) and returns a :obj:`QueueConf` from
+    :meth:`get`. An older job-manager omits the "conf" object, so
+    :meth:`get` then falls back to deriving the config from the broker
+    config via a synchronous ``config.get`` RPC.
+    """
+
+    def __init__(self, flux_handle):
+        super().__init__(flux_handle, "job-manager.queue-list")
+
+    def get(self):
+        """Return the :obj:`QueueConf`. Blocks until the request completes."""
+        conf = super().get().get("conf")
+        if conf is None:
+            #  Older job-manager without "conf": fall back to config.
+            conf = queue_conf_from_config(self._handle.rpc("config.get").get())
+        return QueueConf(conf)
+
+
+def queue_config_fetch(handle):
+    """Send a request for the instance's queue configuration.
+
+    Args:
+        handle (:obj:`flux.Flux`): a Flux handle
+
+    Returns:
+        QueueConfRPC: a pending fetch; :meth:`~QueueConfRPC.get` returns a
+        :obj:`QueueConf`. The request is sent immediately, so the fetch can
+        overlap with other RPCs before :meth:`~QueueConfRPC.get` is called.
+    """
+    return QueueConfRPC(handle)
 
 
 class QueueInfo:
