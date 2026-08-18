@@ -1,4 +1,7 @@
 #!/bin/sh
+#
+# ci=asan
+
 test_description='Test flux job command'
 
 . $(dirname $0)/sharness.sh

@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=asan
 
 test_description='Hard fail a leaf node and verify transition thru lost
 
