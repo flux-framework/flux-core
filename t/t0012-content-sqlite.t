@@ -303,6 +303,70 @@ test_expect_success 'invalid config fails (synchronous)' '
 	rm content-sqlite.toml
 '
 
+#
+# Group commit (batch-timeout)
+#
+test_expect_success 'group commit is enabled by default with a bounded timeout' '
+	flux start -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    "flux module load content; \
+	    flux module load content-sqlite; \
+	    flux module stats content-sqlite; \
+	    flux module remove content-sqlite; \
+	    flux module remove content" >batch_default.out &&
+	jq -e ".config.batch_timeout > 0.0" <batch_default.out &&
+	jq -e ".config.batch_timeout <= 1.0" <batch_default.out
+'
+test_expect_success 'batch-timeout module option enables group commit' '
+	flux start -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    "flux module load content; \
+	    flux module load content-sqlite batch-timeout=10s; \
+	    flux module stats content-sqlite; \
+	    flux module remove content-sqlite; \
+	    flux module remove content" >batch_on.out &&
+	jq -e ".config.batch_timeout == 10.0" <batch_on.out
+'
+test_expect_success 'invalid batch-timeout module option fails' '
+	flux start -Sbroker.rc1_path= -Sbroker.rc3_path= \
+	    "flux module load content; \
+	    flux module load content-sqlite batch-timeout=foo; \
+	    flux module remove -f content-sqlite; \
+	    flux module remove content" 2>batch_bad.err &&
+	grep "content-sqlite: Invalid argument" batch_bad.err
+'
+test_expect_success 'batch_timeout config file works' '
+	cat >content-sqlite.toml <<-EOT &&
+	[content-sqlite]
+	batch_timeout = "0.25s"
+	EOT
+	flux start --config-path=$(pwd) \
+	    -Sbroker.rc1_path="$rc1_kvs" -Sbroker.rc3_path="$rc3_kvs" \
+	    flux module stats content-sqlite >batch_conf.out &&
+	jq -e ".config.batch_timeout == 0.25" <batch_conf.out &&
+	rm content-sqlite.toml
+'
+test_expect_success 'invalid batch_timeout config fails' '
+	cat >content-sqlite.toml <<-EOT &&
+	[content-sqlite]
+	batch_timeout = "foo"
+	EOT
+	test_must_fail flux start --config-path=$(pwd) \
+	    -Sbroker.rc1_path="$rc1_kvs" -Sbroker.rc3_path="$rc3_kvs" \
+	    flux module stats content-sqlite &&
+	rm content-sqlite.toml
+'
+test_expect_success 'reload content-sqlite with group commit enabled' '
+	flux module reload -f content-sqlite truncate batch-timeout=10s
+'
+test_expect_success 'concurrent stores are grouped into transactions' '
+	${SPAMUTIL} 500 200 >/dev/null &&
+	flux content flush &&
+	flux module stats content-sqlite >groupcommit.out &&
+	jq -e ".batch_size.count > 0" <groupcommit.out &&
+	jq -e ".batch_size.max > 1" <groupcommit.out
+'
+test_expect_success 'restore default group commit config for later tests' '
+	flux module reload -f content-sqlite
+'
 
 # Will create in WAL mode since statedir is set
 recreate_database()
