@@ -518,6 +518,19 @@ test_expect_success 'flux resource list -q strips all queue names from propertie
 	test_debug "cat listpropx_multi_q.out" &&
 	grep "free 2 $" listpropx_multi_q.out
 '
+# Exercise the online status -q path (queue config from the queue-list RPC,
+# not --from-stdin/--config-file): batch is configured on 2 of the 4 nodes.
+test_expect_success 'flux resource status -q filters to the requested queue' '
+	flux resource status -q batch -s all -o "{state} {nnodes}" \
+		>statusqueue_q.out &&
+	test_debug "cat statusqueue_q.out" &&
+	grep "avail 2" statusqueue_q.out
+'
+test_expect_success 'flux resource status -q rejects an invalid queue' '
+	test_must_fail flux resource status -q notaqueue 2>statusqueue_bad.err &&
+	test_debug "cat statusqueue_bad.err" &&
+	grep -i "no such queue\|not a valid queue\|notaqueue" statusqueue_bad.err
+'
 test_expect_success 'configure queues and resource with extra property' '
 	flux R encode -r 0-3 -p batch:0-1 -p debug:2-3 -p foo:0-3\
 	   | tr -d "\n" \
