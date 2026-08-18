@@ -44,8 +44,28 @@ typedef enum {
     FLUX_SUBPROCESS_RUNNING,      /* exec(2) has been called */
     FLUX_SUBPROCESS_EXITED,       /* process has exited */
     FLUX_SUBPROCESS_FAILED,       /* exec failure or other non-child error */
-    FLUX_SUBPROCESS_STOPPED,      /* process was stopped */
+    FLUX_SUBPROCESS_STOPPED,      /* DEPRECATED, no longer reported.  Use the
+                                   * on_sigchld callback and
+                                   * FLUX_SUBPROCESS_SIGCHLD_STOPPED instead.
+                                   * The enum value is retained for backwards
+                                   * compatibility. */
 } flux_subprocess_state_t;
+
+/*
+ * Subprocess sigchld, reported via the on_sigchld callback below.
+ * Values are distinct bits so that pending sigchlds can be tracked in a
+ * bitmask.
+ *
+ * If an on_state_change callback is also registered, a sigchld will
+ * not be reported until the subprocess has at least reached the RUNNING
+ * state (reported via on_state_change), and will not be reported once
+ * EXITED or FAILED has been reported.  Without an on_state_change
+ * callback, a sigchld is reported as soon as it is received and is
+ * suppressed once the subprocess has actually exited or failed.
+ */
+typedef enum {
+    FLUX_SUBPROCESS_SIGCHLD_STOPPED = 1, /* SIGSTOP received */
+} flux_subprocess_sigchld_t;
 
 /*
  * Subprocess flags
@@ -95,6 +115,9 @@ typedef void (*flux_subprocess_state_f) (flux_subprocess_t *p,
 typedef void (*flux_subprocess_credit_f) (flux_subprocess_t *p,
                                           const char *stream,
                                           int bytes);
+typedef void (*flux_subprocess_sigchld_f) (
+    flux_subprocess_t *p,
+    flux_subprocess_sigchld_t sigchld);
 typedef void (*flux_subprocess_hook_f) (flux_subprocess_t *p, void *arg);
 
 /*
@@ -118,6 +141,9 @@ typedef struct {
     flux_subprocess_output_f on_stdout; /* Read of stdout is ready           */
     flux_subprocess_output_f on_stderr; /* Read of stderr is ready           */
     flux_subprocess_credit_f on_credit; /* Write buffer space available      */
+    flux_subprocess_sigchld_f on_sigchld; /* Process sigchld, ordered
+                                           * after RUNNING when
+                                           * on_state_change is set     */
 } flux_subprocess_ops_t;
 
 /*
@@ -379,6 +405,11 @@ flux_subprocess_state_t flux_subprocess_state (flux_subprocess_t *p);
 /*  Return string value of state of subprocess
  */
 const char *flux_subprocess_state_string (flux_subprocess_state_t state);
+
+/*  Return string value of sigchld of subprocess
+ */
+const char *
+flux_subprocess_sigchld_string (flux_subprocess_sigchld_t sigchld);
 
 /*  Return true if subprocess p is still active, i.e. it is waiting to
  *  start, still running, or waiting for eof on all streams.
