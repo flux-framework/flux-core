@@ -171,7 +171,7 @@ int bulk_exec_close (struct bulk_exec *exec, const char *stream)
     return 0;
 }
 
-static int exec_exit_notify (struct bulk_exec *exec)
+static void exec_exit_notify (struct bulk_exec *exec)
 {
     if (exec->handlers->on_exit)
         (*exec->handlers->on_exit) (exec, exec->arg, exec->exit_batch);
@@ -180,7 +180,6 @@ static int exec_exit_notify (struct bulk_exec *exec)
         exec->exit_batch_timer = NULL;
         idset_range_clear (exec->exit_batch, 0, INT_MAX);
     }
-    return 0;
 }
 
 static void exit_batch_cb (flux_reactor_t *r,
@@ -357,8 +356,12 @@ static void subprocess_destroy_finish (flux_future_t *f, void *arg)
 static int subprocess_destroy (flux_t *h, flux_subprocess_t *p)
 {
     flux_future_t *f = flux_subprocess_kill (p, SIGKILL);
-    if (!f || flux_future_then (f, -1., subprocess_destroy_finish, p) < 0)
+    if (!f
+        || flux_subprocess_aux_set (p, "flux_t", h, NULL) < 0
+        || flux_future_then (f, -1., subprocess_destroy_finish, p) < 0) {
+        flux_future_destroy (f);
         return -1;
+    }
     return 0;
 }
 
@@ -527,9 +530,10 @@ struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops,
     exec->ops = sp_ops;
     exec->handlers = ops;
     exec->arg = arg;
-    exec->processes = zlist_new ();
-    exec->commands = zlist_new ();
-    exec->exit_batch = idset_create (0, IDSET_FLAG_AUTOGROW);
+    if (!(exec->processes = zlist_new ())
+        || !(exec->commands = zlist_new ())
+        || !(exec->exit_batch = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        goto error;
     exec->max_start_per_loop = 1;
 
     return exec;
