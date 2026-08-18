@@ -108,8 +108,10 @@ struct idset *subprocess_childfds (flux_subprocess_t *p)
     if (!(ids = idset_decode ("0-2")))
         return NULL;
 
-    if (p->sync_fds[1] > 0)
-        idset_set (ids, p->sync_fds[1]);
+    if (p->sync_fds[1] > 0) {
+        if (idset_set (ids, p->sync_fds[1]) < 0)
+            goto error;
+    }
 
     c = zhash_first (p->channels);
     while (c) {
@@ -118,7 +120,8 @@ struct idset *subprocess_childfds (flux_subprocess_t *p)
             if (streq (c->name, stdchan[i]))
                 goto next;
         }
-        idset_set (ids, c->child_fd);
+        if (idset_set (ids, c->child_fd) < 0)
+            goto error;
 next:
         c = zhash_next (p->channels);
     }
@@ -126,11 +129,15 @@ next:
     // protect any message channel file descriptors to be passed to subproc
     mch = zhash_first (p->msgchans);
     while (mch) {
-        idset_set (ids, msgchan_get_fd (mch));
+        if (idset_set (ids, msgchan_get_fd (mch)) < 0)
+            goto error;
         mch = zhash_next (p->msgchans);
     }
 
     return ids;
+error:
+    idset_destroy (ids);
+    return NULL;
 }
 
 static void subprocess_free (flux_subprocess_t *p)
@@ -203,7 +210,7 @@ static flux_subprocess_t *subprocess_create (
 
     /* set CLOEXEC on sync_fds, so on exec(), child sync_fd is closed
      * and seen by parent */
-#if SOCK_CLOEXEC
+#ifdef SOCK_CLOEXEC
     if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, p->sync_fds) < 0)
         goto error;
 #else
@@ -282,7 +289,7 @@ void subprocess_standard_output (flux_subprocess_t *p, const char *stream)
 void subprocess_check_completed (flux_subprocess_t *p)
 {
     if (p->state != FLUX_SUBPROCESS_EXITED) {
-        log_err ("subprocess_check_completed: unexpected state %s",
+        log_msg ("subprocess_check_completed: unexpected state %s",
                  flux_subprocess_state_string (p->state));
         return;
     }
@@ -564,12 +571,21 @@ flux_future_t *flux_rexec_bg (flux_t *h,
                               int flags,
                               const flux_cmd_t *cmd)
 {
+    int valid_flags = (FLUX_SUBPROCESS_FLAGS_NO_SETPGRP
+                       | FLUX_SUBPROCESS_FLAGS_FORK_EXEC
+                       | FLUX_SUBPROCESS_FLAGS_WAITABLE
+                       | FLUX_SUBPROCESS_FLAGS_SIGN);
+
     if (!h
         || (rank < 0
             && rank != FLUX_NODEID_ANY
             && rank != FLUX_NODEID_UPSTREAM)
         || !cmd
         || !flux_cmd_argc (cmd)) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (flags & ~valid_flags) {
         errno = EINVAL;
         return NULL;
     }
@@ -863,11 +879,11 @@ int flux_subprocess_write (flux_subprocess_t *p,
             log_err ("fbuf_write_watcher_get_buffer");
             return -1;
         }
-        if (fbuf_space (fb) < len) {
+        if ((size_t)fbuf_space (fb) < len) {
             errno = ENOSPC;
             return -1;
         }
-        if ((ret = fbuf_write (fb, buf, len)) < 0) {
+        if ((ret = fbuf_write (fb, buf, (int)len)) < 0) {
             log_err ("fbuf_write");
             return -1;
         }
@@ -880,8 +896,7 @@ int flux_subprocess_write (flux_subprocess_t *p,
             return -1;
         }
         if (subprocess_write (p->f, c->name, buf, len, false) < 0) {
-            log_err ("error sending rexec.write request: %s",
-                     strerror (errno));
+            log_err ("error sending rexec.write request");
             return -1;
         }
         ret = len;
@@ -923,8 +938,7 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
     }
     else {
         if (subprocess_write (p->f, c->name, NULL, 0, true) < 0) {
-            log_err ("error sending rexec.write request: %s",
-                     strerror (errno));
+            log_err ("error sending rexec.write request");
             return -1;
         }
         c->closed = true;
@@ -1093,7 +1107,10 @@ static flux_future_t *add_pending_signal (flux_subprocess_t *p, int signum)
         return NULL;
     }
     if ((f = flux_future_create (NULL, NULL))) {
-        flux_subprocess_aux_set (p, "sp::signal_future", f, NULL);
+        if (flux_subprocess_aux_set (p, "sp::signal_future", f, NULL) < 0) {
+            flux_future_destroy (f);
+            return NULL;
+        }
         p->signal_pending = signum;
         /*  Take a reference on the returned future in case the caller
          *  destroys it between now and when the signal is actually sent.
