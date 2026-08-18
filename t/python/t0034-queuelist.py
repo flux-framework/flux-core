@@ -18,7 +18,13 @@ except ModuleNotFoundError:
     from flux.utils import tomli as tomllib
 
 import flux
-from flux.queue import QueueInfo, QueueList
+from flux.queue import (
+    QueueConf,
+    QueueInfo,
+    QueueList,
+    queue_conf_from_config,
+    queue_config_fetch,
+)
 from flux.resource import resource_list
 from subflux import rerun_under_flux
 
@@ -148,6 +154,54 @@ class TestQueueList(unittest.TestCase):
             {q["name"] for q in resp["conf"]["queues"]},
             {"expedite", "batch"},
         )
+
+    def test_0035_conf_matches_helper(self):
+        # The queue_conf_from_config() helper (used as the fallback for
+        # older brokers and by the hidden --config-file/--from-stdin
+        # options) must reproduce the live job-manager 'conf' object
+        # exactly, so the two implementations do not drift. Queue order is
+        # not guaranteed, so compare with the queues list sorted by name.
+        testconf = """
+        [queues.debug]
+        requires = ["debug"]
+
+        [queues.batch]
+        requires = ["batch"]
+
+        [queues.expedite]
+        parent = "batch"
+        """
+        config = tomllib.loads(testconf)
+        self.fh.rpc("config.load", config).get()
+
+        def by_name(conf):
+            return sorted(conf["queues"], key=lambda q: q["name"])
+
+        resp = self.fh.rpc("job-manager.queue-list").get()
+        self.assertEqual(by_name(resp["conf"]), by_name(queue_conf_from_config(config)))
+
+    def test_0036_queue_config_fetch(self):
+        # queue_config_fetch() sends the request and its get() returns a
+        # QueueConf built from the live job-manager.
+        testconf = """
+        [queues.batch]
+        requires = ["batch"]
+        [queues.expedite]
+        parent = "batch"
+        """
+        self.fh.rpc("config.load", tomllib.loads(testconf)).get()
+
+        conf = queue_config_fetch(self.fh).get()
+        self.assertIsInstance(conf, QueueConf)
+        self.assertEqual(sorted(conf), ["batch", "expedite"])
+        # vqueue-resolved effective config from the live job-manager:
+        self.assertEqual(conf.requires("expedite"), ["batch"])
+        self.assertEqual(conf.parent("expedite"), "batch")
+
+        # a second fetch reflects the same configuration:
+        conf2 = queue_config_fetch(self.fh).get()
+        self.assertEqual(sorted(conf2), sorted(conf))
+        self.assertEqual(conf2.entries, conf.entries)
 
     def test_004_vqueue_stale_parent(self):
         # A QueueInfo parent (sourced from the queue-status RPC) missing
