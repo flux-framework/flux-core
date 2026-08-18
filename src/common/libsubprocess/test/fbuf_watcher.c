@@ -13,6 +13,7 @@
 #endif
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <fcntl.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/fdutils.h"
@@ -1168,6 +1169,97 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
     close (fd[1]);
 }
 
+/* Regression test for issue #7774.
+ *
+ * A read buffer watcher on a fd that polls ready but returns a persistent
+ * error on read() (e.g. EBADF) must stop the watcher and notify the user
+ * with FLUX_POLLERR, rather than spinning at 100% CPU re-reading the fd.
+ */
+
+struct buffer_read_error {
+    int count;
+    int revents;
+};
+
+static void buffer_read_error_cb (flux_reactor_t *r,
+                                   flux_watcher_t *w,
+                                   int revents,
+                                   void *arg)
+{
+    struct buffer_read_error *err = arg;
+    err->count++;
+    err->revents = revents;
+    flux_watcher_stop (w);
+    flux_reactor_stop (r);
+}
+
+/* Watchdog: if the watcher busy loops, the reactor never returns on its
+ * own. This timer fires to break out and let the test report failure
+ * instead of hanging.
+ */
+static void buffer_read_error_timeout (flux_reactor_t *r,
+                                       flux_watcher_t *w,
+                                       int revents,
+                                       void *arg)
+{
+    int *timed_out = arg;
+    *timed_out = 1;
+    flux_reactor_stop (r);
+}
+
+static void test_buffer_read_error (flux_reactor_t *reactor)
+{
+    int fd;
+    flux_watcher_t *w;
+    flux_watcher_t *timer;
+    struct buffer_read_error err = { .count = 0, .revents = 0 };
+    int timed_out = 0;
+
+    /* Open /dev/null write-only: the fd is valid and can be made
+     * nonblocking (so watcher creation succeeds), but read() on it
+     * returns EBADF, modeling the sandboxed fd 0 from issue #7774.
+     */
+    ok ((fd = open ("/dev/null", O_WRONLY)) >= 0,
+        "buffer read error: opened /dev/null O_WRONLY");
+    ok (fd_set_nonblocking (fd) >= 0,
+        "buffer read error: set fd nonblocking");
+
+    w = fbuf_read_watcher_create (reactor,
+                                  fd,
+                                  1024,
+                                  buffer_read_error_cb,
+                                  0,
+                                  &err);
+    ok (w != NULL,
+        "buffer read error: read watcher created on EBADF fd");
+
+    timer = flux_timer_watcher_create (reactor,
+                                       5.,
+                                       0.,
+                                       buffer_read_error_timeout,
+                                       &timed_out);
+    if (!timer)
+        BAIL_OUT ("could not create timer watcher");
+
+    flux_watcher_start (w);
+    flux_watcher_start (timer);
+
+    flux_reactor_run (reactor, 0);
+
+    ok (!timed_out,
+        "buffer read error: watcher stopped instead of busy looping");
+    ok (err.count == 1,
+        "buffer read error: user callback called exactly once");
+    ok ((err.revents & FLUX_POLLERR),
+        "buffer read error: user callback got FLUX_POLLERR");
+
+    flux_watcher_stop (timer);
+    flux_watcher_destroy (timer);
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+    close (fd);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *reactor;
@@ -1182,6 +1274,7 @@ int main (int argc, char *argv[])
     test_buffer (reactor);
     test_buffer_refcnt (reactor);
     test_buffer_corner_case (reactor);
+    test_buffer_read_error (reactor);
 
     flux_reactor_destroy (reactor);
 
