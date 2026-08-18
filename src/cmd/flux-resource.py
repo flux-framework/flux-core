@@ -24,6 +24,7 @@ from flux.cli.argparse import FluxArgumentParser
 from flux.eventlog import EventLogFormatter
 from flux.hostlist import Hostlist
 from flux.idset import IDset
+from flux.queue import QueueConf, queue_config_fetch
 from flux.resource import (
     ResourceJournalConsumer,
     ResourceSet,
@@ -196,27 +197,30 @@ def undrain(args):
     RPC(flux.Flux(), "resource.undrain", payload, nodeid=0).get()
 
 
-def queue_effective_entry(queues, name):
+def queue_conf(args, queue_conf_rpc):
     """
-    Return the effective [queues] config entry for queue ``name``: its own
-    entry, or its parent's entry if it is an RFC 33 virtual queue.
+    Return the effective queue configuration as a name->entry dict, where
+    each entry has its effective "requires" (an RFC 33 virtual queue's is
+    resolved from its parent) and, for a virtual queue, its "parent". This
+    is the job-manager's authoritative view.
 
-    A virtual queue has no "requires" of its own, so resolving to the
-    parent's entry is what maps it to the parent's resource slice rather
-    than wrongly matching every node as an unconstrained queue would. An
-    unresolvable parent raises ValueError (defense in depth: config
-    validation rejects it in a live instance, but --config-file and
-    --from-stdin input is not validated).
+    'queue_conf_rpc' is a queue_config_fetch() request the caller has
+    already sent (so it can overlap with other RPCs). It is required on the
+    online path and must be non-None unless ``--config-file`` is set. The
+    hidden --config-file/--from-stdin test options derive the config from a
+    file instead. Returns an empty dict when there is no source.
     """
-    entry = queues[name]
-    if "parent" in entry:
-        parent = entry["parent"]
-        if parent not in queues:
-            raise ValueError(
-                f"queue '{name}': parent queue '{parent}' is not configured"
-            )
-        entry = queues[parent]
-    return entry
+    if args.config_file:
+        with open(args.config_file) as fp:
+            conf = QueueConf.from_config(json.load(fp))
+    elif queue_conf_rpc is None:
+        return {}
+    else:
+        conf = queue_conf_rpc.get()
+    #  Return the raw name->entry dict: the resource rendering below iterates
+    #  entries (filtering hidden/virtual queues, testing membership) rather
+    #  than doing per-queue lookups, so QueueConf.entries fits it directly.
+    return conf.entries
 
 
 class QueueResources:
@@ -224,17 +228,14 @@ class QueueResources:
     Convenience class to map queues to resource sets
     """
 
-    def __init__(self, resource_set, config):
+    def __init__(self, resource_set, queues):
         self._queues = {}
-        if "queues" not in config:
-            return
-        for queue in config["queues"]:
-            entry = queue_effective_entry(config["queues"], queue)
+        for name, entry in queues.items():
             if "requires" in entry:
                 result = resource_set.copy_constraint({"properties": entry["requires"]})
             else:
                 result = resource_set.copy()
-            self._queues[queue] = result
+            self._queues[name] = result
 
     def queue(self, queue):
         if queue not in self._queues:
@@ -242,15 +243,16 @@ class QueueResources:
         return self._queues[queue]
 
 
-def ranks_by_queue(resource_set, config, queues):
+def ranks_by_queue(resource_set, queue_config, queues):
     """
     Return all ranks associated with a list of queues
     Args:
         resource_set: The resource set to query
-        config: a Flux config object including queue configuration, if any.
+        queue_config: effective queue config as a name->entry dict (see
+            queue_conf())
         queues: one or more queues specified as a comma-separated string
     """
-    queue_resources = QueueResources(resource_set, config)
+    queue_resources = QueueResources(resource_set, queue_config)
     ranks = IDset()
     for queue in queues:
         ranks.add(queue_resources.queue(queue).ranks)
@@ -452,6 +454,7 @@ def status(args):
     fmt = FluxResourceConfig("status").load().get_format_string(args.format)
 
     handle = None
+    queue_conf_rpc = None
 
     #  Get payload from stdin or from resource.status RPC:
     if args.from_stdin:
@@ -459,18 +462,21 @@ def status(args):
         rstatus = ResourceStatus(json.loads(input_str) if input_str else None)
     else:
         handle = flux.Flux()
+        #  Send the queue config request (only needed for --queue) before
+        #  resource.status .get(), so the two overlap:
+        if args.queue:
+            queue_conf_rpc = queue_config_fetch(handle)
         rstatus = resource_status(handle).get()
 
     if args.queue:
-        if args.config_file:
-            with open(args.config_file) as fp:
-                config = json.load(fp)
-        else:
-            config = {}
-            if handle is not None:
-                config = handle.rpc("config.get").get()
         try:
-            rstatus.filter(ranks_by_queue(rstatus.rset, config, args.queue))
+            rstatus.filter(
+                ranks_by_queue(
+                    rstatus.rset,
+                    queue_conf(args, queue_conf_rpc),
+                    args.queue,
+                )
+            )
         except ValueError as exc:
             raise ValueError(f"--queue: {exc}") from None
 
@@ -534,12 +540,12 @@ class ResourceSetExtra(ResourceSet):
         self,
         arg=None,
         version=1,
-        flux_config=None,
+        queue_config=None,
         queue=None,
         queue_filter=None,
         hidden_queues=None,
     ):
-        self.flux_config = flux_config
+        self.queue_config = queue_config or {}
         self._queue = queue
         self._queue_filter = queue_filter
         self._hidden_queues = hidden_queues or set()
@@ -558,9 +564,8 @@ class ResourceSetExtra(ResourceSet):
         properties = json.loads(self.get_properties())
         #  Strip all configured queue names from properties, so that
         #  properties used only for queue membership are not displayed.
-        if self.flux_config and "queues" in self.flux_config:
-            for q in self.flux_config["queues"]:
-                properties.pop(q, None)
+        for q in self.queue_config:
+            properties.pop(q, None)
         return ",".join(properties.keys())
 
     @property
@@ -573,11 +578,11 @@ class ResourceSetExtra(ResourceSet):
         #  If self._queue is not set, then build list of queues from
         #  set properties and queue configuration:
         queues = ""
-        if self.flux_config and "queues" in self.flux_config:
+        if self.queue_config:
             if not self.ranks:
                 return ""
             properties = json.loads(self.get_properties())
-            for key, value in self.flux_config["queues"].items():
+            for key, entry in self.queue_config.items():
                 if self._queue_filter:
                     if key not in self._queue_filter:
                         continue
@@ -587,9 +592,8 @@ class ResourceSetExtra(ResourceSet):
                 # was explicitly requested via -q (i.e. is in the filter),
                 # otherwise it would match every node in the default QUEUE
                 # column via its resolved parent's requires:
-                if "parent" in value and not self._queue_filter:
+                if "parent" in entry and not self._queue_filter:
                     continue
-                entry = queue_effective_entry(self.flux_config["queues"], key)
                 if "requires" not in entry or set(entry["requires"]).issubset(
                     set(properties)
                 ):
@@ -626,7 +630,7 @@ def split_by_property_combinations(rset):
 
 
 def resources_uniq_lines(
-    resources, states, formatter, config, queues=None, hidden_queues=None
+    resources, states, formatter, queue_config, queues=None, hidden_queues=None
 ):
     """
     Generate a set of resource sets that would produce unique lines given
@@ -670,10 +674,10 @@ def resources_uniq_lines(
     #  If no queues are configured then one "anonymous" queue is simulated
     #  with [None].
     if not queues:
-        if config and "queues" in config:
+        if queue_config:
             queues = [
                 q
-                for q, entry in config["queues"].items()
+                for q, entry in queue_config.items()
                 if q not in hidden_queues and "parent" not in entry
             ]
             if not queues:
@@ -691,7 +695,7 @@ def resources_uniq_lines(
             #   state would be suppressed.
             #
             for queue in queues:
-                rset = ResourceSetExtra(flux_config=config, queue=queue)
+                rset = ResourceSetExtra(queue_config=queue_config, queue=queue)
                 rset.state = state
                 key = fmt.format(rset)
                 if key not in lines:
@@ -706,7 +710,7 @@ def resources_uniq_lines(
             rset.state = state
             rset = ResourceSetExtra(
                 rset,
-                flux_config=config,
+                queue_config=queue_config,
                 queue_filter=queue_filter,
                 hidden_queues=hidden_queues,
             )
@@ -725,7 +729,7 @@ def get_resource_list(args):
     Common function for list_handler() and emit_R()
     """
     valid_states = ["up", "down", "allocated", "free", "all"]
-    config = None
+    handle = None
 
     args.states = args.states.split(",")
     for state in args.states:
@@ -733,23 +737,27 @@ def get_resource_list(args):
             LOGGER.error("Invalid resource state %s specified", state)
             sys.exit(1)
 
+    queue_conf_rpc = None
     if args.from_stdin:
         resources = SchedResourceList(json.load(sys.stdin))
-        if args.config_file:
-            with open(args.config_file) as fp:
-                config = json.load(fp)
     else:
         handle = flux.Flux()
-        rpcs = [resource_list(handle), handle.rpc("config.get")]
-        resources = rpcs[0].get()
-        try:
-            config = rpcs[1].get()
-        except Exception as e:
-            LOGGER.warning("Could not get flux config: " + str(e))
+        queue_conf_rpc = queue_config_fetch(handle)
+        resources = resource_list(handle).get()
+
+    #  The job-manager may be unavailable (e.g. not loaded); still list
+    #  resources, just without queue annotation.
+    try:
+        queue_config_dict = queue_conf(args, queue_conf_rpc)
+    except OSError as e:
+        LOGGER.warning("Could not get queue configuration: " + str(e))
+        queue_config_dict = {}
 
     if args.queue:
         try:
-            resources.filter(ranks_by_queue(resources.all, config, args.queue))
+            resources.filter(
+                ranks_by_queue(resources.all, queue_config_dict, args.queue)
+            )
         except ValueError as exc:
             raise ValueError(f"--queue: {exc}") from None
 
@@ -759,7 +767,7 @@ def get_resource_list(args):
         except (ValueError, TypeError) as exc:
             raise ValueError(f"--include: {exc}") from None
 
-    return resources, config
+    return resources, queue_config_dict
 
 
 def sort_output(args, items):
@@ -783,7 +791,7 @@ def list_handler(args):
         "nodelist": "NODELIST",
         "rlist": "LIST",
     }
-    resources, config = get_resource_list(args)
+    resources, queue_config_dict = get_resource_list(args)
 
     list_config = FluxResourceConfig("list").load()
     fmt = list_config.get_format_string(args.format)
@@ -794,7 +802,7 @@ def list_handler(args):
         resources,
         args.states,
         formatter,
-        config,
+        queue_config_dict,
         queues=args.queue,
         hidden_queues=hidden_queues,
     )
@@ -815,7 +823,7 @@ def info(args):
 
 def emit_R(args):
     """Emit R in JSON on stdout for requested set of resources"""
-    resources, config = get_resource_list(args)
+    resources, _ = get_resource_list(args)
 
     rset = ResourceSet()
     rset.starttime = resources["all"].starttime
