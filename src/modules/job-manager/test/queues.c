@@ -1606,6 +1606,82 @@ static void test_list_encode (void)
     queues_destroy (qs);
 }
 
+/* Return the number of named queues currently configured. */
+static size_t named_queue_count (struct queues *qs)
+{
+    zlistx_t *names = queues_list_names (qs);
+    size_t n = zlistx_size (names);
+    zlistx_destroy (&names);
+    return n;
+}
+
+/* A failed queues_configure() must be rejected whole, leaving the
+ * previous configuration intact.
+ */
+static void test_configure_failure_preserves_state (void)
+{
+    struct queues *qs;
+    flux_error_t error;
+    json_t *good;
+    json_t *bad;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    good = json_pack ("{s:{} s:{} s:{}}", "a", "b", "c");
+    if (!good)
+        BAIL_OUT ("json_pack failed");
+    if (queues_configure (qs, good, &error) < 0)
+        BAIL_OUT ("queues_configure failed: %s", error.text);
+    json_decref (good);
+    ok (named_queue_count (qs) == 3, "initial configuration established");
+
+    /* A new config with an invalid (non-object) entry must be rejected
+     * whole, leaving the old configuration untouched.
+     */
+    bad = json_pack ("{s:{} s:{} s:i s:{}}",
+                     "c",
+                     "a",
+                     "bad", 5,
+                     "b");
+    if (!bad)
+        BAIL_OUT ("json_pack failed");
+    errno = 0;
+    ok (queues_configure (qs, bad, &error) < 0 && errno == EINVAL,
+        "configure with an invalid entry fails with EINVAL");
+    json_decref (bad);
+
+    ok (named_queue_count (qs) == 3
+        && queues_lookup (qs, "a", NULL) != NULL
+        && queues_lookup (qs, "b", NULL) != NULL
+        && queues_lookup (qs, "c", NULL) != NULL
+        && queues_lookup (qs, "bad", NULL) == NULL,
+        "failed configure leaves the previous configuration intact");
+
+    queues_destroy (qs);
+
+    /* Same, but starting from the anonymous queue: a failed configure
+     * must not partially transition to named mode.
+     */
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    bad = json_pack ("{s:{} s:i}", "a", "bad", 5);
+    if (!bad)
+        BAIL_OUT ("json_pack failed");
+    errno = 0;
+    ok (queues_configure (qs, bad, &error) < 0 && errno == EINVAL,
+        "configure from anon with an invalid entry fails with EINVAL");
+    json_decref (bad);
+
+    ok (!queues_have_named (qs) && queues_lookup (qs, NULL, NULL) != NULL,
+        "failed configure from anon leaves the anonymous queue intact");
+
+    queues_destroy (qs);
+}
+
 /* Look up the conf.queues entry named 'name' in array 'cq', or NULL.
  * Queue order in the array is not guaranteed, so entries are found by
  * name rather than by position.
@@ -2448,6 +2524,7 @@ int main (int argc, char *argv[])
     test_list_names ();
     test_status_encode ();
     test_list_encode ();
+    test_configure_failure_preserves_state ();
     test_list_response ();
 
     test_vqueue_configure ();
