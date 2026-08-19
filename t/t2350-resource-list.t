@@ -598,15 +598,15 @@ test_expect_success 'flux resource list --queue works for a queue with no constr
 	test_must_fail grep debug queue-every.out
 '
 test_expect_success 'flux resource list includes queue names for empty sets' '
-	# There are no nodes in 'down' state in this test, so use that:
+	# There are no nodes in 'down' state in this test, so use that.
+	# Queue order is not guaranteed, so grep for each expected line.
 	flux resource list -s down -no "{queue} {state} {nnodes}" \
 		>queue-empty1.out &&
-	cat <<-EOF >queue-empty1.expected &&
-	every down 0
-	batch down 0
-	debug down 0
-	EOF
-	test_cmp queue-empty1.expected queue-empty1.out
+	test_debug "cat queue-empty1.out" &&
+	test $(grep -c "^every down 0$" queue-empty1.out) -eq 1 &&
+	test $(grep -c "^batch down 0$" queue-empty1.out) -eq 1 &&
+	test $(grep -c "^debug down 0$" queue-empty1.out) -eq 1 &&
+	test $(wc -l <queue-empty1.out) -eq 3
 '
 test_expect_success 'flux resource list includes queue names for empty sets (single)' '
 	flux resource list -q batch -s down -no "{queue} {state} {nnodes}" \
