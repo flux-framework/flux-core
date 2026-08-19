@@ -121,7 +121,8 @@ test_expect_success 'job FLUX_JOB_ID_PATH=/id' '
 test_expect_success 'flux_open("/") works at top-level' '
 	flux python -c "import flux; print(flux.Flux(\"/\").attr_get(\"instance-level\"));"
 '
-test_expect_success 'flux_open(3) accepts path-like URIs: "/", "../.." etc' '
+# N.B. Set NO_ASAN, suspected python related false positives w/ ASAN, See #7624
+test_expect_success NO_ASAN 'flux_open(3) accepts path-like URIs: "/", "../.." etc' '
 	cat <<-EOF >flux_open.py &&
 	import unittest
 	import flux
