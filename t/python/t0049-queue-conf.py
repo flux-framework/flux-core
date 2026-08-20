@@ -163,13 +163,18 @@ class TestQueueConfFromConfig(unittest.TestCase):
 class TestQueueConf(unittest.TestCase):
     """QueueConf exposes effective per-queue configuration."""
 
-    # A representative config: a real queue with its own requires, a virtual
-    # queue inheriting its parent, and a queue with no requires.
+    # A representative config: a global policy with a default queue and a
+    # duration limit, a real queue overriding the limit, a virtual queue
+    # inheriting its parent, and a queue with no own policy.
     # QueueConf.from_config runs it through queue_conf_from_config, so the
-    # per-queue requires entries are already vqueue-resolved.
+    # entries are already effective (vqueue-resolved, global merged in).
     CONFIG = {
+        "policy": {
+            "limits": {"duration": "24h"},
+            "jobspec": {"defaults": {"system": {"queue": "batch", "duration": "1h"}}},
+        },
         "queues": {
-            "batch": {"requires": ["batch"]},
+            "batch": {"requires": ["batch"], "policy": {"limits": {"duration": "8h"}}},
             "expedite": {"parent": "batch"},
             "plain": {},
         },
@@ -218,9 +223,48 @@ class TestQueueConf(unittest.TestCase):
     def test_entries(self):
         # The raw name -> entry escape hatch.
         self.assertEqual(sorted(self.qc.entries), ["batch", "expedite", "plain"])
+        self.assertEqual(self.qc.entries["batch"]["requires"], ["batch"])
+
+    def test_default_queue(self):
+        self.assertEqual(self.qc.default_queue, "batch")
+
+    def test_default_queue_absent(self):
         self.assertEqual(
-            self.qc.entries["batch"], {"name": "batch", "requires": ["batch"]}
+            QueueConf.from_config({"queues": {"batch": {}}}).default_queue, ""
         )
+
+    def test_policy_named_queue(self):
+        # batch's own 8h overrides the global 24h; effective policy is a
+        # direct lookup (already merged by the encoder).
+        self.assertEqual(self.qc.policy("batch")["limits"]["duration"], "8h")
+
+    def test_policy_inherits(self):
+        # expedite (vqueue, no own policy) inherits its parent batch's
+        # effective policy (8h); plain (no policy) gets the global (24h).
+        self.assertEqual(self.qc.policy("expedite")["limits"]["duration"], "8h")
+        self.assertEqual(self.qc.policy("plain")["limits"]["duration"], "24h")
+
+    def test_policy_anonymous(self):
+        # name None or an unconfigured queue -> the global policy.
+        self.assertEqual(self.qc.policy()["limits"]["duration"], "24h")
+        self.assertEqual(self.qc.policy("nosuchqueue")["limits"]["duration"], "24h")
+
+    def test_policy_empty_when_no_global(self):
+        qc = QueueConf.from_config({"queues": {"batch": {}}})
+        self.assertEqual(qc.policy("batch"), {})
+        self.assertEqual(qc.policy(), {})
+
+    def test_defaults(self):
+        # batch inherits the global jobspec defaults (it overrides only the
+        # duration limit, not the defaults).
+        self.assertEqual(
+            self.qc.defaults("batch"), {"queue": "batch", "duration": "1h"}
+        )
+        self.assertEqual(self.qc.defaults(), {"queue": "batch", "duration": "1h"})
+
+    def test_defaults_empty(self):
+        qc = QueueConf.from_config({"queues": {"batch": {}}})
+        self.assertEqual(qc.defaults("batch"), {})
 
 
 class TestPolicyAliasing(unittest.TestCase):
