@@ -254,10 +254,11 @@ def queue_conf_from_config(config):
 class QueueConf:
     """The job-manager's authoritative queue configuration.
 
-    Wraps a job-manager.queue-list "conf" object (``{"queues": [...]}``) and
-    exposes per-queue effective configuration. RFC 33 virtual-queue
-    inheritance is already resolved by the job-manager, so a queue's
-    ``requires`` is an effective value.
+    Wraps a job-manager.queue-list "conf" object (``{"queues": [...],
+    "policy"?: {...}, "default_queue"?: str}``) and exposes per-queue
+    effective configuration. The job-manager resolves everything, so a
+    queue's ``requires`` and ``policy`` are effective values (RFC 33
+    virtual-queue inheritance and the global policy are already merged in).
 
     Fetch from a live instance with :func:`queue_config_fetch`. Build from a
     raw broker config with :meth:`from_config` (the ``--config-file`` /
@@ -267,6 +268,11 @@ class QueueConf:
 
     def __init__(self, conf):
         self._entries = {entry["name"]: entry for entry in conf.get("queues", [])}
+        # The global policy is the effective policy for the anonymous queue
+        # or a job with no queue (a named queue's effective policy is in its
+        # own entry).
+        self._global_policy = conf.get("policy") or {}
+        self._default_queue = conf.get("default_queue", "")
 
     @classmethod
     def from_config(cls, config):
@@ -312,6 +318,33 @@ class QueueConf:
         The job-manager's authoritative view of the resolved parent.
         """
         return (self._entries.get(name) or {}).get("parent", "")
+
+    def policy(self, name=None):
+        """The queue's effective policy dict (empty if none).
+
+        The job-manager has already merged the global policy, RFC 33
+        virtual-queue inheritance, and the queue's own policy, so this is a
+        direct lookup. ``name`` None or an unconfigured queue (the
+        anonymous-queue case) -> the global policy.
+        """
+        entry = self._entries.get(name)
+        if entry is None:
+            return self._global_policy
+        return entry.get("policy") or {}
+
+    def defaults(self, name=None):
+        """The queue's effective job defaults
+        (``policy.jobspec.defaults.system``), an empty dict if none.
+        """
+        try:
+            return self.policy(name)["jobspec"]["defaults"]["system"]
+        except KeyError:
+            return {}
+
+    @property
+    def default_queue(self):
+        """The configured default queue name, or "" if none."""
+        return self._default_queue
 
 
 class QueueConfRPC(RPC):
