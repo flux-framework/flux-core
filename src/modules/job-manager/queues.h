@@ -133,10 +133,16 @@ json_t *queues_list_encode (struct queues *queues);
 
 /* Assemble the full job-manager.queue-list RPC response:
  *   {"queues":[names...],
- *    "conf":{"queues":[{"name":s,"requires"?:[...],"parent"?:s}, ...]}}
+ *    "conf":{"queues":[{"name":s,"requires"?:[...],"parent"?:s,
+ *                       "policy"?:{...}}, ...],
+ *            "policy"?:{...}, "default_queue"?:s}}
  * The "queues" name array is retained for backwards compatibility; "conf"
  * carries the effective per-queue configuration (a virtual queue's
- * 'requires' is inherited from its parent). Queue order is unspecified.
+ * 'requires' is inherited from its parent, and its 'policy' is fully
+ * effective - global, parent, and own merged - see queue_policy()). The
+ * conf's top-level "policy" is the global policy (the effective policy for
+ * the anonymous queue / a job with no queue) and "default_queue" is the
+ * configured default queue name. Queue order is unspecified.
  *
  * The response is cached and rebuilt lazily; any queue mutation
  * invalidates the cache. Returns a BORROWED reference owned by the queues
@@ -154,6 +160,16 @@ const char *queue_name (struct queue *q);
  * it is the queue's own requires.
  */
 json_t *queue_requires (struct queue *q);
+/* This queue's effective policy: the global [policy], the parent's own
+ * policy (for an RFC 33 virtual queue), and this queue's own policy, all
+ * merged per key from the bottom up.
+ *
+ * On success returns 0 and sets '*policyp' to a NEW reference (caller
+ * decrefs), or to NULL when the effective policy is empty (no policy at any
+ * layer, or only empty policy tables - empty == absent). Returns -1 with
+ * errno set on error.
+ */
+int queue_policy (struct queue *q, json_t **policyp);
 bool queue_is_enabled (struct queue *q);
 const char *queue_disable_reason (struct queue *q);
 /* Own started bit; see queue_is_started_effective() below for a
