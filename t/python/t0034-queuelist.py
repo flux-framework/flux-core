@@ -158,27 +158,44 @@ class TestQueueList(unittest.TestCase):
     def test_0035_conf_matches_helper(self):
         # The queue_conf_from_config() helper (used as the fallback for
         # older brokers and by the hidden --config-file/--from-stdin
-        # options) must reproduce the live job-manager 'conf' object
-        # exactly, so the two implementations do not drift. Queue order is
-        # not guaranteed, so compare with the queues list sorted by name.
+        # options) must reproduce the live job-manager 'conf' object, so the
+        # two implementations do not drift. Include a global [policy] and
+        # per-queue policy (including a virtual queue that overrides one key
+        # and inherits another) so the conf's effective-policy and
+        # default_queue fields are exercised, not just requires/parent.
+        # Queue order is not guaranteed, so compare with queues sorted by
+        # name.
         testconf = """
+        [policy.limits]
+        duration = "24h"
+
+        [policy.jobspec.defaults.system]
+        queue = "batch"
+
         [queues.debug]
         requires = ["debug"]
 
         [queues.batch]
         requires = ["batch"]
+        policy.limits.duration = "8h"
+        policy.limits.job-size.max.nnodes = 16
 
         [queues.expedite]
         parent = "batch"
+        policy.limits.duration = "1h"
         """
         config = tomllib.loads(testconf)
         self.fh.rpc("config.load", config).get()
 
-        def by_name(conf):
-            return sorted(conf["queues"], key=lambda q: q["name"])
+        def normalize(conf):
+            conf = dict(conf)
+            conf["queues"] = sorted(conf["queues"], key=lambda q: q["name"])
+            return conf
 
         resp = self.fh.rpc("job-manager.queue-list").get()
-        self.assertEqual(by_name(resp["conf"]), by_name(queue_conf_from_config(config)))
+        self.assertEqual(
+            normalize(resp["conf"]), normalize(queue_conf_from_config(config))
+        )
 
     def test_0036_queue_config_fetch(self):
         # queue_config_fetch() sends the request and its get() returns a
