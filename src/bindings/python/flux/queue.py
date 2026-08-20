@@ -7,6 +7,7 @@
 #
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
+import copy
 import math
 
 try:
@@ -16,7 +17,7 @@ except ModuleNotFoundError:
 
 from flux.resource import resource_list
 from flux.rpc import RPC
-from flux.util import parse_fsd
+from flux.util import dict_merge, parse_fsd
 
 """Simple access to information about Flux queues from Python.
 
@@ -185,9 +186,14 @@ def queue_conf_from_config(config):
     the job-manager is from an older version of Flux that does not provide
     the queue config directly.
 
-    Returns ``{"queues": [{"name": str, "requires"?: list, "parent"?: str},
-    ...]}``. A virtual queue (RFC 33) has no "requires" of its own, so its
-    effective "requires" is resolved from its parent.
+    Returns ``{"queues": [{"name": str, "requires"?: list, "parent"?: str,
+    "policy"?: dict}, ...], "policy"?: dict, "default_queue"?: str}``. A
+    virtual queue (RFC 33) has no "requires" of its own, so its effective
+    "requires" is resolved from its parent. Each queue's "policy" is its
+    fully effective policy (the global [policy], the parent's policy for a
+    virtual queue, and its own, merged per key). The top-level "policy" is
+    the global [policy] (the effective policy for the anonymous queue or a
+    job with no queue) and "default_queue" is the default queue name.
 
     Args:
         config (dict): a broker config, e.g. from the ``config.get`` RPC.
@@ -196,26 +202,53 @@ def queue_conf_from_config(config):
         ValueError: a virtual queue names a parent that is not configured.
     """
     queues = config.get("queues", {})
+    global_policy = config.get("policy") or {}
     entries = []
     for name, entry in queues.items():
         conf = {"name": name}
         parent = entry.get("parent")
+        # A virtual queue (RFC 33) inherits its parent's requires and layers
+        # its own policy over the parent's, so resolve both against the
+        # parent entry. An unresolvable parent is fatal (fail closed):
+        # falling through would report the vqueue as unconstrained.
         if parent is not None:
-            # Virtual queue: inherit the parent's requires. An unresolvable
-            # parent is fatal (fail closed) - falling through would report
-            # the vqueue as covering the full instance resource set.
             if parent not in queues:
                 raise ValueError(
                     f"queue '{name}': parent queue '{parent}' is not configured"
                 )
             conf["parent"] = parent
             requires = queues[parent].get("requires")
+            base_policy = queues[parent].get("policy")
         else:
             requires = entry.get("requires")
+            base_policy = None
         if requires is not None:
             conf["requires"] = requires
+        # Effective per-queue policy: the global [policy], then the parent's
+        # policy (for a virtual queue), then the queue's own, merged per key
+        # from the bottom up (mirrors the job-manager's queue_policy()). Each
+        # layer is deep-copied before merging: dict_merge() shares nested
+        # dicts from its second argument, so a later merge could otherwise
+        # mutate the parent's or global's stored config. An empty result is
+        # omitted (empty == absent).
+        policy = copy.deepcopy(global_policy)
+        if base_policy:
+            dict_merge(policy, copy.deepcopy(base_policy))
+        dict_merge(policy, copy.deepcopy(entry.get("policy") or {}))
+        if policy:
+            conf["policy"] = policy
         entries.append(conf)
-    return {"queues": entries}
+    result = {"queues": entries}
+    if global_policy:
+        result["policy"] = global_policy
+    try:
+        result["default_queue"] = global_policy["jobspec"]["defaults"]["system"][
+            "queue"
+        ]
+    except KeyError:
+        # No default queue, return result as is
+        pass
+    return result
 
 
 class QueueConf:
