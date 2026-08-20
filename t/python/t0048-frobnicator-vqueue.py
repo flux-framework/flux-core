@@ -84,16 +84,20 @@ class TestConstraintsVQueue(unittest.TestCase):
 
 
 class TestDefaultsVQueue(unittest.TestCase):
-    """RFC 33 virtual queue defaults inheritance in the frobnicator."""
+    """The defaults frobnicator reads effective defaults from QueueConf.
+
+    RFC 33 virtual-queue inheritance is resolved by the job-manager, so the
+    conf entries already carry a vqueue's effective defaults.
+    """
 
     def test_vqueue_inherits_parent_defaults(self):
         dc = DefaultsConfig(
-            {
-                "queues": {
+            queue_conf(
+                {
                     "batch": defaults_config({"duration": "1h"}),
                     "expedite": {"parent": "batch"},
                 }
-            }
+            )
         )
         self.assertEqual(dc.queue_defaults("expedite"), {"duration": "1h"})
 
@@ -101,24 +105,18 @@ class TestDefaultsVQueue(unittest.TestCase):
         expedite = defaults_config({"duration": "5m"})
         expedite["parent"] = "batch"
         dc = DefaultsConfig(
-            {
-                "queues": {
+            queue_conf(
+                {
                     "batch": defaults_config({"duration": "1h", "queue": "batch"}),
                     "expedite": expedite,
                 }
-            }
+            )
         )
         # Own duration overrides the parent's; the parent's other keys
         # are still inherited beneath.
         eff = dc.queue_defaults("expedite")
         self.assertEqual(eff["duration"], "5m")
         self.assertEqual(eff["queue"], "batch")
-
-    def test_vqueue_missing_parent_fails_closed(self):
-        # DefaultsConfig validates every queue at construction, so a
-        # vqueue with an unconfigured parent must raise there.
-        with self.assertRaises(ValueError):
-            DefaultsConfig({"queues": {"expedite": {"parent": "nosuchqueue"}}})
 
 
 if __name__ == "__main__":

@@ -8,84 +8,36 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-"""Apply defaults to incoming jobspec based on broker config."""
-
-import copy
+"""Apply queue job defaults to incoming jobspec from the job-manager."""
 
 from flux.job.frobnicator import FrobnicatorPlugin
+from flux.queue import QueueConf
 
 
 class DefaultsConfig:
     """Convenience class for handling jobspec defaults configuration"""
 
-    def __init__(self, config={}):
-        self.defaults = {}
-        self.queues = {}
-        self.default_queue = None
-
-        try:
-            self.defaults = config["policy"]["jobspec"]["defaults"]["system"]
-            self.default_queue = self.defaults["queue"]
-        except KeyError:
-            pass
-
-        try:
-            self.queues = config["queues"]
-        except KeyError:
-            pass
-
-        self.validate_config()
-
-    def validate_config(self):
-        if self.queues and not isinstance(self.queues, dict):
-            raise ValueError("queues must be a table")
-
-        if self.default_queue and self.default_queue not in self.queues:
-            raise ValueError(
-                f"default queue '{self.default_queue}' must be in [queues]"
-            )
-
-        for queue in self.queues:
-            self.queue_defaults(queue)
+    def __init__(self, queue_conf=None):
+        # 'queue_conf' is a flux.queue.QueueConf, with each queue's effective
+        # defaults (the global defaults overlaid by the queue's own, RFC 33
+        # virtual-queue inheritance resolved) already computed.
+        self.queue_conf = queue_conf if queue_conf is not None else QueueConf({})
+        # The broker will have rejected a config with a default queue that
+        # is not also in [queues]. However, protect against it here anyway
+        # and raise a sensible error:
+        default = self.queue_conf.default_queue
+        if default and default not in self.queue_conf:
+            raise ValueError(f"default queue '{default}' must be in [queues]")
 
     def queue_defaults(self, name):
-        """Create a copy of self.defaults updated with queue-specific values
+        """Return the effective job defaults for a queue (None = anonymous).
 
-        Effective defaults are layered: global defaults, then (if 'name'
-        is a virtual queue, RFC 33) the parent queue's own defaults,
-        then this queue's own defaults - each layer overlaid per-key
-        over the last. Inheritance is one level (validated by
-        conf_policy.c), so there is no chain to walk beyond the parent.
+        The job-manager resolves RFC 33 virtual-queue inheritance, so this is
+        just the queue's effective ``jobspec.defaults.system``.
         """
-
-        def queue_system_defaults(qconf):
-            try:
-                return qconf["policy"]["jobspec"]["defaults"]["system"]
-            except KeyError:
-                return None
-
-        defaults = copy.deepcopy(self.defaults)
-        if name and self.queues:
-            if name not in self.queues:
-                raise ValueError(f"Invalid queue '{name}' specified")
-            qconf = self.queues[name]
-            # A virtual queue (RFC 33) inherits the parent's defaults
-            # beneath its own. An unresolvable parent is a fatal error
-            # (fail closed): silently skipping the parent layer would
-            # give the vqueue the wrong effective defaults.
-            parent = qconf.get("parent")
-            if parent is not None:
-                if parent not in self.queues:
-                    raise ValueError(
-                        f"queue '{name}': parent queue '{parent}' is not configured"
-                    )
-                pdefaults = queue_system_defaults(self.queues[parent])
-                if pdefaults is not None:
-                    defaults.update(pdefaults)
-            qdefaults = queue_system_defaults(qconf)
-            if qdefaults is not None:
-                defaults.update(qdefaults)
-        return defaults
+        if name is not None and name not in self.queue_conf:
+            raise ValueError(f"Invalid queue '{name}' specified")
+        return self.queue_conf.defaults(name)
 
     def setattr_default(self, jobspec, attr, value):
         if attr == "duration" and jobspec.duration == 0:
@@ -96,8 +48,10 @@ class DefaultsConfig:
     def apply_defaults(self, jobspec):
         """Apply general defaults then queue-specific defaults to jobspec"""
 
-        queue = jobspec.queue or self.defaults.get("queue")
-        if queue is None and self.queues:
+        queue = jobspec.queue or self.queue_conf.default_queue or None
+        # A falsy QueueConf means no named queues are configured, so the
+        # anonymous queue is valid; otherwise a queue is required.
+        if queue is None and self.queue_conf:
             raise ValueError("no queue specified")
 
         for attr, value in self.queue_defaults(queue).items():
@@ -110,7 +64,9 @@ class Frobnicator(FrobnicatorPlugin):
         super().__init__(parser)
 
     def configure(self, args, config):
-        self.config = DefaultsConfig(config)
+        # queue_conf is injected by the framework as an attribute (see
+        # FrobnicatorPlugin) before configure() is called.
+        self.config = DefaultsConfig(self.queue_conf)
 
     def frob(self, jobspec, user, urgency, flags):
         self.config.apply_defaults(jobspec)
