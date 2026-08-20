@@ -301,6 +301,13 @@ test_expect_success 'vqueue inherits parent job-size limit' '
 	  expedite-jobsize.err
 '
 
+test_expect_success 'flux queue list shows effective vqueue limits' '
+	test "$(flux queue list -q expedite -no {limits.timelimit!F})" = "30m" &&
+	test "$(flux queue list -q expedite -no {limits.max.nnodes})" = "2" &&
+	test "$(flux queue list -q batch -no {limits.timelimit!F})" = "1h" &&
+	test "$(flux queue list -q batch -no {limits.max.nnodes})" = "2"
+'
+
 test_expect_success 'vqueue job within both inherited and own limits passes' '
 	flux submit -q expedite -N 2 -t 20m hostname
 '
