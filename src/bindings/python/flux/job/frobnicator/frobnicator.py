@@ -15,10 +15,22 @@ import flux
 from flux.cli.argparse import FluxArgumentParser
 from flux.importer import import_path, import_plugins
 from flux.job import Jobspec
+from flux.queue import queue_config_fetch
 
 
 class FrobnicatorPlugin:
-    """Base class for plugins which modify jobspec in place"""
+    """Base class for plugins which modify jobspec in place
+
+    The following base class attributes are used to pass optional, extensible
+    context to plugins without perturbing plugin callback method signatures,
+    and will be available from within all callbacks unless otherwise noted:
+
+    Attrs:
+        queue_conf (:obj:`flux.queue.QueueConf`): The instance's queue
+            configuration, as fetched from the job-manager.queue-list RPC.
+    """
+
+    queue_conf = None
 
     def __init__(self, parser):
         """Initialize a FrobnicatorPlugin"""
@@ -103,7 +115,16 @@ class JobFrobnicator:
     def start(self):
         """Read broker config, select and configure frobnicator plugins"""
 
-        self.config = flux.Flux().rpc("config.get").get()
+        # Fetch the full broker config (passed to every plugin) and the
+        # job-manager's queue configuration (for queue-aware plugins). Send
+        # both requests before draining either, so they overlap. The queue
+        # config comes from the queue-list RPC, falling back to the broker
+        # config for an older job-manager (see queue_config_fetch()).
+        handle = flux.Flux()
+        config_rpc = handle.rpc("config.get")
+        queue_conf_rpc = queue_config_fetch(handle)
+        self.config = config_rpc.get()
+        queue_conf = queue_conf_rpc.get()
 
         for name in self.args.plugins:
             if name not in self.plugins:
@@ -114,9 +135,13 @@ class JobFrobnicator:
             plugin = self.plugins[name].Frobnicator(parser=self.plugins_group)
             self.frobnicators.append(plugin)
 
-        # Parse remaining args and pass result to loaded plugins
+        # Parse remaining args and pass result to loaded plugins. Share
+        # queue_conf by attribute rather than as a configure() argument, so
+        # the configure(args, config) signature stays stable for plugins
+        # (including third-party plugins) as new context is added.
         args = self.parser.parse_args(self.remaining_args)
         for frobnicator in self.frobnicators:
+            frobnicator.queue_conf = queue_conf
             frobnicator.configure(args, config=self.config)
 
     def frob(self, jobspec, user=None, flags=None, urgency=16):

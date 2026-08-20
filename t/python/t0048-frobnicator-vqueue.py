@@ -13,8 +13,10 @@
 import unittest
 
 import subflux  # noqa: F401 - To set up PYTHONPATH
-from flux.job.frobnicator.plugins.constraints import QueueConfig
+from flux.job import JobspecV1
+from flux.job.frobnicator.plugins.constraints import apply_constraints
 from flux.job.frobnicator.plugins.defaults import DefaultsConfig
+from flux.queue import QueueConf
 from pycotap import TAPTestRunner
 
 
@@ -22,37 +24,63 @@ def defaults_config(system):
     return {"policy": {"jobspec": {"defaults": {"system": system}}}}
 
 
+def queue_conf(queues):
+    """A QueueConf from a raw [queues] table (as the job-manager resolves it)."""
+    return QueueConf.from_config({"queues": queues})
+
+
+def jobspec(queue=None):
+    js = JobspecV1.from_command(["hostname"])
+    if queue is not None:
+        js.queue = queue
+    return js
+
+
+def properties(js):
+    return js.attributes["system"].get("constraints", {}).get("properties")
+
+
 class TestConstraintsVQueue(unittest.TestCase):
-    """RFC 33 virtual queue constraint inheritance in the frobnicator."""
+    """The constraints frobnicator applies a queue's effective requires.
+
+    RFC 33 virtual-queue inheritance is resolved by the job-manager, so the
+    QueueConf entries already carry a vqueue's effective (parent's) requires.
+    """
 
     def test_vqueue_inherits_parent_requires(self):
-        qc = QueueConfig(
+        qc = queue_conf(
             {
-                "queues": {
-                    "batch": {"requires": ["batch"]},
-                    "expedite": {"parent": "batch"},
-                }
+                "batch": {"requires": ["batch"]},
+                "expedite": {"parent": "batch"},
             }
         )
-        # The vqueue's effective properties are the parent's.
-        self.assertEqual(qc.queue_properties("expedite"), ["batch"])
-        self.assertEqual(qc.queue_properties("expedite"), qc.queue_properties("batch"))
+        # The vqueue is constrained to the parent's required properties.
+        js = jobspec("expedite")
+        apply_constraints(qc, js)
+        self.assertEqual(properties(js), ["batch"])
 
     def test_nonvirtual_queue_uses_own_requires(self):
-        qc = QueueConfig({"queues": {"batch": {"requires": ["batch"]}}})
-        self.assertEqual(qc.queue_properties("batch"), ["batch"])
+        qc = queue_conf({"batch": {"requires": ["batch"]}})
+        js = jobspec("batch")
+        apply_constraints(qc, js)
+        self.assertEqual(properties(js), ["batch"])
 
-    def test_unknown_queue_returns_none(self):
-        qc = QueueConfig({"queues": {"batch": {"requires": ["batch"]}}})
-        self.assertIsNone(qc.queue_properties("nosuchqueue"))
+    def test_queue_without_requires_adds_no_constraint(self):
+        qc = queue_conf({"batch": {}})
+        js = jobspec("batch")
+        apply_constraints(qc, js)
+        self.assertIsNone(properties(js))
 
-    def test_vqueue_missing_parent_fails_closed(self):
-        # A vqueue whose parent is not configured must raise, not
-        # silently drop the parent's constraint (which would place the
-        # job outside the parent's resource slice).
-        qc = QueueConfig({"queues": {"expedite": {"parent": "nosuchqueue"}}})
+    def test_invalid_queue_fails(self):
+        qc = queue_conf({"batch": {"requires": ["batch"]}})
         with self.assertRaises(ValueError):
-            qc.queue_properties("expedite")
+            apply_constraints(qc, jobspec("nosuchqueue"))
+
+    def test_no_queue_is_noop(self):
+        qc = queue_conf({"batch": {"requires": ["batch"]}})
+        js = jobspec()
+        apply_constraints(qc, js)
+        self.assertIsNone(properties(js))
 
 
 class TestDefaultsVQueue(unittest.TestCase):

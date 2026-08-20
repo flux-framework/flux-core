@@ -45,35 +45,54 @@ struct queue {
     bool is_started_sticky;     /* tracks is_started unless --nocheckpoint */
     char *stop_reason;          /* reason if stopped (optionally set) */
     json_t *requires;           /* required properties array (own; a
-                                  * virtual queue's is always NULL - see
-                                  * queue_root() for the effective value)
-                                  */
+                                 * virtual queue's is always NULL - see
+                                 * queue_root() for the effective value)
+                                 */
     struct queue *parent;       /* resolved parent queue (RFC 33 virtual
-                                  * queues), or NULL if not virtual. Not
-                                  * owned; borrowed from the same queues
-                                  * table. Inheritance is one level
-                                  * (validated elsewhere) so this is
-                                  * never itself virtual.
-                                  */
+                                 * queues), or NULL if not virtual. Not
+                                 * owned; borrowed from the same queues
+                                 * table. Inheritance is one level
+                                 * (validated elsewhere) so this is
+                                 * never itself virtual.
+                                 */
     struct queues *queues;      /* back-pointer for notify */
 };
 
 struct queues {
     struct queue *anon;         /* live when named == NULL */
     zhashx_t *named;            /* non-NULL selects named mode */
+    json_t *list_cache;         /* cached queue-list response, built
+                                 * lazily by queues_list_response() and
+                                 * invalidated by notify() on any
+                                 * mutation. NULL when not yet built.
+                                 */
     bool restoring;             /* suppress notify during queues_restore */
     queues_change_f notify_cb;
     void *notify_arg;
 };
 
+/* Invalidate any cached queue-list response.
+ */
+static void cache_invalidate (struct queues *queues)
+{
+    json_decref (queues->list_cache);
+    queues->list_cache = NULL;
+}
+
 /* Internal: fire change notification if callback is registered.
  * Suppressed during queues_restore: restore reconstructs state that
  * was already notified when it originally changed.
+ *
+ * The response cache is invalidated unconditionally (even during restore,
+ * which is not a notify consumer) since any mutation may change it. The
+ * cache depends only on config-derived fields, so enable/start/stop
+ * events over-invalidate harmlessly.
  */
 static void notify (struct queues *queues,
                     struct queue *q,
                     const char *event)
 {
+    cache_invalidate (queues);
     if (queues->notify_cb && !queues->restoring)
         queues->notify_cb (queues, q, event, queues->notify_arg);
 }
@@ -296,6 +315,7 @@ void queues_destroy (struct queues *queues)
             zhashx_destroy (&queues->named);
         else
             queue_free (queues->anon);
+        json_decref (queues->list_cache);
         free (queues);
         errno = saved_errno;
     }
@@ -933,6 +953,101 @@ error:
     errno = ENOMEM;
     ERRNO_SAFE_WRAP (json_decref, a);
     return NULL;
+}
+
+/* Encode one queue's effective configuration for the conf object:
+ * {"name":s, "requires"?:[...], "parent"?:s}. 'requires' is the
+ * effective required-properties array (a virtual queue inherits its
+ * parent's - see queue_requires()), omitted when the queue has none.
+ * 'parent' is present only for a virtual queue (RFC 33).
+ */
+static json_t *queue_conf_encode (struct queue *q)
+{
+    json_t *o;
+    json_t *requires;
+
+    if (!(o = json_pack ("{s:s}", "name", q->name)))
+        goto nomem;
+    if ((requires = queue_requires (q))) {
+        if (json_object_set (o, "requires", requires) < 0)
+            goto nomem;
+    }
+    if (queue_is_virtual (q)) {
+        if (set_string (o, "parent", queue_name (queue_parent (q))) < 0)
+            goto error;
+    }
+    return o;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return NULL;
+}
+
+/* Encode the effective queue configuration object returned by the
+ * queue-list RPC: {"queues":[{name,requires?,parent?}, ...]}. The
+ * anonymous queue is omitted (empty array in anon mode). Future global
+ * fields (default queue, merged policy) attach here as siblings of
+ * "queues".
+ */
+static json_t *queues_conf_encode (struct queues *queues)
+{
+    json_t *conf;
+    json_t *a;
+
+    if (!(a = json_array ()))
+        goto nomem;
+    if (queues->named) {
+        struct queue *q = zhashx_first (queues->named);
+        while (q) {
+            json_t *o;
+            if (!(o = queue_conf_encode (q))
+                || json_array_append_new (a, o) < 0) {
+                /* jansson decrefs `o` on failure */
+                goto error;
+            }
+            q = zhashx_next (queues->named);
+        }
+    }
+    if (!(conf = json_pack ("{s:o}", "queues", a))) {
+        goto nomem;
+    }
+    return conf;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, a);
+    return NULL;
+}
+
+/* Build the full queue-list RPC response (a new reference):
+ *   {"queues":[names...], "conf":{"queues":[{name,requires?,parent?}...]}}
+ */
+static json_t *list_response_build (struct queues *queues)
+{
+    json_t *names = NULL;
+    json_t *conf = NULL;
+    json_t *resp;
+
+    if (!(names = queues_list_encode (queues))
+        || !(conf = queues_conf_encode (queues)))
+        goto error;
+    if (!(resp = json_pack ("{s:o s:o}", "queues", names, "conf", conf)))
+        goto nomem;
+    return resp;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, names);
+    ERRNO_SAFE_WRAP (json_decref, conf);
+    return NULL;
+}
+
+json_t *queues_list_response (struct queues *queues)
+{
+    if (!queues->list_cache)
+        queues->list_cache = list_response_build (queues);
+    return queues->list_cache;
 }
 
 static int save_one (json_t *a, struct queue *q)
