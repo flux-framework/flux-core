@@ -104,7 +104,14 @@ static void rbwatcher_start (flux_watcher_t *w)
     if (!rbw->start) {
         flux_watcher_start (rbw->prepare_w);
         flux_watcher_start (rbw->check_w);
-        if (fbuf_space (rbw->fbuf) > 0)
+        /* Do not (re)start the fd watcher after EOF: the buffer is read-only
+         * and a further read fails with EROFS. This can occur when the
+         * watcher is stopped and restarted after EOF, for example the
+         * flux_subprocess_stream_stop()/_start() calls used for output flow
+         * control. The prepare/check watchers still deliver any buffered data
+         * and the final EOF to the user.
+         */
+        if (!rbw->eof_read && fbuf_space (rbw->fbuf) > 0)
             flux_watcher_start (rbw->fd_w);
         /* else: buffer full, buffer_notify_cb will be called
          * to re-enable io reactor when space is available */
@@ -221,9 +228,13 @@ static void rbwatcher_notify_cb (struct fbuf *fb, void *arg)
 {
     struct rbwatcher *rbw = arg;
 
-    /* space is available, start ev io watcher again, assuming watcher
-     * is not stopped by user */
-    if (rbw->start && fbuf_space (fb) > 0)
+    /* Space is available, start ev io watcher again, assuming watcher is not
+     * stopped by user. Do not re-arm after EOF: the buffer is read-only, so
+     * a further read fails with EROFS. Draining buffered data triggers this
+     * callback, and a re-armed fd watcher would fire again on the readable
+     * (EOF) fd, stranding the read side. See flux-framework/flux-core#7406.
+     */
+    if (rbw->start && !rbw->eof_read && fbuf_space (fb) > 0)
         flux_watcher_start (rbw->fd_w);
 }
 
