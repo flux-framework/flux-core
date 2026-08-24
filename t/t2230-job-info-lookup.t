@@ -256,6 +256,23 @@ test_expect_success NO_CHAIN_LINT 'flux job eventlog -F, --follow works' '
 	test_debug "cat eventlog-follow.out" &&
 	grep clean eventlog-follow.out
 '
+test_expect_success 'submit job for chain-lint allowed eventlog follow tests' '
+	jobid=$(flux submit -n1 hostname)
+'
+test_expect_success 'flux job eventlog -F, --follow works with guest.output' '
+	run_timeout 30 \
+	  flux job eventlog -p guest.output -HF $jobid \
+		> eventlog-follow-output.out &&
+	test_debug "cat eventlog-follow-output.out" &&
+	grep $(hostname) eventlog-follow-output.out
+'
+test_expect_success 'flux job eventlog -F, --follow works with exec eventlog' '
+	run_timeout 30 \
+	  flux job eventlog -p exec -HF $jobid \
+		> eventlog-follow-exec.out &&
+	test_debug "cat eventlog-follow-exec.out" &&
+	grep done eventlog-follow-exec.out
+'
 #
 #  Color and human-readable output tests for flux job eventlog/wait-event
 #

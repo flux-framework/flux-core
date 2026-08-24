@@ -304,6 +304,9 @@ static bool wait_event_test (struct wait_event_ctx *ctx, json_t *event)
     json_t *context = NULL;
     bool match = false;
 
+    if (!ctx->wait_event)
+        return false;
+
     if (eventlog_entry_parse (event, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
 
@@ -347,7 +350,7 @@ static void wait_event_continuation (flux_future_t *f, void *arg)
                           ctx->wait_event);
         } else if (errno == ENODATA) {
             flux_future_destroy (f);
-            if (!ctx->got_event)
+            if (ctx->wait_event && !ctx->got_event)
                 log_msg_exit ("event '%s' never received",
                               ctx->wait_event);
             return;

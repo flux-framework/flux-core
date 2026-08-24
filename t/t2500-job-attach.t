@@ -405,8 +405,8 @@ test_expect_success NO_CHAIN_LINT 'attach: --tail works without arg (live job)' 
 	kill -INT ${pidB} &&
 	sleep 0.2 &&
 	kill -INT ${pidB} &&
-	! wait ${pidA} &&
-	! wait ${pidB} &&
+	wait ${pidA} &&
+	test_must_fail_or_be_terminated wait ${pidB} &&
 	test_must_fail grep "START" tail4B.out &&
 	tail -n 1 tail4B.out | grep "BAR" &&
 	count=`grep FOO tail4B.out | wc -l` &&
@@ -425,8 +425,8 @@ test_expect_success NO_CHAIN_LINT 'attach: --tail works with arg > 0 (live job)'
 	kill -INT ${pidB} &&
 	sleep 0.2 &&
 	kill -INT ${pidB} &&
-	! wait ${pidA} &&
-	! wait ${pidB} &&
+	wait ${pidA} &&
+	test_must_fail_or_be_terminated wait ${pidB} &&
 	test_must_fail grep "START" tail5B.out &&
 	tail -n 1 tail5B.out | grep "BAR" &&
 	count=`grep FOO tail4B.out | wc -l` &&
@@ -445,8 +445,8 @@ test_expect_success NO_CHAIN_LINT 'attach: --tail works with arg == 0 (live job)
 	kill -INT ${pidB} &&
 	sleep 0.2 &&
 	kill -INT ${pidB} &&
-	! wait ${pidA} &&
-	! wait ${pidB} &&
+	wait ${pidA} &&
+	test_must_fail_or_be_terminated wait ${pidB} &&
 	test_must_fail grep "START" tail6B.out &&
 	tail -n 1 tail6B.out | grep "BAR" &&
 	test_must_fail grep "FOO" tail6B.out
