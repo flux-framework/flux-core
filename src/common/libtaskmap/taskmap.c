@@ -787,9 +787,12 @@ json_t *taskmap_encode_json (const struct taskmap *map, int flags)
     }
     if (!(flags & TASKMAP_ENCODE_WRAPPED))
         return blocks;
-    if (!(taskmap = json_pack ("{s:i s:o}",
-                               "version", 1,
-                               "map", blocks)))
+    /* json_pack() steals the reference to 'blocks' on success and failure */
+    taskmap = json_pack ("{s:i s:o}",
+                         "version", 1,
+                         "map", blocks);
+    blocks = NULL;
+    if (!taskmap)
         goto error;
     return taskmap;
 error:
