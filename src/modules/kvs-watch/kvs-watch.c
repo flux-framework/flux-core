@@ -293,13 +293,14 @@ static void handle_load_response (flux_future_t *f, struct watcher *w)
             errprintf (&err, "failed to create treeobj value");
             goto error_respond;
         }
-        if (flux_respond_pack (h, w->request, "{ s:o }", "val", val) < 0) {
+        if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
             flux_log_error (h,
                             "%s: failed to respond to kvs-watch.lookup",
                             __FUNCTION__);
             json_decref (val);
             goto finished;
         }
+        json_decref (val);
         w->loaded_blob_count++;
         w->responded = true;
 
