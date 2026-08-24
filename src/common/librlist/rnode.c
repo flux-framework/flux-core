@@ -889,10 +889,10 @@ json_t *rnode_encode (const struct rnode *n, const struct idset *ids)
         return NULL;
     if (!(children = children_encode (n)))
         goto done;
-    if (!(o = json_pack ("{s:s s:o}",
-                         "rank", ranks,
-                         "children", children)))
-        goto done;
+    /* json_pack() steals the reference to 'children' on success and failure. */
+    o = json_pack ("{s:s s:o}",
+                   "rank", ranks,
+                   "children", children);
     children = NULL;
 done:
     json_decref (children);
