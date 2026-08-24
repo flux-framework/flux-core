@@ -704,7 +704,6 @@ static json_t *tasks_create (int argc, char **argv)
                              "count",
                              "per_slot",
                              1))) {
-        json_decref (argv_json);
         errno = ENOMEM;
         return NULL;
     }
@@ -760,7 +759,6 @@ static json_t *resources_create (int ntasks,
                                 "count", nnodes,
                                 "with",
                                 slot))) {
-            json_decref (slot);
             goto nomem;
         }
         return node;
@@ -806,8 +804,6 @@ flux_jobspec1_t *flux_jobspec1_from_command (int argc,
                                "duration", duration,
                              "environment",
                            "version", 1))) {
-        json_decref (tasks);
-        json_decref (resources);
         errno = ENOMEM;
         return NULL;
     }
