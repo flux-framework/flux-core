@@ -102,8 +102,8 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                            msg,
                            "{s:O s:i s:i s:I s:O}",
                            "journal", journal,
-                           "active_jobs", zhashx_size (ctx->active_jobs),
-                           "inactive_jobs", zhashx_size (ctx->inactive_jobs),
+                           "active_jobs", (int)zhashx_size (ctx->active_jobs),
+                           "inactive_jobs", (int)zhashx_size (ctx->inactive_jobs),
                            "max_jobid", ctx->max_jobid,
                            "housekeeping", housekeeping) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
