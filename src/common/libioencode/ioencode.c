@@ -38,11 +38,11 @@ static json_t *data_encode_base64 (const char *stream,
 
     if ((dest = malloc (destlen))
         && (n = base64_encode (dest, destlen, data, len)) >= 0) {
-        if (!(o = json_pack ("{s:s s:s s:s s:s#}",
+        if (!(o = json_pack ("{s:s s:s s:s s:s%}",
                              "stream", stream,
                              "rank", rank,
                              "encoding", "base64",
-                             "data", dest, n)))
+                             "data", dest, (size_t)n)))
             errno = ENOMEM;
     }
     ERRNO_SAFE_WRAP (free, dest);
