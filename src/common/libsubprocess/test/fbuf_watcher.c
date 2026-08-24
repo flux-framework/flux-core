@@ -1169,16 +1169,21 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
     close (fd[1]);
 }
 
-/* Regression test for issue #7774.
+/* Regression test for issues #7774 and #7406.
  *
  * A read buffer watcher on a fd that polls ready but returns a persistent
- * error on read() (e.g. EBADF) must stop the watcher and notify the user
- * with FLUX_POLLERR, rather than spinning at 100% CPU re-reading the fd.
+ * error on read() (e.g. EBADF) must not spin at 100% CPU re-reading the fd
+ * (#7774). The permanent error is delivered to the user as FLUX_POLLERR - so
+ * a client may report it - and then also as EOF (an empty-buffer FLUX_POLLIN)
+ * so the stream still completes rather than being stranded (#7406). The error
+ * callback is delivered first, the EOF callback second.
  */
 
 struct buffer_read_error {
     int count;
-    int revents;
+    int err_revents;   /* revents on the first (error) callback */
+    int eof_revents;   /* revents on the second (EOF) callback */
+    int eof_len;       /* length returned by the read on the EOF callback */
 };
 
 static void buffer_read_error_cb (flux_reactor_t *r,
@@ -1187,10 +1192,22 @@ static void buffer_read_error_cb (flux_reactor_t *r,
                                    void *arg)
 {
     struct buffer_read_error *err = arg;
+
+    if (err->count == 0)
+        err->err_revents = revents;
+    else {
+        err->eof_revents = revents;
+        if (revents & FLUX_POLLIN) {
+            struct fbuf *fb = fbuf_read_watcher_get_buffer (w);
+            const void *ptr;
+            int len = -1;
+            if (fb && (ptr = fbuf_read (fb, -1, &len)))
+                err->eof_len = len;
+        }
+        flux_watcher_stop (w);
+        flux_reactor_stop (r);
+    }
     err->count++;
-    err->revents = revents;
-    flux_watcher_stop (w);
-    flux_reactor_stop (r);
 }
 
 /* Watchdog: if the watcher busy loops, the reactor never returns on its
@@ -1212,7 +1229,10 @@ static void test_buffer_read_error (flux_reactor_t *reactor)
     int fd;
     flux_watcher_t *w;
     flux_watcher_t *timer;
-    struct buffer_read_error err = { .count = 0, .revents = 0 };
+    struct buffer_read_error err = { .count = 0,
+                                     .err_revents = 0,
+                                     .eof_revents = 0,
+                                     .eof_len = -1 };
     int timed_out = 0;
 
     /* Open /dev/null write-only: the fd is valid and can be made
@@ -1248,10 +1268,14 @@ static void test_buffer_read_error (flux_reactor_t *reactor)
 
     ok (!timed_out,
         "buffer read error: watcher stopped instead of busy looping");
-    ok (err.count == 1,
-        "buffer read error: user callback called exactly once");
-    ok ((err.revents & FLUX_POLLERR),
-        "buffer read error: user callback got FLUX_POLLERR");
+    ok (err.count == 2,
+        "buffer read error: user callback called twice (error, then EOF)");
+    ok ((err.err_revents & FLUX_POLLERR),
+        "buffer read error: first callback got FLUX_POLLERR");
+    ok ((err.eof_revents & FLUX_POLLIN),
+        "buffer read error: second callback got EOF (FLUX_POLLIN)");
+    ok (err.eof_len == 0,
+        "buffer read error: EOF callback read returned 0 bytes");
 
     flux_watcher_stop (timer);
     flux_watcher_destroy (timer);
