@@ -196,22 +196,25 @@ static void rbwatcher_fd_cb (flux_reactor_t *r,
         if ((space = fbuf_space (rbw->fbuf)) < 0)
             return;
 
+        bool read_error = false;
         if ((ret = fbuf_write_from_fd (rbw->fbuf, rbw->fd, space)) < 0) {
-            /* EAGAIN and EWOULDBLOCK are transient errors: return and
-             * try again. Otherwise, stop the watcher and return
-             * FLUX_POLLERR to catch permanent errors like EBADF.
+            /* EAGAIN and EWOULDBLOCK are transient errors: return and try
+             * again. Otherwise, set EOF and raise POLLERR on a permanent
+             * read error.
              */
             if (errno == EAGAIN || errno == EWOULDBLOCK)
                 return;
-            flux_watcher_stop (fd_w);
-            watcher_call (w, FLUX_POLLERR);
-            return;
+            read_error = true;
+            ret = 0;
         }
 
         if (!ret) {
             fbuf_read_watcher_decref (w);
             (void)fbuf_readonly (rbw->fbuf);
             flux_watcher_stop (fd_w);
+            /* N.B. call last: the callback may destroy the watcher */
+            if (read_error)
+                watcher_call (w, FLUX_POLLERR);
         }
         else if (ret == space) {
             /* buffer full, rbwatcher_notify_cb will be called
