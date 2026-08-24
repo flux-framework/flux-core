@@ -192,23 +192,23 @@ static void method_rusage_cb (flux_t *h,
     if (getrusage (who, &ru) < 0)
         goto error;
     if (flux_respond_pack (h, msg,
-            "{s:f s:f s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i}",
+            "{s:f s:f s:I s:I s:I s:I s:I s:I s:I s:I s:I s:I s:I s:I s:I s:I}",
             "utime", (double)ru.ru_utime.tv_sec + 1E-6 * ru.ru_utime.tv_usec,
             "stime", (double)ru.ru_stime.tv_sec + 1E-6 * ru.ru_stime.tv_usec,
-            "maxrss", ru.ru_maxrss,
-            "ixrss", ru.ru_ixrss,
-            "idrss", ru.ru_idrss,
-            "isrss", ru.ru_isrss,
-            "minflt", ru.ru_minflt,
-            "majflt", ru.ru_majflt,
-            "nswap", ru.ru_nswap,
-            "inblock", ru.ru_inblock,
-            "oublock", ru.ru_oublock,
-            "msgsnd", ru.ru_msgsnd,
-            "msgrcv", ru.ru_msgrcv,
-            "nsignals", ru.ru_nsignals,
-            "nvcsw", ru.ru_nvcsw,
-            "nivcsw", ru.ru_nivcsw) < 0)
+            "maxrss", (json_int_t)ru.ru_maxrss,
+            "ixrss", (json_int_t)ru.ru_ixrss,
+            "idrss", (json_int_t)ru.ru_idrss,
+            "isrss", (json_int_t)ru.ru_isrss,
+            "minflt", (json_int_t)ru.ru_minflt,
+            "majflt", (json_int_t)ru.ru_majflt,
+            "nswap", (json_int_t)ru.ru_nswap,
+            "inblock", (json_int_t)ru.ru_inblock,
+            "oublock", (json_int_t)ru.ru_oublock,
+            "msgsnd", (json_int_t)ru.ru_msgsnd,
+            "msgrcv", (json_int_t)ru.ru_msgrcv,
+            "nsignals", (json_int_t)ru.ru_nsignals,
+            "nvcsw", (json_int_t)ru.ru_nvcsw,
+            "nivcsw", (json_int_t)ru.ru_nivcsw) < 0)
         flux_log_error (h, "error responding to rusage request");
     return;
 error:
