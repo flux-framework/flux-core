@@ -638,7 +638,7 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
             }
             if (flux_respond_pack (h,
                                    proc->exec_request,
-                                   "{s:s s:I}",
+                                   "{s:s s:i}",
                                    "type", "started",
                                    "pid", sdexec_unit_pid (proc->unit)) < 0)
                 flux_log_error (h, "error responding to exec request");
