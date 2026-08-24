@@ -8,78 +8,54 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-"""Apply constraints to incoming jobspec based on broker config."""
+"""Apply queue constraints to incoming jobspec from the job-manager."""
 
 from flux.job.frobnicator import FrobnicatorPlugin
+from flux.queue import QueueConf
 
 
-class QueueConfig:
-    """Convenience class for handling jobspec queues configuration"""
+def apply_constraints(queue_conf, jobspec):
+    """Apply a jobspec's queue's required properties as a constraint.
 
-    def __init__(self, config={}):
-        self.queues = {}
-        try:
-            self.queues = config["queues"]
-        except KeyError:
-            pass
+    'queue_conf' is a flux.queue.QueueConf: the job-manager's authoritative
+    queue configuration, with RFC 33 virtual-queue inheritance already
+    resolved.
+    """
+    if not jobspec.queue:
+        return
+    if jobspec.queue not in queue_conf:
+        raise ValueError(f"Invalid queue '{jobspec.queue}' specified")
+    # The queue's effective required properties. For a virtual queue (RFC
+    # 33) this is the parent's, resolved by the job-manager - so applying it
+    # schedules the job as part of the parent's job list.
+    queue_properties = queue_conf.requires(jobspec.queue)
+    if queue_properties is None:
+        return
 
-    def queue_properties(self, name):
-        try:
-            entry = self.queues[name]
-        except KeyError:
-            return None
-        # A virtual queue (RFC 33) has no 'requires' of its own -
-        # inject the parent's instead, since that is what makes the
-        # job schedule as part of the parent's job list. Inheritance
-        # is one level (validated by conf_policy.c), so no chain to
-        # walk. An unresolvable parent is a fatal error (fail closed):
-        # silently dropping the parent's constraint would place the
-        # job outside the parent's resource slice.
-        parent = entry.get("parent")
-        if parent is not None:
-            try:
-                entry = self.queues[parent]
-            except KeyError:
-                raise ValueError(
-                    f"queue '{name}': parent queue '{parent}' is not configured"
-                )
-        return entry.get("requires")
-
-    def apply_constraints(self, jobspec):
-        """Apply queue-specific constraints to jobspec"""
-
-        if jobspec.queue:
-            if jobspec.queue not in self.queues:
-                raise ValueError(f"Invalid queue '{jobspec.queue}' specified")
-            queue_properties = self.queue_properties(jobspec.queue)
-            if queue_properties is None:
-                return
-
-            # First try appending to existing constraints
-            try:
-                spec = jobspec.attributes["system"]["constraints"]["properties"]
-                for prop in queue_properties:
-                    if prop not in spec:
-                        spec.append(prop)
-                return
-            except KeyError:
-                #  No "properties" operator at top level, try combining
-                #  existing constraints with logical AND
-                pass
-            try:
-                jobspec.setattr(
-                    "system.constraints",
-                    {
-                        "and": [
-                            jobspec.attributes["system"]["constraints"],
-                            {"properties": queue_properties},
-                        ]
-                    },
-                )
-            except KeyError:
-                #  No existing "constraints" - set constraints to queue
-                #  constraints
-                jobspec.setattr("system.constraints", {"properties": queue_properties})
+    # First try appending to existing constraints
+    try:
+        spec = jobspec.attributes["system"]["constraints"]["properties"]
+        for prop in queue_properties:
+            if prop not in spec:
+                spec.append(prop)
+        return
+    except KeyError:
+        #  No "properties" operator at top level, try combining
+        #  existing constraints with logical AND
+        pass
+    try:
+        jobspec.setattr(
+            "system.constraints",
+            {
+                "and": [
+                    jobspec.attributes["system"]["constraints"],
+                    {"properties": queue_properties},
+                ]
+            },
+        )
+    except KeyError:
+        #  No existing "constraints" - set constraints to queue constraints
+        jobspec.setattr("system.constraints", {"properties": queue_properties})
 
 
 class Frobnicator(FrobnicatorPlugin):
@@ -87,7 +63,9 @@ class Frobnicator(FrobnicatorPlugin):
         super().__init__(parser)
 
     def configure(self, args, config):
-        self.config = QueueConfig(config)
+        # queue_conf is injected by the framework as an attribute (see
+        # FrobnicatorPlugin) before configure() is called.
+        self.queue_conf = self.queue_conf or QueueConf({})
 
     def frob(self, jobspec, user, urgency, flags):
-        self.config.apply_constraints(jobspec)
+        apply_constraints(self.queue_conf, jobspec)
