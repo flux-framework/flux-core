@@ -410,7 +410,8 @@ EXTRA_DIST= \
 	scheduler/sched-slowgen.py \
 	scheduler/sched_tree_amender.py \
 	scheduler/sched-tree-subclass.py \
-	cocci/json_set_new_decref.cocci
+	cocci/json_set_new_decref.cocci \
+	cocci/json_pack_o_decref.cocci
 
 dist_check_SCRIPTS = \
 	$(TESTSCRIPTS) \
