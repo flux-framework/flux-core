@@ -595,7 +595,7 @@ static void bootstrap_whois_cb (flux_t *h,
         if (flux_respond_pack (h,
                                msg,
                                "{s:i s:O}",
-                               "rank", rank,
+                               "rank", (int)rank,
                                "bizcard", bizcard_get_json (bc)) < 0)
             flux_log_error (h, "error responding to bootstrap.whois request");
         rank = idset_next (ids, rank);
