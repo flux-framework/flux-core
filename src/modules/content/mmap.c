@@ -558,7 +558,7 @@ json_t *content_mmap_get_stats (struct content_mmap *mm)
     }
     if (!(mmap = json_pack ("{s:O s:I}",
                             "tags", o,
-                            "blobs", zhashx_size (mm->cache))))
+                            "blobs", (json_int_t)zhashx_size (mm->cache))))
         goto nomem;
     json_decref (o);
     return mmap;
