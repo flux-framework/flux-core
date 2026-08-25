@@ -232,7 +232,7 @@ jobs:
       if: matrix.coverage
       uses: actions/setup-python@v7.0.0
       with:
-        # Use python3.12 to ensure compatbility with coverage tool:
+        # Use python3.12 to ensure compatibility with coverage tool:
         python-version: '3.12'
 
     - name: coverage setup
