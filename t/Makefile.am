@@ -110,6 +110,7 @@ TESTSCRIPTS = \
 	t0042-rhwloc-gpu-dedup.t \
 	t0043-content-sqlite-gc.t \
 	t0044-gc-cmd.t \
+	t0045-check-json-pack.t \
 	t0090-content-enospc.t \
 	t0099-admin-system-scripts.t \
 	t0100-modprobe.t \
@@ -477,6 +478,7 @@ dist_check_SCRIPTS = \
 	scripts/sqlite-write.py \
 	scripts/pipe.py \
 	scripts/rreq-reader.py \
+	scripts/test-check-json-pack.py \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
 	valgrind/workload.d/job-info \
