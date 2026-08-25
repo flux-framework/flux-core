@@ -19,7 +19,7 @@
  * Queue-specific limit:
  *  [queues.<name>.policy.limits.job-size]
  *
- * N.B. a queue limit may override the general limit with a higher or lower
+ * N.B. a queue's effective limit may be higher or lower than the general
  * limit, even "unlimited".  Since 0 may be a valid size limit, -1 is reserved
  * to mean unlimited in this situation.
  *
@@ -89,19 +89,6 @@ static bool job_size_isset (struct job_size *js)
     return false;
 }
 
-static void job_size_override (struct job_size *js1,
-                               struct job_size *js2)
-{
-    if (js1 && js2) {
-        if (js2->nnodes != SIZE_INVALID)
-            js1->nnodes = js2->nnodes;
-        if (js2->ncores != SIZE_INVALID)
-            js1->ncores = js2->ncores;
-        if (js2->ngpus != SIZE_INVALID)
-            js1->ngpus = js2->ngpus;
-    }
-}
-
 static void limits_clear (struct limits *l)
 {
     job_size_clear (&l->max);
@@ -116,15 +103,6 @@ static bool limits_isset (struct limits *l)
             return true;
     }
     return false;
-}
-
-static void limits_override (struct limits *l1,
-                             struct limits *l2)
-{
-    if (l1 && l2) {
-        job_size_override (&l1->max, &l2->max);
-        job_size_override (&l1->min, &l2->min);
-    }
 }
 
 // zhashx_destructor_fn footprint
@@ -231,6 +209,10 @@ static int job_size_parse (struct job_size *jsp,
     return 0;
 }
 
+/* Parse the effective job-size limits out of 'conf' (a policy-bearing object:
+ * the top-level effective policy, or a single queue's entry). An object with
+ * no policy yields no limits (cleared); a non-object is an error.
+ */
 static int limits_parse (struct limits *limitsp,
                          json_t *conf,
                          flux_error_t *error)
@@ -265,6 +247,11 @@ static int limits_parse (struct limits *limitsp,
     return 0;
 }
 
+/* Parse the effective per-queue job-size limits out of the delivered queue
+ * configuration. Each entry in conf["queues"] carries its name and a fully
+ * resolved effective 'policy' (global + RFC 33 parent + own already merged by
+ * the job-manager), so limits_parse() is applied directly to each entry.
+ */
 static int queues_parse (zhashx_t **zhp,
                          json_t *conf,
                          flux_error_t *error)
@@ -273,63 +260,25 @@ static int queues_parse (zhashx_t **zhp,
     zhashx_t *zh;
 
     if (!(zh = queues_create ())) {
-        errprintf (error, "out of memory parsing [queues]");
+        errprintf (error, "out of memory parsing queues");
         goto error;
     }
     if ((queues = json_object_get (conf, "queues"))) {
-        const char *name;
+        size_t index;
         json_t *entry;
         struct limits limits;
-        struct limits own;
+        const char *name;
         flux_error_t e;
 
-        json_object_foreach (queues, name, entry) {
-            json_t *parent = json_object_get (entry, "parent");
-
-            limits_clear (&limits);
-
-            /* RFC 33 virtual queues: a vqueue inherits its parent
-             * queue's job-size limits, overlaid per-key by its own.
-             * Read the parent's entry directly out of the [queues]
-             * table rather than the hash being built here, since
-             * json_object_foreach() iteration order is arbitrary
-             * and the parent may not have been processed yet. A
-             * malformed or unresolvable parent is a fatal error (fail
-             * closed): a vqueue silently defaulting to global/no
-             * limits would let jobs bypass the intended limits.
-             * conf_policy_validate() rejects this config up front, so
-             * reaching here means validation was bypassed.
-             */
-            if (parent) {
-                const char *parent_name;
-                json_t *parent_entry;
-
-                if (!json_is_string (parent)) {
-                    errprintf (error,
-                               "queues.%s: 'parent' must be a string",
-                               name);
-                    goto error;
-                }
-                parent_name = json_string_value (parent);
-                if (!(parent_entry = json_object_get (queues,
-                                                      parent_name))) {
-                    errprintf (error,
-                               "queues.%s: parent queue '%s' is not"
-                               " configured",
-                               name,
-                               parent_name);
-                    goto error;
-                }
-                if (limits_parse (&limits, parent_entry, &e) < 0) {
-                    errprintf (error, "queues.%s.%s", parent_name, e.text);
-                    goto error;
-                }
+        json_array_foreach (queues, index, entry) {
+            if (json_unpack (entry, "{s:s}", "name", &name) < 0) {
+                errprintf (error, "queues[%zu]: missing queue name", index);
+                goto error;
             }
-            if (limits_parse (&own, entry, &e) < 0) {
+            if (limits_parse (&limits, entry, &e) < 0) {
                 errprintf (error, "queues.%s.%s", name, e.text);
                 goto error;
             }
-            limits_override (&limits, &own);
             queues_insert (zh, name, &limits);
         }
     }
@@ -391,9 +340,15 @@ static int check_limits (struct limit_job_size *ctx,
     int ncores = counts->nslots * counts->slot_size;
     int ngpus = counts->nslots * counts->slot_gpus;
 
-    limits = ctx->general_limits;
+    /* A queue's cached limits are already its fully effective limits (the
+     * job-manager merged the global policy into each queue's policy before
+     * delivery), so use them directly rather than overlaying onto the
+     * general limits.
+     */
     if (queue && (queue_limits = queues_lookup (ctx->queues, queue)))
-        limits_override (&limits, queue_limits);
+        limits = *queue_limits;
+    else
+        limits = ctx->general_limits;
 
     if (check_over (queue, "nnodes", limits.max.nnodes, nnodes, error) < 0
         || check_over (queue, "ncores", limits.max.ncores, ncores, error) < 0
@@ -468,15 +423,22 @@ error:
     return -1;
 }
 
-/* conf.update callback - called on plugin load, and when config is updated
+/* queues.update callback - called on plugin load, and when the job-manager
+ * delivers a new resolved effective queue configuration.
  * This function has two purposes:
- * - Validate proposed 'conf' and return human readable errors if rejected
+ * - Validate the proposed configuration and return human readable errors if
+ *   rejected
  * - Pre-parse and cache the config in 'ctx' to streamline job validation
+ *
+ * The delivered 'conf' object carries the effective global policy under
+ * 'policy' and an array of queues under 'queues', each entry with its own
+ * fully merged effective 'policy'. This plugin performs no RFC 33 parent
+ * merging of its own.
  */
-static int conf_update_cb (flux_plugin_t *p,
-                           const char *topic,
-                           flux_plugin_arg_t *args,
-                           void *arg)
+static int queues_update_cb (flux_plugin_t *p,
+                             const char *topic,
+                             flux_plugin_arg_t *args,
+                             void *arg)
 {
     struct limit_job_size *ctx = flux_plugin_aux_get (p, auxkey);
     flux_error_t error;
@@ -487,15 +449,18 @@ static int conf_update_cb (flux_plugin_t *p,
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
                                 "{s:o}",
-                                "conf", &conf) < 0) {
+                                "queues", &conf) < 0) {
         errprintf (&error,
-                   "limit-job-size: error unpacking conf.update arguments: %s",
+                   "limit-job-size: error unpacking queues.update arguments:"
+                   " %s",
                    flux_plugin_arg_strerror (args));
         goto error;
     }
-    if (limits_parse (&limits, conf, &error) < 0)
-        goto error;
-    if (queues_parse (&queues, conf, &error) < 0)
+    /* conf is an object with an empty "queues" array when no queues are
+     * configured; the parsers extract no limits from it in that case.
+     */
+    if (limits_parse (&limits, conf, &error) < 0
+        || queues_parse (&queues, conf, &error) < 0)
         goto error;
     ctx->general_limits = limits;
     zhashx_destroy (&ctx->queues);
@@ -507,7 +472,7 @@ error:
 
 static const struct flux_plugin_handler tab[] = {
     { "job.validate", validate_cb, NULL },
-    { "conf.update", conf_update_cb, NULL },
+    { "queues.update", queues_update_cb, NULL },
     { 0 }
 };
 
