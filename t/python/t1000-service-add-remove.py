@@ -202,21 +202,26 @@ class TestServiceAddRemove(unittest.TestCase):
         self.assertEqual(e.exception.errno, errno.ENOSYS)
 
     def test_008_service_remove_on_disconnect(self):
-        from multiprocessing import Process
+        from multiprocessing import get_context
 
         #  Add "baz" service in a different process and let the
         #   process exit to cause a disconnect.
         #   then, ensure "baz" service was removed.
         #
+        #  Use the "fork" start method explicitly: this relies on the
+        #   child inheriting the parent's memory so the local target need
+        #   not be pickled.  Python 3.14 changed the default start method
+        #   on Linux to "forkserver", which cannot pickle a local function.
+        #
         def add_service_and_disconnect():
             h = flux.Flux()
             try:
                 h.service_register("baz").get()
-            except Exception():
+            except Exception:
                 sys.exit(-1)
             sys.exit(0)
 
-        p = Process(target=add_service_and_disconnect)
+        p = get_context("fork").Process(target=add_service_and_disconnect)
         p.start()
         p.join()
         self.assertEqual(p.exitcode, 0)
