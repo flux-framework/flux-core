@@ -703,7 +703,6 @@ static json_t *stats_checkpoints (struct content_sqlite *ctx,
                              "id", id,
                              "value", value))
             || json_array_append_new (checkpts, o) < 0) {
-            json_decref (value);
             // jansson decrefs the new object on failure
             errprintf (errp, "checkpt_get_all: out of memory");
             errno = ENOMEM;

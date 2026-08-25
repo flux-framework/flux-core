@@ -509,7 +509,6 @@ json_t *treeobj_create_symlink (const char *ns, const char *target)
                            "ver", treeobj_version,
                            "type", "symlink",
                            "data", data))) {
-        json_decref (data);
         errno = ENOMEM;
         return NULL;
     }

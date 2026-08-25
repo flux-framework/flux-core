@@ -52,7 +52,7 @@ flux_future_t *flux_job_list (flux_t *h,
                              "job-list.list",
                              FLUX_NODEID_ANY,
                              0,
-                             "{s:i s:o s:o}",
+                             "{s:i s:O s:O}",
                              "max_entries", max_entries,
                              "attrs", o,
                              "constraint", c))) {
@@ -62,6 +62,8 @@ flux_future_t *flux_job_list (flux_t *h,
         errno = saved_errno;
         return NULL;
     }
+    json_decref (o);
+    json_decref (c);
     return f;
 }
 
@@ -92,7 +94,7 @@ flux_future_t *flux_job_list_inactive (flux_t *h,
                              "job-list.list",
                              FLUX_NODEID_ANY,
                              0,
-                             "{s:i s:f s:o s:o}",
+                             "{s:i s:f s:O s:O}",
                              "max_entries", max_entries,
                              "since", since,
                              "attrs", o,
@@ -103,6 +105,8 @@ flux_future_t *flux_job_list_inactive (flux_t *h,
         errno = saved_errno;
         return NULL;
     }
+    json_decref (o);
+    json_decref (c);
     return f;
 }
 

@@ -263,7 +263,10 @@ static int legacy_list_rpc (flux_t *h,
         }
     }
 
-    if (!((*legacy_constraint) = json_pack ("{s:o}", "and", a)))
+    /* json_pack() steals the reference to 'a' on success and failure */
+    *legacy_constraint = json_pack ("{s:o}", "and", a);
+    a = NULL;
+    if (!*legacy_constraint)
         goto error;
 
     return 0;

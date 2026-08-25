@@ -49,9 +49,10 @@ flux_future_t *flux_job_raise (flux_t *h,
                              "job-manager.raise",
                              FLUX_NODEID_ANY,
                              0,
-                             "o",
+                             "O",
                              o)))
         goto error;
+    json_decref (o);
     return f;
 nomem:
     errno = ENOMEM;
