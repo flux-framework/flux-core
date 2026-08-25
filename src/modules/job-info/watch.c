@@ -332,7 +332,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
     while (get_next_eventlog_entry (&input, &tok, &toklen)) {
         if (flux_respond_pack (ctx->h,
                                w->msg,
-                               "{s:s#}",
+                               "{s:s%}",
                                "event", tok, toklen) < 0) {
             flux_log_error (ctx->h,
                             "%s: flux_respond_pack",

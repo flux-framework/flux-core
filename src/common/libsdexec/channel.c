@@ -360,11 +360,11 @@ json_t *sdexec_channel_get_stats (struct channel *ch)
                            "remote_fd", ch->fd[1]);
         }
         else {
-            o = json_pack ("{s:i s:i s:i s:i s:b}",
+            o = json_pack ("{s:i s:i s:I s:I s:b}",
                            "local_fd", ch->fd[0],
                            "remote_fd", ch->fd[1],
-                           "buf_used", outbuf_used (ch->buf),
-                           "buf_free", outbuf_free (ch->buf),
+                           "buf_used", (json_int_t)outbuf_used (ch->buf),
+                           "buf_free", (json_int_t)outbuf_free (ch->buf),
                            "eof", ch->eof_received);
         }
     }

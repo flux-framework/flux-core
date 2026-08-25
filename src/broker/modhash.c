@@ -1040,8 +1040,8 @@ static json_t *modhash_entry_tojson (module_t *p,
                        "idle", (int)(now - module_get_lastseen (p)),
                        "status", module_get_status (p),
                        "services", svcs,
-                       "sendqueue", module_get_send_queue_count (p),
-                       "recvqueue", module_get_recv_queue_count (p));
+                       "sendqueue", (int)module_get_send_queue_count (p),
+                       "recvqueue", (int)module_get_recv_queue_count (p));
     json_decref (svcs);
     return entry;
 }

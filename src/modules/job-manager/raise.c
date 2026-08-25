@@ -320,7 +320,7 @@ void raiseall_handle_request (flux_t *h,
     if (flux_respond_pack (h,
                            msg,
                            "{s:i s:i}",
-                           "count", zlistx_size (target_jobs),
+                           "count", (int)zlistx_size (target_jobs),
                            "errors", error_count) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     zlistx_destroy (&target_jobs);

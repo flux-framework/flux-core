@@ -662,8 +662,8 @@ static void alloc_query_cb (flux_t *h,
     if (flux_respond_pack (h,
                            msg,
                            "{s:i s:i s:i}",
-                           "queue_length", zlistx_size (alloc->queue),
-                           "alloc_pending", zlistx_size (alloc->sent),
+                           "queue_length", (int)zlistx_size (alloc->queue),
+                           "alloc_pending", (int)zlistx_size (alloc->sent),
                            "running", alloc->ctx->running_jobs) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;

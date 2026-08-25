@@ -586,7 +586,7 @@ int restart_from_kvs (struct job_manager *ctx)
                                          "debug.exec-reattach-start",
                                          0,
                                          "{s:I}",
-                                         "id", idf58 (job->id)) < 0)
+                                         "id", job->id) < 0)
                     flux_log_error (ctx->h, "%s: event_job_post_pack id=%s",
                                     __FUNCTION__, idf58 (job->id));
             }

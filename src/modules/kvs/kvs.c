@@ -2020,11 +2020,11 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
 
     if (!(s = json_pack ("{ s:i s:i s:i s:i s:i }",
                          "#versionwaiters",
-                         zlistx_size (root->wait_version_list),
+                         (int)zlistx_size (root->wait_version_list),
                          "#no-op stores",
                          kvstxn_mgr_get_noop_stores (root->ktm),
                          "#transactions",
-                         zhashx_size (root->transaction_requests),
+                         (int)zhashx_size (root->transaction_requests),
                          "#readytransactions",
                          kvstxn_mgr_ready_transaction_count (root->ktm),
                          "store revision", root->seq))) {
@@ -2121,7 +2121,7 @@ static void stats_get_cb (flux_t *h,
                            "namespace", nsstats,
                            "transaction-opcount",
                              "commit", txncstats,
-                           "pending_requests", zhashx_size (ctx->requests)) < 0)
+                           "pending_requests", (int)zhashx_size (ctx->requests)) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     json_decref (tstats);
     json_decref (cstats);
